@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Closed a portable M04/M05 recording-library refresh gap on 2026-09-14.
+  The connected UI now reloads the selected session's recording rows when a
+  subscribed `recorder.changed` event arrives, so newly finalized parts and
+  state changes become visible without a manual refresh or session switch.
+  Added a rendered regression for the live event path; the targeted
+  accessibility suite passed (40 tests). No audio endpoint or machine
+  configuration was changed.
+
 - Completed the guarded full acceptance chain on 2026-09-14 at the current
   head. Toolchain compatibility, native compilation, non-installing WDK/
   SysVAD qualification, M01/M04/M05/M06/M07/M08 acceptance, documentation

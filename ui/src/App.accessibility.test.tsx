@@ -11,6 +11,7 @@ import { BackendConnectionContext } from "./backendConnectionContext";
 import { GraphList } from "./GraphList";
 import type { ProcessorDescriptor } from "./processorCatalog";
 import { AudioRouterRpcError } from "@audiorouter/contracts";
+import type { EventsSubscribeResult, RecordingRow } from "@audiorouter/contracts";
 
 function connectedPreviewBackend() {
   return { ...createDisconnectedBackend(), connected: true };
@@ -44,6 +45,24 @@ describe("VB-Cable endpoint selection", () => {
     render(<App backend={{ ...connectedPreviewBackend(), subscribe }} />);
     await waitFor(() => expect(subscribe).toHaveBeenCalled());
     expect(subscribe.mock.calls[0]?.[3]).toEqual([...WORKSPACE_EVENT_CATEGORIES]);
+  });
+
+  it("refreshes the recording library when a live state event arrives", async () => {
+    const recording: RecordingRow = { id: "take-live", sessionId: demoSession.id, recorderId: "recorder-1", path: "C:\\Audio\\take-live.wav", format: "wav", channels: 2, sampleRate: 48000, frames: 480, fileBytes: 1964, startTime: "2026-09-14T01:00:00Z", state: "completed", missing: false, title: null, artist: null, comment: null };
+    let recordingListCalls = 0;
+    const listRecordings = vi.fn(async () => {
+      recordingListCalls += 1;
+      return recordingListCalls < 2 ? [] : [recording];
+    });
+    let eventSent = false;
+    const subscribe = vi.fn(async (): Promise<EventsSubscribeResult> => {
+      if (eventSent) return { backendEpoch: 0, events: [], nextSequence: 1 };
+      eventSent = true;
+      return { backendEpoch: 0, events: [{ sequence: 1, backendEpoch: 0, resourceRevision: 1, operationId: null, category: "recorder.changed", sessionId: demoSession.id }], nextSequence: 1 };
+    });
+    render(<App backend={{ ...connectedPreviewBackend(), listRecordings, subscribe }} />);
+    await waitFor(() => expect(screen.getByText("C:\\Audio\\take-live.wav")).toBeTruthy());
+    expect(listRecordings).toHaveBeenCalledTimes(2);
   });
 
   it("formats recorder drain telemetry only for a running native route", () => {
