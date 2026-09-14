@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Added the symmetric control-owned project-driver render-source binding on
+  2026-09-13. It validates an enabled virtual bus and exact negotiated
+  direction/identity before opening the supplied driver path, retains the
+  bridge generation, exposes bounded read access for a future endpoint worker,
+  and supports control-thread heartbeat/detach. The focused control and
+  Windows-audio suites pass (137 and 70 tests); the mismatched-hello test
+  proves no driver open is attempted. Endpoint-worker attachment and loaded
+  driver qualification remain open.
+
 - Rejected stale project-driver capture-sink bindings on 2026-09-13. Each
   binding now retains the negotiated graph generation and activation refuses
   it when the running session generation differs, preventing a prior graph's

@@ -3624,6 +3624,9 @@ pub struct ControlPlane {
     #[cfg(windows)]
     native_capture_sink_bindings:
         HashMap<EntityId, audiorouter_windows_audio::NativeBridgeCaptureSinkBinding>,
+    #[cfg(windows)]
+    native_render_source_bindings:
+        HashMap<EntityId, audiorouter_windows_audio::NativeBridgeRenderSourceBinding>,
 }
 
 impl Default for ControlPlane {
@@ -3695,6 +3698,8 @@ impl ControlPlane {
             native_endpoint_rejections: 0,
             #[cfg(windows)]
             native_capture_sink_bindings: HashMap::new(),
+            #[cfg(windows)]
+            native_render_source_bindings: HashMap::new(),
         }
     }
 
@@ -3839,11 +3844,70 @@ impl ControlPlane {
     }
 
     #[cfg(windows)]
+    /// Prepare one explicit project-driver render-source binding. The
+    /// endpoint worker consumes it later; this method only owns the
+    /// negotiated lease and keeps it stopped-by-default.
+    pub fn prepare_native_render_source_binding(
+        &mut self,
+        bus_id: EntityId,
+        device_path: &str,
+        mapping_path: impl AsRef<std::path::Path>,
+        hello: audiorouter_protocol::AudioBridgeHello,
+    ) -> Result<(), ControlError> {
+        let known_enabled = self
+            .virtual_buses
+            .list()
+            .iter()
+            .any(|bus| bus.id() == &bus_id && bus.enabled());
+        if !known_enabled {
+            return Err(ControlError::InvalidRequest(
+                "native render source requires a known enabled virtual bus".into(),
+            ));
+        }
+        if hello.bus_id != bus_id.as_str()
+            || hello.direction != audiorouter_protocol::AudioBridgeDirection::RenderSource
+        {
+            return Err(ControlError::InvalidRequest(
+                "native render source hello does not match the requested bus".into(),
+            ));
+        }
+        if self.native_render_source_bindings.contains_key(&bus_id) {
+            return Err(ControlError::InvalidRequest(
+                "native render source binding is already prepared".into(),
+            ));
+        }
+        let binding = audiorouter_windows_audio::NativeBridgeRenderSourceBinding::create(
+            device_path,
+            mapping_path,
+            hello,
+        )
+        .map_err(|error| {
+            ControlError::InvalidRequest(format!(
+                "native render source preparation failed: {error:?}"
+            ))
+        })?;
+        self.native_render_source_bindings.insert(bus_id, binding);
+        Ok(())
+    }
+
+    #[cfg(windows)]
     pub fn heartbeat_native_capture_sink_bindings(&mut self) -> Result<(), ControlError> {
         for binding in self.native_capture_sink_bindings.values_mut() {
             binding.heartbeat().map_err(|error| {
                 ControlError::InvalidRequest(format!(
                     "native capture sink heartbeat failed: {error:?}"
+                ))
+            })?;
+        }
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    pub fn heartbeat_native_render_source_bindings(&mut self) -> Result<(), ControlError> {
+        for binding in self.native_render_source_bindings.values_mut() {
+            binding.heartbeat().map_err(|error| {
+                ControlError::InvalidRequest(format!(
+                    "native render source heartbeat failed: {error:?}"
                 ))
             })?;
         }
@@ -3862,6 +3926,21 @@ impl ControlPlane {
         };
         binding.close().map_err(|error| {
             ControlError::InvalidRequest(format!("native capture sink close failed: {error:?}"))
+        })
+    }
+
+    #[cfg(windows)]
+    pub fn detach_native_render_source_binding(
+        &mut self,
+        bus_id: &EntityId,
+    ) -> Result<(), ControlError> {
+        let Some(binding) = self.native_render_source_bindings.remove(bus_id) else {
+            return Err(ControlError::InvalidRequest(
+                "native render source binding is not prepared".into(),
+            ));
+        };
+        binding.close().map_err(|error| {
+            ControlError::InvalidRequest(format!("native render source close failed: {error:?}"))
         })
     }
 
@@ -4346,6 +4425,8 @@ impl ControlPlane {
             native_endpoint_rejections: 0,
             #[cfg(windows)]
             native_capture_sink_bindings: HashMap::new(),
+            #[cfg(windows)]
+            native_render_source_bindings: HashMap::new(),
         })
     }
 
@@ -10653,6 +10734,38 @@ mod tests {
             error,
             ControlError::InvalidRequest(message)
                 if message == "native capture sink hello does not match the requested bus"
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_render_source_binding_rejects_mismatched_hello_before_driver_open() {
+        let mut plane = ControlPlane::default();
+        let bus_id = EntityId::new("render-bus");
+        plane.create_virtual_bus(bus_id.clone(), "Render").unwrap();
+        let hello = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: "different-bus".into(),
+            direction: audiorouter_protocol::AudioBridgeDirection::RenderSource,
+            generation: 1,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            frames_per_quantum: 128,
+            lease_ms: 1_000,
+        };
+        let error = plane
+            .prepare_native_render_source_binding(
+                bus_id,
+                "\\\\.\\AudioRouterVirtualBridge",
+                "C:\\missing-render.slot",
+                hello,
+            )
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            ControlError::InvalidRequest(message)
+                if message == "native render source hello does not match the requested bus"
         ));
     }
 

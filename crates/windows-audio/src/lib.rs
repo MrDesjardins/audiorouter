@@ -783,6 +783,61 @@ pub struct NativeBridgeCaptureSinkBinding {
 }
 
 #[cfg(windows)]
+/// Owns one project-owned render-source lease. The control thread owns the
+/// controller and its heartbeat/close lifecycle; an endpoint worker may use
+/// the read-only bridge view after the binding has been validated.
+pub struct NativeBridgeRenderSourceBinding {
+    bus_id: audiorouter_domain::EntityId,
+    generation: u64,
+    controller: NativeBridgeController,
+}
+
+#[cfg(windows)]
+impl NativeBridgeRenderSourceBinding {
+    pub fn create(
+        device_path: &str,
+        mapping_path: impl AsRef<std::path::Path>,
+        hello: audiorouter_protocol::AudioBridgeHello,
+    ) -> Result<Self, NativeBridgeControllerError> {
+        if hello.direction != audiorouter_protocol::AudioBridgeDirection::RenderSource {
+            return Err(NativeBridgeControllerError::InvalidDuplex);
+        }
+        let bus_id = audiorouter_domain::EntityId::new(hello.bus_id.clone());
+        let generation = hello.generation;
+        let controller = NativeBridgeController::create(device_path, mapping_path, hello)?;
+        Ok(Self {
+            bus_id,
+            generation,
+            controller,
+        })
+    }
+
+    pub fn bus_id(&self) -> &audiorouter_domain::EntityId {
+        &self.bus_id
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    pub fn heartbeat(&mut self) -> Result<(), NativeBridgeControllerError> {
+        self.controller.heartbeat()
+    }
+
+    pub fn read_into_after(
+        &self,
+        minimum_sequence: u64,
+        samples: &mut [f32],
+    ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeControllerError> {
+        self.controller.read_into_after(minimum_sequence, samples)
+    }
+
+    pub fn close(self) -> Result<(), NativeBridgeControllerError> {
+        self.controller.close()
+    }
+}
+
+#[cfg(windows)]
 impl NativeBridgeCaptureSinkBinding {
     pub fn create(
         device_path: &str,
