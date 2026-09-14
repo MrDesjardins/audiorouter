@@ -112,7 +112,9 @@ fn startup_register(enabled: bool) -> Result<String, String> {
 
 #[tauri::command]
 fn startup_status() -> Result<&'static str, String> {
-    Ok(if startup::is_registered()? {
+    let executable = std::env::current_exe()
+        .map_err(|error| format!("startup executable lookup failed: {error}"))?;
+    Ok(if startup::is_registered(&executable)? {
         "registered"
     } else {
         "unregistered"

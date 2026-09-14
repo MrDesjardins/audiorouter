@@ -156,7 +156,10 @@ mod windows_registry {
         Ok(())
     }
 
-    pub fn is_registered() -> Result<bool, String> {
+    pub fn is_registered(executable: &Path) -> Result<bool, String> {
+        let executable = validate_executable(executable)?;
+        let executable_text = String::from_utf16(&executable[..executable.len() - 1])
+            .map_err(|_| "startup executable path is not valid UTF-16".to_owned())?;
         let subkey = wide(RUN_SUBKEY);
         let name = wide(VALUE_NAME);
         let mut raw = HKEY::default();
@@ -176,7 +179,7 @@ mod windows_registry {
             return Err(format!("startup registry key lookup failed: {status:?}"));
         }
         let _key = Key(raw);
-        Ok(value_text(raw, PCWSTR(name.as_ptr()))?.is_some())
+        Ok(value_text(raw, PCWSTR(name.as_ptr()))?.as_deref() == Some(executable_text.as_str()))
     }
 }
 
@@ -186,8 +189,8 @@ pub fn apply(enabled: bool, executable: &std::path::Path) -> Result<(), String> 
 }
 
 #[cfg(windows)]
-pub fn is_registered() -> Result<bool, String> {
-    windows_registry::is_registered()
+pub fn is_registered(executable: &std::path::Path) -> Result<bool, String> {
+    windows_registry::is_registered(executable)
 }
 
 #[cfg(not(windows))]
@@ -196,7 +199,7 @@ pub fn apply(_enabled: bool, _executable: &std::path::Path) -> Result<(), String
 }
 
 #[cfg(not(windows))]
-pub fn is_registered() -> Result<bool, String> {
+pub fn is_registered(_executable: &std::path::Path) -> Result<bool, String> {
     Err("sign-in startup registration is only available on Windows".into())
 }
 

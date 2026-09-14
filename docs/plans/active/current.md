@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Hardened native startup observation on 2026-09-14. `startup_status` now
+  validates and compares the HKCU Run value with the current shell executable;
+  an unrelated owner is reported as unregistered and is never modified.
+  Shell tests (13), strict Clippy, formatting, and diff checks pass. No
+  registry, driver, endpoint, or persistent audio configuration was changed.
+  Next action: continue the next independently testable M03/M07 recovery
+  integration item.
+
 - Corrected stale startup capability wording on 2026-09-14. The portable
   control plane now explains that native sign-in registration is owned by the
   desktop shell, rather than claiming the feature is unimplemented. The
