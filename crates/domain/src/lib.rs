@@ -565,7 +565,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 68] = [
+pub const API_METHODS: [ApiMethodSpec; 69] = [
     ApiMethodSpec {
         name: "system.describe",
         permission: PermissionScope::Read,
@@ -755,6 +755,11 @@ pub const API_METHODS: [ApiMethodSpec; 68] = [
         name: "plugins.inspect",
         permission: PermissionScope::PluginScan,
         side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "plugins.parameters",
+        permission: PermissionScope::PluginScan,
+        side_effect: SideEffectClass::ExternalOperation,
     },
     ApiMethodSpec {
         name: "virtualDevices.list",
@@ -1385,6 +1390,16 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::Plugin, "classId") => value.as_str().is_some_and(|class_id| {
                     !class_id.is_empty() && class_id.len() <= MAX_PLUGIN_CLASS_ID_BYTES
                 }),
+                (NodeKind::Plugin, name)
+                    if name
+                        .strip_prefix("pluginParameter:")
+                        .and_then(|id| id.parse::<u32>().ok())
+                        .is_some() =>
+                {
+                    value
+                        .as_f64()
+                        .is_some_and(|value| value.is_finite() && (0.0..=1.0).contains(&value))
+                }
                 _ => false,
             };
             if !valid {

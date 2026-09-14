@@ -73,7 +73,7 @@ describe("VB-Cable endpoint selection", () => {
     const pluginNode = await screen.findByRole("button", { name: /Test Vendor.*plugin/ });
     expect(pluginNode).toBeTruthy();
     fireEvent.click(pluginNode);
-    expect(screen.getByText(/Plugin parameters become available after the exact scanned binary/i)).toBeTruthy();
+    expect(screen.getByText(/Plugin parameters unavailable|Loading bounded parameters/i)).toBeTruthy();
     expect(screen.getByText(/added a stopped plugin placeholder/i)).toBeTruthy();
   });
 

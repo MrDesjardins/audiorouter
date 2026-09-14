@@ -17,6 +17,7 @@ import type {
   PrivacyMuteResult,
   PluginScanEntry,
   PluginScanResult,
+  PluginParametersResult,
   RecoveryClearResult,
   RecordingMetadataResult,
   RecordingRenameResult,
@@ -95,6 +96,7 @@ export interface UiBackend {
   listPlugins(directory: string): Promise<PluginScanResult>;
   retryPlugins(directory: string, idempotencyKey: string): Promise<PluginScanResult>;
   inspectPlugin(path: string): Promise<PluginScanEntry>;
+  describePluginParameters(path: string): Promise<PluginParametersResult>;
   listVirtualDevices(): Promise<VirtualDeviceInfo[]>;
   planVirtualDevice(operation: VirtualDeviceOperation): Promise<VirtualDevicePlanResult>;
   applyVirtualDevice(planId: string, idempotencyKey: string): Promise<VirtualDeviceApplyResult>;
@@ -239,6 +241,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     },
     async inspectPlugin() {
       throw new Error("The backend is disconnected; plugin inspection is unavailable.");
+    },
+    async describePluginParameters() {
+      throw new Error("The backend is disconnected; plugin parameter discovery is unavailable.");
     },
     async listVirtualDevices() {
       return [];
@@ -470,6 +475,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     },
     async inspectPlugin(path) {
       return client.request("plugins.inspect", { path });
+    },
+    async describePluginParameters(path) {
+      return client.request("plugins.parameters", { path });
     },
     async listVirtualDevices() {
       return collectPagedRows((cursor) => client.request("virtualDevices.list", cursor === null

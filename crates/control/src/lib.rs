@@ -1601,6 +1601,7 @@ fn method_description(name: &str) -> &'static str {
         "plugins.list" => "List the last bounded plugin scan inventory without scanning or loading plugin code.",
         "plugins.retry" => "Explicitly refresh a plugin inventory after a prior scan failure or quarantine decision.",
         "plugins.inspect" => "Inspect one explicitly selected plugin binary without loading plugin code.",
+        "plugins.parameters" => "Load one currently scanned plugin in its isolated worker and return bounded parameter descriptors.",
         "virtualDevices.list" => "List managed virtual bus desired state without activating endpoints.",
         "virtualDevices.plan" => "Validate a managed virtual bus lifecycle change without applying it.",
         "virtualDevices.apply" => "Apply a validated virtual bus lifecycle plan to desired state.",
@@ -1776,6 +1777,12 @@ fn method_input_schema(name: &str) -> Value {
             &["directory", "idempotencyKey"],
         ),
         "plugins.inspect" => object_schema(
+            json!({
+                "path": { "type": "string", "minLength": 1 }
+            }),
+            &["path"],
+        ),
+        "plugins.parameters" => object_schema(
             json!({
                 "path": { "type": "string", "minLength": 1 }
             }),
@@ -6490,6 +6497,7 @@ impl ControlPlane {
                 "plugins.list" => self.dispatch_plugins_list(request.params),
                 "plugins.retry" => self.dispatch_plugins_retry(request.params),
                 "plugins.inspect" => self.dispatch_plugins_inspect(request.params),
+                "plugins.parameters" => self.dispatch_plugins_parameters(request.params),
                 "virtualDevices.list" => self.dispatch_virtual_devices_list(request.params),
                 "virtualDevices.plan" => self.dispatch_virtual_devices_plan(request.params),
                 "virtualDevices.apply" => self.dispatch_virtual_devices_apply(request.params),
@@ -8750,6 +8758,135 @@ impl ControlPlane {
         Ok(result)
     }
 
+    fn scanned_plugin_identity(
+        &self,
+        path: &str,
+    ) -> Result<(audiorouter_plugin_host::PluginIdentity, std::path::PathBuf), ControlError> {
+        let (root, fingerprint) = self
+            .plugin_inventories
+            .iter()
+            .filter_map(|(root, inventory)| {
+                let entry = inventory
+                    .get("entries")
+                    .and_then(Value::as_array)?
+                    .iter()
+                    .find(|entry| entry.get("path").and_then(Value::as_str) == Some(path))?;
+                let fingerprint = entry
+                    .get("identity")
+                    .and_then(|identity| identity.get("sha256"))
+                    .and_then(Value::as_str)?;
+                Some((root, fingerprint))
+            })
+            .next()
+            .ok_or_else(|| {
+                ControlError::InvalidRequest(
+                    "plugin parameters require a current explicit scan result".into(),
+                )
+            })?;
+        let root = std::path::PathBuf::from(root);
+        let identity = audiorouter_plugin_host::inspect_binary(
+            std::path::Path::new(path),
+            std::slice::from_ref(&root),
+        )
+        .map_err(|error| {
+            ControlError::InvalidRequest(format!("plugin revalidation failed: {error:?}"))
+        })?;
+        if identity.sha256 != fingerprint {
+            return Err(ControlError::InvalidRequest(
+                "plugin fingerprint changed since scan".into(),
+            ));
+        }
+        if identity.compatibility()
+            == audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat
+        {
+            return Err(ControlError::InvalidRequest(
+                "plugin format or architecture is unsupported".into(),
+            ));
+        }
+        Ok((identity, root))
+    }
+
+    fn dispatch_plugins_parameters(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let path = params
+            .as_ref()
+            .and_then(|value| value.get("path"))
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("path is required".into()))?;
+        let (identity, root) = self.scanned_plugin_identity(path)?;
+        let executable = std::env::var_os("AUDIOROUTER_PLUGIN_WORKER_PATH")
+            .map(std::path::PathBuf::from)
+            .or_else(|| {
+                std::env::current_exe()
+                    .ok()
+                    .and_then(|path| path.parent().map(std::path::Path::to_path_buf))
+                    .map(|directory| {
+                        directory.join(if cfg!(windows) {
+                            "audiorouter-plugin-worker.exe"
+                        } else {
+                            "audiorouter-plugin-worker"
+                        })
+                    })
+            })
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("plugin worker executable is unavailable".into())
+            })?;
+        let worker = if identity.format == audiorouter_plugin_host::PluginFormat::Vst3 {
+            #[cfg(windows)]
+            {
+                audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
+                    &executable,
+                    &identity,
+                    std::slice::from_ref(&root),
+                    1,
+                    48_000,
+                    Instant::now(),
+                )
+            }
+            #[cfg(not(windows))]
+            {
+                return Err(ControlError::InvalidRequest(
+                    "VST3 parameter discovery requires Windows".into(),
+                ));
+            }
+        } else {
+            audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_with_sample_rate(
+                &executable,
+                &identity,
+                std::slice::from_ref(&root),
+                1,
+                48_000,
+                Instant::now(),
+            )
+        }
+        .map_err(|error| ControlError::InvalidRequest(format!("plugin worker launch failed: {error:?}")))?;
+        let mut worker = worker;
+        let parameters = worker
+            .describe_parameters(Instant::now())
+            .map_err(|error| {
+                ControlError::InvalidRequest(format!(
+                    "plugin parameter discovery failed: {error:?}"
+                ))
+            })?;
+        let _ = worker.shutdown_with_timeout(Duration::from_secs(2));
+        Ok(json!({
+            "path": path,
+            "sha256": identity.sha256,
+            "format": match identity.format {
+                audiorouter_plugin_host::PluginFormat::Vst2 => "vst2",
+                audiorouter_plugin_host::PluginFormat::Vst3 => "vst3",
+                audiorouter_plugin_host::PluginFormat::Unknown => "unknown",
+            },
+            "parameters": parameters.into_iter().map(|parameter| json!({
+                "parameterId": parameter.parameter_id,
+                "title": parameter.title,
+                "defaultValue": parameter.default_value,
+                "minimum": parameter.minimum,
+                "maximum": parameter.maximum,
+            })).collect::<Vec<_>>()
+        }))
+    }
+
     fn dispatch_startup_plan(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let enabled = params
             .as_ref()
@@ -9475,6 +9612,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "plugins.list" => &["directory"],
         "plugins.retry" => &["directory", "idempotencyKey"],
         "plugins.inspect" => &["path"],
+        "plugins.parameters" => &["path"],
         "virtualDevices.list" => &["cursor", "limit"],
         "virtualDevices.plan" => &["operation"],
         "virtualDevices.apply" => &["planId", "idempotencyKey"],

@@ -75,6 +75,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `plugins.list` | `pluginScan` | read-only |
 | `plugins.retry` | `pluginScan` | mutating; requires an idempotency key |
 | `plugins.inspect` | `pluginScan` | read-only |
+| `plugins.parameters` | `pluginScan` | external operation; bounded descriptors from the exact revalidated plugin worker |
 | `virtualDevices.list` | `read` | read-only |
 | `virtualDevices.plan` | `deviceAdministration` | plan-only |
 | `virtualDevices.apply` | `deviceAdministration` | mutating; requires an idempotency key |

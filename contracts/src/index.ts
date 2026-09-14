@@ -118,6 +118,21 @@ export interface PluginScanResult {
   entries: PluginScanEntry[];
 }
 
+export interface PluginParameterDescriptor {
+  parameterId: number;
+  title: string;
+  defaultValue: number;
+  minimum: number;
+  maximum: number;
+}
+
+export interface PluginParametersResult {
+  path: string;
+  sha256: string;
+  format: "vst3" | "vst2";
+  parameters: PluginParameterDescriptor[];
+}
+
 export interface GraphPlanResult {
   planId: EntityId;
   baseRevision: number;
@@ -763,6 +778,7 @@ export type ImplementedMethod =
   | "plugins.list"
   | "plugins.retry"
   | "plugins.inspect"
+  | "plugins.parameters"
   | "virtualDevices.list"
   | "virtualDevices.plan"
   | "virtualDevices.apply"
@@ -853,6 +869,7 @@ export type MethodParams = {
   "plugins.list": { directory: string };
   "plugins.retry": { directory: string; idempotencyKey: string };
   "plugins.inspect": { path: string };
+  "plugins.parameters": { path: string };
   "virtualDevices.list": { cursor?: string; limit?: number } | undefined;
   "virtualDevices.plan": { operation: VirtualDeviceOperation };
   "virtualDevices.apply": { planId: EntityId; idempotencyKey: string };
@@ -955,6 +972,7 @@ export type MethodResult = {
   "plugins.list": PluginScanResult;
   "plugins.retry": PluginScanResult;
   "plugins.inspect": PluginScanEntry;
+  "plugins.parameters": PluginParametersResult;
   "virtualDevices.list": VirtualDeviceInfo[] | VirtualDeviceListPage;
   "virtualDevices.plan": VirtualDevicePlanResult;
   "virtualDevices.apply": VirtualDeviceApplyResult;
