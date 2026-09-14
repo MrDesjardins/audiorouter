@@ -14701,6 +14701,39 @@ mod tests {
     }
 
     #[test]
+    fn recovery_clear_rpc_preserves_durable_latch_when_journal_is_full() {
+        let storage = Storage::open_memory().unwrap();
+        for index in 0..audiorouter_storage::MAX_OPERATION_JOURNAL_ENTRIES {
+            storage
+                .journal_commit(&format!("existing-recovery-{index}"), "test", "{}", 0)
+                .unwrap();
+        }
+        let mut plane = ControlPlane::with_storage("recovery-full-journal", storage);
+        let now = unix_epoch_seconds() as u64;
+        plane.record_runtime_crash(now).unwrap();
+        plane.record_runtime_crash(now + 1).unwrap();
+        plane.record_runtime_crash(now + 2).unwrap();
+
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(21)),
+            method: "recovery.clearSafeMode".into(),
+            params: Some(json!({ "idempotencyKey": "recovery-clear-full-journal" })),
+        });
+        assert!(response.error.is_some());
+        let status = plane
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(22)),
+                method: "status.get".into(),
+                params: None,
+            })
+            .result
+            .unwrap();
+        assert_eq!(status["recovery"]["safeMode"], true);
+    }
+
+    #[test]
     fn privacy_mute_is_authorized_and_durable_across_control_restart() {
         let path = std::env::temp_dir().join(format!(
             "audiorouter-privacy-mute-{}.sqlite",

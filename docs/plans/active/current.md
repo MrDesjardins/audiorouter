@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Added the M07 control-level recovery atomicity regression on 2026-09-14.
+  An authorized `recovery.clearSafeMode` dispatch now has explicit coverage
+  for journal-capacity failure: the RPC returns an error and the durable
+  safe-mode latch remains active. The focused control test passed, strict
+  Clippy and formatting passed, and no audio, driver, registry, or machine
+  configuration was accessed. Next action: continue the next independently
+  testable M03/M07 recovery item.
+
 - Reconciled release qualification notes on 2026-09-14 with the current
   pushed test counts: UI 188, control 152 plus 2 guarded live tests ignored,
   CLI 33, MCP interoperability 3, plugin-host 70, worker-process 13, and
