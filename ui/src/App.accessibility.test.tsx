@@ -276,6 +276,8 @@ describe("VB-Cable endpoint selection", () => {
     fireEvent.change(await screen.findByRole("textbox", { name: "Absolute plugin directory" }), { target: { value: "C:\\Plugins" } });
     fireEvent.click(screen.getByRole("button", { name: "Scan directory" }));
     fireEvent.click(await screen.findByRole("button", { name: "Select for inspection" }));
+    expect(screen.queryByRole("button", { name: "Test Vendor 1 plugin" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Add to draft" }));
     fireEvent.click(screen.getByRole("button", { name: "List view" }));
     const pluginNode = await screen.findByRole("button", { name: /Test Vendor.*plugin/ });
     expect(pluginNode).toBeTruthy();

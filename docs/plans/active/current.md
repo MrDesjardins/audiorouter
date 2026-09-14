@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Fixed an M06/M07 plugin-panel mutation boundary on 2026-09-14. Selecting a
+  scanned plugin for inspection is now read-only; adding a verified x64 VST2
+  or VST3 result to the stopped graph requires a separate explicit action.
+  Added an accessibility regression proving selection alone does not create a
+  node. The focused UI suite (57 tests), TypeScript typecheck, and diff checks
+  passed. No plugin was loaded or registered and no audio configuration
+  changed. Next action: continue the next safe M03/M07 recovery or delivery
+  item.
+
 - Passed the isolated M06 legacy VST2 acceptance on 2026-09-14 using six
   repository-local x64 ReaPlugs binaries (`reacomp`, `readelay`, `reaeq`,
   `reafir`, `reagate`, and `reaxcomp`) at 44.1, 48, and 96 kHz. Each
