@@ -510,6 +510,87 @@ impl NativeBridgeOutputWorker {
 }
 
 #[cfg(windows)]
+#[derive(Debug)]
+pub enum NativeBridgeDuplexWorkerError {
+    Input(NativeBridgeInputWorkerError),
+    Output(NativeBridgeOutputWorkerError),
+}
+
+#[cfg(windows)]
+/// Owns both directions of one virtual bus without hiding either endpoint's
+/// lifecycle. Construction is stopped-by-default; start is transactional, and
+/// a failed second start rolls back the direction that started successfully.
+/// Heartbeats and packet pumps remain control/worker-thread operations.
+pub struct NativeBridgeDuplexWorker {
+    input: NativeBridgeInputWorker,
+    output: NativeBridgeOutputWorker,
+}
+
+#[cfg(windows)]
+impl NativeBridgeDuplexWorker {
+    pub fn new(input: NativeBridgeInputWorker, output: NativeBridgeOutputWorker) -> Self {
+        Self { input, output }
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.input.is_running() && self.output.is_running()
+    }
+
+    pub fn start(&mut self) -> Result<(), NativeBridgeDuplexWorkerError> {
+        self.input
+            .start()
+            .map_err(NativeBridgeDuplexWorkerError::Input)?;
+        if let Err(error) = self.output.start() {
+            let _ = self.input.stop();
+            return Err(NativeBridgeDuplexWorkerError::Output(error));
+        }
+        Ok(())
+    }
+
+    pub fn stop(&mut self) -> Result<(), NativeBridgeDuplexWorkerError> {
+        let input_result = self.input.stop();
+        let output_result = self.output.stop();
+        if let Err(error) = input_result {
+            return Err(NativeBridgeDuplexWorkerError::Input(error));
+        }
+        output_result.map_err(NativeBridgeDuplexWorkerError::Output)
+    }
+
+    pub fn heartbeat(&mut self) -> Result<(), NativeBridgeDuplexWorkerError> {
+        let input_result = self.input.heartbeat();
+        let output_result = self.output.heartbeat();
+        if let Err(error) = input_result {
+            return Err(NativeBridgeDuplexWorkerError::Input(error));
+        }
+        output_result.map_err(NativeBridgeDuplexWorkerError::Output)
+    }
+
+    pub fn pump_available(
+        &mut self,
+        max_input_quanta: u32,
+        max_output_packets: u32,
+    ) -> Result<(WasapiSchedulerPump, WasapiSchedulerPump), NativeBridgeDuplexWorkerError> {
+        let input = self
+            .input
+            .pump_available(max_input_quanta)
+            .map_err(NativeBridgeDuplexWorkerError::Input)?;
+        let output = self
+            .output
+            .pump_available(max_output_packets)
+            .map_err(NativeBridgeDuplexWorkerError::Output)?;
+        Ok((input, output))
+    }
+
+    pub fn input(&self) -> &NativeBridgeInputWorker {
+        &self.input
+    }
+
+    pub fn output(&self) -> &NativeBridgeOutputWorker {
+        &self.output
+    }
+}
+
+#[cfg(windows)]
 /// Explicit owner of the driver lease and its broker-side mapped session.
 ///
 /// Construction claims the kernel lease before callers can publish blocks.

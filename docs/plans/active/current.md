@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Added `NativeBridgeDuplexWorker` on 2026-09-14 to compose the existing
+  render-source and capture-sink workers for one bus. It provides explicit
+  stopped-by-default lifecycle, transactional start with rollback when the
+  second endpoint fails, both-direction heartbeat, and independently bounded
+  input/output pump budgets. Windows-audio coverage passed 73 tests, strict
+  package Clippy, formatting, and diff checks. This remains user-mode and
+  non-installing evidence; loaded-driver PortCls transport, signing, and
+  physical-latency gates remain open. Next action: continue native bridge
+  lifecycle integration or another independently testable plan item.
+
 - Strengthened the M03 driver callback acceptance gate on 2026-09-14. The
   non-installing WDK acceptance now bounds the exact `WriteBytes`/`ReadBytes`
   callback regions and rejects waits, delays, pool allocation, work-item
