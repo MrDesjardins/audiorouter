@@ -2,6 +2,19 @@
 
 Updated: 2026-09-14.
 
+- Revalidated guarded process-loopback capture on 2026-09-14 using the active
+  `voicemeeterpro.exe` identity (PID 34568, verified creation timestamp and
+  executable path) with the exact active VB-Cable render endpoint. The
+  control-owned acceptance completed two bounded start/pump/stop cycles,
+  restarted the same-process worker, preserved exact identity checks, and
+  confirmed unchanged Windows media-device state. Temporary process
+  environment values were restored. This strengthens M02 application-capture
+  lifecycle evidence only; it does not claim complete cross-process isolation,
+  protected-content capture, physical latency, managed-driver transport, or
+  production signing. No audio defaults, volume, mute, driver, or persistent
+  audio configuration changed. Next action: continue the next independently
+  testable native/UI delivery item.
+
 - Revalidated the guarded live VB-Cable route on 2026-09-14 at the current
   pushed head. The opt-in M02 control harness matched the exact active
   `CABLE Output (VB-Audio Virtual Cable)` capture and `CABLE Input (VB-Audio
