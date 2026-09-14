@@ -2,6 +2,19 @@
 
 Updated: 2026-09-14.
 
+- Revalidated the guarded Rust adapter route on 2026-09-14 with the exact
+  VB-Cable pair. At 48 kHz and the 128-frame graph quantum, the route captured
+  24,000 frames, processed 187 graph blocks, and routed/rendered 23,936
+  frames. Processing-time and deadline-lateness histograms were complete and
+  internally consistent; deadline misses and lateness were zero, with a
+  114,900 ns observed processing maximum and 131,072 ns p99.9 upper bound.
+  Temporary resources were removed and the wrapper confirmed unchanged media
+  state. This is user-mode timing evidence only; physical p95 latency, loaded
+  PortCls ownership, managed-driver qualification, and production signing
+  remain open. No defaults, volume, mute, driver, or persistent audio
+  configuration changed. Next action: continue the next independently
+  testable native/UI delivery item.
+
 - Revalidated three guarded Rust adapter bridge cycles on 2026-09-14 using
   the exact active VB-Cable capture/render pair. Each 500 ms cycle processed
   51 packets, 24,480 captured frames, 191 graph/tap quanta, and 24,448
