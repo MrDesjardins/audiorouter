@@ -39,6 +39,23 @@ function Assert-NoReparsePath {
     throw "The driver package path does not resolve beneath $StopAt."
 }
 
+function Assert-NoReparseAncestors {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path
+    )
+    $current = [IO.DirectoryInfo]::new([IO.Path]::GetFullPath($Path))
+    while ($null -ne $current) {
+        if (Test-Path -LiteralPath $current.FullName) {
+            $item = Get-Item -LiteralPath $current.FullName -Force
+            if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                throw "The lifecycle state path cannot contain a reparse point: $($item.FullName)"
+            }
+        }
+        $current = $current.Parent
+    }
+}
+
 if (-not $AllowDriverInstall) {
     throw 'Driver lifecycle changes require -AllowDriverInstall in addition to -Install or -Uninstall.'
 }
@@ -49,6 +66,7 @@ if (-not $infPath.StartsWith($driverRootPrefix, [StringComparison]::OrdinalIgnor
     throw 'The INF must be inside the AudioRouter driver package directory.'
 }
 Assert-NoReparsePath -Path $infPath -StopAt $driverRoot
+Assert-NoReparseAncestors -Path (Split-Path -Parent $statePath)
 
 $pnputil = Join-Path $env:WINDIR 'System32\pnputil.exe'
 if (-not (Test-Path -LiteralPath $pnputil -PathType Leaf)) {

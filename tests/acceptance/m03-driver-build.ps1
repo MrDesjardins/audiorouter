@@ -22,6 +22,7 @@ foreach ($required in @(
         'refusing unmanaged cleanup',
         '$driverRootPrefix',
         'Assert-NoReparsePath',
+        'Assert-NoReparseAncestors',
         'FileAttributes]::ReparsePoint',
         '/add-driver',
         '/delete-driver',

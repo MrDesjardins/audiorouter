@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Added lifecycle-state path protection to the M03 management script on
+  2026-09-14. Existing ancestors of the rollback JSON path are now checked
+  for reparse points before install/uninstall state is accessed or created;
+  static assertions and the M03 WDK build/signability acceptance passed.
+  No PnP, driver, signing, endpoint, or audio configuration action occurred.
+  Next action: continue the next independently testable M03/M07 recovery
+  integration item.
+
 - Hardened the guarded M03 lifecycle entrypoint on 2026-09-14. INF
   containment now uses a separator-aware package boundary and rejects
   reparse-point files or ancestors before any PnP executable is reached.
