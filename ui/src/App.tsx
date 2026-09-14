@@ -33,6 +33,7 @@ export const WORKSPACE_EVENT_CATEGORIES = [
   "runtime.started",
   "runtime.activated",
   "runtime.stopped",
+  "devices.changed",
   "virtualDevice.changed",
   "virtualBridge.failed",
   "virtualBridge.expired",

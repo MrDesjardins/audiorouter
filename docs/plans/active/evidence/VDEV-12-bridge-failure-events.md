@@ -18,6 +18,9 @@ The UI consumes both bridge categories and presents the bounded bus-scoped
 failure/expiry message through its existing accessible status channel.
 The shared TypeScript contract now constrains `StateEvent.category` and event
 subscription filters to the same 17 categories advertised by Rust discovery.
+The same parity check now includes the emitted `devices.changed` endpoint
+inventory event, for 18 categories total; the UI subscribes to it so endpoint
+changes refresh the authoritative snapshot.
 
 Verification on Windows workspace `C:\code\audiorouter`:
 
@@ -27,7 +30,7 @@ Verification on Windows workspace `C:\code\audiorouter`:
 - `npm.cmd --prefix ui run test -- --run` — 184 passed.
 - `npm.cmd --prefix ui run typecheck` — passed.
 - `npm.cmd --prefix contracts run check:drift` — 71 methods, 19 node kinds, 7
-  processors, and 17 event categories aligned.
+  processors, and 18 event categories aligned.
 - `npm.cmd --prefix contracts run typecheck` — passed.
 - `tests\acceptance\docs.ps1` — 53 Markdown files and 192 local links passed.
 

@@ -724,6 +724,7 @@ export type StateEventCategory =
   | "runtime.started"
   | "runtime.activated"
   | "runtime.stopped"
+  | "devices.changed"
   | "privacy.muteEnabled"
   | "privacy.muteDisabled"
   | "virtualDevice.changed"

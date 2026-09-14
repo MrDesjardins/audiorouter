@@ -67,7 +67,7 @@ const MAX_MEMORY_OPERATION_OUTCOMES: usize = 100;
 const MAX_PLUGIN_INVENTORY_ROOTS: usize = 64;
 const MAX_PLAN_REQUIRED_SCOPES: usize = 1;
 const MAX_PLAN_WARNINGS: usize = 1;
-const STATE_CATEGORIES: [&str; 17] = [
+const STATE_CATEGORIES: [&str; 18] = [
     "session.created",
     "session.deleted",
     "graph.committed",
@@ -75,6 +75,7 @@ const STATE_CATEGORIES: [&str; 17] = [
     "runtime.started",
     "runtime.activated",
     "runtime.stopped",
+    "devices.changed",
     "privacy.muteEnabled",
     "privacy.muteDisabled",
     "virtualDevice.changed",

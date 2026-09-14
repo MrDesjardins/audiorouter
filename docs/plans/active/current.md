@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Corrected the API-08 endpoint-event catalog on 2026-09-14. The emitted
+  `devices.changed` event is now discoverable in Rust, typed in TypeScript, and
+  subscribed by the UI, so endpoint inventory changes trigger the same
+  authoritative refresh path as other workspace state changes. Control (150
+  passed, 2 guarded live ignored), UI (184), contracts drift/typecheck, strict
+  Clippy, formatting, diff, and docs validation passed. No endpoint was opened
+  or machine configuration changed. Next action: continue the next safe
+  M03/M07 recovery integration item.
+
 - Implemented the API-08 contract-hardening slice on 2026-09-14. The contract
   drift checker now fails closed on missing, extra, or duplicate event
   categories and compares the TypeScript `StateEventCategory` union with Rust's
