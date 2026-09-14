@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Qualified the supplied x64 TDR Nova VST2 binary on 2026-09-14 through the
+  contained worker path. Processing passed at 44.1, 48, and 96 kHz, and the
+  bounded editor-thread containment regressions passed; the DLL SHA-256
+  fingerprint remained `4dfc5973416b4b23fa9351128b65e7b42547f6280436cce4cbf8aab1334e4e33`.
+  The acceptance restored the pre-existing VST2 environment variables and
+  performed no registration, file modification, audio stream, or machine
+  configuration action. This does not qualify a native editor window, opaque
+  vendor state round-trip, rights, or release compatibility. Next action:
+  continue the next independently testable M03/M07 recovery item while
+  retaining those M06 gates.
+
 - Requalified the guarded control-owned native lifecycle on 2026-09-14 with
   the existing VB-Cable pair and `-AllowLiveAudio`. The exact active capture
   and render endpoints delivered 24,000 captured frames, 187 processed graph
