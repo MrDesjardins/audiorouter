@@ -2,6 +2,12 @@
 
 Updated: 2026-09-13.
 
+- Cleared the strict-Clippy quality gate on 2026-09-13. The application
+  selector validator had two identical error branches; the equivalent
+  presence-mismatch predicate is now expressed once. Strict Clippy for the
+  Windows-audio dependency chain passes with `-D warnings`, and the locked
+  workspace test suite remains green.
+
 - Added the native process-loopback scheduler slice on 2026-09-13. The
   Windows PCM16 process-loopback packet is expanded in caller-owned storage
   to the scheduler's interleaved float32 contract, with a portable regression

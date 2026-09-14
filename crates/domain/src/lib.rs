@@ -1499,11 +1499,7 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                     ("processId", has_process_id),
                     ("creationTime100ns", has_creation_time),
                 ] {
-                    if selected && !present {
-                        errors.push(ValidationError::InvalidParameter {
-                            path: format!("{path}.parameters.{name}"),
-                        });
-                    } else if !selected && present {
+                    if selected != present {
                         errors.push(ValidationError::InvalidParameter {
                             path: format!("{path}.parameters.{name}"),
                         });
