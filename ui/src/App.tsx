@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ChangeEvent } from "react";
-import type { NativeDuplexPumpResult, NativeEndpointPumpResult, Node, PluginParametersResult, RecordingRecoveryItem, RouteInspection } from "@audiorouter/contracts";
+import type { NativeDuplexPumpResult, NativeEndpointPumpResult, Node, PluginParametersResult, RecordingRecoveryItem, RouteInspection, StateEventCategory } from "@audiorouter/contracts";
 import { LIBRARY_DROP_SOURCE, SessionFlowCanvas } from "./SessionFlowCanvas";
 import { createDisconnectedBackend, formatUiError, isRevisionConflict, SnapshotCache, type ApplicationRow, type RecorderStatus, type UiBackend } from "./backend";
 import type { DeviceListItem } from "@audiorouter/contracts";
@@ -41,7 +41,7 @@ export const WORKSPACE_EVENT_CATEGORIES = [
   "recording.renamed",
   "recording.entryRemoved",
   "recording.recycled",
-] as const;
+] as const satisfies readonly StateEventCategory[];
 
 /** Default diagnostics/meter refresh: 20 Hz, below the API's 30 Hz ceiling. */
 export const DIAGNOSTICS_REFRESH_INTERVAL_MS = 50;

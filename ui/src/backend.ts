@@ -13,6 +13,7 @@ import type {
   DiscoveryDocument,
   DiagnosticsSnapshot,
   EventsSubscribeResult,
+  StateEventCategory,
   GraphCommitResult,
   GraphPlanResult,
   PrivacyMuteResult,
@@ -83,7 +84,7 @@ export interface UiBackend {
   readonly connected: boolean;
   snapshot(): Promise<UiBackendSnapshot>;
   refreshDiagnostics(): Promise<DiagnosticsSnapshot>;
-  subscribe(afterSequence?: number, sessionId?: string, backendEpoch?: number, categories?: string[]): Promise<EventsSubscribeResult>;
+  subscribe(afterSequence?: number, sessionId?: string, backendEpoch?: number, categories?: StateEventCategory[]): Promise<EventsSubscribeResult>;
   inspectRoute(destinationNode: string): Promise<RouteInspection | null>;
   planGraph(candidate: Session): Promise<GraphPlanResult>;
   commitGraph(planId: string, baseRevision: number, idempotencyKey: string, acknowledgments?: string[]): Promise<GraphCommitResult>;

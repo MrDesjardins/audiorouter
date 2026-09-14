@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Closed the API-08 adapter contract gap on 2026-09-14. TypeScript now
+  exposes the same bounded 17-value state-event-category union as Rust
+  discovery, including `virtualBridge.failed` and `virtualBridge.expired`;
+  the UI/backend subscription adapter consumes that type. UI (184 tests),
+  typecheck, the 71-method/19-node/7-processor contract drift check,
+  formatting, and diff checks passed. No audio or machine configuration
+  changed. Next action: continue the next safe M03/M07 recovery integration
+  item.
+
 - Implemented the VDEV-12/API-08 recovery-observability slice on 2026-09-14:
   stale lease expiry now returns exact stable bus IDs from the engine bridge
   set and the control-thread sweep publishes a discoverable,

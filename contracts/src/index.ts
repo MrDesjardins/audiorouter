@@ -716,12 +716,31 @@ export type RecordingRecycleResult =
   | { recordingId: EntityId; path: string; fileAction: "recycle"; preview: true }
   | { recordingId: EntityId; path: string; fileAction: "recycled"; missing: true };
 
+export type StateEventCategory =
+  | "session.created"
+  | "session.deleted"
+  | "graph.committed"
+  | "runtime.crashed"
+  | "runtime.started"
+  | "runtime.activated"
+  | "runtime.stopped"
+  | "privacy.muteEnabled"
+  | "privacy.muteDisabled"
+  | "virtualDevice.changed"
+  | "virtualBridge.failed"
+  | "virtualBridge.expired"
+  | "recorder.changed"
+  | "recording.metadataChanged"
+  | "recording.renamed"
+  | "recording.entryRemoved"
+  | "recording.recycled";
+
 export interface StateEvent {
   sequence: number;
   backendEpoch: number;
   resourceRevision: number;
   operationId: string | null;
-  category: string;
+  category: StateEventCategory;
   sessionId: EntityId | null;
 }
 
@@ -737,7 +756,7 @@ export interface EventsSubscribeResult {
 export interface EventsSubscribeParams {
   afterSequence?: number;
   backendEpoch?: number;
-  categories?: string[];
+  categories?: StateEventCategory[];
   limit?: number;
   sessionId?: EntityId;
 }

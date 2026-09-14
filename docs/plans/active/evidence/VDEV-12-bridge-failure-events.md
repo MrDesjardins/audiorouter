@@ -16,6 +16,8 @@ bridges that expired, silenced, and drained, then publishes one
 `virtualBridge.expired` event per affected bus. Active bridges produce no event.
 The UI consumes both bridge categories and presents the bounded bus-scoped
 failure/expiry message through its existing accessible status channel.
+The shared TypeScript contract now constrains `StateEvent.category` and event
+subscription filters to the same 17 categories advertised by Rust discovery.
 
 Verification on Windows workspace `C:\code\audiorouter`:
 
@@ -24,6 +26,8 @@ Verification on Windows workspace `C:\code\audiorouter`:
 - `cargo clippy -q -p audiorouter-control --locked --all-targets -- -D warnings` — passed.
 - `npm.cmd --prefix ui run test -- --run` — 184 passed.
 - `npm.cmd --prefix ui run typecheck` — passed.
+- `npm.cmd --prefix contracts run check:drift` — 71 methods, 19 node kinds, and
+  7 processors aligned.
 - `tests\acceptance\docs.ps1` — 53 Markdown files and 192 local links passed.
 
 No endpoint, default-device, driver, or other machine audio configuration was
