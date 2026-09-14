@@ -60,6 +60,14 @@ describe("native host bridge", () => {
     expect(backend.connected).toBe(true);
   });
 
+  it("exposes explicit native startup registration through Tauri", async () => {
+    const core = { invoke: vi.fn().mockImplementation((command: string) =>
+      command === "startup_register" ? Promise.resolve('"C:\\Program Files\\AudioRouter\\audiorouter-shell.exe"') : Promise.resolve(response)) };
+    const backend = createInitialBackend(undefined, core, "session-1", "https://tauri.local");
+    await expect(backend.registerStartup?.(true)).resolves.toContain("AudioRouter");
+    expect(core.invoke).toHaveBeenCalledWith("startup_register", { enabled: true });
+  });
+
   it("fails closed to the disconnected preview for malformed injection", () => {
     expect(createInitialBackend(null).connected).toBe(false);
     expect(createInitialBackend({ transport: {}, sessionId: "session-1" }).connected).toBe(false);

@@ -218,7 +218,14 @@ function isTauriCore(value: unknown): value is TauriCore {
 export function createInitialBackend(host: unknown, webview: unknown = undefined, sessionId: unknown = undefined, webviewOrigin: unknown = undefined): UiBackend {
   if (isHostBridge(host)) return createLiveBackendFromTransport(host.transport, host.sessionId);
   if (isTauriCore(webview) && typeof sessionId === "string" && sessionId.length > 0 && sessionId.length <= 128) {
-    return createLiveBackendFromTransport(new TauriRpcTransport(webview), sessionId);
+    return createLiveBackendFromTransport(
+      new TauriRpcTransport(webview),
+      sessionId,
+      (enabled) => Promise.resolve(webview.invoke("startup_register", { enabled })).then((value) => {
+        if (typeof value !== "string") throw new Error("native startup registration returned an invalid response");
+        return value;
+      }),
+    );
   }
   if (isWebView2Webview(webview) && typeof sessionId === "string" && sessionId.length > 0 && sessionId.length <= 128) {
     if (!isTrustedWebView2Origin(webviewOrigin)) return createDisconnectedBackend();

@@ -117,10 +117,23 @@ function StartupPanel({ backend }: { backend: UiBackend }) {
   const applyPlan = async () => {
     if (!plan) return;
     setMessage("Applying startup policy...");
-    try { const result = await backend.applyStartup(plan.planId, uiIdempotencyKey("startup-apply")); setPlan(null); setMessage(result.reason); refresh(); }
+    try {
+      const result = await backend.applyStartup(plan.planId, uiIdempotencyKey("startup-apply"));
+      if (backend.registerStartup) {
+        try {
+          const commandLine = await backend.registerStartup(enabled);
+          setMessage(`${enabled ? "Startup registration enabled" : "Startup registration disabled"}: ${commandLine}`);
+        } catch (error) {
+          setMessage(`Backend policy saved, but native startup registration failed: ${formatUiError(error, "native registration failed")}`);
+        }
+      } else {
+        setMessage(result.reason);
+      }
+      setPlan(null); refresh();
+    }
     catch (error) { setMessage(formatUiError(error, "Startup apply unavailable.")); }
   };
-  return <section className="panel startup-panel" aria-labelledby="startup-heading"><div className="section-heading"><div><p className="eyebrow">Background lifecycle</p><h2 id="startup-heading">Start at sign-in</h2></div><button type="button" className="secondary" onClick={refresh}>Refresh</button></div><p className="muted">{status?.reason ?? "Loading startup capability..."}</p><label>Desired policy<select aria-label="Desired sign-in startup policy" value={enabled ? "enabled" : "disabled"} onChange={(event) => { setEnabled(event.target.value === "enabled"); setPlan(null); }} disabled={!backend.connected}><option value="disabled">Disabled</option><option value="enabled">Enabled</option></select></label><div className="actions"><button type="button" className="secondary" onClick={() => void createPlan()} disabled={!backend.connected}>Plan startup policy</button>{plan && <button type="button" className="secondary" onClick={() => void applyPlan()}>Apply planned policy</button>}</div>{message && <p className="muted" role="status">{message}</p>}<p className="muted">Registration is currently unavailable in this build. Planning and applying only exercise the authorized backend boundary; they do not register Windows startup.</p></section>;
+  return <section className="panel startup-panel" aria-labelledby="startup-heading"><div className="section-heading"><div><p className="eyebrow">Background lifecycle</p><h2 id="startup-heading">Start at sign-in</h2></div><button type="button" className="secondary" onClick={refresh}>Refresh</button></div><p className="muted">{status?.reason ?? "Loading startup capability..."}</p><label>Desired policy<select aria-label="Desired sign-in startup policy" value={enabled ? "enabled" : "disabled"} onChange={(event) => { setEnabled(event.target.value === "enabled"); setPlan(null); }} disabled={!backend.connected}><option value="disabled">Disabled</option><option value="enabled">Enabled</option></select></label><div className="actions"><button type="button" className="secondary" onClick={() => void createPlan()} disabled={!backend.connected}>Plan startup policy</button>{plan && <button type="button" className="secondary" onClick={() => void applyPlan()}>Apply planned policy</button>}</div>{message && <p className="muted" role="status">{message}</p>}<p className="muted">{backend.registerStartup ? "The native shell can register this user's startup preference after an authorized plan is applied." : "Native startup registration is unavailable in this host; planning remains a backend-only operation."}</p></section>;
 }
 
 export function App({ backend }: { backend?: UiBackend } = {}) {

@@ -138,6 +138,7 @@ export interface UiBackend {
   getStartup(): Promise<StartupStatus>;
   planStartup(enabled: boolean): Promise<StartupPlanResult>;
   applyStartup(planId: string, idempotencyKey: string): Promise<StartupApplyResult>;
+  registerStartup?(enabled: boolean): Promise<string>;
 }
 
 export type UiSnapshotState = {
@@ -417,7 +418,7 @@ async function collectPagedRows<T>(request: PagedRequest): Promise<T[]> {
 }
 
 /** Adapter for a future framed/local transport implementation. */
-export function createLiveBackend(client: AudioRouterClient, sessionId: string): UiBackend {
+export function createLiveBackend(client: AudioRouterClient, sessionId: string, registerStartup?: (enabled: boolean) => Promise<string>): UiBackend {
   return {
     connected: true,
     async snapshot() {
@@ -633,10 +634,11 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     async applyStartup(planId, idempotencyKey) {
       return client.request("startup.apply", { planId, idempotencyKey });
     },
+    ...(registerStartup === undefined ? {} : { registerStartup }),
   };
 }
 
 /** Build the live UI backend directly from the host-provided framed transport. */
-export function createLiveBackendFromTransport(transport: RpcTransport, sessionId: string): UiBackend {
-  return createLiveBackend(createAudioRouterClient(transport), sessionId);
+export function createLiveBackendFromTransport(transport: RpcTransport, sessionId: string, registerStartup?: (enabled: boolean) => Promise<string>): UiBackend {
+  return createLiveBackend(createAudioRouterClient(transport), sessionId, registerStartup);
 }
