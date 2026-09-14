@@ -8,7 +8,7 @@ Updated: 2026-09-13.
   control-thread drain; the realtime tap remains enqueue-only. Pump results
   report `recorderChunksDrained`, with the output schema/contracts and API
   reference updated together. Control coverage is 141 passing tests, UI
-  coverage is 158 passing tests, contracts typecheck and strict control
+  coverage is 159 passing tests, contracts typecheck and strict control
   Clippy pass. The existing buffered FLAC worker remains available for
   explicitly offline callers. No endpoint or machine audio configuration was
   changed.
