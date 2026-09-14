@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Strengthened CAP-06 process-restart identity coverage on 2026-09-14. The
+  restart resolver now has explicit regression cases proving a persisted full
+  executable path cannot bind a basename-only observation, and that a
+  path-matching candidate without a creation timestamp remains rejected.
+  This preserves fail-closed PID-reuse protection without opening audio or
+  changing process/device state. Focused Windows-audio tests and strict
+  checks are the validation target; native replacement-process endurance and
+  physical audio gates remain open. Next action: continue the next safe,
+  independently testable plan item.
+
 - Corrected native diagnostics wording on 2026-09-14. When a paired duplex
   worker was attached, the control plane still described it as an endpoint
   worker in `status.get` audio details. The shared status formatter now names

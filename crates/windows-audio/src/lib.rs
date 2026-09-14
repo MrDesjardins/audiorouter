@@ -6630,6 +6630,32 @@ mod tests {
             ),
             Err(AudioError::ApplicationRestartNotFound { .. })
         ));
+        assert!(matches!(
+            resolve_application_restart_with_path(
+                &[ApplicationInfo {
+                    executable: "game.exe".into(),
+                    executable_path: None,
+                    creation_time_100ns: Some(44),
+                    process_id: 9,
+                }],
+                "game.exe",
+                Some(r"C:\Games\Game.EXE")
+            ),
+            Err(AudioError::ApplicationRestartNotFound { .. })
+        ));
+        assert!(matches!(
+            resolve_application_restart_with_path(
+                &[ApplicationInfo {
+                    executable: "game.exe".into(),
+                    executable_path: Some(r"C:\Games\Game.EXE".into()),
+                    creation_time_100ns: None,
+                    process_id: 9,
+                }],
+                "game.exe",
+                Some(r"C:\Games\Game.EXE")
+            ),
+            Err(AudioError::ApplicationRestartIdentityUnavailable { .. })
+        ));
     }
 
     #[cfg(windows)]
