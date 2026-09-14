@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Fixed an M05 template identifier compatibility defect on 2026-09-14. The
+  visible mix-minus selector value (`mix-minus conversation`) is now accepted
+  by the typed template contract and produces the same stopped graph as the
+  canonical `mix-minus` ID, preventing a display/value mismatch from loading
+  an unintended draft. Template regression and UI typecheck passed; no audio
+  or machine configuration changed. Next action: continue the next safe
+  M03/M07 recovery integration item.
+
 - Requalified the complete elevated `tests/acceptance/safe-all.ps1` chain on
   2026-09-14 at pushed head `000834f4`. M00 toolchain/native inventory, M03
   AudioRouter and disposable SysVAD x64 builds, M04 DSP/recording, M05 UI

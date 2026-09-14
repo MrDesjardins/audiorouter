@@ -2,7 +2,7 @@ import type { Session } from "@audiorouter/contracts";
 import { appendDraftConnection } from "./draft";
 import { demoSession } from "./fixtures";
 
-export type TemplateId = "gaming-discord" | "processed-microphone" | "mix-minus";
+export type TemplateId = "gaming-discord" | "processed-microphone" | "mix-minus" | "mix-minus conversation";
 
 function clone(session: Session, name: string): Session {
   return {
@@ -28,7 +28,8 @@ export function templateSession(id: TemplateId): Session {
       const session = voiceTemplate("Processed microphone");
       return { ...session, nodes: session.nodes.map((node) => node.id === "voice" ? { ...node, name: "Processed voice gain", parameters: { gainDb: -3 } } : node) };
     }
-    case "mix-minus": {
+    case "mix-minus":
+    case "mix-minus conversation": {
       const session = voiceTemplate("Mix-minus conversation");
       return { ...session, nodes: session.nodes.map((node) => node.id === "voice" ? { ...node, name: "Call input (mic only)" } : node) };
     }

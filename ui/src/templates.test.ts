@@ -16,5 +16,6 @@ describe("guided templates", () => {
     const second = templateSession("processed-microphone");
     expect(second.nodes[1].parameters.gainDb).toBe(-3);
     expect(templateSession("mix-minus").name).toBe("Mix-minus conversation");
+    expect(templateSession("mix-minus conversation")).toEqual(templateSession("mix-minus"));
   });
 });
