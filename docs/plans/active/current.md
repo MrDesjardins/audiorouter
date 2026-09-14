@@ -2,6 +2,19 @@
 
 Updated: 2026-09-14.
 
+- Requalified the complete non-installing safe acceptance chain after the
+  guarded route gained its built-in Gain stage on 2026-09-14. M00 toolchain,
+  native compile, AudioRouter x64 WDK build/catalog signability, read-only
+  endpoint inventory, disposable SysVAD, M01, M04 (32 DSP and 40 recording),
+  M05 (182 UI tests, typecheck, production builds), M06 VST3/VST2 workers,
+  M07, unsigned M08 preparation, 159 traceability IDs, and documentation
+  validation (52 Markdown files/190 local links) all passed. Cleanup removed
+  15 run-owned temporary children. This remains non-installing qualification;
+  loaded PortCls, production signing/install, physical latency, and attended
+  WebView2 gates remain open. No plugin/startup registration or persistent
+  machine audio configuration changed. Next action: continue the next safe
+  processing/routing delivery item.
+
 - Extended the guarded M02 control-owned route on 2026-09-14 with an actual
   in-house `Gain` node (`gainDb=-6`) between the selected capture endpoint and
   recorder/output. The route therefore now exercises graph compilation and a
