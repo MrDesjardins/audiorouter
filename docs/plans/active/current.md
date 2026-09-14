@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Requalified the complete safe M00-M08 acceptance chain at pushed head
+  `cfc3d712` on 2026-09-13. Toolchain/native compile, x64 WDK driver
+  build/catalog signability, read-only 31-endpoint inventory, disposable
+  SysVAD, M01/M04, M05 (18 files/164 UI tests and production builds), M06
+  VST3/VST2 workers, M07, unsigned M08 artifacts, 159 normative mappings, and
+  52-file/189-link documentation validation all passed. Fifteen temporary
+  run-owned children were removed. No driver install/load, signing-mode or
+  boot-policy change, plugin/startup registration, endpoint-default, or
+  persistent audio action occurred.
+
 - Built the Windows Tauri shell debug artifact on 2026-09-13 with `cargo
   build --manifest-path src-tauri/Cargo.toml`; compilation completed in 10.69 s
   and produced the runnable shell target. The executable was not launched and
