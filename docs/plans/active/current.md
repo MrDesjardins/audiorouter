@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Revalidated the current UI production bundle on 2026-09-14 with typecheck
+  and a disposable Vite output directory: 213 modules transformed and three
+  release assets emitted successfully, then the temporary output was removed.
+  The normal `ui/dist` output was intentionally not replaced because an
+  existing CSS asset was locked (`EPERM`); this is an environment/output-lock
+  limitation, not a source-build failure. No machine audio configuration
+  changed.
+
 - Improved UI-14 recording-library verification on 2026-09-14. Each visible
   recording row now shows authoritative duration derived from frame count and
   sample rate plus file size, alongside its state and approved path. Invalid
