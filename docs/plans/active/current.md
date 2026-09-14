@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Passed the authorized M02/CAP-11 application-capture lifecycle on
+  2026-09-14 using the exact active `voicemeeterpro.exe` identity (PID,
+  executable, and creation time) and existing VB-Cable render endpoint. The
+  test completed two bounded start/pump/stop cycles plus same-process worker
+  restart, then confirmed unchanged media-device identity/state and restored
+  all temporary environment values. No defaults, volume, mute, privacy,
+  registry, driver, signing, or startup configuration changed. Next action:
+  continue the next safe M03/M07 recovery or delivery item.
+
 - Passed the authorized M02 control-owned native lifecycle on 2026-09-14
   against the exact active VB-Cable endpoints. The single Rust control plane
   prepared, started, processed, and stopped the route successfully, reporting
