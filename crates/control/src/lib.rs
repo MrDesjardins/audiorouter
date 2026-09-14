@@ -4552,6 +4552,12 @@ impl ControlPlane {
         first_error.map_or(Ok(()), |message| Err(ControlError::InvalidRequest(message)))
     }
 
+    fn deactivate_virtual_bridge(&self, bus_id: &EntityId) {
+        if let Some(bridge) = self.virtual_bridges.get(bus_id) {
+            bridge.deactivate();
+        }
+    }
+
     #[cfg(windows)]
     pub fn detach_native_capture_sink_binding(
         &mut self,
@@ -4563,9 +4569,7 @@ impl ControlPlane {
             ));
         };
         let close_result = binding.close();
-        if let Some(bridge) = self.virtual_bridges.get(bus_id) {
-            bridge.deactivate();
-        }
+        self.deactivate_virtual_bridge(bus_id);
         close_result.map_err(|error| {
             ControlError::InvalidRequest(format!("native capture sink close failed: {error:?}"))
         })
@@ -4582,9 +4586,7 @@ impl ControlPlane {
             ));
         };
         let close_result = binding.close();
-        if let Some(bridge) = self.virtual_bridges.get(bus_id) {
-            bridge.deactivate();
-        }
+        self.deactivate_virtual_bridge(bus_id);
         close_result.map_err(|error| {
             ControlError::InvalidRequest(format!("native render source close failed: {error:?}"))
         })
@@ -4598,9 +4600,7 @@ impl ControlPlane {
             ));
         };
         let close_result = binding.close();
-        if let Some(bridge) = self.virtual_bridges.get(bus_id) {
-            bridge.deactivate();
-        }
+        self.deactivate_virtual_bridge(bus_id);
         close_result.map_err(|error| {
             ControlError::InvalidRequest(format!("native duplex close failed: {error:?}"))
         })
@@ -17764,6 +17764,21 @@ mod tests {
         let event = plane.events.since(0, 10).unwrap().pop().unwrap();
         assert_eq!(event.category, "virtualBridge.expired");
         assert_eq!(event.operation_id.as_deref(), Some("expiring-bus"));
+    }
+
+    #[test]
+    fn native_detach_cleanup_deactivates_the_portable_bridge() {
+        let mut plane = ControlPlane::default();
+        let id = EntityId::new("detach-bus");
+        plane.create_virtual_bus(id.clone(), "Detach bus").unwrap();
+        let bridge = plane.virtual_bridges.get(&id).unwrap();
+        bridge.activate(1).unwrap();
+        assert!(bridge.is_active());
+
+        plane.deactivate_virtual_bridge(&id);
+
+        assert!(!bridge.is_active());
+        assert!(bridge.try_receive_capture().is_none());
     }
 
     #[test]

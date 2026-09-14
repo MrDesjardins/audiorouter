@@ -21,7 +21,7 @@ release and must not be presented as an installable Windows audio product.
   formatting, and strict Clippy; the guarded native tests remain explicitly
   opt-in.
 - M07 headless acceptance passes 33 CLI tests, 3 MCP interoperability tests,
-  154 control tests (2 guarded live tests intentionally ignored), 70
+  155 control tests (2 guarded live tests intentionally ignored), 70
   plugin-host tests, 13
   worker-process tests, and 17 shell tests.
 - M08 disposable artifact preparation creates and verifies unsigned x64 CLI,

@@ -43,7 +43,7 @@ surface is green:
   build.
 - M06 passes with the pinned local VST3 SDK: 51 SDK self-tests, 1,598 official
   validator tests with zero failures, and the offline native loader.
-- M07 passes 33 CLI tests, MCP stdio/named-pipe interoperability, 154 control
+- M07 passes 33 CLI tests, MCP stdio/named-pipe interoperability, 155 control
   tests (2 guarded live tests ignored), 70 plugin-host tests, 13
   worker-process tests, 17 shell tests, and strict Clippy.
 - M08 unsigned artifact preparation, provenance/SBOM, checksums, exact-content

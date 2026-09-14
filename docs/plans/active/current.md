@@ -6,7 +6,7 @@ Updated: 2026-09-14.
   Capture-sink, render-source, and duplex binding removal now deactivates the
   matching portable bridge even when native lease close reports an error,
   preventing stale audio publication after recovery or operator teardown.
-  The control suite passed 154 tests with 2 guarded live tests intentionally
+  The control suite passed 155 tests with 2 guarded live tests intentionally
   ignored; no driver was installed/loaded and no machine audio configuration
   changed. Next action: continue the next safe M03/M07 recovery integration
   item.
