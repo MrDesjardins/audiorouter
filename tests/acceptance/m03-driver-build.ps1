@@ -177,6 +177,25 @@ foreach ($required in @(
 if (-not $stream.Contains('ReadBytes(ByteDisplacement);')) {
     throw 'WaveRT render consumption must run the bridge publisher even when file diagnostics are disabled'
 }
+$updatePositionStart = $stream.IndexOf('VOID CMiniportWaveRTStream::UpdatePosition')
+$writeBytesStart = $stream.IndexOf('VOID CMiniportWaveRTStream::WriteBytes', $updatePositionStart)
+if ($updatePositionStart -lt 0 -or $writeBytesStart -le $updatePositionStart) {
+    throw 'WaveRT position-update callback boundary is missing'
+}
+$updatePositionSource = $stream.Substring($updatePositionStart, $writeBytesStart - $updatePositionStart)
+foreach ($required in @('WriteBytes(ByteDisplacement);', 'ReadBytes(ByteDisplacement);')) {
+    if (-not $updatePositionSource.Contains($required)) {
+        throw "WaveRT position-update callback does not reach the bridge path: $required"
+    }
+}
+$timerStart = $stream.LastIndexOf('TimerNotifyRT')
+if ($timerStart -lt 0) {
+    throw 'WaveRT timer callback boundary is missing'
+}
+$timerSource = $stream.Substring($timerStart)
+if (-not $timerSource.Contains('_this->UpdatePosition(qpc);')) {
+    throw 'WaveRT timer callback does not reach the position-update bridge path'
+}
 $readBytesSource = $stream.Substring($stream.IndexOf('VOID CMiniportWaveRTStream::ReadBytes'))
 if (-not $readBytesSource.Contains('RefreshBridgePublishShape();')) {
     throw 'WaveRT render callback must refresh the capture-sink bridge shape before publication'

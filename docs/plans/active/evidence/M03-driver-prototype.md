@@ -1,5 +1,16 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-14 - timer-to-bridge source reachability
+
+The non-installing `tests/acceptance/m03-driver-build.ps1` gate now checks the
+actual callback chain: `TimerNotifyRT` invokes `UpdatePosition`, and the
+position-update body reaches both `WriteBytes` and `ReadBytes`. This prevents
+bridge helper presence from being mistaken for a reachable WaveRT callback.
+The x64 WDK build and catalog signability run passed with zero errors and
+warnings, and disposable output was removed. No driver was installed or
+loaded; PortCls ownership, production signing, and loaded endpoint transport
+remain open.
+
 ## 2026-09-13 - elevated installation readiness audit
 
 The read-only administrator audit reported Secure Boot enabled (`True`), no

@@ -41,6 +41,15 @@ Updated: 2026-09-14.
   the exact Voicemeeter identity and CABLE Input endpoint and passed. No
   persistent audio configuration changed.
 
+- Strengthened the non-installing M03 driver gate on 2026-09-14. The source
+  contract now proves the reference `TimerNotifyRT` callback reaches
+  `UpdatePosition`, and that position advancement reaches both directional
+  bridge callbacks, instead of merely checking for helper symbols elsewhere
+  in the driver. The x64 WDK build/catalog signability run passed with zero
+  errors and warnings; disposable output was removed. Loaded PortCls
+  ownership, driver installation, production signing, and endpoint transport
+  remain explicit gates.
+
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
   the current worktree on 2026-09-14 after the lifecycle-order repair. The
   elevated chain passed project WDK build/catalog signability, read-only
