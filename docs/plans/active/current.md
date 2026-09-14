@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Requalified the authorized VB-Cable signal loopback on 2026-09-14 with
+  `m00-native-loopback.ps1 -AllowLiveAudio -CaptureDurationMilliseconds 1000
+  -ToneDurationMilliseconds 1200`. The exact render/capture pair transported
+  a generated tone and produced 213,728 nonzero captured bytes; temporary
+  streams/logs were cleaned and defaults, volume, mute, privacy, driver, and
+  startup state remained unchanged. This proves the existing-cable signal
+  path only; it does not qualify AudioRouter's own driver or physical
+  acoustic latency. Next action: continue the next safe M03/M07 recovery item.
+
 - Requalified the bounded native event and impulse paths on 2026-09-14
   against the existing VB-Cable endpoints. `m00-native-event-live.ps1`
   passed with 24,480 capture frames and 28,800 render frames over 500 ms;
