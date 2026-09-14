@@ -4087,6 +4087,19 @@ impl ControlPlane {
         }
     }
 
+    fn native_worker_attached_to(&self, session_id: &EntityId) -> bool {
+        self.native_endpoint_session.as_ref() == Some(session_id) || {
+            #[cfg(windows)]
+            {
+                self.native_duplex_worker_session.as_ref() == Some(session_id)
+            }
+            #[cfg(not(windows))]
+            {
+                false
+            }
+        }
+    }
+
     /// Attach an already-opened, exact-binding endpoint worker to one known
     /// session. Opening endpoints is outside this method and the worker stays
     /// stopped until an explicit start call is made.
@@ -6912,6 +6925,7 @@ impl ControlPlane {
                 .iter()
                 .filter(|(id, runtime)| {
                     runtime.state() == RuntimeState::Running
+                        && !self.native_worker_attached_to(id)
                         && !self.recorders.get(*id).is_some_and(|recorder| {
                             matches!(
                                 recorder.state(),
@@ -6959,6 +6973,47 @@ impl ControlPlane {
                 runtime.stop();
             }
         }
+        // Recovery is a fail-closed boundary for native ownership too. The
+        // in-process supervisor path may retain worker objects while applying
+        // the crash policy; stop and drop only workers owned by a crashed
+        // session before any portable runtime is restarted. Dropping after a
+        // stop attempt also releases the OS handles when a platform stop
+        // reports an error, while the first error remains visible to the
+        // supervisor.
+        let mut native_recovery_error = None;
+        if self
+            .native_endpoint_session
+            .as_ref()
+            .is_some_and(|session_id| crashed_session_ids.contains(session_id))
+        {
+            if let Some(worker) = self.native_endpoint_worker.as_mut() {
+                if let Err(error) = worker.stop() {
+                    native_recovery_error = Some(audio_control_error(error));
+                }
+            }
+            self.native_endpoint_worker = None;
+            self.native_endpoint_session = None;
+            self.native_endpoint_taps = None;
+        }
+        #[cfg(windows)]
+        if self
+            .native_duplex_worker_session
+            .as_ref()
+            .is_some_and(|session_id| crashed_session_ids.contains(session_id))
+        {
+            if let Some(worker) = self.native_duplex_worker.as_mut() {
+                if let Err(error) = worker.stop() {
+                    if native_recovery_error.is_none() {
+                        native_recovery_error = Some(ControlError::InvalidRequest(format!(
+                            "native duplex recovery stop failed: {error:?}"
+                        )));
+                    }
+                }
+            }
+            self.native_duplex_worker = None;
+            self.native_duplex_worker_session = None;
+            self.native_duplex_worker_generation = None;
+        }
         for session_id in &crashed_session_ids {
             self.deactivate_virtual_route_bridges(session_id);
         }
@@ -6966,6 +7021,9 @@ impl ControlPlane {
             for session_id in &decision.session_ids {
                 self.session_start(session_id)?;
             }
+        }
+        if let Some(error) = native_recovery_error {
+            return Err(error);
         }
         Ok(decision)
     }
@@ -14598,6 +14656,31 @@ mod tests {
                 "runtime.started"
             ]
         );
+    }
+
+    #[test]
+    fn runtime_crash_recovery_does_not_restart_native_owned_sessions() {
+        let mut plane = ControlPlane::default();
+        let mut value = session();
+        value.id = EntityId::new("native-owned");
+        let session_id = value.id.clone();
+        plane.insert_session(value).unwrap();
+        plane.session_start(&session_id).unwrap();
+
+        // A native worker is not constructible in this portable test, but the
+        // ownership marker is enough to model the supervisor handoff. A stale
+        // marker must fail closed too: recovery must not restart a route that
+        // could still require native endpoint ownership.
+        plane.native_endpoint_session = Some(session_id.clone());
+        let decision = plane.recover_after_runtime_crash(100).unwrap();
+
+        assert_eq!(decision.mode, RecoveryMode::RestoreEligible);
+        assert!(decision.session_ids.is_empty());
+        assert_eq!(
+            plane.status_snapshot().unwrap()["activeSessionIds"],
+            json!([])
+        );
+        assert!(plane.native_endpoint_session.is_none());
     }
 
     #[test]

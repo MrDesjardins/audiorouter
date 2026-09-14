@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Closed an M07/VDEV-12 crash-recovery ownership gap on 2026-09-14. Runtime
+  crash recovery now excludes native-owned sessions from automatic portable
+  restart, stops and drops affected native endpoint/duplex workers, clears
+  their bridge ownership markers, and preserves the first stop error for the
+  supervisor. A regression covers fail-closed handling of a native ownership
+  marker. Control tests (156 passed, 2 guarded live ignored), strict Clippy,
+  formatting, diff checks, and Windows-target compilation passed. No native
+  endpoint was opened and no machine audio configuration changed. Next action:
+  continue the next safe M03/M07 recovery integration item.
+
 - Reconciled the REC-03 recording-encoding contract on 2026-09-14. The
   previously pending implementation is already complete: recording dither and
   conversion are validated at the recording boundary, persisted through the
