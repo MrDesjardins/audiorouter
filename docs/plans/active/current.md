@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Added UI-to-backend Limiter parameter integration coverage on 2026-09-13.
+  The regression drags the built-in Limiter onto the visual canvas, edits its
+  ceiling to `-3` dBFS, plans the graph, and verifies the authoritative
+  candidate contains the changed parameter before commit. TypeScript
+  typecheck and the full UI suite pass (18 files/163 tests); no endpoint or
+  machine audio configuration is accessed.
+
 - Added UI-to-backend Compressor parameter integration coverage on 2026-09-13.
   The regression drags the built-in Compressor onto the visual canvas, edits
   its ratio to `6`, plans the graph, and verifies the authoritative candidate

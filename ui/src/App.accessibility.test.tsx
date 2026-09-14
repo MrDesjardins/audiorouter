@@ -569,6 +569,53 @@ describe("keyboard connection dialog", () => {
     }));
   });
 
+  it("commits a dropped limiter parameter through the graph backend", async () => {
+    const planGraph = vi.fn(async (candidate: typeof demoSession) => ({
+      planId: "limiter-plan",
+      baseRevision: candidate.revision,
+      expiresInMs: 30_000,
+      diff: [],
+      affectedDestinations: [],
+      warnings: [],
+      requiredScopes: ["graphWrite"],
+    }));
+    const commitGraph = vi.fn(async () => ({ sessionId: demoSession.id, revision: demoSession.revision + 1 }));
+    const limiter = {
+      id: "limiter",
+      version: 1,
+      category: "dynamics" as const,
+      availability: { status: "available" as const },
+      latencySamples: 240,
+      parameters: [
+        { name: "ceilingDb", type: "number" as const, unit: "dBFS", minimum: -12, maximum: 0, default: -1 },
+      ],
+    };
+    const backend = { ...connectedPreviewBackend(), listProcessors: async () => [limiter], planGraph, commitGraph };
+    render(<App backend={backend} />);
+
+    const dropSource = await screen.findByRole("button", { name: /^Limiter$/ });
+    const canvas = screen.getByLabelText("Signal-flow graph");
+    const values = new Map<string, string>();
+    const dataTransfer = {
+      types: ["application/x-audiorouter-library-kind"],
+      effectAllowed: "copy",
+      setData: (type: string, value: string) => values.set(type, value),
+      getData: (type: string) => values.get(type) ?? "",
+    };
+    fireEvent.dragStart(dropSource, { dataTransfer });
+    fireEvent.drop(canvas, { dataTransfer });
+    fireEvent.click(await screen.findByLabelText("Limiter 1, limiter"));
+    fireEvent.change(await screen.findByRole("spinbutton", { name: "ceilingDb precise value" }), { target: { value: "-3" } });
+    fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
+
+    await waitFor(() => expect(commitGraph).toHaveBeenCalledWith("limiter-plan", demoSession.revision, expect.any(String)));
+    expect(planGraph).toHaveBeenCalledWith(expect.objectContaining({
+      nodes: expect.arrayContaining([
+        expect.objectContaining({ kind: "limiter", parameters: expect.objectContaining({ ceilingDb: -3 }) }),
+      ]),
+    }));
+  });
+
   it("expands an authoritative EQ preset into a draft node", async () => {
     const backend = {
       ...connectedPreviewBackend(),
