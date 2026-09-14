@@ -1,6 +1,6 @@
 # Active plan
 
-Updated: 2026-09-13.
+Updated: 2026-09-14.
 
 - Fixed a real M02 acceptance integration defect on 2026-09-14. After the
   native lifecycle boundary was tightened, the control-owned VB-Cable probe
@@ -21,6 +21,17 @@ Updated: 2026-09-13.
   500 ms start/pump/stop path with 24,000 captured frames, 187 processed
   quanta, and 23,936 rendered frames. The ignored test passed, and its process
   environment was restored; no persistent audio configuration changed.
+
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
+  the current worktree on 2026-09-14 after the lifecycle-order repair. The
+  elevated chain passed project WDK build/catalog signability, read-only
+  31-endpoint inventory, disposable SysVAD, M01/M04/M05 (18 files, 166 UI
+  tests, typecheck, and production bundles), M06 VST3/VST2 workers, M07,
+  unsigned M08 artifacts, 159 traceability IDs, and 52-file/190-link
+  documentation validation. Fifteen run-owned temporary children were
+  removed. No driver installation/loading, signing-mode or boot-policy
+  change, plugin or startup registration, or persistent audio configuration
+  occurred.
 
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
   pushed head `f376156c` on 2026-09-13 after fixing render-stream bridge
