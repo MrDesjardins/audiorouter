@@ -22,6 +22,11 @@ Updated: 2026-09-14.
   startup registration, or persistent machine configuration changed. Manual
   screen-reader and broader signed-release gates remain separate.
 
+- Requalified M01/M07 headless acceptance on 2026-09-14. The CLI/MCP/control
+  suites, plugin-host worker-process checks, and workspace compilation passed
+  through the bounded headless workflow. No audio device, driver, plugin
+  registration, startup registration, or machine configuration changed.
+
 - Requalified M05 at the current worktree on 2026-09-14. The acceptance
   wrapper passed contracts/UI typecheck, 18 UI test files with 167 tests, and
   a disposable Vite production build producing 3 artifacts. The telemetry
