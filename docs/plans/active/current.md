@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Requalified the guarded digital VB-Cable signal path on 2026-09-13. A
+  1,500 ms disposable tone through the exact CABLE render/capture pair
+  produced 207,198 nonzero captured payload bytes during a 1,000 ms capture.
+  Media identity/state remained unchanged and temporary executable/object/log
+  files were removed; no endpoint default, volume, mute, privacy, driver,
+  signing, startup, or persistent machine-audio setting changed. This is
+  digital loopback evidence, not calibrated physical latency or driver proof.
+
 - Requalified the guarded event-driven VB-Cable endpoint lifecycle on
   2026-09-13. The exact pair produced 24,480 captured frames and 28,320
   silently rendered frames; initialize, event setup, start, stop, and reset

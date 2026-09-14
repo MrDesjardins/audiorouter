@@ -18,6 +18,21 @@ setting changed. This qualifies API mode/lifecycle and data-path behavior;
 it does not establish a full cross-process isolation threshold or production
 driver capability.
 
+## 2026-09-13 - guarded digital signal-path loopback
+
+The authorized `m00-native-loopback.ps1 -AllowLiveAudio
+-CaptureDurationMilliseconds 1000 -ToneDurationMilliseconds 1500` probe
+passed through the exact existing `CABLE Input (VB-Audio Virtual Cable)`
+render and `CABLE Output (VB-Audio Virtual Cable)` capture endpoints. The
+1,500 ms disposable tone produced 207,198 nonzero captured payload bytes during
+the 1,000 ms capture.
+
+The harness verified the endpoint/media snapshot was unchanged and removed its
+temporary executable, object, and logs. No endpoint default, volume, mute,
+privacy, driver, signing, startup, or persistent machine-audio setting changed.
+This is digital signal-path evidence through an existing third-party cable;
+calibrated physical latency and managed-driver ownership remain open.
+
 ## 2026-09-13 - guarded event-driven endpoint lifecycle
 
 The authorized `m00-native-event-live.ps1 -AllowLiveAudio
