@@ -3,6 +3,16 @@
 Updated: 2026-09-13.
 
 - Requalified the complete safe M00-M08 acceptance chain at pushed head
+  `ef84e3c4` on 2026-09-13 after the elevated driver-readiness audit. The
+  project x64 WDK build/signability, read-only native checks, disposable
+  SysVAD, M01/M04, 159-test UI and production builds, VST3/VST2 workers, M07,
+  unsigned M08 artifacts, 159 traceability mappings, and 52-file/189-link
+  documentation validation all passed. Fifteen temporary children were
+  removed. No driver install/load, signing-mode or boot-policy change,
+  plugin/startup registration, endpoint-default, or persistent audio action
+  occurred.
+
+- Requalified the complete safe M00-M08 acceptance chain at pushed head
   `0e22ac83` on 2026-09-13. The x64 VS/WDK toolchain and project-driver
   signability/catalog build, read-only endpoint/native checks, disposable
   SysVAD, M01/M04, M05 (159 UI tests and production builds), M06 VST3/VST2
