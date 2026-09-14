@@ -2,6 +2,12 @@
 
 Updated: 2026-09-14.
 
+- Requalified the bounded M00 native lifecycle across the current endpoint
+  inventory on 2026-09-14: 13 capture endpoints and 18 render endpoints were
+  exercised, with one occupied render endpoint correctly reported as such.
+  Capture and silent-render start/stop/reset checks passed; defaults, volume,
+  mute, privacy, drivers, signing, and startup configuration were unchanged.
+
 - Promoted the UI workspace event filter to the exported
   `WORKSPACE_EVENT_CATEGORIES` contract on 2026-09-14 and added a regression
   proving state categories are present while meter categories remain absent.
