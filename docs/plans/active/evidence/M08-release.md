@@ -1,5 +1,16 @@
 # M08 release evidence
 
+## 2026-09-13 - complete safe-chain requalification after lock repair
+
+The complete `tests/acceptance/safe-all.ps1` chain passed on the repaired
+clean tree. It covered the toolchain, x64 project-driver build/signability,
+portable backend/DSP/recording, UI, VST3 SDK and worker, VST2 fixtures, M07
+headless controls, unsigned M08 artifact preparation, 159 traceability
+mappings, and documentation validation (52 Markdown files, 188 local links).
+Cleanup removed 15 run-owned temporary children. Driver installation/loading,
+signing-mode changes, live audio, registration, and persistent machine audio
+configuration remained excluded.
+
 ## 2026-09-13 - locked native shell release requalification
 
 The integrated safe chain first exposed stale `src-tauri/Cargo.lock` data:

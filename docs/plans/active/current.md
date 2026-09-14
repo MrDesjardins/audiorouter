@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Requalified the complete `safe-all.ps1` chain on 2026-09-13 after the
+  native-shell lock repair. Toolchain/native compile, x64 driver build and
+  signability, endpoint inventory, disposable SysVAD, CLI, DSP/recording,
+  UI, VST3 SDK/worker, VST2 fixtures, headless controls, unsigned M08
+  artifacts, 159 traceability mappings, and documentation all passed.
+  Cleanup removed 15 run-owned temporary children. The chain excludes driver
+  installation/loading, signing-mode changes, plugin/startup registration,
+  live audio, and persistent machine audio configuration.
+
 - Attempted the disposable desktop-shell UI acceptance on 2026-09-13.
   `run-vb-cable-desktop.ps1` launched the shell and discovered the exact
   active VB-Cable capture/render pair using a temporary enrolled database;
