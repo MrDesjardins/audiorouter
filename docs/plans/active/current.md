@@ -2,6 +2,18 @@
 
 Updated: 2026-09-14.
 
+- Requalified the elevated `tests/acceptance/safe-all.ps1` chain at the
+  pushed head on 2026-09-14. Toolchain/native compile, 31-endpoint read-only
+  inventory, disposable SysVAD x64 package/API validation, M01, M04 (32 DSP
+  and 40 recording tests), M05 UI (184 tests and production build), M06 VST3
+  SDK/worker and VST2 fixtures, M07 headless, unsigned M08 artifacts,
+  traceability (159 IDs), and documentation (53 files/192 links) passed.
+  The first non-elevated attempt correctly stopped at PnP inventory access;
+  the authorized elevated rerun passed. No driver was installed or loaded,
+  and no startup registration or machine audio configuration changed. Native
+  sign-in/tray, production driver/signing, installer, physical-latency, and
+  attended UI gates remain open.
+
 - Implemented the M07 startup authorization correction on 2026-09-14. Added
   the dedicated `startupWrite` permission to the Rust and TypeScript contracts,
   assigned it to `startup.plan`/`startup.apply`, updated MCP scope guidance and
