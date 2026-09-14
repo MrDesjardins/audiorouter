@@ -1,5 +1,19 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-13 - elevated installation readiness audit
+
+The read-only administrator audit reported Secure Boot enabled (`True`), no
+test-signing flag in the current BCD entry, and no installed AudioRouter
+driver package in `pnputil /enum-drivers`. The only matched present media
+devices were the existing VB-Audio Voicemeeter VAIO and VB-Audio Virtual
+Cable devices. No INF was installed, no driver service or boot policy was
+changed, and the existing audio configuration was untouched.
+
+This establishes why the built prototype cannot be loaded on the current
+machine without either a production-signed package or a deliberately
+isolated developer target with an explicitly reversible security-policy
+change. It does not claim production signing or endpoint qualification.
+
 ## 2026-09-13 - bridge publication requalification at current head
 
 Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File

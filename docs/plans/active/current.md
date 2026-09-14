@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Completed a read-only driver-install readiness audit on 2026-09-13 as
+  administrator. Secure Boot is enabled, the current boot entry does not
+  expose test-signing mode, and no AudioRouter package is present in the
+  installed-driver inventory; only the existing VB-Audio media devices were
+  matched. Therefore a live AudioRouter endpoint test cannot proceed safely
+  with the current unsigned prototype without weakening boot security. The
+  next driver gate requires a production-signed package or an explicitly
+  isolated developer target whose security policy may be changed and then
+  restored; no such change was made.
+
 - Requalified the authorized Rust adapter bridge for five consecutive
   two-second cycles on 2026-09-13 through the exact VB-Cable pair. Every
   cycle captured 96,480 frames, processed 753 quanta/taps, rendered 96,384
