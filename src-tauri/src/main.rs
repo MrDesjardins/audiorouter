@@ -110,6 +110,15 @@ fn startup_register(enabled: bool) -> Result<String, String> {
     Ok(command_line)
 }
 
+#[tauri::command]
+fn startup_status() -> Result<&'static str, String> {
+    Ok(if startup::is_registered()? {
+        "registered"
+    } else {
+        "unregistered"
+    })
+}
+
 fn session_initialization_script(session_id: &str, frontend_probe: bool) -> String {
     let encoded = serde_json::to_string(session_id).expect("session id is serializable");
     let probe = if frontend_probe {
@@ -476,7 +485,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             rpc_request,
             session_id,
-            startup_register
+            startup_register,
+            startup_status
         ])
         .setup(move |app| {
             let session_script = session_script.clone();

@@ -225,6 +225,10 @@ export function createInitialBackend(host: unknown, webview: unknown = undefined
         if (typeof value !== "string") throw new Error("native startup registration returned an invalid response");
         return value;
       }),
+      () => Promise.resolve(webview.invoke("startup_status")).then((value) => {
+        if (value !== "registered" && value !== "unregistered") throw new Error("native startup status returned an invalid response");
+        return value;
+      }),
     );
   }
   if (isWebView2Webview(webview) && typeof sessionId === "string" && sessionId.length > 0 && sessionId.length <= 128) {

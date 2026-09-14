@@ -18,8 +18,10 @@ Updated: 2026-09-14.
   a disabled policy is deliberately a no-op so an unrelated value is never
   removed implicitly. Shell tests (13), strict Clippy, formatting, and diff
   checks pass. The rehydration path was not exercised with an enabled live
-  registry policy during qualification; attended enable/disable rollback and
-  status reconciliation remain open.
+  registry policy during qualification; attended enable/disable rollback
+  remains open. Added a read-only `startup_status` shell command and UI
+  display for registered/unregistered/unavailable native state; UI typecheck
+  and all 185 UI tests pass.
 
 - Fixed the desktop-shell authorization handoff on 2026-09-14. After
   `startupWrite` was separated from the ordinary Operator role, the shell's

@@ -9,8 +9,9 @@ mod windows_registry {
     use windows::core::PCWSTR;
     use windows::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS};
     use windows::Win32::System::Registry::{
-        RegCloseKey, RegCreateKeyExW, RegDeleteValueW, RegSetValueExW, HKEY, HKEY_CURRENT_USER,
-        KEY_SET_VALUE, REG_OPTION_NON_VOLATILE, REG_SZ,
+        RegCloseKey, RegCreateKeyExW, RegDeleteValueW, RegOpenKeyExW, RegQueryValueExW,
+        RegSetValueExW, HKEY, HKEY_CURRENT_USER, KEY_QUERY_VALUE, KEY_SET_VALUE,
+        REG_OPTION_NON_VOLATILE, REG_SZ, REG_VALUE_TYPE,
     };
 
     const RUN_SUBKEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
@@ -91,6 +92,47 @@ mod windows_registry {
         }
         Ok(())
     }
+
+    pub fn is_registered() -> Result<bool, String> {
+        let subkey = wide(RUN_SUBKEY);
+        let name = wide(VALUE_NAME);
+        let mut raw = HKEY::default();
+        let status = unsafe {
+            RegOpenKeyExW(
+                HKEY_CURRENT_USER,
+                PCWSTR(subkey.as_ptr()),
+                None,
+                KEY_QUERY_VALUE,
+                &mut raw,
+            )
+        };
+        if status == ERROR_FILE_NOT_FOUND {
+            return Ok(false);
+        }
+        if status != ERROR_SUCCESS {
+            return Err(format!("startup registry key lookup failed: {status:?}"));
+        }
+        let _key = Key(raw);
+        let mut value_type = REG_VALUE_TYPE(0);
+        let mut byte_len = 0u32;
+        let status = unsafe {
+            RegQueryValueExW(
+                raw,
+                PCWSTR(name.as_ptr()),
+                None,
+                Some(&mut value_type),
+                None,
+                Some(&mut byte_len),
+            )
+        };
+        if status == ERROR_FILE_NOT_FOUND {
+            return Ok(false);
+        }
+        if status != ERROR_SUCCESS {
+            return Err(format!("startup registry value lookup failed: {status:?}"));
+        }
+        Ok(byte_len > 0)
+    }
 }
 
 #[cfg(windows)]
@@ -98,8 +140,18 @@ pub fn apply(enabled: bool, executable: &std::path::Path) -> Result<(), String> 
     windows_registry::apply(enabled, executable)
 }
 
+#[cfg(windows)]
+pub fn is_registered() -> Result<bool, String> {
+    windows_registry::is_registered()
+}
+
 #[cfg(not(windows))]
 pub fn apply(_enabled: bool, _executable: &std::path::Path) -> Result<(), String> {
+    Err("sign-in startup registration is only available on Windows".into())
+}
+
+#[cfg(not(windows))]
+pub fn is_registered() -> Result<bool, String> {
     Err("sign-in startup registration is only available on Windows".into())
 }
 
