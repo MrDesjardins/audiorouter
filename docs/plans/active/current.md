@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Hardened the M07 tray recorder-status boundary on 2026-09-14. Every entry
+  returned by `recorders.list` is now shape-checked, including unrelated
+  sessions; missing required fields, invalid frame types, unknown states, and
+  over-capacity arrays fail closed. Added a malformed-entry regression.
+  `cargo test --manifest-path src-tauri/Cargo.toml --locked` passed all 17
+  shell tests, strict Clippy, formatting, and diff checks. No tray action,
+  endpoint, driver, registry, or machine audio configuration was invoked.
+  Next action: continue the next independently testable M03/M07 recovery
+  item.
+
 - Hardened the M07 tray quit boundary on 2026-09-14. Recorder-list parsing
   now validates every bounded entry, including entries owned by other
   sessions; malformed fields, unknown states, and over-capacity responses fail
