@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Requalified the bounded native event and impulse paths on 2026-09-14
+  against the existing VB-Cable endpoints. `m00-native-event-live.ps1`
+  passed with 24,480 capture frames and 28,800 render frames over 500 ms;
+  `m00-native-impulse-live.ps1 -ImpulseCount 100` detected 98 impulse groups
+  with zero p95 spacing error frames and a 59.08 ms estimated onset. Both
+  checks completed temporary cleanup and preserved media state. The onset is
+  correlation evidence only and does not claim the calibrated physical
+  acoustic-latency gate. Next action: continue the next safe M03/M07 recovery
+  integration item.
+
 - Requalified the bounded native process-attribution prerequisite on
   2026-09-14 with `m00-native-process-live.ps1 -AllowLiveAudio
   -DurationMilliseconds 500`. The disposable child-process tree produced
