@@ -2,6 +2,13 @@
 
 Updated: 2026-09-14.
 
+- Hardened the M03 lifecycle rollback invariant on 2026-09-14: uninstall now
+  requires the requested INF to match the INF recorded with the exact
+  published package name, preventing a copied/stale state file from removing
+  an unrelated package. PowerShell parsing and the M03 build/signability
+  acceptance passed; no installation or machine audio action occurred. Next
+  action: continue the next safe M03/M07 recovery integration item.
+
 - Completed the guarded M03 package-lifecycle slice at pushed commit
   `c2ffcb8e` on 2026-09-14. Added `drivers/audiorouter-virtual/manage.ps1`,
   which requires explicit install/uninstall plus authorization switches,

@@ -65,6 +65,11 @@ if ($record.schemaVersion -ne 1 -or [string]::IsNullOrWhiteSpace($record.publish
     $record.publishedName -notmatch '^oem\d+\.inf$') {
     throw "Lifecycle state is invalid or ambiguous: $statePath"
 }
+if ([string]::IsNullOrWhiteSpace($record.inf) -or
+    -not [string]::Equals((Resolve-Path -LiteralPath $record.inf).Path, $infPath,
+        [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Lifecycle state INF does not match the requested INF: $statePath"
+}
 $result = & $pnputil '/delete-driver' $record.publishedName '/uninstall'
 if ($LASTEXITCODE -ne 0) {
     throw "pnputil failed to uninstall $($record.publishedName) (exit $LASTEXITCODE): $($result -join ' ')"

@@ -22,7 +22,8 @@ foreach ($required in @(
         'refusing unmanaged cleanup',
         '/add-driver',
         '/delete-driver',
-        'publishedName -notmatch ''^oem\d+\.inf$''')) {
+        'publishedName -notmatch ''^oem\d+\.inf$''',
+        'Lifecycle state INF does not match the requested INF')) {
     if (-not $manageScript.Contains($required)) {
         throw "guarded driver lifecycle control is missing: $required"
     }
