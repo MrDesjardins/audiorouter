@@ -554,6 +554,13 @@ impl NativeBridgeDuplexController {
         if render_hello.direction != audiorouter_protocol::AudioBridgeDirection::RenderSource
             || capture_hello.direction != audiorouter_protocol::AudioBridgeDirection::CaptureSink
             || render_hello.bus_id != capture_hello.bus_id
+            || render_hello.protocol_major != capture_hello.protocol_major
+            || render_hello.protocol_minor != capture_hello.protocol_minor
+            || render_hello.generation != capture_hello.generation
+            || render_hello.sample_rate_hz != capture_hello.sample_rate_hz
+            || render_hello.channels != capture_hello.channels
+            || render_hello.frames_per_quantum != capture_hello.frames_per_quantum
+            || render_hello.lease_ms != capture_hello.lease_ms
         {
             return Err(NativeBridgeControllerError::InvalidDuplex);
         }
@@ -6965,6 +6972,35 @@ mod tests {
         capture.generation = 5;
         assert!(matches!(
             NativeBridgeDuplexBinding::create(
+                "\\\\.\\AudioRouterVirtualBridge",
+                "C:\\missing-render.slot",
+                "C:\\missing-capture.slot",
+                render,
+                capture,
+            ),
+            Err(NativeBridgeControllerError::InvalidDuplex)
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_bridge_duplex_rejects_mismatched_shape_before_device_open() {
+        let render = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: "bus-shape".into(),
+            direction: audiorouter_protocol::AudioBridgeDirection::RenderSource,
+            generation: 4,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            frames_per_quantum: 128,
+            lease_ms: 1_000,
+        };
+        let mut capture = render.clone();
+        capture.direction = audiorouter_protocol::AudioBridgeDirection::CaptureSink;
+        capture.channels = 1;
+        assert!(matches!(
+            NativeBridgeDuplexController::create(
                 "\\\\.\\AudioRouterVirtualBridge",
                 "C:\\missing-render.slot",
                 "C:\\missing-capture.slot",

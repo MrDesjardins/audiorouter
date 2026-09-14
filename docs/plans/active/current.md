@@ -2,6 +2,12 @@
 
 Updated: 2026-09-13.
 
+- Hardened duplex hello validation on 2026-09-13. Render-source and
+  capture-sink negotiations must now agree on protocol version, generation,
+  sample rate, channel count, quantum size, and lease duration before either
+  directional lease is opened. A mismatched-channel regression passes before
+  driver open; focused Windows-audio coverage is now 72 tests.
+
 - Added a pre-open duplex-generation regression on 2026-09-13. A render and
   capture hello for the same bus but different graph generations now fails
   before driver-handle or mapping creation. Focused Windows-audio coverage
