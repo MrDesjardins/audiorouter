@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Revalidated the duplex diagnostics and session-start boundary on 2026-09-14.
+  Control now distinguishes endpoint-worker attachment from duplex-worker
+  attachment before activation, reports duplex ownership in read-only
+  diagnostics, and stops it before session shutdown or deletion. Verification:
+  145 control tests and 73 Windows-audio tests passed, strict Clippy,
+  formatting, and diff checks passed. No endpoint or machine audio
+  configuration was accessed. Loaded PortCls, signing, and physical-latency
+  evidence remain open. Next action: continue independently testable bridge/API
+  work.
+
 - Extended read-only diagnostics for duplex native ownership on 2026-09-14.
   `nativeAdapter` and `nativeSessionId` now reflect an attached duplex worker
   as well as the existing endpoint worker, including configured-stopped and
