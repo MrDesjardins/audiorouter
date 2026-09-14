@@ -645,6 +645,78 @@ impl NativeBridgeDuplexController {
 }
 
 #[cfg(windows)]
+/// Owns both directional leases for one virtual bus and exposes the two
+/// bounded realtime views needed by the endpoint workers. The controller
+/// remains the sole owner of heartbeat/close; the capture writer is safe to
+/// share with the engine tap and the render side is read by the input worker.
+pub struct NativeBridgeDuplexBinding {
+    bus_id: audiorouter_domain::EntityId,
+    generation: u64,
+    controller: NativeBridgeDuplexController,
+    capture_writer: std::sync::Arc<NativeBridgeRealtimeWriter>,
+}
+
+#[cfg(windows)]
+impl NativeBridgeDuplexBinding {
+    pub fn create(
+        device_path: &str,
+        render_mapping_path: impl AsRef<std::path::Path>,
+        capture_mapping_path: impl AsRef<std::path::Path>,
+        render_hello: audiorouter_protocol::AudioBridgeHello,
+        capture_hello: audiorouter_protocol::AudioBridgeHello,
+    ) -> Result<Self, NativeBridgeControllerError> {
+        if render_hello.generation != capture_hello.generation {
+            return Err(NativeBridgeControllerError::InvalidDuplex);
+        }
+        let bus_id = audiorouter_domain::EntityId::new(render_hello.bus_id.clone());
+        let generation = render_hello.generation;
+        let controller = NativeBridgeDuplexController::create(
+            device_path,
+            render_mapping_path,
+            capture_mapping_path,
+            render_hello,
+            capture_hello,
+        )?;
+        let capture_writer = std::sync::Arc::new(controller.capture_writer()?);
+        Ok(Self {
+            bus_id,
+            generation,
+            controller,
+            capture_writer,
+        })
+    }
+
+    pub fn bus_id(&self) -> &audiorouter_domain::EntityId {
+        &self.bus_id
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    pub fn capture_writer(&self) -> std::sync::Arc<NativeBridgeRealtimeWriter> {
+        std::sync::Arc::clone(&self.capture_writer)
+    }
+
+    pub fn render_read_into_after(
+        &self,
+        minimum_sequence: u64,
+        samples: &mut [f32],
+    ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeControllerError> {
+        self.controller
+            .render_read_into_after(minimum_sequence, samples)
+    }
+
+    pub fn heartbeat(&mut self) -> Result<(), NativeBridgeControllerError> {
+        self.controller.heartbeat()
+    }
+
+    pub fn close(self) -> Result<(), NativeBridgeControllerError> {
+        self.controller.close()
+    }
+}
+
+#[cfg(windows)]
 impl NativeBridgeController {
     pub fn create(
         device_path: &str,

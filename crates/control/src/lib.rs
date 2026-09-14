@@ -3627,6 +3627,8 @@ pub struct ControlPlane {
     #[cfg(windows)]
     native_render_source_bindings:
         HashMap<EntityId, audiorouter_windows_audio::NativeBridgeRenderSourceBinding>,
+    #[cfg(windows)]
+    native_duplex_bindings: HashMap<EntityId, audiorouter_windows_audio::NativeBridgeDuplexBinding>,
 }
 
 impl Default for ControlPlane {
@@ -3700,6 +3702,8 @@ impl ControlPlane {
             native_capture_sink_bindings: HashMap::new(),
             #[cfg(windows)]
             native_render_source_bindings: HashMap::new(),
+            #[cfg(windows)]
+            native_duplex_bindings: HashMap::new(),
         }
     }
 
@@ -3891,6 +3895,58 @@ impl ControlPlane {
     }
 
     #[cfg(windows)]
+    /// Prepare both directional project-driver leases for one enabled bus.
+    /// The duplex controller rolls back the render lease if capture claiming
+    /// fails, so callers never retain a half-prepared bus.
+    pub fn prepare_native_duplex_binding(
+        &mut self,
+        bus_id: EntityId,
+        device_path: &str,
+        render_mapping_path: impl AsRef<std::path::Path>,
+        capture_mapping_path: impl AsRef<std::path::Path>,
+        render_hello: audiorouter_protocol::AudioBridgeHello,
+        capture_hello: audiorouter_protocol::AudioBridgeHello,
+    ) -> Result<(), ControlError> {
+        let known_enabled = self
+            .virtual_buses
+            .list()
+            .iter()
+            .any(|bus| bus.id() == &bus_id && bus.enabled());
+        if !known_enabled {
+            return Err(ControlError::InvalidRequest(
+                "native duplex requires a known enabled virtual bus".into(),
+            ));
+        }
+        if render_hello.bus_id != bus_id.as_str()
+            || capture_hello.bus_id != bus_id.as_str()
+            || render_hello.direction != audiorouter_protocol::AudioBridgeDirection::RenderSource
+            || capture_hello.direction != audiorouter_protocol::AudioBridgeDirection::CaptureSink
+            || render_hello.generation != capture_hello.generation
+        {
+            return Err(ControlError::InvalidRequest(
+                "native duplex hellos do not match the requested bus".into(),
+            ));
+        }
+        if self.native_duplex_bindings.contains_key(&bus_id) {
+            return Err(ControlError::InvalidRequest(
+                "native duplex binding is already prepared".into(),
+            ));
+        }
+        let binding = audiorouter_windows_audio::NativeBridgeDuplexBinding::create(
+            device_path,
+            render_mapping_path,
+            capture_mapping_path,
+            render_hello,
+            capture_hello,
+        )
+        .map_err(|error| {
+            ControlError::InvalidRequest(format!("native duplex preparation failed: {error:?}"))
+        })?;
+        self.native_duplex_bindings.insert(bus_id, binding);
+        Ok(())
+    }
+
+    #[cfg(windows)]
     pub fn heartbeat_native_capture_sink_bindings(&mut self) -> Result<(), ControlError> {
         for binding in self.native_capture_sink_bindings.values_mut() {
             binding.heartbeat().map_err(|error| {
@@ -3909,6 +3965,16 @@ impl ControlPlane {
                 ControlError::InvalidRequest(format!(
                     "native render source heartbeat failed: {error:?}"
                 ))
+            })?;
+        }
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    pub fn heartbeat_native_duplex_bindings(&mut self) -> Result<(), ControlError> {
+        for binding in self.native_duplex_bindings.values_mut() {
+            binding.heartbeat().map_err(|error| {
+                ControlError::InvalidRequest(format!("native duplex heartbeat failed: {error:?}"))
             })?;
         }
         Ok(())
@@ -3941,6 +4007,18 @@ impl ControlPlane {
         };
         binding.close().map_err(|error| {
             ControlError::InvalidRequest(format!("native render source close failed: {error:?}"))
+        })
+    }
+
+    #[cfg(windows)]
+    pub fn detach_native_duplex_binding(&mut self, bus_id: &EntityId) -> Result<(), ControlError> {
+        let Some(binding) = self.native_duplex_bindings.remove(bus_id) else {
+            return Err(ControlError::InvalidRequest(
+                "native duplex binding is not prepared".into(),
+            ));
+        };
+        binding.close().map_err(|error| {
+            ControlError::InvalidRequest(format!("native duplex close failed: {error:?}"))
         })
     }
 
@@ -4230,6 +4308,20 @@ impl ControlPlane {
                 .any(|bus| bus.id() == &route.bus_id && bus.enabled());
             if enabled {
                 #[cfg(windows)]
+                if let Some(binding) = self.native_duplex_bindings.get(&route.bus_id) {
+                    if binding.generation() != generation {
+                        return Err(ControlError::InvalidRequest(
+                            "native duplex binding generation is stale".into(),
+                        ));
+                    }
+                    taps.add_shared(binding.capture_writer()).map_err(|_| {
+                        ControlError::InvalidRequest(
+                            "native duplex capture tap capacity exceeded".into(),
+                        )
+                    })?;
+                    continue;
+                }
+                #[cfg(windows)]
                 if let Some(binding) = self.native_capture_sink_bindings.get(&route.bus_id) {
                     if binding.generation() != generation {
                         return Err(ControlError::InvalidRequest(
@@ -4454,6 +4546,8 @@ impl ControlPlane {
             native_capture_sink_bindings: HashMap::new(),
             #[cfg(windows)]
             native_render_source_bindings: HashMap::new(),
+            #[cfg(windows)]
+            native_duplex_bindings: HashMap::new(),
         })
     }
 
@@ -10793,6 +10887,43 @@ mod tests {
             error,
             ControlError::InvalidRequest(message)
                 if message == "native render source hello does not match the requested bus"
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_duplex_binding_rejects_mismatched_hellos_before_driver_open() {
+        let mut plane = ControlPlane::default();
+        let bus_id = EntityId::new("duplex-bus");
+        plane.create_virtual_bus(bus_id.clone(), "Duplex").unwrap();
+        let render_hello = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: bus_id.as_str().into(),
+            direction: audiorouter_protocol::AudioBridgeDirection::RenderSource,
+            generation: 2,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            frames_per_quantum: 128,
+            lease_ms: 1_000,
+        };
+        let mut capture_hello = render_hello.clone();
+        capture_hello.direction = audiorouter_protocol::AudioBridgeDirection::CaptureSink;
+        capture_hello.generation = 3;
+        let error = plane
+            .prepare_native_duplex_binding(
+                bus_id,
+                "\\\\.\\AudioRouterVirtualBridge",
+                "C:\\missing-render.slot",
+                "C:\\missing-capture.slot",
+                render_hello,
+                capture_hello,
+            )
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            ControlError::InvalidRequest(message)
+                if message == "native duplex hellos do not match the requested bus"
         ));
     }
 

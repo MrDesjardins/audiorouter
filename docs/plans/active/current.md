@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Added the paired project-driver duplex binding on 2026-09-13. One
+  `NativeBridgeDuplexBinding` now owns matching render-source and capture-sink
+  leases for a bus, exposes the render reader and capture writer, and is
+  preferred by graph activation as one atomic directional choice. Mismatched
+  bus, direction, or generation requests fail before driver open; focused
+  control and Windows-audio suites pass (138 and 70 tests). Physical endpoint
+  worker attachment, driver loading, and production signing remain open.
+
 - Re-ran the human-testable control-owned VB-Cable route on 2026-09-13 using
   exact friendly-name discovery for the current endpoint IDs. The 500 ms
   lifecycle passed with 24,480 captured frames, 191 processed quanta, and
