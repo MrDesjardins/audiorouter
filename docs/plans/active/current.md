@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Hardened the guarded M03 lifecycle entrypoint on 2026-09-14. INF
+  containment now uses a separator-aware package boundary and rejects
+  reparse-point files or ancestors before any PnP executable is reached.
+  Added static acceptance assertions and re-ran the M03 WDK build/signability
+  gate successfully. No driver installation/loading, signing-mode change,
+  endpoint, or audio configuration action occurred. Next action: continue
+  the next independently testable M03/M07 recovery integration item.
+
 - Hardened and regression-covered the M03 package boundary on 2026-09-14.
   The lifecycle acceptance now asserts exact package containment and
   reparse-point rejection in `manage.ps1`, preventing junction/symlink paths
