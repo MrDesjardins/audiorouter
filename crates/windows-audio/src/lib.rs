@@ -643,6 +643,10 @@ impl NativeBridgeDuplexWorker {
         Ok(())
     }
 
+    pub fn bus_id(&self) -> audiorouter_domain::EntityId {
+        self.input.source.bus_id()
+    }
+
     pub fn pump_available(
         &mut self,
         max_input_quanta: u32,
@@ -965,6 +969,10 @@ impl NativeBridgeController {
 
     fn lease_ms(&self) -> u32 {
         self.session.hello().lease_ms
+    }
+
+    fn bus_id(&self) -> audiorouter_domain::EntityId {
+        audiorouter_domain::EntityId::new(self.session.hello().bus_id.clone())
     }
 
     pub fn write(&mut self, samples: &[f32]) -> Result<u64, NativeBridgeControllerError> {

@@ -4763,11 +4763,24 @@ impl ControlPlane {
                 "native duplex worker session generation is not running".into(),
             ));
         }
+        let heartbeat = {
+            let worker = self.native_duplex_worker.as_mut().ok_or_else(|| {
+                ControlError::InvalidRequest("native duplex worker is not attached".into())
+            })?;
+            let bus_id = worker.bus_id();
+            worker.heartbeat_if_due().map_err(|error| (bus_id, error))
+        };
+        if let Err((bus_id, error)) = heartbeat {
+            if let Some(bridge) = self.virtual_bridges.get(&bus_id) {
+                bridge.deactivate();
+            }
+            self.publish_virtual_bridge_failure(&bus_id);
+            return Err(ControlError::InvalidRequest(format!(
+                "native duplex heartbeat failed; bridge deactivated: {error:?}"
+            )));
+        }
         let worker = self.native_duplex_worker.as_mut().ok_or_else(|| {
             ControlError::InvalidRequest("native duplex worker is not attached".into())
-        })?;
-        worker.heartbeat_if_due().map_err(|error| {
-            ControlError::InvalidRequest(format!("native duplex heartbeat failed: {error:?}"))
         })?;
         let (input, output) = worker
             .pump_available(max_input_quanta, max_output_packets)

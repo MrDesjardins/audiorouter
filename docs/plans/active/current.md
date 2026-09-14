@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Closed the VDEV-12 transferred-duplex failure observability gap on
+  2026-09-14. Duplex worker heartbeat failure now carries its negotiated bus
+  identity back to control, deactivates only that portable bridge, publishes
+  `virtualBridge.failed`, and returns the structured failure after both worker
+  directions have been stopped. Control (150 passed, 2 guarded live tests
+  ignored), Windows-audio (73 passed), strict Clippy, formatting,
+  Windows-target check, and diff checks passed. Loaded-driver failure
+  injection and physical silence timing remain native gates. Next action:
+  continue the next safe M03/M07 recovery item.
+
 - Aligned VDEV-12 prepared render-source leases with the same negotiated
   half-lease cadence on 2026-09-14. Control-thread sweeps now avoid issuing
   redundant maintenance IOCTLs while retaining per-binding failure
