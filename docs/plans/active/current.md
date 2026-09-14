@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Requalified the guarded process-loopback lifecycle on 2026-09-14 against
+  the observed `voicemeeterpro.exe` process (PID 34568, creation identity
+  `134336595287373468`) and the exact existing CABLE Input render endpoint.
+  The control-owned worker completed two bounded start/pump/stop cycles and a
+  same-process restart; the media-device identity/state snapshot was
+  unchanged. This is measured application-capture evidence only: no process
+  settings, endpoint defaults, volume, mute, driver, registry, startup, or
+  persistent audio configuration changed. Process-loopback capture remains
+  subject to the managed-driver and physical-latency gates. Next action:
+  continue the next independently testable M03/M07 recovery item.
+
 - Requalified one guarded Rust adapter bridge cycle on 2026-09-14 using the
   existing exact VB-Cable pair. The 500 ms run captured 24,480 frames,
   processed 191 graph quanta with 191 tap calls, rendered 24,448 frames,
