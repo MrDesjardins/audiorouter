@@ -80,6 +80,12 @@ Updated: 2026-09-14.
   loading, signing-mode, boot-policy, service, or audio configuration action
   occurred.
 
+- Requalified the bounded M00 event-mode WASAPI lifecycle on 2026-09-14
+  against the existing VB-Cable pair. The 500 ms run completed with 24,480
+  capture frames and 28,320 render frames using silent render data. Defaults,
+  volume, mute, privacy, drivers, signing, and startup configuration were
+  unchanged.
+
 - Requalified M05 at the current worktree on 2026-09-14. The acceptance
   wrapper passed contracts/UI typecheck, 18 UI test files with 167 tests, and
   a disposable Vite production build producing 3 artifacts. The telemetry
