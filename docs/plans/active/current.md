@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Re-ran the human-testable control-owned VB-Cable route on 2026-09-13 using
+  exact friendly-name discovery for the current endpoint IDs. The 500 ms
+  lifecycle passed with 24,480 captured frames, 191 processed quanta, and
+  24,448 rendered frames; the wrapper restored temporary state and made no
+  persistent audio/default/driver change. Evidence: [M02 audio-engine
+  evidence](evidence/M02-audio-engine.md). The project-owned driver remains a
+  separate unloaded/signing gate.
+
 - Added the explicit render-source ownership handoff on 2026-09-13.
   `ControlPlane::take_native_render_source_controller` checks the requested
   graph generation before removing a prepared binding, then transfers the
