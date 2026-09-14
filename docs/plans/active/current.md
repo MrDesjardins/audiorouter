@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Closed an M07 startup-plan authority gap on 2026-09-14. The desktop UI now
+  applies the backend-approved `startup.plan` value when invoking native
+  registration and reporting the result, rather than trusting mutable local
+  form state after planning. Added a normalization regression; UI tests (193),
+  TypeScript typecheck, and diff checks passed. No registry, endpoint, driver,
+  or persistent audio configuration was accessed. Next action: continue the
+  next safe M03/M07 recovery or delivery item.
+
 - Fixed an M05/CAP-01 endpoint-selection presentation defect on 2026-09-14.
   Render endpoint options now read channel count from the versioned
   `format.channels` contract, matching capture options; the previous UI used

@@ -118,14 +118,15 @@ function StartupPanel({ backend }: { backend: UiBackend }) {
   };
   const applyPlan = async () => {
     if (!plan) return;
+    const plannedEnabled = plan.enabled;
     setMessage("Applying startup policy...");
     try {
       const result = await backend.applyStartup(plan.planId, uiIdempotencyKey("startup-apply"));
       if (backend.registerStartup) {
         try {
-          const commandLine = await backend.registerStartup(enabled);
-          setNativeRegistration(enabled ? "registered" : "unregistered");
-          setMessage(`${enabled ? "Startup registration enabled" : "Startup registration disabled"}: ${commandLine}`);
+          const commandLine = await backend.registerStartup(plannedEnabled);
+          setNativeRegistration(plannedEnabled ? "registered" : "unregistered");
+          setMessage(`${plannedEnabled ? "Startup registration enabled" : "Startup registration disabled"}: ${commandLine}`);
         } catch (error) {
           setMessage(`Backend policy saved, but native startup registration failed: ${formatUiError(error, "native registration failed")}`);
         }

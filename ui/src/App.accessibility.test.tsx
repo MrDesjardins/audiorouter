@@ -63,6 +63,23 @@ describe("VB-Cable endpoint selection", () => {
     expect(await screen.findByText("Native registration: registered")).toBeTruthy();
   });
 
+  it("applies the backend-approved startup plan value to native registration", async () => {
+    const registerStartup = vi.fn(async () => "startup-command");
+    const backend = {
+      ...connectedPreviewBackend(),
+      getStartup: vi.fn(async () => ({ enabled: false, registration: "unavailable" as const, reason: "shell-owned" })),
+      planStartup: vi.fn(async () => ({ planId: "startup-plan", enabled: false, registration: "unavailable" as const, reason: "normalized by backend", requiredScopes: ["startupWrite" as const], warnings: [] })),
+      applyStartup: vi.fn(async () => ({ planId: "startup-plan", state: "unavailable" as const, registration: "unavailable" as const, reason: "shell-owned" })),
+      registerStartup,
+    };
+    render(<App backend={backend} />);
+    fireEvent.change(screen.getByLabelText("Desired sign-in startup policy"), { target: { value: "enabled" } });
+    fireEvent.click(screen.getByRole("button", { name: "Plan startup policy" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Apply planned policy" }));
+    await waitFor(() => expect(registerStartup).toHaveBeenCalledWith(false));
+    expect(await screen.findByText(/Startup registration disabled/)).toBeTruthy();
+  });
+
   it("keeps workspace events bounded to state categories and excludes meters", () => {
     expect(WORKSPACE_EVENT_CATEGORIES).toContain("graph.committed");
     expect(WORKSPACE_EVENT_CATEGORIES).toContain("recording.recycled");
