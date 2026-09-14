@@ -303,7 +303,7 @@ function PluginScanPanel({ backend, onAddPlaceholder }: { backend: UiBackend; on
   return <section className="panel plugin-scan-panel" aria-labelledby="plugin-scan-heading"><div className="section-heading"><div><p className="eyebrow">VST3 and VST2 discovery</p><h2 id="plugin-scan-heading">Plugin scan</h2></div><span className="badge">{result?.entries.length ?? 0}</span></div><p className="muted">Choose a directory explicitly. Discovery inspects bounded metadata only; it does not load or execute plugins.</p><label>Absolute plugin directory<input aria-label="Absolute plugin directory" value={directory} onChange={(event) => setDirectory(event.target.value)} disabled={!backend.connected} placeholder="C:\\Plugins" /></label><button type="button" className="secondary" onClick={() => void scan()} disabled={!backend.connected}>Scan directory</button><button type="button" className="secondary" onClick={() => void list()} disabled={!backend.connected}>Load last scan</button><button type="button" className="secondary" onClick={() => void retry()} disabled={!backend.connected}>Retry scan</button>{result && <ul aria-label="Plugin scan results">{result.entries.length === 0 ? <li className="muted">No VST3, VST2, or other DLL candidates found.</li> : result.entries.map((entry) => <li key={entry.path}><strong>{entry.path}</strong> <small>{entry.identity ? `${entry.identity.format} · ${entry.identity.architecture} · ${entry.identity.compatibility}` : `${entry.errorCode ?? "unknown"}: ${entry.error ?? "inspection failed"}`}</small><button type="button" className="secondary" onClick={() => selectInspectionPath(entry.path)} disabled={!backend.connected}>Select for inspection</button></li>)}</ul>}<label>Absolute plugin path<input aria-label="Absolute plugin path" value={inspectionPath} onChange={(event) => setInspectionPath(event.target.value)} disabled={!backend.connected} placeholder="C:\\Plugins\\effect.vst3 or effect.dll" /></label><button type="button" className="secondary" onClick={() => void inspect()} disabled={!backend.connected}>Inspect path</button>{inspection && <p className="muted" role="status">{inspection.identity ? `${inspection.identity.format} ${inspection.identity.architecture} · ${inspection.identity.compatibility}` : `${inspection.errorCode ?? "unknown"}: ${inspection.error ?? "inspection failed"}`}</p>}{message && <p className="muted" role="status" aria-live="polite">{message}</p>}<p className="muted">The explicit <code>pluginScan</code> permission is required by the backend; selecting a result only copies its path, and inspection remains explicit. Loading the last scan never triggers a new filesystem scan.</p></section>;
 }
 
-function RecorderActions({ backend, sessionId, connected, recorderStatuses }: { backend: UiBackend; sessionId: string; connected: boolean; recorderStatuses: RecorderStatus[] }) {
+function RecorderActions({ backend, sessionId, connected, recorderStatuses, recorderStatusAvailable }: { backend: UiBackend; sessionId: string; connected: boolean; recorderStatuses: RecorderStatus[]; recorderStatusAvailable: boolean }) {
   const [frameText, setFrameText] = useState("0");
   const [state, setState] = useState("idle");
   const [lastFrame, setLastFrame] = useState<number | null>(null);
@@ -316,10 +316,11 @@ function RecorderActions({ backend, sessionId, connected, recorderStatuses }: { 
   const frame = Number.parseInt(frameText, 10);
   const validFrame = Number.isSafeInteger(frame) && frame >= 0;
   useEffect(() => {
+    if (!recorderStatusAvailable) { setState("unavailable"); setLastFrame(null); setNodeId(null); return; }
     const status = recorderStatuses.find((item) => item.sessionId === sessionId);
     if (status) { setState(status.state); setLastFrame(status.lastFrame); setNodeId(status.nodeId ?? null); }
     else { setState("idle"); setLastFrame(null); setNodeId(null); }
-  }, [recorderStatuses, sessionId]);
+  }, [recorderStatuses, recorderStatusAvailable, sessionId]);
   const create = async () => {
     if (!recorderId.trim()) { setMessage("Provide a recorder ID."); return; }
     setMessage("Creating an unarmed recorder...");
@@ -566,6 +567,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [routeInspection, setRouteInspection] = useState<RouteInspection | null>(null);
   const [recordings, setRecordings] = useState<import("@audiorouter/contracts").RecordingRow[]>([]);
   const [recorderStatuses, setRecorderStatuses] = useState<RecorderStatus[]>([]);
+  const [recorderStatusAvailable, setRecorderStatusAvailable] = useState(!backend.connected);
   const [applications, setApplications] = useState<ApplicationRow[]>([]);
   const [devices, setDevices] = useState<DeviceListItem[]>([]);
   const [devicesError, setDevicesError] = useState<string | null>(null);
@@ -616,7 +618,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     void snapshotCache.refresh(backend).then(setSnapshotState);
     void backend.listSessions().then((items) => { setListedSessions(items); setSessionInventoryError(null); }).catch((error) => { setSessionInventoryError(formatUiError(error, "Session inventory unavailable")); if (!backend.connected) setListedSessions(demoSessions); else setListedSessions([]); });
     void backend.listRecordings(session.id).then((items) => { setRecordings(items); setRecordingsError(null); }).catch((error) => { setRecordings([]); setRecordingsError(formatUiError(error, "Recording library unavailable")); });
-    void backend.listRecorders().then(setRecorderStatuses).catch(() => setRecorderStatuses([]));
+    void backend.listRecorders().then((items) => { setRecorderStatuses(items); setRecorderStatusAvailable(true); }).catch(() => { setRecorderStatuses([]); setRecorderStatusAvailable(false); });
     refreshApplications();
     refreshDevices();
   };
@@ -666,7 +668,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   }, [backend, session.id]);
   useEffect(() => {
     let active = true;
-    void backend.listRecorders().then((items) => { if (active) setRecorderStatuses(items); }).catch(() => { if (active) setRecorderStatuses([]); });
+    void backend.listRecorders().then((items) => { if (active) { setRecorderStatuses(items); setRecorderStatusAvailable(true); } }).catch(() => { if (active) { setRecorderStatuses([]); setRecorderStatusAvailable(false); } });
     return () => { active = false; };
   }, [backend]);
   useEffect(() => {
@@ -697,7 +699,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             refreshDevices();
             void backend.listSessions().then((items) => { if (active) { setListedSessions(items); setSessionInventoryError(null); } }).catch((error) => { if (active) setSessionInventoryError(formatUiError(error, "Session inventory unavailable")); });
             void backend.listRecordings(session.id).then((items) => { if (active) { setRecordings(items); setRecordingsError(null); } }).catch((error) => { if (active) setRecordingsError(formatUiError(error, "Recording library unavailable")); });
-            void backend.listRecorders().then((items) => { if (active) setRecorderStatuses(items); });
+            void backend.listRecorders().then((items) => { if (active) { setRecorderStatuses(items); setRecorderStatusAvailable(true); } }).catch(() => { if (active) setRecorderStatusAvailable(false); });
             if (!nextState.stale) eventCursor.current = { backendEpoch: result.backendEpoch, sequence: result.nextSequence };
           }
         } else {
@@ -919,7 +921,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const duplicateSelectedNode = () => { try { const next = duplicateDraftNode(draft, selectedNode.id); const copy = next.nodes[next.nodes.length - 1]; recordDraftChange(next); setSelectedNodeId(copy.id); setActionMessage(`${copy.name} added to the draft without connections. Review and plan the changes before committing.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to duplicate node.")); } };
   const applyTemplate = () => { const next = templateSession(selectedTemplate); recordDraftChange({ ...next, id: draft.id, revision: draft.revision }); setSelectedNodeId(next.nodes[0]?.id ?? ""); setActionMessage("Template loaded into the draft. Review device bindings and plan the changes before committing."); };
   const lifecycleActions = <section className="panel lifecycle-panel" aria-labelledby="lifecycle-heading"><h2 id="lifecycle-heading">Session lifecycle</h2><p className="muted">Starting a session uses the shared authorized backend lifecycle API.</p><button type="button" className="secondary" onClick={() => void (sessionRunning ? stopSession() : startSession())} disabled={!backend.connected}>{sessionRunning ? "Stop session" : "Start session"}</button></section>;
-  return <PluginParameterContext.Provider value={{ parameters: pluginParameters, error: pluginParameterError }}><div className={`app-shell theme-${theme}${compactStatus ? " compact-status" : ""}`}>{lifecycleActions}<RecorderActions backend={backend} sessionId={session.id} connected={backend.connected} recorderStatuses={recorderStatuses} /><RecordingActions recordings={recordings} connected={backend.connected} onRename={renameRecording} onReveal={revealRecording} onRecycle={recycleRecording} /><VirtualDeviceLifecyclePanel backend={backend} /><VirtualRoutePanel backend={backend} />
+  return <PluginParameterContext.Provider value={{ parameters: pluginParameters, error: pluginParameterError }}><div className={`app-shell theme-${theme}${compactStatus ? " compact-status" : ""}`}>{lifecycleActions}<RecorderActions backend={backend} sessionId={session.id} connected={backend.connected} recorderStatuses={recorderStatuses} recorderStatusAvailable={recorderStatusAvailable} /><RecordingActions recordings={recordings} connected={backend.connected} onRename={renameRecording} onReveal={revealRecording} onRecycle={recycleRecording} /><VirtualDeviceLifecyclePanel backend={backend} /><VirtualRoutePanel backend={backend} />
     <header className="topbar"><div><p className="eyebrow">AudioRouter</p><h1>Routing workspace</h1></div><div className="status-cluster" aria-live="polite"><span className={`status-dot${backend.connected ? "" : " disconnected"}`} aria-hidden="true" /><span>{connectionLabel}</span><span className="status-detail">{statusSummary}</span><label className="theme-picker">Theme<select aria-label="Color theme" value={theme} onChange={(event) => setTheme(event.target.value as ThemeMode)}><option value="dark">Dark</option><option value="light">Light</option><option value="high-contrast">High contrast</option></select></label><button type="button" className="secondary" aria-pressed={compactStatus} onClick={() => setCompactStatus((current) => !current)}>{compactStatus ? "Full workspace" : "Compact status"}</button><button type="button" onClick={refresh}>Reconnect</button></div></header>
     {compactStatus && <section className="compact-status-panel" aria-label="Compact route status"><div><p className="eyebrow">Compact route status</p><strong>{session.name}</strong><p className="muted">{statusSummary}</p></div><button type="button" onClick={() => void (sessionRunning ? stopSession() : startSession())} disabled={!backend.connected}>{sessionRunning ? "Stop session" : "Start session"}</button><button type="button" className="secondary" aria-pressed={privacyMuted} onClick={() => void togglePrivacyMute()} disabled={!backend.connected}>{privacyMuted ? "Privacy mute enabled" : "Enable privacy mute"}</button></section>}
       <section className="panel shortcut-panel" aria-labelledby="shortcut-heading"><div className="section-heading"><h2 id="shortcut-heading">Keyboard shortcuts</h2><span className="badge">local</span></div><p className="muted">Shortcuts work while the workspace is focused and never capture text-field typing. They call the same authorized API actions as the buttons.</p><label>Start/stop session<input aria-label="Start or stop session shortcut" value={shortcuts.sessionToggle} readOnly onKeyDown={(event) => captureShortcut("sessionToggle", event)} /></label><label>Privacy mute<input aria-label="Privacy mute shortcut" value={shortcuts.privacyMute} readOnly onKeyDown={(event) => captureShortcut("privacyMute", event)} /></label>{shortcutMessage && <p className="muted" role="alert">{shortcutMessage}</p>}<small>Native tray and OS-wide registration remain platform validation work.</small></section>

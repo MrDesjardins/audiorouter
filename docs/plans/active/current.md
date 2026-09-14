@@ -2,6 +2,13 @@
 
 Updated: 2026-09-14.
 
+- Hardened recorder-state fail-closed presentation on 2026-09-14. A
+  successful empty `recorders.list` result still displays `idle`, while a
+  failed authoritative state read displays `unavailable` and clears stale
+  frame/node identity instead of guessing. Added the connected UI regression;
+  TypeScript typecheck and the full UI suite passed (18 files, 177 tests).
+  No audio endpoint or machine configuration changed.
+
 - Closed the UI/NFR-08 meter freshness mismatch on 2026-09-14. Running
   sessions now refresh backend-owned diagnostics at the declared 20 Hz
   default (50 ms), below the API's 30 Hz ceiling; stopped/disconnected paths

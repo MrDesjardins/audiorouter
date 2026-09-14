@@ -506,6 +506,13 @@ describe("keyboard connection dialog", () => {
     expect(within(panel).getByText("disk full")).toBeTruthy();
   });
 
+  it("does not guess idle when recorder state cannot be read", async () => {
+    const backend = { ...connectedPreviewBackend(), listRecorders: async () => { throw new Error("control pipe unavailable"); } };
+    render(<App backend={backend} />);
+    const panel = await screen.findByRole("region", { name: "Recorder" });
+    await waitFor(() => expect(within(panel).getByText("unavailable")).toBeTruthy());
+  });
+
   it("offers bounded slider and precise entry for numeric processor parameters", async () => {
     const processor: ProcessorDescriptor = {
       id: "gain",
