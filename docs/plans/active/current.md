@@ -42,6 +42,15 @@ Updated: 2026-09-14.
   still the next implementation slice; legacy constructors intentionally
   retain `unknown` until they accept explicit settings.
 
+- Extended REC-03 metadata propagation on 2026-09-14: the explicit
+  `WavRecorderWorker::new_with_dither` path now publishes its target format,
+  sample rate, channel count, and dither choice in finalized rows. Added a
+  segmented-WAV regression for the persisted values. The focused control
+  suite passed (143 passed, 2 guarded live tests ignored), with format and
+  strict-lint checks clean. Buffered-FLAC's legacy constructor still has no
+  dither/configuration argument and therefore remains conservatively marked
+  `unknown`; adding that versioned constructor is the next code slice.
+
 - Delivered the REC-03 recorder dither control on 2026-09-14. The UI now
   exposes TPDF dithering as an explicit create-time option, enabled by
   default, and forwards the selected value through the shared

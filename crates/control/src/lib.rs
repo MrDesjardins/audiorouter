@@ -276,6 +276,10 @@ pub struct WavRecorderWorker {
     recorder: Option<WavRecorder<std::fs::File>>,
     queue: Arc<RecordingQueue>,
     maximum_chunks_per_pass: usize,
+    format: WavFormat,
+    channels: u16,
+    sample_rate: u32,
+    dither: bool,
     library_identity: Option<FileRecordingIdentity>,
     started_at: Option<String>,
     run_id: Option<String>,
@@ -327,6 +331,10 @@ impl WavRecorderWorker {
             recorder: Some(WavRecorder::new(writer)),
             queue: Arc::new(queue),
             maximum_chunks_per_pass,
+            format,
+            channels,
+            sample_rate,
+            dither,
             library_identity: None,
             started_at: None,
             run_id: None,
@@ -475,8 +483,11 @@ impl RecorderWorker for WavRecorderWorker {
                 identity,
                 run_id,
                 start_time,
-                false,
-                "unknown".into(),
+                self.dither,
+                format!(
+                    "targetSampleRate={};channels={};format={:?}",
+                    self.sample_rate, self.channels, self.format
+                ),
             )?];
         }
         Ok(RecorderFinalizationOutcome {
@@ -16125,6 +16136,8 @@ mod tests {
                 && !recording.missing
                 && recording.frames == 2
                 && recording.file_bytes > 44
+                && !recording.dither
+                && recording.conversion == "targetSampleRate=48000;channels=1;format=wav"
         }));
         drop(worker);
         let mut paths = std::fs::read_dir(&root)
