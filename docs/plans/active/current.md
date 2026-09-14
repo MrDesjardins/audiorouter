@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Revalidated the complete safe acceptance chain on 2026-09-14 at the
+  current head. M00/M03 native toolchain and WDK build qualification, M01
+  CLI, M04 DSP/recording, M05 UI, M06 VST2/VST3 worker paths, M07 headless
+  control, unsigned M08 artifact preparation, 159-ID traceability, and
+  documentation validation (53 Markdown files, 192 local links) all passed.
+  The UI production build completed with only the existing bundle-size
+  warning. Acceptance cleanup removed its run-owned temporary children. No
+  driver installation, startup registration, plugin registration, endpoint
+  change, or persistent machine audio configuration occurred. Next action:
+  continue the next independently testable M03/M07 recovery item.
+
 - Revalidated the portable M03 virtual-device lifecycle on 2026-09-14.
   Virtual-device planning/apply/capacity and virtual-bus persistence,
   lease-drain, and referenced-route deletion tests passed (6 focused control
