@@ -6390,7 +6390,14 @@ impl ControlPlane {
             maximum_chunks_per_pass,
         )
         .map_err(ControlError::InvalidRequest)?;
-        self.attach_recorder_worker(session_id, worker)?;
+        if let Err(error) = self.attach_recorder_worker(session_id, worker) {
+            // File creation is intentionally before worker construction, but
+            // attachment is the ownership handoff. If that handoff fails,
+            // remove the exclusively-created empty file so a rejected
+            // recorder cannot leave an orphaned recording artifact behind.
+            let _ = std::fs::remove_file(&path);
+            return Err(error);
+        }
         Ok(path)
     }
 
@@ -16000,6 +16007,49 @@ mod tests {
             plane.recorders[&original.id].checkpoint().last_frame,
             Some(128)
         );
+    }
+
+    #[test]
+    fn file_recorder_factory_removes_file_when_attachment_is_rejected() {
+        let root = std::env::temp_dir().join(format!(
+            "audiorouter-control-factory-rollback-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir(&root).unwrap();
+        let policy = RecordingPathPolicy::new(&root).unwrap();
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        plane
+            .attach_recorder_worker(
+                original.id.clone(),
+                Box::new(HookRecorderWorker {
+                    hooks: Arc::new(std::sync::Mutex::new(Vec::new())),
+                }),
+            )
+            .unwrap();
+
+        let result = plane.create_and_attach_file_recorder(
+            &policy,
+            original.id,
+            "voice",
+            0,
+            FileRecorderFormat::Wav(WavFormat::Pcm16),
+            1,
+            48_000,
+            false,
+            8,
+            1,
+        );
+
+        assert!(matches!(
+            result,
+            Err(ControlError::InvalidRequest(message))
+                if message == "recorder worker is already attached"
+        ));
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0);
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

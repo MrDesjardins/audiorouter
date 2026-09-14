@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Fixed an M07 recording-factory rollback defect on 2026-09-14. The
+  caller-supplied `create_and_attach_file_recorder` path now removes its
+  exclusively-created file when worker attachment is rejected, matching the
+  cleanup already used by the configured factory variants. A regression proves
+  duplicate attachment leaves the approved recording root empty; focused
+  control testing, strict Clippy, formatting, and diff checks passed. No audio,
+  driver, registry, endpoint, or persistent machine configuration changed.
+  Next action: continue the next independently testable M03/M07 recovery or
+  delivery item.
+
 - Clarified the M07 shell handoff documentation on 2026-09-14. The runbook
   now separates the passed WebView-to-authenticated-RPC transport gate from
   the still-open attended visual accessibility/scaling review, and release
