@@ -2,6 +2,13 @@
 
 Updated: 2026-09-14.
 
+- Attempted the attended startup-registration round-trip on 2026-09-14 with
+  the built shell and an isolated temporary database/pipe. The shell process
+  launched, but the Windows computer-use surface returned no targetable apps
+  or windows, so no UI action was performed and the process was stopped. No
+  temporary database, registry value, audio endpoint, or driver state changed.
+  Attended enable/disable rollback remains unverified.
+
 - Added the first native startup-registration adapter on 2026-09-14. The
   desktop shell now exposes an explicit `startup_register` command backed by
   a bounded HKCU Run value, with absolute regular-executable validation and
