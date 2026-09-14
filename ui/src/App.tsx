@@ -304,6 +304,7 @@ function RecorderActions({ backend, sessionId, connected, recorderStatuses }: { 
   const [frameText, setFrameText] = useState("0");
   const [state, setState] = useState("idle");
   const [lastFrame, setLastFrame] = useState<number | null>(null);
+  const [nodeId, setNodeId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [recorderId, setRecorderId] = useState("recorder-1");
   const [format, setFormat] = useState<import("@audiorouter/contracts").RecorderFileFormat>("wavPcm24");
@@ -313,8 +314,8 @@ function RecorderActions({ backend, sessionId, connected, recorderStatuses }: { 
   const validFrame = Number.isSafeInteger(frame) && frame >= 0;
   useEffect(() => {
     const status = recorderStatuses.find((item) => item.sessionId === sessionId);
-    if (status) { setState(status.state); setLastFrame(status.lastFrame); }
-    else { setState("idle"); setLastFrame(null); }
+    if (status) { setState(status.state); setLastFrame(status.lastFrame); setNodeId(status.nodeId ?? null); }
+    else { setState("idle"); setLastFrame(null); setNodeId(null); }
   }, [recorderStatuses, sessionId]);
   const create = async () => {
     if (!recorderId.trim()) { setMessage("Provide a recorder ID."); return; }
@@ -352,6 +353,7 @@ function RecorderActions({ backend, sessionId, connected, recorderStatuses }: { 
       <button type="button" className="secondary" onClick={() => void run("Stopping", () => backend.stopRecorder(sessionId, frame, uiIdempotencyKey("recorder-stop")))} disabled={!connected || !validFrame}>Stop</button>
     </div>
     {message && <p className="muted" role="status">{message}</p>}
+    {nodeId && <p className="muted" role="status">Attached recorder node: {nodeId}</p>}
     {lastFrame !== null && <p className="muted" role="status">Backend last frame: {lastFrame}</p>}
     <p className="muted">Actions are sent only to a connected backend and use explicit engine frame boundaries. The preview backend never arms or starts recording.</p>
   </section>;

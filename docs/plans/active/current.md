@@ -2,6 +2,13 @@
 
 Updated: 2026-09-14.
 
+- Completed the recorder ownership display slice on 2026-09-14. The UI now
+  shows the optional authoritative node identity for node-attached recorders,
+  while session-level recorders remain unlabelled as node-owned; empty state
+  hydration clears the identity. Added a rendered ownership regression,
+  TypeScript typecheck, and full UI verification (18 files, 175 tests) passed.
+  No audio endpoint or machine configuration changed.
+
 - Revalidated the current UI production bundle on 2026-09-14 with typecheck
   and a disposable Vite output directory: 213 modules transformed and three
   release assets emitted successfully, then the temporary output was removed.
