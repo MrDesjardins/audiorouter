@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Requalified the existing control-owned endpoint route after introducing the
+  native worker variant boundary on 2026-09-13. The guarded VB-Cable route
+  passed with 24,000 captured frames, 187 processed quanta, and 23,936
+  rendered frames; exact endpoint selection, start/stop, and temporary-state
+  rollback completed successfully. This confirms the refactor preserved the
+  existing delivery path. It does not substitute for the still-pending
+  process-worker control acceptance or production-driver evidence.
+
 - Fixed and requalified a real process-loopback activation memory defect on
   2026-09-13. Investigation reproduced `STATUS_HEAP_CORRUPTION` in the
   elevated Rust probe, isolated it to raw activation-blob teardown, and
