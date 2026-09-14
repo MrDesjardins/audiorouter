@@ -149,6 +149,7 @@ dependencies = [
 name = "audiorouter-windows-audio"
 version = "0.1.0"
 dependencies = [
+ "audiorouter-domain",
  "audiorouter-engine",
  "audiorouter-protocol",
  "memmap2",
