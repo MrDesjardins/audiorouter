@@ -714,6 +714,19 @@ impl VirtualBusBridgeSet {
         bridge.deactivate();
         Ok(())
     }
+
+    /// Expire every stale bridge using the caller's monotonic tick domain.
+    /// This is a bounded control/recovery sweep; it never reads a clock,
+    /// waits, allocates, or runs on the realtime audio path.
+    pub fn expire_stale_leases(&self, now_tick: u64) -> usize {
+        self.bridges
+            .values()
+            .filter(|bridge| {
+                let generation = bridge.generation();
+                bridge.expire_if_stale(generation, now_tick)
+            })
+            .count()
+    }
 }
 
 impl AudioBlockPool {
@@ -5825,6 +5838,27 @@ mod tests {
             bridge.renew_lease(1, 200),
             Err(VirtualBusBridgeError::InvalidGeneration)
         );
+    }
+
+    #[test]
+    fn virtual_bus_bridge_set_expires_all_stale_leases_without_touching_active_ones() {
+        let mut set = VirtualBusBridgeSet::new(2, 1, 2).unwrap();
+        let stale_id = audiorouter_domain::EntityId::new("stale");
+        let active_id = audiorouter_domain::EntityId::new("active");
+        let stale = set.ensure(stale_id).unwrap();
+        let active = set.ensure(active_id).unwrap();
+        stale.activate(1).unwrap();
+        stale.renew_lease(1, 10).unwrap();
+        active.activate(1).unwrap();
+        active.renew_lease(1, 20).unwrap();
+
+        assert_eq!(set.expire_stale_leases(10), 1);
+        assert!(!stale.is_active());
+        assert!(active.is_active());
+        assert_eq!(set.expire_stale_leases(19), 0);
+        assert!(active.is_active());
+        assert_eq!(set.expire_stale_leases(20), 1);
+        assert!(!active.is_active());
     }
 
     #[test]

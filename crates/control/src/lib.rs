@@ -5527,6 +5527,14 @@ impl ControlPlane {
         Ok(())
     }
 
+    /// Expire managed virtual bridge leases on the control/recovery thread.
+    /// `now_tick` must use the same monotonic domain supplied to bridge lease
+    /// renewal; expiry silences and drains stale buffers without touching a
+    /// Windows endpoint or changing durable desired state.
+    pub fn expire_virtual_bridge_leases(&self, now_tick: u64) -> usize {
+        self.virtual_bridges.expire_stale_leases(now_tick)
+    }
+
     pub fn rename_virtual_bus(
         &mut self,
         id: &EntityId,
@@ -17372,6 +17380,24 @@ mod tests {
         assert!(plane.virtual_bridges.get(&id).is_some());
         plane.delete_virtual_bus(&id).unwrap();
         assert!(plane.virtual_bridges.get(&id).is_none());
+    }
+
+    #[test]
+    fn virtual_bridge_lease_expiry_silences_and_drains_managed_route() {
+        let mut plane = ControlPlane::default();
+        let id = EntityId::new("expiring-bus");
+        plane
+            .create_virtual_bus(id.clone(), "Expiring bus")
+            .unwrap();
+        let bridge = plane.virtual_bridges.get(&id).unwrap();
+        bridge.activate(1).unwrap();
+        bridge.renew_lease(1, 100).unwrap();
+
+        assert_eq!(plane.expire_virtual_bridge_leases(99), 0);
+        assert!(bridge.is_active());
+        assert_eq!(plane.expire_virtual_bridge_leases(100), 1);
+        assert!(!bridge.is_active());
+        assert!(bridge.try_receive_capture().is_none());
     }
 
     #[test]

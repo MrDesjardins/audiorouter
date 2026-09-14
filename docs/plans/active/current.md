@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Implemented the VDEV-12 portable recovery slice on 2026-09-14: the engine
+  bridge set and control plane now expose a bounded control-thread lease-expiry
+  sweep using an injected monotonic tick. Expiry silences and drains stale
+  routes without reading a clock, waiting, allocating, or touching endpoint
+  configuration. Added set/control regressions proving stale bridges expire
+  while active bridges remain live. Engine (111), control (151 with 2 guarded
+  live tests ignored), strict Clippy, formatting, and diff checks passed. The
+  loaded-driver, production-signing, and physical-latency gates remain open.
+  Next action: continue the next safe M03/M07 recovery integration item.
+
 - Corrected REC-03 default quantization policy on 2026-09-14. When the API
   omits `dither`, integer WAV/FLAC recorder formats now default to TPDF
   dithering while WAV Float32 defaults to no dither; explicit opt-out remains
