@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Revalidated the authorized M02 Rust VB-Cable route on 2026-09-14 using
+  the exact active `CABLE Output (VB-Audio Virtual Cable)` capture and
+  `CABLE Input (VB-Audio Virtual Cable)` render endpoints for 500 ms. The
+  control-owned run negotiated 48 kHz stereo, captured 24,000 frames,
+  processed 187 graph blocks, routed 23,936 frames, and reported zero
+  deadline misses. The harness compared media identity/state before and after
+  and passed unchanged; streams and temporary probe outputs were stopped and
+  removed. Defaults, volume, mute, privacy, registry, driver, signing, and
+  startup configuration were unchanged. Next action: continue the next safe
+  M03/M07 recovery or delivery item.
+
 - Closed an M07 startup-panel reconnect gap on 2026-09-14. The panel now
   refreshes its desired and observed startup state when the existing backend
   changes connectivity, not only when a new backend object is supplied. Added
