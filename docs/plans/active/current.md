@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Requalified one guarded Rust adapter bridge cycle on 2026-09-14 using the
+  existing exact VB-Cable pair. The 500 ms run captured 24,480 frames,
+  processed 191 graph quanta with 191 tap calls, rendered 24,448 frames,
+  reported zero non-finite tap samples, dropped frames, scheduler xruns, and
+  deadline misses, and produced a 25,072-byte temporary recording. Cleanup
+  removed the temporary executable/output and the before/after media snapshot
+  was unchanged. This is existing-endpoint adapter evidence only; it does not
+  qualify the managed AudioRouter driver, production signing, or physical
+  latency. Next action: continue the next independently testable M03/M07
+  recovery item.
+
 - Hardened the VST3 worker acceptance entrypoint on 2026-09-14 to accept an
   explicitly selected absolute regular `.vst3` module as well as a directory
   bundle; the default AGain path remains unchanged. The full AGain acceptance
