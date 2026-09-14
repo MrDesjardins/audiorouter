@@ -279,6 +279,7 @@ describe("VB-Cable endpoint selection", () => {
     fireEvent.click(button);
     await waitFor(() => expect((screen.getByRole("combobox", { name: "Native capture endpoint" }) as HTMLSelectElement).value).toBe("capture-vb"));
     expect((screen.getByRole("combobox", { name: "Native render endpoint" }) as HTMLSelectElement).value).toBe("render-vb");
+    expect(screen.getByRole("option", { name: /CABLE Input.*48000 Hz.*2 ch/ })).toBeTruthy();
     expect(JSON.parse(window.localStorage.getItem("audiorouter.ui.endpoint-binding.demo-session") ?? "null")).toEqual({ captureEndpointId: "capture-vb", renderEndpointId: "render-vb" });
     expect(screen.getByText("VB-Cable pair selected. Review the graph, then prepare and start the session.")).toBeTruthy();
   });

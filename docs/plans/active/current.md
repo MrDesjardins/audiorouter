@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Fixed an M05/CAP-01 endpoint-selection presentation defect on 2026-09-14.
+  Render endpoint options now read channel count from the versioned
+  `format.channels` contract, matching capture options; the previous UI used
+  a nonexistent top-level field and displayed incomplete render metadata.
+  Added a VB-Cable endpoint accessibility regression. UI tests (192) and
+  TypeScript typecheck passed. No endpoint, driver, registry, or persistent
+  machine audio configuration was accessed. Next action: continue the next
+  safe M03/M07 recovery or delivery item.
+
 - Requalified the elevated aggregate `safe-all.ps1` chain after the tray
   lifecycle fix on 2026-09-14. VS2026/MSVC/SDK/WDK discovery, AudioRouter x64
   driver build/signability, read-only 34-endpoint inventory, disposable
