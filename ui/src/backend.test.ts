@@ -10,6 +10,7 @@ describe("disconnected backend", () => {
     const snapshot = await backend.snapshot();
     expect(backend.connected).toBe(false);
     expect(snapshot.status.privacyMute.muted).toBe(true);
+    expect(snapshot.diagnostics.schedulerTelemetry).toBeNull();
     expect(snapshot.session.id).toBe(demoSession.id);
     expect(await backend.listRecordings()).toEqual([]);
     expect(await backend.listSessions()).toEqual(expect.arrayContaining([demoSession]));

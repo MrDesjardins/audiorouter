@@ -368,6 +368,11 @@ The shared TypeScript `DiagnosticsSnapshot` was synchronized with this response
 on 2026-09-14, including the three native adapter states, nullable native
 session identity, available/unavailable audio state, and scheduler fields.
 Contracts typecheck, contract drift validation, and the UI typecheck passed.
+The live UI snapshot now requests the same read-only diagnostics method and
+keeps the disconnected fixture at an explicit `schedulerTelemetry: null`.
+The status strip presents processed-quanta and xrun counters only when the
+backend supplies a worker snapshot; UI tests passed with 18 files and 166
+tests.
 
 The fixed `startup.get` capability response and `recovery.clearSafeMode` result
 now have explicit output schemas and shared TypeScript types. Their

@@ -11,6 +11,7 @@ import type {
   VirtualRouteListResult,
   VirtualRouteReplaceResult,
   DiscoveryDocument,
+  DiagnosticsSnapshot,
   EventsSubscribeResult,
   GraphCommitResult,
   GraphPlanResult,
@@ -71,6 +72,7 @@ export function isRevisionConflict(error: unknown): boolean {
 
 export type UiBackendSnapshot = {
   status: StatusSnapshot;
+  diagnostics: DiagnosticsSnapshot;
   session: Session;
   discovery: DiscoveryDocument | null;
 };
@@ -191,12 +193,26 @@ const disconnectedStatus: StatusSnapshot = {
   eventCursor: { backendEpoch: 0, latestSequence: 0 },
 };
 
+const disconnectedDiagnostics: DiagnosticsSnapshot = {
+  build: "preview",
+  backend: "control-plane",
+  storage: "memory",
+  audio: { state: "unavailable", reason: "The control backend is disconnected." },
+  nativeAdapter: "implemented-not-activated",
+  nativeSessionId: null,
+  schedulerTelemetry: null,
+  privacyMute: { muted: true, persistence: "memory" },
+  recovery: { safeMode: false, recentCrashes: 0, persistence: "memory" },
+  eventLog: { latestSequence: 0, retained: 0 },
+  redacted: true,
+};
+
 /** Safe startup backend: it only returns local fixture data and has no mutation methods. */
 export function createDisconnectedBackend(session: Session = demoSession): UiBackend {
   return {
     connected: false,
     async snapshot() {
-      return { status: disconnectedStatus, session, discovery: null };
+      return { status: disconnectedStatus, diagnostics: disconnectedDiagnostics, session, discovery: null };
     },
     async subscribe() {
       return { backendEpoch: 0, events: [], nextSequence: 0 };
@@ -392,12 +408,13 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
   return {
     connected: true,
     async snapshot() {
-      const [status, discovery, session] = await Promise.all([
+      const [status, diagnostics, discovery, session] = await Promise.all([
         client.request("status.get", undefined),
+        client.request("system.diagnostics", undefined),
         client.request("system.describe", undefined),
         client.request("sessions.get", { sessionId }),
       ]);
-      return { status, discovery, session };
+      return { status, diagnostics, discovery, session };
     },
     async subscribe(afterSequence = 0, sessionId, backendEpoch, categories) {
       return client.request("events.subscribe", {

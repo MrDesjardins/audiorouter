@@ -19,6 +19,14 @@ Updated: 2026-09-14.
   validation, and UI typecheck passed; no runtime or machine configuration
   changed.
 
+- Connected the diagnostics contract to the UI snapshot and status strip on
+  2026-09-14. Live and disconnected adapters now carry the redacted
+  `system.diagnostics` result; the visible status includes processed quanta
+  and xrun count when scheduler telemetry is available, while disconnected
+  mode stays explicit and safe. Contracts/UI typechecks and all UI tests
+  passed (18 files, 166 tests). No audio endpoint or machine configuration
+  changed.
+
 - Fixed a real M02 acceptance integration defect on 2026-09-14. After the
   native lifecycle boundary was tightened, the control-owned VB-Cable probe
   still stopped the endpoint worker before stopping its running session; the
