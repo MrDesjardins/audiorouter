@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Added the prototype-driver rollback procedure to the release runbook on
+  2026-09-14. It now documents the isolated-test-only lifecycle entrypoint,
+  exact published-package state requirement, compensating cleanup behavior,
+  and unchanged security/audio boundaries. Documentation validation passed
+  for 53 Markdown files and 192 local links. No driver, registry, endpoint,
+  or persistent audio configuration was changed. Next action: continue the
+  next independently testable M03/M07 recovery item.
+
 - Corrected the M08 driver-status wording on 2026-09-14. Release guidance
   now distinguishes the AudioRouter-owned, build-qualified prototype and
   guarded isolated-test lifecycle entrypoint from the still-missing

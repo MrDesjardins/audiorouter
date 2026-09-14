@@ -86,6 +86,14 @@ registration, privileged helpers, and control-pipe cleanup separately from
 recording retention. Permanent recording deletion is never an implicit
 uninstall action.
 
+For the current prototype-only driver lifecycle, use the guarded
+`drivers/audiorouter-virtual/manage.ps1` entrypoint only on an isolated test
+system. Keep its exact published-package state file with the package; the
+script refuses ambiguous cleanup and attempts compensating package removal if
+it cannot publish that state after installation. This prototype procedure is
+not a substitute for the future signed installer and does not authorize
+changes to test-signing, Secure Boot, HVCI, endpoint defaults, or volumes.
+
 ## Known release blockers
 
 - Production-signed virtual-device driver and normal Secure Boot/Memory
