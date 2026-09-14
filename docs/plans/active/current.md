@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Corrected the API-08 recovery-event catalog on 2026-09-14. The emitted
+  `recovery.safeModeCleared` event is now discoverable in Rust, typed in
+  TypeScript, and subscribed by the UI, so recovery-latch changes refresh the
+  authoritative workspace state. Control (150 passed, 2 guarded live
+  ignored), strict Clippy, UI (184), contracts drift/typecheck, formatting,
+  diff, and docs validation passed. No endpoint or machine configuration was
+  accessed. Next action: continue the next safe M03/M07 recovery item.
+
 - Corrected the API-08 endpoint-event catalog on 2026-09-14. The emitted
   `devices.changed` event is now discoverable in Rust, typed in TypeScript, and
   subscribed by the UI, so endpoint inventory changes trigger the same
