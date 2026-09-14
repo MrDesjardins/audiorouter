@@ -526,8 +526,7 @@ export function findVbCableCaptureEndpointId(devices: DeviceListItem[]): string 
 function NativeEndpointPanel({ backend, sessionId, devices, sessionRunning, onStart, onStop }: { backend: UiBackend; sessionId: string; devices: DeviceListItem[]; sessionRunning: boolean; onStart: () => Promise<void>; onStop: () => Promise<void> }) {
   const activeCapture = devices.filter((device): device is Extract<DeviceListItem, { state: "active" }> => device.state === "active" && device.direction === "capture");
   const activeRender = devices
-    .filter((device): device is Extract<DeviceListItem, { state: "active" }> => device.state === "active" && device.direction === "render")
-    .map((device) => ({ ...device, channels: device.format.channels }));
+    .filter((device): device is Extract<DeviceListItem, { state: "active" }> => device.state === "active" && device.direction === "render");
   const savedHint = readEndpointBindingHint(sessionId);
   const missingCaptureHint = devices.length > 0 && Boolean(savedHint.captureEndpointId) && !activeCapture.some((device) => device.id === savedHint.captureEndpointId);
   const missingRenderHint = devices.length > 0 && Boolean(savedHint.renderEndpointId) && !activeRender.some((device) => device.id === savedHint.renderEndpointId);
