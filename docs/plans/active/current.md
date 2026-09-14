@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Corrected stale startup capability wording on 2026-09-14. The portable
+  control plane now explains that native sign-in registration is owned by the
+  desktop shell, rather than claiming the feature is unimplemented. The
+  backend still reports registration as unavailable because it intentionally
+  does not write the OS registry; the shell's explicit command remains the
+  observed native boundary. Control tests (151 passed, 2 guarded live
+  ignored), formatting, and diff checks pass. No registry, driver, endpoint,
+  or persistent audio configuration was changed. Next action: continue the
+  next independently testable M03/M07 recovery integration item.
+
 - Requalified the clean pushed head on 2026-09-14 after the native startup
   status/attendance work. The complete locked Rust workspace passed all
   package tests and doc-tests; the two guarded live tests remain ignored.

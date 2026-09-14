@@ -7863,7 +7863,7 @@ impl ControlPlane {
                     "startup.get" => Ok(json!({
                         "enabled": self.startup_enabled,
                         "registration": "unavailable",
-                        "reason": "sign-in startup registration is not implemented in this build"
+                        "reason": "native sign-in registration is owned by the desktop shell"
                     })),
                     "startup.plan" => self.dispatch_startup_plan(request.params),
                     "startup.apply" => self.dispatch_startup_apply(request.params),
@@ -10468,7 +10468,7 @@ impl ControlPlane {
             "planId": plan_id,
             "enabled": enabled,
             "registration": "unavailable",
-            "reason": "sign-in startup registration is not implemented in this build",
+            "reason": "native sign-in registration is owned by the desktop shell",
             "requiredScopes": ["startupWrite"],
             "warnings": ["planning does not change Windows startup registration"]
         }))
@@ -10518,7 +10518,7 @@ impl ControlPlane {
             "planId": plan_id,
             "state": "unavailable",
             "registration": "unavailable",
-            "reason": "sign-in startup registration is not implemented in this build"
+            "reason": "native sign-in registration is owned by the desktop shell"
         });
         if let Some(storage) = self.storage.as_mut() {
             // Keep desired state, idempotency, and one-shot plan consumption
@@ -15028,7 +15028,7 @@ mod tests {
         assert_eq!(result["registration"], "unavailable");
         assert_eq!(
             result["reason"],
-            "sign-in startup registration is not implemented in this build"
+            "native sign-in registration is owned by the desktop shell"
         );
     }
 
@@ -15058,7 +15058,7 @@ mod tests {
         assert_eq!(result["registration"], "unavailable");
         assert_eq!(
             result["reason"],
-            "sign-in startup registration is not implemented in this build"
+            "native sign-in registration is owned by the desktop shell"
         );
         assert!(
             plane
