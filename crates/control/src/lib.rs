@@ -10457,7 +10457,7 @@ impl ControlPlane {
             "enabled": enabled,
             "registration": "unavailable",
             "reason": "sign-in startup registration is not implemented in this build",
-            "requiredScopes": ["sessionControl"],
+            "requiredScopes": ["startupWrite"],
             "warnings": ["planning does not change Windows startup registration"]
         }))
     }
@@ -15032,7 +15032,7 @@ mod tests {
         let plan = response.result.unwrap();
         assert_eq!(plan["enabled"], true);
         assert_eq!(plan["registration"], "unavailable");
-        assert_eq!(plan["requiredScopes"], json!(["sessionControl"]));
+        assert_eq!(plan["requiredScopes"], json!(["startupWrite"]));
         let plan_id = plan["planId"].as_str().unwrap().to_owned();
 
         let apply = plane.dispatch(JsonRpcRequest {
@@ -17814,6 +17814,7 @@ mod tests {
         assert!(!ClientGrant::for_role(ClientRole::Editor).allows(PermissionScope::SessionControl));
         assert!(ClientGrant::for_role(ClientRole::Operator).allows(PermissionScope::SessionControl));
         assert!(!ClientGrant::for_role(ClientRole::Operator).allows(PermissionScope::Capture));
+        assert!(!ClientGrant::for_role(ClientRole::Operator).allows(PermissionScope::StartupWrite));
         assert!(!ClientGrant::for_role(ClientRole::Operator)
             .allows(PermissionScope::DeviceAdministration));
         assert!(!ClientGrant::read_only().allows(PermissionScope::PluginScan));
@@ -17836,6 +17837,25 @@ mod tests {
         assert_eq!(response.error.unwrap().code, -32001);
         assert!(plane.native_endpoint_worker.is_none());
         assert!(plane.endpoint_monitor.is_none());
+    }
+
+    #[test]
+    fn startup_mutations_require_the_dedicated_startup_write_scope() {
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "startup.plan".into(),
+            params: Some(json!({ "enabled": true })),
+        };
+        let denied = ControlPlane::default()
+            .dispatch_authorized(request.clone(), &ClientGrant::for_role(ClientRole::Operator));
+        assert_eq!(denied.error.unwrap().code, -32001);
+
+        let allowed = ControlPlane::default().dispatch_authorized(
+            request,
+            &ClientGrant::with_scopes([PermissionScope::StartupWrite]),
+        );
+        assert!(allowed.result.is_some());
     }
 
     #[test]

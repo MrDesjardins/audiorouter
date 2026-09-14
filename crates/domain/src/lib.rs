@@ -568,6 +568,7 @@ pub enum PermissionScope {
     Capture,
     Record,
     PluginScan,
+    StartupWrite,
     DeviceAdministration,
 }
 
@@ -726,12 +727,12 @@ pub const API_METHODS: [ApiMethodSpec; 71] = [
     },
     ApiMethodSpec {
         name: "startup.plan",
-        permission: PermissionScope::SessionControl,
+        permission: PermissionScope::StartupWrite,
         side_effect: SideEffectClass::PlanOnly,
     },
     ApiMethodSpec {
         name: "startup.apply",
-        permission: PermissionScope::SessionControl,
+        permission: PermissionScope::StartupWrite,
         side_effect: SideEffectClass::Mutating,
     },
     ApiMethodSpec {

@@ -553,7 +553,7 @@ describe("live event cursor", () => {
       request: async (method: string, params: unknown) => {
         calls.push({ method, params });
         if (method === "startup.get") return { enabled: false, registration: "unavailable", reason: "native registration unavailable" };
-        if (method === "startup.plan") return { planId: "startup-plan", enabled: true, registration: "unavailable", reason: "native registration unavailable", requiredScopes: ["sessionControl"], warnings: [] };
+        if (method === "startup.plan") return { planId: "startup-plan", enabled: true, registration: "unavailable", reason: "native registration unavailable", requiredScopes: ["startupWrite"], warnings: [] };
         return { planId: "startup-plan", state: "unavailable", registration: "unavailable", reason: "native registration unavailable" };
       },
     } as never;

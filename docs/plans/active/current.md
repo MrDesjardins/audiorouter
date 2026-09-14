@@ -2,6 +2,25 @@
 
 Updated: 2026-09-14.
 
+- Implemented the M07 startup authorization correction on 2026-09-14. Added
+  the dedicated `startupWrite` permission to the Rust and TypeScript contracts,
+  assigned it to `startup.plan`/`startup.apply`, updated MCP scope guidance and
+  response hints, and added a regression proving the ordinary Operator grant
+  cannot plan startup while an explicit startup grant can. Contract drift,
+  TypeScript typechecks, UI backend tests (53), domain (64), control (153),
+  strict Clippy, formatting, and diff checks passed. This changes no OS
+  registration or audio configuration. Native sign-in registration and tray
+  lifecycle remain separate open work. Next action: continue the next safe
+  M03/M07 recovery integration item.
+
+- Planned the next M07 authorization slice on 2026-09-14: align startup
+  planning/apply with the specification's dedicated `startup.write` scope.
+  The current API incorrectly grants startup mutations through broad
+  `sessionControl`, so the fix will update the shared Rust/TypeScript
+  contracts, method metadata, response scope hints, and denial regressions.
+  This is portable authorization work and will not touch OS startup
+  registration or audio configuration.
+
 - Hardened the M03 lifecycle rollback invariant on 2026-09-14: uninstall now
   requires the requested INF to match the INF recorded with the exact
   published package name, preventing a copied/stale state file from removing

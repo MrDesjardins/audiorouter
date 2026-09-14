@@ -376,6 +376,7 @@ export type PermissionScope =
   | "sessionControl"
   | "capture"
   | "record"
+  | "startupWrite"
   | "deviceAdministration";
 
 export type SideEffectClass =
