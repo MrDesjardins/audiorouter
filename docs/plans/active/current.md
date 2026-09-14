@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Attempted the disposable desktop-shell UI acceptance on 2026-09-13.
+  `run-vb-cable-desktop.ps1` launched the shell and discovered the exact
+  active VB-Cable capture/render pair using a temporary enrolled database;
+  the launcher was stopped through its existing process handle so cleanup
+  restored its environment and removed temporary state. The Windows UI
+  observation service was unavailable (`sky` trusted RPC was not configured),
+  so no attended WebView interaction is claimed. No driver, endpoint default,
+  volume, mute, or persistent audio configuration changed. The manual
+  WebView visual/accessibility gate remains open.
+
 - Repaired the native shell lock drift on 2026-09-13: `src-tauri/Cargo.lock`
   now includes the current `audiorouter-windows-audio` domain dependency and
   compatible registry resolutions. The clean M08 release preparation then
