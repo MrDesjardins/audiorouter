@@ -169,6 +169,14 @@ is inactive or the index was not prepared. The processor lifecycle regression
 covers publication, per-node readout, missing indices, and deactivation. This
 completes the portable publication boundary; native scheduler/control API
 transport and physical endpoint telemetry remain open.
+
+On 2026-09-14, compiled graphs began retaining a parallel immutable map from
+prepared stages to authored node IDs. `RuntimeGraph` and `RuntimeProcessor` now
+offer node-ID keyed meter and dynamics telemetry accessors; unmatched IDs,
+non-dynamics stages, absent meters, and callback contention fail closed with
+`None`. Two regressions cover gate telemetry and meter snapshots by identity.
+The engine suite passes 110 tests with formatting clean. Control-plane API
+publication remains separate and is not claimed by this engine-only evidence.
 The engine now provides preparation-time `calculate_latency_compensation`.
 It computes destination-major delay samples from cumulative path latency,
 validates an 8--192 kHz graph rate, and rejects branch spreads beyond the

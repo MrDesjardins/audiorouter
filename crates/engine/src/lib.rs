@@ -3227,6 +3227,13 @@ pub fn compile_session_at_sample_rate_with_plugins(
     }
 
     let mut stages = Vec::new();
+    let mut stage_node_ids = Vec::new();
+    macro_rules! push_stage {
+        ($node:expr, $stage:expr) => {{
+            stage_node_ids.push($node.clone());
+            stages.push($stage);
+        }};
+    }
     let mut previous_node = None;
     for node_id in order {
         let node = session
@@ -3241,9 +3248,12 @@ pub fn compile_session_at_sample_rate_with_plugins(
             if previous_node.as_ref() != Some(&edge.source_node) {
                 return Err(GraphCompileError::UnsupportedTopology);
             }
-            stages.push(ProcessingStage::ChannelMatrix {
-                coefficients: edge.matrix.clone(),
-            });
+            push_stage!(
+                node_id,
+                ProcessingStage::ChannelMatrix {
+                    coefficients: edge.matrix.clone(),
+                }
+            );
         }
         if !node.enabled {
             if matches!(
@@ -3256,7 +3266,7 @@ pub fn compile_session_at_sample_rate_with_plugins(
                     | NodeKind::VirtualCaptureSink
                     | NodeKind::Mixer
             ) {
-                stages.push(ProcessingStage::Mute { muted: true });
+                push_stage!(node_id, ProcessingStage::Mute { muted: true });
             }
             // A disabled compatible processor uses its defined dry bypass.
             previous_node = Some(node_id);
@@ -3279,9 +3289,12 @@ pub fn compile_session_at_sample_rate_with_plugins(
                     .get("gainDb")
                     .and_then(|value| value.as_f64())
                     .unwrap_or(0.0) as f32;
-                stages.push(ProcessingStage::Gain {
-                    linear: 10.0_f32.powf(gain_db / 20.0),
-                });
+                push_stage!(
+                    node_id,
+                    ProcessingStage::Gain {
+                        linear: 10.0_f32.powf(gain_db / 20.0),
+                    }
+                );
             }
             NodeKind::Mute => {
                 let muted = node
@@ -3289,7 +3302,7 @@ pub fn compile_session_at_sample_rate_with_plugins(
                     .get("muted")
                     .and_then(|value| value.as_bool())
                     .unwrap_or(true);
-                stages.push(ProcessingStage::Mute { muted });
+                push_stage!(node_id, ProcessingStage::Mute { muted });
             }
             NodeKind::ParametricEq => {
                 let input_channels = node
@@ -3364,10 +3377,13 @@ pub fn compile_session_at_sample_rate_with_plugins(
                 } else {
                     None
                 };
-                stages.push(ProcessingStage::ParametricEq {
-                    left: Box::new(RealtimeDsp::new(left)),
-                    right: right.map(|filter| Box::new(RealtimeDsp::new(filter))),
-                });
+                push_stage!(
+                    node_id,
+                    ProcessingStage::ParametricEq {
+                        left: Box::new(RealtimeDsp::new(left)),
+                        right: right.map(|filter| Box::new(RealtimeDsp::new(filter))),
+                    }
+                );
             }
             NodeKind::Compressor => {
                 let threshold_db = node
@@ -3419,10 +3435,13 @@ pub fn compile_session_at_sample_rate_with_plugins(
                 let left = audiorouter_dsp::Compressor::new(params, detector_channels)
                     .map_err(|_| GraphCompileError::UnsupportedTopology)?;
                 let right = None;
-                stages.push(ProcessingStage::Compressor {
-                    left: Box::new(RealtimeDsp::new(left)),
-                    right: right.map(|processor| Box::new(RealtimeDsp::new(processor))),
-                });
+                push_stage!(
+                    node_id,
+                    ProcessingStage::Compressor {
+                        left: Box::new(RealtimeDsp::new(left)),
+                        right: right.map(|processor| Box::new(RealtimeDsp::new(processor))),
+                    }
+                );
             }
             NodeKind::Gate => {
                 let threshold_db = node
@@ -3480,10 +3499,13 @@ pub fn compile_session_at_sample_rate_with_plugins(
                 let left = audiorouter_dsp::Gate::new(params, detector_channels)
                     .map_err(|_| GraphCompileError::UnsupportedTopology)?;
                 let right = None;
-                stages.push(ProcessingStage::Gate {
-                    left: Box::new(RealtimeDsp::new(left)),
-                    right: right.map(|processor| Box::new(RealtimeDsp::new(processor))),
-                });
+                push_stage!(
+                    node_id,
+                    ProcessingStage::Gate {
+                        left: Box::new(RealtimeDsp::new(left)),
+                        right: right.map(|processor| Box::new(RealtimeDsp::new(processor))),
+                    }
+                );
             }
             NodeKind::Limiter => {
                 let input_channels = node
@@ -3515,9 +3537,12 @@ pub fn compile_session_at_sample_rate_with_plugins(
                     input_channels,
                 )
                 .map_err(|_| GraphCompileError::UnsupportedTopology)?;
-                stages.push(ProcessingStage::Limiter {
-                    limiter: Box::new(RealtimeDsp::new(limiter)),
-                });
+                push_stage!(
+                    node_id,
+                    ProcessingStage::Limiter {
+                        limiter: Box::new(RealtimeDsp::new(limiter)),
+                    }
+                );
             }
             NodeKind::Delay => {
                 let delay_ms = node
@@ -3549,10 +3574,13 @@ pub fn compile_session_at_sample_rate_with_plugins(
                 } else {
                     None
                 };
-                stages.push(ProcessingStage::Delay {
-                    left: Box::new(RealtimeDsp::new(left)),
-                    right: right.map(|delay| Box::new(RealtimeDsp::new(delay))),
-                });
+                push_stage!(
+                    node_id,
+                    ProcessingStage::Delay {
+                        left: Box::new(RealtimeDsp::new(left)),
+                        right: right.map(|delay| Box::new(RealtimeDsp::new(delay))),
+                    }
+                );
             }
             NodeKind::GraphicEq => {
                 let gains = std::array::from_fn(|index| {
@@ -3577,10 +3605,13 @@ pub fn compile_session_at_sample_rate_with_plugins(
                 } else {
                     None
                 };
-                stages.push(ProcessingStage::GraphicEq {
-                    left: Box::new(RealtimeDsp::new(left)),
-                    right: right.map(|processor| Box::new(RealtimeDsp::new(processor))),
-                });
+                push_stage!(
+                    node_id,
+                    ProcessingStage::GraphicEq {
+                        left: Box::new(RealtimeDsp::new(left)),
+                        right: right.map(|processor| Box::new(RealtimeDsp::new(processor))),
+                    }
+                );
             }
             NodeKind::Pitch => {
                 let semitones = node
@@ -3616,17 +3647,23 @@ pub fn compile_session_at_sample_rate_with_plugins(
                 } else {
                     None
                 };
-                stages.push(ProcessingStage::Pitch {
-                    left: Box::new(RealtimeDsp::new(left)),
-                    right: right.map(|processor| Box::new(RealtimeDsp::new(processor))),
-                });
+                push_stage!(
+                    node_id,
+                    ProcessingStage::Pitch {
+                        left: Box::new(RealtimeDsp::new(left)),
+                        right: right.map(|processor| Box::new(RealtimeDsp::new(processor))),
+                    }
+                );
             }
-            NodeKind::Plugin => stages.push(ProcessingStage::Plugin {
-                processor: plugins
-                    .get(&node.id)
-                    .cloned()
-                    .ok_or(GraphCompileError::UnsupportedTopology)?,
-            }),
+            NodeKind::Plugin => push_stage!(
+                node_id,
+                ProcessingStage::Plugin {
+                    processor: plugins
+                        .get(&node.id)
+                        .cloned()
+                        .ok_or(GraphCompileError::UnsupportedTopology)?,
+                }
+            ),
             NodeKind::PhysicalInput
             | NodeKind::ApplicationCapture
             | NodeKind::EndpointLoopback
@@ -3644,12 +3681,17 @@ pub fn compile_session_at_sample_rate_with_plugins(
                     })
                     .max()
                     .map_or(0, |index| index + 1);
-                stages.push(ProcessingStage::Meter { index });
+                push_stage!(node_id, ProcessingStage::Meter { index });
             }
         }
         previous_node = Some(node_id);
     }
-    let mut graph = RuntimeGraph::prepare_at_sample_rate(generation, stages, sample_rate_hz);
+    let mut graph = RuntimeGraph::prepare_at_sample_rate_with_node_ids(
+        generation,
+        stages,
+        sample_rate_hz,
+        stage_node_ids,
+    );
     graph.has_virtual_capture_sink = session
         .nodes
         .iter()
@@ -3852,6 +3894,7 @@ pub fn compile_fanout_session(
 /// before realtime execution; `process` only mutates the caller's block.
 pub struct RuntimeGraph {
     stages: Vec<ProcessingStage>,
+    stage_node_ids: Vec<audiorouter_domain::EntityId>,
     generation: RuntimeGeneration,
     sample_rate_hz: u32,
     meters: Vec<BlockMeter>,
@@ -3986,6 +4029,29 @@ impl RuntimeProcessor {
         self.publication
             .load()
             .and_then(|graph| graph.processor_telemetry(index))
+    }
+
+    /// Read processor telemetry by authored node identity from the published
+    /// graph. This is a best-effort diagnostics read and never waits for the
+    /// realtime callback.
+    pub fn processor_telemetry_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<ProcessorTelemetry> {
+        self.publication
+            .load()
+            .and_then(|graph| graph.processor_telemetry_for_node(node_id))
+    }
+
+    /// Read a prepared meter node by authored identity from the published
+    /// graph. `None` means the graph has no matching meter or is unavailable.
+    pub fn meter_snapshot_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<BlockMeterSnapshot> {
+        self.publication
+            .load()
+            .and_then(|graph| graph.meter_snapshot_for_node(node_id))
     }
 
     /// Return the negotiated rate of the currently published graph. This is
@@ -4483,6 +4549,19 @@ impl RuntimeGraph {
         stages: Vec<ProcessingStage>,
         sample_rate_hz: u32,
     ) -> Self {
+        Self::prepare_at_sample_rate_with_node_ids(generation, stages, sample_rate_hz, Vec::new())
+    }
+
+    /// Prepare a graph with the control-plane node identity for each compiled
+    /// stage. The identity map is immutable and created before publication;
+    /// it is used only by off-callback diagnostics reads.
+    pub fn prepare_at_sample_rate_with_node_ids(
+        generation: RuntimeGeneration,
+        stages: Vec<ProcessingStage>,
+        sample_rate_hz: u32,
+        stage_node_ids: Vec<audiorouter_domain::EntityId>,
+    ) -> Self {
+        debug_assert!(stage_node_ids.is_empty() || stage_node_ids.len() == stages.len());
         let meter_count = stages
             .iter()
             .filter_map(|stage| match stage {
@@ -4493,6 +4572,7 @@ impl RuntimeGraph {
             .map_or(0, |index| index + 1);
         Self {
             stages,
+            stage_node_ids,
             generation,
             sample_rate_hz,
             meters: (0..meter_count).map(|_| BlockMeter::default()).collect(),
@@ -4565,6 +4645,34 @@ impl RuntimeGraph {
             _ => return None,
         }
         Some(telemetry)
+    }
+
+    /// Read processor telemetry by its authored node identity. Returns
+    /// `None` for hand-built graphs without identity metadata, an unknown
+    /// node, a non-dynamics stage, or a busy callback-owned processor.
+    pub fn processor_telemetry_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<ProcessorTelemetry> {
+        self.stage_node_ids
+            .iter()
+            .position(|candidate| candidate == node_id)
+            .and_then(|index| self.processor_telemetry(index))
+    }
+
+    /// Read the authored meter node by identity, preserving the same
+    /// lock-free snapshot semantics as the stage-indexed accessor.
+    pub fn meter_snapshot_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<BlockMeterSnapshot> {
+        self.stage_node_ids
+            .iter()
+            .position(|candidate| candidate == node_id)
+            .and_then(|index| match self.stages.get(index) {
+                Some(ProcessingStage::Meter { index }) => self.meter_snapshot(*index),
+                _ => None,
+            })
     }
 
     /// Clear all prepared node meters at an activation boundary. This is
@@ -6562,6 +6670,67 @@ mod tests {
         graph.process(&mut block);
         let loud = graph.processor_telemetry(0).unwrap();
         assert!(loud.gate_open[0]);
+    }
+
+    #[test]
+    fn prepared_graph_can_read_processor_telemetry_by_node_identity() {
+        use audiorouter_domain::EntityId;
+        let gate = audiorouter_dsp::Gate::new(
+            audiorouter_dsp::GateParams {
+                threshold_db: -45.0,
+                hysteresis_db: 3.0,
+                ratio: 4.0,
+                range_db: 60.0,
+                attack_ms: 5.0,
+                hold_ms: 50.0,
+                release_ms: 150.0,
+                sample_rate: 48_000.0,
+            },
+            1,
+        )
+        .unwrap();
+        let node_id = EntityId::new("voice-gate");
+        let graph = RuntimeGraph::prepare_at_sample_rate_with_node_ids(
+            RuntimeGeneration::new(15),
+            vec![ProcessingStage::Gate {
+                left: Box::new(RealtimeDsp::new(gate)),
+                right: None,
+            }],
+            48_000,
+            vec![node_id.clone()],
+        );
+        let mut block = AudioBlock::new(1, 128).unwrap();
+        block.channel_mut(0).unwrap().fill(0.001);
+        graph.process(&mut block);
+        let telemetry = graph.processor_telemetry_for_node(&node_id).unwrap();
+        assert!(!telemetry.gate_open[0]);
+        assert!(telemetry.gain_reduction_db[0] > 0.0);
+        assert_eq!(
+            graph.processor_telemetry_for_node(&EntityId::new("missing")),
+            None
+        );
+    }
+
+    #[test]
+    fn prepared_graph_can_read_meter_by_node_identity() {
+        use audiorouter_domain::EntityId;
+        let node_id = EntityId::new("output-meter");
+        let graph = RuntimeGraph::prepare_at_sample_rate_with_node_ids(
+            RuntimeGeneration::new(16),
+            vec![ProcessingStage::Meter { index: 0 }],
+            48_000,
+            vec![node_id.clone()],
+        );
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block.channel_mut(0).unwrap().copy_from_slice(&[0.5, -0.25]);
+        graph.process(&mut block);
+        let snapshot = graph.meter_snapshot_for_node(&node_id).unwrap();
+        assert_eq!(snapshot.channel_peak_abs[0], 0.5);
+        assert!(snapshot.channel_rms_db[0].is_finite());
+        assert_eq!(
+            graph.meter_snapshot_for_node(&EntityId::new("missing")),
+            None
+        );
     }
 
     #[test]
