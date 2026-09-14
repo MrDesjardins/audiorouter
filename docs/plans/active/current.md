@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Requalified the guarded full `tests/acceptance/safe-all.ps1` chain at the
+  current pushed head on 2026-09-14. M00/M03 toolchain, native compile,
+  non-installing AudioRouter/SysVAD qualification, M01, M04, M05 (175 UI
+  tests and production build), M06 VST2/VST3, M07, unsigned M08 preparation,
+  159 traceability IDs, and documentation validation (52 Markdown files, 190
+  local links) passed. Cleanup removed 15 run-owned temporary children. No
+  driver installation/loading, signing-mode change, plugin/startup
+  registration, live audio action, or persistent machine configuration change
+  occurred.
+
 - Completed the recorder ownership display slice on 2026-09-14. The UI now
   shows the optional authoritative node identity for node-attached recorders,
   while session-level recorders remain unlabelled as node-owned; empty state
