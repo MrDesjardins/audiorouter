@@ -3629,6 +3629,20 @@ impl Default for ControlPlane {
     }
 }
 
+fn session_virtual_capture_bus_ids(session: &Session) -> Vec<EntityId> {
+    session
+        .nodes
+        .iter()
+        .filter(|node| node.enabled && node.kind == NodeKind::VirtualCaptureSink)
+        .filter_map(|node| {
+            node.parameters
+                .get("busId")
+                .and_then(serde_json::Value::as_str)
+                .map(EntityId::new)
+        })
+        .collect()
+}
+
 impl ControlPlane {
     pub fn new(build: impl Into<String>) -> Self {
         Self {
@@ -3910,13 +3924,9 @@ impl ControlPlane {
             ControlError::InvalidRequest(format!("native graph rejected: {error:?}"))
         })?;
 
-        self.prepare_virtual_route_bridges(
-            session_id,
-            generation,
-            graph.has_virtual_capture_sink(),
-        )?;
-        let virtual_taps =
-            self.virtual_route_tap_set(session_id, graph.has_virtual_capture_sink())?;
+        let capture_bus_ids = session_virtual_capture_bus_ids(&session);
+        self.prepare_virtual_route_bridges(session_id, generation, &capture_bus_ids)?;
+        let virtual_taps = self.virtual_route_tap_set(session_id, &capture_bus_ids)?;
         recorder_taps.append(&virtual_taps).map_err(|_| {
             ControlError::InvalidRequest("native graph tap capacity exceeded".into())
         })?;
@@ -3940,7 +3950,7 @@ impl ControlPlane {
         &mut self,
         producer_session_id: &EntityId,
         generation: u64,
-        has_capture_sink: bool,
+        capture_bus_ids: &[EntityId],
     ) -> Result<(), ControlError> {
         let route_bus_ids = self
             .virtual_bus_routes
@@ -3956,7 +3966,11 @@ impl ControlPlane {
                 .list()
                 .iter()
                 .any(|bus| bus.id() == bus_id && bus.enabled());
-            if has_capture_sink && enabled {
+            if capture_bus_ids
+                .iter()
+                .any(|selected_bus_id| selected_bus_id == bus_id)
+                && enabled
+            {
                 let bridge = self.virtual_bridges.get(bus_id).ok_or_else(|| {
                     ControlError::InvalidRequest("route bridge is not prepared".into())
                 })?;
@@ -4008,10 +4022,10 @@ impl ControlPlane {
     fn virtual_route_tap_set(
         &self,
         producer_session_id: &EntityId,
-        has_capture_sink: bool,
+        capture_bus_ids: &[EntityId],
     ) -> Result<AudioTapSet, ControlError> {
         let mut taps = AudioTapSet::new();
-        if !has_capture_sink {
+        if capture_bus_ids.is_empty() {
             return Ok(taps);
         }
         for route in self
@@ -4020,6 +4034,9 @@ impl ControlPlane {
             .iter()
             .filter(|route| route.producer_session_id == *producer_session_id)
         {
+            if !capture_bus_ids.iter().any(|bus_id| bus_id == &route.bus_id) {
+                continue;
+            }
             let enabled = self
                 .virtual_buses
                 .list()
@@ -15367,16 +15384,20 @@ mod tests {
         plane.virtual_bus_routes = routes;
         plane.virtual_bus_route_revision = 1;
         assert!(plane
-            .virtual_route_tap_set(&EntityId::new("producer"), false)
+            .virtual_route_tap_set(&EntityId::new("producer"), &[])
             .unwrap()
             .is_empty());
         assert_eq!(
             plane
-                .virtual_route_tap_set(&EntityId::new("producer"), true)
+                .virtual_route_tap_set(&EntityId::new("producer"), &[EntityId::new("route-bus-1")])
                 .unwrap()
                 .len(),
             1
         );
+        assert!(plane
+            .virtual_route_tap_set(&EntityId::new("producer"), &[EntityId::new("route-bus-2")])
+            .unwrap()
+            .is_empty());
     }
 
     #[test]
@@ -15407,19 +15428,19 @@ mod tests {
         let bridge = plane.virtual_bridges.get(&bus_id).unwrap();
         assert!(!bridge.is_active());
         plane
-            .prepare_virtual_route_bridges(&producer, 7, true)
+            .prepare_virtual_route_bridges(&producer, 7, &[bus_id.clone()])
             .unwrap();
         assert!(bridge.is_active());
         assert_eq!(bridge.generation(), 7);
 
         plane
-            .prepare_virtual_route_bridges(&producer, 8, false)
+            .prepare_virtual_route_bridges(&producer, 8, &[])
             .unwrap();
         assert!(!bridge.is_active());
         assert_eq!(bridge.generation(), 7);
 
         plane
-            .prepare_virtual_route_bridges(&producer, 8, true)
+            .prepare_virtual_route_bridges(&producer, 8, &[bus_id.clone()])
             .unwrap();
         assert!(bridge.is_active());
         plane.delete_session(&producer).unwrap();
@@ -15449,12 +15470,12 @@ mod tests {
             )
             .unwrap();
         plane
-            .prepare_virtual_route_bridges(&producer, 4, true)
+            .prepare_virtual_route_bridges(&producer, 4, &[bus_id.clone()])
             .unwrap();
         plane
-            .prepare_virtual_route_bridges(&producer, 4, false)
+            .prepare_virtual_route_bridges(&producer, 4, &[])
             .unwrap();
-        let error = plane.prepare_virtual_route_bridges(&producer, 3, true);
+        let error = plane.prepare_virtual_route_bridges(&producer, 3, &[bus_id]);
         assert!(
             matches!(error, Err(ControlError::InvalidRequest(message)) if message.contains("stale"))
         );

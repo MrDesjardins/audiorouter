@@ -6733,7 +6733,10 @@ mod tests {
                 name: "Virtual capture sink".into(),
                 enabled: true,
                 bypass: false,
-                parameters: Default::default(),
+                parameters: serde_json::Map::from_iter([(
+                    "busId".into(),
+                    serde_json::json!("bus-main"),
+                )]),
                 ports: vec![],
             }],
             edges: vec![],

@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Added explicit virtual-bus identity to graph boundaries on 2026-09-13.
+  `VirtualRenderSource` and `VirtualCaptureSink` nodes now require a bounded
+  `parameters.busId`; native graph activation extracts enabled capture-sink
+  identities and selects only matching route bridges. A control regression
+  proves a producer route for bus A is not tapped when the graph selects bus
+  B, while domain, engine, and control suites pass (62, 108, and 135 tests;
+  one live test remains intentionally ignored). This is the portable binding
+  prerequisite for the project-owned driver and does not claim driver loading.
+
 - Added a shell-to-engine regression on 2026-09-13 for the human-test route.
   The fresh three-node desktop graph now compiles at 48 kHz and preserves
   asymmetric stereo samples through its neutral Gain stage, proving the

@@ -1390,6 +1390,11 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::Plugin, "classId") => value.as_str().is_some_and(|class_id| {
                     !class_id.is_empty() && class_id.len() <= MAX_PLUGIN_CLASS_ID_BYTES
                 }),
+                (NodeKind::VirtualRenderSource | NodeKind::VirtualCaptureSink, "busId") => {
+                    value.as_str().is_some_and(|bus_id| {
+                        !bus_id.is_empty() && bus_id.len() <= MAX_ENTITY_ID_BYTES
+                    })
+                }
                 (NodeKind::Plugin, name)
                     if name
                         .strip_prefix("pluginParameter:")
@@ -1405,6 +1410,21 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
             if !valid {
                 errors.push(ValidationError::InvalidParameter {
                     path: format!("{path}.parameters.{name}"),
+                });
+            }
+        }
+        if matches!(
+            node.kind,
+            NodeKind::VirtualRenderSource | NodeKind::VirtualCaptureSink
+        ) {
+            let valid_bus_id = node
+                .parameters
+                .get("busId")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|bus_id| !bus_id.is_empty() && bus_id.len() <= MAX_ENTITY_ID_BYTES);
+            if !valid_bus_id {
+                errors.push(ValidationError::InvalidParameter {
+                    path: format!("{path}.parameters.busId"),
                 });
             }
         }
@@ -2693,6 +2713,23 @@ mod tests {
             store.remove_session(&EntityId::new("session")),
             Err(StoreError::SessionNotFound)
         );
+    }
+
+    #[test]
+    fn virtual_nodes_require_an_explicit_bus_identity() {
+        let sink = node("sink", NodeKind::VirtualCaptureSink, PortDirection::Input);
+        let errors = validate_session(&session(vec![sink], vec![])).unwrap_err();
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidationError::InvalidParameter { path }
+                if path == "nodes[0].parameters.busId"
+        )));
+
+        let mut identified = node("sink", NodeKind::VirtualCaptureSink, PortDirection::Input);
+        identified
+            .parameters
+            .insert("busId".into(), serde_json::json!("voice-chat"));
+        assert!(validate_session(&session(vec![identified], vec![])).is_ok());
     }
 
     #[test]
