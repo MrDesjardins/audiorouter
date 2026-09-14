@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Requalified the production Rust adapter live path on 2026-09-14 with
+  `m02-rust-adapter-live.ps1 -AllowLiveAudio -DurationMilliseconds 500`.
+  The exact current endpoints negotiated 48 kHz stereo and produced 24,480
+  capture frames, 191 graph blocks, 24,448 scheduler frames, and 25,152
+  render frames; 32 frames were safely pending at the bounded boundary, with
+  zero xruns, input/output overruns, deadline misses, or processing-time
+  accounting errors. Streams stopped/reset and media identity/state remained
+  unchanged. This is adapter/WASAPI evidence only; loaded driver and
+  physical-latency gates remain open. Next action: continue the next safe
+  M03/M07 recovery item.
+
 - Requalified the endpoint-wide bounded native lifecycle on 2026-09-14 with
   `m00-native-live.ps1 -AllowLiveAudio -DurationMilliseconds 100`. All 13
   capture and 18 render endpoints completed the lifecycle matrix; one
