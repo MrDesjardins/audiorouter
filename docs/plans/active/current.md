@@ -5,8 +5,9 @@ Updated: 2026-09-14.
 - Added an M05 UI regression on 2026-09-14 for backend-authored recovery
   presentation. A connected fixture with three recent in-memory crashes now
   proves the UI shows active safe mode, the bounded crash count, memory
-  persistence wording, and an enabled clear action; this closes the visible
-  application verification gap exposed by the M07 memory status fix. UI
+  persistence wording, and an enabled clear action; the same test clears the
+  state and verifies the normal-mode/zero-count refresh. This closes the
+  visible application verification gap exposed by the M07 memory status fix. UI
   typecheck and the full suite (19 files, 188 tests) passed. No audio, driver,
   registry, plugin, or machine configuration changed. Next action: continue
   the next independently testable M03/M07 recovery item.

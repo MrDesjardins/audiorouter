@@ -141,16 +141,22 @@ describe("VB-Cable endpoint selection", () => {
 
   it("shows backend-authored recovery safe mode and recent crash count", async () => {
     const disconnected = createDisconnectedBackend();
+    let safeMode = true;
+    const clearRecoverySafeMode = vi.fn(async () => {
+      safeMode = false;
+      return { safeMode: false as const, recentCrashes: 0 as const, persistence: "memory" as const };
+    });
     const backend = {
       ...disconnected,
       connected: true,
+      clearRecoverySafeMode,
       snapshot: async () => {
         const current = await disconnected.snapshot();
         return {
           ...current,
           status: {
             ...current.status,
-            recovery: { safeMode: true, recentCrashes: 3, persistence: "memory" as const },
+            recovery: { safeMode, recentCrashes: safeMode ? 3 : 0, persistence: "memory" as const },
           },
         };
       },
@@ -159,7 +165,13 @@ describe("VB-Cable endpoint selection", () => {
     expect(await screen.findByRole("heading", { name: "Safe mode is active" })).toBeTruthy();
     expect(screen.getByText("3 recent crashes")).toBeTruthy();
     expect(screen.getByText("Recovery state is held in memory for this preview.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Clear safe mode" }).hasAttribute("disabled")).toBe(false);
+    const clearButton = screen.getByRole("button", { name: "Clear safe mode" });
+    expect(clearButton.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(clearButton);
+    expect(clearRecoverySafeMode).toHaveBeenCalledWith(expect.any(String));
+    expect(await screen.findByRole("heading", { name: "Normal startup mode" })).toBeTruthy();
+    expect(screen.getByText("0 recent crashes")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Clear safe mode" }).hasAttribute("disabled")).toBe(true);
   });
 
   it("offers a persisted compact route status view with live controls", async () => {
