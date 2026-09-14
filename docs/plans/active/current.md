@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Requalified the guarded event-driven VB-Cable endpoint lifecycle on
+  2026-09-13. The exact pair produced 24,480 captured frames and 28,320
+  silently rendered frames; initialize, event setup, start, stop, and reset
+  all passed. Media identity/state remained unchanged and temporary binaries
+  were removed; no endpoint default, volume, mute, privacy, driver, signing,
+  startup, or persistent machine-audio setting changed. Physical latency,
+  drift, and production-driver gates remain open.
+
 - Requalified guarded native process-loopback attribution on 2026-09-13.
   Include mode captured 21,609 frames with 76,378 nonzero payload bytes;
   exclude mode captured 22,050 frames and completed activation, start, stop,

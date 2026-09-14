@@ -18,6 +18,20 @@ setting changed. This qualifies API mode/lifecycle and data-path behavior;
 it does not establish a full cross-process isolation threshold or production
 driver capability.
 
+## 2026-09-13 - guarded event-driven endpoint lifecycle
+
+The authorized `m00-native-event-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 500` probe passed against the exact existing VB-Cable
+pair. The event-backed capture path produced 24,480 frames and the silent
+event-backed render path submitted 28,320 frames; both completed initialize,
+event setup, start, stop, and reset successfully.
+
+The harness compared media-device identity/state before and after and removed
+its temporary probe binaries. No endpoint default, volume, mute, privacy,
+driver, signing, startup, or persistent machine-audio setting changed. This
+is event-driven shared-mode lifecycle evidence, not physical latency, drift,
+or production-driver qualification.
+
 ## Shared-mode endpoint lifecycle
 
 The bounded post-reboot `m00-native-live.ps1` acceptance passed across 13
