@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { App, findVbCableCaptureEndpointId, findVbCableEndpointPair, formatNativePumpSummary, WORKSPACE_EVENT_CATEGORIES } from "./App";
+import { App, findVbCableCaptureEndpointId, findVbCableEndpointPair, formatNativePumpSummary, formatRecordingDuration, WORKSPACE_EVENT_CATEGORIES } from "./App";
 import { createDisconnectedBackend } from "./backend";
 import { DraftConnectionList, insertMixerActionId, removeMixerActionId } from "./DraftConnectionList";
 import { appendDraftConnection, insertDraftMixer } from "./draft";
@@ -71,6 +71,12 @@ describe("VB-Cable endpoint selection", () => {
     expect(formatNativePumpSummary({ ...stats, recorderChunksDrained: 0 }, true)).toBe("native 128 in / 128 out / 1 quanta");
     expect(formatNativePumpSummary({ ...stats, droppedRenderFrames: 2, renderBackpressureEvents: 1 }, true)).toBe("native 128 in / 128 out / 1 quanta / 3 recorder chunks / 2 dropped / 1 backpressure");
     expect(formatNativePumpSummary(stats, false)).toBeNull();
+  });
+
+  it("formats recording duration from bounded frame metadata", () => {
+    expect(formatRecordingDuration(480, 48000)).toBe("00:00:00.010");
+    expect(formatRecordingDuration(180000, 48000)).toBe("00:00:03.750");
+    expect(formatRecordingDuration(-1, 48000)).toBe("unknown");
   });
 
   it("exposes the human-testable route sequence without duplicating controls", async () => {

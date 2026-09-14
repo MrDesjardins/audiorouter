@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Improved UI-14 recording-library verification on 2026-09-14. Each visible
+  recording row now shows authoritative duration derived from frame count and
+  sample rate plus file size, alongside its state and approved path. Invalid
+  metadata formats as `unknown`; no audio is decoded or played by the UI.
+  Added formatter/UI regressions; TypeScript typecheck and the full UI suite
+  passed (18 files, 175 tests). No audio endpoint or machine configuration
+  changed.
+
 - Hardened UI-14 recorder failure visibility on 2026-09-14. A rejected
   lifecycle operation now marks the local panel `failed` while retaining the
   backend's actionable error text; successful authoritative `recorders.list`
