@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Hardened the native startup registry boundary on 2026-09-14. Registry
+  values must now be bounded, even-sized UTF-16 `REG_SZ` data, and the
+  second query's returned length is checked before decoding. Malformed or
+  oversized per-user values fail closed without changing the value. Shell
+  tests (13), strict Clippy, formatting, and diff checks pass. No registry,
+  driver, endpoint, or persistent audio configuration was changed. Next
+  action: continue the next independently testable M03/M07 recovery item.
+
 - Requalified `tests/acceptance/safe-all.ps1` at pushed commit `df30e2b9` on
   2026-09-14. Toolchain/native compile, AudioRouter and disposable SysVAD
   x64 build/signability, read-only 31-endpoint inventory, M01, M04, M05,

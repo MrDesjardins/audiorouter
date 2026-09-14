@@ -16,6 +16,7 @@ mod windows_registry {
 
     const RUN_SUBKEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
     const VALUE_NAME: &str = "AudioRouter";
+    const MAX_STARTUP_VALUE_BYTES: u32 = 32 * 1024;
 
     fn wide(value: &str) -> Vec<u16> {
         value.encode_utf16().chain(std::iter::once(0)).collect()
@@ -55,8 +56,14 @@ mod windows_registry {
         if status != ERROR_SUCCESS {
             return Err(format!("startup registry value lookup failed: {status:?}"));
         }
+        if value_type != REG_SZ {
+            return Err("startup registry value is not REG_SZ".into());
+        }
         if byte_len == 0 || byte_len % 2 != 0 {
             return Err("startup registry value is not valid UTF-16".into());
+        }
+        if byte_len > MAX_STARTUP_VALUE_BYTES {
+            return Err("startup registry value exceeds the bounded size".into());
         }
         let mut bytes = vec![0u8; byte_len as usize];
         let status = unsafe {
@@ -71,6 +78,9 @@ mod windows_registry {
         };
         if status != ERROR_SUCCESS {
             return Err(format!("startup registry value read failed: {status:?}"));
+        }
+        if byte_len > bytes.len() as u32 || byte_len % 2 != 0 {
+            return Err("startup registry value returned an invalid length".into());
         }
         let words = bytes[..byte_len as usize]
             .chunks_exact(2)
