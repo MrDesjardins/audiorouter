@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Closed an M07 startup-panel reconnect gap on 2026-09-14. The panel now
+  refreshes its desired and observed startup state when the existing backend
+  changes connectivity, not only when a new backend object is supplied. Added
+  a reconnect regression; UI tests (194), TypeScript typecheck, and diff
+  checks passed. No registry, endpoint, driver, or persistent audio
+  configuration was accessed. Next action: continue the next safe M03/M07
+  recovery or delivery item.
+
 - Closed an M07 startup-plan authority gap on 2026-09-14. The desktop UI now
   applies the backend-approved `startup.plan` value when invoking native
   registration and reporting the result, rather than trusting mutable local

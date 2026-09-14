@@ -80,6 +80,19 @@ describe("VB-Cable endpoint selection", () => {
     expect(await screen.findByText(/Startup registration disabled/)).toBeTruthy();
   });
 
+  it("refreshes startup state when the existing backend reconnects", async () => {
+    const backend = {
+      ...connectedPreviewBackend(),
+      connected: false,
+      getStartup: vi.fn(async () => ({ enabled: false, registration: "unavailable" as const, reason: "reconnected" })),
+    };
+    const { rerender } = render(<App backend={backend} />);
+    await waitFor(() => expect(backend.getStartup).toHaveBeenCalledTimes(1));
+    backend.connected = true;
+    rerender(<App backend={backend} />);
+    await waitFor(() => expect(backend.getStartup).toHaveBeenCalledTimes(2));
+  });
+
   it("keeps workspace events bounded to state categories and excludes meters", () => {
     expect(WORKSPACE_EVENT_CATEGORIES).toContain("graph.committed");
     expect(WORKSPACE_EVENT_CATEGORIES).toContain("recording.recycled");

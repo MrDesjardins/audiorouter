@@ -110,7 +110,7 @@ function StartupPanel({ backend }: { backend: UiBackend }) {
     void backend.getStartup().then((result) => { setStatus(result); setEnabled(result.enabled); if (clearMessage) setMessage(null); }).catch((error) => setMessage(formatUiError(error, "Startup status unavailable.")));
     if (backend.startupRegistrationStatus) void backend.startupRegistrationStatus().then(setNativeRegistration).catch(() => setNativeRegistration("unavailable"));
   };
-  useEffect(() => { setPlan(null); refresh(); }, [backend]);
+  useEffect(() => { setPlan(null); refresh(); }, [backend, backend.connected]);
   const createPlan = async () => {
     setMessage("Planning sign-in startup policy...");
     try { const result = await backend.planStartup(enabled); setPlan(result); setMessage(result.reason); }
