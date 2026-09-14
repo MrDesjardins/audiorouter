@@ -40,6 +40,13 @@ Updated: 2026-09-14.
   `4c0862ab3cfd8a0345481b4792c07bf8d5a9761014f217d4e13669bf8143c7a0`.
   No copy, registration, plugin mutation, or audio configuration occurred.
 
+- Extended the installed VST2 qualification on 2026-09-14 to the supplied
+  `C:\\Program Files\\VSTPlugins\\ReaPlugs\\reaeq-standalone.dll`.
+  Isolated processing passed at 44.1/48/96 kHz and editor-timeout containment
+  passed; SHA-256 remained
+  `c200e540c26ac793b43611aaceb4aa42cdd2829cdfbf0d60494716d9bdde8a7d`.
+  No copy, registration, plugin mutation, or audio configuration occurred.
+
 - Requalified M05 at the current worktree on 2026-09-14. The acceptance
   wrapper passed contracts/UI typecheck, 18 UI test files with 167 tests, and
   a disposable Vite production build producing 3 artifacts. The telemetry
