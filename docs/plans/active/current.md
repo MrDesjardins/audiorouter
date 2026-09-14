@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Hardened M03/VDEV-12 native worker handoff on 2026-09-14. Transferring a
+  duplex or render-source native binding into its worker now deactivates the
+  matching portable bridge before removing the control-plane binding, so
+  route lookup cannot fall back to stale portable frames after ownership
+  transfer. The host regression suite and Windows-target control compilation
+  passed; no driver, endpoint, or machine audio configuration changed. Next
+  action: continue the next safe M03/M07 recovery integration item.
+
 - Hardened M03/VDEV-12 explicit native binding detachment on 2026-09-14.
   Capture-sink, render-source, and duplex binding removal now deactivates the
   matching portable bridge even when native lease close reports an error,

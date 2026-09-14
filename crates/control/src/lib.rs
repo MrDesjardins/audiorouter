@@ -4629,6 +4629,11 @@ impl ControlPlane {
                 "native duplex binding generation is stale".into(),
             ));
         }
+        // Once ownership moves to the worker, the portable bridge must not
+        // remain active as a fallback tap. Otherwise a route lookup after the
+        // transfer can publish stale portable frames alongside the worker's
+        // exact native lease.
+        self.deactivate_virtual_bridge(bus_id);
         Ok(self
             .native_duplex_bindings
             .remove(bus_id)
@@ -4656,6 +4661,9 @@ impl ControlPlane {
                 "native render source binding generation is stale".into(),
             ));
         }
+        // The worker now owns the native lease; prevent the portable bridge
+        // from being selected as a stale fallback after the map entry moves.
+        self.deactivate_virtual_bridge(bus_id);
         Ok(self
             .native_render_source_bindings
             .remove(bus_id)
