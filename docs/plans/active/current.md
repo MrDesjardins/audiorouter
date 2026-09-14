@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Revalidated the portable M03 virtual-device lifecycle on 2026-09-14.
+  Virtual-device planning/apply/capacity and virtual-bus persistence,
+  lease-drain, and referenced-route deletion tests passed (6 focused control
+  tests). The API continues to report endpoint capability as unavailable until
+  the managed driver is installed; no native state was inferred from portable
+  records. No driver, registry, endpoint, or persistent audio configuration
+  was changed. Next action: continue the next independently testable M03/M07
+  recovery item.
+
 - Added the prototype-driver rollback procedure to the release runbook on
   2026-09-14. It now documents the isolated-test-only lifecycle entrypoint,
   exact published-package state requirement, compensating cleanup behavior,
