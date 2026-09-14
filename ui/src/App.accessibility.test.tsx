@@ -39,6 +39,13 @@ describe("VB-Cable endpoint selection", () => {
     expect(WORKSPACE_EVENT_CATEGORIES.some((category) => category.startsWith("meter"))).toBe(false);
   });
 
+  it("forwards the bounded workspace categories through the live event loop", async () => {
+    const subscribe = vi.fn(async (_afterSequence?: number, _sessionId?: string, _backendEpoch?: number, _categories?: string[]) => ({ backendEpoch: 0, events: [], nextSequence: 0 }));
+    render(<App backend={{ ...connectedPreviewBackend(), subscribe }} />);
+    await waitFor(() => expect(subscribe).toHaveBeenCalled());
+    expect(subscribe.mock.calls[0]?.[3]).toEqual([...WORKSPACE_EVENT_CATEGORIES]);
+  });
+
   it("formats recorder drain telemetry only for a running native route", () => {
     const stats = { sessionId: demoSession.id, generation: 1, packets: 1, capturedFrames: 128, processedQuanta: 1, renderedFrames: 128, droppedRenderFrames: 0, renderBackpressureEvents: 0, recorderChunksDrained: 3 };
     expect(formatNativePumpSummary(stats, true)).toBe("native 128 in / 128 out / 1 quanta / 3 recorder chunks");

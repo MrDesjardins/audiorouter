@@ -8,6 +8,12 @@ Updated: 2026-09-14.
   TypeScript typecheck and the full UI suite passed (18 files, 168 tests).
   No endpoint or machine configuration changed.
 
+- Added rendered-workspace regression coverage on 2026-09-14 proving the
+  live `events.subscribe` loop forwards the bounded state-category filter,
+  not merely that the constant exists. TypeScript typecheck and the full UI
+  suite passed (18 files, 169 tests); no endpoint or machine configuration
+  changed.
+
 - Requalified the bounded native impulse/correlation path on 2026-09-14
   against the existing VB-Cable pair. Analysis detected 997 of 1,000 impulse
   groups with zero p95 spacing error and estimated a 78.75 ms onset. This is
