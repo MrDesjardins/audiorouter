@@ -14,7 +14,9 @@ Updated: 2026-09-14.
   and refreshes it with lifecycle events, so the Recorder panel does not
   display a locally guessed `idle` state or lose the backend's last frame
   after reconnect or session changes; lifecycle responses update that frame
-  immediately as well.
+  immediately as well. An empty status result now clears the prior session's
+  state/frame instead of leaking it into the selected session. TypeScript
+  typecheck and the full UI suite passed (18 files, 173 tests).
   Added a rendered authoritative-state regression; TypeScript typecheck and
   the full UI suite passed (18 files, 172 tests). No audio endpoint or machine
   configuration was changed.

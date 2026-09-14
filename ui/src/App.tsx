@@ -304,6 +304,7 @@ function RecorderActions({ backend, sessionId, connected, recorderStatuses }: { 
   useEffect(() => {
     const status = recorderStatuses.find((item) => item.sessionId === sessionId);
     if (status) { setState(status.state); setLastFrame(status.lastFrame); }
+    else { setState("idle"); setLastFrame(null); }
   }, [recorderStatuses, sessionId]);
   const create = async () => {
     if (!recorderId.trim()) { setMessage("Provide a recorder ID."); return; }

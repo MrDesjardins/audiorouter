@@ -476,6 +476,16 @@ describe("keyboard connection dialog", () => {
     expect(within(panel).getByText("Backend last frame: 480")).toBeTruthy();
   });
 
+  it("clears recorder state when the selected session has no live recorder", async () => {
+    const activeBackend = { ...connectedPreviewBackend(), listRecorders: async () => [{ sessionId: demoSession.id, state: "recording" as const, lastFrame: 480 }] };
+    const view = render(<App backend={activeBackend} />);
+    const panel = await screen.findByRole("region", { name: "Recorder" });
+    await waitFor(() => expect(within(panel).getByText("recording")).toBeTruthy());
+    view.rerender(<App backend={{ ...connectedPreviewBackend(), listRecorders: async () => [] }} />);
+    await waitFor(() => expect(within(screen.getByRole("region", { name: "Recorder" })).getByText("idle")).toBeTruthy());
+    expect(screen.queryByText("Backend last frame: 480")).toBeNull();
+  });
+
   it("offers bounded slider and precise entry for numeric processor parameters", async () => {
     const processor: ProcessorDescriptor = {
       id: "gain",
