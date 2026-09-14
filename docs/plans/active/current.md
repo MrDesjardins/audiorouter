@@ -15,6 +15,12 @@ Updated: 2026-09-14.
   sign-in registration and tray lifecycle remain separate open work. Next
   action: continue the next safe M03/M07 recovery integration item.
 
+- Requalified `tests/acceptance/m07-headless.ps1` after the startup scope
+  correction on 2026-09-14. M07 control/CLI/MCP/plugin-host tests, strict
+  Clippy, M01 CLI parity, and diff checks passed; no audio device, driver,
+  startup registration, or machine configuration was touched. The native
+  sign-in/tray lifecycle and loaded-driver gates remain open.
+
 - Planned the next M07 authorization slice on 2026-09-14: align startup
   planning/apply with the specification's dedicated `startup.write` scope.
   The current API incorrectly grants startup mutations through broad
