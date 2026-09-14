@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Corrected the `status.get` discovery contract on 2026-09-14. The runtime
+  already reports `audio: "available"` for a running native worker, but the
+  advertised output schema incorrectly required the constant `"unavailable"`.
+  The schema now advertises both valid runtime states and includes a discovery
+  regression, preventing clients from rejecting valid active-session status.
+  No endpoint or machine configuration was accessed. Next action: continue
+  the next safe, independently testable plan item.
+
 - Requalified the complete elevated safe acceptance chain on 2026-09-14 at
   the current UI status-observability head. M00 toolchain/native checks,
   project-owned x64 WDK driver build/signability/catalog, read-only endpoint

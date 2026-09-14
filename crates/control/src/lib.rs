@@ -3280,7 +3280,7 @@ fn status_output_schema() -> Value {
         "type": "object",
         "properties": {
             "build": { "type": "string" },
-            "audio": { "const": "unavailable" },
+            "audio": { "enum": ["available", "unavailable"] },
             "deviceDiscovery": { "const": "available" },
             "reason": { "type": "string", "minLength": 1 },
             "storage": { "enum": ["memory", "sqlite"] },
@@ -13580,8 +13580,8 @@ mod tests {
             .find(|method| method["name"] == "status.get")
             .unwrap();
         assert_eq!(
-            status["outputSchema"]["properties"]["audio"]["const"],
-            "unavailable"
+            status["outputSchema"]["properties"]["audio"]["enum"],
+            json!(["available", "unavailable"])
         );
         assert_eq!(
             status["outputSchema"]["properties"]["activeSessionIds"]["maxItems"],
