@@ -1308,3 +1308,22 @@ This is digital signal-path evidence using an existing third-party virtual
 cable; it does not claim that AudioRouter creates or owns a managed virtual
 driver. Defaults, volume, mute, privacy, driver, signing, startup, and
 persistent machine audio configuration were unchanged.
+# Native process-loopback qualification (2026-09-13)
+
+## 2026-09-13 - guarded include/exclude process attribution
+
+The authorized guarded probes completed successfully:
+
+- `m00-native-process-live.ps1 -AllowLiveAudio -DurationMilliseconds 500`
+  activated the include process-loopback mode, captured 21,609 frames, and
+  reported 76,378 nonzero payload bytes.
+- `m00-native-process-exclude-live.ps1 -AllowLiveAudio -DurationMilliseconds
+  500` activated the exclude mode, captured 22,050 frames, and completed
+  capture stop/reset with the disposable child exiting successfully.
+
+Both harnesses compared the present media-device inventory before and after
+the run and removed their temporary probe binaries. No endpoint default,
+volume, mute, privacy, driver, signing, startup, or persistent machine-audio
+setting changed. This qualifies API mode/lifecycle and data-path behavior;
+it does not establish a full cross-process isolation threshold or production
+driver capability.

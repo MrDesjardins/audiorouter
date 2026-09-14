@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Requalified guarded native process-loopback attribution on 2026-09-13.
+  Include mode captured 21,609 frames with 76,378 nonzero payload bytes;
+  exclude mode captured 22,050 frames and completed activation, start, stop,
+  reset, and child exit. Both disposable probes removed their binaries and
+  preserved the before/after media inventory; no endpoint default, volume,
+  mute, privacy, driver, signing, startup, or persistent machine-audio setting
+  changed. This closes the API mode/lifecycle data-path check, not full
+  cross-process isolation or production-driver qualification.
+
 - Requalified the authorized current-tip Rust adapter bridge on 2026-09-13
   with three explicit 300 ms cycles through the existing VB-Cable pair. Each
   cycle reported 48 kHz stereo, 14,880 captured frames, 116 processed quanta,
