@@ -80,3 +80,11 @@ elevated PowerShell session. It opts into a temporary frontend initialization
 probe through `AUDIOROUTER_SHELL_PROBE_FILE`; the marker is written only after
 the authenticated native command receives `system.describe`, and the script
 removes its database, marker, processes, and pipe-related state afterward.
+
+The shell also exposes an explicit `startup_register` command for the consent
+flow. It writes only the current user's
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Run\AudioRouter` value using
+the validated shell executable path; disabling it removes that value. It does
+not require elevation and does not create a service, scheduled task, driver,
+or audio-device change. The command is not invoked by build or unit
+qualification.

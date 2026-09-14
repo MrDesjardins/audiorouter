@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Added the first native startup-registration adapter on 2026-09-14. The
+  desktop shell now exposes an explicit `startup_register` command backed by
+  a bounded HKCU Run value, with absolute regular-executable validation and
+  reversible enable/disable behavior. Shell tests (13), offline compilation,
+  strict Clippy, formatting, and diff checks passed. The command was not
+  invoked, so no registry, driver, audio, or machine configuration changed.
+  Wiring this command into the authenticated startup plan/apply consent flow,
+  sign-in rehydration, and attended rollback verification remains open.
+
 - Fixed the desktop-shell authorization handoff on 2026-09-14. After
   `startupWrite` was separated from the ordinary Operator role, the shell's
   enrolled operator path still received the old three-scope grant and could

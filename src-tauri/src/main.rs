@@ -12,6 +12,8 @@ use tauri::{
     Manager, State, WebviewUrl, WebviewWindowBuilder,
 };
 
+mod startup;
+
 const DEFAULT_PIPE_NAME: &str = r"\\.\pipe\audiorouter-control";
 const DEFAULT_DATABASE_DIRECTORY: &str = "AudioRouter";
 const DEFAULT_DATABASE_FILE: &str = "state.sqlite";
@@ -94,6 +96,18 @@ fn forward_rpc_request(
 #[tauri::command]
 fn session_id(state: State<'_, ShellState>) -> String {
     state.session_id.clone()
+}
+
+/// Apply the current user's reversible sign-in registration. This command is
+/// deliberately separate from audio/session control and has no elevation
+/// path; callers must invoke it explicitly after the startup consent flow.
+#[tauri::command]
+fn startup_register(enabled: bool) -> Result<String, String> {
+    let executable = std::env::current_exe()
+        .map_err(|error| format!("startup executable lookup failed: {error}"))?;
+    let command_line = startup::command_line(&executable)?;
+    startup::apply(enabled, &executable)?;
+    Ok(command_line)
 }
 
 fn session_initialization_script(session_id: &str, frontend_probe: bool) -> String {
@@ -436,7 +450,11 @@ fn main() {
     let tray_pipe_name = state.pipe_name.clone();
     tauri::Builder::default()
         .manage(state)
-        .invoke_handler(tauri::generate_handler![rpc_request, session_id])
+        .invoke_handler(tauri::generate_handler![
+            rpc_request,
+            session_id,
+            startup_register
+        ])
         .setup(move |app| {
             let session_script = session_script.clone();
             let open = MenuItem::with_id(app, "open", "Open AudioRouter", true, None::<&str>)?;
