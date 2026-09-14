@@ -124,6 +124,7 @@ function StartupPanel({ backend }: { backend: UiBackend }) {
       if (backend.registerStartup) {
         try {
           const commandLine = await backend.registerStartup(enabled);
+          setNativeRegistration(enabled ? "registered" : "unregistered");
           setMessage(`${enabled ? "Startup registration enabled" : "Startup registration disabled"}: ${commandLine}`);
         } catch (error) {
           setMessage(`Backend policy saved, but native startup registration failed: ${formatUiError(error, "native registration failed")}`);

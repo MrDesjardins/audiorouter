@@ -60,6 +60,7 @@ describe("VB-Cable endpoint selection", () => {
     await screen.findByRole("button", { name: "Apply planned policy" });
     fireEvent.click(screen.getByRole("button", { name: "Apply planned policy" }));
     expect(await screen.findByText(/Startup registration enabled:/)).toBeTruthy();
+    expect(await screen.findByText("Native registration: registered")).toBeTruthy();
   });
 
   it("keeps workspace events bounded to state categories and excludes meters", () => {

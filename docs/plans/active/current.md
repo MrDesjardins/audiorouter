@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Made native startup status update immediately after a successful shell
+  registration on 2026-09-14; the asynchronous query remains a reconciliation
+  check. The UI regression now verifies both the apply confirmation and the
+  registered badge. UI typecheck, 19 test files/187 tests, and diff checks
+  passed. No registry, driver, endpoint, or persistent audio configuration
+  was changed. Next action: continue the next independently testable M03/M07
+  recovery item.
+
 - Removed an unintended native startup side effect on 2026-09-14. Disable
   now opens the existing HKCU Run key instead of creating it, and a missing
   key is a true no-op. Shell tests (15), strict Clippy, formatting, and diff
