@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Closed the REC-10 recording-library metadata UI gap on 2026-09-14. The
+  existing versioned backend/storage contract already persisted title, artist,
+  and comment, but the UI exposed only title editing. The library now
+  hydrates and saves all three fields together through the authorized
+  `recordings.setMetadata` adapter and updates its local row only after the
+  request succeeds. The new accessibility regression proves the exact
+  multi-field request and success message; UI typecheck and the focused suite
+  pass (54 tests). No audio or machine configuration changed. Next action:
+  continue the next uncompleted REC-04/REC-09 recovery or native delivery
+  item.
+
 - Fixed and requalified the M02 Rust VB-Cable route on 2026-09-14. Shared
   capture and render initialization now retains `AUTOCONVERTPCM` alongside
   `NOPERSIST` and event delivery, matching the passing native probe for the

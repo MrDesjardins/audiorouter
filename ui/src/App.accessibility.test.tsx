@@ -977,6 +977,19 @@ describe("keyboard connection dialog", () => {
     expect(within(panel).getByText(/targetSampleRate=44100;channels=2;bitsPerSample=16/)).toBeTruthy();
   });
 
+  it("edits title, artist, and comment metadata together", async () => {
+    const recording: RecordingRow = { id: "metadata-take", sessionId: demoSession.id, recorderId: "recorder-1", path: "C:\\Audio\\metadata.wav", format: "wav", channels: 1, sampleRate: 48000, frames: 480, fileBytes: 1000, startTime: "2026-09-14T01:00:00Z", state: "completed", missing: false, title: "Old title", artist: "Old artist", comment: "Old comment", dither: true, conversion: "targetSampleRate=48000;channels=1;format=wav" };
+    const setRecordingMetadata = vi.fn(async () => ({ recordingId: recording.id, title: "New title", artist: "New artist", comment: "New comment" }));
+    render(<App backend={{ ...connectedPreviewBackend(), listRecordings: async () => [recording], setRecordingMetadata }} />);
+    await screen.findByDisplayValue("Old title");
+    fireEvent.change(screen.getByRole("textbox", { name: "Title for metadata-take" }), { target: { value: "New title" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Artist for metadata-take" }), { target: { value: "New artist" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Comment for metadata-take" }), { target: { value: "New comment" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save metadata" }));
+    await waitFor(() => expect(setRecordingMetadata).toHaveBeenCalledWith(recording.id, expect.objectContaining({ title: "New title", artist: "New artist", comment: "New comment", idempotencyKey: expect.any(String) })));
+    expect(await screen.findByText("Recording metadata saved; the audio file was unchanged.")).toBeTruthy();
+  });
+
   it("validates and explicitly commits a stopped session import", async () => {
     const imported = { ...demoSession, id: "imported-session", name: "Imported voice setup" };
     const planSessionImport = vi.fn(async () => ({ planId: "import-plan", expiresInMs: 300000, session: imported }));
