@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Closed a portable M07/UI-10 tray-status gap on 2026-09-14. The shell now
+  performs one bounded authoritative `status.get` and `recorders.list` refresh
+  when the tray is created, so session/privacy/recorder state is not falsely
+  shown as unavailable until a user clicks Refresh; the same helper services
+  later manual refreshes. The stale close-window comment was corrected.
+  Shell tests (17), strict shell Clippy, formatting, and diff checks passed.
+  No endpoint, driver, or machine configuration was accessed. The attended
+  tray/WebView2 and native production gates remain open. Next action: continue
+  the next safe M03/M07 recovery integration item.
+
 - Requalified the complete safe acceptance chain at pushed head on 2026-09-14.
   M00 toolchain/native inventory, M03 non-installing x64 WDK driver build and
   catalog signability, M01/M04/M05, M06 SDK/VST3/VST2 workers, M07 headless,

@@ -9,7 +9,7 @@ use audiorouter_storage::Storage;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    Manager, State, WebviewUrl, WebviewWindowBuilder,
+    Manager, Runtime, State, WebviewUrl, WebviewWindowBuilder,
 };
 
 mod startup;
@@ -507,6 +507,30 @@ fn tray_privacy_muted(response: &JsonRpcResponse) -> Option<bool> {
         .and_then(serde_json::Value::as_bool)
 }
 
+fn refresh_tray_status<R: Runtime>(status: &MenuItem<R>, recordings: &MenuItem<R>, pipe_name: &str) {
+    let status_request = JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(serde_json::json!("tray-status")),
+        method: "status.get".into(),
+        params: None,
+    };
+    let text = forward_rpc_request(&status_request, pipe_name)
+        .map(|response| tray_status_text(&response))
+        .unwrap_or_else(|_| "Status unavailable".to_owned());
+    let _ = status.set_text(text);
+
+    let recordings_request = JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(serde_json::json!("tray-recorders")),
+        method: "recorders.list".into(),
+        params: None,
+    };
+    let text = forward_rpc_request(&recordings_request, pipe_name)
+        .map(|response| tray_recording_text(&response))
+        .unwrap_or_else(|_| "Live recorders: unavailable".to_owned());
+    let _ = recordings.set_text(text);
+}
+
 fn main() {
     let pipe_name =
         std::env::var("AUDIOROUTER_CONTROL_PIPE").unwrap_or_else(|_| DEFAULT_PIPE_NAME.to_owned());
@@ -563,7 +587,7 @@ fn main() {
                     &recordings,
                 ],
             )?;
-            TrayIconBuilder::with_id("audiorouter")
+            let _tray = TrayIconBuilder::with_id("audiorouter")
                 .menu(&menu)
                 .tooltip("AudioRouter")
                 .on_menu_event(move |app, event| {
@@ -695,31 +719,17 @@ fn main() {
                             }
                         }
                         "refresh-status" => {
-                            let request = JsonRpcRequest {
-                                jsonrpc: "2.0".into(),
-                                id: Some(serde_json::json!("tray-status")),
-                                method: "status.get".into(),
-                                params: None,
-                            };
-                            let text = forward_rpc_request(&request, &pipe_name)
-                                .map(|response| tray_status_text(&response))
-                                .unwrap_or_else(|_| "Status unavailable".to_owned());
-                            let _ = status_for_handler.set_text(text);
-                            let recordings_request = JsonRpcRequest {
-                                jsonrpc: "2.0".into(),
-                                id: Some(serde_json::json!("tray-recorders")),
-                                method: "recorders.list".into(),
-                                params: None,
-                            };
-                            let text = forward_rpc_request(&recordings_request, &pipe_name)
-                                .map(|response| tray_recording_text(&response))
-                                .unwrap_or_else(|_| "Live recorders: unavailable".to_owned());
-                            let _ = recordings_for_handler.set_text(text);
+                            refresh_tray_status(
+                                &status_for_handler,
+                                &recordings_for_handler,
+                                &pipe_name,
+                            );
                         }
                         _ => {}
                     }
                 })
                 .build(app)?;
+            refresh_tray_status(&status, &recordings, &tray_pipe_name);
             WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                 .title("AudioRouter")
                 .inner_size(1280.0, 800.0)
@@ -731,8 +741,8 @@ fn main() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 // Closing the editor must not tear down an independently owned
-                // backend/audio process. A future tray Quit action will use an
-                // explicit stop/finalize path before allowing application exit.
+                // backend/audio process. Tray Quit uses an explicit
+                // stop/finalize path before allowing application exit.
                 api.prevent_close();
                 let _ = window.hide();
             }
