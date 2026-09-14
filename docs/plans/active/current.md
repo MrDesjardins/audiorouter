@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Requalified the bounded native process-attribution prerequisite on
+  2026-09-14 with `m00-native-process-live.ps1 -AllowLiveAudio
+  -DurationMilliseconds 500`. The disposable child-process tree produced
+  21,609 capture frames and 77,823 nonzero payload bytes; attribution,
+  capture start/stop/reset, media-state comparison, and temporary cleanup
+  passed. This is process-loopback/WASAPI adapter evidence only; protected
+  application behavior, loaded AudioRouter driver routing, and physical
+  latency remain separate gates. Next action: continue the next safe M03/M07
+  recovery integration item.
+
 - Requalified the authorized routed M02 path on 2026-09-14 against the exact
   existing VB-Cable endpoints. `m02-control-route-live.ps1` passed with
   generation 1, 24,000 captured frames, 187 processed quanta, 23,936
