@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Completed the guarded full acceptance chain on 2026-09-14 at the current
+  head. Toolchain compatibility, native compilation, non-installing WDK/
+  SysVAD qualification, M01/M04/M05/M06/M07/M08 acceptance, documentation
+  validation, and traceability all passed; the delivery map covers 159
+  normative requirement IDs and documentation validation found 52 Markdown
+  files with 190 local links. The run removed 15 run-owned temporary children.
+  This evidence remains limited to compile/portable/SDK/reference-driver and
+  guarded test scopes: no driver installation, signing-mode change, plugin
+  registration, startup registration, or machine audio configuration change
+  was performed.
+
 - Requalified the bounded M00 native lifecycle across the current endpoint
   inventory on 2026-09-14: 13 capture endpoints and 18 render endpoints were
   exercised, with one occupied render endpoint correctly reported as such.
