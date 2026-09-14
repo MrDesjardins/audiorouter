@@ -2,6 +2,13 @@
 
 Updated: 2026-09-14.
 
+- Delivered the REC-03 recorder dither control on 2026-09-14. The UI now
+  exposes TPDF dithering as an explicit create-time option, enabled by
+  default, and forwards the selected value through the shared
+  `recorders.create` contract. Added default/on and explicit-off regression
+  coverage; TypeScript typecheck and the full UI suite passed (18 files, 177
+  tests). No audio endpoint or machine configuration changed.
+
 - Hardened recorder-state fail-closed presentation on 2026-09-14. A
   successful empty `recorders.list` result still displays `idle`, while a
   failed authoritative state read displays `unavailable` and clears stale

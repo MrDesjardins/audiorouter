@@ -313,6 +313,7 @@ function RecorderActions({ backend, sessionId, connected, recorderStatuses, reco
   const [format, setFormat] = useState<import("@audiorouter/contracts").RecorderFileFormat>("wavPcm24");
   const [channels, setChannels] = useState<1 | 2>(2);
   const [sampleRate, setSampleRate] = useState<44100 | 48000>(48000);
+  const [dither, setDither] = useState(true);
   const frame = Number.parseInt(frameText, 10);
   const validFrame = Number.isSafeInteger(frame) && frame >= 0;
   useEffect(() => {
@@ -325,7 +326,7 @@ function RecorderActions({ backend, sessionId, connected, recorderStatuses, reco
     if (!recorderId.trim()) { setMessage("Provide a recorder ID."); return; }
     setMessage("Creating an unarmed recorder...");
     try {
-      const result = await backend.createRecorder({ sessionId, recorderId: recorderId.trim(), format, sequence: 1, channels, sampleRate, dither: true, queueCapacity: 8, maximumChunksPerPass: 1, idempotencyKey: uiIdempotencyKey("recorder-create") });
+      const result = await backend.createRecorder({ sessionId, recorderId: recorderId.trim(), format, sequence: 1, channels, sampleRate, dither, queueCapacity: 8, maximumChunksPerPass: 1, idempotencyKey: uiIdempotencyKey("recorder-create") });
       setState(result.state);
       setMessage(`Recorder ${result.recorderId} created unarmed at ${result.path}.`);
     } catch (error) {
@@ -346,7 +347,7 @@ function RecorderActions({ backend, sessionId, connected, recorderStatuses, reco
   };
   return <section className="panel recorder-actions" aria-labelledby="recorder-actions-heading">
     <div className="section-heading"><div><p className="eyebrow">Frame boundary control</p><h2 id="recorder-actions-heading">Recorder</h2></div><span className="badge">{state}</span></div>
-    <fieldset disabled={!connected}><legend>Create unarmed recorder</legend><label>Recorder ID<input aria-label="Recorder ID" value={recorderId} onChange={(event) => setRecorderId(event.target.value)} /></label><label>Format<select aria-label="Recorder format" value={format} onChange={(event) => setFormat(event.target.value as typeof format)}><option value="wavPcm24">WAV PCM24</option><option value="wavPcm16">WAV PCM16</option><option value="wavFloat32">WAV Float32</option><option value="flac16">FLAC 16</option><option value="flac24">FLAC 24</option></select></label><label>Channels<select aria-label="Recorder channels" value={channels} onChange={(event) => setChannels(Number(event.target.value) as 1 | 2)}><option value={1}>Mono</option><option value={2}>Stereo</option></select></label><label>Sample rate<select aria-label="Recorder sample rate" value={sampleRate} onChange={(event) => setSampleRate(Number(event.target.value) as 44100 | 48000)}><option value={48000}>48 kHz</option><option value={44100}>44.1 kHz</option></select></label><button type="button" className="secondary" onClick={() => void create()}>Create recorder</button></fieldset>
+    <fieldset disabled={!connected}><legend>Create unarmed recorder</legend><label>Recorder ID<input aria-label="Recorder ID" value={recorderId} onChange={(event) => setRecorderId(event.target.value)} /></label><label>Format<select aria-label="Recorder format" value={format} onChange={(event) => setFormat(event.target.value as typeof format)}><option value="wavPcm24">WAV PCM24</option><option value="wavPcm16">WAV PCM16</option><option value="wavFloat32">WAV Float32</option><option value="flac16">FLAC 16</option><option value="flac24">FLAC 24</option></select></label><label>Channels<select aria-label="Recorder channels" value={channels} onChange={(event) => setChannels(Number(event.target.value) as 1 | 2)}><option value={1}>Mono</option><option value={2}>Stereo</option></select></label><label>Sample rate<select aria-label="Recorder sample rate" value={sampleRate} onChange={(event) => setSampleRate(Number(event.target.value) as 44100 | 48000)}><option value={48000}>48 kHz</option><option value={44100}>44.1 kHz</option></select></label><label>TPDF dither<input aria-label="TPDF dither" type="checkbox" checked={dither} onChange={(event) => setDither(event.target.checked)} /></label><button type="button" className="secondary" onClick={() => void create()}>Create recorder</button></fieldset>
     <label>Engine frame<input aria-label="Recorder engine frame" inputMode="numeric" value={frameText} onChange={(event) => setFrameText(event.target.value)} disabled={!connected} /></label>
     <div className="actions">
       <button type="button" className="secondary" onClick={() => void run("Arming", () => backend.armRecorder(sessionId, uiIdempotencyKey("recorder-arm")))} disabled={!connected}>Arm</button>

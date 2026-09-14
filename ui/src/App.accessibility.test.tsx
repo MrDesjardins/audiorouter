@@ -470,8 +470,11 @@ describe("keyboard connection dialog", () => {
     const backend = { ...connectedPreviewBackend(), createRecorder };
     render(<App backend={backend} />);
     fireEvent.change(await screen.findByRole("textbox", { name: "Recorder ID" }), { target: { value: "voice-take" } });
+    const dither = screen.getByRole("checkbox", { name: "TPDF dither" });
+    expect((dither as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(dither);
     fireEvent.click(screen.getByRole("button", { name: "Create recorder" }));
-    await waitFor(() => expect(createRecorder).toHaveBeenCalledWith(expect.objectContaining({ recorderId: "voice-take", format: "wavPcm24", channels: 2, sampleRate: 48000, sequence: 1, dither: true })));
+    await waitFor(() => expect(createRecorder).toHaveBeenCalledWith(expect.objectContaining({ recorderId: "voice-take", format: "wavPcm24", channels: 2, sampleRate: 48000, sequence: 1, dither: false })));
     expect(await screen.findByText(/Recorder voice-take created unarmed/)).toBeTruthy();
   });
 
