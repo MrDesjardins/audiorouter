@@ -6,8 +6,9 @@ Updated: 2026-09-14.
   stale lease expiry now returns exact stable bus IDs from the engine bridge
   set and the control-thread sweep publishes a discoverable,
   bus-scoped `virtualBridge.expired` event after silencing/draining each
-  bridge. UI subscribes to the category. Engine (111), control (150 plus 2
-  guarded live tests ignored), UI (183), strict Clippy, typecheck, formatting,
+  bridge. UI subscribes to the category and surfaces a bounded recovery notice
+  through its accessible status channel. Engine (111), control (150 plus 2
+  guarded live tests ignored), UI (184), strict Clippy, typecheck, formatting,
   and diff checks passed. No endpoint or durable desired state is touched;
   loaded-driver timing remains an open gate. Evidence: [bridge failure event
   evidence](evidence/VDEV-12-bridge-failure-events.md). Next action: continue

@@ -65,6 +65,17 @@ describe("VB-Cable endpoint selection", () => {
     expect(listRecordings).toHaveBeenCalledTimes(2);
   });
 
+  it("shows a bounded recovery notice for a bridge event", async () => {
+    let eventSent = false;
+    const subscribe = vi.fn(async (): Promise<EventsSubscribeResult> => {
+      if (eventSent) return { backendEpoch: 0, events: [], nextSequence: 1 };
+      eventSent = true;
+      return { backendEpoch: 0, events: [{ sequence: 1, backendEpoch: 0, resourceRevision: 0, operationId: "voice-bus", category: "virtualBridge.expired", sessionId: null }], nextSequence: 1 };
+    });
+    render(<App backend={{ ...connectedPreviewBackend(), subscribe }} />);
+    expect(await screen.findByText(/Virtual bridge lease expired for voice-bus; the route is silenced/i)).toBeTruthy();
+  });
+
   it("formats recorder drain telemetry only for a running native route", () => {
     const stats = { sessionId: demoSession.id, generation: 1, packets: 1, capturedFrames: 128, processedQuanta: 1, renderedFrames: 128, droppedRenderFrames: 0, renderBackpressureEvents: 0, recorderChunksDrained: 3 };
     expect(formatNativePumpSummary(stats, true)).toBe("native 128 in / 128 out / 1 quanta / 3 recorder chunks");

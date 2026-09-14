@@ -14,15 +14,17 @@ and are not retained in the event stream.
 The injected-tick control-thread lease sweep returns exact stable IDs for
 bridges that expired, silenced, and drained, then publishes one
 `virtualBridge.expired` event per affected bus. Active bridges produce no event.
+The UI consumes both bridge categories and presents the bounded bus-scoped
+failure/expiry message through its existing accessible status channel.
 
 Verification on Windows workspace `C:\code\audiorouter`:
 
 - `cargo test -q -p audiorouter-control --locked -- --test-threads=1` — 150
   passed, 2 guarded live tests ignored.
 - `cargo clippy -q -p audiorouter-control --locked --all-targets -- -D warnings` — passed.
-- `npm.cmd --prefix ui run test -- --run` — 183 passed.
+- `npm.cmd --prefix ui run test -- --run` — 184 passed.
 - `npm.cmd --prefix ui run typecheck` — passed.
-- `tests\acceptance\docs.ps1` — 52 Markdown files and 190 local links passed.
+- `tests\acceptance\docs.ps1` — 53 Markdown files and 192 local links passed.
 
 No endpoint, default-device, driver, or other machine audio configuration was
 changed. Loaded-driver heartbeat failure and production-signing validation

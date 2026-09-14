@@ -703,6 +703,13 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       try {
         const result = await backend.subscribe(eventCursor.current.sequence, session.id, eventCursor.current.backendEpoch, [...WORKSPACE_EVENT_CATEGORIES]);
         if (!active) return;
+        const bridgeEvent = result.events.find((event) => event.category === "virtualBridge.failed" || event.category === "virtualBridge.expired");
+        if (bridgeEvent) {
+          const bus = bridgeEvent.operationId ?? "an affected bus";
+          setActionMessage(bridgeEvent.category === "virtualBridge.expired"
+            ? `Virtual bridge lease expired for ${bus}; the route is silenced until it is deliberately restarted.`
+            : `Virtual bridge failure detected for ${bus}; the route is silenced until it is deliberately recovered.`);
+        }
         if (result.resyncRequired || result.events.length > 0) {
           const nextState = await snapshotCache.refresh(backend);
           if (active) {
