@@ -10,6 +10,18 @@ Updated: 2026-09-14.
   doc-tests. This is portable/user-mode evidence only; no driver, endpoint,
   signing policy, or persistent machine audio configuration changed.
 
+- Requalified M05 UI acceptance on 2026-09-14 at the current head. Contracts
+  and TypeScript typecheck, 18 UI test files with 167 tests, and a disposable
+  Vite production build producing 3 files passed. The normal `ui/dist` was
+  not replaced; no audio endpoint, driver, signing policy, or machine
+  configuration changed.
+
+- Passed the administrator-authorized M07 frontend-owned shell-RPC acceptance
+  on 2026-09-14. WebView initialization reached the Tauri command and the
+  authenticated backend `system.describe` boundary. No audio endpoint,
+  startup registration, or persistent machine configuration changed. Manual
+  screen-reader and broader signed-release gates remain separate.
+
 - Requalified M05 at the current worktree on 2026-09-14. The acceptance
   wrapper passed contracts/UI typecheck, 18 UI test files with 167 tests, and
   a disposable Vite production build producing 3 artifacts. The telemetry
