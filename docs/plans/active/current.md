@@ -6,9 +6,10 @@ Updated: 2026-09-14.
   The connected UI now reloads the selected session's recording rows when a
   subscribed `recorder.changed` event arrives, so newly finalized parts and
   state changes become visible without a manual refresh or session switch.
-  Added a rendered regression for the live event path; the targeted
-  accessibility suite passed (40 tests). No audio endpoint or machine
-  configuration was changed.
+  Added a rendered regression for the live event path; TypeScript typecheck,
+  the targeted accessibility suite (40 tests), and the full UI suite (18
+  files, 170 tests) passed. No audio endpoint or machine configuration was
+  changed.
 
 - Completed the guarded full acceptance chain on 2026-09-14 at the current
   head. Toolchain compatibility, native compilation, non-installing WDK/
