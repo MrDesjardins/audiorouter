@@ -3621,6 +3621,9 @@ pub struct ControlPlane {
     native_endpoint_session: Option<EntityId>,
     native_endpoint_taps: Option<AudioTapSet>,
     native_endpoint_rejections: u64,
+    #[cfg(windows)]
+    native_capture_sink_bindings:
+        HashMap<EntityId, audiorouter_windows_audio::NativeBridgeCaptureSinkBinding>,
 }
 
 impl Default for ControlPlane {
@@ -3690,6 +3693,8 @@ impl ControlPlane {
             native_endpoint_session: None,
             native_endpoint_taps: None,
             native_endpoint_rejections: 0,
+            #[cfg(windows)]
+            native_capture_sink_bindings: HashMap::new(),
         }
     }
 
@@ -3784,6 +3789,80 @@ impl ControlPlane {
             bridge,
         );
         self.attach_native_endpoint_worker(session_id, worker)
+    }
+
+    #[cfg(windows)]
+    /// Prepare one explicit project-driver capture-sink binding. This opens
+    /// only the supplied driver path and mapping, remains stopped, and is
+    /// selected by graph activation only when the graph names the same bus.
+    pub fn prepare_native_capture_sink_binding(
+        &mut self,
+        bus_id: EntityId,
+        device_path: &str,
+        mapping_path: impl AsRef<std::path::Path>,
+        hello: audiorouter_protocol::AudioBridgeHello,
+    ) -> Result<(), ControlError> {
+        let known_enabled = self
+            .virtual_buses
+            .list()
+            .iter()
+            .any(|bus| bus.id() == &bus_id && bus.enabled());
+        if !known_enabled {
+            return Err(ControlError::InvalidRequest(
+                "native capture sink requires a known enabled virtual bus".into(),
+            ));
+        }
+        if hello.bus_id != bus_id.as_str()
+            || hello.direction != audiorouter_protocol::AudioBridgeDirection::CaptureSink
+        {
+            return Err(ControlError::InvalidRequest(
+                "native capture sink hello does not match the requested bus".into(),
+            ));
+        }
+        if self.native_capture_sink_bindings.contains_key(&bus_id) {
+            return Err(ControlError::InvalidRequest(
+                "native capture sink binding is already prepared".into(),
+            ));
+        }
+        let binding = audiorouter_windows_audio::NativeBridgeCaptureSinkBinding::create(
+            device_path,
+            mapping_path,
+            hello,
+        )
+        .map_err(|error| {
+            ControlError::InvalidRequest(format!(
+                "native capture sink preparation failed: {error:?}"
+            ))
+        })?;
+        self.native_capture_sink_bindings.insert(bus_id, binding);
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    pub fn heartbeat_native_capture_sink_bindings(&mut self) -> Result<(), ControlError> {
+        for binding in self.native_capture_sink_bindings.values_mut() {
+            binding.heartbeat().map_err(|error| {
+                ControlError::InvalidRequest(format!(
+                    "native capture sink heartbeat failed: {error:?}"
+                ))
+            })?;
+        }
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    pub fn detach_native_capture_sink_binding(
+        &mut self,
+        bus_id: &EntityId,
+    ) -> Result<(), ControlError> {
+        let Some(binding) = self.native_capture_sink_bindings.remove(bus_id) else {
+            return Err(ControlError::InvalidRequest(
+                "native capture sink binding is not prepared".into(),
+            ));
+        };
+        binding.close().map_err(|error| {
+            ControlError::InvalidRequest(format!("native capture sink close failed: {error:?}"))
+        })
     }
 
     /// Start the explicitly attached endpoint pair on the control thread.
@@ -4043,6 +4122,15 @@ impl ControlPlane {
                 .iter()
                 .any(|bus| bus.id() == &route.bus_id && bus.enabled());
             if enabled {
+                #[cfg(windows)]
+                if let Some(binding) = self.native_capture_sink_bindings.get(&route.bus_id) {
+                    taps.add_shared(binding.writer()).map_err(|_| {
+                        ControlError::InvalidRequest(
+                            "native capture sink tap capacity exceeded".into(),
+                        )
+                    })?;
+                    continue;
+                }
                 let bridge = self.virtual_bridges.get(&route.bus_id).ok_or_else(|| {
                     ControlError::InvalidRequest("route bridge is not prepared".into())
                 })?;
@@ -4250,6 +4338,8 @@ impl ControlPlane {
             native_endpoint_session: None,
             native_endpoint_taps: None,
             native_endpoint_rejections: 0,
+            #[cfg(windows)]
+            native_capture_sink_bindings: HashMap::new(),
         })
     }
 

@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Added the first control-owned project-driver capture-sink binding on
+  2026-09-13. `ControlPlane` can now prepare, heartbeat, and detach one
+  negotiated `NativeBridgeCaptureSinkBinding`; graph activation prefers its
+  lock-free realtime writer only for the matching `busId`, while the Windows
+  handle remains control-thread-owned. Workspace compilation and focused
+  control/windows-audio tests pass (135 and 70); no driver device was opened
+  by those tests, and driver installation/loading/signing remain separate
+  gates.
+
 - Added explicit virtual-bus identity to graph boundaries on 2026-09-13.
   `VirtualRenderSource` and `VirtualCaptureSink` nodes now require a bounded
   `parameters.busId`; native graph activation extracts enabled capture-sink

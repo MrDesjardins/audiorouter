@@ -771,6 +771,58 @@ impl Drop for NativeBridgeController {
 }
 
 #[cfg(windows)]
+/// Owns one project-owned capture-sink lease and the realtime tap that
+/// publishes processed graph blocks into it. The controller remains the sole
+/// owner of heartbeat/close operations; the tap only performs its bounded
+/// callback handoff.
+pub struct NativeBridgeCaptureSinkBinding {
+    bus_id: audiorouter_domain::EntityId,
+    controller: NativeBridgeController,
+    writer: std::sync::Arc<NativeBridgeRealtimeWriter>,
+}
+
+#[cfg(windows)]
+impl NativeBridgeCaptureSinkBinding {
+    pub fn create(
+        device_path: &str,
+        mapping_path: impl AsRef<std::path::Path>,
+        hello: audiorouter_protocol::AudioBridgeHello,
+    ) -> Result<Self, NativeBridgeControllerError> {
+        if hello.direction != audiorouter_protocol::AudioBridgeDirection::CaptureSink {
+            return Err(NativeBridgeControllerError::InvalidDuplex);
+        }
+        let bus_id = audiorouter_domain::EntityId::new(hello.bus_id.clone());
+        let controller = NativeBridgeController::create(device_path, mapping_path, hello)?;
+        let writer = controller.realtime_writer()?;
+        Ok(Self {
+            bus_id,
+            controller,
+            writer: std::sync::Arc::new(writer),
+        })
+    }
+
+    pub fn bus_id(&self) -> &audiorouter_domain::EntityId {
+        &self.bus_id
+    }
+
+    pub fn heartbeat(&mut self) -> Result<(), NativeBridgeControllerError> {
+        self.controller.heartbeat()
+    }
+
+    pub fn published_blocks(&self) -> u64 {
+        self.writer.published_blocks()
+    }
+
+    pub fn writer(&self) -> std::sync::Arc<NativeBridgeRealtimeWriter> {
+        std::sync::Arc::clone(&self.writer)
+    }
+
+    pub fn close(self) -> Result<(), NativeBridgeControllerError> {
+        self.controller.close()
+    }
+}
+
+#[cfg(windows)]
 trait NativeRenderSource {
     fn read_into_after(
         &self,
