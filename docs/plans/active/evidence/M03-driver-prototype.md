@@ -783,3 +783,13 @@ WDK 10.0.28000.0. The x64 driver/package/catalog build reported zero
 signability errors and warnings, and disposable output was removed. No driver
 was installed or loaded and no signing, boot-policy, service, endpoint, or
 machine audio configuration action occurred.
+## 2026-09-13 - WDK qualification refresh
+
+The non-installing `m03-driver-build.ps1` run used Visual Studio 18.9.1 and
+WDK 10.0.28000.0. Utilities, Filters, Main, package/catalog, and Inc targets
+built successfully; the x64 `AudioRouterVirtual.sys` and INF were produced,
+catalog generation completed, and the signability test reported zero errors
+and zero warnings. The script removed disposable build output. No driver was
+installed or loaded, and no service, boot policy, signing mode, endpoint, or
+machine audio configuration was changed. This is compile/catalog evidence,
+not production-driver or PortCls callback evidence.

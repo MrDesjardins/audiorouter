@@ -20,6 +20,14 @@ Updated: 2026-09-13.
   rejection, 48 kHz on both endpoints, and unchanged media-device state.
   Evidence: [M03 VB-Cable bridge evidence](evidence/M03-virtual-routing.md).
 
+- Refreshed the non-installing project-owned driver qualification on
+  2026-09-13 with Visual Studio 18.9.1 and WDK 10.0.28000.0. Utilities,
+  Filters, Main, package/catalog, and Inc built; catalog signability reported
+  zero errors and zero warnings, and disposable output was removed.
+  Evidence: [M03 driver prototype evidence](evidence/M03-driver-prototype.md).
+  The loaded-driver/PortCls callback, production signing, installation, and
+  endpoint lifecycle gates remain open by design.
+
 - Wired committed plugin parameter values into the worker bridge on
   2026-09-13. Native graph activation now converts bounded normalized
   `pluginParameter:<id>` values into sorted `ParameterEvent`s; the bridge
