@@ -36,6 +36,12 @@ Updated: 2026-09-13.
   running. The focused regression and full control suite pass (143 tests,
   2 intentionally ignored); no endpoint was opened.
 
+- Added a regression for the native session lifecycle boundary on 2026-09-13.
+  A running session that has an attached native-worker identity now rejects
+  direct worker stop and detach requests, preserving `session.stop` as the
+  shutdown/finalization boundary. The full control suite passes (143 tests,
+  2 intentionally ignored) after `cargo fmt --all`; no endpoint was opened.
+
 - Added a persisted local compact route-status view on 2026-09-13. The UI
   exposes an accessible `Compact status` toggle that presents the selected
   session, backend/native telemetry summary, session start/stop, and privacy
