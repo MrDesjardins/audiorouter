@@ -640,7 +640,19 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       if (!active || polling) return;
       polling = true;
       try {
-        const result = await backend.subscribe(eventCursor.current.sequence, session.id, eventCursor.current.backendEpoch);
+        const result = await backend.subscribe(eventCursor.current.sequence, session.id, eventCursor.current.backendEpoch, [
+          "graph.committed",
+          "runtime.crashed",
+          "runtime.started",
+          "runtime.activated",
+          "runtime.stopped",
+          "virtualDevice.changed",
+          "recorder.changed",
+          "recording.metadataChanged",
+          "recording.renamed",
+          "recording.entryRemoved",
+          "recording.recycled",
+        ]);
         if (!active) return;
         if (result.resyncRequired || result.events.length > 0) {
           const nextState = await snapshotCache.refresh(backend);

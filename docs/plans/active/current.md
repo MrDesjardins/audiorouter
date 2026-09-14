@@ -2,6 +2,13 @@
 
 Updated: 2026-09-14.
 
+- Narrowed the live UI event subscription on 2026-09-14 to the bounded state
+  categories the workspace can refresh: graph/runtime, virtual-device,
+  recorder, and recording-library changes. Meter events remain excluded as
+  required by API-08; diagnostics continue through the separate 1 Hz
+  read-only snapshot path. UI typecheck and the full suite passed (18 files,
+  167 tests). No endpoint or machine configuration changed.
+
 - Requalified the current pushed head after the M05 telemetry changes on
   2026-09-14 with `cargo test --workspace --locked -- --test-threads=1`.
   CLI (32), MCP (3), control (145), domain (64), DSP (32), engine (110),
