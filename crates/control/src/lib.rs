@@ -57,6 +57,9 @@ const MAX_ACTIVE_RECORDERS: usize = audiorouter_engine::MAX_AUDIO_TAPS;
 /// operation loop forever; the caller receives a recoverable finalization
 /// error and the recorder remains owned by the worker.
 const MAX_RECORDER_FINALIZATION_PASSES: usize = 4096;
+/// Maximum number of queued recorder chunks drained per native pump and per
+/// attached worker. This keeps recording I/O bounded per control request.
+const MAX_RECORDER_PUMP_CHUNKS: usize = 4;
 const MAX_RESPONSE_BANDS: usize = 8;
 const MAX_RESPONSE_FREQUENCIES: usize = 256;
 const MAX_MEMORY_OPERATION_OUTCOMES: usize = 100;
@@ -225,6 +228,13 @@ pub trait RecorderWorker: Send {
         Ok(())
     }
 
+    /// Drain a bounded amount of queued audio on the lifecycle/control
+    /// thread. Implementations return zero while armed or idle; the realtime
+    /// tap only enqueues into the preallocated queue and never calls this.
+    fn drain_pending(&mut self, _maximum_chunks: usize) -> Result<usize, String> {
+        Ok(0)
+    }
+
     fn split(&mut self, _frame: u64) -> Result<(), String> {
         Err("attached recorder worker does not support file splitting".into())
     }
@@ -366,6 +376,21 @@ impl RecorderWorker for WavRecorderWorker {
 
     fn finalized_recordings(&self) -> Vec<FinalizedRecording> {
         self.finalized_recordings.clone()
+    }
+
+    fn drain_pending(&mut self, maximum_chunks: usize) -> Result<usize, String> {
+        let Some(recorder) = self.recorder.as_mut() else {
+            return Ok(0);
+        };
+        if !matches!(
+            recorder.state(),
+            RecorderState::Recording | RecorderState::Stopping
+        ) {
+            return Ok(0);
+        }
+        recorder
+            .drain_queue(&self.queue, maximum_chunks)
+            .map_err(|error| format!("WAV recorder drain failed: {error:?}"))
     }
 
     fn arm(&mut self) -> Result<(), String> {
@@ -582,9 +607,9 @@ pub fn create_file_recorder_with_config(
                 recorder_id: config.recorder_id.to_owned(),
                 path: path.clone(),
             };
-            let mut worker = BufferedFlacRecorderWorker::new(
+            let mut worker = StreamingFlacRecorderWorker::new(
                 file,
-                usize::from(config.channels),
+                config.channels,
                 config.sample_rate,
                 bits_per_sample,
                 config.queue_capacity,
@@ -831,6 +856,21 @@ impl RecorderWorker for SegmentedWavRecorderWorker {
         self.finalized_recordings.clone()
     }
 
+    fn drain_pending(&mut self, maximum_chunks: usize) -> Result<usize, String> {
+        let Some(recorder) = self.recorder.as_mut() else {
+            return Ok(0);
+        };
+        if !matches!(
+            recorder.state(),
+            RecorderState::Recording | RecorderState::Stopping
+        ) {
+            return Ok(0);
+        }
+        recorder
+            .drain_queue(&self.queue, maximum_chunks)
+            .map_err(|error| format!("segmented WAV recorder drain failed: {error:?}"))
+    }
+
     fn pause(&mut self, frame: u64) -> Result<(), String> {
         self.recorder
             .as_mut()
@@ -960,10 +1000,9 @@ fn format_path_policy_error(error: PathPolicyError) -> String {
     format!("recording path policy rejected file creation: {error:?}")
 }
 
-/// Concrete buffered-FLAC worker for offline and non-realtime recording
+/// Concrete buffered-FLAC worker for offline and compatibility recording
 /// integration. The encoder retains compressed output until finalization;
-/// native realtime wiring must use the streaming worker once that adapter is
-/// available.
+/// the file-recorder factory uses the streaming worker for live attachment.
 pub struct BufferedFlacRecorderWorker {
     recorder: Option<BufferedFlacRecorder>,
     queue: Arc<RecordingQueue>,
@@ -1058,6 +1097,21 @@ impl RecorderWorker for BufferedFlacRecorderWorker {
 
     fn finalized_recordings(&self) -> Vec<FinalizedRecording> {
         self.finalized_recordings.clone()
+    }
+
+    fn drain_pending(&mut self, maximum_chunks: usize) -> Result<usize, String> {
+        let Some(recorder) = self.recorder.as_mut() else {
+            return Ok(0);
+        };
+        if !matches!(
+            recorder.state(),
+            RecorderState::Recording | RecorderState::Stopping
+        ) {
+            return Ok(0);
+        }
+        recorder
+            .drain_queue(&self.queue, maximum_chunks)
+            .map_err(|error| format!("buffered FLAC recorder drain failed: {error:?}"))
     }
 
     fn arm(&mut self) -> Result<(), String> {
@@ -1252,6 +1306,21 @@ impl RecorderWorker for StreamingFlacRecorderWorker {
 
     fn finalized_recordings(&self) -> Vec<FinalizedRecording> {
         self.finalized_recordings.clone()
+    }
+
+    fn drain_pending(&mut self, maximum_chunks: usize) -> Result<usize, String> {
+        let Some(recorder) = self.recorder.as_mut() else {
+            return Ok(0);
+        };
+        if !matches!(
+            recorder.state(),
+            RecorderState::Recording | RecorderState::Stopping
+        ) {
+            return Ok(0);
+        }
+        recorder
+            .drain_queue(&self.queue, maximum_chunks)
+            .map_err(|error| format!("streaming FLAC recorder drain failed: {error:?}"))
     }
 
     fn arm(&mut self) -> Result<(), String> {
@@ -2637,9 +2706,10 @@ fn method_output_schema(name: &str) -> Value {
                 "processedQuanta": { "type": "integer", "minimum": 0 },
                 "renderedFrames": { "type": "integer", "minimum": 0 },
                 "droppedRenderFrames": { "type": "integer", "minimum": 0 },
-                "renderBackpressureEvents": { "type": "integer", "minimum": 0 }
+                "renderBackpressureEvents": { "type": "integer", "minimum": 0 },
+                "recorderChunksDrained": { "type": "integer", "minimum": 0 }
             },
-            "required": ["sessionId", "generation", "packets", "capturedFrames", "processedQuanta", "renderedFrames", "droppedRenderFrames", "renderBackpressureEvents"],
+            "required": ["sessionId", "generation", "packets", "capturedFrames", "processedQuanta", "renderedFrames", "droppedRenderFrames", "renderBackpressureEvents", "recorderChunksDrained"],
             "additionalProperties": false
         }),
         "plugins.scan" | "plugins.list" | "plugins.retry" => json!({
@@ -4297,20 +4367,23 @@ impl ControlPlane {
                 "native endpoint worker generation is stale".into(),
             ));
         }
-        let worker = self.native_endpoint_worker.as_mut().ok_or_else(|| {
-            ControlError::InvalidRequest("native endpoint worker is not attached".into())
-        })?;
-        if worker.bridge().scheduler().telemetry().active_generation
-            != Some(RuntimeGeneration::new(generation))
-        {
-            self.native_endpoint_rejections = self.native_endpoint_rejections.saturating_add(1);
-            return Err(ControlError::InvalidRequest(
-                "native endpoint worker has no matching prepared graph".into(),
-            ));
-        }
-        let pump = worker
-            .pump_available_with_tap(max_packets, tap)
-            .map_err(audio_control_error)?;
+        let pump = {
+            let worker = self.native_endpoint_worker.as_mut().ok_or_else(|| {
+                ControlError::InvalidRequest("native endpoint worker is not attached".into())
+            })?;
+            if worker.bridge().scheduler().telemetry().active_generation
+                != Some(RuntimeGeneration::new(generation))
+            {
+                self.native_endpoint_rejections = self.native_endpoint_rejections.saturating_add(1);
+                return Err(ControlError::InvalidRequest(
+                    "native endpoint worker has no matching prepared graph".into(),
+                ));
+            }
+            worker
+                .pump_available_with_tap(max_packets, tap)
+                .map_err(audio_control_error)?
+        };
+        let recorder_chunks_drained = self.drain_attached_recorders()?;
         Ok(json!({
             "sessionId": session_id,
             "generation": generation,
@@ -4320,7 +4393,32 @@ impl ControlPlane {
             "renderedFrames": pump.rendered_frames,
             "droppedRenderFrames": pump.dropped_render_frames,
             "renderBackpressureEvents": pump.render_backpressure_events,
+            "recorderChunksDrained": recorder_chunks_drained,
         }))
+    }
+
+    /// Drain recorder queues only after the endpoint pump has returned to the
+    /// control thread. The realtime tap remains a bounded enqueue-only path;
+    /// file encoding and flushing never run in the audio callback.
+    fn drain_attached_recorders(&mut self) -> Result<usize, ControlError> {
+        let mut drained = 0usize;
+        for worker in self.recorder_workers.values_mut() {
+            let count = worker
+                .drain_pending(MAX_RECORDER_PUMP_CHUNKS)
+                .map_err(|error| {
+                    ControlError::InvalidRequest(format!("recorder drain failed: {error}"))
+                })?;
+            drained = drained.saturating_add(count);
+        }
+        for worker in self.recorder_node_workers.values_mut() {
+            let count = worker
+                .drain_pending(MAX_RECORDER_PUMP_CHUNKS)
+                .map_err(|error| {
+                    ControlError::InvalidRequest(format!("recorder node drain failed: {error}"))
+                })?;
+            drained = drained.saturating_add(count);
+        }
+        Ok(drained)
     }
 
     /// Compile and publish the validated session graph into the attached
@@ -15868,6 +15966,7 @@ mod tests {
                 samples: vec![0.25, -0.25],
             })
             .unwrap();
+        assert_eq!(worker.drain_pending(1).unwrap(), 1);
         let outcome = worker.finalize(2).unwrap();
         assert_eq!(outcome.state, "completed");
         let info = audiorouter_recording::inspect_flac_file(&path).unwrap();
@@ -15879,6 +15978,52 @@ mod tests {
         assert_eq!(rows[0].file_bytes, info.file_bytes);
         assert!(!rows[0].missing);
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn recorder_factory_selects_incremental_flac_worker() {
+        let run_id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("audiorouter-control-streaming-factory-{run_id}"));
+        std::fs::create_dir_all(&root).unwrap();
+        let policy = RecordingPathPolicy::new(&root).unwrap();
+        let config = FileRecorderConfig {
+            version: FILE_RECORDER_CONFIG_VERSION,
+            session_id: "session",
+            recorder_id: "voice",
+            sequence: 0,
+            format: FileRecorderFormat::Flac {
+                bits_per_sample: 16,
+            },
+            channels: 1,
+            sample_rate: 48_000,
+            dither: false,
+            queue_capacity: 8,
+            maximum_chunks_per_pass: 1,
+        };
+        let (path, mut worker) = create_file_recorder_with_config(&policy, &config).unwrap();
+        assert!(std::fs::metadata(&path).unwrap().len() >= 4);
+        worker.arm().unwrap();
+        worker.start(0).unwrap();
+        let tap = worker.shared_audio_tap().unwrap();
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block
+            .channel_mut(0)
+            .unwrap()
+            .copy_from_slice(&[0.25, -0.25]);
+        tap.on_processed_block(0, &block);
+        assert_eq!(worker.drain_pending(1).unwrap(), 1);
+        assert_eq!(worker.finalize(2).unwrap().state, "completed");
+        assert_eq!(
+            audiorouter_recording::inspect_flac_file(&path)
+                .unwrap()
+                .frames,
+            2
+        );
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

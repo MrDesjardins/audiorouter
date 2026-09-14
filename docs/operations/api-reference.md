@@ -130,7 +130,9 @@ replacement endpoint, or activate a stopped session.
 Pump ticks are intentionally not counted against the user mutation-rate bucket:
 they are bounded scheduler traffic rather than user mutations. They remain
 authenticated, session-generation-bound, and fail closed when the native
-worker or prepared graph is absent.
+worker or prepared graph is absent. The response also reports the bounded
+number of recorder chunks drained on the control thread; file encoding and
+flushing never run in the realtime callback.
 
 The singular and plural session lifecycle names are compatibility aliases with
 the same authorization and behavior. Mutating graph and virtual-device calls

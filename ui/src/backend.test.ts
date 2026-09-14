@@ -328,7 +328,7 @@ describe("live event cursor", () => {
 
   it("forwards the bounded native pump with the exact session generation", async () => {
     let received: unknown;
-    const result = { sessionId: demoSession.id, generation: 7, packets: 2, capturedFrames: 256, processedQuanta: 2, renderedFrames: 256, droppedRenderFrames: 0, renderBackpressureEvents: 0 };
+    const result = { sessionId: demoSession.id, generation: 7, packets: 2, capturedFrames: 256, processedQuanta: 2, renderedFrames: 256, droppedRenderFrames: 0, renderBackpressureEvents: 0, recorderChunksDrained: 0 };
     const client = {
       request: async (method: string, params: unknown) => { received = { method, params }; return result; },
     } as never;

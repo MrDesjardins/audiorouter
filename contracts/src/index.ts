@@ -269,6 +269,7 @@ export interface NativeEndpointPumpResult {
   renderedFrames: number;
   droppedRenderFrames: number;
   renderBackpressureEvents: number;
+  recorderChunksDrained: number;
 }
 
 export interface InactiveDeviceInfo {

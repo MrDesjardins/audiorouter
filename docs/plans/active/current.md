@@ -2,6 +2,17 @@
 
 Updated: 2026-09-13.
 
+- Connected incremental FLAC recording to the live control-plane pump on
+  2026-09-13. Factory-created FLAC recorders now use the seekable streaming
+  writer, and every attached recorder worker exposes a bounded
+  control-thread drain; the realtime tap remains enqueue-only. Pump results
+  report `recorderChunksDrained`, with the output schema/contracts and API
+  reference updated together. Control coverage is 141 passing tests, UI
+  coverage is 158 passing tests, contracts typecheck and strict control
+  Clippy pass. The existing buffered FLAC worker remains available for
+  explicitly offline callers. No endpoint or machine audio configuration was
+  changed.
+
 - Requalified the complete elevated `tests/acceptance/safe-all.ps1` chain at
   the current pushed head on 2026-09-13. Toolchain/native compile, non-
   installing x64 WDK driver build and catalog signability, read-only endpoint
