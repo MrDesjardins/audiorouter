@@ -13,6 +13,16 @@ Updated: 2026-09-13.
   persistent machine configuration. Rust control/domain tests and UI tests
   pass; a live application-capture invocation remains a guarded Windows gate.
 
+- Requalified the end-to-end guarded application worker on 2026-09-13 using
+  the currently active Voicemeeter process (`PID 34568`) and the existing
+  VB-Cable render endpoint. The 500 ms control-owned lifecycle passed with
+  process identity validation, stopped preparation, session start, bounded
+  pumping, rendered output, stop, and detach; the process-scoped environment
+  wrapper restored every prior value. Added an authorization regression proving
+  read-only clients are rejected before platform access. This is native
+  Windows runtime evidence for the application route, not production-driver or
+  signing evidence.
+
 - Added a guarded control-owned application-capture acceptance on 2026-09-13.
   With explicit `AUDIOROUTER_APPLICATION_PROCESS_ID`, executable,
   creation-time, and render-endpoint inputs, the test constructs the real

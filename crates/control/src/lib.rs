@@ -11259,6 +11259,23 @@ mod tests {
     }
 
     #[test]
+    fn native_application_preparation_requires_device_administration_before_platform_access() {
+        let mut plane = ControlPlane::default();
+        let response = plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(91)),
+                method: "nativeApplications.prepare".into(),
+                params: Some(json!({ "processId": 1 })),
+            },
+            &ClientGrant::read_only(),
+        );
+        assert_eq!(response.error.unwrap().code, -32001);
+        assert!(plane.endpoint_monitor.is_none());
+        assert!(plane.native_endpoint_worker.is_none());
+    }
+
+    #[test]
     fn native_application_worker_rejects_missing_graph_source_before_platform_access() {
         let mut plane = ControlPlane::default();
         let mut owned = session();
