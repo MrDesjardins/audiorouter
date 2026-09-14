@@ -8,8 +8,9 @@ Updated: 2026-09-14.
   Added an accessibility regression proving selection alone does not create a
   node. The focused UI suite (57 tests), TypeScript typecheck, and diff checks
   passed. No plugin was loaded or registered and no audio configuration
-  changed. Next action: continue the next safe M03/M07 recovery or delivery
-  item.
+  changed. The subsequent full UI suite also passed (19 files, 194 tests) with
+  TypeScript typecheck. Next action: continue the next safe M03/M07 recovery or
+  delivery item.
 
 - Passed the isolated M06 legacy VST2 acceptance on 2026-09-14 using six
   repository-local x64 ReaPlugs binaries (`reacomp`, `readelay`, `reaeq`,
