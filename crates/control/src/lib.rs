@@ -3820,7 +3820,6 @@ impl ControlPlane {
     ) -> Result<(), ControlError> {
         let session = self.get_session(&session_id)?.clone();
         let process_id_value = serde_json::Value::from(u64::from(config.process_id));
-        let executable_value = serde_json::Value::from(config.expected_executable);
         let creation_time_value =
             serde_json::Value::from(config.expected_creation_time_100ns.to_string());
         let has_matching_capture = session.nodes.iter().any(|node| {
@@ -3833,7 +3832,8 @@ impl ControlPlane {
                 && node
                     .parameters
                     .get("executable")
-                    .is_some_and(|value| value == &executable_value)
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|value| value.eq_ignore_ascii_case(config.expected_executable))
                 && node
                     .parameters
                     .get("creationTime100ns")

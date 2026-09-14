@@ -31,6 +31,12 @@ Updated: 2026-09-13.
   green (140 passed, two guarded live tests ignored) with strict Clippy. This
   prevents a stale graph identity from being paired with a different request.
 
+- Corrected application identity comparison on 2026-09-13. The committed
+  graph executable is now compared case-insensitively, matching Windows
+  process identity semantics, while creation-time identity remains an exact
+  decimal match. Control tests (140 passed, two guarded live tests ignored)
+  and strict Clippy pass.
+
 - Added a guarded control-owned application-capture acceptance on 2026-09-13.
   With explicit `AUDIOROUTER_APPLICATION_PROCESS_ID`, executable,
   creation-time, and render-endpoint inputs, the test constructs the real
