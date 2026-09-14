@@ -2,6 +2,20 @@
 
 Updated: 2026-09-13.
 
+- Requalified the complete non-installing `tests/acceptance/safe-all.ps1`
+  chain at pushed head `ac2a869d` on 2026-09-13. Toolchain/native compile,
+  AudioRouter x64 WDK driver build/signability/catalog, read-only 31-endpoint
+  inventory, disposable SysVAD x64 package/API validation, M01/M04, M05 with
+  159 UI tests and production builds, M06 VST3/VST2 workers, M07 headless,
+  unsigned M08 artifacts, 159 normative traceability mappings, and
+  documentation validation (52 Markdown files/189 local links) passed. The
+  acceptance cleanup removed 15 run-owned temporary children. No driver was
+  installed or loaded, no signing or boot policy changed, and no plugin/startup
+  registration, live stream, endpoint default, volume, mute, privacy, or
+  persistent machine audio configuration action occurred. Production
+  PortCls ownership/deployment, signing, installer, physical-latency, and
+  attended WebView2 gates remain open.
+
 - Connected incremental FLAC recording to the live control-plane pump on
   2026-09-13. Factory-created FLAC recorders now use the seekable streaming
   writer, and every attached recorder worker exposes a bounded
