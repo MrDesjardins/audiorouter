@@ -1,5 +1,16 @@
 # M08 release evidence
 
+## 2026-09-13 - locked native shell release requalification
+
+The integrated safe chain first exposed stale `src-tauri/Cargo.lock` data:
+the locked shell build required the current `audiorouter-windows-audio`
+domain dependency. After regenerating the lockfile from the current manifest,
+the clean `tests/acceptance/m08-release.ps1` run passed. It built and
+validated unsigned x64 CLI, plugin-worker, native shell, UI, SBOM, and
+provenance artifacts, then removed temporary output. No installer, driver,
+signing, startup, or audio configuration action occurred. The release remains
+unsigned and not publication-ready.
+
 ## 2026-09-13 - full safe-chain requalification at `fbba7134`
 
 The elevated safe acceptance chain passed after the guided Quick route UI

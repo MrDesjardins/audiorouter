@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Repaired the native shell lock drift on 2026-09-13: `src-tauri/Cargo.lock`
+  now includes the current `audiorouter-windows-audio` domain dependency and
+  compatible registry resolutions. The clean M08 release preparation then
+  passed, producing and validating unsigned x64 CLI, plugin-worker, shell,
+  UI, SBOM, and provenance artifacts before removing temporary output. No
+  installer, driver, signing, startup, or audio configuration action occurred.
+  Evidence: [M08 release evidence](evidence/M08-release.md).
+
 - Requalified the project-driver bridge publication contract on 2026-09-13
   with the installed VS Community MSBuild 18.9.1 and WDK 10.0.28000.0.
   Utilities, Filters, Main, package/catalog, and Inc compiled; catalog
