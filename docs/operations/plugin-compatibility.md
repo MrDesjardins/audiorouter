@@ -26,6 +26,13 @@ reaped the worker successfully. This is a vendor activation incompatibility,
 not evidence of endpoint contention or `E_INVALIDARG`; the supplied binary
 was not modified or registered.
 
+The supplied x64 TDR Nova VST3 candidate was also rerun through the same
+worker on 2026-09-13. It reached processing, but the supervised replacement
+worker rejected opaque state restoration with VST3 result `0x1`; the negative
+fixture regression now covers both launch-time and deferred restart-time
+failures and reaps the worker. It remains unsupported for the current state
+contract; the binary was not modified or registered.
+
 The current read-only scan of that directory found nine x64 DLL candidates,
 all classified as VST2: `reacomp-standalone.dll`,
 `reacontrolmidi-standalone.dll`, `readelay-standalone.dll`,

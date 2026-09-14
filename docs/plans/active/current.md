@@ -19,6 +19,14 @@ Updated: 2026-09-13.
   contention or an `E_INVALIDARG` audio-device failure. The binary remained
   unchanged and unregistered; no audio or machine configuration was touched.
 
+- Hardened the native VST3 negative-fixture regression on 2026-09-13. It now
+  accepts and verifies contained failures during launch, descriptor/state
+  exchange, or supervised replacement rather than requiring failure at one
+  phase. BUSTERse fails during activation and TDR Nova fails deferred state
+  restoration with VST3 result `0x1`; both workers are reaped successfully.
+  This preserves fail-closed behavior and records vendor incompatibility
+  without weakening the worker contract or touching audio configuration.
+
 - Exposed the verified application-capture preparation path through the
   versioned JSON-RPC contract and UI on 2026-09-13. The new
   `nativeApplications.prepare` operation is device-administration gated,

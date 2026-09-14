@@ -1103,21 +1103,71 @@ fn verified_native_vst3_worker_contains_an_opt_in_fixture_failure() {
         .expect("inspect VST3 fixture without loading it");
     assert_eq!(identity.format, PluginFormat::Vst3);
     assert_eq!(identity.architecture, PeArchitecture::X64);
-    let result = SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
+    let mut worker = match SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
         worker_path,
         &identity,
         std::slice::from_ref(&root),
         2,
         48_000,
         Instant::now(),
+    ) {
+        Err(error) => {
+            assert!(matches!(
+                error,
+                WorkerProcessError::Message(_)
+                    | WorkerProcessError::Protocol(_)
+                    | WorkerProcessError::Exited
+                    | WorkerProcessError::Timeout
+            ));
+            return;
+        }
+        Ok(worker) => worker,
+    };
+    let descriptors = match worker.describe_parameters(Instant::now()) {
+        Ok(descriptors) => descriptors,
+        Err(error) => {
+            assert!(matches!(
+                error,
+                WorkerProcessError::Message(_)
+                    | WorkerProcessError::Protocol(_)
+                    | WorkerProcessError::Exited
+                    | WorkerProcessError::Timeout
+            ));
+            return;
+        }
+    };
+    assert!(!descriptors.is_empty());
+    let state = match worker.save_state(Instant::now()) {
+        Ok(state) => state,
+        Err(error) => {
+            assert!(matches!(
+                error,
+                WorkerProcessError::Message(_)
+                    | WorkerProcessError::Protocol(_)
+                    | WorkerProcessError::Exited
+                    | WorkerProcessError::Timeout
+            ));
+            return;
+        }
+    };
+    assert_eq!(
+        worker.record_failure(Instant::now()),
+        audiorouter_plugin_host::WorkerState::Failed
     );
-    assert!(matches!(
-        result,
-        Err(WorkerProcessError::Message(_)
-            | WorkerProcessError::Protocol(_)
-            | WorkerProcessError::Exited
-            | WorkerProcessError::Timeout)
-    ));
+    let replacement = worker.restart_with_state(state.clone(), state.version, Instant::now());
+    match replacement {
+        Err((error, _)) => assert!(matches!(
+            error,
+            WorkerProcessError::Message(_)
+                | WorkerProcessError::Protocol(_)
+                | WorkerProcessError::Exited
+                | WorkerProcessError::Timeout
+        )),
+        Ok(replacement) => {
+            let _ = replacement.shutdown();
+            panic!("expected the selected VST3 fixture to fail during its contained lifecycle");
+        }
+    }
 }
 
 #[cfg(all(windows, feature = "test-fixtures"))]
