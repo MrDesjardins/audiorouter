@@ -22,6 +22,8 @@ The same parity check now includes the emitted `devices.changed` endpoint
 inventory event and `recovery.safeModeCleared`, for 19 categories total; the UI
 subscribes to both so endpoint and recovery changes refresh the authoritative
 snapshot.
+The `events.subscribe` JSON schema also exposes this exact 19-value enum,
+preventing schema-driven clients from requesting undiscoverable categories.
 
 Verification on Windows workspace `C:\code\audiorouter`:
 
@@ -33,6 +35,8 @@ Verification on Windows workspace `C:\code\audiorouter`:
 - `npm.cmd --prefix contracts run check:drift` — 71 methods, 19 node kinds, 7
   processors, and 19 event categories aligned.
 - `npm.cmd --prefix contracts run typecheck` — passed.
+- `cargo test -q -p audiorouter-control --locked -- --test-threads=1` — 150
+  passed, 2 guarded live tests ignored, including the schema equality regression.
 - `tests\acceptance\docs.ps1` — 53 Markdown files and 192 local links passed.
 
 No endpoint, default-device, driver, or other machine audio configuration was

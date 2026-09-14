@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Implemented the API-08 schema-hardening slice on 2026-09-14. The
+  `events.subscribe` input schema now advertises the authoritative 19-value
+  event-category enum, matching Rust discovery and the TypeScript contract;
+  control discovery regression coverage protects the equality. Control (150
+  passed, 2 guarded live ignored), strict Clippy, contract drift/typecheck,
+  formatting, diff, and docs validation passed. No audio or machine
+  configuration was accessed. Next action: continue the next safe M03/M07
+  recovery item.
+
 - Added explicit API-08 UI subscription regressions on 2026-09-14 for
   `devices.changed` and `recovery.safeModeCleared`, the two production event
   categories found during the emission audit. UI coverage remains 184 tests,

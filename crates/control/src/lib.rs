@@ -2182,7 +2182,7 @@ fn method_input_schema(name: &str) -> Value {
                 "backendEpoch": { "type": "integer", "minimum": 0 },
                 "categories": {
                     "type": "array",
-                    "items": { "type": "string", "minLength": 1, "maxLength": 128 },
+                    "items": { "type": "string", "minLength": 1, "maxLength": 128, "enum": STATE_CATEGORIES },
                     "maxItems": 32
                 },
                 "limit": { "type": "integer", "minimum": 1, "maximum": MAX_EVENT_SUBSCRIPTION_ITEMS },
@@ -13196,6 +13196,11 @@ mod tests {
         assert_eq!(
             describe_schema["properties"]["events"]["properties"]["stateCategories"]["maxItems"],
             STATE_CATEGORIES.len()
+        );
+        let events_subscribe_schema = method_input_schema("events.subscribe");
+        assert_eq!(
+            events_subscribe_schema["properties"]["categories"]["items"]["enum"],
+            json!(STATE_CATEGORIES)
         );
         assert!(description["methods"]
             .as_array()
