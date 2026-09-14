@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Passed the isolated M06 legacy VST2 acceptance on 2026-09-14 using six
+  repository-local x64 ReaPlugs binaries (`reacomp`, `readelay`, `reaeq`,
+  `reafir`, `reagate`, and `reaxcomp`) at 44.1, 48, and 96 kHz. Each
+  disposable worker loaded and processed successfully; the harness exercised
+  bounded parameter-offset behavior, restored the VST2 environment variables,
+  and verified every fixture's size and SHA-256 remained unchanged. No plugin
+  registration or audio configuration changed. Editor/GUI support and
+  independent vendor qualification remain separate gates. Next action:
+  continue the next safe M03/M07 recovery or delivery item.
+
 - Passed the authorized M00 impulse-response acceptance on 2026-09-14 against
   the exact existing VB-Cable render/capture pair. The bounded 1,000-impulse
   run detected 998 groups, with p95 spacing error of 0 frames and an estimated
