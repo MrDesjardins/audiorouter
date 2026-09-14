@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Requalified REC-03 after the metadata round-trip regression on 2026-09-14:
+  all 145 control tests passed (2 guarded live tests remained intentionally
+  ignored) and strict control Clippy passed. The persisted encoding fields are
+  now covered for both legacy/unknown and converted+dithered recordings at the
+  storage, control API, and UI hydration boundaries. No recording file,
+  endpoint, or machine audio configuration was changed. Next action: continue
+  the next safe delivery item; native driver installation/signing and physical
+  audio gates remain explicit blockers.
+
 - Closed the remaining REC-03 API evidence gap on 2026-09-14. The control
   regression now stores both a conservative legacy recording (`unknown`
   conversion, no dither) and a converted dithered recording, then verifies
