@@ -17,6 +17,12 @@ The shell does not install a driver,
 register plugins, change Windows audio endpoints, or start an unconfigured
 service.
 
+A newly created desktop session contains a neutral, backend-owned Gain node
+between the physical input and output. It is set to 0 dB so the initial route
+is behaviorally unchanged, while giving the UI an immediately visible
+modifier that can be adjusted, bypassed, or replaced before committing a
+graph change.
+
 For an explicitly authorized native adapter test, set both
 `AUDIOROUTER_CAPTURE_ENDPOINT_ID` and `AUDIOROUTER_RENDER_ENDPOINT_ID` to the
 exact IDs returned by `devices.list`. The shell then prepares matching stopped

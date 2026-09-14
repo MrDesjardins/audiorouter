@@ -50,6 +50,12 @@ audio** action when finished; the launcher removes its database and restores
 the caller's environment. It does not change Windows defaults, endpoint
 volume/mute, driver state, or startup registration.
 
+The fresh desktop session starts with a neutral 0 dB Gain node between the
+selected input and output. Adjusting that node is a real graph change: use
+**Plan changes**, commit the validated plan, and restart the session if it was
+already running. The same path is used for EQ, gate, compressor, limiter, and
+other built-in processors added from the canvas.
+
 The defaults are `CABLE Output (VB-Audio Virtual Cable)` capture and `CABLE
 Input (VB-Audio Virtual Cable)` render for deliberate loopback testing. To use
 the normal VB-Cable-capture-to-physical-output route, pass one exact active

@@ -139,6 +139,30 @@ fn default_desktop_session() -> Session {
                 }],
             },
             Node {
+                id: EntityId::new("desktop-gain"),
+                kind: NodeKind::Gain,
+                type_version: 1,
+                name: "Neutral gain".into(),
+                enabled: true,
+                bypass: false,
+                parameters: serde_json::Map::from_iter([(
+                    "gainDb".into(),
+                    serde_json::json!(0.0),
+                )]),
+                ports: vec![
+                    Port {
+                        name: "in".into(),
+                        direction: PortDirection::Input,
+                        channels: 2,
+                    },
+                    Port {
+                        name: "out".into(),
+                        direction: PortDirection::Output,
+                        channels: 2,
+                    },
+                ],
+            },
+            Node {
                 id: EntityId::new("desktop-output"),
                 kind: NodeKind::PhysicalOutput,
                 type_version: 1,
@@ -153,15 +177,26 @@ fn default_desktop_session() -> Session {
                 }],
             },
         ],
-        edges: vec![Edge {
-            id: EntityId::new("desktop-edge"),
-            source_node: EntityId::new("desktop-input"),
-            source_port: "main".into(),
-            destination_node: EntityId::new("desktop-output"),
-            destination_port: "main".into(),
-            matrix: vec![1.0, 0.0, 0.0, 1.0],
-            enabled: true,
-        }],
+        edges: vec![
+            Edge {
+                id: EntityId::new("desktop-input-gain"),
+                source_node: EntityId::new("desktop-input"),
+                source_port: "main".into(),
+                destination_node: EntityId::new("desktop-gain"),
+                destination_port: "in".into(),
+                matrix: vec![1.0, 0.0, 0.0, 1.0],
+                enabled: true,
+            },
+            Edge {
+                id: EntityId::new("desktop-gain-output"),
+                source_node: EntityId::new("desktop-gain"),
+                source_port: "out".into(),
+                destination_node: EntityId::new("desktop-output"),
+                destination_port: "main".into(),
+                matrix: vec![1.0, 0.0, 0.0, 1.0],
+                enabled: true,
+            },
+        ],
     }
 }
 
@@ -574,8 +609,10 @@ mod tests {
         let session = default_desktop_session();
         assert_eq!(session.id.as_str(), DESKTOP_SESSION_ID);
         assert_eq!(session.revision, 0);
-        assert_eq!(session.nodes.len(), 2);
-        assert_eq!(session.edges.len(), 1);
+        assert_eq!(session.nodes.len(), 3);
+        assert_eq!(session.edges.len(), 2);
+        assert_eq!(session.nodes[1].kind, NodeKind::Gain);
+        assert_eq!(session.nodes[1].parameters["gainDb"], serde_json::json!(0.0));
         assert!(validate_session(&session).is_ok());
     }
 

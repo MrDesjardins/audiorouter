@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Made the first human-test route visibly exercise an in-house processor on
+  2026-09-13. A fresh Tauri desktop session now contains a backend-owned
+  neutral `Gain` node (0 dB) between the input and output, preserving the
+  initial signal while exposing an immediately editable modifier in the
+  visual graph. The shell test confirms the three-node/two-edge stereo graph
+  validates; `cargo fmt --all -- --check` and the 10-shell-test suite passed.
+  This changes only newly created desktop sessions; existing persisted
+  sessions are not rewritten. Native driver activation and attended desktop
+  observation remain separate gates.
+
 - Requalified the guarded acceptance chain after refreshing `src-tauri/Cargo.lock`
   on 2026-09-13. The first run correctly stopped at M08 because the locked
   native-shell build detected the stale lockfile; `cargo check --manifest-path
