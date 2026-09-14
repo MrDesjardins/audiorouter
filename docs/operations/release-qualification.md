@@ -70,9 +70,12 @@ production signing, or clean-machine qualification.
 4. Review the install preview and the required elevation scope.
 5. Keep unrelated audio drivers and devices out of the change set.
 
-The current repository has no production installer or owned virtual-device
-driver to install. Do not treat VB-Audio, Voicemeeter, Sonar, or another
-existing virtual device as an AudioRouter release artifact.
+The current repository has no production installer or production-signed
+virtual-device driver package to install. It does contain an AudioRouter-owned
+x64 prototype and a guarded, build-qualified lifecycle entrypoint for an
+isolated test system; neither is a releasable driver artifact. Do not treat
+VB-Audio, Voicemeeter, Sonar, or another existing virtual device as an
+AudioRouter release artifact.
 
 ## Recovery and uninstall expectations
 

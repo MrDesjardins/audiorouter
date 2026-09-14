@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Corrected the M08 driver-status wording on 2026-09-14. Release guidance
+  now distinguishes the AudioRouter-owned, build-qualified prototype and
+  guarded isolated-test lifecycle entrypoint from the still-missing
+  production-signed package/installer. Documentation validation passed for
+  53 Markdown files and 192 local links. No driver, registry, endpoint, or
+  persistent audio configuration was changed. Next action: continue the
+  next independently testable M03/M07 recovery item.
+
 - Made native startup status update immediately after a successful shell
   registration on 2026-09-14; the asynchronous query remains a reconciliation
   check. The UI regression now verifies both the apply confirmation and the
