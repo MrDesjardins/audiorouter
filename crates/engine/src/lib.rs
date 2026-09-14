@@ -719,13 +719,22 @@ impl VirtualBusBridgeSet {
     /// This is a bounded control/recovery sweep; it never reads a clock,
     /// waits, allocates, or runs on the realtime audio path.
     pub fn expire_stale_leases(&self, now_tick: u64) -> usize {
+        self.expire_stale_lease_ids(now_tick).len()
+    }
+
+    /// Expire stale leases and return the stable bus IDs that were silenced.
+    /// The caller uses these IDs for bounded control-plane observability;
+    /// bridge expiry itself remains independent of the event system.
+    pub fn expire_stale_lease_ids(&self, now_tick: u64) -> Vec<audiorouter_domain::EntityId> {
         self.bridges
-            .values()
-            .filter(|bridge| {
+            .iter()
+            .filter_map(|(id, bridge)| {
                 let generation = bridge.generation();
-                bridge.expire_if_stale(generation, now_tick)
+                bridge
+                    .expire_if_stale(generation, now_tick)
+                    .then(|| id.clone())
             })
-            .count()
+            .collect()
     }
 }
 
@@ -5845,14 +5854,14 @@ mod tests {
         let mut set = VirtualBusBridgeSet::new(2, 1, 2).unwrap();
         let stale_id = audiorouter_domain::EntityId::new("stale");
         let active_id = audiorouter_domain::EntityId::new("active");
-        let stale = set.ensure(stale_id).unwrap();
+        let stale = set.ensure(stale_id.clone()).unwrap();
         let active = set.ensure(active_id).unwrap();
         stale.activate(1).unwrap();
         stale.renew_lease(1, 10).unwrap();
         active.activate(1).unwrap();
         active.renew_lease(1, 20).unwrap();
 
-        assert_eq!(set.expire_stale_leases(10), 1);
+        assert_eq!(set.expire_stale_lease_ids(10), vec![stale_id]);
         assert!(!stale.is_active());
         assert!(active.is_active());
         assert_eq!(set.expire_stale_leases(19), 0);

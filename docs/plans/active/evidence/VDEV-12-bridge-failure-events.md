@@ -2,13 +2,18 @@
 
 Date: 2026-09-14
 
-The control plane now advertises `virtualBridge.failed` in its discoverable
-state-category catalog. Native capture-sink, render-source, and duplex
+The control plane now advertises `virtualBridge.failed` and
+`virtualBridge.expired` in its discoverable state-category catalog. Native
+capture-sink, render-source, and duplex
 heartbeat containment publishes this event only after detaching the affected
 binding, closing its lease, and deactivating the portable bridge. The affected
 bus identifier is carried as the bounded operation identity; native HRESULTs,
 paths, and private diagnostics remain in the structured supervisor response
 and are not retained in the event stream.
+
+The injected-tick control-thread lease sweep returns exact stable IDs for
+bridges that expired, silenced, and drained, then publishes one
+`virtualBridge.expired` event per affected bus. Active bridges produce no event.
 
 Verification on Windows workspace `C:\code\audiorouter`:
 

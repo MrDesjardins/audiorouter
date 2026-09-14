@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Implemented the VDEV-12/API-08 recovery-observability slice on 2026-09-14:
+  stale lease expiry now returns exact stable bus IDs from the engine bridge
+  set and the control-thread sweep publishes a discoverable,
+  bus-scoped `virtualBridge.expired` event after silencing/draining each
+  bridge. UI subscribes to the category. Engine (111), control (150 plus 2
+  guarded live tests ignored), UI (183), strict Clippy, typecheck, formatting,
+  and diff checks passed. No endpoint or durable desired state is touched;
+  loaded-driver timing remains an open gate. Evidence: [bridge failure event
+  evidence](evidence/VDEV-12-bridge-failure-events.md). Next action: continue
+  the next safe M03/M07 recovery integration item.
+
 - Requalified the complete `tests/acceptance/safe-all.ps1` chain after
   `1000ffae` on 2026-09-14. M00 toolchain/native checks, M03 project WDK
   build/signability, M01/M04/M05, M06 VST3/VST2 workers, M07 headless, unsigned

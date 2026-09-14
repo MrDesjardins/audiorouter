@@ -67,7 +67,7 @@ const MAX_MEMORY_OPERATION_OUTCOMES: usize = 100;
 const MAX_PLUGIN_INVENTORY_ROOTS: usize = 64;
 const MAX_PLAN_REQUIRED_SCOPES: usize = 1;
 const MAX_PLAN_WARNINGS: usize = 1;
-const STATE_CATEGORIES: [&str; 16] = [
+const STATE_CATEGORIES: [&str; 17] = [
     "session.created",
     "session.deleted",
     "graph.committed",
@@ -79,6 +79,7 @@ const STATE_CATEGORIES: [&str; 16] = [
     "privacy.muteDisabled",
     "virtualDevice.changed",
     "virtualBridge.failed",
+    "virtualBridge.expired",
     "recorder.changed",
     "recording.metadataChanged",
     "recording.renamed",
@@ -5585,8 +5586,17 @@ impl ControlPlane {
     /// `now_tick` must use the same monotonic domain supplied to bridge lease
     /// renewal; expiry silences and drains stale buffers without touching a
     /// Windows endpoint or changing durable desired state.
-    pub fn expire_virtual_bridge_leases(&self, now_tick: u64) -> usize {
-        self.virtual_bridges.expire_stale_leases(now_tick)
+    pub fn expire_virtual_bridge_leases(&mut self, now_tick: u64) -> usize {
+        let expired = self.virtual_bridges.expire_stale_lease_ids(now_tick);
+        for bus_id in &expired {
+            self.events.append(
+                0,
+                Some(bus_id.as_str().to_owned()),
+                "virtualBridge.expired",
+                None,
+            );
+        }
+        expired.len()
     }
 
     fn publish_virtual_bridge_failure(&mut self, bus_id: &EntityId) {
@@ -17477,6 +17487,9 @@ mod tests {
         assert_eq!(plane.expire_virtual_bridge_leases(100), 1);
         assert!(!bridge.is_active());
         assert!(bridge.try_receive_capture().is_none());
+        let event = plane.events.since(0, 10).unwrap().pop().unwrap();
+        assert_eq!(event.category, "virtualBridge.expired");
+        assert_eq!(event.operation_id.as_deref(), Some("expiring-bus"));
     }
 
     #[test]
