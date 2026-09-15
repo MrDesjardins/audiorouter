@@ -165,3 +165,17 @@ unsafe extern "system" fn window_proc(
     }
     DefWindowProcW(window, message, wparam, lparam)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn listener_starts_and_stops_without_audio_or_transition_side_effects() {
+        let (sender, receiver) = mpsc::sync_channel(1);
+        let listener = OsTransitionListener::start(sender).expect("native listener starts");
+        assert!(receiver.try_recv().is_err());
+        drop(listener);
+        assert!(receiver.try_recv().is_err());
+    }
+}

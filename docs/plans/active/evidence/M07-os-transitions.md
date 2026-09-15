@@ -37,11 +37,12 @@ cargo test -p audiorouter-control --locked --lib -- --test-threads=1
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
 clean
 cargo test --manifest-path src-tauri/Cargo.toml --locked -- --test-threads=1
-20 passed; 0 failed
+21 passed; 0 failed
 ```
 
 This is portable policy evidence, not Windows power-notification evidence.
-The native listener is now present, but attended delivery still needs a
-guarded lock/sign-out/sleep/resume acceptance and endpoint re-enumeration with
+The native listener startup/teardown smoke test now passes, but attended
+delivery still needs a guarded lock/sign-out/sleep/resume acceptance and
+endpoint re-enumeration with
 before/after identity proof. No machine power state, audio endpoint, driver,
 or user configuration was changed by this work.

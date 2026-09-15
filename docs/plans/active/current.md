@@ -8,7 +8,8 @@ Updated: 2026-09-14.
   through a bounded nonblocking channel to authenticated `system.osTransition`
   RPCs. The actual listener thread ID is used for shutdown and callback state
   is released with the window. Native shell Clippy passed with `-D warnings`
-  and all 20 shell tests passed. No power transition was induced on the
+  and all 21 shell tests passed, including a native listener startup/teardown
+  smoke test. No power transition was induced on the
   workstation; attended event delivery, endpoint re-enumeration, and native
   before/after identity proof remain open gates. Evidence:
   [M07 OS-transition policy evidence](evidence/M07-os-transitions.md).
