@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Revalidated the guarded M02 control-owned native lifecycle on 2026-09-14
+  against the active VB-Cable pair. The exact-endpoint same-process run passed
+  with 24,000 captured frames, 187 processed quanta, and 23,936 rendered
+  frames. Start, bounded pumping, stop, and cleanup completed through one
+  control plane; no persistent audio configuration changed. This remains
+  user-mode endpoint evidence and does not qualify loaded PortCls ownership,
+  production driver signing/install, or physical latency. Next action:
+  continue the next independently testable native bridge/API slice.
+
 - Passed the authorized guarded M02 control-owned VB-Cable route acceptance on
   2026-09-14 using the exact active CABLE Output capture and CABLE Input render
   IDs. The generation-1 lifecycle captured 24,000 frames, processed 187
