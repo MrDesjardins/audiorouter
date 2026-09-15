@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Guarded M07 session configuration mutations on 2026-09-14. Create and
+  duplicate session actions now fail closed when disconnected and reject
+  overlapping requests; the shared status summary exposes the in-flight
+  update state to the UI. The focused UI suite (78 tests), TypeScript
+  typecheck, and diff checks passed. No audio, endpoint, driver, registry, or
+  machine configuration was changed. Next action: continue the next
+  independently testable native bridge/API slice.
+
 - Passed the guarded M00 single-process-tree exclusion acceptance on
   2026-09-14 for 500 ms. The disposable child process completed activation,
   capture start/stop/reset, and produced 22,050 capture frames; media-device
