@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Aligned M04/M07 control presentation with mutation serialization on
+  2026-09-14. Session lifecycle, privacy/recovery safety, and recording-file
+  controls now expose their in-flight busy state and disable competing UI
+  inputs while the guarded backend action is pending; the existing duplicate
+  action regressions remain green. The focused UI suite (78 tests),
+  TypeScript typecheck, and diff checks passed. No audio file, endpoint,
+  driver, registry, or machine configuration was changed. Next action:
+  continue the next independently testable native bridge/API slice.
+
 - Revalidated the guarded M02 control-owned native lifecycle on 2026-09-14
   against the active VB-Cable pair. The exact-endpoint same-process run passed
   with 24,000 captured frames, 187 processed quanta, and 23,936 rendered
