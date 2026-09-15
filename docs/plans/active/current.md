@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Extended M07 refresh ordering to session, recording, and recorder inventories
+  on 2026-09-14. Post-mutation refresh helpers now ignore superseded responses
+  across all remaining lifecycle lists, preventing an older read from
+  replacing newer authoritative state. The focused UI suite (74 tests) and
+  TypeScript typecheck passed. These are read-only changes; no audio file,
+  endpoint, driver, registry, or machine configuration was accessed. Next
+  action: continue the next safe M03/M07 implementation slice.
+
 - Hardened M03 virtual-device plan freshness on 2026-09-14. Any inventory
   refresh now invalidates a previously prepared lifecycle plan, requiring a
   new authoritative plan before apply. Added refresh-invalidation coverage;

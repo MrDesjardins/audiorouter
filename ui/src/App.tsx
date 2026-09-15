@@ -718,6 +718,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const eventCursor = useRef({ backendEpoch: 0, sequence: 0 });
   const applicationRefreshGeneration = useRef(0);
   const deviceRefreshGeneration = useRef(0);
+  const sessionRefreshGeneration = useRef(0);
+  const recordingRefreshGeneration = useRef(0);
+  const recorderRefreshGeneration = useRef(0);
   useEffect(() => { let mounted = true; void snapshotCache.refresh(backend).then((nextState) => { if (mounted) { setSnapshotState(nextState); if (nextState.snapshot) eventCursor.current = { backendEpoch: nextState.snapshot.status.eventCursor.backendEpoch, sequence: nextState.snapshot.status.eventCursor.latestSequence }; } }); return () => { mounted = false; }; }, [backend, snapshotCache]);
   const refreshApplications = () => {
     const generation = ++applicationRefreshGeneration.current;
@@ -727,11 +730,23 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     const generation = ++deviceRefreshGeneration.current;
     void backend.listDevices(true).then((items) => { if (generation !== deviceRefreshGeneration.current) return; setDevices(items); setDevicesError(null); }).catch((error) => { if (generation !== deviceRefreshGeneration.current) return; setDevices([]); setDevicesError(formatUiError(error, "Device inventory unavailable")); });
   };
+  const refreshSessions = () => {
+    const generation = ++sessionRefreshGeneration.current;
+    void backend.listSessions().then((items) => { if (generation !== sessionRefreshGeneration.current) return; setListedSessions(items); setSessionInventoryError(null); }).catch((error) => { if (generation !== sessionRefreshGeneration.current) return; setSessionInventoryError(formatUiError(error, "Session inventory unavailable")); if (!backend.connected) setListedSessions(demoSessions); else setListedSessions([]); });
+  };
+  const refreshRecordings = (sessionId: string) => {
+    const generation = ++recordingRefreshGeneration.current;
+    void backend.listRecordings(sessionId).then((items) => { if (generation !== recordingRefreshGeneration.current) return; setRecordings(items); setRecordingsError(null); }).catch((error) => { if (generation !== recordingRefreshGeneration.current) return; setRecordings([]); setRecordingsError(formatUiError(error, "Recording library unavailable")); });
+  };
+  const refreshRecorders = () => {
+    const generation = ++recorderRefreshGeneration.current;
+    void backend.listRecorders().then((items) => { if (generation !== recorderRefreshGeneration.current) return; setRecorderStatuses(items); setRecorderStatusAvailable(true); }).catch(() => { if (generation !== recorderRefreshGeneration.current) return; setRecorderStatuses([]); setRecorderStatusAvailable(false); });
+  };
   const refresh = () => {
     void snapshotCache.refresh(backend).then(setSnapshotState);
-    void backend.listSessions().then((items) => { setListedSessions(items); setSessionInventoryError(null); }).catch((error) => { setSessionInventoryError(formatUiError(error, "Session inventory unavailable")); if (!backend.connected) setListedSessions(demoSessions); else setListedSessions([]); });
-    void backend.listRecordings(session.id).then((items) => { setRecordings(items); setRecordingsError(null); }).catch((error) => { setRecordings([]); setRecordingsError(formatUiError(error, "Recording library unavailable")); });
-    void backend.listRecorders().then((items) => { setRecorderStatuses(items); setRecorderStatusAvailable(true); }).catch(() => { setRecorderStatuses([]); setRecorderStatusAvailable(false); });
+    refreshSessions();
+    refreshRecordings(session.id);
+    refreshRecorders();
     refreshApplications();
     refreshDevices();
   };
