@@ -672,6 +672,22 @@ describe("keyboard connection dialog", () => {
     expect(screen.getByText("This list is read-only. Recovery inspection does not open, repair, play, or delete audio files.")).toBeTruthy();
   });
 
+  it("keeps the newest recording inspection result when responses arrive out of order", async () => {
+    const recording: RecordingRow = { id: "inspection-take", sessionId: demoSession.id, recorderId: "recorder-1", path: "C:\\Audio\\inspection.wav", format: "wav", channels: 2, sampleRate: 48000, frames: 480, fileBytes: 1000, startTime: "2026-09-14T01:00:00Z", state: "completed", missing: false, title: null, artist: null, comment: null, dither: true, conversion: "targetSampleRate=48000;channels=2;format=wav" };
+    let releaseOld!: (value: { preview: { status: string } }) => void;
+    const oldResult = new Promise<{ preview: { status: string } }>((resolve) => { releaseOld = resolve; });
+    const previewRecording = vi.fn().mockReturnValueOnce(oldResult).mockResolvedValueOnce({ preview: { status: "new" } });
+    const backend = { ...connectedPreviewBackend(), listRecordings: async () => [recording], previewRecording };
+    render(<App backend={backend} />);
+    const previewButtons = await screen.findAllByRole("button", { name: "Preview" });
+    fireEvent.click(previewButtons[0]);
+    fireEvent.click(previewButtons[0]);
+    expect(await screen.findByText("new recording preview loaded.")).toBeTruthy();
+    releaseOld({ preview: { status: "old" } });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByText("old recording preview loaded.")).toBeNull();
+  });
+
   it("exposes revisioned virtual-route editing in the connected UI", async () => {
     const replaceVirtualRoutes = vi.fn(async (baseRevision: number, routes: unknown[]) => ({
       state: "applied" as const,

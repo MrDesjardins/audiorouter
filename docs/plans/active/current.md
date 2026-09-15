@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Hardened M07 recording inspection ordering on 2026-09-14. Preview and
+  recovery requests now use bounded UI request generations, so a late result
+  from an older recording cannot overwrite the user's newest inspection
+  status. Added an out-of-order preview regression; the focused UI suite (63
+  tests) and TypeScript typecheck passed. No audio payload, file, endpoint,
+  driver, registry, or machine audio configuration was changed. Next action:
+  continue the next safe M03/M07 implementation slice.
+
 - Added M07 startup mutation in-flight protection on 2026-09-14. Planning and
   apply controls now reject concurrent requests and disable while the current
   operation is pending, preventing duplicate backend or native registration
