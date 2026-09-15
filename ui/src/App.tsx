@@ -387,6 +387,7 @@ function RecorderActions({ backend, sessionId, connected, recorderStatuses, reco
   const [channels, setChannels] = useState<1 | 2>(2);
   const [sampleRate, setSampleRate] = useState<44100 | 48000>(48000);
   const [dither, setDither] = useState(true);
+  const [busy, setBusy] = useState(false);
   const frame = Number.parseInt(frameText, 10);
   const validFrame = Number.isSafeInteger(frame) && frame >= 0;
   useEffect(() => {
@@ -397,6 +398,8 @@ function RecorderActions({ backend, sessionId, connected, recorderStatuses, reco
   }, [recorderStatuses, recorderStatusAvailable, sessionId]);
   const create = async () => {
     if (!recorderId.trim()) { setMessage("Provide a recorder ID."); return; }
+    if (busy || !connected) return;
+    setBusy(true);
     setMessage("Creating an unarmed recorder...");
     try {
       const result = await backend.createRecorder({ sessionId, recorderId: recorderId.trim(), format, sequence: 1, channels, sampleRate, dither, queueCapacity: 8, maximumChunksPerPass: 1, idempotencyKey: uiIdempotencyKey("recorder-create") });
@@ -404,9 +407,11 @@ function RecorderActions({ backend, sessionId, connected, recorderStatuses, reco
       setMessage(`Recorder ${result.recorderId} created unarmed at ${result.path}.`);
     } catch (error) {
       setMessage(formatUiError(error, "Unable to create recorder."));
-    }
+    } finally { setBusy(false); }
   };
   const run = async (action: string, operation: () => Promise<{ state: string; lastFrame?: number | null }>) => {
+    if (busy || !connected) return;
+    setBusy(true);
     setMessage(`${action}...`);
     try {
       const result = await operation();
@@ -416,7 +421,7 @@ function RecorderActions({ backend, sessionId, connected, recorderStatuses, reco
     } catch (error) {
       setState("failed");
       setMessage(formatUiError(error, `Unable to ${action.toLowerCase()} recorder.`));
-    }
+    } finally { setBusy(false); }
   };
   return <section className="panel recorder-actions" aria-labelledby="recorder-actions-heading">
     <div className="section-heading"><div><p className="eyebrow">Frame boundary control</p><h2 id="recorder-actions-heading">Recorder</h2></div><span className="badge">{state}</span></div>

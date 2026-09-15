@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Hardened M04 recorder lifecycle controls on 2026-09-14. Create and all
+  arm/start/pause/resume/split/stop actions now reject concurrent or
+  disconnected invocations, preventing repeated UI input from racing recorder
+  state transitions. Added a deferred arm regression using the full lifecycle
+  result contract; the focused UI suite (73 tests) and TypeScript typecheck
+  passed. No recording file, audio endpoint, driver, registry, or machine
+  configuration was changed. Next action: continue the next safe M03/M07
+  implementation slice.
+
 - Hardened M06 plugin discovery concurrency on 2026-09-14. Scan, cached-list,
   retry, and inspect handlers now use a single-flight/request-generation
   boundary, preventing duplicate scans and stale plugin metadata from

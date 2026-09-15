@@ -875,6 +875,21 @@ describe("keyboard connection dialog", () => {
     expect(within(panel).getByText("disk full")).toBeTruthy();
   });
 
+  it("prevents duplicate recorder lifecycle actions while one is pending", async () => {
+    let releaseArm!: (value: { sessionId: string; state: "armed"; parts: never[]; pauses: never[]; lastFrame: number }) => void;
+    const result = new Promise<{ sessionId: string; state: "armed"; parts: never[]; pauses: never[]; lastFrame: number }>((resolve) => { releaseArm = resolve; });
+    const armRecorder = vi.fn(() => result);
+    const backend = { ...connectedPreviewBackend(), armRecorder };
+    render(<App backend={backend} />);
+    const panel = await screen.findByRole("region", { name: "Recorder" });
+    fireEvent.click(within(panel).getByRole("button", { name: "Arm" }));
+    await within(panel).findByText("Arming...");
+    fireEvent.click(within(panel).getByRole("button", { name: "Arm" }));
+    expect(armRecorder).toHaveBeenCalledTimes(1);
+    releaseArm({ sessionId: "demo-session", state: "armed", parts: [], pauses: [], lastFrame: 0 });
+    await waitFor(() => expect(within(panel).getByText("armed")).toBeTruthy());
+  });
+
   it("does not guess idle when recorder state cannot be read", async () => {
     const backend = { ...connectedPreviewBackend(), listRecorders: async () => { throw new Error("control pipe unavailable"); } };
     render(<App backend={backend} />);
