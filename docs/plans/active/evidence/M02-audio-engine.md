@@ -235,6 +235,23 @@ delivery for the in-house voice processors, not acoustic response measurement,
 production callback timing, managed-driver ownership, signing, or physical
 latency qualification.
 
+## 2026-09-14 - guarded Rust process-loopback include/exclude requalification
+
+Command:
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m00-rust-process-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 500`
+
+Both process-loopback modes passed through the Rust adapter and bounded graph
+resampler. Include mode captured 22,050 source frames at 44.1 kHz and emitted
+23,936 engine frames at 48 kHz across 187 quantum blocks; exclude mode
+captured 21,609 source frames and emitted 23,296 engine frames across 182
+blocks. Both runs reported generation 1 and zero scheduler xruns, input/output
+overruns, or input/output underruns. Streams stopped/reset and the media
+snapshot remained unchanged. This is user-mode process-loopback and
+resampling evidence, not arbitrary protected-app capture, physical latency,
+or production-driver evidence.
+
 ## 2026-09-13 - guarded lifecycle with built-in EQ and Gate
 
 The ignored Windows control test was extended to use a disposable one-channel

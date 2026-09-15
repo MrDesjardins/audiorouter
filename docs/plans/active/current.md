@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Passed the guarded Rust process-loopback acceptance on 2026-09-14 in both
+  include and exclude modes. Include captured 22,050 source frames and
+  produced 23,936 engine frames across 187 quantum blocks; exclude captured
+  21,609 source frames and produced 23,296 engine frames across 182 blocks.
+  Both negotiated the explicit 44.1 kHz to 48 kHz conversion, generation 1,
+  bounded packet periods, and zero scheduler xruns or input/output overruns
+  and underruns. Streams stopped/reset and the media-device snapshot stayed
+  unchanged. This qualifies the Rust process-loopback/resampler path, not
+  arbitrary protected capture, physical latency, or driver behavior. Next
+  action: continue the next independently testable M02/M03 or M07 slice.
+
 - Requalified controlled M00 process-tree attribution on 2026-09-14 for a
   bounded 500 ms disposable tone. The selected process tree activated,
   captured 21,609 frames with 76,378 nonzero payload bytes, and exited
