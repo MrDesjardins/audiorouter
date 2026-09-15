@@ -153,12 +153,14 @@ export type UiSnapshotState = {
 /** Keeps the last known state visible across a failed refresh or reconnect. */
 export class SnapshotCache {
   private state: UiSnapshotState = { snapshot: null, stale: true, error: null };
+  private refreshGeneration = 0;
 
   current(): UiSnapshotState {
     return this.state;
   }
 
   async refresh(backend: UiBackend): Promise<UiSnapshotState> {
+    const generation = ++this.refreshGeneration;
     let lastError: unknown = undefined;
     // The native shell may still be creating its per-user pipe/backend when
     // the WebView finishes loading. Retry briefly without blocking the UI or
@@ -166,6 +168,7 @@ export class SnapshotCache {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         const snapshot = await backend.snapshot();
+        if (generation !== this.refreshGeneration) return this.state;
         this.state = { snapshot, stale: false, error: null };
         return this.state;
       } catch (error) {
@@ -175,6 +178,7 @@ export class SnapshotCache {
         }
       }
     }
+    if (generation !== this.refreshGeneration) return this.state;
     this.state = {
       ...this.state,
       stale: true,

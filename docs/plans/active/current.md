@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Hardened the shared UI snapshot cache on 2026-09-14. Concurrent snapshot
+  refreshes now publish only the newest request, preventing an older backend
+  state or failure from replacing a newer authoritative snapshot. Added a
+  backend-adapter out-of-order regression; 56 backend tests and TypeScript
+  typecheck passed. No audio, endpoint, driver, registry, or machine
+  configuration was accessed. Next action: continue the next safe M03/M07
+  implementation slice.
+
 - Hardened M02/M07 application and device inventory refreshes on 2026-09-14.
   The shared post-mutation/event refresh helpers now use independent request
   generations, ignoring late responses from superseded reads instead of

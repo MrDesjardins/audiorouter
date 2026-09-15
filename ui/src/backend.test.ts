@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createDisconnectedBackend, createLiveBackend, createLiveBackendFromTransport, formatUiError, isRevisionConflict, SnapshotCache, type UiBackend } from "./backend";
 import { AudioRouterRpcError } from "@audiorouter/contracts";
 import { demoSession } from "./fixtures";
@@ -150,6 +150,20 @@ describe("snapshot cache", () => {
     expect(second.snapshot?.session.id).toBe(demoSession.id);
     expect(second.stale).toBe(true);
     expect(second.error).toBe("pipe closed");
+  });
+
+  it("does not publish an older concurrent snapshot after a newer refresh", async () => {
+    const cache = new SnapshotCache();
+    const base = await createDisconnectedBackend().snapshot();
+    let releaseOld!: (value: typeof base) => void;
+    const oldSnapshot = new Promise<typeof base>((resolve) => { releaseOld = resolve; });
+    const newer = { ...base, session: { ...base.session, name: "new snapshot" } };
+    const backend: UiBackend = { ...createDisconnectedBackend(), snapshot: vi.fn().mockReturnValueOnce(oldSnapshot).mockResolvedValueOnce(newer) };
+    const oldRefresh = cache.refresh(backend);
+    await expect(cache.refresh(backend)).resolves.toMatchObject({ snapshot: { session: { name: "new snapshot" } } });
+    releaseOld(base);
+    await oldRefresh;
+    expect(cache.current().snapshot?.session.name).toBe("new snapshot");
   });
 
   it("retains structured audio diagnostics when the status refresh fails", async () => {
