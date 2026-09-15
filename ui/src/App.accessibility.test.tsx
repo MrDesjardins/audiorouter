@@ -727,6 +727,17 @@ describe("keyboard connection dialog", () => {
     expect(await screen.findByText("Virtual routes applied at revision 3.")).toBeTruthy();
   });
 
+  it("refreshes virtual-route inventory when the same backend reconnects", async () => {
+    const listVirtualRoutes = vi.fn(async () => ({ revision: 4, routes: [] }));
+    const backend = { ...createDisconnectedBackend(), connected: false, listVirtualRoutes };
+    const { rerender } = render(<App backend={backend} />);
+    await waitFor(() => expect(listVirtualRoutes).toHaveBeenCalledTimes(0));
+    backend.connected = true;
+    rerender(<App backend={backend} />);
+    await waitFor(() => expect(listVirtualRoutes).toHaveBeenCalledTimes(1));
+    expect((screen.getByRole("textbox", { name: "Virtual-route base revision" }) as HTMLInputElement).value).toBe("4");
+  });
+
   it("prevents duplicate virtual-route replacement while the first request is pending", async () => {
     let releaseReplace!: (value: { state: "applied"; revision: number; routes: never[] }) => void;
     const result = new Promise<{ state: "applied"; revision: number; routes: never[] }>((resolve) => { releaseReplace = resolve; });

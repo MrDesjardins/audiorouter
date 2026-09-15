@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Closed an M03 reconnect-refresh gap on 2026-09-14. Virtual-device and
+  virtual-route panels now react when a shared backend object's `connected`
+  state changes, clearing disconnected state and reloading authoritative
+  inventory on reconnect. Added same-object reconnect coverage; the focused UI
+  suite (69 tests) and TypeScript typecheck passed. No endpoint, driver,
+  registry, or machine audio configuration was changed. Next action: continue
+  the next safe M03/M07 implementation slice.
+
 - Added M05/M07 graph-plan single-flight protection on 2026-09-14. Plan and
   acknowledged-commit handlers now reject concurrent or disconnected calls,
   preventing repeated UI input from dispatching duplicate graph mutations.

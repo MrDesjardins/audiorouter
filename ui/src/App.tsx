@@ -430,7 +430,7 @@ function VirtualDeviceLifecyclePanel({ backend }: { backend: UiBackend }) {
   const [busy, setBusy] = useState(false);
   const refreshGeneration = useRef(0);
   const refresh = () => { const generation = ++refreshGeneration.current; void backend.listVirtualDevices().then((items) => { if (generation !== refreshGeneration.current) return; setDevices(items); if (!selectedId && items[0]) { setSelectedId(items[0].id); setBusId(items[0].id); setBusName(items[0].name); } }).catch((error) => { if (generation === refreshGeneration.current) setMessage(formatUiError(error, "Virtual-device inventory unavailable.")); }); };
-  useEffect(() => { if (backend.connected) refresh(); else { setDevices([]); setPlan(null); } }, [backend]);
+  useEffect(() => { if (backend.connected) refresh(); else { setDevices([]); setPlan(null); } }, [backend, backend.connected]);
   const selected = devices.find((device) => device.id === selectedId);
   const chooseAction = (next: "create" | "rename" | "setEnabled" | "delete") => { setAction(next); setPlan(null); if (next === "create") { setBusId("virtual-bus"); setBusName("AudioRouter Bus"); } else if (selected) { setBusId(selected.id); setBusName(selected.name); } };
   const createPlan = async () => { if (busy || !backend.connected) return; const operation: import("@audiorouter/contracts").VirtualDeviceOperation = action === "create" ? { action, id: busId.trim(), name: busName.trim() } : action === "rename" ? { action, id: selectedId, name: busName.trim() } : action === "setEnabled" ? { action, id: selectedId, enabled: !(selected?.enabled ?? false) } : { action, id: selectedId }; if (!operation.id || ("name" in operation && !operation.name)) { setMessage("Provide a valid bus ID and name."); return; } setBusy(true); setMessage("Planning managed virtual-bus change..."); try { const result = await backend.planVirtualDevice(operation); setPlan(result); setMessage(result.availability.reason); } catch (error) { setMessage(formatUiError(error, "Unable to plan managed virtual-bus change.")); } finally { setBusy(false); } };
@@ -463,7 +463,7 @@ function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
       setRevisionText("0");
       setMessage(null);
     }
-  }, [backend]);
+  }, [backend, backend.connected]);
   const replace = async () => {
     if (busy || !backend.connected) return;
     const baseRevision = Number.parseInt(revisionText, 10);
