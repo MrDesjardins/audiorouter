@@ -2,6 +2,18 @@
 
 Updated: 2026-09-14.
 
+- Added the portable STATE-11 OS-transition policy boundary on 2026-09-14.
+  `crates/control/src/os_transition.rs` now plans lock, sign-out, sleep, and
+  resume actions without side effects: lock keeps explicit sessions; sign-out
+  and sleep stop/release them; resume excludes native and recording sessions
+  until endpoint revalidation. Four focused regressions and the full control
+  library suite passed (162 passed, 2 ignored). Evidence is recorded in
+  [M07 OS-transition policy evidence](evidence/M07-os-transitions.md).
+  Windows power notifications, endpoint re-enumeration, and native
+  before/after identity proof remain open gates. Next action: integrate this
+  planner into the guarded Windows lifecycle adapter or continue the next safe
+  M03/M07 delivery slice.
+
 - Closed the native startup-registration access-mask defect on 2026-09-14.
   The HKCU Run enable path now requests query and set access together, which
   is required because it verifies existing ownership before writing. The

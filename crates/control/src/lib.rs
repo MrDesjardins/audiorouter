@@ -34,6 +34,8 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+pub mod os_transition;
+
 const MUTATION_RATE_PER_SECOND: f64 = 20.0;
 const MUTATION_BURST: f64 = 40.0;
 const MAX_MUTATION_BUCKETS: usize = 256;
