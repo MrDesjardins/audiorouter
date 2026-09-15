@@ -13,9 +13,11 @@ $workerSource = Get-Content -LiteralPath (Join-Path $repositoryRoot 'tools\m06-v
 foreach ($required in @(
         'case ''\b'':',
         'case ''\n'':',
-        'static_cast<unsigned char>(character) < 0x20')) {
+        'static_cast<unsigned char>(character) < 0x20',
+        'SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX)',
+        'WerSetFlags(WER_FAULT_REPORTING_NO_UI)')) {
     if (-not $workerSource.Contains($required)) {
-        throw "native VST3 JSON string escaping is missing: $required"
+        throw "native VST3 worker safety invariant is missing: $required"
     }
 }
 $defaultFixture = Join-Path $repositoryRoot 'third_party\vst3sdk-build\VST3\Release\again.vst3'

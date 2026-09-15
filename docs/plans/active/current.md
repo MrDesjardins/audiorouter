@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Hardened the M06 unattended-worker regression on 2026-09-14. The VST3
+  acceptance entrypoint now fails if the native worker loses its Windows
+  critical-error/fault-dialog suppression (`SetErrorMode`) or WER no-UI
+  configuration (`WerSetFlags`). This protects third-party plugin faults from
+  blocking unattended supervision; it does not hide the failure from the
+  supervisor. The guard is exercised by the native VST3 acceptance, with no
+  plugin registration, audio stream, or machine configuration change. Next
+  action: continue the next safe M03/M07 implementation slice.
+
 - Closed the remaining M06 inspection-path stale-state case on 2026-09-14.
   Editing the absolute path now clears the prior inspection result immediately,
   before any new inspection request. Added regression coverage for direct path
