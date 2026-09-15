@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Requalified the non-installing M03 project-driver build on 2026-09-14 with
+  Visual Studio 18.9.1 and WDK 10.0.28000.0. Utilities, Filters, Main,
+  package/catalog, and include targets compiled; catalog signability reported
+  zero errors and warnings, and disposable output was removed. No driver
+  installation/loading, signing-mode, boot-policy, service, endpoint, or
+  machine audio configuration action occurred. Loaded PortCls behavior and
+  production signing/install remain explicit gates. Next action: continue the
+  next independently testable native bridge/API slice.
+
 - Revalidated the current workspace head on 2026-09-14. The full locked Rust
   workspace passed (including 160 control, 111 engine, 70 plugin-host, 73
   Windows-audio, and 90 storage tests), with two explicitly guarded live
