@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Requalified the supplied x64 TDR Nova VST2 binary on 2026-09-14 through
+  the isolated worker. Processing passed at 44.1, 48, and 96 kHz; editor
+  thread containment and supervised editor timeout tests passed; and the
+  binary remained unchanged with SHA-256
+  `4dfc5973416b4b23fa9351128b65e7b42547f6280436cce4cbf8aab1334e4e33`.
+  Temporary VST environment values were restored. This adds one more vendor
+  compatibility result but does not establish redistribution rights or the
+  complete plugin/editor matrix. Next action: continue the next safe M03/M07
+  recovery or delivery slice.
+
 - Requalified the supplied installed VST2 binary `C:\\Program Files\\VSTPlugins\\ReaPlugs\\reaeq-standalone.dll` on 2026-09-14 through the isolated worker. Processing passed at 44.1, 48, and 96 kHz; the bounded editor-thread and supervised editor-timeout containment tests also passed. The x64 binary fingerprint remained unchanged with SHA-256 `c200e540c26ac793b43611aaceb4aa42cdd2829cdfbf0d60494716d9bdde8a7d`, and all temporary environment values were restored. This qualifies one selected installed VST2 effect, not the complete vendor/editor or redistribution-rights matrix. Next action: continue the next independently testable M03/M07 or plugin delivery slice.
 
 - Passed the elevated M07 frontend-owned shell RPC acceptance on 2026-09-14.

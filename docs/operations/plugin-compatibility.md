@@ -461,3 +461,11 @@ file size were unchanged, and the harness restored its environment variables.
 This is qualification of one user-installed VST2 effect only; it does not
 establish redistribution rights or the full vendor/editor compatibility
 matrix.
+
+The supplied x64 TDR Nova VST2 binary also passed the isolated worker at
+44.1, 48, and 96 kHz, including editor-thread containment and supervised
+editor-timeout handling. Its SHA-256 remained
+`4dfc5973416b4b23fa9351128b65e7b42547f6280436cce4cbf8aab1334e4e33`, and
+temporary environment values were restored. This is compatibility evidence
+for one supplied binary, not redistribution-rights or full vendor-matrix
+evidence.
