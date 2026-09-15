@@ -1355,6 +1355,20 @@ describe("keyboard connection dialog", () => {
     expect(await screen.findByText("Recording metadata saved; the audio file was unchanged.")).toBeTruthy();
   });
 
+  it("prevents duplicate recording metadata writes while the first is pending", async () => {
+    const recording: RecordingRow = { id: "metadata-pending", sessionId: demoSession.id, recorderId: "recorder-1", path: "C:\\Audio\\pending.wav", format: "wav", channels: 1, sampleRate: 48000, frames: 480, fileBytes: 1000, startTime: "2026-09-14T01:00:00Z", state: "completed", missing: false, title: "Title", artist: null, comment: null, dither: true, conversion: "targetSampleRate=48000;channels=1;format=wav" };
+    let releaseMetadata!: () => void;
+    const setRecordingMetadata = vi.fn(() => new Promise<{ updated: true; recordingId: string; title: string; artist: null; comment: null }>((resolve) => { releaseMetadata = () => resolve({ updated: true, recordingId: recording.id, title: "Title", artist: null, comment: null }); }));
+    render(<App backend={{ ...connectedPreviewBackend(), listRecordings: async () => [recording], setRecordingMetadata }} />);
+    await screen.findByDisplayValue("Title");
+    const save = screen.getByRole("button", { name: "Save metadata" });
+    fireEvent.click(save);
+    fireEvent.click(save);
+    expect(setRecordingMetadata).toHaveBeenCalledTimes(1);
+    releaseMetadata();
+    await waitFor(() => expect(setRecordingMetadata).toHaveBeenCalledTimes(1));
+  });
+
   it("validates and explicitly commits a stopped session import", async () => {
     const imported = { ...demoSession, id: "imported-session", name: "Imported voice setup" };
     const planSessionImport = vi.fn(async () => ({ planId: "import-plan", expiresInMs: 300000, session: imported }));

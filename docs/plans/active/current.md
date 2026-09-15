@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Guarded M04 recording-library mutations on 2026-09-14. Metadata writes,
+  rename, reveal, recycle, and library-entry removal now reject overlapping
+  or disconnected dispatches, protecting file and metadata state from rapid
+  duplicate UI actions. Added a pending metadata-write regression; the
+  focused UI suite (78 tests), TypeScript typecheck, and diff checks passed.
+  No audio file or machine configuration was changed. Next action: continue
+  the next safe M03/M07 implementation slice.
+
 - Guarded M07 safety-control concurrency on 2026-09-14. Privacy-mute and
   recovery-safe-mode actions now reject overlapping or disconnected dispatches,
   including calls from keyboard shortcuts and compact status controls. Added
