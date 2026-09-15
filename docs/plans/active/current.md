@@ -13,6 +13,13 @@ Updated: 2026-09-14.
   evidence. Next action: qualify another compatible VST3 bundle or continue
   with the next non-blocked delivery slice.
 
+- Qualified the supplied x64 COMPER VST3 binary on 2026-09-14 through the
+  isolated single-stream worker path. COMPER exposes no parameters and its
+  second input bus is stereo; the generic auxiliary-bus probe requests a mono
+  second bus and is therefore not applicable. The acceptance now has an
+  explicit `-SingleStreamOnly` mode, and the result is recorded as
+  single-stream-only compatibility rather than hiding a failed bus probe.
+
 - Passed the installed ReaPlugs VST2 editor-containment acceptance on
   2026-09-14 for all 9 x64 DLL candidates. Each candidate passed the bounded
   non-returning editor-thread and supervised editor-timeout tests through a

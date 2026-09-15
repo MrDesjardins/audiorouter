@@ -507,3 +507,10 @@ containment matrix with state restoration recorded as unsupported. The
 supplied BUSTERse bundle still terminates before the initial worker handshake;
 it is not recorded as compatible. These results are binary-specific evidence,
 not a general vendor compatibility claim.
+
+The supplied x64 COMPER VST3 binary also passed the isolated single-stream
+worker acceptance. It exposes zero automatable parameters, which is valid for
+an effect with fixed controls. Its auxiliary-bus layout was not qualified:
+the generic probe requests a mono secondary bus while COMPER declares that bus
+stereo. It is therefore recorded as single-stream-only compatibility, not as
+multi-bus support.

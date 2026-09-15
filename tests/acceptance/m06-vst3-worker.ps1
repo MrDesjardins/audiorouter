@@ -1,6 +1,7 @@
 param(
     [switch]$SkipBuild,
     [switch]$AllowStateUnsupported,
+    [switch]$SingleStreamOnly,
     [string]$FixturePath = ''
 )
 
@@ -55,10 +56,12 @@ try {
     if ($AllowStateUnsupported) { $env:AUDIOROUTER_VST3_ALLOW_STATE_UNSUPPORTED = '1' }
     & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- --ignored --exact verified_native_vst3_worker_processes_an_opt_in_fixture --nocapture
     if ($LASTEXITCODE -ne 0) { throw "native VST3 worker acceptance failed with exit code $LASTEXITCODE" }
-    & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- --ignored --exact verified_native_vst3_worker_processes_an_opt_in_multi_bus_fixture --nocapture
-    if ($LASTEXITCODE -ne 0) { throw "native VST3 multi-bus worker acceptance failed with exit code $LASTEXITCODE" }
-    & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- --ignored --exact verified_native_vst3_async_bus_worker_bridges_the_graph_scheduler --nocapture
-    if ($LASTEXITCODE -ne 0) { throw "native VST3 asynchronous worker acceptance failed with exit code $LASTEXITCODE" }
+    if (-not $SingleStreamOnly) {
+        & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- --ignored --exact verified_native_vst3_worker_processes_an_opt_in_multi_bus_fixture --nocapture
+        if ($LASTEXITCODE -ne 0) { throw "native VST3 multi-bus worker acceptance failed with exit code $LASTEXITCODE" }
+        & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- --ignored --exact verified_native_vst3_async_bus_worker_bridges_the_graph_scheduler --nocapture
+        if ($LASTEXITCODE -ne 0) { throw "native VST3 asynchronous worker acceptance failed with exit code $LASTEXITCODE" }
+    }
     & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- --exact supervised_bus_worker_loop_silences_after_a_bounded_worker_failure --nocapture
     if ($LASTEXITCODE -ne 0) { throw "supervised multi-bus failure recovery acceptance failed with exit code $LASTEXITCODE" }
     & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- --exact supervised_bus_worker_loop_keeps_repeated_quanta_bounded --nocapture
@@ -71,5 +74,6 @@ try {
     if ($null -eq $previousStateUnsupported) { Remove-Item Env:AUDIOROUTER_VST3_ALLOW_STATE_UNSUPPORTED -ErrorAction SilentlyContinue } else { $env:AUDIOROUTER_VST3_ALLOW_STATE_UNSUPPORTED = $previousStateUnsupported }
     Remove-Item -LiteralPath $worker,$workerObject,$iidObject -Force -ErrorAction SilentlyContinue
 }
-Write-Output "M06 native VST3 worker acceptance passed for fixture $fixture: isolated single-stream and auxiliary-bus processing, asynchronous graph staging, bounded restart/quarantine recovery, validated state restoration where supported, repeated-quantum timing, finite transformed output, and bounded shutdown."
+$busScope = if ($SingleStreamOnly) { 'isolated single-stream processing' } else { 'isolated single-stream and auxiliary-bus processing, asynchronous graph staging' }
+Write-Output "M06 native VST3 worker acceptance passed for fixture ${fixture}: $busScope, bounded restart/quarantine recovery, validated state restoration where supported, repeated-quantum timing, finite transformed output, and bounded shutdown."
 Write-Output 'Scope: one explicitly selected local VST3 fixture and the repository native worker; no plugin registration, audio stream, or machine audio configuration changes.'
