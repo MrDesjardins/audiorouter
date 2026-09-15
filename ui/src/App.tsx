@@ -106,9 +106,20 @@ function StartupPanel({ backend }: { backend: UiBackend }) {
   const [plan, setPlan] = useState<import("@audiorouter/contracts").StartupPlanResult | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [nativeRegistration, setNativeRegistration] = useState<"registered" | "unregistered" | "unavailable">("unavailable");
+  const refreshGeneration = useRef(0);
   const refresh = (clearMessage = true) => {
-    void backend.getStartup().then((result) => { setStatus(result); setEnabled(result.enabled); if (clearMessage) setMessage(null); }).catch((error) => setMessage(formatUiError(error, "Startup status unavailable.")));
-    if (backend.startupRegistrationStatus) void backend.startupRegistrationStatus().then(setNativeRegistration).catch(() => setNativeRegistration("unavailable"));
+    const generation = ++refreshGeneration.current;
+    void backend.getStartup().then((result) => {
+      if (generation !== refreshGeneration.current) return;
+      setStatus(result); setEnabled(result.enabled); if (clearMessage) setMessage(null);
+    }).catch((error) => {
+      if (generation === refreshGeneration.current) setMessage(formatUiError(error, "Startup status unavailable."));
+    });
+    if (backend.startupRegistrationStatus) void backend.startupRegistrationStatus().then((result) => {
+      if (generation === refreshGeneration.current) setNativeRegistration(result);
+    }).catch(() => {
+      if (generation === refreshGeneration.current) setNativeRegistration("unavailable");
+    });
   };
   useEffect(() => { setPlan(null); refresh(); }, [backend, backend.connected]);
   const createPlan = async () => {

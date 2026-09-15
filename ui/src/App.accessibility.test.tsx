@@ -110,6 +110,25 @@ describe("VB-Cable endpoint selection", () => {
     await waitFor(() => expect(backend.getStartup).toHaveBeenCalledTimes(2));
   });
 
+  it("does not let an older startup refresh overwrite newer observed state", async () => {
+    let releaseInitial!: (value: { enabled: boolean; registration: "unavailable"; reason: string }) => void;
+    const initial = new Promise<{ enabled: boolean; registration: "unavailable"; reason: string }>((resolve) => { releaseInitial = resolve; });
+    const backend = {
+      ...connectedPreviewBackend(),
+      getStartup: vi.fn()
+        .mockReturnValueOnce(initial)
+        .mockResolvedValueOnce({ enabled: true, registration: "unavailable" as const, reason: "newer observed state" }),
+    };
+    render(<App backend={backend} />);
+    const startupPanel = screen.getByRole("region", { name: "Start at sign-in" });
+    fireEvent.click(within(startupPanel).getByRole("button", { name: "Refresh" }));
+    expect(await screen.findByText("newer observed state")).toBeTruthy();
+    releaseInitial({ enabled: false, registration: "unavailable", reason: "stale observed state" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByText("stale observed state")).toBeNull();
+    expect(screen.getByText("newer observed state")).toBeTruthy();
+  });
+
   it("keeps workspace events bounded to state categories and excludes meters", () => {
     expect(WORKSPACE_EVENT_CATEGORIES).toContain("graph.committed");
     expect(WORKSPACE_EVENT_CATEGORIES).toContain("recording.recycled");

@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Hardened M07 startup refresh ordering on 2026-09-14. Startup status and
+  native-registration responses now carry a generation guard, so an older
+  asynchronous refresh cannot overwrite newer observed state or diagnostics.
+  Added a regression covering the out-of-order response sequence. The focused
+  UI suite (60 tests), TypeScript typecheck, and diff checks passed. No
+  registry, driver, endpoint, plugin, or machine audio configuration was
+  accessed. Next action: continue the next safe M03/M07 implementation slice.
+
 - Added an M07 startup safety regression on 2026-09-14 proving that a failed
   backend `startup.apply` cannot fall through to native startup registration.
   The focused UI suite (59 tests), TypeScript typecheck, and diff checks
