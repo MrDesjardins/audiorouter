@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Requalified the post-startup-safety repository on 2026-09-14. The full UI
+  suite passed (19 files, 198 tests), TypeScript typecheck passed, the full
+  Rust workspace passed, and documentation validation passed (53 Markdown
+  files, 193 local links). Two live-audio tests remain intentionally ignored
+  under their explicit opt-in guards; this run did not alter audio, registry,
+  driver, endpoint, plugin, or startup configuration. Next action: continue
+  the next safe M03/M07 implementation slice.
+
 - Added M07 disconnect fail-closed behavior on 2026-09-14. A prepared startup
   plan's apply control is disabled as soon as the shared backend reports a
   disconnect, preventing stale lifecycle work from being dispatched. Added a
