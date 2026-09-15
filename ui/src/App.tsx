@@ -266,6 +266,8 @@ function PresetCatalog({ presets, error }: { presets: import("@audiorouter/contr
 function SessionTransferPanel({ backend, session, onImported }: { backend: UiBackend; session: import("@audiorouter/contracts").Session; onImported: (session: import("@audiorouter/contracts").Session) => void }) {
   const [message, setMessage] = useState<string | null>(null);
   const [plan, setPlan] = useState<import("@audiorouter/contracts").SessionImportPlanResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const importRequest = useRef(0);
   const readFileText = (file: File) => typeof file.text === "function" ? file.text() : new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result ?? "")); reader.onerror = () => reject(reader.error ?? new Error("Unable to read import file.")); reader.readAsText(file); });
   const exportSession = async () => {
     setMessage("Exporting the selected stopped-session configuration...");
@@ -285,16 +287,22 @@ function SessionTransferPanel({ backend, session, onImported }: { backend: UiBac
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    const request = ++importRequest.current;
+    setPlan(null);
+    setBusy(true);
     setMessage("Validating the selected session import...");
     try {
       const candidate = JSON.parse(await readFileText(file)) as import("@audiorouter/contracts").Session;
       const next = await backend.planSessionImport(candidate);
+      if (request !== importRequest.current) return;
       setPlan(next);
       setMessage(`Import validated for ${next.session.name}; it will remain stopped until you commit it.`);
-    } catch (error) { setPlan(null); setMessage(formatUiError(error, "Unable to validate session import.")); }
+    } catch (error) { if (request === importRequest.current) { setPlan(null); setMessage(formatUiError(error, "Unable to validate session import.")); } }
+    finally { if (request === importRequest.current) setBusy(false); }
   };
   const commitImport = async () => {
-    if (!plan) return;
+    if (!plan || busy || !backend.connected) return;
+    setBusy(true);
     setMessage("Committing the validated stopped-session import...");
     try {
       const result = await backend.commitSessionImport(plan.planId, uiIdempotencyKey("session-import"));
@@ -302,8 +310,9 @@ function SessionTransferPanel({ backend, session, onImported }: { backend: UiBac
       onImported(result.session);
       setMessage(`Imported stopped session ${result.session.name}. Review bindings before starting it.`);
     } catch (error) { setMessage(formatUiError(error, "Unable to commit session import.")); }
+    finally { setBusy(false); }
   };
-  return <section className="panel session-transfer-panel" aria-labelledby="session-transfer-heading"><div className="section-heading"><div><p className="eyebrow">Portable configuration</p><h2 id="session-transfer-heading">Session transfer</h2></div><span className="badge">stopped only</span></div><p className="muted">Export the selected configuration or validate an import. Imports never start audio, arm recorders, enable startup, or include credentials, recordings, plugin binaries, or machine-specific authorization. The UI transfer is JSON; the versioned `.audiorouter` ZIP bundle is available through the headless bundle commands.</p><div className="actions"><button type="button" className="secondary" onClick={() => void exportSession()} disabled={!backend.connected}>Export session</button><label className="file-picker">Import session<input aria-label="Import session configuration" type="file" accept=".json,.audiorouter.json,application/json" onChange={(event) => void inspectImport(event)} disabled={!backend.connected} /></label>{plan && <button type="button" className="primary" onClick={() => void commitImport()}>Commit stopped import</button>}</div>{plan && <p className="muted" role="status">Validated import: {plan.session.name} · expires in {Math.ceil(plan.expiresInMs / 1000)} seconds. Explicit commit is required.</p>}{message && <p className="muted" role="status" aria-live="polite">{message}</p>}</section>;
+  return <section className="panel session-transfer-panel" aria-labelledby="session-transfer-heading"><div className="section-heading"><div><p className="eyebrow">Portable configuration</p><h2 id="session-transfer-heading">Session transfer</h2></div><span className="badge">stopped only</span></div><p className="muted">Export the selected configuration or validate an import. Imports never start audio, arm recorders, enable startup, or include credentials, recordings, plugin binaries, or machine-specific authorization. The UI transfer is JSON; the versioned `.audiorouter` ZIP bundle is available through the headless bundle commands.</p><div className="actions"><button type="button" className="secondary" onClick={() => void exportSession()} disabled={!backend.connected || busy}>Export session</button><label className="file-picker">Import session<input aria-label="Import session configuration" type="file" accept=".json,.audiorouter.json,application/json" onChange={(event) => void inspectImport(event)} disabled={!backend.connected || busy} /></label>{plan && <button type="button" className="primary" onClick={() => void commitImport()} disabled={!backend.connected || busy}>Commit stopped import</button>}</div>{plan && <p className="muted" role="status">Validated import: {plan.session.name} · expires in {Math.ceil(plan.expiresInMs / 1000)} seconds. Explicit commit is required.</p>}{message && <p className="muted" role="status" aria-live="polite">{message}</p>}</section>;
 }
 
 function PluginScanPanel({ backend, onAddPlaceholder }: { backend: UiBackend; onAddPlaceholder?: (entry: import("@audiorouter/contracts").PluginScanEntry) => void }) {

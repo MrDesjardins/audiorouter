@@ -1287,4 +1287,21 @@ describe("keyboard connection dialog", () => {
     await waitFor(() => expect(commitSessionImport).toHaveBeenCalledWith("import-plan", expect.any(String)));
     expect(await within(transferPanel).findByText(/Imported stopped session Imported voice setup/)).toBeTruthy();
   });
+
+  it("clears pending import plans and blocks duplicate validation while reading a file", async () => {
+    const imported = { ...demoSession, id: "pending-import", name: "Pending import" };
+    let releasePlan!: (value: { planId: string; expiresInMs: number; session: typeof imported }) => void;
+    const planResult = new Promise<{ planId: string; expiresInMs: number; session: typeof imported }>((resolve) => { releasePlan = resolve; });
+    const planSessionImport = vi.fn(() => planResult);
+    const backend = { ...connectedPreviewBackend(), planSessionImport };
+    render(<App backend={backend} />);
+    const transferPanel = screen.getByRole("region", { name: "Session transfer" });
+    const input = within(transferPanel).getByLabelText("Import session configuration");
+    fireEvent.change(input, { target: { files: [new File([JSON.stringify(imported)], "pending.json", { type: "application/json" })] } });
+    await waitFor(() => expect(planSessionImport).toHaveBeenCalledTimes(1));
+    expect((input as HTMLInputElement).disabled).toBe(true);
+    expect(within(transferPanel).queryByRole("button", { name: "Commit stopped import" })).toBeNull();
+    releasePlan({ planId: "pending-plan", expiresInMs: 300000, session: imported });
+    expect(await within(transferPanel).findByRole("button", { name: "Commit stopped import" })).toBeTruthy();
+  });
 });

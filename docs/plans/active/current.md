@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Hardened M07 session transfer ordering on 2026-09-14. A newly selected
+  import immediately invalidates any prior plan, validation is single-flight,
+  and late results from superseded requests are ignored; commit remains
+  disabled until the current validation completes. Added pending-import
+  coverage; the focused UI suite (71 tests) and TypeScript typecheck passed.
+  No audio, endpoint, driver, registry, or machine configuration was changed.
+  Next action: continue the next safe M03/M07 implementation slice.
+
 - Closed an M03 virtual-device selection-integrity gap on 2026-09-14. When
   authoritative inventory no longer contains the selected bus, the UI now
   selects the first current bus (or resets to the create defaults) instead of
