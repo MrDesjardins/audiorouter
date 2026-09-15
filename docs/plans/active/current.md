@@ -2,6 +2,18 @@
 
 Updated: 2026-09-14.
 
+- Passed the authorized guarded M02 control-owned VB-Cable route acceptance on
+  2026-09-14 using the exact active CABLE Output capture and CABLE Input render
+  IDs. The generation-1 lifecycle captured 24,000 frames, processed 187
+  quanta, rendered 23,936 frames, and recorded one successful start, stop,
+  and reset plus one correctly rejected post-stop pump. The harness stopped
+  and detached the worker and verified the existing endpoints remained
+  unchanged. Defaults, volume, mute, privacy, drivers, signing, startup, and
+  endpoint registration were unchanged. This is user-mode control/endpoint
+  evidence, not loaded production-driver or physical-latency qualification.
+  Next action: continue the next independently testable native bridge/API
+  slice.
+
 - Passed the authorized guarded M02 Rust adapter-route acceptance on
   2026-09-14 using the existing VB-Cable pair (`CABLE Output` capture to
   `CABLE Input` render). The run negotiated 48 kHz on both endpoints and a
