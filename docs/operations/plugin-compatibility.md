@@ -16,6 +16,13 @@ containment checks passed, and its before/after SHA-256 remained
 binary was not copied, registered, or modified; this is gated compatibility
 evidence and does not grant redistribution rights.
 
+The supplied TDR Nova x64 VST2 binary was also rechecked through the contained
+worker on 2026-09-14. Processing passed at 44.1, 48, and 96 kHz, both editor
+containment checks passed, and its before/after SHA-256 remained
+`4dfc5973416b4b23fa9351128b65e7b42547f6280436cce4cbf8aab1334e4e33`. The
+binary was not copied, registered, or modified; this is gated compatibility
+evidence and does not grant redistribution rights.
+
 The installed ReaPlugs directory was batch-qualified on 2026-09-13. Seven
 x64 audio-effect candidates passed the contained worker matrix at 44.1, 48,
 and 96 kHz. `reacontrolmidi-standalone.dll` and `reajs.dll` were classified

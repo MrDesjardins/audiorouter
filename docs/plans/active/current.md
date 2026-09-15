@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Passed the isolated supplied TDR Nova x64 VST2 acceptance on 2026-09-14.
+  Processing succeeded at 44.1, 48, and 96 kHz; editor-thread containment and
+  supervised timeout/reaping passed; and the binary fingerprint
+  (`4dfc5973416b4b23fa9351128b65e7b42547f6280436cce4cbf8aab1334e4e33`)
+  remained unchanged. Temporary environment values were restored. No plugin
+  registration or audio configuration changed. This is gated VST2 evidence,
+  not a redistribution or release-rights decision. Next action: continue the
+  next safe M03/M07 implementation slice.
+
 - Passed the isolated supplied BUSTERse x64 VST2 acceptance on 2026-09-14.
   Processing succeeded at 44.1, 48, and 96 kHz; editor-thread containment and
   supervised timeout/reaping passed; and the binary fingerprint
