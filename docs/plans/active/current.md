@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Hardened M03 virtual-route replacement on 2026-09-14. Revisioned route
+  inventory refreshes now ignore stale responses, and replacement controls
+  reject concurrent requests while explicitly disabling during the in-flight
+  operation. Added a pending-replacement regression; the focused UI suite (66
+  tests) and TypeScript typecheck passed. No endpoint, driver, registry, or
+  machine audio configuration was changed. Next action: continue the next
+  safe M03/M07 implementation slice.
+
 - Hardened M03 virtual-device lifecycle controls on 2026-09-14. Managed-bus
   inventory refreshes now ignore stale responses, while plan/apply operations
   are guarded against concurrent requests and explicit controls are disabled

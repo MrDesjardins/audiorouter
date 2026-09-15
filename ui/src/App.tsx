@@ -443,13 +443,17 @@ function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
   const [routeText, setRouteText] = useState("[]");
   const [revisionText, setRevisionText] = useState("0");
   const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const refreshGeneration = useRef(0);
   const refresh = () => {
+    const generation = ++refreshGeneration.current;
     void backend.listVirtualRoutes().then((result) => {
+      if (generation !== refreshGeneration.current) return;
       setState(result);
       setRouteText(JSON.stringify(result.routes, null, 2));
       setRevisionText(String(result.revision));
       setMessage(null);
-    }).catch((error) => setMessage(formatUiError(error, "Virtual-route inventory unavailable.")));
+    }).catch((error) => { if (generation === refreshGeneration.current) setMessage(formatUiError(error, "Virtual-route inventory unavailable.")); });
   };
   useEffect(() => {
     if (backend.connected) refresh();
@@ -461,6 +465,7 @@ function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
     }
   }, [backend]);
   const replace = async () => {
+    if (busy || !backend.connected) return;
     const baseRevision = Number.parseInt(revisionText, 10);
     if (!Number.isSafeInteger(baseRevision) || baseRevision < 0) {
       setMessage("Base revision must be a non-negative integer.");
@@ -475,7 +480,7 @@ function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
       setMessage(error instanceof Error ? error.message : "Route JSON is invalid.");
       return;
     }
-    setMessage("Replacing explicit virtual-bus routes...");
+    setBusy(true); setMessage("Replacing explicit virtual-bus routes...");
     try {
       const result = await backend.replaceVirtualRoutes(baseRevision, routes, uiIdempotencyKey("virtual-routes-replace"));
       setState({ revision: result.revision, routes: result.routes });
@@ -484,9 +489,9 @@ function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
       setMessage(`Virtual routes ${result.state} at revision ${result.revision}.`);
     } catch (error) {
       setMessage(formatUiError(error, "Unable to replace virtual-bus routes."));
-    }
+    } finally { setBusy(false); }
   };
-  return <section className="panel virtual-route-panel" aria-labelledby="virtual-route-heading"><div className="section-heading"><div><p className="eyebrow">Explicit cross-session routing</p><h2 id="virtual-route-heading">Virtual-bus routes</h2></div><div className="actions"><span className="badge">rev {state?.revision ?? "-"}</span><button type="button" className="secondary" onClick={refresh} disabled={!backend.connected}>Refresh</button></div></div><p className="muted">Routes are replaced as one revisioned document. The backend validates bus identities, sessions, cycles, authorization, and idempotency before changing desired state.</p>{state?.routes.length ? <ul aria-label="Explicit virtual-bus routes">{state.routes.map((route) => <li key={`${route.busId}-${route.producerSessionId}-${route.consumerSessionId}`}><code>{route.busId}</code> · {route.producerSessionId} → {route.consumerSessionId}</li>)}</ul> : <p className="muted">No explicit cross-session routes are currently listed.</p>}<fieldset disabled={!backend.connected}><legend>Revisioned replacement</legend><label>Base revision<input aria-label="Virtual-route base revision" inputMode="numeric" value={revisionText} onChange={(event) => setRevisionText(event.target.value)} /></label><label>Routes JSON<textarea aria-label="Virtual-route JSON" value={routeText} onChange={(event) => setRouteText(event.target.value)} rows={6} spellCheck={false} /></label><button type="button" className="secondary" onClick={() => void replace()}>Replace routes</button></fieldset>{message && <p className="muted" role="status" aria-live="polite">{message}</p>}<p className="muted">Disconnected preview mode never mutates route state. Replacement requires the backend’s <code>deviceAdministration</code> permission and does not activate endpoints by itself.</p></section>;
+  return <section className="panel virtual-route-panel" aria-labelledby="virtual-route-heading"><div className="section-heading"><div><p className="eyebrow">Explicit cross-session routing</p><h2 id="virtual-route-heading">Virtual-bus routes</h2></div><div className="actions"><span className="badge">rev {state?.revision ?? "-"}</span><button type="button" className="secondary" onClick={refresh} disabled={!backend.connected || busy}>Refresh</button></div></div><p className="muted">Routes are replaced as one revisioned document. The backend validates bus identities, sessions, cycles, authorization, and idempotency before changing desired state.</p>{state?.routes.length ? <ul aria-label="Explicit cross-session routes">{state.routes.map((route) => <li key={`${route.busId}-${route.producerSessionId}-${route.consumerSessionId}`}><code>{route.busId}</code> · {route.producerSessionId} → {route.consumerSessionId}</li>)}</ul> : <p className="muted">No explicit cross-session routes are currently listed.</p>}<fieldset disabled={!backend.connected || busy}><legend>Revisioned replacement</legend><label>Base revision<input aria-label="Virtual-route base revision" inputMode="numeric" value={revisionText} onChange={(event) => setRevisionText(event.target.value)} /></label><label>Routes JSON<textarea aria-label="Virtual-route JSON" value={routeText} onChange={(event) => setRouteText(event.target.value)} rows={6} spellCheck={false} /></label><button type="button" className="secondary" onClick={() => void replace()} disabled={!backend.connected || busy}>Replace routes</button></fieldset>{message && <p className="muted" role="status" aria-live="polite">{message}</p>}<p className="muted">Disconnected preview mode never mutates route state. Replacement requires the backend’s <code>deviceAdministration</code> permission and does not activate endpoints by itself.</p></section>;
 }
 
 function endpointBindingStorageKey(sessionId: string) {

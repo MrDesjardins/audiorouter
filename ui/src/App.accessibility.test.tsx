@@ -708,6 +708,27 @@ describe("keyboard connection dialog", () => {
     expect(await screen.findByText("Virtual routes applied at revision 3.")).toBeTruthy();
   });
 
+  it("prevents duplicate virtual-route replacement while the first request is pending", async () => {
+    let releaseReplace!: (value: { state: "applied"; revision: number; routes: never[] }) => void;
+    const result = new Promise<{ state: "applied"; revision: number; routes: never[] }>((resolve) => { releaseReplace = resolve; });
+    const replaceVirtualRoutes = vi.fn(() => result);
+    const backend = {
+      ...createDisconnectedBackend(),
+      connected: true,
+      listVirtualRoutes: async () => ({ revision: 2, routes: [] }),
+      replaceVirtualRoutes,
+    };
+    render(<App backend={backend} />);
+    const panel = await screen.findByRole("region", { name: "Virtual-bus routes" });
+    const replace = within(panel).getByRole("button", { name: "Replace routes" });
+    fireEvent.click(replace);
+    await waitFor(() => expect((replace as HTMLButtonElement).disabled).toBe(true));
+    fireEvent.click(replace);
+    expect(replaceVirtualRoutes).toHaveBeenCalledTimes(1);
+    releaseReplace({ state: "applied", revision: 3, routes: [] });
+    await waitFor(() => expect(within(panel).getByText("Virtual routes applied at revision 3.")).toBeTruthy());
+  });
+
   it("creates an unarmed recorder with the explicit UI configuration", async () => {
     const createRecorder = vi.fn(async (params: { recorderId: string }) => ({
       sessionId: demoSession.id,
