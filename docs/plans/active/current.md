@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Passed the isolated native M06 VST3 AGain acceptance on 2026-09-14. The
+  checked-in worker successfully qualified single-stream and auxiliary-bus
+  processing, asynchronous graph scheduling, bounded failure silence and
+  repeated-quantum handling, validated state restoration, and shutdown. The
+  harness removed generated worker artifacts and restored VST3 environment
+  variables. No plugin registration, audio stream, or machine configuration
+  changed. This remains repository-fixture evidence, not independent vendor
+  or production-driver qualification. Next action: continue the next safe
+  M03/M07 implementation slice.
+
 - Requalified the complete M07 headless acceptance on 2026-09-14 after the
   plugin-panel boundary fix. CLI (33), MCP (3), control (158 passed with 2
   guarded live tests ignored), plugin-host (70), and worker-process (13) tests
