@@ -223,7 +223,6 @@ mod windows_registry {
     #[cfg(test)]
     mod tests {
         use super::{apply, is_registered, registration_matches};
-        use std::path::PathBuf;
 
         #[test]
         fn ownership_matches_windows_path_casing() {
@@ -251,7 +250,6 @@ mod windows_registry {
                 return;
             }
             let executable = std::env::current_exe().expect("startup test executable");
-            let executable = PathBuf::from(executable);
             assert!(!is_registered(&executable).expect("inspect startup registration"));
             struct Cleanup<'a>(&'a std::path::Path);
             impl Drop for Cleanup<'_> {

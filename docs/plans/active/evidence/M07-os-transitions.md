@@ -21,15 +21,27 @@ The same boundary is exposed as the authenticated, idempotent
 the shared backend authority. Its input and output schemas are included in
 method discovery and the readable API reference.
 
+The Tauri shell now owns a Windows message-only listener in
+`src-tauri/src/os_transition_windows.rs`. WTS session notifications map the
+current user's lock and logoff events; `WM_POWERBROADCAST` maps suspend and
+automatic resume. Delivery uses a bounded `SyncSender::try_send`, while a
+separate shell thread forwards authenticated RPC requests. The listener uses
+the actual listener thread ID for shutdown and releases its window callback
+state during `WM_NCDESTROY`.
+
 Validation:
 
 ```text
 cargo test -p audiorouter-control --locked --lib -- --test-threads=1
 164 passed; 2 ignored; 0 failed
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
+clean
+cargo test --manifest-path src-tauri/Cargo.toml --locked -- --test-threads=1
+20 passed; 0 failed
 ```
 
 This is portable policy evidence, not Windows power-notification evidence.
-The native shell still needs a guarded adapter for lock, sign-out, sleep, and
-resume notifications, plus endpoint re-enumeration and before/after identity
-proof. No machine power state, audio endpoint, driver, or user configuration
-was changed by this work.
+The native listener is now present, but attended delivery still needs a
+guarded lock/sign-out/sleep/resume acceptance and endpoint re-enumeration with
+before/after identity proof. No machine power state, audio endpoint, driver,
+or user configuration was changed by this work.

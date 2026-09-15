@@ -2,6 +2,19 @@
 
 Updated: 2026-09-14.
 
+- Implemented the guarded Windows OS-transition listener on 2026-09-14.
+  `src-tauri/src/os_transition_windows.rs` owns a message-only window, maps
+  WTS lock/logoff and power suspend/resume notifications, and forwards them
+  through a bounded nonblocking channel to authenticated `system.osTransition`
+  RPCs. The actual listener thread ID is used for shutdown and callback state
+  is released with the window. Native shell Clippy passed with `-D warnings`
+  and all 20 shell tests passed. No power transition was induced on the
+  workstation; attended event delivery, endpoint re-enumeration, and native
+  before/after identity proof remain open gates. Evidence:
+  [M07 OS-transition policy evidence](evidence/M07-os-transitions.md).
+  Next action: continue with the next safe M03/M07 delivery slice while
+  retaining this native acceptance gate.
+
 - Added `system.osTransition` to the shared API contract on 2026-09-14.
   The method is session-control authorized, idempotent, schema-bounded, and
   dispatches to the control-plane STATE-11 boundary. Its response reports

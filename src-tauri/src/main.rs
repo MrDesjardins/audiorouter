@@ -13,6 +13,8 @@ use tauri::{
 };
 
 mod startup;
+#[cfg(windows)]
+mod os_transition_windows;
 
 const DEFAULT_PIPE_NAME: &str = r"\\.\pipe\audiorouter-control";
 const DEFAULT_DATABASE_DIRECTORY: &str = "AudioRouter";
@@ -583,6 +585,49 @@ fn main() {
         ])
         .setup(move |app| {
             let session_script = session_script.clone();
+            #[cfg(windows)]
+            {
+                let (transition_sender, transition_receiver) =
+                    std::sync::mpsc::sync_channel(16);
+                match os_transition_windows::OsTransitionListener::start(transition_sender) {
+                    Ok(listener) => {
+                        app.manage(listener);
+                        let transition_pipe = tray_pipe_name.clone();
+                        std::thread::Builder::new()
+                            .name("audiorouter-os-transition-rpc".into())
+                            .spawn(move || {
+                                for (sequence, transition) in
+                                    transition_receiver.into_iter().enumerate()
+                                {
+                                    let transition = match transition {
+                                        audiorouter_control::os_transition::OsTransition::Lock => "lock",
+                                        audiorouter_control::os_transition::OsTransition::SignOut => "signOut",
+                                        audiorouter_control::os_transition::OsTransition::Sleep => "sleep",
+                                        audiorouter_control::os_transition::OsTransition::Resume => "resume",
+                                    };
+                                    let _ = forward_rpc_request(
+                                        &JsonRpcRequest {
+                                            jsonrpc: "2.0".into(),
+                                            id: Some(serde_json::json!(format!(
+                                                "os-transition-{sequence}"
+                                            ))),
+                                            method: "system.osTransition".into(),
+                                            params: Some(serde_json::json!({
+                                                "transition": transition,
+                                                "idempotencyKey": format!("shell-os-transition-{sequence}")
+                                            })),
+                                        },
+                                        &transition_pipe,
+                                    );
+                                }
+                            })
+                            .map_err(|error| format!("OS transition RPC thread failed: {error}"))?;
+                    }
+                    Err(error) => {
+                        eprintln!("AudioRouter OS transition listener unavailable: {error}");
+                    }
+                }
+            }
             let open = MenuItem::with_id(app, "open", "Open AudioRouter", true, None::<&str>)?;
             let close = MenuItem::with_id(app, "close", "Close window", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit and stop audio", true, None::<&str>)?;
