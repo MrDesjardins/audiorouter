@@ -429,7 +429,7 @@ function VirtualDeviceLifecyclePanel({ backend }: { backend: UiBackend }) {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const refreshGeneration = useRef(0);
-  const refresh = () => { const generation = ++refreshGeneration.current; void backend.listVirtualDevices().then((items) => { if (generation !== refreshGeneration.current) return; setDevices(items); if (!selectedId && items[0]) { setSelectedId(items[0].id); setBusId(items[0].id); setBusName(items[0].name); } }).catch((error) => { if (generation === refreshGeneration.current) setMessage(formatUiError(error, "Virtual-device inventory unavailable.")); }); };
+  const refresh = () => { const generation = ++refreshGeneration.current; void backend.listVirtualDevices().then((items) => { if (generation !== refreshGeneration.current) return; setDevices(items); if (!items.some((item) => item.id === selectedId)) { const next = items[0]; setSelectedId(next?.id ?? ""); setBusId(next?.id ?? "virtual-bus"); setBusName(next?.name ?? "AudioRouter Bus"); } }).catch((error) => { if (generation === refreshGeneration.current) setMessage(formatUiError(error, "Virtual-device inventory unavailable.")); }); };
   useEffect(() => { if (backend.connected) refresh(); else { setDevices([]); setPlan(null); } }, [backend, backend.connected]);
   const selected = devices.find((device) => device.id === selectedId);
   const chooseAction = (next: "create" | "rename" | "setEnabled" | "delete") => { setAction(next); setPlan(null); if (next === "create") { setBusId("virtual-bus"); setBusName("AudioRouter Bus"); } else if (selected) { setBusId(selected.id); setBusName(selected.name); } };

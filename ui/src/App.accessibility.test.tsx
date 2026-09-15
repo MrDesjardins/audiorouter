@@ -11,7 +11,7 @@ import { BackendConnectionContext } from "./backendConnectionContext";
 import { GraphList } from "./GraphList";
 import type { ProcessorDescriptor } from "./processorCatalog";
 import { AudioRouterRpcError } from "@audiorouter/contracts";
-import type { EventsSubscribeResult, RecordingRow } from "@audiorouter/contracts";
+import type { EventsSubscribeResult, RecordingRow, VirtualDeviceInfo } from "@audiorouter/contracts";
 
 function connectedPreviewBackend() {
   return { ...createDisconnectedBackend(), connected: true };
@@ -736,6 +736,20 @@ describe("keyboard connection dialog", () => {
     rerender(<App backend={backend} />);
     await waitFor(() => expect(listVirtualRoutes).toHaveBeenCalledTimes(1));
     expect((screen.getByRole("textbox", { name: "Virtual-route base revision" }) as HTMLInputElement).value).toBe("4");
+  });
+
+  it("clears a virtual-device selection that disappears from inventory", async () => {
+    const makeDevice = (id: string, name: string): VirtualDeviceInfo => ({ id, name, direction: "bidirectional", channels: 2, enabled: true, availability: { status: "unavailable", reason: "managed driver unavailable" }, endpointIds: { render: null, capture: null }, capabilities: { render: false, capture: false, channels: 2 }, privilege: "deviceAdministration", restartRequired: false, clientImpacts: [], leaseOwner: null });
+    const listVirtualDevices = vi.fn().mockResolvedValueOnce([makeDevice("old-bus", "Old bus")]).mockResolvedValueOnce([makeDevice("new-bus", "New bus")]);
+    const backend = { ...connectedPreviewBackend(), listVirtualDevices };
+    render(<App backend={backend} />);
+    const panel = await screen.findByRole("region", { name: "Virtual-device lifecycle" });
+    await waitFor(() => expect(listVirtualDevices).toHaveBeenCalledTimes(1));
+    fireEvent.change(within(panel).getByRole("combobox", { name: "Virtual-device action" }), { target: { value: "rename" } });
+    expect((within(panel).getByRole("combobox", { name: "Existing virtual-device target" }) as HTMLSelectElement).value).toBe("old-bus");
+    fireEvent.click(within(panel).getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(listVirtualDevices).toHaveBeenCalledTimes(2));
+    expect((within(panel).getByRole("combobox", { name: "Existing virtual-device target" }) as HTMLSelectElement).value).toBe("new-bus");
   });
 
   it("prevents duplicate virtual-route replacement while the first request is pending", async () => {

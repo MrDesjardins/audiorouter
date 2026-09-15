@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Closed an M03 virtual-device selection-integrity gap on 2026-09-14. When
+  authoritative inventory no longer contains the selected bus, the UI now
+  selects the first current bus (or resets to the create defaults) instead of
+  retaining a phantom target. Added inventory-replacement coverage; the
+  focused UI suite (70 tests) and TypeScript typecheck passed. No endpoint,
+  driver, registry, or machine audio configuration was changed. Next action:
+  continue the next safe M03/M07 implementation slice.
+
 - Closed an M03 reconnect-refresh gap on 2026-09-14. Virtual-device and
   virtual-route panels now react when a shared backend object's `connected`
   state changes, clearing disconnected state and reloading authoritative
