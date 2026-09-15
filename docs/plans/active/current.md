@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Closed an M06 plugin-directory identity race on 2026-09-14. Discovery and
+  inspection responses are now published only when their requested directory
+  or path still matches the current editor field, preventing old scan results
+  from being shown for a newly edited location. Added a directory-edit
+  regression; the focused UI suite (75 tests) and TypeScript typecheck passed.
+  No plugin code was loaded or modified, and no audio or machine configuration
+  changed. Next action: continue the next safe M03/M07 implementation slice.
+
 - Extended M07 refresh ordering to session, recording, and recorder inventories
   on 2026-09-14. Post-mutation refresh helpers now ignore superseded responses
   across all remaining lifecycle lists, preventing an older read from
