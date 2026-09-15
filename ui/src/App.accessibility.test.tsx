@@ -116,6 +116,28 @@ describe("VB-Cable endpoint selection", () => {
     expect(applyStartup).not.toHaveBeenCalled();
   });
 
+  it("prevents duplicate startup apply while the first request is pending", async () => {
+    let releaseApply!: (value: { planId: string; state: "unavailable"; registration: "unavailable"; reason: string }) => void;
+    const applyResult = new Promise<{ planId: string; state: "unavailable"; registration: "unavailable"; reason: string }>((resolve) => { releaseApply = resolve; });
+    const applyStartup = vi.fn(() => applyResult);
+    const backend = {
+      ...connectedPreviewBackend(),
+      getStartup: vi.fn(async () => ({ enabled: false, registration: "unavailable" as const, reason: "shell-owned" })),
+      planStartup: vi.fn(async () => ({ planId: "startup-plan", enabled: true, registration: "unavailable" as const, reason: "shell-owned", requiredScopes: ["startupWrite" as const], warnings: [] })),
+      applyStartup,
+    };
+    render(<App backend={backend} />);
+    fireEvent.change(screen.getByLabelText("Desired sign-in startup policy"), { target: { value: "enabled" } });
+    fireEvent.click(screen.getByRole("button", { name: "Plan startup policy" }));
+    const apply = await screen.findByRole("button", { name: "Apply planned policy" });
+    fireEvent.click(apply);
+    expect((apply as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(apply);
+    expect(applyStartup).toHaveBeenCalledTimes(1);
+    releaseApply({ planId: "startup-plan", state: "unavailable", registration: "unavailable", reason: "shell-owned" });
+    await waitFor(() => expect(applyStartup).toHaveBeenCalledTimes(1));
+  });
+
   it("refreshes startup state when the existing backend reconnects", async () => {
     const backend = {
       ...connectedPreviewBackend(),

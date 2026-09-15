@@ -107,6 +107,7 @@ function StartupPanel({ backend }: { backend: UiBackend }) {
   const [message, setMessage] = useState<string | null>(null);
   const [nativeRegistration, setNativeRegistration] = useState<"registered" | "unregistered" | "unavailable">("unavailable");
   const refreshGeneration = useRef(0);
+  const [busy, setBusy] = useState(false);
   const refresh = (clearMessage = true) => {
     const generation = ++refreshGeneration.current;
     void backend.getStartup().then((result) => {
@@ -123,12 +124,16 @@ function StartupPanel({ backend }: { backend: UiBackend }) {
   };
   useEffect(() => { setPlan(null); refresh(); }, [backend, backend.connected]);
   const createPlan = async () => {
+    if (busy || !backend.connected) return;
+    setBusy(true);
     setMessage("Planning sign-in startup policy...");
     try { const result = await backend.planStartup(enabled); setPlan(result); setMessage(result.reason); }
     catch (error) { setMessage(formatUiError(error, "Startup planning unavailable.")); }
+    finally { setBusy(false); }
   };
   const applyPlan = async () => {
-    if (!plan) return;
+    if (!plan || busy || !backend.connected) return;
+    setBusy(true);
     const plannedEnabled = plan.enabled;
     setMessage("Applying startup policy...");
     try {
@@ -147,8 +152,9 @@ function StartupPanel({ backend }: { backend: UiBackend }) {
       setPlan(null); refresh(false);
     }
     catch (error) { setMessage(formatUiError(error, "Startup apply unavailable.")); }
+    finally { setBusy(false); }
   };
-  return <section className="panel startup-panel" aria-labelledby="startup-heading"><div className="section-heading"><div><p className="eyebrow">Background lifecycle</p><h2 id="startup-heading">Start at sign-in</h2></div><button type="button" className="secondary" onClick={() => refresh()}>Refresh</button></div><p className="muted">{status?.reason ?? "Loading startup capability..."}</p><p className="muted" role="status">Native registration: {nativeRegistration}</p><label>Desired policy<select aria-label="Desired sign-in startup policy" value={enabled ? "enabled" : "disabled"} onChange={(event) => { setEnabled(event.target.value === "enabled"); setPlan(null); }} disabled={!backend.connected}><option value="disabled">Disabled</option><option value="enabled">Enabled</option></select></label><div className="actions"><button type="button" className="secondary" onClick={() => void createPlan()} disabled={!backend.connected}>Plan startup policy</button>{plan && <button type="button" className="secondary" onClick={() => void applyPlan()} disabled={!backend.connected}>Apply planned policy</button>}</div>{message && <p className="muted" role="status">{message}</p>}<p className="muted">{backend.registerStartup ? "The native shell can register this user's startup preference after an authorized plan is applied." : "Native startup registration is unavailable in this host; planning remains a backend-only operation."}</p></section>;
+  return <section className="panel startup-panel" aria-labelledby="startup-heading"><div className="section-heading"><div><p className="eyebrow">Background lifecycle</p><h2 id="startup-heading">Start at sign-in</h2></div><button type="button" className="secondary" onClick={() => refresh()} disabled={busy}>Refresh</button></div><p className="muted">{status?.reason ?? "Loading startup capability..."}</p><p className="muted" role="status">Native registration: {nativeRegistration}</p><label>Desired policy<select aria-label="Desired sign-in startup policy" value={enabled ? "enabled" : "disabled"} onChange={(event) => { setEnabled(event.target.value === "enabled"); setPlan(null); }} disabled={!backend.connected || busy}><option value="disabled">Disabled</option><option value="enabled">Enabled</option></select></label><div className="actions"><button type="button" className="secondary" onClick={() => void createPlan()} disabled={!backend.connected || busy}>Plan startup policy</button>{plan && <button type="button" className="secondary" onClick={() => void applyPlan()} disabled={!backend.connected || busy}>Apply planned policy</button>}</div>{message && <p className="muted" role="status">{message}</p>}<p className="muted">{backend.registerStartup ? "The native shell can register this user's startup preference after an authorized plan is applied." : "Native startup registration is unavailable in this host; planning remains a backend-only operation."}</p></section>;
 }
 
 export function App({ backend }: { backend?: UiBackend } = {}) {

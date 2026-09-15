@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Added M07 startup mutation in-flight protection on 2026-09-14. Planning and
+  apply controls now reject concurrent requests and disable while the current
+  operation is pending, preventing duplicate backend or native registration
+  work from repeated input. Added a pending-apply regression; the focused UI
+  suite (62 tests) and TypeScript typecheck passed. No registry, driver,
+  endpoint, plugin, or machine audio configuration was accessed. Next action:
+  continue the next safe M03/M07 implementation slice.
+
 - Requalified the post-startup-safety repository on 2026-09-14. The full UI
   suite passed (19 files, 198 tests), TypeScript typecheck passed, the full
   Rust workspace passed, and documentation validation passed (53 Markdown
