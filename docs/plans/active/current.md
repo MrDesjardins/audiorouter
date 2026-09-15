@@ -2,6 +2,18 @@
 
 Updated: 2026-09-14.
 
+- Passed the authorized guarded M02 Rust adapter-route acceptance on
+  2026-09-14 using the existing VB-Cable pair (`CABLE Output` capture to
+  `CABLE Input` render). The run negotiated 48 kHz on both endpoints and a
+  128-frame graph, captured 24,480 frames, routed 24,448 frames across 191
+  graph blocks, and recorded zero deadline misses with bounded processing
+  telemetry. Before/after media identity/state matched; temporary native
+  artifacts were removed. This is user-mode VB-Cable bridge evidence, not
+  loaded AudioRouter driver or physical-latency qualification. Defaults,
+  volume, mute, privacy, driver, signing, and startup configuration remained
+  unchanged. Next action: continue the next independently testable native
+  bridge/API slice.
+
 - Requalified the non-installing M03 project-driver build on 2026-09-14 with
   Visual Studio 18.9.1 and WDK 10.0.28000.0. Utilities, Filters, Main,
   package/catalog, and include targets compiled; catalog signability reported
