@@ -450,3 +450,14 @@ It leaves no registered plugin or system audio changes.
 
 See [SDK setup](sdk-setup.md) and [release notes](release-notes.md) for the
 toolchain and current qualification boundaries.
+## 2026-09-14 installed VST2 requalification
+
+The explicitly selected installed binary `C:\\Program
+Files\\VSTPlugins\\ReaPlugs\\reaeq-standalone.dll` passed the isolated
+AudioRouter worker at 44.1, 48, and 96 kHz. The dedicated editor-thread
+containment and supervised editor-timeout tests also passed. Its x64 SHA-256
+(`c200e540c26ac793b43611aaceb4aa42cdd2829cdfbf0d60494716d9bdde8a7d`) and
+file size were unchanged, and the harness restored its environment variables.
+This is qualification of one user-installed VST2 effect only; it does not
+establish redistribution rights or the full vendor/editor compatibility
+matrix.

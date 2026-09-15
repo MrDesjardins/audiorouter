@@ -2,6 +2,8 @@
 
 Updated: 2026-09-14.
 
+- Requalified the supplied installed VST2 binary `C:\\Program Files\\VSTPlugins\\ReaPlugs\\reaeq-standalone.dll` on 2026-09-14 through the isolated worker. Processing passed at 44.1, 48, and 96 kHz; the bounded editor-thread and supervised editor-timeout containment tests also passed. The x64 binary fingerprint remained unchanged with SHA-256 `c200e540c26ac793b43611aaceb4aa42cdd2829cdfbf0d60494716d9bdde8a7d`, and all temporary environment values were restored. This qualifies one selected installed VST2 effect, not the complete vendor/editor or redistribution-rights matrix. Next action: continue the next independently testable M03/M07 or plugin delivery slice.
+
 - Passed the elevated M07 frontend-owned shell RPC acceptance on 2026-09-14.
   The disposable WebView initialization reached the Tauri command boundary
   and an authenticated backend `system.describe` response returned
