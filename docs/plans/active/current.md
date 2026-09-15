@@ -2,6 +2,19 @@
 
 Updated: 2026-09-14.
 
+- Requalified the complete guarded `safe-all.ps1` chain at current pushed head
+  on 2026-09-14. M00 toolchain/native checks, non-installing M03 x64 WDK build
+  and catalog signability, M01 CLI, M04 DSP/recording, M05 UI (216 tests and
+  production build), M06 SDK/VST3/VST2 workers, M07 headless control/MCP, M08
+  unsigned release preparation, 159 normative mappings, and documentation
+  validation (53 Markdown files, 193 local links) passed. Cleanup removed 15
+  run-owned temporary children. No driver installation/loading, signing or
+  boot-policy change, plugin/startup registration, live audio mutation, or
+  persistent machine-audio configuration occurred. Loaded PortCls behavior,
+  production signing/install, physical latency, and attended UI acceptance
+  remain open gates. Next action: continue the next safe M03/M07 recovery or
+  delivery implementation slice.
+
 - Improved the native VST3 worker state-restore boundary on 2026-09-14. A
   plugin returning `kResultFalse` from `setState` is now reported as the
   existing `StateUnsupported` protocol result after the worker restores its
