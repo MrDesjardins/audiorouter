@@ -2,6 +2,13 @@
 
 Updated: 2026-09-14.
 
+- Improved M05/M06 plugin-result accessibility on 2026-09-14. Each supported
+  candidate's graph-add control now has an accessible name containing its
+  exact path, removing ambiguity when multiple plugins are listed. The full
+  UI suite (19 files, 195 tests), TypeScript typecheck, and diff checks passed.
+  No plugin was loaded, registered, or modified, and no audio configuration
+  changed. Next action: continue the next safe M03/M07 implementation slice.
+
 - Hardened M06 plugin inventory refresh state on 2026-09-14. A successful
   scan, cached-list load, or retry now clears the prior inspection path/result,
   so refreshed candidates cannot be presented with stale metadata. Added a UI
