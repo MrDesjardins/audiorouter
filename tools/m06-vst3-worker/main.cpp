@@ -740,17 +740,32 @@ public:
             require_result("VST3 component pause for state", component_->setActive(false));
             active_ = false;
         }
-        if (controller_) {
-            StateStream controller_component_stream(component_state.data(), component_state.size());
-            require_result("VST3 controller component state", controller_->setComponentState(
-                &controller_component_stream));
-        }
-        StateStream component_stream(component_state.data(), component_state.size());
-        require_result("VST3 component setState", component_->setState(&component_stream));
-        if (!controller_state.empty()) {
-            if (!controller_) throw protocol_error("VST3 controller state is unavailable");
-            StateStream controller_stream(controller_state.data(), controller_state.size());
-            require_result("VST3 controller setState", controller_->setState(&controller_stream));
+        try {
+            if (controller_) {
+                StateStream controller_component_stream(component_state.data(), component_state.size());
+                require_result("VST3 controller component state", controller_->setComponentState(
+                    &controller_component_stream));
+            }
+            StateStream component_stream(component_state.data(), component_state.size());
+            require_result("VST3 component setState", component_->setState(&component_stream));
+            if (!controller_state.empty()) {
+                if (!controller_) throw protocol_error("VST3 controller state is unavailable");
+                StateStream controller_stream(controller_state.data(), controller_state.size());
+                require_result("VST3 controller setState", controller_->setState(&controller_stream));
+            }
+        } catch (...) {
+            // A plugin may reject an otherwise valid host snapshot. Restore
+            // the lifecycle before reporting the capability limitation so a
+            // subsequent quantum is not processed by a half-paused instance.
+            if (was_active) {
+                require_result("VST3 component resume after rejected state", component_->setActive(true));
+                active_ = true;
+            }
+            if (was_processing) {
+                require_result("VST3 processor resume after rejected state", processor_->setProcessing(true));
+                processing_ = true;
+            }
+            throw;
         }
         if (was_active) {
             require_result("VST3 component resume after state", component_->setActive(true));
@@ -1065,6 +1080,9 @@ static std::string processed_message(uint64_t sequence, uint64_t deadline, uint1
 static constexpr const char* kEditorUnavailableMessage =
     "{\"type\":\"Failure\",\"payload\":{\"code\":\"editorUnavailable\"}}";
 
+static constexpr const char* kStateUnsupportedMessage =
+    "{\"type\":\"Failure\",\"payload\":{\"code\":\"StateUnsupported\"}}";
+
 static constexpr const char* kNoEditorMessage =
     "{\"type\":\"Editor\",\"payload\":{\"has_editor\":false,\"width\":0,\"height\":0}}";
 
@@ -1229,8 +1247,19 @@ int wmain(int argc, wchar_t** argv) {
                     throw protocol_error("state version is outside the bounded contract");
                 }
                 const auto bytes = parse_bytes(json);
-                effect.restore_state(bytes);
-                write_frame(state_message(static_cast<uint32_t>(version), bytes));
+                try {
+                    effect.restore_state(bytes);
+                    write_frame(state_message(static_cast<uint32_t>(version), bytes));
+                } catch (const std::exception& error) {
+                    const std::string diagnostic(error.what());
+                    if (diagnostic.find("setState failed with VST3 result") != std::string::npos ||
+                        diagnostic.find("controller setState failed with VST3 result") != std::string::npos ||
+                        diagnostic.find("controller component state failed with VST3 result") != std::string::npos) {
+                        write_frame(kStateUnsupportedMessage);
+                        continue;
+                    }
+                    throw;
+                }
                 continue;
             }
             const auto events = parse_parameters(json);

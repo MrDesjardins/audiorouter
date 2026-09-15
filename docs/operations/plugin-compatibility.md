@@ -493,3 +493,17 @@ disposable worker. This validates containment behavior even for candidates
 that are rejected by the separate audio-effect/state processing contract; it
 does not make those candidates supported effects or establish editor GUI
 compatibility.
+
+## 2026-09-14 VST3 state-restore boundary
+
+The native worker now converts a VST3 component's `kResultFalse` state-restore
+response into the existing `StateUnsupported` protocol result, after restoring
+the component's active and processing lifecycle. This prevents a vendor state
+limitation from becoming a generic truncated-pipe crash while preserving the
+host's explicit unsupported-feature handling.
+
+The supplied x64 TDR Nova VST3 bundle passed the worker processing and
+containment matrix with state restoration recorded as unsupported. The
+supplied BUSTERse bundle still terminates before the initial worker handshake;
+it is not recorded as compatible. These results are binary-specific evidence,
+not a general vendor compatibility claim.

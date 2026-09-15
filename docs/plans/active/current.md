@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Improved the native VST3 worker state-restore boundary on 2026-09-14. A
+  plugin returning `kResultFalse` from `setState` is now reported as the
+  existing `StateUnsupported` protocol result after the worker restores its
+  active/processing lifecycle, instead of terminating with a truncated pipe.
+  The TDR Nova x64 bundle passed the isolated processing, multi-bus,
+  asynchronous, failure-recovery, repeated-quantum, and shutdown acceptance
+  with this explicit limitation. BUSTERse still exits before the initial
+  handshake and remains unsupported pending vendor-specific crash isolation
+  evidence. Next action: qualify another compatible VST3 bundle or continue
+  with the next non-blocked delivery slice.
+
 - Passed the installed ReaPlugs VST2 editor-containment acceptance on
   2026-09-14 for all 9 x64 DLL candidates. Each candidate passed the bounded
   non-returning editor-thread and supervised editor-timeout tests through a

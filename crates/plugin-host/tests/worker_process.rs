@@ -1000,10 +1000,16 @@ fn verified_native_vst3_worker_processes_an_opt_in_fixture() {
         worker.record_failure(Instant::now()),
         audiorouter_plugin_host::WorkerState::Failed
     );
-    let mut worker = worker
-        .restart_with_state(saved_state.clone(), saved_state.version, Instant::now())
-        .map_err(|(error, _)| error)
-        .expect("restart native VST3 worker and restore state");
+    let mut worker =
+        match worker.restart_with_state(saved_state.clone(), saved_state.version, Instant::now()) {
+            Ok(worker) => worker,
+            Err((WorkerProcessError::UnsupportedFeature(_), _))
+                if std::env::var_os("AUDIOROUTER_VST3_ALLOW_STATE_UNSUPPORTED").is_some() =>
+            {
+                return
+            }
+            Err((error, _)) => panic!("restart native VST3 worker and restore state: {error:?}"),
+        };
     let restarted = WorkerFrame::new(
         2,
         worker_clock_tick().saturating_add(10_000),

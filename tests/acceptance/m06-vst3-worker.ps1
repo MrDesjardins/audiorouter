@@ -1,5 +1,6 @@
 param(
     [switch]$SkipBuild,
+    [switch]$AllowStateUnsupported,
     [string]$FixturePath = ''
 )
 
@@ -47,9 +48,11 @@ foreach ($path in @($worker, $fixture)) {
 }
 $previousFixture = $env:AUDIOROUTER_VST3_FIXTURE
 $previousWorker = $env:AUDIOROUTER_VST3_NATIVE_WORKER
+$previousStateUnsupported = $env:AUDIOROUTER_VST3_ALLOW_STATE_UNSUPPORTED
 try {
     $env:AUDIOROUTER_VST3_FIXTURE = $fixture
     $env:AUDIOROUTER_VST3_NATIVE_WORKER = $worker
+    if ($AllowStateUnsupported) { $env:AUDIOROUTER_VST3_ALLOW_STATE_UNSUPPORTED = '1' }
     & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- --ignored --exact verified_native_vst3_worker_processes_an_opt_in_fixture --nocapture
     if ($LASTEXITCODE -ne 0) { throw "native VST3 worker acceptance failed with exit code $LASTEXITCODE" }
     & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- --ignored --exact verified_native_vst3_worker_processes_an_opt_in_multi_bus_fixture --nocapture
@@ -65,7 +68,8 @@ try {
 } finally {
     if ($null -eq $previousFixture) { Remove-Item Env:AUDIOROUTER_VST3_FIXTURE -ErrorAction SilentlyContinue } else { $env:AUDIOROUTER_VST3_FIXTURE = $previousFixture }
     if ($null -eq $previousWorker) { Remove-Item Env:AUDIOROUTER_VST3_NATIVE_WORKER -ErrorAction SilentlyContinue } else { $env:AUDIOROUTER_VST3_NATIVE_WORKER = $previousWorker }
+    if ($null -eq $previousStateUnsupported) { Remove-Item Env:AUDIOROUTER_VST3_ALLOW_STATE_UNSUPPORTED -ErrorAction SilentlyContinue } else { $env:AUDIOROUTER_VST3_ALLOW_STATE_UNSUPPORTED = $previousStateUnsupported }
     Remove-Item -LiteralPath $worker,$workerObject,$iidObject -Force -ErrorAction SilentlyContinue
 }
-Write-Output 'M06 native VST3 worker acceptance passed: isolated AGain single-stream and auxiliary-bus processing, asynchronous graph staging, bounded restart/quarantine recovery, validated state restoration, repeated-quantum timing, finite transformed output, and bounded shutdown.'
-Write-Output 'Scope: repository-local native worker and AGain fixture; no plugin registration, audio stream, or machine audio configuration changes.'
+Write-Output "M06 native VST3 worker acceptance passed for fixture $fixture: isolated single-stream and auxiliary-bus processing, asynchronous graph staging, bounded restart/quarantine recovery, validated state restoration where supported, repeated-quantum timing, finite transformed output, and bounded shutdown."
+Write-Output 'Scope: one explicitly selected local VST3 fixture and the repository native worker; no plugin registration, audio stream, or machine audio configuration changes.'
