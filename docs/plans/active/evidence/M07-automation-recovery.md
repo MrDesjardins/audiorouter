@@ -1457,3 +1457,15 @@ the structured response is idle and unarmed, retains the requested format,
 and creates exactly one exclusive output. CLI unit tests passed 32, MCP stdio
 integration passed 3, and strict Clippy, formatting, and diff checks passed.
 The temporary root is removed by the test; no live endpoint is opened.
+## 2026-09-14 - frontend-owned shell RPC acceptance
+
+Command:
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m07-shell-rpc.ps1`
+
+The elevated disposable shell acceptance passed from WebView initialization
+through the Tauri command boundary to an authenticated backend
+`system.describe` response. No audio endpoint was opened and no startup,
+driver, signing, or persistent machine configuration was changed. This
+qualifies the native shell transport path; attended UI/accessibility,
+sign-in/tray usability, and production packaging remain separate gates.

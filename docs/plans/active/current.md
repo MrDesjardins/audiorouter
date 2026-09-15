@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Passed the elevated M07 frontend-owned shell RPC acceptance on 2026-09-14.
+  The disposable WebView initialization reached the Tauri command boundary
+  and an authenticated backend `system.describe` response returned
+  successfully. No audio endpoint, startup registration, driver, or
+  persistent machine configuration was changed. This closes the tested shell
+  transport path; attended UI/accessibility and production packaging gates
+  remain open. Next action: continue the next independently testable M03/M07
+  recovery or delivery slice.
+
 - Requalified the complete guarded `safe-all.ps1` chain on 2026-09-14 at
   pushed head `8eeb8b99`. M00 toolchain/native compile and endpoint inventory,
   M03 AudioRouter WDK build/signability plus disposable SysVAD qualification,
