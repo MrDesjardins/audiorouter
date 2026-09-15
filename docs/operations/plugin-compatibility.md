@@ -9,6 +9,12 @@ temporary environment and removed generated worker artifacts; neither binary
 was modified or registered. These are explicit fixture compatibility results,
 not endpoint or `E_INVALIDARG` evidence.
 
+The supplied BUSTERse VST3 negative fixture was rerun on 2026-09-14 under the
+worker's explicit Windows no-UI fault mode. The expected worker failure was
+contained and reaped without a modal error dialog blocking supervision. This
+is crash-containment evidence only; the binary remains incompatible and was
+not modified or registered.
+
 The supplied BUSTERse x64 VST2 binary was rechecked through the contained
 worker on 2026-09-14. Processing passed at 44.1, 48, and 96 kHz, both editor
 containment checks passed, and its before/after SHA-256 remained

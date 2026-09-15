@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Passed the isolated M06 crash-containment regression on 2026-09-14 using the
+  supplied BUSTERse VST3 negative fixture. The expected worker failure was
+  contained and reaped successfully under the no-UI fault configuration; no
+  modal error dialog blocked the test. Generated worker artifacts and
+  temporary environment values were removed/restored. No plugin registration,
+  audio stream, or machine configuration changed. This proves containment for
+  the fixture, not compatibility of the plugin. Next action: continue the next
+  safe M03/M07 implementation slice.
+
 - Hardened the M06 unattended-worker regression on 2026-09-14. The VST3
   acceptance entrypoint now fails if the native worker loses its Windows
   critical-error/fault-dialog suppression (`SetErrorMode`) or WER no-UI
