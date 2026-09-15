@@ -2,6 +2,18 @@
 
 Updated: 2026-09-14.
 
+- Passed the guarded M02 Rust adapter-bridge acceptance on 2026-09-14 for
+  two bounded cycles against the active VB-Cable pair. Cycle 1 captured
+  24,480 frames, processed 191 quanta, invoked the tap 191 times, rendered
+  24,448 frames, and wrote 25,072 recording bytes; cycle 2 captured 24,960
+  frames, processed and tapped 195 quanta, rendered 24,960 frames, and wrote
+  25,072 recording bytes. Both cycles reported zero non-finite tap samples,
+  dropped render frames, scheduler xruns, and deadline misses. The harness
+  stopped and removed temporary streams/recordings and verified unchanged
+  endpoint identity/state. This is user-mode bridge lifecycle evidence, not
+  loaded production-driver or physical-latency qualification. Next action:
+  continue the next independently testable M02/M03 bridge or recovery slice.
+
 - Requalified the complete guarded `safe-all.ps1` chain on 2026-09-14 at the
   current head. Toolchain/native compile, AudioRouter WDK driver build and
   signability, disposable SysVAD reference qualification, M01 CLI, M04
