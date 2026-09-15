@@ -1,5 +1,14 @@
 # Plugin compatibility snapshot
 
+The supplied x64 VST3 candidates were rechecked through the current native
+worker on 2026-09-14. COMPER reached the parameter-contract gate but exposed
+no automatable descriptors and was rejected. TDR Nova reached processing but
+returned VST3 result `0x1` from `setState` during supervised restoration and
+was rejected for the current opaque-state contract. Both runs restored their
+temporary environment and removed generated worker artifacts; neither binary
+was modified or registered. These are explicit fixture compatibility results,
+not endpoint or `E_INVALIDARG` evidence.
+
 The installed ReaPlugs directory was batch-qualified on 2026-09-13. Seven
 x64 audio-effect candidates passed the contained worker matrix at 44.1, 48,
 and 96 kHz. `reacontrolmidi-standalone.dll` and `reajs.dll` were classified
@@ -152,13 +161,14 @@ candidates without copying or registering them.
 The 2026-09-09 qualification results are split by host contract. BUSTERse VST2
 passed the contained VST2 processing/editor matrix at 44.1, 48, and 96 kHz;
 its VST3 module crashed the standalone loader with Windows exception
-`0xC0000005`. COMPER VST3 loaded its factory but failed controller creation.
-TDR Nova VST2 passed the same contained VST2 matrix, while TDR Nova VST3
-passed the existing multi-bus worker acceptance and standalone two-input-bus
-loader probe. The VST3 failures are compatibility results, not evidence that
-the Windows audio device is unavailable. The supplied binaries remained in
-place and unchanged, and no plugin registration or machine audio configuration
-was performed.
+`0xC0000005`. COMPER VST3 was later rechecked and rejected because its current
+worker response exposed no automatable parameter descriptors. TDR Nova VST2
+passed the same contained VST2 matrix, while its VST3 path reached processing
+but failed the supervised opaque-state restoration contract with VST3 result
+`0x1`. The VST3 failures are compatibility results, not evidence that the
+Windows audio device is unavailable. The supplied binaries remained in place
+and unchanged, and no plugin registration or machine audio configuration was
+performed.
 
 `plugins scan` and `plugins inspect` accept explicitly selected absolute paths,
 return bounded identity/compatibility metadata, including best-effort VST3

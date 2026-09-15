@@ -2,6 +2,26 @@
 
 Updated: 2026-09-14.
 
+- Exercised the supplied x64 COMPER VST3 binary on 2026-09-14 through the
+  isolated worker. The candidate was rejected at the parameter-contract gate
+  because it returned no automatable descriptors (`assertion failed:
+  !descriptors.is_empty()`); this is an explicit incompatible-fixture result,
+  not a worker crash or general VST3 failure. The harness restored its
+  environment and removed generated artifacts. No plugin registration, audio
+  stream, or machine configuration changed. Independent vendor qualification
+  remains open. Next action: test the supplied x64 TDR Nova candidate.
+
+- Exercised the supplied x64 TDR Nova VST3 binary on 2026-09-14 through the
+  isolated worker. Discovery and processing reached the state-restoration
+  gate, where the plugin returned VST3 result `0x1` (`setState` not
+  implemented); the acceptance therefore rejected it rather than claiming
+  state compatibility. The worker reported the bounded failure, restored its
+  environment, and removed generated artifacts. No plugin registration, audio
+  stream, or machine configuration changed. This identifies a vendor
+  compatibility limitation, not evidence that the worker should silently drop
+  state. Next action: continue portable M03/M07 implementation while retaining
+  this fixture as an explicit compatibility result.
+
 - Passed the isolated native M06 VST3 AGain acceptance on 2026-09-14. The
   checked-in worker successfully qualified single-stream and auxiliary-bus
   processing, asynchronous graph scheduling, bounded failure silence and
