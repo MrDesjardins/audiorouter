@@ -2,6 +2,18 @@
 
 Updated: 2026-09-14.
 
+- Revalidated the current workspace head on 2026-09-14. The full locked Rust
+  workspace passed (including 160 control, 111 engine, 70 plugin-host, 73
+  Windows-audio, and 90 storage tests), with two explicitly guarded live
+  control tests ignored; the UI suite passed 19 files/216 tests, TypeScript
+  typecheck passed, and documentation validation passed for 53 Markdown files
+  and 193 local links. Current source confirms REC-03 persisted conversion and
+  dither fields plus explicit virtual capture-sink bridge tap selection. No
+  endpoint, driver, registry, plugin, or machine audio configuration was
+  accessed. Remaining native gates are loaded PortCls behavior, production
+  signing/install, and physical latency. Next action: continue the next
+  independently testable native bridge/API implementation slice.
+
 - Guarded M04 recording-library mutations on 2026-09-14. Metadata writes,
   rename, reveal, recycle, and library-entry removal now reject overlapping
   or disconnected dispatches, protecting file and metadata state from rapid
