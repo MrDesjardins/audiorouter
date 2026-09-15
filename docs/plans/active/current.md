@@ -2,6 +2,13 @@
 
 Updated: 2026-09-14.
 
+- Added an M07 startup safety regression on 2026-09-14 proving that a failed
+  backend `startup.apply` cannot fall through to native startup registration.
+  The focused UI suite (59 tests), TypeScript typecheck, and diff checks
+  passed. No registry, driver, endpoint, plugin, or machine audio
+  configuration was accessed. Next action: continue the next safe M03/M07
+  implementation slice.
+
 - Hardened M06 plugin inventory failure handling on 2026-09-14. Failed scan,
   cached-list, and retry operations now clear the candidate inventory and any
   prior inspection path/result, preventing stale plugin metadata after an

@@ -80,6 +80,23 @@ describe("VB-Cable endpoint selection", () => {
     expect(await screen.findByText(/Startup registration disabled/)).toBeTruthy();
   });
 
+  it("does not register native startup when backend apply fails", async () => {
+    const registerStartup = vi.fn(async () => "startup-command");
+    const backend = {
+      ...connectedPreviewBackend(),
+      getStartup: vi.fn(async () => ({ enabled: false, registration: "unavailable" as const, reason: "shell-owned" })),
+      planStartup: vi.fn(async () => ({ planId: "startup-plan", enabled: true, registration: "unavailable" as const, reason: "shell-owned", requiredScopes: ["startupWrite" as const], warnings: [] })),
+      applyStartup: vi.fn(async () => { throw new Error("backend apply rejected"); }),
+      registerStartup,
+    };
+    render(<App backend={backend} />);
+    fireEvent.change(screen.getByLabelText("Desired sign-in startup policy"), { target: { value: "enabled" } });
+    fireEvent.click(screen.getByRole("button", { name: "Plan startup policy" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Apply planned policy" }));
+    expect(await screen.findByText(/backend apply rejected/)).toBeTruthy();
+    expect(registerStartup).not.toHaveBeenCalled();
+  });
+
   it("refreshes startup state when the existing backend reconnects", async () => {
     const backend = {
       ...connectedPreviewBackend(),
