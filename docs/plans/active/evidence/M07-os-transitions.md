@@ -9,11 +9,18 @@ non-native, non-recording sessions for endpoint revalidation before restart;
 protected sessions remain stopped. IDs are sorted and deduplicated before a
 decision is returned.
 
+The control plane now applies the stop/release boundary through
+`ControlPlane::handle_os_transition`. It refuses a sleep/sign-out transition
+when an active recorder still needs explicit finalization, preserving the
+running session rather than silently losing recording data. A successful sleep
+stores only eligible portable sessions; resume consumes that bounded set and
+returns `revalidateBeforeRestart` without starting audio itself.
+
 Validation:
 
 ```text
 cargo test -p audiorouter-control --locked --lib -- --test-threads=1
-162 passed; 2 ignored; 0 failed
+164 passed; 2 ignored; 0 failed
 ```
 
 This is portable policy evidence, not Windows power-notification evidence.

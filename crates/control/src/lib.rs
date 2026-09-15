@@ -36,6 +36,8 @@ use std::time::{Duration, Instant};
 
 pub mod os_transition;
 
+use os_transition::{plan_os_transition, OsTransition};
+
 const MUTATION_RATE_PER_SECOND: f64 = 20.0;
 const MUTATION_BURST: f64 = 40.0;
 const MAX_MUTATION_BUCKETS: usize = 256;
@@ -3998,6 +4000,7 @@ pub struct ControlPlane {
     privacy_muted: bool,
     startup_enabled: bool,
     recovery_tracker: CrashRecoveryTracker,
+    os_suspended_sessions: Vec<EntityId>,
     virtual_buses: VirtualBusRegistry,
     virtual_bus_routes: VirtualBusRouteRegistry,
     virtual_bus_route_revision: u64,
@@ -4076,6 +4079,7 @@ impl ControlPlane {
             privacy_muted: false,
             startup_enabled: false,
             recovery_tracker: CrashRecoveryTracker::default(),
+            os_suspended_sessions: Vec::new(),
             virtual_buses: VirtualBusRegistry::default(),
             virtual_bus_routes: VirtualBusRouteRegistry::default(),
             virtual_bus_route_revision: 0,
@@ -5497,6 +5501,7 @@ impl ControlPlane {
             privacy_muted,
             startup_enabled,
             recovery_tracker: CrashRecoveryTracker::default(),
+            os_suspended_sessions: Vec::new(),
             virtual_buses,
             virtual_bus_routes,
             virtual_bus_route_revision,
@@ -7064,6 +7069,89 @@ impl ControlPlane {
             return Err(error);
         }
         Ok(decision)
+    }
+
+    /// Apply the side-effecting portion of an OS transition on the control
+    /// thread. Sign-out and sleep stop sessions and release their ownership;
+    /// resume only reports the previously running portable sessions that a
+    /// platform adapter must re-enumerate and revalidate before calling
+    /// `session_start`. Native and recording sessions are never resumed here.
+    pub fn handle_os_transition(
+        &mut self,
+        transition: OsTransition,
+    ) -> Result<Value, ControlError> {
+        let mut running_sessions = self
+            .runtimes
+            .iter()
+            .filter(|(_, runtime)| runtime.state() == RuntimeState::Running)
+            .map(|(id, _)| id.clone())
+            .collect::<Vec<_>>();
+        running_sessions.sort_by(|left, right| left.as_str().cmp(right.as_str()));
+        let native_sessions = running_sessions
+            .iter()
+            .filter(|id| self.native_worker_attached_to(id))
+            .cloned()
+            .collect::<Vec<_>>();
+        let recording_sessions = running_sessions
+            .iter()
+            .filter(|id| {
+                self.recorders.get(*id).is_some_and(|recorder| {
+                    matches!(
+                        recorder.state(),
+                        RecorderState::Armed
+                            | RecorderState::Recording
+                            | RecorderState::Paused
+                            | RecorderState::Stopping
+                    )
+                })
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+
+        let decision = plan_os_transition(
+            transition,
+            &running_sessions,
+            &native_sessions,
+            &recording_sessions,
+        );
+        match transition {
+            OsTransition::Lock => Ok(json!({
+                "transition": "lock",
+                "action": "keepRunning",
+                "sessionIds": decision.session_ids,
+            })),
+            OsTransition::SignOut | OsTransition::Sleep => {
+                if !recording_sessions.is_empty() {
+                    return Err(ControlError::InvalidRequest(
+                        "OS transition requires explicit recorder finalization".into(),
+                    ));
+                }
+                let resumable = decision
+                    .session_ids
+                    .iter()
+                    .filter(|id| !native_sessions.contains(id))
+                    .cloned()
+                    .collect::<Vec<_>>();
+                for session_id in &decision.session_ids {
+                    self.session_stop(session_id)?;
+                }
+                self.os_suspended_sessions = resumable;
+                Ok(json!({
+                    "transition": if transition == OsTransition::Sleep { "sleep" } else { "signOut" },
+                    "action": "stopAndRelease",
+                    "sessionIds": decision.session_ids,
+                }))
+            }
+            OsTransition::Resume => {
+                let session_ids = std::mem::take(&mut self.os_suspended_sessions);
+                let decision = plan_os_transition(transition, &session_ids, &[], &[]);
+                Ok(json!({
+                    "transition": "resume",
+                    "action": if decision.session_ids.is_empty() { "remainStopped" } else { "revalidateBeforeRestart" },
+                    "sessionIds": decision.session_ids,
+                }))
+            }
+        }
     }
 
     fn status_snapshot(&mut self) -> Result<Value, ControlError> {
@@ -14705,6 +14793,56 @@ mod tests {
         let third = plane.record_runtime_crash(102).unwrap();
         assert_eq!(third.mode, RecoveryMode::SafeMode);
         assert!(third.session_ids.is_empty());
+    }
+
+    #[test]
+    fn sleep_stops_fake_sessions_and_resume_requires_revalidation() {
+        let mut plane = ControlPlane::default();
+        let mut value = session();
+        value.id = EntityId::new("sleep-route");
+        let session_id = value.id.clone();
+        plane.insert_session(value).unwrap();
+        plane.session_start(&session_id).unwrap();
+
+        let stopped = plane
+            .handle_os_transition(os_transition::OsTransition::Sleep)
+            .unwrap();
+        assert_eq!(stopped["action"], "stopAndRelease");
+        assert_eq!(
+            plane.status_snapshot().unwrap()["activeSessionIds"],
+            json!([])
+        );
+
+        let resumed = plane
+            .handle_os_transition(os_transition::OsTransition::Resume)
+            .unwrap();
+        assert_eq!(resumed["action"], "revalidateBeforeRestart");
+        assert_eq!(resumed["sessionIds"], json!(["sleep-route"]));
+        assert_eq!(
+            plane.status_snapshot().unwrap()["activeSessionIds"],
+            json!([])
+        );
+    }
+
+    #[test]
+    fn os_transition_refuses_to_stop_an_active_recording_implicitly() {
+        let mut plane = ControlPlane::default();
+        let value = session();
+        let session_id = value.id.clone();
+        plane.insert_session(value).unwrap();
+        plane.session_start(&session_id).unwrap();
+        let recorder = RecorderController::new();
+        plane.recorders.insert(session_id.clone(), recorder);
+        let recorder = plane.recorders.get_mut(&session_id).unwrap();
+        recorder.arm().unwrap();
+        recorder.start(0).unwrap();
+
+        let result = plane.handle_os_transition(os_transition::OsTransition::Sleep);
+        assert!(result.is_err());
+        assert_eq!(
+            plane.status_snapshot().unwrap()["activeSessionIds"],
+            json!([session_id])
+        );
     }
 
     #[test]

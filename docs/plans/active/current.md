@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Extended the STATE-11 boundary on 2026-09-14 from pure planning to control
+  application. `ControlPlane::handle_os_transition` now stops and releases
+  portable sessions for sleep/sign-out, refuses implicit interruption of an
+  active recording, and returns the saved portable session set for resume
+  revalidation without opening audio. The focused control suite passed 164
+  tests (2 ignored); details are in [M07 OS-transition policy evidence]
+  (evidence/M07-os-transitions.md). Native power notifications and endpoint
+  re-enumeration remain open gates. Next action: integrate this boundary into
+  the guarded Windows lifecycle adapter.
+
 - Added the portable STATE-11 OS-transition policy boundary on 2026-09-14.
   `crates/control/src/os_transition.rs` now plans lock, sign-out, sleep, and
   resume actions without side effects: lock keeps explicit sessions; sign-out
