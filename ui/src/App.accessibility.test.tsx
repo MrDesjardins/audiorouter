@@ -397,6 +397,20 @@ describe("VB-Cable endpoint selection", () => {
     expect(screen.queryByText(/inspected C:\\Plugins\\two\.dll/)).toBeNull();
   });
 
+  it("prevents duplicate plugin scans while the first scan is pending", async () => {
+    let releaseScan!: (value: { directory: string; entries: never[] }) => void;
+    const scanResult = new Promise<{ directory: string; entries: never[] }>((resolve) => { releaseScan = resolve; });
+    const scanPlugins = vi.fn(() => scanResult);
+    render(<App backend={{ ...connectedPreviewBackend(), scanPlugins }} />);
+    fireEvent.change(await screen.findByRole("textbox", { name: "Absolute plugin directory" }), { target: { value: "C:\\Plugins" } });
+    fireEvent.click(screen.getByRole("button", { name: "Scan directory" }));
+    await screen.findByText("Scanning selected directory...");
+    fireEvent.click(screen.getByRole("button", { name: "Scan directory" }));
+    expect(scanPlugins).toHaveBeenCalledTimes(1);
+    releaseScan({ directory: "C:\\Plugins", entries: [] });
+    await waitFor(() => expect(screen.getByText("Plugin scan completed without loading plugin code.")).toBeTruthy());
+  });
+
   it("returns exact IDs only for one active, unambiguous pair", () => {
     const format = { sampleRateHz: 48000, channels: 2, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 8 };
     expect(findVbCableEndpointPair([

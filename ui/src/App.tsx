@@ -321,29 +321,47 @@ function PluginScanPanel({ backend, onAddPlaceholder }: { backend: UiBackend; on
   const [inspectionPath, setInspectionPath] = useState("");
   const [inspection, setInspection] = useState<import("@audiorouter/contracts").PluginScanEntry | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const requestGeneration = useRef(0);
   const scan = async () => {
     if (!directory.trim()) { setMessage("Enter an absolute plugin directory."); return; }
+    if (busy || !backend.connected) return;
+    const request = ++requestGeneration.current;
+    setBusy(true);
     setMessage("Scanning selected directory...");
-    try { setResult(await backend.scanPlugins(directory.trim())); setInspection(null); setInspectionPath(""); setMessage("Plugin scan completed without loading plugin code."); }
-    catch (error) { setResult(null); setInspection(null); setInspectionPath(""); setMessage(formatUiError(error, "Plugin scan unavailable.")); }
+    try { const next = await backend.scanPlugins(directory.trim()); if (request === requestGeneration.current) { setResult(next); setInspection(null); setInspectionPath(""); setMessage("Plugin scan completed without loading plugin code."); } }
+    catch (error) { if (request === requestGeneration.current) { setResult(null); setInspection(null); setInspectionPath(""); setMessage(formatUiError(error, "Plugin scan unavailable.")); } }
+    finally { if (request === requestGeneration.current) setBusy(false); }
   };
   const list = async () => {
     if (!directory.trim()) { setMessage("Enter an absolute plugin directory."); return; }
+    if (busy || !backend.connected) return;
+    const request = ++requestGeneration.current;
+    setBusy(true);
     setMessage("Loading the last explicit plugin scan...");
-    try { setResult(await backend.listPlugins(directory.trim())); setInspection(null); setInspectionPath(""); setMessage("Loaded the last backend scan without rescanning."); }
-    catch (error) { setResult(null); setInspection(null); setInspectionPath(""); setMessage(formatUiError(error, "Plugin inventory unavailable.")); }
+    try { const next = await backend.listPlugins(directory.trim()); if (request === requestGeneration.current) { setResult(next); setInspection(null); setInspectionPath(""); setMessage("Loaded the last backend scan without rescanning."); } }
+    catch (error) { if (request === requestGeneration.current) { setResult(null); setInspection(null); setInspectionPath(""); setMessage(formatUiError(error, "Plugin inventory unavailable.")); } }
+    finally { if (request === requestGeneration.current) setBusy(false); }
   };
   const inspect = async () => {
     if (!inspectionPath.trim()) { setMessage("Enter an absolute plugin path."); return; }
+    if (busy || !backend.connected) return;
+    const request = ++requestGeneration.current;
+    setBusy(true);
     setMessage("Inspecting selected plugin path...");
-    try { setInspection(await backend.inspectPlugin(inspectionPath.trim())); setMessage("Plugin inspection completed without loading plugin code."); }
-    catch (error) { setInspection(null); setMessage(formatUiError(error, "Plugin inspection unavailable.")); }
+    try { const next = await backend.inspectPlugin(inspectionPath.trim()); if (request === requestGeneration.current) { setInspection(next); setMessage("Plugin inspection completed without loading plugin code."); } }
+    catch (error) { if (request === requestGeneration.current) { setInspection(null); setMessage(formatUiError(error, "Plugin inspection unavailable.")); } }
+    finally { if (request === requestGeneration.current) setBusy(false); }
   };
   const retry = async () => {
     if (!directory.trim()) { setMessage("Enter an absolute plugin directory."); return; }
+    if (busy || !backend.connected) return;
+    const request = ++requestGeneration.current;
+    setBusy(true);
     setMessage("Retrying selected directory scan...");
-    try { setResult(await backend.retryPlugins(directory.trim(), uiIdempotencyKey("plugins-retry"))); setInspection(null); setInspectionPath(""); setMessage("Plugin scan retry completed without loading plugin code."); }
-    catch (error) { setResult(null); setInspection(null); setInspectionPath(""); setMessage(formatUiError(error, "Plugin scan retry unavailable.")); }
+    try { const next = await backend.retryPlugins(directory.trim(), uiIdempotencyKey("plugins-retry")); if (request === requestGeneration.current) { setResult(next); setInspection(null); setInspectionPath(""); setMessage("Plugin scan retry completed without loading plugin code."); } }
+    catch (error) { if (request === requestGeneration.current) { setResult(null); setInspection(null); setInspectionPath(""); setMessage(formatUiError(error, "Plugin scan retry unavailable.")); } }
+    finally { if (request === requestGeneration.current) setBusy(false); }
   };
   const selectInspectionPath = (path: string) => {
     setInspectionPath(path);

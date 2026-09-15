@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Hardened M06 plugin discovery concurrency on 2026-09-14. Scan, cached-list,
+  retry, and inspect handlers now use a single-flight/request-generation
+  boundary, preventing duplicate scans and stale plugin metadata from
+  superseded requests. Added pending-scan coverage; the focused UI suite (72
+  tests) and TypeScript typecheck passed. No plugin code was loaded or
+  modified, and no audio, endpoint, driver, registry, or machine configuration
+  was changed. Next action: continue the next safe M03/M07 implementation
+  slice.
+
 - Hardened M07 session transfer ordering on 2026-09-14. A newly selected
   import immediately invalidates any prior plan, validation is single-flight,
   and late results from superseded requests are ignored; commit remains
