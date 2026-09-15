@@ -559,6 +559,7 @@ function NativeEndpointPanel({ backend, sessionId, devices, sessionRunning, onSt
   const [captureEndpointId, setCaptureEndpointId] = useState(() => readEndpointBindingHint(sessionId).captureEndpointId ?? "");
   const [renderEndpointId, setRenderEndpointId] = useState(() => readEndpointBindingHint(sessionId).renderEndpointId ?? "");
   const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
     const hint = readEndpointBindingHint(sessionId);
     setCaptureEndpointId(hint.captureEndpointId ?? "");
@@ -573,17 +574,21 @@ function NativeEndpointPanel({ backend, sessionId, devices, sessionRunning, onSt
     if (renderEndpointId && !activeRender.some((device) => device.id === renderEndpointId)) setRenderEndpointId("");
   }, [devices, sessionId, captureEndpointId, renderEndpointId]);
   const prepare = async () => {
+    if (busy || !backend.connected) return;
     if (!backend.prepareNativeEndpoint) { setMessage("Native endpoint preparation is unavailable in this backend."); return; }
     if (!captureEndpointId || !renderEndpointId) { setMessage("Select both an active capture and render endpoint."); return; }
-    setMessage("Preparing exact endpoints in stopped state...");
+    setBusy(true); setMessage("Preparing exact endpoints in stopped state...");
     try { const result = await backend.prepareNativeEndpoint(sessionId, captureEndpointId, renderEndpointId); setMessage(`Prepared ${result.state}; start the session to activate audio.`); }
     catch (error) { setMessage(formatUiError(error, "Native endpoint preparation failed.")); }
+    finally { setBusy(false); }
   };
   const detach = async () => {
+    if (busy || !backend.connected) return;
     if (!backend.detachNativeEndpoint) { setMessage("Native endpoint detachment is unavailable in this backend."); return; }
-    setMessage("Detaching the stopped native worker...");
+    setBusy(true); setMessage("Detaching the stopped native worker...");
     try { const result = await backend.detachNativeEndpoint(sessionId); setMessage(`Native worker ${result.state}; select new endpoints before preparing again.`); }
     catch (error) { setMessage(formatUiError(error, "Native endpoint detachment failed.")); }
+    finally { setBusy(false); }
   };
   const selectVbCable = () => {
     if (!vbCablePair) { setMessage("An unambiguous active VB-Cable input/output pair was not found."); return; }

@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Hardened M03 native endpoint preparation controls on 2026-09-14. Prepare and
+  detach handlers now fail closed when disconnected and reject concurrent
+  operations while an exact endpoint worker transition is pending. Added a
+  duplicate-preparation regression using the explicit VB-Cable pair without
+  opening an endpoint; the focused UI suite (67 tests) and TypeScript
+  typecheck passed. No endpoint, driver, registry, or machine audio
+  configuration was changed. Next action: continue the next safe M03/M07
+  implementation slice.
+
 - Hardened M03 virtual-route replacement on 2026-09-14. Revisioned route
   inventory refreshes now ignore stale responses, and replacement controls
   reject concurrent requests while explicitly disabling during the in-flight

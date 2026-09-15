@@ -469,6 +469,25 @@ describe("VB-Cable endpoint selection", () => {
     await waitFor(() => expect(detachNativeEndpoint).toHaveBeenCalledWith("demo-session"));
     expect(await screen.findByText(/Native worker detached; select new endpoints/i)).toBeTruthy();
   });
+
+  it("prevents duplicate native endpoint preparation while the first request is pending", async () => {
+    const format = { sampleRateHz: 48000, channels: 2, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 8 };
+    const devices = [
+      { id: "capture-vb", name: "CABLE Output (VB-Audio Virtual Cable)", direction: "capture" as const, state: "active" as const, defaultRoles: [], format, periods: { default100ns: 100000, minimum100ns: 30000 } },
+      { id: "render-vb", name: "CABLE Input (VB-Audio Virtual Cable)", direction: "render" as const, state: "active" as const, defaultRoles: [], format, periods: { default100ns: 100000, minimum100ns: 30000 } },
+    ];
+    let releasePrepare!: (value: { sessionId: string; state: "configured-stopped"; captureEndpointId: string; renderEndpointId: string }) => void;
+    const result = new Promise<{ sessionId: string; state: "configured-stopped"; captureEndpointId: string; renderEndpointId: string }>((resolve) => { releasePrepare = resolve; });
+    const prepareNativeEndpoint = vi.fn(() => result);
+    render(<App backend={{ ...connectedPreviewBackend(), listDevices: async () => devices, prepareNativeEndpoint }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Select VB-Cable loopback pair" }));
+    fireEvent.click(screen.getByRole("button", { name: "Prepare native endpoints" }));
+    await screen.findByText("Preparing exact endpoints in stopped state...");
+    fireEvent.click(screen.getByRole("button", { name: "Prepare native endpoints" }));
+    expect(prepareNativeEndpoint).toHaveBeenCalledTimes(1);
+    releasePrepare({ sessionId: "demo-session", state: "configured-stopped", captureEndpointId: "capture-vb", renderEndpointId: "render-vb" });
+    await waitFor(() => expect(screen.getByText(/Prepared configured-stopped/)).toBeTruthy());
+  });
 });
 
 describe("keyboard connection dialog", () => {
