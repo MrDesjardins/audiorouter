@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Completed the M07 session-configuration mutation boundary on 2026-09-14.
+  Delete now shares the create/duplicate single-flight guard, checks backend
+  connectivity before confirmation/dispatch, and always releases its busy
+  state on success or failure. The focused UI suite (78 tests), TypeScript
+  typecheck, and diff checks passed. No audio, endpoint, driver, registry, or
+  machine configuration was changed. Next action: continue the next
+  independently testable native bridge/API slice.
+
 - Guarded M07 session configuration mutations on 2026-09-14. Create and
   duplicate session actions now fail closed when disconnected and reject
   overlapping requests; the shared status summary exposes the in-flight
