@@ -309,6 +309,19 @@ describe("VB-Cable endpoint selection", () => {
     await waitFor(() => expect(startSession).toHaveBeenCalledTimes(1));
   });
 
+  it("prevents overlapping privacy-mute changes", async () => {
+    let releaseMute!: () => void;
+    const setPrivacyMute = vi.fn(() => new Promise<{ muted: boolean; persistence: "memory"; audioEffect: "process-local" }>((resolve) => { releaseMute = () => resolve({ muted: true, persistence: "memory", audioEffect: "process-local" }); }));
+    render(<App backend={{ ...connectedPreviewBackend(), setPrivacyMute }} />);
+    const muteButtons = screen.getAllByRole("button", { name: "Privacy mute enabled" });
+    fireEvent.click(muteButtons[0]);
+    await screen.findByText("Disabling privacy mute...");
+    fireEvent.click(muteButtons[0]);
+    expect(setPrivacyMute).toHaveBeenCalledTimes(1);
+    releaseMute();
+    await waitFor(() => expect(setPrivacyMute).toHaveBeenCalledTimes(1));
+  });
+
   it("forwards the selected application capture policy", async () => {
     const prepareNativeApplication = vi.fn(async () => ({ sessionId: demoSession.id, state: "configured-stopped" as const, processId: 42, executable: "Music.exe", executablePath: "C:\\Apps\\Music.exe", creationTime100ns: "123", mode: "exclude" as const, renderEndpointId: "render-test" }));
     const backend = {

@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Guarded M07 safety-control concurrency on 2026-09-14. Privacy-mute and
+  recovery-safe-mode actions now reject overlapping or disconnected dispatches,
+  including calls from keyboard shortcuts and compact status controls. Added
+  a duplicate privacy-mute regression; the focused UI suite (77 tests),
+  TypeScript typecheck, and diff checks passed. No audio, endpoint, driver,
+  registry, or machine configuration was accessed. Next action: continue the
+  next safe M03/M07 implementation slice.
+
 - Guarded M02/M07 session lifecycle actions on 2026-09-14. Start and stop
   requests now reject duplicate or disconnected dispatches while the first
   lifecycle mutation is pending, preventing overlapping backend transitions.
