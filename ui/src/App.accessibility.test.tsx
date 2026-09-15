@@ -286,6 +286,29 @@ describe("VB-Cable endpoint selection", () => {
     expect(screen.getByText(/added a stopped plugin placeholder/i)).toBeTruthy();
   });
 
+  it("clears stale plugin inspection when selecting another scan result", async () => {
+    const backend = {
+      ...connectedPreviewBackend(),
+      scanPlugins: async () => ({
+        directory: "C:\\Plugins",
+        entries: [
+          { path: "C:\\Plugins\\one.dll", identity: null, error: "first", errorCode: "io" as const },
+          { path: "C:\\Plugins\\two.dll", identity: null, error: "second", errorCode: "io" as const },
+        ],
+      }),
+      inspectPlugin: vi.fn(async (path: string) => ({ path, identity: null, error: `inspected ${path}`, errorCode: "io" as const })),
+    };
+    render(<App backend={backend} />);
+    fireEvent.change(await screen.findByRole("textbox", { name: "Absolute plugin directory" }), { target: { value: "C:\\Plugins" } });
+    fireEvent.click(screen.getByRole("button", { name: "Scan directory" }));
+    const selections = await screen.findAllByRole("button", { name: "Select for inspection" });
+    fireEvent.click(selections[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Inspect path" }));
+    expect(await screen.findByText(/inspected C:\\Plugins\\one\.dll/)).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button", { name: "Select for inspection" })[1]);
+    expect(screen.queryByText(/inspected C:\\Plugins\\one\.dll/)).toBeNull();
+  });
+
   it("returns exact IDs only for one active, unambiguous pair", () => {
     const format = { sampleRateHz: 48000, channels: 2, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 8 };
     expect(findVbCableEndpointPair([

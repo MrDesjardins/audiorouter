@@ -321,6 +321,7 @@ function PluginScanPanel({ backend, onAddPlaceholder }: { backend: UiBackend; on
   };
   const selectInspectionPath = (path: string) => {
     setInspectionPath(path);
+    setInspection(null);
     setMessage("Selected the discovered path; inspect it explicitly when ready.");
   };
   const addToDraft = (entry: import("@audiorouter/contracts").PluginScanEntry) => {

@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Fixed an M06 plugin-inspection stale-state defect on 2026-09-14. Selecting a
+  different scan candidate now clears the prior inspection result, preventing
+  old vendor/error metadata from being shown for a new path. Added an
+  accessibility regression for the selection sequence; the focused UI suite
+  (58 tests), TypeScript typecheck, and diff checks passed. No plugin was
+  loaded, registered, or modified, and no audio configuration changed. Next
+  action: continue the next safe M03/M07 implementation slice.
+
 - Passed the isolated supplied TDR Nova x64 VST2 acceptance on 2026-09-14.
   Processing succeeded at 44.1, 48, and 96 kHz; editor-thread containment and
   supervised timeout/reaping passed; and the binary fingerprint
