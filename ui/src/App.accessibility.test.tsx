@@ -307,6 +307,10 @@ describe("VB-Cable endpoint selection", () => {
     expect(await screen.findByText(/inspected C:\\Plugins\\one\.dll/)).toBeTruthy();
     fireEvent.click(screen.getAllByRole("button", { name: "Select for inspection" })[1]);
     expect(screen.queryByText(/inspected C:\\Plugins\\one\.dll/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Inspect path" }));
+    expect(await screen.findByText(/inspected C:\\Plugins\\two\.dll/)).toBeTruthy();
+    fireEvent.change(screen.getByRole("textbox", { name: "Absolute plugin path" }), { target: { value: "C:\\Plugins\\manual.dll" } });
+    expect(screen.queryByText(/inspected C:\\Plugins\\two\.dll/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Scan directory" }));
     expect(screen.queryByText(/inspected C:\\Plugins\\two\.dll/)).toBeNull();
   });

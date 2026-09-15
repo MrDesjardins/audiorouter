@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Closed the remaining M06 inspection-path stale-state case on 2026-09-14.
+  Editing the absolute path now clears the prior inspection result immediately,
+  before any new inspection request. Added regression coverage for direct path
+  edits; the focused UI suite (58 tests), TypeScript typecheck, and diff checks
+  passed. No plugin was loaded, registered, or modified, and no audio
+  configuration changed. Next action: continue the next safe M03/M07
+  implementation slice.
+
 - Improved M05/M06 plugin-result accessibility on 2026-09-14. Each supported
   candidate's graph-add control now has an accessible name containing its
   exact path, removing ambiguity when multiple plugins are listed. The full
