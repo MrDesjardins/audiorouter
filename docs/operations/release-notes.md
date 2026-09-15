@@ -74,9 +74,16 @@ release and must not be presented as an installable Windows audio product.
   filesystem/network OS sandboxing, arbitrary plugin execution, and a broad
   third-party compatibility matrix remain open. The VST2 editor, rights, and
   release-qualification gates also remain open.
-- Sign-in startup registration remains unverified in an attended rollback run;
-  tray/background lifecycle code is covered by shell tests, while manual
-  accessibility, scaling, and first-time-user qualification remain open.
+- Sign-in startup registration is verified at the native helper boundary, but
+  an attended rollback run, manual accessibility, scaling, and first-time-user
+  qualification remain open.
+
+The native startup helper's HKCU Run boundary was requalified on 2026-09-14
+with an opt-in enable/disable round trip. The test temporarily created only
+the current user's `AudioRouter` value, verified ownership, removed it, and
+confirmed the value was absent afterward. The native helper is qualified; an
+attended shell/accessibility and clean-machine startup review is still
+required before release claims.
 
 ## Safety and recovery
 

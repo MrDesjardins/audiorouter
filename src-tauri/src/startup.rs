@@ -125,7 +125,7 @@ mod windows_registry {
                     Some(0),
                     None,
                     REG_OPTION_NON_VOLATILE,
-                    KEY_SET_VALUE,
+                    KEY_QUERY_VALUE | KEY_SET_VALUE,
                     None,
                     &mut raw,
                     None,
@@ -222,7 +222,8 @@ mod windows_registry {
 
     #[cfg(test)]
     mod tests {
-        use super::registration_matches;
+        use super::{apply, is_registered, registration_matches};
+        use std::path::PathBuf;
 
         #[test]
         fn ownership_matches_windows_path_casing() {
@@ -242,6 +243,27 @@ mod windows_registry {
                 r#""C:\Program Files\AudioRouter\shell.exe" --unexpected"#,
                 r#"C:\Program Files\AudioRouter\shell.exe"#
             ));
+        }
+
+        #[test]
+        fn opt_in_registry_round_trip_restores_an_unregistered_value() {
+            if std::env::var_os("AUDIOROUTER_ALLOW_STARTUP_REGISTRY_TEST").is_none() {
+                return;
+            }
+            let executable = std::env::current_exe().expect("startup test executable");
+            let executable = PathBuf::from(executable);
+            assert!(!is_registered(&executable).expect("inspect startup registration"));
+            struct Cleanup<'a>(&'a std::path::Path);
+            impl Drop for Cleanup<'_> {
+                fn drop(&mut self) {
+                    let _ = apply(false, self.0);
+                }
+            }
+            apply(true, &executable).expect("enable startup registration");
+            let _cleanup = Cleanup(&executable);
+            assert!(is_registered(&executable).expect("verify startup registration"));
+            apply(false, &executable).expect("disable startup registration");
+            assert!(!is_registered(&executable).expect("verify startup cleanup"));
         }
     }
 }

@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Closed the native startup-registration access-mask defect on 2026-09-14.
+  The HKCU Run enable path now requests query and set access together, which
+  is required because it verifies existing ownership before writing. The
+  opt-in Windows round-trip test passed: enable, exact executable ownership
+  check, disable, and cleanup; a post-test registry check confirmed the
+  `AudioRouter` value was absent. No audio, driver, machine-wide policy, or
+  unrelated registry value was touched. Native helper behavior is now
+  verified; attended shell/accessibility and clean-machine startup review
+  remain separate gates. Next action: continue the next safe M03/M07
+  recovery or delivery implementation slice.
+
 - Requalified the complete guarded `safe-all.ps1` chain at current pushed head
   on 2026-09-14. M00 toolchain/native checks, non-installing M03 x64 WDK build
   and catalog signability, M01 CLI, M04 DSP/recording, M05 UI (216 tests and

@@ -475,7 +475,10 @@ fn tray_active_session_ids(response: &JsonRpcResponse) -> Option<Vec<String>> {
             (!id.is_empty()).then_some(id)
         })
         .collect::<Option<_>>()?;
-    if ids.iter().any(|id| ids.iter().filter(|other| *other == id).count() != 1) {
+    if ids
+        .iter()
+        .any(|id| ids.iter().filter(|other| *other == id).count() != 1)
+    {
         return None;
     }
     Some(ids)
@@ -527,7 +530,11 @@ fn tray_privacy_muted(response: &JsonRpcResponse) -> Option<bool> {
         .and_then(serde_json::Value::as_bool)
 }
 
-fn refresh_tray_status<R: Runtime>(status: &MenuItem<R>, recordings: &MenuItem<R>, pipe_name: &str) {
+fn refresh_tray_status<R: Runtime>(
+    status: &MenuItem<R>,
+    recordings: &MenuItem<R>,
+    pipe_name: &str,
+) {
     let status_request = JsonRpcRequest {
         jsonrpc: "2.0".into(),
         id: Some(serde_json::json!("tray-status")),
@@ -630,12 +637,10 @@ fn main() {
                                 method: "status.get".into(),
                                 params: None,
                             };
-                            let Some(active_sessions) = forward_rpc_request(
-                                &status_request,
-                                &pipe_name,
-                            )
-                            .ok()
-                            .and_then(|response| tray_active_session_ids(&response))
+                            let Some(active_sessions) =
+                                forward_rpc_request(&status_request, &pipe_name)
+                                    .ok()
+                                    .and_then(|response| tray_active_session_ids(&response))
                             else {
                                 let _ = status_for_handler
                                     .set_text("Quit refused: session status unavailable");
@@ -647,19 +652,18 @@ fn main() {
                                 method: "recorders.list".into(),
                                 params: None,
                             };
-                            let Some(recorders) = forward_rpc_request(&recorders_request, &pipe_name)
-                                .ok()
-                                .and_then(|response| tray_recorders_to_finalize_all(&response))
+                            let Some(recorders) =
+                                forward_rpc_request(&recorders_request, &pipe_name)
+                                    .ok()
+                                    .and_then(|response| tray_recorders_to_finalize_all(&response))
                             else {
                                 let _ = status_for_handler
                                     .set_text("Quit refused: recorder status unavailable");
                                 return;
                             };
-                            let recorders = recorders
-                                .into_iter()
-                                .filter(|(session_id, _, _)| {
-                                    active_sessions.iter().any(|id| id == session_id)
-                                });
+                            let recorders = recorders.into_iter().filter(|(session_id, _, _)| {
+                                active_sessions.iter().any(|id| id == session_id)
+                            });
                             for (index, (session_id, node_id, frame)) in recorders.enumerate() {
                                 let mut params = serde_json::json!({
                                     "sessionId": session_id,
@@ -696,9 +700,7 @@ fn main() {
                             for (index, session_id) in active_sessions.into_iter().enumerate() {
                                 let request = JsonRpcRequest {
                                     jsonrpc: "2.0".into(),
-                                    id: Some(serde_json::json!(format!(
-                                        "tray-quit-stop-{index}"
-                                    ))),
+                                    id: Some(serde_json::json!(format!("tray-quit-stop-{index}"))),
                                     method: "session.stop".into(),
                                     params: Some(serde_json::json!({
                                         "sessionId": session_id,
@@ -985,8 +987,16 @@ mod tests {
         assert_eq!(
             tray_recorders_to_finalize_all(&response),
             Some(vec![
-                (DESKTOP_SESSION_ID.to_owned(), Some("mic-rec".to_owned()), 480),
-                ("other-session".to_owned(), Some("other-rec".to_owned()), 960),
+                (
+                    DESKTOP_SESSION_ID.to_owned(),
+                    Some("mic-rec".to_owned()),
+                    480
+                ),
+                (
+                    "other-session".to_owned(),
+                    Some("other-rec".to_owned()),
+                    960
+                ),
             ])
         );
     }
@@ -1022,13 +1032,12 @@ mod tests {
         assert_eq!(tray_recorders_to_finalize_all(&malformed_item), None);
 
         let active_without_frame = JsonRpcResponse {
-            result: Some(json!([{ "sessionId": DESKTOP_SESSION_ID, "state": "recording", "lastFrame": null }])),
+            result: Some(
+                json!([{ "sessionId": DESKTOP_SESSION_ID, "state": "recording", "lastFrame": null }]),
+            ),
             ..malformed_item
         };
-        assert_eq!(
-            tray_recorders_to_finalize_all(&active_without_frame),
-            None
-        );
+        assert_eq!(tray_recorders_to_finalize_all(&active_without_frame), None);
     }
 
     #[test]
