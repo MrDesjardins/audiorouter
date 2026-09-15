@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Added M07 disconnect fail-closed behavior on 2026-09-14. A prepared startup
+  plan's apply control is disabled as soon as the shared backend reports a
+  disconnect, preventing stale lifecycle work from being dispatched. Added a
+  regression for planning, disconnecting, rerendering, and attempted apply.
+  The focused UI suite (61 tests), TypeScript typecheck, and diff checks pass.
+  No registry, driver, endpoint, plugin, or machine audio configuration was
+  accessed. Next action: continue the next safe M03/M07 implementation slice.
+
 - Hardened M07 startup refresh ordering on 2026-09-14. Startup status and
   native-registration responses now carry a generation guard, so an older
   asynchronous refresh cannot overwrite newer observed state or diagnostics.
