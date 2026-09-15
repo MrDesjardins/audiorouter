@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Hardened M06 plugin inventory failure handling on 2026-09-14. Failed scan,
+  cached-list, and retry operations now clear the candidate inventory and any
+  prior inspection path/result, preventing stale plugin metadata after an
+  error. Added a regression for failed refresh invalidation; the focused UI
+  suite (58 tests), TypeScript typecheck, and diff checks passed. No plugin was
+  loaded, registered, or modified, and no audio configuration changed. Next
+  action: continue the next safe M03/M07 implementation slice.
+
 - Passed the isolated M06 crash-containment regression on 2026-09-14 using the
   supplied BUSTERse VST3 negative fixture. The expected worker failure was
   contained and reaped successfully under the no-UI fault configuration; no

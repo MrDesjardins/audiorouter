@@ -287,15 +287,20 @@ describe("VB-Cable endpoint selection", () => {
   });
 
   it("clears stale plugin inspection when selecting another scan result", async () => {
+    let scanCount = 0;
     const backend = {
       ...connectedPreviewBackend(),
-      scanPlugins: async () => ({
+      scanPlugins: async () => {
+        scanCount += 1;
+        if (scanCount > 1) throw new Error("refresh failed");
+        return {
         directory: "C:\\Plugins",
         entries: [
           { path: "C:\\Plugins\\one.dll", identity: null, error: "first", errorCode: "io" as const },
           { path: "C:\\Plugins\\two.dll", identity: null, error: "second", errorCode: "io" as const },
         ],
-      }),
+        };
+      },
       inspectPlugin: vi.fn(async (path: string) => ({ path, identity: null, error: `inspected ${path}`, errorCode: "io" as const })),
     };
     render(<App backend={backend} />);
