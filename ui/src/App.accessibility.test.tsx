@@ -307,6 +307,8 @@ describe("VB-Cable endpoint selection", () => {
     expect(await screen.findByText(/inspected C:\\Plugins\\one\.dll/)).toBeTruthy();
     fireEvent.click(screen.getAllByRole("button", { name: "Select for inspection" })[1]);
     expect(screen.queryByText(/inspected C:\\Plugins\\one\.dll/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Scan directory" }));
+    expect(screen.queryByText(/inspected C:\\Plugins\\two\.dll/)).toBeNull();
   });
 
   it("returns exact IDs only for one active, unambiguous pair", () => {

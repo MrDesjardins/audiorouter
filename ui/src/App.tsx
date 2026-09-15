@@ -298,13 +298,13 @@ function PluginScanPanel({ backend, onAddPlaceholder }: { backend: UiBackend; on
   const scan = async () => {
     if (!directory.trim()) { setMessage("Enter an absolute plugin directory."); return; }
     setMessage("Scanning selected directory...");
-    try { setResult(await backend.scanPlugins(directory.trim())); setMessage("Plugin scan completed without loading plugin code."); }
+    try { setResult(await backend.scanPlugins(directory.trim())); setInspection(null); setInspectionPath(""); setMessage("Plugin scan completed without loading plugin code."); }
     catch (error) { setResult(null); setMessage(formatUiError(error, "Plugin scan unavailable.")); }
   };
   const list = async () => {
     if (!directory.trim()) { setMessage("Enter an absolute plugin directory."); return; }
     setMessage("Loading the last explicit plugin scan...");
-    try { setResult(await backend.listPlugins(directory.trim())); setMessage("Loaded the last backend scan without rescanning."); }
+    try { setResult(await backend.listPlugins(directory.trim())); setInspection(null); setInspectionPath(""); setMessage("Loaded the last backend scan without rescanning."); }
     catch (error) { setResult(null); setMessage(formatUiError(error, "Plugin inventory unavailable.")); }
   };
   const inspect = async () => {
@@ -316,7 +316,7 @@ function PluginScanPanel({ backend, onAddPlaceholder }: { backend: UiBackend; on
   const retry = async () => {
     if (!directory.trim()) { setMessage("Enter an absolute plugin directory."); return; }
     setMessage("Retrying selected directory scan...");
-    try { setResult(await backend.retryPlugins(directory.trim(), uiIdempotencyKey("plugins-retry"))); setMessage("Plugin scan retry completed without loading plugin code."); }
+    try { setResult(await backend.retryPlugins(directory.trim(), uiIdempotencyKey("plugins-retry"))); setInspection(null); setInspectionPath(""); setMessage("Plugin scan retry completed without loading plugin code."); }
     catch (error) { setMessage(formatUiError(error, "Plugin scan retry unavailable.")); }
   };
   const selectInspectionPath = (path: string) => {

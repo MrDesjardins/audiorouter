@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Hardened M06 plugin inventory refresh state on 2026-09-14. A successful
+  scan, cached-list load, or retry now clears the prior inspection path/result,
+  so refreshed candidates cannot be presented with stale metadata. Added a UI
+  regression for re-scan invalidation; the full UI suite (19 files, 195 tests),
+  TypeScript typecheck, and diff checks passed. No plugin was loaded,
+  registered, or modified, and no audio configuration changed. Next action:
+  continue the next safe M03/M07 implementation slice.
+
 - Fixed an M06 plugin-inspection stale-state defect on 2026-09-14. Selecting a
   different scan candidate now clears the prior inspection result, preventing
   old vendor/error metadata from being shown for a new path. Added an
