@@ -2,6 +2,21 @@
 
 Updated: 2026-09-14.
 
+- Requalified the complete guarded `safe-all.ps1` chain on 2026-09-14 at
+  pushed head `8eeb8b99`. M00 toolchain/native compile and endpoint inventory,
+  M03 AudioRouter WDK build/signability plus disposable SysVAD qualification,
+  M01 CLI, M04 DSP/recording, M05 UI (19 files/216 tests and production
+  builds), M06 pinned VST3 SDK/native worker/VST2 fixtures, M07 headless
+  control/MCP/plugin-host, M08 unsigned release preparation, 159 normative
+  mappings, and documentation validation (53 Markdown files, 193 local links)
+  all passed. Cleanup removed 15 run-owned temporary children. No driver
+  installation/loading, signing-mode change, plugin/startup registration,
+  live audio mutation, or persistent machine audio configuration occurred.
+  Loaded PortCls behavior, production signing/install, physical latency,
+  attended UI acceptance, and independent vendor compatibility remain open
+  gates. Next action: continue the next independently testable M03/M07
+  implementation slice.
+
 - Passed the guarded Rust process-loopback acceptance on 2026-09-14 in both
   include and exclude modes. Include captured 22,050 source frames and
   produced 23,936 engine frames across 187 quantum blocks; exclude captured
