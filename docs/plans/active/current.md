@@ -2,6 +2,18 @@
 
 Updated: 2026-09-14.
 
+- Requalified the guarded M02 application-capture lifecycle on 2026-09-14
+  against the live Voicemeeter process (PID 34568, basename
+  `voicemeeterpro.exe`, exact executable path, and creation FILETIME
+  `134336595287373468`). An initial invocation that supplied the full path in
+  the basename field was rejected before audio activation with the typed
+  `application identity changed` error; the corrected identity then passed two
+  bounded start/pump/stop cycles and a same-process worker restart. Media
+  identity/state and process-only environment state were restored. This is
+  user-mode process-loopback evidence, not production driver or physical
+  latency qualification. Next action: continue the next independently
+  testable native bridge/API slice.
+
 - Aligned M04/M07 control presentation with mutation serialization on
   2026-09-14. Session lifecycle, privacy/recovery safety, and recording-file
   controls now expose their in-flight busy state and disable competing UI
