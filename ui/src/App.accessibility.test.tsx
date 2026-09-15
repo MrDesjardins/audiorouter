@@ -748,6 +748,21 @@ describe("keyboard connection dialog", () => {
     await waitFor(() => expect(within(panel).getByText("Virtual routes applied at revision 3.")).toBeTruthy());
   });
 
+  it("prevents duplicate graph planning while the first request is pending", async () => {
+    let releasePlan!: (value: { planId: string; baseRevision: number; expiresInMs: number; diff: never[]; warnings: never[]; affectedDestinations: string[]; requiredScopes: string[] }) => void;
+    const result = new Promise<{ planId: string; baseRevision: number; expiresInMs: number; diff: never[]; warnings: never[]; affectedDestinations: string[]; requiredScopes: string[] }>((resolve) => { releasePlan = resolve; });
+    const planGraph = vi.fn(() => result);
+    const commitGraph = vi.fn(async () => ({ sessionId: demoSession.id, revision: demoSession.revision + 1 }));
+    render(<App backend={{ ...connectedPreviewBackend(), planGraph, commitGraph }} />);
+    const plan = screen.getByRole("button", { name: "Plan changes" });
+    fireEvent.click(plan);
+    await waitFor(() => expect(planGraph).toHaveBeenCalledTimes(1));
+    fireEvent.click(plan);
+    expect(planGraph).toHaveBeenCalledTimes(1);
+    releasePlan({ planId: "graph-plan", baseRevision: demoSession.revision, expiresInMs: 30000, diff: [], warnings: [], affectedDestinations: [], requiredScopes: [] });
+    await waitFor(() => expect(commitGraph).toHaveBeenCalledTimes(1));
+  });
+
   it("creates an unarmed recorder with the explicit UI configuration", async () => {
     const createRecorder = vi.fn(async (params: { recorderId: string }) => ({
       sessionId: demoSession.id,

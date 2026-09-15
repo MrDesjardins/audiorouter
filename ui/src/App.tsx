@@ -652,6 +652,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [pendingWarnings, setPendingWarnings] = useState<string[]>([]);
   const [acknowledgedWarnings, setAcknowledgedWarnings] = useState<Set<string>>(() => new Set());
   const [pendingOperation, setPendingOperation] = useState<string | null>(null);
+  const [graphBusy, setGraphBusy] = useState(false);
   const [privacyMuted, setPrivacyMuted] = useState(true);
   const [listView, setListView] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateId>("gaming-discord");
@@ -873,6 +874,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const resetNodeParameters = () => { recordDraftChange(resetNodeDraftParameters(draft, selectedNode.id)); setActionMessage("Processor parameters reset in the draft. Review and plan the changes before committing."); };
   const changeSessionName = (name: string) => { try { recordDraftChange(setSessionDraftName(draft, name)); setActionMessage("Session name draft updated. Review and plan the change before committing."); } catch (error) { setActionMessage(formatUiError(error, "Unable to rename session.")); } };
   const planChanges = async () => {
+    if (graphBusy || !backend.connected) return;
+    setGraphBusy(true);
     setActionMessage("Planning changes...");
     try {
       const operation = uiIdempotencyKey("graph-commit");
@@ -893,10 +896,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         void snapshotCache.refresh(backend).then(setSnapshotState);
         setActionMessage(`${formatUiError(error, "Graph changed elsewhere.")} The authoritative session was refreshed; review the draft again.`);
       } else setActionMessage(formatUiError(error, "Unable to apply graph changes."));
-    }
+    } finally { setGraphBusy(false); }
   };
   const commitAcknowledgedPlan = async () => {
-    if (!pendingOperation || acknowledgedWarnings.size !== pendingWarnings.length) return;
+    if (graphBusy || !backend.connected || !pendingOperation || acknowledgedWarnings.size !== pendingWarnings.length) return;
+    setGraphBusy(true);
     setActionMessage("Replanning acknowledged changes...");
     try {
       const result = await applyGraphDraft(backend, draft, pendingOperation, [...acknowledgedWarnings]);
@@ -908,7 +912,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         void snapshotCache.refresh(backend).then(setSnapshotState);
         setActionMessage(`${formatUiError(error, "Graph changed elsewhere.")} The authoritative session was refreshed; review the draft again.`);
       } else setActionMessage(formatUiError(error, "Unable to commit acknowledged changes."));
-    }
+    } finally { setGraphBusy(false); }
   };
   const inspectRoute = async () => { const request = ++routeInspectionRequest.current; setActionMessage("Inspecting route..."); try { const result = await backend.inspectRoute(selectedNode.id); if (request === routeInspectionRequest.current) { setRouteInspection(result); setActionMessage("Route inspection refreshed from the backend."); } } catch (error) { if (request === routeInspectionRequest.current) { setRouteInspection(null); setActionMessage(formatUiError(error, "Unable to inspect route.")); } } };
   const previewRecording = async (recordingId: string) => { const request = ++previewRequest.current; setPreviewMessage("Inspecting recording..."); try { const result = await backend.previewRecording(recordingId); if (request === previewRequest.current) setPreviewMessage(`${String(result.preview.status)} recording preview loaded.`); } catch (error) { if (request === previewRequest.current) setPreviewMessage(formatUiError(error, "Recording preview unavailable.")); } };

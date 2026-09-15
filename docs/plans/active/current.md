@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Added M05/M07 graph-plan single-flight protection on 2026-09-14. Plan and
+  acknowledged-commit handlers now reject concurrent or disconnected calls,
+  preventing repeated UI input from dispatching duplicate graph mutations.
+  Added a deferred graph-plan regression; the focused UI suite (68 tests) and
+  TypeScript typecheck passed. No audio, endpoint, driver, registry, or
+  machine configuration was changed. Next action: continue the next safe
+  M03/M07 implementation slice.
+
 - Hardened M03 native endpoint preparation controls on 2026-09-14. Prepare and
   detach handlers now fail closed when disconnected and reject concurrent
   operations while an exact endpoint worker transition is pending. Added a
