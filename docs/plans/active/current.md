@@ -2,6 +2,13 @@
 
 Updated: 2026-09-14.
 
+- Hardened M05 route-inspection ordering on 2026-09-14. Each route refresh is
+  tagged with a request generation, so a late backend response cannot replace
+  a newer inspection in the visual editor. Added an out-of-order refresh
+  regression; the focused UI suite (64 tests) and TypeScript typecheck passed.
+  No audio, endpoint, driver, registry, or machine configuration was changed.
+  Next action: continue the next safe M03/M07 implementation slice.
+
 - Hardened M07 recording inspection ordering on 2026-09-14. Preview and
   recovery requests now use bounded UI request generations, so a late result
   from an older recording cannot overwrite the user's newest inspection

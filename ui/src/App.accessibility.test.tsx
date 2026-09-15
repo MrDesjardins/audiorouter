@@ -1137,6 +1137,22 @@ describe("keyboard connection dialog", () => {
     expect(within(routePanel).getByText(/Channel map: \[1\]/)).toBeTruthy();
   });
 
+  it("keeps the newest route inspection when refreshes resolve out of order", async () => {
+    let releaseOld!: (value: { destinationNode: string; reachable: boolean; complete: boolean; paths: never[] }) => void;
+    const oldResult = new Promise<{ destinationNode: string; reachable: boolean; complete: boolean; paths: never[] }>((resolve) => { releaseOld = resolve; });
+    const inspectRoute = vi.fn().mockReturnValueOnce(oldResult).mockResolvedValueOnce({ destinationNode: "voice", reachable: false, complete: true, paths: [] });
+    render(<App backend={{ ...connectedPreviewBackend(), inspectRoute }} />);
+    const routePanel = screen.getByRole("region", { name: "Receives audio from" });
+    const refresh = within(routePanel).getByRole("button", { name: "Refresh" });
+    fireEvent.click(refresh);
+    fireEvent.click(refresh);
+    expect(await within(routePanel).findByText("No reachable route reported by the backend.")).toBeTruthy();
+    releaseOld({ destinationNode: "voice", reachable: true, complete: true, paths: [] });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(within(routePanel).getByText("No reachable route reported by the backend.")).toBeTruthy();
+    expect(within(routePanel).queryByText(/reachable path/)).toBeNull();
+  });
+
   it("shows persisted recording encoding details", async () => {
     const recording: RecordingRow = { id: "encoded-take", sessionId: demoSession.id, recorderId: "recorder-1", path: "C:\\Audio\\encoded.flac", format: "flac", channels: 2, sampleRate: 44100, frames: 4410, fileBytes: 12000, startTime: "2026-09-14T01:00:00Z", state: "completed", missing: false, title: null, artist: null, comment: null, dither: true, conversion: "targetSampleRate=44100;channels=2;bitsPerSample=16" };
     render(<App backend={{ ...connectedPreviewBackend(), listRecordings: async () => [recording] }} />);
