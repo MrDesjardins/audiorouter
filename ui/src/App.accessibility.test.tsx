@@ -1153,6 +1153,22 @@ describe("keyboard connection dialog", () => {
     expect(within(routePanel).queryByText(/reachable path/)).toBeNull();
   });
 
+  it("prevents duplicate managed-bus planning while the first request is pending", async () => {
+    let releasePlan!: (value: { planId: string; expiresInMs: number; operation: { action: "create"; id: string; name: string }; availability: { status: "unavailable"; reason: string }; requiredScopes: string[]; warnings: string[] }) => void;
+    const planResult = new Promise<{ planId: string; expiresInMs: number; operation: { action: "create"; id: string; name: string }; availability: { status: "unavailable"; reason: string }; requiredScopes: string[]; warnings: string[] }>((resolve) => { releasePlan = resolve; });
+    const planVirtualDevice = vi.fn(() => planResult);
+    const backend = { ...connectedPreviewBackend(), planVirtualDevice };
+    render(<App backend={backend} />);
+    const panel = screen.getByRole("region", { name: "Virtual-device lifecycle" });
+    const plan = within(panel).getByRole("button", { name: "Plan create" });
+    fireEvent.click(plan);
+    await waitFor(() => expect((plan as HTMLButtonElement).disabled).toBe(true));
+    fireEvent.click(plan);
+    expect(planVirtualDevice).toHaveBeenCalledTimes(1);
+    releasePlan({ planId: "virtual-plan", expiresInMs: 30000, operation: { action: "create", id: "virtual-bus", name: "AudioRouter Bus" }, availability: { status: "unavailable", reason: "managed driver unavailable" }, requiredScopes: ["deviceAdministration"], warnings: [] });
+    await waitFor(() => expect(within(panel).getByText("managed driver unavailable")).toBeTruthy());
+  });
+
   it("shows persisted recording encoding details", async () => {
     const recording: RecordingRow = { id: "encoded-take", sessionId: demoSession.id, recorderId: "recorder-1", path: "C:\\Audio\\encoded.flac", format: "flac", channels: 2, sampleRate: 44100, frames: 4410, fileBytes: 12000, startTime: "2026-09-14T01:00:00Z", state: "completed", missing: false, title: null, artist: null, comment: null, dither: true, conversion: "targetSampleRate=44100;channels=2;bitsPerSample=16" };
     render(<App backend={{ ...connectedPreviewBackend(), listRecordings: async () => [recording] }} />);

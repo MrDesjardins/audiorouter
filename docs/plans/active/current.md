@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Hardened M03 virtual-device lifecycle controls on 2026-09-14. Managed-bus
+  inventory refreshes now ignore stale responses, while plan/apply operations
+  are guarded against concurrent requests and explicit controls are disabled
+  during the in-flight operation. Added a pending-plan regression; the
+  focused UI suite (65 tests) and TypeScript typecheck passed. No endpoint was
+  provisioned and no driver, registry, or machine audio configuration changed.
+  Next action: continue the next safe M03/M07 implementation slice.
+
 - Hardened M05 route-inspection ordering on 2026-09-14. Each route refresh is
   tagged with a request generation, so a late backend response cannot replace
   a newer inspection in the visual editor. Added an out-of-order refresh
