@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Passed the isolated supplied BUSTERse x64 VST2 acceptance on 2026-09-14.
+  Processing succeeded at 44.1, 48, and 96 kHz; editor-thread containment and
+  supervised timeout/reaping passed; and the binary fingerprint
+  (`580325343014664a61fd1c2d73e5424897a47199be5c5538da75c25a8d0261d3`)
+  remained unchanged. Temporary environment values were restored. No plugin
+  registration or audio configuration changed. This is one additional gated
+  VST2 fixture, not a redistribution or release-rights decision. Next action:
+  continue the next safe M03/M07 implementation slice.
+
 - Exercised the supplied x64 COMPER VST3 binary on 2026-09-14 through the
   isolated worker. The candidate was rejected at the parameter-contract gate
   because it returned no automatable descriptors (`assertion failed:

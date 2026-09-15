@@ -9,6 +9,13 @@ temporary environment and removed generated worker artifacts; neither binary
 was modified or registered. These are explicit fixture compatibility results,
 not endpoint or `E_INVALIDARG` evidence.
 
+The supplied BUSTERse x64 VST2 binary was rechecked through the contained
+worker on 2026-09-14. Processing passed at 44.1, 48, and 96 kHz, both editor
+containment checks passed, and its before/after SHA-256 remained
+`580325343014664a61fd1c2d73e5424897a47199be5c5538da75c25a8d0261d3`. The
+binary was not copied, registered, or modified; this is gated compatibility
+evidence and does not grant redistribution rights.
+
 The installed ReaPlugs directory was batch-qualified on 2026-09-13. Seven
 x64 audio-effect candidates passed the contained worker matrix at 44.1, 48,
 and 96 kHz. `reacontrolmidi-standalone.dll` and `reajs.dll` were classified
