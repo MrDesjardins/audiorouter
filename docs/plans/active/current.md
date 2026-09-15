@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Guarded M02/M07 session lifecycle actions on 2026-09-14. Start and stop
+  requests now reject duplicate or disconnected dispatches while the first
+  lifecycle mutation is pending, preventing overlapping backend transitions.
+  Added a duplicate-start regression; the focused UI suite (76 tests),
+  TypeScript typecheck, and diff checks passed. No audio, endpoint, driver,
+  registry, or machine configuration was accessed. Next action: continue the
+  next safe M03/M07 implementation slice.
+
 - Optimized superseded snapshot refresh cancellation on 2026-09-14. The shared
   UI cache now exits before additional retry attempts once a newer refresh
   owns publication, preserving bounded retry behavior without needless backend

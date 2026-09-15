@@ -295,6 +295,20 @@ describe("VB-Cable endpoint selection", () => {
     expect(window.localStorage.getItem("audiorouter.ui.compact-status")).toBe("false");
   });
 
+  it("prevents duplicate session starts while the first start is pending", async () => {
+    let releaseStart!: (value: { sessionId: string; state: "running"; runtime: "fake"; generation: number }) => void;
+    const result = new Promise<{ sessionId: string; state: "running"; runtime: "fake"; generation: number }>((resolve) => { releaseStart = resolve; });
+    const startSession = vi.fn(() => result);
+    render(<App backend={{ ...connectedPreviewBackend(), startSession }} />);
+    const lifecycle = screen.getByRole("region", { name: "Session lifecycle" });
+    fireEvent.click(within(lifecycle).getByRole("button", { name: "Start session" }));
+    await screen.findByText("Starting session...");
+    fireEvent.click(within(lifecycle).getByRole("button", { name: "Start session" }));
+    expect(startSession).toHaveBeenCalledTimes(1);
+    releaseStart({ sessionId: "demo-session", state: "running", runtime: "fake", generation: 1 });
+    await waitFor(() => expect(startSession).toHaveBeenCalledTimes(1));
+  });
+
   it("forwards the selected application capture policy", async () => {
     const prepareNativeApplication = vi.fn(async () => ({ sessionId: demoSession.id, state: "configured-stopped" as const, processId: 42, executable: "Music.exe", executablePath: "C:\\Apps\\Music.exe", creationTime100ns: "123", mode: "exclude" as const, renderEndpointId: "render-test" }));
     const backend = {
