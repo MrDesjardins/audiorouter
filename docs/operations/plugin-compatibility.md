@@ -469,3 +469,11 @@ editor-timeout handling. Its SHA-256 remained
 temporary environment values were restored. This is compatibility evidence
 for one supplied binary, not redistribution-rights or full vendor-matrix
 evidence.
+
+The supplied x64 BUSTERse VST2 binary also passed the isolated worker at
+44.1, 48, and 96 kHz, including editor-thread containment and supervised
+editor-timeout handling. Its SHA-256 remained
+`580325343014664a61fd1c2d73e5424897a47199be5c5538da75c25a8d0261d3`, and
+temporary environment values were restored. This is compatibility evidence
+for one supplied binary, not redistribution-rights or full vendor-matrix
+evidence.

@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Requalified the supplied x64 BUSTERse VST2 binary on 2026-09-14 through
+  the isolated worker. Processing passed at 44.1, 48, and 96 kHz; editor
+  thread containment and supervised editor-timeout tests passed; and the
+  binary remained unchanged with SHA-256
+  `580325343014664a61fd1c2d73e5424897a47199be5c5538da75c25a8d0261d3`.
+  Temporary VST environment values were restored. This is one supplied
+  vendor result and does not establish redistribution rights or the complete
+  compatibility matrix. Next action: continue the next safe M03/M07 recovery
+  or delivery slice.
+
 - Requalified the supplied x64 TDR Nova VST2 binary on 2026-09-14 through
   the isolated worker. Processing passed at 44.1, 48, and 96 kHz; editor
   thread containment and supervised editor timeout tests passed; and the
