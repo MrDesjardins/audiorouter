@@ -400,6 +400,22 @@ variants. The media-device snapshot was unchanged and temporary native
 artifacts were removed. This supports format negotiation only, not universal
 format acceptance or latency.
 
+## 2026-09-14 - controlled process-tree attribution requalification
+
+Command:
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m00-native-process-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 500`
+
+The guarded native harness launched its disposable child tone source and
+captured only the selected process tree. Activation, capture start/stop/reset,
+and child cleanup succeeded; it reported 21,609 capture frames and 76,378
+nonzero payload bytes. The before/after media-device identity/state snapshot
+matched, and the temporary executable/object were removed. This is controlled
+process-tree attribution evidence only; it does not qualify protected or
+arbitrary application capture, PID-reuse recovery, physical latency, the
+AudioRouter driver, or production signing.
+
 ## Status
 
 The read-only endpoint inventory probe has been added at [`tools/m00-wasapi-probe`](../../../../tools/m00-wasapi-probe). It uses Rust `windows` bindings and does not modify Windows defaults, start audio streams, install drivers, or write outside stdout.

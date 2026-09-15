@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Requalified controlled M00 process-tree attribution on 2026-09-14 for a
+  bounded 500 ms disposable tone. The selected process tree activated,
+  captured 21,609 frames with 76,378 nonzero payload bytes, and exited
+  cleanly; the harness removed its temporary executable/object and verified
+  unchanged media-device identity/state. This establishes attribution of a
+  controlled process tree, not arbitrary protected-app capture, PID-reuse
+  recovery, physical latency, or driver behavior. Next action: continue the
+  next independently testable M02/M03 or M07 implementation slice.
+
 - Passed the guarded M02 Rust adapter-bridge acceptance on 2026-09-14 for
   two bounded cycles against the active VB-Cable pair. Cycle 1 captured
   24,480 frames, processed 191 quanta, invoked the tap 191 times, rendered
