@@ -16,6 +16,11 @@ running session rather than silently losing recording data. A successful sleep
 stores only eligible portable sessions; resume consumes that bounded set and
 returns `revalidateBeforeRestart` without starting audio itself.
 
+The same boundary is exposed as the authenticated, idempotent
+`system.osTransition` JSON-RPC method so a native notification adapter can use
+the shared backend authority. Its input and output schemas are included in
+method discovery and the readable API reference.
+
 Validation:
 
 ```text

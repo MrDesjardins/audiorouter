@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Added `system.osTransition` to the shared API contract on 2026-09-14.
+  The method is session-control authorized, idempotent, schema-bounded, and
+  dispatches to the control-plane STATE-11 boundary. Its response reports
+  `keepRunning`, `stopAndRelease`, `revalidateBeforeRestart`, or
+  `remainStopped`; it never silently resumes a recording or native endpoint.
+  Domain/control focused tests passed (64 domain, 164 control) and API
+  reference validation passed (54 Markdown files, 194 links). The Windows
+  notification source and endpoint revalidation adapter remain the next
+  native task.
+
 - Extended the STATE-11 boundary on 2026-09-14 from pure planning to control
   application. `ControlPlane::handle_os_transition` now stops and releases
   portable sessions for sleep/sign-out, refuses implicit interruption of an

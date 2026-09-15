@@ -15,7 +15,7 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
-The current catalog contains 73 methods, including the session portability,
+The current catalog contains 74 methods, including the session portability,
 recorder lifecycle, plugin inventory/retry, and startup plan/apply methods added
 after the initial 47-method reference.
 
@@ -24,6 +24,7 @@ after the initial 47-method reference.
 | `system.describe` | `read` | read-only |
 | `system.handshake` | `read` | read-only |
 | `status.get` | `read` | read-only |
+| `system.osTransition` | `sessionControl` | mutating; requires an idempotency key |
 | `system.diagnostics` | `read` | read-only |
 | `clients.list` | `read` | read-only |
 | `clients.authorize` | `deviceAdministration` | mutating; requires an idempotency key |

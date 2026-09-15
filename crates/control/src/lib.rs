@@ -1735,6 +1735,9 @@ fn method_description(name: &str) -> &'static str {
         "system.describe" => "Describe protocol capabilities, methods, node types, and limits.",
         "system.handshake" => "Negotiate a compatible protocol version before requests.",
         "status.get" => "Return backend, runtime, and audio availability status.",
+        "system.osTransition" => {
+            "Apply a lock, sign-out, sleep, or resume lifecycle transition policy."
+        }
         "system.diagnostics" => "Return a redacted backend diagnostic snapshot.",
         "clients.list" => "List enrolled local client identities and roles.",
         "clients.authorize" => "Authorize a client with an explicit built-in role.",
@@ -1862,6 +1865,13 @@ fn method_input_schema(name: &str) -> Value {
                 }
             }),
             &["protocolVersion"],
+        ),
+        "system.osTransition" => object_schema(
+            json!({
+                "transition": { "enum": ["lock", "signOut", "sleep", "resume"] },
+                "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
+            }),
+            &["transition", "idempotencyKey"],
         ),
         "clients.authorize" => object_schema(
             json!({
@@ -2271,6 +2281,16 @@ fn recorder_input_schema(frame_required: bool) -> Value {
 
 fn method_output_schema(name: &str) -> Value {
     match name {
+        "system.osTransition" => json!({
+            "type": "object",
+            "properties": {
+                "transition": { "enum": ["lock", "signOut", "sleep", "resume"] },
+                "action": { "enum": ["keepRunning", "stopAndRelease", "revalidateBeforeRestart", "remainStopped"] },
+                "sessionIds": { "type": "array", "maxItems": audiorouter_domain::MAX_ACTIVE_SESSIONS, "items": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } }
+            },
+            "required": ["transition", "action", "sessionIds"],
+            "additionalProperties": false
+        }),
         "recorders.create" => json!({
             "type": "object",
             "properties": {
@@ -8064,6 +8084,7 @@ impl ControlPlane {
                     "system.describe" => Ok(self.describe()),
                     "system.handshake" => self.dispatch_handshake(request.params),
                     "status.get" => self.status_snapshot(),
+                    "system.osTransition" => self.dispatch_os_transition(request.params),
                     "system.diagnostics" => {
                         let (recent_recovery_crashes, recovery_safe_mode) =
                             self.recovery_status()?;
@@ -9827,6 +9848,42 @@ impl ControlPlane {
         }
     }
 
+    fn dispatch_os_transition(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("transition and idempotencyKey are required".into())
+        })?;
+        let transition_name = params
+            .get("transition")
+            .and_then(Value::as_str)
+            .ok_or_else(|| ControlError::InvalidRequest("transition is required".into()))?;
+        let transition = match transition_name {
+            "lock" => OsTransition::Lock,
+            "signOut" => OsTransition::SignOut,
+            "sleep" => OsTransition::Sleep,
+            "resume" => OsTransition::Resume,
+            _ => {
+                return Err(ControlError::InvalidRequest(
+                    "transition must be lock, signOut, sleep, or resume".into(),
+                ))
+            }
+        };
+        let idempotency_key = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        let operation = (
+            self.scoped_idempotency_key("system.osTransition", idempotency_key),
+            Self::request_hash(&json!({ "transition": transition_name })),
+        );
+        if let Some(previous) = self.lookup_idempotent_result(&operation.0, &operation.1)? {
+            return Ok(previous);
+        }
+        let result = self.handle_os_transition(transition)?;
+        self.journal_idempotent_result(&operation.0, "system.osTransition", &operation.1, &result)?;
+        Ok(result)
+    }
+
     fn dispatch_privacy_mute(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let params = params.ok_or_else(|| {
             ControlError::InvalidRequest("muted and idempotencyKey are required".into())
@@ -11455,6 +11512,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
             "acknowledgments",
         ],
         "system.handshake" => &["protocolVersion"],
+        "system.osTransition" => &["transition", "idempotencyKey"],
         "clients.authorize" => &["clientId", "role", "idempotencyKey"],
         "clients.revoke" => &["clientId", "idempotencyKey"],
         "operations.get" => &["operationId"],
@@ -14805,7 +14863,16 @@ mod tests {
         plane.session_start(&session_id).unwrap();
 
         let stopped = plane
-            .handle_os_transition(os_transition::OsTransition::Sleep)
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!("sleep")),
+                method: "system.osTransition".into(),
+                params: Some(json!({
+                    "transition": "sleep",
+                    "idempotencyKey": "os-sleep-1"
+                })),
+            })
+            .result
             .unwrap();
         assert_eq!(stopped["action"], "stopAndRelease");
         assert_eq!(
@@ -14814,7 +14881,16 @@ mod tests {
         );
 
         let resumed = plane
-            .handle_os_transition(os_transition::OsTransition::Resume)
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!("resume")),
+                method: "system.osTransition".into(),
+                params: Some(json!({
+                    "transition": "resume",
+                    "idempotencyKey": "os-resume-1"
+                })),
+            })
+            .result
             .unwrap();
         assert_eq!(resumed["action"], "revalidateBeforeRestart");
         assert_eq!(resumed["sessionIds"], json!(["sleep-route"]));
