@@ -166,12 +166,14 @@ export class SnapshotCache {
     // the WebView finishes loading. Retry briefly without blocking the UI or
     // hiding a previously valid snapshot.
     for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (generation !== this.refreshGeneration) return this.state;
       try {
         const snapshot = await backend.snapshot();
         if (generation !== this.refreshGeneration) return this.state;
         this.state = { snapshot, stale: false, error: null };
         return this.state;
       } catch (error) {
+        if (generation !== this.refreshGeneration) return this.state;
         lastError = error;
         if (attempt < 2) {
           await new Promise<void>((resolve) => setTimeout(resolve, 100 * (attempt + 1)));

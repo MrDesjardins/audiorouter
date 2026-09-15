@@ -2,6 +2,13 @@
 
 Updated: 2026-09-14.
 
+- Optimized superseded snapshot refresh cancellation on 2026-09-14. The shared
+  UI cache now exits before additional retry attempts once a newer refresh
+  owns publication, preserving bounded retry behavior without needless backend
+  calls. Backend adapter tests (56), TypeScript typecheck, and diff checks
+  passed. No audio, endpoint, driver, registry, or machine configuration was
+  accessed. Next action: continue the next safe M03/M07 implementation slice.
+
 - Closed an M06 plugin-directory identity race on 2026-09-14. Discovery and
   inspection responses are now published only when their requested directory
   or path still matches the current editor field, preventing old scan results
