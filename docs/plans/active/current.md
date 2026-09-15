@@ -2,6 +2,20 @@
 
 Updated: 2026-09-14.
 
+- Requalified the complete guarded `safe-all.ps1` chain on 2026-09-14 at the
+  current head. Toolchain/native compile, AudioRouter WDK driver build and
+  signability, disposable SysVAD reference qualification, M01 CLI, M04
+  DSP/recording, M05 UI (19 files/216 tests and production build), M06 pinned
+  VST3 SDK/native worker/VST2 fixtures, M07 headless control/MCP/plugin-host,
+  M08 unsigned release preparation, 159 normative mappings, and documentation
+  validation (53 Markdown files, 193 local links) all passed. Cleanup removed
+  15 run-owned temporary children. No driver installation/loading, signing
+  mode, plugin/startup registration, live audio mutation, or persistent
+  machine audio configuration occurred. Native loaded-PortCls behavior,
+  production signing/install, physical latency, and attended UI acceptance
+  remain explicit gates. Next action: continue the next independently
+  testable implementation or native bridge item.
+
 - Completed the M07 session-configuration mutation boundary on 2026-09-14.
   Delete now shares the create/duplicate single-flight guard, checks backend
   connectivity before confirmation/dispatch, and always releases its busy
