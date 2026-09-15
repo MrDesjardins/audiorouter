@@ -2,6 +2,13 @@
 
 Updated: 2026-09-14.
 
+- Hardened M03 virtual-device plan freshness on 2026-09-14. Any inventory
+  refresh now invalidates a previously prepared lifecycle plan, requiring a
+  new authoritative plan before apply. Added refresh-invalidation coverage;
+  the focused UI suite (74 tests) and TypeScript typecheck passed. No endpoint,
+  driver, registry, or machine audio configuration was changed. Next action:
+  continue the next safe M03/M07 implementation slice.
+
 - Hardened the shared UI snapshot cache on 2026-09-14. Concurrent snapshot
   refreshes now publish only the newest request, preventing an older backend
   state or failure from replacing a newer authoritative snapshot. Added a

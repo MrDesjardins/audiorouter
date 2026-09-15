@@ -766,6 +766,20 @@ describe("keyboard connection dialog", () => {
     expect((within(panel).getByRole("combobox", { name: "Existing virtual-device target" }) as HTMLSelectElement).value).toBe("new-bus");
   });
 
+  it("invalidates a virtual-device plan when inventory is refreshed", async () => {
+    const backend = {
+      ...connectedPreviewBackend(),
+      listVirtualDevices: vi.fn(async () => []),
+      planVirtualDevice: vi.fn(async () => ({ planId: "virtual-plan", expiresInMs: 300000, operation: { action: "create" as const, id: "virtual-bus", name: "AudioRouter Bus" }, availability: { status: "unavailable" as const, reason: "managed driver unavailable" }, requiredScopes: ["deviceAdministration"], warnings: [] })),
+    };
+    render(<App backend={backend} />);
+    const panel = await screen.findByRole("region", { name: "Virtual-device lifecycle" });
+    fireEvent.click(within(panel).getByRole("button", { name: "Plan create" }));
+    expect(await within(panel).findByRole("button", { name: "Apply planned state" })).toBeTruthy();
+    fireEvent.click(within(panel).getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(within(panel).queryByRole("button", { name: "Apply planned state" })).toBeNull());
+  });
+
   it("prevents duplicate virtual-route replacement while the first request is pending", async () => {
     let releaseReplace!: (value: { state: "applied"; revision: number; routes: never[] }) => void;
     const result = new Promise<{ state: "applied"; revision: number; routes: never[] }>((resolve) => { releaseReplace = resolve; });
