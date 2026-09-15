@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Passed the guarded M00 single-process-tree exclusion acceptance on
+  2026-09-14 for 500 ms. The disposable child process completed activation,
+  capture start/stop/reset, and produced 22,050 capture frames; media-device
+  identity/state was unchanged and temporary artifacts were removed. This
+  validates the supported Windows process-loopback exclusion API/lifecycle,
+  not a full cross-process isolation or production virtual-driver claim.
+  Next action: continue the next independently testable native bridge/API
+  slice.
+
 - Requalified the guarded M02 application-capture lifecycle on 2026-09-14
   against the live Voicemeeter process (PID 34568, basename
   `voicemeeterpro.exe`, exact executable path, and creation FILETIME
