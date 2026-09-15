@@ -37,6 +37,14 @@ contract. Before/after fingerprints were checked for the candidates, and the
 temporary VST environment values were restored. No plugin registration or
 audio configuration changed.
 
+The same installed directory was requalified on 2026-09-14. The seven x64
+candidates were again exercised at 44.1, 48, and 96 kHz with five audio
+effects accepted and `reacontrolmidi-standalone.dll` plus `reajs.dll` rejected
+as incompatible with the bounded audio-effect/state contract. Every candidate
+passed before/after fingerprint checks and temporary environment values were
+restored. This remains compatibility evidence only; it does not grant
+redistribution rights or establish a complete native-editor matrix.
+
 The native VST3 worker acceptance was rerun on 2026-09-13 with the pinned
 repository AGain fixture. Single-bus and auxiliary-bus processing,
 asynchronous graph staging, bounded failure quarantine, repeated-quantum

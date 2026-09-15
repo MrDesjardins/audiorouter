@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Requalified the complete installed ReaPlugs VST2 directory on 2026-09-14.
+  Seven x64 candidates were exercised at 44.1, 48, and 96 kHz through
+  disposable workers; five audio effects passed, while
+  `reacontrolmidi-standalone.dll` and `reajs.dll` were rejected as
+  incompatible with the bounded audio-effect/state contract. Before/after
+  fingerprints passed for every candidate and temporary environment values
+  were restored. No plugin registration or audio configuration changed. This
+  is installed-directory evidence, not redistribution-rights or full editor
+  compatibility evidence. Next action: continue the next safe M03/M07 or
+  plugin delivery slice.
+
 - Requalified the supplied x64 BUSTERse VST2 binary on 2026-09-14 through
   the isolated worker. Processing passed at 44.1, 48, and 96 kHz; editor
   thread containment and supervised editor-timeout tests passed; and the
