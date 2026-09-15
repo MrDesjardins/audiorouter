@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Hardened M02/M07 application and device inventory refreshes on 2026-09-14.
+  The shared post-mutation/event refresh helpers now use independent request
+  generations, ignoring late responses from superseded reads instead of
+  overwriting newer authoritative inventory. The focused UI suite (73 tests)
+  and TypeScript typecheck passed. These are read-only inventory changes; no
+  endpoint, driver, registry, or machine audio configuration was changed. Next
+  action: continue the next safe M03/M07 implementation slice.
+
 - Hardened M04 recorder lifecycle controls on 2026-09-14. Create and all
   arm/start/pause/resume/split/stop actions now reject concurrent or
   disconnected invocations, preventing repeated UI input from racing recorder

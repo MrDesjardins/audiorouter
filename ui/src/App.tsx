@@ -716,12 +716,16 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [nativeGeneration, setNativeGeneration] = useState<number | null>(null);
   const [nativePumpStats, setNativePumpStats] = useState<NativePumpStats | null>(null);
   const eventCursor = useRef({ backendEpoch: 0, sequence: 0 });
+  const applicationRefreshGeneration = useRef(0);
+  const deviceRefreshGeneration = useRef(0);
   useEffect(() => { let mounted = true; void snapshotCache.refresh(backend).then((nextState) => { if (mounted) { setSnapshotState(nextState); if (nextState.snapshot) eventCursor.current = { backendEpoch: nextState.snapshot.status.eventCursor.backendEpoch, sequence: nextState.snapshot.status.eventCursor.latestSequence }; } }); return () => { mounted = false; }; }, [backend, snapshotCache]);
   const refreshApplications = () => {
-    void backend.listApplications().then((items) => { setApplications(items); setApplicationsError(null); }).catch((error) => { setApplications([]); setApplicationsError(formatUiError(error, "Application inventory unavailable")); });
+    const generation = ++applicationRefreshGeneration.current;
+    void backend.listApplications().then((items) => { if (generation !== applicationRefreshGeneration.current) return; setApplications(items); setApplicationsError(null); }).catch((error) => { if (generation !== applicationRefreshGeneration.current) return; setApplications([]); setApplicationsError(formatUiError(error, "Application inventory unavailable")); });
   };
   const refreshDevices = () => {
-    void backend.listDevices(true).then((items) => { setDevices(items); setDevicesError(null); }).catch((error) => { setDevices([]); setDevicesError(formatUiError(error, "Device inventory unavailable")); });
+    const generation = ++deviceRefreshGeneration.current;
+    void backend.listDevices(true).then((items) => { if (generation !== deviceRefreshGeneration.current) return; setDevices(items); setDevicesError(null); }).catch((error) => { if (generation !== deviceRefreshGeneration.current) return; setDevices([]); setDevicesError(formatUiError(error, "Device inventory unavailable")); });
   };
   const refresh = () => {
     void snapshotCache.refresh(backend).then(setSnapshotState);
