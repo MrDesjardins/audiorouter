@@ -485,3 +485,11 @@ editor-timeout handling. Its SHA-256 remained
 temporary environment values were restored. This is compatibility evidence
 for one supplied binary, not redistribution-rights or full vendor-matrix
 evidence.
+
+On 2026-09-14, the installed ReaPlugs directory also passed the bounded editor
+containment matrix for all 9 x64 DLL candidates. Each candidate passed both
+the non-returning editor-thread and supervised editor-timeout tests through a
+disposable worker. This validates containment behavior even for candidates
+that are rejected by the separate audio-effect/state processing contract; it
+does not make those candidates supported effects or establish editor GUI
+compatibility.

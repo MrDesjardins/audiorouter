@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Passed the installed ReaPlugs VST2 editor-containment acceptance on
+  2026-09-14 for all 9 x64 DLL candidates. Each candidate passed the bounded
+  non-returning editor-thread and supervised editor-timeout tests through a
+  disposable worker. This includes the five processing-qualified effects and
+  the two candidates rejected for audio-effect/state processing; no plugin
+  registration or audio configuration changed. Next action: continue the
+  next safe M03/M07 recovery or delivery slice.
+
 - Requalified the complete installed ReaPlugs VST2 directory on 2026-09-14.
   Seven x64 candidates were exercised at 44.1, 48, and 96 kHz through
   disposable workers; five audio effects passed, while
