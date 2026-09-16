@@ -75,6 +75,6 @@ try {
 
 # A nested acceptance step may intentionally leave LASTEXITCODE nonzero after
 # validating a rejected child process. The chain itself has completed
-# successfully at this point, so make the process result explicit for CI and
-# callers instead of inheriting that sentinel.
-exit 0
+# successfully at this point, so terminate the runner with an explicit process
+# result for CI and callers instead of inheriting that sentinel.
+[Environment]::Exit(0)
