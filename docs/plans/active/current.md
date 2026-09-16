@@ -28,6 +28,15 @@ destructive, and idempotency annotations for both ownership tools. Focused
 verification passed: 36 CLI unit tests, 3 MCP stdio tests, and strict Clippy.
 No runtime or machine audio configuration changed.
 
+Re-ran the authorized VB-Cable user-mode bridge on 2026-09-16 at commit
+`ea745207` with `-DurationMilliseconds 750`. One 48 kHz stereo cycle moved
+36,000 captured and 35,968 rendered frames through 281 processing quanta;
+the tap reported zero non-finite samples, drops, scheduler xruns, or deadline
+misses. Temporary streams and recording output were removed and media-device
+state remained unchanged. This is current user-mode routing evidence only;
+managed-driver installation, loaded PortCls transport, and physical latency
+remain separate gates.
+
 Re-ran the complete guarded `safe-all.ps1` chain at the MCP parity head on
 2026-09-16. M00 toolchain/native inventory and disposable SysVAD checks,
 AudioRouter x64/ARM64 driver source builds and Software Device dry-run, M01,
