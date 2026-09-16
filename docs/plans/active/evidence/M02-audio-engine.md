@@ -1,5 +1,16 @@
 # M02 audio-engine evidence
 
+## 2026-09-16 - guarded control-owned VB-Cable lifecycle
+
+`tests/acceptance/m02-control-native-live.ps1 -AllowLiveAudio` passed using
+the exact recorded VB-Cable capture and render endpoint IDs. The 500 ms native
+shared-mode session captured 24,000 frames, processed 187 graph quanta, and
+rendered 23,936 frames before clean stop. The wrapper restored its process
+environment and changed no persistent defaults, volume, mute, privacy,
+driver, signing, startup, or endpoint configuration. This is native
+user-mode endpoint lifecycle evidence; it does not qualify the project-owned
+driver, physical latency, or rebind during an actual device transition.
+
 ## 2026-09-16 - PD200X physical-loopback attempt (blocked)
 
 The authorized `m00-native-impulse.ps1 -AllowLiveAudio -ImpulseCount 100`

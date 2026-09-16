@@ -26,6 +26,16 @@ No endpoint was opened by this change and no persistent audio configuration
 changed. The next task is guarded native rebind qualification with before/after
 endpoint identity and lease/generation evidence.
 
+Ran the authorized guarded control-owned native lifecycle test on 2026-09-16
+against the exact recorded VB-Cable capture/render IDs. The 500 ms session
+started and stopped cleanly, delivering 24,000 capture frames through 187
+processed quanta and rendering 23,936 frames. The test changed no defaults,
+volume, mute, privacy, driver, signing, startup, or persistent audio state;
+process environment was restored. This qualifies the existing shared-mode
+endpoint lifecycle only. Project-driver callback ownership, invalidation
+rebind under a real device transition, physical latency, and signing remain
+open.
+
 Refreshed the release qualification snapshot on 2026-09-16 after the latest
 authorized VB-Cable route requalification. `docs/operations/release-notes.md`
 now reports the current 500 ms control-owned route evidence: 24,000 captured
