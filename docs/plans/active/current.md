@@ -28,6 +28,14 @@ normal startup/list/plan/apply remains fail-closed and the prototype package
 is not claimed as production or activated on this machine. Documentation
 validation passed for 54 Markdown files and 218 local links.
 
+Strengthened the M03 driver source-contract acceptance on 2026-09-16. The
+non-installing gate now verifies secure control-device creation, the symbolic
+link, device-control/cleanup/close dispatch registration, heartbeat handling,
+and the three bounded bridge-direction helpers, in addition to the existing
+INF, ownership, rundown, WaveRT, and realtime-operation checks. Both x64 and
+ARM64 acceptance runs passed. No driver was installed or loaded and no machine
+audio configuration changed.
+
 Re-ran the dedicated M07 frontend-owned Tauri RPC acceptance on 2026-09-16.
 The shell WebView initialization reached the authenticated backend
 `system.describe` command and returned protocol major version 1 using

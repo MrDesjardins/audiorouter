@@ -87,7 +87,14 @@ foreach ($required in @(
         'NTSTATUS BridgeControlCreateClose',
         'if (stack == NULL)',
         'stack == NULL || stack->FileObject == NULL',
+        'IoCreateDeviceSecure',
+        'AUDIOROUTER_BRIDGE_DEVICE_SDDL',
+        'IoCreateSymbolicLink',
+        'DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = BridgeControlDeviceControl',
+        'DriverObject->MajorFunction[IRP_MJ_CLEANUP] = BridgeControlCreateClose',
+        'DriverObject->MajorFunction[IRP_MJ_CLOSE] = BridgeControlCreateClose',
     'IOCTL_AUDIOROUTER_BRIDGE_OPEN &&',
+    'IOCTL_AUDIOROUTER_BRIDGE_HEARTBEAT',
     'request->SectionHandle == 0',
     'request->SectionHandle != 0',
     'BridgeRequestsHaveSameLeaseIdentity',
@@ -96,6 +103,14 @@ foreach ($required in @(
     'RtlCompareMemory(Left->BusId, Right->BusId')) {
     if (-not $source.Contains($required)) {
         throw "driver IOCTL handle-role validation is missing: $required"
+    }
+}
+foreach ($required in @(
+        'AudioRouterCopyLeaseBlockForDirection',
+        'AudioRouterPublishLeaseBlockForDirection',
+        'AudioRouterGetLeaseShapeForDirection')) {
+    if (-not $source.Contains($required)) {
+        throw "driver bridge direction export is missing: $required"
     }
 }
 foreach ($required in @(
