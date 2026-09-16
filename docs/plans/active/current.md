@@ -2,6 +2,17 @@
 
 Updated: 2026-09-16.
 
+Requalified the clean elevated `safe-all.ps1` chain at pushed head `c00cff70`
+on 2026-09-16 after integrating the frontend-owned shell RPC stage. All
+stages passed: toolchain and x64/ARM64 driver compile/signability, read-only
+31-endpoint inventory, disposable SysVAD, M01/M03/M04/M05/M06/M07, unsigned
+M08 artifacts and NSIS smoke, the frontend WebView -> Tauri -> authenticated
+backend probe, 159 traceability IDs, and documentation. The chain removed 15
+run-owned temporary children. No driver was installed or loaded, no plugin was
+registered, and no persistent audio or machine configuration changed. Native
+production-driver activation/signing, clean-machine, physical-latency, and
+manual visual/accessibility gates remain explicit.
+
 Integrated the frontend-owned shell RPC acceptance into `safe-all.ps1` on
 2026-09-16 after unsigned installer smoke, where the debug shell and CLI
 artifacts are guaranteed to exist. The chain now exercises the shell's actual
