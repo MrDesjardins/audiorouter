@@ -149,6 +149,30 @@ The operation file contains one lifecycle object, for example
 commands do not install a driver, create a Windows endpoint, or change audio
 configuration.
 
+## Explicit managed-device ownership
+
+After a bus exists and is enabled, device administration is a separate,
+idempotent operation. It requires the `deviceAdministration` scope and does
+not belong to graph plan/apply atomicity:
+
+```powershell
+audiorouter virtual-devices provision desktop-in `
+  --instance-id desktop-in `
+  --idempotency-key device-provision-001 `
+  --database C:\path\audiorouter.sqlite `
+  --json
+
+audiorouter virtual-devices remove desktop-in `
+  --idempotency-key device-remove-001 `
+  --database C:\path\audiorouter.sqlite `
+  --json
+```
+
+Provisioning and removal are intentionally unavailable until the managed
+AudioRouter driver is installed and qualified. They do not touch existing
+VB-Cable endpoints or Windows audio defaults; use the guarded isolated-target
+procedure for any future driver lifecycle test.
+
 ## Watch bounded state events
 
 Replay state events for one session from an opaque cursor. Repeat `--category`

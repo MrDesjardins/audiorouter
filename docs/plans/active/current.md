@@ -172,6 +172,15 @@ bounded instance ID to both explicit lifecycle methods. UI typecheck and all
 delivery only: the native driver is not installed/loaded and no endpoint or
 persistent machine audio configuration was changed.
 
+Added CLI parity for explicit managed-device ownership on 2026-09-16:
+`virtual-devices provision <bus-id> --instance-id ID --idempotency-key KEY`
+and `virtual-devices remove <bus-id> --idempotency-key KEY` now forward through
+the same authorized shared dispatcher, with bounded instance/key validation
+and offline help entries. CLI/MCP tests passed (36 CLI, 3 MCP), strict Clippy
+and formatting passed, and an oversized-instance regression proves validation
+occurs before storage/native access. The commands remain fail-closed until the
+managed driver is installed and qualified.
+
 Added bounded native ownership in `crates/windows-audio` on 2026-09-16 via
 `ManagedSoftwareDeviceInventory`. It keys RAII Software Device API handles by
 managed bus ID, rejects duplicate and over-capacity entries, exposes the

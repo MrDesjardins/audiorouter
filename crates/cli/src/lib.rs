@@ -803,8 +803,60 @@ fn virtual_devices_command(args: &[&str]) -> Result<Value, CliError> {
                 ))
             })
         }
+        Some("provision") => {
+            let bus_id = positional(args, 2, "bus-id")?;
+            let instance_id = option_value(args, "--instance-id")?;
+            let idempotency_key = option_value(args, "--idempotency-key")?;
+            if instance_id.len() > audiorouter_domain::MAX_VIRTUAL_BUS_DRIVER_INSTANCE_ID_CHARS {
+                return Err(CliError::InvalidArguments(
+                    "--instance-id is too long".into(),
+                ));
+            }
+            if idempotency_key.len() > 256 {
+                return Err(CliError::InvalidArguments(
+                    "--idempotency-key must contain at most 256 characters".into(),
+                ));
+            }
+            let response = ControlPlane::with_storage("cli", database(args)?).dispatch_authorized(
+                audiorouter_protocol::JsonRpcRequest {
+                    jsonrpc: "2.0".into(), id: Some(json!(1)), method: "virtualDevices.provision".into(),
+                    params: Some(json!({ "busId": bus_id, "instanceId": instance_id, "idempotencyKey": idempotency_key })),
+                },
+                &ClientGrant::with_scopes([PermissionScope::DeviceAdministration]),
+            );
+            response.result.ok_or_else(|| {
+                CliError::InvalidArguments(response.error.map_or_else(
+                    || "virtual device provision failed".into(),
+                    |error| error.message,
+                ))
+            })
+        }
+        Some("remove") => {
+            let bus_id = positional(args, 2, "bus-id")?;
+            let idempotency_key = option_value(args, "--idempotency-key")?;
+            if idempotency_key.len() > 256 {
+                return Err(CliError::InvalidArguments(
+                    "--idempotency-key must contain at most 256 characters".into(),
+                ));
+            }
+            let response = ControlPlane::with_storage("cli", database(args)?).dispatch_authorized(
+                audiorouter_protocol::JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(1)),
+                    method: "virtualDevices.remove".into(),
+                    params: Some(json!({ "busId": bus_id, "idempotencyKey": idempotency_key })),
+                },
+                &ClientGrant::with_scopes([PermissionScope::DeviceAdministration]),
+            );
+            response.result.ok_or_else(|| {
+                CliError::InvalidArguments(response.error.map_or_else(
+                    || "virtual device removal failed".into(),
+                    |error| error.message,
+                ))
+            })
+        }
         _ => Err(CliError::InvalidArguments(
-            "usage: virtual-devices <list|plan|apply> [options]".into(),
+            "usage: virtual-devices <list|plan|apply|provision|remove> [options]".into(),
         )),
     }
 }
@@ -1761,6 +1813,14 @@ fn help_value() -> Value {
     );
     value["commands"].as_array_mut().unwrap().insert(
         8,
+        json!("virtual-devices provision <bus-id> --instance-id ID --idempotency-key KEY --database <path>"),
+    );
+    value["commands"].as_array_mut().unwrap().insert(
+        9,
+        json!("virtual-devices remove <bus-id> --idempotency-key KEY --database <path>"),
+    );
+    value["commands"].as_array_mut().unwrap().insert(
+        10,
         json!("virtual-routes list|replace --database <path> [--base-revision N --file <routes.json> --idempotency-key KEY]"),
     );
     value["commands"]
@@ -2527,6 +2587,8 @@ mod tests {
         assert!(help.contains("virtual-devices list"));
         assert!(help.contains("virtual-devices plan"));
         assert!(help.contains("virtual-devices apply"));
+        assert!(help.contains("virtual-devices provision"));
+        assert!(help.contains("virtual-devices remove"));
         assert!(help.contains("virtual-routes list|replace"));
         assert!(help.contains("plugins scan"));
         assert!(help.contains("operation get"));
@@ -2534,6 +2596,27 @@ mod tests {
         let schema: Value = serde_json::from_str(&run(["schema", "--json"]).unwrap()).unwrap();
         assert_eq!(schema["protocolVersion"]["major"], 1);
         assert_eq!(schema["limits"]["maxVirtualBuses"], 8);
+    }
+
+    #[test]
+    fn virtual_device_admin_commands_bound_arguments_before_native_access() {
+        let oversized =
+            "x".repeat(audiorouter_domain::MAX_VIRTUAL_BUS_DRIVER_INSTANCE_ID_CHARS + 1);
+        let result = run([
+            "virtual-devices",
+            "provision",
+            "bus-1",
+            "--instance-id",
+            &oversized,
+            "--idempotency-key",
+            "key",
+            "--database",
+            "C:\\does-not-open.sqlite",
+            "--json",
+        ]);
+        assert!(
+            matches!(result, Err(CliError::InvalidArguments(message)) if message == "--instance-id is too long")
+        );
     }
 
     #[test]
