@@ -496,11 +496,14 @@ traceability, and documentation stages. It deliberately did not install or
 load a driver or change machine audio configuration. Cross-rate resampling and
 physical-latency qualification remain open.
 
-On 2026-09-15, `InterleavedStreamingResampler` was added at the Windows
-adapter boundary. Its 76-test suite covers phase retention across packets,
-bounded all-or-nothing admission, finite-sample repair, atomic underflow
-silence, and reset. The primitive is not yet connected to live endpoint pump
-I/O, so this evidence does not claim cross-rate device routing.
+On 2026-09-15, `InterleavedStreamingResampler` was wired into the native
+endpoint bridge's capture path. The bridge now accepts differing capture and
+render rates after strict channel/format validation, selects the render rate
+as graph rate, and converts captured float32 packets before scheduling. Its
+76-test suite covers phase retention, bounded admission, finite-sample repair,
+atomic underflow silence, reset, and 44.1↔48 kHz endpoint-rate selection.
+The render endpoint remains at the graph rate in this slice, and live
+cross-rate device evidence is still required.
 
 ## 2026-09-08 - Differing-rate route requalification
 

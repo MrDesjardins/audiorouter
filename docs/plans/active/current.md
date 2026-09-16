@@ -2,13 +2,14 @@
 
 Updated: 2026-09-15.
 
-- Added the bounded interleaved streaming-resampler primitive on 2026-09-15.
-  It retains interpolation phase across packets, admits only complete frames,
-  repairs non-finite input, returns atomic silence on underflow, and bounds
-  storage before allocation. The Windows-audio suite now passes 76 tests.
-  This is an adapter building block only; capture/render scheduler wiring and
-  cross-rate live evidence remain open. No endpoint or machine configuration
-  was accessed.
+- Wired bounded capture resampling into the native endpoint bridge on
+  2026-09-15. Differing capture/render sample rates are now accepted after
+  strict channel and format validation; the render rate becomes the graph
+  rate and captured float32 packets are resampled before fixed-quantum
+  scheduling. Phase, underflow, reset, and endpoint-rate selection are tested
+  in the 76-test Windows-audio suite. Render-side rates are intentionally the
+  graph rate for this slice; live cross-rate evidence remains open. No
+  endpoint or machine configuration was accessed.
 
 - Requalified the complete guarded acceptance chain on 2026-09-15 after the
   negotiated-rate fix. VS/SDK/WDK discovery, AudioRouter x64 driver

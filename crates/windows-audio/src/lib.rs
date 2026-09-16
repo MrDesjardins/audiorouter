@@ -1834,6 +1834,19 @@ impl InterleavedStreamingResampler {
         self.destination_rate_hz
     }
 
+    /// Return the maximum number of complete destination frames that can be
+    /// produced without underflow. The interpolation look-ahead sample is
+    /// included in the bound.
+    pub fn available_output_frames(&self) -> usize {
+        if self.queued_frames < 2 {
+            return 0;
+        }
+        let ratio = f64::from(self.source_rate_hz) / f64::from(self.destination_rate_hz);
+        (((self.queued_frames - 1) as f64 - self.phase) / ratio)
+            .ceil()
+            .max(0.0) as usize
+    }
+
     pub fn reset(&mut self) {
         self.read_frame = 0;
         self.queued_frames = 0;
@@ -1961,6 +1974,8 @@ impl WasapiSchedulerPump {
 pub struct WasapiSchedulerBridge {
     scheduler: audiorouter_engine::RealtimeScheduler,
     accumulator: Float32PacketAccumulator,
+    capture_resampler: Option<InterleavedStreamingResampler>,
+    capture_samples: Vec<f32>,
     capture_bytes: Vec<u8>,
     render_bytes: Vec<u8>,
     render_pending: Vec<u8>,
@@ -1987,7 +2002,6 @@ impl WasapiSchedulerBridge {
             || render.direction != EndpointDirection::Render
             || !capture.is_ieee_float32()
             || !render.is_ieee_float32()
-            || capture.sample_rate_hz != render.sample_rate_hz
             || capture.channels != render.channels
             || capture.bits_per_sample != render.bits_per_sample
             || capture.format_tag != render.format_tag
@@ -1998,13 +2012,22 @@ impl WasapiSchedulerBridge {
         {
             return Err(AudioError::InvalidFrameSize);
         }
-        Self::new_at_sample_rate(
+        let mut bridge = Self::new_at_sample_rate(
             ring_capacity,
             usize::from(capture.channels),
             quantum_frames,
             max_packet_frames,
-            capture.sample_rate_hz,
-        )
+            render.sample_rate_hz,
+        )?;
+        if capture.sample_rate_hz != render.sample_rate_hz {
+            bridge.capture_resampler = Some(InterleavedStreamingResampler::new(
+                usize::from(capture.channels),
+                max_packet_frames.max(quantum_frames),
+                capture.sample_rate_hz,
+                render.sample_rate_hz,
+            )?);
+        }
+        Ok(bridge)
     }
 
     pub fn new(
@@ -2059,6 +2082,8 @@ impl WasapiSchedulerBridge {
         Ok(Self {
             scheduler,
             accumulator,
+            capture_resampler: None,
+            capture_samples: vec![0.0; max_packet_frames * channels],
             capture_bytes: vec![0; capture_bytes],
             render_bytes: vec![0; render_bytes],
             render_pending: vec![0; render_pending],
@@ -2096,6 +2121,9 @@ impl WasapiSchedulerBridge {
     /// endpoint clients have stopped; `pump` never invokes it.
     pub fn reset_stream(&mut self) -> Result<usize, AudioError> {
         self.accumulator.reset();
+        if let Some(resampler) = self.capture_resampler.as_mut() {
+            resampler.reset();
+        }
         self.render_pending_bytes = 0;
         self.timeline_frame = 0;
         let state_reset = self.scheduler.reset_processing_state();
@@ -2283,6 +2311,35 @@ impl WasapiSchedulerBridge {
         };
         result.packets = 1;
         result.captured_frames = packet.frames;
+        if let Some(resampler) = self.capture_resampler.as_mut() {
+            let samples = usize::try_from(packet.frames)
+                .ok()
+                .and_then(|frames| {
+                    frames.checked_mul(self.bytes_per_frame / std::mem::size_of::<f32>())
+                })
+                .ok_or(AudioError::InvalidFrameSize)?;
+            if samples > self.capture_samples.len() {
+                return Err(AudioError::BufferTooSmall {
+                    required: samples * std::mem::size_of::<f32>(),
+                    available: self.capture_samples.len() * std::mem::size_of::<f32>(),
+                });
+            }
+            for (destination, source) in self.capture_samples[..samples]
+                .iter_mut()
+                .zip(self.capture_bytes[..packet_bytes].chunks_exact(4))
+            {
+                *destination = f32::from_ne_bytes([source[0], source[1], source[2], source[3]]);
+            }
+            let accepted = resampler.push(&self.capture_samples[..samples])?;
+            if accepted != samples / (self.bytes_per_frame / std::mem::size_of::<f32>()) {
+                return Err(AudioError::BufferTooSmall {
+                    required: packet_bytes,
+                    available: 0,
+                });
+            }
+            self.process_ready(render, &mut result, tap, deadline)?;
+            return Ok(result);
+        }
         let mut offset = 0;
         while offset < packet_bytes {
             let consumed = self
@@ -2320,7 +2377,10 @@ impl WasapiSchedulerBridge {
         tap: Option<&dyn audiorouter_engine::AudioTap>,
         deadline: Option<DeadlineSchedule>,
     ) -> Result<(), AudioError> {
-        while self.accumulator.pending_frames() >= self.quantum_frames {
+        while self.capture_resampler.as_ref().map_or(
+            self.accumulator.pending_frames() >= self.quantum_frames,
+            |resampler| resampler.available_output_frames() >= self.quantum_frames,
+        ) {
             self.drain_render_pending(render, result)?;
             let Some(mut input) = self.scheduler.acquire_input() else {
                 return Err(AudioError::BufferTooSmall {
@@ -2328,7 +2388,16 @@ impl WasapiSchedulerBridge {
                     available: 0,
                 });
             };
-            if !self.accumulator.pop_into(&mut input)? {
+            if let Some(resampler) = self.capture_resampler.as_mut() {
+                let samples = self.quantum_frames * input.channels();
+                if resampler.pop_into(&mut self.bridge_samples[..samples])? == 0 {
+                    let _ = self.scheduler.input().try_recycle(input);
+                    return Ok(());
+                }
+                input
+                    .copy_from_interleaved(&self.bridge_samples[..samples])
+                    .map_err(|_| AudioError::InvalidFrameSize)?;
+            } else if !self.accumulator.pop_into(&mut input)? {
                 return Ok(());
             }
             self.scheduler
@@ -6489,7 +6558,7 @@ mod tests {
     }
 
     #[test]
-    fn scheduler_bridge_rejects_mismatched_endpoint_formats_before_activation() {
+    fn scheduler_bridge_resamples_mismatched_endpoint_rates_before_activation() {
         let endpoint = |direction| EndpointInfo {
             id: match direction {
                 EndpointDirection::Capture => "capture",
@@ -6511,11 +6580,28 @@ mod tests {
         let bridge =
             WasapiSchedulerBridge::new_for_endpoints(2, &capture, &render, 128, 256).unwrap();
         assert_eq!(bridge.sample_rate_hz(), 48_000);
+        let mut capture = capture;
+        capture.sample_rate_hz = 44_100;
+        let mut bridge =
+            WasapiSchedulerBridge::new_for_endpoints(2, &capture, &render, 128, 256).unwrap();
+        let resampler = bridge.capture_resampler.as_ref().unwrap();
+        assert_eq!(resampler.source_rate_hz(), 44_100);
+        assert_eq!(resampler.destination_rate_hz(), 48_000);
+        bridge
+            .capture_resampler
+            .as_mut()
+            .unwrap()
+            .push(&[0.25; 4])
+            .unwrap();
+        bridge.reset_stream().unwrap();
+        assert_eq!(
+            bridge.capture_resampler.as_ref().unwrap().queued_frames(),
+            0
+        );
         render.sample_rate_hz = 44_100;
-        assert!(matches!(
-            WasapiSchedulerBridge::new_for_endpoints(2, &capture, &render, 128, 256),
-            Err(AudioError::InvalidFrameSize)
-        ));
+        let bridge =
+            WasapiSchedulerBridge::new_for_endpoints(2, &capture, &render, 128, 256).unwrap();
+        assert_eq!(bridge.sample_rate_hz(), 44_100);
     }
 
     #[test]
