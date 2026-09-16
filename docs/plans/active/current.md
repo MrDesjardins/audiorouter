@@ -6,8 +6,9 @@ Added package-identity validation to the M03 lifecycle entrypoint on
 2026-09-16. Before preview or execution, the bounded generated `.inf` must
 contain the AudioRouter software-device hardware ID and driver binary marker;
 matching is case-insensitive for Windows package spelling. The x64 and ARM64
-qualifications passed against their generated package INFs, with no
-`pnputil`, driver, endpoint, or audio configuration action.
+qualifications passed against their generated package INFs and rejected a
+temporary unrelated `.inf` placed beside them, with no `pnputil`, driver,
+endpoint, or audio configuration action.
 
 Hardened the M03 lifecycle input boundary on 2026-09-16: `manage.ps1` now
 rejects source `.inx` and other non-`.inf` inputs, while the acceptance

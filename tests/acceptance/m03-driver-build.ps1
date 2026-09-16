@@ -78,6 +78,7 @@ if ($buildText -notmatch [regex]::Escape("Driver binary: $expectedPlatformRoot")
 $guardState = Join-Path ([IO.Path]::GetTempPath()) ('audiorouter-driver-guard-' + [guid]::NewGuid().ToString('N') + '.json')
 $trackedState = Join-Path ([IO.Path]::GetTempPath()) ('audiorouter-driver-tracked-' + [guid]::NewGuid().ToString('N') + '.json')
 $guardInf = Join-Path $expectedPlatformRoot 'Release/package/AudioRouterVirtual.inf'
+$foreignInf = Join-Path $expectedPlatformRoot 'Release/package/audiorouter-foreign-test.inf'
 $guardStdout = [IO.Path]::GetTempFileName()
 $guardStderr = [IO.Path]::GetTempFileName()
 $consentStdout = [IO.Path]::GetTempFileName()
@@ -86,6 +87,18 @@ if (-not (Test-Path -LiteralPath $guardInf -PathType Leaf)) {
     throw "generated driver INF is missing for lifecycle regression: $guardInf"
 }
 try {
+    'Class=MEDIA' | Set-Content -LiteralPath $foreignInf -Encoding ASCII -NoNewline
+    $identityProcess = Start-Process -FilePath powershell.exe -ArgumentList @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $manage,
+        '-Install', '-Preview', '-Inf', $foreignInf, '-State', $guardState
+    ) -RedirectStandardOutput $guardStdout -RedirectStandardError $guardStderr -PassThru
+    $identityProcess.WaitForExit(); $identityProcess.Refresh()
+    $identityOutput = ((Get-Content -LiteralPath $guardStdout -Raw -ErrorAction SilentlyContinue) +
+        (Get-Content -LiteralPath $guardStderr -Raw -ErrorAction SilentlyContinue))
+    if ($identityProcess.ExitCode -eq 0 -or $identityOutput -notmatch 'not an AudioRouter package') {
+        throw "driver lifecycle accepted an unrelated INF: $identityOutput"
+    }
+
     $previewOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $manage `
         -Install -Preview -Inf $guardInf -State $guardState)
     if ($LASTEXITCODE -ne 0) { throw "driver lifecycle preview failed with exit code $LASTEXITCODE" }
@@ -141,7 +154,7 @@ try {
         throw "driver lifecycle guard did not refuse an untracked package: $guardOutput"
     }
 } finally {
-    foreach ($guardPath in @($guardState, $trackedState, $guardStdout, $guardStderr, $consentStdout, $consentStderr)) {
+    foreach ($guardPath in @($foreignInf, $guardState, $trackedState, $guardStdout, $guardStderr, $consentStdout, $consentStderr)) {
         if (Test-Path -LiteralPath $guardPath) { Remove-Item -LiteralPath $guardPath -Force }
     }
 }
