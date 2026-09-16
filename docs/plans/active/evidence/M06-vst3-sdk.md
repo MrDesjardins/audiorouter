@@ -10,6 +10,17 @@ The matrix verified temporary environment restoration and before/after binary
 integrity, and made no plugin registration or machine audio configuration
 change. This is local gated compatibility evidence only.
 
+## 2026-09-16 - supplied TDR Nova and COMPER VST3 worker gates
+
+`tests/acceptance/m06-vst3-worker.ps1` passed for the supplied x64 TDR Nova
+and COMPER VST3 bundles with explicit state-unsupported and single-stream
+options. Both passed finite processing, bounded restart/quarantine recovery,
+repeated-quantum timing, and bounded shutdown. No plugin registration or
+machine audio configuration changed. Opaque-state restoration, auxiliary-bus
+compatibility, native editor support, and broad vendor/release qualification
+remain open; the separate BUSTERse activation failure remains contained as an
+unsupported fixture.
+
 ## 2026-09-16 - supplied ReaPlugs VST2 worker matrix
 
 `tests/acceptance/m06-vst2-reaplugs.ps1 -SkipIncompatibleCandidates` passed

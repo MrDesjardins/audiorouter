@@ -53,6 +53,14 @@ no plugin registration or audio configuration changed. This proves worker
 containment behavior for the local binaries, not native editor compatibility
 or a blanket vendor/release claim.
 
+Requalified the supplied x64 TDR Nova and COMPER VST3 bundles on 2026-09-16
+through the isolated native worker with explicit state-unsupported and
+single-stream gates. Both passed finite processing, bounded restart/quarantine
+recovery, repeated-quantum timing, and shutdown; no plugin registration or
+audio configuration changed. This qualifies those local fixture paths only;
+opaque state, auxiliary-bus compatibility, native editor support, and broad
+vendor/release qualification remain separate.
+
 Requalified the elevated guarded `tests/acceptance/safe-all.ps1` chain at
 head `d52f7ec4` on 2026-09-16. Toolchain/native probes, x64/ARM64 driver
 source builds, read-only 31-endpoint inventory, disposable SysVAD, M01/M03/
