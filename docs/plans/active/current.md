@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Requalified Windows process-loopback exclusion on 2026-09-16 with
+`m00-native-process-exclude-live.ps1 -AllowLiveAudio -DurationMilliseconds
+500`. The disposable child exclusion path activated, started, captured 22,050
+frames, stopped, reset, and exited cleanly; generated binaries/objects were
+removed. Media-device state and persistent audio configuration were unchanged.
+This validates the documented one-process-tree exclusion API/lifecycle
+boundary, not arbitrary multi-exclusion or full cross-process isolation.
+
 Requalified the control-owned Firefox application-capture lifecycle on
 2026-09-16 with `m02-control-application-live.ps1 -AllowLiveAudio`, using the
 verified `firefox.exe` path, PID, and creation timestamp plus the existing
