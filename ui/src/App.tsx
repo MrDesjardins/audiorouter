@@ -892,8 +892,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       try {
         const result = await backend.subscribe(eventCursor.current.sequence, session.id, eventCursor.current.backendEpoch, [...WORKSPACE_EVENT_CATEGORIES]);
         if (!active) return;
+        const bindingInvalidatedEvent = result.events.find((event) => event.category === "devices.bindingInvalidated");
         const bridgeEvent = result.events.find((event) => event.category === "virtualBridge.failed" || event.category === "virtualBridge.expired");
-        if (bridgeEvent) {
+        if (bindingInvalidatedEvent) {
+          setActionMessage("Native endpoint binding changed; audio is stopped. Review the exact endpoints and rebind before restarting.");
+        } else if (bridgeEvent) {
           const bus = bridgeEvent.operationId ?? "an affected bus";
           setActionMessage(bridgeEvent.category === "virtualBridge.expired"
             ? `Virtual bridge lease expired for ${bus}; the route is silenced until it is deliberately restarted.`

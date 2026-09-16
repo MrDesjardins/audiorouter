@@ -1,5 +1,15 @@
 # M05 visual editor evidence
 
+## 2026-09-16 - explicit endpoint invalidation recovery notice
+
+The live event loop now presents a bounded, actionable message when the
+backend publishes `devices.bindingInvalidated`: audio is stopped, exact
+endpoints must be reviewed, and the user must deliberately rebind before
+restarting. The UI still refreshes authoritative state through the existing
+snapshot path. UI tests passed at 234 and TypeScript typecheck passed. Manual
+WebView2 visual/accessibility acceptance remains open because no targetable
+desktop surface was available; no machine audio configuration changed.
+
 ## 2026-09-16 - explicit endpoint rebind UI
 
 The native endpoint panel now exposes a stopped-only “Rebind exact endpoints”

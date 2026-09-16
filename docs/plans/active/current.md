@@ -37,6 +37,13 @@ audio later. Control (173) and Windows-audio (82) tests, strict Clippy, and
 format/diff checks passed; no endpoint or persistent machine configuration
 changed.
 
+Added the corresponding M05 recovery notice on 2026-09-16. The UI now turns
+`devices.bindingInvalidated` into an explicit stopped-audio message directing
+the user to review exact endpoints and rebind before restarting, while the
+existing event refresh keeps endpoint state current. UI coverage passed with
+234 tests and TypeScript typecheck passed; no endpoint or persistent machine
+configuration changed.
+
 Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at the
 current head on 2026-09-16. The run passed toolchain/native probes, x64/ARM64
 driver source builds, read-only endpoint inventory, disposable SysVAD,
