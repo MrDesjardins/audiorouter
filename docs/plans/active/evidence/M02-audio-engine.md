@@ -19,6 +19,18 @@ verified unchanged media-device state. Include and exclude lifecycle coverage
 is user-mode process-loopback evidence, not arbitrary isolation or PID-reuse
 qualification.
 
+## 2026-09-16 - guarded Rust adapter route
+
+`tests/acceptance/m02-rust-adapter-route-live.ps1 -AllowLiveAudio` passed
+against the current exact VB-Cable pair discovered read-only. The 500 ms run
+negotiated 48 kHz capture/render, 128-frame graph quanta, and a 2,666,667 ns
+deadline; it captured 24,480 frames, processed 191 graph blocks, and
+routed/rendered 24,448 frames. Processing and deadline histograms were
+consistent, with zero deadline misses, XRuns, and non-finite tap samples.
+Temporary outputs were removed and endpoint/media state and persistent audio
+configuration remained unchanged. This qualifies the shared-mode adapter
+route, not physical latency or production-driver timing.
+
 ## 2026-09-16 - current guarded control-owned VB-Cable lifecycle
 
 `tests/acceptance/m02-control-native-live.ps1 -AllowLiveAudio` passed using

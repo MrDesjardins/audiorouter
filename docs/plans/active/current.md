@@ -1117,6 +1117,15 @@ compatibility snapshot; no plugin was registered or modified and no audio
 configuration changed. Next task remains production driver/bridge
 qualification and attended shell acceptance.
 
+Requalified the guarded Rust adapter route on 2026-09-16 against the current
+exact VB-Cable pair discovered read-only. The 500 ms run negotiated 48 kHz
+capture/render and 128-frame graph quanta with a 2,666,667 ns deadline; it
+captured 24,480 frames, processed 191 graph blocks, and routed/rendered
+24,448 frames with zero deadline misses, XRuns, or non-finite tap samples.
+Temporary outputs were cleaned and defaults, volume, mute, privacy, driver,
+signing, and startup configuration were unchanged. This remains shared-mode
+adapter evidence, not physical latency or production-driver qualification.
+
 Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
 `861b4c54` on 2026-09-16 after the strengthened M03 driver source-contract
 gate. M00 toolchain/native inventory and disposable SysVAD checks, AudioRouter
