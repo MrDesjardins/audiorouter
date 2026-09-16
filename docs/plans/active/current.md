@@ -2,6 +2,13 @@
 
 Updated: 2026-09-16.
 
+Re-ran `tests/acceptance/m03-driver-build.ps1 -Platform x64` and `-Platform
+ARM64` on 2026-09-16 at the current head. Both project-owned WDK
+compile/signability/catalog qualifications passed and removed disposable
+outputs. The scope remains source/package evidence only; no driver was
+installed or loaded and no signing mode, boot policy, service, endpoint, or
+persistent audio configuration changed.
+
 Re-ran `tests/acceptance/m03-swdevice-probe.ps1` on 2026-09-16. The native
 Software Device API probe compiled and its bounded enumerator/parent/hardware
 ID/instance plan dry-run passed; temporary executable/object outputs were
