@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Closed the remaining whole-struct bridge request race on 2026-09-16. The
+callback-visible `Channels`, `FramesPerQuantum`, and `Direction` members are
+now written only through interlocked stores; generation is invalidated first
+and published last, while non-callback fields use explicit field-wise copies.
+Teardown uses the same discipline. The strengthened x64 and ARM64 WDK
+source/build gates passed. No installation, loading, signing-mode, boot-
+policy, service, endpoint, or audio configuration action occurred.
+
 Strengthened the M03 source-contract regression on 2026-09-16 to verify the
 bridge request publication order: generation invalidation, atomic callback
 shape stores, then final generation publication. The x64 and ARM64 WDK

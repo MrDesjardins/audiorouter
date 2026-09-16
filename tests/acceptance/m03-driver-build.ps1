@@ -120,7 +120,7 @@ if ($publishRequestStart -lt 0 -or $publishRequestEnd -le $publishRequestStart) 
 }
 $publishRequest = $source.Substring($publishRequestStart, $publishRequestEnd - $publishRequestStart)
 $generationClear = $publishRequest.IndexOf('Request.Generation), 0)')
-$requestCopy = $publishRequest.IndexOf('Lease->Request = *Request;')
+$requestCopy = $publishRequest.IndexOf('Lease->Request.ProtocolMajor = Request->ProtocolMajor;')
 $generationPublish = $publishRequest.LastIndexOf('Request->Generation))')
 if ($generationClear -lt 0 -or $requestCopy -le $generationClear -or
     $generationPublish -le $requestCopy) {

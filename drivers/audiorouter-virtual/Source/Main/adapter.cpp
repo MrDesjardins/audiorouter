@@ -81,7 +81,18 @@ static void ClearBridgeRequest(_In_ AR_BRIDGE_LEASE_STATE* Lease)
     InterlockedExchange64(
         reinterpret_cast<volatile LONG64*>(&Lease->Request.Generation), 0);
     KeMemoryBarrier();
-    RtlZeroMemory(&Lease->Request, sizeof(Lease->Request));
+    Lease->Request.ProtocolMajor = 0;
+    Lease->Request.ProtocolMinor = 0;
+    Lease->Request.BusIdBytes = 0;
+    StoreBridgeUshort(&Lease->Request.Channels, 0);
+    StoreBridgeUshort(&Lease->Request.FramesPerQuantum, 0);
+    StoreBridgeUshort(&Lease->Request.Direction, 0);
+    Lease->Request.SampleRateHz = 0;
+    Lease->Request.LeaseMs = 0;
+    Lease->Request.SectionHandle = 0;
+    Lease->Request.MappingBytes = 0;
+    Lease->Request.Reserved2 = 0;
+    RtlZeroMemory(Lease->Request.BusId, sizeof(Lease->Request.BusId));
 }
 
 static void PublishBridgeRequest(
@@ -93,7 +104,16 @@ static void PublishBridgeRequest(
     // callback-visible fields are atomically installed.
     InterlockedExchange64(
         reinterpret_cast<volatile LONG64*>(&Lease->Request.Generation), 0);
-    Lease->Request = *Request;
+    Lease->Request.ProtocolMajor = Request->ProtocolMajor;
+    Lease->Request.ProtocolMinor = Request->ProtocolMinor;
+    Lease->Request.BusIdBytes = Request->BusIdBytes;
+    Lease->Request.SampleRateHz = Request->SampleRateHz;
+    Lease->Request.LeaseMs = Request->LeaseMs;
+    Lease->Request.SectionHandle = Request->SectionHandle;
+    Lease->Request.MappingBytes = Request->MappingBytes;
+    Lease->Request.Reserved2 = Request->Reserved2;
+    RtlCopyMemory(
+        Lease->Request.BusId, Request->BusId, sizeof(Lease->Request.BusId));
     StoreBridgeUshort(&Lease->Request.Channels, Request->Channels);
     StoreBridgeUshort(
         &Lease->Request.FramesPerQuantum, Request->FramesPerQuantum);
