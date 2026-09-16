@@ -41,6 +41,14 @@ Ran `cargo clippy --workspace --all-targets --locked -- -D warnings` on
 passed with warnings denied. This is static portable evidence and does not
 close the native driver, signing, or attended UI gates.
 
+Requalified the project-owned driver source with the installed WDK on
+2026-09-16 for both x64 and ARM64. `tests/acceptance/m03-driver-build.ps1`
+passed for each platform, including the source-contract and guarded output
+cleanup checks. This remains compile/signability evidence only: the prototype
+was not installed, loaded, signed, or used to alter audio configuration.
+The remaining PortCls endpoint, production package/signing, and clean-machine
+gates are still open.
+
 The dedicated VST2 editor-containment harness passed all 9 x64 ReaPlugs
 fixtures again on 2026-09-16 after its temporary fixture environment was
 hardened to check exact restoration, including absent-variable state. Both
