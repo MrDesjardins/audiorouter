@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Added and passed `tests/acceptance/m03-signing-prerequisites.ps1` on
+2026-09-16. The read-only guard locates the installed WDK `signtool.exe`,
+records Secure Boot and VBS status, and verifies that both x64 and ARM64
+prototype `.sys` files are unsigned. It passed with Secure Boot `True` and
+VBS status `2`; no signing, installation, boot-policy, driver, or audio
+configuration action occurred. The guard prevents unsigned development
+packages from being mistaken for production-signed artifacts.
+
 Validated the local signing-tool boundary on 2026-09-16 using only a
 disposable copy of the x64 prototype `.sys`. WDK `signtool.exe` successfully
 signed the copy with the existing `WDKTestCert`, while normal trust

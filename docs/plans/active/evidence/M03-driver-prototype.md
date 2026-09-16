@@ -1,5 +1,15 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-16 - automated signing-prerequisite guard
+
+`tests/acceptance/m03-signing-prerequisites.ps1` passed for both x64 and
+ARM64. It located the installed WDK `signtool.exe`, recorded Secure Boot as
+`True` and VBS status as `2`, and classified each generated prototype `.sys`
+as unsigned after expected `signtool verify /kp` rejection. The check is
+read-only: it did not sign, install, load, or alter boot policy, driver state,
+or machine audio configuration. Production certificate/catalog signing and
+trusted isolated installation remain open.
+
 ## 2026-09-16 - disposable developer-signing tool qualification
 
 WDK `signtool.exe` successfully signed a disposable copy of the x64

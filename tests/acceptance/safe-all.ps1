@@ -8,6 +8,7 @@ $steps = @(
     @{ Name = 'M00 native compile'; Script = Join-Path $acceptanceRoot 'm00-native-build.ps1' },
     @{ Name = 'M03 AudioRouter driver build'; Script = Join-Path $acceptanceRoot 'm03-driver-build.ps1' },
     @{ Name = 'M03 AudioRouter ARM64 driver build'; Script = Join-Path $acceptanceRoot 'm03-driver-build.ps1'; Platform = 'ARM64' },
+    @{ Name = 'M03 signing prerequisites'; Script = Join-Path $acceptanceRoot 'm03-signing-prerequisites.ps1' },
     @{ Name = 'M03 Software Device API probe'; Script = Join-Path $acceptanceRoot 'm03-swdevice-probe.ps1' },
     @{ Name = 'M00 native format inventory'; Script = Join-Path $acceptanceRoot 'm00-native-format-inventory.ps1' },
     @{ Name = 'M00 pinned SysVAD qualification'; Script = Join-Path $repositoryRoot 'tools\m00-sysvad\qualify.ps1' },
