@@ -15954,6 +15954,30 @@ mod tests {
     }
 
     #[test]
+    fn one_hundred_durable_reconnects_advance_backend_epoch_monotonically() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-control-reconnect-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let mut previous_epoch = None;
+
+        for index in 0..100 {
+            let plane = ControlPlane::with_storage(
+                format!("reconnect-{index}"),
+                Storage::open(&path).unwrap(),
+            );
+            let epoch = plane.events.backend_epoch();
+            if let Some(previous) = previous_epoch {
+                assert_eq!(epoch, previous + 1);
+            }
+            previous_epoch = Some(epoch);
+        }
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn recordings_list_dispatch_exposes_storage_metadata_without_file_actions() {
         let storage = Storage::open_memory().unwrap();
         storage

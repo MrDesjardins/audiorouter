@@ -1555,3 +1555,11 @@ through the Tauri command boundary to an authenticated backend
 driver, signing, or persistent machine configuration was changed. This
 qualifies the native shell transport path; attended UI/accessibility,
 sign-in/tray usability, and production packaging remain separate gates.
+## 2026-09-15 — durable reconnect stress
+
+Added `one_hundred_durable_reconnects_advance_backend_epoch_monotonically`.
+The test opens the same unique temporary SQLite database through 100 fresh
+control-plane instances and requires each persisted backend epoch to increase
+by exactly one. It passed in 0.42 seconds; the temporary database was removed.
+This is portable reconnect/resync identity evidence only and does not claim
+native process, endpoint, or audio restart.

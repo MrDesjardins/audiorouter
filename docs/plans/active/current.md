@@ -141,6 +141,12 @@ revalidation; the focused control transition suite passed 6 tests. This is
 bounded policy evidence, not proof of real OS power-notification delivery or
 native endpoint restart.
 
+Added the complementary durable reconnect regression on 2026-09-15. It
+reopens one unique temporary SQLite database 100 times and requires the
+persisted backend epoch to advance exactly once per reopen; the focused test
+passed in 0.42 seconds and removed its temporary database. This validates
+portable reconnect identity only, not native process/audio restart.
+
 Requalified `tests/acceptance/safe-all.ps1` at the current head on 2026-09-15.
 The complete guarded chain passed M00/M03 toolchain, native, driver, and
 reference-driver checks; M01/M04; M05 UI tests and temporary production
