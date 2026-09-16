@@ -62,6 +62,12 @@ validation paths. Explicit caller output and `-KeepOutput` remain preserved.
 The PowerShell parser check and the elevated non-installing M03 acceptance
 passed after this change; no driver or machine audio state was touched.
 
+The same build-only script also qualified the installed ARM64 WDK target on
+2026-09-15. The ARM64 compile exited successfully and its automatically
+allocated temporary output was absent afterward. This expands compile-only
+architecture evidence; it does not imply ARM64 endpoint, signing, loading, or
+production support.
+
 The guarded event-driven WASAPI lifecycle also passed for 500 ms using the
 existing VB-Cable pair: 24,480 capture frames and 29,280 silent render frames,
 with initialize/event/start/stop/reset success on both directions. The probe
