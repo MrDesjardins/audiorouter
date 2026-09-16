@@ -125,7 +125,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\safe-all.
 ```
 
 This includes native compile and read-only format checks, disposable SysVAD
-reference qualification, M01/M04/M05/M06/M07/M08 acceptance, the repository-
+reference qualification, M01/M04/M05/M06/M07/M08 acceptance (including the
+disposable unsigned NSIS installer smoke), the repository-
 owned x64 VST2 state/legacy-entry-point fixture, and documentation validation.
 It deliberately excludes all live-audio wrappers and third-party plugin
 fixtures.

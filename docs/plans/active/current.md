@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Added `tests/acceptance/m08-installer-smoke.ps1` on 2026-09-16 and included it
+in `safe-all.ps1` and Windows CI. The new gate builds the unsigned x64 NSIS
+artifact, verifies that Tauri does not mutate `src-tauri/Cargo.toml`, and
+removes the exact disposable bundle directory. Its direct run passed with a
+4,752,665-byte installer; documentation validation passed with 54 Markdown
+files and 218 local links. The installer was not executed or installed, and
+no driver or audio configuration changed.
+
 Re-ran the complete guarded `tests/acceptance/safe-all.ps1` chain at
 `91b3b0de` on 2026-09-16 after the Tauri manifest reproducibility fix. M00
 toolchain/native inventory and disposable SysVAD checks, AudioRouter x64 and

@@ -29,6 +29,10 @@ That smoke writes only to the native Cargo target directory and must be
 cleaned afterward; it is not production signing, installer, or clean-machine
 qualification.
 
+The checked-in wrapper `tests/acceptance/m08-installer-smoke.ps1` runs this
+smoke, verifies that Tauri does not modify `src-tauri/Cargo.toml`, and removes
+its exact disposable NSIS bundle directory on completion.
+
 ## Current qualification snapshot
 
 At the current repository revision, the safe, repository-local qualification

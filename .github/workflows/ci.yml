@@ -73,6 +73,9 @@ jobs:
       - name: Run M08 unsigned release acceptance
         shell: pwsh
         run: ./tests/acceptance/m08-release.ps1
+      - name: Run M08 unsigned installer smoke
+        shell: pwsh
+        run: ./tests/acceptance/m08-installer-smoke.ps1
       - name: Test release verifier and runbook
         shell: pwsh
         run: |
