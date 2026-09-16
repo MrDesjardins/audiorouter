@@ -136,10 +136,9 @@ warning. The suite explicitly excluded driver installation/loading, production
 signing, plugin registration, startup registration, live audio, and persistent
 machine-audio changes. Evidence log: `%TEMP%\\audiorouter-safe-all-20260915.log`.
 
-Next: continue with the remaining guarded cross-rate/process-loopback and
-loaded-driver gates. The user-mode cross-rate gate is now evidenced, so the
-next independent implementation work is the driver/bridge contract needed to
-provision and expose the production virtual bus. Do not install/load the
+Next: continue with attended UI validation when a targetable desktop surface is
+available, and with the production driver/bridge contract. Cross-rate and
+process-loopback user-mode gates are evidenced. Do not install/load the
 prototype driver or change audio defaults as part of this qualification; the
 loaded-driver gate remains blocked on production bus provisioning, PortCls
 ownership, signing, and clean-machine evidence.
