@@ -34,6 +34,17 @@ x64 and ARM64 non-installing builds passed with catalog/signability checks.
 This does not create a device, load the driver, persist returned PnP instance
 IDs, or close the production signing/isolated-target gates.
 
+Added `tools/m03-swdevice-probe` on 2026-09-15 as the first native software-
+device provisioning seam. It uses the Windows Software Device API contract
+with a stable AudioRouter enumerator, bounded instance ID, and
+`SWD\\AudioRouterVirtual` hardware ID. The default is a no-side-effect
+dry-run; temporary creation requires both `--create` and
+`--allow-device-create`, waits for a bounded callback, and closes its handle
+before exit. `tests/acceptance/m03-swdevice-probe.ps1` compiled the probe and
+passed the dry-run, and is now included in `safe-all.ps1`. Persistent handle
+ownership, returned PnP instance-ID storage, enable/disable/delete semantics,
+and isolated loaded-driver validation remain open.
+
 Reduced the packaged UI entry chunk on 2026-09-15 by moving `@xyflow/react`
 to a dedicated Rollup vendor chunk. The UI suite passed 226 tests and the
 temporary production build passed with a 321 kB application chunk plus a
