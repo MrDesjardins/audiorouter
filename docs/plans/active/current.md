@@ -2,14 +2,17 @@
 
 Updated: 2026-09-15.
 
-## Next implementation slice: harden visual-editor mutation boundaries (M05)
+## Next implementation slice: production driver/bridge qualification (M03)
 
 The backend-owned tray shutdown slice is complete and pushed as `acfa38f2`.
-The user-mode VB-Cable route and cross-rate/process-loopback gates are already
-evidenced. The next actionable slice hardens the visual editor's drag/drop
-boundary while preserving the machine's current configuration.
+The user-mode VB-Cable route, cross-rate/process-loopback gates, and visual
+editor mutation boundaries are already evidenced. The next actionable slice
+is production driver/bridge qualification: move from the non-installing WDK
+prototype toward managed bus provisioning and loaded PortCls ownership while
+preserving the machine's current configuration.
 
-Requirement IDs: UI-08, UI-10, UI-13, M02-AUDIO.
+Requirement IDs: VDEV-01, VDEV-02, VDEV-04, VDEV-07, VDEV-08, VDEV-09,
+VDEV-12, SEC-08, QUAL-01.
 Prerequisites: a targetable desktop surface for attended UI acceptance; a
 production-owned PortCls driver design and signing path for native endpoint
 qualification. Portable verification does not require opening an endpoint or
