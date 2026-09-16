@@ -162,7 +162,10 @@ positions. The drop handler now validates the serialized library kind against
 the supported processor catalog before calculating coordinates or invoking any
 backend callback. A malformed or stale payload therefore fails closed. The
 focused canvas suite passed 9/9; the full UI suite passed
-226/226 tests across 19 files, and TypeScript typecheck passed. This remains
+226/226 tests across 19 files, and TypeScript typecheck passed. A read-only
+drop guard was evaluated but reverted after the full App suite showed that
+disconnected drops must still reach the adapter to produce its connection
+diagnostic. This remains
 automated UI evidence and does not replace attended drag/drop, keyboard,
 accessibility, or native-shell acceptance.
 
