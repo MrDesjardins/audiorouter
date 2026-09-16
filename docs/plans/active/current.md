@@ -167,6 +167,16 @@ processor kind, preventing unavailable source/destination metadata from being
 offered as malformed drop actions. The same UI test and typecheck gates passed
 after this correction.
 
+The complete guarded acceptance chain was requalified again at pushed head
+`ed1ddc72` on 2026-09-15 with exit code 0. M05 UI acceptance passed after the
+canvas shelf correction; M08 unsigned artifact preparation/verification,
+traceability (159 normative IDs), and documentation (54 Markdown files, 217
+local links) also passed. Cleanup removed 15 run-owned temporary children. The
+existing non-failing Vite bundle-size warning remains. The suite did not
+install/load a driver, alter signing or startup policy, register plugins, open
+live audio, or change persistent machine audio configuration. Evidence log:
+`%TEMP%\\audiorouter-safe-all-20260915-ed1.log`.
+
 ### Completed shutdown slice (UI-10/STATE-09)
 
 Objective: replace the shell-side quit sequence with one authenticated,
