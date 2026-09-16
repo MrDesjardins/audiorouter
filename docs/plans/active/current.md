@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Re-ran `cargo test --workspace --locked -- --test-threads=1` on 2026-09-16
+after the Windows-target qualification. The complete workspace suite passed:
+36 CLI, 3 MCP, 173 control, 65 domain, 32 DSP, 111 engine, 70 plugin-host,
+13 worker-process, 8 protocol, 40 recording, 91 storage, 19 transport, and
+81 Windows-audio tests, with all doc-tests passing. This is portable and
+control-plane evidence; it does not substitute for native driver installation,
+signing, or attended endpoint tests.
+
 Re-ran the focused elevated `tests/acceptance/m07-shell-rpc.ps1` gate on
 2026-09-16 after the integrated safe-all qualification; it passed again. The
 frontend WebView initialization -> Tauri command -> authenticated backend
