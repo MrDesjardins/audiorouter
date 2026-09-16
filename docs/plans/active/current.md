@@ -2,6 +2,15 @@
 
 Updated: 2026-09-16.
 
+Requalified the control-owned Firefox application-capture lifecycle on
+2026-09-16 with `m02-control-application-live.ps1 -AllowLiveAudio`, using the
+verified `firefox.exe` path, PID, and creation timestamp plus the existing
+VB-Cable render endpoint. Two bounded start/pump/stop cycles and same-process
+worker restart passed. The script restored all temporary environment values
+and media-device identity/state was unchanged; no application routing or
+system audio default was modified. This is process-loopback user-mode
+evidence, not proof of capture for every protected or unsupported application.
+
 Requalified the control-owned native endpoint lifecycle on 2026-09-16 with
 `m02-control-native-live.ps1 -AllowLiveAudio` using the existing exact
 VB-Cable capture/render pair. The guarded test captured 24,000 frames,
