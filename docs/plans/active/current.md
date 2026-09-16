@@ -14,6 +14,17 @@ persistent audio configuration changed. Next task: continue adapter parity
 and user-testable routing/processors while retaining the production-driver
 and attended-shell acceptance blockers below.
 
+Re-ran the complete guarded `safe-all.ps1` chain at the MCP parity head on
+2026-09-16. M00 toolchain/native inventory and disposable SysVAD checks,
+AudioRouter x64/ARM64 driver source builds and Software Device dry-run, M01,
+M04 (32 DSP and 40 recording tests), M05 (227 UI tests and builds), M06
+VST3/VST2 SDK, worker, and fixture gates, M07 (36 CLI, 3 MCP, 173 control,
+70 plugin-host, and 13 worker-process tests), unsigned M08 artifacts, 159
+traceability mappings, and 54-file/218-link documentation validation all
+passed. Cleanup removed 15 run-owned temporary children. No driver was
+installed or loaded, no plugin or startup registration occurred, and no
+persistent audio configuration changed.
+
 The packaged-shell visibility contract was made explicit on 2026-09-15 at
 `ef952348`: the dynamically created Tauri editor window now requests
 `visible(true)` instead of relying on a framework default. The separate
