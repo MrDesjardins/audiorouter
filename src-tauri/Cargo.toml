@@ -7,7 +7,9 @@ edition = "2021"
 rust-version = "1.80"
 
 [build-dependencies]
-tauri-build = "2.6.3"
+# Keep the feature table explicit so `cargo tauri build` does not rewrite the
+# manifest during the disposable installer smoke.
+tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
 audiorouter-control = { path = "../crates/control" }

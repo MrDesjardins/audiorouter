@@ -1,5 +1,16 @@
 # M08 release evidence
 
+## 2026-09-16 - installer smoke manifest reproducibility
+
+The first current-head NSIS smoke caused Tauri to rewrite the equivalent
+`tauri-build` dependency declaration. The manifest is now intentionally an
+explicit empty-feature table, and a second `npm.cmd exec --yes --package
+@tauri-apps/cli@2.11.4 -- tauri build --debug --no-sign --ci --bundles nsis`
+run produced the same unsigned x64 installer without additional worktree
+churn. `cargo check --manifest-path src-tauri/Cargo.toml` and diff validation
+passed; the exact disposable bundle output was removed. No installer was
+executed or installed and no machine audio configuration changed.
+
 ## 2026-09-16 - current-head unsigned NSIS bundler smoke
 
 The Tauri 2.11.4 CLI produced the unsigned x64

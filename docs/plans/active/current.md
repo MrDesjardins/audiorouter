@@ -2,6 +2,13 @@
 
 Updated: 2026-09-16.
 
+Fixed a release reproducibility issue on 2026-09-16: Tauri's unsigned NSIS
+smoke rewrote the equivalent `tauri-build` manifest dependency. The explicit
+empty-feature table is now checked in; a second current-head bundler run left
+no additional worktree changes. Shell `cargo check` and diff validation
+passed, and the disposable installer output was removed. No installer was
+executed or installed and no machine audio configuration changed.
+
 Requalified the current-head unsigned Tauri NSIS bundler on 2026-09-16. The
 Tauri 2.11.4 CLI produced the x64 `AudioRouter_0.1.0_x64-setup.exe` artifact
 with `--no-sign`; its 4,755,500-byte disposable bundle output was removed
