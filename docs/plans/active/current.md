@@ -2,6 +2,15 @@
 
 Updated: 2026-09-16.
 
+Requalified `tests/acceptance/safe-all.ps1` at pushed head `02ae69f0` on
+2026-09-16 with elevated read-only inventory access. The chain returned exit
+code 0 and covered the versioned M08 release manifest, 31 endpoint inventory,
+x64/ARM64 driver builds, Rust/UI/VST2/VST3 workers, unsigned NSIS smoke, shell
+RPC, traceability, and documentation; 15 temporary children were cleaned.
+No driver installation, signing-mode change, endpoint mutation, startup
+registration, or persistent audio configuration occurred. The two guarded
+live-audio tests remained intentional skips.
+
 Re-ran `tests/acceptance/m08-release.ps1` at pushed head `a4b87212` on
 2026-09-16 from a clean tree. Release Rust binaries, UI production bundle,
 CycloneDX npm SBOM, Cargo metadata, notices, checksums, and the versioned
