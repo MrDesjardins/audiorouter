@@ -928,7 +928,7 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
-    fn backend_failure_marker_survives_storage_reopen() {
+    fn backend_failure_markers_latch_safe_mode_after_storage_reopen() {
         let suffix = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("system clock is after the Unix epoch")
@@ -938,12 +938,16 @@ mod tests {
             process = std::process::id()
         ));
         assert_eq!(record_backend_failure(&database), Some(1));
+        assert_eq!(record_backend_failure(&database), Some(2));
+        assert_eq!(record_backend_failure(&database), Some(3));
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("system clock is after the Unix epoch")
             .as_secs();
         let storage = Storage::open(&database).expect("recovery database reopens");
-        assert_eq!(storage.recovery_status(now).expect("recovery status" ).recent_crashes, 1);
+        let status = storage.recovery_status(now).expect("recovery status");
+        assert_eq!(status.recent_crashes, 3);
+        assert!(status.safe_mode);
         drop(storage);
         let _ = std::fs::remove_file(&database);
         let _ = std::fs::remove_file(database.with_extension("sqlite-wal"));

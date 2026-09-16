@@ -1,13 +1,13 @@
 # M07 automation and recovery evidence
 
-## 2026-09-15 - durable marker reopen regression
+## 2026-09-15 - durable safe-mode latch regression
 
-The shell test suite now exercises the Windows failure-marker helper against a
-unique temporary SQLite database and reopens that database to verify the
-recorded crash remains visible. The test removes its database, WAL, and SHM
-files afterward. Native shell tests now pass with 26 tests; strict Clippy and
-formatting also pass. No live audio or persistent machine audio configuration
-was changed.
+The shell test suite now exercises three failure markers through the helper
+against a unique temporary SQLite database, reopens the database, and verifies
+that the durable `safe_mode` latch and count remain set. The test removes its
+database, WAL, and SHM files afterward. Native shell tests now pass with 26
+tests; strict Clippy and formatting also pass. No live audio or persistent
+machine audio configuration was changed.
 
 ## 2026-09-15 - durable shell failure markers
 
