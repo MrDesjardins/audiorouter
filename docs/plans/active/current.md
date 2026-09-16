@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Implemented the next safe M03/M05 editor slice on 2026-09-16: the managed
+virtual-device panel now adds stopped `virtualRenderSource` or
+`virtualCaptureSink` nodes for the exact selected bus identity. Empty identities
+are rejected; no bus is inferred, provisioned, or activated by the editor.
+Driver/endpoint availability continues to come from the backend inventory.
+UI verification passed 231 tests, TypeScript typecheck, and the production
+build. No driver, endpoint, or persistent machine configuration changed.
+
 Implemented the next safe endpoint-authoring slice on 2026-09-16: the
 Endpoint binding panel can add a stopped `endpointLoopback` source using only
 the exact selected active render endpoint ID. The draft helper trims and

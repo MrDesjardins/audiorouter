@@ -221,6 +221,35 @@ export function appendEndpointLoopbackNode(session: Session, endpointId: string)
   };
 }
 
+/** Adds a stopped virtual-bus source or sink bound to an existing bus identity. */
+export function appendVirtualBusNode(session: Session, busId: string, direction: "renderSource" | "captureSink"): Session {
+  const normalizedBusId = busId.trim();
+  if (!normalizedBusId) throw new Error("An existing virtual bus identity is required");
+  const kind = direction === "renderSource" ? "virtualRenderSource" : "virtualCaptureSink";
+  const prefix = direction === "renderSource" ? "virtual-render-source" : "virtual-capture-sink";
+  let suffix = 1;
+  let id = `${prefix}-${suffix}`;
+  while (session.nodes.some((node) => node.id === id)) {
+    suffix += 1;
+    id = `${prefix}-${suffix}`;
+  }
+  return {
+    ...session,
+    nodes: [...session.nodes, {
+      id,
+      kind,
+      typeVersion: 1,
+      name: `${direction === "renderSource" ? "Virtual render source" : "Virtual capture sink"} ${suffix}`,
+      enabled: false,
+      bypass: false,
+      parameters: { busId: normalizedBusId },
+      ports: direction === "renderSource"
+        ? [{ name: "out", direction: "output", channels: 2 }]
+        : [{ name: "in", direction: "input", channels: 2 }],
+    }],
+  };
+}
+
 /** Adds a verified scan result as an explicit, stopped plugin placeholder. */
 export function appendPluginPlaceholderNode(session: Session, entry: PluginScanEntry): Session {
   const identity = entry.identity;

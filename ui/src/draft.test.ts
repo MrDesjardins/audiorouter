@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendApplicationCaptureNode, appendDraftConnection, appendEndpointLoopbackNode, appendLibraryNode, appendPluginPlaceholderNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, removeDraftNode, resetNodeDraftParameters, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
+import { appendApplicationCaptureNode, appendDraftConnection, appendEndpointLoopbackNode, appendLibraryNode, appendPluginPlaceholderNode, appendVirtualBusNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, removeDraftNode, resetNodeDraftParameters, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
 import { demoSession } from "./fixtures";
 
 describe("appendLibraryNode", () => {
@@ -139,6 +139,20 @@ describe("appendEndpointLoopbackNode", () => {
 
   it("rejects an absent exact endpoint identity", () => {
     expect(() => appendEndpointLoopbackNode(demoSession, "  ")).toThrow("exact render endpoint");
+  });
+});
+
+describe("appendVirtualBusNode", () => {
+  it("adds stopped source and sink nodes bound to the exact bus identity", () => {
+    const source = appendVirtualBusNode(demoSession, " bus-1 ", "renderSource");
+    const sink = appendVirtualBusNode(source, "bus-1", "captureSink");
+    expect(source.nodes.at(-1)).toMatchObject({ kind: "virtualRenderSource", enabled: false, parameters: { busId: "bus-1" }, ports: [{ name: "out", direction: "output", channels: 2 }] });
+    expect(sink.nodes.at(-1)).toMatchObject({ kind: "virtualCaptureSink", enabled: false, parameters: { busId: "bus-1" }, ports: [{ name: "in", direction: "input", channels: 2 }] });
+    expect(sink.edges).toEqual(demoSession.edges);
+  });
+
+  it("rejects an absent bus identity", () => {
+    expect(() => appendVirtualBusNode(demoSession, " ", "captureSink")).toThrow("existing virtual bus identity");
   });
 });
 
