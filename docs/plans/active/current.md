@@ -68,6 +68,15 @@ stopped and detached. This is third-party-cable/user-mode evidence only and
 does not claim project-driver endpoint support. No persistent audio
 configuration changed.
 
+Re-ran the authorized process-loopback checks on 2026-09-16. The Rust
+include/exclude paths each delivered 10,584 source frames into 11,392 engine
+frames across 89 scheduler blocks with zero xruns, overruns, or underruns.
+The native process-attribution exclusion probe captured 22,050 frames and
+completed activation, stop, and reset successfully. Both checks preserved
+the before/after media inventory and changed no persistent audio
+configuration. These are process-loopback API/lifecycle gates, not proof of
+project-driver virtual endpoint behavior.
+
 The dedicated VST2 editor-containment harness passed all 9 x64 ReaPlugs
 fixtures again on 2026-09-16 after its temporary fixture environment was
 hardened to check exact restoration, including absent-variable state. Both
