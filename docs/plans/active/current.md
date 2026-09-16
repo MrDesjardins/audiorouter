@@ -2,6 +2,20 @@
 
 Updated: 2026-09-16.
 
+Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
+`861b4c54` on 2026-09-16 after the strengthened M03 driver source-contract
+gate. M00 toolchain/native inventory and disposable SysVAD checks, AudioRouter
+x64/ARM64 source builds and Software Device dry-run, M01, M04 (32 DSP and 40
+recording tests), M05 (227 UI tests and builds), M06 VST3/VST2 SDK, worker, and
+fixture gates, M07 (36 CLI, 3 MCP, 173 control, 70 plugin-host, and 13
+worker-process tests), unsigned M08 artifacts, 159 traceability mappings, and
+54-file/218-link documentation validation all passed. Cleanup removed 15
+run-owned temporary children. No driver was installed or loaded, no plugin or
+startup registration occurred, and no persistent audio configuration changed.
+The next actionable slice remains production driver/bridge qualification and
+attended shell acceptance; signing, clean-machine, loaded-endpoint, and
+physical-latency gates remain open.
+
 Added explicit MCP managed-device administration tools on 2026-09-16. The
 catalog now exposes bounded `provision_virtual_device` and
 `remove_virtual_device` schemas, marks removal destructive, and forwards both
