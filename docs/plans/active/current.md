@@ -46,6 +46,16 @@ warnings; all generated output was removed. This confirms the source/build
 contract only. Bus provisioning, loaded PortCls ownership, production signing,
 and clean-machine installation remain open and were not attempted.
 
+Re-ran `tests/acceptance/m03-driver-build.ps1` on 2026-09-15 with the
+installed VS Community 2026 and WDK 10.0.28000.0. The x64 Utilities, Filters,
+Main, package/catalog, and Inc targets compiled; catalog signability reported
+zero errors and warnings. The harness's lifecycle and bridge source-contract
+checks also passed, and its disposable output was removed. No INF installation,
+driver loading, signing-mode or boot-policy change, service action, or machine
+audio configuration change occurred. This is stronger source/package safety
+evidence, but it does not close dynamic bus provisioning, loaded PortCls
+ownership, production signing, or clean-machine qualification.
+
 The guarded event-driven WASAPI lifecycle also passed for 500 ms using the
 existing VB-Cable pair: 24,480 capture frames and 29,280 silent render frames,
 with initialize/event/start/stop/reset success on both directions. The probe
