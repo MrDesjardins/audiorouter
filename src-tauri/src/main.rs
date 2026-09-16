@@ -841,6 +841,12 @@ fn main() {
                 .title("AudioRouter")
                 .inner_size(1280.0, 800.0)
                 .resizable(true)
+                // Keep the editor visible on first launch. The tray's Open
+                // action can still hide/show this same window; relying on a
+                // framework default here made packaged-shell diagnostics
+                // ambiguous when no static window entry existed in the
+                // configuration.
+                .visible(true)
                 .initialization_script(session_script.clone())
                 .build()?;
             Ok(())
