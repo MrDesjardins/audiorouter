@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Ran the authorized guarded `m02-rust-adapter-route-live.ps1` on 2026-09-16
+against the existing VB-Cable pair. At 48 kHz with 128-frame graph quanta,
+the 500 ms route captured 24,480 frames, routed 24,416 frames, processed 191
+graph blocks, and reported zero deadline misses; processing telemetry remained
+within the 2,666,667 ns graph deadline. Before/after media snapshots matched,
+and the temporary probe artifacts were removed. This is existing-endpoint
+user-mode evidence, not production-driver or calibrated-latency evidence.
+
 Requalified `tests/acceptance/safe-all.ps1` at pushed head `02ae69f0` on
 2026-09-16 with elevated read-only inventory access. The chain returned exit
 code 0 and covered the versioned M08 release manifest, 31 endpoint inventory,
