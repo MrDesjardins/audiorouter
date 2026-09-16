@@ -11,6 +11,15 @@ No endpoint, driver, plugin registration, or persistent machine audio
 configuration was changed. This is portable evidence only; it does not close
 the native driver/signing or attended shell gates below.
 
+Revalidated the native shell target on 2026-09-16 with 26 shell tests and an
+optimized `cargo build --manifest-path src-tauri/Cargo.toml --locked --release`.
+The shell build is healthy, but attended interaction could not be captured:
+the Windows automation surface reported no targetable applications or
+browsers. No shell was launched through that unavailable surface, and no
+audio endpoint or persistent machine configuration was touched. Manual
+WebView2, keyboard, Narrator, scaling, and accessibility acceptance remains
+open rather than inferred from the build.
+
 The dedicated VST2 editor-containment harness passed all 9 x64 ReaPlugs
 fixtures again on 2026-09-16 after its temporary fixture environment was
 hardened to check exact restoration, including absent-variable state. Both
