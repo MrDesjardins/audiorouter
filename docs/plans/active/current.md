@@ -2,6 +2,15 @@
 
 Updated: 2026-09-15.
 
+- Fixed stale UI state after resume recovery on 2026-09-15. The resume panel
+  now refreshes the authoritative snapshot after validation and after the
+  explicit portable-route restart, so session/sidebar status reflects actual
+  backend state after partial success. UI typecheck, production build, and 218
+  UI tests pass. Evidence:
+  [M07 OS-transition policy evidence](evidence/M07-os-transitions.md). No
+  audio, driver, power, or machine configuration changed. Next action: continue
+  the next safe M03/M07 delivery slice.
+
 - Completed the explicit portable-resume action on 2026-09-15. After
   `system.osTransition` validation, the UI can deliberately restart only the
   returned portable session IDs, reports per-route failures, and leaves native

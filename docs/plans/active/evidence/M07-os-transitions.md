@@ -49,6 +49,10 @@ routes stopped. A separate deliberate action can restart only the portable
 IDs returned by the backend, with per-route failure reporting; native IDs are
 never passed to session start.
 
+After either validation or the explicit portable restart, the panel refreshes
+the authoritative snapshot so sidebar and session status do not remain stale
+after a partial or successful recovery.
+
 The Tauri shell now owns a Windows message-only listener in
 `src-tauri/src/os_transition_windows.rs`. WTS session notifications map the
 current user's lock and logoff events; `WM_POWERBROADCAST` maps suspend and
