@@ -7,6 +7,7 @@ $steps = @(
     @{ Name = 'M00 toolchain compatibility'; Script = Join-Path $acceptanceRoot 'm00-toolchain.ps1' },
     @{ Name = 'M00 native compile'; Script = Join-Path $acceptanceRoot 'm00-native-build.ps1' },
     @{ Name = 'M03 AudioRouter driver build'; Script = Join-Path $acceptanceRoot 'm03-driver-build.ps1' },
+    @{ Name = 'M03 AudioRouter ARM64 driver build'; Script = Join-Path $acceptanceRoot 'm03-driver-build.ps1'; Platform = 'ARM64' },
     @{ Name = 'M00 native format inventory'; Script = Join-Path $acceptanceRoot 'm00-native-format-inventory.ps1' },
     @{ Name = 'M00 pinned SysVAD qualification'; Script = Join-Path $repositoryRoot 'tools\m00-sysvad\qualify.ps1' },
     @{ Name = 'M01 CLI'; Script = Join-Path $acceptanceRoot 'm01-cli.ps1' },
@@ -40,7 +41,11 @@ try {
         # negative child-process cases and leave that sentinel nonzero after
         # successfully validating the expected rejection. Each step owns its
         # native-command checks and throws on an actual failure.
-        & $step.Script
+        if ($step.ContainsKey('Platform')) {
+            & $step.Script -Platform $step.Platform
+        } else {
+            & $step.Script
+        }
     }
 
     Write-Output 'Safe acceptance chain passed.'

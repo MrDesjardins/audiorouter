@@ -104,6 +104,12 @@ opposite platform's reported package root. Both explicit platform runs
 passed with disposable output removed; this adds compile-only architecture
 coverage and does not close the loaded-driver or production-signing gates.
 
+The first attempt to add the ARM64 step to `safe-all.ps1` reached M07, then
+M08 correctly refused to prepare release artifacts because this runner was
+testing an uncommitted worktree. That expected clean-tree guard was recorded
+as a failed orchestration attempt; the runner change is now ready to commit
+before the valid integrated rerun.
+
 Requalified `tests/acceptance/safe-all.ps1` at the current head on 2026-09-15.
 The complete guarded chain passed M00/M03 toolchain, native, driver, and
 reference-driver checks; M01/M04; M05 UI tests and temporary production
