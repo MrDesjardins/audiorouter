@@ -2,6 +2,16 @@
 
 Updated: 2026-09-15.
 
+- Requalified the two-way resampling implementation against the existing
+  VB-Cable pair on 2026-09-15 at pushed head `3d24953f`. The authorized 500 ms
+  route processed 24,480 captured frames, 191 graph quanta/tap calls, and
+  24,448 rendered frames at 48 kHz stereo with zero non-finite tap samples,
+  dropped render frames, scheduler XRuns, or deadline misses. The complete
+  Windows-audio suite passed 78 tests. Temporary streams/recording were
+  removed and media identity/state remained unchanged. This is existing
+  VB-Cable user-mode evidence; production driver/PortCls and physical-latency
+  qualification remain open.
+
 - Completed the bounded two-way native endpoint resampling boundary on
   2026-09-15. `WasapiSchedulerBridge::new_for_endpoints_at_graph_rate` now
   keeps the engine at the declared 48 kHz internal rate while converting both

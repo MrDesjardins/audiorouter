@@ -12,6 +12,18 @@ and strict Clippy passed for Windows audio and control. This is portable
 adapter evidence; live cross-rate hardware and production driver/PortCls
 qualification remain open.
 
+## 2026-09-15 - live VB-Cable validation after two-way conversion
+
+The authorized `tests/acceptance/m02-rust-adapter-bridge-live.ps1
+-AllowLiveAudio -DurationMilliseconds 500 -Cycles 1` run passed after the
+two-way implementation was pushed. Against the exact existing VB-Cable pair
+at 48 kHz stereo, it processed 24,480 captured frames, 191 graph quanta/tap
+calls, and 24,448 rendered frames with zero non-finite tap samples, dropped
+render frames, scheduler XRuns, or deadline misses. The 78-test Windows-audio
+suite also passed. Temporary streams and recording were removed, and media
+identity/state remained unchanged. This does not qualify the production
+AudioRouter driver, PortCls transport, or physical latency.
+
 # Native adapter route requalification (2026-09-14)
 
 ## 2026-09-14 - verified application-capture lifecycle
