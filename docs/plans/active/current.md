@@ -2,6 +2,17 @@
 
 Updated: 2026-09-16.
 
+Refreshed the release qualification snapshot on 2026-09-16 after the latest
+authorized VB-Cable route requalification. `docs/operations/release-notes.md`
+now reports the current 500 ms control-owned route evidence: 24,000 captured
+frames, 23,936 rendered frames, 187 processed quanta, one successful
+start/stop/reset sequence, and one deliberate post-stop pump rejection. The
+documentation acceptance passed with 54 Markdown files and 218 local links;
+the correction changes no implementation or machine configuration. The
+desktop automation surface was checked again and still exposed no targetable
+application, so attended visual/accessibility acceptance remains open.
+Evidence: `ea95c047` and the latest guarded M02 route log.
+
 Revalidated the complete portable workspace and UI after the editor
 environment-restoration hardening on 2026-09-16. `cargo test --workspace
 --locked -- --test-threads=1` passed all runnable workspace tests (the two
