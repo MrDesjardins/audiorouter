@@ -3,7 +3,7 @@
 Updated: 2026-09-16.
 
 Requalified the elevated guarded `tests/acceptance/safe-all.ps1` chain at
-head `16d3835e` on 2026-09-16. Toolchain/native probes, x64/ARM64 driver
+head `4fb78ce3` on 2026-09-16. Toolchain/native probes, x64/ARM64 driver
 source builds, read-only 31-endpoint inventory, disposable SysVAD, M01/M03/
 M04/M05/M06/M07, unsigned M08 artifacts and NSIS smoke, frontend shell RPC,
 159 traceability mappings, and documentation all passed. The run included 34
