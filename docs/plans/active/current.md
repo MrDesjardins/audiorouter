@@ -2,6 +2,12 @@
 
 Updated: 2026-09-16.
 
+Re-ran `tests/acceptance/m05-ui.ps1` on 2026-09-16 after the graph source
+authoring slices. The temporary production build, TypeScript check, and full
+UI suite passed with 231 tests. The acceptance remains UI-only and does not
+prove WebView2 attended accessibility, loaded-driver audio, or physical
+latency; no audio endpoint or machine configuration changed.
+
 Implemented the next safe M03/M05 editor slice on 2026-09-16: the managed
 virtual-device panel now adds stopped `virtualRenderSource` or
 `virtualCaptureSink` nodes for the exact selected bus identity. Empty identities
