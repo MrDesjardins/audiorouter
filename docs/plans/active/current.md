@@ -2,6 +2,16 @@
 
 Updated: 2026-09-16.
 
+Requalified the supplied x64 TDR Nova VST3 bundle on 2026-09-16 through
+`m06-vst3-worker.ps1 -AllowStateUnsupported -SingleStreamOnly`. The isolated
+worker passed finite single-stream processing, bounded restart/quarantine,
+repeated-quantum timing, validated shutdown, and native fault-UI suppression;
+TDR Nova state restoration was explicitly recorded as unsupported. Temporary
+worker objects were removed, with no plugin registration, audio stream, or
+machine configuration change. This is binary-specific evidence, not a
+general VST3 vendor claim.
+
+Completed fresh authorized VB-Cable route evidence on 2026-09-16. The
 Completed fresh authorized VB-Cable route evidence on 2026-09-16. The
 explicit-ID control-owned route passed one 500 ms cycle at 48 kHz with 50
 packets, 24,000 captured frames, 23,936 rendered frames, one successful
