@@ -14,6 +14,17 @@ production-driver/PortCls, signing, clean-machine, physical-latency, and
 attended UI/accessibility gates; no safe repository-local substitute can
 close those claims.
 
+Re-ran the complete guarded acceptance chain on 2026-09-16 at pushed head
+`48718d6e`. All substantive stages reported success, including the workspace
+tests, x64/ARM64 project-driver qualification, UI build, VST2/VST3 worker
+checks, unsigned release and NSIS smoke, shell RPC, 159-ID traceability, and
+54-document link validation; cleanup removed 15 run-owned temporary children.
+The runner now explicitly returns success after cleanup, but the surrounding
+PowerShell pipeline still surfaced process exit 1 despite the success output.
+This is recorded as an acceptance-runner invocation issue pending isolation;
+the substantive stage output is evidence, not a release gate. No driver,
+plugin, startup, or persistent audio configuration was changed.
+
 Attempted the guarded physical-loopback latency path on 2026-09-16 using the
 available exact PD200X render/capture pair and 100 impulses. The analyzer
 detected 0/100 impulse groups, so no latency value was accepted; the pair is
