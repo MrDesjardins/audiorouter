@@ -107,6 +107,34 @@ try {
             }
         }
         if (-not $cycleRejected) { throw 'cross-session virtual route cycle was not rejected' }
+        $writerRejected = $false
+        try {
+            $null = Invoke-CliJson @(
+                'virtual-routes', 'replace', '--base-revision', '1',
+                '--file', (Join-Path $fixtureRoot 'virtual-route-conflicting-writers.json'),
+                '--idempotency-key', 'route-writers', '--database', $database)
+        } catch {
+            if ($_.Exception.Message -match 'DuplicateVirtualBusWriter|writer') {
+                $writerRejected = $true
+            } else {
+                throw
+            }
+        }
+        if (-not $writerRejected) { throw 'multiple virtual-bus writers were not rejected' }
+        $revisionRejected = $false
+        try {
+            $null = Invoke-CliJson @(
+                'virtual-routes', 'replace', '--base-revision', '0',
+                '--file', $routeFile, '--idempotency-key', 'route-stale-revision',
+                '--database', $database)
+        } catch {
+            if ($_.Exception.Message -match 'baseRevision') {
+                $revisionRejected = $true
+            } else {
+                throw
+            }
+        }
+        if (-not $revisionRejected) { throw 'stale virtual-route revision was not rejected' }
 
         $renamed = Apply-Operation 'virtual-bus-rename.json' 'rename-desktop'
         if ($renamed.operation.name -ne 'Desktop Monitor') { throw 'rename lifecycle result was not persisted' }

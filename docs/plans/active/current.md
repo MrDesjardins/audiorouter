@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Extended M03 route acceptance on 2026-09-16 with ownership and concurrency
+guards. The CLI now verifies that two producers cannot claim one virtual bus,
+that a two-way cross-session cycle is rejected, and that a stale
+`baseRevision` cannot replace the persisted route set. The complete
+eight-bus, lifecycle, persistence, and one-route checks remain passing in the
+same disposable database workflow. No audio endpoint, native device, or
+machine configuration was accessed.
+
 Extended M03 virtual-bus acceptance on 2026-09-16 to cover the explicit
 cross-session route boundary. The disposable CLI workflow imports and
 duplicates two stopped sessions, creates the eight-bus inventory, applies a
