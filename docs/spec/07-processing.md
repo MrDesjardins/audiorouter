@@ -15,6 +15,12 @@ calculated at a different rate.
 - **DSP-03 — Dynamics.** Supply a compressor with threshold, ratio, attack, release, knee, makeup gain, and linked stereo detection; and a gate/downward expander with threshold, hysteresis, ratio/range, attack, hold, and release. A gate is amplitude-based, not a substitute for frequency filtering. Basic mode groups advanced controls while preserving direct API access.
 - **DSP-04 — Limiting/gain.** Gain supports attenuation, boost, and click-free mute. Limiter supports output ceiling and disclosed lookahead/release. v1 guarantees a tested sample-peak ceiling; do not call it true-peak protection unless oversampling/inter-sample testing is implemented. Gain reduction and clipping have distinct meters.
 - **DSP-05 — Delay.** Delay adds 0–1,000 ms with bounded preallocation and de-clicked parameter transitions. It supports manual audio/video alignment and is separate from automatic mixer path compensation. Do not promise perceptually seamless large delay changes; report a rebuilding/warming state if needed.
+
+The built-in delay implements a 64-frame read-tap crossfade for changes made
+after processing has started. Rapid updates are coalesced until the active
+crossfade completes; initial configuration and reset remain immediate and
+silent-safe. This bounded transition is a click-reduction measure, not a claim
+that a large alignment change is perceptually seamless.
 - **DSP-06 — Pitch.** M06 supplies a time-preserving pitch-shift node, -12 to +12 semitones plus -100 to +100 cents, with explicit algorithmic latency. A VST3-only workaround does not meet the built-in node requirement. Formant control is optional/future. At ±12 semitones, duration remains within 0.1% in a 60-second offline test; pitch error for steady tones is within 10 cents after warmup. Test speech for intelligibility and artifacts separately.
 - **DSP-07 — Metering.** Expose per-channel sample peak, RMS, clipping count, gate state, and gain reduction where relevant. RMS window defaults to 300 ms; peak hold defaults to 1 second. Silence is represented by a documented floor or null dB value, never JSON `-Infinity`. Telemetry rate is bounded by [14](14-quality.md).
 

@@ -1302,7 +1302,8 @@ pub enum DelayError {
 }
 
 /// A bounded interleaved delay line. The ring is allocated once at
-/// construction and parameter changes only alter read positions.
+/// construction; parameter changes alter read positions through a bounded
+/// crossfade so a running stream does not jump between unrelated taps.
 #[derive(Clone, Debug)]
 pub struct DelayLine {
     sample_rate: f32,
