@@ -7,6 +7,8 @@ import type {
   VirtualDeviceApplyResult,
   VirtualDeviceOperation,
   VirtualDevicePlanResult,
+  VirtualDeviceProvisionResult,
+  VirtualDeviceRemoveResult,
   VirtualBusRoute,
   VirtualRouteListResult,
   VirtualRouteReplaceResult,
@@ -112,6 +114,8 @@ export interface UiBackend {
   listVirtualDevices(): Promise<VirtualDeviceInfo[]>;
   planVirtualDevice(operation: VirtualDeviceOperation): Promise<VirtualDevicePlanResult>;
   applyVirtualDevice(planId: string, idempotencyKey: string): Promise<VirtualDeviceApplyResult>;
+  provisionVirtualDevice(busId: string, instanceId: string, idempotencyKey: string): Promise<VirtualDeviceProvisionResult>;
+  removeVirtualDevice(busId: string, idempotencyKey: string): Promise<VirtualDeviceRemoveResult>;
   listVirtualRoutes(): Promise<VirtualRouteListResult>;
   replaceVirtualRoutes(baseRevision: number, routes: VirtualBusRoute[], idempotencyKey: string): Promise<VirtualRouteReplaceResult>;
   previewRecording(recordingId: string): Promise<RecordingPreviewResult>;
@@ -302,6 +306,12 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
       };
     },
     async applyVirtualDevice() {
+      throw new Error("demo backend has no managed virtual driver");
+    },
+    async provisionVirtualDevice() {
+      throw new Error("demo backend has no managed virtual driver");
+    },
+    async removeVirtualDevice() {
       throw new Error("demo backend has no managed virtual driver");
     },
     async listVirtualRoutes() {
@@ -559,6 +569,12 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
     },
     async applyVirtualDevice(planId, idempotencyKey) {
       return client.request("virtualDevices.apply", { planId, idempotencyKey });
+    },
+    async provisionVirtualDevice(busId, instanceId, idempotencyKey) {
+      return client.request("virtualDevices.provision", { busId, instanceId, idempotencyKey });
+    },
+    async removeVirtualDevice(busId, idempotencyKey) {
+      return client.request("virtualDevices.remove", { busId, idempotencyKey });
     },
     async listVirtualRoutes() {
       return client.request("virtualRoutes.list", undefined);

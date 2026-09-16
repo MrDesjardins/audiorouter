@@ -127,6 +127,16 @@ Markdown files and 218 local links. No driver was installed or loaded, no
 plugin/startup registration occurred, and no persistent audio configuration
 changed. The API transaction/compensation refactor remains the next task.
 
+Extended the UI backend adapter and managed-bus lifecycle panel on 2026-09-16
+with typed `provisionVirtualDevice` and `removeVirtualDevice` calls. The panel
+now exposes a bounded instance-ID field and explicit native ownership buttons
+alongside the existing desired-state plan/apply controls, so the new API is
+human-testable without conflating graph state with device administration. Demo
+and disconnected backends fail closed with the existing unavailable message.
+UI typecheck and all 226 UI tests passed. This remains a control-surface
+delivery only: the native driver is not installed/loaded and no endpoint or
+persistent machine audio configuration was changed.
+
 Added bounded native ownership in `crates/windows-audio` on 2026-09-16 via
 `ManagedSoftwareDeviceInventory`. It keys RAII Software Device API handles by
 managed bus ID, rejects duplicate and over-capacity entries, exposes the
