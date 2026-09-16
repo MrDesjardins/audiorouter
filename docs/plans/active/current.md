@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Rechecked repository quality gates on 2026-09-16 after the integrated
+acceptance run: `cargo fmt --all -- --check` and
+`cargo clippy --workspace --all-targets --locked -- -D warnings` both passed
+with no warnings or formatting changes. This covers the Rust backend, engine,
+control, transport, plugin host, CLI, and Windows adapter; it does not replace
+the open native driver/signing, physical-latency, clean-machine, or attended
+desktop gates.
+
 Requalified the endpoint lifecycle seam on 2026-09-16 with
 `cargo test --locked -p audiorouter-windows-audio endpoint_ --
 --test-threads=1`: 20 endpoint tests passed, including read-only active
