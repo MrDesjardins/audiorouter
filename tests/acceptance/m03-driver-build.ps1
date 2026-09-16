@@ -33,6 +33,7 @@ foreach ($required in @(
         'Assert-NoReparseAncestors',
         '$maxStateBytes',
         'Read-BoundedState',
+        'Assert-AudioRouterInf',
         'lifecycle state file cannot be a reparse point',
         'lifecycle state file exceeds',
         'FileAttributes]::ReparsePoint',

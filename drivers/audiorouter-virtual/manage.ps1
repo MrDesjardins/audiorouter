@@ -75,6 +75,23 @@ function Read-BoundedState {
     return [IO.File]::ReadAllText($item.FullName)
 }
 
+function Assert-AudioRouterInf {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path
+    )
+    $item = Get-Item -LiteralPath $Path -Force
+    if ($item.Length -gt 256KB) {
+        throw "The driver INF exceeds the 256 KiB lifecycle validation limit: $($item.FullName)"
+    }
+    $content = [IO.File]::ReadAllText($item.FullName)
+    foreach ($required in @('SWD\AudioRouterVirtual', 'AudioRouterVirtual.sys')) {
+        if ($content.IndexOf($required, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+            throw "The driver INF is not an AudioRouter package: missing $required"
+        }
+    }
+}
+
 if (-not $Preview -and -not $AllowDriverInstall) {
     throw 'Driver lifecycle changes require -AllowDriverInstall in addition to -Install or -Uninstall.'
 }
@@ -90,6 +107,7 @@ if (-not [string]::Equals([IO.Path]::GetExtension($infPath), '.inf',
 }
 Assert-NoReparsePath -Path $infPath -StopAt $driverRoot
 Assert-NoReparseAncestors -Path (Split-Path -Parent $statePath)
+Assert-AudioRouterInf -Path $infPath
 
 $pnputil = Join-Path $env:WINDIR 'System32\pnputil.exe'
 if (-not (Test-Path -LiteralPath $pnputil -PathType Leaf)) {
