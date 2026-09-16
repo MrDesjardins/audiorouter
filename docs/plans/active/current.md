@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Requalified the installed x64 ReaComp VST2 binary on 2026-09-16 through the
+contained worker at 44.1, 48, and 96 kHz. Processing, bounded editor-thread
+containment, and supervised editor-timeout containment passed; the before/after
+SHA-256 remained `4c0862ab3cfd8a0345481b4792c07bf8d5a9761014f217d4e13669bf8143c7a0`.
+The acceptance restored existing environment values and made no copy,
+registration, audio, or machine-configuration change. This is one selected
+binary's VST2 evidence, not a general plugin compatibility claim.
+
 Requalified the supplied x64 TDR Nova VST3 bundle on 2026-09-16 through
 `m06-vst3-worker.ps1 -AllowStateUnsupported -SingleStreamOnly`. The isolated
 worker passed finite single-stream processing, bounded restart/quarantine,
