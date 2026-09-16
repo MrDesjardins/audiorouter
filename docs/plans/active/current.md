@@ -2,7 +2,30 @@
 
 Updated: 2026-09-15.
 
-## Next implementation slice: backend-owned tray shutdown (UI-10/STATE-09)
+## Next implementation slice: native VB-Cable route qualification (M02)
+
+The backend-owned tray shutdown slice is complete and pushed as `acfa38f2`.
+The next actionable gate is repeated human-testable qualification of the
+existing VB-Cable route while preserving the machine's current configuration.
+
+Requirement IDs: M02-AUDIO, AUDIO-03, AUDIO-07, REC-09, UI-10.
+Prerequisites: exact active VB-Cable endpoint identities; administrator-
+authorized live test; automatic stream teardown and before/after media-state
+comparison.
+
+Validation completed on 2026-09-15: the Rust adapter bridge passed two 500 ms
+cycles with 24,480 captured and 24,448 rendered frames per cycle, zero dropped
+frames, xruns, or deadline misses. The control-owned route passed with 23,520
+captured and 23,424 rendered frames, one successful start/stop/reset, and one
+deliberately rejected post-stop pump. Both wrappers restored temporary state;
+no defaults, volume, mute, privacy, driver, signing, startup, or persistent
+audio configuration changed. Evidence: [M02 audio engine evidence](evidence/M02-audio-engine.md).
+
+Next: continue with the remaining guarded cross-rate/process-loopback and
+loaded-driver gates; do not install/load the prototype driver or change audio
+defaults as part of this user-mode qualification.
+
+### Completed shutdown slice (UI-10/STATE-09)
 
 Objective: replace the shell-side quit sequence with one authenticated,
 idempotent `system.quit` operation owned by `ControlPlane`, so recorder

@@ -14,6 +14,22 @@ configuration changed. This qualifies built-in processor graph execution in
 the existing user-mode VB-Cable route; production-driver callback and
 subjective/transfer-function audio-quality gates remain open.
 
+# 2026-09-15 - repeated VB-Cable bridge and control-route qualification
+
+The guarded `m02-rust-adapter-bridge-live.ps1` acceptance passed two 500 ms
+cycles against the exact existing VB-Cable pair. Each cycle negotiated 48 kHz
+stereo and reported 24,480 captured frames, 191 processed quanta, 24,448
+rendered frames, zero dropped frames, zero scheduler xruns, and zero deadline
+misses. Temporary recording and stream resources were removed and the media
+snapshot was unchanged before and after both cycles.
+
+The guarded `m02-control-route-live.ps1` acceptance also passed for 500 ms:
+generation 1, 49 packets, 23,520 captured frames, 183 processed quanta, 23,424
+rendered frames, one successful start/stop/reset, and one rejected post-stop
+pump. It stopped and detached the worker, and verified unchanged media-device
+identity/state. These are user-mode VB-Cable qualifications; they do not claim
+production driver installation, PortCls ownership, or physical latency.
+
 # 2026-09-15 - two-way endpoint resampling boundary
 
 `WasapiSchedulerBridge::new_for_endpoints_at_graph_rate` now supports an
