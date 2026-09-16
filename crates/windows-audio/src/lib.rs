@@ -7374,6 +7374,90 @@ mod tests {
     }
 
     #[test]
+    fn native_bridge_sessions_enforce_direction_generation_and_lease() {
+        let unique = |label: &str| {
+            std::env::temp_dir().join(format!(
+                "audiorouter-session-{label}-{}-{}.slot",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ))
+        };
+        let hello = |direction| audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: "bus-session".into(),
+            direction,
+            generation: 12,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            frames_per_quantum: 4,
+            lease_ms: 1_000,
+        };
+        let capture_path = unique("capture");
+        let render_path = unique("render");
+        let mut capture = NativeBridgeSession::create(
+            &capture_path,
+            hello(audiorouter_protocol::AudioBridgeDirection::CaptureSink),
+        )
+        .unwrap();
+        let capture_reader = NativeBridgeRegion::open(&capture_path, 2, 4).unwrap();
+        let input = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8];
+        assert_eq!(capture.write(&input).unwrap(), 1);
+        let mut captured = [0.0; 8];
+        assert_eq!(
+            capture_reader
+                .read_into(12, &mut captured)
+                .unwrap()
+                .sequence,
+            1
+        );
+        assert_eq!(captured, input);
+        assert!(matches!(
+            capture.read_into(&mut captured),
+            Err(NativeBridgeSessionError::WrongDirection)
+        ));
+
+        let mut render = NativeBridgeSession::create(
+            &render_path,
+            hello(audiorouter_protocol::AudioBridgeDirection::RenderSource),
+        )
+        .unwrap();
+        let render_writer = NativeBridgeRegion::open(&render_path, 2, 4).unwrap();
+        render_writer.write(12, 9, &input).unwrap();
+        assert_eq!(
+            render.read_into_after(8, &mut captured).unwrap().sequence,
+            9
+        );
+        assert!(matches!(
+            render.read_into_after(9, &mut captured),
+            Err(NativeBridgeSessionError::Region(
+                NativeBridgeRegionError::SequenceRegression
+            ))
+        ));
+        assert!(matches!(
+            render.write(&input),
+            Err(NativeBridgeSessionError::WrongDirection)
+        ));
+
+        let base = std::time::Instant::now();
+        capture.heartbeat_at(base).unwrap();
+        assert!(matches!(
+            capture.heartbeat_at(base + std::time::Duration::from_millis(1_001)),
+            Err(NativeBridgeSessionError::LeaseExpired)
+        ));
+        assert!(render.is_lease_expired_at(base + std::time::Duration::from_millis(1_001)));
+        drop(render_writer);
+        drop(capture_reader);
+        drop(render);
+        drop(capture);
+        std::fs::remove_file(capture_path).unwrap();
+        std::fs::remove_file(render_path).unwrap();
+    }
+
+    #[test]
     fn native_bridge_realtime_writer_publishes_engine_tap_without_allocation() {
         let path = std::env::temp_dir().join(format!(
             "audiorouter-tap-{}-{}.slot",

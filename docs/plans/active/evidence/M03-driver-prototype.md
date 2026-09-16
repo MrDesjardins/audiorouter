@@ -1,5 +1,16 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-15 - directional session contract
+
+Added `native_bridge_sessions_enforce_direction_generation_and_lease`, a
+file-backed regression covering both negotiated directions. A capture-sink
+session writes a generation-bound block that a separate reader can consume,
+while render-source reads reject replay and writes reject the wrong direction.
+Both sessions reject heartbeat access after the bounded lease interval. The
+focused Windows-audio test and strict Clippy pass. This is user-mode mapped
+bridge evidence only; it does not claim a loaded driver, PortCls callback,
+production signing, or virtual Windows endpoint.
+
 ## 2026-09-14 - timer-to-bridge source reachability
 
 The non-installing `tests/acceptance/m03-driver-build.ps1` gate now checks the

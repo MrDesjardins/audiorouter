@@ -2,6 +2,13 @@
 
 Updated: 2026-09-15.
 
+- Added a file-backed directional bridge session regression on 2026-09-15.
+  Negotiated capture-sink writes and render-source reads now have explicit
+  test coverage for direction enforcement, generation matching, replay
+  rejection, and lease expiry. The focused Windows-audio test and strict
+  Clippy pass. This qualifies only the user-mode bridge contract; no driver
+  device path was opened or loaded.
+
 - Ran the authorized guarded VB-Cable route on 2026-09-15 using the exact
   `CABLE Output` capture and `CABLE Input` render bindings at 48 kHz stereo.
   The control-owned worker processed 50 packets / 24,000 captured frames,
