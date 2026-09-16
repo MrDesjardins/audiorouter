@@ -2,6 +2,20 @@
 
 Updated: 2026-09-16.
 
+Requalified the complete workspace regression on 2026-09-16 with `cargo test
+--workspace --locked -- --test-threads=1`: all portable suites passed,
+including 36 CLI, 173 control (two explicitly guarded live tests ignored), 65
+domain, 32 DSP, 111 engine, 70 plugin-host, 13 worker-process, 8 protocol,
+40 recording, 91 storage, 19 transport, and 81 Windows-audio tests, plus all
+doc-tests. The endpoint invalidation/rebind seam is present and fail-closed:
+fresh binding resolution distinguishes missing, direction-changed, and
+format-changed identities; rebind helpers release stale clients, refresh the
+read-only snapshot, reopen only the exact persisted IDs with bounded retries,
+and leave the worker stopped on success or without clients on open failure.
+No endpoint, stream, driver, plugin registration, or persistent machine
+configuration was accessed. This is portable/replayable evidence; native
+rebind after unplug/default changes remains a guarded Windows hardware gate.
+
 Strengthened the M03 WaveRT bridge source contract on 2026-09-16. The
 acceptance now verifies that `WriteBytes` consumes only the render-source
 lease with bounded shape validation and that `ReadBytes` publishes only the
