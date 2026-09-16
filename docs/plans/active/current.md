@@ -2,6 +2,15 @@
 
 Updated: 2026-09-16.
 
+Ran the repository-local ReaPlugs VST2 matrix on 2026-09-16 with
+`-SkipIncompatibleCandidates`. Seven x64 audio effects passed 44.1/48/96 kHz
+processing with worker containment and before/after binary-integrity checks;
+`reacontrolmidi-standalone.dll` and `reajs.dll` were explicitly rejected after
+their incompatible state/native lifecycle responses were contained. The
+matrix restored environment variables and changed no plugin registration,
+audio route, or machine configuration. This preserves a binary-specific
+compatibility boundary rather than claiming every DLL in the directory.
+
 Requalified the installed x64 ReaComp VST2 binary on 2026-09-16 through the
 contained worker at 44.1, 48, and 96 kHz. Processing, bounded editor-thread
 containment, and supervised editor-timeout containment passed; the before/after
