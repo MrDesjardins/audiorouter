@@ -51,8 +51,18 @@ function Assert-PluginUnchanged {
     }
 }
 
-$previousFixture = $env:AUDIOROUTER_VST2_FIXTURE
-$previousSampleRate = $env:AUDIOROUTER_VST2_SAMPLE_RATE
+$previousFixturePresent = Test-Path Env:AUDIOROUTER_VST2_FIXTURE
+$previousSampleRatePresent = Test-Path Env:AUDIOROUTER_VST2_SAMPLE_RATE
+$previousFixture = if ($previousFixturePresent) { $env:AUDIOROUTER_VST2_FIXTURE } else { $null }
+$previousSampleRate = if ($previousSampleRatePresent) { $env:AUDIOROUTER_VST2_SAMPLE_RATE } else { $null }
+function Assert-EnvironmentRestored {
+    param([Parameter(Mandatory = $true)][string]$Name, [Parameter(Mandatory = $true)][bool]$ExpectedPresent, [AllowNull()][string]$Expected)
+    $actual = [Environment]::GetEnvironmentVariable($Name, 'Process')
+    $present = Test-Path "Env:$Name"
+    if ($present -ne $ExpectedPresent -or ($ExpectedPresent -and $actual -ne $Expected)) {
+        throw "Acceptance did not restore process environment variable $Name"
+    }
+}
 try {
     $env:AUDIOROUTER_VST2_FIXTURE = $PluginPath
     foreach ($sampleRate in @(44100, 48000, 96000)) {
@@ -94,6 +104,8 @@ try {
     # normal success-path check.  An incompatible plugin must not be able to
     # make the harness skip the before/after fingerprint validation.
     Assert-PluginUnchanged
+    Assert-EnvironmentRestored 'AUDIOROUTER_VST2_FIXTURE' $previousFixturePresent $previousFixture
+    Assert-EnvironmentRestored 'AUDIOROUTER_VST2_SAMPLE_RATE' $previousSampleRatePresent $previousSampleRate
 }
 
 Write-Output 'Scope: one explicitly selected user-installed VST2 DLL; binary fingerprint is checked before/after, with no copy, registration, or audio configuration changes.'

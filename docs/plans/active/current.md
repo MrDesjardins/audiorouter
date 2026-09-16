@@ -2,6 +2,21 @@
 
 Updated: 2026-09-16.
 
+Completed the plugin-harness restoration hardening on 2026-09-16. After
+capturing variable presence separately from its value, the installed VST2 and
+ReaPlugs acceptance scripts now assert exact restoration for both present and
+absent process variables. ReaComp and the complete seven-pass/two-rejected
+ReaPlugs matrix passed with this assertion active; no plugin, audio, or machine
+configuration changed.
+
+Hardened the installed-plugin acceptance safety boundary on 2026-09-16. The
+single-VST2 and ReaPlugs matrix scripts now assert that every process
+environment variable they temporarily set is restored to its exact prior
+value, including the previously-absent case. The change is test-harness-only;
+it does not modify plugin files, registration, audio routing, or machine
+configuration. Focused ReaComp and matrix runs passed again after this
+assertion was added.
+
 Ran the repository-local ReaPlugs VST2 matrix on 2026-09-16 with
 `-SkipIncompatibleCandidates`. Seven x64 audio effects passed 44.1/48/96 kHz
 processing with worker containment and before/after binary-integrity checks;
