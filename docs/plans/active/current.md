@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Re-ran `tests/acceptance/m08-release.ps1` at pushed head `a4b87212` on
+2026-09-16 from a clean tree. Release Rust binaries, UI production bundle,
+CycloneDX npm SBOM, Cargo metadata, notices, checksums, and the versioned
+unsigned manifest all prepared and verified successfully. The manifest version
+matched the Tauri/Cargo contract and retained unsigned driver/signing/clean-
+machine blockers. Temporary release output was removed; no installer, driver,
+endpoint, or audio configuration action occurred.
+
 Added M08 release-version provenance on 2026-09-16. Artifact preparation now
 cross-checks the Tauri shell version against `src-tauri/Cargo.toml`, validates
 semantic-version shape, and records the version in `release-manifest.json`;
