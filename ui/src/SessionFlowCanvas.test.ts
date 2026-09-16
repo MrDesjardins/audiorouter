@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { demoSession } from "./fixtures";
@@ -88,5 +88,20 @@ describe("canvas library drop positions", () => {
     fireEvent.click(getByRole("button", { name: "Gate" }));
 
     expect(onAddLibraryNode).toHaveBeenCalledWith("gate", { x: 0, y: 150 });
+  });
+
+  it("keeps unavailable source metadata out of the processor drop shelf", () => {
+    const { getByLabelText } = render(createElement(SessionFlowCanvas, {
+      session: demoSession,
+      selectedNodeId: "mic",
+      onSelect: vi.fn(),
+      onConnect: vi.fn(),
+      onAddLibraryNode: vi.fn(() => "processor-1"),
+    }));
+    const shelf = within(getByLabelText("Drag processors to canvas"));
+
+    expect(shelf.getByRole("button", { name: "Gain" })).toBeTruthy();
+    expect(shelf.queryByRole("button", { name: "Physical input" })).toBeNull();
+    expect(shelf.queryByRole("button", { name: "Virtual capture sink" })).toBeNull();
   });
 });

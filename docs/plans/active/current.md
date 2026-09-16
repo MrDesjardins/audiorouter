@@ -158,7 +158,7 @@ proves that the selected built-in processor and bounded canvas coordinates are
 forwarded to the backend draft callback. The same library buttons now also add
 processors through keyboard activation at deterministic presentation-only
 positions. The focused canvas suite passed 6/6; the full UI suite passed
-223/223 tests across 19 files, and TypeScript typecheck passed. This remains
+224/224 tests across 19 files, and TypeScript typecheck passed. This remains
 automated UI evidence and does not replace attended drag/drop, keyboard,
 accessibility, or native-shell acceptance.
 
