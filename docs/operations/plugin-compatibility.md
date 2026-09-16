@@ -18,6 +18,12 @@ failure recovery, repeated-quantum finite processing, and shutdown checks on
 activation remains rejected because it exposes no acceptable automatable
 parameter/state surface; no full vendor compatibility claim is made.
 
+The supervised worker diagnostic was hardened on 2026-09-15. Reproducing the
+known BUSTERse VST3 activation failure now reports the child exit status
+`-1073741819` (`0xC0000005`, Windows access violation) in addition to the
+truncated-pipe error. The worker still rejects the fixture and terminates it
+in isolation; this is diagnostic evidence, not compatibility qualification.
+
 The supplied installed ReaPlugs directory was requalified on 2026-09-15
 through the isolated legacy VST2 worker. Six x64 candidates passed at 44.1,
 48, and 96 kHz: `reacomp-standalone.dll`, `readelay-standalone.dll`,

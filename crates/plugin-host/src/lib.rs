@@ -4684,18 +4684,43 @@ impl WorkerProcess {
             .map_err(|error| self.with_diagnostic(error))
     }
 
-    fn with_diagnostic(&self, error: WorkerMessageError) -> WorkerMessageError {
-        let Ok(diagnostic) = self.diagnostic.try_lock() else {
-            return error;
-        };
-        if diagnostic.is_empty() {
-            return error;
+    fn with_diagnostic(&mut self, error: WorkerMessageError) -> WorkerMessageError {
+        let diagnostic = self
+            .diagnostic
+            .try_lock()
+            .ok()
+            .filter(|value| !value.is_empty())
+            .map(|value| value.clone());
+        let mut exit_status = self.child.try_wait().ok().flatten();
+        if exit_status.is_none() && matches!(error, WorkerMessageError::Io(_)) {
+            // A worker can close stdout immediately before Windows publishes
+            // its exit status. Poll only this control-plane diagnostic seam;
+            // never add a wait to the realtime worker handoff.
+            for _ in 0..20 {
+                std::thread::sleep(Duration::from_millis(1));
+                exit_status = self.child.try_wait().ok().flatten();
+                if exit_status.is_some() {
+                    break;
+                }
+            }
         }
-        match error {
-            WorkerMessageError::Io(message) => {
+        let exit = exit_status.map(|status| match status.code() {
+            Some(code) => format!("native worker exited with code {code}"),
+            None => "native worker exited without a code".to_owned(),
+        });
+        match (error, diagnostic, exit) {
+            (WorkerMessageError::Io(message), Some(diagnostic), Some(exit)) => {
+                WorkerMessageError::Io(format!(
+                    "{message}; {exit}; native worker diagnostic: {diagnostic}"
+                ))
+            }
+            (WorkerMessageError::Io(message), Some(diagnostic), None) => {
                 WorkerMessageError::Io(format!("{message}; native worker diagnostic: {diagnostic}"))
             }
-            other => other,
+            (WorkerMessageError::Io(message), None, Some(exit)) => {
+                WorkerMessageError::Io(format!("{message}; {exit}"))
+            }
+            (other, _, _) => other,
         }
     }
 

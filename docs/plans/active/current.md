@@ -81,6 +81,14 @@ under the explicit state-unsupported allowance. Its normal contract remains
 rejected because it exposes no acceptable automatable parameter/state surface;
 this is partial processing evidence only.
 
+Improved the supervised worker EOF diagnostic so a native plugin crash now
+includes the bounded child exit status. The BUSTERse negative fixture
+reproduction reports `-1073741819` (`0xC0000005`, access violation) alongside
+the pipe truncation, making the activation failure actionable while retaining
+worker isolation and fail-closed behavior. Plugin-host tests (70 library, 13
+worker-process), strict Clippy, formatting, and the expected negative fixture
+reproduction passed/behaved as intended.
+
 The previously documented differing-rate capture ID was stale and correctly
 failed closed with Windows `0x80070490` before stream opening. A fresh
 read-only inventory identified a current 96 kHz capture endpoint, and the
