@@ -2,6 +2,15 @@
 
 Updated: 2026-09-16.
 
+Requalified the project-owned virtual-driver source for x64 and ARM64 at
+`85e8bca3` on 2026-09-16 with the installed Visual Studio/WDK toolchain.
+Both build-only gates passed with catalog/signability checks and disposable
+outputs removed. No driver was installed or loaded, and no signing mode,
+boot policy, service, endpoint, or persistent audio configuration changed.
+This confirms the callback-hardening commit remains build-compatible; loaded
+PortCls, production signing, clean-machine, and physical-latency gates remain
+open.
+
 Hardened the Windows Software Device callback boundary on 2026-09-16. The
 bounded instance-ID decoder now stops before the 64-character limit instead
 of probing one additional UTF-16 element, and a late callback closes an

@@ -1,5 +1,15 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-16 - x64 and ARM64 requalification at `85e8bca3`
+
+Commands: `tests/acceptance/m03-driver-build.ps1 -Platform x64` and
+`tests/acceptance/m03-driver-build.ps1 -Platform ARM64`. Both project-owned
+build-only gates passed with catalog/signability and bridge source-contract
+checks; disposable outputs were removed. No driver was installed or loaded,
+and signing mode, boot policy, services, endpoints, and persistent audio
+configuration were unchanged. Loaded PortCls transport, production signing,
+and clean-machine endpoint qualification remain open.
+
 ## 2026-09-16 - Software Device callback lifetime hardening
 
 The Windows Software Device callback now caps instance-ID decoding before the
