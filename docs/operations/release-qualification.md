@@ -39,13 +39,14 @@ surface is green:
   and strict workspace Clippy.
 - M04 passes 32 DSP and 40 recording tests, including the 60-second pitch
   boundary cases.
-- M05 passes TypeScript typecheck, 189 UI tests, and a disposable production
+- M05 passes TypeScript typecheck, 221 UI tests, and a disposable production
   build.
 - M06 passes with the pinned local VST3 SDK: 51 SDK self-tests, 1,598 official
   validator tests with zero failures, and the offline native loader.
-- M07 passes 33 CLI tests, MCP stdio/named-pipe interoperability, 155 control
+- M07 passes 35 CLI tests, MCP stdio/named-pipe interoperability, 167 control
   tests (2 guarded live tests ignored), 70 plugin-host tests, 13
-  worker-process tests, 17 shell tests, and strict Clippy.
+  worker-process tests, 26 shell tests, and strict Clippy, including durable
+  shell safe-mode supervision.
 - M08 unsigned artifact preparation, provenance/SBOM, checksums, exact-content
   verification, and cleanup pass in a disposable output directory.
 - M00 native validation includes read-only endpoint-format inventory and

@@ -1,13 +1,13 @@
 # AudioRouter 0.1.0-dev qualification notes
 
-This document describes the current development snapshot (2026-09-14). It is not a signed
+This document describes the current development snapshot (2026-09-15). It is not a signed
 release and must not be presented as an installable Windows audio product.
 
 ## Scope and platform
 
 - Target: Windows 11 x64.
 - Portable control, storage, DSP, recording, CLI, UI, MCP, and plugin-worker
-  foundations are implemented and covered by automated tests. The UI has 189
+  foundations are implemented and covered by automated tests. The UI has 221
   passing tests and includes a visual graph editor, backend-bound built-in
   processor/preset editing, explicit endpoint binding, and route provenance.
 - The repository-local Steinberg VST3 SDK is pinned and verified at
@@ -15,15 +15,16 @@ release and must not be presented as an installable Windows audio product.
 - Native builds use Visual Studio Community 2026/MSVC 14.51.36231 and Windows
   SDK 10.0.28000.0; the installed WDK is 10.1.28000.2526.
 
-## Verified in this qualification snapshot (2026-09-14)
+## Verified in this qualification snapshot (2026-09-15)
 
 - The locked Rust workspace passes its current package tests and doc-tests,
   formatting, and strict Clippy; the guarded native tests remain explicitly
   opt-in.
-- M07 headless acceptance passes 33 CLI tests, 3 MCP interoperability tests,
-  155 control tests (2 guarded live tests intentionally ignored), 70
-  plugin-host tests, 13
-  worker-process tests, and 17 shell tests.
+- M07 headless acceptance passes 35 CLI tests, 3 MCP interoperability tests,
+  167 control tests (2 guarded live tests intentionally ignored), 70
+  plugin-host tests, 13 worker-process tests, and 26 shell tests. The shell
+  supervisor persists crash markers and keeps a stopped control plane
+  available in safe mode.
 - M08 disposable artifact preparation creates and verifies unsigned x64 CLI,
   native-shell, and plugin-worker artifacts, SBOM metadata, notices, checksums,
   and a manifest, validates bounded PE headers for x64 executables, then removes
