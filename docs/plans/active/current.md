@@ -2,6 +2,15 @@
 
 Updated: 2026-09-15.
 
+- Exposed the STATE-11 `system.osTransition` method through the shared
+  TypeScript contract and UI backend adapter on 2026-09-15. Connected hosts now
+  have a typed path for the authenticated transition response, including
+  `nativeSessionIds`; disconnected hosts fail closed. Contracts typecheck and
+  the UI suite passes 217 tests. Evidence:
+  [M07 OS-transition policy evidence](evidence/M07-os-transitions.md). No
+  native or machine configuration was changed. Next action: continue the next
+  safe M03/M07 delivery slice.
+
 - Preserved native session identities across sleep on 2026-09-15. The
   `system.osTransition` resume response now returns the exact native session
   IDs that require explicit endpoint/driver revalidation, while keeping those

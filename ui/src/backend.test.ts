@@ -576,6 +576,18 @@ describe("live event cursor", () => {
     expect(received).toEqual({ method: "safety.setPrivacyMute", params: { muted: true } });
   });
 
+  it("forwards OS transitions through the shared contract", async () => {
+    let received: unknown;
+    const client = { request: async (method: string, params: unknown) => {
+      received = { method, params };
+      return { transition: "resume", action: "revalidateBeforeRestart", endpointInventory: "refreshed", nativeSessionIds: ["native-1"], sessionIds: ["portable-1"] };
+    } } as never;
+    await expect(createLiveBackend(client, demoSession.id).osTransition?.("resume", "resume-key")).resolves.toEqual({
+      transition: "resume", action: "revalidateBeforeRestart", endpointInventory: "refreshed", nativeSessionIds: ["native-1"], sessionIds: ["portable-1"],
+    });
+    expect(received).toEqual({ method: "system.osTransition", params: { transition: "resume", idempotencyKey: "resume-key" } });
+  });
+
   it("forwards authorized recovery safe-mode clearing through the live API", async () => {
     let received: unknown;
     const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { safeMode: false, recentCrashes: 0, persistence: "durable" }; } } as never;

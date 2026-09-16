@@ -44,6 +44,8 @@ import type {
   StartupStatus,
   StartupPlanResult,
   StartupApplyResult,
+  OsTransition,
+  OsTransitionResult,
   StatusSnapshot,
   RpcTransport,
 } from "@audiorouter/contracts";
@@ -120,6 +122,7 @@ export interface UiBackend {
   renameRecording(recordingId: string, newPath: string, idempotencyKey?: string): Promise<RecordingRenameResult>;
   setPrivacyMute(muted: boolean, idempotencyKey?: string): Promise<PrivacyMuteResult>;
   clearRecoverySafeMode(idempotencyKey?: string): Promise<RecoveryClearResult>;
+  osTransition?(transition: OsTransition, idempotencyKey?: string): Promise<OsTransitionResult>;
   removeRecordingEntry(recordingId: string, idempotencyKey?: string): Promise<RecordingRemoveResult>;
   recycleRecording(recordingId: string, confirm: boolean, idempotencyKey?: string): Promise<RecordingRecycleResult>;
   createRecorder(params: MethodParams["recorders.create"]): Promise<RecorderCreateResult>;
@@ -330,6 +333,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     },
     async clearRecoverySafeMode() {
       throw new Error("The backend is disconnected; recovery safe-mode clearing is unavailable.");
+    },
+    async osTransition() {
+      throw new Error("The backend is disconnected; OS transition handling is unavailable.");
     },
     async removeRecordingEntry() {
       throw new Error("The backend is disconnected; recording removal is unavailable.");
@@ -588,6 +594,12 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
     },
     async clearRecoverySafeMode(idempotencyKey) {
       return client.request("recovery.clearSafeMode", idempotencyKey === undefined ? undefined : { idempotencyKey });
+    },
+    async osTransition(transition, idempotencyKey) {
+      return client.request("system.osTransition", {
+        transition,
+        idempotencyKey: idempotencyKey ?? `ui-os-transition-${Date.now().toString(36)}`,
+      });
     },
     async removeRecordingEntry(recordingId, idempotencyKey) {
       return client.request("recordings.removeEntry", { recordingId, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });

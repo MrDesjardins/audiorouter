@@ -569,6 +569,16 @@ export interface StartupApplyResult {
   reason: string;
 }
 
+export type OsTransition = "lock" | "signOut" | "sleep" | "resume";
+
+export interface OsTransitionResult {
+  transition: OsTransition;
+  action: "keepRunning" | "stopAndRelease" | "revalidateBeforeRestart" | "remainStopped";
+  endpointInventory: "refreshed" | "notStarted";
+  nativeSessionIds: EntityId[];
+  sessionIds: EntityId[];
+}
+
 export interface RecoveryClearResult {
   safeMode: false;
   recentCrashes: 0;
@@ -831,6 +841,7 @@ export type ImplementedMethod =
   | "system.handshake"
   | "status.get"
   | "system.diagnostics"
+  | "system.osTransition"
   | "clients.list"
   | "clients.authorize"
   | "clients.revoke"
@@ -906,6 +917,7 @@ export type MethodParams = {
   "system.handshake": { protocolVersion: { major: number; minor: number } };
   "status.get": undefined;
   "system.diagnostics": undefined;
+  "system.osTransition": { transition: OsTransition; idempotencyKey: string };
   "clients.list": undefined;
   "clients.authorize": { clientId: string; role: "observer" | "editor" | "operator" };
   "clients.revoke": { clientId: string };
@@ -1033,6 +1045,7 @@ export type MethodResult = {
   };
   "status.get": StatusSnapshot;
   "system.diagnostics": DiagnosticsSnapshot;
+  "system.osTransition": OsTransitionResult;
   "clients.list": Array<{ clientId: string; role: string; revoked: boolean }>;
   "clients.authorize": ClientAuthorizeResult;
   "clients.revoke": ClientRevokeResult;

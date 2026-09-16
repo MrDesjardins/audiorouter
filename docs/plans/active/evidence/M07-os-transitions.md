@@ -28,7 +28,9 @@ the identity needed by the future exact-rebind operation.
 The same boundary is exposed as the authenticated, idempotent
 `system.osTransition` JSON-RPC method so a native notification adapter can use
 the shared backend authority. Its input and output schemas are included in
-method discovery and the readable API reference.
+method discovery and the readable API reference. The TypeScript contract and
+UI backend adapter now expose the same typed method to connected hosts; the
+disconnected adapter fails closed.
 
 The Tauri shell now owns a Windows message-only listener in
 `src-tauri/src/os_transition_windows.rs`. WTS session notifications map the
@@ -47,6 +49,12 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D w
 clean
 cargo test --manifest-path src-tauri/Cargo.toml --locked -- --test-threads=1
 22 passed; 0 failed
+npm.cmd run typecheck --prefix contracts
+clean
+npm.cmd run typecheck --prefix ui
+clean
+npm.cmd test --prefix ui -- --run
+217 passed; 0 failed
 ```
 
 This is portable policy evidence, not Windows power-notification evidence.

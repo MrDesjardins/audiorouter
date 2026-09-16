@@ -24,8 +24,8 @@ after the initial 47-method reference.
 | `system.describe` | `read` | read-only |
 | `system.handshake` | `read` | read-only |
 | `status.get` | `read` | read-only |
-| `system.osTransition` | `sessionControl` | mutating; requires an idempotency key |
 | `system.diagnostics` | `read` | read-only |
+| `system.osTransition` | `sessionControl` | mutating; requires an idempotency key; reports routes requiring explicit resume validation |
 | `clients.list` | `read` | read-only |
 | `clients.authorize` | `deviceAdministration` | mutating; requires an idempotency key |
 | `clients.revoke` | `deviceAdministration` | mutating; requires an idempotency key |
