@@ -109,9 +109,24 @@ captured frames, 23,936 routed frames, 187 graph blocks, zero deadline misses
 or lateness, and unchanged media state. The stale identity was not silently
 replaced by the runner.
 
+The complete guarded `tests/acceptance/safe-all.ps1` chain was requalified at
+the pushed head `9278e112` on 2026-09-15 with exit code 0. M00/M03 build and
+reference-driver checks, M01/M04, M05 UI build, M06 SDK/native VST3 worker and
+VST2 fixtures, M07 headless controls, unsigned M08 artifact preparation and
+verification, 159 normative traceability mappings, and documentation (54
+Markdown files, 217 local links) passed. Cleanup removed 15 run-owned
+temporary children. The UI build retained its existing non-failing bundle-size
+warning. The suite explicitly excluded driver installation/loading, production
+signing, plugin registration, startup registration, live audio, and persistent
+machine-audio changes. Evidence log: `%TEMP%\\audiorouter-safe-all-20260915.log`.
+
 Next: continue with the remaining guarded cross-rate/process-loopback and
-loaded-driver gates; do not install/load the prototype driver or change audio
-defaults as part of this user-mode qualification.
+loaded-driver gates. The user-mode cross-rate gate is now evidenced, so the
+next independent implementation work is the driver/bridge contract needed to
+provision and expose the production virtual bus. Do not install/load the
+prototype driver or change audio defaults as part of this qualification; the
+loaded-driver gate remains blocked on production bus provisioning, PortCls
+ownership, signing, and clean-machine evidence.
 
 ### Completed shutdown slice (UI-10/STATE-09)
 
