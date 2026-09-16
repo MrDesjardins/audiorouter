@@ -65,6 +65,8 @@ $trackedState = Join-Path ([IO.Path]::GetTempPath()) ('audiorouter-driver-tracke
 $guardInf = Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/AudioRouterVirtual.inx'
 $guardStdout = [IO.Path]::GetTempFileName()
 $guardStderr = [IO.Path]::GetTempFileName()
+$consentStdout = [IO.Path]::GetTempFileName()
+$consentStderr = [IO.Path]::GetTempFileName()
 try {
     $previewOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $manage `
         -Install -Preview -Inf $guardInf -State $guardState)
@@ -77,6 +79,18 @@ try {
         $preview.consentProvided -ne $false -or
         $preview.command[0] -ne '/add-driver' -or (Test-Path -LiteralPath $guardState)) {
         throw "driver lifecycle preview was not read-only or did not describe install: $($previewOutput -join ' ')"
+    }
+
+    $consentProcess = Start-Process -FilePath powershell.exe -ArgumentList @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $manage,
+        '-Install', '-Inf', $guardInf, '-State', $guardState
+    ) -RedirectStandardOutput $consentStdout -RedirectStandardError $consentStderr -PassThru
+    $consentProcess.WaitForExit()
+    $consentProcess.Refresh()
+    $consentOutput = ((Get-Content -LiteralPath $consentStdout -Raw -ErrorAction SilentlyContinue) +
+        (Get-Content -LiteralPath $consentStderr -Raw -ErrorAction SilentlyContinue))
+    if ($consentProcess.ExitCode -eq 0 -or $consentOutput -notmatch 'require .*AllowDriverInstall') {
+        throw "driver install did not fail closed without consent: $consentOutput"
     }
 
     $uninstallPreviewOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $manage `
@@ -118,7 +132,7 @@ try {
         throw "driver lifecycle guard did not refuse an untracked package: $guardOutput"
     }
 } finally {
-    foreach ($guardPath in @($guardState, $trackedState, $guardStdout, $guardStderr)) {
+    foreach ($guardPath in @($guardState, $trackedState, $guardStdout, $guardStderr, $consentStdout, $consentStderr)) {
         if (Test-Path -LiteralPath $guardPath) {
             Remove-Item -LiteralPath $guardPath -Force
         }
