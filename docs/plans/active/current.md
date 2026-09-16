@@ -49,6 +49,16 @@ was not installed, loaded, signed, or used to alter audio configuration.
 The remaining PortCls endpoint, production package/signing, and clean-machine
 gates are still open.
 
+Re-ran the guarded integrated `tests/acceptance/safe-all.ps1` chain at the
+current head on 2026-09-16. Toolchain discovery, x64/ARM64 driver builds,
+Software Device dry-run, read-only 31-endpoint inventory, disposable SysVAD,
+M01/M03/M04/M05/M06/M07, unsigned M08 artifacts and NSIS smoke, frontend shell
+RPC, traceability, and documentation all passed; the chain removed 15
+run-owned temporary children. No driver was installed or loaded, no plugin was
+registered, and no persistent audio configuration changed. This is integrated
+qualification evidence only; production PortCls ownership, signing,
+clean-machine, physical latency, and attended UI gates remain open.
+
 The dedicated VST2 editor-containment harness passed all 9 x64 ReaPlugs
 fixtures again on 2026-09-16 after its temporary fixture environment was
 hardened to check exact restoration, including absent-variable state. Both
