@@ -81,6 +81,12 @@ under the explicit state-unsupported allowance. Its normal contract remains
 rejected because it exposes no acceptable automatable parameter/state surface;
 this is partial processing evidence only.
 
+The bounded VST2 editor acceptance passed for all six current x64 ReaPlugs
+fixtures. Each passed the dedicated editor-thread non-returning test and the
+supervised timeout-kill test; this proves containment and cleanup, not that a
+vendor editor is safe to embed in the shell or that native editor UI hosting
+is release-qualified.
+
 Improved the supervised worker EOF diagnostic so a native plugin crash now
 includes the bounded child exit status. The BUSTERse negative fixture
 reproduction reports `-1073741819` (`0xC0000005`, access violation) alongside

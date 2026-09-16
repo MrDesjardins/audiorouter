@@ -35,6 +35,11 @@ results. Candidate fingerprints and temporary environment values were restored.
 This is gated compatibility evidence only and does not grant redistribution rights
 or native editor support.
 
+The current six-fixture set also passed both bounded VST2 editor containment
+checks on 2026-09-15: non-returning editor-thread bounds and supervised
+timeout-kill cleanup. This qualifies worker containment only; native editor
+embedding remains a separate attended/UI gate.
+
 The same nine x64 ReaPlugs candidates also passed the bounded editor-thread
 and supervised editor-timeout containment checks. This proves worker cleanup
 under the tested editor fault boundary, not successful native editor hosting.
