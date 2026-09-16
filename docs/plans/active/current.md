@@ -13,6 +13,14 @@ desktop automation surface was checked again and still exposed no targetable
 application, so attended visual/accessibility acceptance remains open.
 Evidence: `ea95c047` and the latest guarded M02 route log.
 
+Implemented the next M04/DSP-05 processing slice on 2026-09-16. A running
+`DelayLine` now crossfades from its previous read tap to a changed delay over
+64 frames without allocating or blocking; initial configuration and reset stay
+immediate. The focused DSP suite passed 33 tests and the engine suite passed
+111 tests, including the running-delay discontinuity regression. Evidence:
+`docs/plans/active/evidence/M04-effects-recording.md`. No endpoint or machine
+audio configuration was accessed.
+
 Revalidated the complete portable workspace and UI after the editor
 environment-restoration hardening on 2026-09-16. `cargo test --workspace
 --locked -- --test-threads=1` passed all runnable workspace tests (the two

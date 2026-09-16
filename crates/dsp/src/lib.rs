@@ -1309,9 +1309,15 @@ pub struct DelayLine {
     channels: usize,
     capacity_frames: usize,
     delay_frames: usize,
+    transition_from_frames: usize,
+    transition_remaining: usize,
+    transition_total: usize,
+    has_processed: bool,
     buffer: Vec<f32>,
     write_frame: usize,
 }
+
+const DELAY_TRANSITION_FRAMES: usize = 64;
 
 #[derive(Clone, Debug)]
 pub struct VoiceChainConfig {
@@ -1533,6 +1539,10 @@ impl DelayLine {
             channels,
             capacity_frames,
             delay_frames: 0,
+            transition_from_frames: 0,
+            transition_remaining: 0,
+            transition_total: 0,
+            has_processed: false,
             buffer: vec![0.0; capacity_frames * channels],
             write_frame: 0,
         })
@@ -1553,34 +1563,74 @@ impl DelayLine {
         if frames >= self.capacity_frames {
             return Err(DelayError::InvalidDelay);
         }
-        self.delay_frames = frames;
+        if !self.has_processed || self.delay_frames == frames {
+            self.delay_frames = frames;
+            self.transition_from_frames = frames;
+            self.transition_remaining = 0;
+            self.transition_total = 0;
+        } else {
+            self.transition_from_frames = self.delay_frames;
+            self.transition_remaining = DELAY_TRANSITION_FRAMES;
+            self.transition_total = DELAY_TRANSITION_FRAMES;
+            self.delay_frames = frames;
+        }
         Ok(())
     }
 
     pub fn reset(&mut self) {
         self.buffer.fill(0.0);
         self.write_frame = 0;
+        self.transition_from_frames = self.delay_frames;
+        self.transition_remaining = 0;
+        self.transition_total = 0;
+        self.has_processed = false;
     }
 
     pub fn process_interleaved(&mut self, samples: &mut [f32]) {
         for frame in samples.chunks_exact_mut(self.channels) {
             let read_frame = (self.write_frame + self.capacity_frames - self.delay_frames)
                 % self.capacity_frames;
+            let old_read_frame = (self.write_frame + self.capacity_frames
+                - self.transition_from_frames)
+                % self.capacity_frames;
+            let crossfade = self.transition_remaining != 0;
+            let mix = if crossfade {
+                1.0 - (self.transition_remaining as f32 / self.transition_total as f32)
+            } else {
+                1.0
+            };
             for (channel, sample) in frame.iter_mut().enumerate() {
                 let input = if sample.is_finite() { *sample } else { 0.0 };
                 let index = self.write_frame * self.channels + channel;
                 let delayed = self.buffer[read_frame * self.channels + channel];
                 self.buffer[index] = input;
-                *sample = if self.delay_frames == 0 {
+                let new_output = if self.delay_frames == 0 {
                     input
                 } else if delayed.is_finite() {
                     delayed
                 } else {
                     0.0
                 };
+                *sample = if !crossfade {
+                    new_output
+                } else {
+                    let old_delayed = self.buffer[old_read_frame * self.channels + channel];
+                    let old_output = if self.transition_from_frames == 0 {
+                        input
+                    } else if old_delayed.is_finite() {
+                        old_delayed
+                    } else {
+                        0.0
+                    };
+                    old_output.mul_add(1.0 - mix, new_output * mix)
+                };
             }
             self.write_frame = (self.write_frame + 1) % self.capacity_frames;
+            if self.transition_remaining != 0 {
+                self.transition_remaining -= 1;
+            }
         }
+        self.has_processed = true;
     }
 }
 
@@ -2443,6 +2493,25 @@ mod tests {
         delay.set_delay_ms(0.0).unwrap();
         delay.process_interleaved(&mut zero_delay);
         assert_eq!(zero_delay, [4.0, 5.0]);
+    }
+
+    #[test]
+    fn running_delay_changes_crossfade_without_allocating_or_jumping() {
+        let mut delay = DelayLine::new(100.0, 1_000.0, 1).unwrap();
+        let mut warmup = (0..10).map(|value| value as f32).collect::<Vec<_>>();
+        delay.process_interleaved(&mut warmup);
+        delay.set_delay_ms(4.0).unwrap();
+
+        let mut transition = (10..74).map(|value| value as f32).collect::<Vec<_>>();
+        delay.process_interleaved(&mut transition);
+
+        // The old zero-delay tap is still fully present at the transition
+        // boundary, and the new tap is reached gradually over 64 frames.
+        assert!((transition[0] - 10.0).abs() < f32::EPSILON);
+        assert!(transition
+            .windows(2)
+            .all(|pair| (pair[1] - pair[0]).abs() <= 1.1));
+        assert!((transition[63] - 69.0).abs() < 0.1);
     }
 
     #[test]
