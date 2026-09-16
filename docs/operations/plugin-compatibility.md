@@ -1,5 +1,11 @@
 # Plugin compatibility snapshot
 
+The pinned SDK AGain fixture was requalified on 2026-09-15 through the native
+VST3 worker. Single-stream, auxiliary/multi-bus, asynchronous graph staging,
+bounded failure recovery, validated-state restart, repeated-quantum finite
+processing, and shutdown checks passed. This is SDK-fixture evidence and does
+not establish compatibility with arbitrary vendor VST3 binaries.
+
 The supplied installed ReaPlugs directory was requalified on 2026-09-15
 through the isolated legacy VST2 worker. Six x64 candidates passed at 44.1,
 48, and 96 kHz: `reacomp-standalone.dll`, `readelay-standalone.dll`,

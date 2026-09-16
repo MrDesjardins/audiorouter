@@ -62,6 +62,13 @@ checks. This advances the approved legacy VST2 extension only; the binaries
 remain user-installed, no registration occurred, and the complete vendor or
 redistribution matrix is not claimed.
 
+The current native VST3 worker acceptance passed the pinned SDK AGain fixture
+through single-stream, auxiliary/multi-bus, asynchronous scheduler staging,
+bounded failure silencing, validated-state restart, repeated-quantum, finite-
+output, and shutdown checks. Worker build artifacts and environment overrides
+were removed/restored; no plugin registration, audio stream, or machine audio
+configuration changed.
+
 The previously documented differing-rate capture ID was stale and correctly
 failed closed with Windows `0x80070490` before stream opening. A fresh
 read-only inventory identified a current 96 kHz capture endpoint, and the
