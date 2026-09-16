@@ -841,6 +841,20 @@ describe("keyboard connection dialog", () => {
     await waitFor(() => expect(within(panel).queryByRole("button", { name: "Apply planned state" })).toBeNull());
   });
 
+  it("forwards explicit managed-device provision and removal actions", async () => {
+    const device: VirtualDeviceInfo = { id: "bus-1", name: "Bus 1", driverInstanceId: null, direction: "bidirectional", channels: 2, enabled: true, availability: { status: "unavailable", reason: "managed driver unavailable" }, endpointIds: { render: null, capture: null }, capabilities: { render: false, capture: false, channels: 2 }, privilege: "deviceAdministration", restartRequired: false, clientImpacts: [], leaseOwner: null };
+    const provisionVirtualDevice = vi.fn(async () => ({ operationId: "operation-1", state: "completed" as const, busId: device.id, driverInstanceId: "SWD\\AudioRouter\\bus-1", availability: { status: "unavailable" as const, reason: "requires M03 managed virtual driver" } }));
+    const removeVirtualDevice = vi.fn(async () => ({ operationId: "operation-2", state: "completed" as const, busId: device.id, driverInstanceId: null, availability: { status: "unavailable" as const, reason: "requires M03 managed virtual driver" } }));
+    const backend = { ...connectedPreviewBackend(), listVirtualDevices: async () => [device], provisionVirtualDevice, removeVirtualDevice };
+    render(<App backend={backend} />);
+    const panel = await screen.findByRole("region", { name: "Virtual-device lifecycle" });
+    fireEvent.change(within(panel).getByRole("textbox", { name: "Managed device instance ID" }), { target: { value: "bus-1" } });
+    fireEvent.click(within(panel).getByRole("button", { name: "Provision managed device" }));
+    await waitFor(() => expect(provisionVirtualDevice).toHaveBeenCalledWith("bus-1", "bus-1", expect.any(String)));
+    fireEvent.click(within(panel).getByRole("button", { name: "Remove managed device" }));
+    await waitFor(() => expect(removeVirtualDevice).toHaveBeenCalledWith("bus-1", expect.any(String)));
+  });
+
   it("prevents duplicate virtual-route replacement while the first request is pending", async () => {
     let releaseReplace!: (value: { state: "applied"; revision: number; routes: never[] }) => void;
     const result = new Promise<{ state: "applied"; revision: number; routes: never[] }>((resolve) => { releaseReplace = resolve; });

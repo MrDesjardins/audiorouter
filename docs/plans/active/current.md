@@ -157,7 +157,9 @@ now exposes a bounded instance-ID field and explicit native ownership buttons
 alongside the existing desired-state plan/apply controls, so the new API is
 human-testable without conflating graph state with device administration. Demo
 and disconnected backends fail closed with the existing unavailable message.
-UI typecheck and all 226 UI tests passed. This remains a control-surface
+Added an interaction regression proving the UI forwards the selected bus and
+bounded instance ID to both explicit lifecycle methods. UI typecheck and all
+227 UI tests passed. This remains a control-surface
 delivery only: the native driver is not installed/loaded and no endpoint or
 persistent machine audio configuration was changed.
 
