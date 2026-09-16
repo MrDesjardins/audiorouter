@@ -1,5 +1,17 @@
 # M02 audio-engine evidence
 
+## 2026-09-16 - guarded application-capture lifecycle
+
+`tests/acceptance/m02-control-application-live.ps1 -AllowLiveAudio` passed in
+include mode using the exact recorded Voicemeeter process ID, executable, and
+creation-time identity, plus the current exact VB-Cable render endpoint
+discovery. The control-owned application loopback completed two bounded
+start/pump/stop cycles and same-process worker restart. The wrapper restored
+temporary environment values and verified unchanged media-device state. This
+is application-capture lifecycle evidence; arbitrary process isolation,
+PID-reuse recovery, physical latency, and production-driver ownership remain
+open.
+
 ## 2026-09-16 - current guarded control-owned VB-Cable lifecycle
 
 `tests/acceptance/m02-control-native-live.ps1 -AllowLiveAudio` passed using

@@ -51,6 +51,14 @@ rendered 23,424 frames before clean stop. The test passed and changed no
 persistent audio configuration; this remains user-mode route evidence, not
 production-driver, physical-latency, or transition-rebind qualification.
 
+Requalified the guarded control-owned application-capture lifecycle on
+2026-09-16 against the recorded exact Voicemeeter process identity in include
+mode. The test passed two bounded start/pump/stop cycles and same-process
+worker restart, restored its temporary environment values, and verified
+unchanged media-device state. This advances CAP-11/M02 application routing
+evidence without claiming arbitrary process isolation, PID-reuse recovery,
+physical latency, or production-driver ownership.
+
 Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at the
 current head on 2026-09-16. The run passed toolchain/native probes, x64/ARM64
 driver source builds, read-only endpoint inventory, disposable SysVAD,
