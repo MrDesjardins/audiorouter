@@ -36,6 +36,15 @@ endpoint lifecycle only. Project-driver callback ownership, invalidation
 rebind under a real device transition, physical latency, and signing remain
 open.
 
+Extended the guarded native lifecycle acceptance on 2026-09-16 to exercise
+explicit stopped-worker rebind and deliberate restart against the exact
+VB-Cable pair. The run passed with 24,480 capture frames, 191 processed
+quanta, and 24,448 rendered frames; the worker completed two clean start/stop
+cycles and restored process environment. No persistent audio configuration
+changed. This proves same-binding refresh/reopen behavior, not unplug/replug,
+format-change recovery, project-driver ownership, lease expiry, or physical
+latency.
+
 Refreshed the release qualification snapshot on 2026-09-16 after the latest
 authorized VB-Cable route requalification. `docs/operations/release-notes.md`
 now reports the current 500 ms control-owned route evidence: 24,000 captured

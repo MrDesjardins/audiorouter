@@ -4468,6 +4468,78 @@ impl ControlPlane {
     }
 
     #[cfg(windows)]
+    /// Rebind an attached stopped native endpoint worker to exact refreshed
+    /// capture/render IDs. The worker is left stopped so the caller can
+    /// inspect the result before deliberately restarting the session.
+    pub fn rebind_native_endpoint_worker(
+        &mut self,
+        session_id: &EntityId,
+        capture_endpoint_id: &str,
+        render_endpoint_id: &str,
+        buffer_duration_100ns: i64,
+        max_attempts: u32,
+        retry_delay_ms: u64,
+    ) -> Result<(), ControlError> {
+        self.get_session(session_id)?;
+        if self.native_endpoint_session.as_ref() != Some(session_id) {
+            return Err(ControlError::InvalidRequest(
+                "native endpoint worker is not bound to the session".into(),
+            ));
+        }
+        if self
+            .runtimes
+            .get(session_id)
+            .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
+        {
+            return Err(ControlError::InvalidRequest(
+                "native endpoint worker must be rebound while the session is stopped".into(),
+            ));
+        }
+        if self.endpoint_monitor.is_none() {
+            self.endpoint_monitor = Some(
+                audiorouter_windows_audio::EndpointMonitor::start().map_err(audio_control_error)?,
+            );
+        }
+        let monitor = self
+            .endpoint_monitor
+            .as_mut()
+            .expect("endpoint monitor initialized above");
+        monitor.refresh_changes().map_err(audio_control_error)?;
+        let capture = monitor
+            .snapshot()
+            .iter()
+            .find(|endpoint| {
+                endpoint.id == capture_endpoint_id
+                    && endpoint.direction == audiorouter_windows_audio::EndpointDirection::Capture
+            })
+            .cloned()
+            .ok_or_else(|| ControlError::InvalidRequest("capture endpoint is not active".into()))?;
+        let render = monitor
+            .snapshot()
+            .iter()
+            .find(|endpoint| {
+                endpoint.id == render_endpoint_id
+                    && endpoint.direction == audiorouter_windows_audio::EndpointDirection::Render
+            })
+            .cloned()
+            .ok_or_else(|| ControlError::InvalidRequest("render endpoint is not active".into()))?;
+        self.native_endpoint_worker
+            .as_mut()
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("native endpoint worker is not attached".into())
+            })?
+            .rebind_with_refreshed_bound_with_retry(
+                monitor,
+                &capture,
+                &render,
+                buffer_duration_100ns,
+                max_attempts,
+                retry_delay_ms,
+            )
+            .map_err(audio_control_error)
+    }
+
+    #[cfg(windows)]
     /// Prepare one explicit project-driver capture-sink binding. This opens
     /// only the supplied driver path and mapping, remains stopped, and is
     /// selected by graph activation only when the graph names the same bus.
@@ -13674,6 +13746,20 @@ mod tests {
         assert_eq!(
             plane.native_endpoint_lifecycle_telemetry()["successfulStops"],
             1
+        );
+        plane
+            .rebind_native_endpoint_worker(&owned.id, &capture_id, &render_id, 0, 3, 100)
+            .unwrap();
+        assert_eq!(
+            plane.native_endpoint_lifecycle_telemetry()["successfulStarts"],
+            1
+        );
+        let rebound = plane.session_start(&owned.id).unwrap();
+        assert_eq!(rebound["runtime"], "native");
+        plane.session_stop(&owned.id).unwrap();
+        assert_eq!(
+            plane.native_endpoint_lifecycle_telemetry()["successfulStops"],
+            2
         );
     }
 

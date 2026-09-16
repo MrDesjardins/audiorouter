@@ -3071,6 +3071,30 @@ pub enum NativeAudioWorker {
 }
 
 impl NativeAudioWorker {
+    /// Rebind an endpoint worker using a refreshed exact monitor snapshot.
+    /// Process-loopback workers have a separate identity-based lifecycle.
+    pub fn rebind_with_refreshed_bound_with_retry(
+        &mut self,
+        monitor: &mut EndpointMonitor,
+        expected_capture: &EndpointInfo,
+        expected_render: &EndpointInfo,
+        buffer_duration_100ns: i64,
+        max_attempts: u32,
+        retry_delay_ms: u64,
+    ) -> Result<(), AudioError> {
+        match self {
+            Self::Endpoint(worker) => worker.rebind_with_refreshed_bound_with_retry(
+                monitor,
+                expected_capture,
+                expected_render,
+                buffer_duration_100ns,
+                max_attempts,
+                retry_delay_ms,
+            ),
+            Self::ProcessLoopback(_) => Err(AudioError::ProcessingStateUnavailable),
+        }
+    }
+
     pub fn is_running(&self) -> bool {
         match self {
             Self::Endpoint(worker) => worker.is_running(),

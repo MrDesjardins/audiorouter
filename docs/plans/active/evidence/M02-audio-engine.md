@@ -11,6 +11,13 @@ driver, signing, startup, or endpoint configuration. This is native
 user-mode endpoint lifecycle evidence; it does not qualify the project-owned
 driver, physical latency, or rebind during an actual device transition.
 
+The guarded test also performed an explicit stopped-worker rebind using the
+same exact IDs, then deliberately restarted and stopped the worker again.
+That extended run passed with 24,480 captured frames, 191 processed quanta,
+and 24,448 rendered frames. It validates refreshed exact-binding reopen and
+restart ordering; an actual device invalidation transition and project-driver
+callback qualification remain open.
+
 ## 2026-09-16 - PD200X physical-loopback attempt (blocked)
 
 The authorized `m00-native-impulse.ps1 -AllowLiveAudio -ImpulseCount 100`
