@@ -1,5 +1,14 @@
 # M07 automation and recovery evidence
 
+## 2026-09-15 - durable marker reopen regression
+
+The shell test suite now exercises the Windows failure-marker helper against a
+unique temporary SQLite database and reopens that database to verify the
+recorded crash remains visible. The test removes its database, WAL, and SHM
+files afterward. Native shell tests now pass with 26 tests; strict Clippy and
+formatting also pass. No live audio or persistent machine audio configuration
+was changed.
+
 ## 2026-09-15 - durable shell failure markers
 
 The Windows shell supervisor now records each terminal control-backend

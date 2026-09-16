@@ -926,6 +926,30 @@ mod tests {
         assert!(first.len() < 256);
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn backend_failure_marker_survives_storage_reopen() {
+        let suffix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock is after the Unix epoch")
+            .as_nanos();
+        let database = std::env::temp_dir().join(format!(
+            "audiorouter-shell-recovery-{process}-{suffix}.sqlite",
+            process = std::process::id()
+        ));
+        assert_eq!(record_backend_failure(&database), Some(1));
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock is after the Unix epoch")
+            .as_secs();
+        let storage = Storage::open(&database).expect("recovery database reopens");
+        assert_eq!(storage.recovery_status(now).expect("recovery status" ).recent_crashes, 1);
+        drop(storage);
+        let _ = std::fs::remove_file(&database);
+        let _ = std::fs::remove_file(database.with_extension("sqlite-wal"));
+        let _ = std::fs::remove_file(database.with_extension("sqlite-shm"));
+    }
+
     #[test]
     fn default_desktop_session_is_a_valid_stopped_stereo_graph() {
         let session = default_desktop_session();

@@ -2,6 +2,12 @@
 
 Updated: 2026-09-15.
 
+- Added a STATE-10 regression on 2026-09-15 proving the shell crash-marker
+  helper survives SQLite reopen using a unique temporary database; database,
+  WAL, and SHM files are removed by the test. Native shell tests now pass 26,
+  with Clippy and formatting clean. Evidence: [M07 automation and recovery]
+  (evidence/M07-automation-recovery.md).
+
 - Requalified `safe-all.ps1` at pushed head `21cc138f` after durable STATE-10
   recovery integration. WDK/driver signability, 34-endpoint inventory,
   disposable SysVAD, M01/M04, M05 UI (221 tests/build), M06 VST3/VST2,
