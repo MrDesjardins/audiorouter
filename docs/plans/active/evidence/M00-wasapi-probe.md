@@ -1,5 +1,13 @@
 # Native endpoint and loopback requalification (2026-09-12)
 
+## 2026-09-15 - native process attribution requalification
+
+The guarded `m00-native-process-live.ps1 -AllowLiveAudio -DurationMilliseconds
+500` probe passed. It captured 21,609 frames with 77,810 nonzero payload bytes,
+and the controlled child exited successfully after capture stop/reset. The
+temporary executable and object were removed; no persistent audio
+configuration changed.
+
 ## 2026-09-15 - Rust process-loopback include/exclude requalification
 
 The guarded `m00-rust-process-live.ps1 -AllowLiveAudio -DurationMilliseconds
