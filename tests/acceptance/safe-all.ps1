@@ -12,6 +12,7 @@ $steps = @(
     @{ Name = 'M00 native format inventory'; Script = Join-Path $acceptanceRoot 'm00-native-format-inventory.ps1' },
     @{ Name = 'M00 pinned SysVAD qualification'; Script = Join-Path $repositoryRoot 'tools\m00-sysvad\qualify.ps1' },
     @{ Name = 'M01 CLI'; Script = Join-Path $acceptanceRoot 'm01-cli.ps1' },
+    @{ Name = 'M03 virtual-bus CLI'; Script = Join-Path $acceptanceRoot 'm03-virtual-buses.ps1' },
     @{ Name = 'M04 DSP and recording'; Script = Join-Path $acceptanceRoot 'm04-dsp-recording.ps1' },
     @{ Name = 'M05 UI'; Script = Join-Path $acceptanceRoot 'm05-ui.ps1' },
     @{ Name = 'M06 SDK installer'; Script = Join-Path $acceptanceRoot 'm06-sdk-installer.ps1' },

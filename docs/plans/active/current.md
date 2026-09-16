@@ -2,6 +2,17 @@
 
 Updated: 2026-09-16.
 
+Closed a real M03 CLI persistence defect on 2026-09-16. `virtual-devices
+list --database` previously created an in-memory control plane and returned
+no buses after a separate process had successfully planned/applied durable
+bus state. The CLI now hydrates the requested database for that listing path.
+The new acceptance creates three named buses, verifies persisted list data
+and the unavailable managed-driver boundary, renames one, toggles another,
+and disables before deleting the third across separate CLI invocations.
+Focused CLI regression, M03 acceptance, workspace Clippy/formatting, diff,
+and documentation validation passed. Only disposable SQLite state was used;
+no native device or machine audio configuration was changed.
+
 Closed the remaining whole-struct bridge request race on 2026-09-16. The
 callback-visible `Channels`, `FramesPerQuantum`, and `Direction` members are
 now written only through interlocked stores; generation is invalidated first

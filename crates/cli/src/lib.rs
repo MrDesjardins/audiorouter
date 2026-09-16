@@ -704,7 +704,11 @@ fn list_subcommand(args: &[&str], parent: &str) -> Result<Value, CliError> {
         )));
     }
     let expected = subcommand.unwrap();
-    let mut plane = ControlPlane::default();
+    let mut plane = if parent == "virtual-devices" && args.contains(&"--database") {
+        ControlPlane::with_storage("cli", database(args)?)
+    } else {
+        ControlPlane::default()
+    };
     Ok(match parent {
         "devices" | "virtual-devices" => {
             let cursor = optional_option_value(args, "--cursor")?;
@@ -2837,6 +2841,19 @@ mod tests {
         assert_eq!(applied["state"], "applied");
         assert_eq!(applied["availability"]["status"], "unavailable");
         assert_eq!(applied["operation"]["action"], "create");
+        let listed: Value = serde_json::from_str(
+            &run([
+                "virtual-devices",
+                "list",
+                "--database",
+                database.to_str().unwrap(),
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(listed.as_array().unwrap().len(), 1);
+        assert_eq!(listed[0]["id"], "bus-cli");
         let _ = std::fs::remove_file(database);
         let _ = std::fs::remove_file(operation);
     }
