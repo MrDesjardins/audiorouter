@@ -2,6 +2,13 @@
 
 Updated: 2026-09-16.
 
+Performed a read-only native post-test inventory on 2026-09-16. `pnputil
+/enum-drivers` returned exit 0 with no AudioRouter package matches, and
+present PnP enumeration reported zero AudioRouter devices. This confirms the
+build, lifecycle-guard, and acceptance work left the machine's driver/device
+state unchanged; installation, loaded PortCls behavior, and signing remain
+separate isolated-target gates.
+
 Fixed and qualified an M03 lifecycle-script defect on 2026-09-16. The guarded
 uninstall probe exposed that PowerShell's `FileInfo.Parent` path walk stopped
 after the INF leaf, incorrectly rejecting a valid in-package path before the
