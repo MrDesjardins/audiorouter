@@ -28,6 +28,14 @@ automation surface still returned no targetable application or window. The
 process and temporary database were removed afterward. This strengthens the
 launch evidence but does not replace attended UI acceptance.
 
+Corrected a stale M05 library contract on 2026-09-16. Application capture and
+endpoint loopback are implemented through the application inventory and exact
+endpoint-binding panels, but their generic library entries cannot create a
+valid node without an identity. The UI now reports those explicit selection
+prerequisites instead of incorrectly claiming that the M02 adapter is absent.
+The focused UI suite (231 tests), production build (214 modules), and docs
+validation passed; no audio or machine configuration changed.
+
 The dedicated VST2 editor-containment harness passed all 9 x64 ReaPlugs
 fixtures again on 2026-09-16 after its temporary fixture environment was
 hardened to check exact restoration, including absent-variable state. Both

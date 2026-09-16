@@ -10,8 +10,8 @@ export type LibraryEntry = {
 
 export const libraryEntries: LibraryEntry[] = [
   { id: "physical-input", label: "Physical input", category: "Source", kind: "physicalInput" },
-  { id: "application-capture", label: "Application capture", category: "Source", unavailableReason: "Requires the M02 Windows audio adapter" },
-  { id: "endpoint-loopback", label: "Endpoint loopback", category: "Source", unavailableReason: "Requires the M02 Windows audio adapter" },
+  { id: "application-capture", label: "Application capture", category: "Source", unavailableReason: "Select a verified running application in Audio sources" },
+  { id: "endpoint-loopback", label: "Endpoint loopback", category: "Source", unavailableReason: "Select an exact active render endpoint in Endpoint binding" },
   { id: "physical-output", label: "Physical output", category: "Destination", kind: "physicalOutput" },
   { id: "virtual-render-source", label: "Virtual render source", category: "Virtual bus", unavailableReason: "Requires the M03 managed virtual driver" },
   { id: "virtual-capture-sink", label: "Virtual capture sink", category: "Virtual bus", unavailableReason: "Requires the M03 managed virtual driver" },

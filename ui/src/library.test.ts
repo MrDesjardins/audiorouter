@@ -4,15 +4,18 @@ import { filterLibraryEntries, libraryEntries, libraryEntryAccessibleLabel } fro
 describe("node library search", () => {
   it("matches labels, categories, and availability reasons", () => {
     expect(filterLibraryEntries(libraryEntries, "effect").map((entry) => entry.id)).toEqual(["gain", "mute", "parametric-eq", "compressor", "gate", "limiter", "delay", "graphic-eq", "pitch"]);
-    expect(filterLibraryEntries(libraryEntries, "M02").map((entry) => entry.id)).toEqual([
+    expect(filterLibraryEntries(libraryEntries, "verified running application").map((entry) => entry.id)).toEqual([
       "application-capture",
-      "endpoint-loopback",
     ]);
   });
 
-  it("keeps M02 sources and destinations discoverable in the editor", () => {
-    const entries = libraryEntries.filter((entry) => entry.unavailableReason?.includes("M02") === true);
+  it("keeps identity-bound sources discoverable with actionable prerequisites", () => {
+    const entries = libraryEntries.filter((entry) => entry.id === "application-capture" || entry.id === "endpoint-loopback");
     expect(entries.map((entry) => entry.id)).toEqual(["application-capture", "endpoint-loopback"]);
+    expect(entries.map((entry) => entry.unavailableReason)).toEqual([
+      "Select a verified running application in Audio sources",
+      "Select an exact active render endpoint in Endpoint binding",
+    ]);
     expect(libraryEntries.find((entry) => entry.id === "physical-input")?.kind).toBe("physicalInput");
     expect(libraryEntries.find((entry) => entry.id === "physical-output")?.kind).toBe("physicalOutput");
   });
@@ -35,7 +38,7 @@ describe("node library search", () => {
 
   it("includes unavailable reasons in accessible library labels", () => {
     expect(libraryEntryAccessibleLabel(libraryEntries.find((entry) => entry.id === "application-capture")!)).toBe(
-      "Application capture, Source, unavailable: Requires the M02 Windows audio adapter",
+      "Application capture, Source, unavailable: Select a verified running application in Audio sources",
     );
     expect(libraryEntryAccessibleLabel(libraryEntries.find((entry) => entry.id === "gain")!)).toBe("Gain, Effect");
   });
