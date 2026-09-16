@@ -2,6 +2,15 @@
 
 Updated: 2026-09-16.
 
+Requalified the guarded all-endpoint shared-mode lifecycle matrix on
+2026-09-16 with `m00-native-live.ps1 -AllowLiveAudio -DurationMilliseconds
+100`. All 13 capture and 18 render endpoints completed bounded lifecycle
+checks; one occupied render endpoint correctly followed the distinct
+`0x8889000A` ownership branch while the remaining endpoints initialized,
+started, stopped, and reset successfully. Media-device identity/state and
+defaults, volume, mute, privacy, drivers, signing, and startup configuration
+were unchanged.
+
 Requalified bounded VB-Cable impulse correlation on 2026-09-16 with 100
 impulses at 10 ms spacing. The guarded analyzer detected 97 impulses, measured
 zero p95 spacing error in frames, and estimated 84.96 ms onset. Temporary
