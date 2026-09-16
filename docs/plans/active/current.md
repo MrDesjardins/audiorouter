@@ -138,6 +138,13 @@ with two guarded live tests ignored, 91 storage tests, strict Clippy, and
 format/diff checks. The native driver remains unloaded, so endpoint
 qualification and production signing are still open.
 
+Requalified the current headless adapter boundary on 2026-09-16 after the
+transactional refactor: M07 passed with 35 CLI tests, 3 MCP stdio tests, 173
+control tests (171 passed, 2 guarded live tests ignored), 70 plugin-host tests,
+and 13 worker-process tests. Documentation validation also passed for 54
+Markdown files and 218 local links. No endpoint, driver, plugin registration,
+or persistent audio configuration was changed.
+
 Extended the UI backend adapter and managed-bus lifecycle panel on 2026-09-16
 with typed `provisionVirtualDevice` and `removeVirtualDevice` calls. The panel
 now exposes a bounded instance-ID field and explicit native ownership buttons
