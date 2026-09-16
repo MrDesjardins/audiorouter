@@ -2,6 +2,15 @@
 
 Updated: 2026-09-15.
 
+- Re-ran `cargo test --workspace --locked --all-targets --
+  --test-threads=1` after the STATE-10 post-clear supervision correction;
+  every workspace target passed, including the 78-test Windows-audio suite.
+  This check opened no live endpoint and changed no driver or persistent
+  machine audio configuration. Evidence: [M07 automation and recovery]
+  (evidence/M07-automation-recovery.md). Next action: continue the remaining
+  native-driver/PortCls qualification slice without treating compile-only
+  evidence as loaded-driver evidence.
+
 - Corrected post-clear STATE-10 supervision on 2026-09-15. Once an operator
   clears the durable safe-mode latch, the shell re-reads SQLite after a later
   serving failure, resets its in-memory retry window, and resumes bounded

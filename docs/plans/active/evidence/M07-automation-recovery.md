@@ -1,5 +1,14 @@
 # M07 automation and recovery evidence
 
+## 2026-09-15 - locked workspace regression after safe-mode correction
+
+The complete locked Rust workspace was re-run after the shell's explicit
+safe-mode-clear correction. All workspace targets passed, including the
+Windows-audio suite (78 tests); the command exited successfully with one
+test thread. This is repository-level evidence only: no driver was installed
+or loaded, no live endpoint was opened by this check, and no persistent
+machine audio configuration changed.
+
 ## 2026-09-15 - explicit safe-mode clear resumes supervision
 
 After an operator clears the durable recovery latch while the shell is serving
