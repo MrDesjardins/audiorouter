@@ -909,3 +909,9 @@ platform runs passed the source-contract, signability, platform-scoped
 artifact, and lifecycle checks; each disposable build output was removed.
 This is compile-only architecture evidence and does not claim ARM64 endpoint
 support, driver loading, signing, or production qualification.
+
+The clean-tree `safe-all.ps1 -AllowLiveAudio` rerun also passed with both the
+default x64 and explicit ARM64 M03 steps included. The later M00/M01/M04/M05,
+M06, M07, M08, traceability, and documentation gates passed as well; 15
+run-owned temporary children were removed. No driver was installed or loaded
+and no persistent machine-audio configuration changed.

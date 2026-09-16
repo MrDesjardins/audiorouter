@@ -110,6 +110,13 @@ testing an uncommitted worktree. That expected clean-tree guard was recorded
 as a failed orchestration attempt; the runner change is now ready to commit
 before the valid integrated rerun.
 
+The clean-tree rerun then passed with both the default x64 and explicit ARM64
+M03 driver qualification steps, followed by M00 reference validation, M01/M04,
+M05 (226 UI tests and production builds), M06 VST3/VST2, M07, unsigned M08
+artifact preparation/verification, 159 normative mappings, and docs. Cleanup
+removed 15 run-owned temporary children. No driver was installed or loaded,
+and no persistent machine-audio configuration changed.
+
 Requalified `tests/acceptance/safe-all.ps1` at the current head on 2026-09-15.
 The complete guarded chain passed M00/M03 toolchain, native, driver, and
 reference-driver checks; M01/M04; M05 UI tests and temporary production
