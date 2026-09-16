@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Fixed an endpoint-monitor startup race on 2026-09-16. Notification
+registration now precedes the initial read-only endpoint snapshot, preventing
+a device/default change in the old enumeration-to-registration gap from being
+lost. Initial enumeration failure explicitly drops the subscription so its
+callback is unregistered. Verification: endpoint-monitor test passed, strict
+Windows-audio Clippy passed, and formatting passed. No stream, endpoint, or
+machine audio configuration was changed.
+
 Rechecked repository quality gates on 2026-09-16 after the integrated
 acceptance run: `cargo fmt --all -- --check` and
 `cargo clippy --workspace --all-targets --locked -- -D warnings` both passed

@@ -4837,8 +4837,20 @@ pub struct EndpointMonitor {
 
 impl EndpointMonitor {
     pub fn start() -> Result<Self, AudioError> {
-        let snapshot = enumerate_active_endpoints()?;
+        // Register before taking the initial snapshot. A device/default
+        // change between enumeration and callback registration would
+        // otherwise be lost, leaving recovery unaware of a changed binding.
         let notifications = EndpointNotificationSubscription::start()?;
+        let snapshot = match enumerate_active_endpoints() {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                // Drop the subscription before returning so the callback is
+                // unregistered even when the initial read-only inventory
+                // fails.
+                drop(notifications);
+                return Err(error);
+            }
+        };
         Ok(Self {
             notifications,
             snapshot,
