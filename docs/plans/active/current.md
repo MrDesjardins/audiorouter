@@ -2,6 +2,13 @@
 
 Updated: 2026-09-15.
 
+- Added bounded shell backend supervision on 2026-09-15. The owned control
+  transport may be reconstructed after two terminal failures with 100/500 ms
+  backoff and enters safe mode after a third failure in ten minutes. It does
+  not auto-start sessions, reopen native endpoints, or resume recording;
+  recovery remains explicit. Shell tests (25), clippy, and format checks pass.
+  Evidence: [M07 automation and recovery](evidence/M07-automation-recovery.md).
+
 - Requalified the complete guarded `safe-all.ps1` chain at pushed head
   `a5d96803` on 2026-09-15. WDK build/signability, 34-endpoint inventory,
   disposable SysVAD, M01 CLI, M04 DSP/recording, M05 UI (220 tests/build),

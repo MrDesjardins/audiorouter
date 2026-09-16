@@ -1,5 +1,21 @@
 # M07 automation and recovery evidence
 
+## 2026-09-15 - bounded shell backend supervision
+
+The shell-owned control backend now has a bounded supervisor around its
+transport serving loop. A terminal backend failure reconstructs the durable
+control plane after 100 ms and then 500 ms; a third failure inside ten minutes
+stops the loop and reports safe mode. The supervisor is deliberately limited
+to control-plane availability: it does not start sessions, reopen native
+endpoints, resume recording, or alter machine audio configuration. Route and
+recording recovery therefore remain explicit and validated operations.
+
+Evidence: `cargo test --manifest-path src-tauri/Cargo.toml --locked --
+--test-threads=1` (25 passed), `cargo clippy --manifest-path
+src-tauri/Cargo.toml --all-targets --locked -- -D warnings`, and
+`cargo fmt --all -- --check` passed on Windows. No live audio or persistent
+machine configuration was changed.
+
 ## 2026-09-13 - frontend-owned Tauri RPC requalification at `1cdf1019`
 
 `tests/acceptance/m07-shell-rpc.ps1` passed in the authorized elevated

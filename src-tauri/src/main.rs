@@ -13,8 +13,11 @@ use tauri::{
 };
 
 mod startup;
+mod backend_supervisor;
 #[cfg(windows)]
 mod os_transition_windows;
+
+use backend_supervisor::{BackendRestartDecision, BackendSupervisor};
 
 const DEFAULT_PIPE_NAME: &str = r"\\.\pipe\audiorouter-control";
 const DEFAULT_DATABASE_DIRECTORY: &str = "AudioRouter";
@@ -302,7 +305,9 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
         let handle = std::thread::Builder::new()
             .name("audiorouter-control".into())
             .spawn(move || {
-                let result = (|| -> Result<(), String> {
+                let mut supervisor = BackendSupervisor::default();
+                loop {
+                    let result = (|| -> Result<(), String> {
                     // ControlPlane contains COM-backed endpoint state and is
                     // deliberately constructed on the serving thread.
                     let storage = Storage::open(&database)
@@ -404,13 +409,33 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                             .map_err(|error| format!("current user enrollment lookup failed: {error:?}"))?
                             .ok_or_else(|| "current user is not enrolled".to_owned())?
                     };
-                    audiorouter_transport::serve_control_connections_forever_with_grant(
-                        &pipe_name, plane, grant,
-                    )
-                    .map_err(|error| format!("control backend stopped: {error:?}"))
-                })();
-                if let Err(error) = result {
-                    eprintln!("AudioRouter control backend stopped: {error:?}");
+                        audiorouter_transport::serve_control_connections_forever_with_grant(
+                            &pipe_name, plane, grant,
+                        )
+                        .map_err(|error| format!("control backend stopped: {error:?}"))
+                    })();
+                    match result {
+                        Ok(()) => break,
+                        Err(error) => {
+                            let now = std::time::Instant::now();
+                            match supervisor.record_failure(now) {
+                                BackendRestartDecision::Restart { delay } => {
+                                    eprintln!(
+                                        "AudioRouter control backend stopped: {error}; restarting after {} ms ({} recent failures)",
+                                        delay.as_millis(),
+                                        supervisor.failure_count(now),
+                                    );
+                                    std::thread::sleep(delay);
+                                }
+                                BackendRestartDecision::StopSafeMode => {
+                                    eprintln!(
+                                        "AudioRouter control backend stopped: {error}; safe mode engaged after repeated failures"
+                                    );
+                                    break;
+                                }
+                            }
+                        }
+                    }
                 }
             })
             .map_err(|error| format!("backend thread creation failed: {error}"))?;
