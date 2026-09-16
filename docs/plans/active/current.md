@@ -2,6 +2,13 @@
 
 Updated: 2026-09-16.
 
+Requalified the complete guarded `safe-all.ps1` chain at pushed head
+`9a30e78e` on 2026-09-16 through direct `cmd.exe` execution; the process
+returned exit code 0. This rechecked the integrated M00-M08 acceptance path
+after the driver lifecycle preview and its x64/ARM64 regressions. The run was
+output-suppressed for status-only verification; no endpoint, driver, plugin,
+startup, or persistent audio configuration was changed.
+
 Added and qualified the missing M03 lifecycle preview on 2026-09-16. The
 guarded `manage.ps1` entrypoint now supports `-Install -AllowDriverInstall
 -Preview` and the corresponding uninstall preview, emitting bounded JSON with
