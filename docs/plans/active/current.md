@@ -93,6 +93,14 @@ passed; non-finite output was rejected; crash and hang fixtures were contained
 by disposable workers. This validates the legacy ABI and failure policy, not
 third-party redistribution or arbitrary plugin compatibility.
 
+The explicitly selected supplied x64 TDR Nova VST2 binary also passed isolated
+processing at 44.1, 48, and 96 kHz, plus bounded editor-thread and supervised
+editor-timeout containment. Its SHA-256 fingerprint was unchanged before and
+after (`4dfc5973416b4b23fa9351128b65e7b42547f6280436cce4cbf8aab1334e4e33`),
+and the temporary fixture/sample-rate environment was restored. This qualifies
+one local VST2 binary and does not grant redistribution rights or arbitrary
+vendor compatibility.
+
 Improved the supervised worker EOF diagnostic so a native plugin crash now
 includes the bounded child exit status. The BUSTERse negative fixture
 reproduction reports `-1073741819` (`0xC0000005`, access violation) alongside
