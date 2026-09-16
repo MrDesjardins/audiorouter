@@ -2,6 +2,13 @@
 
 Updated: 2026-09-16.
 
+Requalified bounded VB-Cable impulse correlation on 2026-09-16 with 100
+impulses at 10 ms spacing. The guarded analyzer detected 97 impulses, measured
+zero p95 spacing error in frames, and estimated 84.96 ms onset. Temporary
+probe, raw capture, and logs were removed; endpoint/media state and persistent
+audio configuration were unchanged. This is user-mode signal-correlation
+evidence only; the estimate is not the calibrated physical-latency gate.
+
 Requalified the guarded VB-Cable signal and event paths on 2026-09-16.
 `m00-native-loopback-live.ps1 -AllowLiveAudio` passed a 750 ms capture with
 1,000 ms tone and 139,020 nonzero captured payload bytes. The event-driven
