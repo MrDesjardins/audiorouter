@@ -66,6 +66,14 @@ and does not claim that a driver is installed or loaded. Evidence: 65 domain,
 90 storage, 172 control, and 226 UI tests passed, plus strict Clippy and UI
 typecheck.
 
+Added bounded native ownership in `crates/windows-audio` on 2026-09-16 via
+`ManagedSoftwareDeviceInventory`. It keys RAII Software Device API handles by
+managed bus ID, rejects duplicate and over-capacity entries, exposes the
+returned instance identity, and closes handles on removal or inventory drop.
+This is an explicit control-plane primitive; no caller currently enables it,
+so no software device or machine audio configuration was changed. The
+Windows-audio suite (80 tests) and strict Clippy passed.
+
 Reduced the packaged UI entry chunk on 2026-09-15 by moving `@xyflow/react`
 to a dedicated Rollup vendor chunk. The UI suite passed 226 tests and the
 temporary production build passed with a 321 kB application chunk plus a

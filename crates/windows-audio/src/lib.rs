@@ -14,7 +14,10 @@ use windows_core::Interface;
 #[cfg(windows)]
 mod software_device;
 #[cfg(windows)]
-pub use software_device::{SoftwareDeviceError, SoftwareDeviceHandle, SoftwareDeviceProvisioner};
+pub use software_device::{
+    ManagedSoftwareDeviceInventory, SoftwareDeviceError, SoftwareDeviceHandle,
+    SoftwareDeviceProvisioner, MAX_MANAGED_SOFTWARE_DEVICES,
+};
 
 /// Maximum number of OS-provided audio-session names retained per process.
 pub const MAX_APPLICATION_AUDIO_DISPLAY_NAMES: usize = 64;

@@ -6,6 +6,7 @@
 //! enumerated; dropping it uses the default handle lifetime and removes the
 //! temporary device.
 
+use std::collections::BTreeMap;
 use std::ffi::c_void;
 use std::ptr::null;
 use std::sync::mpsc::{self, RecvTimeoutError};
@@ -15,6 +16,7 @@ use windows_core::HRESULT;
 
 const MAX_INSTANCE_ID_CHARS: usize = 64;
 const CALLBACK_TIMEOUT: Duration = Duration::from_secs(5);
+pub const MAX_MANAGED_SOFTWARE_DEVICES: usize = 8;
 const SW_DEVICE_CAPABILITIES_DRIVER_REQUIRED: u32 = 0x8;
 
 type HswDevice = *mut c_void;
@@ -86,6 +88,9 @@ pub enum SoftwareDeviceError {
     CallbackTimeout,
     Callback(HRESULT),
     MissingHandle,
+    InventoryFull,
+    AlreadyTracked,
+    NotTracked,
 }
 
 impl std::fmt::Display for SoftwareDeviceError {
@@ -107,6 +112,11 @@ impl std::fmt::Display for SoftwareDeviceError {
             Self::MissingHandle => {
                 formatter.write_str("Windows Software Device API returned no device handle")
             }
+            Self::InventoryFull => formatter.write_str("managed software-device inventory is full"),
+            Self::AlreadyTracked => {
+                formatter.write_str("managed software device is already tracked")
+            }
+            Self::NotTracked => formatter.write_str("managed software device is not tracked"),
         }
     }
 }
@@ -213,6 +223,60 @@ pub struct SoftwareDeviceHandle {
 impl SoftwareDeviceHandle {
     pub fn instance_id(&self) -> &str {
         &self.instance_id
+    }
+}
+
+/// Bounded control-plane ownership for the software devices associated with
+/// managed virtual buses. Dropping or removing an entry closes its native
+/// handle, which asks Windows to remove the temporary software device.
+#[derive(Debug, Default)]
+pub struct ManagedSoftwareDeviceInventory {
+    devices: BTreeMap<String, SoftwareDeviceHandle>,
+}
+
+impl ManagedSoftwareDeviceInventory {
+    pub fn len(&self) -> usize {
+        self.devices.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.devices.is_empty()
+    }
+
+    pub fn contains(&self, bus_id: &str) -> bool {
+        self.devices.contains_key(bus_id)
+    }
+
+    /// Create and retain one device for a bus. The caller must perform the
+    /// authorization and desired-state checks before invoking this method.
+    pub fn create(
+        &mut self,
+        provisioner: &SoftwareDeviceProvisioner,
+        bus_id: &str,
+        instance_id: &str,
+    ) -> Result<&SoftwareDeviceHandle, SoftwareDeviceError> {
+        if self.devices.contains_key(bus_id) {
+            return Err(SoftwareDeviceError::AlreadyTracked);
+        }
+        if self.devices.len() >= MAX_MANAGED_SOFTWARE_DEVICES {
+            return Err(SoftwareDeviceError::InventoryFull);
+        }
+        let handle = provisioner.create(instance_id)?;
+        self.devices.insert(bus_id.to_owned(), handle);
+        Ok(self.devices.get(bus_id).expect("inserted managed device"))
+    }
+
+    pub fn remove(&mut self, bus_id: &str) -> Result<(), SoftwareDeviceError> {
+        self.devices
+            .remove(bus_id)
+            .map(|_| ())
+            .ok_or(SoftwareDeviceError::NotTracked)
+    }
+
+    pub fn instance_id(&self, bus_id: &str) -> Option<&str> {
+        self.devices
+            .get(bus_id)
+            .map(SoftwareDeviceHandle::instance_id)
     }
 }
 
