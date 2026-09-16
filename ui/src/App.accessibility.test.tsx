@@ -546,6 +546,20 @@ describe("VB-Cable endpoint selection", () => {
     expect(await screen.findByText(/Native worker detached; select new endpoints/i)).toBeTruthy();
   });
 
+  it("offers explicit exact endpoint rebinding while stopped", async () => {
+    const format = { sampleRateHz: 48000, channels: 2, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 8 };
+    const devices = [
+      { id: "capture-vb", name: "CABLE Output (VB-Audio Virtual Cable)", direction: "capture" as const, state: "active" as const, defaultRoles: [], format, periods: { default100ns: 100000, minimum100ns: 30000 } },
+      { id: "render-vb", name: "CABLE Input (VB-Audio Virtual Cable)", direction: "render" as const, state: "active" as const, defaultRoles: [], format, periods: { default100ns: 100000, minimum100ns: 30000 } },
+    ];
+    const rebindNativeEndpoint = vi.fn(async () => ({ sessionId: "demo-session", state: "configured-stopped" as const, captureEndpointId: "capture-vb", renderEndpointId: "render-vb" }));
+    render(<App backend={{ ...connectedPreviewBackend(), listDevices: async () => devices, rebindNativeEndpoint }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Select VB-Cable loopback pair" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rebind exact endpoints" }));
+    await waitFor(() => expect(rebindNativeEndpoint).toHaveBeenCalledWith("demo-session", "capture-vb", "render-vb"));
+    expect(await screen.findByText(/Rebound configured-stopped; start the session/i)).toBeTruthy();
+  });
+
   it("prevents duplicate native endpoint preparation while the first request is pending", async () => {
     const format = { sampleRateHz: 48000, channels: 2, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 8 };
     const devices = [

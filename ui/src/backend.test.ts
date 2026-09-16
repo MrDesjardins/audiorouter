@@ -405,6 +405,17 @@ describe("live event cursor", () => {
     expect(received).toEqual({ method: "nativeEndpoints.detach", params: { sessionId: demoSession.id } });
   });
 
+  it("forwards native endpoint rebinding with exact endpoint IDs", async () => {
+    let received: unknown;
+    const result = { sessionId: demoSession.id, state: "configured-stopped" as const, captureEndpointId: "capture-1", renderEndpointId: "render-1" };
+    const client = {
+      request: async (method: string, params: unknown) => { received = { method, params }; return result; },
+    } as never;
+    const backend = createLiveBackend(client, demoSession.id);
+    await expect(backend.rebindNativeEndpoint?.(demoSession.id, "capture-1", "render-1")).resolves.toEqual(result);
+    expect(received).toEqual({ method: "nativeEndpoints.rebind", params: { sessionId: demoSession.id, captureEndpointId: "capture-1", renderEndpointId: "render-1" } });
+  });
+
   it("forwards native duplex detachment for the exact session", async () => {
     let received: unknown;
     const result = { sessionId: demoSession.id, state: "detached" as const };

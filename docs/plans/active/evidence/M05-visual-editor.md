@@ -1,5 +1,14 @@
 # M05 visual editor evidence
 
+## 2026-09-16 - explicit endpoint rebind UI
+
+The native endpoint panel now exposes a stopped-only “Rebind exact endpoints”
+action, forwarding the selected session and exact capture/render IDs through
+the typed backend adapter. UI tests cover both request forwarding and visible
+success feedback; the full UI suite passed 233 tests and TypeScript typecheck
+passed. No endpoint or persistent machine configuration was changed by this
+portable UI validation.
+
 ## 2026-09-16 - current visual editor requalification
 
 `tests/acceptance/m05-ui.ps1` passed TypeScript typecheck, 227 tests across 19

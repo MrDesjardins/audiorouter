@@ -53,6 +53,13 @@ and detach. Domain/control (65/173), UI (231), strict Clippy, typecheck,
 formatting, and diff checks passed. Actual unplug/replug, project-driver, and
 signing gates remain open.
 
+Added focused rebind UI and adapter regressions on 2026-09-16. The live UI
+backend forwards exact session/capture/render IDs to `nativeEndpoints.rebind`,
+and the endpoint panel exposes the stopped-only action with explicit status
+feedback. UI coverage is now 233 tests; control/domain suites remain green and
+documentation validation passes. This improves human-testable VB-Cable
+configuration without changing machine audio state.
+
 Refreshed the release qualification snapshot on 2026-09-16 after the latest
 authorized VB-Cable route requalification. `docs/operations/release-notes.md`
 now reports the current 500 ms control-owned route evidence: 24,000 captured
