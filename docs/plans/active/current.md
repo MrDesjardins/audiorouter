@@ -68,6 +68,14 @@ allocated temporary output was absent afterward. This expands compile-only
 architecture evidence; it does not imply ARM64 endpoint, signing, loading, or
 production support.
 
+Corrected platform-specific artifact discovery in `build.ps1` on 2026-09-15.
+The previous recursive search could report a stale artifact from another
+architecture; discovery now stays under the requested `x64` or `ARM64` output
+root. Sequential non-installing x64 and ARM64 builds reported their matching
+package paths and removed their temporary outputs, and the full M03 acceptance
+passed afterward. This protects qualification evidence only and does not
+change the driver installation or loading boundary.
+
 Requalified `tests/acceptance/safe-all.ps1` at the current head on 2026-09-15.
 The complete guarded chain passed M00/M03 toolchain, native, driver, and
 reference-driver checks; M01/M04; M05 UI tests and temporary production

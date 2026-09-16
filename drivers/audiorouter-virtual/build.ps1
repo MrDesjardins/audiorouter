@@ -18,6 +18,7 @@ if (-not $Output) {
 }
 $output = [IO.Path]::GetFullPath($Output)
 $outputExistedBeforeBuild = Test-Path -LiteralPath $output
+$platformOutputRoot = Join-Path $driverRoot $Platform
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 
 function Remove-DisposableOutput {
@@ -81,8 +82,8 @@ $commandLine = 'set "Path=" && set "PATH=' + $env:Path + '" && "' + $msbuild + '
 & cmd.exe /d /c $commandLine
 if ($LASTEXITCODE -ne 0) { throw "MSBuild failed with exit code $LASTEXITCODE. See $log" }
 
-$sys = @(Get-ChildItem -LiteralPath $driverRoot -Filter 'AudioRouterVirtual.sys' -Recurse -File | Where-Object { $_.FullName -notlike "$output*" })
-$inf = @(Get-ChildItem -LiteralPath $driverRoot -Filter 'AudioRouterVirtual.inf' -Recurse -File | Where-Object { $_.FullName -notlike "$output*" })
+$sys = @(Get-ChildItem -LiteralPath $platformOutputRoot -Filter 'AudioRouterVirtual.sys' -Recurse -File | Where-Object { $_.FullName -notlike "$output*" })
+$inf = @(Get-ChildItem -LiteralPath $platformOutputRoot -Filter 'AudioRouterVirtual.inf' -Recurse -File | Where-Object { $_.FullName -notlike "$output*" })
 if (-not $sys -or -not $inf) {
     throw "Build completed but the expected .sys/.inf package was not produced. See $log"
 }

@@ -41,6 +41,7 @@ foreach ($required in @(
 foreach ($required in @(
         '$outputWasProvided',
         '$outputExistedBeforeBuild',
+        '$platformOutputRoot',
         '$outputIsUnderTemp',
         'Preserved caller-owned build output')) {
     if (-not $buildScript.Contains($required)) {
