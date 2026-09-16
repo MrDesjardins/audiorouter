@@ -107,6 +107,24 @@ audiorouter graph apply C:\path\change.plan.json `
 
 Apply rereads the current revision and refuses a stale plan. If the caller loses the response, query `operations.get` through `api call` before retrying.
 
+## Handle an operating-system transition
+
+The typed CLI command applies the authenticated lock, sign-out, sleep, or
+resume policy through the control plane. It requires a durable database and a
+unique idempotency key:
+
+```powershell
+audiorouter os-transition sleep `
+  --database C:\path\audiorouter.sqlite `
+  --idempotency-key os-sleep-20260915-001 `
+  --json
+```
+
+Sleep and sign-out stop routes; resume reports portable and native session IDs
+that require explicit endpoint validation. It never silently reopens native
+audio or installs/activates a driver. The Windows shell supplies real lock,
+logoff, suspend, and resume notifications to this same method.
+
 ## Plan and apply virtual-bus desired state
 
 Virtual-bus lifecycle changes use the same explicit plan/apply boundary. The

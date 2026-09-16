@@ -2,6 +2,15 @@
 
 Updated: 2026-09-15.
 
+- Added the typed `os-transition` CLI command on 2026-09-15. It requires an
+  absolute durable database and idempotency key, validates transition names
+  before opening storage, and routes through the authenticated
+  `system.osTransition` dispatcher. Focused and full CLI/MCP tests pass; the
+  command never installs a driver or silently opens native audio. Evidence:
+  [M07 OS-transition policy evidence](evidence/M07-os-transitions.md). No
+  machine audio, power, or driver configuration changed. Next action: continue
+  the next safe M03/M07 delivery slice.
+
 - Added the focused MCP `os_transition` tool on 2026-09-15. It validates the
   four transition names, requires an idempotency key, carries the existing
   session-control authorization, and forwards to `system.osTransition` rather

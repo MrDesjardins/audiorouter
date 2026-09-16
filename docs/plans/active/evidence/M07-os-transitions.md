@@ -37,6 +37,11 @@ transition enum and required idempotency key. It is non-read-only and
 idempotent, and dispatches through the authenticated control plane; the MCP
 adapter owns no transition state.
 
+The CLI now exposes the same operation as `os-transition <transition>` with a
+durable database and explicit idempotency key. Invalid transition names are
+rejected before storage is opened; valid requests use the shared authenticated
+dispatcher.
+
 The Tauri shell now owns a Windows message-only listener in
 `src-tauri/src/os_transition_windows.rs`. WTS session notifications map the
 current user's lock and logoff events; `WM_POWERBROADCAST` maps suspend and
@@ -61,7 +66,7 @@ clean
 npm.cmd test --prefix ui -- --run
 217 passed; 0 failed
 cargo test -p audiorouter-cli --locked
-36 passed; 0 failed
+38 passed; 0 failed
 ```
 
 This is portable policy evidence, not Windows power-notification evidence.

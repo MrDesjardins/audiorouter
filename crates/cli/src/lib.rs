@@ -103,6 +103,7 @@ where
         "privacy" => privacy_command(&command_args)?,
         "recovery" => recovery_command(&command_args)?,
         "startup" => startup_command(&command_args)?,
+        "os-transition" => os_transition_command(&command_args)?,
         "backup" => backup_command(&command_args)?,
         "restore" => restore_command(&command_args)?,
         "export" => export_session(&command_args)?,
@@ -635,6 +636,34 @@ fn privacy_command(args: &[&str]) -> Result<Value, CliError> {
         })
         .result
         .ok_or_else(|| CliError::InvalidArguments("privacy mute update failed".into()))
+}
+
+fn os_transition_command(args: &[&str]) -> Result<Value, CliError> {
+    let transition = args.get(1).copied().unwrap_or_default();
+    if !matches!(transition, "lock" | "signOut" | "sleep" | "resume") {
+        return Err(CliError::InvalidArguments(
+            "usage: os-transition <lock|signOut|sleep|resume> --database <absolute-path> --idempotency-key KEY".into(),
+        ));
+    }
+    let idempotency_key = option_value(args, "--idempotency-key")?;
+    let response = ControlPlane::with_storage("cli", database(args)?).dispatch(
+        audiorouter_protocol::JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "system.osTransition".into(),
+            params: Some(json!({
+                "transition": transition,
+                "idempotencyKey": idempotency_key
+            })),
+        },
+    );
+    response.result.ok_or_else(|| {
+        CliError::InvalidArguments(
+            response
+                .error
+                .map_or_else(|| "OS transition failed".into(), |error| error.message),
+        )
+    })
 }
 
 fn recovery_command(args: &[&str]) -> Result<Value, CliError> {
@@ -1777,6 +1806,10 @@ fn help_value() -> Value {
     value["commands"].as_array_mut().unwrap().insert(
         5,
         json!("startup apply <plan-id> --idempotency-key KEY --database <absolute-path>"),
+    );
+    value["commands"].as_array_mut().unwrap().insert(
+        6,
+        json!("os-transition <lock|signOut|sleep|resume> --database <absolute-path> --idempotency-key KEY"),
     );
     value["commands"].as_array_mut().unwrap().insert(
         7,
@@ -3229,6 +3262,57 @@ mod tests {
             serde_json::from_str(&run(["startup", "get", "--json"]).unwrap()).unwrap();
         assert_eq!(startup["enabled"], false);
         assert_eq!(startup["registration"], "unavailable");
+    }
+
+    #[test]
+    fn os_transition_command_uses_durable_authenticated_dispatch() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-cli-os-transition-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let path = path.to_string_lossy().into_owned();
+        let result: Value = serde_json::from_str(
+            &run([
+                "os-transition",
+                "lock",
+                "--database",
+                &path,
+                "--idempotency-key",
+                "cli-os-lock-1",
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(result["transition"], "lock");
+        assert_eq!(result["action"], "keepRunning");
+        assert_eq!(result["nativeSessionIds"], json!([]));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn os_transition_command_rejects_invalid_transition_before_storage_open() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-cli-invalid-transition-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let path = path.to_string_lossy().into_owned();
+        let error = run([
+            "os-transition",
+            "hibernate",
+            "--database",
+            &path,
+            "--idempotency-key",
+            "cli-invalid-transition-1",
+            "--json",
+        ])
+        .unwrap_err();
+        assert!(
+            matches!(error, CliError::InvalidArguments(message) if message.contains("usage: os-transition"))
+        );
+        assert!(!std::path::Path::new(&path).exists());
     }
 
     #[test]
