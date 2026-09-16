@@ -45,6 +45,13 @@ zero deadline-lateness samples. Processing telemetry accounted for all 192
 blocks; temporary streams and generated probe files were cleaned and media
 state remained unchanged. This strengthens the user-mode route gate only.
 
+Ran the guarded VB-Cable impulse correlation on 2026-09-16 with 100 bounded
+impulses. The existing CABLE Input → CABLE Output loopback detected 97 impulse
+groups, with zero p95 spacing error and an estimated 86.19 ms onset. Temporary
+capture/probe artifacts were cleaned. This is signal-correlation evidence for
+the user-mode cable path; the estimate is not an acoustic p95 latency result,
+and no persistent audio configuration changed.
+
 Re-ran the control-owned VB-Cable route lifecycle acceptance on 2026-09-16
 with the exact existing endpoint IDs. One generation completed at 48 kHz with
 51 packets, 24,480 captured frames, 191 processing quanta, 24,448 rendered
