@@ -1,5 +1,16 @@
 # M08 release evidence
 
+## 2026-09-15 - guarded safe acceptance at `d8b530ea`
+
+The complete guarded `safe-all.ps1` chain passed after the backend-owned
+`system.quit` implementation and failure-ordering regression. It covered
+M00/M03 native compile and signability, M01/M04, M05 UI and shell release
+builds, M06 VST3/VST2, M07 headless controls, unsigned M08 artifacts, 159
+normative mappings, and documentation validation (54 Markdown files, 215
+local links). Cleanup removed 15 run-owned temporary children. No driver was
+installed or loaded, no plugin or startup registration changed, and no
+persistent machine audio configuration changed.
+
 ## 2026-09-15 - guarded safe acceptance at `32662417`
 
 The complete guarded `safe-all.ps1` chain passed at the current pushed head.

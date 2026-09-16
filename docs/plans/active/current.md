@@ -32,6 +32,14 @@ failed finalization never reports the affected session stopped.
   tests), UI (221), strict Clippy, formatting, and documentation checks pass.
   No live endpoint or persistent machine audio configuration changed.
 
+- Requalified the complete guarded `safe-all.ps1` chain at pushed head
+  `d8b530ea` after the `system.quit` implementation and regression. M00/M03,
+  M01/M04, M05 UI/shell builds, M06 VST3/VST2, M07, unsigned M08 artifacts,
+  159 mappings, and documentation (54 Markdown files, 215 local links)
+  passed; cleanup removed 15 temporary children. No driver was installed or
+  loaded and no persistent machine audio configuration changed. Evidence:
+  [M08 release](evidence/M08-release.md).
+
 - Ran the disposable M06 SDK-installer provenance acceptance. Wrong-origin
   checkouts and destinations below a reparse-point parent were rejected as
   intended; all temporary metadata was removed. The real SDK, plugins,
