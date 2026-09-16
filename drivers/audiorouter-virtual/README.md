@@ -58,9 +58,9 @@ are approved.
 
 ## Current limits and next integration work
 
-- The prototype is x64 build-qualified; the active plan records the installed
-  VS/WDK build and zero-error signability result. This is not production
-  signing evidence.
+- The prototype is x64 and ARM64 compile-qualified; the active plan records
+  the installed VS/WDK build and zero-error signability result. This is not
+  production signing evidence.
 - Production signing, catalog/release policy, clean-machine qualification,
   managed bus creation/rename/enable/
   disable/delete, and endpoint teardown are not implemented here.

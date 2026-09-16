@@ -1,6 +1,6 @@
 # Active plan
 
-Updated: 2026-09-15.
+Updated: 2026-09-16.
 
 The packaged-shell visibility contract was made explicit on 2026-09-15 at
 `ef952348`: the dynamically created Tauri editor window now requests
