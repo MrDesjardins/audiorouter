@@ -2,6 +2,13 @@
 
 Updated: 2026-09-15.
 
+- Corrected post-clear STATE-10 supervision on 2026-09-15. Once an operator
+  clears the durable safe-mode latch, the shell re-reads SQLite after a later
+  serving failure, resets its in-memory retry window, and resumes bounded
+  supervision without auto-starting audio. The 26-test shell suite and strict
+  Clippy pass. Evidence: [M07 automation and recovery]
+  (evidence/M07-automation-recovery.md).
+
 - Corrected STATE-10 safe-mode lifecycle on 2026-09-15. After the third
   backend failure, the shell now reconstructs and serves a stopped control
   plane while skipping native preparation, keeping authorized safe-mode

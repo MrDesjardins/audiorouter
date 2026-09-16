@@ -168,6 +168,11 @@ fn record_backend_failure(database: &std::path::Path) -> Option<usize> {
     storage.record_recovery_crash(timestamp).ok()
 }
 
+#[cfg(windows)]
+fn recovery_safe_mode(database: &std::path::Path) -> Option<bool> {
+    Storage::open(database).ok()?.recovery_safe_mode().ok()
+}
+
 fn default_desktop_session() -> Session {
     Session {
         id: EntityId::new(DESKTOP_SESSION_ID),
@@ -316,10 +321,7 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
             .name("audiorouter-control".into())
             .spawn(move || {
                 let mut supervisor = BackendSupervisor::default();
-                let mut safe_mode = Storage::open(&database)
-                    .ok()
-                    .and_then(|storage| storage.recovery_safe_mode().ok())
-                    .unwrap_or(false);
+                let mut safe_mode = recovery_safe_mode(&database).unwrap_or(false);
                 if safe_mode {
                     eprintln!("AudioRouter control backend starting in durable safe mode; routes remain stopped");
                 }
@@ -435,10 +437,15 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                         Ok(()) => break,
                         Err(error) => {
                             if safe_mode {
-                                eprintln!(
-                                    "AudioRouter safe-mode control backend stopped: {error}; backend thread exiting"
-                                );
-                                break;
+                                if recovery_safe_mode(&database) != Some(false) {
+                                    eprintln!(
+                                        "AudioRouter safe-mode control backend stopped: {error}; backend thread exiting"
+                                    );
+                                    break;
+                                }
+                                safe_mode = false;
+                                supervisor = BackendSupervisor::default();
+                                eprintln!("AudioRouter safe mode was explicitly cleared; bounded backend supervision resumed");
                             }
                             let now = std::time::Instant::now();
                             let durable_failures = record_backend_failure(&database);
@@ -964,6 +971,10 @@ mod tests {
         let status = storage.recovery_status(now).expect("recovery status");
         assert_eq!(status.recent_crashes, 3);
         assert!(status.safe_mode);
+        storage
+            .clear_recovery_crashes()
+            .expect("safe mode clear persists");
+        assert_eq!(recovery_safe_mode(&database), Some(false));
         drop(storage);
         let _ = std::fs::remove_file(&database);
         let _ = std::fs::remove_file(database.with_extension("sqlite-wal"));

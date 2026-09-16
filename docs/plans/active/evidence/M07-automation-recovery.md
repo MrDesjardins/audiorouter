@@ -1,5 +1,15 @@
 # M07 automation and recovery evidence
 
+## 2026-09-15 - explicit safe-mode clear resumes supervision
+
+After an operator clears the durable recovery latch while the shell is serving
+safe mode, the supervisor now re-reads SQLite on the next serving failure,
+resets its in-memory retry window, and returns to bounded normal supervision.
+It still never resumes sessions or native endpoints implicitly. The regression
+covers the three-failure latch, explicit clear, and post-clear state observation
+using temporary storage. Native shell tests (26) and strict Clippy pass; no
+live audio or persistent machine audio configuration was changed.
+
 ## 2026-09-15 - safe mode keeps control available
 
 Corrected the shell recovery boundary so the third-failure safe-mode decision
