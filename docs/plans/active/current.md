@@ -2,6 +2,15 @@
 
 Updated: 2026-09-16.
 
+Completed fresh authorized VB-Cable route evidence on 2026-09-16. The
+explicit-ID control-owned route passed one 500 ms cycle at 48 kHz with 50
+packets, 24,000 captured frames, 23,936 rendered frames, one successful
+start/stop/reset sequence, one deliberate post-stop pump rejection, and
+95,788 recording bytes; before/after media identity and state matched. The
+user-mode adapter route also passed with 24,480 captured and 24,416 routed
+frames, 191 graph blocks, and zero deadline misses. Both tests used only the
+existing VB-Cable pair and made no persistent audio configuration change.
+
 Ran the authorized guarded `m02-rust-adapter-route-live.ps1` on 2026-09-16
 against the existing VB-Cable pair. At 48 kHz with 128-frame graph quanta,
 the 500 ms route captured 24,480 frames, routed 24,416 frames, processed 191
