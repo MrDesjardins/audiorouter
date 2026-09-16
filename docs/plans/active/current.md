@@ -2,6 +2,13 @@
 
 Updated: 2026-09-16.
 
+After the endpoint-monitor race fix, the full Windows-audio package regression
+passed on 2026-09-16: 81 tests and all package doc-tests passed. This includes
+Software Device bounds/cleanup, endpoint enumeration and binding, WASAPI
+fallback/error distinctions, bridge seqlock/lease/generation checks,
+resampling, packet budgets, process-loopback policies, and lifecycle rollback.
+No endpoint, stream, driver, or persistent machine configuration was changed.
+
 Fixed an endpoint-monitor startup race on 2026-09-16. Notification
 registration now precedes the initial read-only endpoint snapshot, preventing
 a device/default change in the old enumeration-to-registration gap from being
