@@ -14,6 +14,15 @@ production-driver/PortCls, signing, clean-machine, physical-latency, and
 attended UI/accessibility gates; no safe repository-local substitute can
 close those claims.
 
+Attempted the guarded physical-loopback latency path on 2026-09-16 using the
+available exact PD200X render/capture pair and 100 impulses. The analyzer
+detected 0/100 impulse groups, so no latency value was accepted; the pair is
+not presently a usable physically coupled loopback. The test cleaned its
+temporary executable, capture, logs, and objects and preserved media state,
+defaults, volume, mute, privacy, and persistent audio configuration. The
+calibrated physical-latency gate remains blocked pending a coupled output and
+input path.
+
 Requalified the authorized guarded VB-Cable impulse correlation on 2026-09-16
 with `m00-native-impulse.ps1 -AllowLiveAudio -ImpulseCount 100`. The exact
 existing render/capture pair detected 96/100 impulses, measured zero p95

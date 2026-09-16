@@ -1,5 +1,18 @@
 # M02 audio-engine evidence
 
+## 2026-09-16 - PD200X physical-loopback attempt (blocked)
+
+The authorized `m00-native-impulse.ps1 -AllowLiveAudio -ImpulseCount 100`
+attempt used the exact available pair `Speakers (PD200X Podcast Microphone)`
+and `Microphone (PD200X Podcast Microphone)`. The bounded capture detected
+0/100 impulse groups, so no onset or latency value was produced. The result
+indicates that this render/capture pair is not presently providing a usable
+physical acoustic loopback; it does not distinguish speaker coupling from
+endpoint routing. The probe verified media state before/after and removed all
+temporary artifacts. Defaults, volume, mute, privacy, and persistent audio
+configuration were unchanged. A physically coupled output/input path remains
+required for the calibrated latency gate.
+
 ## 2026-09-16 - guarded VB-Cable impulse correlation
 
 The authorized `m00-native-impulse.ps1 -AllowLiveAudio -ImpulseCount 100`
