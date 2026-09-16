@@ -11,9 +11,9 @@ try {
     Remove-Item -LiteralPath $database -Force -ErrorAction SilentlyContinue
 
     function Invoke-CliJson([string[]] $Arguments) {
-        $output = & cargo run --quiet -p audiorouter-cli -- --json @Arguments
+        $output = & cargo run --quiet -p audiorouter-cli -- --json @Arguments 2>&1
         if ($LASTEXITCODE -ne 0) {
-            throw "CLI command failed: $($Arguments -join ' ')"
+            throw "CLI command failed: $($Arguments -join ' '): $($output -join ' ')"
         }
         return ($output -join [Environment]::NewLine | ConvertFrom-Json)
     }
@@ -37,7 +37,12 @@ try {
         $operations = @(
                 @{ Fixture = 'virtual-bus-create.json'; Key = 'create-desktop' },
                 @{ Fixture = 'virtual-bus-voice-create.json'; Key = 'create-voice' },
-                @{ Fixture = 'virtual-bus-recording-create.json'; Key = 'create-recording' }
+                @{ Fixture = 'virtual-bus-recording-create.json'; Key = 'create-recording' },
+                @{ Fixture = 'virtual-bus-monitor-create.json'; Key = 'create-monitor' },
+                @{ Fixture = 'virtual-bus-chat-create.json'; Key = 'create-chat' },
+                @{ Fixture = 'virtual-bus-music-create.json'; Key = 'create-music' },
+                @{ Fixture = 'virtual-bus-aux-create.json'; Key = 'create-aux' },
+                @{ Fixture = 'virtual-bus-test-create.json'; Key = 'create-test' }
         )
         foreach ($operation in $operations) {
             $document = Get-Content -LiteralPath (Join-Path $fixtureRoot $operation.Fixture) -Raw | ConvertFrom-Json
@@ -48,7 +53,7 @@ try {
         }
 
         $devices = Invoke-CliJson @('virtual-devices', 'list', '--database', $database)
-        if ($devices.Count -ne 3) { throw "expected three managed buses, got $($devices.Count)" }
+        if ($devices.Count -ne 8) { throw "expected eight managed buses, got $($devices.Count)" }
         foreach ($device in $devices) {
             if ($device.direction -ne 'bidirectional' -or $device.channels -ne 2 -or
                 $device.availability.status -ne 'unavailable' -or
@@ -57,6 +62,20 @@ try {
                 throw "managed-driver boundary or endpoint identity is incorrect for $($device.id)"
             }
         }
+        $overflowRejected = $false
+        try {
+            $null = Invoke-CliJson @(
+                'virtual-devices', 'plan',
+                '--operation', (Join-Path $fixtureRoot 'virtual-bus-overflow-create.json'),
+                '--database', $database)
+        } catch {
+            if ($_.Exception.Message -match 'capacity|too many|LimitReached') {
+                $overflowRejected = $true
+            } else {
+                throw
+            }
+        }
+        if (-not $overflowRejected) { throw 'ninth managed bus was not rejected at the declared capacity' }
 
         $renamed = Apply-Operation 'virtual-bus-rename.json' 'rename-desktop'
         if ($renamed.operation.name -ne 'Desktop Monitor') { throw 'rename lifecycle result was not persisted' }
@@ -70,9 +89,9 @@ try {
         if ($deleted.operation.id -ne 'recording-bus') { throw 'delete lifecycle result was not returned' }
 
         $remaining = Invoke-CliJson @('virtual-devices', 'list', '--database', $database)
-        if ($remaining.Count -ne 2 -or $null -eq ($remaining | Where-Object id -eq 'desktop-bus') -or
+        if ($remaining.Count -ne 7 -or $null -eq ($remaining | Where-Object id -eq 'desktop-bus') -or
             $null -eq ($remaining | Where-Object id -eq 'voice-bus')) {
-            throw 'managed bus lifecycle did not retain the expected two buses'
+            throw 'managed bus lifecycle did not retain seven buses after deleting one'
         }
         if (($remaining | Where-Object id -eq 'desktop-bus').name -ne 'Desktop Monitor') {
             throw 'renamed bus was not retained after reopening the CLI database'

@@ -2,6 +2,15 @@
 
 Updated: 2026-09-16.
 
+Expanded M03 virtual-bus acceptance on 2026-09-16 to demonstrate the declared
+eight-bus capacity and fail closed on a ninth (`LimitReached`). The disposable
+database run still exercises separate CLI-process create/list persistence,
+rename, enable/disable, and disabled-before-delete behavior for the named
+Desktop In, Voice Chat, Game Recording, monitor, chat, music, auxiliary, and
+test buses. The harness now captures child stderr so rejection assertions
+match the actual CLI diagnostic. Acceptance passed; no native device,
+installation, or audio configuration action occurred.
+
 Closed a real M03 CLI persistence defect on 2026-09-16. `virtual-devices
 list --database` previously created an in-memory control plane and returned
 no buses after a separate process had successfully planned/applied durable
