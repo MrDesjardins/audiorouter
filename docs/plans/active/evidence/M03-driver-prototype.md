@@ -1,5 +1,16 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-15 - workspace and UI requalification
+
+The full locked Rust workspace passed after the directional bridge-session
+regression, including 77 Windows-audio tests and all doc-tests. The UI suite
+passed 218 tests across 19 files; TypeScript typecheck and the elevated Vite
+production build also passed, transforming 214 modules. The initial build
+attempts could not replace the existing `ui/dist` output under the workspace
+ACL; the elevated retry succeeded. No driver was installed or loaded and no
+machine audio configuration changed. This requalifies portable/UI consumers
+of the bridge contract, not the still-open loaded PortCls data path.
+
 ## 2026-09-15 - directional session contract
 
 Added `native_bridge_sessions_enforce_direction_generation_and_lease`, a

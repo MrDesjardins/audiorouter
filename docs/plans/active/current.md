@@ -2,6 +2,20 @@
 
 Updated: 2026-09-15.
 
+- Requalified the full locked Rust workspace and UI delivery on 2026-09-15
+  after the directional bridge-session regression. Rust packages passed: CLI
+  35, control 165 plus 2 guarded ignores, domain 64, DSP 32, engine 111,
+  plugin host 70 plus 13 worker-process tests, protocol 8, recording 40,
+  storage 90, transport 19, and Windows audio 77; all doc-tests passed. The
+  UI suite passed 218 tests across 19 files, TypeScript typecheck passed, and
+  the elevated Vite production build passed for 214 modules. The first UI
+  build attempts were blocked by the workspace ACL while replacing `ui/dist`;
+  the authorized elevated retry succeeded. Only the existing chunk-size
+  warning remains. No audio, driver, or persistent machine configuration was
+  changed. The next actionable native gate remains loaded AudioRouter
+  driver/PortCls qualification, which requires a signed or deliberately
+  isolated developer package.
+
 - Added a file-backed directional bridge session regression on 2026-09-15.
   Negotiated capture-sink writes and render-source reads now have explicit
   test coverage for direction enforcement, generation matching, replay
