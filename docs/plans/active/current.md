@@ -68,6 +68,16 @@ allocated temporary output was absent afterward. This expands compile-only
 architecture evidence; it does not imply ARM64 endpoint, signing, loading, or
 production support.
 
+Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain after
+the driver build-harness change on 2026-09-15. M00/M03 toolchain, native
+compile, AudioRouter driver, and reference-driver checks; M01/M04; M05 UI
+typecheck/tests/temporary production builds; M06 SDK/VST3/VST2; M07 headless;
+M08 unsigned artifacts and verification; 159 normative mappings; and
+documentation all passed. Cleanup removed 15 run-owned temporary children.
+The existing Vite bundle-size warning remains non-failing. The chain did not
+install or load a driver, change signing or startup policy, register plugins,
+open live audio, or alter persistent machine-audio configuration.
+
 The guarded event-driven WASAPI lifecycle also passed for 500 ms using the
 existing VB-Cable pair: 24,480 capture frames and 29,280 silent render frames,
 with initialize/event/start/stop/reset success on both directions. The probe
