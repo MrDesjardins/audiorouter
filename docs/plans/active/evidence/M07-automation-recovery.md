@@ -12,6 +12,11 @@ The focused `tests/acceptance/m07-shell-rpc.ps1` gate also passed on
 and authenticated backend `system.describe` path. No audio endpoint or
 persistent machine configuration was accessed.
 
+The locked workspace regression was rerun afterward with one test thread.
+All workspace unit, integration, and doc-tests passed, including 172 control
+tests and 78 Windows-audio tests. This remains repository-level evidence; no
+endpoint, driver, or persistent machine configuration was accessed.
+
 ## 2026-09-15 - backend-owned quit/finalization contract
 
 Added the authenticated idempotent `system.quit` operation and routed the

@@ -46,6 +46,12 @@ The frontend-owned WebView initialization to Tauri command to authenticated
 `system.describe` path passed. This remains transport/control-plane evidence;
 it opened no audio endpoint and changed no persistent machine configuration.
 
+Re-ran `cargo test --workspace --locked -- --test-threads=1` on 2026-09-15
+after the resilience additions. All workspace unit, integration, and
+doc-tests passed, including the 172-control-test M07 suite and the 78-test
+Windows-audio suite; no endpoint, driver, or persistent machine configuration
+was accessed.
+
 Validation completed on 2026-09-15: the Rust adapter bridge passed two 500 ms
 cycles with 24,480 captured and 24,448 rendered frames per cycle, zero dropped
 frames, xruns, or deadline misses. The control-owned route passed with 23,520
