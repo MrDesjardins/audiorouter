@@ -101,6 +101,14 @@ and the temporary fixture/sample-rate environment was restored. This qualifies
 one local VST2 binary and does not grant redistribution rights or arbitrary
 vendor compatibility.
 
+The supplied x64 BUSTERse VST2 binary was subsequently qualified through the
+same isolated matrix at 44.1, 48, and 96 kHz. Processing, editor-thread
+containment, and supervised editor-timeout containment passed; its SHA-256
+fingerprint remained unchanged
+(`580325343014664a61fd1c2d73e5424897a47199be5c5538da75c25a8d0261d3`). The VST2
+path did not reproduce the access violation observed with the supplied BUSTERse
+VST3 binary, so the two format results remain separate evidence.
+
 Improved the supervised worker EOF diagnostic so a native plugin crash now
 includes the bounded child exit status. The BUSTERse negative fixture
 reproduction reports `-1073741819` (`0xC0000005`, access violation) alongside
