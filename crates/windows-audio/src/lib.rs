@@ -1843,6 +1843,7 @@ pub struct WasapiSchedulerBridge {
     render_pending_bytes: usize,
     bytes_per_frame: usize,
     quantum_frames: usize,
+    sample_rate_hz: u32,
     timeline_frame: u64,
 }
 
@@ -1872,11 +1873,12 @@ impl WasapiSchedulerBridge {
         {
             return Err(AudioError::InvalidFrameSize);
         }
-        Self::new(
+        Self::new_at_sample_rate(
             ring_capacity,
             usize::from(capture.channels),
             quantum_frames,
             max_packet_frames,
+            capture.sample_rate_hz,
         )
     }
 
@@ -1886,6 +1888,26 @@ impl WasapiSchedulerBridge {
         quantum_frames: usize,
         max_packet_frames: usize,
     ) -> Result<Self, AudioError> {
+        Self::new_at_sample_rate(
+            ring_capacity,
+            channels,
+            quantum_frames,
+            max_packet_frames,
+            48_000,
+        )
+    }
+
+    /// Construct a bridge for an already-negotiated graph sample rate.
+    pub fn new_at_sample_rate(
+        ring_capacity: usize,
+        channels: usize,
+        quantum_frames: usize,
+        max_packet_frames: usize,
+        sample_rate_hz: u32,
+    ) -> Result<Self, AudioError> {
+        if !(8_000..=192_000).contains(&sample_rate_hz) {
+            return Err(AudioError::InvalidFrameSize);
+        }
         if max_packet_frames == 0 || max_packet_frames > MAX_FLOAT32_ACCUMULATOR_FRAMES {
             return Err(AudioError::InvalidFrameSize);
         }
@@ -1919,6 +1941,7 @@ impl WasapiSchedulerBridge {
             render_pending_bytes: 0,
             bytes_per_frame,
             quantum_frames,
+            sample_rate_hz,
             timeline_frame: 0,
         })
     }
@@ -1933,6 +1956,10 @@ impl WasapiSchedulerBridge {
 
     pub fn timeline_frame(&self) -> u64 {
         self.timeline_frame
+    }
+
+    pub fn sample_rate_hz(&self) -> u32 {
+        self.sample_rate_hz
     }
 
     /// Clear all audio staged by the adapter at an endpoint lifecycle
@@ -6322,12 +6349,35 @@ mod tests {
         };
         let capture = endpoint(EndpointDirection::Capture);
         let mut render = endpoint(EndpointDirection::Render);
-        assert!(WasapiSchedulerBridge::new_for_endpoints(2, &capture, &render, 128, 256).is_ok());
+        let bridge =
+            WasapiSchedulerBridge::new_for_endpoints(2, &capture, &render, 128, 256).unwrap();
+        assert_eq!(bridge.sample_rate_hz(), 48_000);
         render.sample_rate_hz = 44_100;
         assert!(matches!(
             WasapiSchedulerBridge::new_for_endpoints(2, &capture, &render, 128, 256),
             Err(AudioError::InvalidFrameSize)
         ));
+    }
+
+    #[test]
+    fn scheduler_bridge_preserves_validated_44100_graph_rate() {
+        let endpoint = |direction| EndpointInfo {
+            id: format!("{direction:?}"),
+            direction,
+            default_period_100ns: 100_000,
+            minimum_period_100ns: 20_000,
+            sample_rate_hz: 44_100,
+            channels: 2,
+            bits_per_sample: 32,
+            format_tag: 3,
+            channel_mask: 3,
+            subformat_guid: "{00000003-0000-0010-8000-00AA00389B71}".into(),
+        };
+        let capture = endpoint(EndpointDirection::Capture);
+        let render = endpoint(EndpointDirection::Render);
+        let bridge =
+            WasapiSchedulerBridge::new_for_endpoints(2, &capture, &render, 128, 256).unwrap();
+        assert_eq!(bridge.sample_rate_hz(), 44_100);
     }
 
     #[test]

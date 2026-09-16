@@ -7882,7 +7882,13 @@ impl ControlPlane {
         // before starting the worker; any failure rolls back the runtime and
         // selected bridge generation so the session cannot be half-started.
         if native_endpoint_attached {
-            if let Err(error) = self.activate_native_graph(id, generation, 48_000) {
+            let sample_rate_hz = self
+                .native_endpoint_worker
+                .as_ref()
+                .expect("native_attached implies an endpoint worker")
+                .bridge()
+                .sample_rate_hz();
+            if let Err(error) = self.activate_native_graph(id, generation, sample_rate_hz) {
                 if let Some(runtime) = self.runtimes.get_mut(id) {
                     runtime.stop();
                 }

@@ -2,6 +2,14 @@
 
 Updated: 2026-09-15.
 
+- Fixed native same-rate graph activation on 2026-09-15. Endpoint bridges
+  now retain their validated negotiated sample rate, and native session start
+  prepares the graph at that rate instead of always selecting 48 kHz. This
+  enables same-rate 44.1 kHz endpoint pairs while preserving strict rejection
+  of capture/render format mismatches; cross-rate conversion remains a later
+  bounded resampling task. Focused Windows-audio and control checks passed.
+  No endpoint was opened and no machine audio configuration changed.
+
 - Fixed stale UI state after resume recovery on 2026-09-15. The resume panel
   now refreshes the authoritative snapshot after validation and after the
   explicit portable-route restart, so session/sidebar status reflects actual

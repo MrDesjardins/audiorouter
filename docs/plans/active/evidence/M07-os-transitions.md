@@ -1,5 +1,11 @@
 # M07 OS-transition policy evidence
 
+The native endpoint bridge now exposes its negotiated same-rate graph sample
+rate to control-plane activation. This corrects the prior 48 kHz activation
+assumption for validated 44.1 kHz endpoint pairs. Cross-rate capture/render
+conversion is intentionally still gated; mismatched endpoint formats remain
+rejected before activation.
+
 Date: 2026-09-15
 
 The control crate now exposes a side-effect-free `plan_os_transition` contract
