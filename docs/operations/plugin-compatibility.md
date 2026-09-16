@@ -17,6 +17,12 @@ failed at activation with child exit `-1073741819` (`0xC0000005`, access
 violation); the isolated worker contained and reaped it. These results are
 explicit fixture compatibility boundaries, not a universal vendor claim.
 
+The supplied BUSTERse x64 VST2 DLL passed processing at 44.1, 48, and 96 kHz
+and both editor-containment checks on 2026-09-16. Its before/after SHA-256
+`580325343014664a61fd1c2d73e5424897a47199be5c5538da75c25a8d0261d3` was
+unchanged. This is gated VST2 compatibility evidence for the DLL and does not
+override the separate VST3 failure or grant redistribution rights.
+
 The pinned SDK AGain fixture was requalified on 2026-09-15 through the native
 VST3 worker. Single-stream, auxiliary/multi-bus, asynchronous graph staging,
 bounded failure recovery, validated-state restart, repeated-quantum finite

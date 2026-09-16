@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Extended the guarded M06 matrix again on 2026-09-16: BUSTERse x64 VST2
+processing passed at 44.1/48/96 kHz and both editor-containment checks, with
+the before/after SHA-256 unchanged. Its separate VST3 module remains a
+contained `0xC0000005` activation failure. This confirms format-specific
+compatibility without changing the VST3 boundary; no plugin was registered or
+modified and no audio configuration changed. Next task remains production
+driver/bridge qualification and attended shell acceptance.
+
 Extended the guarded M06 local compatibility matrix on 2026-09-16. The
 supplied x64 TDR Nova VST3 passed single-stream, auxiliary-bus, asynchronous
 staging, bounded recovery, finite processing, and shutdown with the explicit
