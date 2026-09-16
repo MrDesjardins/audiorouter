@@ -2,6 +2,16 @@
 
 Updated: 2026-09-16.
 
+Implemented the next safe M05/M02 editor slice on 2026-09-16: the connected
+graph library now offers `physicalInput` and `physicalOutput` nodes with
+stereo ports, so users can author endpoint routes on the canvas. Existing
+application-capture, endpoint-loopback, and managed virtual-bus entries remain
+explicitly unavailable where their binding/driver prerequisites are required.
+The backend/native binding still owns exact endpoint selection and activation;
+adding these nodes does not claim live audio capability. UI verification passed
+227 tests, TypeScript typecheck, and the production Vite build. No endpoint,
+driver, plugin, or machine configuration was accessed.
+
 Re-ran `cargo test --workspace --locked -- --test-threads=1` on 2026-09-16
 after the Windows-target qualification. The complete workspace suite passed:
 36 CLI, 3 MCP, 173 control, 65 domain, 32 DSP, 111 engine, 70 plugin-host,

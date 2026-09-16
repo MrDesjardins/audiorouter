@@ -115,7 +115,7 @@ describe("canvas library drop positions", () => {
     expect(onAddLibraryNode).toHaveBeenCalledWith("gate", { x: 0, y: 150 });
   });
 
-  it("keeps unavailable source metadata out of the processor drop shelf", () => {
+  it("offers physical endpoint nodes while keeping managed virtual nodes unavailable", () => {
     const { getByLabelText } = render(createElement(SessionFlowCanvas, {
       session: demoSession,
       selectedNodeId: "mic",
@@ -126,7 +126,8 @@ describe("canvas library drop positions", () => {
     const shelf = within(getByLabelText("Drag processors to canvas"));
 
     expect(shelf.getByRole("button", { name: "Gain" })).toBeTruthy();
-    expect(shelf.queryByRole("button", { name: "Physical input" })).toBeNull();
+    expect(shelf.getByRole("button", { name: "Physical input" })).toBeTruthy();
+    expect(shelf.getByRole("button", { name: "Physical output" })).toBeTruthy();
     expect(shelf.queryByRole("button", { name: "Virtual capture sink" })).toBeNull();
   });
 

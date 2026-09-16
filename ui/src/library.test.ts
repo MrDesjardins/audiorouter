@@ -2,25 +2,19 @@ import { describe, expect, it } from "vitest";
 import { filterLibraryEntries, libraryEntries, libraryEntryAccessibleLabel } from "./library";
 
 describe("node library search", () => {
-  it("matches labels, categories, and unavailable reasons", () => {
+  it("matches labels, categories, and availability reasons", () => {
     expect(filterLibraryEntries(libraryEntries, "effect").map((entry) => entry.id)).toEqual(["gain", "mute", "parametric-eq", "compressor", "gate", "limiter", "delay", "graphic-eq", "pitch"]);
     expect(filterLibraryEntries(libraryEntries, "M02").map((entry) => entry.id)).toEqual([
-      "physical-input",
       "application-capture",
       "endpoint-loopback",
-      "physical-output",
     ]);
   });
 
-  it("keeps every M02 source and destination discoverable but unavailable", () => {
+  it("keeps M02 sources and destinations discoverable in the editor", () => {
     const entries = libraryEntries.filter((entry) => entry.unavailableReason?.includes("M02") === true);
-    expect(entries.map((entry) => entry.id)).toEqual([
-      "physical-input",
-      "application-capture",
-      "endpoint-loopback",
-      "physical-output",
-    ]);
-    expect(entries.every((entry) => entry.kind === undefined)).toBe(true);
+    expect(entries.map((entry) => entry.id)).toEqual(["application-capture", "endpoint-loopback"]);
+    expect(libraryEntries.find((entry) => entry.id === "physical-input")?.kind).toBe("physicalInput");
+    expect(libraryEntries.find((entry) => entry.id === "physical-output")?.kind).toBe("physicalOutput");
   });
 
   it("keeps virtual bus entries discoverable but unavailable", () => {
@@ -40,8 +34,8 @@ describe("node library search", () => {
   });
 
   it("includes unavailable reasons in accessible library labels", () => {
-    expect(libraryEntryAccessibleLabel(libraryEntries.find((entry) => entry.id === "physical-output")!)).toBe(
-      "Physical output, Destination, unavailable: Requires the M02 Windows audio adapter",
+    expect(libraryEntryAccessibleLabel(libraryEntries.find((entry) => entry.id === "application-capture")!)).toBe(
+      "Application capture, Source, unavailable: Requires the M02 Windows audio adapter",
     );
     expect(libraryEntryAccessibleLabel(libraryEntries.find((entry) => entry.id === "gain")!)).toBe("Gain, Effect");
   });

@@ -10,8 +10,8 @@ export type DraftChange = {
 export const GAIN_MIN_DB = -60;
 export const GAIN_MAX_DB = 24;
 
-export type LibraryNodeKind = Extract<NodeKind, "mixer" | "gain" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch">;
-export type InsertableProcessorKind = Exclude<LibraryNodeKind, "mixer" | "meter">;
+export type LibraryNodeKind = Extract<NodeKind, "physicalInput" | "physicalOutput" | "mixer" | "gain" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch">;
+export type InsertableProcessorKind = Exclude<LibraryNodeKind, "physicalInput" | "physicalOutput" | "mixer" | "meter">;
 export type EqPresetId = "voiceNeutral" | "hum50Hz" | "hum60Hz";
 export type VoiceChainPresetId = "voiceNeutral" | "voiceGateAndCompression";
 
@@ -33,6 +33,16 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
   parameters: Record<string, boolean | number | string>;
   ports: Session["nodes"][number]["ports"];
 }> = {
+  physicalInput: {
+    name: "Physical input",
+    parameters: {},
+    ports: [{ name: "out", direction: "output", channels: 2 }],
+  },
+  physicalOutput: {
+    name: "Physical output",
+    parameters: {},
+    ports: [{ name: "in", direction: "input", channels: 2 }],
+  },
   mixer: {
     name: "Mixer",
     parameters: {},
