@@ -5,10 +5,10 @@ Updated: 2026-09-16.
 Requalified the current-head unsigned Tauri NSIS bundler on 2026-09-16. The
 Tauri 2.11.4 CLI produced the x64 `AudioRouter_0.1.0_x64-setup.exe` artifact
 with `--no-sign`; its 4,755,500-byte disposable bundle output was removed
-without executing or installing it. Documentation and diff checks remain the
-next verification step; production signing, driver installation, and
-clean-machine qualification remain open. No audio or persistent machine
-configuration changed.
+without executing or installing it. Documentation validation and diff checks
+passed afterward; production signing, driver installation, and clean-machine
+qualification remain open. No audio or persistent machine configuration
+changed.
 
 Built and launched the native Tauri shell on 2026-09-16 from the current
 checkout. `cargo build --manifest-path src-tauri/Cargo.toml` passed, and a
