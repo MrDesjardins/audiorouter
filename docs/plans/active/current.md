@@ -2,6 +2,15 @@
 
 Updated: 2026-09-16.
 
+Extended the guarded control-owned application-capture acceptance on
+2026-09-16 to select the documented `include` or `exclude` process-loopback
+mode explicitly, with environment restoration. The new `exclude` run passed
+for the verified Firefox identity through two bounded start/pump/stop cycles
+and same-process worker restart; media-device state and application/system
+audio routing were unchanged. Formatting, strict control Clippy, and docs
+validation passed. This closes acceptance coverage for the one-tree exclusion
+control path, not arbitrary multi-exclusion support.
+
 Requalified the guarded all-endpoint shared-mode lifecycle matrix on
 2026-09-16 with `m00-native-live.ps1 -AllowLiveAudio -DurationMilliseconds
 100`. All 13 capture and 18 render endpoints completed bounded lifecycle

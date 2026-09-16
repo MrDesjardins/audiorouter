@@ -3,6 +3,7 @@ param(
     [Parameter(Mandatory = $true)][uint32]$ProcessId,
     [Parameter(Mandatory = $true)][string]$Executable,
     [Parameter(Mandatory = $true)][uint64]$CreationTime100ns,
+    [ValidateSet('include', 'exclude')][string]$Mode = 'include',
     [string]$ApplicationPath = '',
     [string]$RenderEndpointId = ''
 )
@@ -24,6 +25,7 @@ $names = @(
     'AUDIOROUTER_APPLICATION_PROCESS_ID',
     'AUDIOROUTER_APPLICATION_EXECUTABLE',
     'AUDIOROUTER_APPLICATION_CREATION_TIME_100NS',
+    'AUDIOROUTER_APPLICATION_MODE',
     'AUDIOROUTER_APPLICATION_PATH',
     'AUDIOROUTER_RENDER_ENDPOINT_ID'
 )
@@ -47,6 +49,7 @@ try {
     $env:AUDIOROUTER_APPLICATION_PROCESS_ID = $ProcessId.ToString()
     $env:AUDIOROUTER_APPLICATION_EXECUTABLE = $Executable
     $env:AUDIOROUTER_APPLICATION_CREATION_TIME_100NS = $CreationTime100ns.ToString()
+    $env:AUDIOROUTER_APPLICATION_MODE = $Mode
     if ([string]::IsNullOrWhiteSpace($ApplicationPath)) {
         Remove-Item Env:AUDIOROUTER_APPLICATION_PATH -ErrorAction SilentlyContinue
     } else {
@@ -61,7 +64,7 @@ try {
         throw 'media-device identity/state changed during application-capture acceptance'
     }
     Write-Output 'M02 control-owned application-capture lifecycle acceptance passed'
-    Write-Output 'Scope: exact process identity, two bounded start/pump/stop cycles, same-process worker restart, and unchanged media-device state.'
+    Write-Output ("Scope: exact process identity, mode={0}, two bounded start/pump/stop cycles, same-process worker restart, and unchanged media-device state." -f $Mode)
 }
 finally {
     foreach ($name in $names) {

@@ -13241,6 +13241,14 @@ mod tests {
             .expect("AUDIOROUTER_APPLICATION_CREATION_TIME_100NS is required")
             .parse::<u64>()
             .expect("application creation time must be numeric");
+        let mode = match std::env::var("AUDIOROUTER_APPLICATION_MODE")
+            .unwrap_or_else(|_| "include".into())
+            .as_str()
+        {
+            "include" => audiorouter_windows_audio::ProcessLoopbackMode::IncludeTargetTree,
+            "exclude" => audiorouter_windows_audio::ProcessLoopbackMode::ExcludeTargetTree,
+            value => panic!("application mode must be include or exclude, got {value}"),
+        };
         let render_id = std::env::var("AUDIOROUTER_RENDER_ENDPOINT_ID")
             .expect("AUDIOROUTER_RENDER_ENDPOINT_ID is required");
         let render = audiorouter_windows_audio::enumerate_active_endpoints()
@@ -13289,7 +13297,7 @@ mod tests {
                         .ok()
                         .as_deref(),
                     expected_creation_time_100ns: creation_time,
-                    mode: audiorouter_windows_audio::ProcessLoopbackMode::IncludeTargetTree,
+                    mode,
                     render: &render,
                     buffer_duration_100ns: 0,
                     max_attempts: 3,
