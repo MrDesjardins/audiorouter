@@ -1,5 +1,14 @@
 # M06 VST3 SDK boundary
 
+## 2026-09-16 - supplied ReaPlugs VST2 worker matrix
+
+`tests/acceptance/m06-vst2-reaplugs.ps1 -SkipIncompatibleCandidates` passed
+for six supplied x64 ReaPlugs audio-effect fixtures at 44.1, 48, and 96 kHz.
+The isolated worker matrix included intra-block parameter-offset coverage and
+before/after binary-integrity checks. No plugin registration or machine audio
+configuration changed. This is gated local VST2 compatibility evidence, not
+blanket vendor or release qualification.
+
 ## 2026-09-16 - VST2 legacy/state/failure fixture requalification
 
 `tests/acceptance/m06-vst2-state-fixture.ps1` passed the repository-owned VST2

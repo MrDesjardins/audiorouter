@@ -32,6 +32,13 @@ lifecycles and correctly classified one occupied render endpoint. Temporary
 probe outputs were removed, and defaults, volume, mute, privacy, drivers,
 signing, startup, and persistent audio configuration were unchanged.
 
+Requalified the supplied ReaPlugs legacy VST2 matrix on 2026-09-16 through
+the isolated worker. Six x64 audio-effect fixtures passed at 44.1, 48, and
+96 kHz, including intra-block parameter-offset and before/after binary-
+integrity checks. No plugin registration or audio configuration changed;
+this remains gated local VST2 compatibility evidence, not blanket vendor or
+release qualification.
+
 Requalified the elevated guarded `tests/acceptance/safe-all.ps1` chain at
 head `d52f7ec4` on 2026-09-16. Toolchain/native probes, x64/ARM64 driver
 source builds, read-only 31-endpoint inventory, disposable SysVAD, M01/M03/
