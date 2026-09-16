@@ -72,3 +72,9 @@ try {
     }
     Write-Output "Acceptance cleanup removed $($newTempChildren.Count) run-owned temp children."
 }
+
+# A nested acceptance step may intentionally leave LASTEXITCODE nonzero after
+# validating a rejected child process. The chain itself has completed
+# successfully at this point, so make the process result explicit for CI and
+# callers instead of inheriting that sentinel.
+exit 0
