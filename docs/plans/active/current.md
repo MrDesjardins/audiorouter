@@ -2,6 +2,13 @@
 
 Updated: 2026-09-16.
 
+Audited the owned WaveRT prototype source on 2026-09-16 after the boundary
+requalification. The remaining `STATUS_NOT_IMPLEMENTED` returns are confined
+to optional clock/position-register and PortCls power callbacks or the sample's
+intentional data-range delegation; no safe source-only replacement is justified
+without a loaded-driver callback trace. This preserves the production-driver
+gate rather than converting sample behavior into an unsupported claim.
+
 Fresh boundary verification at pushed head `31ca7d83` on 2026-09-16 passed
 the Windows-audio package suite (81 tests plus doc-tests) and M05 UI
 acceptance (19 files/231 tests, TypeScript check, and disposable Vite build).
