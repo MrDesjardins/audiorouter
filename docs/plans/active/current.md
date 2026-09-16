@@ -2,6 +2,15 @@
 
 Updated: 2026-09-15.
 
+- Requalified the supplied installed ReaPlugs directory through the isolated
+  VST2 worker at 44.1, 48, and 96 kHz. Seven x64 candidates passed the
+  bounded load/process/state path, including ReaStream; only
+  `reacontrolmidi-standalone.dll` and `reajs.dll` were rejected. Candidate
+  fingerprints and temporary environment values were restored. Evidence:
+  [M06 VST3/VST2](evidence/M06-vst3-sdk.md) and [plugin compatibility]
+  (../../operations/plugin-compatibility.md). This does not grant
+  redistribution rights or native editor support.
+
 - Requalified the complete guarded `safe-all.ps1` chain at pushed head
   `32662417`. M00/M03 native compile and signability, M01/M04, M05 UI (214
   production modules), M06 VST3/VST2, M07 headless controls, unsigned M08

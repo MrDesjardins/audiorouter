@@ -1,5 +1,16 @@
 # M06 VST3 SDK boundary
 
+## 2026-09-15 - ReaPlugs VST2 matrix re-run
+
+The supplied installed ReaPlugs directory was re-run through the isolated
+legacy VST2 worker at 44.1, 48, and 96 kHz. Seven x64 candidates passed the
+bounded load/process/state path, including `reastream-standalone.dll`; only
+`reacontrolmidi-standalone.dll` and `reajs.dll` were rejected as incompatible
+with the audio-effect/state contract. The wrapper restored temporary
+environment values and verified candidate integrity. This remains gated
+compatibility evidence and grants no redistribution rights or native editor
+support.
+
 ## Local ReaPlugs VST2 requalification (2026-09-12)
 
 `tests/acceptance/m06-vst2-reaplugs.ps1 -SkipIncompatibleCandidates` qualified

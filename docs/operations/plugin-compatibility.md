@@ -1,5 +1,13 @@
 # Plugin compatibility snapshot
 
+The supplied installed ReaPlugs directory was requalified on 2026-09-15
+through the isolated legacy VST2 worker. Seven x64 candidates passed at 44.1,
+48, and 96 kHz, including `reastream-standalone.dll`; `reacontrolmidi-standalone.dll`
+and `reajs.dll` were rejected by the bounded audio-effect/state contract.
+Candidate fingerprints and temporary environment values were restored. This
+is gated compatibility evidence only and does not grant redistribution rights
+or native editor support.
+
 The supplied x64 VST3 candidates were rechecked through the current native
 worker on 2026-09-14. COMPER reached the parameter-contract gate but exposed
 no automatable descriptors and was rejected. TDR Nova reached processing but
