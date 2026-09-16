@@ -2,6 +2,13 @@
 
 Updated: 2026-09-15.
 
+- Re-ran the pinned M06 VST3 SDK acceptance: validator, offline loader, AGain
+  main/auxiliary-bus probes, explicit single-bus rejection, and the five-class
+  mda matrix passed. Repository-local fixtures only; no plugin registration,
+  audio stream, or machine configuration changed. Evidence: [M06 VST3/VST2]
+  (evidence/M06-vst3-sdk.md). Native realtime vendor compatibility and
+  authenticated editor ownership remain open.
+
 - Requalified the supplied installed ReaPlugs directory through the isolated
   VST2 worker at 44.1, 48, and 96 kHz. Seven x64 candidates passed the
   bounded load/process/state path, including ReaStream; only

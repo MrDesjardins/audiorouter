@@ -2239,3 +2239,11 @@ reaping). Environment variables were restored and generated DLL/object/import
 artifacts remain local-only. This is compatibility and containment evidence;
 third-party rights, editor, production callback, and release gates remain
 open.
+## 2026-09-15 - SDK and offline loader re-run
+
+The pinned repository VST3 SDK acceptance was re-run with the existing built
+artifacts. Validator, offline loader, AGain main/auxiliary-bus probes, explicit
+single-bus rejection, and the five-class mda matrix all passed. This uses only
+repository-local fixtures and performs no plugin registration, audio streaming,
+or machine configuration change. Native realtime vendor compatibility and
+authenticated editor ownership remain separate gates.
