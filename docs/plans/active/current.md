@@ -28,6 +28,12 @@ normal startup/list/plan/apply remains fail-closed and the prototype package
 is not claimed as production or activated on this machine. Documentation
 validation passed for 54 Markdown files and 218 local links.
 
+Re-ran the dedicated M07 frontend-owned Tauri RPC acceptance on 2026-09-16.
+The shell WebView initialization reached the authenticated backend
+`system.describe` command and returned protocol major version 1 using
+disposable backend state. The harness cleaned its processes and temporary
+files; no audio endpoint or persistent machine configuration was touched.
+
 Hardened MCP ownership-tool coverage on 2026-09-16. The CLI regression suite
 now explicitly verifies that `provision_virtual_device` is denied by a
 read-only grant before native access, and checks accurate read-only,
