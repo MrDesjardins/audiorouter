@@ -2,6 +2,13 @@
 
 Updated: 2026-09-15.
 
+- Requalified REC-03 persisted recording metadata on 2026-09-15. Control
+  (167), storage (90), and recording (40) tests passed, covering durable
+  dither/conversion round-trip, legacy-schema migration defaults, malformed
+  metadata rejection, format-aware defaults, and Float32 no-dither reporting.
+  No live endpoint or machine audio configuration was accessed. Evidence:
+  [M04 effects and recording](evidence/M04-effects-recording.md).
+
 - Improved the visual editor on 2026-09-15: selected canvas connections can
   now be deleted with the Delete key when the backend is connected, using the
   existing draft-only removal and plan/commit flow. Disconnected/read-only

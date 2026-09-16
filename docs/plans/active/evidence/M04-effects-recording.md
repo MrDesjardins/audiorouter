@@ -1,5 +1,18 @@
 # M04 effects and recording evidence
 
+## 2026-09-15 - persisted conversion and dither metadata requalification
+
+The REC-03 metadata contract is now covered end to end: recorder workers
+persist the effective dither choice and a bounded conversion description,
+SQLite adds the columns for legacy schemas with conservative defaults, and
+control listing exposes both fields through the recording contract. The
+focused control, storage, and recording suites passed: 167, 90, and 40 tests
+respectively, with the two guarded live control tests remaining ignored by
+their explicit opt-in design. Coverage includes durable reopen, legacy
+schema migration, invalid metadata rejection, format-aware dither defaults,
+and Float32 metadata that correctly reports no applied dither. No live audio
+endpoint or machine configuration was accessed.
+
 ## 2026-09-12 - configured WAV factory uses segmented worker
 
 The normal `create_file_recorder_with_config` control factory now routes WAV
