@@ -2,6 +2,16 @@
 
 Updated: 2026-09-16.
 
+Completed the remaining driver-bridge shape-load audit on 2026-09-16. The
+future callback-facing paths now read `Direction`, `FramesPerQuantum`, and
+`Channels` through interlocked 16-bit loads, matching the existing rundown
+and mapped-size publication discipline while preserving fail-closed shape
+validation. The M03 source contract was updated to assert the atomic-load
+invariants rather than the former direct field expressions. Guarded x64 and
+ARM64 driver build/signability qualifications passed; no installation,
+loading, signing-mode, boot-policy, service, endpoint, or audio
+configuration action occurred.
+
 Extended the guarded control-owned application-capture acceptance on
 2026-09-16 to select the documented `include` or `exclude` process-loopback
 mode explicitly, with environment restoration. The new `exclude` run passed

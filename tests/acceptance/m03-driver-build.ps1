@@ -198,8 +198,12 @@ if ($publishStart -lt 0 -or $publishEnd -le $publishStart) {
 $publishHelper = $source.Substring($publishStart, $publishEnd - $publishStart)
 foreach ($required in @(
         'AR_BRIDGE_DIRECTION_CAPTURE_SINK',
-        'Request.FramesPerQuantum != Frames',
-        'Request.Channels != Channels',
+        'USHORT framesPerQuantum',
+        'LoadBridgeUshort(&Lease->Request.FramesPerQuantum)',
+        'USHORT channels',
+        'LoadBridgeUshort(&Lease->Request.Channels)',
+        'framesPerQuantum != Frames',
+        'channels != Channels',
         'InterlockedIncrement64',
         'InterlockedCompareExchange64',
         'generation == 0',

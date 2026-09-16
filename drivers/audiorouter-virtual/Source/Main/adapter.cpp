@@ -59,6 +59,12 @@ static void SetBridgeMappedBytes(
         static_cast<LONG>(Bytes));
 }
 
+static USHORT LoadBridgeUshort(_In_ volatile USHORT* Value)
+{
+    return static_cast<USHORT>(InterlockedCompareExchange16(
+        reinterpret_cast<volatile SHORT*>(Value), 0, 0));
+}
+
 // This helper is intentionally independent of the sample's timer callback.
 // It is safe for a future PortCls callback: rundown protects the mapped view
 // from CLOSE/expiry/unload, and the callback takes no lease spin lock.
@@ -80,7 +86,7 @@ NTSTATUS AudioRouterCopyLeaseBlock(
     ULONG mappedBytes = static_cast<ULONG>(
         InterlockedCompareExchange(
             reinterpret_cast<volatile LONG*>(&Lease->MappedBytes), 0, 0));
-    USHORT direction = Lease->Request.Direction;
+    USHORT direction = LoadBridgeUshort(&Lease->Request.Direction);
     ULONGLONG generation = InterlockedCompareExchange64(
         reinterpret_cast<volatile LONG64*>(&Lease->Request.Generation), 0, 0);
     KeMemoryBarrier();
@@ -136,13 +142,16 @@ NTSTATUS AudioRouterPublishLeaseBlock(
     ULONG mappedBytes = static_cast<ULONG>(
         InterlockedCompareExchange(
             reinterpret_cast<volatile LONG*>(&Lease->MappedBytes), 0, 0));
-    USHORT direction = Lease->Request.Direction;
+    USHORT direction = LoadBridgeUshort(&Lease->Request.Direction);
+    USHORT framesPerQuantum =
+        LoadBridgeUshort(&Lease->Request.FramesPerQuantum);
+    USHORT channels = LoadBridgeUshort(&Lease->Request.Channels);
     ULONGLONG generation = InterlockedCompareExchange64(
         reinterpret_cast<volatile LONG64*>(&Lease->Request.Generation), 0, 0);
     NTSTATUS status = STATUS_DEVICE_NOT_READY;
     if (direction != AR_BRIDGE_DIRECTION_CAPTURE_SINK || view == NULL ||
-        Lease->Request.FramesPerQuantum != Frames ||
-        Lease->Request.Channels != Channels ||
+        framesPerQuantum != Frames ||
+        channels != Channels ||
         mappedBytes < AR_BRIDGE_PAYLOAD_OFFSET + sampleCount * sizeof(FLOAT) ||
         generation == 0) {
         ExReleaseRundownProtection(&Lease->Rundown);
@@ -333,12 +342,13 @@ NTSTATUS AudioRouterGetLeaseShapeForDirection(
         return STATUS_DEVICE_NOT_READY;
     }
     PVOID view = InterlockedCompareExchangePointer(&lease->MappedView, NULL, NULL);
-    if (view == NULL || lease->Request.Direction != Direction) {
+    if (view == NULL ||
+        LoadBridgeUshort(&lease->Request.Direction) != Direction) {
         ExReleaseRundownProtection(&lease->Rundown);
         return STATUS_DEVICE_NOT_READY;
     }
-    *Frames = lease->Request.FramesPerQuantum;
-    *Channels = lease->Request.Channels;
+    *Frames = LoadBridgeUshort(&lease->Request.FramesPerQuantum);
+    *Channels = LoadBridgeUshort(&lease->Request.Channels);
     ExReleaseRundownProtection(&lease->Rundown);
     return STATUS_SUCCESS;
 }
