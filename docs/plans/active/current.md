@@ -32,6 +32,14 @@ and after, and no defaults or persistent audio configuration changed. This
 remains user-mode signal-correlation evidence, not calibrated physical
 latency or loaded-driver evidence.
 
+Audited the historical M06 multi-bus worker note on 2026-09-16. The current
+worker executable contains the separately negotiated `HelloBuses`/
+`ProcessBuses` path, and the typed/supervised multi-bus client and worker
+process regressions are present and passing. The older note stating that the
+shipped worker lacked this path is retained as historical chronology, not as
+the current implementation status; independent rights-cleared plugin,
+production realtime, and release gates remain separate.
+
 Attempted the attended shell/WebView2 gate again on 2026-09-16 by launching
 the repository-built shell against a disposable database. The shell process
 started, but the Windows automation surface returned no targetable app or
