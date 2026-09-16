@@ -138,7 +138,7 @@ if ($deleteStart -lt 0 -or $deleteEnd -le $deleteStart) {
 }
 $deleteSource = $source.Substring($deleteStart, $deleteEnd - $deleteStart)
 $retireIndex = $deleteSource.IndexOf('RetireBridgeResources(')
-$clearIndex = $deleteSource.IndexOf('RtlZeroMemory(&g_BridgeLeases[index].Request')
+$clearIndex = $deleteSource.IndexOf('ClearBridgeRequest(&g_BridgeLeases[index])')
 if ($retireIndex -lt 0 -or $clearIndex -le $retireIndex) {
     throw 'bridge unload must clear request identity after rundown retirement'
 }

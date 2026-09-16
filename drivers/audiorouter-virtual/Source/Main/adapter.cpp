@@ -65,6 +65,45 @@ static USHORT LoadBridgeUshort(_In_ volatile USHORT* Value)
         reinterpret_cast<volatile SHORT*>(Value), 0, 0));
 }
 
+static void StoreBridgeUshort(
+    _In_ volatile USHORT* Value,
+    _In_ USHORT Data)
+{
+    InterlockedExchange16(
+        reinterpret_cast<volatile SHORT*>(Value), static_cast<SHORT>(Data));
+}
+
+static void ClearBridgeRequest(_In_ AR_BRIDGE_LEASE_STATE* Lease)
+{
+    // Generation is the callback's validity gate. Clear it before changing
+    // the remaining request fields so a callback can only observe an invalid
+    // request while the control path retires the lease.
+    InterlockedExchange64(
+        reinterpret_cast<volatile LONG64*>(&Lease->Request.Generation), 0);
+    KeMemoryBarrier();
+    RtlZeroMemory(&Lease->Request, sizeof(Lease->Request));
+}
+
+static void PublishBridgeRequest(
+    _In_ AR_BRIDGE_LEASE_STATE* Lease,
+    _In_ const AR_BRIDGE_OPEN_REQUEST* Request)
+{
+    // Invalidate the old callback contract before replacing its shape. The
+    // final generation store publishes the complete request after its
+    // callback-visible fields are atomically installed.
+    InterlockedExchange64(
+        reinterpret_cast<volatile LONG64*>(&Lease->Request.Generation), 0);
+    Lease->Request = *Request;
+    StoreBridgeUshort(&Lease->Request.Channels, Request->Channels);
+    StoreBridgeUshort(
+        &Lease->Request.FramesPerQuantum, Request->FramesPerQuantum);
+    StoreBridgeUshort(&Lease->Request.Direction, Request->Direction);
+    KeMemoryBarrier();
+    InterlockedExchange64(
+        reinterpret_cast<volatile LONG64*>(&Lease->Request.Generation),
+        static_cast<LONG64>(Request->Generation));
+}
+
 // This helper is intentionally independent of the sample's timer callback.
 // It is safe for a future PortCls callback: rundown protects the mapped view
 // from CLOSE/expiry/unload, and the callback takes no lease spin lock.
@@ -257,7 +296,7 @@ static void ReleaseLeasesOwnedByFileObject(_In_opt_ PFILE_OBJECT FileObject)
             RetireBridgeResources(lease, mappedView, sectionObject,
                                   rundownStarted);
             KeAcquireSpinLock(&lease->Lock, &oldIrql);
-            RtlZeroMemory(&lease->Request, sizeof(lease->Request));
+            ClearBridgeRequest(lease);
             lease->Retiring = FALSE;
             KeReleaseSpinLock(&lease->Lock, oldIrql);
         }
@@ -539,7 +578,7 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                             ExReInitializeRundownProtection(&lease->Rundown);
                             lease->RundownStarted = FALSE;
                         }
-                        lease->Request = *request;
+                        PublishBridgeRequest(lease, request);
                         lease->OwnerFileObject = stack->FileObject;
                         lease->LastHeartbeat100ns = now;
                         lease->Active = TRUE;
@@ -578,7 +617,7 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                     lease->OwnerFileObject = NULL;
                     lease->Retiring = oldRundownStarted;
                     if (!oldRundownStarted) {
-                        RtlZeroMemory(&lease->Request, sizeof(lease->Request));
+                        ClearBridgeRequest(lease);
                     }
                 }
                 status = STATUS_INVALID_DEVICE_STATE;
@@ -611,7 +650,7 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                     lease->RundownStarted == oldRundownStarted) {
                     ExReInitializeRundownProtection(&lease->Rundown);
                     lease->RundownStarted = FALSE;
-                    lease->Request = *request;
+                    PublishBridgeRequest(lease, request);
                     lease->OwnerFileObject = stack->FileObject;
                     lease->LastHeartbeat100ns = now;
                     lease->SectionObject = sectionObject;
@@ -639,7 +678,7 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                 // releasing the lock and waiting for callback readers.
                 if (oldRundownStarted) {
                     KeAcquireSpinLock(&lease->Lock, &oldIrql);
-                    RtlZeroMemory(&lease->Request, sizeof(lease->Request));
+                    ClearBridgeRequest(lease);
                     lease->Retiring = FALSE;
                     KeReleaseSpinLock(&lease->Lock, oldIrql);
                 }
@@ -714,8 +753,7 @@ void DeleteBridgeControlDevice()
         // reading Request. Clear the contract only after that reader has
         // drained; this is the unload equivalent of close/expiry cleanup.
         KeAcquireSpinLock(&g_BridgeLeases[index].Lock, &oldIrql);
-        RtlZeroMemory(&g_BridgeLeases[index].Request,
-                      sizeof(g_BridgeLeases[index].Request));
+        ClearBridgeRequest(&g_BridgeLeases[index]);
         g_BridgeLeases[index].Retiring = FALSE;
         KeReleaseSpinLock(&g_BridgeLeases[index].Lock, oldIrql);
     }

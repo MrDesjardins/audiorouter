@@ -2,6 +2,17 @@
 
 Updated: 2026-09-16.
 
+Completed the bridge request publication/teardown race slice on 2026-09-16.
+The project-owned driver now clears the callback validity generation before
+replacing or clearing request shape fields, publishes the 16-bit callback
+shape atomically, and publishes generation last. This prevents a callback
+from accepting a partially replaced request during lease retirement or
+replacement. The M03 source contract was aligned with the centralized clear
+helper; guarded x64 and ARM64 WDK build/signability qualifications passed.
+No installation, loading, signing-mode, boot-policy, service, endpoint, or
+audio configuration action occurred. PortCls wiring, production signing, and
+clean-machine qualification remain open.
+
 Completed the remaining driver-bridge shape-load audit on 2026-09-16. The
 future callback-facing paths now read `Direction`, `FramesPerQuantum`, and
 `Channels` through interlocked 16-bit loads, matching the existing rundown
