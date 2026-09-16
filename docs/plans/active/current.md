@@ -2,6 +2,17 @@
 
 Updated: 2026-09-16.
 
+Fixed and requalified the M07 frontend-owned shell RPC acceptance on
+2026-09-16. The harness previously started its disposable one-request backend
+with `--connections 1`, but the shell performs two tray status requests during
+startup before the WebView `system.describe` probe; the first status request
+therefore exhausted the sole pipe instance and produced a misleading timeout.
+The fixture now keeps the backend bounded at four request instances, covering
+the two tray calls and frontend probe, and the elevated acceptance passed.
+This is a test-harness correctness fix, not a relaxation of transport or
+authorization checks; no audio endpoint or persistent machine configuration
+was accessed.
+
 Qualified the native desktop shell on 2026-09-16 with
 `cargo test --manifest-path src-tauri/Cargo.toml --locked -- --test-threads=1`
 and `cargo build --manifest-path src-tauri/Cargo.toml --locked --release`.

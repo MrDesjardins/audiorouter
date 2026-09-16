@@ -42,7 +42,11 @@ try {
     $enroll = & $cli api call clients.authorize $params --database $database --json 2>&1
     if ($LASTEXITCODE -ne 0) { throw "client enrollment failed: $enroll" }
 
-    $backend = Start-IsolatedProcess $cli @('backend', 'serve', '--database', $database, '--pipe', $pipe, '--connections', '1') @{}
+    # The shell performs two tray-status RPCs during setup before the
+    # frontend-owned system.describe probe runs. Keep the backend bounded, but
+    # reserve enough one-request pipe instances for that documented startup
+    # sequence instead of allowing the tray refresh to consume the only slot.
+    $backend = Start-IsolatedProcess $cli @('backend', 'serve', '--database', $database, '--pipe', $pipe, '--connections', '4') @{}
     Start-Sleep -Milliseconds 750
     # WebView2 requires the shell to be attached to the interactive desktop;
     # keep only the disposable backend hidden so the probe runs in a real GUI
