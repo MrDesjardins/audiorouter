@@ -130,6 +130,10 @@ its opaque ID, and follow-default behavior must be an explicit graph choice.
 When endpoint notifications produce a non-empty snapshot diff, the control
 plane retains a bounded `devices.changed` state event; clients should refetch
 `devices.list` rather than expect endpoint details in the event payload.
+If a changed or removed endpoint is owned by a running native endpoint worker,
+the worker is stopped and its staged audio is reset before the additional
+`devices.bindingInvalidated` event is retained. Rebinding is always explicit
+and must revalidate the exact endpoint identity and format.
 
 `nativeEndpoints.prepare` requires exact active capture and render endpoint IDs
 and opens both clients stopped; it never changes the system default endpoint,

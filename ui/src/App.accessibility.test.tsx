@@ -174,6 +174,7 @@ describe("VB-Cable endpoint selection", () => {
     expect(WORKSPACE_EVENT_CATEGORIES).toContain("graph.committed");
     expect(WORKSPACE_EVENT_CATEGORIES).toContain("recording.recycled");
     expect(WORKSPACE_EVENT_CATEGORIES).toContain("devices.changed");
+    expect(WORKSPACE_EVENT_CATEGORIES).toContain("devices.bindingInvalidated");
     expect(WORKSPACE_EVENT_CATEGORIES).toContain("recovery.safeModeCleared");
     expect(WORKSPACE_EVENT_CATEGORIES.some((category) => category.startsWith("meter"))).toBe(false);
   });

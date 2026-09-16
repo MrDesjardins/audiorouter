@@ -801,6 +801,15 @@ and operation method groups so response contracts cannot silently drift from
 the persistence limits. Control/storage tests (86/52), strict Clippy,
 formatting, diff validation, and documentation validation pass; no audio or
 machine configuration was accessed.
+## 2026-09-16 - endpoint invalidation event contract
+
+The public state-event registry and TypeScript `StateEventCategory` now include
+`devices.bindingInvalidated`, matching the control-plane event emitted when a
+running native worker is stopped after an exact endpoint binding changes.
+The UI workspace subscription includes the category so clients can refresh
+their device/session view. Control and Windows-audio tests, strict Clippy,
+formatting, and documentation validation cover the change.
+
 ## State-event category registry (2026-09-07)
 
 The 15 supported state-event categories are now centralized in one control

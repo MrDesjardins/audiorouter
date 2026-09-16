@@ -71,7 +71,7 @@ const MAX_MEMORY_OPERATION_OUTCOMES: usize = 100;
 const MAX_PLUGIN_INVENTORY_ROOTS: usize = 64;
 const MAX_PLAN_REQUIRED_SCOPES: usize = 1;
 const MAX_PLAN_WARNINGS: usize = 1;
-const STATE_CATEGORIES: [&str; 19] = [
+const STATE_CATEGORIES: [&str; 20] = [
     "session.created",
     "session.deleted",
     "graph.committed",
@@ -80,6 +80,7 @@ const STATE_CATEGORIES: [&str; 19] = [
     "runtime.activated",
     "runtime.stopped",
     "devices.changed",
+    "devices.bindingInvalidated",
     "recovery.safeModeCleared",
     "privacy.muteEnabled",
     "privacy.muteDisabled",
@@ -14685,6 +14686,7 @@ mod tests {
         );
         let event_categories = document["events"]["stateCategories"].as_array().unwrap();
         for category in [
+            "devices.bindingInvalidated",
             "virtualDevice.changed",
             "recording.metadataChanged",
             "recording.renamed",

@@ -769,6 +769,7 @@ export type StateEventCategory =
   | "runtime.activated"
   | "runtime.stopped"
   | "devices.changed"
+  | "devices.bindingInvalidated"
   | "recovery.safeModeCleared"
   | "privacy.muteEnabled"
   | "privacy.muteDisabled"

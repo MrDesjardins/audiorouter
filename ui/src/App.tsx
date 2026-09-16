@@ -34,6 +34,7 @@ export const WORKSPACE_EVENT_CATEGORIES = [
   "runtime.activated",
   "runtime.stopped",
   "devices.changed",
+  "devices.bindingInvalidated",
   "recovery.safeModeCleared",
   "virtualDevice.changed",
   "virtualBridge.failed",
