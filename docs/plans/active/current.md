@@ -28,6 +28,13 @@ available Windows automation surface, but it returned no targetable apps or
 browsers, so manual visual/accessibility evidence remains open rather than
 being inferred from automated tests.
 
+On 2026-09-15 the existing packaged `target/release-qualification-20260915`
+shell was also launched for that gate and remained running, but the automation
+provider again returned no targetable app/window. The run-owned shell process
+was stopped afterward; no endpoint, driver, or persistent audio configuration
+was changed. This confirms the manual-gate limitation is the automation
+surface, not a shell launch failure.
+
 Validation completed on 2026-09-15: the Rust adapter bridge passed two 500 ms
 cycles with 24,480 captured and 24,448 rendered frames per cycle, zero dropped
 frames, xruns, or deadline misses. The control-owned route passed with 23,520
