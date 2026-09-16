@@ -44,6 +44,13 @@ existing event refresh keeps endpoint state current. UI coverage passed with
 234 tests and TypeScript typecheck passed; no endpoint or persistent machine
 configuration changed.
 
+Requalified the authorized guarded VB-Cable control-owned route on 2026-09-16
+using the script's current read-only exact-pair discovery. The 500 ms native
+shared-mode session captured 23,520 frames, processed 183 graph quanta, and
+rendered 23,424 frames before clean stop. The test passed and changed no
+persistent audio configuration; this remains user-mode route evidence, not
+production-driver, physical-latency, or transition-rebind qualification.
+
 Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at the
 current head on 2026-09-16. The run passed toolchain/native probes, x64/ARM64
 driver source builds, read-only endpoint inventory, disposable SysVAD,

@@ -1,5 +1,16 @@
 # M02 audio-engine evidence
 
+## 2026-09-16 - current guarded control-owned VB-Cable lifecycle
+
+`tests/acceptance/m02-control-native-live.ps1 -AllowLiveAudio` passed using
+the script's current read-only discovery of the exact active VB-Cable pair.
+The 500 ms native shared-mode session captured 23,520 frames, processed 183
+graph quanta, and rendered 23,424 frames before clean stop. The wrapper
+restored its process environment and changed no persistent defaults, volume,
+mute, privacy, driver, signing, startup, or endpoint configuration. This is
+native user-mode endpoint lifecycle evidence; it does not qualify the
+project-owned driver, physical latency, or actual transition rebind.
+
 ## 2026-09-16 - guarded control-owned VB-Cable lifecycle
 
 `tests/acceptance/m02-control-native-live.ps1 -AllowLiveAudio` passed using

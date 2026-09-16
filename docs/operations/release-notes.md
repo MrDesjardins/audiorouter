@@ -7,7 +7,7 @@ release and must not be presented as an installable Windows audio product.
 
 - Target: Windows 11 x64.
 - Portable control, storage, DSP, recording, CLI, UI, MCP, and plugin-worker
-  foundations are implemented and covered by automated tests. The UI has 231
+  foundations are implemented and covered by automated tests. The UI has 234
   passing tests and includes a visual graph editor, backend-bound built-in
   processor/preset editing, explicit endpoint binding, and route provenance.
 - The repository-local Steinberg VST3 SDK is pinned and verified at
@@ -48,11 +48,10 @@ release and must not be presented as an installable Windows audio product.
   submission while preserving the media-device snapshot.
 - The guarded control-owned native VB-Cable route qualifies exact capture and
   render endpoint binding, processor-bearing graph activation, bounded pump
-  delivery, and clean start/stop. The latest 500 ms run observed 24,000
-  captured frames, 23,936 rendered frames, and 187 processed quanta, with one
-  successful start/stop/reset sequence and one deliberate post-stop pump
-  rejection. It did not change defaults, volume, mute, privacy, drivers, or
-  persistent audio settings.
+  delivery, and clean start/stop. The latest 500 ms run observed 23,520
+  captured frames, 23,424 rendered frames, and 183 processed quanta. It did
+  not change defaults, volume, mute, privacy, drivers, or persistent audio
+  settings.
 - Shell-owned backend recovery persists crash markers and keeps a stopped
   control plane available after the safe-mode threshold, allowing an
   authorized operator to inspect and clear the latch without reopening native
