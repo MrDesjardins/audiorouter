@@ -41,6 +41,12 @@ warnings; all generated output was removed. This confirms the source/build
 contract only. Bus provisioning, loaded PortCls ownership, production signing,
 and clean-machine installation remain open and were not attempted.
 
+The guarded event-driven WASAPI lifecycle also passed for 500 ms using the
+existing VB-Cable pair: 24,480 capture frames and 29,280 silent render frames,
+with initialize/event/start/stop/reset success on both directions. The probe
+performed no default-device, volume, mute, privacy, driver, signing, startup,
+or persistent audio configuration action.
+
 The previously documented differing-rate capture ID was stale and correctly
 failed closed with Windows `0x80070490` before stream opening. A fresh
 read-only inventory identified a current 96 kHz capture endpoint, and the

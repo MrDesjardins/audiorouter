@@ -1,5 +1,15 @@
 # Native endpoint and loopback requalification (2026-09-12)
 
+## 2026-09-15 - event-driven WASAPI lifecycle
+
+The guarded `m00-native-event-live.ps1 -AllowLiveAudio -DurationMilliseconds
+500` acceptance passed on the existing VB-Cable pair. Capture initialized,
+registered its event, started, captured 24,480 frames, stopped, and reset;
+render initialized, registered its event, started, submitted 29,280 silent
+frames, stopped, and reset. The disposable probe was removed and defaults,
+volume, mute, privacy, drivers, signing, startup, and persistent audio
+configuration were unchanged.
+
 ## 2026-09-15 - native process attribution requalification
 
 The guarded `m00-native-process-live.ps1 -AllowLiveAudio -DurationMilliseconds
