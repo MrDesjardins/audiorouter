@@ -2,6 +2,17 @@
 
 Updated: 2026-09-16.
 
+Qualified the native desktop shell on 2026-09-16 with
+`cargo test --manifest-path src-tauri/Cargo.toml --locked -- --test-threads=1`
+and `cargo build --manifest-path src-tauri/Cargo.toml --locked --release`.
+All 26 shell tests passed and the optimized Windows shell build completed.
+Coverage includes bounded backend supervision, safe-mode persistence,
+authenticated control forwarding, startup ownership, OS-transition listener
+lifecycle, authoritative tray status/quit behavior, and recorder finalization.
+No shell was launched for this check, no audio endpoint was opened, and no
+machine configuration changed. Attended WebView2/accessibility acceptance and
+native shell interaction remain open manual gates.
+
 Re-ran the elevated integrated acceptance chain at pushed head `3265f3ab` on
 2026-09-16 after the workspace qualification checkpoint. The complete chain
 passed again, including the read-only 31-endpoint inventory, disposable SysVAD
