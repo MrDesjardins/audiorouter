@@ -39,6 +39,13 @@ integrity checks. No plugin registration or audio configuration changed;
 this remains gated local VST2 compatibility evidence, not blanket vendor or
 release qualification.
 
+Requalified the actual user-provided `C:\Program Files\VSTPlugins\ReaPlugs`
+directory on 2026-09-16. Seven x64 VST2 candidates passed at 44.1, 48, and
+96 kHz; `reacontrolmidi-standalone.dll` and `reajs.dll` were explicitly
+rejected/contained as incompatible candidates. Environment and binary
+integrity checks passed, with no plugin registration or audio configuration
+change. This is local gated compatibility evidence only.
+
 Requalified the elevated guarded `tests/acceptance/safe-all.ps1` chain at
 head `d52f7ec4` on 2026-09-16. Toolchain/native probes, x64/ARM64 driver
 source builds, read-only 31-endpoint inventory, disposable SysVAD, M01/M03/

@@ -1,5 +1,15 @@
 # M06 VST3 SDK boundary
 
+## 2026-09-16 - direct user-provided ReaPlugs VST2 matrix
+
+`tests/acceptance/m06-vst2-reaplugs.ps1 -FixtureDirectory 'C:\Program
+Files\VSTPlugins\ReaPlugs' -SkipIncompatibleCandidates` passed for seven x64
+VST2 candidates at 44.1, 48, and 96 kHz. `reacontrolmidi-standalone.dll` and
+`reajs.dll` were explicitly rejected and contained as incompatible candidates.
+The matrix verified temporary environment restoration and before/after binary
+integrity, and made no plugin registration or machine audio configuration
+change. This is local gated compatibility evidence only.
+
 ## 2026-09-16 - supplied ReaPlugs VST2 worker matrix
 
 `tests/acceptance/m06-vst2-reaplugs.ps1 -SkipIncompatibleCandidates` passed
