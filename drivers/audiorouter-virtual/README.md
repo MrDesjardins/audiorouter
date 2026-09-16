@@ -43,9 +43,14 @@ After producing a package, an administrator may use the guarded lifecycle
 entrypoint below on an isolated test system:
 
 ```powershell
+.\manage.ps1 -Install -AllowDriverInstall -Preview -Inf .\path\to\AudioRouterVirtual.inf
 .\manage.ps1 -Install -AllowDriverInstall -Inf .\path\to\AudioRouterVirtual.inf
 .\manage.ps1 -Uninstall -AllowDriverInstall -Inf .\path\to\AudioRouterVirtual.inf
 ```
+
+Add `-Preview` to either action to emit a bounded JSON plan. Preview validates
+the package/state paths and reports whether the action is ready, but never
+invokes `pnputil` or changes driver/device state.
 
 Installation records the exact `oem*.inf` name returned by `pnputil`; uninstall
 requires that state file and removes only that package. Both switches are

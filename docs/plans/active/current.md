@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Added and qualified the missing M03 lifecycle preview on 2026-09-16. The
+guarded `manage.ps1` entrypoint now supports `-Install -AllowDriverInstall
+-Preview` and the corresponding uninstall preview, emitting bounded JSON with
+exact paths, readiness, consent scope, and planned `pnputil` arguments while
+never invoking the tool. The x64 and ARM64 M03 qualifications both passed the
+preview regression and WDK compile/signability/catalog checks. No driver,
+device, endpoint, or persistent audio configuration changed.
+
 Performed a read-only native post-test inventory on 2026-09-16. `pnputil
 /enum-drivers` returned exit 0 with no AudioRouter package matches, and
 present PnP enumeration reported zero AudioRouter devices. This confirms the

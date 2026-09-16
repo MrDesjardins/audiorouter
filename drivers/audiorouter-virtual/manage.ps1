@@ -4,6 +4,7 @@ param(
     [switch] $Install,
     [Parameter(Mandatory = $true, ParameterSetName = 'Uninstall')]
     [switch] $Uninstall,
+    [switch] $Preview,
     [Parameter(Mandatory = $true)]
     [switch] $AllowDriverInstall,
     [Parameter(Mandatory = $true)]
@@ -90,6 +91,56 @@ Assert-NoReparseAncestors -Path (Split-Path -Parent $statePath)
 $pnputil = Join-Path $env:WINDIR 'System32\pnputil.exe'
 if (-not (Test-Path -LiteralPath $pnputil -PathType Leaf)) {
     throw "pnputil.exe was not found at $pnputil."
+}
+
+if ($Preview) {
+    $action = if ($Install) { 'install' } else { 'uninstall' }
+    $plan = [ordered]@{
+        schemaVersion = 1
+        action = $action
+        mutates = $false
+        ready = $true
+        inf = $infPath
+        state = $statePath
+        tool = $pnputil
+        requiredConsent = 'AllowDriverInstall'
+    }
+    if ($Install) {
+        $plan.statePresent = Test-Path -LiteralPath $statePath -PathType Leaf
+        if ($plan.statePresent) {
+            $plan.ready = $false
+            $plan.blocker = 'lifecycle state already exists; install would overwrite ownership state'
+        }
+        $plan.command = @('/add-driver', $infPath, '/install')
+    } else {
+        $plan.statePresent = Test-Path -LiteralPath $statePath -PathType Leaf
+        if (-not $plan.statePresent) {
+            $plan.ready = $false
+            $plan.blocker = 'no lifecycle state exists; uninstall refuses package-wide deletion'
+        } else {
+            try {
+                Assert-NoReparsePath -Path $statePath -StopAt (Split-Path -Parent $statePath)
+                $previewRecord = Read-BoundedState -Path $statePath | ConvertFrom-Json
+                if ($previewRecord.schemaVersion -ne 1 -or
+                    [string]::IsNullOrWhiteSpace($previewRecord.publishedName) -or
+                    $previewRecord.publishedName -notmatch '^oem\d+\.inf$') {
+                    throw 'lifecycle state is invalid or ambiguous'
+                }
+                if ([string]::IsNullOrWhiteSpace($previewRecord.inf) -or
+                    -not [string]::Equals((Resolve-Path -LiteralPath $previewRecord.inf).Path, $infPath,
+                        [StringComparison]::OrdinalIgnoreCase)) {
+                    throw 'lifecycle state INF does not match the requested INF'
+                }
+                $plan.publishedName = $previewRecord.publishedName
+                $plan.command = @('/delete-driver', $previewRecord.publishedName, '/uninstall')
+            } catch {
+                $plan.ready = $false
+                $plan.blocker = $_.Exception.Message
+            }
+        }
+    }
+    Write-Output ($plan | ConvertTo-Json -Depth 4)
+    exit 0
 }
 
 if ($Install) {

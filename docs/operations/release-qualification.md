@@ -100,6 +100,15 @@ it cannot publish that state after installation. This prototype procedure is
 not a substitute for the future signed installer and does not authorize
 changes to test-signing, Secure Boot, HVCI, endpoint defaults, or volumes.
 
+The non-mutating preview is available before that isolated operation:
+
+```powershell
+.\drivers\audiorouter-virtual\manage.ps1 -Install -AllowDriverInstall -Preview -Inf .\path\to\AudioRouterVirtual.inf
+```
+
+It emits a bounded JSON plan and does not invoke `pnputil`; a preview of an
+uninstall similarly reports the tracked package or the fail-closed blocker.
+
 ## Known release blockers
 
 - Production-signed virtual-device driver and normal Secure Boot/Memory

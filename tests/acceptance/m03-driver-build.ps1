@@ -24,6 +24,7 @@ $manageScript = Get-Content -LiteralPath $manage -Raw
 foreach ($required in @(
         'ParameterSetName = ''Install''',
         'ParameterSetName = ''Uninstall''',
+        'Preview',
         'AllowDriverInstall',
         'Refusing to overwrite existing lifecycle state',
         'refusing unmanaged cleanup',
@@ -64,6 +65,18 @@ $guardInf = Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/AudioR
 $guardStdout = [IO.Path]::GetTempFileName()
 $guardStderr = [IO.Path]::GetTempFileName()
 try {
+    $previewOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $manage `
+        -Install -AllowDriverInstall -Preview -Inf $guardInf -State $guardState)
+    if ($LASTEXITCODE -ne 0) {
+        throw "driver lifecycle preview failed with exit code $LASTEXITCODE"
+    }
+    $preview = ($previewOutput -join "`n") | ConvertFrom-Json
+    if ($preview.mutates -ne $false -or $preview.action -ne 'install' -or
+        $preview.ready -ne $true -or $preview.statePresent -ne $false -or
+        $preview.command[0] -ne '/add-driver' -or (Test-Path -LiteralPath $guardState)) {
+        throw "driver lifecycle preview was not read-only or did not describe install: $($previewOutput -join ' ')"
+    }
+
     $guardProcess = Start-Process -FilePath powershell.exe -ArgumentList @(
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $manage,
         '-Uninstall', '-AllowDriverInstall', '-Inf', $guardInf, '-State', $guardState
