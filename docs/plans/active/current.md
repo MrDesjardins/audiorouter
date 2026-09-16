@@ -1126,6 +1126,14 @@ Temporary outputs were cleaned and defaults, volume, mute, privacy, driver,
 signing, and startup configuration were unchanged. This remains shared-mode
 adapter evidence, not physical latency or production-driver qualification.
 
+Extended the guarded Rust adapter bridge qualification on 2026-09-16 to two
+cycles against the exact discovered VB-Cable pair. Cycle 1 delivered 24,000
+captured and 23,936 rendered frames; cycle 2 delivered 24,480 captured and
+24,448 rendered frames. Both cycles reported zero dropped frames, XRuns,
+deadline misses, and non-finite tap samples; temporary streams/recordings
+were removed and media state remained unchanged. This strengthens repeatable
+shared-mode bridge evidence only.
+
 Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
 `861b4c54` on 2026-09-16 after the strengthened M03 driver source-contract
 gate. M00 toolchain/native inventory and disposable SysVAD checks, AudioRouter

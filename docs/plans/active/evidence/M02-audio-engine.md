@@ -31,6 +31,17 @@ Temporary outputs were removed and endpoint/media state and persistent audio
 configuration remained unchanged. This qualifies the shared-mode adapter
 route, not physical latency or production-driver timing.
 
+## 2026-09-16 - two-cycle guarded Rust adapter bridge
+
+`tests/acceptance/m02-rust-adapter-bridge-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 500 -Cycles 2` passed against the exact discovered
+VB-Cable pair. Cycle 1 delivered 24,000 captured and 23,936 rendered frames;
+cycle 2 delivered 24,480 captured and 24,448 rendered frames. Both cycles
+reported zero dropped frames, XRuns, deadline misses, and non-finite tap
+samples. Temporary streams and recordings were removed and media-device state
+remained unchanged. This is repeatability evidence for the shared-mode bridge,
+not physical latency or production-driver timing.
+
 ## 2026-09-16 - current guarded control-owned VB-Cable lifecycle
 
 `tests/acceptance/m02-control-native-live.ps1 -AllowLiveAudio` passed using
