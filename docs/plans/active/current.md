@@ -21,6 +21,13 @@ deliberately rejected post-stop pump. Both wrappers restored temporary state;
 no defaults, volume, mute, privacy, driver, signing, startup, or persistent
 audio configuration changed. Evidence: [M02 audio engine evidence](evidence/M02-audio-engine.md).
 
+The guarded Rust process-loopback acceptance also passed both include and
+exclude modes for 250 ms. Include delivered 10,584 source frames through
+11,392 engine frames and 89 graph blocks; exclude delivered 11,025 source
+frames through 11,904 engine frames and 93 graph blocks. Both used the
+44.1-to-48 kHz conversion path with zero rejected packets, xruns, and buffer
+overruns/underruns; no persistent audio configuration changed.
+
 Next: continue with the remaining guarded cross-rate/process-loopback and
 loaded-driver gates; do not install/load the prototype driver or change audio
 defaults as part of this user-mode qualification.

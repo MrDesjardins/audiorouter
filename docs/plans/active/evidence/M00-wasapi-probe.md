@@ -1,5 +1,16 @@
 # Native endpoint and loopback requalification (2026-09-12)
 
+## 2026-09-15 - Rust process-loopback include/exclude requalification
+
+The guarded `m00-rust-process-live.ps1 -AllowLiveAudio -DurationMilliseconds
+250` acceptance passed both modes against the current Windows audio session.
+Include mode delivered 10,584 source frames, 11,392 engine frames, and 89
+quantum blocks; exclude mode delivered 11,025 source frames, 11,904 engine
+frames, and 93 quantum blocks. Both converted 44.1 kHz source audio to the
+48 kHz engine rate with zero rejected packets, scheduler xruns, or input and
+output overruns/underruns. The process-loopback streams stopped cleanly and no
+persistent audio configuration changed.
+
 ## 2026-09-13 - current-tip event-driven lifecycle
 
 The authorized `m00-native-event-live.ps1 -AllowLiveAudio
