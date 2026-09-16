@@ -233,6 +233,13 @@ publish read-only, destructive, and idempotency hints, but the backend remains
 the authority for permission and mutation checks. Confirmed recording recycle
 is destructive; preview is read-only.
 
+Managed-device administration also has focused tools named
+`provision_virtual_device` and `remove_virtual_device`. They require the
+`deviceAdministration` grant and an idempotency key; provisioning additionally
+requires an explicit bounded `busId` and `instanceId`. Both remain fail-closed
+until a qualified managed driver is installed, and neither tool changes the
+Windows default endpoint or other persistent audio settings.
+
 Device and application discovery failures retain their structured JSON-RPC error
 data through the CLI and MCP boundaries. Inspect `data.code`, `data.hresult`,
 `data.retryable`, and `data.remediation`; in particular, `deviceInUse` is a
