@@ -1,3 +1,19 @@
+# 2026-09-15 - live built-in processing chain validation
+
+The authorized ignored control test
+`guarded_live_native_endpoint_session_lifecycle_uses_one_control_plane` was
+run at the current head with the exact existing VB-Cable capture and render
+endpoint IDs. The prepared native graph included the built-in EQ, gate,
+compressor, pitch-shift, and limiter chain before the output. The 500 ms
+session completed with 24,000 captured frames, 187 processed graph quanta,
+and 23,936 rendered frames; the test passed.
+
+The test stopped the session and detached the worker on completion. No default
+device, volume, mute, privacy, driver, signing, startup, or persistent audio
+configuration changed. This qualifies built-in processor graph execution in
+the existing user-mode VB-Cable route; production-driver callback and
+subjective/transfer-function audio-quality gates remain open.
+
 # 2026-09-15 - two-way endpoint resampling boundary
 
 `WasapiSchedulerBridge::new_for_endpoints_at_graph_rate` now supports an

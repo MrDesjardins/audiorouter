@@ -2,6 +2,16 @@
 
 Updated: 2026-09-15.
 
+- Requalified the built-in native processing chain on 2026-09-15 at the
+  current head using the exact existing VB-Cable pair. The guarded 500 ms
+  control-owned session prepared and executed EQ, gate, compressor, pitch,
+  and limiter stages, processing 24,000 captured frames, 187 graph quanta,
+  and 23,936 rendered frames. The session stopped and detached cleanly; no
+  persistent audio or machine configuration changed. This is user-mode
+  existing-VB-Cable evidence; production-driver timing and subjective/
+  transfer-function quality gates remain open. Evidence: [M02 audio engine]
+  (evidence/M02-audio-engine.md).
+
 - Requalified the two-way resampling implementation against the existing
   VB-Cable pair on 2026-09-15 at pushed head `3d24953f`. The authorized 500 ms
   route processed 24,480 captured frames, 191 graph quanta/tap calls, and
