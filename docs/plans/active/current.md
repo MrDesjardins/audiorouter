@@ -21,8 +21,8 @@ AudioRouter x64 and ARM64 compile-only driver gates, M04 (32 DSP and 40
 recording tests), M05 (226 UI tests and temporary builds), M06 VST3/VST2,
 M07 (172 control tests plus CLI/MCP/worker integration), unsigned M08
 artifacts, 159 normative mappings, and 54-file documentation validation all
-passed. Cleanup removed 15 run-owned temporary children. The known Vite
-chunk-size warning remains non-failing. No driver was installed or loaded, no
+passed. Cleanup removed 15 run-owned temporary children. No driver was
+installed or loaded, no
 plugin or startup registration occurred, and no persistent audio
 configuration changed.
 
@@ -54,6 +54,17 @@ Windows-audio suite, strict package Clippy, formatting, and diff checks passed.
 The wrapper is not called by the current unavailable-driver control path;
 administrator authorization, persistent handle ownership, instance-ID
 hydration, and loaded-driver endpoint qualification remain explicit gates.
+
+Persisted the native PnP identity seam on 2026-09-16. `VirtualBusSnapshot`,
+SQLite schema version 3, all virtual-bus commit paths, the control response,
+and the TypeScript contract now carry an optional bounded
+`driverInstanceId`. Legacy databases hydrate it as null, while the registry
+round-trip test proves a returned identity survives restart without restoring
+runtime leases. This is metadata for future reconciliation only: the control
+path still reports the endpoint unavailable, does not invoke device creation,
+and does not claim that a driver is installed or loaded. Evidence: 65 domain,
+90 storage, 172 control, and 226 UI tests passed, plus strict Clippy and UI
+typecheck.
 
 Reduced the packaged UI entry chunk on 2026-09-15 by moving `@xyflow/react`
 to a dedicated Rollup vendor chunk. The UI suite passed 226 tests and the

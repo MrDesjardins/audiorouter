@@ -814,7 +814,7 @@ describe("keyboard connection dialog", () => {
   });
 
   it("clears a virtual-device selection that disappears from inventory", async () => {
-    const makeDevice = (id: string, name: string): VirtualDeviceInfo => ({ id, name, direction: "bidirectional", channels: 2, enabled: true, availability: { status: "unavailable", reason: "managed driver unavailable" }, endpointIds: { render: null, capture: null }, capabilities: { render: false, capture: false, channels: 2 }, privilege: "deviceAdministration", restartRequired: false, clientImpacts: [], leaseOwner: null });
+    const makeDevice = (id: string, name: string): VirtualDeviceInfo => ({ id, name, driverInstanceId: null, direction: "bidirectional", channels: 2, enabled: true, availability: { status: "unavailable", reason: "managed driver unavailable" }, endpointIds: { render: null, capture: null }, capabilities: { render: false, capture: false, channels: 2 }, privilege: "deviceAdministration", restartRequired: false, clientImpacts: [], leaseOwner: null });
     const listVirtualDevices = vi.fn().mockResolvedValueOnce([makeDevice("old-bus", "Old bus")]).mockResolvedValueOnce([makeDevice("new-bus", "New bus")]);
     const backend = { ...connectedPreviewBackend(), listVirtualDevices };
     render(<App backend={backend} />);

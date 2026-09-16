@@ -309,6 +309,7 @@ export interface DeviceListPage {
 export interface VirtualDeviceInfo {
   id: string;
   name: string;
+  driverInstanceId: string | null;
   direction: "bidirectional";
   channels: 2;
   enabled: boolean;

@@ -3722,6 +3722,7 @@ fn virtual_device_item_schema() -> Value {
                 "required": ["render", "capture"],
                 "additionalProperties": false
             },
+            "driverInstanceId": { "type": ["string", "null"], "maxLength": audiorouter_domain::MAX_VIRTUAL_BUS_DRIVER_INSTANCE_ID_CHARS },
             "capabilities": {
                 "type": "object",
                 "properties": {
@@ -3737,7 +3738,7 @@ fn virtual_device_item_schema() -> Value {
             "clientImpacts": { "type": "array", "items": { "type": "string" } },
             "leaseOwner": { "type": ["string", "null"] }
         },
-        "required": ["id", "name", "direction", "channels", "enabled", "availability", "endpointIds", "capabilities", "privilege", "restartRequired", "clientImpacts", "leaseOwner"],
+        "required": ["id", "name", "driverInstanceId", "direction", "channels", "enabled", "availability", "endpointIds", "capabilities", "privilege", "restartRequired", "clientImpacts", "leaseOwner"],
         "additionalProperties": false
     })
 }
@@ -11261,6 +11262,7 @@ impl ControlPlane {
                 json!({
                     "id": bus.id(),
                     "name": bus.name(),
+                    "driverInstanceId": bus.driver_instance_id(),
                     "direction": "bidirectional",
                     "channels": bus.channels(),
                     "enabled": bus.enabled(),

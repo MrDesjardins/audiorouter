@@ -28,6 +28,7 @@ pub const MAX_ROUTE_PATHS: usize = 500;
 pub const MAX_VIRTUAL_BUSES: usize = 8;
 pub const MAX_VIRTUAL_BUS_ROUTES: usize = MAX_VIRTUAL_BUSES * MAX_VIRTUAL_BUSES;
 pub const MAX_VIRTUAL_BUS_NAME_CHARS: usize = 120;
+pub const MAX_VIRTUAL_BUS_DRIVER_INSTANCE_ID_CHARS: usize = 256;
 pub const MAX_RETAINED_EVENTS: usize = 10_000;
 pub const MAX_ENTITY_ID_BYTES: usize = 128;
 pub const MAX_DISPLAY_NAME_BYTES: usize = 256;
@@ -333,6 +334,8 @@ pub enum VirtualBusError {
     AlreadyOwned,
     NotOwner,
     StaleLease,
+    DriverInstanceIdInvalid,
+    DriverInstanceIdTooLong,
 }
 
 /// Desired-state descriptor for one stereo virtual bus. Endpoint identities
@@ -342,6 +345,7 @@ pub struct VirtualBus {
     id: EntityId,
     name: String,
     enabled: bool,
+    driver_instance_id: Option<String>,
     lease: VirtualBusLease,
 }
 
@@ -351,6 +355,8 @@ pub struct VirtualBusSnapshot {
     pub id: EntityId,
     pub name: String,
     pub enabled: bool,
+    #[serde(default)]
+    pub driver_instance_id: Option<String>,
 }
 
 impl VirtualBus {
@@ -368,6 +374,10 @@ impl VirtualBus {
 
     pub fn enabled(&self) -> bool {
         self.enabled
+    }
+
+    pub fn driver_instance_id(&self) -> Option<&str> {
+        self.driver_instance_id.as_deref()
     }
 
     pub fn lease(&self) -> &VirtualBusLease {
@@ -392,6 +402,7 @@ impl VirtualBusRegistry {
                 id: bus.id.clone(),
                 name: bus.name.clone(),
                 enabled: bus.enabled,
+                driver_instance_id: bus.driver_instance_id.clone(),
             })
             .collect()
     }
@@ -403,6 +414,9 @@ impl VirtualBusRegistry {
         for snapshot in snapshots {
             let id = snapshot.id;
             registry.create(id.clone(), snapshot.name)?;
+            if let Some(instance_id) = snapshot.driver_instance_id {
+                registry.set_driver_instance_id(&id, instance_id)?;
+            }
             if !snapshot.enabled {
                 registry.set_enabled(&id, false)?;
             }
@@ -435,6 +449,7 @@ impl VirtualBusRegistry {
             id,
             name,
             enabled: true,
+            driver_instance_id: None,
             lease: VirtualBusLease::default(),
         });
         self.buses
@@ -474,6 +489,30 @@ impl VirtualBusRegistry {
             return Err(VirtualBusError::Owned);
         }
         bus.enabled = enabled;
+        Ok(())
+    }
+
+    /// Retain the PnP instance identity returned by the native software-device
+    /// provider. This is control-plane metadata only; it does not imply that
+    /// the driver is installed, loaded, or currently available.
+    pub fn set_driver_instance_id(
+        &mut self,
+        id: &EntityId,
+        instance_id: impl Into<String>,
+    ) -> Result<(), VirtualBusError> {
+        let instance_id = instance_id.into();
+        if instance_id.is_empty() {
+            return Err(VirtualBusError::DriverInstanceIdInvalid);
+        }
+        if instance_id.chars().count() > MAX_VIRTUAL_BUS_DRIVER_INSTANCE_ID_CHARS {
+            return Err(VirtualBusError::DriverInstanceIdTooLong);
+        }
+        let bus = self
+            .buses
+            .iter_mut()
+            .find(|bus| bus.id == *id)
+            .ok_or(VirtualBusError::NotFound)?;
+        bus.driver_instance_id = Some(instance_id);
         Ok(())
     }
 
@@ -3501,6 +3540,38 @@ mod tests {
         assert_eq!(
             registry.create(EntityId::new("bus-overflow"), "Overflow"),
             Err(VirtualBusError::LimitReached)
+        );
+    }
+
+    #[test]
+    fn virtual_bus_registry_retains_bounded_driver_instance_identity() {
+        let mut registry = VirtualBusRegistry::default();
+        let id = EntityId::new("bus");
+        registry.create(id.clone(), "Bus").unwrap();
+        assert_eq!(
+            registry.set_driver_instance_id(&id, "SWD\\AudioRouterVirtual\\bus"),
+            Ok(())
+        );
+        assert_eq!(
+            registry.list()[0].driver_instance_id(),
+            Some("SWD\\AudioRouterVirtual\\bus")
+        );
+
+        let restored = VirtualBusRegistry::from_snapshots(registry.snapshots()).unwrap();
+        assert_eq!(
+            restored.list()[0].driver_instance_id(),
+            Some("SWD\\AudioRouterVirtual\\bus")
+        );
+        assert_eq!(
+            registry.set_driver_instance_id(&id, ""),
+            Err(VirtualBusError::DriverInstanceIdInvalid)
+        );
+        assert_eq!(
+            registry.set_driver_instance_id(
+                &id,
+                "x".repeat(MAX_VIRTUAL_BUS_DRIVER_INSTANCE_ID_CHARS + 1)
+            ),
+            Err(VirtualBusError::DriverInstanceIdTooLong)
         );
     }
 

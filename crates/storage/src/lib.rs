@@ -70,7 +70,7 @@ pub const MAX_REQUEST_HASH_BYTES: usize = 128;
 pub const MAX_SESSION_LIST_ITEMS: usize = 500;
 /// Highest schema migration this binary knows how to apply. Newer databases
 /// must be opened by a newer binary rather than silently written by this one.
-pub const MAX_SCHEMA_VERSION: i64 = 2;
+pub const MAX_SCHEMA_VERSION: i64 = 3;
 /// One extra row is permitted so callers can detect a full page.
 pub const MAX_SESSION_HISTORY_ITEMS: usize = 101;
 /// Maximum number of directory entries inspected by recovery retention.
@@ -824,7 +824,8 @@ impl Storage {
              CREATE TABLE IF NOT EXISTS virtual_buses (
                  id TEXT PRIMARY KEY,
                  name TEXT NOT NULL UNIQUE COLLATE NOCASE,
-                 enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1))
+                 enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
+                 driver_instance_id TEXT
              );
              CREATE TABLE IF NOT EXISTS virtual_device_plans (
                  id TEXT PRIMARY KEY,
@@ -933,6 +934,21 @@ impl Storage {
             "INSERT OR IGNORE INTO schema_migrations(version) VALUES (2)",
             [],
         )?;
+        let has_driver_instance_id = self
+            .connection
+            .prepare("PRAGMA table_info(virtual_buses)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .any(|column| column.as_deref().ok() == Some("driver_instance_id"));
+        if !has_driver_instance_id {
+            self.connection.execute(
+                "ALTER TABLE virtual_buses ADD COLUMN driver_instance_id TEXT",
+                [],
+            )?;
+        }
+        self.connection.execute(
+            "INSERT OR IGNORE INTO schema_migrations(version) VALUES (3)",
+            [],
+        )?;
         self.connection.execute(
             "CREATE INDEX IF NOT EXISTS operation_journal_created_at
              ON operation_journal(created_at)",
@@ -985,11 +1001,12 @@ impl Storage {
         transaction.execute("DELETE FROM virtual_buses", [])?;
         for snapshot in snapshots {
             transaction.execute(
-                "INSERT INTO virtual_buses(id, name, enabled) VALUES (?1, ?2, ?3)",
+                "INSERT INTO virtual_buses(id, name, enabled, driver_instance_id) VALUES (?1, ?2, ?3, ?4)",
                 params![
                     snapshot.id.as_str(),
                     snapshot.name,
-                    i64::from(snapshot.enabled)
+                    i64::from(snapshot.enabled),
+                    snapshot.driver_instance_id
                 ],
             )?;
         }
@@ -1013,11 +1030,12 @@ impl Storage {
         transaction.execute("DELETE FROM virtual_buses", [])?;
         for snapshot in snapshots {
             transaction.execute(
-                "INSERT INTO virtual_buses(id, name, enabled) VALUES (?1, ?2, ?3)",
+                "INSERT INTO virtual_buses(id, name, enabled, driver_instance_id) VALUES (?1, ?2, ?3, ?4)",
                 params![
                     snapshot.id.as_str(),
                     snapshot.name,
-                    i64::from(snapshot.enabled)
+                    i64::from(snapshot.enabled),
+                    snapshot.driver_instance_id
                 ],
             )?;
         }
@@ -1054,11 +1072,12 @@ impl Storage {
         transaction.execute("DELETE FROM virtual_buses", [])?;
         for snapshot in snapshots {
             transaction.execute(
-                "INSERT INTO virtual_buses(id, name, enabled) VALUES (?1, ?2, ?3)",
+                "INSERT INTO virtual_buses(id, name, enabled, driver_instance_id) VALUES (?1, ?2, ?3, ?4)",
                 params![
                     snapshot.id.as_str(),
                     snapshot.name,
-                    i64::from(snapshot.enabled)
+                    i64::from(snapshot.enabled),
+                    snapshot.driver_instance_id
                 ],
             )?;
         }
@@ -1079,13 +1098,14 @@ impl Storage {
     pub fn load_virtual_buses(&self) -> Result<VirtualBusRegistry, StorageError> {
         let mut statement = self
             .connection
-            .prepare("SELECT id, name, enabled FROM virtual_buses ORDER BY id ASC LIMIT ?1")?;
+            .prepare("SELECT id, name, enabled, driver_instance_id FROM virtual_buses ORDER BY id ASC LIMIT ?1")?;
         let snapshots = statement
             .query_map([audiorouter_domain::MAX_VIRTUAL_BUSES + 1], |row| {
                 Ok(VirtualBusSnapshot {
                     id: EntityId::new(row.get::<_, String>(0)?),
                     name: row.get(1)?,
                     enabled: row.get::<_, i64>(2)? != 0,
+                    driver_instance_id: row.get(3)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -4142,6 +4162,9 @@ mod tests {
             .set_enabled(&EntityId::new("bus-1"), false)
             .unwrap();
         registry
+            .set_driver_instance_id(&EntityId::new("bus-2"), "SWD\\AudioRouterVirtual\\bus-2")
+            .unwrap();
+        registry
             .acquire_lease(&EntityId::new("bus-2"), EntityId::new("session"))
             .unwrap();
 
@@ -4151,11 +4174,23 @@ mod tests {
             restored
                 .list()
                 .iter()
-                .map(|bus| (bus.id().as_str(), bus.name(), bus.enabled()))
+                .map(|bus| {
+                    (
+                        bus.id().as_str(),
+                        bus.name(),
+                        bus.enabled(),
+                        bus.driver_instance_id(),
+                    )
+                })
                 .collect::<Vec<_>>(),
             vec![
-                ("bus-1", "Desktop In", false),
-                ("bus-2", "Voice Chat", true)
+                ("bus-1", "Desktop In", false, None),
+                (
+                    "bus-2",
+                    "Voice Chat",
+                    true,
+                    Some("SWD\\AudioRouterVirtual\\bus-2")
+                )
             ]
         );
         assert!(restored
