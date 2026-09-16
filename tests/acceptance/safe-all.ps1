@@ -22,6 +22,7 @@ $steps = @(
     @{ Name = 'M07 headless'; Script = Join-Path $acceptanceRoot 'm07-headless.ps1' },
     @{ Name = 'M08 release'; Script = Join-Path $acceptanceRoot 'm08-release.ps1' },
     @{ Name = 'M08 unsigned installer smoke'; Script = Join-Path $acceptanceRoot 'm08-installer-smoke.ps1' },
+    @{ Name = 'M07 frontend-owned shell RPC'; Script = Join-Path $acceptanceRoot 'm07-shell-rpc.ps1' },
     @{ Name = 'M08 traceability'; Script = Join-Path $acceptanceRoot 'm08-traceability.ps1' },
     @{ Name = 'Documentation'; Script = Join-Path $acceptanceRoot 'docs.ps1' }
 )
@@ -52,7 +53,7 @@ try {
     }
 
     Write-Output 'Safe acceptance chain passed.'
-    Write-Output 'Scope: compile/portable/SDK/reference-driver qualification only; live audio, driver installation, signing-mode changes, plugin registration, startup registration, and machine audio configuration are excluded.'
+    Write-Output 'Scope: compile/portable/SDK/reference-driver and frontend-owned shell transport qualification only; live audio, driver installation, signing-mode changes, plugin registration, startup registration, and machine audio configuration are excluded.'
 } finally {
     $newTempChildren = @(Get-ChildItem -LiteralPath $tempRoot -Force | Where-Object {
         $_.Name.StartsWith('audiorouter-', [StringComparison]::OrdinalIgnoreCase) -and

@@ -2,6 +2,15 @@
 
 Updated: 2026-09-16.
 
+Integrated the frontend-owned shell RPC acceptance into `safe-all.ps1` on
+2026-09-16 after unsigned installer smoke, where the debug shell and CLI
+artifacts are guaranteed to exist. The chain now exercises the shell's actual
+WebView initialization -> Tauri command -> authenticated backend path instead
+of leaving it as a separate manual invocation. The stage remains transport
+only: it does not install a driver, register startup, open audio, or change
+machine configuration. Manual visual/accessibility acceptance remains a
+separate gate.
+
 Fixed and requalified the M07 frontend-owned shell RPC acceptance on
 2026-09-16. The harness previously started its disposable one-request backend
 with `--connections 1`, but the shell performs two tray status requests during
