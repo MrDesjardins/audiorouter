@@ -291,6 +291,16 @@ $readBytesSource = $stream.Substring($readBytesStart, $readBytesEnd - $readBytes
 if (-not $readBytesSource.Contains('RefreshBridgePublishShape();')) {
     throw 'WaveRT render callback must refresh the capture-sink bridge shape before publication'
 }
+$writeBytesSource = $stream.Substring($writeBytesStart, $readBytesStart - $writeBytesStart)
+if (-not $writeBytesSource.Contains('AudioRouterCopyLeaseBlockForDirection')) {
+    throw 'WaveRT render callback must consume only through the bounded bridge helper'
+}
+if (-not $writeBytesSource.Contains('AR_BRIDGE_DIRECTION_RENDER_SOURCE')) {
+    throw 'WaveRT render callback must consume the render-source lease direction'
+}
+if (-not $writeBytesSource.Contains('header.Channels != bridgeChannels')) {
+    throw 'WaveRT render callback must reject a bridge channel-shape mismatch'
+}
 $callbackBoundaries = @(
     $stream.Substring($stream.IndexOf('VOID CMiniportWaveRTStream::WriteBytes'), $stream.IndexOf('VOID CMiniportWaveRTStream::ReadBytes') - $stream.IndexOf('VOID CMiniportWaveRTStream::WriteBytes')),
     $readBytesSource

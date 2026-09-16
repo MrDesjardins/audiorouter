@@ -2,6 +2,13 @@
 
 Updated: 2026-09-16.
 
+Strengthened the M03 WaveRT bridge source contract on 2026-09-16. The
+acceptance now verifies that `WriteBytes` consumes only the render-source
+lease with bounded shape validation and that `ReadBytes` publishes only the
+capture-sink lease, in addition to the existing no-wait/no-allocation and
+fail-closed checks. Guarded x64 and ARM64 WDK build/signability gates passed;
+no driver was installed or loaded and no machine audio configuration changed.
+
 Extended M03 route acceptance on 2026-09-16 with ownership and concurrency
 guards. The CLI now verifies that two producers cannot claim one virtual bus,
 that a two-way cross-session cycle is rejected, and that a stale
