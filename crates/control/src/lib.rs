@@ -10413,6 +10413,7 @@ impl ControlPlane {
             let endpoints = monitor.snapshot().to_vec();
             (endpoint_changes, endpoints)
         };
+        self.invalidate_changed_native_endpoint_worker(&endpoint_changes)?;
         self.record_endpoint_changes(!endpoint_changes.is_empty());
         let defaults = audiorouter_windows_audio::enumerate_default_endpoint_bindings()
             .map_err(audio_control_error)?;
@@ -10830,6 +10831,32 @@ impl ControlPlane {
             // not duplicate an unbounded or stale device payload.
             self.events.append(0, None, "devices.changed", None);
         }
+    }
+
+    /// Fail closed when the read-only endpoint monitor observes a change to
+    /// an endpoint owned by the native worker. The worker keeps its exact
+    /// bindings and must be deliberately rebound against the refreshed
+    /// snapshot; this method never chooses a replacement endpoint.
+    fn invalidate_changed_native_endpoint_worker(
+        &mut self,
+        changes: &[audiorouter_windows_audio::EndpointChange],
+    ) -> Result<(), ControlError> {
+        let invalidated = {
+            let Some(worker) = self.native_endpoint_worker.as_mut() else {
+                return Ok(());
+            };
+            if !worker.endpoint_bindings_affected_by(changes) || !worker.is_running() {
+                return Ok(());
+            }
+            worker.stop().map_err(audio_control_error)?;
+            true
+        };
+        if !invalidated {
+            return Ok(());
+        }
+        self.events
+            .append(0, None, "devices.bindingInvalidated", None);
+        Ok(())
     }
 
     fn dispatch_plugins_scan(&mut self, params: Option<Value>) -> Result<Value, ControlError> {

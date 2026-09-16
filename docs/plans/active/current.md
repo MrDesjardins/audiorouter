@@ -16,6 +16,16 @@ attended UI/accessibility gates remain open. The next portable task is to
 extend endpoint invalidation/rebind policy through the control-owned lifecycle
 seam.
 
+Extended the endpoint lifecycle seam on 2026-09-16. `devices.list` now
+consults the worker's exact binding policy and stops a running native endpoint
+worker when its capture or render endpoint is removed or its metadata changes,
+publishing `devices.bindingInvalidated`; it never chooses a replacement. The
+focused control suite passed 171 tests (two guarded-live ignores), the Windows
+audio suite passed 82 tests, strict Clippy passed, and diff validation passed.
+No endpoint was opened by this change and no persistent audio configuration
+changed. The next task is guarded native rebind qualification with before/after
+endpoint identity and lease/generation evidence.
+
 Refreshed the release qualification snapshot on 2026-09-16 after the latest
 authorized VB-Cable route requalification. `docs/operations/release-notes.md`
 now reports the current 500 ms control-owned route evidence: 24,000 captured

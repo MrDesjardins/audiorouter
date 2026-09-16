@@ -398,6 +398,14 @@ focused Windows-audio suite passed 82 tests and strict Clippy passed. No
 endpoint was opened by this change and no driver or machine audio
 configuration changed.
 
+The control plane now applies that policy when `devices.list` observes a
+refresh: a running affected worker is stopped and its staged bridge audio is
+reset before `devices.bindingInvalidated` is published. Replacement selection
+and reopening remain explicit operations. Control (171, with two guarded-live
+ignores), Windows-audio (82), strict Clippy, and diff checks passed. This is
+portable/control lifecycle evidence; loaded-driver callback ownership and
+production rebind timing remain open.
+
 ## 2026-09-16 - guarded VB-Cable bridge requalification
 
 Command: `tests/acceptance/m02-rust-adapter-bridge-live.ps1 -AllowLiveAudio
