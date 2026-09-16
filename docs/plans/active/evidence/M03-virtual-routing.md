@@ -383,3 +383,16 @@ Managed virtual-device plan operations and list items now advertise the shared
 regression coverage verifies both input and output schemas. Workspace tests,
 strict Clippy, formatting, and documentation validation pass; driver
 installation and endpoint activation remain open.
+# M03 virtual routing evidence
+
+## 2026-09-16 - guarded VB-Cable bridge requalification
+
+Command: `tests/acceptance/m02-rust-adapter-bridge-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 750`. The explicitly selected existing VB-Cable pair
+completed one 750 ms cycle at 48 kHz stereo with 36,480 captured frames,
+36,480 rendered frames, 285 processed quanta, zero non-finite samples, drops,
+xruns, or deadline misses, and a 25,072-byte temporary recording. The harness
+stopped and removed temporary streams/files and verified media-device state was
+unchanged. This is existing user-mode VB-Cable evidence only; the managed
+AudioRouter driver, loaded PortCls transport, signing, and physical-latency
+gates remain open.

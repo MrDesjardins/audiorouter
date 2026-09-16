@@ -138,6 +138,15 @@ with two guarded live tests ignored, 91 storage tests, strict Clippy, and
 format/diff checks. The native driver remains unloaded, so endpoint
 qualification and production signing are still open.
 
+Requalified the guarded existing VB-Cable user-mode bridge on 2026-09-16 at
+the current head with `m02-rust-adapter-bridge-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 750`. One 48 kHz stereo cycle transported 36,480
+captured and rendered frames through 285 processed quanta with zero
+non-finite samples, drops, xruns, or deadline misses. Temporary streams and
+recording output were removed, and media-device state was unchanged. This
+strengthens human-testable VB-Cable routing evidence only; the managed driver,
+loaded PortCls transport, signing, and physical-latency gates remain open.
+
 Requalified the current headless adapter boundary on 2026-09-16 after the
 transactional refactor: M07 passed with 35 CLI tests, 3 MCP stdio tests, 173
 control tests (171 passed, 2 guarded live tests ignored), 70 plugin-host tests,
