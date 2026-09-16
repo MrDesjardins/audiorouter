@@ -4118,6 +4118,11 @@ pub struct ControlPlane {
     next_session_import_plan: u64,
     active_idempotency_scope: Option<String>,
     endpoint_monitor: Option<audiorouter_windows_audio::EndpointMonitor>,
+    /// Changes observed by read-only inventory but not yet handled at a
+    /// mutating native lifecycle boundary. Keeping these pending prevents a
+    /// `devices.list` call from consuming the invalidation signal before the
+    /// audio pump can fail closed.
+    pending_endpoint_changes: Vec<audiorouter_windows_audio::EndpointChange>,
     native_endpoint_worker: Option<audiorouter_windows_audio::NativeAudioWorker>,
     native_endpoint_session: Option<EntityId>,
     native_endpoint_taps: Option<AudioTapSet>,
@@ -4205,6 +4210,7 @@ impl ControlPlane {
             next_session_import_plan: 1,
             active_idempotency_scope: None,
             endpoint_monitor: None,
+            pending_endpoint_changes: Vec::new(),
             native_endpoint_worker: None,
             native_endpoint_session: None,
             native_endpoint_taps: None,
@@ -4486,7 +4492,14 @@ impl ControlPlane {
             render_client,
             bridge,
         );
-        self.attach_native_endpoint_worker(session_id, worker)
+        let result = self.attach_native_endpoint_worker(session_id, worker);
+        if result.is_ok() {
+            // Preparation resolved the latest monitor snapshot explicitly;
+            // older inventory observations must not invalidate this fresh
+            // stopped binding when it is later started.
+            self.pending_endpoint_changes.clear();
+        }
+        result
     }
 
     #[cfg(windows)]
@@ -4545,7 +4558,8 @@ impl ControlPlane {
             })
             .cloned()
             .ok_or_else(|| ControlError::InvalidRequest("render endpoint is not active".into()))?;
-        self.native_endpoint_worker
+        let result = self
+            .native_endpoint_worker
             .as_mut()
             .ok_or_else(|| {
                 ControlError::InvalidRequest("native endpoint worker is not attached".into())
@@ -4558,7 +4572,11 @@ impl ControlPlane {
                 max_attempts,
                 retry_delay_ms,
             )
-            .map_err(audio_control_error)
+            .map_err(audio_control_error);
+        if result.is_ok() {
+            self.pending_endpoint_changes.clear();
+        }
+        result
     }
 
     #[cfg(windows)]
@@ -5711,6 +5729,7 @@ impl ControlPlane {
             next_session_import_plan: 1,
             active_idempotency_scope: None,
             endpoint_monitor: None,
+            pending_endpoint_changes: Vec::new(),
             native_endpoint_worker: None,
             native_endpoint_session: None,
             native_endpoint_taps: None,
@@ -10517,7 +10536,15 @@ impl ControlPlane {
             let endpoints = monitor.snapshot().to_vec();
             (endpoint_changes, endpoints)
         };
-        self.record_endpoint_changes(!endpoint_changes.is_empty());
+        if !endpoint_changes.is_empty() {
+            // Only retain observations while an endpoint worker exists. A
+            // later prepare operation resolves the current snapshot itself;
+            // there is no binding to invalidate in the unattached state.
+            if self.native_endpoint_worker.is_some() {
+                self.pending_endpoint_changes.extend(endpoint_changes);
+            }
+            self.record_endpoint_changes(true);
+        }
         let defaults = audiorouter_windows_audio::enumerate_default_endpoint_bindings()
             .map_err(audio_control_error)?;
         let display_info = audiorouter_windows_audio::enumerate_active_endpoint_display_info()
@@ -11013,7 +11040,8 @@ impl ControlPlane {
         let Some(monitor) = self.endpoint_monitor.as_mut() else {
             return Ok(false);
         };
-        let changes = monitor.poll_changes().map_err(audio_control_error)?;
+        let mut changes = std::mem::take(&mut self.pending_endpoint_changes);
+        changes.extend(monitor.poll_changes().map_err(audio_control_error)?);
         if changes.is_empty() {
             return Ok(false);
         }

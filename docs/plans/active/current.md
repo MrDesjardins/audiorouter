@@ -21,6 +21,15 @@ before returning a rebind-required error. Control (173) and Windows-audio
 (82) tests, strict Clippy, formatting, diff checks, and documentation passed.
 No endpoint or persistent machine configuration changed.
 
+Fixed the follow-up notification-loss defect on 2026-09-16. A read-only
+`devices.list` call now retains endpoint changes while an endpoint worker is
+attached, allowing the next mutating native pump to invalidate the exact
+binding even when inventory was queried first. Successful explicit prepare or
+rebind clears observations resolved against the fresh snapshot. Control and
+Windows-audio suites passed (173/82); no endpoint or persistent machine
+configuration changed. The production driver/bridge qualification remains the
+next external-gate task.
+
 Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at the
 current head on 2026-09-16. The run passed toolchain/native probes, x64/ARM64
 driver source builds, read-only endpoint inventory, disposable SysVAD,
