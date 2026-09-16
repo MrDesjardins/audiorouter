@@ -10,6 +10,16 @@ Both used the bounded 44.1-to-48 kHz conversion path with zero rejected
 packets, scheduler xruns, and input/output overruns or underruns. Media-device
 identity/state remained unchanged and streams stopped/reset on completion.
 
+## 2026-09-15 - Rust bridge cycle requalification
+
+The authorized `m02-rust-adapter-bridge-live.ps1 -AllowLiveAudio` acceptance
+completed its bounded bridge cycle with the exact active VB-Cable endpoints at
+48 kHz stereo. It captured 24,480 frames, processed 191 quanta, invoked the
+tap 191 times, rendered 24,448 frames, and recorded 25,072 bytes. Dropped
+render frames, non-finite tap samples, scheduler xruns, and deadline misses
+were all zero. The temporary stream and recording were stopped/removed and
+media-device state remained unchanged.
+
 ## 2026-09-15 - Rust adapter route requalification
 
 The authorized `m02-rust-adapter-route-live.ps1 -AllowLiveAudio` acceptance

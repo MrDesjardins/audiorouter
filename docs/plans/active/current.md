@@ -484,6 +484,14 @@ conversion with zero rejected packets, xruns, or buffer overruns/underruns;
 media-device identity/state remained unchanged. Evidence: [M02 audio engine]
 (evidence/M02-audio-engine.md).
 
+Re-ran the guarded Rust bridge acceptance on 2026-09-15 with
+`-AllowLiveAudio`. Its exact VB-Cable pair completed one bounded 48 kHz stereo
+cycle with 24,480 captured frames, 191 processed quanta, 24,448 rendered
+frames, and 25,072 recording bytes. Dropped frames, non-finite tap samples,
+xruns, and deadline misses were zero; temporary stream/recording cleanup and
+media-state preservation passed. Evidence: [M02 audio engine]
+(evidence/M02-audio-engine.md).
+
 - Requalified the two-way resampling implementation against the existing
   VB-Cable pair on 2026-09-15 at pushed head `3d24953f`. The authorized 500 ms
   route processed 24,480 captured frames, 191 graph quanta/tap calls, and
