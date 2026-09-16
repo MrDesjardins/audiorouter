@@ -5,7 +5,6 @@ param(
     [Parameter(Mandatory = $true, ParameterSetName = 'Uninstall')]
     [switch] $Uninstall,
     [switch] $Preview,
-    [Parameter(Mandatory = $true)]
     [switch] $AllowDriverInstall,
     [Parameter(Mandatory = $true)]
     [ValidateScript({ Test-Path -LiteralPath $_ -PathType Leaf })]
@@ -76,7 +75,7 @@ function Read-BoundedState {
     return [IO.File]::ReadAllText($item.FullName)
 }
 
-if (-not $AllowDriverInstall) {
+if (-not $Preview -and -not $AllowDriverInstall) {
     throw 'Driver lifecycle changes require -AllowDriverInstall in addition to -Install or -Uninstall.'
 }
 if (-not [IO.Path]::IsPathRooted($statePath)) {
@@ -103,7 +102,8 @@ if ($Preview) {
         inf = $infPath
         state = $statePath
         tool = $pnputil
-        requiredConsent = 'AllowDriverInstall'
+        requiredConsent = 'AllowDriverInstall for execution'
+        consentProvided = [bool]$AllowDriverInstall
     }
     if ($Install) {
         $plan.statePresent = Test-Path -LiteralPath $statePath -PathType Leaf

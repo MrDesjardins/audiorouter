@@ -103,7 +103,7 @@ changes to test-signing, Secure Boot, HVCI, endpoint defaults, or volumes.
 The non-mutating preview is available before that isolated operation:
 
 ```powershell
-.\drivers\audiorouter-virtual\manage.ps1 -Install -AllowDriverInstall -Preview -Inf .\path\to\AudioRouterVirtual.inf
+.\drivers\audiorouter-virtual\manage.ps1 -Install -Preview -Inf .\path\to\AudioRouterVirtual.inf
 ```
 
 It emits a bounded JSON plan and does not invoke `pnputil`; a preview of an

@@ -67,19 +67,20 @@ $guardStdout = [IO.Path]::GetTempFileName()
 $guardStderr = [IO.Path]::GetTempFileName()
 try {
     $previewOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $manage `
-        -Install -AllowDriverInstall -Preview -Inf $guardInf -State $guardState)
+        -Install -Preview -Inf $guardInf -State $guardState)
     if ($LASTEXITCODE -ne 0) {
         throw "driver lifecycle preview failed with exit code $LASTEXITCODE"
     }
     $preview = ($previewOutput -join "`n") | ConvertFrom-Json
     if ($preview.mutates -ne $false -or $preview.action -ne 'install' -or
         $preview.ready -ne $true -or $preview.statePresent -ne $false -or
+        $preview.consentProvided -ne $false -or
         $preview.command[0] -ne '/add-driver' -or (Test-Path -LiteralPath $guardState)) {
         throw "driver lifecycle preview was not read-only or did not describe install: $($previewOutput -join ' ')"
     }
 
     $uninstallPreviewOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $manage `
-        -Uninstall -AllowDriverInstall -Preview -Inf $guardInf -State $guardState)
+        -Uninstall -Preview -Inf $guardInf -State $guardState)
     if ($LASTEXITCODE -ne 0) {
         throw "driver lifecycle uninstall preview failed with exit code $LASTEXITCODE"
     }
@@ -93,7 +94,7 @@ try {
     @{ schemaVersion = 1; inf = $guardInf; publishedName = 'oem123.inf' } |
         ConvertTo-Json | Set-Content -LiteralPath $trackedState -Encoding UTF8 -NoNewline
     $trackedPreviewOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $manage `
-        -Uninstall -AllowDriverInstall -Preview -Inf $guardInf -State $trackedState)
+        -Uninstall -Preview -Inf $guardInf -State $trackedState)
     if ($LASTEXITCODE -ne 0) {
         throw "tracked driver lifecycle preview failed with exit code $LASTEXITCODE"
     }

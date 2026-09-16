@@ -2,6 +2,13 @@
 
 Updated: 2026-09-16.
 
+Refined the M03 lifecycle preview on 2026-09-16 so read-only plans no longer
+require the mutation-consent switch. Preview reports whether
+`AllowDriverInstall` was supplied, while actual install/uninstall execution
+still rejects missing consent. The x64 and ARM64 qualifications passed with
+install, missing-state uninstall, tracked-package uninstall, and fail-closed
+execution coverage; no `pnputil` action or machine-state change occurred.
+
 Requalified the complete guarded `safe-all.ps1` chain at pushed head
 `9a30e78e` on 2026-09-16 through direct `cmd.exe` execution; the process
 returned exit code 0. This rechecked the integrated M00-M08 acceptance path
