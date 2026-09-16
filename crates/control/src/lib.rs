@@ -4072,6 +4072,8 @@ pub struct ControlPlane {
     native_duplex_worker_session: Option<EntityId>,
     #[cfg(windows)]
     native_duplex_worker_generation: Option<u64>,
+    #[cfg(windows)]
+    managed_software_devices: audiorouter_windows_audio::ManagedSoftwareDeviceInventory,
 }
 
 impl Default for ControlPlane {
@@ -4155,6 +4157,9 @@ impl ControlPlane {
             native_duplex_worker_session: None,
             #[cfg(windows)]
             native_duplex_worker_generation: None,
+            #[cfg(windows)]
+            managed_software_devices:
+                audiorouter_windows_audio::ManagedSoftwareDeviceInventory::default(),
         }
     }
 
@@ -5580,6 +5585,9 @@ impl ControlPlane {
             native_duplex_worker_session: None,
             #[cfg(windows)]
             native_duplex_worker_generation: None,
+            #[cfg(windows)]
+            managed_software_devices:
+                audiorouter_windows_audio::ManagedSoftwareDeviceInventory::default(),
         })
     }
 
@@ -5820,6 +5828,89 @@ impl ControlPlane {
             if let Some(bridge) = self.virtual_bridges.get(id) {
                 bridge.deactivate();
             }
+        }
+        Ok(())
+    }
+
+    /// Provision one explicitly selected managed bus and retain its native
+    /// Software Device API handle. This is a Windows-only control-plane
+    /// operation; authorization and stopped-route policy belong to its caller.
+    /// Ordinary virtual-device plan/apply and list paths intentionally do not
+    /// invoke it yet.
+    #[cfg(windows)]
+    pub fn provision_virtual_bus_device(
+        &mut self,
+        id: &EntityId,
+        instance_id: &str,
+    ) -> Result<String, ControlError> {
+        let bus = self
+            .virtual_buses
+            .list()
+            .iter()
+            .find(|bus| bus.id() == id)
+            .ok_or_else(|| ControlError::InvalidRequest("virtual bus not found".into()))?;
+        if !bus.enabled() {
+            return Err(ControlError::InvalidRequest(
+                "virtual bus must be enabled before device provisioning".into(),
+            ));
+        }
+        if bus.driver_instance_id().is_some() {
+            return Err(ControlError::InvalidRequest(
+                "virtual bus already has a driver instance identity".into(),
+            ));
+        }
+
+        let provisioner = audiorouter_windows_audio::SoftwareDeviceProvisioner;
+        let returned_instance_id = self
+            .managed_software_devices
+            .create(&provisioner, id.as_str(), instance_id)
+            .map_err(software_device_control_error)?
+            .instance_id()
+            .to_owned();
+        let checkpoint = self.virtual_buses.clone();
+        if let Err(error) = self
+            .virtual_buses
+            .set_driver_instance_id(id, returned_instance_id.clone())
+        {
+            let _ = self.managed_software_devices.remove(id.as_str());
+            return Err(virtual_bus_control_error(error));
+        }
+        if let Some(storage) = &self.storage {
+            if let Err(error) = storage.save_virtual_buses(&self.virtual_buses) {
+                self.virtual_buses = checkpoint;
+                let _ = self.managed_software_devices.remove(id.as_str());
+                return Err(storage_error(error));
+            }
+        }
+        Ok(returned_instance_id)
+    }
+
+    /// Remove one explicitly owned native software device after clearing its
+    /// persisted identity. The handle is dropped only after durable state is
+    /// updated, so a storage failure leaves the native owner recoverable.
+    #[cfg(windows)]
+    pub fn remove_virtual_bus_device(&mut self, id: &EntityId) -> Result<(), ControlError> {
+        if !self.managed_software_devices.contains(id.as_str()) {
+            return Err(software_device_control_error(
+                audiorouter_windows_audio::SoftwareDeviceError::NotTracked,
+            ));
+        }
+        let checkpoint = self.virtual_buses.clone();
+        self.virtual_buses
+            .clear_driver_instance_id(id)
+            .map_err(virtual_bus_control_error)?;
+        if let Some(storage) = &self.storage {
+            if let Err(error) = storage.save_virtual_buses(&self.virtual_buses) {
+                self.virtual_buses = checkpoint;
+                return Err(storage_error(error));
+            }
+        }
+        if let Err(error) = self.managed_software_devices.remove(id.as_str()) {
+            self.virtual_buses = checkpoint;
+            if let Some(storage) = &self.storage {
+                let _ = storage.save_virtual_buses(&self.virtual_buses);
+            }
+            return Err(software_device_control_error(error));
         }
         Ok(())
     }
@@ -11852,6 +11943,13 @@ fn virtual_bus_control_error(error: audiorouter_domain::VirtualBusError) -> Cont
     ControlError::InvalidRequest(format!("virtual bus operation rejected: {error:?}"))
 }
 
+#[cfg(windows)]
+fn software_device_control_error(
+    error: audiorouter_windows_audio::SoftwareDeviceError,
+) -> ControlError {
+    ControlError::InvalidRequest(format!("software device operation rejected: {error}"))
+}
+
 fn virtual_bridge_control_error(error: VirtualBusBridgeSetError) -> ControlError {
     let message = match error {
         VirtualBusBridgeSetError::InvalidCapacity => "invalid virtual bridge capacity",
@@ -12259,6 +12357,29 @@ mod tests {
             .result
             .unwrap_or_else(|| panic!("unexpected paged response error: {:?}", paged.error));
         assert_eq!(paged_result, json!({ "items": [], "nextCursor": null }));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn managed_virtual_device_operations_validate_before_native_access() {
+        let mut plane = ControlPlane::default();
+        let missing = EntityId::new("missing");
+        assert!(matches!(
+            plane.provision_virtual_bus_device(&missing, "bus"),
+            Err(ControlError::InvalidRequest(message)) if message == "virtual bus not found"
+        ));
+
+        let id = EntityId::new("bus");
+        plane.create_virtual_bus(id.clone(), "Bus").unwrap();
+        plane.set_virtual_bus_enabled(&id, false).unwrap();
+        assert!(matches!(
+            plane.provision_virtual_bus_device(&id, "bus"),
+            Err(ControlError::InvalidRequest(message)) if message == "virtual bus must be enabled before device provisioning"
+        ));
+        assert!(matches!(
+            plane.remove_virtual_bus_device(&id),
+            Err(ControlError::InvalidRequest(message)) if message.contains("not tracked")
+        ));
     }
 
     #[test]

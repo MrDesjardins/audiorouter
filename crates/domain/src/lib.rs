@@ -516,6 +516,16 @@ impl VirtualBusRegistry {
         Ok(())
     }
 
+    pub fn clear_driver_instance_id(&mut self, id: &EntityId) -> Result<(), VirtualBusError> {
+        let bus = self
+            .buses
+            .iter_mut()
+            .find(|bus| bus.id == *id)
+            .ok_or(VirtualBusError::NotFound)?;
+        bus.driver_instance_id = None;
+        Ok(())
+    }
+
     pub fn delete(&mut self, id: &EntityId) -> Result<(), VirtualBusError> {
         let index = self
             .buses

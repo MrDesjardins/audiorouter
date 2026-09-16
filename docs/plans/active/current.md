@@ -88,6 +88,16 @@ This is an explicit control-plane primitive; no caller currently enables it,
 so no software device or machine audio configuration was changed. The
 Windows-audio suite (80 tests) and strict Clippy passed.
 
+Wired that owner into the Windows `ControlPlane` on 2026-09-16. Explicit
+`provision_virtual_bus_device` and `remove_virtual_bus_device` methods now
+validate bus existence/enabled state before native access, persist the
+returned identity before releasing an owned handle, and roll back desired
+state on storage failure. They are not exposed through ordinary graph or
+virtual-device plan/apply dispatch yet; the missing-bus, disabled-bus, and
+untracked-removal regressions prove those paths do not open native devices.
+Focused control coverage is 173 tests (171 passed, 2 guarded live tests
+ignored); Windows-audio remains 80 tests and strict Clippy passes.
+
 Reduced the packaged UI entry chunk on 2026-09-15 by moving `@xyflow/react`
 to a dedicated Rollup vendor chunk. The UI suite passed 226 tests and the
 temporary production build passed with a 321 kB application chunk plus a
@@ -117,6 +127,20 @@ Prerequisites: a targetable desktop surface for attended UI acceptance; a
 production-owned PortCls driver design and signing path for native endpoint
 qualification. Portable verification does not require opening an endpoint or
 changing persistent machine audio configuration.
+
+Ordered implementation tasks for this slice:
+
+1. Add an explicit Windows-only ControlPlane owner for managed software-device
+   handles, initialized on both memory and storage-backed construction paths.
+2. Expose internal provision/remove operations that validate bus state before
+   native access, persist the returned identity transactionally, and roll back
+   desired state on storage failure. Do not call them from ordinary graph
+   apply/list paths yet.
+3. Add no-side-effect missing-bus and rollback tests, run focused Rust/UI and
+   full guarded acceptance, then record evidence and push.
+
+Rollback: revert the implementation commit; the owner is opt-in and no
+machine device is created by existing startup, list, plan, or apply paths.
 
 Reconciled the stale REC-03 checkpoint on 2026-09-15: the current tree already
 contains the versioned `dither` and `conversion` recording metadata in the

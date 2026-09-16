@@ -207,9 +207,14 @@ impl SoftwareDeviceProvisioner {
         if handle.is_null() {
             return Err(SoftwareDeviceError::MissingHandle);
         }
+        let instance_id = if completion.instance_id.is_empty() {
+            instance_id.to_owned()
+        } else {
+            completion.instance_id
+        };
         Ok(SoftwareDeviceHandle {
             raw: handle,
-            instance_id: completion.instance_id,
+            instance_id,
         })
     }
 }
