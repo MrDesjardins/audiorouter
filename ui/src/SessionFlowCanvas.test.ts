@@ -75,6 +75,31 @@ describe("canvas library drop positions", () => {
     expect(onAddLibraryNode).toHaveBeenCalledWith("compressor", { x: 120, y: 110 });
   });
 
+  it("rejects stale or malformed library drop kinds before backend mutation", () => {
+    const onAddLibraryNode = vi.fn(() => "invalid-1");
+    const onConnect = vi.fn();
+    const { getByLabelText } = render(createElement(SessionFlowCanvas, {
+      session: demoSession,
+      selectedNodeId: "mic",
+      onSelect: vi.fn(),
+      onConnect,
+      onAddLibraryNode,
+    }));
+    const canvas = getByLabelText("Signal-flow graph");
+    const drop = new Event("drop", { bubbles: true });
+    Object.defineProperty(drop, "dataTransfer", {
+      value: {
+        types: ["application/x-audiorouter-library-kind"],
+        getData: () => "stale-processor-kind",
+      },
+    });
+
+    fireEvent(canvas, drop);
+
+    expect(onAddLibraryNode).not.toHaveBeenCalled();
+    expect(onConnect).not.toHaveBeenCalled();
+  });
+
   it("offers a keyboard-accessible click path for adding a processor", () => {
     const onAddLibraryNode = vi.fn(() => "gate-1");
     const { getByRole } = render(createElement(SessionFlowCanvas, {

@@ -56,6 +56,10 @@ export function libraryDropPosition(clientX: number, clientY: number, bounds: Pi
   return { x: Math.max(0, safeX - bounds.left - 20), y: Math.max(0, safeY - bounds.top - 20) };
 }
 
+function isLibraryNodeKind(value: string): value is LibraryNodeKind {
+  return libraryEntries.some((entry) => entry.kind === value);
+}
+
 export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onRemoveNode, onAddLibraryNode, canEdit = true }: SessionFlowCanvasProps) {
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
   const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey));
@@ -121,7 +125,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
   }));
 
   return (
-    <div className="session-flow-canvas" aria-label="Signal-flow graph" onDragOver={(event) => { if (event.dataTransfer.types.includes("application/x-audiorouter-library-kind")) event.preventDefault(); }} onDrop={(event) => { const kind = event.dataTransfer.getData("application/x-audiorouter-library-kind") as LibraryNodeKind; if (!kind) return; event.preventDefault(); const bounds = event.currentTarget.getBoundingClientRect(); const position = libraryDropPosition(event.clientX, event.clientY, bounds); if (onAddLibraryNode) addLibraryNode(kind, position); else onConnect({ source: LIBRARY_DROP_SOURCE, sourceHandle: kind, target: "__drop__", targetHandle: null }); }}>
+    <div className="session-flow-canvas" aria-label="Signal-flow graph" onDragOver={(event) => { if (event.dataTransfer.types.includes("application/x-audiorouter-library-kind")) event.preventDefault(); }} onDrop={(event) => { const kind = event.dataTransfer.getData("application/x-audiorouter-library-kind"); event.preventDefault(); if (!isLibraryNodeKind(kind)) return; const bounds = event.currentTarget.getBoundingClientRect(); const position = libraryDropPosition(event.clientX, event.clientY, bounds); if (onAddLibraryNode) addLibraryNode(kind, position); else onConnect({ source: LIBRARY_DROP_SOURCE, sourceHandle: kind, target: "__drop__", targetHandle: null }); }}>
       <div className="canvas-library" aria-label="Drag processors to canvas"><strong>Drag or select to add</strong>{libraryEntries.filter((entry): entry is typeof entry & { kind: LibraryNodeKind } => entry.kind !== undefined).map((entry) => <button type="button" key={`drag-${entry.id}`} draggable={canEdit} disabled={!canEdit} onClick={() => addLibraryNode(entry.kind, positionFor(session.nodes.length))} onDragStart={(event) => { if (!canEdit) return; event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-audiorouter-library-kind", entry.kind); }}>{entry.label}</button>)}</div>
       <div className="session-flow-toolbar"><span className="muted">Positions are presentation-only.</span><span className="muted" role="status" aria-live="polite">{selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} selected</span><button type="button" className="secondary" onClick={tidyLayout}>Tidy layout</button><button type="button" className="secondary" onClick={() => { clearLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey); positionsRef.current = {}; setPositions({}); }}>Reset layout</button></div>
       <ReactFlow

@@ -2,13 +2,14 @@
 
 Updated: 2026-09-15.
 
-## Next implementation slice: native VB-Cable route qualification (M02)
+## Next implementation slice: harden visual-editor mutation boundaries (M05)
 
 The backend-owned tray shutdown slice is complete and pushed as `acfa38f2`.
-The next actionable gate is repeated human-testable qualification of the
-existing VB-Cable route while preserving the machine's current configuration.
+The user-mode VB-Cable route and cross-rate/process-loopback gates are already
+evidenced. The next actionable slice hardens the visual editor's drag/drop
+boundary while preserving the machine's current configuration.
 
-Requirement IDs: M02-AUDIO, AUDIO-03, AUDIO-07, REC-09, UI-10.
+Requirement IDs: UI-08, UI-10, UI-13, M02-AUDIO.
 Prerequisites: exact active VB-Cable endpoint identities; administrator-
 authorized live test; automatic stream teardown and before/after media-state
 comparison.
@@ -157,8 +158,11 @@ boundary. A real drop event now exercises the rendered signal-flow canvas and
 proves that the selected built-in processor and bounded canvas coordinates are
 forwarded to the backend draft callback. The same library buttons now also add
 processors through keyboard activation at deterministic presentation-only
-positions. The focused canvas suite passed 6/6; the full UI suite passed
-225/225 tests across 19 files, and TypeScript typecheck passed. This remains
+positions. The drop handler now validates the serialized library kind against
+the supported processor catalog before calculating coordinates or invoking any
+backend callback. A malformed or stale payload therefore fails closed. The
+focused canvas suite passed 9/9; the full UI suite passed
+226/226 tests across 19 files, and TypeScript typecheck passed. This remains
 automated UI evidence and does not replace attended drag/drop, keyboard,
 accessibility, or native-shell acceptance.
 
