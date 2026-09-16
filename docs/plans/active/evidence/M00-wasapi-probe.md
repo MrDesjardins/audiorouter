@@ -41,16 +41,6 @@ lifecycles completed. Temporary probe outputs were removed, and defaults,
 volume, mute, privacy, drivers, signing, startup, and persistent audio
 configuration were unchanged.
 
-## 2026-09-16 - guarded digital impulse correlation
-
-The guarded `m00-native-impulse.ps1 -AllowLiveAudio -ImpulseCount 100`
-acceptance passed against the exact current VB-Cable pair. It detected 97 of
-100 impulse groups, measured zero p95 spacing error, and estimated an 84.98 ms
-onset. Temporary capture/executable artifacts were removed and defaults,
-volume, mute, privacy, drivers, signing, startup, and persistent audio
-configuration were unchanged. The onset is digital loopback evidence, not the
-calibrated acoustic p95 latency gate.
-
 ## 2026-09-15 - event-driven WASAPI lifecycle
 
 The guarded `m00-native-event-live.ps1 -AllowLiveAudio -DurationMilliseconds

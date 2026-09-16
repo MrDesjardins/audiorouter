@@ -32,13 +32,6 @@ lifecycles and correctly classified one occupied render endpoint. Temporary
 probe outputs were removed, and defaults, volume, mute, privacy, drivers,
 signing, startup, and persistent audio configuration were unchanged.
 
-Requalified the guarded VB-Cable digital impulse correlation on 2026-09-16
-with 100 bounded impulses. The exact current pair produced 97 detected groups,
-zero p95 spacing error, and an estimated 84.98 ms onset; temporary capture
-artifacts were removed and persistent audio configuration was unchanged. This
-is digital signal-path evidence only and does not close calibrated physical
-latency without a timestamped physical setup.
-
 Requalified the elevated guarded `tests/acceptance/safe-all.ps1` chain at
 head `d52f7ec4` on 2026-09-16. Toolchain/native probes, x64/ARM64 driver
 source builds, read-only 31-endpoint inventory, disposable SysVAD, M01/M03/
