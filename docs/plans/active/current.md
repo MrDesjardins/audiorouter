@@ -2,6 +2,12 @@
 
 Updated: 2026-09-16.
 
+Added an executable M03 regression on 2026-09-16 for incomplete driver
+packages. The x64 and ARM64 acceptance scripts now copy each generated package
+to a disposable in-repository subdirectory, remove its driver binary, and
+verify the lifecycle preview rejects it before any tool invocation; cleanup
+removes the temporary package. Both focused qualifications passed.
+
 Requalified the complete guarded `safe-all.ps1` chain at pushed head
 `b2c4f357` on 2026-09-16 using an elevated shell because the non-elevated
 attempt was denied by read-only `Get-PnpDevice` WMI inventory. The elevated run

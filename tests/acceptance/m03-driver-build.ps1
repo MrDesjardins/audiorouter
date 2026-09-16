@@ -90,6 +90,7 @@ if ($buildText -notmatch [regex]::Escape("Driver binary: $expectedPlatformRoot")
 # parent chain, and must never invoke pnputil or delete a package.
 $guardState = Join-Path ([IO.Path]::GetTempPath()) ('audiorouter-driver-guard-' + [guid]::NewGuid().ToString('N') + '.json')
 $trackedState = Join-Path ([IO.Path]::GetTempPath()) ('audiorouter-driver-tracked-' + [guid]::NewGuid().ToString('N') + '.json')
+$incompletePackage = Join-Path $expectedPlatformRoot ('Release/package/audiorouter-incomplete-' + [guid]::NewGuid().ToString('N'))
 $guardInf = Join-Path $expectedPlatformRoot 'Release/package/AudioRouterVirtual.inf'
 $foreignInf = Join-Path $expectedPlatformRoot 'Release/package/audiorouter-foreign-test.inf'
 $guardStdout = [IO.Path]::GetTempFileName()
@@ -110,6 +111,24 @@ try {
         (Get-Content -LiteralPath $guardStderr -Raw -ErrorAction SilentlyContinue))
     if ($identityProcess.ExitCode -eq 0 -or $identityOutput -notmatch 'not an AudioRouter package') {
         throw "driver lifecycle accepted an unrelated INF: $identityOutput"
+    }
+
+    New-Item -ItemType Directory -Path $incompletePackage | Out-Null
+    foreach ($packageFile in @('AudioRouterVirtual.inf', 'AudioRouterVirtual.sys', 'AudioRouterVirtual.cat')) {
+        Copy-Item -LiteralPath (Join-Path (Split-Path -Parent $guardInf) $packageFile) `
+            -Destination (Join-Path $incompletePackage $packageFile)
+    }
+    Remove-Item -LiteralPath (Join-Path $incompletePackage 'AudioRouterVirtual.sys') -Force
+    $incompleteInf = Join-Path $incompletePackage 'AudioRouterVirtual.inf'
+    $incompleteProcess = Start-Process -FilePath $powershellExe -ArgumentList @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $manage,
+        '-Install', '-Preview', '-Inf', $incompleteInf, '-State', $guardState
+    ) -RedirectStandardOutput $guardStdout -RedirectStandardError $guardStderr -PassThru
+    $incompleteProcess.WaitForExit(); $incompleteProcess.Refresh()
+    $incompleteOutput = ((Get-Content -LiteralPath $guardStdout -Raw -ErrorAction SilentlyContinue) +
+        (Get-Content -LiteralPath $guardStderr -Raw -ErrorAction SilentlyContinue))
+    if ($incompleteProcess.ExitCode -eq 0 -or $incompleteOutput -notmatch 'package is incomplete') {
+        throw "driver lifecycle accepted an incomplete package: $incompleteOutput"
     }
 
     $previewOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $manage `
@@ -171,6 +190,9 @@ try {
 } finally {
     foreach ($guardPath in @($foreignInf, $guardState, $trackedState, $guardStdout, $guardStderr, $consentStdout, $consentStderr)) {
         if (Test-Path -LiteralPath $guardPath) { Remove-Item -LiteralPath $guardPath -Force }
+    }
+    if (Test-Path -LiteralPath $incompletePackage) {
+        Remove-Item -LiteralPath $incompletePackage -Recurse -Force
     }
 }
 
