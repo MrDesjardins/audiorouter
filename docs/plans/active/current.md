@@ -2,6 +2,15 @@
 
 Updated: 2026-09-15.
 
+- Requalified the authorized 500 ms Rust adapter bridge against the existing
+  VB-Cable pair on 2026-09-15 at pushed head `7978e7f5`. The route processed
+  24,480 captured frames, 191 graph quanta/tap calls, and 24,448 rendered
+  frames at 48 kHz stereo with zero non-finite tap samples, dropped render
+  frames, scheduler XRuns, or deadline misses. The harness stopped and
+  removed every temporary stream/recording and verified unchanged media
+  identity/state. This is existing-VB-Cable user-mode evidence, not
+  production-driver or physical-latency qualification.
+
 - Requalified the complete guarded `safe-all.ps1` chain at pushed head
   `718a8b8a` on 2026-09-15. Toolchain/native compile and 34-endpoint
   read-only inventory, M03 x64 WDK build/signability/catalog, disposable

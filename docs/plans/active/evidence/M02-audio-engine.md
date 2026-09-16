@@ -2174,3 +2174,16 @@ shared-memory file is opened or mapped.
 The focused Windows-audio suite passed 68 tests with formatting and diff
 checks. No driver was installed or loaded and no audio endpoint or persistent
 machine configuration was changed.
+# 2026-09-15 - authorized VB-Cable bridge requalification
+
+The elevated `tests/acceptance/m02-rust-adapter-bridge-live.ps1
+-AllowLiveAudio -DurationMilliseconds 500 -Cycles 1` run passed against the
+exact existing VB-Cable endpoints: capture
+`{0.0.1.00000000}.{06268191-5f8c-42ed-827e-d3c7a19637ed}` and render
+`{0.0.0.00000000}.{71f96f14-94c1-4189-b9b9-df8c960db8f2}`. At 48 kHz stereo,
+the adapter processed 24,480 captured frames, 191 graph quanta/tap calls, and
+24,448 rendered frames with zero non-finite tap samples, dropped render
+frames, scheduler XRuns, or deadline misses. Temporary streams and the
+recording were removed, and media identity/state were unchanged afterward.
+This qualifies the existing VB-Cable user-mode route only; it does not qualify
+the AudioRouter driver or physical latency.
