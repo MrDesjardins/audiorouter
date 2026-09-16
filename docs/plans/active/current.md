@@ -34,6 +34,13 @@ processing time, 168,600 ns maximum block time, and zero deadline misses or
 lateness. The measured 128-frame deadline was 2,666,667 ns; the run preserved
 the exact endpoint IDs and changed no persistent configuration.
 
+The non-installing M03 driver qualification was rerun at this head with VS
+Community MSBuild 18.9.1 and WDK 10.0.28000.0. Utilities, Filters, Main,
+package/catalog, and Inc built successfully with zero signability errors or
+warnings; all generated output was removed. This confirms the source/build
+contract only. Bus provisioning, loaded PortCls ownership, production signing,
+and clean-machine installation remain open and were not attempted.
+
 Next: continue with the remaining guarded cross-rate/process-loopback and
 loaded-driver gates; do not install/load the prototype driver or change audio
 defaults as part of this user-mode qualification.
