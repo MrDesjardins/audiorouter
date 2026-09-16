@@ -2,6 +2,18 @@
 
 Updated: 2026-09-16.
 
+Extended the guarded M06 local compatibility matrix on 2026-09-16. The
+supplied x64 TDR Nova VST3 passed single-stream, auxiliary-bus, asynchronous
+staging, bounded recovery, finite processing, and shutdown with the explicit
+state-unsupported allowance; its x64 VST2 DLL passed 44.1/48/96 kHz processing
+and editor containment with unchanged SHA-256. COMPER passed single-stream but
+was correctly rejected for the requested one-channel auxiliary layout because
+it declares a two-channel auxiliary input. BUSTERse VST3 activation again
+failed closed with contained `0xC0000005`. Results are recorded in the plugin
+compatibility snapshot; no plugin was registered or modified and no audio
+configuration changed. Next task remains production driver/bridge
+qualification and attended shell acceptance.
+
 Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
 `861b4c54` on 2026-09-16 after the strengthened M03 driver source-contract
 gate. M00 toolchain/native inventory and disposable SysVAD checks, AudioRouter

@@ -1,5 +1,22 @@
 # Plugin compatibility snapshot
 
+The supplied x64 TDR Nova VST3 bundle was requalified on 2026-09-16 with
+the explicit state-unsupported allowance. Single-stream, auxiliary-bus,
+asynchronous staging, bounded failure recovery, repeated-quantum finite
+processing, and shutdown passed; normal opaque-state restoration remains
+outside this fixture's contract. Its x64 VST2 DLL also passed processing at
+44.1, 48, and 96 kHz plus both editor-containment checks. The VST2 SHA-256
+`4dfc5973416b4b23fa9351128b65e7b42547f6280436cce4cbf8aab1334e4e33` was
+unchanged before and after testing.
+
+The supplied x64 COMPER VST3 module passed the valid single-stream worker
+gate on 2026-09-16. The auxiliary-bus gate correctly rejected its declared
+two-channel auxiliary input when the requested test layout was one channel,
+so it is not multi-bus qualified. The supplied BUSTERse VST3 module again
+failed at activation with child exit `-1073741819` (`0xC0000005`, access
+violation); the isolated worker contained and reaped it. These results are
+explicit fixture compatibility boundaries, not a universal vendor claim.
+
 The pinned SDK AGain fixture was requalified on 2026-09-15 through the native
 VST3 worker. Single-stream, auxiliary/multi-bus, asynchronous graph staging,
 bounded failure recovery, validated-state restart, repeated-quantum finite
