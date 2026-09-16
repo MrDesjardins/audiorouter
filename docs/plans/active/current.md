@@ -14,6 +14,14 @@ production-driver/PortCls, signing, clean-machine, physical-latency, and
 attended UI/accessibility gates; no safe repository-local substitute can
 close those claims.
 
+Attempted the attended shell/WebView2 gate again on 2026-09-16 by launching
+the repository-built shell against a disposable database. The shell process
+started, but the Windows automation surface returned no targetable app or
+browser, so no visual, Narrator, scaling, or interactive graph evidence was
+claimed. The process and temporary database were stopped and removed; the
+user's persistent database, endpoints, driver state, and audio configuration
+were not touched.
+
 Re-ran `cargo test --workspace --locked -- --test-threads=1` on 2026-09-16
 after the release-documentation reconciliation. All workspace suites passed:
 36 CLI, 3 MCP, 171 control with 2 guarded-live ignores, 65 domain, 32 DSP,
