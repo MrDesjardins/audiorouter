@@ -2,6 +2,15 @@
 
 Updated: 2026-09-15.
 
+- Requalified the complete guarded `safe-all.ps1` chain at pushed head
+  `a5d96803` on 2026-09-15. WDK build/signability, 34-endpoint inventory,
+  disposable SysVAD, M01 CLI, M04 DSP/recording, M05 UI (220 tests/build),
+  M06 VST3/VST2 workers, M07 headless controls, unsigned M08 artifacts, 159
+  normative mappings, and documentation (54 Markdown files, 207 links) all
+  passed; cleanup removed 15 temporary children. No driver installation,
+  signing-mode, registration, live audio, or persistent machine audio
+  configuration changed. Evidence: [M08 release](evidence/M08-release.md).
+
 - Added UI-02 canvas node deletion on 2026-09-15. Editable nodes can be
   selected and removed with Delete after confirmation; incident edges are
   removed from the local draft and normal backend plan/commit validation is

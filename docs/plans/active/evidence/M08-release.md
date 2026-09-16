@@ -1,5 +1,19 @@
 # M08 release evidence
 
+## 2026-09-15 - complete guarded acceptance at `a5d96803`
+
+The elevated `tests/acceptance/safe-all.ps1` chain passed at the current
+head. It covered VS/SDK/WDK discovery, the AudioRouter x64 WDK
+compile/signability/catalog, 34-endpoint read-only inventory, disposable
+SysVAD, M01 CLI, M04 DSP/recording, M05 UI (220 tests and production build),
+M06 VST3 SDK/native worker and VST2 fixtures, M07 headless controls, unsigned
+M08 artifacts, 159 normative mappings, and documentation validation (54
+Markdown files and 207 local links). Cleanup removed 15 run-owned temporary
+children. No driver was installed or loaded, no signing mode or startup/
+plugin registration changed, and no live or persistent machine audio
+configuration changed. Loaded PortCls transport, production signing/install,
+physical latency, and attended UI/accessibility remain open gates.
+
 ## 2026-09-15 - guarded acceptance at `718a8b8a`
 
 The complete elevated `tests/acceptance/safe-all.ps1` chain passed at the
