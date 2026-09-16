@@ -16584,6 +16584,35 @@ mod tests {
     }
 
     #[test]
+    fn system_quit_keeps_session_running_when_recorder_finalization_fails() {
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        plane.session_start(&original.id).unwrap();
+        let mut recorder = RecorderController::new();
+        recorder.arm().unwrap();
+        recorder.start(128).unwrap();
+        plane.recorders.insert(original.id.clone(), recorder);
+        let request = || JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!("quit")),
+            method: "system.quit".into(),
+            params: Some(json!({ "idempotencyKey": "quit-retry" })),
+        };
+        let grant = ClientGrant::for_role(ClientRole::Operator);
+        let failed = plane.dispatch_authorized_for_client(request(), "shell", &grant);
+        assert!(failed.result.is_none());
+        assert_eq!(plane.runtimes[&original.id].state(), RuntimeState::Running);
+
+        plane
+            .attach_recorder_worker(original.id.clone(), Box::new(TestRecorderWorker))
+            .unwrap();
+        let recovered = plane.dispatch_authorized_for_client(request(), "shell", &grant);
+        assert_eq!(recovered.result.as_ref().unwrap()["state"], "stopped");
+        assert_eq!(plane.runtimes[&original.id].state(), RuntimeState::Stopped);
+    }
+
+    #[test]
     fn session_runtime_label_distinguishes_native_attachment() {
         assert_eq!(session_runtime_label(false), "fake");
         assert_eq!(session_runtime_label(true), "native");

@@ -6,7 +6,7 @@ Added the authenticated idempotent `system.quit` operation and routed the
 native tray action through it. ControlPlane now owns bounded recorder cleanup
 before stopping running sessions; a successful result reports stopped sessions
 and finalized node recorders, while an unsuccessful finalization leaves the
-affected lifecycle available for recovery. Control tests (166, with 2 guarded
+affected lifecycle available for recovery. Control tests (167, with 2 guarded
 ignores), shell tests (26), strict Clippy, contract drift (75 methods), and
 the UI suite (221) passed. No live endpoint or persistent machine audio
 configuration was changed.

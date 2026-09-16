@@ -28,7 +28,7 @@ failed finalization never reports the affected session stopped.
   it. The operation is authenticated, idempotent, bounded, finalizes active
   node recorders before stopping running sessions, and returns canonical
   session/recorder results. TypeScript/Rust contract drift passes at 75
-  methods; control (166, 2 ignored), shell (26), workspace (78 Windows-audio
+  methods; control (167, 2 ignored), shell (26), workspace (78 Windows-audio
   tests), UI (221), strict Clippy, formatting, and documentation checks pass.
   No live endpoint or persistent machine audio configuration changed.
 
