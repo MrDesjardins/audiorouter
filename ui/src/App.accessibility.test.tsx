@@ -249,11 +249,15 @@ describe("VB-Cable endpoint selection", () => {
       nativeSessionIds: ["native-session"],
       sessionIds: ["portable-session"],
     }));
-    render(<App backend={{ ...connectedPreviewBackend(), osTransition }} />);
+    const startSession = vi.fn(async () => ({ sessionId: "portable-session", state: "running" as const, generation: 1, runtime: "fake" as const }));
+    render(<App backend={{ ...connectedPreviewBackend(), osTransition, startSession }} />);
     fireEvent.click(await screen.findByRole("button", { name: "Revalidate after resume" }));
     await waitFor(() => expect(osTransition).toHaveBeenCalledWith("resume", expect.any(String)));
     expect(await screen.findByText(/No route was restarted/)).toBeTruthy();
     expect(screen.getByText(/portable routes 1; native routes 1/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Restart validated portable routes" }));
+    await waitFor(() => expect(startSession).toHaveBeenCalledWith("portable-session", expect.any(String)));
+    expect(await screen.findByText(/Restarted 1 validated portable route/)).toBeTruthy();
   });
 
   it("keeps the backend-authored audio reason visible in the status summary", async () => {

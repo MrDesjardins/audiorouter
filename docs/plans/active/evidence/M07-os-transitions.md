@@ -44,7 +44,10 @@ dispatcher.
 
 The connected UI exposes a resume-validation panel. It displays the backend's
 endpoint-inventory result and exact portable/native revalidation candidates;
-the panel does not call session start and explicitly keeps routes stopped.
+the panel does not start routes during validation and explicitly keeps native
+routes stopped. A separate deliberate action can restart only the portable
+IDs returned by the backend, with per-route failure reporting; native IDs are
+never passed to session start.
 
 The Tauri shell now owns a Windows message-only listener in
 `src-tauri/src/os_transition_windows.rs`. WTS session notifications map the

@@ -2,6 +2,15 @@
 
 Updated: 2026-09-15.
 
+- Completed the explicit portable-resume action on 2026-09-15. After
+  `system.osTransition` validation, the UI can deliberately restart only the
+  returned portable session IDs, reports per-route failures, and leaves native
+  session IDs stopped for endpoint/driver validation. UI typecheck, production
+  build, and 218 UI tests pass. Evidence:
+  [M07 OS-transition policy evidence](evidence/M07-os-transitions.md). No
+  machine audio, driver, power, or default-device configuration changed. Next
+  action: continue the next safe M03/M07 delivery slice.
+
 - Added a user-visible resume-validation panel on 2026-09-15. The UI can
   invoke the shared `system.osTransition` resume boundary, shows refreshed
   endpoint inventory plus portable/native route counts, and explicitly states

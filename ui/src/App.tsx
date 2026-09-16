@@ -177,7 +177,25 @@ function OsTransitionPanel({ backend }: { backend: UiBackend }) {
       setBusy(false);
     }
   };
-  return <section className="panel os-transition-panel" aria-labelledby="os-transition-heading"><div className="section-heading"><div><p className="eyebrow">Background lifecycle</p><h2 id="os-transition-heading">Resume validation</h2></div><span className="badge">{result?.endpointInventory ?? "not run"}</span></div><p className="muted">After sleep, sign-out, or an endpoint change, refresh the exact endpoint inventory before restarting any stopped route.</p><button type="button" className="secondary" onClick={() => void revalidate()} disabled={!backend.connected || !backend.osTransition || busy}>Revalidate after resume</button>{result && <p className="muted" role="status">Last result: {result.action}; portable routes {result.sessionIds.length}; native routes {result.nativeSessionIds.length}.</p>}{message && <p className="muted" role="status" aria-live="polite">{message}</p>}<p className="muted">Native routes remain stopped until deliberate endpoint/driver validation. This action never changes Windows defaults, volume, mute, or driver state.</p></section>;
+  const restartPortable = async () => {
+    if (!result || result.sessionIds.length === 0 || busy) return;
+    setBusy(true);
+    let started = 0;
+    const failures: string[] = [];
+    for (const sessionId of result.sessionIds) {
+      try {
+        await backend.startSession(sessionId, uiIdempotencyKey(`os-restart-${sessionId}`));
+        started += 1;
+      } catch (error) {
+        failures.push(`${sessionId}: ${formatUiError(error, "start failed")}`);
+      }
+    }
+    setMessage(failures.length === 0
+      ? `Restarted ${started} validated portable route${started === 1 ? "" : "s"}. Native routes remain stopped.`
+      : `Restarted ${started} portable route${started === 1 ? "" : "s"}; ${failures.length} route${failures.length === 1 ? "" : "s"} failed. ${failures.join(" ")}`);
+    setBusy(false);
+  };
+  return <section className="panel os-transition-panel" aria-labelledby="os-transition-heading"><div className="section-heading"><div><p className="eyebrow">Background lifecycle</p><h2 id="os-transition-heading">Resume validation</h2></div><span className="badge">{result?.endpointInventory ?? "not run"}</span></div><p className="muted">After sleep, sign-out, or an endpoint change, refresh the exact endpoint inventory before restarting any stopped route.</p><div className="actions"><button type="button" className="secondary" onClick={() => void revalidate()} disabled={!backend.connected || !backend.osTransition || busy}>Revalidate after resume</button>{result?.sessionIds.length ? <button type="button" className="primary" onClick={() => void restartPortable()} disabled={!backend.connected || busy}>Restart validated portable routes</button> : null}</div>{result && <p className="muted" role="status">Last result: {result.action}; portable routes {result.sessionIds.length}; native routes {result.nativeSessionIds.length}.</p>}{message && <p className="muted" role="status" aria-live="polite">{message}</p>}<p className="muted">Native routes remain stopped until deliberate endpoint/driver validation. This action never changes Windows defaults, volume, mute, or driver state.</p></section>;
 }
 
 export function App({ backend }: { backend?: UiBackend } = {}) {
