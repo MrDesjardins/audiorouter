@@ -2,6 +2,15 @@
 
 Updated: 2026-09-15.
 
+- Added the focused MCP `os_transition` tool on 2026-09-15. It validates the
+  four transition names, requires an idempotency key, carries the existing
+  session-control authorization, and forwards to `system.osTransition` rather
+  than owning transition state. The full CLI/MCP suite passes 36 tests after
+  updating the tool-count acceptance from 47 to 48. Evidence:
+  [M07 OS-transition policy evidence](evidence/M07-os-transitions.md). No
+  audio, driver, power, or machine configuration changed. Next action:
+  continue the next safe M03/M07 delivery slice.
+
 - Exposed the STATE-11 `system.osTransition` method through the shared
   TypeScript contract and UI backend adapter on 2026-09-15. Connected hosts now
   have a typed path for the authenticated transition response, including

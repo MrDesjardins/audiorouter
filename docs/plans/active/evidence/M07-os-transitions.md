@@ -32,6 +32,11 @@ method discovery and the readable API reference. The TypeScript contract and
 UI backend adapter now expose the same typed method to connected hosts; the
 disconnected adapter fails closed.
 
+The MCP adapter now exposes a focused `os_transition` tool with the same
+transition enum and required idempotency key. It is non-read-only and
+idempotent, and dispatches through the authenticated control plane; the MCP
+adapter owns no transition state.
+
 The Tauri shell now owns a Windows message-only listener in
 `src-tauri/src/os_transition_windows.rs`. WTS session notifications map the
 current user's lock and logoff events; `WM_POWERBROADCAST` maps suspend and
@@ -55,6 +60,8 @@ npm.cmd run typecheck --prefix ui
 clean
 npm.cmd test --prefix ui -- --run
 217 passed; 0 failed
+cargo test -p audiorouter-cli --locked
+36 passed; 0 failed
 ```
 
 This is portable policy evidence, not Windows power-notification evidence.

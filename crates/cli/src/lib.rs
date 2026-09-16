@@ -2199,6 +2199,7 @@ fn mcp_tools() -> Value {
         { "name": "plan_graph_change", "description": "Validate and preview a complete graph candidate without committing it.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "baseRevision": { "type": "integer", "minimum": 0 }, "candidate": { "type": "object" } }, "required": ["sessionId", "baseRevision", "candidate"], "additionalProperties": false } },
         { "name": "apply_graph_change", "description": "Commit a previously planned graph change with stale-plan and idempotency checks.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string" }, "baseRevision": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string" } }, "required": ["planId", "baseRevision", "idempotencyKey"], "additionalProperties": false } },
         { "name": "control_session", "description": "Start or stop one session through the authorized lifecycle API with an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "action": { "enum": ["start", "stop"] }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "action", "idempotencyKey"], "additionalProperties": false } },
+        { "name": "os_transition", "description": "Apply an authenticated lock, sign-out, sleep, or resume transition policy; native and portable routes remain stopped until explicit revalidation.", "inputSchema": { "type": "object", "properties": { "transition": { "enum": ["lock", "signOut", "sleep", "resume"] }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["transition", "idempotencyKey"], "additionalProperties": false } },
         { "name": "call_api", "description": "Call one validated permitted AudioRouter API method.", "inputSchema": { "type": "object", "properties": { "method": { "type": "string" }, "params": { "type": ["object", "null"] } }, "required": ["method"], "additionalProperties": false } }
     ]);
     for tool in tools.as_array_mut().expect("MCP tool catalog is an array") {
@@ -2317,6 +2318,28 @@ fn mcp_tool_call(
                 "idempotencyKey": arguments["idempotencyKey"]
             });
             return mcp_dispatch_tool(plane, client_id, grant, pipe_name, id, method, Some(params));
+        }
+        "os_transition" => {
+            let transition = arguments["transition"].as_str().unwrap_or_default();
+            if !matches!(transition, "lock" | "signOut" | "sleep" | "resume") {
+                return mcp_tool_error(
+                    id,
+                    "os_transition transition must be lock, signOut, sleep, or resume",
+                );
+            }
+            let params = json!({
+                "transition": transition,
+                "idempotencyKey": arguments["idempotencyKey"]
+            });
+            return mcp_dispatch_tool(
+                plane,
+                client_id,
+                grant,
+                pipe_name,
+                id,
+                "system.osTransition",
+                Some(params),
+            );
         }
         "call_api" => {
             let method = arguments["method"].as_str().unwrap_or_default();
@@ -3934,7 +3957,21 @@ mod tests {
             }),
         );
         assert_eq!(denied_clear["result"]["isError"], true);
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 47);
+        let transition = mcp_tool_call(
+            &mut plane,
+            "mcp-test",
+            &operator,
+            None,
+            &json!({
+                "id": 13,
+                "params": { "name": "os_transition", "arguments": { "transition": "lock", "idempotencyKey": "mcp-os-lock-1" } }
+            }),
+        );
+        assert_eq!(transition["result"]["isError"], false);
+        let transition_content = transition["result"]["content"][0]["text"].as_str().unwrap();
+        let transition_payload: Value = serde_json::from_str(transition_content).unwrap();
+        assert_eq!(transition_payload["result"]["transition"], "lock");
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 48);
         let tools = mcp_tools();
         let create_recorder = tools
             .as_array()
@@ -3988,6 +4025,7 @@ mod tests {
             ("remove_recording_entry", false, true, true),
             ("reveal_recording", false, false, false),
             ("call_api", false, false, false),
+            ("os_transition", false, false, true),
         ] {
             let tool = tools
                 .as_array()
@@ -4053,6 +4091,7 @@ mod tests {
                 "control_session",
                 json!(["sessionId", "action", "idempotencyKey"]),
             ),
+            ("os_transition", json!(["transition", "idempotencyKey"])),
             (
                 "apply_graph_change",
                 json!(["planId", "baseRevision", "idempotencyKey"]),
