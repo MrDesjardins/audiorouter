@@ -1,5 +1,16 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-16 - disposable developer-signing tool qualification
+
+WDK `signtool.exe` successfully signed a disposable copy of the x64
+`AudioRouterVirtual.sys` with the existing local `WDKTestCert`. Normal trust
+verification then rejected the copy because its certificate chain terminates
+at an untrusted test root. The signed copy was deleted immediately; the
+repository package was not modified, and no driver, boot policy, test-signing
+mode, or machine audio configuration changed. This qualifies the local
+developer tool path only. Production certificate/catalog signing and trusted
+Secure Boot/HVCI installation remain open.
+
 ## 2026-09-16 - security and prototype-signature prerequisite audit
 
 Read-only Windows checks reported Secure Boot enabled and VBS/Memory Integrity

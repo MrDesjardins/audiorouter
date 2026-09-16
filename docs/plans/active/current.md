@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Validated the local signing-tool boundary on 2026-09-16 using only a
+disposable copy of the x64 prototype `.sys`. WDK `signtool.exe` successfully
+signed the copy with the existing `WDKTestCert`, while normal trust
+verification rejected its untrusted test root. The temporary signed copy was
+deleted; the repository package, boot policy, driver state, and audio
+configuration were untouched. This confirms developer test-signing tooling,
+not production trust or Secure Boot/HVCI release readiness.
+
 Checked production-driver prerequisites on 2026-09-16 without changing system
 state. Secure Boot is enabled and VBS/Memory Integrity is active. The WDK
 `signtool.exe` is installed, but read-only verification of the generated x64

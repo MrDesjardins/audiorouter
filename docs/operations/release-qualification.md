@@ -89,6 +89,9 @@ Windows SDK, but read-only verification of the generated x64 and ARM64
 prototype `.sys` files reports `No signature found`. The packages therefore
 remain unsigned development artifacts; certificate submission, production
 catalog signing, and clean-machine installation evidence are still required.
+A disposable copy can be signed with the local `WDKTestCert`, but normal
+trust verification rejects that chain at its untrusted test root; this is
+developer-tool evidence only and must not be confused with production trust.
 
 ## Recovery and uninstall expectations
 
