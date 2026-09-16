@@ -41,6 +41,11 @@ resilience regressions. The full control/CLI/MCP/plugin-host gate passed with
 tests; strict package checks completed without audio or machine configuration
 access.
 
+Re-ran the focused `tests/acceptance/m07-shell-rpc.ps1` gate on 2026-09-15.
+The frontend-owned WebView initialization to Tauri command to authenticated
+`system.describe` path passed. This remains transport/control-plane evidence;
+it opened no audio endpoint and changed no persistent machine configuration.
+
 Validation completed on 2026-09-15: the Rust adapter bridge passed two 500 ms
 cycles with 24,480 captured and 24,448 rendered frames per cycle, zero dropped
 frames, xruns, or deadline misses. The control-owned route passed with 23,520

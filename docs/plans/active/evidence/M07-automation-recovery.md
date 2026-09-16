@@ -7,6 +7,11 @@ suspend/resume and durable reconnect regressions were added. Results included
 172 control tests, 35 CLI tests, 3 MCP stdio tests, and 13 worker-process
 tests. No audio endpoint or machine configuration was accessed.
 
+The focused `tests/acceptance/m07-shell-rpc.ps1` gate also passed on
+2026-09-15, proving the frontend-owned WebView initialization, Tauri command,
+and authenticated backend `system.describe` path. No audio endpoint or
+persistent machine configuration was accessed.
+
 ## 2026-09-15 - backend-owned quit/finalization contract
 
 Added the authenticated idempotent `system.quit` operation and routed the
