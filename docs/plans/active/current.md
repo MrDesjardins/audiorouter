@@ -77,6 +77,13 @@ persistent audio configuration changed. Evidence: [M02 audio engine]
 (evidence/M02-audio-engine.md). This remains existing-device user-mode
 evidence, not loaded-driver or physical-latency qualification.
 
+Re-ran the authorized guarded Rust adapter route acceptance on 2026-09-15
+with `-AllowLiveAudio`. It selected the exact active VB-Cable render/capture
+pair, captured 24,000 frames, processed 187 graph blocks, and routed 23,936
+frames. The 128-frame deadline was 2,666,667 ns with zero deadline misses or
+lateness; temporary clients stopped cleanly and endpoint/media state remained
+unchanged. Evidence: [M02 audio engine](evidence/M02-audio-engine.md).
+
 Corrected platform-specific artifact discovery in `build.ps1` on 2026-09-15.
 The previous recursive search could report a stale artifact from another
 architecture; discovery now stays under the requested `x64` or `ARM64` output

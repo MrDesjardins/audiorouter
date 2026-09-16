@@ -1,5 +1,17 @@
 # 2026-09-15 - live built-in processing chain validation
 
+## 2026-09-15 - Rust adapter route requalification
+
+The authorized `m02-rust-adapter-route-live.ps1 -AllowLiveAudio` acceptance
+passed with the exact active `CABLE Input (VB-Audio Virtual Cable)` render
+endpoint and `CABLE Output (VB-Audio Virtual Cable)` capture endpoint. The
+500 ms route captured 24,000 frames, processed 187 graph blocks, and routed
+23,936 frames. The 128-frame deadline was 2,666,667 ns; deadline misses and
+lateness were zero, and processing telemetry stayed within the bounded
+histogram. Temporary clients were stopped and endpoint/media state was
+unchanged; defaults, volume, mute, privacy, driver, signing, and startup
+configuration were untouched.
+
 ## 2026-09-15 - native lifecycle requalification after M03 harness fix
 
 The authorized `m02-control-native-live.ps1 -AllowLiveAudio` acceptance
