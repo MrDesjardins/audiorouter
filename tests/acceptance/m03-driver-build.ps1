@@ -6,9 +6,18 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Some managed shells expose both Path and PATH in the process environment.
+# PowerShell's Start-Process cannot materialize that case-insensitive duplicate;
+# normalize this test process only. The process exits after the acceptance run,
+# so the machine/user environment is not changed.
+$existingPath = $env:Path
+[Environment]::SetEnvironmentVariable('PATH', $null, 'Process')
+[Environment]::SetEnvironmentVariable('Path', $existingPath, 'Process')
+
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $build = Join-Path $workspace 'drivers/audiorouter-virtual/build.ps1'
 $manage = Join-Path $workspace 'drivers/audiorouter-virtual/manage.ps1'
+$powershellExe = Join-Path $env:WINDIR 'System32/WindowsPowerShell/v1.0/powershell.exe'
 $adapter = Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/adapter.cpp'
 $infSource = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/AudioRouterVirtual.inx') -Raw
 foreach ($required in @(
@@ -34,6 +43,10 @@ foreach ($required in @(
         '$maxStateBytes',
         'Read-BoundedState',
         'Assert-AudioRouterInf',
+        'Assert-AudioRouterPackage',
+        'package is incomplete',
+        'package file cannot be a reparse point',
+        'packageFiles',
         'lifecycle state file cannot be a reparse point',
         'lifecycle state file exceeds',
         'FileAttributes]::ReparsePoint',
@@ -88,7 +101,7 @@ if (-not (Test-Path -LiteralPath $guardInf -PathType Leaf)) {
 }
 try {
     'Class=MEDIA' | Set-Content -LiteralPath $foreignInf -Encoding ASCII -NoNewline
-    $identityProcess = Start-Process -FilePath powershell.exe -ArgumentList @(
+    $identityProcess = Start-Process -FilePath $powershellExe -ArgumentList @(
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $manage,
         '-Install', '-Preview', '-Inf', $foreignInf, '-State', $guardState
     ) -RedirectStandardOutput $guardStdout -RedirectStandardError $guardStderr -PassThru
@@ -105,12 +118,14 @@ try {
     $preview = ($previewOutput -join "`n") | ConvertFrom-Json
     if ($preview.mutates -ne $false -or $preview.action -ne 'install' -or
         $preview.ready -ne $true -or $preview.statePresent -ne $false -or
-        $preview.consentProvided -ne $false -or $preview.command[0] -ne '/add-driver' -or
+         $preview.packageFiles.'AudioRouterVirtual.sys' -eq $null -or
+         $preview.packageFiles.'AudioRouterVirtual.cat' -eq $null -or
+         $preview.consentProvided -ne $false -or $preview.command[0] -ne '/add-driver' -or
         (Test-Path -LiteralPath $guardState)) {
         throw "driver lifecycle preview was not read-only or did not describe install: $($previewOutput -join ' ')"
     }
 
-    $consentProcess = Start-Process -FilePath powershell.exe -ArgumentList @(
+    $consentProcess = Start-Process -FilePath $powershellExe -ArgumentList @(
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $manage,
         '-Install', '-Inf', $guardInf, '-State', $guardState
     ) -RedirectStandardOutput $consentStdout -RedirectStandardError $consentStderr -PassThru
@@ -143,7 +158,7 @@ try {
         throw "tracked driver lifecycle preview did not describe uninstall: $($trackedPreviewOutput -join ' ')"
     }
 
-    $guardProcess = Start-Process -FilePath powershell.exe -ArgumentList @(
+    $guardProcess = Start-Process -FilePath $powershellExe -ArgumentList @(
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $manage,
         '-Uninstall', '-AllowDriverInstall', '-Inf', $guardInf, '-State', $guardState
     ) -RedirectStandardOutput $guardStdout -RedirectStandardError $guardStderr -PassThru

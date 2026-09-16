@@ -106,8 +106,11 @@ The non-mutating preview is available before that isolated operation:
 .\drivers\audiorouter-virtual\manage.ps1 -Install -Preview -Inf .\path\to\AudioRouterVirtual.inf
 ```
 
-It emits a bounded JSON plan and does not invoke `pnputil`; a preview of an
-uninstall similarly reports the tracked package or the fail-closed blocker.
+It emits a bounded JSON plan and does not invoke `pnputil`. The plan includes
+the validated driver-binary and catalog paths, and refuses an incomplete,
+reparse-point, or oversized package before describing installation. A preview
+of an uninstall similarly reports the tracked package or the fail-closed
+blocker.
 
 ## Known release blockers
 

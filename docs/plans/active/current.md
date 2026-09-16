@@ -2,6 +2,15 @@
 
 Updated: 2026-09-16.
 
+Added bounded package-companion validation to the M03 lifecycle entrypoint
+on 2026-09-16. Before preview or execution, the generated INF directory must
+contain exactly one regular, non-reparse AudioRouter driver binary and catalog
+within bounded sizes; preview now reports their resolved paths. x64 and ARM64
+qualifications passed, including the existing unrelated-INF, consent, and
+tracked-state regressions. The acceptance harness also normalizes a duplicate
+case-variant PATH inherited from this machine's managed shell in-process only;
+the machine environment and driver/audio state were unchanged.
+
 Added package-identity validation to the M03 lifecycle entrypoint on
 2026-09-16. Before preview or execution, the bounded generated `.inf` must
 contain the AudioRouter software-device hardware ID and driver binary marker;

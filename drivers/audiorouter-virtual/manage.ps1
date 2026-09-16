@@ -92,6 +92,35 @@ function Assert-AudioRouterInf {
     }
 }
 
+function Assert-AudioRouterPackage {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $InfPath
+    )
+    $packageDirectory = [IO.Directory]::GetParent($InfPath)
+    $requiredFiles = @(
+        @{ Name = 'AudioRouterVirtual.sys'; MaxBytes = 16MB },
+        @{ Name = 'AudioRouterVirtual.cat'; MaxBytes = 256KB }
+    )
+    $resolved = [ordered]@{}
+    foreach ($required in $requiredFiles) {
+        $candidate = Get-ChildItem -LiteralPath $packageDirectory.FullName -File -Force |
+            Where-Object { [string]::Equals($_.Name, $required.Name, [StringComparison]::OrdinalIgnoreCase) }
+        if ($candidate.Count -ne 1) {
+            throw "The AudioRouter package is incomplete: expected exactly one $($required.Name) beside the INF"
+        }
+        $item = $candidate[0]
+        if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "The AudioRouter package file cannot be a reparse point: $($item.FullName)"
+        }
+        if ($item.Length -gt $required.MaxBytes) {
+            throw "The AudioRouter package file exceeds its validation limit: $($item.FullName)"
+        }
+        $resolved[$required.Name] = $item.FullName
+    }
+    return $resolved
+}
+
 if (-not $Preview -and -not $AllowDriverInstall) {
     throw 'Driver lifecycle changes require -AllowDriverInstall in addition to -Install or -Uninstall.'
 }
@@ -108,6 +137,7 @@ if (-not [string]::Equals([IO.Path]::GetExtension($infPath), '.inf',
 Assert-NoReparsePath -Path $infPath -StopAt $driverRoot
 Assert-NoReparseAncestors -Path (Split-Path -Parent $statePath)
 Assert-AudioRouterInf -Path $infPath
+$packageFiles = Assert-AudioRouterPackage -InfPath $infPath
 
 $pnputil = Join-Path $env:WINDIR 'System32\pnputil.exe'
 if (-not (Test-Path -LiteralPath $pnputil -PathType Leaf)) {
@@ -124,6 +154,7 @@ if ($Preview) {
         inf = $infPath
         state = $statePath
         tool = $pnputil
+        packageFiles = $packageFiles
         requiredConsent = 'AllowDriverInstall for execution'
         consentProvided = [bool]$AllowDriverInstall
     }
