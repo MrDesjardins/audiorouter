@@ -21,6 +21,16 @@ overruns or underruns. Both streams stopped and reset cleanly, and no
 persistent audio configuration changed. This is process-loopback evidence,
 not arbitrary isolation or PID-reuse qualification.
 
+## 2026-09-16 - all-endpoint WASAPI lifecycle sweep
+
+The guarded `m00-native-live.ps1 -AllowLiveAudio -DurationMilliseconds 100`
+acceptance passed with 13 capture endpoints and 18 render endpoints in the
+current inventory. One occupied render endpoint was correctly reported as
+unavailable while the remaining bounded shared capture and silent-render
+lifecycles completed. Temporary probe outputs were removed, and defaults,
+volume, mute, privacy, drivers, signing, startup, and persistent audio
+configuration were unchanged.
+
 ## 2026-09-15 - event-driven WASAPI lifecycle
 
 The guarded `m00-native-event-live.ps1 -AllowLiveAudio -DurationMilliseconds

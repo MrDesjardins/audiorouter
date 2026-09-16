@@ -18,6 +18,13 @@ Streams stopped and reset cleanly; no persistent audio configuration changed.
 This remains process-loopback evidence, not arbitrary isolation or PID-reuse
 qualification.
 
+Requalified the guarded all-endpoint WASAPI lifecycle sweep on 2026-09-16.
+The current inventory exposed 13 capture endpoints and 18 render endpoints;
+the bounded run completed the available shared capture/silent-render
+lifecycles and correctly classified one occupied render endpoint. Temporary
+probe outputs were removed, and defaults, volume, mute, privacy, drivers,
+signing, startup, and persistent audio configuration were unchanged.
+
 Requalified the elevated guarded `tests/acceptance/safe-all.ps1` chain at
 head `d52f7ec4` on 2026-09-16. Toolchain/native probes, x64/ARM64 driver
 source builds, read-only 31-endpoint inventory, disposable SysVAD, M01/M03/
