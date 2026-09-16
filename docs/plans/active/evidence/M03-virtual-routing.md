@@ -1,5 +1,15 @@
 # M03 virtual-routing contract evidence
 
+## 2026-09-16 - endpoint invalidation survives read-only inventory
+
+The control seam now retains endpoint changes observed by `devices.list` while
+an endpoint worker is attached. The next mutating native pump consumes those
+pending changes and fails closed on an exact capture/render binding; explicit
+prepare/rebind clears observations resolved against the latest snapshot. This
+closes the notification-loss case where inventory was queried before the
+audio pump. Control (173) and Windows-audio (82) tests plus strict Clippy
+passed. No endpoint or persistent machine audio configuration changed.
+
 ## 2026-09-13 - guarded VB-Cable bridge publication
 
 Command:
