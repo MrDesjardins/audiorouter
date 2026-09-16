@@ -10,9 +10,10 @@ evidenced. The next actionable slice hardens the visual editor's drag/drop
 boundary while preserving the machine's current configuration.
 
 Requirement IDs: UI-08, UI-10, UI-13, M02-AUDIO.
-Prerequisites: exact active VB-Cable endpoint identities; administrator-
-authorized live test; automatic stream teardown and before/after media-state
-comparison.
+Prerequisites: a targetable desktop surface for attended UI acceptance; a
+production-owned PortCls driver design and signing path for native endpoint
+qualification. Portable verification does not require opening an endpoint or
+changing persistent machine audio configuration.
 
 Validation completed on 2026-09-15: the Rust adapter bridge passed two 500 ms
 cycles with 24,480 captured and 24,448 rendered frames per cycle, zero dropped
@@ -168,6 +169,15 @@ disconnected drops must still reach the adapter to produce its connection
 diagnostic. This remains
 automated UI evidence and does not replace attended drag/drop, keyboard,
 accessibility, or native-shell acceptance.
+
+Re-ran `cargo test --workspace --locked --all-targets -- --test-threads=1`
+on 2026-09-15 at the pushed head. All 733 executable tests passed, including
+the 78-test Windows-audio suite; two live-audio tests remain explicitly
+ignored because they require operator-supplied endpoint identities and the
+live-audio opt-in. No driver was installed or loaded, no plugin was
+registered, and no persistent machine audio configuration changed. This
+refreshes portable evidence only; it does not close the loaded-driver,
+physical-latency, production-signing, or attended UI gates.
 
 The canvas shelf filter was also corrected to exclude library entries without a
 processor kind, preventing unavailable source/destination metadata from being
