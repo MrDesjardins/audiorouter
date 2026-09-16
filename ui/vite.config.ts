@@ -13,4 +13,17 @@ export default defineConfig({
   // itself remains writable for local UI inspection.
   cacheDir: process.env.AUDIOROUTER_VITE_CACHE ?? path.join(os.tmpdir(), "audiorouter-vite-cache"),
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        // Keep the graph-editor dependency out of the initial application
+        // chunk. This makes the packaged shell's startup payload explicit
+        // and prevents a single entry chunk from crossing the warning
+        // threshold as the editor grows.
+        manualChunks: {
+          "xyflow-vendor": ["@xyflow/react"],
+        },
+      },
+    },
+  },
 });

@@ -26,6 +26,13 @@ chunk-size warning remains non-failing. No driver was installed or loaded, no
 plugin or startup registration occurred, and no persistent audio
 configuration changed.
 
+Reduced the packaged UI entry chunk on 2026-09-15 by moving `@xyflow/react`
+to a dedicated Rollup vendor chunk. The UI suite passed 226 tests and the
+temporary production build passed with a 321 kB application chunk plus a
+192 kB editor vendor chunk; the prior single-chunk >500 kB warning is cleared.
+The build output was removed after inspection and no audio or machine
+configuration was accessed.
+
 Corrected the M03 acceptance report on 2026-09-15 so its scope line names the
 requested architecture rather than always claiming x64. Focused non-installing
 x64 and ARM64 runs both passed and reported their matching platform. This is
