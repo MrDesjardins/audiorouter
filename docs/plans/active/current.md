@@ -2,6 +2,23 @@
 
 Updated: 2026-09-16.
 
+Re-ran the complete guarded `tests/acceptance/safe-all.ps1` chain at the
+current pushed head `4f2f8a33` on 2026-09-16. M00 toolchain/native inventory
+and disposable SysVAD checks, AudioRouter x64/ARM64 driver source gates,
+Software Device dry-run, M01, M04 (32 DSP and 40 recording tests), M05 (227
+UI tests and production builds), M06 SDK/VST3/VST2, M07 (36 CLI, 3 MCP, 173
+control, 70 plugin-host, and 13 worker-process tests), M08 unsigned artifact
+preparation, the new unsigned x64 NSIS installer smoke (4,750,259 bytes),
+159 traceability mappings, and 54-file/218-link documentation validation all
+passed. The installer was not executed or installed; cleanup removed 30
+run-owned temporary children and removed the exact disposable NSIS bundle.
+No driver was installed or loaded, no plugin or startup registration occurred,
+and no persistent audio configuration changed. Production signing, loaded
+PortCls/endpoint qualification, clean-machine validation, physical latency,
+and attended shell/accessibility acceptance remain open. Next action remains
+the production driver/bridge qualification slice, with installer evidence now
+repeatable in the guarded acceptance chain.
+
 Added `tests/acceptance/m08-installer-smoke.ps1` on 2026-09-16 and included it
 in `safe-all.ps1` and Windows CI. The new gate builds the unsigned x64 NSIS
 artifact, verifies that Tauri does not mutate `src-tauri/Cargo.toml`, and

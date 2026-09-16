@@ -1,5 +1,22 @@
 # M08 release evidence
 
+## 2026-09-16 - complete guarded acceptance with installer smoke at `4f2f8a33`
+
+The complete guarded `tests/acceptance/safe-all.ps1` chain passed at the
+current pushed head. It covered M00/M03 toolchain, native, AudioRouter x64
+and ARM64 source, Software Device dry-run, and disposable SysVAD checks;
+M01; M04 with 32 DSP and 40 recording tests; M05 with 227 UI tests and
+production builds; M06 VST3/VST2 SDK, worker, and fixture gates; M07 with 36
+CLI, 3 MCP, 173 control, 70 plugin-host, and 13 worker-process tests; M08
+unsigned artifact preparation; the unsigned x64 NSIS smoke; 159 traceability
+mappings; and 54 Markdown files with 218 local links. The installer smoke
+produced `AudioRouter_0.1.0_x64-setup.exe` at 4,750,259 bytes and verified
+the Cargo manifest hash before removing the exact disposable bundle. Cleanup
+removed 30 run-owned temporary children. No driver was installed or loaded,
+no plugin or startup registration occurred, and no persistent audio
+configuration changed. Signing, installation, clean-machine, physical
+latency, and attended UI/accessibility gates remain open.
+
 ## 2026-09-16 - installer smoke manifest reproducibility
 
 The first current-head NSIS smoke caused Tauri to rewrite the equivalent
