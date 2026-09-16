@@ -2,6 +2,17 @@
 
 Updated: 2026-09-16.
 
+Re-ran the complete guarded `tests/acceptance/safe-all.ps1` chain at
+`91b3b0de` on 2026-09-16 after the Tauri manifest reproducibility fix. M00
+toolchain/native inventory and disposable SysVAD checks, AudioRouter x64 and
+ARM64 driver source gates, M01, M04 (32 DSP and 40 recording tests), M05 (227
+UI tests and production builds), M06 SDK/VST3/VST2, M07 (36 CLI, 3 MCP, 173
+control, 70 plugin-host, and 13 worker-process tests), unsigned M08 artifact
+preparation, 159 traceability mappings, and 54-file/218-link documentation
+validation all passed. Cleanup removed 15 run-owned temporary children. No
+driver was installed or loaded, no plugin or startup registration occurred,
+and no persistent audio configuration changed.
+
 Fixed a release reproducibility issue on 2026-09-16: Tauri's unsigned NSIS
 smoke rewrote the equivalent `tauri-build` manifest dependency. The explicit
 empty-feature table is now checked in; a second current-head bundler run left
