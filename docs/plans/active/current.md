@@ -21,6 +21,13 @@ and their fail-closed behavior before qualified driver installation.
 Documentation validation remained green (54 Markdown files, 218 local links);
 no runtime or machine configuration changed.
 
+Hardened MCP ownership-tool coverage on 2026-09-16. The CLI regression suite
+now explicitly verifies that `provision_virtual_device` is denied by a
+read-only grant before native access, and checks accurate read-only,
+destructive, and idempotency annotations for both ownership tools. Focused
+verification passed: 36 CLI unit tests, 3 MCP stdio tests, and strict Clippy.
+No runtime or machine audio configuration changed.
+
 Re-ran the complete guarded `safe-all.ps1` chain at the MCP parity head on
 2026-09-16. M00 toolchain/native inventory and disposable SysVAD checks,
 AudioRouter x64/ARM64 driver source builds and Software Device dry-run, M01,

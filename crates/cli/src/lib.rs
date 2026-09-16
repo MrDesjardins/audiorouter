@@ -3945,6 +3945,28 @@ mod tests {
             denied_route_replace["result"]["structuredContent"]["error"]["data"]["code"],
             "permissionDenied"
         );
+        let denied_virtual_device = mcp_tool_call(
+            &mut plane,
+            "mcp-test",
+            &grant,
+            None,
+            &json!({
+                "id": 19,
+                "params": {
+                    "name": "provision_virtual_device",
+                    "arguments": {
+                        "busId": "voice-bus",
+                        "instanceId": "mcp-instance",
+                        "idempotencyKey": "mcp-device-1"
+                    }
+                }
+            }),
+        );
+        assert_eq!(denied_virtual_device["result"]["isError"], true);
+        assert_eq!(
+            denied_virtual_device["result"]["structuredContent"]["error"]["data"]["code"],
+            "permissionDenied"
+        );
         let denied_generic = mcp_tool_call(
             &mut plane,
             "mcp-test",
@@ -4195,6 +4217,8 @@ mod tests {
             ("plan_graph_change", true, false, true),
             ("apply_graph_change", false, false, true),
             ("remove_recording_entry", false, true, true),
+            ("provision_virtual_device", false, false, true),
+            ("remove_virtual_device", false, true, true),
             ("reveal_recording", false, false, false),
             ("call_api", false, false, false),
             ("os_transition", false, false, true),
