@@ -21,6 +21,13 @@ and their fail-closed behavior before qualified driver installation.
 Documentation validation remained green (54 Markdown files, 218 local links);
 no runtime or machine configuration changed.
 
+Corrected the virtual-driver README on 2026-09-16 to reflect the current
+implementation boundary: the repository now contains an explicit guarded
+Software Device API probe and control-plane ownership/persistence seam, while
+normal startup/list/plan/apply remains fail-closed and the prototype package
+is not claimed as production or activated on this machine. Documentation
+validation passed for 54 Markdown files and 218 local links.
+
 Hardened MCP ownership-tool coverage on 2026-09-16. The CLI regression suite
 now explicitly verifies that `provision_virtual_device` is denied by a
 read-only grant before native access, and checks accurate read-only,
