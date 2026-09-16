@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Implemented the next safe endpoint-authoring slice on 2026-09-16: the
+Endpoint binding panel can add a stopped `endpointLoopback` source using only
+the exact selected active render endpoint ID. The draft helper trims and
+rejects an absent identity, preserves revision/edges, and leaves activation to
+the backend/native worker. UI verification passed 229 tests, TypeScript
+typecheck, and the production build. No endpoint was opened and no persistent
+audio configuration changed.
+
 Implemented the next safe M05/M02 editor slice on 2026-09-16: the connected
 graph library now offers `physicalInput` and `physicalOutput` nodes with
 stereo ports, so users can author endpoint routes on the canvas. Existing

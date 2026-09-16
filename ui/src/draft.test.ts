@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendApplicationCaptureNode, appendDraftConnection, appendLibraryNode, appendPluginPlaceholderNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, removeDraftNode, resetNodeDraftParameters, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
+import { appendApplicationCaptureNode, appendDraftConnection, appendEndpointLoopbackNode, appendLibraryNode, appendPluginPlaceholderNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, removeDraftNode, resetNodeDraftParameters, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
 import { demoSession } from "./fixtures";
 
 describe("appendLibraryNode", () => {
@@ -120,6 +120,25 @@ describe("appendLibraryNode", () => {
     expect(setSessionDraftName(demoSession, "  Streaming setup  ").name).toBe("Streaming setup");
     expect(() => setSessionDraftName(demoSession, " ")).toThrow("cannot be empty");
     expect(() => setSessionDraftName(demoSession, "x".repeat(121))).toThrow("120");
+  });
+});
+
+describe("appendEndpointLoopbackNode", () => {
+  it("adds an exact, stopped endpoint-loopback source without changing topology", () => {
+    const next = appendEndpointLoopbackNode(demoSession, "  endpoint-render-1  ");
+    expect(next.nodes.at(-1)).toMatchObject({
+      id: "endpoint-loopback-1",
+      kind: "endpointLoopback",
+      enabled: false,
+      parameters: { endpointId: "endpoint-render-1" },
+      ports: [{ name: "out", direction: "output", channels: 2 }],
+    });
+    expect(next.revision).toBe(demoSession.revision);
+    expect(next.edges).toEqual(demoSession.edges);
+  });
+
+  it("rejects an absent exact endpoint identity", () => {
+    expect(() => appendEndpointLoopbackNode(demoSession, "  ")).toThrow("exact render endpoint");
   });
 });
 

@@ -196,6 +196,31 @@ export function appendApplicationCaptureNode(session: Session, application: Appl
   };
 }
 
+/** Adds a stopped endpoint-loopback source bound to one exact render endpoint. */
+export function appendEndpointLoopbackNode(session: Session, endpointId: string): Session {
+  const normalizedEndpointId = endpointId.trim();
+  if (!normalizedEndpointId) throw new Error("An exact render endpoint is required");
+  let suffix = 1;
+  let id = `endpoint-loopback-${suffix}`;
+  while (session.nodes.some((node) => node.id === id)) {
+    suffix += 1;
+    id = `endpoint-loopback-${suffix}`;
+  }
+  return {
+    ...session,
+    nodes: [...session.nodes, {
+      id,
+      kind: "endpointLoopback",
+      typeVersion: 1,
+      name: `Endpoint loopback ${suffix}`,
+      enabled: false,
+      bypass: false,
+      parameters: { endpointId: normalizedEndpointId },
+      ports: [{ name: "out", direction: "output", channels: 2 }],
+    }],
+  };
+}
+
 /** Adds a verified scan result as an explicit, stopped plugin placeholder. */
 export function appendPluginPlaceholderNode(session: Session, entry: PluginScanEntry): Session {
   const identity = entry.identity;
