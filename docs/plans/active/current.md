@@ -75,6 +75,12 @@ when the test explicitly allowed unsupported state restoration. It is partial
 compatibility evidence only: the normal contract still rejects its state
 round-trip result, and no arbitrary-vendor compatibility claim is made.
 
+COMPER's supplied x64 VST3 bundle similarly passed single-stream processing,
+bounded failure recovery, repeated-quantum, finite-output, and shutdown checks
+under the explicit state-unsupported allowance. Its normal contract remains
+rejected because it exposes no acceptable automatable parameter/state surface;
+this is partial processing evidence only.
+
 The previously documented differing-rate capture ID was stale and correctly
 failed closed with Windows `0x80070490` before stream opening. A fresh
 read-only inventory identified a current 96 kHz capture endpoint, and the

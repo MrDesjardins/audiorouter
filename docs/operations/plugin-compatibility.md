@@ -12,6 +12,12 @@ on 2026-09-15 only with the explicit state-unsupported allowance. Its normal
 state restoration result remains outside the AudioRouter activation contract;
 this is partial compatibility evidence, not full qualification.
 
+The supplied x64 COMPER bundle passed single-stream processing, bounded
+failure recovery, repeated-quantum finite processing, and shutdown checks on
+2026-09-15 only with the explicit state-unsupported allowance. Its normal
+activation remains rejected because it exposes no acceptable automatable
+parameter/state surface; no full vendor compatibility claim is made.
+
 The supplied installed ReaPlugs directory was requalified on 2026-09-15
 through the isolated legacy VST2 worker. Six x64 candidates passed at 44.1,
 48, and 96 kHz: `reacomp-standalone.dll`, `readelay-standalone.dll`,
@@ -20,8 +26,7 @@ and `reaxcomp-standalone.dll`. The current fixture directory contains no
 additional candidate; previously qualified `reastream-standalone.dll`,
 `reacontrolmidi-standalone.dll`, and `reajs.dll` remain separate historical
 results. Candidate fingerprints and temporary environment values were restored.
-Candidate fingerprints and temporary environment values were restored. This
-is gated compatibility evidence only and does not grant redistribution rights
+This is gated compatibility evidence only and does not grant redistribution rights
 or native editor support.
 
 The same nine x64 ReaPlugs candidates also passed the bounded editor-thread
