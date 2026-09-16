@@ -11,6 +11,14 @@ Updated: 2026-09-15.
   and state matched, and the worker stopped/detached. This is live existing
   VB-Cable evidence, not production-driver or physical-latency qualification.
 
+- Requalified both native VB-Cable harnesses on 2026-09-15. The control-owned
+  lifecycle processed 24,000 captured frames, 187 quanta, and 23,936 rendered
+  frames. The lower Rust adapter bridge processed 24,960 captured/rendered
+  frames across 195 tap calls with zero non-finite samples, XRuns, deadline
+  misses, or dropped frames. Both exact 48 kHz stereo routes stopped cleanly
+  and preserved media identity/state. Cross-rate hardware, production-driver
+  loading, signing, and physical-latency gates remain open.
+
 - Wired bounded capture resampling into the native endpoint bridge on
   2026-09-15. Differing capture/render sample rates are now accepted after
   strict channel and format validation; the render rate becomes the graph

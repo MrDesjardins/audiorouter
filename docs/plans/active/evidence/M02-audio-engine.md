@@ -519,6 +519,16 @@ startup settings, and endpoint registration were unchanged. This validates
 the existing-endpoint control route only and does not qualify the production
 driver, capture-rate conversion on hardware, or physical latency.
 
+The same exact 48 kHz stereo pair was independently requalified on 2026-09-15
+through `m02-control-native-live.ps1`: 24,000 captured frames, 187 processed
+quanta, and 23,936 rendered frames completed in 500 ms. The lower
+`m02-rust-adapter-bridge-live.ps1` harness completed one cycle with 24,960
+captured/rendered frames, 195 tap calls, zero non-finite samples, zero XRuns,
+zero deadline misses, and zero dropped frames. Both harnesses verified
+unchanged media identity/state and cleanup. These runs provide 48 kHz
+existing-endpoint evidence; they do not prove 44.1 kHz hardware negotiation,
+cross-rate live conversion, production driver activation, or physical latency.
+
 ## 2026-09-08 - Differing-rate route requalification
 
 The guarded `m02-rust-adapter-route-live.ps1 -AllowLiveAudio
