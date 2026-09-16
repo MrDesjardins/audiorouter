@@ -11,6 +11,11 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use windows_core::Interface;
 
+#[cfg(windows)]
+mod software_device;
+#[cfg(windows)]
+pub use software_device::{SoftwareDeviceError, SoftwareDeviceHandle, SoftwareDeviceProvisioner};
+
 /// Maximum number of OS-provided audio-session names retained per process.
 pub const MAX_APPLICATION_AUDIO_DISPLAY_NAMES: usize = 64;
 /// Maximum UTF-8 byte length of one retained OS-provided session name.

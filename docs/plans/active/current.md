@@ -45,6 +45,16 @@ passed the dry-run, and is now included in `safe-all.ps1`. Persistent handle
 ownership, returned PnP instance-ID storage, enable/disable/delete semantics,
 and isolated loaded-driver validation remain open.
 
+Added the reusable Windows adapter `SoftwareDeviceProvisioner` on 2026-09-16
+in `crates/windows-audio`. It wraps the Windows Software Device API behind an
+exclusive RAII handle, validates stable instance IDs, uses the same
+`SWD\\AudioRouterVirtual` match as the driver INF, bounds callback completion
+to five seconds, and closes temporary devices on drop. The 80-test
+Windows-audio suite, strict package Clippy, formatting, and diff checks passed.
+The wrapper is not called by the current unavailable-driver control path;
+administrator authorization, persistent handle ownership, instance-ID
+hydration, and loaded-driver endpoint qualification remain explicit gates.
+
 Reduced the packaged UI entry chunk on 2026-09-15 by moving `@xyflow/react`
 to a dedicated Rollup vendor chunk. The UI suite passed 226 tests and the
 temporary production build passed with a 321 kB application chunk plus a
