@@ -2,6 +2,16 @@
 
 Updated: 2026-09-15.
 
+- Requalified the complete guarded `safe-all.ps1` chain at pushed head
+  `32662417`. M00/M03 native compile and signability, M01/M04, M05 UI (214
+  production modules), M06 VST3/VST2, M07 headless controls, unsigned M08
+  artifacts, 159 normative mappings, and documentation (54 Markdown files,
+  214 local links) passed. Cleanup removed 15 run-owned temporary children.
+  No driver was installed or loaded, no signing or startup registration
+  changed, and no persistent machine audio configuration changed. Evidence:
+  [M08 release](evidence/M08-release.md). Remaining loaded-driver,
+  production-signing, physical-latency, and attended UI gates remain open.
+
 - Re-ran the authorized guarded M02 control-owned VB-Cable lifecycle using
   the exact active capture/render pair. One 500 ms route processed 23,520
   captured frames, 183 graph quanta, and 23,424 rendered frames; the test

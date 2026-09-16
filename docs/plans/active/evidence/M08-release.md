@@ -1,5 +1,16 @@
 # M08 release evidence
 
+## 2026-09-15 - guarded safe acceptance at `32662417`
+
+The complete guarded `safe-all.ps1` chain passed at the current pushed head.
+It covered M00 toolchain/native checks and non-installing M03 WDK
+qualification, M01/M04, M05 UI (214 production modules), M06 VST3/VST2,
+M07 headless controls, unsigned M08 artifact preparation and verification, 159
+normative requirement mappings, and documentation validation (54 Markdown
+files, 214 local links). Cleanup removed 15 run-owned temporary children. No
+driver was installed or loaded, no signing or startup registration changed,
+and no persistent machine audio configuration changed.
+
 ## 2026-09-15 - guarded acceptance after durable recovery at `21cc138f`
 
 The complete elevated `tests/acceptance/safe-all.ps1` chain passed after the
