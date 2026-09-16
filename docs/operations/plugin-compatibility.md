@@ -1,5 +1,15 @@
 # Plugin compatibility snapshot
 
+The installed ReaPlugs VST2 matrix was requalified on 2026-09-16 with
+`m06-vst2-reaplugs.ps1 -SkipIncompatibleCandidates`. Seven compatible x64
+effects passed contained processing at 44.1, 48, and 96 kHz (21 combinations),
+including parameter-offset, editor-containment, and before/after binary
+integrity checks. `reacontrolmidi-standalone.dll` and `reajs.dll` were
+explicitly rejected as incompatible; their native failures were contained by
+the worker. Environment values were restored and DLLs were not modified or
+registered. This qualifies local fixtures only and grants no redistribution
+rights.
+
 The supplied x64 TDR Nova VST3 bundle was requalified on 2026-09-16 with
 the explicit state-unsupported allowance. Single-stream, auxiliary-bus,
 asynchronous staging, bounded failure recovery, repeated-quantum finite

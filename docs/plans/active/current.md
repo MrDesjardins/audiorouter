@@ -2,6 +2,16 @@
 
 Updated: 2026-09-16.
 
+Requalified the supplied installed ReaPlugs VST2 directory on 2026-09-16.
+Seven compatible x64 audio effects passed contained worker processing at
+44.1, 48, and 96 kHz (21 combinations), with parameter-offset, editor
+containment, and before/after binary-integrity checks. `reacontrolmidi` and
+`reajs` were rejected as incompatible; their native failures were contained
+and reported rather than treated as support. Environment values were restored,
+DLLs were not modified or registered, and no audio configuration changed.
+This qualifies local VST2 fixtures only, not redistribution rights or the
+complete independent-vendor matrix.
+
 Corrected the Software Device instance-ID bound check on 2026-09-16. The
 decoder now evaluates `length < MAX_INSTANCE_ID_CHARS` before dereferencing
 the callback pointer, closing the one-element overread left by the previous
