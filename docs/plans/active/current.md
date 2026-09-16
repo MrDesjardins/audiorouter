@@ -2,6 +2,15 @@
 
 Updated: 2026-09-16.
 
+Requalified the control-owned VB-Cable route on 2026-09-16 for 750 ms using
+the exact existing endpoints. The lifecycle transported 36,000 captured and
+35,968 rendered frames across 281 quanta and 75 packets, with one successful
+start/stop/reset, one deliberate rejected pump, and 143,916 recording bytes.
+Generation and both negotiated rates were valid. The worker was stopped and
+detached; defaults, volume, mute, privacy, drivers, signing, startup, endpoint
+registration, and persistent media state were unchanged. This validates the
+user-mode control lifecycle, not managed-driver or physical-latency behavior.
+
 Requalified the authorized one-second VB-Cable graph route on 2026-09-16.
 The exact active 48 kHz stereo endpoints delivered 48,480 captured and
 48,384 scheduled/routed frames across 378 graph blocks. Processing telemetry

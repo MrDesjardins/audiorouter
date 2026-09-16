@@ -1,5 +1,18 @@
 # 2026-09-15 - live built-in processing chain validation
 
+## 2026-09-16 - control-owned VB-Cable route lifecycle
+
+The authorized `m02-control-route-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 750` acceptance passed using the exact existing VB-Cable
+endpoints. It transported 36,000 captured and 35,968 rendered frames across
+281 processed quanta and 75 packets, with one successful start, stop, and
+reset, one deliberate rejected pump, and 143,916 recording bytes. Generation
+1 and both negotiated rates were valid. The worker was stopped/detached and
+defaults, volume, mute, privacy, drivers, signing, startup, endpoint
+registration, and persistent media state remained unchanged. This is
+user-mode control-lifecycle evidence; managed-driver and physical-latency
+qualification remain open.
+
 ## 2026-09-16 - one-second VB-Cable graph route timing gate
 
 The authorized `m02-rust-adapter-route-live.ps1 -AllowLiveAudio
