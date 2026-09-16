@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Requalified the current M07 headless acceptance on 2026-09-16.
+`m07-headless.ps1` passed 36 CLI tests, 3 MCP stdio tests, 173 control tests
+with two explicitly ignored guarded-live cases, 70 plugin-host tests, and 13
+worker-process tests; strict package checks completed successfully. No audio
+device, driver, plugin registration, or machine configuration was accessed.
+The interactive shell/WebView desktop gate remains open because this session
+has no targetable desktop surface.
+
 Requalified the repository-owned VST2 safety fixtures on 2026-09-16 at 44.1,
 48, and 96 kHz. Legacy `main` export loading, chunk-state save/restore,
 non-finite output rejection, native crash containment, and hang containment

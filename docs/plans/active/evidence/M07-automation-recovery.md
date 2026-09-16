@@ -1,5 +1,14 @@
 # M07 automation and recovery evidence
 
+## 2026-09-16 - current headless acceptance
+
+`tests/acceptance/m07-headless.ps1` passed 36 CLI tests, 3 MCP stdio tests,
+173 control tests with two explicitly ignored guarded-live cases, 70
+plugin-host tests, and 13 worker-process tests; strict package checks also
+passed. No audio device, driver, plugin registration, or machine
+configuration was accessed. The interactive shell/WebView desktop gate
+remains open because no targetable desktop surface is available.
+
 ## 2026-09-16 - locked all-features workspace requalification
 
 `cargo test --workspace --locked --all-features -- --test-threads=1`
