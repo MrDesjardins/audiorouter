@@ -5875,13 +5875,8 @@ impl ControlPlane {
         Ok(())
     }
 
-    /// Provision one explicitly selected managed bus and retain its native
-    /// Software Device API handle. This is a Windows-only control-plane
-    /// operation; authorization and stopped-route policy belong to its caller.
-    /// Ordinary virtual-device plan/apply and list paths intentionally do not
-    /// invoke it yet.
     #[cfg(windows)]
-    pub fn provision_virtual_bus_device(
+    fn provision_virtual_bus_device_unpersisted(
         &mut self,
         id: &EntityId,
         instance_id: &str,
@@ -5910,7 +5905,6 @@ impl ControlPlane {
             .map_err(software_device_control_error)?
             .instance_id()
             .to_owned();
-        let checkpoint = self.virtual_buses.clone();
         if let Err(error) = self
             .virtual_buses
             .set_driver_instance_id(id, returned_instance_id.clone())
@@ -5918,6 +5912,21 @@ impl ControlPlane {
             let _ = self.managed_software_devices.remove(id.as_str());
             return Err(virtual_bus_control_error(error));
         }
+        Ok(returned_instance_id)
+    }
+
+    /// Provision one explicitly selected managed bus and retain its native
+    /// Software Device API handle. This is a Windows-only control-plane
+    /// operation; authorization and stopped-route policy belong to its caller.
+    #[cfg(windows)]
+    pub fn provision_virtual_bus_device(
+        &mut self,
+        id: &EntityId,
+        instance_id: &str,
+    ) -> Result<String, ControlError> {
+        let checkpoint = self.virtual_buses.clone();
+        let returned_instance_id =
+            self.provision_virtual_bus_device_unpersisted(id, instance_id)?;
         if let Some(storage) = &self.storage {
             if let Err(error) = storage.save_virtual_buses(&self.virtual_buses) {
                 self.virtual_buses = checkpoint;
@@ -5928,20 +5937,26 @@ impl ControlPlane {
         Ok(returned_instance_id)
     }
 
-    /// Remove one explicitly owned native software device after clearing its
-    /// persisted identity. The handle is dropped only after durable state is
-    /// updated, so a storage failure leaves the native owner recoverable.
     #[cfg(windows)]
-    pub fn remove_virtual_bus_device(&mut self, id: &EntityId) -> Result<(), ControlError> {
+    fn remove_virtual_bus_device_unpersisted(&mut self, id: &EntityId) -> Result<(), ControlError> {
         if !self.managed_software_devices.contains(id.as_str()) {
             return Err(software_device_control_error(
                 audiorouter_windows_audio::SoftwareDeviceError::NotTracked,
             ));
         }
-        let checkpoint = self.virtual_buses.clone();
         self.virtual_buses
             .clear_driver_instance_id(id)
             .map_err(virtual_bus_control_error)?;
+        Ok(())
+    }
+
+    /// Remove one explicitly owned native software device after clearing its
+    /// persisted identity. The handle is dropped only after durable state is
+    /// updated, so a storage failure leaves the native owner recoverable.
+    #[cfg(windows)]
+    pub fn remove_virtual_bus_device(&mut self, id: &EntityId) -> Result<(), ControlError> {
+        let checkpoint = self.virtual_buses.clone();
+        self.remove_virtual_bus_device_unpersisted(id)?;
         if let Some(storage) = &self.storage {
             if let Err(error) = storage.save_virtual_buses(&self.virtual_buses) {
                 self.virtual_buses = checkpoint;
@@ -11457,10 +11472,11 @@ impl ControlPlane {
             }
         }
         let operation_id = EntityId::new(format!("operation-{}", request_hash));
+        let checkpoint = self.virtual_buses.clone();
         let result = match method {
             "virtualDevices.provision" => {
                 #[cfg(windows)]
-                let driver_instance_id = self.provision_virtual_bus_device(
+                let driver_instance_id = self.provision_virtual_bus_device_unpersisted(
                     &EntityId::new(bus_id),
                     instance_id.expect("provision instance id"),
                 )?;
@@ -11472,7 +11488,7 @@ impl ControlPlane {
             }
             "virtualDevices.remove" => {
                 #[cfg(windows)]
-                self.remove_virtual_bus_device(&EntityId::new(bus_id))?;
+                self.remove_virtual_bus_device_unpersisted(&EntityId::new(bus_id))?;
                 #[cfg(not(windows))]
                 return Err(ControlError::InvalidRequest(
                     "managed virtual device removal is unavailable on this platform".into(),
@@ -11493,7 +11509,19 @@ impl ControlPlane {
                 &request_hash,
                 &result,
             ) {
+                #[cfg(windows)]
+                if method == "virtualDevices.provision" {
+                    let _ = self.managed_software_devices.remove(bus_id);
+                }
+                self.virtual_buses = checkpoint;
                 return Err(storage_error(error));
+            }
+        }
+        #[cfg(windows)]
+        if method == "virtualDevices.remove" {
+            if let Err(error) = self.managed_software_devices.remove(bus_id) {
+                self.virtual_buses = checkpoint;
+                return Err(software_device_control_error(error));
             }
         }
         self.remember_operation_outcome(&storage_key, result.clone(), method, Some(&request_hash));
@@ -19017,6 +19045,22 @@ mod tests {
                 &grant,
             );
             assert_eq!(apply.error.unwrap().code, -32001);
+            let provision = plane.dispatch_authorized(
+                request(
+                    "virtualDevices.provision",
+                    Some(json!({ "busId": "bus-1", "instanceId": "instance-1", "idempotencyKey": "key-2" })),
+                ),
+                &grant,
+            );
+            assert_eq!(provision.error.unwrap().code, -32001);
+            let remove = plane.dispatch_authorized(
+                request(
+                    "virtualDevices.remove",
+                    Some(json!({ "busId": "bus-1", "idempotencyKey": "key-3" })),
+                ),
+                &grant,
+            );
+            assert_eq!(remove.error.unwrap().code, -32001);
         }
         let mut plane = ControlPlane::default();
         let grant = ClientGrant::with_scopes([PermissionScope::DeviceAdministration]);

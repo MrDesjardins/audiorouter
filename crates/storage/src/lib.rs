@@ -4029,6 +4029,37 @@ mod tests {
     }
 
     #[test]
+    fn external_virtual_bus_journal_commits_snapshot_and_result_together() {
+        let storage = Storage::open_memory().unwrap();
+        let mut registry = VirtualBusRegistry::default();
+        registry.create(EntityId::new("bus"), "Bus").unwrap();
+        storage
+            .save_virtual_buses_and_external_journal(
+                &registry,
+                "virtualDevices.provision",
+                "provision-key",
+                "request-hash",
+                &serde_json::json!({ "state": "completed" }),
+            )
+            .unwrap();
+        assert_eq!(storage.load_virtual_buses().unwrap().list().len(), 1);
+        assert_eq!(
+            storage.journal_result("provision-key").unwrap().as_deref(),
+            Some("{\"state\":\"completed\"}")
+        );
+        assert!(storage
+            .save_virtual_buses_and_external_journal(
+                &registry,
+                "virtualDevices.remove",
+                "bad-hash-key",
+                &"h".repeat(MAX_REQUEST_HASH_BYTES + 1),
+                &serde_json::json!({}),
+            )
+            .is_err());
+        assert_eq!(storage.load_virtual_buses().unwrap().list().len(), 1);
+    }
+
+    #[test]
     fn journal_operations_reject_empty_or_unbounded_keys() {
         let storage = Storage::open_memory().unwrap();
         let oversized = "k".repeat(MAX_IDEMPOTENCY_KEY_BYTES + 1);

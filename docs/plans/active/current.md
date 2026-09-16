@@ -127,6 +127,17 @@ Markdown files and 218 local links. No driver was installed or loaded, no
 plugin/startup registration occurred, and no persistent audio configuration
 changed. The API transaction/compensation refactor remains the next task.
 
+Closed the registry/journal persistence window on 2026-09-16. Dispatched
+managed-device operations now use unpersisted native-owner helpers, commit the
+updated virtual-bus identity and external-operation result through the same
+SQLite transaction, and release an owned removal handle only after commit;
+native provision failure removes the newly created handle and restores the
+checkpoint. Added storage atomicity coverage and expanded authorization
+regressions for both methods. Focused verification passed: 171 control tests
+with two guarded live tests ignored, 91 storage tests, strict Clippy, and
+format/diff checks. The native driver remains unloaded, so endpoint
+qualification and production signing are still open.
+
 Extended the UI backend adapter and managed-bus lifecycle panel on 2026-09-16
 with typed `provisionVirtualDevice` and `removeVirtualDevice` calls. The panel
 now exposes a bounded instance-ID field and explicit native ownership buttons
