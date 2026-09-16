@@ -2287,9 +2287,10 @@ fn method_output_schema(name: &str) -> Value {
                 "transition": { "enum": ["lock", "signOut", "sleep", "resume"] },
                 "action": { "enum": ["keepRunning", "stopAndRelease", "revalidateBeforeRestart", "remainStopped"] },
                 "endpointInventory": { "enum": ["refreshed", "notStarted"] },
+                "nativeSessionIds": { "type": "array", "maxItems": audiorouter_domain::MAX_ACTIVE_SESSIONS, "items": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } },
                 "sessionIds": { "type": "array", "maxItems": audiorouter_domain::MAX_ACTIVE_SESSIONS, "items": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } }
             },
-            "required": ["transition", "action", "endpointInventory", "sessionIds"],
+            "required": ["transition", "action", "endpointInventory", "nativeSessionIds", "sessionIds"],
             "additionalProperties": false
         }),
         "recorders.create" => json!({
@@ -4022,6 +4023,7 @@ pub struct ControlPlane {
     startup_enabled: bool,
     recovery_tracker: CrashRecoveryTracker,
     os_suspended_sessions: Vec<EntityId>,
+    os_suspended_native_sessions: Vec<EntityId>,
     virtual_buses: VirtualBusRegistry,
     virtual_bus_routes: VirtualBusRouteRegistry,
     virtual_bus_route_revision: u64,
@@ -4101,6 +4103,7 @@ impl ControlPlane {
             startup_enabled: false,
             recovery_tracker: CrashRecoveryTracker::default(),
             os_suspended_sessions: Vec::new(),
+            os_suspended_native_sessions: Vec::new(),
             virtual_buses: VirtualBusRegistry::default(),
             virtual_bus_routes: VirtualBusRouteRegistry::default(),
             virtual_bus_route_revision: 0,
@@ -5523,6 +5526,7 @@ impl ControlPlane {
             startup_enabled,
             recovery_tracker: CrashRecoveryTracker::default(),
             os_suspended_sessions: Vec::new(),
+            os_suspended_native_sessions: Vec::new(),
             virtual_buses,
             virtual_bus_routes,
             virtual_bus_route_revision,
@@ -7140,6 +7144,7 @@ impl ControlPlane {
                 "transition": "lock",
                 "action": "keepRunning",
                 "endpointInventory": "notStarted",
+                "nativeSessionIds": Vec::<EntityId>::new(),
                 "sessionIds": decision.session_ids,
             })),
             OsTransition::SignOut | OsTransition::Sleep => {
@@ -7154,6 +7159,11 @@ impl ControlPlane {
                     .filter(|id| !native_sessions.contains(id))
                     .cloned()
                     .collect::<Vec<_>>();
+                self.os_suspended_native_sessions = if transition == OsTransition::Sleep {
+                    native_sessions.clone()
+                } else {
+                    Vec::new()
+                };
                 for session_id in &decision.session_ids {
                     self.session_stop(session_id)?;
                 }
@@ -7162,6 +7172,7 @@ impl ControlPlane {
                     "transition": if transition == OsTransition::Sleep { "sleep" } else { "signOut" },
                     "action": "stopAndRelease",
                     "endpointInventory": "notStarted",
+                    "nativeSessionIds": Vec::<EntityId>::new(),
                     "sessionIds": decision.session_ids,
                 }))
             }
@@ -7173,11 +7184,13 @@ impl ControlPlane {
                     "notStarted"
                 };
                 let session_ids = std::mem::take(&mut self.os_suspended_sessions);
+                let native_session_ids = std::mem::take(&mut self.os_suspended_native_sessions);
                 let decision = plan_os_transition(transition, &session_ids, &[], &[]);
                 Ok(json!({
                     "transition": "resume",
-                    "action": if decision.session_ids.is_empty() { "remainStopped" } else { "revalidateBeforeRestart" },
+                    "action": if decision.session_ids.is_empty() && native_session_ids.is_empty() { "remainStopped" } else { "revalidateBeforeRestart" },
                     "endpointInventory": endpoint_inventory,
+                    "nativeSessionIds": native_session_ids,
                     "sessionIds": decision.session_ids,
                 }))
             }
@@ -14929,6 +14942,28 @@ mod tests {
             plane.status_snapshot().unwrap()["activeSessionIds"],
             json!([session_id])
         );
+    }
+
+    #[test]
+    fn sleep_preserves_native_identity_for_explicit_resume_revalidation() {
+        let mut plane = ControlPlane::default();
+        let value = session();
+        let session_id = value.id.clone();
+        plane.insert_session(value).unwrap();
+        plane.session_start(&session_id).unwrap();
+        // A marker is sufficient to model a native-owned route in this
+        // portable test; no endpoint or driver is opened.
+        plane.native_endpoint_session = Some(session_id.clone());
+
+        plane
+            .handle_os_transition(os_transition::OsTransition::Sleep)
+            .unwrap();
+        let resumed = plane
+            .handle_os_transition(os_transition::OsTransition::Resume)
+            .unwrap();
+        assert_eq!(resumed["action"], "revalidateBeforeRestart");
+        assert_eq!(resumed["nativeSessionIds"], json!([session_id]));
+        assert_eq!(resumed["sessionIds"], json!([]));
     }
 
     #[test]

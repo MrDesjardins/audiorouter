@@ -1,6 +1,16 @@
 # Active plan
 
-Updated: 2026-09-14.
+Updated: 2026-09-15.
+
+- Preserved native session identities across sleep on 2026-09-15. The
+  `system.osTransition` resume response now returns the exact native session
+  IDs that require explicit endpoint/driver revalidation, while keeping those
+  routes stopped and never reopening hardware implicitly. The control suite
+  passed 165 tests (2 ignored), the Windows shell suite passed 22 tests, and
+  strict native-shell Clippy passed. Evidence:
+  [M07 OS-transition policy evidence](evidence/M07-os-transitions.md). No
+  stream, driver, power transition, or machine audio configuration was
+  changed. Next action: continue the next safe M03/M07 delivery slice.
 
 - Added read-only endpoint re-enumeration to STATE-11 resume handling on
   2026-09-15. `system.osTransition` now refreshes an existing endpoint monitor

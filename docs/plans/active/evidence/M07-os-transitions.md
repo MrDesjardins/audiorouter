@@ -1,6 +1,6 @@
 # M07 OS-transition policy evidence
 
-Date: 2026-09-14
+Date: 2026-09-15
 
 The control crate now exposes a side-effect-free `plan_os_transition` contract
 for STATE-11. Lock keeps the explicitly running session set. Sign-out and
@@ -19,6 +19,12 @@ On resume, an existing endpoint monitor is force-refreshed through its
 read-only snapshot path before the response is returned; the response reports
 `endpointInventory: refreshed` or `notStarted`.
 
+Sleep also preserves the exact IDs of native-owned sessions separately from
+portable restart candidates. Resume returns those IDs as `nativeSessionIds`
+and requires `revalidateBeforeRestart`; it does not restart or reopen a native
+endpoint. This keeps hardware and driver recovery explicit while preserving
+the identity needed by the future exact-rebind operation.
+
 The same boundary is exposed as the authenticated, idempotent
 `system.osTransition` JSON-RPC method so a native notification adapter can use
 the shared backend authority. Its input and output schemas are included in
@@ -36,11 +42,11 @@ Validation:
 
 ```text
 cargo test -p audiorouter-control --locked --lib -- --test-threads=1
-164 passed; 2 ignored; 0 failed
+165 passed; 2 ignored; 0 failed
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
 clean
 cargo test --manifest-path src-tauri/Cargo.toml --locked -- --test-threads=1
-21 passed; 0 failed
+22 passed; 0 failed
 ```
 
 This is portable policy evidence, not Windows power-notification evidence.
