@@ -1,5 +1,15 @@
 # M07 automation and recovery evidence
 
+## 2026-09-15 - safe mode keeps control available
+
+Corrected the shell recovery boundary so the third-failure safe-mode decision
+does not make the control API unreachable. The supervisor now reconstructs a
+stopped control plane, skips native endpoint preparation, and keeps serving so
+an authorized client can inspect and explicitly clear the durable latch. If
+that safe-mode control plane cannot serve, the backend exits fail-closed. The
+26-test native shell suite, strict Clippy, and formatting passed. No live audio
+or persistent machine audio configuration was changed.
+
 ## 2026-09-15 - durable safe-mode latch regression
 
 The shell test suite now exercises three failure markers through the helper

@@ -2,6 +2,13 @@
 
 Updated: 2026-09-15.
 
+- Corrected STATE-10 safe-mode lifecycle on 2026-09-15. After the third
+  backend failure, the shell now reconstructs and serves a stopped control
+  plane while skipping native preparation, keeping authorized safe-mode
+  clearing reachable; failure of that safe-mode server still exits
+  fail-closed. Native shell tests (26), Clippy, and formatting pass. Evidence:
+  [M07 automation and recovery](evidence/M07-automation-recovery.md).
+
 - Strengthened the STATE-10 regression on 2026-09-15: three shell failure
   markers now survive SQLite reopen with the durable `safe_mode` latch still
   set; database, WAL, and SHM files are removed by the test. Native shell

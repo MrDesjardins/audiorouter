@@ -316,6 +316,13 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
             .name("audiorouter-control".into())
             .spawn(move || {
                 let mut supervisor = BackendSupervisor::default();
+                let mut safe_mode = Storage::open(&database)
+                    .ok()
+                    .and_then(|storage| storage.recovery_safe_mode().ok())
+                    .unwrap_or(false);
+                if safe_mode {
+                    eprintln!("AudioRouter control backend starting in durable safe mode; routes remain stopped");
+                }
                 loop {
                     let result = (|| -> Result<(), String> {
                     // ControlPlane contains COM-backed endpoint state and is
@@ -373,7 +380,7 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                                 format!("default desktop session creation failed: {error:?}")
                             })?;
                     }
-                    if std::env::var_os("AUDIOROUTER_CAPTURE_ENDPOINT_ID").is_some() {
+                    if !safe_mode && std::env::var_os("AUDIOROUTER_CAPTURE_ENDPOINT_ID").is_some() {
                         match prepare_configured_native_worker(&mut plane, session_id.clone()) {
                             Ok(true) => eprintln!("AudioRouter native endpoint worker prepared; session start remains explicit"),
                             Ok(false) => unreachable!("configured native worker returned false"),
@@ -427,14 +434,22 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                     match result {
                         Ok(()) => break,
                         Err(error) => {
+                            if safe_mode {
+                                eprintln!(
+                                    "AudioRouter safe-mode control backend stopped: {error}; backend thread exiting"
+                                );
+                                break;
+                            }
                             let now = std::time::Instant::now();
                             let durable_failures = record_backend_failure(&database);
                             let decision = supervisor.record_failure(now);
                             if durable_failures.is_some_and(|count| count >= 3) {
                                 eprintln!(
-                                    "AudioRouter control backend stopped: {error}; durable safe mode engaged after repeated failures"
+                                    "AudioRouter control backend stopped: {error}; entering durable safe mode with routes stopped"
                                 );
-                                break;
+                                safe_mode = true;
+                                std::thread::sleep(std::time::Duration::from_millis(500));
+                                continue;
                             }
                             match decision {
                                 BackendRestartDecision::Restart { delay } => {
@@ -447,9 +462,10 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                                 }
                                 BackendRestartDecision::StopSafeMode => {
                                     eprintln!(
-                                        "AudioRouter control backend stopped: {error}; safe mode engaged after repeated failures"
+                                        "AudioRouter control backend stopped: {error}; entering safe mode with routes stopped"
                                     );
-                                    break;
+                                    safe_mode = true;
+                                    std::thread::sleep(std::time::Duration::from_millis(500));
                                 }
                             }
                         }
