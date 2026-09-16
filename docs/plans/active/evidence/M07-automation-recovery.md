@@ -1,5 +1,12 @@
 # M07 automation and recovery evidence
 
+## 2026-09-15 - integrated headless gate after resilience regressions
+
+The `tests/acceptance/m07-headless.ps1` gate passed after the 100-cycle
+suspend/resume and durable reconnect regressions were added. Results included
+172 control tests, 35 CLI tests, 3 MCP stdio tests, and 13 worker-process
+tests. No audio endpoint or machine configuration was accessed.
+
 ## 2026-09-15 - backend-owned quit/finalization contract
 
 Added the authenticated idempotent `system.quit` operation and routed the

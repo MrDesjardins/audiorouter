@@ -35,6 +35,12 @@ was stopped afterward; no endpoint, driver, or persistent audio configuration
 was changed. This confirms the manual-gate limitation is the automation
 surface, not a shell launch failure.
 
+Re-ran `tests/acceptance/m07-headless.ps1` at the current head after both
+resilience regressions. The full control/CLI/MCP/plugin-host gate passed with
+172 control tests, 35 CLI tests, 3 MCP stdio tests, and 13 worker-process
+tests; strict package checks completed without audio or machine configuration
+access.
+
 Validation completed on 2026-09-15: the Rust adapter bridge passed two 500 ms
 cycles with 24,480 captured and 24,448 rendered frames per cycle, zero dropped
 frames, xruns, or deadline misses. The control-owned route passed with 23,520
