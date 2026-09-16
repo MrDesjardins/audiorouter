@@ -2,6 +2,16 @@
 
 Updated: 2026-09-16.
 
+Built and launched the native Tauri shell on 2026-09-16 from the current
+checkout. `cargo build --manifest-path src-tauri/Cargo.toml` passed, and a
+five-second run produced a responsive `AudioRouter` window with a non-zero
+native window handle. The run-owned shell was then stopped and no
+`audiorouter-*` process remained. The desktop automation provider exposed no
+targetable app, so attended visual/accessibility acceptance remains open; this
+is startup evidence only. No endpoint, driver, plugin, or persistent audio
+configuration changed. Next task remains production driver/bridge
+qualification and attended shell acceptance.
+
 Corrected the release-qualification current snapshot on 2026-09-16 to match
 the latest acceptance evidence: M05 now reports 227 UI tests and M07 reports
 36 CLI, 3 MCP, and 173 control tests (with 2 guarded live tests ignored),
