@@ -2,6 +2,16 @@
 
 Updated: 2026-09-16.
 
+Requalified the endpoint lifecycle seam on 2026-09-16 with
+`cargo test --locked -p audiorouter-windows-audio endpoint_ --
+--test-threads=1`: 20 endpoint tests passed, including read-only active
+enumeration and monitor startup, deterministic snapshot diffs, inactive/
+activation/removal state mapping, exact ID/direction binding, changed-format
+rejection, injected start rollback, and stop/reset cleanup. These tests did
+not alter endpoints or streams. Actual unplug/default-change/reopen behavior
+and production endpoint-owned callback evidence remain Windows hardware/driver
+gates.
+
 Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain on
 2026-09-16 at pushed head `5baf321e`. Toolchain discovery/native probe,
 x64/ARM64 AudioRouter driver builds, Software Device dry run, read-only
