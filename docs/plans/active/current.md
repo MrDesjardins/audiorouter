@@ -2,6 +2,17 @@
 
 Updated: 2026-09-15.
 
+- Completed the bounded two-way native endpoint resampling boundary on
+  2026-09-15. `WasapiSchedulerBridge::new_for_endpoints_at_graph_rate` now
+  keeps the engine at the declared 48 kHz internal rate while converting both
+  capture endpoint input and processed graph output when endpoint clocks
+  differ. Phase-retaining FIFOs, finite repair, bounded backpressure, and
+  stream reset are covered by the Windows-audio suite (78 tests); control
+  preparation now selects the internal graph rate and strict Clippy passes.
+  No endpoint was opened in this implementation test and no machine audio
+  configuration changed. Live cross-rate hardware evidence and production
+  driver/PortCls qualification remain open.
+
 - Requalified the authorized 500 ms Rust adapter bridge against the existing
   VB-Cable pair on 2026-09-15 at pushed head `7978e7f5`. The route processed
   24,480 captured frames, 191 graph quanta/tap calls, and 24,448 rendered

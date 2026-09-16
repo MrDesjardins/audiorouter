@@ -1,3 +1,17 @@
+# 2026-09-15 - two-way endpoint resampling boundary
+
+`WasapiSchedulerBridge::new_for_endpoints_at_graph_rate` now supports an
+explicit internal graph rate independent of the selected endpoint rates. The
+native endpoint control path uses the engine's 48 kHz internal rate; capture
+packets are converted into that graph rate and processed graph blocks are
+converted back to the render endpoint rate. Both streaming FIFOs retain phase,
+repair non-finite input, stay allocation-free after construction, and reset at
+stream boundaries. The regression
+`scheduler_bridge_converts_graph_output_to_a_different_render_rate` passed,
+and strict Clippy passed for Windows audio and control. This is portable
+adapter evidence; live cross-rate hardware and production driver/PortCls
+qualification remain open.
+
 # Native adapter route requalification (2026-09-14)
 
 ## 2026-09-14 - verified application-capture lifecycle

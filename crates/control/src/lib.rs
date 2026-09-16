@@ -4352,14 +4352,16 @@ impl ControlPlane {
                 "native endpoint worker is already attached".into(),
             ));
         }
-        let bridge = audiorouter_windows_audio::WasapiSchedulerBridge::new_for_endpoints(
-            2,
-            capture,
-            render,
-            audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
-            audiorouter_windows_audio::MAX_FLOAT32_ACCUMULATOR_FRAMES,
-        )
-        .map_err(audio_control_error)?;
+        let bridge =
+            audiorouter_windows_audio::WasapiSchedulerBridge::new_for_endpoints_at_graph_rate(
+                2,
+                capture,
+                render,
+                audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+                audiorouter_windows_audio::MAX_FLOAT32_ACCUMULATOR_FRAMES,
+                audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ,
+            )
+            .map_err(audio_control_error)?;
         if self.endpoint_monitor.is_none() {
             self.endpoint_monitor = Some(
                 audiorouter_windows_audio::EndpointMonitor::start().map_err(audio_control_error)?,

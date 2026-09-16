@@ -1975,7 +1975,9 @@ pub struct WasapiSchedulerBridge {
     scheduler: audiorouter_engine::RealtimeScheduler,
     accumulator: Float32PacketAccumulator,
     capture_resampler: Option<InterleavedStreamingResampler>,
+    render_resampler: Option<InterleavedStreamingResampler>,
     capture_samples: Vec<f32>,
+    render_samples: Vec<f32>,
     capture_bytes: Vec<u8>,
     render_bytes: Vec<u8>,
     render_pending: Vec<u8>,
@@ -2012,18 +2014,63 @@ impl WasapiSchedulerBridge {
         {
             return Err(AudioError::InvalidFrameSize);
         }
+        Self::new_for_endpoints_at_graph_rate(
+            ring_capacity,
+            capture,
+            render,
+            quantum_frames,
+            max_packet_frames,
+            render.sample_rate_hz,
+        )
+    }
+
+    /// Construct a bridge with an explicit internal graph rate. Endpoint
+    /// capture is converted into that rate before scheduling, and processed
+    /// graph output is converted back to the render endpoint rate. Both
+    /// conversions retain phase across packets and use only storage prepared
+    /// during construction.
+    pub fn new_for_endpoints_at_graph_rate(
+        ring_capacity: usize,
+        capture: &EndpointInfo,
+        render: &EndpointInfo,
+        quantum_frames: usize,
+        max_packet_frames: usize,
+        graph_sample_rate_hz: u32,
+    ) -> Result<Self, AudioError> {
+        if capture.direction != EndpointDirection::Capture
+            || render.direction != EndpointDirection::Render
+            || !capture.is_ieee_float32()
+            || !render.is_ieee_float32()
+            || capture.channels != render.channels
+            || capture.bits_per_sample != render.bits_per_sample
+            || capture.format_tag != render.format_tag
+            || capture.channel_mask != render.channel_mask
+            || !capture
+                .subformat_guid
+                .eq_ignore_ascii_case(&render.subformat_guid)
+        {
+            return Err(AudioError::InvalidFrameSize);
+        }
         let mut bridge = Self::new_at_sample_rate(
             ring_capacity,
             usize::from(capture.channels),
             quantum_frames,
             max_packet_frames,
-            render.sample_rate_hz,
+            graph_sample_rate_hz,
         )?;
-        if capture.sample_rate_hz != render.sample_rate_hz {
+        if capture.sample_rate_hz != graph_sample_rate_hz {
             bridge.capture_resampler = Some(InterleavedStreamingResampler::new(
                 usize::from(capture.channels),
                 max_packet_frames.max(quantum_frames),
                 capture.sample_rate_hz,
+                graph_sample_rate_hz,
+            )?);
+        }
+        if graph_sample_rate_hz != render.sample_rate_hz {
+            bridge.render_resampler = Some(InterleavedStreamingResampler::new(
+                usize::from(render.channels),
+                max_packet_frames.max(quantum_frames),
+                graph_sample_rate_hz,
                 render.sample_rate_hz,
             )?);
         }
@@ -2065,7 +2112,8 @@ impl WasapiSchedulerBridge {
         let capture_bytes = max_packet_frames
             .checked_mul(bytes_per_frame)
             .ok_or(AudioError::InvalidFrameSize)?;
-        let render_bytes = quantum_frames
+        let render_capacity_frames = max_packet_frames.max(quantum_frames);
+        let render_bytes = render_capacity_frames
             .checked_mul(bytes_per_frame)
             .ok_or(AudioError::InvalidFrameSize)?;
         let render_pending = render_bytes
@@ -2083,7 +2131,9 @@ impl WasapiSchedulerBridge {
             scheduler,
             accumulator,
             capture_resampler: None,
+            render_resampler: None,
             capture_samples: vec![0.0; max_packet_frames * channels],
+            render_samples: vec![0.0; max_packet_frames * channels],
             capture_bytes: vec![0; capture_bytes],
             render_bytes: vec![0; render_bytes],
             render_pending: vec![0; render_pending],
@@ -2122,6 +2172,9 @@ impl WasapiSchedulerBridge {
     pub fn reset_stream(&mut self) -> Result<usize, AudioError> {
         self.accumulator.reset();
         if let Some(resampler) = self.capture_resampler.as_mut() {
+            resampler.reset();
+        }
+        if let Some(resampler) = self.render_resampler.as_mut() {
             resampler.reset();
         }
         self.render_pending_bytes = 0;
@@ -2228,21 +2281,8 @@ impl WasapiSchedulerBridge {
         result.processed_quanta = 1;
         if let Some(generation) = generation {
             if let Some(output) = self.scheduler.receive_output_for_generation(generation) {
-                encode_interleaved_float32(&output, &mut self.render_bytes)
+                self.append_render_output(&output)
                     .map_err(NativeBridgeInputPumpError::Audio)?;
-                let bytes = output.frames() * self.bytes_per_frame;
-                if self.render_pending_bytes + bytes > self.render_pending.len() {
-                    self.scheduler.output().try_recycle(output).ok();
-                    return Err(NativeBridgeInputPumpError::Audio(
-                        AudioError::BufferTooSmall {
-                            required: self.render_pending_bytes + bytes,
-                            available: self.render_pending.len(),
-                        },
-                    ));
-                }
-                self.render_pending[self.render_pending_bytes..self.render_pending_bytes + bytes]
-                    .copy_from_slice(&self.render_bytes[..bytes]);
-                self.render_pending_bytes += bytes;
                 self.scheduler.output().try_recycle(output).ok();
                 self.drain_render_pending(render, &mut result)
                     .map_err(NativeBridgeInputPumpError::Audio)?;
@@ -2431,28 +2471,90 @@ impl WasapiSchedulerBridge {
             let Some(output) = self.scheduler.receive_output_for_generation(generation) else {
                 continue;
             };
-            encode_interleaved_float32(&output, &mut self.render_bytes)?;
-            let output_bytes = output.frames() * self.bytes_per_frame;
-            if self.render_pending_bytes + output_bytes > self.render_pending.len() {
-                self.scheduler
-                    .output()
-                    .try_recycle(output)
-                    .map_err(|_| AudioError::InvalidFrameSize)?;
-                return Err(AudioError::BufferTooSmall {
-                    required: self.render_pending_bytes + output_bytes,
-                    available: self.render_pending.len(),
-                });
-            }
-            self.render_pending
-                [self.render_pending_bytes..self.render_pending_bytes + output_bytes]
-                .copy_from_slice(&self.render_bytes[..output_bytes]);
-            self.render_pending_bytes += output_bytes;
+            self.append_render_output(&output)?;
             self.scheduler
                 .output()
                 .try_recycle(output)
                 .map_err(|_| AudioError::InvalidFrameSize)?;
             self.drain_render_pending(render, result)?;
         }
+        Ok(())
+    }
+
+    fn append_render_output(
+        &mut self,
+        output: &audiorouter_engine::AudioBlock,
+    ) -> Result<(), AudioError> {
+        if let Some(resampler) = self.render_resampler.as_mut() {
+            let samples = output
+                .frames()
+                .checked_mul(output.channels())
+                .ok_or(AudioError::InvalidFrameSize)?;
+            if samples > self.bridge_samples.len() {
+                return Err(AudioError::BufferTooSmall {
+                    required: samples * std::mem::size_of::<f32>(),
+                    available: self.bridge_samples.len() * std::mem::size_of::<f32>(),
+                });
+            }
+            for frame in 0..output.frames() {
+                for channel in 0..output.channels() {
+                    self.bridge_samples[frame * output.channels() + channel] = output
+                        .channel(channel)
+                        .ok_or(AudioError::InvalidFrameSize)?[frame];
+                }
+            }
+            if resampler.push(&self.bridge_samples[..samples])? != output.frames() {
+                return Err(AudioError::BufferTooSmall {
+                    required: samples * std::mem::size_of::<f32>(),
+                    available: 0,
+                });
+            }
+            while resampler.available_output_frames() > 0 {
+                let capacity_frames = self.render_samples.len() / output.channels();
+                let frames = resampler.available_output_frames().min(capacity_frames);
+                if frames == 0 {
+                    return Err(AudioError::InvalidFrameSize);
+                }
+                let samples = frames * output.channels();
+                let produced = resampler.pop_into(&mut self.render_samples[..samples])?;
+                if produced == 0 {
+                    break;
+                }
+                let bytes = produced * self.bytes_per_frame;
+                if bytes > self.render_bytes.len()
+                    || self.render_pending_bytes + bytes > self.render_pending.len()
+                {
+                    return Err(AudioError::BufferTooSmall {
+                        required: self.render_pending_bytes + bytes,
+                        available: self.render_pending.len(),
+                    });
+                }
+                for (destination, sample) in self.render_bytes[..bytes]
+                    .chunks_exact_mut(std::mem::size_of::<f32>())
+                    .zip(self.render_samples[..produced * output.channels()].iter())
+                {
+                    destination.copy_from_slice(&sample.to_ne_bytes());
+                }
+                self.render_pending[self.render_pending_bytes..self.render_pending_bytes + bytes]
+                    .copy_from_slice(&self.render_bytes[..bytes]);
+                self.render_pending_bytes += bytes;
+            }
+            return Ok(());
+        }
+        let bytes = output
+            .frames()
+            .checked_mul(self.bytes_per_frame)
+            .ok_or(AudioError::InvalidFrameSize)?;
+        encode_interleaved_float32(output, &mut self.render_bytes[..bytes])?;
+        if self.render_pending_bytes + bytes > self.render_pending.len() {
+            return Err(AudioError::BufferTooSmall {
+                required: self.render_pending_bytes + bytes,
+                available: self.render_pending.len(),
+            });
+        }
+        self.render_pending[self.render_pending_bytes..self.render_pending_bytes + bytes]
+            .copy_from_slice(&self.render_bytes[..bytes]);
+        self.render_pending_bytes += bytes;
         Ok(())
     }
 
@@ -6602,6 +6704,46 @@ mod tests {
         let bridge =
             WasapiSchedulerBridge::new_for_endpoints(2, &capture, &render, 128, 256).unwrap();
         assert_eq!(bridge.sample_rate_hz(), 44_100);
+    }
+
+    #[test]
+    fn scheduler_bridge_converts_graph_output_to_a_different_render_rate() {
+        let endpoint = |direction, sample_rate_hz| EndpointInfo {
+            id: format!("{direction:?}-{sample_rate_hz}"),
+            direction,
+            default_period_100ns: 100_000,
+            minimum_period_100ns: 20_000,
+            sample_rate_hz,
+            channels: 2,
+            bits_per_sample: 32,
+            format_tag: 3,
+            channel_mask: 3,
+            subformat_guid: "{00000003-0000-0010-8000-00AA00389B71}".into(),
+        };
+        let capture = endpoint(EndpointDirection::Capture, 44_100);
+        let render = endpoint(EndpointDirection::Render, 44_100);
+        let mut bridge = WasapiSchedulerBridge::new_for_endpoints_at_graph_rate(
+            2, &capture, &render, 128, 256, 48_000,
+        )
+        .unwrap();
+        assert_eq!(bridge.sample_rate_hz(), 48_000);
+        let capture_resampler = bridge.capture_resampler.as_ref().unwrap();
+        assert_eq!(capture_resampler.source_rate_hz(), 44_100);
+        assert_eq!(capture_resampler.destination_rate_hz(), 48_000);
+        let render_resampler = bridge.render_resampler.as_ref().unwrap();
+        assert_eq!(render_resampler.source_rate_hz(), 48_000);
+        assert_eq!(render_resampler.destination_rate_hz(), 44_100);
+
+        let mut output = audiorouter_engine::AudioBlock::new(2, 128).unwrap();
+        for channel in 0..2 {
+            output.channel_mut(channel).unwrap().fill(0.25);
+        }
+        bridge.append_render_output(&output).unwrap();
+        assert!(bridge.render_pending_bytes > 0);
+        assert!(bridge.render_pending_bytes < 128 * bridge.bytes_per_frame);
+        bridge.reset_stream().unwrap();
+        assert_eq!(bridge.render_pending_bytes, 0);
+        assert_eq!(bridge.render_resampler.as_ref().unwrap().queued_frames(), 0);
     }
 
     #[test]
