@@ -46,3 +46,8 @@ delivery still needs a guarded lock/sign-out/sleep/resume acceptance and
 endpoint re-enumeration with
 before/after identity proof. No machine power state, audio endpoint, driver,
 or user configuration was changed by this work.
+
+The shell transition forwarder uses a process-and-timestamp-qualified
+idempotency key, preventing a newly launched shell from colliding with a
+durable transition operation from an earlier shell instance. The uniqueness
+regression is covered by the native shell test suite.

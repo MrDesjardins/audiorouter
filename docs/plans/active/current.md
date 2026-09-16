@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Fixed a durable transition-operation collision on 2026-09-15. Native shell
+  transition requests now qualify their idempotency keys with the shell
+  process ID, timestamp, and event sequence, so a later shell instance cannot
+  replay or conflict with sequence zero from an earlier instance. The shell
+  suite passed 22 tests and strict Clippy passed; the uniqueness regression is
+  recorded in [M07 OS-transition policy evidence]
+  (evidence/M07-os-transitions.md). No audio or machine configuration changed.
+  Next action: continue the next safe M03/M07 delivery slice.
+
 - Implemented the guarded Windows OS-transition listener on 2026-09-14.
   `src-tauri/src/os_transition_windows.rs` owns a message-only window, maps
   WTS lock/logoff and power suspend/resume notifications, and forwards them

@@ -21,6 +21,17 @@ const DEFAULT_DATABASE_DIRECTORY: &str = "AudioRouter";
 const DEFAULT_DATABASE_FILE: &str = "state.sqlite";
 const DESKTOP_SESSION_ID: &str = "desktop-session";
 
+fn transition_operation_key(sequence: usize) -> String {
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    format!(
+        "shell-os-transition-{}-{timestamp}-{sequence}",
+        std::process::id()
+    )
+}
+
 #[derive(Clone)]
 struct ShellState {
     pipe_name: String,
@@ -599,6 +610,7 @@ fn main() {
                                 for (sequence, transition) in
                                     transition_receiver.into_iter().enumerate()
                                 {
+                                    let operation_key = transition_operation_key(sequence);
                                     let transition = match transition {
                                         audiorouter_control::os_transition::OsTransition::Lock => "lock",
                                         audiorouter_control::os_transition::OsTransition::SignOut => "signOut",
@@ -614,7 +626,7 @@ fn main() {
                                             method: "system.osTransition".into(),
                                             params: Some(serde_json::json!({
                                                 "transition": transition,
-                                                "idempotencyKey": format!("shell-os-transition-{sequence}")
+                                                "idempotencyKey": operation_key
                                             })),
                                         },
                                         &transition_pipe,
@@ -860,6 +872,15 @@ mod tests {
             r#"window.__AUDIO_ROUTER_SESSION_ID__ = "shell\";window.pwned=true;\\escape";"#
         ));
         assert!(script.contains("window.__AUDIO_ROUTER_HOST__"));
+    }
+
+    #[test]
+    fn transition_operation_keys_are_unique_across_sequences() {
+        let first = transition_operation_key(0);
+        let second = transition_operation_key(1);
+        assert_ne!(first, second);
+        assert!(first.starts_with("shell-os-transition-"));
+        assert!(first.len() < 256);
     }
 
     #[test]
