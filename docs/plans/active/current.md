@@ -2,6 +2,20 @@
 
 Updated: 2026-09-16.
 
+Requalified the elevated integrated `tests/acceptance/safe-all.ps1` chain on
+2026-09-16. The run passed toolchain discovery, AudioRouter x64 and ARM64
+driver compile/signability, Software Device dry-run, read-only 31-endpoint
+inventory, disposable SysVAD reference qualification, M03 virtual-bus CLI,
+M04 DSP/recording, M05 UI (227 tests and production build), M06 pinned VST3
+SDK/native worker and VST2 fixtures, M07 headless, unsigned M08 artifacts and
+NSIS installer smoke, 159 traceability IDs, and documentation validation.
+The first non-elevated attempt stopped at read-only PnP inventory with
+`0x80041003 Access denied`; the elevated rerun completed successfully and
+removed 15 run-owned temporary children. No driver was installed or loaded,
+no plugin was registered, and no persistent audio or machine configuration
+changed. Production driver activation/signing, clean-machine behavior,
+physical latency, and attended UI remain open gates.
+
 Requalified the complete workspace regression on 2026-09-16 with `cargo test
 --workspace --locked -- --test-threads=1`: all portable suites passed,
 including 36 CLI, 173 control (two explicitly guarded live tests ignored), 65
