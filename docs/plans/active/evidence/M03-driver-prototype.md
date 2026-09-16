@@ -1,5 +1,16 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-15 - non-installing WDK qualification
+
+Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m03-driver-build.ps1`. Visual Studio Community MSBuild
+18.9.1 and WDK 10.0.28000.0 built Utilities, Filters, Main, package/catalog,
+and Inc for x64. Catalog signability reported zero errors and zero warnings;
+the acceptance removed disposable output. No driver was installed or loaded,
+and no signing mode, service, boot-policy, endpoint, or machine audio
+configuration action occurred. Loaded PortCls/data-path and production
+signing qualification remain open.
+
 ## 2026-09-15 - workspace and UI requalification
 
 The full locked Rust workspace passed after the directional bridge-session

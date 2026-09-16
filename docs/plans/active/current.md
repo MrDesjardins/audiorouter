@@ -2,6 +2,14 @@
 
 Updated: 2026-09-15.
 
+- Requalified the non-installing M03 AudioRouter x64 WDK driver on 2026-09-15
+  with Visual Studio Community MSBuild 18.9.1 and WDK 10.0.28000.0.
+  Utilities, Filters, Main, package/catalog, and Inc built successfully;
+  catalog signability reported zero errors and zero warnings, and disposable
+  output was removed. No driver was installed or loaded, and no signing mode,
+  service, boot policy, endpoint, or machine audio configuration changed.
+  The loaded PortCls/data-path and production-signing gates remain open.
+
 - Requalified the full locked Rust workspace and UI delivery on 2026-09-15
   after the directional bridge-session regression. Rust packages passed: CLI
   35, control 165 plus 2 guarded ignores, domain 64, DSP 32, engine 111,
