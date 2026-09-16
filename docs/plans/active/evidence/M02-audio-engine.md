@@ -488,6 +488,14 @@ Windows-audio tests passed (165 control tests, 74 Windows-audio tests; two
 control tests remain intentionally ignored because they require explicit live
 audio authorization).
 
+The complete guarded acceptance chain was requalified on 2026-09-15 with the
+installed VS 18/WDK 10.0.28000 toolchain. The project driver compiled with
+signability and catalog generation, and the read-only native inventory found
+31 endpoints. The chain passed all portable, UI, VST3, VST2, headless, release,
+traceability, and documentation stages. It deliberately did not install or
+load a driver or change machine audio configuration. Cross-rate resampling and
+physical-latency qualification remain open.
+
 ## 2026-09-08 - Differing-rate route requalification
 
 The guarded `m02-rust-adapter-route-live.ps1 -AllowLiveAudio

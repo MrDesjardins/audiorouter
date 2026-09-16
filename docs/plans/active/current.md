@@ -2,6 +2,18 @@
 
 Updated: 2026-09-15.
 
+- Requalified the complete guarded acceptance chain on 2026-09-15 after the
+  negotiated-rate fix. VS/SDK/WDK discovery, AudioRouter x64 driver
+  compile/signability/catalog, 31-endpoint read-only inventory, pinned SysVAD,
+  M01/M04/M05, VST3 SDK and native worker, VST2 fixtures, M07 headless,
+  unsigned M08 artifacts, 159 requirement mappings, and documentation (54
+  Markdown files, 204 local links) all passed. The first non-admin attempt
+  stopped at Get-PnpDevice access denied; the authorized native/admin rerun
+  passed. Cleanup removed 15 run-owned temporary children. No driver was
+  installed, no plugin was registered, and no machine audio/default/power
+  configuration changed. Cross-rate endpoint resampling, driver installation,
+  signing, and physical-latency gates remain open.
+
 - Fixed native same-rate graph activation on 2026-09-15. Endpoint bridges
   now retain their validated negotiated sample rate, and native session start
   prepares the graph at that rate instead of always selecting 48 kHz. This
