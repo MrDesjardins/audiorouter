@@ -2229,3 +2229,13 @@ frames, scheduler XRuns, or deadline misses. Temporary streams and the
 recording were removed, and media identity/state were unchanged afterward.
 This qualifies the existing VB-Cable user-mode route only; it does not qualify
 the AudioRouter driver or physical latency.
+## 2026-09-15 - control-owned VB-Cable lifecycle re-run
+
+The authorized guarded acceptance used the exact active VB-Audio pair and
+completed one 500 ms control-owned capture → graph → render cycle. It
+processed 23,520 captured frames across 183 graph quanta and rendered 23,424
+frames; the lifecycle test passed and the temporary process environment was
+restored. No persistent audio configuration, endpoint default, volume, mute,
+driver, or signing state was changed. This remains user-mode existing-device
+evidence; loaded AudioRouter driver/PortCls timing and physical-latency gates
+remain open.

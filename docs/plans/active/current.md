@@ -2,6 +2,15 @@
 
 Updated: 2026-09-15.
 
+- Re-ran the authorized guarded M02 control-owned VB-Cable lifecycle using
+  the exact active capture/render pair. One 500 ms route processed 23,520
+  captured frames, 183 graph quanta, and 23,424 rendered frames; the test
+  passed and restored its process environment. No persistent audio settings,
+  defaults, volume, mute, driver, or signing state changed. Evidence: [M02
+  audio engine](evidence/M02-audio-engine.md). This is existing-device
+  user-mode evidence; loaded AudioRouter driver/PortCls timing and
+  physical-latency gates remain open.
+
 - Re-ran the authorized M03 build-only acceptance with VS Community
   2026/MSBuild 18.9.1 and WDK 10.0.28000.0. All x64 driver, package/catalog,
   and include targets completed with zero signability errors or warnings;
