@@ -174,11 +174,18 @@ impl SoftwareDeviceProvisioner {
         let completion = match receiver.recv_timeout(CALLBACK_TIMEOUT) {
             Ok(value) => value,
             Err(RecvTimeoutError::Timeout) => {
-                // Do not reclaim `context`: a late callback could still run.
-                // The bounded allocation is intentionally leaked on this
-                // terminal timeout to preserve callback memory safety.
                 if !returned_handle.is_null() {
+                    // The Windows contract guarantees that SwDeviceClose
+                    // waits for an in-flight callback and that no callback
+                    // runs after it returns. Reclaim the callback context
+                    // only after that guarantee is established.
                     unsafe { SwDeviceClose(returned_handle) };
+                    unsafe { drop(Box::from_raw(context)) };
+                } else {
+                    // A successful call is expected to return a handle, but
+                    // preserve callback safety if a nonconforming runtime
+                    // reports success without one: the callback context is
+                    // intentionally retained because it cannot be retired.
                 }
                 return Err(SoftwareDeviceError::CallbackTimeout);
             }

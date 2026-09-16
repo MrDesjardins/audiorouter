@@ -1,5 +1,17 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-16 - Software Device timeout-context reclamation
+
+The Software Device timeout path now closes the returned handle and reclaims
+the callback context only after `SwDeviceClose` returns. This follows the
+Windows API guarantee that no create callback runs after close completes; a
+successful call with an anomalous null returned handle retains the context
+conservatively. The focused `cargo test --locked -p
+audiorouter-windows-audio` suite passed 81 tests, with strict package Clippy,
+formatting, and diff checks also passing. No software device was created,
+installed, or loaded and no machine audio configuration changed. Loaded
+PortCls, production signing, and clean-machine qualification remain open.
+
 ## 2026-09-16 - x64 and ARM64 requalification at `85e8bca3`
 
 Commands: `tests/acceptance/m03-driver-build.ps1 -Platform x64` and

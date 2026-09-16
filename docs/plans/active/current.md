@@ -2,6 +2,15 @@
 
 Updated: 2026-09-16.
 
+Corrected Software Device timeout ownership on 2026-09-16. After a callback
+timeout, the Windows API's `SwDeviceClose` completion guarantee now allows
+the callback context to be reclaimed safely once the returned handle is
+closed; the null-handle anomaly retains the context conservatively. The
+focused Windows-audio suite passed 81 tests, strict Clippy, formatting, and
+diff checks passed. No software device was created and no machine audio
+configuration changed. The native M03 signing, loaded PortCls, clean-machine,
+and physical-latency gates remain open.
+
 Requalified the authorized process-loopback include/exclude paths on
 2026-09-16 for 500 ms. Include converted 21,609 source frames to 23,296
 engine frames across 182 quanta; exclude converted 22,050 source frames to
