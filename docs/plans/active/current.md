@@ -2,6 +2,13 @@
 
 Updated: 2026-09-16.
 
+Strengthened the M03 source-contract regression on 2026-09-16 to verify the
+bridge request publication order: generation invalidation, atomic callback
+shape stores, then final generation publication. The x64 and ARM64 WDK
+build/signability gates and documentation validation passed. This protects
+the new fail-closed replacement protocol from future regressions; it does
+not represent loaded-driver, production-signing, or clean-machine evidence.
+
 Completed the bridge request publication/teardown race slice on 2026-09-16.
 The project-owned driver now clears the callback validity generation before
 replacing or clearing request shape fields, publishes the 16-bit callback

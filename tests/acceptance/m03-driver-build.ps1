@@ -113,6 +113,30 @@ foreach ($required in @(
         throw "driver bridge direction export is missing: $required"
     }
 }
+$publishRequestStart = $source.IndexOf('static void PublishBridgeRequest(')
+$publishRequestEnd = $source.IndexOf('// This helper is intentionally independent', $publishRequestStart)
+if ($publishRequestStart -lt 0 -or $publishRequestEnd -le $publishRequestStart) {
+    throw 'callback request publication helper boundary is missing'
+}
+$publishRequest = $source.Substring($publishRequestStart, $publishRequestEnd - $publishRequestStart)
+$generationClear = $publishRequest.IndexOf('Request.Generation), 0)')
+$requestCopy = $publishRequest.IndexOf('Lease->Request = *Request;')
+$generationPublish = $publishRequest.LastIndexOf('Request->Generation))')
+if ($generationClear -lt 0 -or $requestCopy -le $generationClear -or
+    $generationPublish -le $requestCopy) {
+    throw 'callback request publication must clear generation, publish shape, then publish generation'
+}
+foreach ($required in @(
+        'StoreBridgeUshort(&Lease->Request.Channels',
+        '&Lease->Request.FramesPerQuantum',
+        '&Lease->Request.Direction')) {
+    if (-not $publishRequest.Contains($required)) {
+        throw "callback request publication is missing atomic shape store: $required"
+    }
+}
+if (-not $source.Contains('ClearBridgeRequest(')) {
+    throw 'callback request teardown helper is missing'
+}
 foreach ($required in @(
         'ReleaseLeasesOwnedByFileObject',
         'IRP_MJ_CLEANUP',
