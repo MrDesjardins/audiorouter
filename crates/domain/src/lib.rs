@@ -638,7 +638,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 75] = [
+pub const API_METHODS: [ApiMethodSpec; 77] = [
     ApiMethodSpec {
         name: "system.describe",
         permission: PermissionScope::Read,
@@ -878,6 +878,16 @@ pub const API_METHODS: [ApiMethodSpec; 75] = [
         name: "virtualDevices.apply",
         permission: PermissionScope::DeviceAdministration,
         side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "virtualDevices.provision",
+        permission: PermissionScope::DeviceAdministration,
+        side_effect: SideEffectClass::ExternalOperation,
+    },
+    ApiMethodSpec {
+        name: "virtualDevices.remove",
+        permission: PermissionScope::DeviceAdministration,
+        side_effect: SideEffectClass::ExternalOperation,
     },
     ApiMethodSpec {
         name: "virtualRoutes.list",

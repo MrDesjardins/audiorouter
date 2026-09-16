@@ -98,6 +98,24 @@ and does not claim that a driver is installed or loaded. Evidence: 65 domain,
 90 storage, 172 control, and 226 UI tests passed, plus strict Clippy and UI
 typecheck.
 
+Added the explicit managed-device administration API on 2026-09-16:
+`virtualDevices.provision` and `virtualDevices.remove` are registered in the
+shared domain method catalog, exposed in the TypeScript method/parameter/result
+contracts, described with bounded input/output schemas, authorized by
+`deviceAdministration`, and dispatched with client-scoped idempotency keys,
+request hashes, operation IDs, and durable journal records. The methods call
+the existing Windows-only owned-handle seam; non-Windows builds fail closed,
+and results continue to report endpoint availability as unavailable until the
+managed driver is loaded and qualified. A storage helper commits the
+virtual-bus snapshot and external-operation journal in one SQLite transaction.
+Focused Rust tests passed (65 domain, 90 storage, 171 control passed with two
+guarded tests ignored), strict Clippy passed, and UI typecheck plus all 226 UI
+tests passed. The remaining concern is a narrow compensation window between
+native handle mutation and the existing public persistence wrapper; this must
+be closed before calling the API production-ready. Next task: refactor the
+native provision/remove wrappers to use the atomic snapshot+journal transaction
+directly, then re-run the complete guarded acceptance chain.
+
 Added bounded native ownership in `crates/windows-audio` on 2026-09-16 via
 `ManagedSoftwareDeviceInventory`. It keys RAII Software Device API handles by
 managed bus ID, rejects duplicate and over-capacity entries, exposes the

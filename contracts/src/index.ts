@@ -376,6 +376,22 @@ export interface VirtualDeviceApplyResult {
   operation: VirtualDeviceOperation;
 }
 
+export interface VirtualDeviceProvisionResult {
+  operationId: EntityId;
+  state: "completed";
+  busId: EntityId;
+  driverInstanceId: string;
+  availability: { status: "unavailable"; reason: string };
+}
+
+export interface VirtualDeviceRemoveResult {
+  operationId: EntityId;
+  state: "completed";
+  busId: EntityId;
+  driverInstanceId: null;
+  availability: { status: "unavailable"; reason: string };
+}
+
 export interface GraphHistoryPage {
   items: Session[];
   nextCursor: string | null;
@@ -892,6 +908,8 @@ export type ImplementedMethod =
   | "virtualDevices.list"
   | "virtualDevices.plan"
   | "virtualDevices.apply"
+  | "virtualDevices.provision"
+  | "virtualDevices.remove"
   | "virtualRoutes.list"
   | "virtualRoutes.replace"
   | "apps.list"
@@ -989,6 +1007,8 @@ export type MethodParams = {
   "virtualDevices.list": { cursor?: string; limit?: number } | undefined;
   "virtualDevices.plan": { operation: VirtualDeviceOperation };
   "virtualDevices.apply": { planId: EntityId; idempotencyKey: string };
+  "virtualDevices.provision": { busId: EntityId; instanceId: string; idempotencyKey: string };
+  "virtualDevices.remove": { busId: EntityId; idempotencyKey: string };
   "virtualRoutes.list": undefined;
   "virtualRoutes.replace": {
     baseRevision: number;
@@ -1098,6 +1118,8 @@ export type MethodResult = {
   "virtualDevices.list": VirtualDeviceInfo[] | VirtualDeviceListPage;
   "virtualDevices.plan": VirtualDevicePlanResult;
   "virtualDevices.apply": VirtualDeviceApplyResult;
+  "virtualDevices.provision": VirtualDeviceProvisionResult;
+  "virtualDevices.remove": VirtualDeviceRemoveResult;
   "virtualRoutes.list": VirtualRouteListResult;
   "virtualRoutes.replace": VirtualRouteReplaceResult;
   "apps.list": ApplicationInfo[];

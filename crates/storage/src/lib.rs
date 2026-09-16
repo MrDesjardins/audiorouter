@@ -1095,6 +1095,44 @@ impl Storage {
         Ok(())
     }
 
+    pub fn save_virtual_buses_and_external_journal(
+        &self,
+        registry: &VirtualBusRegistry,
+        operation: &str,
+        idempotency_key: &str,
+        request_hash: &str,
+        result: &Value,
+    ) -> Result<(), StorageError> {
+        validate_idempotency_key(idempotency_key)?;
+        validate_request_hash(request_hash)?;
+        let snapshots = registry.snapshots();
+        if snapshots.len() > audiorouter_domain::MAX_VIRTUAL_BUSES {
+            return Err(StorageError::InvalidSession(
+                "too many virtual buses".into(),
+            ));
+        }
+        let result = serde_json::to_string(result)?;
+        validate_journal_fields(operation, &result, 0)?;
+        self.prune_expired_journal()?;
+        self.ensure_journal_capacity(idempotency_key)?;
+        let transaction = self.connection.unchecked_transaction()?;
+        transaction.execute("DELETE FROM virtual_buses", [])?;
+        for snapshot in snapshots {
+            transaction.execute(
+                "INSERT INTO virtual_buses(id, name, enabled, driver_instance_id) VALUES (?1, ?2, ?3, ?4)",
+                params![snapshot.id.as_str(), snapshot.name, i64::from(snapshot.enabled), snapshot.driver_instance_id],
+            )?;
+        }
+        transaction.execute(
+            "INSERT OR IGNORE INTO operation_journal
+             (idempotency_key, operation, result, committed_revision, request_hash)
+             VALUES (?1, ?2, ?3, 0, ?4)",
+            params![idempotency_key, operation, result, request_hash],
+        )?;
+        transaction.commit()?;
+        Ok(())
+    }
+
     pub fn load_virtual_buses(&self) -> Result<VirtualBusRegistry, StorageError> {
         let mut statement = self
             .connection

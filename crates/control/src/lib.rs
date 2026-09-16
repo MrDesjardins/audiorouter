@@ -1804,6 +1804,8 @@ fn method_description(name: &str) -> &'static str {
         "virtualDevices.list" => "List managed virtual bus desired state without activating endpoints.",
         "virtualDevices.plan" => "Validate a managed virtual bus lifecycle change without applying it.",
         "virtualDevices.apply" => "Apply a validated virtual bus lifecycle plan to desired state.",
+        "virtualDevices.provision" => "Provision one explicitly selected managed virtual bus device.",
+        "virtualDevices.remove" => "Remove one explicitly selected managed virtual bus device.",
         "virtualRoutes.list" => "List explicit cross-session virtual-bus routes without activating audio.",
         "virtualRoutes.replace" => "Atomically replace explicit cross-session routes using a revision and idempotency key.",
         "apps.list" | "applications.list" => {
@@ -2059,6 +2061,21 @@ fn method_input_schema(name: &str) -> Value {
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
             }),
             &["planId", "idempotencyKey"],
+        ),
+        "virtualDevices.provision" => object_schema(
+            json!({
+                "busId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "instanceId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_VIRTUAL_BUS_DRIVER_INSTANCE_ID_CHARS },
+                "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
+            }),
+            &["busId", "instanceId", "idempotencyKey"],
+        ),
+        "virtualDevices.remove" => object_schema(
+            json!({
+                "busId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
+            }),
+            &["busId", "idempotencyKey"],
         ),
         "virtualRoutes.replace" => object_schema(
             json!({
@@ -3062,6 +3079,30 @@ fn method_output_schema(name: &str) -> Value {
                 "operation": virtual_device_operation_schema()
             },
             "required": ["planId", "state", "availability", "operation"],
+            "additionalProperties": false
+        }),
+        "virtualDevices.provision" => json!({
+            "type": "object",
+            "properties": {
+                "operationId": { "type": "string", "minLength": 1 },
+                "state": { "const": "completed" },
+                "busId": { "type": "string", "minLength": 1 },
+                "driverInstanceId": { "type": "string", "minLength": 1 },
+                "availability": { "type": "object", "properties": { "status": { "const": "unavailable" }, "reason": { "type": "string", "minLength": 1 } }, "required": ["status", "reason"], "additionalProperties": false }
+            },
+            "required": ["operationId", "state", "busId", "driverInstanceId", "availability"],
+            "additionalProperties": false
+        }),
+        "virtualDevices.remove" => json!({
+            "type": "object",
+            "properties": {
+                "operationId": { "type": "string", "minLength": 1 },
+                "state": { "const": "completed" },
+                "busId": { "type": "string", "minLength": 1 },
+                "driverInstanceId": { "const": null },
+                "availability": { "type": "object", "properties": { "status": { "const": "unavailable" }, "reason": { "type": "string", "minLength": 1 } }, "required": ["status", "reason"], "additionalProperties": false }
+            },
+            "required": ["operationId", "state", "busId", "driverInstanceId", "availability"],
             "additionalProperties": false
         }),
         "virtualRoutes.list" => json!({
@@ -5642,6 +5683,8 @@ impl ControlPlane {
                 vec![
                     format!("{client}\0graph.commit\0{operation_id}"),
                     format!("{client}\0virtualDevices.apply\0{operation_id}"),
+                    format!("{client}\0virtualDevices.provision\0{operation_id}"),
+                    format!("{client}\0virtualDevices.remove\0{operation_id}"),
                     format!("{client}\0virtualRoutes.replace\0{operation_id}"),
                     format!("{client}\0recordings.setMetadata\0{operation_id}"),
                     format!("{client}\0recordings.rename\0{operation_id}"),
@@ -8309,6 +8352,10 @@ impl ControlPlane {
                     "virtualDevices.list" => self.dispatch_virtual_devices_list(request.params),
                     "virtualDevices.plan" => self.dispatch_virtual_devices_plan(request.params),
                     "virtualDevices.apply" => self.dispatch_virtual_devices_apply(request.params),
+                    "virtualDevices.provision" => {
+                        self.dispatch_virtual_devices_provision(request.params)
+                    }
+                    "virtualDevices.remove" => self.dispatch_virtual_devices_remove(request.params),
                     "virtualRoutes.list" => self.dispatch_virtual_routes_list(),
                     "virtualRoutes.replace" => self.dispatch_virtual_routes_replace(request.params),
                     "apps.list" | "applications.list" => self.dispatch_apps_list(),
@@ -11326,6 +11373,133 @@ impl ControlPlane {
         Ok(result)
     }
 
+    fn dispatch_virtual_devices_provision(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params =
+            params.ok_or_else(|| ControlError::InvalidRequest("busId is required".into()))?;
+        let bus_id = params
+            .get("busId")
+            .and_then(Value::as_str)
+            .filter(|v| !v.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("busId is required".into()))?;
+        let instance_id = params
+            .get("instanceId")
+            .and_then(Value::as_str)
+            .filter(|v| !v.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("instanceId is required".into()))?;
+        let key = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|v| !v.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        self.dispatch_virtual_device_external(
+            "virtualDevices.provision",
+            bus_id,
+            Some(instance_id),
+            key,
+        )
+    }
+
+    fn dispatch_virtual_devices_remove(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params =
+            params.ok_or_else(|| ControlError::InvalidRequest("busId is required".into()))?;
+        let bus_id = params
+            .get("busId")
+            .and_then(Value::as_str)
+            .filter(|v| !v.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("busId is required".into()))?;
+        let key = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|v| !v.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        self.dispatch_virtual_device_external("virtualDevices.remove", bus_id, None, key)
+    }
+
+    fn dispatch_virtual_device_external(
+        &mut self,
+        method: &str,
+        bus_id: &str,
+        instance_id: Option<&str>,
+        idempotency_key: &str,
+    ) -> Result<Value, ControlError> {
+        let storage_key = self.scoped_idempotency_key(method, idempotency_key);
+        let request_hash = virtual_device_external_request_hash(method, bus_id, instance_id);
+        if let Some(previous) = self.operation_outcomes.get(&storage_key) {
+            if self
+                .idempotency_hashes
+                .get(&storage_key)
+                .is_some_and(|hash| hash == &request_hash)
+            {
+                return Ok(previous.clone());
+            }
+            return Err(ControlError::IdempotencyConflict);
+        }
+        if let Some(storage) = &self.storage {
+            if let Some(previous) = storage
+                .journal_result_checked(&storage_key, &request_hash)
+                .map_err(storage_error)?
+            {
+                let previous: Value = serde_json::from_str(&previous)
+                    .map_err(|error| ControlError::Json(error.to_string()))?;
+                self.remember_operation_outcome(
+                    &storage_key,
+                    previous.clone(),
+                    method,
+                    Some(&request_hash),
+                );
+                return Ok(previous);
+            }
+        }
+        let operation_id = EntityId::new(format!("operation-{}", request_hash));
+        let result = match method {
+            "virtualDevices.provision" => {
+                #[cfg(windows)]
+                let driver_instance_id = self.provision_virtual_bus_device(
+                    &EntityId::new(bus_id),
+                    instance_id.expect("provision instance id"),
+                )?;
+                #[cfg(not(windows))]
+                let driver_instance_id = return Err(ControlError::InvalidRequest(
+                    "managed virtual device provisioning is unavailable on this platform".into(),
+                ));
+                json!({"operationId": operation_id, "state": "completed", "busId": bus_id, "driverInstanceId": driver_instance_id, "availability": {"status": "unavailable", "reason": "requires M03 managed virtual driver"}})
+            }
+            "virtualDevices.remove" => {
+                #[cfg(windows)]
+                self.remove_virtual_bus_device(&EntityId::new(bus_id))?;
+                #[cfg(not(windows))]
+                return Err(ControlError::InvalidRequest(
+                    "managed virtual device removal is unavailable on this platform".into(),
+                ));
+                json!({"operationId": operation_id, "state": "completed", "busId": bus_id, "driverInstanceId": null, "availability": {"status": "unavailable", "reason": "requires M03 managed virtual driver"}})
+            }
+            _ => {
+                return Err(ControlError::InvalidRequest(
+                    "unsupported virtual-device operation".into(),
+                ))
+            }
+        };
+        if let Some(storage) = &self.storage {
+            if let Err(error) = storage.save_virtual_buses_and_external_journal(
+                &self.virtual_buses,
+                method,
+                &storage_key,
+                &request_hash,
+                &result,
+            ) {
+                return Err(storage_error(error));
+            }
+        }
+        self.remember_operation_outcome(&storage_key, result.clone(), method, Some(&request_hash));
+        Ok(result)
+    }
+
     fn dispatch_virtual_devices_list(&self, params: Option<Value>) -> Result<Value, ControlError> {
         let params = params.unwrap_or_else(|| json!({}));
         let paged = params.get("cursor").is_some() || params.get("limit").is_some();
@@ -11800,6 +11974,8 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "virtualDevices.list" => &["cursor", "limit"],
         "virtualDevices.plan" => &["operation"],
         "virtualDevices.apply" => &["planId", "idempotencyKey"],
+        "virtualDevices.provision" => &["busId", "instanceId", "idempotencyKey"],
+        "virtualDevices.remove" => &["busId", "idempotencyKey"],
         "virtualRoutes.list" => &[],
         "virtualRoutes.replace" => &["baseRevision", "routes", "idempotencyKey"],
         "startup.plan" => &["enabled"],
@@ -11962,6 +12138,15 @@ fn virtual_bridge_control_error(error: VirtualBusBridgeSetError) -> ControlError
 
 fn virtual_device_request_hash(plan_id: &str) -> String {
     let fingerprint = format!("virtualDevices.apply:{plan_id}");
+    format!("{:x}", Sha256::digest(fingerprint.as_bytes()))
+}
+
+fn virtual_device_external_request_hash(
+    method: &str,
+    bus_id: &str,
+    instance_id: Option<&str>,
+) -> String {
+    let fingerprint = format!("{method}:{}:{}", bus_id, instance_id.unwrap_or_default());
     format!("{:x}", Sha256::digest(fingerprint.as_bytes()))
 }
 
