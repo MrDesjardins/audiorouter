@@ -2,6 +2,16 @@
 
 Updated: 2026-09-15.
 
+- Requalified the complete guarded `safe-all.ps1` chain at pushed head
+  `9a374954` on 2026-09-15 after the shell-supervisor and UI draft-safety
+  changes. WDK compile/signability, 34-endpoint inventory, disposable SysVAD,
+  M01/M04, M05 UI (221 tests/build), M06 VST3/VST2 workers, M07 headless,
+  unsigned M08 artifacts, 159 normative mappings, and documentation (54
+  Markdown files, 210 links) passed; cleanup removed 15 temporary children.
+  No driver installation, signing-mode, registration, live audio, or
+  persistent machine audio configuration changed. Evidence: [M08 release]
+  (evidence/M08-release.md).
+
 - Hardened UI-02 draft deletion on 2026-09-15: the shared draft helper now
   rejects deleting the final node, and inspector/canvas actions report the
   actionable reason. UI tests (221), typecheck, and the elevated production
