@@ -152,6 +152,14 @@ limitation, not UI pass evidence; the automated M05 build/tests and M07 shell
 RPC acceptance remain the authoritative UI-related checks until a targetable
 desktop surface is available.
 
+Added a component-level M05 regression for the visual editor library-drop
+boundary. A real drop event now exercises the rendered signal-flow canvas and
+proves that the selected built-in processor and bounded canvas coordinates are
+forwarded to the backend draft callback. The focused canvas suite passed 5/5;
+the full UI suite passed 222/222 tests across 19 files. This remains automated
+UI evidence and does not replace attended drag/drop, keyboard, accessibility,
+or native-shell acceptance.
+
 ### Completed shutdown slice (UI-10/STATE-09)
 
 Objective: replace the shell-side quit sequence with one authenticated,
