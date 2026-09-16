@@ -2,6 +2,15 @@
 
 Updated: 2026-09-16.
 
+Re-ran the focused elevated `tests/acceptance/m07-shell-rpc.ps1` gate on
+2026-09-16 after the integrated safe-all qualification; it passed again. The
+frontend WebView initialization -> Tauri command -> authenticated backend
+`system.describe` path is therefore repeatable. Also ran
+`cargo check --workspace --locked --target x86_64-pc-windows-msvc`; the full
+workspace compiled for the native Windows target. Neither check opened an
+audio endpoint, installed/loaded a driver, registered a plugin, or changed
+persistent machine configuration.
+
 Requalified the clean elevated `safe-all.ps1` chain at pushed head `c00cff70`
 on 2026-09-16 after adding the shell RPC stage. All stages passed, including
 the x64/ARM64 driver compile/signability gates, read-only 31-endpoint
