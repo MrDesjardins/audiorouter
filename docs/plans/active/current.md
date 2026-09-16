@@ -2,6 +2,15 @@
 
 Updated: 2026-09-15.
 
+- Ran the authorized guarded VB-Cable route on 2026-09-15 using the exact
+  `CABLE Output` capture and `CABLE Input` render bindings at 48 kHz stereo.
+  The control-owned worker processed 50 packets / 24,000 captured frames,
+  187 graph quanta, and 23,936 rendered frames; its temporary WAV was 95,788
+  bytes. Lifecycle telemetry reported one successful start, stop, and reset,
+  plus one deliberate stale-generation rejection. Before/after media identity
+  and state matched, and the worker stopped/detached. This is live existing
+  VB-Cable evidence, not production-driver or physical-latency qualification.
+
 - Wired bounded capture resampling into the native endpoint bridge on
   2026-09-15. Differing capture/render sample rates are now accepted after
   strict channel and format validation; the render rate becomes the graph

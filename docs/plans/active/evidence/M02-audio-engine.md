@@ -505,6 +505,20 @@ atomic underflow silence, reset, and 44.1↔48 kHz endpoint-rate selection.
 The render endpoint remains at the graph rate in this slice, and live
 cross-rate device evidence is still required.
 
+## Guarded VB-Cable route
+
+On 2026-09-15, the authorized `m02-control-route-live.ps1` harness ran for
+500 ms against the exact existing VB-Cable bindings (`CABLE Output` capture
+and `CABLE Input` render). Both negotiated 48 kHz stereo. The control-owned
+worker reported generation 1, 50 packets, 24,000 captured frames, 187
+processed quanta, 23,936 rendered frames, a 95,788-byte temporary WAV, one
+start/stop/reset success, and one deliberate stale-generation rejection.
+The before/after media identity and state snapshots matched. The worker was
+stopped and detached; defaults, volume, mute, privacy, drivers, signing,
+startup settings, and endpoint registration were unchanged. This validates
+the existing-endpoint control route only and does not qualify the production
+driver, capture-rate conversion on hardware, or physical latency.
+
 ## 2026-09-08 - Differing-rate route requalification
 
 The guarded `m02-rust-adapter-route-live.ps1 -AllowLiveAudio
