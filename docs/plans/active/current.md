@@ -87,6 +87,12 @@ supervised timeout-kill test; this proves containment and cleanup, not that a
 vendor editor is safe to embed in the shell or that native editor UI hosting
 is release-qualified.
 
+The repository-owned VST2 state/ABI fixture acceptance also passed at 44.1,
+48, and 96 kHz. Standard chunk state and legacy `main` export round-trips
+passed; non-finite output was rejected; crash and hang fixtures were contained
+by disposable workers. This validates the legacy ABI and failure policy, not
+third-party redistribution or arbitrary plugin compatibility.
+
 Improved the supervised worker EOF diagnostic so a native plugin crash now
 includes the bounded child exit status. The BUSTERse negative fixture
 reproduction reports `-1073741819` (`0xC0000005`, access violation) alongside

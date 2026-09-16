@@ -40,6 +40,12 @@ checks on 2026-09-15: non-returning editor-thread bounds and supervised
 timeout-kill cleanup. This qualifies worker containment only; native editor
 embedding remains a separate attended/UI gate.
 
+The repository-owned VST2 state/ABI fixtures passed on 2026-09-15 at 44.1,
+48, and 96 kHz. Standard chunk-state and legacy `main` export round-trips
+passed, non-finite output was rejected, and crash/hang fixtures were contained
+by disposable workers. This is host-boundary evidence and does not expand
+third-party compatibility or redistribution rights.
+
 The same nine x64 ReaPlugs candidates also passed the bounded editor-thread
 and supervised editor-timeout containment checks. This proves worker cleanup
 under the tested editor fault boundary, not successful native editor hosting.
