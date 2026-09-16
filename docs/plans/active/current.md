@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Rechecked the control-owned native worker boundary on 2026-09-16 with
+`cargo test --locked -p audiorouter-control native_ -- --test-threads=1`:
+22 tests passed and two explicitly guarded live tests remained ignored. The
+portable tests cover preparation authorization, exact endpoint/graph identity,
+session start/stop ownership, graph activation rollback, bridge cleanup,
+generation checks, bounded pump input, and crash/sleep recovery policy. No
+endpoint or stream was opened by this run.
+
 Completed the companion half of the driver bridge size-field hardening on
 2026-09-16: every `MappedBytes` publication and teardown write now uses the
 same interlocked access discipline as callback-side reads. Guarded x64 and
