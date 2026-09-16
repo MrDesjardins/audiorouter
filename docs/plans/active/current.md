@@ -29,6 +29,14 @@ engine) and 13 expected fixture/desktop-gated ignores, matching the current
 tree. This is documentation correction only; no implementation or machine
 configuration changed.
 
+Requalified the full locked all-features workspace after the delay automation
+changes on 2026-09-16. The command passed 764 tests with 13 expected
+fixture/desktop-gated ignores across CLI/MCP, control, domain, DSP, engine,
+plugin-host/worker, protocol, recording, storage, transport, and Windows
+audio, including all doc-tests. No endpoint, driver, plugin registration, or
+persistent machine audio configuration was accessed. Evidence:
+`docs/plans/active/evidence/M07-automation-recovery.md`.
+
 Revalidated the complete portable workspace and UI after the editor
 environment-restoration hardening on 2026-09-16. `cargo test --workspace
 --locked -- --test-threads=1` passed all runnable workspace tests (the two

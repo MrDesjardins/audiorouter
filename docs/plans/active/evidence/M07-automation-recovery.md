@@ -1,5 +1,15 @@
 # M07 automation and recovery evidence
 
+## 2026-09-16 - all-features qualification after delay automation changes
+
+The full locked workspace was rerun after the M04 delay crossfade and rapid
+update changes: 764 tests passed and 13 expected fixture/desktop-gated tests
+remained ignored. The run included 36 CLI, 3 MCP, 171 control plus 2 guarded
+live ignores, 65 domain, 34 DSP, 111 engine, 70 plugin-host, 35 worker
+process, 8 protocol, 40 recording, 91 storage, 19 transport, and 81
+Windows-audio tests, with all doc-tests passing. No endpoint, driver, plugin
+registration, or persistent machine audio configuration was accessed.
+
 ## 2026-09-16 - current headless acceptance
 
 `tests/acceptance/m07-headless.ps1` passed 36 CLI tests, 3 MCP stdio tests,
