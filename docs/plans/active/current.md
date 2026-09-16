@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Hardened driver bridge teardown loads on 2026-09-16 by making callback-side
+`MappedBytes` reads interlocked, matching the control path's pre-rundown clear.
+The first x64 build caught a WDK type mismatch (`C2664`) at that new call;
+the explicit `volatile LONG*` cast was added and the guarded x64 and ARM64
+M03 driver build/signability qualifications then passed. No installation,
+loading, signing-mode, boot-policy, service, endpoint, or audio configuration
+action occurred.
+
 After the endpoint-monitor race fix, the full Windows-audio package regression
 passed on 2026-09-16: 81 tests and all package doc-tests passed. This includes
 Software Device bounds/cleanup, endpoint enumeration and binding, WASAPI

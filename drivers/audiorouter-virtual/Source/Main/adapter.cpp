@@ -65,7 +65,12 @@ NTSTATUS AudioRouterCopyLeaseBlock(
         return STATUS_DEVICE_NOT_READY;
     }
     PVOID view = InterlockedCompareExchangePointer(&Lease->MappedView, NULL, NULL);
-    ULONG mappedBytes = Lease->MappedBytes;
+    // The view is detached before retirement, but the control path clears
+    // MappedBytes before waiting for rundown readers. Use an interlocked load
+    // so this callback-side read cannot race that teardown write.
+    ULONG mappedBytes = static_cast<ULONG>(
+        InterlockedCompareExchange(
+            reinterpret_cast<volatile LONG*>(&Lease->MappedBytes), 0, 0));
     USHORT direction = Lease->Request.Direction;
     ULONGLONG generation = InterlockedCompareExchange64(
         reinterpret_cast<volatile LONG64*>(&Lease->Request.Generation), 0, 0);
@@ -117,7 +122,11 @@ NTSTATUS AudioRouterPublishLeaseBlock(
         return STATUS_DEVICE_NOT_READY;
     }
     PVOID view = InterlockedCompareExchangePointer(&Lease->MappedView, NULL, NULL);
-    ULONG mappedBytes = Lease->MappedBytes;
+    // See AudioRouterCopyLeaseBlock: teardown may clear this field while a
+    // rundown-protected callback is finishing against the old view.
+    ULONG mappedBytes = static_cast<ULONG>(
+        InterlockedCompareExchange(
+            reinterpret_cast<volatile LONG*>(&Lease->MappedBytes), 0, 0));
     USHORT direction = Lease->Request.Direction;
     ULONGLONG generation = InterlockedCompareExchange64(
         reinterpret_cast<volatile LONG64*>(&Lease->Request.Generation), 0, 0);
