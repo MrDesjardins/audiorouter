@@ -13,7 +13,8 @@ $adapter = Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/adapter
 $infSource = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/AudioRouterVirtual.inx') -Raw
 foreach ($required in @(
         'AUDIOROUTERVIRTUAL.WaveSpeaker.szPname="AudioRouter - Desktop In"',
-        'AUDIOROUTERVIRTUAL.WaveMicArray1.szPname="AudioRouter - Voice Chat"')) {
+        'AUDIOROUTERVIRTUAL.WaveMicArray1.szPname="AudioRouter - Voice Chat"',
+        'SWD\AudioRouterVirtual')) {
     if (-not $infSource.Contains($required)) {
         throw "driver endpoint identity contract is missing: $required"
     }

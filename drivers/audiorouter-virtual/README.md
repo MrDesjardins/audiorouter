@@ -12,6 +12,12 @@ identities. It is a build target for
 the M03 virtual-device work, not a production driver or a claim that the full
 AudioRouter bus lifecycle is implemented.
 
+The INF now also declares the `SWD\\AudioRouterVirtual` hardware-ID match used
+by the planned Software Device API provisioner. This is only a driver-package
+matching prerequisite: the repository does not yet create software devices,
+persist their returned PnP instance IDs, or activate this package on the
+current machine.
+
 ## Build-only workflow
 
 From an x64 Developer PowerShell or an elevated PowerShell session with Visual

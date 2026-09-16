@@ -26,6 +26,14 @@ chunk-size warning remains non-failing. No driver was installed or loaded, no
 plugin or startup registration occurred, and no persistent audio
 configuration changed.
 
+Added the first package-level prerequisite for managed software-device buses
+on 2026-09-15: `AudioRouterVirtual.inx` now matches the explicit
+`SWD\\AudioRouterVirtual` hardware ID used by a future Software Device API
+provisioner, and the M03 source acceptance checks that declaration. Focused
+x64 and ARM64 non-installing builds passed with catalog/signability checks.
+This does not create a device, load the driver, persist returned PnP instance
+IDs, or close the production signing/isolated-target gates.
+
 Reduced the packaged UI entry chunk on 2026-09-15 by moving `@xyflow/react`
 to a dedicated Rollup vendor chunk. The UI suite passed 226 tests and the
 temporary production build passed with a 321 kB application chunk plus a
