@@ -2,6 +2,15 @@
 
 Updated: 2026-09-16.
 
+Revalidated the complete portable workspace and UI after the editor
+environment-restoration hardening on 2026-09-16. `cargo test --workspace
+--locked -- --test-threads=1` passed all runnable workspace tests (the two
+guarded live-native tests remain intentional ignores), the UI suite passed all
+231 tests, and the UI production build transformed 214 modules successfully.
+No endpoint, driver, plugin registration, or persistent machine audio
+configuration was changed. This is portable evidence only; it does not close
+the native driver/signing or attended shell gates below.
+
 The dedicated VST2 editor-containment harness passed all 9 x64 ReaPlugs
 fixtures again on 2026-09-16 after its temporary fixture environment was
 hardened to check exact restoration, including absent-variable state. Both
