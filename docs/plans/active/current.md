@@ -2,6 +2,19 @@
 
 Updated: 2026-09-15.
 
+The packaged-shell visibility contract was made explicit on 2026-09-15 at
+`ef952348`: the dynamically created Tauri editor window now requests
+`visible(true)` instead of relying on a framework default. The separate
+`src-tauri` test workspace passed all 26 shell tests, and M08 rebuilt and
+verified the disposable unsigned release artifacts afterward. A bounded
+diagnostic of the existing packaged shell observed a responsive native window
+handle after five seconds; its title was blank in the process API and the CUA
+provider still exposed no targetable app, so attended visual/accessibility
+acceptance remains open. The final launch attempt against `target/release`
+was not executed because the release harness removes its temporary copy and
+this checkout has no binary at that path. No endpoint, driver, plugin
+registration, or persistent audio configuration was changed.
+
 ## Next implementation slice: production driver/bridge qualification (M03)
 
 The backend-owned tray shutdown slice is complete and pushed as `acfa38f2`.
