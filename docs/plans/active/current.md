@@ -155,10 +155,12 @@ desktop surface is available.
 Added a component-level M05 regression for the visual editor library-drop
 boundary. A real drop event now exercises the rendered signal-flow canvas and
 proves that the selected built-in processor and bounded canvas coordinates are
-forwarded to the backend draft callback. The focused canvas suite passed 5/5;
-the full UI suite passed 222/222 tests across 19 files. This remains automated
-UI evidence and does not replace attended drag/drop, keyboard, accessibility,
-or native-shell acceptance.
+forwarded to the backend draft callback. The same library buttons now also add
+processors through keyboard activation at deterministic presentation-only
+positions. The focused canvas suite passed 6/6; the full UI suite passed
+223/223 tests across 19 files, and TypeScript typecheck passed. This remains
+automated UI evidence and does not replace attended drag/drop, keyboard,
+accessibility, or native-shell acceptance.
 
 ### Completed shutdown slice (UI-10/STATE-09)
 

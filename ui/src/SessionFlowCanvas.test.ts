@@ -1,8 +1,8 @@
 /** @vitest-environment jsdom */
 
-import { fireEvent, render } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { createElement } from "react";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { demoSession } from "./fixtures";
 import { deletedConnectionIds, deletedNodeIds, libraryDropPosition } from "./SessionFlowCanvas";
 import { SessionFlowCanvas } from "./SessionFlowCanvas";
@@ -17,6 +17,8 @@ beforeAll(() => {
     },
   });
 });
+
+afterEach(cleanup);
 
 describe("canvas library drop positions", () => {
   it("converts viewport coordinates into bounded canvas coordinates", () => {
@@ -71,5 +73,20 @@ describe("canvas library drop positions", () => {
     fireEvent(canvas, drop);
 
     expect(onAddLibraryNode).toHaveBeenCalledWith("compressor", { x: 120, y: 110 });
+  });
+
+  it("offers a keyboard-accessible click path for adding a processor", () => {
+    const onAddLibraryNode = vi.fn(() => "gate-1");
+    const { getByRole } = render(createElement(SessionFlowCanvas, {
+      session: demoSession,
+      selectedNodeId: "mic",
+      onSelect: vi.fn(),
+      onConnect: vi.fn(),
+      onAddLibraryNode,
+    }));
+
+    fireEvent.click(getByRole("button", { name: "Gate" }));
+
+    expect(onAddLibraryNode).toHaveBeenCalledWith("gate", { x: 0, y: 150 });
   });
 });
