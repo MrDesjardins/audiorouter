@@ -50,7 +50,16 @@ if ($x64Fixtures.Count -eq 0) {
     throw "No x64 VST2 DLL fixtures found in $fixtureRoot"
 }
 
-$previousFixture = $env:AUDIOROUTER_VST2_FIXTURE
+$previousFixturePresent = Test-Path Env:AUDIOROUTER_VST2_FIXTURE
+$previousFixture = if ($previousFixturePresent) { $env:AUDIOROUTER_VST2_FIXTURE } else { $null }
+function Assert-EnvironmentRestored {
+    param([Parameter(Mandatory = $true)][string]$Name, [Parameter(Mandatory = $true)][bool]$ExpectedPresent, [AllowNull()][string]$Expected)
+    $actual = [Environment]::GetEnvironmentVariable($Name, 'Process')
+    $present = Test-Path "Env:$Name"
+    if ($present -ne $ExpectedPresent -or ($ExpectedPresent -and $actual -ne $Expected)) {
+        throw "Acceptance did not restore process environment variable $Name"
+    }
+}
 try {
     foreach ($fixture in $x64Fixtures) {
         $env:AUDIOROUTER_VST2_FIXTURE = $fixture.FullName
@@ -73,6 +82,7 @@ try {
     } else {
         $env:AUDIOROUTER_VST2_FIXTURE = $previousFixture
     }
+    Assert-EnvironmentRestored 'AUDIOROUTER_VST2_FIXTURE' $previousFixturePresent $previousFixture
 }
 
 Write-Output 'Scope: ignored local VST2 fixtures and disposable worker/editor threads; no plugin registration or audio configuration changes.'

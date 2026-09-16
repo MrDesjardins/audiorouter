@@ -2,6 +2,12 @@
 
 Updated: 2026-09-16.
 
+The dedicated VST2 editor-containment harness passed all 9 x64 ReaPlugs
+fixtures again on 2026-09-16 after its temporary fixture environment was
+hardened to check exact restoration, including absent-variable state. Both
+editor-thread containment and supervised editor-timeout tests passed; no
+plugin registration or audio configuration changes were made.
+
 Extended exact process-environment restoration assertions to the VST3 worker
 acceptance on 2026-09-16, preserving variable presence separately from value.
 The supplied TDR Nova qualification is the verification for this change; no
