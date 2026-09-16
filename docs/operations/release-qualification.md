@@ -56,9 +56,9 @@ surface is green:
 - M00 native validation includes read-only endpoint-format inventory and
   compile-only probe checks on this machine. Visual Studio Community 2026,
   MSVC 14.51.36231, Windows SDK 10.0.28000.0, and WDK 10.0.28000.0 are
-  available; the SysVAD sample also passes x64 package/API validation through
-  the 64-bit MSBuild host. No stream, probe runtime, or driver is run by this
-  gate.
+  available, including the WDK x64 `signtool.exe`; the SysVAD sample also
+  passes x64 package/API validation through the 64-bit MSBuild host. No
+  stream, probe runtime, signing, or driver is run by this gate.
 
 The VST3 SDK is source-distributed and installed only at the ignored local
 path `third_party/vst3sdk`; it is not a system SDK or plugin registration.

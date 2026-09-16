@@ -23,7 +23,8 @@ $required = @(
     (Join-Path $msvc.FullName 'include'),
     (Join-Path $kits "Lib\$sdkVersion\um\x64\Mmdevapi.lib"),
     (Join-Path $kits "DesignTime\CommonConfiguration\Neutral\WDK\$sdkVersion\WDK.props"),
-    (Join-Path $kits "bin\$sdkVersion\x64\stampinf.exe")
+    (Join-Path $kits "bin\$sdkVersion\x64\stampinf.exe"),
+    (Join-Path $kits "bin\$sdkVersion\x64\signtool.exe")
 )
 foreach ($path in $required) {
     if (-not (Test-Path -LiteralPath $path)) { throw "Required toolchain component is missing: $path" }
@@ -32,5 +33,6 @@ foreach ($path in $required) {
 $kitLine = if ($sdkVersion -match '^10\.0\.(\d+)\.') { $Matches[1] } else { '' }
 if ($kitLine -ne '28000') { throw "Unexpected SDK/WDK kit line: $sdkVersion" }
 
-Write-Output "M00 toolchain compatibility acceptance passed: VS=$installation MSVC=$($msvc.Name) SDK=$sdkVersion WDK=matching-$kitLine"
+$signtool = Join-Path $kits "bin\$sdkVersion\x64\signtool.exe"
+Write-Output "M00 toolchain compatibility acceptance passed: VS=$installation MSVC=$($msvc.Name) SDK=$sdkVersion WDK=matching-$kitLine signtool=$signtool"
 Write-Output 'Scope: read-only toolchain discovery; no SDK installation, driver action, signing-mode change, or audio configuration action.'

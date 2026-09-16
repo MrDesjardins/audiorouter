@@ -1,5 +1,14 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-16 - M00 signing-toolchain prerequisite coverage
+
+The M00 toolchain gate now requires and reports the WDK `signtool.exe` path in
+addition to the compiler, SDK, WDK targets, and `stampinf.exe`. The updated
+read-only acceptance passed with SDK/WDK `10.0.28000.0` and the installed
+x64 signing tool. It performed no signing, installation, loading, boot-policy,
+or machine audio configuration action. This verifies local tool availability,
+not production certificate trust or release signing.
+
 ## 2026-09-16 - integrated signing-prerequisite guard
 
 The new read-only signing-prerequisite step passed inside the full

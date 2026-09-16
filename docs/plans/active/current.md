@@ -2,6 +2,13 @@
 
 Updated: 2026-09-16.
 
+Strengthened the M00 toolchain acceptance on 2026-09-16 to require and report
+the installed WDK `signtool.exe` in addition to MSVC, SDK headers, libraries,
+WDK targets, and `stampinf.exe`. The read-only check passed with the 28000
+toolchain and the exact signing-tool path; no signing, driver, boot-policy,
+or audio-configuration action occurred. This closes tool-discovery coverage
+only; production certificate trust remains open.
+
 Requalified the integrated `tests/acceptance/safe-all.ps1` chain at head
 `be57c02e` on 2026-09-16 after adding the read-only signing-prerequisite
 guard. Toolchain/native probes, x64/ARM64 driver builds, Secure Boot/VBS and
