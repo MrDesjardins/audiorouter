@@ -2,6 +2,19 @@
 
 Updated: 2026-09-16.
 
+Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
+head `1e9c60ce` on 2026-09-16. Toolchain/native probes, x64/ARM64 driver
+source builds, read-only 31-endpoint inventory, disposable SysVAD, M01/M03/
+M04/M05/M06/M07, unsigned M08 artifacts and NSIS smoke, frontend shell RPC,
+159 traceability mappings, and documentation all passed. The run included
+34 DSP, 40 recording, 234 UI, 36 CLI, 3 MCP, 173 control, 70 plugin-host,
+and 13 worker-process tests; the disposable unsigned installer was 4,760,908
+bytes. Cleanup removed 15 run-owned temporary children. No driver was
+installed or loaded, no plugin or startup registration occurred, and no
+persistent audio configuration changed. Production driver activation/signing,
+clean-machine, physical-latency, actual transition-rebind, and attended
+UI/accessibility gates remain open.
+
 Requalified the pinned VST3 SDK acceptance on 2026-09-16. The repository-local
 SDK build completed; the official validator reported 1,598 passed and 0
 failed tests, the offline loader reported 94 passed and 0 failed tests, and

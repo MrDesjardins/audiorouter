@@ -17,6 +17,11 @@ release and must not be presented as an installable Windows audio product.
 
 ## Verified in this qualification snapshot (2026-09-16)
 
+The guarded integrated acceptance chain passed at commit `1e9c60ce`, including
+the x64/ARM64 source gates, 234 UI tests, unsigned artifact/NSIS smoke,
+traceability, and documentation validation. The generated installer was
+4,760,908 bytes and was removed after the disposable smoke test.
+
 - The locked Rust workspace passes its current package tests and doc-tests,
   formatting, and strict Clippy; the guarded native tests remain explicitly
   opt-in.
