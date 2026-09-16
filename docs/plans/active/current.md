@@ -136,6 +136,15 @@ prototype driver or change audio defaults as part of this qualification; the
 loaded-driver gate remains blocked on production bus provisioning, PortCls
 ownership, signing, and clean-machine evidence.
 
+An attended-shell attempt on 2026-09-15 launched the existing
+`src-tauri/target/debug/audiorouter-shell.exe` successfully, but the available
+computer-use provider returned no native app windows (`apps: []`), so no UI
+click, drag, keyboard, accessibility, or visual-editor result could be
+observed. The exact shell process was then closed. This is an environment
+limitation, not UI pass evidence; the automated M05 build/tests and M07 shell
+RPC acceptance remain the authoritative UI-related checks until a targetable
+desktop surface is available.
+
 ### Completed shutdown slice (UI-10/STATE-09)
 
 Objective: replace the shell-side quit sequence with one authenticated,
