@@ -2,6 +2,13 @@
 
 Updated: 2026-09-16.
 
+Corrected the Software Device instance-ID bound check on 2026-09-16. The
+decoder now evaluates `length < MAX_INSTANCE_ID_CHARS` before dereferencing
+the callback pointer, closing the one-element overread left by the previous
+short-circuit ordering. The focused Windows-audio suite passed 81 tests,
+strict Clippy, formatting, and diff checks passed. No software device or
+machine audio configuration was touched.
+
 Corrected Software Device timeout ownership on 2026-09-16. After a callback
 timeout, the Windows API's `SwDeviceClose` completion guarantee now allows
 the callback context to be reclaimed safely once the returned handle is

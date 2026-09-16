@@ -1,5 +1,14 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-16 - instance-ID bound-order regression correction
+
+The bounded instance-ID decoder now evaluates its length limit before the
+pointer dereference, preventing an unterminated 64-character callback value
+from probing element 64. The focused `cargo test --locked -p
+audiorouter-windows-audio` suite passed 81 tests; strict package Clippy,
+formatting, and diff checks also passed. No software device was created or
+machine audio configuration changed.
+
 ## 2026-09-16 - Software Device timeout-context reclamation
 
 The Software Device timeout path now closes the returned handle and reclaims

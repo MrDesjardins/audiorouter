@@ -325,7 +325,7 @@ unsafe fn decode_instance_id(instance_id: *const u16) -> String {
     // metadata, so reading at index MAX_INSTANCE_ID_CHARS could inspect
     // memory beyond the caller's declared instance-id budget when a
     // malformed/non-terminated string is supplied.
-    while *instance_id.add(length) != 0 && length < MAX_INSTANCE_ID_CHARS {
+    while length < MAX_INSTANCE_ID_CHARS && *instance_id.add(length) != 0 {
         length += 1;
     }
     String::from_utf16_lossy(std::slice::from_raw_parts(instance_id, length))
