@@ -385,6 +385,19 @@ strict Clippy, formatting, and documentation validation pass; driver
 installation and endpoint activation remain open.
 # M03 virtual routing evidence
 
+## 2026-09-16 - exact endpoint invalidation policy
+
+The Windows endpoint worker now retains the exact capture/render endpoint IDs
+used to open its clients and exposes a control-thread policy that marks the
+worker affected when either endpoint is removed or its metadata changes.
+Unrelated additions and process-loopback changes do not invalidate the
+worker. This prevents an unchanged opaque ID from being treated as a valid
+binding after a format or state transition; deliberate stop, refreshed exact
+binding validation, and rebind remain the caller's responsibility. The
+focused Windows-audio suite passed 82 tests and strict Clippy passed. No
+endpoint was opened by this change and no driver or machine audio
+configuration changed.
+
 ## 2026-09-16 - guarded VB-Cable bridge requalification
 
 Command: `tests/acceptance/m02-rust-adapter-bridge-live.ps1 -AllowLiveAudio

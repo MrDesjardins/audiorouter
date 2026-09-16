@@ -2626,6 +2626,20 @@ pub struct WasapiEndpointWorkerTelemetry {
 /// Waiting for the next event remains outside the pump loop.
 pub const MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE: u32 = 64;
 
+fn endpoint_changes_affect_bindings(
+    changes: &[EndpointChange],
+    capture_id: &str,
+    render_id: &str,
+) -> bool {
+    changes.iter().any(|change| match change {
+        EndpointChange::Added(_) => false,
+        EndpointChange::Removed(endpoint) => endpoint.id == capture_id || endpoint.id == render_id,
+        EndpointChange::Changed { before, after } => {
+            before != after && (before.id == capture_id || before.id == render_id)
+        }
+    })
+}
+
 trait EndpointLifecycle {
     fn start(&mut self) -> Result<(), AudioError>;
     fn stop(&mut self) -> Result<(), AudioError>;
@@ -2739,6 +2753,20 @@ impl WasapiEndpointWorker {
 
     pub fn telemetry(&self) -> WasapiEndpointWorkerTelemetry {
         self.telemetry
+    }
+
+    /// Return whether a refreshed endpoint snapshot invalidates either exact
+    /// binding owned by this worker. A changed or removed endpoint is treated
+    /// as invalid even when its opaque ID is unchanged: callers must stop and
+    /// deliberately rebind after validating the new format.
+    pub fn bindings_affected_by(&self, changes: &[EndpointChange]) -> bool {
+        let Some(capture) = self.capture.as_ref() else {
+            return true;
+        };
+        let Some(render) = self.render.as_ref() else {
+            return true;
+        };
+        endpoint_changes_affect_bindings(changes, &capture.endpoint_id, &render.endpoint_id)
     }
 
     /// Start capture first, then render. If render activation fails, capture
@@ -3095,6 +3123,15 @@ impl NativeAudioWorker {
         match self {
             Self::Endpoint(worker) => worker.telemetry(),
             Self::ProcessLoopback(_) => WasapiEndpointWorkerTelemetry::default(),
+        }
+    }
+
+    /// Whether endpoint metadata changes invalidate an attached endpoint
+    /// worker. Process-loopback bindings are intentionally unaffected.
+    pub fn endpoint_bindings_affected_by(&self, changes: &[EndpointChange]) -> bool {
+        match self {
+            Self::Endpoint(worker) => worker.bindings_affected_by(changes),
+            Self::ProcessLoopback(_) => false,
         }
     }
 }
@@ -3524,6 +3561,7 @@ impl Drop for ComApartment {
 pub struct SharedCapture {
     client: windows::Win32::Media::Audio::IAudioClient,
     capture: windows::Win32::Media::Audio::IAudioCaptureClient,
+    endpoint_id: String,
     started: bool,
     event: Option<EventHandle>,
     _com: ComApartment,
@@ -3535,6 +3573,7 @@ pub struct SharedCapture {
 pub struct SharedRender {
     client: windows::Win32::Media::Audio::IAudioClient,
     render: windows::Win32::Media::Audio::IAudioRenderClient,
+    endpoint_id: String,
     buffer_size: u32,
     started: bool,
     event: EventHandle,
@@ -4245,6 +4284,7 @@ impl SharedCapture {
         Ok(Self {
             client,
             capture,
+            endpoint_id: endpoint_id.to_owned(),
             started: false,
             event,
             _com: com,
@@ -4576,6 +4616,7 @@ impl SharedRender {
         Ok(Self {
             client,
             render,
+            endpoint_id: endpoint_id.to_owned(),
             buffer_size,
             started: false,
             event,
@@ -6840,6 +6881,43 @@ mod tests {
                 EndpointChange::Added(endpoint("bravo")),
             ]
         );
+    }
+
+    #[test]
+    fn endpoint_change_policy_only_invalidates_exact_boundings() {
+        let endpoint = |id: &str, rate: u32| EndpointInfo {
+            id: id.into(),
+            direction: EndpointDirection::Render,
+            default_period_100ns: 100_000,
+            minimum_period_100ns: 20_000,
+            sample_rate_hz: rate,
+            channels: 2,
+            bits_per_sample: 32,
+            format_tag: 3,
+            channel_mask: 0,
+            subformat_guid: String::new(),
+        };
+        let added = EndpointChange::Added(endpoint("unrelated", 48_000));
+        assert!(!endpoint_changes_affect_bindings(
+            std::slice::from_ref(&added),
+            "capture",
+            "render"
+        ));
+        let changed = EndpointChange::Changed {
+            before: endpoint("render", 48_000),
+            after: endpoint("render", 44_100),
+        };
+        assert!(endpoint_changes_affect_bindings(
+            std::slice::from_ref(&changed),
+            "capture",
+            "render"
+        ));
+        let removed = EndpointChange::Removed(endpoint("capture", 48_000));
+        assert!(endpoint_changes_affect_bindings(
+            std::slice::from_ref(&removed),
+            "capture",
+            "render"
+        ));
     }
 
     #[test]

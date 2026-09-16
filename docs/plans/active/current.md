@@ -2,6 +2,20 @@
 
 Updated: 2026-09-16.
 
+Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at the
+current head on 2026-09-16. The run passed toolchain/native probes, x64/ARM64
+driver source builds, read-only endpoint inventory, disposable SysVAD,
+M01/M03/M04/M05/M06/M07, unsigned M08 artifacts and NSIS smoke, frontend shell
+RPC, traceability, and documentation. It reported 36 CLI, 3 MCP, 173 control,
+70 plugin-host, and 13 worker-process tests, with 34 DSP and 40 recording
+tests; the unsigned installer was 4,758,374 bytes. Cleanup removed 15
+run-owned temporary children. No driver was installed or loaded, no plugin or
+startup registration occurred, and no persistent audio configuration changed.
+Production driver activation/signing, clean-machine, physical-latency, and
+attended UI/accessibility gates remain open. The next portable task is to
+extend endpoint invalidation/rebind policy through the control-owned lifecycle
+seam.
+
 Refreshed the release qualification snapshot on 2026-09-16 after the latest
 authorized VB-Cable route requalification. `docs/operations/release-notes.md`
 now reports the current 500 ms control-owned route evidence: 24,000 captured
