@@ -20,6 +20,20 @@ $output = [IO.Path]::GetFullPath($Output)
 $outputExistedBeforeBuild = Test-Path -LiteralPath $output
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 
+function Remove-DisposableOutput {
+    if ($KeepOutput) { return }
+    $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+    $outputIsUnderTemp = $output.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase) -and
+        $output.TrimEnd('\') -ne $tempRoot.TrimEnd('\')
+    if (-not $outputWasProvided -and $outputIsUnderTemp -and -not $outputExistedBeforeBuild -and
+        (Test-Path -LiteralPath $output)) {
+        Remove-Item -LiteralPath $output -Recurse -Force
+        Write-Host 'Removed disposable build output.'
+    } elseif ($outputWasProvided -or $outputExistedBeforeBuild) {
+        Write-Host 'Preserved caller-owned build output; use an automatic temporary output for cleanup.'
+    }
+}
+
 function Find-MSBuild {
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
     if (Test-Path -LiteralPath $vswhere) {
@@ -34,6 +48,7 @@ function Find-MSBuild {
     throw 'MSBuild.exe was not found. Install the VS C++ workload and WDK build tools.'
 }
 
+try {
 $msbuild = Find-MSBuild
 $wdkTargets = @(Get-ChildItem -Path ${env:ProgramFiles(x86)}, ${env:ProgramFiles} -Filter 'WindowsDriver.Default.props' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1)
 if (-not $wdkTargets) {
@@ -74,14 +89,8 @@ if (-not $sys -or -not $inf) {
 Write-Host "Driver binary: $($sys[0].FullName)"
 Write-Host "Driver INF: $($inf[0].FullName)"
 Write-Host 'No installation, signing, boot-policy, service, or audio-device action was performed.'
-if (-not $KeepOutput) {
-    $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
-    $outputIsUnderTemp = $output.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase) -and
-        $output.TrimEnd('\') -ne $tempRoot.TrimEnd('\')
-    if (-not $outputWasProvided -and $outputIsUnderTemp -and -not $outputExistedBeforeBuild) {
-        Remove-Item -LiteralPath $output -Recurse -Force
-        Write-Host 'Removed disposable build output.'
-    } else {
-        Write-Host 'Preserved caller-owned build output; use an automatic temporary output for cleanup.'
-    }
+Remove-DisposableOutput
+} catch {
+    Remove-DisposableOutput
+    throw
 }

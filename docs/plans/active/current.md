@@ -56,6 +56,12 @@ audio configuration change occurred. This is stronger source/package safety
 evidence, but it does not close dynamic bus provisioning, loaded PortCls
 ownership, production signing, or clean-machine qualification.
 
+Hardened `drivers/audiorouter-virtual/build.ps1` on 2026-09-15 so automatic
+temporary output is cleaned from both successful and exceptional build or
+validation paths. Explicit caller output and `-KeepOutput` remain preserved.
+The PowerShell parser check and the elevated non-installing M03 acceptance
+passed after this change; no driver or machine audio state was touched.
+
 The guarded event-driven WASAPI lifecycle also passed for 500 ms using the
 existing VB-Cable pair: 24,480 capture frames and 29,280 silent render frames,
 with initialize/event/start/stop/reset success on both directions. The probe
