@@ -10,7 +10,7 @@ import {
   type Node as FlowNode,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Session } from "@audiorouter/contracts";
 import { clearLayout, readLayout, writeLayout, type LayoutPositions } from "./layout";
 import { nodePortLabels, relatedNodeIds } from "./graphView";
@@ -59,17 +59,24 @@ export function libraryDropPosition(clientX: number, clientY: number, bounds: Pi
 export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onRemoveNode, onAddLibraryNode, canEdit = true }: SessionFlowCanvasProps) {
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
   const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey));
-  useEffect(() => { setPositions(readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey)); }, [layoutKey]);
+  const positionsRef = useRef(positions);
+  useEffect(() => {
+    const next = readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey);
+    positionsRef.current = next;
+    setPositions(next);
+  }, [layoutKey]);
   const highlightedNodeIds = relatedNodeIds(session, selectedNodeId);
   const tidyLayout = () => {
     const next = Object.fromEntries(session.nodes.map((node, index) => [node.id, positionFor(index)]));
+    positionsRef.current = next;
     setPositions(next);
     writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
   };
   const addLibraryNode = (kind: LibraryNodeKind, position: { x: number; y: number }) => {
     const nodeId = onAddLibraryNode?.(kind, position);
     if (nodeId) {
-      const next = { ...positions, [nodeId]: position };
+      const next = { ...positionsRef.current, [nodeId]: position };
+      positionsRef.current = next;
       setPositions(next);
       writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
     }
@@ -116,7 +123,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
   return (
     <div className="session-flow-canvas" aria-label="Signal-flow graph" onDragOver={(event) => { if (event.dataTransfer.types.includes("application/x-audiorouter-library-kind")) event.preventDefault(); }} onDrop={(event) => { const kind = event.dataTransfer.getData("application/x-audiorouter-library-kind") as LibraryNodeKind; if (!kind) return; event.preventDefault(); const bounds = event.currentTarget.getBoundingClientRect(); const position = libraryDropPosition(event.clientX, event.clientY, bounds); if (onAddLibraryNode) addLibraryNode(kind, position); else onConnect({ source: LIBRARY_DROP_SOURCE, sourceHandle: kind, target: "__drop__", targetHandle: null }); }}>
       <div className="canvas-library" aria-label="Drag processors to canvas"><strong>Drag or select to add</strong>{libraryEntries.filter((entry): entry is typeof entry & { kind: LibraryNodeKind } => entry.kind !== undefined).map((entry) => <button type="button" key={`drag-${entry.id}`} draggable={canEdit} disabled={!canEdit} onClick={() => addLibraryNode(entry.kind, positionFor(session.nodes.length))} onDragStart={(event) => { if (!canEdit) return; event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-audiorouter-library-kind", entry.kind); }}>{entry.label}</button>)}</div>
-      <div className="session-flow-toolbar"><span className="muted">Positions are presentation-only.</span><span className="muted" role="status" aria-live="polite">{selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} selected</span><button type="button" className="secondary" onClick={tidyLayout}>Tidy layout</button><button type="button" className="secondary" onClick={() => { clearLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey); setPositions({}); }}>Reset layout</button></div>
+      <div className="session-flow-toolbar"><span className="muted">Positions are presentation-only.</span><span className="muted" role="status" aria-live="polite">{selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} selected</span><button type="button" className="secondary" onClick={tidyLayout}>Tidy layout</button><button type="button" className="secondary" onClick={() => { clearLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey); positionsRef.current = {}; setPositions({}); }}>Reset layout</button></div>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -129,7 +136,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
         onConnect={canEdit ? onConnect : undefined}
         onEdgesDelete={canEdit && onRemoveConnection ? (deleted) => { for (const edgeId of deletedConnectionIds(deleted)) onRemoveConnection(edgeId); } : undefined}
         onNodesDelete={canEdit ? (deleted) => { for (const nodeId of deletedNodeIds(deleted)) { if (onRemoveNode) onRemoveNode(nodeId); else globalThis.dispatchEvent(new CustomEvent("audiorouter:remove-node", { detail: { nodeId } })); } } : undefined}
-        onNodeDragStop={(_, node) => { const next = { ...positions, [node.id]: node.position }; setPositions(next); writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next); }}
+        onNodeDragStop={(_, node) => { const next = { ...positionsRef.current, [node.id]: node.position }; positionsRef.current = next; setPositions(next); writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next); }}
         proOptions={{ hideAttribution: true }}
       >
         <Background gap={24} size={1} color="#2e4057" />

@@ -158,7 +158,7 @@ proves that the selected built-in processor and bounded canvas coordinates are
 forwarded to the backend draft callback. The same library buttons now also add
 processors through keyboard activation at deterministic presentation-only
 positions. The focused canvas suite passed 6/6; the full UI suite passed
-224/224 tests across 19 files, and TypeScript typecheck passed. This remains
+225/225 tests across 19 files, and TypeScript typecheck passed. This remains
 automated UI evidence and does not replace attended drag/drop, keyboard,
 accessibility, or native-shell acceptance.
 
@@ -166,6 +166,11 @@ The canvas shelf filter was also corrected to exclude library entries without a
 processor kind, preventing unavailable source/destination metadata from being
 offered as malformed drop actions. The same UI test and typecheck gates passed
 after this correction.
+
+Presentation-layout updates now use a ref-backed latest snapshot, so rapid
+processor insertions or node moves cannot overwrite an earlier position with a
+stale React closure. A regression covers two rapid insertions and verifies both
+layout entries survive in local storage; the focused canvas suite passed 8/8.
 
 The complete guarded acceptance chain was requalified again at pushed head
 `ed1ddc72` on 2026-09-15 with exit code 0. M05 UI acceptance passed after the

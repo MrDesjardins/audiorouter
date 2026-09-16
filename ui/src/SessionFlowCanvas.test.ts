@@ -104,4 +104,26 @@ describe("canvas library drop positions", () => {
     expect(shelf.queryByRole("button", { name: "Physical input" })).toBeNull();
     expect(shelf.queryByRole("button", { name: "Virtual capture sink" })).toBeNull();
   });
+
+  it("preserves both layout entries when processors are added rapidly", () => {
+    window.localStorage.clear();
+    let nextId = 1;
+    const onAddLibraryNode = vi.fn(() => `gain-${nextId++}`);
+    const { getByLabelText } = render(createElement(SessionFlowCanvas, {
+      session: demoSession,
+      selectedNodeId: "mic",
+      onSelect: vi.fn(),
+      onConnect: vi.fn(),
+      onAddLibraryNode,
+    }));
+    const shelf = within(getByLabelText("Drag processors to canvas"));
+
+    fireEvent.click(shelf.getByRole("button", { name: "Gain" }));
+    fireEvent.click(shelf.getByRole("button", { name: "Gain" }));
+
+    expect(JSON.parse(window.localStorage.getItem("audiorouter.ui.layout.demo-session") ?? "null")).toEqual({
+      "gain-1": { x: 0, y: 150 },
+      "gain-2": { x: 0, y: 150 },
+    });
+  });
 });
