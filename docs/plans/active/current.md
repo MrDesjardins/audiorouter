@@ -2,6 +2,15 @@
 
 Updated: 2026-09-16.
 
+Requalified the control-owned native endpoint lifecycle on 2026-09-16 with
+`m02-control-native-live.ps1 -AllowLiveAudio` using the existing exact
+VB-Cable capture/render pair. The guarded test captured 24,000 frames,
+processed 187 graph quanta, and rendered 23,936 frames through the same
+control-plane start/stop lifecycle. Environment values were restored and
+media-device identity/state remained unchanged. This is real user-mode
+WASAPI lifecycle evidence; it does not qualify the managed driver, loaded
+PortCls ownership, physical latency, or production signing.
+
 Rechecked the control-owned native worker boundary on 2026-09-16 with
 `cargo test --locked -p audiorouter-control native_ -- --test-threads=1`:
 22 tests passed and two explicitly guarded live tests remained ignored. The
