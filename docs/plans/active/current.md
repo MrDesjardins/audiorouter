@@ -10,9 +10,10 @@ tools to the shared authorized `virtualDevices.provision`/
 semantics as the CLI. The CLI unit/integration suite passed 39 tests (36 unit,
 3 MCP stdio), strict Clippy passed, and documentation validation passed for
 54 Markdown files with 218 local links. No driver, endpoint, plugin, or
-persistent audio configuration changed. Next task: continue adapter parity
-and user-testable routing/processors while retaining the production-driver
-and attended-shell acceptance blockers below.
+persistent audio configuration changed. Next task: production driver/bridge
+qualification and attended shell acceptance, while retaining the explicit
+signing, clean-machine, and physical-latency blockers below. Portable adapter
+parity and user-testable VB-Cable routing are now evidenced.
 
 Documented the MCP ownership-tool workflow in
 `docs/operations/headless-runbook.md` on 2026-09-16. The runbook now names
