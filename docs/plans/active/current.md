@@ -162,6 +162,11 @@ positions. The focused canvas suite passed 6/6; the full UI suite passed
 automated UI evidence and does not replace attended drag/drop, keyboard,
 accessibility, or native-shell acceptance.
 
+The canvas shelf filter was also corrected to exclude library entries without a
+processor kind, preventing unavailable source/destination metadata from being
+offered as malformed drop actions. The same UI test and typecheck gates passed
+after this correction.
+
 ### Completed shutdown slice (UI-10/STATE-09)
 
 Objective: replace the shell-side quit sequence with one authenticated,
