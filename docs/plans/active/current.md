@@ -52,6 +52,13 @@ frames, and 97,836 recording bytes. The worker reported one successful start,
 stop, and reset, plus one deliberately rejected stale pump; endpoint/media
 state and all persistent defaults remained unchanged after detach and cleanup.
 
+Re-ran the guarded control-owned native endpoint lifecycle on 2026-09-16 with
+the exact VB-Cable capture/render IDs. The same control plane delivered 23,520
+captured frames, 183 processed quanta, and 23,424 rendered frames during the
+500 ms lifecycle, then stopped cleanly. The harness restored its process-scoped
+environment and made no persistent audio configuration change. This is
+user-mode endpoint lifecycle evidence; it does not qualify the managed driver.
+
 Re-ran the authorized Rust process-loopback acceptance on 2026-09-16 at the
 current head. Both include and exclude modes completed at source 44.1 kHz and
 engine 48 kHz with 25 packets, 11,025 source frames, 11,904 engine frames,
