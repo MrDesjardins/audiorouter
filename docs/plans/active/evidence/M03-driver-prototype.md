@@ -1,5 +1,16 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-16 - Software Device callback lifetime hardening
+
+The Windows Software Device callback now caps instance-ID decoding before the
+64-character boundary and closes a native callback handle when a late callback
+cannot deliver to the timed-out receiver. Focused command:
+`cargo test --locked -p audiorouter-windows-audio`; 81 tests passed. Strict
+package Clippy, formatting, and diff checks also passed. This hardens the
+control-plane interop boundary only; no software device or driver was created,
+installed, or loaded and no machine audio configuration changed. Loaded
+PortCls, production signing, and clean-machine qualification remain open.
+
 ## 2026-09-16 - x64 and ARM64 source/build requalification
 
 Commands: `tests/acceptance/m03-driver-build.ps1 -Platform x64` and

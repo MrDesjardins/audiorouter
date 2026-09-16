@@ -50,20 +50,25 @@ unsafe extern "system" fn created_callback(
     // until the bounded callback result is received. The callback is allowed
     // to run before SwDeviceCreate returns, so no stack pointer is passed.
     let sender = &*(context as *const mpsc::Sender<Completion>);
-    let id = if instance_id.is_null() {
-        String::new()
-    } else {
-        let mut length = 0;
-        while *instance_id.add(length) != 0 && length <= MAX_INSTANCE_ID_CHARS {
-            length += 1;
-        }
-        String::from_utf16_lossy(std::slice::from_raw_parts(instance_id, length))
-    };
-    let _ = sender.send(Completion {
+    // SAFETY: the Windows callback supplies a readable null-terminated UTF-16
+    // instance ID for a non-null pointer; the decoder enforces our local
+    // maximum before inspecting another element.
+    let id = unsafe { decode_instance_id(instance_id) };
+    let completion = Completion {
         handle,
         result,
         instance_id: id,
-    });
+    };
+    if let Err(failed) = sender.send(completion) {
+        // A timeout deliberately leaves the sender context alive for a late
+        // callback. If its receiver has already been dropped, no owner will
+        // receive this handle, so close it at the callback boundary.
+        if !failed.0.handle.is_null() {
+            // SAFETY: this is the native handle supplied by Windows for this
+            // callback, and no Rust owner received it after send failed.
+            SwDeviceClose(failed.0.handle);
+        }
+    }
 }
 
 #[link(name = "Swdevice")]
@@ -314,6 +319,21 @@ fn wide_multi(value: &str) -> Vec<u16> {
 
 const E_FAIL: HRESULT = HRESULT(0x8000_4005u32 as i32);
 
+unsafe fn decode_instance_id(instance_id: *const u16) -> String {
+    if instance_id.is_null() {
+        return String::new();
+    }
+    let mut length = 0;
+    // Stop before the bounded payload limit. The callback owns no length
+    // metadata, so reading at index MAX_INSTANCE_ID_CHARS could inspect
+    // memory beyond the caller's declared instance-id budget when a
+    // malformed/non-terminated string is supplied.
+    while *instance_id.add(length) != 0 && length < MAX_INSTANCE_ID_CHARS {
+        length += 1;
+    }
+    String::from_utf16_lossy(std::slice::from_raw_parts(instance_id, length))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -334,5 +354,15 @@ mod tests {
         let ids = wide_multi("SWD\\AudioRouterVirtual");
         assert_eq!(ids[ids.len() - 1], 0);
         assert_eq!(ids[ids.len() - 2], 0);
+    }
+
+    #[test]
+    fn callback_instance_id_decoder_caps_unterminated_payload() {
+        let instance_id = [b'x' as u16; MAX_INSTANCE_ID_CHARS];
+        // SAFETY: the test allocation contains exactly the bounded payload;
+        // no terminator is required to exercise the cap.
+        let decoded = unsafe { decode_instance_id(instance_id.as_ptr()) };
+        assert_eq!(decoded.chars().count(), MAX_INSTANCE_ID_CHARS);
+        assert!(unsafe { decode_instance_id(std::ptr::null()) }.is_empty());
     }
 }

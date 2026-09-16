@@ -2,6 +2,16 @@
 
 Updated: 2026-09-16.
 
+Hardened the Windows Software Device callback boundary on 2026-09-16. The
+bounded instance-ID decoder now stops before the 64-character limit instead
+of probing one additional UTF-16 element, and a late callback closes an
+unowned native handle when its timed-out receiver is gone. The focused
+`audiorouter-windows-audio` suite passed 81 tests, strict package Clippy,
+formatting, and diff checks passed. This is control-plane interop hardening;
+it does not install/load a driver or change audio configuration. The next
+native M03 gates remain signed production packaging, loaded PortCls endpoint
+qualification, clean-machine validation, and physical latency.
+
 Re-ran the complete guarded `tests/acceptance/safe-all.ps1` chain at the
 current pushed head `4f2f8a33` on 2026-09-16. M00 toolchain/native inventory
 and disposable SysVAD checks, AudioRouter x64/ARM64 driver source gates,
