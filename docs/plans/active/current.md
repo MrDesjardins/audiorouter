@@ -2,6 +2,15 @@
 
 Updated: 2026-09-16.
 
+Requalified the pinned VST3 SDK acceptance on 2026-09-16. The repository-local
+SDK build completed; the official validator reported 1,598 passed and 0
+failed tests, the offline loader reported 94 passed and 0 failed tests, and
+the AudioRouter checks covered the AGain main/auxiliary-bus classes, explicit
+single-bus rejection, and the five-class mda matrix. The run used disposable
+SDK/build outputs only: no plugin registration, audio stream, or persistent
+machine configuration changed. This confirms the SDK/toolchain boundary, not
+blanket third-party VST3 activation or editor compatibility.
+
 Requalified the guarded VB-Cable digital impulse correlation on 2026-09-16
 with 100 bounded impulses. The exact current pair produced 97 detected groups,
 zero p95 spacing error, and an estimated 84.98 ms onset; temporary capture

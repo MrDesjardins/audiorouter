@@ -1,5 +1,16 @@
 # M06 VST3 SDK boundary
 
+## 2026-09-16 - pinned SDK acceptance requalification
+
+`tests/acceptance/m06-vst3-sdk.ps1` passed after rebuilding the pinned SDK
+checkout. The official validator reported 1,598 passed and 0 failed tests;
+the offline loader reported 94 passed and 0 failed tests; and the AudioRouter
+checks covered AGain main/auxiliary-bus classes, explicit single-bus
+rejection, and the five-class mda matrix. All SDK/build outputs were
+disposable. No plugin registration, audio stream, or persistent machine audio
+configuration changed. This is SDK/toolchain evidence and does not expand
+third-party VST3 activation, editor, or release compatibility claims.
+
 ## 2026-09-16 - direct user-provided ReaPlugs VST2 matrix
 
 `tests/acceptance/m06-vst2-reaplugs.ps1 -FixtureDirectory 'C:\Program
