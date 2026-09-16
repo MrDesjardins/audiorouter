@@ -2235,6 +2235,7 @@ fn mcp_tool_annotations(name: &str) -> Value {
             | "recycle_recording"
             | "apply_virtual_device"
             | "apply_virtual_device_change"
+            | "remove_virtual_device"
     );
     let idempotent = !matches!(name, "reveal_recording" | "call_api");
     json!({
@@ -2258,6 +2259,8 @@ fn mcp_tools() -> Value {
         { "name": "replace_virtual_routes", "description": "Replace explicit cross-session virtual-bus routes as one revisioned, idempotent operation; requires device-administration scope and does not activate endpoints.", "inputSchema": { "type": "object", "properties": { "baseRevision": { "type": "integer", "minimum": 0 }, "routes": { "type": "array", "maxItems": 64, "items": { "type": "object", "properties": { "busId": { "type": "string", "minLength": 1, "maxLength": 128 }, "producerSessionId": { "type": "string", "minLength": 1, "maxLength": 128 }, "consumerSessionId": { "type": "string", "minLength": 1, "maxLength": 128 } }, "required": ["busId", "producerSessionId", "consumerSessionId"], "additionalProperties": false } }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["baseRevision", "routes", "idempotencyKey"], "additionalProperties": false } },
         { "name": "plan_virtual_device", "description": "Validate a managed virtual bus lifecycle operation without applying it.", "inputSchema": { "type": "object", "properties": { "operation": { "type": "object" } }, "required": ["operation"], "additionalProperties": false } },
         { "name": "apply_virtual_device", "description": "Apply a validated managed virtual bus lifecycle plan.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["planId", "idempotencyKey"], "additionalProperties": false } },
+        { "name": "provision_virtual_device", "description": "Provision one explicitly selected managed virtual device; requires device-administration scope and an idempotency key. The managed driver must be installed and qualified.", "inputSchema": { "type": "object", "properties": { "busId": { "type": "string", "minLength": 1, "maxLength": 128 }, "instanceId": { "type": "string", "minLength": 1, "maxLength": 256 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["busId", "instanceId", "idempotencyKey"], "additionalProperties": false } },
+        { "name": "remove_virtual_device", "description": "Remove one explicitly owned managed virtual device; requires device-administration scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "busId": { "type": "string", "minLength": 1, "maxLength": 128 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["busId", "idempotencyKey"], "additionalProperties": false } },
         { "name": "plan_virtual_device_change", "description": "Validate a managed virtual bus lifecycle operation without applying it; compatibility name for the focused virtual-device planner.", "inputSchema": { "type": "object", "properties": { "operation": { "type": "object" } }, "required": ["operation"], "additionalProperties": false } },
         { "name": "apply_virtual_device_change", "description": "Apply a validated managed virtual bus lifecycle plan; compatibility name for the focused virtual-device applier.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["planId", "idempotencyKey"], "additionalProperties": false } },
         { "name": "list_applications", "description": "List discoverable application identities and observed Windows audio-session activity.", "inputSchema": { "type": "object", "additionalProperties": false } },
@@ -2338,6 +2341,8 @@ fn mcp_tool_call(
         "replace_virtual_routes" => ("virtualRoutes.replace", Some(arguments)),
         "plan_virtual_device" => ("virtualDevices.plan", Some(arguments)),
         "apply_virtual_device" => ("virtualDevices.apply", Some(arguments)),
+        "provision_virtual_device" => ("virtualDevices.provision", Some(arguments)),
+        "remove_virtual_device" => ("virtualDevices.remove", Some(arguments)),
         "plan_virtual_device_change" => ("virtualDevices.plan", Some(arguments)),
         "apply_virtual_device_change" => ("virtualDevices.apply", Some(arguments)),
         "list_applications" => ("apps.list", None),
@@ -4138,7 +4143,7 @@ mod tests {
         let transition_content = transition["result"]["content"][0]["text"].as_str().unwrap();
         let transition_payload: Value = serde_json::from_str(transition_content).unwrap();
         assert_eq!(transition_payload["result"]["transition"], "lock");
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 48);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 50);
         let tools = mcp_tools();
         let create_recorder = tools
             .as_array()
@@ -4214,6 +4219,11 @@ mod tests {
             ("apply_startup", json!(["planId", "idempotencyKey"])),
             ("retry_plugins", json!(["directory", "idempotencyKey"])),
             ("apply_virtual_device", json!(["planId", "idempotencyKey"])),
+            (
+                "provision_virtual_device",
+                json!(["busId", "instanceId", "idempotencyKey"]),
+            ),
+            ("remove_virtual_device", json!(["busId", "idempotencyKey"])),
             (
                 "replace_virtual_routes",
                 json!(["baseRevision", "routes", "idempotencyKey"]),

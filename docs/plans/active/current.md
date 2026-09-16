@@ -2,6 +2,18 @@
 
 Updated: 2026-09-16.
 
+Added explicit MCP managed-device administration tools on 2026-09-16. The
+catalog now exposes bounded `provision_virtual_device` and
+`remove_virtual_device` schemas, marks removal destructive, and forwards both
+tools to the shared authorized `virtualDevices.provision`/
+`virtualDevices.remove` dispatcher with the same idempotency and persistence
+semantics as the CLI. The CLI unit/integration suite passed 39 tests (36 unit,
+3 MCP stdio), strict Clippy passed, and documentation validation passed for
+54 Markdown files with 218 local links. No driver, endpoint, plugin, or
+persistent audio configuration changed. Next task: continue adapter parity
+and user-testable routing/processors while retaining the production-driver
+and attended-shell acceptance blockers below.
+
 The packaged-shell visibility contract was made explicit on 2026-09-15 at
 `ef952348`: the dynamically created Tauri editor window now requests
 `visible(true)` instead of relying on a framework default. The separate
