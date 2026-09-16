@@ -37,6 +37,13 @@ state remained unchanged. This is current user-mode routing evidence only;
 managed-driver installation, loaded PortCls transport, and physical latency
 remain separate gates.
 
+Re-ran the authorized Rust process-loopback acceptance on 2026-09-16 at the
+current head. Both include and exclude modes completed at source 44.1 kHz and
+engine 48 kHz with 25 packets, 11,025 source frames, 11,904 engine frames,
+93 scheduler quanta, zero rejected packets, and zero scheduler xruns. Streams
+stopped/reset and media state remained unchanged; this is process-loopback
+routing evidence, not managed-driver or physical-latency qualification.
+
 Re-ran the complete guarded `safe-all.ps1` chain at the MCP parity head on
 2026-09-16. M00 toolchain/native inventory and disposable SysVAD checks,
 AudioRouter x64/ARM64 driver source builds and Software Device dry-run, M01,
