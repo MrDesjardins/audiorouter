@@ -7,8 +7,9 @@ guarded `manage.ps1` entrypoint now supports `-Install -AllowDriverInstall
 -Preview` and the corresponding uninstall preview, emitting bounded JSON with
 exact paths, readiness, consent scope, and planned `pnputil` arguments while
 never invoking the tool. The x64 and ARM64 M03 qualifications both passed the
-preview regression and WDK compile/signability/catalog checks. No driver,
-device, endpoint, or persistent audio configuration changed.
+preview regression, including ready install, missing-state uninstall, and
+valid tracked-package uninstall plans, plus the WDK compile/signability/catalog
+checks. No driver, device, endpoint, or persistent audio configuration changed.
 
 Performed a read-only native post-test inventory on 2026-09-16. `pnputil
 /enum-drivers` returned exit 0 with no AudioRouter package matches, and
