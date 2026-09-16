@@ -14,6 +14,15 @@ production-driver/PortCls, signing, clean-machine, physical-latency, and
 attended UI/accessibility gates; no safe repository-local substitute can
 close those claims.
 
+Requalified the authorized guarded VB-Cable impulse correlation on 2026-09-16
+with `m00-native-impulse.ps1 -AllowLiveAudio -ImpulseCount 100`. The exact
+existing render/capture pair detected 96/100 impulses, measured zero p95
+spacing error, and estimated 98.17 ms onset. Temporary executable, raw
+capture, logs, and objects were removed; media-device state matched before
+and after, and no defaults or persistent audio configuration changed. This
+remains user-mode signal-correlation evidence, not calibrated physical
+latency or loaded-driver evidence.
+
 Attempted the attended shell/WebView2 gate again on 2026-09-16 by launching
 the repository-built shell against a disposable database. The shell process
 started, but the Windows automation surface returned no targetable app or

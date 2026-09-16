@@ -1,3 +1,15 @@
+# M02 audio-engine evidence
+
+## 2026-09-16 - guarded VB-Cable impulse correlation
+
+The authorized `m00-native-impulse.ps1 -AllowLiveAudio -ImpulseCount 100`
+acceptance passed against the exact existing VB-Cable render/capture pair.
+It detected 96 of 100 impulses with zero p95 spacing error and estimated a
+98.17 ms onset. The probe verified media-device state before and after and
+removed its executable, raw capture, logs, and object files. This is bounded
+user-mode signal-correlation evidence only; it is not calibrated physical
+acoustic latency or loaded-driver evidence.
+
 # 2026-09-15 - live built-in processing chain validation
 
 ## 2026-09-16 - process-loopback include/exclude requalification
