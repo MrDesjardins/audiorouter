@@ -15,9 +15,11 @@ Evidence: `ea95c047` and the latest guarded M02 route log.
 
 Implemented the next M04/DSP-05 processing slice on 2026-09-16. A running
 `DelayLine` now crossfades from its previous read tap to a changed delay over
-64 frames without allocating or blocking; initial configuration and reset stay
-immediate. The focused DSP suite passed 33 tests and the engine suite passed
-111 tests, including the running-delay discontinuity regression. Evidence:
+64 frames without allocating or blocking; rapid updates are coalesced until
+the active transition completes, while initial configuration and reset stay
+immediate. The focused DSP suite passed 34 tests and the engine suite passed
+111 tests, including running-delay discontinuity and rapid-update regressions.
+Evidence:
 `docs/plans/active/evidence/M04-effects-recording.md`. No endpoint or machine
 audio configuration was accessed.
 

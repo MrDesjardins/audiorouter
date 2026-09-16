@@ -3,12 +3,14 @@
 ## 2026-09-16 - allocation-free delay transition smoothing
 
 `DelayLine` now crossfades between the previous and requested read taps over
-64 processed frames when a running graph changes delay. Initial configuration
-and reset remain immediate and silent-safe, while the fixed ring storage is
-reused and the processing path performs no allocation. The focused DSP suite
-passed 33 tests and the engine suite passed 111 tests, including a regression
-that changes delay during a running stream and bounds the resulting sample
-step. No endpoint or machine audio configuration was accessed.
+64 processed frames when a running graph changes delay. Rapid subsequent
+updates are coalesced and applied after the active transition, so automation
+cannot restart a fade from a tap that is not currently audible. Initial
+configuration and reset remain immediate and silent-safe, while the fixed ring
+storage is reused and the processing path performs no allocation. The focused
+DSP suite passed 34 tests and the engine suite passed 111 tests, including
+regressions for running changes, rapid updates, and bounded sample steps. No
+endpoint or machine audio configuration was accessed.
 
 ## 2026-09-15 - persisted conversion and dither metadata requalification
 

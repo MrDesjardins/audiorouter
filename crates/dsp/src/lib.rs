@@ -1312,6 +1312,7 @@ pub struct DelayLine {
     transition_from_frames: usize,
     transition_remaining: usize,
     transition_total: usize,
+    pending_delay_frames: Option<usize>,
     has_processed: bool,
     buffer: Vec<f32>,
     write_frame: usize,
@@ -1542,6 +1543,7 @@ impl DelayLine {
             transition_from_frames: 0,
             transition_remaining: 0,
             transition_total: 0,
+            pending_delay_frames: None,
             has_processed: false,
             buffer: vec![0.0; capacity_frames * channels],
             write_frame: 0,
@@ -1568,11 +1570,19 @@ impl DelayLine {
             self.transition_from_frames = frames;
             self.transition_remaining = 0;
             self.transition_total = 0;
+            self.pending_delay_frames = None;
+        } else if self.transition_remaining != 0 {
+            // Coalesce rapid control updates and apply the latest request only
+            // after the current crossfade. This keeps the audio path bounded
+            // while preventing a new transition from starting at a tap that
+            // is not the currently audible blend.
+            self.pending_delay_frames = Some(frames);
         } else {
             self.transition_from_frames = self.delay_frames;
             self.transition_remaining = DELAY_TRANSITION_FRAMES;
             self.transition_total = DELAY_TRANSITION_FRAMES;
             self.delay_frames = frames;
+            self.pending_delay_frames = None;
         }
         Ok(())
     }
@@ -1583,6 +1593,7 @@ impl DelayLine {
         self.transition_from_frames = self.delay_frames;
         self.transition_remaining = 0;
         self.transition_total = 0;
+        self.pending_delay_frames = None;
         self.has_processed = false;
     }
 
@@ -1628,6 +1639,16 @@ impl DelayLine {
             self.write_frame = (self.write_frame + 1) % self.capacity_frames;
             if self.transition_remaining != 0 {
                 self.transition_remaining -= 1;
+                if self.transition_remaining == 0 {
+                    if let Some(pending) = self.pending_delay_frames.take() {
+                        if pending != self.delay_frames {
+                            self.transition_from_frames = self.delay_frames;
+                            self.delay_frames = pending;
+                            self.transition_remaining = DELAY_TRANSITION_FRAMES;
+                            self.transition_total = DELAY_TRANSITION_FRAMES;
+                        }
+                    }
+                }
             }
         }
         self.has_processed = true;
@@ -2512,6 +2533,25 @@ mod tests {
             .windows(2)
             .all(|pair| (pair[1] - pair[0]).abs() <= 1.1));
         assert!((transition[63] - 69.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn rapid_delay_updates_are_coalesced_after_current_transition() {
+        let mut delay = DelayLine::new(100.0, 1_000.0, 1).unwrap();
+        let mut warmup = (0..10).map(|value| value as f32).collect::<Vec<_>>();
+        delay.process_interleaved(&mut warmup);
+        delay.set_delay_ms(4.0).unwrap();
+
+        let mut first = (10..20).map(|value| value as f32).collect::<Vec<_>>();
+        delay.process_interleaved(&mut first);
+        delay.set_delay_ms(8.0).unwrap();
+        let mut second = (20..100).map(|value| value as f32).collect::<Vec<_>>();
+        delay.process_interleaved(&mut second);
+
+        assert!(first
+            .windows(2)
+            .chain(second.windows(2))
+            .all(|pair| { (pair[1] - pair[0]).abs() <= 1.1 }));
     }
 
     #[test]
