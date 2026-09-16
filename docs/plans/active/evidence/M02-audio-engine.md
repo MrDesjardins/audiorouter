@@ -476,6 +476,18 @@ do not substitute for managed-driver callback or physical-latency validation.
 
 # M02 audio adapter groundwork
 
+## Negotiated same-rate graph activation
+
+On 2026-09-15, the native endpoint bridge began retaining the validated
+capture/render sample rate and the control plane began preparing the native
+graph at that rate. This fixes the prior unconditional 48 kHz activation for
+validated 44.1 kHz endpoint pairs. Cross-rate capture/render conversion is
+still gated behind a separate bounded-resampling implementation; endpoint
+format mismatches continue to fail before activation. Focused control and
+Windows-audio tests passed (165 control tests, 74 Windows-audio tests; two
+control tests remain intentionally ignored because they require explicit live
+audio authorization).
+
 ## 2026-09-08 - Differing-rate route requalification
 
 The guarded `m02-rust-adapter-route-live.ps1 -AllowLiveAudio

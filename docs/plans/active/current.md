@@ -8,7 +8,8 @@ Updated: 2026-09-15.
   enables same-rate 44.1 kHz endpoint pairs while preserving strict rejection
   of capture/render format mismatches; cross-rate conversion remains a later
   bounded resampling task. Focused Windows-audio and control checks passed.
-  No endpoint was opened and no machine audio configuration changed.
+  Evidence: [M02 audio evidence](evidence/M02-audio-engine.md). No endpoint
+  was opened and no machine audio configuration changed.
 
 - Fixed stale UI state after resume recovery on 2026-09-15. The resume panel
   now refreshes the authoritative snapshot after validation and after the
