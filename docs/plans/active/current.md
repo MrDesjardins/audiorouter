@@ -2,6 +2,12 @@
 
 Updated: 2026-09-16.
 
+Re-ran `tests/acceptance/m03-swdevice-probe.ps1` on 2026-09-16. The native
+Software Device API probe compiled and its bounded enumerator/parent/hardware
+ID/instance plan dry-run passed; temporary executable/object outputs were
+removed. This remains no-side-effect evidence only: no software device,
+driver, endpoint, or persistent machine audio configuration was created.
+
 Re-ran `tests/acceptance/m05-ui.ps1` on 2026-09-16 after the graph source
 authoring slices. The temporary production build, TypeScript check, and full
 UI suite passed with 231 tests. The acceptance remains UI-only and does not
