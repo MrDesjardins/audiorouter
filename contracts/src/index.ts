@@ -633,6 +633,12 @@ export interface SessionStopResult {
   }>;
 }
 
+export interface SystemQuitResult {
+  state: "stopped";
+  sessions: SessionStopResult[];
+  recorders: RecorderLifecycleResult[];
+}
+
 export interface GraphUndoPlanResult {
   planId: EntityId;
   baseRevision: number;
@@ -841,6 +847,7 @@ export type ImplementedMethod =
   | "system.handshake"
   | "status.get"
   | "system.diagnostics"
+  | "system.quit"
   | "system.osTransition"
   | "clients.list"
   | "clients.authorize"
@@ -917,6 +924,7 @@ export type MethodParams = {
   "system.handshake": { protocolVersion: { major: number; minor: number } };
   "status.get": undefined;
   "system.diagnostics": undefined;
+  "system.quit": { idempotencyKey: string };
   "system.osTransition": { transition: OsTransition; idempotencyKey: string };
   "clients.list": undefined;
   "clients.authorize": { clientId: string; role: "observer" | "editor" | "operator" };
@@ -1045,6 +1053,7 @@ export type MethodResult = {
   };
   "status.get": StatusSnapshot;
   "system.diagnostics": DiagnosticsSnapshot;
+  "system.quit": SystemQuitResult;
   "system.osTransition": OsTransitionResult;
   "clients.list": Array<{ clientId: string; role: string; revoked: boolean }>;
   "clients.authorize": ClientAuthorizeResult;

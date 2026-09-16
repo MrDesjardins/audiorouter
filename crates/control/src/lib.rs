@@ -1739,6 +1739,7 @@ fn method_description(name: &str) -> &'static str {
             "Apply a lock, sign-out, sleep, or resume lifecycle transition policy."
         }
         "system.diagnostics" => "Return a redacted backend diagnostic snapshot.",
+        "system.quit" => "Finalize active recorders and stop all running sessions before the owner exits.",
         "clients.list" => "List enrolled local client identities and roles.",
         "clients.authorize" => "Authorize a client with an explicit built-in role.",
         "clients.revoke" => "Revoke a client enrollment without deleting its audit record.",
@@ -1852,6 +1853,12 @@ fn object_schema(properties: Value, required: &[&str]) -> Value {
 
 fn method_input_schema(name: &str) -> Value {
     match name {
+        "system.quit" => object_schema(
+            json!({
+                "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
+            }),
+            &["idempotencyKey"],
+        ),
         "system.handshake" => object_schema(
             json!({
                 "protocolVersion": {
@@ -2281,6 +2288,16 @@ fn recorder_input_schema(frame_required: bool) -> Value {
 
 fn method_output_schema(name: &str) -> Value {
     match name {
+        "system.quit" => json!({
+            "type": "object",
+            "properties": {
+                "state": { "const": "stopped" },
+                "sessions": { "type": "array", "maxItems": audiorouter_domain::MAX_ACTIVE_SESSIONS },
+                "recorders": { "type": "array", "maxItems": MAX_ACTIVE_RECORDERS }
+            },
+            "required": ["state", "sessions", "recorders"],
+            "additionalProperties": false
+        }),
         "system.osTransition" => json!({
             "type": "object",
             "properties": {
@@ -8149,6 +8166,7 @@ impl ControlPlane {
                         "redacted": true
                         }))
                     }
+                    "system.quit" => self.dispatch_system_quit(request.params),
                     "clients.list" => self.dispatch_clients_list(),
                     "clients.authorize" => self.dispatch_client_authorize(request.params),
                     "clients.revoke" => self.dispatch_client_revoke(request.params),
@@ -8829,6 +8847,86 @@ impl ControlPlane {
             .and_then(Value::as_u64)
             .unwrap_or(100);
         self.sessions_list_page(cursor, limit as usize)
+    }
+
+    fn dispatch_system_quit(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        let idempotency_key = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|key| !key.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        let request_hash = Self::request_hash(&json!({"action": "quit"}));
+        let scoped_key = self.scoped_idempotency_key("system.quit", idempotency_key);
+        if let Some(previous) = self.lookup_idempotent_result(&scoped_key, &request_hash)? {
+            return Ok(previous);
+        }
+
+        let node_ids = self
+            .recorder_node_sessions
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        let mut finalized_recorders = Vec::new();
+        for node_id in node_ids {
+            let state = self
+                .recorder_node_states
+                .get(&node_id)
+                .map(|recorder| recorder.state())
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest("recorder node state is missing".into())
+                })?;
+            match state {
+                RecorderState::Recording | RecorderState::Paused => {
+                    let frame = self
+                        .recorder_node_states
+                        .get(&node_id)
+                        .and_then(|recorder| {
+                            let checkpoint = recorder.checkpoint();
+                            checkpoint.stop_frame.or(checkpoint.last_frame)
+                        })
+                        .ok_or_else(|| {
+                            ControlError::InvalidRequest(
+                                "active recorder has no committed frame boundary".into(),
+                            )
+                        })?;
+                    finalized_recorders.push(self.control_recorder_node(
+                        &node_id,
+                        "recorders.stop",
+                        Some(frame),
+                    )?);
+                }
+                RecorderState::Idle | RecorderState::Armed | RecorderState::Completed => {
+                    self.recorder_node_workers.remove(&node_id);
+                    self.recorder_node_states.remove(&node_id);
+                    self.recorder_node_sessions.remove(&node_id);
+                }
+                RecorderState::Stopping | RecorderState::Failed => {
+                    return Err(ControlError::InvalidRequest(
+                        "recorder node requires explicit recovery before quit".into(),
+                    ));
+                }
+            }
+        }
+
+        let running_sessions = self
+            .runtimes
+            .iter()
+            .filter(|(_, runtime)| runtime.state() == RuntimeState::Running)
+            .map(|(id, _)| id.clone())
+            .collect::<Vec<_>>();
+        let mut stopped_sessions = Vec::with_capacity(running_sessions.len());
+        for session_id in running_sessions {
+            stopped_sessions.push(self.session_stop(&session_id)?);
+        }
+        let result = json!({
+            "state": "stopped",
+            "sessions": stopped_sessions,
+            "recorders": finalized_recorders,
+        });
+        self.journal_idempotent_result(&scoped_key, "system.quit", &request_hash, &result)?;
+        Ok(result)
     }
 
     fn dispatch_session_stop(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -11543,6 +11641,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
             "acknowledgments",
         ],
         "system.handshake" => &["protocolVersion"],
+        "system.quit" => &["idempotencyKey"],
         "system.osTransition" => &["transition", "idempotencyKey"],
         "clients.authorize" => &["clientId", "role", "idempotencyKey"],
         "clients.revoke" => &["clientId", "idempotencyKey"],
@@ -16455,6 +16554,33 @@ mod tests {
         let events = plane.events.since(0, 10).unwrap();
         assert_eq!(events.last().unwrap().resource_revision, original.revision);
         assert_eq!(plane.session_start(&original.id).unwrap()["generation"], 2);
+    }
+
+    #[test]
+    fn system_quit_stops_running_sessions_and_replays_idempotently() {
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        plane.session_start(&original.id).unwrap();
+        let request = || JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!("quit")),
+            method: "system.quit".into(),
+            params: Some(json!({ "idempotencyKey": "quit-once" })),
+        };
+        let grant = ClientGrant::for_role(ClientRole::Operator);
+        let first = plane.dispatch_authorized_for_client(request(), "shell", &grant);
+        assert_eq!(first.result.as_ref().unwrap()["state"], "stopped");
+        assert_eq!(
+            first.result.as_ref().unwrap()["sessions"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(plane.runtimes[&original.id].state(), RuntimeState::Stopped);
+        let replay = plane.dispatch_authorized_for_client(request(), "shell", &grant);
+        assert_eq!(replay.result, first.result);
     }
 
     #[test]

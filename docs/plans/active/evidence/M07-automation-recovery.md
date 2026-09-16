@@ -1,5 +1,21 @@
 # M07 automation and recovery evidence
 
+## 2026-09-15 - backend-owned quit/finalization contract
+
+Added the authenticated idempotent `system.quit` operation and routed the
+native tray action through it. ControlPlane now owns bounded recorder cleanup
+before stopping running sessions; a successful result reports stopped sessions
+and finalized node recorders, while an unsuccessful finalization leaves the
+affected lifecycle available for recovery. Control tests (166, with 2 guarded
+ignores), shell tests (26), strict Clippy, contract drift (75 methods), and
+the UI suite (221) passed. No live endpoint or persistent machine audio
+configuration was changed.
+
+The full locked workspace re-run also passed after the implementation,
+including 78 Windows-audio tests; contract drift reported 75 methods and the
+UI suite reported 221 tests. No live endpoint or persistent machine audio
+configuration changed.
+
 ## 2026-09-15 - locked workspace regression after safe-mode correction
 
 The complete locked Rust workspace was re-run after the shell's explicit

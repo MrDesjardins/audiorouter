@@ -15,7 +15,8 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
-The current catalog contains 74 methods, including the session portability,
+The current catalog contains 75 methods, including backend-owned quit/finalize,
+session portability,
 recorder lifecycle, plugin inventory/retry, and startup plan/apply methods added
 after the initial 47-method reference.
 
@@ -25,6 +26,7 @@ after the initial 47-method reference.
 | `system.handshake` | `read` | read-only |
 | `status.get` | `read` | read-only |
 | `system.diagnostics` | `read` | read-only |
+| `system.quit` | `sessionControl` | external operation; requires an idempotency key; finalizes active recorders before stopping running sessions |
 | `system.osTransition` | `sessionControl` | mutating; requires an idempotency key; reports routes requiring explicit resume validation |
 | `clients.list` | `read` | read-only |
 | `clients.authorize` | `deviceAdministration` | mutating; requires an idempotency key |

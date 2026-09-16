@@ -2,6 +2,36 @@
 
 Updated: 2026-09-15.
 
+## Next implementation slice: backend-owned tray shutdown (UI-10/STATE-09)
+
+Objective: replace the shell-side quit sequence with one authenticated,
+idempotent `system.quit` operation owned by `ControlPlane`, so recorder
+finalization and session/native stop ordering are authoritative and shared by
+future adapters.
+
+Requirement IDs: UI-10, STATE-09, REC-09, API-01/API-03/API-08, SEC-01/SEC-06.
+Prerequisites: existing session-stop and recorder-worker lifecycle contracts;
+no driver or persistent audio changes are required.
+
+Ordered work: add the method to the domain catalog and schemas; implement
+bounded node/session recorder finalization followed by session stop; route the
+tray action through the method; add idempotency, failure-ordering, and
+multi-recorder regressions; run focused control/shell tests, Clippy, format,
+and documentation validation.
+
+Rollback: revert the operation and tray adapter together; the existing
+per-session stop path remains unchanged. Verification must prove that a
+successful response reports stopped sessions and completed files, while a
+failed finalization never reports the affected session stopped.
+
+- Implemented backend-owned `system.quit` and routed the tray action through
+  it. The operation is authenticated, idempotent, bounded, finalizes active
+  node recorders before stopping running sessions, and returns canonical
+  session/recorder results. TypeScript/Rust contract drift passes at 75
+  methods; control (166, 2 ignored), shell (26), workspace (78 Windows-audio
+  tests), UI (221), strict Clippy, formatting, and documentation checks pass.
+  No live endpoint or persistent machine audio configuration changed.
+
 - Ran the disposable M06 SDK-installer provenance acceptance. Wrong-origin
   checkouts and destinations below a reparse-point parent were rejected as
   intended; all temporary metadata was removed. The real SDK, plugins,

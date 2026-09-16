@@ -528,6 +528,7 @@ fn tray_recording_text(response: &JsonRpcResponse) -> String {
     )
 }
 
+#[cfg(test)]
 fn tray_stop_succeeded(response: &JsonRpcResponse) -> bool {
     response
         .result
@@ -540,6 +541,7 @@ fn tray_stop_succeeded(response: &JsonRpcResponse) -> bool {
 /// Extract the bounded set of currently running sessions from the
 /// authoritative status response. A malformed or over-capacity response is
 /// rejected so tray quit cannot claim that every session was stopped.
+#[cfg(test)]
 fn tray_active_session_ids(response: &JsonRpcResponse) -> Option<Vec<String>> {
     let result = response.result.as_ref()?;
     let items = result.get("activeSessionIds")?.as_array()?;
@@ -563,6 +565,7 @@ fn tray_active_session_ids(response: &JsonRpcResponse) -> Option<Vec<String>> {
     Some(ids)
 }
 
+#[cfg(test)]
 fn tray_recorders_to_finalize_all(
     response: &JsonRpcResponse,
 ) -> Option<Vec<(String, Option<String>, u64)>> {
@@ -754,93 +757,24 @@ fn main() {
                             let _ = window.hide();
                         }
                         "quit" => {
-                            let status_request = JsonRpcRequest {
+                            let request = JsonRpcRequest {
                                 jsonrpc: "2.0".into(),
-                                id: Some(serde_json::json!("tray-quit-status")),
-                                method: "status.get".into(),
-                                params: None,
+                                id: Some(serde_json::json!("tray-quit")),
+                                method: "system.quit".into(),
+                                params: Some(serde_json::json!({
+                                    "idempotencyKey": "tray-quit"
+                                })),
                             };
-                            let Some(active_sessions) =
-                                forward_rpc_request(&status_request, &pipe_name)
-                                    .ok()
-                                    .and_then(|response| tray_active_session_ids(&response))
-                            else {
-                                let _ = status_for_handler
-                                    .set_text("Quit refused: session status unavailable");
-                                return;
-                            };
-                            let recorders_request = JsonRpcRequest {
-                                jsonrpc: "2.0".into(),
-                                id: Some(serde_json::json!("tray-quit-recorders")),
-                                method: "recorders.list".into(),
-                                params: None,
-                            };
-                            let Some(recorders) =
-                                forward_rpc_request(&recorders_request, &pipe_name)
-                                    .ok()
-                                    .and_then(|response| tray_recorders_to_finalize_all(&response))
-                            else {
-                                let _ = status_for_handler
-                                    .set_text("Quit refused: recorder status unavailable");
-                                return;
-                            };
-                            let recorders = recorders.into_iter().filter(|(session_id, _, _)| {
-                                active_sessions.iter().any(|id| id == session_id)
-                            });
-                            for (index, (session_id, node_id, frame)) in recorders.enumerate() {
-                                let mut params = serde_json::json!({
-                                    "sessionId": session_id,
-                                    "frame": frame,
-                                    "idempotencyKey": format!("tray-quit-recorder-{index}"),
-                                });
-                                if let Some(node_id) = node_id {
-                                    params["nodeId"] = serde_json::Value::String(node_id);
-                                }
-                                let response = forward_rpc_request(
-                                    &JsonRpcRequest {
-                                        jsonrpc: "2.0".into(),
-                                        id: Some(serde_json::json!(format!(
-                                            "tray-quit-recorder-{index}"
-                                        ))),
-                                        method: "recorders.stop".into(),
-                                        params: Some(params),
-                                    },
-                                    &pipe_name,
-                                );
-                                if !response.as_ref().is_ok_and(|response| {
-                                    response
-                                        .result
-                                        .as_ref()
-                                        .and_then(|result| result.get("state"))
+                            match forward_rpc_request(&request, &pipe_name) {
+                                Ok(response)
+                                    if response.result.as_ref().and_then(|result| result.get("state"))
                                         .and_then(serde_json::Value::as_str)
-                                        == Some("completed")
-                                }) {
+                                        == Some("stopped") => app.exit(0),
+                                _ => {
                                     let _ = status_for_handler
-                                        .set_text("Quit refused: recorder finalization failed");
-                                    return;
+                                        .set_text("Quit refused: backend finalization failed");
                                 }
                             }
-                            for (index, session_id) in active_sessions.into_iter().enumerate() {
-                                let request = JsonRpcRequest {
-                                    jsonrpc: "2.0".into(),
-                                    id: Some(serde_json::json!(format!("tray-quit-stop-{index}"))),
-                                    method: "session.stop".into(),
-                                    params: Some(serde_json::json!({
-                                        "sessionId": session_id,
-                                        "idempotencyKey": format!("tray-quit-stop-{index}"),
-                                    })),
-                                };
-                                match forward_rpc_request(&request, &pipe_name) {
-                                    Ok(response) if tray_stop_succeeded(&response) => {}
-                                    _ => {
-                                        let _ = status_for_handler.set_text(
-                                            "Quit refused: session stop did not complete",
-                                        );
-                                        return;
-                                    }
-                                }
-                            }
-                            app.exit(0);
                         }
                         "privacy" => {
                             let status_request = JsonRpcRequest {
