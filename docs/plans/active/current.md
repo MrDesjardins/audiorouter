@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Requalified the guarded event-driven WASAPI path on 2026-09-16 against the
+current VB-Cable pair. Capture registered its event and delivered 24,480
+frames; silent render registered its event and submitted 28,800 frames; both
+completed start/stop/reset successfully. Temporary probe outputs were
+removed, and defaults, volume, mute, privacy, drivers, signing, startup, and
+persistent audio configuration were unchanged. This is event lifecycle
+evidence, not production callback timing or physical latency.
+
 Requalified the elevated guarded `tests/acceptance/safe-all.ps1` chain at
 head `d52f7ec4` on 2026-09-16. Toolchain/native probes, x64/ARM64 driver
 source builds, read-only 31-endpoint inventory, disposable SysVAD, M01/M03/
