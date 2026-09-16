@@ -55,8 +55,9 @@ driver/device state. `-AllowDriverInstall` remains mandatory for execution.
 
 Installation records the exact `oem*.inf` name returned by `pnputil`; uninstall
 requires that state file and removes only that package. Both switches are
-required, the INF must be inside this driver package directory, and ambiguous
-or missing state fails closed. State publication is staged in the same
+required for execution, the generated `.inf` must be inside this driver
+package directory, and ambiguous or missing state fails closed. State
+publication is staged in the same
 directory; if it fails after installation, the script attempts an automatic
 package rollback and reports if that compensation fails. The script does not change test-signing,
 Secure Boot, HVCI, audio defaults, or endpoint selections. Do not run it on the

@@ -57,88 +57,6 @@ foreach ($required in @(
     }
 }
 
-# Exercise the lifecycle guard with an in-package file but no state record.
-# This must reach the precise missing-state refusal after walking the file's
-# parent chain, and must never invoke pnputil or delete a package.
-$guardState = Join-Path ([IO.Path]::GetTempPath()) ('audiorouter-driver-guard-' + [guid]::NewGuid().ToString('N') + '.json')
-$trackedState = Join-Path ([IO.Path]::GetTempPath()) ('audiorouter-driver-tracked-' + [guid]::NewGuid().ToString('N') + '.json')
-$guardInf = Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/AudioRouterVirtual.inx'
-$guardStdout = [IO.Path]::GetTempFileName()
-$guardStderr = [IO.Path]::GetTempFileName()
-$consentStdout = [IO.Path]::GetTempFileName()
-$consentStderr = [IO.Path]::GetTempFileName()
-try {
-    $previewOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $manage `
-        -Install -Preview -Inf $guardInf -State $guardState)
-    if ($LASTEXITCODE -ne 0) {
-        throw "driver lifecycle preview failed with exit code $LASTEXITCODE"
-    }
-    $preview = ($previewOutput -join "`n") | ConvertFrom-Json
-    if ($preview.mutates -ne $false -or $preview.action -ne 'install' -or
-        $preview.ready -ne $true -or $preview.statePresent -ne $false -or
-        $preview.consentProvided -ne $false -or
-        $preview.command[0] -ne '/add-driver' -or (Test-Path -LiteralPath $guardState)) {
-        throw "driver lifecycle preview was not read-only or did not describe install: $($previewOutput -join ' ')"
-    }
-
-    $consentProcess = Start-Process -FilePath powershell.exe -ArgumentList @(
-        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $manage,
-        '-Install', '-Inf', $guardInf, '-State', $guardState
-    ) -RedirectStandardOutput $consentStdout -RedirectStandardError $consentStderr -PassThru
-    $consentProcess.WaitForExit()
-    $consentProcess.Refresh()
-    $consentOutput = ((Get-Content -LiteralPath $consentStdout -Raw -ErrorAction SilentlyContinue) +
-        (Get-Content -LiteralPath $consentStderr -Raw -ErrorAction SilentlyContinue))
-    if ($consentProcess.ExitCode -eq 0 -or $consentOutput -notmatch 'require .*AllowDriverInstall') {
-        throw "driver install did not fail closed without consent: $consentOutput"
-    }
-
-    $uninstallPreviewOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $manage `
-        -Uninstall -Preview -Inf $guardInf -State $guardState)
-    if ($LASTEXITCODE -ne 0) {
-        throw "driver lifecycle uninstall preview failed with exit code $LASTEXITCODE"
-    }
-    $uninstallPreview = ($uninstallPreviewOutput -join "`n") | ConvertFrom-Json
-    if ($uninstallPreview.mutates -ne $false -or $uninstallPreview.action -ne 'uninstall' -or
-        $uninstallPreview.ready -ne $false -or $uninstallPreview.statePresent -ne $false -or
-        $uninstallPreview.blocker -notmatch 'no lifecycle state') {
-        throw "driver lifecycle preview did not describe the missing uninstall state: $($uninstallPreviewOutput -join ' ')"
-    }
-
-    @{ schemaVersion = 1; inf = $guardInf; publishedName = 'oem123.inf' } |
-        ConvertTo-Json | Set-Content -LiteralPath $trackedState -Encoding UTF8 -NoNewline
-    $trackedPreviewOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $manage `
-        -Uninstall -Preview -Inf $guardInf -State $trackedState)
-    if ($LASTEXITCODE -ne 0) {
-        throw "tracked driver lifecycle preview failed with exit code $LASTEXITCODE"
-    }
-    $trackedPreview = ($trackedPreviewOutput -join "`n") | ConvertFrom-Json
-    if ($trackedPreview.mutates -ne $false -or $trackedPreview.ready -ne $true -or
-        $trackedPreview.publishedName -ne 'oem123.inf' -or
-        $trackedPreview.command[0] -ne '/delete-driver' -or
-        $trackedPreview.command[1] -ne 'oem123.inf') {
-        throw "tracked driver lifecycle preview did not describe uninstall: $($trackedPreviewOutput -join ' ')"
-    }
-
-    $guardProcess = Start-Process -FilePath powershell.exe -ArgumentList @(
-        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $manage,
-        '-Uninstall', '-AllowDriverInstall', '-Inf', $guardInf, '-State', $guardState
-    ) -RedirectStandardOutput $guardStdout -RedirectStandardError $guardStderr -PassThru
-    $guardProcess.WaitForExit()
-    $guardProcess.Refresh()
-    $guardOutput = ((Get-Content -LiteralPath $guardStdout -Raw -ErrorAction SilentlyContinue) +
-        (Get-Content -LiteralPath $guardStderr -Raw -ErrorAction SilentlyContinue))
-    if ($guardProcess.ExitCode -eq 0 -or $guardOutput -notmatch 'No lifecycle state exists') {
-        throw "driver lifecycle guard did not refuse an untracked package: $guardOutput"
-    }
-} finally {
-    foreach ($guardPath in @($guardState, $trackedState, $guardStdout, $guardStderr, $consentStdout, $consentStderr)) {
-        if (Test-Path -LiteralPath $guardPath) {
-            Remove-Item -LiteralPath $guardPath -Force
-        }
-    }
-}
-
 $buildOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $build -Platform $Platform 2>&1)
 if ($LASTEXITCODE -ne 0) {
     throw "AudioRouter virtual-driver build failed with exit code $LASTEXITCODE"
@@ -151,6 +69,80 @@ if ($buildText -notmatch [regex]::Escape("Driver binary: $expectedPlatformRoot")
     $buildText -match [regex]::Escape("Driver binary: $([IO.Path]::Combine($workspace, 'drivers', 'audiorouter-virtual', $unexpectedPlatform))") -or
     $buildText -match [regex]::Escape("Driver INF: $([IO.Path]::Combine($workspace, 'drivers', 'audiorouter-virtual', $unexpectedPlatform))")) {
     throw "driver build reported an artifact outside the requested $Platform platform root`n$buildText"
+}
+
+# Exercise the lifecycle guard against the generated .inf but no state record.
+# This must reach the precise missing-state refusal after walking the file's
+# parent chain, and must never invoke pnputil or delete a package.
+$guardState = Join-Path ([IO.Path]::GetTempPath()) ('audiorouter-driver-guard-' + [guid]::NewGuid().ToString('N') + '.json')
+$trackedState = Join-Path ([IO.Path]::GetTempPath()) ('audiorouter-driver-tracked-' + [guid]::NewGuid().ToString('N') + '.json')
+$guardInf = Join-Path $expectedPlatformRoot 'Release/package/AudioRouterVirtual.inf'
+$guardStdout = [IO.Path]::GetTempFileName()
+$guardStderr = [IO.Path]::GetTempFileName()
+$consentStdout = [IO.Path]::GetTempFileName()
+$consentStderr = [IO.Path]::GetTempFileName()
+if (-not (Test-Path -LiteralPath $guardInf -PathType Leaf)) {
+    throw "generated driver INF is missing for lifecycle regression: $guardInf"
+}
+try {
+    $previewOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $manage `
+        -Install -Preview -Inf $guardInf -State $guardState)
+    if ($LASTEXITCODE -ne 0) { throw "driver lifecycle preview failed with exit code $LASTEXITCODE" }
+    $preview = ($previewOutput -join "`n") | ConvertFrom-Json
+    if ($preview.mutates -ne $false -or $preview.action -ne 'install' -or
+        $preview.ready -ne $true -or $preview.statePresent -ne $false -or
+        $preview.consentProvided -ne $false -or $preview.command[0] -ne '/add-driver' -or
+        (Test-Path -LiteralPath $guardState)) {
+        throw "driver lifecycle preview was not read-only or did not describe install: $($previewOutput -join ' ')"
+    }
+
+    $consentProcess = Start-Process -FilePath powershell.exe -ArgumentList @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $manage,
+        '-Install', '-Inf', $guardInf, '-State', $guardState
+    ) -RedirectStandardOutput $consentStdout -RedirectStandardError $consentStderr -PassThru
+    $consentProcess.WaitForExit(); $consentProcess.Refresh()
+    $consentOutput = ((Get-Content -LiteralPath $consentStdout -Raw -ErrorAction SilentlyContinue) +
+        (Get-Content -LiteralPath $consentStderr -Raw -ErrorAction SilentlyContinue))
+    if ($consentProcess.ExitCode -eq 0 -or $consentOutput -notmatch 'require .*AllowDriverInstall') {
+        throw "driver install did not fail closed without consent: $consentOutput"
+    }
+
+    $uninstallPreviewOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $manage `
+        -Uninstall -Preview -Inf $guardInf -State $guardState)
+    if ($LASTEXITCODE -ne 0) { throw "driver lifecycle uninstall preview failed with exit code $LASTEXITCODE" }
+    $uninstallPreview = ($uninstallPreviewOutput -join "`n") | ConvertFrom-Json
+    if ($uninstallPreview.mutates -ne $false -or $uninstallPreview.action -ne 'uninstall' -or
+        $uninstallPreview.ready -ne $false -or $uninstallPreview.statePresent -ne $false -or
+        $uninstallPreview.blocker -notmatch 'no lifecycle state') {
+        throw "driver lifecycle preview did not describe the missing uninstall state: $($uninstallPreviewOutput -join ' ')"
+    }
+
+    @{ schemaVersion = 1; inf = $guardInf; publishedName = 'oem123.inf' } |
+        ConvertTo-Json | Set-Content -LiteralPath $trackedState -Encoding UTF8 -NoNewline
+    $trackedPreviewOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $manage `
+        -Uninstall -Preview -Inf $guardInf -State $trackedState)
+    if ($LASTEXITCODE -ne 0) { throw "tracked driver lifecycle preview failed with exit code $LASTEXITCODE" }
+    $trackedPreview = ($trackedPreviewOutput -join "`n") | ConvertFrom-Json
+    if ($trackedPreview.mutates -ne $false -or $trackedPreview.ready -ne $true -or
+        $trackedPreview.publishedName -ne 'oem123.inf' -or
+        $trackedPreview.command[0] -ne '/delete-driver' -or $trackedPreview.command[1] -ne 'oem123.inf') {
+        throw "tracked driver lifecycle preview did not describe uninstall: $($trackedPreviewOutput -join ' ')"
+    }
+
+    $guardProcess = Start-Process -FilePath powershell.exe -ArgumentList @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $manage,
+        '-Uninstall', '-AllowDriverInstall', '-Inf', $guardInf, '-State', $guardState
+    ) -RedirectStandardOutput $guardStdout -RedirectStandardError $guardStderr -PassThru
+    $guardProcess.WaitForExit(); $guardProcess.Refresh()
+    $guardOutput = ((Get-Content -LiteralPath $guardStdout -Raw -ErrorAction SilentlyContinue) +
+        (Get-Content -LiteralPath $guardStderr -Raw -ErrorAction SilentlyContinue))
+    if ($guardProcess.ExitCode -eq 0 -or $guardOutput -notmatch 'No lifecycle state exists') {
+        throw "driver lifecycle guard did not refuse an untracked package: $guardOutput"
+    }
+} finally {
+    foreach ($guardPath in @($guardState, $trackedState, $guardStdout, $guardStderr, $consentStdout, $consentStderr)) {
+        if (Test-Path -LiteralPath $guardPath) { Remove-Item -LiteralPath $guardPath -Force }
+    }
 }
 
 $source = Get-Content -LiteralPath $adapter -Raw

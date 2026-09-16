@@ -84,6 +84,10 @@ if (-not [IO.Path]::IsPathRooted($statePath)) {
 if (-not $infPath.StartsWith($driverRootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
     throw 'The INF must be inside the AudioRouter driver package directory.'
 }
+if (-not [string]::Equals([IO.Path]::GetExtension($infPath), '.inf',
+        [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'The lifecycle package input must be a generated .inf file.'
+}
 Assert-NoReparsePath -Path $infPath -StopAt $driverRoot
 Assert-NoReparseAncestors -Path (Split-Path -Parent $statePath)
 

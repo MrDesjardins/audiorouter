@@ -2,6 +2,13 @@
 
 Updated: 2026-09-16.
 
+Hardened the M03 lifecycle input boundary on 2026-09-16: `manage.ps1` now
+rejects source `.inx` and other non-`.inf` inputs, while the acceptance
+regression uses the actual generated platform package INF. Install and
+uninstall previews, no-consent execution rejection, tracked-state validation,
+and fail-closed cleanup all passed on x64 and ARM64; no `pnputil` or driver
+state action occurred.
+
 Refined the M03 lifecycle preview on 2026-09-16 so read-only plans no longer
 require the mutation-consent switch. Preview reports whether
 `AllowDriverInstall` was supplied, while actual install/uninstall execution
