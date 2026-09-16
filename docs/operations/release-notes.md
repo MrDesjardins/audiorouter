@@ -51,6 +51,10 @@ release and must not be presented as an installable Windows audio product.
   delivery, and clean start/stop. The latest run observed 24,000 captured
   frames, 187 processed quanta, and 23,936 rendered frames; it did not change
   defaults, volume, mute, privacy, drivers, or persistent audio settings.
+- Shell-owned backend recovery persists crash markers and keeps a stopped
+  control plane available after the safe-mode threshold, allowing an
+  authorized operator to inspect and clear the latch without reopening native
+  endpoints.
 - The attended Tauri shell transport acceptance reaches the WebView's native
   RPC command and authenticated backend through a disposable pipe/database;
   manual visual accessibility and scaling review remains separate.
