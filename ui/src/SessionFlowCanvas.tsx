@@ -27,6 +27,7 @@ type SessionFlowCanvasProps = {
   onSelectMany?: (ids: string[]) => void;
   onConnect: (connection: Connection) => void;
   onRemoveConnection?: (edgeId: string) => void;
+  onRemoveNode?: (nodeId: string) => void;
   onAddLibraryNode?: (kind: LibraryNodeKind, position: { x: number; y: number }) => string | void;
   canEdit?: boolean;
 };
@@ -34,6 +35,11 @@ type SessionFlowCanvasProps = {
 /** Returns only real graph edges from a canvas deletion event. */
 export function deletedConnectionIds(edges: Pick<FlowEdge, "id">[]): string[] {
   return edges.map((edge) => edge.id).filter((id) => id.length > 0);
+}
+
+/** Returns only non-empty node identities from a canvas deletion event. */
+export function deletedNodeIds(nodes: Pick<FlowNode, "id">[]): string[] {
+  return nodes.map((node) => node.id).filter((id) => id.length > 0);
 }
 
 function positionFor(index: number) {
@@ -50,7 +56,7 @@ export function libraryDropPosition(clientX: number, clientY: number, bounds: Pi
   return { x: Math.max(0, safeX - bounds.left - 20), y: Math.max(0, safeY - bounds.top - 20) };
 }
 
-export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onAddLibraryNode, canEdit = true }: SessionFlowCanvasProps) {
+export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onRemoveNode, onAddLibraryNode, canEdit = true }: SessionFlowCanvasProps) {
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
   const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey));
   useEffect(() => { setPositions(readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey)); }, [layoutKey]);
@@ -77,6 +83,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
     },
     draggable: true,
     selectable: true,
+    deletable: canEdit,
     style: {
       border: selectedNodeIds.includes(node.id) ? "2px solid var(--accent, #65d1b5)" : "1px solid var(--line, #40536b)",
       borderRadius: 10,
@@ -113,6 +120,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
         onNodeClick={(_, node) => onSelect(node.id)}
         onConnect={canEdit ? onConnect : undefined}
         onEdgesDelete={canEdit && onRemoveConnection ? (deleted) => { for (const edgeId of deletedConnectionIds(deleted)) onRemoveConnection(edgeId); } : undefined}
+        onNodesDelete={canEdit ? (deleted) => { for (const nodeId of deletedNodeIds(deleted)) { if (onRemoveNode) onRemoveNode(nodeId); else globalThis.dispatchEvent(new CustomEvent("audiorouter:remove-node", { detail: { nodeId } })); } } : undefined}
         onNodeDragStop={(_, node) => { const next = { ...positions, [node.id]: node.position }; setPositions(next); writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next); }}
         proOptions={{ hideAttribution: true }}
       >

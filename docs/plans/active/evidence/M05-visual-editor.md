@@ -1,5 +1,15 @@
 # M05 visual editor evidence
 
+## 2026-09-15 - canvas node deletion
+
+Editable canvas nodes can now be selected and deleted with the Delete key.
+The action asks for confirmation and removes the node plus its incident edges
+from the local draft only; disconnected/read-only canvases do not enable the
+action, and the authoritative backend still validates the subsequent
+plan/commit. The complete UI suite passed (19 files, 220 tests), TypeScript
+typecheck passed, and the production build passed. No audio or machine
+configuration was accessed.
+
 ## 2026-09-15 - direct canvas connection removal
 
 The visual editor now exposes draft edges as deletable React Flow edges. With

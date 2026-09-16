@@ -2,6 +2,13 @@
 
 Updated: 2026-09-15.
 
+- Added UI-02 canvas node deletion on 2026-09-15. Editable nodes can be
+  selected and removed with Delete after confirmation; incident edges are
+  removed from the local draft and normal backend plan/commit validation is
+  preserved. The UI suite passed 220 tests, typecheck passed, and the
+  production build passed. No audio or machine configuration was accessed.
+  Evidence: [M05 visual editor](evidence/M05-visual-editor.md).
+
 - Requalified REC-03 persisted recording metadata on 2026-09-15. Control
   (167), storage (90), and recording (40) tests passed, covering durable
   dither/conversion round-trip, legacy-schema migration defaults, malformed

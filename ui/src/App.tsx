@@ -1071,6 +1071,22 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     return () => globalThis.removeEventListener("audiorouter:insert-processor", handleInsertProcessor);
   }, [backend, draft]);
   useEffect(() => {
+    const handleRemoveNode = (event: Event) => {
+      const nodeId = (event as CustomEvent<{ nodeId?: string }>).detail?.nodeId;
+      if (!nodeId || !backend.connected || !window.confirm("Remove this node and its draft connections?")) return;
+      try {
+        const next = removeDraftNode(draft, nodeId);
+        recordDraftChange(next);
+        setSelectedNodeId(next.nodes[0]?.id ?? "");
+        setActionMessage("Node removed from the draft. Review and plan the changes before committing.");
+      } catch (error) {
+        setActionMessage(formatUiError(error, "Unable to remove node."));
+      }
+    };
+    globalThis.addEventListener("audiorouter:remove-node", handleRemoveNode);
+    return () => globalThis.removeEventListener("audiorouter:remove-node", handleRemoveNode);
+  }, [backend, draft]);
+  useEffect(() => {
     const handleAppendEqPreset = (event: Event) => {
       const detail = (event as CustomEvent<{ presetId?: EqPresetId }>).detail;
       if (detail.presetId) appendPreset(detail.presetId);

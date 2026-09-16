@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deletedConnectionIds, libraryDropPosition } from "./SessionFlowCanvas";
+import { deletedConnectionIds, deletedNodeIds, libraryDropPosition } from "./SessionFlowCanvas";
 
 describe("canvas library drop positions", () => {
   it("converts viewport coordinates into bounded canvas coordinates", () => {
@@ -12,5 +12,9 @@ describe("canvas library drop positions", () => {
 
   it("extracts only non-empty edge identities for draft deletion", () => {
     expect(deletedConnectionIds([{ id: "edge-1" }, { id: "" }, { id: "edge-2" }])).toEqual(["edge-1", "edge-2"]);
+  });
+
+  it("extracts only non-empty node identities for draft deletion", () => {
+    expect(deletedNodeIds([{ id: "node-1" }, { id: "" }, { id: "node-2" }])).toEqual(["node-1", "node-2"]);
   });
 });
