@@ -24,7 +24,8 @@ powershell -ExecutionPolicy Bypass -File .\tools\m06-vst3-sdk\install.ps1
 
 The script is idempotent, initializes the SDK's submodules, and verifies the
 pinned revision and required headers. It refuses to replace a different
-checkout unless `-Force` is supplied. The SDK is source-distributed, so this
+checkout unless `-Force` is supplied, and rejects a destination below a
+reparse-point parent. The SDK is source-distributed, so this
 is the supported project-local installation boundary; it does not register a
 system-wide SDK or install anything into Windows.
 

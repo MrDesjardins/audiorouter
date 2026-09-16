@@ -1,5 +1,12 @@
 # M06 VST3 SDK boundary
 
+## 2026-09-15 - SDK installer provenance regression
+
+The disposable SDK installer acceptance passed its wrong-origin rejection and
+destination-parent reparse-point rejection checks. Temporary Git metadata and
+directories were removed; the real SDK checkout, plugins, driver, and audio
+configuration were untouched.
+
 ## 2026-09-15 - ReaPlugs VST2 matrix re-run
 
 The supplied installed ReaPlugs directory was re-run through the isolated

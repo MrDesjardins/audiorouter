@@ -2,6 +2,12 @@
 
 Updated: 2026-09-15.
 
+- Ran the disposable M06 SDK-installer provenance acceptance. Wrong-origin
+  checkouts and destinations below a reparse-point parent were rejected as
+  intended; all temporary metadata was removed. The real SDK, plugins,
+  driver, and audio configuration were untouched. Evidence: [M06 VST3/VST2]
+  (evidence/M06-vst3-sdk.md).
+
 - Re-ran the VST2 editor-containment acceptance for all nine x64 ReaPlugs
   candidates. The dedicated bounded editor-thread and supervised timeout
   tests passed, including worker termination for non-returning editor cases.
