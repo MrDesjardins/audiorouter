@@ -50,6 +50,15 @@ typedef struct _AR_BRIDGE_LEASE_STATE {
 #define AR_BRIDGE_LEASE_SLOTS 2
 AR_BRIDGE_LEASE_STATE g_BridgeLeases[AR_BRIDGE_LEASE_SLOTS] = {};
 
+static void SetBridgeMappedBytes(
+    _In_ AR_BRIDGE_LEASE_STATE* Lease,
+    _In_ ULONG Bytes)
+{
+    InterlockedExchange(
+        reinterpret_cast<volatile LONG*>(&Lease->MappedBytes),
+        static_cast<LONG>(Bytes));
+}
+
 // This helper is intentionally independent of the sample's timer callback.
 // It is safe for a future PortCls callback: rundown protects the mapped view
 // from CLOSE/expiry/unload, and the callback takes no lease spin lock.
@@ -228,7 +237,7 @@ static void ReleaseLeasesOwnedByFileObject(_In_opt_ PFILE_OBJECT FileObject)
             lease->RundownStarted = rundownStarted;
             lease->Retiring = rundownStarted;
             lease->SectionObject = NULL;
-            lease->MappedBytes = 0;
+            SetBridgeMappedBytes(lease, 0);
             lease->Active = FALSE;
             lease->OwnerFileObject = NULL;
             lease->LastHeartbeat100ns = 0;
@@ -504,7 +513,7 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                         &lease->MappedView, NULL);
                     oldRundownStarted = oldMappedView != NULL;
                     lease->RundownStarted = oldRundownStarted;
-                    lease->MappedBytes = 0;
+                    SetBridgeMappedBytes(lease, 0);
                     lease->SectionObject = NULL;
                     lease->Active = FALSE;
                     lease->OwnerFileObject = NULL;
@@ -526,7 +535,8 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                         lease->Active = TRUE;
                         lease->SectionObject = sectionObject;
                         lease->MappedView = mappedView;
-                        lease->MappedBytes = static_cast<ULONG>(request->MappingBytes);
+                        SetBridgeMappedBytes(
+                            lease, static_cast<ULONG>(request->MappingBytes));
                         InterlockedExchange64(&lease->NextSequence, 0);
                         sectionObject = NULL;
                         mappedView = NULL;
@@ -553,7 +563,7 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                     oldRundownStarted = oldMappedView != NULL;
                     lease->RundownStarted = oldRundownStarted;
                     lease->SectionObject = NULL;
-                    lease->MappedBytes = 0;
+                    SetBridgeMappedBytes(lease, 0);
                     lease->Active = FALSE;
                     lease->OwnerFileObject = NULL;
                     lease->Retiring = oldRundownStarted;
@@ -573,7 +583,7 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                 lease->OwnerFileObject = NULL;
                 lease->LastHeartbeat100ns = 0;
                 lease->SectionObject = NULL;
-                lease->MappedBytes = 0;
+                SetBridgeMappedBytes(lease, 0);
                 status = STATUS_SUCCESS;
             } else {
                 lease->LastHeartbeat100ns = now;
@@ -595,7 +605,8 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                     lease->OwnerFileObject = stack->FileObject;
                     lease->LastHeartbeat100ns = now;
                     lease->SectionObject = sectionObject;
-                    lease->MappedBytes = static_cast<ULONG>(request->MappingBytes);
+                    SetBridgeMappedBytes(
+                        lease, static_cast<ULONG>(request->MappingBytes));
                     InterlockedExchange64(&lease->NextSequence, 0);
                     KeMemoryBarrier();
                     lease->MappedView = mappedView;
@@ -680,7 +691,7 @@ void DeleteBridgeControlDevice()
         g_BridgeLeases[index].Retiring = rundownStarted;
         g_BridgeLeases[index].SectionObject = NULL;
         g_BridgeLeases[index].MappedView = NULL;
-        g_BridgeLeases[index].MappedBytes = 0;
+        SetBridgeMappedBytes(&g_BridgeLeases[index], 0);
         g_BridgeLeases[index].Active = FALSE;
         g_BridgeLeases[index].OwnerFileObject = NULL;
         g_BridgeLeases[index].LastHeartbeat100ns = 0;

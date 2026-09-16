@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Completed the companion half of the driver bridge size-field hardening on
+2026-09-16: every `MappedBytes` publication and teardown write now uses the
+same interlocked access discipline as callback-side reads. Guarded x64 and
+ARM64 M03 driver build/signability qualifications passed after the change.
+This closes the field-level callback/teardown race slice; the sample timer is
+still not wired, and installation, loaded PortCls ownership, production
+signing, and physical-latency evidence remain open.
+
 Hardened driver bridge teardown loads on 2026-09-16 by making callback-side
 `MappedBytes` reads interlocked, matching the control path's pre-rundown clear.
 The first x64 build caught a WDK type mismatch (`C2664`) at that new call;
