@@ -10537,11 +10537,25 @@ impl ControlPlane {
             (endpoint_changes, endpoints)
         };
         if !endpoint_changes.is_empty() {
-            // Only retain observations while an endpoint worker exists. A
-            // later prepare operation resolves the current snapshot itself;
-            // there is no binding to invalidate in the unattached state.
-            if self.native_endpoint_worker.is_some() {
-                self.pending_endpoint_changes.extend(endpoint_changes);
+            // Only retain exact-binding observations while an endpoint worker
+            // exists. Unrelated endpoint churn must not accumulate in the
+            // control plane or invalidate a worker later; a later prepare
+            // operation resolves the current snapshot itself.
+            let relevant_changes = self
+                .native_endpoint_worker
+                .as_ref()
+                .map(|worker| {
+                    endpoint_changes
+                        .iter()
+                        .filter(|change| {
+                            worker.endpoint_bindings_affected_by(std::slice::from_ref(*change))
+                        })
+                        .cloned()
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            if !relevant_changes.is_empty() {
+                self.pending_endpoint_changes.extend(relevant_changes);
             }
             self.record_endpoint_changes(true);
         }

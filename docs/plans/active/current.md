@@ -30,6 +30,13 @@ Windows-audio suites passed (173/82); no endpoint or persistent machine
 configuration changed. The production driver/bridge qualification remains the
 next external-gate task.
 
+Bounded the same retention path on 2026-09-16 by filtering queued observations
+to changes affecting the exact attached capture/render binding. Unrelated
+endpoint churn is reported but is neither retained nor allowed to invalidate
+audio later. Control (173) and Windows-audio (82) tests, strict Clippy, and
+format/diff checks passed; no endpoint or persistent machine configuration
+changed.
+
 Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at the
 current head on 2026-09-16. The run passed toolchain/native probes, x64/ARM64
 driver source builds, read-only endpoint inventory, disposable SysVAD,
