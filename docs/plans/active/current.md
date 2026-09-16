@@ -59,6 +59,14 @@ unchanged media-device state. This advances CAP-11/M02 application routing
 evidence without claiming arbitrary process isolation, PID-reuse recovery,
 physical latency, or production-driver ownership.
 
+Extended CAP-11/M02 application-capture qualification on 2026-09-16 with
+exclude mode against the same exact Voicemeeter process identity. The guarded
+test again passed two bounded start/pump/stop cycles and same-process worker
+restart, restored temporary environment values, and verified unchanged
+media-device state. Both supported process-loopback modes now have current
+user-mode lifecycle evidence; arbitrary process isolation, PID reuse,
+physical latency, and production-driver ownership remain open.
+
 Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at the
 current head on 2026-09-16. The run passed toolchain/native probes, x64/ARM64
 driver source builds, read-only endpoint inventory, disposable SysVAD,

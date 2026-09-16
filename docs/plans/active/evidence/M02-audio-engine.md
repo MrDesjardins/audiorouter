@@ -12,6 +12,13 @@ is application-capture lifecycle evidence; arbitrary process isolation,
 PID-reuse recovery, physical latency, and production-driver ownership remain
 open.
 
+The same guarded wrapper was then run in `exclude` mode against the exact
+Voicemeeter identity. It passed the two bounded start/pump/stop cycles and
+same-process worker restart, restored its temporary environment values, and
+verified unchanged media-device state. Include and exclude lifecycle coverage
+is user-mode process-loopback evidence, not arbitrary isolation or PID-reuse
+qualification.
+
 ## 2026-09-16 - current guarded control-owned VB-Cable lifecycle
 
 `tests/acceptance/m02-control-native-live.ps1 -AllowLiveAudio` passed using
