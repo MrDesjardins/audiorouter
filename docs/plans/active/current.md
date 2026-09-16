@@ -68,6 +68,16 @@ allocated temporary output was absent afterward. This expands compile-only
 architecture evidence; it does not imply ARM64 endpoint, signing, loading, or
 production support.
 
+Requalified `tests/acceptance/safe-all.ps1` at the current head on 2026-09-15.
+The complete guarded chain passed M00/M03 toolchain, native, driver, and
+reference-driver checks; M01/M04; M05 UI tests and temporary production
+builds; M06 SDK/VST3/VST2; M07 headless controls; M08 unsigned artifact
+preparation and verification; 159 normative mappings; and documentation.
+Cleanup removed 15 run-owned temporary children. No driver was installed or
+loaded, no signing or startup policy changed, no plugin was registered, and no
+live audio or persistent machine-audio configuration was touched. The existing
+non-failing Vite bundle-size warning remains recorded.
+
 Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain after
 the driver build-harness change on 2026-09-15. M00/M03 toolchain, native
 compile, AudioRouter driver, and reference-driver checks; M01/M04; M05 UI
