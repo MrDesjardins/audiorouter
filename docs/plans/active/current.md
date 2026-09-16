@@ -2,6 +2,16 @@
 
 Updated: 2026-09-16.
 
+Verified the REC-03 persisted recording conversion/dither metadata contract on
+2026-09-16. Storage migration upgrades legacy `recordings` tables with
+conservative `dither=0` and `conversion='unknown'` defaults, validates and
+round-trips both fields, and control finalization persists the effective WAV
+and FLAC policy. `cargo test --locked -p audiorouter-storage -p
+audiorouter-control -- --test-threads=1` passed (91 storage, 171 control, and
+two expected guarded-live control ignores). This closes the previously stale
+metadata-contract action; the next portable task is endpoint-invalidation and
+rebind evidence through the existing device-lifecycle seam.
+
 Requalified two supplied native x64 VST3 binaries on 2026-09-16 with
 `m06-vst3-worker.ps1 -AllowStateUnsupported -SingleStreamOnly`: TDR Nova and
 COMPER both passed isolated single-stream processing, bounded worker
