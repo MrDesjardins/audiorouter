@@ -1,5 +1,14 @@
 # M05 visual editor evidence
 
+## 2026-09-15 - retain one node in editable drafts
+
+The shared draft mutation now rejects removal of the final node, and both the
+inspector and canvas deletion paths explain that a second node must be added
+first. This keeps the UI selection and graph draft valid before backend Plan
+validation. The complete UI suite passed with 221 tests, TypeScript typecheck
+passed, and the elevated production build passed for 214 modules (with the
+existing chunk-size warning). No audio or machine configuration was changed.
+
 ## 2026-09-15 - canvas node deletion
 
 Editable canvas nodes can now be selected and deleted with the Delete key.

@@ -73,6 +73,11 @@ describe("appendLibraryNode", () => {
     expect(() => removeDraftNode(reduced, "voice")).toThrow("Unknown draft node");
   });
 
+  it("keeps one-node drafts valid", () => {
+    const single = { ...demoSession, nodes: [demoSession.nodes[0]], edges: [] };
+    expect(() => removeDraftNode(single, demoSession.nodes[0].id)).toThrow("at least one node");
+  });
+
   it("duplicates a node without copying edges or changing the revision", () => {
     const connected = appendDraftConnection(demoSession, "mic", "out", "voice", "in");
     const duplicated = duplicateDraftNode(connected, "voice");

@@ -410,6 +410,7 @@ export function removeDraftConnection(session: Session, edgeId: EntityId): Sessi
 /** Removes a draft node and its incident edges without changing the session revision. */
 export function removeDraftNode(session: Session, nodeId: EntityId): Session {
   if (!session.nodes.some((node) => node.id === nodeId)) throw new Error(`Unknown draft node: ${nodeId}`);
+  if (session.nodes.length <= 1) throw new Error("A draft must retain at least one node");
   return {
     ...session,
     nodes: session.nodes.filter((node) => node.id !== nodeId),

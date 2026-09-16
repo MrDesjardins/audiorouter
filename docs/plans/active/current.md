@@ -2,6 +2,12 @@
 
 Updated: 2026-09-15.
 
+- Hardened UI-02 draft deletion on 2026-09-15: the shared draft helper now
+  rejects deleting the final node, and inspector/canvas actions report the
+  actionable reason. UI tests (221), typecheck, and the elevated production
+  build (214 modules; existing chunk-size warning) passed. Evidence: [M05
+  visual editor](evidence/M05-visual-editor.md).
+
 - Added bounded shell backend supervision on 2026-09-15. The owned control
   transport may be reconstructed after two terminal failures with 100/500 ms
   backoff and enters safe mode after a third failure in ten minutes. It does
