@@ -41,9 +41,9 @@ surface is green:
 - The locked Rust workspace passes the current workspace suites and all doc-tests,
   formatting,
   and strict workspace Clippy.
-- M04 passes 32 DSP and 40 recording tests, including the 60-second pitch
+- M04 passes 34 DSP and 40 recording tests, including the 60-second pitch
   boundary cases.
-- M05 passes TypeScript typecheck, 231 UI tests, and a disposable production
+- M05 passes TypeScript typecheck, 234 UI tests, and a disposable production
   build.
 - M06 passes with the pinned local VST3 SDK: 51 SDK self-tests, 1,598 official
   validator tests with zero failures, and the offline native loader.
@@ -82,6 +82,13 @@ x64 prototype and a guarded, build-qualified lifecycle entrypoint for an
 isolated test system; neither is a releasable driver artifact. Do not treat
 VB-Audio, Voicemeeter, Sonar, or another existing virtual device as an
 AudioRouter release artifact.
+
+The current qualification workstation reports Secure Boot enabled and VBS/
+Memory Integrity active. WDK `signtool.exe` is available under the installed
+Windows SDK, but read-only verification of the generated x64 and ARM64
+prototype `.sys` files reports `No signature found`. The packages therefore
+remain unsigned development artifacts; certificate submission, production
+catalog signing, and clean-machine installation evidence are still required.
 
 ## Recovery and uninstall expectations
 

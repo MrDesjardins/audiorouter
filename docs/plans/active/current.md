@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Checked production-driver prerequisites on 2026-09-16 without changing system
+state. Secure Boot is enabled and VBS/Memory Integrity is active. The WDK
+`signtool.exe` is installed, but read-only verification of the generated x64
+and ARM64 prototype packages reported `No signature found` for both `.sys`
+files. This confirms that the current packages are unsigned development
+artifacts; production certificate/catalog signing and isolated install,
+update, rollback, uninstall, and loaded-PortCls evidence remain blocked.
+
 Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
 head `1e9c60ce` on 2026-09-16. Toolchain/native probes, x64/ARM64 driver
 source builds, read-only 31-endpoint inventory, disposable SysVAD, M01/M03/

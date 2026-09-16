@@ -1,5 +1,16 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-16 - security and prototype-signature prerequisite audit
+
+Read-only Windows checks reported Secure Boot enabled and VBS/Memory Integrity
+active. The installed WDK supplied `signtool.exe`; verification of the
+generated x64 and ARM64 `AudioRouterVirtual.sys` files reported `No signature
+found` for each package. No package was installed or loaded and no signing or
+boot policy was changed. The result confirms the current outputs are unsigned
+development artifacts; production certificate/catalog signing, isolated
+installation, loaded PortCls transport, and clean-machine qualification remain
+open.
+
 ## 2026-09-16 - instance-ID bound-order regression correction
 
 The bounded instance-ID decoder now evaluates its length limit before the
