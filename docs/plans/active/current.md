@@ -77,6 +77,14 @@ the before/after media inventory and changed no persistent audio
 configuration. These are process-loopback API/lifecycle gates, not proof of
 project-driver virtual endpoint behavior.
 
+Re-ran the authorized Rust adapter route on 2026-09-16 against the exact
+VB-Cable IDs. The 500 ms run negotiated 48 kHz and 128-frame quanta, captured
+24,000 frames, routed 23,936 frames through 187 graph blocks, recorded zero
+deadline misses, and reported a 65,536 ns p999 processing bound against a
+2,666,667 ns graph deadline. Before/after media identity and state matched;
+defaults, volume, mute, privacy, driver, signing, and startup configuration
+were unchanged.
+
 The dedicated VST2 editor-containment harness passed all 9 x64 ReaPlugs
 fixtures again on 2026-09-16 after its temporary fixture environment was
 hardened to check exact restoration, including absent-variable state. Both
