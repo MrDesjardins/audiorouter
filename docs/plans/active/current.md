@@ -39,6 +39,15 @@ resolved that harness limitation. Cleanup removed 15 run-owned temporary
 children. No driver was installed or loaded, no plugin/startup registration
 occurred, and no persistent audio configuration changed.
 
+Re-ran `safe-all.ps1` elevated at `a393ca82` on 2026-09-16 after wiring the
+owned-device inventory into ControlPlane. The complete chain passed again,
+including the 173-test control suite (171 passed, 2 guarded live tests
+ignored), 80 Windows-audio tests, all UI/plugin/driver/reference checks, 159
+traceability mappings, and 54 Markdown files with 218 local links. Cleanup
+removed 15 run-owned temporary children. No Software Device API create,
+driver installation/loading, plugin/startup registration, or persistent audio
+configuration action occurred.
+
 Added the first package-level prerequisite for managed software-device buses
 on 2026-09-15: `AudioRouterVirtual.inx` now matches the explicit
 `SWD\\AudioRouterVirtual` hardware ID used by a future Software Device API
