@@ -957,12 +957,13 @@ qualification.
 
 ## Next implementation slice: production driver/bridge qualification (M03)
 
-The backend-owned tray shutdown slice is complete and pushed as `acfa38f2`.
-The user-mode VB-Cable route, cross-rate/process-loopback gates, and visual
-editor mutation boundaries are already evidenced. The next actionable slice
-is production driver/bridge qualification: move from the non-installing WDK
-prototype toward managed bus provisioning and loaded PortCls ownership while
-preserving the machine's current configuration.
+The backend-owned tray shutdown slice, user-mode VB-Cable route,
+cross-rate/process-loopback gates, visual editor mutation boundaries, and
+managed Software Device control-plane seam are already implemented and
+evidenced. The next actionable slice is production driver/bridge
+qualification: move from the non-installing WDK prototype toward managed bus
+provisioning and loaded PortCls ownership while preserving the machine's
+current configuration.
 
 Requirement IDs: VDEV-01, VDEV-02, VDEV-04, VDEV-07, VDEV-08, VDEV-09,
 VDEV-12, SEC-08, QUAL-01.
@@ -971,19 +972,33 @@ production-owned PortCls driver design and signing path for native endpoint
 qualification. Portable verification does not require opening an endpoint or
 changing persistent machine audio configuration.
 
-Ordered implementation tasks for this slice:
+Completed implementation tasks for this slice:
 
-1. Add an explicit Windows-only ControlPlane owner for managed software-device
-   handles, initialized on both memory and storage-backed construction paths.
-2. Expose internal provision/remove operations that validate bus state before
-   native access, persist the returned identity transactionally, and roll back
-   desired state on storage failure. Do not call them from ordinary graph
-   apply/list paths yet.
-3. Add no-side-effect missing-bus and rollback tests, run focused Rust/UI and
-   full guarded acceptance, then record evidence and push.
+1. The Windows-only ControlPlane owner for managed Software Device handles is
+   initialized on memory and storage-backed construction paths.
+2. Explicit provision/remove operations validate bus state before native
+   access, persist the returned identity transactionally, and compensate on
+   storage failure. CLI and MCP expose the same authorized/idempotent boundary;
+   ordinary graph, list, and startup paths remain non-provisioning.
+3. Missing-bus, disabled-bus, untracked-removal, persistence, capacity, and
+   full guarded acceptance tests pass. Evidence is recorded in
+   `evidence/M03-virtual-routing.md` and the current M08/M03 evidence files.
 
-Rollback: revert the implementation commit; the owner is opt-in and no
-machine device is created by existing startup, list, plan, or apply paths.
+Remaining tasks for this slice:
+
+1. Qualify the project driver on an isolated Windows test system with loaded
+   PortCls endpoints and the bridge callback under real ownership, including
+   before/after identity, lease expiry, restart, and bounded-latency evidence.
+2. Obtain and validate the production signing/package path under normal Secure
+   Boot and Memory Integrity settings; test install, update, rollback, and
+   uninstall without affecting unrelated devices.
+3. If those external gates are unavailable, preserve the blocked evidence and
+   continue only with independent portable tests or attended UI/accessibility
+   validation when a targetable desktop surface exists.
+
+Rollback: revert the implementation commits or remove only disposable test
+artifacts. The current startup, list, plan, and apply paths do not create a
+machine device automatically, and no production driver has been installed.
 
 Reconciled the stale REC-03 checkpoint on 2026-09-15: the current tree already
 contains the versioned `dither` and `conversion` recording metadata in the
