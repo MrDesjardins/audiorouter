@@ -2,6 +2,14 @@
 
 Updated: 2026-09-15.
 
+- Re-ran the authorized M03 build-only acceptance with VS Community
+  2026/MSBuild 18.9.1 and WDK 10.0.28000.0. All x64 driver, package/catalog,
+  and include targets completed with zero signability errors or warnings;
+  disposable output was removed. No driver was installed or loaded and no
+  machine audio configuration changed. Evidence: [M03 driver prototype]
+  (evidence/M03-driver-prototype.md). Loaded PortCls/data-path and
+  production-signing qualification remain open.
+
 - Re-ran `cargo test --workspace --locked --all-targets --
   --test-threads=1` after the STATE-10 post-clear supervision correction;
   every workspace target passed, including the 78-test Windows-audio suite.

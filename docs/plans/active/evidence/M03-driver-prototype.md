@@ -1,5 +1,15 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-15 - non-installing WDK qualification re-run
+
+The authorized build-only acceptance was re-run with Visual Studio Community
+2026/MSBuild 18.9.1 and WDK 10.0.28000.0. Utilities, Filters, Main,
+package/catalog, and Inc completed for x64; catalog signability reported no
+errors or warnings. The script removed disposable output. No driver was
+installed or loaded, no signing or boot policy changed, and no audio-device
+configuration was touched. Loaded PortCls/data-path and production-signing
+evidence remain open.
+
 ## 2026-09-15 - non-installing WDK qualification
 
 Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
