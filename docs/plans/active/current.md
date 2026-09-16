@@ -45,6 +45,13 @@ zero deadline-lateness samples. Processing telemetry accounted for all 192
 blocks; temporary streams and generated probe files were cleaned and media
 state remained unchanged. This strengthens the user-mode route gate only.
 
+Re-ran the control-owned VB-Cable route lifecycle acceptance on 2026-09-16
+with the exact existing endpoint IDs. One generation completed at 48 kHz with
+51 packets, 24,480 captured frames, 191 processing quanta, 24,448 rendered
+frames, and 97,836 recording bytes. The worker reported one successful start,
+stop, and reset, plus one deliberately rejected stale pump; endpoint/media
+state and all persistent defaults remained unchanged after detach and cleanup.
+
 Re-ran the authorized Rust process-loopback acceptance on 2026-09-16 at the
 current head. Both include and exclude modes completed at source 44.1 kHz and
 engine 48 kHz with 25 packets, 11,025 source frames, 11,904 engine frames,
