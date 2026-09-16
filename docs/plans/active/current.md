@@ -26,6 +26,13 @@ chunk-size warning remains non-failing. No driver was installed or loaded, no
 plugin or startup registration occurred, and no persistent audio
 configuration changed.
 
+Corrected the M03 acceptance report on 2026-09-15 so its scope line names the
+requested architecture rather than always claiming x64. Focused non-installing
+x64 and ARM64 runs both passed and reported their matching platform. This is
+evidence-reporting correctness only; it does not expand the prototype into a
+loaded driver or close managed bus provisioning, signing, or clean-machine
+qualification.
+
 ## Next implementation slice: production driver/bridge qualification (M03)
 
 The backend-owned tray shutdown slice is complete and pushed as `acfa38f2`.

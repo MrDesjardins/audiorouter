@@ -390,4 +390,4 @@ if ($waitOffset -lt 0 -or $unmapOffset -lt 0 -or $waitOffset -ge $unmapOffset) {
 }
 
 Write-Output 'M03 AudioRouter virtual-driver build acceptance passed'
-Write-Output 'Scope: project-owned x64 WDK compile/signability/catalog qualification only; no installation, loading, signing-mode, boot-policy, service, or audio configuration action.'
+Write-Output "Scope: project-owned $Platform WDK compile/signability/catalog qualification only; no installation, loading, signing-mode, boot-policy, service, or audio configuration action."
