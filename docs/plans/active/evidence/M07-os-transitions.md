@@ -15,6 +15,9 @@ when an active recorder still needs explicit finalization, preserving the
 running session rather than silently losing recording data. A successful sleep
 stores only eligible portable sessions; resume consumes that bounded set and
 returns `revalidateBeforeRestart` without starting audio itself.
+On resume, an existing endpoint monitor is force-refreshed through its
+read-only snapshot path before the response is returned; the response reports
+`endpointInventory: refreshed` or `notStarted`.
 
 The same boundary is exposed as the authenticated, idempotent
 `system.osTransition` JSON-RPC method so a native notification adapter can use

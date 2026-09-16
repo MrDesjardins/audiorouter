@@ -2286,9 +2286,10 @@ fn method_output_schema(name: &str) -> Value {
             "properties": {
                 "transition": { "enum": ["lock", "signOut", "sleep", "resume"] },
                 "action": { "enum": ["keepRunning", "stopAndRelease", "revalidateBeforeRestart", "remainStopped"] },
+                "endpointInventory": { "enum": ["refreshed", "notStarted"] },
                 "sessionIds": { "type": "array", "maxItems": audiorouter_domain::MAX_ACTIVE_SESSIONS, "items": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } }
             },
-            "required": ["transition", "action", "sessionIds"],
+            "required": ["transition", "action", "endpointInventory", "sessionIds"],
             "additionalProperties": false
         }),
         "recorders.create" => json!({
@@ -7138,6 +7139,7 @@ impl ControlPlane {
             OsTransition::Lock => Ok(json!({
                 "transition": "lock",
                 "action": "keepRunning",
+                "endpointInventory": "notStarted",
                 "sessionIds": decision.session_ids,
             })),
             OsTransition::SignOut | OsTransition::Sleep => {
@@ -7159,15 +7161,23 @@ impl ControlPlane {
                 Ok(json!({
                     "transition": if transition == OsTransition::Sleep { "sleep" } else { "signOut" },
                     "action": "stopAndRelease",
+                    "endpointInventory": "notStarted",
                     "sessionIds": decision.session_ids,
                 }))
             }
             OsTransition::Resume => {
+                let endpoint_inventory = if let Some(monitor) = self.endpoint_monitor.as_mut() {
+                    monitor.refresh_changes().map_err(audio_control_error)?;
+                    "refreshed"
+                } else {
+                    "notStarted"
+                };
                 let session_ids = std::mem::take(&mut self.os_suspended_sessions);
                 let decision = plan_os_transition(transition, &session_ids, &[], &[]);
                 Ok(json!({
                     "transition": "resume",
                     "action": if decision.session_ids.is_empty() { "remainStopped" } else { "revalidateBeforeRestart" },
+                    "endpointInventory": endpoint_inventory,
                     "sessionIds": decision.session_ids,
                 }))
             }

@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Added read-only endpoint re-enumeration to STATE-11 resume handling on
+  2026-09-15. `system.osTransition` now refreshes an existing endpoint monitor
+  before returning restart candidates and reports `endpointInventory`; it
+  still requires exact binding validation before any restart. Focused control
+  tests and strict native-shell Clippy passed. Evidence:
+  [M07 OS-transition policy evidence](evidence/M07-os-transitions.md). No
+  stream was opened and no machine audio configuration changed. Next action:
+  continue the next safe M03/M07 delivery slice.
+
 - Fixed a durable transition-operation collision on 2026-09-15. Native shell
   transition requests now qualify their idempotency keys with the shell
   process ID, timestamp, and event sequence, so a later shell instance cannot
