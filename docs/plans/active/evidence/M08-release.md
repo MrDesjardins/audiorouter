@@ -1,5 +1,15 @@
 # M08 release evidence
 
+## 2026-09-16 - current-head unsigned NSIS bundler smoke
+
+The Tauri 2.11.4 CLI produced the unsigned x64
+`AudioRouter_0.1.0_x64-setup.exe` bundle from the current checkout with
+`--debug --no-sign --ci --bundles nsis`. The generated installer was 4,755,500
+bytes, and the exact disposable `src-tauri/target/debug/bundle/nsis` output
+was removed afterward. The installer was not executed or installed; signing,
+driver/package installation, and clean-machine qualification remain open. The
+build changed no audio endpoint or persistent machine configuration.
+
 ## 2026-09-15 - current-head unsigned artifact requalification
 
 The locked release-preparation flow completed into the new disposable
