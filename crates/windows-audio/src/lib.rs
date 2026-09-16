@@ -1777,6 +1777,131 @@ impl Float32PacketAccumulator {
     }
 }
 
+/// Fixed-capacity interleaved linear resampler for an adapter boundary whose
+/// source and destination clocks use different rates. The FIFO and phase are
+/// retained across calls, so packet and quantum boundaries cannot reset the
+/// interpolation state. Construction is control-plane work; `push` and
+/// `pop_into` are bounded and allocation-free.
+pub struct InterleavedStreamingResampler {
+    channels: usize,
+    capacity_frames: usize,
+    source_rate_hz: u32,
+    destination_rate_hz: u32,
+    fifo: Vec<f32>,
+    read_frame: usize,
+    queued_frames: usize,
+    phase: f64,
+}
+
+impl InterleavedStreamingResampler {
+    pub fn new(
+        channels: usize,
+        capacity_frames: usize,
+        source_rate_hz: u32,
+        destination_rate_hz: u32,
+    ) -> Result<Self, AudioError> {
+        if channels == 0
+            || !(1..=MAX_FLOAT32_ACCUMULATOR_FRAMES).contains(&capacity_frames)
+            || !(8_000..=192_000).contains(&source_rate_hz)
+            || !(8_000..=192_000).contains(&destination_rate_hz)
+        {
+            return Err(AudioError::InvalidFrameSize);
+        }
+        let samples = capacity_frames
+            .checked_mul(channels)
+            .ok_or(AudioError::InvalidFrameSize)?;
+        Ok(Self {
+            channels,
+            capacity_frames,
+            source_rate_hz,
+            destination_rate_hz,
+            fifo: vec![0.0; samples],
+            read_frame: 0,
+            queued_frames: 0,
+            phase: 0.0,
+        })
+    }
+
+    pub fn queued_frames(&self) -> usize {
+        self.queued_frames
+    }
+
+    pub fn source_rate_hz(&self) -> u32 {
+        self.source_rate_hz
+    }
+
+    pub fn destination_rate_hz(&self) -> u32 {
+        self.destination_rate_hz
+    }
+
+    pub fn reset(&mut self) {
+        self.read_frame = 0;
+        self.queued_frames = 0;
+        self.phase = 0.0;
+    }
+
+    /// Append complete interleaved float32 frames. The whole input is
+    /// admitted or rejected; partial admission would make packet ownership
+    /// ambiguous for the realtime caller.
+    pub fn push(&mut self, source: &[f32]) -> Result<usize, AudioError> {
+        if source.len() % self.channels != 0 {
+            return Err(AudioError::InvalidFrameSize);
+        }
+        let frames = source.len() / self.channels;
+        if frames > self.capacity_frames.saturating_sub(self.queued_frames) {
+            return Ok(0);
+        }
+        for frame in 0..frames {
+            let destination = (self.read_frame + self.queued_frames + frame) % self.capacity_frames;
+            let destination_start = destination * self.channels;
+            let source_start = frame * self.channels;
+            for channel in 0..self.channels {
+                let sample = source[source_start + channel];
+                self.fifo[destination_start + channel] =
+                    if sample.is_finite() { sample } else { 0.0 };
+            }
+        }
+        self.queued_frames += frames;
+        Ok(frames)
+    }
+
+    /// Produce exactly `destination.len() / channels` frames, or clear the
+    /// destination and return zero when interpolation needs more source data.
+    pub fn pop_into(&mut self, destination: &mut [f32]) -> Result<usize, AudioError> {
+        if destination.len() % self.channels != 0 {
+            return Err(AudioError::InvalidFrameSize);
+        }
+        destination.fill(0.0);
+        let frames = destination.len() / self.channels;
+        let ratio = f64::from(self.source_rate_hz) / f64::from(self.destination_rate_hz);
+        for frame in 0..frames {
+            let position = self.phase + frame as f64 * ratio;
+            let lower = position.floor() as usize;
+            if lower + 1 >= self.queued_frames {
+                return Ok(0);
+            }
+        }
+        for frame in 0..frames {
+            let position = self.phase + frame as f64 * ratio;
+            let lower = position.floor() as usize;
+            let fraction = (position - lower as f64) as f32;
+            let first_frame = (self.read_frame + lower) % self.capacity_frames;
+            let second_frame = (self.read_frame + lower + 1) % self.capacity_frames;
+            for channel in 0..self.channels {
+                let first = self.fifo[first_frame * self.channels + channel];
+                let second = self.fifo[second_frame * self.channels + channel];
+                destination[frame * self.channels + channel] = first + (second - first) * fraction;
+            }
+        }
+        self.phase += frames as f64 * ratio;
+        let consumed = (self.phase.floor() as usize).min(self.queued_frames.saturating_sub(1));
+        self.read_frame = (self.read_frame + consumed) % self.capacity_frames;
+        self.queued_frames -= consumed;
+        self.phase -= consumed as f64;
+        Ok(frames)
+    }
+}
+
 /// Result of one nonblocking endpoint pump. Counts are control/diagnostic
 /// data; the pump itself does not log or allocate.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -6215,6 +6340,40 @@ mod tests {
         assert_eq!(accumulator.pending_frames(), 0);
         let mut block = audiorouter_engine::AudioBlock::new(1, 4).unwrap();
         assert!(!accumulator.pop_into(&mut block).unwrap());
+    }
+
+    #[test]
+    fn interleaved_resampler_retains_phase_across_source_packets() {
+        let mut resampler = InterleavedStreamingResampler::new(1, 8, 8_000, 16_000).unwrap();
+        let mut output = [0.0; 4];
+        assert_eq!(resampler.push(&[0.0, 1.0, 2.0, 3.0, 4.0]).unwrap(), 5);
+        assert_eq!(resampler.pop_into(&mut output).unwrap(), 4);
+        assert_eq!(output, [0.0, 0.5, 1.0, 1.5]);
+        assert_eq!(resampler.queued_frames(), 3);
+        assert_eq!(resampler.push(&[5.0, 6.0]).unwrap(), 2);
+        assert_eq!(resampler.pop_into(&mut output).unwrap(), 4);
+        assert_eq!(output, [2.0, 2.5, 3.0, 3.5]);
+    }
+
+    #[test]
+    fn interleaved_resampler_is_bounded_and_repairs_nonfinite_samples() {
+        let mut resampler = InterleavedStreamingResampler::new(2, 3, 48_000, 44_100).unwrap();
+        assert_eq!(
+            resampler
+                .push(&[0.0, f32::NAN, 1.0, 2.0, 3.0, 4.0])
+                .unwrap(),
+            3
+        );
+        assert_eq!(resampler.push(&[5.0, 6.0]).unwrap(), 0);
+        let mut output = [9.0; 6];
+        assert_eq!(resampler.pop_into(&mut output).unwrap(), 0);
+        assert_eq!(output, [0.0; 6]);
+        assert!(matches!(
+            resampler.push(&[1.0]),
+            Err(AudioError::InvalidFrameSize)
+        ));
+        resampler.reset();
+        assert_eq!(resampler.queued_frames(), 0);
     }
 
     #[test]

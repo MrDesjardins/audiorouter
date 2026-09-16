@@ -496,6 +496,12 @@ traceability, and documentation stages. It deliberately did not install or
 load a driver or change machine audio configuration. Cross-rate resampling and
 physical-latency qualification remain open.
 
+On 2026-09-15, `InterleavedStreamingResampler` was added at the Windows
+adapter boundary. Its 76-test suite covers phase retention across packets,
+bounded all-or-nothing admission, finite-sample repair, atomic underflow
+silence, and reset. The primitive is not yet connected to live endpoint pump
+I/O, so this evidence does not claim cross-rate device routing.
+
 ## 2026-09-08 - Differing-rate route requalification
 
 The guarded `m02-rust-adapter-route-live.ps1 -AllowLiveAudio
