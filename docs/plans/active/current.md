@@ -2,6 +2,15 @@
 
 Updated: 2026-09-16.
 
+Completed a locked sequential all-features workspace run at the current
+head on 2026-09-16. The authoritative log recorded 762 passed tests and 13
+expected fixture/desktop-gated ignores across CLI/MCP (36/3), control (171,
+2 guarded live ignores), domain (65), DSP (32), engine (111), plugin-host
+(70 plus 35 worker-process tests and 11 ignores), protocol (8), recording
+(40), storage (91), transport (19), and Windows audio (81); all workspace
+doc-tests passed. No endpoint, driver, plugin registration, or persistent
+machine audio configuration was accessed.
+
 Requalified the supplied installed ReaPlugs VST2 directory on 2026-09-16.
 Seven compatible x64 audio effects passed contained worker processing at
 44.1, 48, and 96 kHz (21 combinations), with parameter-offset, editor

@@ -1,5 +1,16 @@
 # M07 automation and recovery evidence
 
+## 2026-09-16 - locked all-features workspace requalification
+
+`cargo test --workspace --locked --all-features -- --test-threads=1`
+completed with 762 passed tests and 13 expected fixture/desktop-gated ignored
+tests. Package coverage included CLI/MCP (36/3), control (171 with two
+guarded live ignores), domain (65), DSP (32), engine (111), plugin-host (70
+plus 35 worker-process tests and 11 ignores), protocol (8), recording (40),
+storage (91), transport (19), and Windows audio (81); all doc-test targets
+passed. No audio endpoint, driver, plugin registration, or persistent machine
+audio configuration was accessed.
+
 ## 2026-09-15 - integrated headless gate after resilience regressions
 
 The `tests/acceptance/m07-headless.ps1` gate passed after the 100-cycle
