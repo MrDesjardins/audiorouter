@@ -37,6 +37,14 @@ state remained unchanged. This is current user-mode routing evidence only;
 managed-driver installation, loaded PortCls transport, and physical latency
 remain separate gates.
 
+Re-ran the guarded VB-Cable route acceptance on 2026-09-16. The existing
+`CABLE Output (VB-Audio Virtual Cable)` capture to `CABLE Input (VB-Audio
+Virtual Cable)` render route completed at 48 kHz stereo with 24,576 captured
+frames, 24,064 routed frames, 192 graph blocks, zero deadline misses, and
+zero deadline-lateness samples. Processing telemetry accounted for all 192
+blocks; temporary streams and generated probe files were cleaned and media
+state remained unchanged. This strengthens the user-mode route gate only.
+
 Re-ran the authorized Rust process-loopback acceptance on 2026-09-16 at the
 current head. Both include and exclude modes completed at source 44.1 kHz and
 engine 48 kHz with 25 packets, 11,025 source frames, 11,904 engine frames,
