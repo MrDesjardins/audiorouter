@@ -2,6 +2,18 @@
 
 Updated: 2026-09-16.
 
+Requalified the elevated guarded `tests/acceptance/safe-all.ps1` chain at
+head `16d3835e` on 2026-09-16. Toolchain/native probes, x64/ARM64 driver
+source builds, read-only 31-endpoint inventory, disposable SysVAD, M01/M03/
+M04/M05/M06/M07, unsigned M08 artifacts and NSIS smoke, frontend shell RPC,
+159 traceability mappings, and documentation all passed. The run included 34
+DSP, 40 recording, 233 UI, 36 CLI, 3 MCP, 173 control, 70 plugin-host, and 13
+worker-process tests; the disposable unsigned installer was 4,763,039 bytes.
+Cleanup removed 15 run-owned temporary children. No driver was installed or
+loaded, no plugin or startup registration occurred, and no persistent audio
+configuration changed. Production driver activation/signing, clean-machine,
+physical-latency, actual transition-rebind, and attended UI gates remain open.
+
 Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at the
 current head on 2026-09-16. The run passed toolchain/native probes, x64/ARM64
 driver source builds, read-only endpoint inventory, disposable SysVAD,

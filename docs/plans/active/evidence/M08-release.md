@@ -1,5 +1,21 @@
 # M08 release evidence
 
+## 2026-09-16 - elevated complete guarded acceptance at `16d3835e`
+
+The elevated `tests/acceptance/safe-all.ps1` chain passed with exit code 0 at
+the rebind/UI head. It covered M00/M03 toolchain, native, AudioRouter x64 and
+ARM64 source, Software Device dry-run, read-only 31-endpoint inventory,
+disposable SysVAD, M01, M04 (34 DSP and 40 recording tests), M05 (233 UI tests
+and production builds), M06 VST3/VST2 SDK and worker gates, M07 (36 CLI, 3
+MCP, 173 control, 70 plugin-host, and 13 worker-process tests), unsigned M08
+artifact preparation, unsigned x64 NSIS smoke, 159 traceability mappings, and
+54 Markdown files with 218 local links. The generated installer was
+`AudioRouter_0.1.0_x64-setup.exe` at 4,763,039 bytes. Cleanup removed 15
+run-owned temporary children. No driver was installed or loaded, no plugin or
+startup registration occurred, and no persistent audio configuration changed.
+Signing, installation, clean-machine, physical-latency, actual transition
+rebind, and attended UI/accessibility gates remain open.
+
 ## 2026-09-16 - complete guarded acceptance at `299b0410`
 
 The current-head `tests/acceptance/safe-all.ps1` run passed with exit code 0.
