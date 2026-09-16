@@ -46,8 +46,9 @@ $manifest = Get-Content -LiteralPath $manifestFile -Raw | ConvertFrom-Json
 if ($manifest.format -ne "audiorouter.release-preparation" -or $manifest.schemaVersion -ne 1) {
     throw "unsupported release manifest format or schema version"
 }
-if ($manifest.architecture -ne "x64" -or $manifest.sourceRevision -notmatch '^[0-9a-f]{40}$') {
-    throw "release manifest has invalid architecture or source revision"
+if ($manifest.version -notmatch '^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$' -or
+    $manifest.architecture -ne "x64" -or $manifest.sourceRevision -notmatch '^[0-9a-f]{40}$') {
+    throw "release manifest has invalid version, architecture, or source revision"
 }
 if ($manifest.signed -ne $false -or $manifest.publicationReady -ne $false) {
     throw "unsigned preparation manifest cannot claim signed or publication-ready status"

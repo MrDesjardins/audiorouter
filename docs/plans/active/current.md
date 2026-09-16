@@ -2,6 +2,13 @@
 
 Updated: 2026-09-16.
 
+Added M08 release-version provenance on 2026-09-16. Artifact preparation now
+cross-checks the Tauri shell version against `src-tauri/Cargo.toml`, validates
+semantic-version shape, and records the version in `release-manifest.json`;
+artifact verification and its fixtures require the same bounded version
+contract. Release verifier and preparation path-safety tests passed. Full
+artifact preparation remains to be run from a clean tree.
+
 Added an executable M03 regression on 2026-09-16 for incomplete driver
 packages. The x64 and ARM64 acceptance scripts now copy each generated package
 to a disposable in-repository subdirectory, remove its driver binary, and

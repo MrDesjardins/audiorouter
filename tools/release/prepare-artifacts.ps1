@@ -75,6 +75,16 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "UI lockfile is not valid JSON: $uiLock"
     }
+    $shellConfig = Get-Content -LiteralPath (Join-Path $workspace "src-tauri/tauri.conf.json") -Raw | ConvertFrom-Json
+    $appVersion = [string]$shellConfig.version
+    $cargoText = Get-Content -LiteralPath (Join-Path $workspace "src-tauri/Cargo.toml") -Raw
+    $cargoVersionMatch = [regex]::Match($cargoText, '(?m)^version\s*=\s*"([^"]+)"')
+    if ([string]::IsNullOrWhiteSpace($appVersion) -or
+        -not $cargoVersionMatch.Success -or
+        $cargoVersionMatch.Groups[1].Value -ne $appVersion -or
+        $appVersion -notmatch '^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$') {
+        throw "release application version is missing, invalid, or mismatched between Tauri and Cargo metadata"
+    }
 
     New-Item -ItemType Directory -Path $output | Out-Null
 
@@ -141,6 +151,7 @@ try {
     $manifest = [ordered]@{
         format = "audiorouter.release-preparation"
         schemaVersion = 1
+        version = $appVersion
         architecture = "x64"
         sourceRevision = $revision
         build = [ordered]@{

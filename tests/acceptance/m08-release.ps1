@@ -17,6 +17,10 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "release verification failed with exit code $LASTEXITCODE" }
 
     $manifest = Get-Content -LiteralPath (Join-Path $output "release-manifest.json") -Raw | ConvertFrom-Json
+    $expectedVersion = ([string](Get-Content -LiteralPath (Join-Path $repoRoot 'src-tauri/tauri.conf.json') -Raw | ConvertFrom-Json).version)
+    if ($manifest.version -ne $expectedVersion) {
+        throw "release manifest version does not match Tauri package version"
+    }
     if ($manifest.signed -ne $false -or $manifest.publicationReady -ne $false) {
         throw "unsigned preparation must not claim signed or publication-ready status"
     }

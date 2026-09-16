@@ -41,6 +41,7 @@ try {
     $manifest = [ordered]@{
         format = "audiorouter.release-preparation"
         schemaVersion = 1
+        version = "0.1.0"
         architecture = "x64"
         sourceRevision = ("a" * 40)
         build = [ordered]@{ profile = "release"; target = "x86_64-pc-windows-msvc"; rustc = "1.96.0"; cargo = "cargo 1.96.0" }
@@ -83,6 +84,7 @@ try {
     $withoutNotices = [ordered]@{
         format = "audiorouter.release-preparation"
         schemaVersion = 1
+        version = "0.1.0"
         architecture = "x64"
         sourceRevision = ("c" * 40)
         artifacts = @([ordered]@{ file = "sample.bin"; sha256 = $hash; bytes = 5 })
@@ -109,6 +111,7 @@ try {
         $linkManifest = [ordered]@{
             format = "audiorouter.release-preparation"
             schemaVersion = 1
+            version = "0.1.0"
             architecture = "x64"
             sourceRevision = ("b" * 40)
             artifacts = @([ordered]@{ file = "linked.bin"; sha256 = $linkHash; bytes = (Get-Item -LiteralPath $linkPath).Length }) + $linkRequiredEntries + @(
