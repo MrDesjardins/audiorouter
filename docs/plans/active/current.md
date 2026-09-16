@@ -2,6 +2,16 @@
 
 Updated: 2026-09-16.
 
+Fixed and qualified an M03 lifecycle-script defect on 2026-09-16. The guarded
+uninstall probe exposed that PowerShell's `FileInfo.Parent` path walk stopped
+after the INF leaf, incorrectly rejecting a valid in-package path before the
+intended missing-state refusal. `manage.ps1` now walks parents with explicit
+`System.IO` paths; `m03-driver-build.ps1` captures the expected child rejection
+without treating its stderr as a harness failure. Both x64 and ARM64
+non-installing WDK qualifications passed, including the regression. No
+`pnputil`, driver installation/removal, endpoint, or audio configuration action
+occurred.
+
 Audited the owned WaveRT prototype source on 2026-09-16 after the boundary
 requalification. The remaining `STATUS_NOT_IMPLEMENTED` returns are confined
 to optional clock/position-register and PortCls power callbacks or the sample's

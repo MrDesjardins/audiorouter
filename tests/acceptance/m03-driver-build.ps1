@@ -56,6 +56,33 @@ foreach ($required in @(
     }
 }
 
+# Exercise the lifecycle guard with an in-package file but no state record.
+# This must reach the precise missing-state refusal after walking the file's
+# parent chain, and must never invoke pnputil or delete a package.
+$guardState = Join-Path ([IO.Path]::GetTempPath()) ('audiorouter-driver-guard-' + [guid]::NewGuid().ToString('N') + '.json')
+$guardInf = Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/AudioRouterVirtual.inx'
+$guardStdout = [IO.Path]::GetTempFileName()
+$guardStderr = [IO.Path]::GetTempFileName()
+try {
+    $guardProcess = Start-Process -FilePath powershell.exe -ArgumentList @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $manage,
+        '-Uninstall', '-AllowDriverInstall', '-Inf', $guardInf, '-State', $guardState
+    ) -RedirectStandardOutput $guardStdout -RedirectStandardError $guardStderr -PassThru
+    $guardProcess.WaitForExit()
+    $guardProcess.Refresh()
+    $guardOutput = ((Get-Content -LiteralPath $guardStdout -Raw -ErrorAction SilentlyContinue) +
+        (Get-Content -LiteralPath $guardStderr -Raw -ErrorAction SilentlyContinue))
+    if ($guardProcess.ExitCode -eq 0 -or $guardOutput -notmatch 'No lifecycle state exists') {
+        throw "driver lifecycle guard did not refuse an untracked package: $guardOutput"
+    }
+} finally {
+    foreach ($guardPath in @($guardState, $guardStdout, $guardStderr)) {
+        if (Test-Path -LiteralPath $guardPath) {
+            Remove-Item -LiteralPath $guardPath -Force
+        }
+    }
+}
+
 $buildOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $build -Platform $Platform 2>&1)
 if ($LASTEXITCODE -ne 0) {
     throw "AudioRouter virtual-driver build failed with exit code $LASTEXITCODE"

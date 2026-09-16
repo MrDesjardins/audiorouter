@@ -26,16 +26,19 @@ function Assert-NoReparsePath {
         [Parameter(Mandatory = $true)]
         [string] $StopAt
     )
-    $current = Get-Item -LiteralPath $Path -Force
-    while ($null -ne $current) {
+    $currentPath = [IO.Path]::GetFullPath($Path)
+    $stopPath = [IO.Path]::GetFullPath($StopAt)
+    while ($null -ne $currentPath) {
+        $current = Get-Item -LiteralPath $currentPath -Force
         if (($current.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
             throw "The driver package path cannot contain a reparse point: $($current.FullName)"
         }
-        if ([string]::Equals($current.FullName.TrimEnd('\'), $StopAt.TrimEnd('\'),
+        if ([string]::Equals($currentPath.TrimEnd('\'), $stopPath.TrimEnd('\'),
                 [StringComparison]::OrdinalIgnoreCase)) {
             return
         }
-        $current = $current.Parent
+        $parent = [IO.Directory]::GetParent($currentPath)
+        $currentPath = if ($null -eq $parent) { $null } else { $parent.FullName }
     }
     throw "The driver package path does not resolve beneath $StopAt."
 }
