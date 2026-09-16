@@ -68,6 +68,15 @@ allocated temporary output was absent afterward. This expands compile-only
 architecture evidence; it does not imply ARM64 endpoint, signing, loading, or
 production support.
 
+Re-ran the authorized guarded native VB-Cable lifecycle acceptance on
+2026-09-15 with `-AllowLiveAudio`. The exact active endpoint pair completed
+500 ms with 24,000 captured frames, 187 processed quanta, and 23,936 rendered
+frames. Start/stop/detach cleanup passed and endpoint/media state remained
+unchanged; no defaults, volume, mute, privacy, driver, signing, startup, or
+persistent audio configuration changed. Evidence: [M02 audio engine]
+(evidence/M02-audio-engine.md). This remains existing-device user-mode
+evidence, not loaded-driver or physical-latency qualification.
+
 Corrected platform-specific artifact discovery in `build.ps1` on 2026-09-15.
 The previous recursive search could report a stale artifact from another
 architecture; discovery now stays under the requested `x64` or `ARM64` output

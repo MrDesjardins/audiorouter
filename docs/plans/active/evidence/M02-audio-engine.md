@@ -1,5 +1,15 @@
 # 2026-09-15 - live built-in processing chain validation
 
+## 2026-09-15 - native lifecycle requalification after M03 harness fix
+
+The authorized `m02-control-native-live.ps1 -AllowLiveAudio` acceptance
+rediscovered the exact existing VB-Cable endpoints and completed the bounded
+500 ms control-owned lifecycle. It captured 24,000 frames, processed 187
+quanta, and rendered 23,936 frames. Start/stop/detach cleanup passed, with no
+persistent endpoint or machine-audio state change. This refreshes existing
+VB-Cable user-mode evidence; it does not qualify the prototype driver or
+physical latency.
+
 The authorized ignored control test
 `guarded_live_native_endpoint_session_lifecycle_uses_one_control_plane` was
 run at the current head with the exact existing VB-Cable capture and render
