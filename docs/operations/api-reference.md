@@ -76,6 +76,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `startup.apply` | `startupWrite` | mutating; requires an idempotency key |
 | `devices.list` | `read` | read-only |
 | `nativeEndpoints.prepare` | `deviceAdministration` | external operation; prepares exact stopped clients |
+| `nativeEndpoints.rebind` | `deviceAdministration` | external operation; refreshes and reopens exact stopped clients |
 | `nativeEndpoints.detach` | `deviceAdministration` | external operation; detaches an exact stopped native worker |
 | `nativeDuplex.detach` | `deviceAdministration` | external operation; detaches an exact stopped project-driver bridge |
 | `nativeApplications.prepare` | `deviceAdministration` | external operation; prepares a verified stopped process-loopback capture and exact render client |
@@ -144,6 +145,10 @@ replacement endpoint, or activate a stopped session.
 `nativeEndpoints.detach` requires the session to be stopped and removes only
 that session's stopped worker, allowing a deliberate exact-endpoint selection
 and preparation to follow.
+`nativeEndpoints.rebind` is the explicit replacement path for an attached
+stopped endpoint worker. It refreshes and validates the supplied exact capture
+and render IDs, reopens stopped clients, and returns `configured-stopped`; it
+does not choose a replacement or start the session.
 `nativeDuplex.detach` has the same stopped-session rule for the project-driver
 bridge and returns unavailable on non-Windows hosts.
 

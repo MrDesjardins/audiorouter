@@ -251,6 +251,8 @@ export interface NativeEndpointPrepareResult {
   renderEndpointId: string;
 }
 
+export type NativeEndpointRebindResult = NativeEndpointPrepareResult;
+
 export interface NativeEndpointDetachResult {
   sessionId: EntityId;
   state: "detached";
@@ -896,6 +898,7 @@ export type ImplementedMethod =
   | "startup.apply"
   | "devices.list"
   | "nativeEndpoints.prepare"
+  | "nativeEndpoints.rebind"
   | "nativeEndpoints.detach"
   | "nativeDuplex.detach"
   | "nativeApplications.prepare"
@@ -995,6 +998,7 @@ export type MethodParams = {
   "startup.apply": { planId: EntityId; idempotencyKey: string };
   "devices.list": { cursor?: string; limit?: number; includeInactive?: boolean } | undefined;
   "nativeEndpoints.prepare": { sessionId: EntityId; captureEndpointId: string; renderEndpointId: string };
+  "nativeEndpoints.rebind": { sessionId: EntityId; captureEndpointId: string; renderEndpointId: string };
   "nativeEndpoints.detach": { sessionId: EntityId };
   "nativeDuplex.detach": { sessionId: EntityId };
   "nativeApplications.prepare": { sessionId: EntityId; processId: number; executable: string; executablePath?: string | null; creationTime100ns: string; mode: "include" | "exclude"; renderEndpointId: string };
@@ -1106,6 +1110,7 @@ export type MethodResult = {
   "startup.apply": StartupApplyResult;
   "devices.list": DeviceInfo[] | DeviceListPage;
   "nativeEndpoints.prepare": NativeEndpointPrepareResult;
+  "nativeEndpoints.rebind": NativeEndpointRebindResult;
   "nativeEndpoints.detach": NativeEndpointDetachResult;
   "nativeDuplex.detach": NativeDuplexDetachResult;
   "nativeApplications.prepare": NativeApplicationPrepareResult;

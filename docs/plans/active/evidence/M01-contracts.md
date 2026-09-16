@@ -1,5 +1,15 @@
 # M01 contracts and control-plane evidence
 
+## 2026-09-16 - explicit native endpoint rebind contract
+
+The shared API registry, discovery schemas, TypeScript method maps, and UI
+backend adapter now expose `nativeEndpoints.rebind`. It uses the same bounded
+exact endpoint ID fields as preparation, requires the device-administration
+scope, and returns the stopped configuration state. Control/domain tests,
+TypeScript typecheck, UI tests, strict Clippy, formatting, and documentation
+validation passed. Rebind remains Windows-only at execution time and does not
+claim project-driver or physical transition recovery.
+
 ## 2026-09-08 - Graph-plan persistence rollback
 
 `ControlPlane::plan_graph` now checkpoints the in-memory graph store before

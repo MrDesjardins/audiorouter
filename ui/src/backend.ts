@@ -98,6 +98,7 @@ export interface UiBackend {
   listApplications(): Promise<ApplicationRow[]>;
   listDevices(includeInactive?: boolean): Promise<DeviceListItem[]>;
   prepareNativeEndpoint?(sessionId: string, captureEndpointId: string, renderEndpointId: string): Promise<import("@audiorouter/contracts").NativeEndpointPrepareResult>;
+  rebindNativeEndpoint?(sessionId: string, captureEndpointId: string, renderEndpointId: string): Promise<import("@audiorouter/contracts").NativeEndpointRebindResult>;
   detachNativeEndpoint?(sessionId: string): Promise<import("@audiorouter/contracts").NativeEndpointDetachResult>;
   detachNativeDuplex?(sessionId: string): Promise<import("@audiorouter/contracts").NativeDuplexDetachResult>;
   prepareNativeApplication?(params: Omit<import("@audiorouter/contracts").MethodParams["nativeApplications.prepare"], "creationTime100ns"> & { creationTime100ns: string | null }): Promise<import("@audiorouter/contracts").NativeApplicationPrepareResult>;
@@ -510,6 +511,13 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
     },
     async prepareNativeEndpoint(currentSessionId, captureEndpointId, renderEndpointId) {
       return client.request("nativeEndpoints.prepare", {
+        sessionId: currentSessionId,
+        captureEndpointId,
+        renderEndpointId,
+      });
+    },
+    async rebindNativeEndpoint(currentSessionId, captureEndpointId, renderEndpointId) {
+      return client.request("nativeEndpoints.rebind", {
         sessionId: currentSessionId,
         captureEndpointId,
         renderEndpointId,

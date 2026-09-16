@@ -1782,6 +1782,9 @@ fn method_description(name: &str) -> &'static str {
         "nativeEndpoints.prepare" => {
             "Prepare exact capture/render clients without starting audio."
         }
+        "nativeEndpoints.rebind" => {
+            "Rebind an attached stopped native worker to refreshed exact endpoints without starting audio."
+        }
         "nativeEndpoints.detach" => {
             "Detach a stopped native endpoint worker so exact bindings can be replaced."
         }
@@ -1957,6 +1960,14 @@ fn method_input_schema(name: &str) -> Value {
             &[],
         ),
         "nativeEndpoints.prepare" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "captureEndpointId": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES },
+                "renderEndpointId": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES }
+            }),
+            &["sessionId", "captureEndpointId", "renderEndpointId"],
+        ),
+        "nativeEndpoints.rebind" => object_schema(
             json!({
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "captureEndpointId": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES },
@@ -2872,6 +2883,17 @@ fn method_output_schema(name: &str) -> Value {
             })
         }
         "nativeEndpoints.prepare" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "state": { "const": "configured-stopped" },
+                "captureEndpointId": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES },
+                "renderEndpointId": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES }
+            },
+            "required": ["sessionId", "state", "captureEndpointId", "renderEndpointId"],
+            "additionalProperties": false
+        }),
+        "nativeEndpoints.rebind" => json!({
             "type": "object",
             "properties": {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
@@ -8423,6 +8445,9 @@ impl ControlPlane {
                     "nativeEndpoints.prepare" => {
                         self.dispatch_native_endpoints_prepare(request.params)
                     }
+                    "nativeEndpoints.rebind" => {
+                        self.dispatch_native_endpoints_rebind(request.params)
+                    }
                     "nativeEndpoints.detach" => {
                         self.dispatch_native_endpoints_detach(request.params)
                     }
@@ -10664,6 +10689,49 @@ impl ControlPlane {
         }))
     }
 
+    #[cfg(windows)]
+    fn dispatch_native_endpoints_rebind(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("sessionId and endpoint IDs are required".into())
+        })?;
+        let session_id = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(EntityId::new)
+            .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+        let capture_id = params
+            .get("captureEndpointId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("captureEndpointId is required".into()))?;
+        let render_id = params
+            .get("renderEndpointId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("renderEndpointId is required".into()))?;
+        self.rebind_native_endpoint_worker(&session_id, capture_id, render_id, 0, 3, 100)?;
+        Ok(json!({
+            "sessionId": session_id,
+            "state": "configured-stopped",
+            "captureEndpointId": capture_id,
+            "renderEndpointId": render_id
+        }))
+    }
+
+    #[cfg(not(windows))]
+    fn dispatch_native_endpoints_rebind(
+        &mut self,
+        _params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        Err(ControlError::InvalidRequest(
+            "native endpoint rebinding requires Windows".into(),
+        ))
+    }
+
     fn dispatch_native_endpoints_detach(
         &mut self,
         params: Option<Value>,
@@ -12075,7 +12143,9 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "recordings.removeEntry" => &["recordingId", "idempotencyKey"],
         "recordings.recycle" => &["recordingId", "confirm", "idempotencyKey"],
         "devices.list" => &["cursor", "limit"],
-        "nativeEndpoints.prepare" => &["sessionId", "captureEndpointId", "renderEndpointId"],
+        "nativeEndpoints.prepare" | "nativeEndpoints.rebind" => {
+            &["sessionId", "captureEndpointId", "renderEndpointId"]
+        }
         "nativeEndpoints.detach" => &["sessionId"],
         "nativeDuplex.detach" => &["sessionId"],
         "nativeApplications.prepare" => &[

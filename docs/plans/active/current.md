@@ -45,6 +45,14 @@ changed. This proves same-binding refresh/reopen behavior, not unplug/replug,
 format-change recovery, project-driver ownership, lease expiry, or physical
 latency.
 
+Exposed explicit native endpoint rebinding through the shared API and UI on
+2026-09-16. `nativeEndpoints.rebind` requires device administration, a stopped
+attached worker, and exact refreshed capture/render IDs; it never selects a
+replacement or starts audio. The UI now offers the same action beside prepare
+and detach. Domain/control (65/173), UI (231), strict Clippy, typecheck,
+formatting, and diff checks passed. Actual unplug/replug, project-driver, and
+signing gates remain open.
+
 Refreshed the release qualification snapshot on 2026-09-16 after the latest
 authorized VB-Cable route requalification. `docs/operations/release-notes.md`
 now reports the current 500 ms control-owned route evidence: 24,000 captured
