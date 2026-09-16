@@ -145,6 +145,12 @@ and 13 worker-process tests. Documentation validation also passed for 54
 Markdown files and 218 local links. No endpoint, driver, plugin registration,
 or persistent audio configuration was changed.
 
+Requalified the project-owned M03 driver source/build gate on 2026-09-16 for
+both x64 and ARM64. `m03-driver-build.ps1` passed catalog/signability and
+directional bridge source checks for each requested architecture and cleaned
+disposable outputs. No driver was installed or loaded; signing mode, boot
+policy, services, endpoints, and persistent audio configuration were unchanged.
+
 Extended the UI backend adapter and managed-bus lifecycle panel on 2026-09-16
 with typed `provisionVirtualDevice` and `removeVirtualDevice` calls. The panel
 now exposes a bounded instance-ID field and explicit native ownership buttons

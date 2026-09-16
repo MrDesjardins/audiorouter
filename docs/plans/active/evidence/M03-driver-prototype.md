@@ -1,5 +1,15 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-16 - x64 and ARM64 source/build requalification
+
+Commands: `tests/acceptance/m03-driver-build.ps1 -Platform x64` and
+`tests/acceptance/m03-driver-build.ps1 -Platform ARM64`. Both project-owned
+builds passed with catalog/signability and bridge source-contract checks; each
+reported the requested architecture and removed disposable output. No driver
+was installed or loaded, and signing mode, boot policy, services, endpoints,
+and persistent audio configuration were unchanged. Loaded PortCls transport,
+production signing, and clean-machine endpoint qualification remain open.
+
 ## 2026-09-15 - non-installing WDK qualification re-run
 
 The authorized build-only acceptance was re-run with Visual Studio Community
