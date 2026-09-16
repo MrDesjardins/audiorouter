@@ -19,6 +19,16 @@ before/after binary-integrity checks. No plugin registration or machine audio
 configuration changed. This is gated local VST2 compatibility evidence, not
 blanket vendor or release qualification.
 
+## 2026-09-16 - direct ReaPlugs VST2 editor containment
+
+`tests/acceptance/m06-vst2-editor.ps1 -FixtureDirectory 'C:\Program
+Files\VSTPlugins\ReaPlugs'` passed for all 9 x64 DLLs. Every candidate
+completed the dedicated editor-thread bound and supervised editor-timeout
+tests, including the two incompatible/non-audio candidates. No plugin was
+registered and no machine audio configuration changed. This is worker/editor
+containment evidence for local binaries, not native editor compatibility or a
+blanket vendor/release qualification.
+
 ## 2026-09-16 - VST2 legacy/state/failure fixture requalification
 
 `tests/acceptance/m06-vst2-state-fixture.ps1` passed the repository-owned VST2

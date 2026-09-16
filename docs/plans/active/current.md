@@ -46,6 +46,13 @@ rejected/contained as incompatible candidates. Environment and binary
 integrity checks passed, with no plugin registration or audio configuration
 change. This is local gated compatibility evidence only.
 
+Extended the direct ReaPlugs qualification on 2026-09-16 to editor
+containment. All 9 x64 DLLs completed the dedicated editor-thread and
+supervised timeout tests, including the two incompatible/non-audio candidates;
+no plugin registration or audio configuration changed. This proves worker
+containment behavior for the local binaries, not native editor compatibility
+or a blanket vendor/release claim.
+
 Requalified the elevated guarded `tests/acceptance/safe-all.ps1` chain at
 head `d52f7ec4` on 2026-09-16. Toolchain/native probes, x64/ARM64 driver
 source builds, read-only 31-endpoint inventory, disposable SysVAD, M01/M03/
