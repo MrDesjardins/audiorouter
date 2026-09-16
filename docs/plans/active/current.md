@@ -2,6 +2,13 @@
 
 Updated: 2026-09-16.
 
+Requalified the guarded VB-Cable digital impulse correlation on 2026-09-16
+with 100 bounded impulses. The exact current pair produced 97 detected groups,
+zero p95 spacing error, and an estimated 84.98 ms onset; temporary capture
+artifacts were removed and persistent audio configuration was unchanged. This
+is digital signal-path evidence only and does not close calibrated physical
+latency without a timestamped physical setup.
+
 Requalified the guarded event-driven WASAPI path on 2026-09-16 against the
 current VB-Cable pair. Capture registered its event and delivered 24,480
 frames; silent render registered its event and submitted 28,800 frames; both
