@@ -61,6 +61,12 @@ audio configuration changed. This qualifies those local fixture paths only;
 opaque state, auxiliary-bus compatibility, native editor support, and broad
 vendor/release qualification remain separate.
 
+Requalified the supplied BUSTERse VST3 failure path on 2026-09-16 with the
+dedicated worker-containment test. Its known activation failure was isolated
+and reported without escaping into the host; temporary worker outputs and
+process environment were restored. This remains an explicitly unsupported
+fixture result and does not count as successful BUSTERse processing.
+
 Requalified the elevated guarded `tests/acceptance/safe-all.ps1` chain at
 head `d52f7ec4` on 2026-09-16. Toolchain/native probes, x64/ARM64 driver
 source builds, read-only 31-endpoint inventory, disposable SysVAD, M01/M03/

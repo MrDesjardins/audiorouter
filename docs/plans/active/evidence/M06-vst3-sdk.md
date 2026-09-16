@@ -21,6 +21,15 @@ compatibility, native editor support, and broad vendor/release qualification
 remain open; the separate BUSTERse activation failure remains contained as an
 unsupported fixture.
 
+## 2026-09-16 - supplied BUSTERse VST3 failure containment
+
+The dedicated `verified_native_vst3_worker_contains_an_opt_in_fixture_failure`
+acceptance passed for the supplied BUSTERse VST3 bundle. Its known activation
+failure was isolated and reported by the worker without escaping into the host;
+temporary worker outputs and process environment were restored. This is an
+explicitly unsupported-fixture result and does not count as successful BUSTERse
+processing or broad VST3 compatibility.
+
 ## 2026-09-16 - supplied ReaPlugs VST2 worker matrix
 
 `tests/acceptance/m06-vst2-reaplugs.ps1 -SkipIncompatibleCandidates` passed
