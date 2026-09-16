@@ -2,6 +2,13 @@
 
 Updated: 2026-09-16.
 
+Requalified the native VST3 worker on 2026-09-16 with the repository AGain
+fixture. Single-stream and auxiliary-bus processing, asynchronous graph
+staging, bounded failure/restart recovery, repeated-quantum timing, validated
+state restoration, finite output, and bounded shutdown all passed. The worker
+and fixture remained repository-local; no plugin registration, audio stream,
+or machine audio configuration changed.
+
 Requalified the visual editor on 2026-09-16 with `tests/acceptance/m05-ui.ps1`.
 TypeScript typecheck, 227 tests across 19 files, and a temporary Vite
 production build transforming 214 modules all passed. This includes the

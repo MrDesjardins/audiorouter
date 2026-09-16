@@ -1,5 +1,14 @@
 # M06 VST3 SDK boundary
 
+## 2026-09-16 - native worker current-head qualification
+
+`tests/acceptance/m06-vst3-worker.ps1` passed for the repository
+`third_party/vst3sdk-build/VST3/Release/again.vst3` fixture. Single-stream and
+auxiliary-bus processing, asynchronous graph staging, bounded failure/restart
+recovery, repeated-quantum timing, validated state restoration, finite output,
+and bounded shutdown all passed. The worker and fixture were repository-local;
+no plugin registration, audio stream, or machine audio configuration changed.
+
 ## 2026-09-15 - SDK installer provenance regression
 
 The disposable SDK installer acceptance passed its wrong-origin rejection and
