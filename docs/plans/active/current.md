@@ -14,6 +14,13 @@ persistent audio configuration changed. Next task: continue adapter parity
 and user-testable routing/processors while retaining the production-driver
 and attended-shell acceptance blockers below.
 
+Documented the MCP ownership-tool workflow in
+`docs/operations/headless-runbook.md` on 2026-09-16. The runbook now names
+the focused provision/remove tools, required scope and idempotency inputs,
+and their fail-closed behavior before qualified driver installation.
+Documentation validation remained green (54 Markdown files, 218 local links);
+no runtime or machine configuration changed.
+
 Re-ran the complete guarded `safe-all.ps1` chain at the MCP parity head on
 2026-09-16. M00 toolchain/native inventory and disposable SysVAD checks,
 AudioRouter x64/ARM64 driver source builds and Software Device dry-run, M01,
