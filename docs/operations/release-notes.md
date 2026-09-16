@@ -48,9 +48,11 @@ release and must not be presented as an installable Windows audio product.
   submission while preserving the media-device snapshot.
 - The guarded control-owned native VB-Cable route qualifies exact capture and
   render endpoint binding, processor-bearing graph activation, bounded pump
-  delivery, and clean start/stop. The latest run observed 36,000 captured
-  frames, 35,968 rendered frames, and 281 processed quanta; it did not change
-  defaults, volume, mute, privacy, drivers, or persistent audio settings.
+  delivery, and clean start/stop. The latest 500 ms run observed 24,000
+  captured frames, 23,936 rendered frames, and 187 processed quanta, with one
+  successful start/stop/reset sequence and one deliberate post-stop pump
+  rejection. It did not change defaults, volume, mute, privacy, drivers, or
+  persistent audio settings.
 - Shell-owned backend recovery persists crash markers and keeps a stopped
   control plane available after the safe-mode threshold, allowing an
   authorized operator to inspect and clear the latch without reopening native
