@@ -2,6 +2,14 @@
 
 Updated: 2026-09-15.
 
+- Re-ran the VST2 editor-containment acceptance for all nine x64 ReaPlugs
+  candidates. The dedicated bounded editor-thread and supervised timeout
+  tests passed, including worker termination for non-returning editor cases.
+  No plugin registration, audio stream, or machine configuration changed;
+  temporary environment state was restored. Evidence: [M06 VST3/VST2]
+  (evidence/M06-vst3-sdk.md). This proves containment, not native editor
+  hosting compatibility.
+
 - Re-ran the pinned M06 VST3 SDK acceptance: validator, offline loader, AGain
   main/auxiliary-bus probes, explicit single-bus rejection, and the five-class
   mda matrix passed. Repository-local fixtures only; no plugin registration,

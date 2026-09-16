@@ -8,6 +8,10 @@ Candidate fingerprints and temporary environment values were restored. This
 is gated compatibility evidence only and does not grant redistribution rights
 or native editor support.
 
+The same nine x64 ReaPlugs candidates also passed the bounded editor-thread
+and supervised editor-timeout containment checks. This proves worker cleanup
+under the tested editor fault boundary, not successful native editor hosting.
+
 The supplied x64 VST3 candidates were rechecked through the current native
 worker on 2026-09-14. COMPER reached the parameter-contract gate but exposed
 no automatable descriptors and was rejected. TDR Nova reached processing but

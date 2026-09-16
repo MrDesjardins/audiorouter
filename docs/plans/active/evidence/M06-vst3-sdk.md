@@ -2247,3 +2247,11 @@ single-bus rejection, and the five-class mda matrix all passed. This uses only
 repository-local fixtures and performs no plugin registration, audio streaming,
 or machine configuration change. Native realtime vendor compatibility and
 authenticated editor ownership remain separate gates.
+## 2026-09-15 - VST2 editor containment re-run
+
+The bounded editor-thread and supervised timeout tests passed for all nine x64
+ReaPlugs DLL candidates, including candidates rejected by the audio-effect
+processing contract. Non-returning editor behavior was contained and workers
+were terminated within the tested boundary. No plugin registration, audio
+stream, or machine configuration changed; temporary fixture environment state
+was restored.
