@@ -1,13 +1,13 @@
 # AudioRouter 0.1.0-dev qualification notes
 
-This document describes the current development snapshot (2026-09-15). It is not a signed
+This document describes the current development snapshot (2026-09-16). It is not a signed
 release and must not be presented as an installable Windows audio product.
 
 ## Scope and platform
 
 - Target: Windows 11 x64.
 - Portable control, storage, DSP, recording, CLI, UI, MCP, and plugin-worker
-  foundations are implemented and covered by automated tests. The UI has 221
+  foundations are implemented and covered by automated tests. The UI has 231
   passing tests and includes a visual graph editor, backend-bound built-in
   processor/preset editing, explicit endpoint binding, and route provenance.
 - The repository-local Steinberg VST3 SDK is pinned and verified at
@@ -20,8 +20,8 @@ release and must not be presented as an installable Windows audio product.
 - The locked Rust workspace passes its current package tests and doc-tests,
   formatting, and strict Clippy; the guarded native tests remain explicitly
   opt-in.
-- M07 headless acceptance passes 35 CLI tests, 3 MCP interoperability tests,
-  167 control tests (2 guarded live tests intentionally ignored), 70
+- M07 headless acceptance passes 36 CLI tests, 3 MCP interoperability tests,
+  173 control tests (2 guarded live tests intentionally ignored), 70
   plugin-host tests, 13 worker-process tests, and 26 shell tests. The shell
   supervisor persists crash markers and keeps a stopped control plane
   available in safe mode.
@@ -48,8 +48,8 @@ release and must not be presented as an installable Windows audio product.
   submission while preserving the media-device snapshot.
 - The guarded control-owned native VB-Cable route qualifies exact capture and
   render endpoint binding, processor-bearing graph activation, bounded pump
-  delivery, and clean start/stop. The latest run observed 24,000 captured
-  frames, 187 processed quanta, and 23,936 rendered frames; it did not change
+  delivery, and clean start/stop. The latest run observed 36,000 captured
+  frames, 35,968 rendered frames, and 281 processed quanta; it did not change
   defaults, volume, mute, privacy, drivers, or persistent audio settings.
 - Shell-owned backend recovery persists crash markers and keeps a stopped
   control plane available after the safe-mode threshold, allowing an

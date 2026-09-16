@@ -1,11 +1,11 @@
 # M08 release evidence
 
-## 2026-09-16 - complete guarded acceptance with installer smoke at `4f2f8a33`
+## 2026-09-16 - complete guarded acceptance with installer smoke at `af07d213`
 
 The complete guarded `tests/acceptance/safe-all.ps1` chain passed at the
 current pushed head. It covered M00/M03 toolchain, native, AudioRouter x64
 and ARM64 source, Software Device dry-run, and disposable SysVAD checks;
-M01; M04 with 32 DSP and 40 recording tests; M05 with 227 UI tests and
+M01; M04 with 32 DSP and 40 recording tests; M05 with 231 UI tests and
 production builds; M06 VST3/VST2 SDK, worker, and fixture gates; M07 with 36
 CLI, 3 MCP, 173 control, 70 plugin-host, and 13 worker-process tests; M08
 unsigned artifact preparation; the unsigned x64 NSIS smoke; 159 traceability

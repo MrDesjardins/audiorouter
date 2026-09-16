@@ -2,6 +2,18 @@
 
 Updated: 2026-09-16.
 
+Reconciled the release qualification documents on 2026-09-16 with the
+current pushed evidence: the UI count is 231, M07 is 36 CLI/3 MCP/173
+control tests, and the latest guarded VB-Cable control route evidence is
+36,000 captured, 35,968 rendered, and 281 processed frames. The M08 evidence
+head now points at `af07d213` rather than an older installer-smoke revision.
+Release verifier, preparation path-safety, runbook-command, documentation,
+and diff checks passed. No runtime, driver, plugin, or machine audio
+configuration changed. The next actionable work remains the native
+production-driver/PortCls, signing, clean-machine, physical-latency, and
+attended UI/accessibility gates; no safe repository-local substitute can
+close those claims.
+
 Requalified the full elevated `tests/acceptance/safe-all.ps1` chain on
 2026-09-16 at the current head. Every guarded stage passed: x64/ARM64
 project-driver compile/signability, Software Device dry-run, endpoint
