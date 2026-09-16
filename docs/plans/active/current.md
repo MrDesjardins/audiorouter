@@ -2,6 +2,17 @@
 
 Updated: 2026-09-16.
 
+Requalified the complete guarded `safe-all.ps1` chain at pushed head
+`b2c4f357` on 2026-09-16 using an elevated shell because the non-elevated
+attempt was denied by read-only `Get-PnpDevice` WMI inventory. The elevated run
+returned exit code 0: native inventory found 31 endpoints; M00-M08 toolchain,
+portable, UI, VST2/VST3 worker, unsigned release/NSIS, shell RPC, 159-ID
+traceability, and 54-document validation all passed, with 15 temporary
+children cleaned. The two live-audio tests remained intentional skips. The
+run performed no driver installation, signing-mode change, endpoint mutation,
+startup registration, or persistent audio configuration change; the disposable
+SysVAD checkout emitted the previously known Git INF-encoding warnings.
+
 Added bounded package-companion validation to the M03 lifecycle entrypoint
 on 2026-09-16. Before preview or execution, the generated INF directory must
 contain exactly one regular, non-reparse AudioRouter driver binary and catalog
