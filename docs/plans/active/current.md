@@ -59,6 +59,15 @@ registered, and no persistent audio configuration changed. This is integrated
 qualification evidence only; production PortCls ownership, signing,
 clean-machine, physical latency, and attended UI gates remain open.
 
+Re-ran the authorized existing-VB-Cable control-owned route on 2026-09-16
+against the exact recorded capture/render IDs. The 500 ms cycle passed at
+48 kHz with 50 packets, 24,000 captured frames, 23,936 rendered frames, 187
+processed quanta, one successful start/stop/reset sequence, and one rejected
+post-stop pump. Before/after media identity and state matched; the worker was
+stopped and detached. This is third-party-cable/user-mode evidence only and
+does not claim project-driver endpoint support. No persistent audio
+configuration changed.
+
 The dedicated VST2 editor-containment harness passed all 9 x64 ReaPlugs
 fixtures again on 2026-09-16 after its temporary fixture environment was
 hardened to check exact restoration, including absent-variable state. Both
