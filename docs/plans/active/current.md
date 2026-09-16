@@ -118,6 +118,16 @@ The existing Vite bundle-size warning remains non-failing. The chain did not
 install or load a driver, change signing or startup policy, register plugins,
 open live audio, or alter persistent machine-audio configuration.
 
+Re-ran the complete guarded `tests/acceptance/safe-all.ps1 -AllowLiveAudio`
+chain after the platform-specific artifact assertion was committed. M00/M03,
+M01/M04, M05 (226 UI tests and temporary production builds), M06 VST3/VST2,
+M07, unsigned M08 artifacts, 159 normative mappings, and documentation all
+passed; cleanup removed 15 run-owned temporary children. The existing Vite
+chunk-size warning remains non-failing. No driver was installed or loaded, no
+signing or startup policy changed, no plugin was registered, and no persistent
+machine-audio configuration changed. Evidence: [M03 driver prototype]
+(evidence/M03-driver-prototype.md).
+
 Corrected the M05 canvas responsive layout on 2026-09-15: the toolbar is now
 anchored to the lower canvas edge, wraps at narrow widths, and the processor
 shelf uses the available width for 100–200% scaling. Light/high-contrast panel

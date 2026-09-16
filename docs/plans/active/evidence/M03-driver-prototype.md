@@ -883,3 +883,22 @@ and zero warnings. The script removed disposable build output. No driver was
 installed or loaded, and no service, boot policy, signing mode, endpoint, or
 machine audio configuration was changed. This is compile/catalog evidence,
 not production-driver or PortCls callback evidence.
+
+## 2026-09-15 - Platform-scoped artifact regression and safe-all rerun
+
+The M03 acceptance harness now captures the build output and asserts that the
+default x64 qualification reports both the driver and INF under the requested
+x64 package root. It rejects an ARM64 report even when stale ARM64 output is
+present. The focused acceptance passed with that stale output present.
+
+The complete guarded `safe-all.ps1 -AllowLiveAudio` chain then passed at the
+same repository head: M00/M03 toolchain, native, AudioRouter driver, and
+reference-driver checks; M01/M04; M05 UI typecheck, 226 tests, and temporary
+production builds; M06 SDK/native VST3/VST2; M07; unsigned M08 artifact
+preparation and verification; 159 normative mappings; and documentation.
+Cleanup removed 15 run-owned temporary children. No driver was installed or
+loaded, no signing or startup policy changed, no plugin was registered, and
+no persistent machine-audio configuration changed. This remains source,
+package, and portable qualification only; dynamic bus provisioning, loaded
+PortCls ownership, production signing, and clean-machine installation remain
+open.
