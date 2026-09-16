@@ -474,7 +474,15 @@ failed finalization never reports the affected session stopped.
   persistent audio or machine configuration changed. This is user-mode
   existing-VB-Cable evidence; production-driver timing and subjective/
   transfer-function quality gates remain open. Evidence: [M02 audio engine]
-  (evidence/M02-audio-engine.md).
+(evidence/M02-audio-engine.md).
+
+Re-ran the guarded Rust process-loopback acceptance on 2026-09-15 with
+`-AllowLiveAudio`. Include mode delivered 11,025 source frames through 11,904
+engine frames and 93 scheduler quanta; exclude delivered 10,584 source frames
+through 11,392 engine frames and 89 quanta. Both exercised 44.1-to-48 kHz
+conversion with zero rejected packets, xruns, or buffer overruns/underruns;
+media-device identity/state remained unchanged. Evidence: [M02 audio engine]
+(evidence/M02-audio-engine.md).
 
 - Requalified the two-way resampling implementation against the existing
   VB-Cable pair on 2026-09-15 at pushed head `3d24953f`. The authorized 500 ms

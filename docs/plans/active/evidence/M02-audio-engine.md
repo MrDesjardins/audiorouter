@@ -1,5 +1,15 @@
 # 2026-09-15 - live built-in processing chain validation
 
+## 2026-09-15 - process-loopback include/exclude requalification
+
+The authorized `m00-rust-process-live.ps1 -AllowLiveAudio` acceptance passed
+both process-loopback modes for 250 ms. Include delivered 11,025 source
+frames through 11,904 engine frames and 93 scheduler quanta; exclude delivered
+10,584 source frames through 11,392 engine frames and 89 scheduler quanta.
+Both used the bounded 44.1-to-48 kHz conversion path with zero rejected
+packets, scheduler xruns, and input/output overruns or underruns. Media-device
+identity/state remained unchanged and streams stopped/reset on completion.
+
 ## 2026-09-15 - Rust adapter route requalification
 
 The authorized `m02-rust-adapter-route-live.ps1 -AllowLiveAudio` acceptance
