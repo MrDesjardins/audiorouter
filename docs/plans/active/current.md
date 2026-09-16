@@ -23,6 +23,12 @@ Evidence:
 `docs/plans/active/evidence/M04-effects-recording.md`. No endpoint or machine
 audio configuration was accessed.
 
+Synchronized the 2026-09-16 all-features workspace evidence after the DSP
+delay regressions. The M07 evidence now reports 764 passed tests (34 DSP, 111
+engine) and 13 expected fixture/desktop-gated ignores, matching the current
+tree. This is documentation correction only; no implementation or machine
+configuration changed.
+
 Revalidated the complete portable workspace and UI after the editor
 environment-restoration hardening on 2026-09-16. `cargo test --workspace
 --locked -- --test-threads=1` passed all runnable workspace tests (the two
