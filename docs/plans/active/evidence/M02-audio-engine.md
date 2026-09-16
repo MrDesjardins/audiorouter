@@ -1,5 +1,18 @@
 # 2026-09-15 - live built-in processing chain validation
 
+## 2026-09-16 - one-second VB-Cable graph route timing gate
+
+The authorized `m02-rust-adapter-route-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 1000` acceptance passed against the exact active
+`CABLE Input` render and `CABLE Output` capture endpoints at 48 kHz stereo.
+It captured 48,480 frames and processed/scheduled/routed 378/48,384 frames.
+Processing time was 8,216,100 ns total, 60,900 ns maximum, and 65,536 ns
+p99.9 upper bound, below the 2,666,667 ns deadline; deadline misses and
+lateness were zero. Temporary streams and generated probe files were removed,
+and media identity/state remained unchanged. Defaults, volume, mute, privacy,
+driver, signing, and startup configuration were untouched. This is user-mode
+timing evidence and does not qualify physical latency or the loaded driver.
+
 ## 2026-09-16 - two-cycle VB-Cable bridge requalification
 
 The authorized `m02-rust-adapter-bridge-live.ps1 -AllowLiveAudio

@@ -2,6 +2,15 @@
 
 Updated: 2026-09-16.
 
+Requalified the authorized one-second VB-Cable graph route on 2026-09-16.
+The exact active 48 kHz stereo endpoints delivered 48,480 captured and
+48,384 scheduled/routed frames across 378 graph blocks. Processing telemetry
+was 8,216,100 ns total, 60,900 ns maximum, with a 65,536 ns p99.9 upper
+bound against the 2,666,667 ns quantum deadline; deadline misses and lateness
+were zero. Generated probe files and temporary streams were removed, and
+media identity/state remained unchanged. This is user-mode timing evidence,
+not physical latency or loaded-driver callback evidence.
+
 Requalified the authorized existing VB-Cable bridge on 2026-09-16 with two
 750 ms cycles at 48 kHz stereo. The exact active endpoints transported
 36,000 and 36,480 captured frames, processed 281 and 285 quanta, rendered
