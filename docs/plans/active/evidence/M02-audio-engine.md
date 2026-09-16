@@ -24,6 +24,21 @@ and routed 23,936 frames. Processing telemetry reported 4,482,600 ns total,
 deadline lateness; the 128-frame deadline was 2,666,667 ns. Endpoint media
 identity/state remained unchanged and all temporary clients were stopped.
 
+# 2026-09-15 - differing-rate route requalification
+
+The earlier documented 96 kHz capture identity was no longer active; an
+exact-ID attempt failed closed with `0x80070490` (`no active capture endpoint`)
+before opening a stream. A fresh read-only inventory found active 96 kHz mono
+capture `{0.0.1.00000000}.{9f27c735-b82c-47a3-a962-56ea1e3774f3}` and active
+48 kHz render `{0.0.0.00000000}.{1869e2ef-82c1-4602-a35a-be804a32112a}`.
+
+The guarded route then passed for 500 ms using those exact IDs: 48,000 capture
+frames, 23,936 scheduler/routed frames, 187 graph blocks, a 1,333,334 ns
+128-frame deadline, 2,421,200 ns total processing time, and zero deadline
+misses/lateness. Temporary clients were stopped and endpoint/media state was
+unchanged. This is shared-mode cross-rate evidence, not independent-clock,
+physical-latency, or managed-driver evidence.
+
 # 2026-09-15 - repeated VB-Cable bridge and control-route qualification
 
 The guarded `m02-rust-adapter-bridge-live.ps1` acceptance passed two 500 ms

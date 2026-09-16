@@ -41,6 +41,14 @@ warnings; all generated output was removed. This confirms the source/build
 contract only. Bus provisioning, loaded PortCls ownership, production signing,
 and clean-machine installation remain open and were not attempted.
 
+The previously documented differing-rate capture ID was stale and correctly
+failed closed with Windows `0x80070490` before stream opening. A fresh
+read-only inventory identified a current 96 kHz capture endpoint, and the
+replacement exact-ID run passed into the 48 kHz render endpoint: 48,000
+captured frames, 23,936 routed frames, 187 graph blocks, zero deadline misses
+or lateness, and unchanged media state. The stale identity was not silently
+replaced by the runner.
+
 Next: continue with the remaining guarded cross-rate/process-loopback and
 loaded-driver gates; do not install/load the prototype driver or change audio
 defaults as part of this user-mode qualification.
