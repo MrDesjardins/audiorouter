@@ -1,3 +1,9 @@
+[CmdletBinding()]
+param(
+    [ValidateSet('x64', 'ARM64')]
+    [string] $Platform = 'x64'
+)
+
 $ErrorActionPreference = 'Stop'
 
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
@@ -49,16 +55,18 @@ foreach ($required in @(
     }
 }
 
-$buildOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $build 2>&1)
+$buildOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $build -Platform $Platform 2>&1)
 if ($LASTEXITCODE -ne 0) {
     throw "AudioRouter virtual-driver build failed with exit code $LASTEXITCODE"
 }
 $buildText = $buildOutput -join "`n"
-$expectedPlatformRoot = [IO.Path]::Combine($workspace, 'drivers', 'audiorouter-virtual', 'x64')
+$expectedPlatformRoot = [IO.Path]::Combine($workspace, 'drivers', 'audiorouter-virtual', $Platform)
+$unexpectedPlatform = if ($Platform -eq 'x64') { 'ARM64' } else { 'x64' }
 if ($buildText -notmatch [regex]::Escape("Driver binary: $expectedPlatformRoot") -or
     $buildText -notmatch [regex]::Escape("Driver INF: $expectedPlatformRoot") -or
-    $buildText -match 'Driver (binary|INF): .*\\ARM64\\') {
-    throw "driver build reported an artifact outside the requested x64 platform root`n$buildText"
+    $buildText -match [regex]::Escape("Driver binary: $([IO.Path]::Combine($workspace, 'drivers', 'audiorouter-virtual', $unexpectedPlatform))") -or
+    $buildText -match [regex]::Escape("Driver INF: $([IO.Path]::Combine($workspace, 'drivers', 'audiorouter-virtual', $unexpectedPlatform))")) {
+    throw "driver build reported an artifact outside the requested $Platform platform root`n$buildText"
 }
 
 $source = Get-Content -LiteralPath $adapter -Raw

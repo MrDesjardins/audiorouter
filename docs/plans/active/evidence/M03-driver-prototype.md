@@ -902,3 +902,10 @@ no persistent machine-audio configuration changed. This remains source,
 package, and portable qualification only; dynamic bus provisioning, loaded
 PortCls ownership, production signing, and clean-machine installation remain
 open.
+
+The same acceptance script now accepts an explicit `-Platform x64|ARM64`,
+with x64 retained as the default used by `safe-all.ps1`. On 2026-09-15 both
+platform runs passed the source-contract, signability, platform-scoped
+artifact, and lifecycle checks; each disposable build output was removed.
+This is compile-only architecture evidence and does not claim ARM64 endpoint
+support, driver loading, signing, or production qualification.
