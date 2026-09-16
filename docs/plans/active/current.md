@@ -28,6 +28,12 @@ frames through 11,904 engine frames and 93 graph blocks. Both used the
 44.1-to-48 kHz conversion path with zero rejected packets, xruns, and buffer
 overruns/underruns; no persistent audio configuration changed.
 
+The timing-qualified Rust adapter route also passed for 500 ms: 24,000
+captured frames, 23,936 routed frames, 187 graph blocks, 4,482,600 ns total
+processing time, 168,600 ns maximum block time, and zero deadline misses or
+lateness. The measured 128-frame deadline was 2,666,667 ns; the run preserved
+the exact endpoint IDs and changed no persistent configuration.
+
 Next: continue with the remaining guarded cross-rate/process-loopback and
 loaded-driver gates; do not install/load the prototype driver or change audio
 defaults as part of this user-mode qualification.

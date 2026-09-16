@@ -14,6 +14,16 @@ configuration changed. This qualifies built-in processor graph execution in
 the existing user-mode VB-Cable route; production-driver callback and
 subjective/transfer-function audio-quality gates remain open.
 
+# 2026-09-15 - timing-qualified Rust adapter route
+
+The guarded `m02-rust-adapter-route-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 500` acceptance passed against the exact existing
+VB-Cable endpoints. It captured 24,000 frames, processed 187 graph blocks,
+and routed 23,936 frames. Processing telemetry reported 4,482,600 ns total,
+168,600 ns maximum, 187 histogram samples, and zero deadline misses or
+deadline lateness; the 128-frame deadline was 2,666,667 ns. Endpoint media
+identity/state remained unchanged and all temporary clients were stopped.
+
 # 2026-09-15 - repeated VB-Cable bridge and control-route qualification
 
 The guarded `m02-rust-adapter-bridge-live.ps1` acceptance passed two 500 ms
