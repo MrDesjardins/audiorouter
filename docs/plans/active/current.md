@@ -36,6 +36,11 @@ prerequisites instead of incorrectly claiming that the M02 adapter is absent.
 The focused UI suite (231 tests), production build (214 modules), and docs
 validation passed; no audio or machine configuration changed.
 
+Ran `cargo clippy --workspace --all-targets --locked -- -D warnings` on
+2026-09-16 after the UI contract correction; the complete Rust workspace
+passed with warnings denied. This is static portable evidence and does not
+close the native driver, signing, or attended UI gates.
+
 The dedicated VST2 editor-containment harness passed all 9 x64 ReaPlugs
 fixtures again on 2026-09-16 after its temporary fixture environment was
 hardened to check exact restoration, including absent-variable state. Both
