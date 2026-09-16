@@ -54,9 +54,9 @@ with a stable AudioRouter enumerator, bounded instance ID, and
 dry-run; temporary creation requires both `--create` and
 `--allow-device-create`, waits for a bounded callback, and closes its handle
 before exit. `tests/acceptance/m03-swdevice-probe.ps1` compiled the probe and
-passed the dry-run, and is now included in `safe-all.ps1`. Persistent handle
-ownership, returned PnP instance-ID storage, enable/disable/delete semantics,
-and isolated loaded-driver validation remain open.
+passed the dry-run, and is now included in `safe-all.ps1`. Control-plane
+integration of owned handles, enable/disable/delete reconciliation, and
+isolated loaded-driver validation remain open.
 
 Added the reusable Windows adapter `SoftwareDeviceProvisioner` on 2026-09-16
 in `crates/windows-audio`. It wraps the Windows Software Device API behind an
@@ -65,8 +65,9 @@ exclusive RAII handle, validates stable instance IDs, uses the same
 to five seconds, and closes temporary devices on drop. The 80-test
 Windows-audio suite, strict package Clippy, formatting, and diff checks passed.
 The wrapper is not called by the current unavailable-driver control path;
-administrator authorization, persistent handle ownership, instance-ID
-hydration, and loaded-driver endpoint qualification remain explicit gates.
+administrator authorization, control-plane integration of the owned-handle
+inventory, enable/disable/delete reconciliation, and loaded-driver endpoint
+qualification remain explicit gates.
 
 Persisted the native PnP identity seam on 2026-09-16. `VirtualBusSnapshot`,
 SQLite schema version 3, all virtual-bus commit paths, the control response,
