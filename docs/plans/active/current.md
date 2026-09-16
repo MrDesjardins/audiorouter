@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Corrected the release-qualification current snapshot on 2026-09-16 to match
+the latest acceptance evidence: M05 now reports 227 UI tests and M07 reports
+36 CLI, 3 MCP, and 173 control tests (with 2 guarded live tests ignored),
+alongside the existing plugin-host, worker, and shell counts. Documentation
+validation passed with 54 Markdown files and 218 local links. No runtime,
+driver, plugin, or machine audio configuration changed. The next actionable
+slice remains production driver/bridge qualification.
+
 Extended the guarded M06 matrix again on 2026-09-16: BUSTERse x64 VST2
 processing passed at 44.1/48/96 kHz and both editor-containment checks, with
 the before/after SHA-256 unchanged. Its separate VST3 module remains a
