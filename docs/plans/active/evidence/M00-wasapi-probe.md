@@ -11,6 +11,16 @@ volume, mute, privacy, drivers, signing, startup, and persistent audio
 configuration were unchanged. This remains event lifecycle evidence, not
 production callback timing or physical latency.
 
+## 2026-09-16 - Rust process-loopback include/exclude qualification
+
+The guarded `m00-rust-process-live.ps1 -AllowLiveAudio -DurationMilliseconds
+250` acceptance passed both include and exclude modes. Each mode converted
+10,584 source frames at 44.1 kHz into 11,392 engine frames at 48 kHz across
+89 scheduler quanta, with zero rejected packets, XRuns, and input/output
+overruns or underruns. Both streams stopped and reset cleanly, and no
+persistent audio configuration changed. This is process-loopback evidence,
+not arbitrary isolation or PID-reuse qualification.
+
 ## 2026-09-15 - event-driven WASAPI lifecycle
 
 The guarded `m00-native-event-live.ps1 -AllowLiveAudio -DurationMilliseconds

@@ -10,6 +10,14 @@ removed, and defaults, volume, mute, privacy, drivers, signing, startup, and
 persistent audio configuration were unchanged. This is event lifecycle
 evidence, not production callback timing or physical latency.
 
+Requalified the guarded Rust process-loopback path on 2026-09-16 in both
+include and exclude modes. Each 250 ms run converted 10,584 source frames at
+44.1 kHz into 11,392 engine frames at 48 kHz across 89 scheduler quanta,
+with zero rejected packets, XRuns, and input/output overruns or underruns.
+Streams stopped and reset cleanly; no persistent audio configuration changed.
+This remains process-loopback evidence, not arbitrary isolation or PID-reuse
+qualification.
+
 Requalified the elevated guarded `tests/acceptance/safe-all.ps1` chain at
 head `d52f7ec4` on 2026-09-16. Toolchain/native probes, x64/ARM64 driver
 source builds, read-only 31-endpoint inventory, disposable SysVAD, M01/M03/
