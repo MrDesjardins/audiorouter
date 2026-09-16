@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Fresh boundary verification at pushed head `31ca7d83` on 2026-09-16 passed
+the Windows-audio package suite (81 tests plus doc-tests) and M05 UI
+acceptance (19 files/231 tests, TypeScript check, and disposable Vite build).
+Coverage includes exact endpoint binding, E_INVALIDARG-only fallback,
+fail-closed rebind/pump behavior, bounded native bridge ownership, and the
+visual editor's current contract surface. These checks opened no endpoint and
+changed no audio, driver, or persistent machine configuration.
+
 Reconciled the release qualification documents on 2026-09-16 with the
 current pushed evidence: the UI count is 231, M07 is 36 CLI/3 MCP/173
 control tests, and the latest guarded VB-Cable control route evidence is
