@@ -11,6 +11,11 @@ ignores), shell tests (26), strict Clippy, contract drift (75 methods), and
 the UI suite (221) passed. No live endpoint or persistent machine audio
 configuration was changed.
 
+The regression now also covers two active node-owned recorders in one session:
+both are finalized, all node worker/state/session ownership maps are drained,
+and only then is the session stopped. Control tests (168, with 2 guarded
+ignores) and strict Clippy passed after this addition.
+
 The full locked workspace re-run also passed after the implementation,
 including 78 Windows-audio tests; contract drift reported 75 methods and the
 UI suite reported 221 tests. No live endpoint or persistent machine audio

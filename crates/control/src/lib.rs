@@ -11991,6 +11991,10 @@ mod tests {
         tap: Arc<dyn AudioTap>,
     }
 
+    struct SuccessfulTapRecorderWorker {
+        tap: Arc<dyn AudioTap>,
+    }
+
     impl RecorderWorker for FailingTapRecorderWorker {
         fn shared_audio_tap(&self) -> Option<Arc<dyn AudioTap>> {
             Some(self.tap.clone())
@@ -11998,6 +12002,20 @@ mod tests {
 
         fn finalize(&mut self, _frame: u64) -> Result<RecorderFinalizationOutcome, String> {
             Err("synthetic encoder failure".into())
+        }
+    }
+
+    impl RecorderWorker for SuccessfulTapRecorderWorker {
+        fn shared_audio_tap(&self) -> Option<Arc<dyn AudioTap>> {
+            Some(self.tap.clone())
+        }
+
+        fn finalize(&mut self, _frame: u64) -> Result<RecorderFinalizationOutcome, String> {
+            Ok(RecorderFinalizationOutcome {
+                state: "completed".into(),
+                file_finalized: true,
+                recoverable: false,
+            })
         }
     }
 
@@ -16610,6 +16628,69 @@ mod tests {
         let recovered = plane.dispatch_authorized_for_client(request(), "shell", &grant);
         assert_eq!(recovered.result.as_ref().unwrap()["state"], "stopped");
         assert_eq!(plane.runtimes[&original.id].state(), RuntimeState::Stopped);
+    }
+
+    #[test]
+    fn system_quit_finalizes_all_active_node_recorders_before_stopping_session() {
+        let mut plane = ControlPlane::default();
+        let mut original = session();
+        for node_id in ["quit-recorder-a", "quit-recorder-b"] {
+            original.nodes.push(Node {
+                id: EntityId::new(node_id),
+                kind: NodeKind::Recorder,
+                type_version: 1,
+                name: node_id.into(),
+                enabled: true,
+                bypass: false,
+                parameters: Default::default(),
+                ports: vec![],
+            });
+        }
+        let session_id = original.id.clone();
+        plane.insert_session(original).unwrap();
+        plane.session_start(&session_id).unwrap();
+        let queue = Arc::new(RecordingQueue::new(4).unwrap());
+        for node_id in ["quit-recorder-a", "quit-recorder-b"] {
+            plane
+                .attach_recorder_worker_to_node(
+                    &session_id,
+                    EntityId::new(node_id),
+                    Box::new(SuccessfulTapRecorderWorker {
+                        tap: Arc::new(RecorderAudioTap::new(queue.clone())),
+                    }),
+                )
+                .unwrap();
+            plane
+                .control_recorder_node(&EntityId::new(node_id), "recorders.arm", None)
+                .unwrap();
+            plane
+                .control_recorder_node(&EntityId::new(node_id), "recorders.start", Some(0))
+                .unwrap();
+        }
+
+        let response = plane.dispatch_authorized_for_client(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!("quit")),
+                method: "system.quit".into(),
+                params: Some(json!({ "idempotencyKey": "quit-two-node-recorders" })),
+            },
+            "shell",
+            &ClientGrant::for_role(ClientRole::Operator),
+        );
+
+        assert_eq!(response.result.as_ref().unwrap()["state"], "stopped");
+        assert_eq!(
+            response.result.as_ref().unwrap()["recorders"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
+        assert!(plane.recorder_node_workers.is_empty());
+        assert!(plane.recorder_node_states.is_empty());
+        assert!(plane.recorder_node_sessions.is_empty());
+        assert_eq!(plane.runtimes[&session_id].state(), RuntimeState::Stopped);
     }
 
     #[test]
