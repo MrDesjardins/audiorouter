@@ -54,21 +54,11 @@ unsafe extern "system" fn created_callback(
     // instance ID for a non-null pointer; the decoder enforces our local
     // maximum before inspecting another element.
     let id = unsafe { decode_instance_id(instance_id) };
-    let completion = Completion {
+    let _ = sender.send(Completion {
         handle,
         result,
         instance_id: id,
-    };
-    if let Err(failed) = sender.send(completion) {
-        // A timeout deliberately leaves the sender context alive for a late
-        // callback. If its receiver has already been dropped, no owner will
-        // receive this handle, so close it at the callback boundary.
-        if !failed.0.handle.is_null() {
-            // SAFETY: this is the native handle supplied by Windows for this
-            // callback, and no Rust owner received it after send failed.
-            SwDeviceClose(failed.0.handle);
-        }
-    }
+    });
 }
 
 #[link(name = "Swdevice")]
