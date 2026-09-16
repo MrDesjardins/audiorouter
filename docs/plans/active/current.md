@@ -55,6 +55,13 @@ validated the complete set. The output remains unsigned and publication-
 ineligible, with production signing, driver installation, installer, and
 clean-machine gates unchanged.
 
+The isolated VST2 acceptance also passed six local x64 ReaPlugs fixtures
+(`reacomp`, `readelay`, `reeq`, `reafir`, `reagate`, and `reaxcomp`) at 44.1,
+48, and 96 kHz, including parameter-offset and before/after binary-integrity
+checks. This advances the approved legacy VST2 extension only; the binaries
+remain user-installed, no registration occurred, and the complete vendor or
+redistribution matrix is not claimed.
+
 The previously documented differing-rate capture ID was stale and correctly
 failed closed with Windows `0x80070490` before stream opening. A fresh
 read-only inventory identified a current 96 kHz capture endpoint, and the

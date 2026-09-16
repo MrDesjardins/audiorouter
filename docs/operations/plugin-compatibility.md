@@ -1,9 +1,13 @@
 # Plugin compatibility snapshot
 
 The supplied installed ReaPlugs directory was requalified on 2026-09-15
-through the isolated legacy VST2 worker. Seven x64 candidates passed at 44.1,
-48, and 96 kHz, including `reastream-standalone.dll`; `reacontrolmidi-standalone.dll`
-and `reajs.dll` were rejected by the bounded audio-effect/state contract.
+through the isolated legacy VST2 worker. Six x64 candidates passed at 44.1,
+48, and 96 kHz: `reacomp-standalone.dll`, `readelay-standalone.dll`,
+`reaeq-standalone.dll`, `reafir_standalone.dll`, `reagate-standalone.dll`,
+and `reaxcomp-standalone.dll`. The current fixture directory contains no
+additional candidate; previously qualified `reastream-standalone.dll`,
+`reacontrolmidi-standalone.dll`, and `reajs.dll` remain separate historical
+results. Candidate fingerprints and temporary environment values were restored.
 Candidate fingerprints and temporary environment values were restored. This
 is gated compatibility evidence only and does not grant redistribution rights
 or native editor support.
