@@ -1,5 +1,15 @@
 # M05 visual editor evidence
 
+## 2026-09-15 - scaled canvas layout correction
+
+Anchored the React Flow canvas toolbar to the lower canvas edge instead of
+leaving its absolute position dependent on browser static positioning. The
+toolbar now wraps, and the processor shelf expands within narrow canvases;
+light and high-contrast themes retain explicit panel boundaries. M05
+typecheck, all 226 UI tests across 19 files, and a temporary 214-module Vite
+production build passed. The existing non-failing bundle-size warning remains.
+No audio, driver, or machine configuration was accessed.
+
 ## 2026-09-15 - retain one node in editable drafts
 
 The shared draft mutation now rejects removal of the final node, and both the

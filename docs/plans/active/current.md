@@ -112,6 +112,14 @@ The existing Vite bundle-size warning remains non-failing. The chain did not
 install or load a driver, change signing or startup policy, register plugins,
 open live audio, or alter persistent machine-audio configuration.
 
+Corrected the M05 canvas responsive layout on 2026-09-15: the toolbar is now
+anchored to the lower canvas edge, wraps at narrow widths, and the processor
+shelf uses the available width for 100–200% scaling. Light/high-contrast panel
+boundaries remain explicit. M05 acceptance passed with 226 UI tests across 19
+files, TypeScript typecheck, and a temporary 214-module production build. No
+audio, driver, or machine configuration changed. Evidence: [M05 visual editor]
+(evidence/M05-visual-editor.md).
+
 The guarded event-driven WASAPI lifecycle also passed for 500 ms using the
 existing VB-Cable pair: 24,480 capture frames and 29,280 silent render frames,
 with initialize/event/start/stop/reset success on both directions. The probe
