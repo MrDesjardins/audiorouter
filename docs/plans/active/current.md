@@ -22,6 +22,12 @@ storage, 19 transport, and 81 Windows-audio tests; all doc-tests passed. No
 endpoint, driver, plugin registration, or persistent machine configuration
 was accessed.
 
+Re-ran the non-installing M03 project-driver qualification at pushed head
+`94c289f3` on 2026-09-16 for both x64 and ARM64. WDK compilation,
+package/catalog generation, and signability checks passed for each platform;
+disposable outputs were removed. No driver was installed or loaded, and no
+signing mode, boot policy, service, endpoint, or audio configuration changed.
+
 Requalified the full elevated `tests/acceptance/safe-all.ps1` chain on
 2026-09-16 at the current head. Every guarded stage passed: x64/ARM64
 project-driver compile/signability, Software Device dry-run, endpoint
