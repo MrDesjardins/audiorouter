@@ -1,5 +1,19 @@
 # 2026-09-15 - live built-in processing chain validation
 
+## 2026-09-16 - two-cycle VB-Cable bridge requalification
+
+The authorized `m02-rust-adapter-bridge-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 750 -Cycles 2` acceptance passed against the exact
+active VB-Cable endpoints at 48 kHz stereo. Cycle one captured 36,000 frames,
+processed 281 quanta, and rendered 35,968 frames; cycle two captured 36,480
+frames, processed 285 quanta, and rendered 36,480 frames. Both cycles reported
+zero non-finite tap samples, dropped render frames, scheduler xruns, and
+deadline misses. Temporary streams and recording outputs were stopped/removed,
+and before/after media identity/state matched. No defaults, volume, mute,
+privacy, driver, signing, startup, or persistent audio configuration changed.
+This remains user-mode VB-Cable evidence; managed-driver, loaded PortCls, and
+physical-latency qualification remain open.
+
 ## 2026-09-15 - process-loopback include/exclude requalification
 
 The authorized `m00-rust-process-live.ps1 -AllowLiveAudio` acceptance passed

@@ -2,6 +2,16 @@
 
 Updated: 2026-09-16.
 
+Requalified the authorized existing VB-Cable bridge on 2026-09-16 with two
+750 ms cycles at 48 kHz stereo. The exact active endpoints transported
+36,000 and 36,480 captured frames, processed 281 and 285 quanta, rendered
+35,968 and 36,480 frames, and reported zero non-finite samples, drops, xruns,
+or deadline misses. Temporary streams and recording outputs were removed;
+before/after media identity and state matched. No defaults, volume, mute,
+privacy, driver, signing, startup, or persistent audio configuration changed.
+This is current user-mode VB-Cable evidence, not managed-driver or physical
+latency qualification.
+
 Requalified the project-owned virtual-driver source for x64 and ARM64 at
 `85e8bca3` on 2026-09-16 with the installed Visual Studio/WDK toolchain.
 Both build-only gates passed with catalog/signability checks and disposable
