@@ -13,10 +13,11 @@ the M03 virtual-device work, not a production driver or a claim that the full
 AudioRouter bus lifecycle is implemented.
 
 The INF now also declares the `SWD\\AudioRouterVirtual` hardware-ID match used
-by the planned Software Device API provisioner. This is only a driver-package
-matching prerequisite: the repository does not yet create software devices,
-persist their returned PnP instance IDs, or activate this package on the
-current machine.
+by the Software Device API provisioner. The repository contains a guarded,
+explicit Software Device API probe and a control-plane ownership seam that can
+persist the returned PnP instance identity. Those paths are not invoked by
+normal startup, list, plan, or apply operations, and this prototype package
+has not been activated on the current machine.
 
 ## Build-only workflow
 
@@ -62,8 +63,10 @@ are approved.
   the installed VS/WDK build and zero-error signability result. This is not
   production signing evidence.
 - Production signing, catalog/release policy, clean-machine qualification,
-  managed bus creation/rename/enable/
-  disable/delete, and endpoint teardown are not implemented here.
+  and loaded-driver endpoint teardown remain open. Managed bus desired-state
+  administration and explicit ownership calls exist in the shared control
+  plane, but native provisioning remains fail-closed until this package is
+  qualified and loaded on an isolated target.
 - The secured control scaffold has direction-aware ownership leases and a
   bounded mapped-block ABI. Both sample WaveRT directions now call the bounded
   bridge helpers: render-source data is copied into the capture fill path and
