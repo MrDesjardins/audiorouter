@@ -20,6 +20,14 @@ audio endpoint or persistent machine configuration was touched. Manual
 WebView2, keyboard, Narrator, scaling, and accessibility acceptance remains
 open rather than inferred from the build.
 
+Performed a bounded packaged-shell runtime probe on 2026-09-16 using the
+existing release executable with an isolated temporary database and with
+endpoint/live-audio environment variables cleared. The process started and
+responded for five seconds, creating only the temporary database; the
+automation surface still returned no targetable application or window. The
+process and temporary database were removed afterward. This strengthens the
+launch evidence but does not replace attended UI acceptance.
+
 The dedicated VST2 editor-containment harness passed all 9 x64 ReaPlugs
 fixtures again on 2026-09-16 after its temporary fixture environment was
 hardened to check exact restoration, including absent-variable state. Both
