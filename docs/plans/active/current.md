@@ -14,6 +14,13 @@ loaded, no plugin or startup registration occurred, and no persistent audio
 configuration changed. Production driver activation/signing, clean-machine,
 physical-latency, actual transition-rebind, and attended UI gates remain open.
 
+Corrected the endpoint invalidation side-effect boundary on 2026-09-16:
+read-only `devices.list` now only reports endpoint changes, while the mutating
+native pump polls the monitor and stops/resets an affected running worker
+before returning a rebind-required error. Control (173) and Windows-audio
+(82) tests, strict Clippy, formatting, diff checks, and documentation passed.
+No endpoint or persistent machine configuration changed.
+
 Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at the
 current head on 2026-09-16. The run passed toolchain/native probes, x64/ARM64
 driver source builds, read-only endpoint inventory, disposable SysVAD,
@@ -29,9 +36,10 @@ extend endpoint invalidation/rebind policy through the control-owned lifecycle
 seam.
 
 Extended the endpoint lifecycle seam on 2026-09-16. `devices.list` now
-consults the worker's exact binding policy and stops a running native endpoint
-worker when its capture or render endpoint is removed or its metadata changes,
-publishing `devices.bindingInvalidated`; it never chooses a replacement. The
+consults the worker's exact binding policy at the mutating native pump boundary
+and stops a running native endpoint worker when its capture or render endpoint
+is removed or its metadata changes, publishing `devices.bindingInvalidated`;
+it never chooses a replacement. The
 focused control suite passed 171 tests (two guarded-live ignores), the Windows
 audio suite passed 82 tests, strict Clippy passed, and diff validation passed.
 No endpoint was opened by this change and no persistent audio configuration

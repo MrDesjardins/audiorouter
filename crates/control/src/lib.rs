@@ -5146,6 +5146,12 @@ impl ControlPlane {
                 "native endpoint worker generation is stale".into(),
             ));
         }
+        if self.poll_native_endpoint_lifecycle()? {
+            self.native_endpoint_rejections = self.native_endpoint_rejections.saturating_add(1);
+            return Err(ControlError::InvalidRequest(
+                "native endpoint worker binding was invalidated; rebind before pumping".into(),
+            ));
+        }
         let pump = {
             let worker = self.native_endpoint_worker.as_mut().ok_or_else(|| {
                 ControlError::InvalidRequest("native endpoint worker is not attached".into())
@@ -10511,7 +10517,6 @@ impl ControlPlane {
             let endpoints = monitor.snapshot().to_vec();
             (endpoint_changes, endpoints)
         };
-        self.invalidate_changed_native_endpoint_worker(&endpoint_changes)?;
         self.record_endpoint_changes(!endpoint_changes.is_empty());
         let defaults = audiorouter_windows_audio::enumerate_default_endpoint_bindings()
             .map_err(audio_control_error)?;
@@ -10998,6 +11003,27 @@ impl ControlPlane {
         self.events
             .append(0, None, "devices.bindingInvalidated", None);
         Ok(())
+    }
+
+    /// Poll endpoint notifications from a mutating native lifecycle boundary.
+    /// Read-only inventory must not stop an audio worker as a hidden side
+    /// effect; the native pump is the point where an affected running worker
+    /// is fail-closed and its staged audio is reset.
+    fn poll_native_endpoint_lifecycle(&mut self) -> Result<bool, ControlError> {
+        let Some(monitor) = self.endpoint_monitor.as_mut() else {
+            return Ok(false);
+        };
+        let changes = monitor.poll_changes().map_err(audio_control_error)?;
+        if changes.is_empty() {
+            return Ok(false);
+        }
+        let affected = self
+            .native_endpoint_worker
+            .as_ref()
+            .is_some_and(|worker| worker.endpoint_bindings_affected_by(&changes));
+        self.invalidate_changed_native_endpoint_worker(&changes)?;
+        self.record_endpoint_changes(true);
+        Ok(affected)
     }
 
     fn dispatch_plugins_scan(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
