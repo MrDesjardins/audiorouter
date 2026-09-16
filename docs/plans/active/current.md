@@ -14,6 +14,14 @@ production-driver/PortCls, signing, clean-machine, physical-latency, and
 attended UI/accessibility gates; no safe repository-local substitute can
 close those claims.
 
+Re-ran `cargo test --workspace --locked -- --test-threads=1` on 2026-09-16
+after the release-documentation reconciliation. All workspace suites passed:
+36 CLI, 3 MCP, 171 control with 2 guarded-live ignores, 65 domain, 32 DSP,
+111 engine, 70 plugin-host, 13 worker-process, 8 protocol, 40 recording, 91
+storage, 19 transport, and 81 Windows-audio tests; all doc-tests passed. No
+endpoint, driver, plugin registration, or persistent machine configuration
+was accessed.
+
 Requalified the full elevated `tests/acceptance/safe-all.ps1` chain on
 2026-09-16 at the current head. Every guarded stage passed: x64/ARM64
 project-driver compile/signability, Software Device dry-run, endpoint
