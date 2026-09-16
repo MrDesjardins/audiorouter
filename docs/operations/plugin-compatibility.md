@@ -6,6 +6,12 @@ bounded failure recovery, validated-state restart, repeated-quantum finite
 processing, and shutdown checks passed. This is SDK-fixture evidence and does
 not establish compatibility with arbitrary vendor VST3 binaries.
 
+The supplied x64 TDR Nova bundle passed single-stream activation, finite
+processing, bounded failure recovery, repeated-quantum, and shutdown checks
+on 2026-09-15 only with the explicit state-unsupported allowance. Its normal
+state restoration result remains outside the AudioRouter activation contract;
+this is partial compatibility evidence, not full qualification.
+
 The supplied installed ReaPlugs directory was requalified on 2026-09-15
 through the isolated legacy VST2 worker. Six x64 candidates passed at 44.1,
 48, and 96 kHz: `reacomp-standalone.dll`, `readelay-standalone.dll`,
