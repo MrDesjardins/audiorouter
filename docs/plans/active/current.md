@@ -2,6 +2,16 @@
 
 Updated: 2026-09-16.
 
+Requalified the full elevated `tests/acceptance/safe-all.ps1` chain on
+2026-09-16 at the current head. Every guarded stage passed: x64/ARM64
+project-driver compile/signability, Software Device dry-run, endpoint
+inventory, disposable SysVAD, M01/M03/M04/M05/M06/M07, unsigned M08 release
+artifacts and NSIS smoke, frontend-owned shell RPC, traceability, and
+documentation. The run removed 15 run-owned temporary children. Its scope
+excludes driver installation/loading, production signing, plugin registration,
+startup registration, and persistent machine audio configuration; those remain
+explicit native/release gates.
+
 Re-ran `tests/acceptance/m03-driver-build.ps1 -Platform x64` and `-Platform
 ARM64` on 2026-09-16 at the current head. Both project-owned WDK
 compile/signability/catalog qualifications passed and removed disposable
