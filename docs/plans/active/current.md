@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Requalified the repository-owned VST2 safety fixtures on 2026-09-16 at 44.1,
+48, and 96 kHz. Legacy `main` export loading, chunk-state save/restore,
+non-finite output rejection, native crash containment, and hang containment
+all passed in disposable workers. No plugin was registered and no audio or
+machine configuration changed. This completes repository fixture evidence;
+third-party rights, independent-vendor compatibility, native editor
+qualification, and production release gates remain separate.
+
 Requalified the native VST3 worker on 2026-09-16 with the repository AGain
 fixture. Single-stream and auxiliary-bus processing, asynchronous graph
 staging, bounded failure/restart recovery, repeated-quantum timing, validated

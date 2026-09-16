@@ -1,5 +1,15 @@
 # M06 VST3 SDK boundary
 
+## 2026-09-16 - VST2 legacy/state/failure fixture requalification
+
+`tests/acceptance/m06-vst2-state-fixture.ps1` passed the repository-owned VST2
+fixtures at 44.1, 48, and 96 kHz. Legacy `main` export loading, chunk-state
+save/restore, non-finite output rejection, native crash containment, and hang
+containment all passed in disposable workers. No plugin was registered and no
+audio or machine configuration changed. This is repository fixture evidence;
+third-party rights, independent-vendor compatibility, native editor hosting,
+and production release qualification remain separate gates.
+
 ## 2026-09-16 - native worker current-head qualification
 
 `tests/acceptance/m06-vst3-worker.ps1` passed for the repository
