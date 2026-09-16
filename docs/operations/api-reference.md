@@ -15,7 +15,7 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
-The current catalog contains 75 methods, including backend-owned quit/finalize,
+The current catalog contains 77 methods, including backend-owned quit/finalize,
 session portability,
 recorder lifecycle, plugin inventory/retry, and startup plan/apply methods added
 after the initial 47-method reference.
@@ -89,6 +89,8 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `virtualDevices.list` | `read` | read-only |
 | `virtualDevices.plan` | `deviceAdministration` | plan-only |
 | `virtualDevices.apply` | `deviceAdministration` | mutating; requires an idempotency key |
+| `virtualDevices.provision` | `deviceAdministration` | external operation; requires an idempotency key; explicitly creates and owns one managed software device |
+| `virtualDevices.remove` | `deviceAdministration` | external operation; requires an idempotency key; explicitly removes one owned managed software device |
 | `virtualRoutes.list` | `read` | read-only; returns explicit durable cross-session routes |
 | `virtualRoutes.replace` | `deviceAdministration` | mutating; revision-checked and requires an idempotency key |
 | `apps.list` | `read` | read-only |

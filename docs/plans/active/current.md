@@ -116,6 +116,17 @@ be closed before calling the API production-ready. Next task: refactor the
 native provision/remove wrappers to use the atomic snapshot+journal transaction
 directly, then re-run the complete guarded acceptance chain.
 
+The guarded chain was then run at the new API commit on 2026-09-16. M00/M03
+toolchain, native endpoint inventory, compile-only AudioRouter and SysVAD
+reference-driver checks, M01 CLI, M04 DSP/recording, M05 UI (226 tests), M06
+VST3/VST2, M07 CLI/MCP/control/worker, and unsigned M08 release preparation
+all passed. The first chain stopped only at documentation trace validation
+because `docs/operations/api-reference.md` still said 75 methods; the method
+count and two lifecycle rows were corrected, and `docs.ps1` then passed for 54
+Markdown files and 218 local links. No driver was installed or loaded, no
+plugin/startup registration occurred, and no persistent audio configuration
+changed. The API transaction/compensation refactor remains the next task.
+
 Added bounded native ownership in `crates/windows-audio` on 2026-09-16 via
 `ManagedSoftwareDeviceInventory`. It keys RAII Software Device API handles by
 managed bus ID, rejects duplicate and over-capacity entries, exposes the
