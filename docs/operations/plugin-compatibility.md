@@ -1,5 +1,14 @@
 # Plugin compatibility snapshot
 
+The supplied x64 TDR Nova and COMPER VST3 modules were requalified on
+2026-09-16 with `m06-vst3-worker.ps1 -AllowStateUnsupported -SingleStreamOnly`.
+Both passed isolated single-stream processing, bounded worker
+failure/restart recovery, repeated-quantum timing, finite output, and bounded
+shutdown. This run made no registration, live audio, or machine-configuration
+changes. It does not establish opaque-state restoration, auxiliary-bus
+compatibility, native editor support, or a universal vendor compatibility
+claim.
+
 The installed ReaPlugs VST2 matrix was requalified on 2026-09-16 with
 `m06-vst2-reaplugs.ps1 -SkipIncompatibleCandidates`. Seven compatible x64
 effects passed contained processing at 44.1, 48, and 96 kHz (21 combinations),

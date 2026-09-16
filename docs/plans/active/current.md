@@ -2,6 +2,14 @@
 
 Updated: 2026-09-16.
 
+Requalified two supplied native x64 VST3 binaries on 2026-09-16 with
+`m06-vst3-worker.ps1 -AllowStateUnsupported -SingleStreamOnly`: TDR Nova and
+COMPER both passed isolated single-stream processing, bounded worker
+failure/restart recovery, repeated-quantum timing, finite output, and bounded
+shutdown. The test workers were disposable and no plugin registration, audio
+stream, or machine configuration changed. This does not qualify auxiliary-bus
+layouts, native editors, arbitrary vendor plugins, or production release use.
+
 Requalified the current M07 headless acceptance on 2026-09-16.
 `m07-headless.ps1` passed 36 CLI tests, 3 MCP stdio tests, 173 control tests
 with two explicitly ignored guarded-live cases, 70 plugin-host tests, and 13
