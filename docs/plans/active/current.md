@@ -2,6 +2,17 @@
 
 Updated: 2026-09-16.
 
+Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain on
+2026-09-16 at pushed head `5baf321e`. Toolchain discovery/native probe,
+x64/ARM64 AudioRouter driver builds, Software Device dry run, read-only
+31-endpoint inventory, disposable SysVAD qualification, M01/M04/M05/M06/M07,
+unsigned M08 artifacts and NSIS installer smoke, 159 traceability IDs, and
+documentation validation all passed. The run removed 15 run-owned temporary
+children. No driver was installed or loaded, no plugin was registered, and no
+persistent audio or machine configuration changed. Production driver
+activation/signing, clean-machine behavior, physical latency, and attended UI
+gates remain open.
+
 Verified the REC-03 persisted recording conversion/dither metadata contract on
 2026-09-16. Storage migration upgrades legacy `recordings` tables with
 conservative `dither=0` and `conversion='unknown'` defaults, validates and
