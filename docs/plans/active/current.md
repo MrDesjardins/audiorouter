@@ -18,6 +18,16 @@ production-owned PortCls driver design and signing path for native endpoint
 qualification. Portable verification does not require opening an endpoint or
 changing persistent machine audio configuration.
 
+Reconciled the stale REC-03 checkpoint on 2026-09-15: the current tree already
+contains the versioned `dither` and `conversion` recording metadata in the
+SQLite migration, storage validation/round-trip, control/API response,
+TypeScript contract, recorder UI, and focused tests. The M04 acceptance and
+full safe-all chain pass these paths; REC-03 metadata is therefore not an
+unimplemented next task. An attended UI smoke check was attempted through the
+available Windows automation surface, but it returned no targetable apps or
+browsers, so manual visual/accessibility evidence remains open rather than
+being inferred from automated tests.
+
 Validation completed on 2026-09-15: the Rust adapter bridge passed two 500 ms
 cycles with 24,480 captured and 24,448 rendered frames per cycle, zero dropped
 frames, xruns, or deadline misses. The control-owned route passed with 23,520
