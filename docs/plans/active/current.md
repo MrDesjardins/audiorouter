@@ -2,6 +2,17 @@
 
 Updated: 2026-09-16.
 
+Re-ran the elevated integrated acceptance chain at pushed head `3265f3ab` on
+2026-09-16 after the workspace qualification checkpoint. The complete chain
+passed again, including the read-only 31-endpoint inventory, disposable SysVAD
+build/package validation, M03/M04/M05/M06/M07 gates, unsigned M08 artifacts,
+NSIS smoke, traceability, and documentation. The non-elevated attempt was
+correctly rejected at PnP inventory with `0x80041003`; the elevated rerun
+completed and removed its 15 run-owned temporary children. No driver was
+installed or loaded, no plugin was registered, and no persistent audio or
+machine configuration changed. Native production-driver activation/signing,
+clean-machine, physical-latency, and attended UI gates remain explicit.
+
 Requalified the elevated integrated `tests/acceptance/safe-all.ps1` chain on
 2026-09-16. The run passed toolchain discovery, AudioRouter x64 and ARM64
 driver compile/signability, Software Device dry-run, read-only 31-endpoint
