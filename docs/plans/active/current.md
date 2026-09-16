@@ -26,6 +26,19 @@ installed or loaded, no
 plugin or startup registration occurred, and no persistent audio
 configuration changed.
 
+Re-ran the complete guarded chain elevated on 2026-09-16 after the native
+ownership and persistence slices. The chain passed: M00 toolchain, native
+format inventory (31 endpoints), and disposable SysVAD x64 reference build;
+M03 AudioRouter x64/ARM64 build, signability, and Software Device API dry-run;
+M01 CLI; M04 32 DSP and 40 recording tests; M05 226 UI tests and builds; M06
+VST3/VST2 SDK, worker, and fixture gates; M07 35 CLI, 3 MCP, 172 control, and
+13 worker-process tests; unsigned M08 artifacts; 159 requirement mappings;
+and 54 Markdown files with 218 local links. The initial non-elevated attempt
+was stopped by read-only `Get-PnpDevice` access denial; the elevated rerun
+resolved that harness limitation. Cleanup removed 15 run-owned temporary
+children. No driver was installed or loaded, no plugin/startup registration
+occurred, and no persistent audio configuration changed.
+
 Added the first package-level prerequisite for managed software-device buses
 on 2026-09-15: `AudioRouterVirtual.inx` now matches the explicit
 `SWD\\AudioRouterVirtual` hardware ID used by a future Software Device API
