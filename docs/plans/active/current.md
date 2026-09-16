@@ -2,6 +2,13 @@
 
 Updated: 2026-09-15.
 
+- Improved the visual editor on 2026-09-15: selected canvas connections can
+  now be deleted with the Delete key when the backend is connected, using the
+  existing draft-only removal and plan/commit flow. Disconnected/read-only
+  canvases remain non-destructive. The focused canvas test (3), complete UI
+  suite (219), typecheck, and production build passed. Evidence: [M05 visual
+  editor](evidence/M05-visual-editor.md).
+
 - Requalified the built-in native processing chain on 2026-09-15 at the
   current head using the exact existing VB-Cable pair. The guarded 500 ms
   control-owned session prepared and executed EQ, gate, compressor, pitch,

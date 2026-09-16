@@ -1,5 +1,16 @@
 # M05 visual editor evidence
 
+## 2026-09-15 - direct canvas connection removal
+
+The visual editor now exposes draft edges as deletable React Flow edges. With
+an editable connected backend, selecting an edge and pressing Delete routes
+its identity through the existing draft-removal callback; disconnected or
+read-only canvases do not enable deletion. The authoritative graph is still
+unchanged until the existing plan/commit flow succeeds. The focused canvas
+test passed (3 tests), the complete UI suite passed (19 files, 219 tests),
+typecheck passed, and the production build passed. No audio or machine
+configuration was accessed.
+
 ## 2026-09-13 - first-run route navigation
 
 The connected UI now presents an accessible three-step Quick route panel:

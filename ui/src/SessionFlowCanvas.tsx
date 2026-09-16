@@ -26,9 +26,15 @@ type SessionFlowCanvasProps = {
   onSelect: (id: string) => void;
   onSelectMany?: (ids: string[]) => void;
   onConnect: (connection: Connection) => void;
+  onRemoveConnection?: (edgeId: string) => void;
   onAddLibraryNode?: (kind: LibraryNodeKind, position: { x: number; y: number }) => string | void;
   canEdit?: boolean;
 };
+
+/** Returns only real graph edges from a canvas deletion event. */
+export function deletedConnectionIds(edges: Pick<FlowEdge, "id">[]): string[] {
+  return edges.map((edge) => edge.id).filter((id) => id.length > 0);
+}
 
 function positionFor(index: number) {
   const columns = 3;
@@ -44,7 +50,7 @@ export function libraryDropPosition(clientX: number, clientY: number, bounds: Pi
   return { x: Math.max(0, safeX - bounds.left - 20), y: Math.max(0, safeY - bounds.top - 20) };
 }
 
-export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onAddLibraryNode, canEdit = true }: SessionFlowCanvasProps) {
+export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onAddLibraryNode, canEdit = true }: SessionFlowCanvasProps) {
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
   const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey));
   useEffect(() => { setPositions(readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey)); }, [layoutKey]);
@@ -87,6 +93,8 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
     target: edge.destinationNode,
     label: `${edge.sourcePort} → ${edge.destinationPort}`,
     animated: false,
+    deletable: canEdit && onRemoveConnection !== undefined,
+    selectable: true,
     style: { stroke: edge.enabled && highlightedNodeIds.has(edge.sourceNode) && highlightedNodeIds.has(edge.destinationNode) ? "#65d1b5" : "#667085", strokeWidth: edge.enabled && highlightedNodeIds.has(edge.sourceNode) && highlightedNodeIds.has(edge.destinationNode) ? 3 : 1, opacity: !highlightedNodeIds.has(edge.sourceNode) || !highlightedNodeIds.has(edge.destinationNode) ? 0.45 : 1 },
   }));
 
@@ -104,6 +112,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
         onSelectionChange={({ nodes: selectedNodes }) => onSelectMany?.(selectedNodes.map((node) => node.id))}
         onNodeClick={(_, node) => onSelect(node.id)}
         onConnect={canEdit ? onConnect : undefined}
+        onEdgesDelete={canEdit && onRemoveConnection ? (deleted) => { for (const edgeId of deletedConnectionIds(deleted)) onRemoveConnection(edgeId); } : undefined}
         onNodeDragStop={(_, node) => { const next = { ...positions, [node.id]: node.position }; setPositions(next); writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next); }}
         proOptions={{ hideAttribution: true }}
       >
