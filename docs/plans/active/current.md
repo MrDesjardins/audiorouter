@@ -15,6 +15,17 @@ was not executed because the release harness removes its temporary copy and
 this checkout has no binary at that path. No endpoint, driver, plugin
 registration, or persistent audio configuration was changed.
 
+The complete guarded `tests/acceptance/safe-all.ps1` chain was requalified at
+`f06927fe` on 2026-09-15. M00 toolchain/native/reference-driver checks, both
+AudioRouter x64 and ARM64 compile-only driver gates, M04 (32 DSP and 40
+recording tests), M05 (226 UI tests and temporary builds), M06 VST3/VST2,
+M07 (172 control tests plus CLI/MCP/worker integration), unsigned M08
+artifacts, 159 normative mappings, and 54-file documentation validation all
+passed. Cleanup removed 15 run-owned temporary children. The known Vite
+chunk-size warning remains non-failing. No driver was installed or loaded, no
+plugin or startup registration occurred, and no persistent audio
+configuration changed.
+
 ## Next implementation slice: production driver/bridge qualification (M03)
 
 The backend-owned tray shutdown slice is complete and pushed as `acfa38f2`.
