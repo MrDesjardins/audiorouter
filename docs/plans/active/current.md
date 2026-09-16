@@ -2,6 +2,15 @@
 
 Updated: 2026-09-15.
 
+- Added a user-visible resume-validation panel on 2026-09-15. The UI can
+  invoke the shared `system.osTransition` resume boundary, shows refreshed
+  endpoint inventory plus portable/native route counts, and explicitly states
+  that routes are not restarted automatically. UI typecheck, production build,
+  and 218 UI tests pass. Evidence:
+  [M07 OS-transition policy evidence](evidence/M07-os-transitions.md). No
+  audio, driver, power, or machine configuration changed. Next action: continue
+  the next safe M03/M07 delivery slice.
+
 - Added the typed `os-transition` CLI command on 2026-09-15. It requires an
   absolute durable database and idempotency key, validates transition names
   before opening storage, and routes through the authenticated

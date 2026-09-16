@@ -241,6 +241,21 @@ describe("VB-Cable endpoint selection", () => {
     expect(within(quickRoute).getByRole("link", { name: "Start the session" }).getAttribute("href")).toBe("#native-endpoint-panel");
   });
 
+  it("exposes explicit resume validation without restarting routes", async () => {
+    const osTransition = vi.fn(async () => ({
+      transition: "resume" as const,
+      action: "revalidateBeforeRestart" as const,
+      endpointInventory: "refreshed" as const,
+      nativeSessionIds: ["native-session"],
+      sessionIds: ["portable-session"],
+    }));
+    render(<App backend={{ ...connectedPreviewBackend(), osTransition }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Revalidate after resume" }));
+    await waitFor(() => expect(osTransition).toHaveBeenCalledWith("resume", expect.any(String)));
+    expect(await screen.findByText(/No route was restarted/)).toBeTruthy();
+    expect(screen.getByText(/portable routes 1; native routes 1/)).toBeTruthy();
+  });
+
   it("keeps the backend-authored audio reason visible in the status summary", async () => {
     render(<App backend={createDisconnectedBackend()} />);
     expect(await screen.findByText(/unavailable audio \(The control backend is disconnected\.\)/)).toBeTruthy();

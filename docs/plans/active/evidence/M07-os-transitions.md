@@ -42,6 +42,10 @@ durable database and explicit idempotency key. Invalid transition names are
 rejected before storage is opened; valid requests use the shared authenticated
 dispatcher.
 
+The connected UI exposes a resume-validation panel. It displays the backend's
+endpoint-inventory result and exact portable/native revalidation candidates;
+the panel does not call session start and explicitly keeps routes stopped.
+
 The Tauri shell now owns a Windows message-only listener in
 `src-tauri/src/os_transition_windows.rs`. WTS session notifications map the
 current user's lock and logoff events; `WM_POWERBROADCAST` maps suspend and
@@ -64,7 +68,9 @@ clean
 npm.cmd run typecheck --prefix ui
 clean
 npm.cmd test --prefix ui -- --run
-217 passed; 0 failed
+218 passed; 0 failed
+npm.cmd run build --prefix ui
+production build passed (214 modules)
 cargo test -p audiorouter-cli --locked
 38 passed; 0 failed
 ```
