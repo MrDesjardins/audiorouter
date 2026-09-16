@@ -47,9 +47,20 @@ if (-not $SkipBuild) {
 foreach ($path in @($worker, $fixture)) {
     if (-not (Test-Path -LiteralPath $path)) { throw "required native VST3 worker path is missing: $path" }
 }
-$previousFixture = $env:AUDIOROUTER_VST3_FIXTURE
-$previousWorker = $env:AUDIOROUTER_VST3_NATIVE_WORKER
-$previousStateUnsupported = $env:AUDIOROUTER_VST3_ALLOW_STATE_UNSUPPORTED
+$previousFixturePresent = Test-Path Env:AUDIOROUTER_VST3_FIXTURE
+$previousWorkerPresent = Test-Path Env:AUDIOROUTER_VST3_NATIVE_WORKER
+$previousStateUnsupportedPresent = Test-Path Env:AUDIOROUTER_VST3_ALLOW_STATE_UNSUPPORTED
+$previousFixture = if ($previousFixturePresent) { $env:AUDIOROUTER_VST3_FIXTURE } else { $null }
+$previousWorker = if ($previousWorkerPresent) { $env:AUDIOROUTER_VST3_NATIVE_WORKER } else { $null }
+$previousStateUnsupported = if ($previousStateUnsupportedPresent) { $env:AUDIOROUTER_VST3_ALLOW_STATE_UNSUPPORTED } else { $null }
+function Assert-EnvironmentRestored {
+    param([Parameter(Mandatory = $true)][string]$Name, [Parameter(Mandatory = $true)][bool]$ExpectedPresent, [AllowNull()][string]$Expected)
+    $actual = [Environment]::GetEnvironmentVariable($Name, 'Process')
+    $present = Test-Path "Env:$Name"
+    if ($present -ne $ExpectedPresent -or ($ExpectedPresent -and $actual -ne $Expected)) {
+        throw "Acceptance did not restore process environment variable $Name"
+    }
+}
 try {
     $env:AUDIOROUTER_VST3_FIXTURE = $fixture
     $env:AUDIOROUTER_VST3_NATIVE_WORKER = $worker
@@ -72,6 +83,9 @@ try {
     if ($null -eq $previousFixture) { Remove-Item Env:AUDIOROUTER_VST3_FIXTURE -ErrorAction SilentlyContinue } else { $env:AUDIOROUTER_VST3_FIXTURE = $previousFixture }
     if ($null -eq $previousWorker) { Remove-Item Env:AUDIOROUTER_VST3_NATIVE_WORKER -ErrorAction SilentlyContinue } else { $env:AUDIOROUTER_VST3_NATIVE_WORKER = $previousWorker }
     if ($null -eq $previousStateUnsupported) { Remove-Item Env:AUDIOROUTER_VST3_ALLOW_STATE_UNSUPPORTED -ErrorAction SilentlyContinue } else { $env:AUDIOROUTER_VST3_ALLOW_STATE_UNSUPPORTED = $previousStateUnsupported }
+    Assert-EnvironmentRestored 'AUDIOROUTER_VST3_FIXTURE' $previousFixturePresent $previousFixture
+    Assert-EnvironmentRestored 'AUDIOROUTER_VST3_NATIVE_WORKER' $previousWorkerPresent $previousWorker
+    Assert-EnvironmentRestored 'AUDIOROUTER_VST3_ALLOW_STATE_UNSUPPORTED' $previousStateUnsupportedPresent $previousStateUnsupported
     Remove-Item -LiteralPath $worker,$workerObject,$iidObject -Force -ErrorAction SilentlyContinue
 }
 $busScope = if ($SingleStreamOnly) { 'isolated single-stream processing' } else { 'isolated single-stream and auxiliary-bus processing, asynchronous graph staging' }

@@ -2,6 +2,11 @@
 
 Updated: 2026-09-16.
 
+Extended exact process-environment restoration assertions to the VST3 worker
+acceptance on 2026-09-16, preserving variable presence separately from value.
+The supplied TDR Nova qualification is the verification for this change; no
+plugin registration, audio route, or machine configuration is involved.
+
 Completed the plugin-harness restoration hardening on 2026-09-16. After
 capturing variable presence separately from its value, the installed VST2 and
 ReaPlugs acceptance scripts now assert exact restoration for both present and
