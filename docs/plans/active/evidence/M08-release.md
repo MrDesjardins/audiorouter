@@ -1,5 +1,18 @@
 # M08 release evidence
 
+## 2026-09-15 - guarded acceptance after durable recovery at `21cc138f`
+
+The complete elevated `tests/acceptance/safe-all.ps1` chain passed after the
+durable shell recovery-marker integration. WDK compile/signability, 34-device
+inventory, disposable SysVAD, M01/M04, M05 with 221 UI tests and builds, M06
+VST3/VST2 workers, M07 headless controls, unsigned M08 artifacts, 159
+traceability mappings, and 54 Markdown/210-link documentation validation all
+passed. Cleanup removed 15 run-owned temporary children. No driver was
+installed or loaded, no signing mode or boot policy changed, and no plugin,
+startup, or persistent machine audio configuration changed. Production driver,
+signing/install, physical-latency, and attended UI/accessibility gates remain
+open.
+
 ## 2026-09-15 - complete guarded acceptance at `9a374954`
 
 The complete elevated `tests/acceptance/safe-all.ps1` chain passed at the

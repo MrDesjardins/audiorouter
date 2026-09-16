@@ -2,6 +2,15 @@
 
 Updated: 2026-09-15.
 
+- Requalified `safe-all.ps1` at pushed head `21cc138f` after durable STATE-10
+  recovery integration. WDK/driver signability, 34-endpoint inventory,
+  disposable SysVAD, M01/M04, M05 UI (221 tests/build), M06 VST3/VST2,
+  M07 headless, unsigned M08 artifacts, 159 mappings, and documentation (54
+  Markdown files, 210 links) passed. Cleanup removed 15 temporary children;
+  no driver, signing mode, registration, live audio, or persistent machine
+  audio configuration changed. Evidence: [M08 release]
+  (evidence/M08-release.md).
+
 - Integrated durable STATE-10 crash markers into the Windows shell supervisor
   on 2026-09-15. Each terminal control-backend failure is recorded through
   SQLite before retry, and a prior durable three-failure latch prevents a new
