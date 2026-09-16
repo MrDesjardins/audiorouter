@@ -117,4 +117,21 @@ mod tests {
         assert_eq!(decision.action, OsTransitionAction::RemainStopped);
         assert!(decision.session_ids.is_empty());
     }
+
+    #[test]
+    fn repeated_suspend_resume_cycles_remain_bounded_and_fail_closed() {
+        let running = ids(&["voice", "desktop"]);
+        let native = ids(&["voice"]);
+
+        for _ in 0..100 {
+            let stopped = plan_os_transition(OsTransition::Sleep, &running, &native, &[]);
+            assert_eq!(stopped.action, OsTransitionAction::StopAndRelease);
+            assert_eq!(stopped.session_ids, ids(&["desktop", "voice"]));
+
+            let resumed =
+                plan_os_transition(OsTransition::Resume, &stopped.session_ids, &native, &[]);
+            assert_eq!(resumed.action, OsTransitionAction::RevalidateBeforeRestart);
+            assert_eq!(resumed.session_ids, ids(&["desktop"]));
+        }
+    }
 }

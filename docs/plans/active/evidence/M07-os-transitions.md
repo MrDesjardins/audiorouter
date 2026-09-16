@@ -99,3 +99,13 @@ The shell transition forwarder uses a process-and-timestamp-qualified
 idempotency key, preventing a newly launched shell from colliding with a
 durable transition operation from an earlier shell instance. The uniqueness
 regression is covered by the native shell test suite.
+## 2026-09-15 — repeated suspend/resume policy cycles
+
+Added `repeated_suspend_resume_cycles_remain_bounded_and_fail_closed`, which
+runs 100 portable Sleep/Resume decisions over a mixed desktop/native session
+set. Every cycle returns `StopAndRelease` for the sorted running set and
+`RevalidateBeforeRestart` only for the desktop session; the native session is
+never automatically resumed. The focused control transition suite passed 6
+tests with formatting and diff checks clean. This validates the side-effect-
+free policy boundary only; it does not claim OS power-notification delivery,
+endpoint reopening, or native restart evidence.

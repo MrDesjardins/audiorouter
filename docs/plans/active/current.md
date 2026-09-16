@@ -134,6 +134,13 @@ artifact preparation/verification, 159 normative mappings, and docs. Cleanup
 removed 15 run-owned temporary children. No driver was installed or loaded,
 and no persistent machine-audio configuration changed.
 
+Added a portable M07 regression on 2026-09-15 covering 100 repeated
+suspend/resume policy cycles. The policy consistently stops and releases the
+sorted running set, then returns only the non-native session for explicit
+revalidation; the focused control transition suite passed 6 tests. This is
+bounded policy evidence, not proof of real OS power-notification delivery or
+native endpoint restart.
+
 Requalified `tests/acceptance/safe-all.ps1` at the current head on 2026-09-15.
 The complete guarded chain passed M00/M03 toolchain, native, driver, and
 reference-driver checks; M01/M04; M05 UI tests and temporary production
