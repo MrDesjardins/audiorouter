@@ -2,6 +2,16 @@
 
 Updated: 2026-09-16.
 
+Requalified the guarded VB-Cable signal and event paths on 2026-09-16.
+`m00-native-loopback-live.ps1 -AllowLiveAudio` passed a 750 ms capture with
+1,000 ms tone and 139,020 nonzero captured payload bytes. The event-driven
+check passed for 500 ms with 24,000 capture frames and 28,320 submitted render
+frames; both directions completed initialize/start/stop/reset successfully.
+Temporary probe artifacts were removed and defaults, volume, mute, privacy,
+drivers, signing, startup, endpoint identities, and persistent audio state
+were unchanged. This is user-mode WASAPI signal/lifecycle evidence, not
+managed-driver or physical-latency evidence.
+
 Requalified Windows process-loopback exclusion on 2026-09-16 with
 `m00-native-process-exclude-live.ps1 -AllowLiveAudio -DurationMilliseconds
 500`. The disposable child exclusion path activated, started, captured 22,050
