@@ -2,6 +2,17 @@
 
 Updated: 2026-09-16.
 
+Requalified the integrated `tests/acceptance/safe-all.ps1` chain at head
+`be57c02e` on 2026-09-16 after adding the read-only signing-prerequisite
+guard. Toolchain/native probes, x64/ARM64 driver builds, Secure Boot/VBS and
+prototype signature classification, Software Device dry-run, endpoint
+inventory, SysVAD, M01/M03/M04/M05/M06/M07, unsigned M08 release/installer
+checks, shell RPC, traceability, and documentation all passed. The run
+performed no signing, driver installation/loading, plugin or startup
+registration, or persistent audio configuration change; the new guard
+reported Secure Boot `True`, VBS status `2`, and both prototype packages
+unsigned.
+
 Added and passed `tests/acceptance/m03-signing-prerequisites.ps1` on
 2026-09-16. The read-only guard locates the installed WDK `signtool.exe`,
 records Secure Boot and VBS status, and verifies that both x64 and ARM64

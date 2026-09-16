@@ -1,5 +1,16 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-16 - integrated signing-prerequisite guard
+
+The new read-only signing-prerequisite step passed inside the full
+`tests/acceptance/safe-all.ps1` chain at `be57c02e`. It verified the installed
+WDK signing tool, recorded Secure Boot `True` and VBS status `2`, and rejected
+both x64 and ARM64 prototype packages as unsigned. The integrated run also
+passed both driver source builds and the existing bridge/package guards. No
+signing, installation, loading, boot-policy change, or machine audio
+configuration change occurred. Production signing and isolated loaded-driver
+qualification remain open.
+
 ## 2026-09-16 - automated signing-prerequisite guard
 
 `tests/acceptance/m03-signing-prerequisites.ps1` passed for both x64 and
