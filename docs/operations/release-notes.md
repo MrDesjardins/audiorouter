@@ -15,7 +15,7 @@ release and must not be presented as an installable Windows audio product.
 - Native builds use Visual Studio Community 2026/MSVC 14.51.36231 and Windows
   SDK 10.0.28000.0; the installed WDK is 10.1.28000.2526.
 
-## Verified in this qualification snapshot (2026-09-15)
+## Verified in this qualification snapshot (2026-09-16)
 
 - The locked Rust workspace passes its current package tests and doc-tests,
   formatting, and strict Clippy; the guarded native tests remain explicitly
