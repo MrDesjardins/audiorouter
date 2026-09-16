@@ -49,9 +49,16 @@ foreach ($required in @(
     }
 }
 
-& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $build
+$buildOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $build 2>&1)
 if ($LASTEXITCODE -ne 0) {
     throw "AudioRouter virtual-driver build failed with exit code $LASTEXITCODE"
+}
+$buildText = $buildOutput -join "`n"
+$expectedPlatformRoot = [IO.Path]::Combine($workspace, 'drivers', 'audiorouter-virtual', 'x64')
+if ($buildText -notmatch [regex]::Escape("Driver binary: $expectedPlatformRoot") -or
+    $buildText -notmatch [regex]::Escape("Driver INF: $expectedPlatformRoot") -or
+    $buildText -match 'Driver (binary|INF): .*\\ARM64\\') {
+    throw "driver build reported an artifact outside the requested x64 platform root`n$buildText"
 }
 
 $source = Get-Content -LiteralPath $adapter -Raw

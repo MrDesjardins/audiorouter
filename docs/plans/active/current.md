@@ -92,6 +92,12 @@ package paths and removed their temporary outputs, and the full M03 acceptance
 passed afterward. This protects qualification evidence only and does not
 change the driver installation or loading boundary.
 
+Strengthened `tests/acceptance/m03-driver-build.ps1` on 2026-09-15 to capture
+the build output and assert that the default x64 acceptance reports both the
+driver and INF beneath the x64 package root, rejecting any ARM64 report. The
+regression passed with the stale ARM64 package still present, along with the
+existing source, signability, and lifecycle checks.
+
 Requalified `tests/acceptance/safe-all.ps1` at the current head on 2026-09-15.
 The complete guarded chain passed M00/M03 toolchain, native, driver, and
 reference-driver checks; M01/M04; M05 UI tests and temporary production
