@@ -2,6 +2,15 @@
 
 Updated: 2026-09-16.
 
+Requalified the visual editor on 2026-09-16 with `tests/acceptance/m05-ui.ps1`.
+TypeScript typecheck, 227 tests across 19 files, and a temporary Vite
+production build transforming 214 modules all passed. This includes the
+drag/drop processor shelf, keyboard connection dialog, graph mutations,
+selection, deletion, and accessibility contracts. Temporary build output was
+removed; no audio, driver, or machine configuration was accessed. Manual
+visual/accessibility observation remains open because the desktop automation
+surface is not targetable.
+
 Completed a locked sequential all-features workspace run at the current
 head on 2026-09-16. The authoritative log recorded 762 passed tests and 13
 expected fixture/desktop-gated ignores across CLI/MCP (36/3), control (171,

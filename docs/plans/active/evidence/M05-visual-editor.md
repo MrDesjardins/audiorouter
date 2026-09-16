@@ -1,5 +1,15 @@
 # M05 visual editor evidence
 
+## 2026-09-16 - current visual editor requalification
+
+`tests/acceptance/m05-ui.ps1` passed TypeScript typecheck, 227 tests across 19
+files, and a temporary Vite production build transforming 214 modules. The
+covered UI contracts include the drag/drop processor shelf, keyboard
+connection dialog, graph mutations, selection, deletion, and accessibility
+behavior. Temporary build output was removed; no audio, driver, or machine
+configuration was accessed. Manual visual/accessibility observation remains
+open because the desktop automation surface is not targetable.
+
 ## 2026-09-15 - scaled canvas layout correction
 
 Anchored the React Flow canvas toolbar to the lower canvas edge instead of
