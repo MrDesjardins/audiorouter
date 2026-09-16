@@ -2,6 +2,15 @@
 
 Updated: 2026-09-16.
 
+Requalified the authorized process-loopback include/exclude paths on
+2026-09-16 for 500 ms. Include converted 21,609 source frames to 23,296
+engine frames across 182 quanta; exclude converted 22,050 source frames to
+23,936 engine frames across 187 quanta. Both used the bounded 44.1-to-48 kHz
+path with zero rejected packets, xruns, and input/output overruns or
+underruns. Streams stopped/reset and media-device identity/state remained
+unchanged. This validates user-mode process-loopback policy, not physical
+latency or loaded-driver routing.
+
 Requalified the control-owned VB-Cable route on 2026-09-16 for 750 ms using
 the exact existing endpoints. The lifecycle transported 36,000 captured and
 35,968 rendered frames across 281 quanta and 75 packets, with one successful

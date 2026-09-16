@@ -1,5 +1,17 @@
 # 2026-09-15 - live built-in processing chain validation
 
+## 2026-09-16 - process-loopback include/exclude requalification
+
+The authorized `m00-rust-process-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 500` acceptance passed both modes. Include converted
+21,609 source frames to 23,296 engine frames across 182 scheduler quanta;
+exclude converted 22,050 source frames to 23,936 engine frames across 187
+quanta. Both used the bounded 44.1-to-48 kHz resampler with zero rejected
+packets, xruns, or input/output overruns and underruns. Streams stopped/reset
+and media-device identity/state remained unchanged. This is user-mode
+process-loopback policy evidence, not physical-latency or loaded-driver
+qualification.
+
 ## 2026-09-16 - control-owned VB-Cable route lifecycle
 
 The authorized `m02-control-route-live.ps1 -AllowLiveAudio
