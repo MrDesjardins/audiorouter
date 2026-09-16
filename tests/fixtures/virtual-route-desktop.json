@@ -1,0 +1,7 @@
+[
+  {
+    "busId": "desktop-bus",
+    "producerSessionId": "session-fixture",
+    "consumerSessionId": "session-consumer"
+  }
+]

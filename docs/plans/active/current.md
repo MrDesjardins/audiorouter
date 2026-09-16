@@ -2,6 +2,15 @@
 
 Updated: 2026-09-16.
 
+Extended M03 virtual-bus acceptance on 2026-09-16 to cover the explicit
+cross-session route boundary. The disposable CLI workflow imports and
+duplicates two stopped sessions, creates the eight-bus inventory, applies a
+Desktop In route between the sessions, verifies route revision/data after a
+separate process reopen, and rejects a two-way virtual route cycle. The
+existing capacity and lifecycle checks remain passing, including ninth-bus
+`LimitReached` and disabled-before-delete. No audio endpoint, native device,
+or persistent machine audio configuration was accessed.
+
 Expanded M03 virtual-bus acceptance on 2026-09-16 to demonstrate the declared
 eight-bus capacity and fail closed on a ninth (`LimitReached`). The disposable
 database run still exercises separate CLI-process create/list persistence,

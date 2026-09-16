@@ -34,6 +34,10 @@ try {
     }
 
     try {
+        & cargo run --quiet -p audiorouter-cli -- import (Join-Path $fixtureRoot 'valid-session.json') --database $database 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'failed to import the producer session fixture' }
+        $duplicate = Invoke-CliJson @('session', 'duplicate', 'session-fixture', 'session-consumer', '--idempotency-key', 'duplicate-consumer', '--database', $database)
+        if ($duplicate.session.id -ne 'session-consumer') { throw 'failed to create the consumer session fixture' }
         $operations = @(
                 @{ Fixture = 'virtual-bus-create.json'; Key = 'create-desktop' },
                 @{ Fixture = 'virtual-bus-voice-create.json'; Key = 'create-voice' },
@@ -76,6 +80,33 @@ try {
             }
         }
         if (-not $overflowRejected) { throw 'ninth managed bus was not rejected at the declared capacity' }
+
+        $routeFile = Join-Path $fixtureRoot 'virtual-route-desktop.json'
+        $routeApplied = Invoke-CliJson @(
+            'virtual-routes', 'replace', '--base-revision', '0', '--file', $routeFile,
+            '--idempotency-key', 'route-desktop', '--database', $database)
+        if ($routeApplied.revision -ne 1 -or $routeApplied.routes.Count -ne 1) {
+            throw 'explicit cross-session virtual route was not applied'
+        }
+        $routeListed = Invoke-CliJson @('virtual-routes', 'list', '--database', $database)
+        if ($routeListed.revision -ne 1 -or $routeListed.routes.Count -ne 1 -or
+            $routeListed.routes[0].busId -ne 'desktop-bus') {
+            throw 'explicit virtual route was not persisted across CLI processes'
+        }
+        $cycleRejected = $false
+        try {
+            $null = Invoke-CliJson @(
+                'virtual-routes', 'replace', '--base-revision', '1',
+                '--file', (Join-Path $fixtureRoot 'virtual-route-cycle.json'),
+                '--idempotency-key', 'route-cycle', '--database', $database)
+        } catch {
+            if ($_.Exception.Message -match 'Cycle|cycle') {
+                $cycleRejected = $true
+            } else {
+                throw
+            }
+        }
+        if (-not $cycleRejected) { throw 'cross-session virtual route cycle was not rejected' }
 
         $renamed = Apply-Operation 'virtual-bus-rename.json' 'rename-desktop'
         if ($renamed.operation.name -ne 'Desktop Monitor') { throw 'rename lifecycle result was not persisted' }
