@@ -2,6 +2,14 @@
 
 Updated: 2026-09-15.
 
+- Integrated durable STATE-10 crash markers into the Windows shell supervisor
+  on 2026-09-15. Each terminal control-backend failure is recorded through
+  SQLite before retry, and a prior durable three-failure latch prevents a new
+  shell instance from forgetting safe mode. The control plane remains stopped
+  and does not resume sessions, native endpoints, or recordings. Shell tests
+  (25), Clippy, and formatting pass. Evidence: [M07 automation and recovery]
+  (evidence/M07-automation-recovery.md).
+
 - Requalified the complete guarded `safe-all.ps1` chain at pushed head
   `9a374954` on 2026-09-15 after the shell-supervisor and UI draft-safety
   changes. WDK compile/signability, 34-endpoint inventory, disposable SysVAD,

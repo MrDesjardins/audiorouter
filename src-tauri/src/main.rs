@@ -158,6 +158,16 @@ fn default_database_path() -> Result<std::path::PathBuf, String> {
         .join(DEFAULT_DATABASE_FILE))
 }
 
+#[cfg(windows)]
+fn record_backend_failure(database: &std::path::Path) -> Option<usize> {
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_secs();
+    let storage = Storage::open(database).ok()?;
+    storage.record_recovery_crash(timestamp).ok()
+}
+
 fn default_desktop_session() -> Session {
     Session {
         id: EntityId::new(DESKTOP_SESSION_ID),
@@ -418,7 +428,15 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                         Ok(()) => break,
                         Err(error) => {
                             let now = std::time::Instant::now();
-                            match supervisor.record_failure(now) {
+                            let durable_failures = record_backend_failure(&database);
+                            let decision = supervisor.record_failure(now);
+                            if durable_failures.is_some_and(|count| count >= 3) {
+                                eprintln!(
+                                    "AudioRouter control backend stopped: {error}; durable safe mode engaged after repeated failures"
+                                );
+                                break;
+                            }
+                            match decision {
                                 BackendRestartDecision::Restart { delay } => {
                                     eprintln!(
                                         "AudioRouter control backend stopped: {error}; restarting after {} ms ({} recent failures)",

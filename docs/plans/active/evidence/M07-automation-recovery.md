@@ -1,5 +1,16 @@
 # M07 automation and recovery evidence
 
+## 2026-09-15 - durable shell failure markers
+
+The Windows shell supervisor now records each terminal control-backend
+failure through the existing SQLite recovery marker before deciding whether to
+retry. The durable count is checked alongside the in-process bounded policy,
+so a fresh shell cannot forget a three-failure safe-mode latch. Failure
+reconstruction still creates only a stopped control plane: sessions, native
+endpoints, and recordings are never resumed implicitly. Shell tests (25),
+strict Clippy, and formatting passed. No live audio or persistent machine
+audio configuration was changed.
+
 ## 2026-09-15 - bounded shell backend supervision
 
 The shell-owned control backend now has a bounded supervisor around its
