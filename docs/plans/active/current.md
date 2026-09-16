@@ -2,6 +2,18 @@
 
 Updated: 2026-09-15.
 
+- Requalified the complete guarded `safe-all.ps1` chain at pushed head
+  `718a8b8a` on 2026-09-15. Toolchain/native compile and 34-endpoint
+  read-only inventory, M03 x64 WDK build/signability/catalog, disposable
+  SysVAD, M01 CLI, M04 DSP/recording, M05 UI (218 tests and production build),
+  M06 VST3 SDK/native worker and VST2 fixtures, M07 headless controls, M08
+  unsigned artifacts, 159 normative mappings, and documentation (54 Markdown
+  files, 204 local links) passed. Cleanup removed 15 run-owned temporary
+  children. No driver was installed or loaded, no signing mode or startup/
+  plugin registration changed, and no live or persistent machine audio
+  configuration changed. Loaded PortCls transport, production signing/install,
+  physical latency, and attended UI/accessibility gates remain open.
+
 - Requalified the non-installing M03 AudioRouter x64 WDK driver on 2026-09-15
   with Visual Studio Community MSBuild 18.9.1 and WDK 10.0.28000.0.
   Utilities, Filters, Main, package/catalog, and Inc built successfully;

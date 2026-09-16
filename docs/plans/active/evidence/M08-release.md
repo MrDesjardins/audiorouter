@@ -1,5 +1,20 @@
 # M08 release evidence
 
+## 2026-09-15 - guarded acceptance at `718a8b8a`
+
+The complete elevated `tests/acceptance/safe-all.ps1` chain passed at the
+current pushed head. It covered toolchain/native compile and 34-endpoint
+read-only inventory, M03 x64 WDK build/signability/catalog, disposable SysVAD,
+M01 CLI, M04 DSP/recording, M05 UI (218 tests and production build), M06 VST3
+SDK/native worker and VST2 fixtures, M07 headless controls, unsigned M08
+artifacts, 159 normative requirement mappings, and documentation validation
+(54 Markdown files and 204 local links). Cleanup removed 15 run-owned
+temporary children. This is qualification evidence only: no driver was
+installed or loaded, no signing mode or startup/plugin registration changed,
+and no live or persistent machine audio configuration changed. Loaded PortCls
+transport, production signing/install, physical latency, and attended
+UI/accessibility gates remain open.
+
 ## 2026-09-13 - complete safe-chain requalification after lock repair
 
 The complete `tests/acceptance/safe-all.ps1` chain passed on the repaired
