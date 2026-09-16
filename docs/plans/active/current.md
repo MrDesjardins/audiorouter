@@ -48,6 +48,15 @@ removed 15 run-owned temporary children. No Software Device API create,
 driver installation/loading, plugin/startup registration, or persistent audio
 configuration action occurred.
 
+Performed one explicitly authorized temporary Software Device API lifecycle
+probe on 2026-09-16 using instance `manual-20260916`. Windows returned
+`SWD\\AudioRouter\\manual-20260916`, the probe closed the handle and exited
+successfully, exact temporary executable/object files were removed, and a
+read-only `Get-PnpDevice -PresentOnly` query found zero remaining matching
+devices. This validates the create/close rollback seam only; the AudioRouter
+driver package was not installed or loaded, no endpoint was qualified, and no
+persistent audio configuration changed.
+
 Added the first package-level prerequisite for managed software-device buses
 on 2026-09-15: `AudioRouterVirtual.inx` now matches the explicit
 `SWD\\AudioRouterVirtual` hardware ID used by a future Software Device API
