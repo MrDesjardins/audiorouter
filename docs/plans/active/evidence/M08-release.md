@@ -1,5 +1,17 @@
 # M08 release evidence
 
+## 2026-09-15 - current-head unsigned artifact requalification
+
+The locked release-preparation flow completed into the new disposable
+`target/release-qualification-20260915` directory. It produced and verified
+the x64 `audiorouter-cli.exe`, `audiorouter-plugin-worker.exe`,
+`audiorouter-shell.exe`, zipped UI bundle, VB-Cable launcher, Cargo/npm SBOMs,
+third-party notices, checksums, and unsigned release manifest. The companion
+`verify-artifacts.ps1` check passed PE architecture, exact hashes, manifest,
+and SBOM validation. Generated output is disposable and remains unsigned,
+not publication-ready; no driver or installer was installed and no machine
+audio configuration changed.
+
 ## 2026-09-15 - guarded safe acceptance at `d8b530ea`
 
 The complete guarded `safe-all.ps1` chain passed after the backend-owned

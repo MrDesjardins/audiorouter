@@ -47,6 +47,14 @@ with initialize/event/start/stop/reset success on both directions. The probe
 performed no default-device, volume, mute, privacy, driver, signing, startup,
 or persistent audio configuration action.
 
+The reproducible M08 release-preparation flow was rerun at this head into the
+new disposable `target/release-qualification-20260915` directory. It built
+the optimized x64 CLI, plugin worker, native shell, UI archive, Cargo/npm
+SBOMs, notices, checksums, and unsigned manifest; `verify-artifacts.ps1`
+validated the complete set. The output remains unsigned and publication-
+ineligible, with production signing, driver installation, installer, and
+clean-machine gates unchanged.
+
 The previously documented differing-rate capture ID was stale and correctly
 failed closed with Windows `0x80070490` before stream opening. A fresh
 read-only inventory identified a current 96 kHz capture endpoint, and the
