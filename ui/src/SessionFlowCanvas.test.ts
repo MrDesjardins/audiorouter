@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { demoSession } from "./fixtures";
-import { deletedConnectionIds, deletedNodeIds, libraryDropPosition } from "./SessionFlowCanvas";
+import { deletedConnectionIds, deletedNodeIds, eqBandCoordinates, libraryDropPosition, telemetrySignalActive } from "./SessionFlowCanvas";
 import { SessionFlowCanvas } from "./SessionFlowCanvas";
 
 beforeAll(() => {
@@ -21,6 +21,18 @@ beforeAll(() => {
 afterEach(cleanup);
 
 describe("canvas library drop positions", () => {
+  it("maps EQ bands across the audible frequency range", () => {
+    expect(eqBandCoordinates(20, 0).x).toBeCloseTo(8);
+    expect(eqBandCoordinates(20_000, 0).x).toBeCloseTo(192);
+    expect(eqBandCoordinates(1_000, 12).y).toBeLessThan(eqBandCoordinates(1_000, -12).y);
+  });
+
+  it("only marks a link active for a real bounded meter signal", () => {
+    expect(telemetrySignalActive({ nodeId: "meter", kind: "meter", meter: null, processor: null })).toBe(false);
+    expect(telemetrySignalActive({ nodeId: "meter", kind: "meter", meter: { peakDb: -60, rmsDb: -70, clippedSamples: 0, channelPeakDb: [], channelRmsDb: [], channelClippedSamples: [] }, processor: null })).toBe(false);
+    expect(telemetrySignalActive({ nodeId: "meter", kind: "meter", meter: { peakDb: -12, rmsDb: -18, clippedSamples: 0, channelPeakDb: [], channelRmsDb: [], channelClippedSamples: [] }, processor: null })).toBe(true);
+  });
+
   it("converts viewport coordinates into bounded canvas coordinates", () => {
     expect(libraryDropPosition(240, 180, { left: 100, top: 50 })).toEqual({ x: 120, y: 110 });
   });
