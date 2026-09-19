@@ -61,13 +61,13 @@ function edgePoint(node: ReturnType<typeof useInternalNode>, side: EdgeSide, fal
 }
 
 function edgeHandleId(portName: string, side: EdgeSide) {
-  return `${portName}::${side}`;
+  return `${portName}__edge_${side}`;
 }
 
 function logicalPortHandle(handle: string | null | undefined) {
   if (!handle) return { port: handle ?? null, side: undefined as EdgeSide | undefined };
-  const separator = handle.lastIndexOf("::");
-  const side = handle.slice(separator + 2) as EdgeSide;
+  const separator = handle.lastIndexOf("__edge_");
+  const side = handle.slice(separator + 7) as EdgeSide;
   return separator > 0 && EDGE_SIDES.includes(side) ? { port: handle.slice(0, separator), side } : { port: handle, side: undefined };
 }
 
