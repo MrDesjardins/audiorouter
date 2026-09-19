@@ -1706,3 +1706,7 @@ detected 2,006 groups, with 471-frame p95 inter-group spacing error and an
 estimated 188.98 ms onset. Although the wrapper returned success because its
 minimum-count check was met, the excess detections and cadence error make this
 an invalid physical-latency measurement. It does not close NFR-01.
+
+The physical-latency gate is parked until a loopback cable is available. The
+current USB PD200X microphone plus Focusrite headset arrangement is not a
+stable wired reference; no acoustic result is promoted to NFR-01 evidence.

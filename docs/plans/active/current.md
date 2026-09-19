@@ -978,3 +978,13 @@ The subsequent retry detected 2,006 groups for 1,000 impulses with 471-frame
 p95 spacing error and an estimated 188.98 ms onset. It is explicitly rejected
 as a physical-latency result despite the wrapper exit code being zero because
 the cadence is not valid.
+
+## Physical-latency gate parked (2026-09-18)
+
+The calibrated physical-latency gate is intentionally deferred until the user
+has the required loopback cable available. The current USB PD200X microphone
+and Focusrite headset arrangement can produce audible output, but it cannot
+provide a stable wired reference; repeated acoustic runs were therefore
+rejected for insufficient detection or invalid cadence. This is a recorded
+prerequisite, not a waiver of NFR-01/NFR-02/QUAL-04. Continue with the next
+available non-physical acceptance work.
