@@ -1037,6 +1037,20 @@ Strict static verification was rerun afterward and passed: `cargo clippy
 `cargo fmt --all -- --check`. No source or generated artifact changes were
 left by either check.
 
+The native AudioRouter shell was subsequently exposed to the Windows
+computer-use surface and an attended M05 check was performed without starting
+audio. The initial shell showed backend ready, a stopped revision-0 session,
+safe startup, monitoring muted/unarmed, labeled session/canvas/inspector
+controls, and deferred virtual-device controls visibly disabled. The user
+clicked `+ Test Signal`; the node appeared on the canvas and in the inspector
+with bounded frequency, level, and duration controls. No plan was committed
+and the session remained stopped. The draft was then discarded and the
+original graph was confirmed restored. A maximized-window screenshot also
+showed the session list, canvas, shelf, inspector, and draft controls in one
+responsive layout. This is attended native-shell evidence for the click path
+and safe first-run state; Narrator speech, Windows display-scaling settings,
+and live drag-and-drop remain unverified.
+
 The elevated `tests/acceptance/safe-all.ps1` chain was rerun after this
 reconciliation and passed end to end on the clean tree. It covered M00
 toolchain/native compile and 34-endpoint format inventory, M01 CLI, existing-
