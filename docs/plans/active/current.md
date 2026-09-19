@@ -988,3 +988,31 @@ provide a stable wired reference; repeated acoustic runs were therefore
 rejected for insufficient detection or invalid cadence. This is a recorded
 prerequisite, not a waiver of NFR-01/NFR-02/QUAL-04. Continue with the next
 available non-physical acceptance work.
+
+## Authoritative current-state reconciliation (2026-09-18)
+
+This section supersedes older point-in-time notes above where they describe a
+different checkout state. The current Git worktree is clean at commit
+`81bd72b0` (`Park physical latency pending loopback cable`). The clean-tree
+`tests/acceptance/m08-release.ps1` run passed unsigned optimized Rust/UI
+artifact preparation and verification; its temporary outputs were removed.
+Documentation validation currently reports 56 Markdown files and 225 local
+links, and traceability covers 159 normative requirement IDs.
+
+The remaining blockers are evidence or authority gaps, not uncommitted source:
+
+- The AudioRouter-owned driver, PortCls, production-signing, and clean-machine
+  driver track is future work under `docs/plans/future/` and is excluded from
+  the active VB-Cable-first completion chain.
+- NFR-01/NFR-02/QUAL-04 physical latency remains parked until a wired
+  Focusrite output-to-input loopback cable is available. The USB PD200X
+  acoustic retries were rejected and are not latency evidence.
+- Attended M05 accessibility/scaling/first-run/drag-and-drop and M07 actual
+  OS-transition delivery/native reopen remain unverified because the current
+  computer-use inventory is `apps: []`, `browsers: []`.
+- Plugin redistribution rights/full OS sandboxing and signed installer,
+  clean install/upgrade/uninstall, and publication evidence remain open.
+
+Until one of those external prerequisites changes, the next actionable work
+is documentation/audit maintenance; the plan must not be archived or marked
+complete on the basis of portable or unsigned evidence.
