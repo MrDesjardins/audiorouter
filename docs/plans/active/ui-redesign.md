@@ -110,3 +110,10 @@ Reported defects and fixes:
 Automated verification: UI typecheck and 263 Vitest tests pass after this
 follow-up. Native visual confirmation remains pending until the attended shell
 surface is available again.
+
+The follow-up also makes backend state and persistence explicit. A connected
+backend uses a green status dot; disconnected status remains amber. A
+physical-input inspector with no active capture endpoints offers a device-list
+refresh and explains that a reboot is not normally required. `Plan changes`
+only validates and stages a backend plan; `Commit changes` is the explicit save
+operation, including when validation returns no warnings.

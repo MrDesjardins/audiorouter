@@ -844,6 +844,8 @@ describe("keyboard connection dialog", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Add connection to draft" }));
     fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
 
+    await waitFor(() => expect(screen.getByRole("button", { name: "Commit changes" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Commit changes" }));
     await waitFor(() => expect(commitGraph).toHaveBeenCalledWith("connection-plan", demoSession.revision, expect.any(String)));
     expect(planGraph).toHaveBeenCalledWith(expect.objectContaining({
       edges: expect.arrayContaining([
@@ -997,6 +999,8 @@ describe("keyboard connection dialog", () => {
     fireEvent.click(plan);
     expect(planGraph).toHaveBeenCalledTimes(1);
     releasePlan({ planId: "graph-plan", baseRevision: demoSession.revision, expiresInMs: 30000, diff: [], warnings: [], affectedDestinations: [], requiredScopes: [] });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Commit changes" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Commit changes" }));
     await waitFor(() => expect(commitGraph).toHaveBeenCalledTimes(1));
   });
 
@@ -1189,6 +1193,8 @@ describe("keyboard connection dialog", () => {
     fireEvent.change(await screen.findByRole("spinbutton", { name: "thresholdDb precise value" }), { target: { value: "-30" } });
     fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
 
+    await waitFor(() => expect(screen.getByRole("button", { name: "Commit changes" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Commit changes" }));
     await waitFor(() => expect(commitGraph).toHaveBeenCalledWith("gate-plan", demoSession.revision, expect.any(String)));
     expect(planGraph).toHaveBeenCalledWith(expect.objectContaining({
       nodes: expect.arrayContaining([
@@ -1237,6 +1243,8 @@ describe("keyboard connection dialog", () => {
     fireEvent.change(await screen.findByRole("spinbutton", { name: "semitones precise value" }), { target: { value: "5" } });
     fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
 
+    await waitFor(() => expect(screen.getByRole("button", { name: "Commit changes" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Commit changes" }));
     await waitFor(() => expect(commitGraph).toHaveBeenCalledWith("pitch-plan", demoSession.revision, expect.any(String)));
     expect(planGraph).toHaveBeenCalledWith(expect.objectContaining({
       nodes: expect.arrayContaining([
@@ -1284,6 +1292,8 @@ describe("keyboard connection dialog", () => {
     fireEvent.change(await screen.findByRole("spinbutton", { name: "ratio precise value" }), { target: { value: "6" } });
     fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
 
+    await waitFor(() => expect(screen.getByRole("button", { name: "Commit changes" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Commit changes" }));
     await waitFor(() => expect(commitGraph).toHaveBeenCalledWith("compressor-plan", demoSession.revision, expect.any(String)));
     expect(planGraph).toHaveBeenCalledWith(expect.objectContaining({
       nodes: expect.arrayContaining([
@@ -1331,6 +1341,8 @@ describe("keyboard connection dialog", () => {
     fireEvent.change(await screen.findByRole("spinbutton", { name: "ceilingDb precise value" }), { target: { value: "-3" } });
     fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
 
+    await waitFor(() => expect(screen.getByRole("button", { name: "Commit changes" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Commit changes" }));
     await waitFor(() => expect(commitGraph).toHaveBeenCalledWith("limiter-plan", demoSession.revision, expect.any(String)));
     expect(planGraph).toHaveBeenCalledWith(expect.objectContaining({
       nodes: expect.arrayContaining([
