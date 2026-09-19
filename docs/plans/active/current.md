@@ -565,10 +565,10 @@ the current shell/backend uses an owner-authenticated Windows named pipe, not a
 TCP listener, so Firefox, Claude/ChatGPT Work, and MCP cannot yet be treated as
 equivalent browser clients. The existing tray already exposes Open, close,
 quit, privacy, status, and recorder actions, but it does not have a truthful
-IP/port to display. Add loopback-only HTTP/WebSocket JSON-RPC with explicit
-origin/authentication policy and a tray endpoint/status item as a subsequent
-M07/M05 integration task; do not claim browser or remote control support until
-that transport is implemented and qualified.
+IP/port to display. `docs/spec/10-api.md` explicitly classifies a standalone
+browser adapter as future scope; therefore loopback HTTP/WebSocket JSON-RPC,
+origin/authentication policy, and a browser-facing tray endpoint are not active
+M07/M05 completion tasks. Do not claim browser or remote control support.
 
 The follow-up M05 polish on 2026-09-18 added a generated waveform tray icon,
 an expanding canvas layout, an initialization-time ReactFlow fit pass, and
