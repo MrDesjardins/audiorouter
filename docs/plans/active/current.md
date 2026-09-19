@@ -1088,3 +1088,9 @@ suite now passes 263 tests, typecheck, production build, and M05 acceptance.
 Native-shell visual inspection at 1280×720/maximized remains open because the
 attended computer-use surface is unavailable; do not treat the automated build
 as visual acceptance.
+
+The subsequent 2026-09-18 usability pass addressed four user-reported M05
+defects: initial canvas fit after draft hydration, physical-input endpoint
+selection in the node inspector, recorder format/approved-path visibility, and
+inspector width/control layout. The UI typecheck, 263 tests, production build,
+and M05 acceptance passed again. Native visual confirmation remains open.

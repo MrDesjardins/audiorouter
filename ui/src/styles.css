@@ -231,3 +231,19 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .library-grid button { min-height: 3.25rem; text-align: left; }
 @media (prefers-reduced-motion: reduce) { .session-flow-canvas .react-flow__edge.flow-edge-active .react-flow__edge-path { animation: none; } .session-flow-canvas .react-flow__node { transition: none; } }
 @media (max-width: 900px) { .session-flow-canvas { min-height: 520px; } .canvas-library { width: min(192px, calc(100% - 1.6rem)); } }
+
+/* Inspector usability: give controls room to breathe, especially the EQ. */
+.main-content { grid-template-columns: minmax(0, 1fr) minmax(360px, 420px); }
+.main-content > .inspector { padding: 1rem; }
+.main-content > .inspector .inspector-grid { gap: .9rem; }
+.main-content > .inspector .inspector-grid > label { display: grid; gap: .35rem; width: 100%; align-items: stretch; }
+.main-content > .inspector .inspector-grid input[type="range"] { width: 100%; }
+.main-content > .inspector .inspector-grid input[type="number"], .main-content > .inspector .inspector-grid select { min-width: 0; width: 100%; }
+.node-binding-editor { display: grid; gap: .55rem; margin: .8rem 0; padding: .8rem; border: 1px solid #4c6978; border-radius: 10px; background: linear-gradient(145deg, rgb(33 57 66 / 74%), rgb(26 34 41 / 84%)); box-shadow: inset 1px 1px 0 rgb(255 255 255 / 10%); }
+.node-binding-editor strong { display: block; margin-top: .2rem; color: #f4fbff; font-size: .85rem; }
+.node-binding-editor label { display: grid; gap: .3rem; color: #d5e0e7; font-size: .78rem; }
+.node-binding-editor input[readonly] { color: #9fb0bd; font-size: .75rem; }
+.node-binding-editor small { color: #a7b8c4; line-height: 1.4; }
+.recorder-node-editor { border-color: #716746; background: linear-gradient(145deg, rgb(61 53 34 / 72%), rgb(33 34 35 / 88%)); }
+@media (max-width: 1100px) { .main-content { grid-template-columns: minmax(0, 1fr) minmax(320px, 36vw); } }
+@media (max-width: 900px) { .main-content { grid-template-columns: 1fr; } }

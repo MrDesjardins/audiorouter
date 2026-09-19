@@ -90,3 +90,23 @@ Current diagnostics snapshots are bounded and may be unavailable while the
 session is stopped or the native stage is not prepared. The UI must say that
 honestly; it must not invent a meter signal. Full Windows Narrator and scaling
 evidence remains an attended acceptance task.
+
+## 2026-09-18 usability defect follow-up
+
+Reported defects and fixes:
+
+1. The initial React Flow could fit before the draft nodes arrived. The canvas
+   now refits after node/edge/layout changes as well as on initialization.
+2. A selected physical-input node did not expose microphone selection. The
+   inspector now exposes the exact active capture endpoint and writes the same
+   stopped session binding used by native preparation.
+3. Recorder settings were hidden from the selected-node workflow. The
+   inspector now exposes the recorder format and approved output-path state,
+   while making the backend-owned safe-directory restriction explicit.
+4. The fixed-width inspector made EQ controls cramped. The desktop layout now
+   reserves 360–420 px for the inspector and stacks its controls; it collapses
+   to one column below 900 px.
+
+Automated verification: UI typecheck and 263 Vitest tests pass after this
+follow-up. Native visual confirmation remains pending until the attended shell
+surface is available again.

@@ -8,6 +8,7 @@ import {
   type Connection,
   type Edge as FlowEdge,
   type Node as FlowNode,
+  type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
@@ -163,11 +164,17 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
   const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey));
   const positionsRef = useRef(positions);
+  const flowInstanceRef = useRef<ReactFlowInstance | null>(null);
   useEffect(() => {
     const next = readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey);
     positionsRef.current = next;
     setPositions(next);
   }, [layoutKey]);
+  useEffect(() => {
+    if (!flowInstanceRef.current) return;
+    const frame = globalThis.requestAnimationFrame(() => flowInstanceRef.current?.fitView({ padding: 0.2 }));
+    return () => globalThis.cancelAnimationFrame(frame);
+  }, [session.nodes.length, session.edges.length, positions]);
   const highlightedNodeIds = relatedNodeIds(session, selectedNodeId);
   const tidyLayout = () => {
     const next = Object.fromEntries(session.nodes.map((node, index) => [node.id, positionFor(index)]));
@@ -259,7 +266,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
         nodes={nodes}
         edges={edges}
         fitView
-        onInit={(instance) => { globalThis.requestAnimationFrame(() => instance.fitView({ padding: 0.2 })); }}
+        onInit={(instance) => { flowInstanceRef.current = instance; globalThis.requestAnimationFrame(() => instance.fitView({ padding: 0.2 })); }}
         nodesConnectable={canEdit}
         nodesDraggable
         selectionOnDrag
