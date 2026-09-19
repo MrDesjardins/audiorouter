@@ -1024,6 +1024,14 @@ test therefore cannot be started on this host, and even an available browser
 would cover only the WebView/page surface—not Narrator, the native Tauri
 window/tray, or actual Windows lock/sign-out/sleep transitions.
 
+The subsequent full locked workspace regression passed with 36 CLI, 181
+control tests plus four guarded-live tests ignored, 66 domain, 34 DSP, 118
+engine, 70 plugin-host, 13 worker-process, 8 protocol, 40 recording, 92
+storage, 19 transport, 88 Windows-audio tests, and all doc-tests. This
+refreshes portable regression evidence only; the guarded-live tests remain
+explicitly opt-in and do not close the physical, attended, or OS-transition
+gates.
+
 The elevated `tests/acceptance/safe-all.ps1` chain was rerun after this
 reconciliation and passed end to end on the clean tree. It covered M00
 toolchain/native compile and 34-endpoint format inventory, M01 CLI, existing-
