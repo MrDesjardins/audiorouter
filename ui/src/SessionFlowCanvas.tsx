@@ -308,30 +308,32 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
       writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
     }
   };
+  const captureConnectionHandle = (event: MouseEvent<HTMLDivElement> | PointerEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null;
+    const handle = target?.closest<HTMLElement>("[data-debug-handle-id]");
+    if (!handle) return;
+    const handleId = handle.dataset.debugHandleId;
+    const side = handle.dataset.debugSide as EdgeSide | undefined;
+    const direction = handle.dataset.debugDirection as "source" | "target" | undefined;
+    const nodeId = handle.dataset.nodeid;
+    const node = session.nodes.find((candidate) => candidate.id === nodeId);
+    if (!handleId || !side || !direction || !nodeId || !node) return;
+    const captured = { nodeId, handleId, side };
+    if (direction === "source") sourceHandleRef.current = captured;
+    else targetHandleRef.current = captured;
+    logConnectionDebug("handle-capture", {
+      nodeId,
+      nodeName: node.name,
+      direction,
+      side,
+      handleId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      button: event.button,
+    });
+  };
   const nodes: FlowNode[] = session.nodes.map((node, index) => {
     const telemetry = nodeTelemetryFor(node, diagnostics);
-    const captureConnectionHandle = (event: MouseEvent<HTMLDivElement> | PointerEvent<HTMLDivElement>) => {
-      const target = event.target as HTMLElement | null;
-      const handle = target?.closest<HTMLElement>("[data-debug-handle-id]");
-      if (!handle) return;
-      const handleId = handle.dataset.debugHandleId;
-      const side = handle.dataset.debugSide as EdgeSide | undefined;
-      const direction = handle.dataset.debugDirection as "source" | "target" | undefined;
-      if (!handleId || !side || !direction) return;
-      const captured = { nodeId: node.id, handleId, side };
-      if (direction === "source") sourceHandleRef.current = captured;
-      else targetHandleRef.current = captured;
-      logConnectionDebug("handle-capture", {
-        nodeId: node.id,
-        nodeName: node.name,
-        direction,
-        side,
-        handleId,
-        clientX: event.clientX,
-        clientY: event.clientY,
-        button: event.button,
-      });
-    };
     return ({
     id: node.id,
     position: positions[node.id] ?? positionFor(index),
@@ -394,6 +396,8 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
         selectionOnDrag
         onSelectionChange={({ nodes: selectedNodes }) => onSelectMany?.(selectedNodes.map((node) => node.id))}
         onNodeClick={(_, node) => onSelect(node.id)}
+        onMouseDownCapture={captureConnectionHandle}
+        onPointerDownCapture={captureConnectionHandle}
         onConnectStart={(_, params) => logConnectionDebug("react-flow-connect-start", { handleType: params.handleType, nodeId: params.nodeId, handleId: params.handleId, capturedSource: sourceHandleRef.current, capturedTarget: targetHandleRef.current })}
         onConnectEnd={(_, connectionState) => logConnectionDebug("react-flow-connect-end", { inProgress: "inProgress" in connectionState ? connectionState.inProgress : false, fromNode: connectionState.fromNode?.id, fromHandle: connectionState.fromHandle?.id, toNode: connectionState.toNode?.id, toHandle: connectionState.toHandle?.id, toPosition: connectionState.toPosition })}
         onConnect={canEdit ? (connection) => { const rawSourceHandle = connection.sourceHandle ?? (sourceHandleRef.current?.nodeId === connection.source ? sourceHandleRef.current.handleId : null); const rawTargetHandle = connection.targetHandle ?? (targetHandleRef.current?.nodeId === connection.target ? targetHandleRef.current.handleId : null); logConnectionDebug("react-flow-connect", { source: connection.source, sourceHandle: connection.sourceHandle, recoveredSourceHandle: rawSourceHandle, target: connection.target, targetHandle: connection.targetHandle, recoveredTargetHandle: rawTargetHandle }); const source = logicalPortHandle(rawSourceHandle); const target = logicalPortHandle(rawTargetHandle); const normalized = { ...connection, sourceHandle: source.port, targetHandle: target.port }; const edgeId = onConnect(normalized); logConnectionDebug("draft-connect-result", { edgeId, normalizedSourceHandle: normalized.sourceHandle, normalizedTargetHandle: normalized.targetHandle, sourceSide: source.side, targetSide: target.side }); if (edgeId) { if (source.side) setEdgeSide(edgeId, "source", source.side); if (target.side) setEdgeSide(edgeId, "target", target.side); } sourceHandleRef.current = null; targetHandleRef.current = null; } : undefined}
