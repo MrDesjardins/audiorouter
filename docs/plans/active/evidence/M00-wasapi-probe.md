@@ -1680,3 +1680,13 @@ an 81.02 ms digital onset. Temporary probe artifacts were removed. This is
 bounded software signal-correlation evidence only; the estimate is not
 calibrated acoustic/physical latency and does not qualify managed-driver
 callback timing.
+
+## Native physical impulse attempt (2026-09-18)
+
+The guarded 100-impulse acceptance was rerun using the exact physical
+`Speakers (PD200X Podcast Microphone)` render endpoint and `Microphone
+(PD200X Podcast Microphone)` capture endpoint. The analyzer detected 0 of 100
+impulse groups and correctly rejected the run (`only 0 impulse groups
+detected; expected at least 90`). Temporary probe artifacts were cleaned.
+This confirms that the current setup does not provide a valid acoustic
+correlation result; it does not qualify calibrated physical latency.

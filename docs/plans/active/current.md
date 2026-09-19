@@ -951,3 +951,9 @@ CABLE Output capture and CABLE Input render endpoints: 187 processed quanta,
 destination peak `-18.000 dB`, and successful plan/commit, start, meter,
 stop, and cleanup. This is existing-device graph evidence, not attended UI or
 physical-latency qualification.
+
+The exact physical PD200X speaker/microphone impulse attempt was also run with
+100 impulses and detected 0 groups, so the analyzer rejected it. Temporary
+artifacts were cleaned. The result preserves the current evidence boundary:
+digital CABLE correlation is repeatable, but calibrated acoustic/physical
+latency remains unverified.
