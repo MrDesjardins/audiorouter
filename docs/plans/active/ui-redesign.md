@@ -163,3 +163,8 @@ icons are positioned on the Bezier midpoint, and the right-side add palette is
 alphabetized. Canvas edges expose compact inline disable/remove/add-processor
 actions, so Canvas view no longer duplicates the same topology controls in a
 list below the graph.
+
+Connection creation now exposes four real handle positions for every logical
+port. The canvas normalizes the selected side back to the backend port identity
+and stores the selected source/target sides on the new edge, so a bottom-to-top
+connection is a normal supported graph edit rather than a visual-only path.

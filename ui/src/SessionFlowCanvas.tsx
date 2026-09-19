@@ -60,6 +60,17 @@ function edgePoint(node: ReturnType<typeof useInternalNode>, side: EdgeSide, fal
   return { x: origin.x + width / 2, y: origin.y + height };
 }
 
+function edgeHandleId(portName: string, side: EdgeSide) {
+  return `${portName}::${side}`;
+}
+
+function logicalPortHandle(handle: string | null | undefined) {
+  if (!handle) return { port: handle ?? null, side: undefined as EdgeSide | undefined };
+  const separator = handle.lastIndexOf("::");
+  const side = handle.slice(separator + 2) as EdgeSide;
+  return separator > 0 && EDGE_SIDES.includes(side) ? { port: handle.slice(0, separator), side } : { port: handle, side: undefined };
+}
+
 /** Returns only real graph edges from a canvas deletion event. */
 export function deletedConnectionIds(edges: Pick<FlowEdge, "id">[]): string[] {
   return edges.map((edge) => edge.id).filter((id) => id.length > 0);
@@ -244,10 +255,12 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
     }
   }, [layoutKey, edgeLayoutKey]);
   const setEdgeSide = (edgeId: string, endpoint: "source" | "target", side: EdgeSide) => {
-    const current = edgeSides[edgeId] ?? { source: "right" as EdgeSide, target: "left" as EdgeSide };
-    const next = { ...edgeSides, [edgeId]: { ...current, [endpoint]: side } };
-    setEdgeSides(next);
-    if (typeof window !== "undefined") window.localStorage.setItem(edgeLayoutKey, JSON.stringify(next));
+    setEdgeSides((currentMap) => {
+      const current = currentMap[edgeId] ?? { source: "right" as EdgeSide, target: "left" as EdgeSide };
+      const next = { ...currentMap, [edgeId]: { ...current, [endpoint]: side } };
+      if (typeof window !== "undefined") window.localStorage.setItem(edgeLayoutKey, JSON.stringify(next));
+      return next;
+    });
   };
   useEffect(() => {
     if (initialFitDoneRef.current || !flowInstanceRef.current || session.nodes.length === 0) return;
@@ -297,13 +310,13 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
     data: {
       label: (
         <div className={`flow-node-content node-kind-${node.kind}`} aria-label={`${node.name}, ${node.kind}`}>
-          {node.ports.filter((port) => port.direction === "input").map((port, portIndex) => <Handle key={`input-${port.name}`} type="target" id={port.name} position={Position.Left} style={{ top: `${35 + portIndex * 18}px` }} aria-label={`${node.name} ${port.name} input`} />)}
+          {node.ports.filter((port) => port.direction === "input").map((port, portIndex) => EDGE_SIDES.map((side) => <Handle key={`input-${port.name}-${side}`} type="target" id={edgeHandleId(port.name, side)} position={edgeSidePosition(side)} style={side === "left" || side === "right" ? { top: `${35 + portIndex * 18}px` } : { left: `${35 + portIndex * 18}px` }} aria-label={side === "left" ? `${node.name} ${port.name} input` : `${node.name} ${port.name} input ${side} connector`} />))}
           <div className="flow-node-kicker"><span className="node-kind">{node.kind}</span><span className={`node-state ${node.bypass ? "is-bypassed" : node.enabled ? "is-ready" : "is-disabled"}`}>{node.bypass ? "bypass" : node.enabled ? "ready" : "off"}</span></div>
           <div className="flow-node-title"><strong>{node.name}</strong>{canEdit && <button type="button" className="flow-node-delete" aria-label={`Delete ${node.name}`} title={`Delete ${node.name}`} onClick={(event) => { event.stopPropagation(); if (onRemoveNode) onRemoveNode(node.id); else globalThis.dispatchEvent(new CustomEvent("audiorouter:remove-node", { detail: { nodeId: node.id } })); }}>×</button>}</div>
           <NodeVisual node={node} telemetry={telemetry} onSetNodeParameter={onSetNodeParameter} />
           <small className="node-port-count">{node.ports.length} port{node.ports.length === 1 ? "" : "s"} · {node.enabled ? "enabled" : "disabled"}</small>
           <span className="flow-port-list">{nodePortLabels(node).map((port) => <small key={port}>{port}</small>)}</span>
-          {node.ports.filter((port) => port.direction === "output").map((port, portIndex) => <Handle key={`output-${port.name}`} type="source" id={port.name} position={Position.Right} style={{ top: `${35 + portIndex * 18}px` }} aria-label={`${node.name} ${port.name} output`} />)}
+          {node.ports.filter((port) => port.direction === "output").map((port, portIndex) => EDGE_SIDES.map((side) => <Handle key={`output-${port.name}-${side}`} type="source" id={edgeHandleId(port.name, side)} position={edgeSidePosition(side)} style={side === "left" || side === "right" ? { top: `${35 + portIndex * 18}px` } : { left: `${35 + portIndex * 18}px` }} aria-label={side === "right" ? `${node.name} ${port.name} output` : `${node.name} ${port.name} output ${side} connector`} />))}
         </div>
       ),
     },
@@ -353,7 +366,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
         selectionOnDrag
         onSelectionChange={({ nodes: selectedNodes }) => onSelectMany?.(selectedNodes.map((node) => node.id))}
         onNodeClick={(_, node) => onSelect(node.id)}
-        onConnect={canEdit ? onConnect : undefined}
+        onConnect={canEdit ? (connection) => { const source = logicalPortHandle(connection.sourceHandle); const target = logicalPortHandle(connection.targetHandle); const edgeId = onConnect({ ...connection, sourceHandle: source.port, targetHandle: target.port }); if (edgeId) { if (source.side) setEdgeSide(edgeId, "source", source.side); if (target.side) setEdgeSide(edgeId, "target", target.side); } } : undefined}
         edgeTypes={edgeTypes}
         onEdgesDelete={canEdit && onRemoveConnection ? (deleted) => { for (const edgeId of deletedConnectionIds(deleted)) onRemoveConnection(edgeId); } : undefined}
         onNodesDelete={canEdit ? (deleted) => { for (const nodeId of deletedNodeIds(deleted)) { if (onRemoveNode) onRemoveNode(nodeId); else globalThis.dispatchEvent(new CustomEvent("audiorouter:remove-node", { detail: { nodeId } })); } } : undefined}
