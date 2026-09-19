@@ -239,7 +239,11 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .main-content > .inspector .inspector-grid > label { display: grid; gap: .35rem; width: 100%; align-items: stretch; }
 .main-content > .inspector .inspector-grid input[type="range"] { width: 100%; }
 .main-content > .inspector .inspector-grid input[type="number"], .main-content > .inspector .inspector-grid select { min-width: 0; width: 100%; }
-.node-binding-editor { display: grid; gap: .55rem; margin: .8rem 0; padding: .8rem; border: 1px solid #4c6978; border-radius: 10px; background: linear-gradient(145deg, rgb(33 57 66 / 74%), rgb(26 34 41 / 84%)); box-shadow: inset 1px 1px 0 rgb(255 255 255 / 10%); }
+.node-binding-editor { display: grid; min-width: 0; gap: .55rem; margin: .8rem 0; padding: .8rem; border: 1px solid #4c6978; border-radius: 10px; background: linear-gradient(145deg, rgb(33 57 66 / 74%), rgb(26 34 41 / 84%)); box-shadow: inset 1px 1px 0 rgb(255 255 255 / 10%); box-sizing: border-box; }
+.node-binding-editor > * { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.node-binding-editor select { width: 100%; min-width: 0; color: #f4fbff; background: #202b35; }
+.node-binding-editor select option { color: #f4fbff; background: #202b35; }
+.theme-light .node-binding-editor select, .theme-light .node-binding-editor select option { color: #172033; background: #edf1f6; }
 .node-binding-editor strong { display: block; margin-top: .2rem; color: #f4fbff; font-size: .85rem; }
 .node-binding-editor label { display: grid; gap: .3rem; color: #d5e0e7; font-size: .78rem; }
 .node-binding-editor input[readonly] { color: #9fb0bd; font-size: .75rem; }

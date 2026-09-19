@@ -127,3 +127,12 @@ The live inventory confirmed active render endpoints, including the Focusrite
 speakers. The inspector now exposes the same exact render binding when a
 physical-output node is selected, rather than requiring the separate endpoint
 panel.
+
+The output-binding screenshot also exposed a dark-theme layout defect: long
+endpoint labels could force the selector beyond the inspector card and native
+select text inherited an unreadable color. Binding controls now constrain
+widths to the card and set explicit dark/light option colors.
+
+Canvas viewport behavior is also stabilized: initial fit occurs once after a
+session graph is available, while node drops and later layout updates preserve
+the user's current pan and zoom.
