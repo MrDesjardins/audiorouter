@@ -155,9 +155,11 @@ The follow-up canvas interaction pass makes Graphic EQ render ten fixed-band
 points from its authoritative `bandNDb` parameters, while Parametric EQ only
 renders enabled bands; both now update through the existing draft parameter
 path. React Flow's automatic fit and CSS transform transition were removed
-from active dragging, eliminating the main sources of node drag lag. Ports can
-be repositioned per node and direction with Shift-drag and their positions are
-stored locally for the session presentation; normal port dragging remains
-available for creating connections. Canvas edges now expose compact inline
-disable/remove/add-processor actions, so Canvas view no longer duplicates the
-same topology controls in a list below the graph.
+from active dragging, eliminating the main sources of node drag lag. Each
+relationship now stores independent source and target edge sides in local
+presentation state; the edge menu can route either endpoint to the left, right,
+top, or bottom of its node without changing the node's port layout. Edge action
+icons are positioned on the Bezier midpoint, and the right-side add palette is
+alphabetized. Canvas edges expose compact inline disable/remove/add-processor
+actions, so Canvas view no longer duplicates the same topology controls in a
+list below the graph.

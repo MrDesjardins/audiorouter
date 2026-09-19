@@ -7,6 +7,7 @@ import {
   Handle,
   Position,
   ReactFlow,
+  useInternalNode,
   type Connection,
   type Edge as FlowEdge,
   type EdgeProps,
@@ -14,7 +15,7 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Fragment, useEffect, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent } from "react";
 import type { DiagnosticsSnapshot, Node, Session } from "@audiorouter/contracts";
 import { clearLayout, readLayout, writeLayout, type LayoutPositions } from "./layout";
 import { nodePortLabels, relatedNodeIds } from "./graphView";
@@ -44,6 +45,21 @@ type SessionFlowCanvasProps = {
   canEdit?: boolean;
 };
 
+type EdgeSide = "left" | "right" | "top" | "bottom";
+const EDGE_SIDES: EdgeSide[] = ["left", "right", "top", "bottom"];
+const edgeSidePosition = (side: EdgeSide) => side === "left" ? Position.Left : side === "right" ? Position.Right : side === "top" ? Position.Top : Position.Bottom;
+
+function edgePoint(node: ReturnType<typeof useInternalNode>, side: EdgeSide, fallbackX: number, fallbackY: number) {
+  if (!node) return { x: fallbackX, y: fallbackY };
+  const width = node.measured.width ?? 218;
+  const height = node.measured.height ?? 150;
+  const origin = node.internals.positionAbsolute;
+  if (side === "left") return { x: origin.x, y: origin.y + height / 2 };
+  if (side === "right") return { x: origin.x + width, y: origin.y + height / 2 };
+  if (side === "top") return { x: origin.x + width / 2, y: origin.y };
+  return { x: origin.x + width / 2, y: origin.y + height };
+}
+
 /** Returns only real graph edges from a canvas deletion event. */
 export function deletedConnectionIds(edges: Pick<FlowEdge, "id">[]): string[] {
   return edges.map((edge) => edge.id).filter((id) => id.length > 0);
@@ -62,12 +78,16 @@ function positionFor(index: number) {
   };
 }
 
-function AudioEdgeActions({ id, sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition, data, style }: EdgeProps) {
+function AudioEdgeActions({ id, source, target, sourceX, sourceY, targetX, targetY, data, style }: EdgeProps) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [path] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
-  const labelX = (sourceX + targetX) / 2;
-  const labelY = (sourceY + targetY) / 2;
-  const edgeData = data as { enabled?: boolean; active?: boolean; onToggle?: SessionFlowCanvasProps["onToggleConnection"]; onRemove?: SessionFlowCanvasProps["onRemoveConnection"]; onInsert?: SessionFlowCanvasProps["onInsertProcessor"]; canEdit?: boolean } | undefined;
+  const sourceNode = useInternalNode(source);
+  const targetNode = useInternalNode(target);
+  const edgeData = data as { enabled?: boolean; active?: boolean; sourceSide?: EdgeSide; targetSide?: EdgeSide; onSetSide?: (edgeId: string, endpoint: "source" | "target", side: EdgeSide) => void; onToggle?: SessionFlowCanvasProps["onToggleConnection"]; onRemove?: SessionFlowCanvasProps["onRemoveConnection"]; onInsert?: SessionFlowCanvasProps["onInsertProcessor"]; canEdit?: boolean } | undefined;
+  const sourceSide = edgeData?.sourceSide ?? "right";
+  const targetSide = edgeData?.targetSide ?? "left";
+  const sourcePoint = edgePoint(sourceNode, sourceSide, sourceX, sourceY);
+  const targetPoint = edgePoint(targetNode, targetSide, targetX, targetY);
+  const [path, labelX, labelY] = getBezierPath({ sourceX: sourcePoint.x, sourceY: sourcePoint.y, sourcePosition: edgeSidePosition(sourceSide), targetX: targetPoint.x, targetY: targetPoint.y, targetPosition: edgeSidePosition(targetSide) });
   return <>
     <BaseEdge path={path} style={style} className={edgeData?.active ? "flow-edge-active" : undefined} />
     <EdgeLabelRenderer>
@@ -75,7 +95,7 @@ function AudioEdgeActions({ id, sourceX, sourceY, sourcePosition, targetX, targe
         <button type="button" className="edge-action-icon" disabled={!edgeData?.canEdit} aria-label={edgeData?.enabled ? `Disable connection ${id}` : `Enable connection ${id}`} title={edgeData?.enabled ? "Disable connection" : "Enable connection"} onClick={() => edgeData?.onToggle?.(id, !edgeData.enabled)}>{edgeData?.enabled ? "Ⅱ" : "▶"}</button>
         <button type="button" className="edge-action-icon edge-action-remove" disabled={!edgeData?.canEdit} aria-label={`Remove connection ${id}`} title="Remove connection" onClick={() => edgeData?.onRemove?.(id)}>×</button>
         <button type="button" className="edge-action-icon" disabled={!edgeData?.canEdit} aria-label={`Add processor to connection ${id}`} title="Add processor" onClick={() => setMenuOpen((open) => !open)}>＋</button>
-        {menuOpen && <div className="edge-insert-menu" role="menu" aria-label={`Add processor to connection ${id}`}>{PROCESSOR_ACTIONS.map((processor) => <button key={processor.kind} type="button" role="menuitem" onClick={() => { edgeData?.onInsert?.(id, processor.kind); setMenuOpen(false); }}>{processor.label}</button>)}</div>}
+        {menuOpen && <div className="edge-insert-menu" role="menu" aria-label={`Configure connection ${id}`}><div className="edge-side-picker"><strong>Source side</strong>{EDGE_SIDES.map((side) => <button key={`source-${side}`} type="button" className={sourceSide === side ? "is-selected" : ""} role="menuitem" onClick={() => edgeData?.onSetSide?.(id, "source", side)}>{side}</button>)}</div><div className="edge-side-picker"><strong>Target side</strong>{EDGE_SIDES.map((side) => <button key={`target-${side}`} type="button" className={targetSide === side ? "is-selected" : ""} role="menuitem" onClick={() => edgeData?.onSetSide?.(id, "target", side)}>{side}</button>)}</div><div className="edge-processor-picker"><strong>Add processor</strong>{PROCESSOR_ACTIONS.map((processor) => <button key={processor.kind} type="button" role="menuitem" onClick={() => { edgeData?.onInsert?.(id, processor.kind); setMenuOpen(false); }}>{processor.label}</button>)}</div></div>}
       </div>
     </EdgeLabelRenderer>
   </>;
@@ -205,15 +225,13 @@ function NodeVisual({ node, telemetry, onSetNodeParameter }: { node: Node; telem
 
 export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onToggleConnection, onInsertProcessor, onRemoveNode, onAddLibraryNode, onAddVirtualBusNode, diagnostics, onSetNodeParameter, canEdit = true }: SessionFlowCanvasProps) {
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
-  const portLayoutKey = `${layoutKey}.ports`;
   const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey));
-  const [portPositions, setPortPositions] = useState<Record<string, { x: number; y: number }>>(() => {
+  const edgeLayoutKey = `${layoutKey}.edges`;
+  const [edgeSides, setEdgeSides] = useState<Record<string, { source: EdgeSide; target: EdgeSide }>>(() => {
     if (typeof window === "undefined") return {};
-    try { return JSON.parse(window.localStorage.getItem(portLayoutKey) ?? "{}") as Record<string, { x: number; y: number }>; } catch { return {}; }
+    try { return JSON.parse(window.localStorage.getItem(edgeLayoutKey) ?? "{}") as Record<string, { source: EdgeSide; target: EdgeSide }>; } catch { return {}; }
   });
   const positionsRef = useRef(positions);
-  const portPositionsRef = useRef(portPositions);
-  const portDragRef = useRef<{ key: string; pointerId: number } | null>(null);
   const flowInstanceRef = useRef<ReactFlowInstance | null>(null);
   const initialFitDoneRef = useRef(false);
   useEffect(() => {
@@ -222,56 +240,15 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
     positionsRef.current = next;
     setPositions(next);
     if (typeof window !== "undefined") {
-      try {
-        const nextPorts = JSON.parse(window.localStorage.getItem(portLayoutKey) ?? "{}") as Record<string, { x: number; y: number }>;
-        portPositionsRef.current = nextPorts;
-        setPortPositions(nextPorts);
-      } catch {
-        portPositionsRef.current = {};
-        setPortPositions({});
-      }
+      try { setEdgeSides(JSON.parse(window.localStorage.getItem(edgeLayoutKey) ?? "{}") as Record<string, { source: EdgeSide; target: EdgeSide }>); } catch { setEdgeSides({}); }
     }
-  }, [layoutKey, portLayoutKey]);
-  const updatePortPosition = (key: string, x: number, y: number) => {
-    const next = { ...portPositionsRef.current, [key]: { x: clamp(x, 0.03, 0.97), y: clamp(y, 0.08, 0.92) } };
-    portPositionsRef.current = next;
-    setPortPositions(next);
-    if (typeof window !== "undefined") window.localStorage.setItem(portLayoutKey, JSON.stringify(next));
+  }, [layoutKey, edgeLayoutKey]);
+  const setEdgeSide = (edgeId: string, endpoint: "source" | "target", side: EdgeSide) => {
+    const current = edgeSides[edgeId] ?? { source: "right" as EdgeSide, target: "left" as EdgeSide };
+    const next = { ...edgeSides, [edgeId]: { ...current, [endpoint]: side } };
+    setEdgeSides(next);
+    if (typeof window !== "undefined") window.localStorage.setItem(edgeLayoutKey, JSON.stringify(next));
   };
-  const portPosition = (node: Node, port: Node["ports"][number], portIndex: number) => {
-    const key = `${node.id}:${port.direction}:${port.name}`;
-    const stored = portPositions[key];
-    if (stored) return { key, ...stored };
-    const sameDirection = node.ports.filter((candidate) => candidate.direction === port.direction).length;
-    return { key, x: port.direction === "input" ? 0.03 : 0.97, y: (portIndex + 1) / (sameDirection + 1) };
-  };
-  const handlePosition = (x: number, y: number) => {
-    const distances = { left: x, right: 1 - x, top: y, bottom: 1 - y };
-    const side = Object.entries(distances).sort(([, a], [, b]) => a - b)[0][0];
-    const position = side === "left" ? Position.Left : side === "right" ? Position.Right : side === "top" ? Position.Top : Position.Bottom;
-    return { position, style: { left: `${x * 100}%`, top: `${y * 100}%`, transform: "translate(-50%, -50%)" } };
-  };
-  const startPortDrag = (event: PointerEvent<HTMLElement>, key: string) => {
-    event.preventDefault();
-    event.stopPropagation();
-    portDragRef.current = { key, pointerId: event.pointerId };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-  const movePortFromPointer = (event: PointerEvent<HTMLElement>, key: string) => {
-    const bounds = event.currentTarget.closest(".react-flow__node")?.getBoundingClientRect();
-    if (!bounds) return;
-    updatePortPosition(key, (event.clientX - bounds.left) / bounds.width, (event.clientY - bounds.top) / bounds.height);
-  };
-  const stopPortDrag = (event: PointerEvent<HTMLElement>, key: string) => {
-    if (portDragRef.current?.key !== key) return;
-    portDragRef.current = null;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-  };
-  const repositionGripStyle = (handle: ReturnType<typeof handlePosition>) => ({
-    ...handle.style,
-    marginLeft: handle.position === Position.Left ? "12px" : handle.position === Position.Right ? "-12px" : undefined,
-    marginTop: handle.position === Position.Top ? "12px" : handle.position === Position.Bottom ? "-12px" : undefined,
-  });
   useEffect(() => {
     if (initialFitDoneRef.current || !flowInstanceRef.current || session.nodes.length === 0) return;
     const frame = globalThis.requestAnimationFrame(() => flowInstanceRef.current?.fitView({ padding: 0.2 }));
@@ -320,13 +297,13 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
     data: {
       label: (
         <div className={`flow-node-content node-kind-${node.kind}`} aria-label={`${node.name}, ${node.kind}`}>
-          {node.ports.filter((port) => port.direction === "input").map((port, portIndex) => { const placement = portPosition(node, port, portIndex); const handle = handlePosition(placement.x, placement.y); return <Fragment key={`input-${port.name}`}><Handle type="target" id={port.name} position={handle.position} style={handle.style} aria-label={`${node.name} ${port.name} input`} title="Connection point" onPointerDown={(event) => { if (!event.shiftKey) return; startPortDrag(event, placement.key); }} onPointerMove={(event) => { if (portDragRef.current?.key === placement.key) movePortFromPointer(event, placement.key); }} onPointerUp={(event) => stopPortDrag(event, placement.key)} /><span className="port-reposition-grip nodrag nopan" role="button" tabIndex={0} aria-label={`Reposition ${node.name} ${port.name} input`} title="Drag to reposition input" style={repositionGripStyle(handle)} onPointerDown={(event) => startPortDrag(event, placement.key)} onPointerMove={(event) => { if (portDragRef.current?.key === placement.key) movePortFromPointer(event, placement.key); }} onPointerUp={(event) => stopPortDrag(event, placement.key)} onPointerCancel={(event) => stopPortDrag(event, placement.key)}>↕</span></Fragment>; })}
+          {node.ports.filter((port) => port.direction === "input").map((port, portIndex) => <Handle key={`input-${port.name}`} type="target" id={port.name} position={Position.Left} style={{ top: `${35 + portIndex * 18}px` }} aria-label={`${node.name} ${port.name} input`} />)}
           <div className="flow-node-kicker"><span className="node-kind">{node.kind}</span><span className={`node-state ${node.bypass ? "is-bypassed" : node.enabled ? "is-ready" : "is-disabled"}`}>{node.bypass ? "bypass" : node.enabled ? "ready" : "off"}</span></div>
           <div className="flow-node-title"><strong>{node.name}</strong>{canEdit && <button type="button" className="flow-node-delete" aria-label={`Delete ${node.name}`} title={`Delete ${node.name}`} onClick={(event) => { event.stopPropagation(); if (onRemoveNode) onRemoveNode(node.id); else globalThis.dispatchEvent(new CustomEvent("audiorouter:remove-node", { detail: { nodeId: node.id } })); }}>×</button>}</div>
           <NodeVisual node={node} telemetry={telemetry} onSetNodeParameter={onSetNodeParameter} />
           <small className="node-port-count">{node.ports.length} port{node.ports.length === 1 ? "" : "s"} · {node.enabled ? "enabled" : "disabled"}</small>
           <span className="flow-port-list">{nodePortLabels(node).map((port) => <small key={port}>{port}</small>)}</span>
-          {node.ports.filter((port) => port.direction === "output").map((port, portIndex) => { const placement = portPosition(node, port, portIndex); const handle = handlePosition(placement.x, placement.y); return <Fragment key={`output-${port.name}`}><Handle type="source" id={port.name} position={handle.position} style={handle.style} aria-label={`${node.name} ${port.name} output`} title="Connection point" onPointerDown={(event) => { if (!event.shiftKey) return; startPortDrag(event, placement.key); }} onPointerMove={(event) => { if (portDragRef.current?.key === placement.key) movePortFromPointer(event, placement.key); }} onPointerUp={(event) => stopPortDrag(event, placement.key)} /><span className="port-reposition-grip nodrag nopan" role="button" tabIndex={0} aria-label={`Reposition ${node.name} ${port.name} output`} title="Drag to reposition output" style={repositionGripStyle(handle)} onPointerDown={(event) => startPortDrag(event, placement.key)} onPointerMove={(event) => { if (portDragRef.current?.key === placement.key) movePortFromPointer(event, placement.key); }} onPointerUp={(event) => stopPortDrag(event, placement.key)} onPointerCancel={(event) => stopPortDrag(event, placement.key)}>↕</span></Fragment>; })}
+          {node.ports.filter((port) => port.direction === "output").map((port, portIndex) => <Handle key={`output-${port.name}`} type="source" id={port.name} position={Position.Right} style={{ top: `${35 + portIndex * 18}px` }} aria-label={`${node.name} ${port.name} output`} />)}
         </div>
       ),
     },
@@ -353,7 +330,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
     source: edge.sourceNode,
     target: edge.destinationNode,
     type: "audioActions",
-    data: { enabled: edge.enabled, active, onToggle: onToggleConnection, onRemove: onRemoveConnection, onInsert: onInsertProcessor, canEdit },
+    data: { enabled: edge.enabled, active, sourceSide: edgeSides[edge.id]?.source, targetSide: edgeSides[edge.id]?.target, onSetSide: setEdgeSide, onToggle: onToggleConnection, onRemove: onRemoveConnection, onInsert: onInsertProcessor, canEdit },
     deletable: canEdit && onRemoveConnection !== undefined,
     selectable: true,
     className: active ? "flow-edge-active" : undefined,
@@ -364,9 +341,9 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
 
   return (
     <>
-    <div className="canvas-layout-actions" aria-label="Canvas layout actions"><span className="muted" role="status" aria-live="polite">{selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} selected</span><button type="button" className="secondary" onClick={tidyLayout}>Tidy layout</button><button type="button" className="secondary" onClick={() => { clearLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey); if (typeof window !== "undefined") window.localStorage.removeItem(portLayoutKey); positionsRef.current = {}; portPositionsRef.current = {}; setPositions({}); setPortPositions({}); }}>Reset layout</button></div>
+    <div className="canvas-layout-actions" aria-label="Canvas layout actions"><span className="muted" role="status" aria-live="polite">{selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} selected</span><button type="button" className="secondary" onClick={tidyLayout}>Tidy layout</button><button type="button" className="secondary" onClick={() => { clearLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey); if (typeof window !== "undefined") window.localStorage.removeItem(edgeLayoutKey); positionsRef.current = {}; setEdgeSides({}); setPositions({}); }}>Reset layout</button></div>
     <div className="session-flow-canvas" aria-label="Signal-flow graph" onDragOver={(event) => { if (!canEdit) return; event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }} onDrop={(event) => { const kind = readLibraryDropKind(event.dataTransfer); event.preventDefault(); const bounds = event.currentTarget.getBoundingClientRect(); const position = libraryDropPosition(event.clientX, event.clientY, bounds); if (isLibraryNodeKind(kind)) { if (onAddLibraryNode) addLibraryNode(kind, position); else routeLibraryDrop(kind, position); } else if (isVirtualBusKind(kind)) { if (onAddVirtualBusNode) addVirtualBusNode(kind === "virtualRenderSource" ? "renderSource" : "captureSink", position); else routeLibraryDrop(kind, position); } }}>
-      <div className="canvas-library" aria-label="Drag processors to canvas"><strong>Drag or select to add</strong>{libraryEntries.filter((entry) => entry.kind !== undefined || entry.virtualKind !== undefined).map((entry) => { const kind = entry.kind ?? entry.virtualKind!; const unavailable = Boolean(entry.unavailableReason); return <button type="button" key={`drag-${entry.id}`} draggable={canEdit && !unavailable} disabled={!canEdit || unavailable} title={entry.unavailableReason} onClick={() => { if (unavailable) return; if (entry.kind) addLibraryNode(entry.kind, positionFor(session.nodes.length)); else if (onAddVirtualBusNode) addVirtualBusNode(entry.virtualKind === "virtualRenderSource" ? "renderSource" : "captureSink", positionFor(session.nodes.length)); else routeLibraryDrop(entry.virtualKind!, positionFor(session.nodes.length)); }} onDragStart={(event) => { if (!canEdit || unavailable) return; event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData(LIBRARY_DROP_MIME, kind); event.dataTransfer.setData(LIBRARY_DROP_TEXT_MIME, kind); }}>{entry.label}</button>; })}</div>
+        <div className="canvas-library" aria-label="Drag processors to canvas"><strong>Drag or select to add</strong>{libraryEntries.filter((entry) => entry.kind !== undefined || entry.virtualKind !== undefined).sort((left, right) => left.label.localeCompare(right.label)).map((entry) => { const kind = entry.kind ?? entry.virtualKind!; const unavailable = Boolean(entry.unavailableReason); return <button type="button" key={`drag-${entry.id}`} draggable={canEdit && !unavailable} disabled={!canEdit || unavailable} title={entry.unavailableReason} onClick={() => { if (unavailable) return; if (entry.kind) addLibraryNode(entry.kind, positionFor(session.nodes.length)); else if (onAddVirtualBusNode) addVirtualBusNode(entry.virtualKind === "virtualRenderSource" ? "renderSource" : "captureSink", positionFor(session.nodes.length)); else routeLibraryDrop(entry.virtualKind!, positionFor(session.nodes.length)); }} onDragStart={(event) => { if (!canEdit || unavailable) return; event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData(LIBRARY_DROP_MIME, kind); event.dataTransfer.setData(LIBRARY_DROP_TEXT_MIME, kind); }}>{entry.label}</button>; })}</div>
       <ReactFlow
         nodes={nodes}
         edges={edges}
