@@ -1707,3 +1707,14 @@ prepared and verified unsigned artifacts, and removed its disposable output.
 This closes unsigned artifact preparation for the committed VB-Cable-first
 track only; signing, installer execution/install-upgrade-rollback,
 clean-machine, managed-driver, and publication gates remain outside scope.
+
+## 2026-09-18 - active non-driver safe-chain qualification
+
+After the acceptance harness was narrowed to the active VB-Cable-first scope,
+`tests/acceptance/safe-all.ps1` passed end-to-end on the clean committed tree.
+M00, M01, existing-device M03 routing, M04, M05, M06, M07, unsigned M08
+artifact preparation and NSIS smoke, frontend-owned shell RPC, traceability,
+and documentation all passed. The chain explicitly excludes the deferred
+M03 driver-build, ARM64-driver, signing, Software Device API, and SysVAD
+steps. No driver was installed or loaded and no persistent audio
+configuration changed.

@@ -951,6 +951,12 @@ VB-Cable-first track: deferred M03 driver-build, ARM64-driver, signing,
 Software Device API, and SysVAD steps remain available as separate future
 track scripts but are no longer run as active completion gates.
 
+The corrected active safe chain then passed end-to-end on 2026-09-18. It
+covered M00, M01, existing-device M03 routing, M04, M05, M06, M07, unsigned
+M08 artifact preparation and NSIS smoke, frontend-owned shell RPC, M08
+traceability, and documentation. No driver was installed or loaded and no
+persistent audio configuration changed.
+
 The clean-commit guarded M05 Test Signal acceptance then passed against exact
 CABLE Output capture and CABLE Input render endpoints: 187 processed quanta,
 destination peak `-18.000 dB`, and successful plan/commit, start, meter,
