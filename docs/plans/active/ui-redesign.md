@@ -136,3 +136,8 @@ widths to the card and set explicit dark/light option colors.
 Canvas viewport behavior is also stabilized: initial fit occurs once after a
 session graph is available, while node drops and later layout updates preserve
 the user's current pan and zoom.
+
+The next visual pass aligns the canvas and inspector tops, replaces native
+checkboxes with compact toggle controls, applies explicit control contrast,
+moves layout actions outside the graph surface, removes the minimap, and makes
+the library palette scroll within short canvases.
