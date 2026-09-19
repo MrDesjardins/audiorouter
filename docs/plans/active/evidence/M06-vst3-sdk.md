@@ -1,5 +1,97 @@
 # M06 VST3 SDK boundary
 
+## 2026-09-17 - ReaPlugs matrix refresh
+
+`tests/acceptance/m06-vst2-reaplugs.ps1` passed six repository-local x64 VST2
+fixtures (`reacomp`, `readelay`, `reaeq`, `reafir`, `reagate`, and `reaxcomp`)
+at 44.1, 48, and 96 kHz. Each worker process passed the bounded processing
+path and the acceptance verified before/after binary integrity and restored its
+environment. This expands local compatibility evidence only; it does not
+qualify redistribution rights, broad third-party compatibility, native editor
+release support, or a full plugin sandbox.
+
+## 2026-09-17 - installed x64 VST2/Pitchproof refresh
+
+`tests/acceptance/m06-vst2-installed.ps1` passed the explicitly selected
+user-installed x64 VST2 binary
+`C:\Program Files\Common Files\VST3\Pitchproof\pitchproof-x64.dll` at
+44.1, 48, and 96 kHz, plus the bounded native editor-thread and supervised
+editor-timeout checks. The SHA-256 fingerprint
+`1974a3033b53ae72da5f419a9f37056d44c1610591bfd11a615ace0c448cf050` was
+unchanged; no copy, registration, audio stream, or machine configuration was
+used. This is local compatibility and containment evidence only, not rights,
+redistribution, broad vendor, or release qualification.
+
+## 2026-09-17 - current native VST3 worker refresh
+
+`tests/acceptance/m06-vst3-worker.ps1` passed the repository-selected
+`third_party/vst3sdk-build/VST3/Release/again.vst3` fixture through isolated
+single-stream and auxiliary-bus processing, asynchronous graph staging,
+bounded worker-failure silence, repeated-quantum bounds, and validated worker
+restart/state restoration. The acceptance cleaned its generated worker
+artifacts and changed no plugin registration, audio stream, or machine audio
+configuration. This is local fixture/worker evidence, not broad vendor
+compatibility, rights, full filesystem/network sandbox, or native-editor
+release evidence.
+
+## 2026-09-17 - post-privacy full worker acceptance refresh
+
+The current `m06-vst3-worker.ps1` acceptance passed the selected local
+`again.vst3` fixture across isolated single-stream and auxiliary-bus
+processing, asynchronous graph staging, bounded failure silencing/restart and
+quarantine, validated state restoration, repeated-quantum timing, finite
+output, and shutdown. This remains local fixture evidence; plugin rights,
+full filesystem/network sandboxing, native-editor qualification, broad vendor
+compatibility, and release qualification remain open.
+
+## 2026-09-17 - current worker and VST2 matrix refresh
+
+The guarded `tests/acceptance/m06-vst3-worker.ps1
+-AllowStateUnsupported -SingleStreamOnly` run rebuilt its disposable native
+worker and passed the selected local `again.vst3` fixture, bounded worker
+failure recovery, repeated-quantum timing, validated state restoration, and
+shutdown checks. A preliminary `-SkipBuild` invocation correctly stopped
+because the disposable worker executable was absent; it was not counted as a
+qualification result. The guarded VST2 matrix then passed six x64 local
+fixtures at 44.1, 48, and 96 kHz with integrity and cleanup checks. No plugin
+registration, audio stream, or machine audio configuration changed. These
+results strengthen local worker evidence only; rights, full sandboxing,
+native editor support, broad vendor compatibility, and release qualification
+remain open.
+
+## 2026-09-17 - native worker requalification
+
+`tests/acceptance/m06-vst3-worker.ps1` passed for the selected local
+`again.vst3` fixture. The run covered isolated single-stream and auxiliary-bus
+processing, asynchronous graph staging, bounded worker restart/quarantine
+recovery, validated state restoration where supported, repeated-quantum
+timing, finite transformed output, and bounded shutdown. It changed no plugin
+registration, audio stream, or machine audio configuration. This is
+selected-fixture worker evidence, not a general vendor compatibility, rights,
+sandbox, or release qualification claim.
+
+The installed x64 VST2 acceptance was also rerun on 2026-09-17 for six local
+fixtures at 44.1, 48, and 96 kHz. All worker runs passed with before/after
+binary-integrity checks and disposable cleanup. This remains local-binary
+evidence only and does not establish redistribution rights, editor support,
+OS sandboxing, or a general vendor compatibility matrix.
+
+The same requalification passed the pinned SDK validator/offline loader and
+five-class local mda matrix. No system plugin registration or audio
+configuration changed.
+
+## 2026-09-16 - pinned native worker acceptance requalification
+
+`tests/acceptance/m06-vst3-worker.ps1` passed for the explicitly selected
+`third_party/vst3sdk-build/VST3/Release/again.vst3` fixture. The repository
+worker verified isolated single-stream and auxiliary-bus processing,
+asynchronous graph staging, bounded restart/quarantine recovery, validated
+state restoration where supported, repeated-quanta timing, finite transformed
+output, and bounded shutdown. This is one local fixture's processing-tool
+evidence; it does not qualify plugin registration, native editors, broad
+vendor activation, live audio, or release compatibility. No persistent audio
+or machine configuration changed.
+
 ## 2026-09-16 - pinned SDK acceptance requalification
 
 `tests/acceptance/m06-vst3-sdk.ps1` passed after rebuilding the pinned SDK
@@ -1867,6 +1959,13 @@ The wrappers restored both VST2 environment variables and did not copy,
 register, or alter plugins or audio configuration. This is compatibility and
 containment evidence only; rights, successful editor integration, and release
 qualification remain open.
+
+The current `tests/acceptance/m06-vst2-state-fixture.ps1` rerun also passed at
+44.1, 48, and 96 kHz. It exercised repository-owned ignored DLL fixtures for
+chunk-state restore, legacy-main handling, non-finite output rejection, and
+native fault containment through disposable workers. No plugin registration,
+audio stream, or machine audio configuration changed; rights, full sandboxing,
+native editors, and broad compatibility remain open.
 ## Installed plugin inventory follow-up (2026-09-08)
 
 A read-only inventory of the available Windows plugin locations found the six
@@ -2341,3 +2440,82 @@ processing contract. Non-returning editor behavior was contained and workers
 were terminated within the tested boundary. No plugin registration, audio
 stream, or machine configuration changed; temporary fixture environment state
 was restored.
+
+## 2026-09-17 - current worker qualification refresh
+
+The current tree passed both contained plugin qualification commands:
+
+```text
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/acceptance/m06-vst3-worker.ps1 -AllowStateUnsupported -SingleStreamOnly
+M06 native VST3 worker acceptance passed for the pinned AGain fixture.
+
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/acceptance/m06-vst2-reaplugs.ps1 -SkipIncompatibleCandidates
+M06 VST2 acceptance passed for 6 x64 fixtures at 44.1, 48, and 96 kHz.
+```
+
+The VST3 run covered isolated single-stream processing, bounded restart/
+quarantine recovery, validated state restoration where supported,
+repeated-quantum timing, finite output, and shutdown. The VST2 run covered
+the six accepted local effects, intra-block parameter offsets, and
+before/after binary-integrity checks. No plugin was registered, no audio
+stream was opened, and no machine audio configuration changed. This refreshes
+local compatibility evidence only; redistribution rights, full filesystem /
+network sandboxing, arbitrary vendor compatibility, native editor embedding,
+realtime callback timing, physical latency, and release qualification remain
+open as documented boundaries.
+
+## 2026-09-17 - installed ReaJS VST2 negative qualification
+
+The explicitly selected installed x64 binary
+`C:\Program Files\VSTPlugins\ReaPlugs\reajs.dll` was fingerprinted as
+`600223acd0337c494a0bc2fb2a399f5ba477c6c0886e9c1e2c1f7475810fcf72` and run
+through `tests/acceptance/m06-vst2-installed.ps1`. At 44.1 kHz the bounded
+worker rejected its empty VST2 state asset and exited with code 1; the
+acceptance therefore stopped before claiming processing compatibility. The
+binary fingerprint remained unchanged and the temporary environment was
+restored. This is an explicit unsupported-candidate result, not a failure of
+the six previously qualified local x64 effects and not a broad ReaPlugs or
+VST2 compatibility claim.
+
+## 2026-09-18 - local VST2 worker requalification
+
+`tests/acceptance/m06-vst2-reaplugs.ps1` passed for six x64 local fixtures
+(`reacomp`, `readelay`, `reaeq`, `reafir`, `reagate`, and `reaxcomp`) at
+44.1, 48, and 96 kHz. The run exercised disposable worker processes,
+intra-block parameter offsets, and before/after fixture integrity checks. No
+plugin registration, audio stream, or machine audio configuration action
+occurred. This refreshes local worker evidence only; rights, full sandbox,
+native editor, broad compatibility, and release gates remain open.
+
+## 2026-09-18 - pinned VST3 SDK acceptance refresh
+
+After an initial non-elevated MSBuild `FileTracker` access-denied failure, the
+elevated `tests/acceptance/m06-vst3-sdk.ps1` run passed. It rebuilt the pinned
+SDK fixtures, passed the validator self-tests, validated the mda and AGain
+bundles, exercised the offline loader and parameter descriptors, verified the
+auxiliary-bus path and explicit single-bus rejection, and completed the
+five-class mda matrix. No system plugin registration, audio stream, or
+machine audio configuration changed. This remains local fixture evidence;
+third-party rights, full sandboxing, native editor embedding, and release
+qualification remain open.
+
+## 2026-09-18 - native VST3 worker acceptance refresh
+
+`tests/acceptance/m06-vst3-worker.ps1` passed for the pinned local `again.vst3`
+fixture. The acceptance covered isolated single-stream and auxiliary-bus
+processing, asynchronous graph staging, bounded restart/quarantine recovery,
+validated state restoration where supported, repeated-quantum timing, finite
+output, and bounded shutdown. No plugin registration, audio stream, or machine
+audio configuration changed; rights, full sandboxing, native editors, and
+release qualification remain open.
+
+The current `tests/acceptance/m06-vst2-reaplugs.ps1` rerun passed for six x64
+local fixtures (`reacomp`, `readelay`, `reaeq`, `reafir`, `reagate`, and
+`reaxcomp`) at 44.1, 48, and 96 kHz. It included intra-block parameter-offset
+and before/after binary-integrity checks through disposable workers. No plugin
+registration or audio configuration changed; rights, full sandboxing, native
+editors, and broad compatibility remain open.
+
+The current `tests/acceptance/m06-sdk-installer.ps1` provenance acceptance
+also passed using disposable Git metadata checks. No SDK, plugin, driver, or
+audio configuration was changed.

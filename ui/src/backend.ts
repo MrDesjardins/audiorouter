@@ -50,6 +50,11 @@ import type {
   OsTransitionResult,
   StatusSnapshot,
   RpcTransport,
+  NativeOutputFanoutPrepareResult,
+  NativeMultiInputPrepareResult,
+  NativeRenderSourcePumpResult,
+  NativeMultiInputPumpResult,
+  NativeMultiInputBranchBindingResult,
 } from "@audiorouter/contracts";
 import type { MethodParams, MethodResult } from "@audiorouter/contracts";
 import { demoSession, demoSessions } from "./fixtures";
@@ -98,12 +103,17 @@ export interface UiBackend {
   listApplications(): Promise<ApplicationRow[]>;
   listDevices(includeInactive?: boolean): Promise<DeviceListItem[]>;
   prepareNativeEndpoint?(sessionId: string, captureEndpointId: string, renderEndpointId: string): Promise<import("@audiorouter/contracts").NativeEndpointPrepareResult>;
+  prepareNativeOutputs?(sessionId: string, generation: number, renderEndpointIds: string[]): Promise<NativeOutputFanoutPrepareResult>;
+  prepareNativeMultiInputs?(sessionId: string, generation: number, captureEndpointIds: string[]): Promise<NativeMultiInputPrepareResult>;
   rebindNativeEndpoint?(sessionId: string, captureEndpointId: string, renderEndpointId: string): Promise<import("@audiorouter/contracts").NativeEndpointRebindResult>;
   detachNativeEndpoint?(sessionId: string): Promise<import("@audiorouter/contracts").NativeEndpointDetachResult>;
   detachNativeDuplex?(sessionId: string): Promise<import("@audiorouter/contracts").NativeDuplexDetachResult>;
   prepareNativeApplication?(params: Omit<import("@audiorouter/contracts").MethodParams["nativeApplications.prepare"], "creationTime100ns"> & { creationTime100ns: string | null }): Promise<import("@audiorouter/contracts").NativeApplicationPrepareResult>;
   pumpNativeEndpoint?(sessionId: string, generation: number, maxPackets?: number): Promise<import("@audiorouter/contracts").NativeEndpointPumpResult>;
   pumpNativeDuplex?(sessionId: string, generation: number, maxInputQuanta?: number, maxOutputPackets?: number): Promise<import("@audiorouter/contracts").NativeDuplexPumpResult>;
+  pumpNativeRenderSource?(sessionId: string, generation: number, maxQuanta?: number): Promise<NativeRenderSourcePumpResult>;
+  pumpNativeMultiInputs?(sessionId: string, generation: number, maxPackets?: number): Promise<NativeMultiInputPumpResult>;
+  bindNativeMultiInputBranches?(sessionId: string, generation: number, branchNodeIds: string[]): Promise<NativeMultiInputBranchBindingResult>;
   listProcessors(): Promise<DiscoveryDocument["processors"]>;
   processorResponse(params: ProcessorResponseParams): Promise<ProcessorResponse>;
   listPresets(): Promise<DiscoveryDocument["presets"]>;
@@ -516,6 +526,20 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
         renderEndpointId,
       });
     },
+    async prepareNativeOutputs(currentSessionId, generation, renderEndpointIds) {
+      return client.request("nativeOutputs.prepare", {
+        sessionId: currentSessionId,
+        generation,
+        renderEndpointIds,
+      });
+    },
+    async prepareNativeMultiInputs(currentSessionId, generation, captureEndpointIds) {
+      return client.request("nativeMultiInputs.prepare", {
+        sessionId: currentSessionId,
+        generation,
+        captureEndpointIds,
+      });
+    },
     async rebindNativeEndpoint(currentSessionId, captureEndpointId, renderEndpointId) {
       return client.request("nativeEndpoints.rebind", {
         sessionId: currentSessionId,
@@ -541,6 +565,19 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
         generation,
         maxInputQuanta,
         maxOutputPackets,
+      });
+    },
+    async pumpNativeRenderSource(currentSessionId, generation, maxQuanta = 64) {
+      return client.request("nativeRenderSources.pump", { sessionId: currentSessionId, generation, maxQuanta });
+    },
+    async pumpNativeMultiInputs(currentSessionId, generation, maxPackets = 64) {
+      return client.request("nativeMultiInputs.pump", { sessionId: currentSessionId, generation, maxPackets });
+    },
+    async bindNativeMultiInputBranches(currentSessionId, generation, branchNodeIds) {
+      return client.request("nativeMultiInputs.bindBranches", {
+        sessionId: currentSessionId,
+        generation,
+        branchNodeIds,
       });
     },
     async listProcessors() {

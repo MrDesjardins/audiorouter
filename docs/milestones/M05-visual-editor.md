@@ -1,6 +1,10 @@
 # M05 — React visual editor and guided setup
 
-Status: React/UI foundation implemented; native shell injection and manual acceptance remain open. Prerequisite: M04. Outcome: the primary workflow is understandable and configurable entirely through the desktop UI and guided external-app steps.
+Status: React/UI foundation and frontend-owned native shell injection are
+implemented and automated-qualified; attended accessibility, scaling,
+first-run, and live drag/drop acceptance remain open. Prerequisite: M04.
+Outcome: the primary workflow is understandable and configurable entirely
+through the desktop UI and guided external-app steps.
 
 ## Read first
 
@@ -31,6 +35,28 @@ Run typecheck/lint/build and meaningful component/UI integration tests using a f
 Do not implement audio DSP in browser APIs or duplicate graph validation in React. The shell cannot bypass client permissions. A browser dev-server demo is not packaged Windows evidence. Keep new UI options out of the product if their backend capabilities are absent.
 
 ## Handoff
+
+## Next M05 slice
+
+Implement the graph-native Test Signal source and destination meter view before
+claiming the attended “hear the change” workflow. The source should generate a
+bounded deterministic tone inside the backend graph, use ordinary node
+parameters and plan/commit semantics, and remain inactive until explicit
+session start. The UI should show per-node/destination signal presence, peak,
+RMS, clipping, and stopped/not-prepared/owned-by-another-client state.
+
+The primary manual route is: keep VoiceMeeter open if desired, add Test Signal
+and a destination, plan and commit, prepare the exact existing endpoint, start,
+and verify the destination meter. Then replace Test Signal with a deliberate
+physical-input or application-capture source and compare the same meters. This
+does not imply that VoiceMeeter is closed, that AudioRouter owns its virtual
+driver, or that browser clients are supported.
+
+The current raw signal-path smoke remains separate:
+`tests/acceptance/m00-native-loopback.ps1 -AllowLiveAudio` generates a tone
+through the exact VB-Cable pair and verifies nonzero capture. It does not prove
+that the AudioRouter graph, UI meter path, or an attended microphone workflow
+is working.
 
 Document view/component ownership, generated contract workflow, keyboard commands, onboarding instructions, test fixtures, UX findings, and known accessibility limitations. M06 uses the existing generic inspector for new node types.
 

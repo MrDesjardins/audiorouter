@@ -4,20 +4,23 @@ export type LibraryEntry = {
   id: string;
   label: string;
   category: string;
-  kind?: Extract<NodeKind, "physicalInput" | "physicalOutput" | "mixer" | "gain" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch">;
+  kind?: Extract<NodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "mixer" | "gain" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch" | "recorder">;
   unavailableReason?: string;
+  virtualKind?: "virtualRenderSource" | "virtualCaptureSink";
 };
 
 export const libraryEntries: LibraryEntry[] = [
   { id: "physical-input", label: "Physical input", category: "Source", kind: "physicalInput" },
+  { id: "test-signal", label: "Test Signal", category: "Source", kind: "testSignal" },
   { id: "application-capture", label: "Application capture", category: "Source", unavailableReason: "Select a verified running application in Audio sources" },
   { id: "endpoint-loopback", label: "Endpoint loopback", category: "Source", unavailableReason: "Select an exact active render endpoint in Endpoint binding" },
   { id: "physical-output", label: "Physical output", category: "Destination", kind: "physicalOutput" },
-  { id: "virtual-render-source", label: "Virtual render source", category: "Virtual bus", unavailableReason: "Requires the M03 managed virtual driver" },
-  { id: "virtual-capture-sink", label: "Virtual capture sink", category: "Virtual bus", unavailableReason: "Requires the M03 managed virtual driver" },
+  { id: "existing-virtual-output", label: "Existing virtual output", category: "Virtual endpoint", kind: "physicalOutput" },
+  { id: "virtual-render-source", label: "Virtual render source", category: "Virtual bus", unavailableReason: "Requires the deferred AudioRouter-managed signed driver", virtualKind: "virtualRenderSource" },
+  { id: "virtual-capture-sink", label: "Virtual capture sink", category: "Virtual bus", unavailableReason: "Requires the deferred AudioRouter-managed signed driver", virtualKind: "virtualCaptureSink" },
   { id: "gain", label: "Gain", category: "Effect", kind: "gain" },
   { id: "mixer", label: "Mixer", category: "Routing", kind: "mixer" },
-  { id: "recorder", label: "Recorder", category: "Output", unavailableReason: "Use the Recorder panel to control recording" },
+  { id: "recorder", label: "Recorder", category: "Output", kind: "recorder" },
   { id: "mute", label: "Mute", category: "Effect", kind: "mute" },
   { id: "meter", label: "Meter", category: "Monitor", kind: "meter" },
   { id: "parametric-eq", label: "Parametric EQ", category: "Effect", kind: "parametricEq" },

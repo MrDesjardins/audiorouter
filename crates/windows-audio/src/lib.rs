@@ -402,6 +402,29 @@ impl NativeBridgeInputWorker {
         self.running
     }
 
+    pub fn set_privacy_muted(&self, muted: bool) {
+        self.bridge.set_privacy_muted(muted);
+    }
+
+    pub fn bus_id(&self) -> audiorouter_domain::EntityId {
+        self.source.bus_id()
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.source.generation()
+    }
+
+    pub fn bridge(&self) -> &WasapiSchedulerBridge {
+        &self.bridge
+    }
+
+    /// Publish a fully prepared graph into this worker before its endpoint is
+    /// started. Preparation stays on the control thread; the render-source
+    /// pump only observes the immutable scheduler publication.
+    pub fn publish_graph(&mut self, graph: audiorouter_engine::RuntimeGraph) {
+        self.bridge.scheduler_mut().publish(graph);
+    }
+
     pub fn heartbeat(&mut self) -> Result<(), NativeBridgeInputWorkerError> {
         if let Err(error) = self.source.heartbeat() {
             // A lost render-source lease must not leave the physical render
@@ -427,7 +450,41 @@ impl NativeBridgeInputWorker {
             ));
         }
         self.bridge
-            .pump_from_native_render_source(&self.source, &self.render, &mut self.last_sequence)
+            .pump_from_native_render_source(
+                &self.source,
+                &self.render,
+                &mut self.last_sequence,
+                None,
+            )
+            .map_err(|error| match error {
+                NativeBridgeInputPumpError::Bridge(error) => {
+                    NativeBridgeInputWorkerError::Bridge(error)
+                }
+                NativeBridgeInputPumpError::Audio(error) => {
+                    NativeBridgeInputWorkerError::Audio(error)
+                }
+            })
+    }
+
+    /// Pump one bridge block while forwarding the processed graph output to
+    /// a prebuilt tap set. Tap membership is established on the control
+    /// thread and is never changed in this path.
+    pub fn pump_with_taps(
+        &mut self,
+        taps: &audiorouter_engine::AudioTapSet,
+    ) -> Result<WasapiSchedulerPump, NativeBridgeInputWorkerError> {
+        if !self.running {
+            return Err(NativeBridgeInputWorkerError::Audio(
+                AudioError::ProcessingStateUnavailable,
+            ));
+        }
+        self.bridge
+            .pump_from_native_render_source(
+                &self.source,
+                &self.render,
+                &mut self.last_sequence,
+                Some(taps),
+            )
             .map_err(|error| match error {
                 NativeBridgeInputPumpError::Bridge(error) => {
                     NativeBridgeInputWorkerError::Bridge(error)
@@ -452,6 +509,19 @@ impl NativeBridgeInputWorker {
             ));
         }
         bounded_pump(max_quanta, false, || self.pump())
+    }
+
+    pub fn pump_available_with_taps(
+        &mut self,
+        max_quanta: u32,
+        taps: &audiorouter_engine::AudioTapSet,
+    ) -> Result<WasapiSchedulerPump, NativeBridgeInputWorkerError> {
+        if !self.running {
+            return Err(NativeBridgeInputWorkerError::Audio(
+                AudioError::ProcessingStateUnavailable,
+            ));
+        }
+        bounded_pump(max_quanta, false, || self.pump_with_taps(taps))
     }
 }
 
@@ -498,6 +568,10 @@ impl NativeBridgeOutputWorker {
 
     pub fn is_running(&self) -> bool {
         self.endpoint.is_running()
+    }
+
+    pub fn set_privacy_muted(&self, muted: bool) {
+        self.endpoint.set_privacy_muted(muted);
     }
 
     pub fn published_blocks(&self) -> u64 {
@@ -600,6 +674,11 @@ impl NativeBridgeDuplexWorker {
         self.input.is_running() && self.output.is_running()
     }
 
+    pub fn set_privacy_muted(&self, muted: bool) {
+        self.input.set_privacy_muted(muted);
+        self.output.set_privacy_muted(muted);
+    }
+
     pub fn start(&mut self) -> Result<(), NativeBridgeDuplexWorkerError> {
         let input_was_running = self.input.is_running();
         self.input
@@ -695,7 +774,7 @@ impl Drop for NativeBridgeDuplexWorker {
 /// handle; this type deliberately does not claim kernel access to the file view.
 pub struct NativeBridgeController {
     client: NativeBridgeControlClient,
-    session: NativeBridgeSession,
+    session: Option<NativeBridgeSession>,
     section: Option<NativeBridgeSectionHandle>,
     closed: bool,
 }
@@ -943,48 +1022,85 @@ impl NativeBridgeController {
         let session = NativeBridgeSession::create(&mapping_path, hello.clone())
             .map_err(NativeBridgeControllerError::Session)?;
         let section =
-            NativeBridgeSectionHandle::for_file(mapping_path, session.mapping_bytes() as u32)
-                .map_err(NativeBridgeControllerError::Windows)?;
-        client
-            .open_bridge_with_mapping(&hello, section.raw_handle(), section.mapping_bytes())
-            .map_err(NativeBridgeControllerError::Windows)?;
+            match NativeBridgeSectionHandle::for_file(mapping_path, session.mapping_bytes() as u32)
+            {
+                Ok(section) => section,
+                Err(error) => {
+                    let _ = session.remove_owned_mapping();
+                    return Err(NativeBridgeControllerError::Windows(error));
+                }
+            };
+        if let Err(error) =
+            client.open_bridge_with_mapping(&hello, section.raw_handle(), section.mapping_bytes())
+        {
+            drop(section);
+            let _ = session.remove_owned_mapping();
+            return Err(NativeBridgeControllerError::Windows(error));
+        }
         Ok(Self {
             client,
-            session,
+            session: Some(session),
             section: Some(section),
             closed: false,
         })
     }
 
     pub fn heartbeat(&mut self) -> Result<(), NativeBridgeControllerError> {
+        let session = self
+            .session
+            .as_ref()
+            .expect("native bridge session remains owned until close");
         if let Some(section) = &self.section {
             self.client
                 .heartbeat_with_mapping(
-                    self.session.hello(),
+                    session.hello(),
                     section.raw_handle(),
                     section.mapping_bytes(),
                 )
                 .map_err(NativeBridgeControllerError::Windows)?;
         } else {
             self.client
-                .heartbeat(self.session.hello())
+                .heartbeat(session.hello())
                 .map_err(NativeBridgeControllerError::Windows)?;
         }
         self.session
+            .as_mut()
+            .expect("native bridge session remains owned until close")
             .heartbeat()
             .map_err(NativeBridgeControllerError::Session)
     }
 
     fn lease_ms(&self) -> u32 {
-        self.session.hello().lease_ms
+        self.session
+            .as_ref()
+            .expect("native bridge session remains owned until close")
+            .hello()
+            .lease_ms
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.session
+            .as_ref()
+            .expect("native bridge session remains owned until close")
+            .hello()
+            .generation
     }
 
     fn bus_id(&self) -> audiorouter_domain::EntityId {
-        audiorouter_domain::EntityId::new(self.session.hello().bus_id.clone())
+        audiorouter_domain::EntityId::new(
+            self.session
+                .as_ref()
+                .expect("native bridge session remains owned until close")
+                .hello()
+                .bus_id
+                .clone(),
+        )
     }
 
     pub fn write(&mut self, samples: &[f32]) -> Result<u64, NativeBridgeControllerError> {
         self.session
+            .as_mut()
+            .expect("native bridge session remains owned until close")
             .write(samples)
             .map_err(NativeBridgeControllerError::Session)
     }
@@ -994,6 +1110,8 @@ impl NativeBridgeController {
         samples: &mut [f32],
     ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeControllerError> {
         self.session
+            .as_ref()
+            .expect("native bridge session remains owned until close")
             .read_into(samples)
             .map_err(NativeBridgeControllerError::Session)
     }
@@ -1004,6 +1122,8 @@ impl NativeBridgeController {
         samples: &mut [f32],
     ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeControllerError> {
         self.session
+            .as_ref()
+            .expect("native bridge session remains owned until close")
             .read_into_after(minimum_sequence, samples)
             .map_err(NativeBridgeControllerError::Session)
     }
@@ -1016,31 +1136,52 @@ impl NativeBridgeController {
         &self,
     ) -> Result<NativeBridgeRealtimeWriter, NativeBridgeControllerError> {
         self.session
+            .as_ref()
+            .expect("native bridge session remains owned until close")
             .realtime_writer()
             .map_err(NativeBridgeControllerError::Session)
     }
 
     pub fn close(mut self) -> Result<(), NativeBridgeControllerError> {
-        if let Some(section) = &self.section {
+        let section = self.section.take();
+        let close_result = if let Some(section) = section.as_ref() {
             self.client
                 .close_with_mapping(
-                    self.session.hello(),
+                    self.session
+                        .as_ref()
+                        .expect("native bridge session remains owned until close")
+                        .hello(),
                     section.raw_handle(),
                     section.mapping_bytes(),
                 )
-                .map_err(NativeBridgeControllerError::Windows)?;
+                .map_err(NativeBridgeControllerError::Windows)
         } else {
             self.client
-                .close(self.session.hello())
-                .map_err(NativeBridgeControllerError::Windows)?;
-        }
+                .close(
+                    self.session
+                        .as_ref()
+                        .expect("native bridge session remains owned until close")
+                        .hello(),
+                )
+                .map_err(NativeBridgeControllerError::Windows)
+        };
+        close_result?;
+        drop(section);
         // Mark the broker lease closed before any later cleanup can run. If
         // the request above fails, this assignment is not reached and Drop
         // retains its best-effort retry path.
         self.closed = true;
-        self.session
+        let mut session = self
+            .session
+            .take()
+            .expect("native bridge session remains owned until close");
+        let flush_result = session
             .flush()
-            .map_err(NativeBridgeControllerError::Session)
+            .map_err(NativeBridgeControllerError::Session);
+        let mapping_result = session
+            .remove_owned_mapping()
+            .map_err(NativeBridgeControllerError::Session);
+        flush_result.and(mapping_result)
     }
 }
 
@@ -1054,12 +1195,20 @@ impl Drop for NativeBridgeController {
         }
         if let Some(section) = &self.section {
             let _ = self.client.close_with_mapping(
-                self.session.hello(),
+                self.session
+                    .as_ref()
+                    .expect("native bridge session remains owned until close")
+                    .hello(),
                 section.raw_handle(),
                 section.mapping_bytes(),
             );
         } else {
-            let _ = self.client.close(self.session.hello());
+            let _ = self.client.close(
+                self.session
+                    .as_ref()
+                    .expect("native bridge session remains owned until close")
+                    .hello(),
+            );
         }
     }
 }
@@ -2162,6 +2311,13 @@ impl WasapiSchedulerBridge {
         &mut self.scheduler
     }
 
+    /// Update the allocation-free process-local privacy latch used by the
+    /// published graph. This is an atomic control-plane handoff; the pump
+    /// remains responsible for applying silence on the realtime boundary.
+    pub fn set_privacy_muted(&self, muted: bool) {
+        self.scheduler.processor().set_privacy_muted(muted);
+    }
+
     pub fn timeline_frame(&self) -> u64 {
         self.timeline_frame
     }
@@ -2224,6 +2380,7 @@ impl WasapiSchedulerBridge {
         source: &impl NativeRenderSource,
         render: &dyn RenderSink,
         last_sequence: &mut u64,
+        taps: Option<&audiorouter_engine::AudioTapSet>,
     ) -> Result<WasapiSchedulerPump, NativeBridgeInputPumpError> {
         let mut result = WasapiSchedulerPump::default();
         self.drain_render_pending(render, &mut result)
@@ -2279,10 +2436,13 @@ impl WasapiSchedulerBridge {
             ));
         }
         result.packets = 1;
-        let generation = self
-            .scheduler
-            .process_once()
-            .map_err(|_| NativeBridgeInputPumpError::Audio(AudioError::InvalidFrameSize))?;
+        let generation = match taps {
+            Some(taps) => self
+                .scheduler
+                .process_once_with_tap_set(self.timeline_frame, taps),
+            None => self.scheduler.process_once(),
+        }
+        .map_err(|_| NativeBridgeInputPumpError::Audio(AudioError::InvalidFrameSize))?;
         self.timeline_frame = self
             .timeline_frame
             .saturating_add(self.quantum_frames as u64);
@@ -2631,13 +2791,18 @@ fn endpoint_changes_affect_bindings(
     capture_id: &str,
     render_id: &str,
 ) -> bool {
-    changes.iter().any(|change| match change {
-        EndpointChange::Added(_) => false,
-        EndpointChange::Removed(endpoint) => endpoint.id == capture_id || endpoint.id == render_id,
-        EndpointChange::Changed { before, after } => {
-            before != after && (before.id == capture_id || before.id == render_id)
-        }
+    changes.iter().any(|change| {
+        endpoint_change_affects_id(change, capture_id)
+            || endpoint_change_affects_id(change, render_id)
     })
+}
+
+fn endpoint_change_affects_id(change: &EndpointChange, endpoint_id: &str) -> bool {
+    match change {
+        EndpointChange::Added(_) => false,
+        EndpointChange::Removed(endpoint) => endpoint.id == endpoint_id,
+        EndpointChange::Changed { before, after } => before != after && before.id == endpoint_id,
+    }
 }
 
 trait EndpointLifecycle {
@@ -2749,6 +2914,10 @@ impl WasapiEndpointWorker {
 
     pub fn bridge_mut(&mut self) -> &mut WasapiSchedulerBridge {
         &mut self.bridge
+    }
+
+    pub fn set_privacy_muted(&self, muted: bool) {
+        self.bridge.set_privacy_muted(muted);
     }
 
     pub fn telemetry(&self) -> WasapiEndpointWorkerTelemetry {
@@ -3006,6 +3175,10 @@ impl ProcessLoopbackWorker {
         &mut self.bridge
     }
 
+    pub fn set_privacy_muted(&self, muted: bool) {
+        self.bridge.set_privacy_muted(muted);
+    }
+
     pub fn start(&mut self) -> Result<(), AudioError> {
         if self.running {
             return Ok(());
@@ -3071,6 +3244,13 @@ pub enum NativeAudioWorker {
 }
 
 impl NativeAudioWorker {
+    pub fn set_privacy_muted(&self, muted: bool) {
+        match self {
+            Self::Endpoint(worker) => worker.set_privacy_muted(muted),
+            Self::ProcessLoopback(worker) => worker.set_privacy_muted(muted),
+        }
+    }
+
     /// Rebind an endpoint worker using a refreshed exact monitor snapshot.
     /// Process-loopback workers have a separate identity-based lifecycle.
     pub fn rebind_with_refreshed_bound_with_retry(
@@ -3542,6 +3722,8 @@ struct EventHandle(windows::Win32::Foundation::HANDLE);
 fn should_retry_capture_initialization(error: &windows::core::Error) -> bool {
     error.code() == windows::core::HRESULT(0x80070057u32 as i32)
 }
+
+const DEFAULT_CAPTURE_POLLING_BUFFER_100NS: i64 = 1_000_000;
 
 fn capture_initialize_operation(event_driven: bool) -> &'static str {
     if event_driven {
@@ -4109,6 +4291,10 @@ impl AudioCaptureSource for ProcessLoopbackCapture {
 }
 
 impl SharedCapture {
+    pub fn endpoint_id(&self) -> &str {
+        &self.endpoint_id
+    }
+
     /// Stop, release, refresh, and reopen the exact capture binding with a
     /// bounded retry policy for transient device/service failures. The old
     /// client is released before any retry, and no substitute endpoint is
@@ -4205,7 +4391,7 @@ impl SharedCapture {
                 // permission failures, and endpoint disappearance must remain
                 // visible to the caller instead of being relabeled as a mode
                 // compatibility issue.
-                Self::open_internal(endpoint_id, false, 1_000_000)
+                Self::open_internal(endpoint_id, false, DEFAULT_CAPTURE_POLLING_BUFFER_100NS)
             }
             result => result,
         }
@@ -4222,7 +4408,7 @@ impl SharedCapture {
         let duration = if buffer_duration_100ns > 0 {
             buffer_duration_100ns
         } else {
-            1_000_000
+            DEFAULT_CAPTURE_POLLING_BUFFER_100NS
         };
         Self::open_internal(endpoint_id, false, duration)
     }
@@ -4295,6 +4481,21 @@ impl SharedCapture {
                 format,
                 None,
             )
+        };
+        // Some shared-mode capture clients reject an explicit polling buffer
+        // duration even though the same mix format is valid with the
+        // engine-selected period. Retry only that precise incompatibility;
+        // ownership, access, and other HRESULTs must remain visible to the
+        // caller instead of being reclassified as a format fallback.
+        let initialized = if !event_driven
+            && initialized
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.code().0 == 0x80070057u32 as i32)
+        {
+            unsafe { client.Initialize(AUDCLNT_SHAREMODE_SHARED, stream_flags, 0, 0, format, None) }
+        } else {
+            initialized
         };
         unsafe { windows::Win32::System::Com::CoTaskMemFree(Some(format.cast())) };
         initialized.map_err(|error| AudioError::WindowsOperation {
@@ -4493,6 +4694,10 @@ impl AudioCaptureSource for SharedCapture {
 }
 
 impl SharedRender {
+    pub fn endpoint_id(&self) -> &str {
+        &self.endpoint_id
+    }
+
     /// Stop, release, refresh, and reopen the exact render binding with a
     /// bounded retry policy for transient device/service failures. The old
     /// client is released before any retry, and no substitute endpoint is
@@ -4741,6 +4946,1014 @@ trait RenderSink {
 impl RenderSink for SharedRender {
     fn submit_bytes(&self, source: &[u8], bytes_per_frame: usize) -> Result<u32, AudioError> {
         SharedRender::submit_bytes(self, source, bytes_per_frame)
+    }
+}
+
+/// Control/worker-thread pump that drains one prebuilt engine output ring
+/// into one render sink. The ring and all byte storage are created before the
+/// pump is started; draining never waits or allocates. A partially accepted
+/// render block remains in the bounded carry buffer for the next wake.
+struct RingOutputPump<S: RenderSink> {
+    sink: S,
+    ring: Arc<audiorouter_engine::AudioBlockRing>,
+    generation: u64,
+    channels: usize,
+    bytes_per_frame: usize,
+    pending: Vec<u8>,
+    pending_bytes: usize,
+}
+
+impl<S: RenderSink> RingOutputPump<S> {
+    fn new(
+        sink: S,
+        ring: Arc<audiorouter_engine::AudioBlockRing>,
+        generation: u64,
+        channels: usize,
+        quantum_frames: usize,
+    ) -> Result<Self, AudioError> {
+        if generation == 0
+            || !(1..=audiorouter_engine::MAX_CHANNELS).contains(&channels)
+            || quantum_frames == 0
+        {
+            return Err(AudioError::InvalidFrameSize);
+        }
+        let bytes_per_frame = channels
+            .checked_mul(std::mem::size_of::<f32>())
+            .ok_or(AudioError::InvalidFrameSize)?;
+        let pending_bytes = quantum_frames
+            .checked_mul(bytes_per_frame)
+            .ok_or(AudioError::InvalidFrameSize)?;
+        Ok(Self {
+            sink,
+            ring,
+            generation,
+            channels,
+            bytes_per_frame,
+            pending: vec![0; pending_bytes],
+            pending_bytes: 0,
+        })
+    }
+
+    fn is_drained(&self) -> bool {
+        self.pending_bytes == 0
+    }
+
+    fn drain_pending(&mut self, result: &mut WasapiSchedulerPump) -> Result<(), AudioError> {
+        while self.pending_bytes != 0 {
+            let submitted = self
+                .sink
+                .submit_bytes(&self.pending[..self.pending_bytes], self.bytes_per_frame)?;
+            if submitted == 0 {
+                result.render_backpressure_events =
+                    result.render_backpressure_events.saturating_add(1);
+                return Ok(());
+            }
+            let submitted_bytes = usize::try_from(submitted)
+                .ok()
+                .and_then(|frames| frames.checked_mul(self.bytes_per_frame))
+                .ok_or(AudioError::InvalidFrameSize)?;
+            if submitted_bytes > self.pending_bytes {
+                return Err(AudioError::InvalidFrameSize);
+            }
+            self.pending
+                .copy_within(submitted_bytes..self.pending_bytes, 0);
+            self.pending_bytes -= submitted_bytes;
+            result.rendered_frames = result.rendered_frames.saturating_add(submitted);
+        }
+        Ok(())
+    }
+
+    fn pump_one(&mut self) -> Result<WasapiSchedulerPump, AudioError> {
+        let mut result = WasapiSchedulerPump::default();
+        self.drain_pending(&mut result)?;
+        if !self.is_drained() {
+            return Ok(result);
+        }
+        let Some(block) = self.ring.try_receive_generation(self.generation) else {
+            return Ok(result);
+        };
+        result.packets = 1;
+        if block.channels() != self.channels {
+            let _ = self.ring.try_recycle(block);
+            return Err(AudioError::InvalidFrameSize);
+        }
+        let bytes = block
+            .frames()
+            .checked_mul(self.bytes_per_frame)
+            .ok_or(AudioError::InvalidFrameSize)?;
+        if bytes > self.pending.len() {
+            let _ = self.ring.try_recycle(block);
+            return Err(AudioError::BufferTooSmall {
+                required: bytes,
+                available: self.pending.len(),
+            });
+        }
+        let encode_result = encode_interleaved_float32(&block, &mut self.pending[..bytes]);
+        self.pending_bytes = bytes;
+        self.ring
+            .try_recycle(block)
+            .map_err(|_| AudioError::InvalidFrameSize)?;
+        if let Err(error) = encode_result {
+            self.pending_bytes = 0;
+            return Err(error);
+        }
+        self.drain_pending(&mut result)?;
+        Ok(result)
+    }
+
+    fn pump_available(&mut self, max_blocks: u32) -> Result<WasapiSchedulerPump, AudioError> {
+        let mut result = WasapiSchedulerPump::default();
+        for _ in 0..max_blocks {
+            let one = self.pump_one()?;
+            let made_progress =
+                one.packets != 0 || one.rendered_frames != 0 || one.render_backpressure_events != 0;
+            result.accumulate(one);
+            if !made_progress || !self.is_drained() {
+                break;
+            }
+        }
+        Ok(result)
+    }
+}
+
+#[cfg(windows)]
+#[derive(Debug)]
+pub enum WasapiOutputFanoutError {
+    Capacity,
+    InvalidGeneration,
+    Mixer(audiorouter_engine::MixerFanoutError),
+    Audio(AudioError),
+}
+
+#[cfg(windows)]
+/// Owns several exact physical render workers fed by independent bounded
+/// taps from one already-published graph. Construction is stopped-by-default;
+/// start/stop are transactional control operations and `pump_available` is a
+/// bounded worker-thread drain. One slow render endpoint only accumulates its
+/// own carry/backpressure; it cannot block sibling output workers or the
+/// realtime graph callback.
+pub struct WasapiOutputFanout {
+    workers: Vec<RingOutputPump<SharedRender>>,
+    output_rings: Vec<Arc<audiorouter_engine::AudioBlockRing>>,
+    branch_tap_sets: Vec<audiorouter_engine::AudioTapSet>,
+    taps: audiorouter_engine::AudioTapSet,
+    generation: u64,
+    quantum_frames: usize,
+    timeline_frame: u64,
+    running: bool,
+}
+
+#[cfg(windows)]
+impl WasapiOutputFanout {
+    /// Construct a stopped fan-out that owns only virtual/recording/tool
+    /// branches. It has no physical render workers; callers append the
+    /// prebuilt branch tap sets before activation.
+    pub fn new_tap_only(
+        generation: u64,
+        channels: usize,
+        quantum_frames: usize,
+    ) -> Result<Self, WasapiOutputFanoutError> {
+        if generation == 0
+            || !(1..=audiorouter_engine::MAX_CHANNELS).contains(&channels)
+            || quantum_frames == 0
+        {
+            return Err(WasapiOutputFanoutError::Capacity);
+        }
+        Ok(Self {
+            workers: Vec::new(),
+            output_rings: Vec::new(),
+            branch_tap_sets: Vec::new(),
+            taps: audiorouter_engine::AudioTapSet::new(),
+            generation,
+            quantum_frames,
+            timeline_frame: 0,
+            running: false,
+        })
+    }
+
+    pub fn new(
+        outputs: Vec<(SharedRender, Arc<audiorouter_engine::AudioBlockRing>)>,
+        generation: u64,
+        channels: usize,
+        quantum_frames: usize,
+    ) -> Result<Self, WasapiOutputFanoutError> {
+        if generation == 0 {
+            return Err(WasapiOutputFanoutError::InvalidGeneration);
+        }
+        if outputs.is_empty() || outputs.len() > audiorouter_engine::MAX_AUDIO_TAPS {
+            return Err(WasapiOutputFanoutError::Capacity);
+        }
+        let mut workers = Vec::with_capacity(outputs.len());
+        let mut output_rings = Vec::with_capacity(outputs.len());
+        let mut branch_tap_sets = Vec::with_capacity(outputs.len());
+        let mut taps = audiorouter_engine::AudioTapSet::new();
+        for (render, ring) in outputs {
+            let tap_ring = Arc::clone(&ring);
+            let worker = RingOutputPump::new(render, ring, generation, channels, quantum_frames)
+                .map_err(WasapiOutputFanoutError::Audio)?;
+            output_rings.push(tap_ring.clone());
+            let shared_tap_ring = Arc::clone(&tap_ring);
+            taps.add(audiorouter_engine::AudioBlockRingTap::new(tap_ring))
+                .map_err(|_| WasapiOutputFanoutError::Capacity)?;
+            let mut branch_taps = audiorouter_engine::AudioTapSet::new();
+            branch_taps
+                .add(audiorouter_engine::AudioBlockRingTap::new(shared_tap_ring))
+                .map_err(|_| WasapiOutputFanoutError::Capacity)?;
+            branch_tap_sets.push(branch_taps);
+            workers.push(worker);
+        }
+        Ok(Self {
+            workers,
+            output_rings,
+            branch_tap_sets,
+            taps,
+            generation,
+            quantum_frames,
+            timeline_frame: 0,
+            running: false,
+        })
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    pub fn output_count(&self) -> usize {
+        self.workers.len()
+    }
+
+    /// Return whether a refreshed endpoint snapshot invalidates any exact
+    /// physical render binding owned by this fan-out. Tap-only branches have
+    /// no endpoint binding and therefore cannot be invalidated here.
+    pub fn bindings_affected_by(&self, changes: &[EndpointChange]) -> bool {
+        self.workers.iter().any(|worker| {
+            changes
+                .iter()
+                .any(|change| endpoint_change_affects_id(change, worker.sink.endpoint_id()))
+        })
+    }
+
+    pub fn tap_set(&self) -> &audiorouter_engine::AudioTapSet {
+        &self.taps
+    }
+
+    /// Add prebuilt observers to the corresponding physical output branches.
+    /// Membership is copied off the realtime path and remains branch-local.
+    pub fn with_branch_tap_sets(
+        mut self,
+        tap_sets: Vec<audiorouter_engine::AudioTapSet>,
+    ) -> Result<Self, WasapiOutputFanoutError> {
+        self.attach_branch_tap_sets(&tap_sets)?;
+        Ok(self)
+    }
+
+    /// Attach branch-local observers before startup without replacing the
+    /// output owner. Membership is copied while the control thread owns the
+    /// stopped fan-out.
+    pub fn attach_branch_tap_sets(
+        &mut self,
+        tap_sets: &[audiorouter_engine::AudioTapSet],
+    ) -> Result<(), WasapiOutputFanoutError> {
+        if tap_sets.len() != self.branch_tap_sets.len() {
+            return Err(WasapiOutputFanoutError::Capacity);
+        }
+        if self.running {
+            return Err(WasapiOutputFanoutError::Capacity);
+        }
+        for (branch, tap_set) in self.branch_tap_sets.iter_mut().zip(tap_sets.iter()) {
+            branch
+                .append(tap_set)
+                .map_err(|_| WasapiOutputFanoutError::Capacity)?;
+            self.taps
+                .append(tap_set)
+                .map_err(|_| WasapiOutputFanoutError::Capacity)?;
+        }
+        Ok(())
+    }
+
+    /// Append a virtual/tool-only output branch. The branch receives a
+    /// preallocated ring tap for downstream bridge consumers but has no
+    /// physical render worker. Callers must append branches in the exact
+    /// validated graph destination order before activation.
+    pub fn append_tap_branch(
+        &mut self,
+        tap_set: audiorouter_engine::AudioTapSet,
+        channels: usize,
+        quantum_frames: usize,
+    ) -> Result<Arc<audiorouter_engine::AudioBlockRing>, WasapiOutputFanoutError> {
+        if self.running
+            || self.output_rings.len() >= audiorouter_engine::MAX_AUDIO_TAPS
+            || !(1..=audiorouter_engine::MAX_CHANNELS).contains(&channels)
+            || quantum_frames == 0
+        {
+            return Err(WasapiOutputFanoutError::Capacity);
+        }
+        let ring = Arc::new(
+            audiorouter_engine::AudioBlockRing::new(2, channels, quantum_frames)
+                .map_err(|_| WasapiOutputFanoutError::Capacity)?,
+        );
+        let mut branch_taps = audiorouter_engine::AudioTapSet::new();
+        branch_taps
+            .add(audiorouter_engine::AudioBlockRingTap::new(Arc::clone(
+                &ring,
+            )))
+            .map_err(|_| WasapiOutputFanoutError::Capacity)?;
+        branch_taps
+            .append(&tap_set)
+            .map_err(|_| WasapiOutputFanoutError::Capacity)?;
+        self.taps
+            .append(&tap_set)
+            .map_err(|_| WasapiOutputFanoutError::Capacity)?;
+        self.branch_tap_sets.push(branch_taps);
+        self.output_rings.push(ring.clone());
+        Ok(ring)
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.running
+    }
+
+    pub fn start(&mut self) -> Result<(), AudioError> {
+        if self.running {
+            return Ok(());
+        }
+        for started in 0..self.workers.len() {
+            if let Err(error) = self.workers[started].sink.start() {
+                for rollback in self.workers[..started].iter_mut().rev() {
+                    let _ = rollback.sink.stop();
+                }
+                return Err(error);
+            }
+        }
+        self.running = true;
+        Ok(())
+    }
+
+    pub fn stop(&mut self) -> Result<(), AudioError> {
+        self.running = false;
+        let mut first_error = None;
+        for worker in &mut self.workers {
+            if let Err(error) = worker.sink.stop() {
+                first_error.get_or_insert(error);
+            }
+            worker.pending_bytes = 0;
+            worker.ring.recycle_all();
+        }
+        for ring in &self.output_rings {
+            ring.recycle_all();
+        }
+        self.timeline_frame = 0;
+        first_error.map_or(Ok(()), Err)
+    }
+
+    pub fn pump_available(&mut self, max_blocks: u32) -> Result<WasapiSchedulerPump, AudioError> {
+        if !self.running {
+            return Err(AudioError::ProcessingStateUnavailable);
+        }
+        let mut result = WasapiSchedulerPump::default();
+        for worker in &mut self.workers {
+            result.accumulate(worker.pump_available(max_blocks)?);
+        }
+        Ok(result)
+    }
+
+    /// Process one already-decoded coherent multi-input quantum into this
+    /// fanout's independent physical output rings, then give each render
+    /// worker one bounded drain opportunity. The mixer owns graph validation;
+    /// this adapter owns endpoint rings and render lifecycle. The fixed array
+    /// of ring references avoids rebuilding a heap-backed destination list on
+    /// the worker path.
+    pub fn process_fanout_once(
+        &mut self,
+        mixer: &mut audiorouter_engine::RealtimeMixerFanout,
+    ) -> Result<(usize, WasapiSchedulerPump), WasapiOutputFanoutError> {
+        if !self.running {
+            return Err(WasapiOutputFanoutError::Audio(
+                AudioError::ProcessingStateUnavailable,
+            ));
+        }
+        if mixer.generation().value() != self.generation {
+            return Err(WasapiOutputFanoutError::InvalidGeneration);
+        }
+        if mixer.branch_count() != self.output_rings.len()
+            || self.output_rings.len() > audiorouter_engine::MAX_AUDIO_TAPS
+        {
+            return Err(WasapiOutputFanoutError::Capacity);
+        }
+        let destinations: [&audiorouter_engine::AudioBlockRing;
+            audiorouter_engine::MAX_AUDIO_TAPS] = std::array::from_fn(|index| {
+            self.output_rings
+                .get(index)
+                .map(Arc::as_ref)
+                .unwrap_or_else(|| self.output_rings[0].as_ref())
+        });
+        let branch_count = self.output_rings.len();
+        let start_frame = self.timeline_frame;
+        let tap_sets: [&audiorouter_engine::AudioTapSet; audiorouter_engine::MAX_AUDIO_TAPS] =
+            std::array::from_fn(|index| {
+                self.branch_tap_sets
+                    .get(index)
+                    .unwrap_or_else(|| &self.branch_tap_sets[0])
+            });
+        let delivered = mixer
+            .process_once_to_rings_with_tap_sets(
+                start_frame,
+                &destinations[..branch_count],
+                &tap_sets[..branch_count],
+            )
+            .map_err(WasapiOutputFanoutError::Mixer)?;
+        if delivered != 0 {
+            self.timeline_frame = self
+                .timeline_frame
+                .saturating_add(self.quantum_frames as u64);
+        }
+        let mut pump = WasapiSchedulerPump::default();
+        for worker in &mut self.workers {
+            pump.accumulate(
+                worker
+                    .pump_available(1)
+                    .map_err(WasapiOutputFanoutError::Audio)?,
+            );
+        }
+        Ok((delivered, pump))
+    }
+}
+
+#[cfg(windows)]
+impl Drop for WasapiOutputFanout {
+    fn drop(&mut self) {
+        let _ = self.stop();
+    }
+}
+
+#[derive(Debug)]
+pub enum WasapiMultiInputFanoutError {
+    Capacity,
+    InputCount,
+    Audio(AudioError),
+    Mixer(audiorouter_engine::MixerFanoutError),
+}
+
+/// Bounded capture-side feeder for a multi-input mixer. Each source owns a
+/// fixed packet accumulator and reusable planar block; packet conversion and
+/// ring submission never allocate, wait, or access another endpoint. A full
+/// source ring leaves its decoded quantum staged for a later pump instead of
+/// overwriting an earlier quantum.
+pub struct WasapiMultiInputFanout {
+    mixer: audiorouter_engine::RealtimeMixerFanout,
+    accumulators: Vec<Float32PacketAccumulator>,
+    capture_bytes: Vec<Vec<u8>>,
+    pending_packet_bytes: Vec<usize>,
+    pending_packet_offsets: Vec<usize>,
+    source_blocks: Vec<audiorouter_engine::AudioBlock>,
+    channels: Vec<usize>,
+    quantum_frames: usize,
+}
+
+impl WasapiMultiInputFanout {
+    pub fn new(
+        mixer: audiorouter_engine::RealtimeMixerFanout,
+        source_channels: &[usize],
+        quantum_frames: usize,
+        max_packet_frames: usize,
+    ) -> Result<Self, WasapiMultiInputFanoutError> {
+        if source_channels.len() != mixer.input_count() || quantum_frames == 0 {
+            return Err(WasapiMultiInputFanoutError::InputCount);
+        }
+        if max_packet_frames == 0 || max_packet_frames > MAX_FLOAT32_ACCUMULATOR_FRAMES {
+            return Err(WasapiMultiInputFanoutError::Capacity);
+        }
+        let mut accumulators = Vec::with_capacity(source_channels.len());
+        let mut capture_bytes = Vec::with_capacity(source_channels.len());
+        let mut pending_packet_bytes = Vec::with_capacity(source_channels.len());
+        let mut pending_packet_offsets = Vec::with_capacity(source_channels.len());
+        let mut source_blocks = Vec::with_capacity(source_channels.len());
+        let mut channels = Vec::with_capacity(source_channels.len());
+        for &channel_count in source_channels {
+            if !(1..=audiorouter_engine::MAX_CHANNELS).contains(&channel_count) {
+                return Err(WasapiMultiInputFanoutError::Capacity);
+            }
+            accumulators.push(
+                Float32PacketAccumulator::new(channel_count, quantum_frames, max_packet_frames)
+                    .map_err(WasapiMultiInputFanoutError::Audio)?,
+            );
+            let bytes = max_packet_frames
+                .checked_mul(channel_count)
+                .and_then(|samples| samples.checked_mul(std::mem::size_of::<f32>()))
+                .ok_or(WasapiMultiInputFanoutError::Capacity)?;
+            capture_bytes.push(vec![0; bytes]);
+            pending_packet_bytes.push(0);
+            pending_packet_offsets.push(0);
+            source_blocks.push(
+                audiorouter_engine::AudioBlock::new(channel_count, quantum_frames)
+                    .map_err(|_| WasapiMultiInputFanoutError::Capacity)?,
+            );
+            channels.push(channel_count);
+        }
+        Ok(Self {
+            mixer,
+            accumulators,
+            capture_bytes,
+            pending_packet_bytes,
+            pending_packet_offsets,
+            source_blocks,
+            channels,
+            quantum_frames,
+        })
+    }
+
+    pub fn mixer(&self) -> &audiorouter_engine::RealtimeMixerFanout {
+        &self.mixer
+    }
+
+    pub fn input_count(&self) -> usize {
+        self.channels.len()
+    }
+
+    pub fn mixer_mut(&mut self) -> &mut audiorouter_engine::RealtimeMixerFanout {
+        &mut self.mixer
+    }
+
+    pub fn reset(&mut self) -> usize {
+        for accumulator in &mut self.accumulators {
+            accumulator.reset();
+        }
+        self.pending_packet_bytes.fill(0);
+        self.pending_packet_offsets.fill(0);
+        self.mixer.reset_inputs()
+    }
+
+    /// Pump at most one currently available packet from each capture source.
+    /// Complete quanta are copied through the engine-owned generation and
+    /// shape boundary. If a source ring is full, its accumulator remains
+    /// intact and the caller can retry after processing/output drain.
+    pub fn pump_inputs(
+        &mut self,
+        captures: &[&dyn AudioCaptureSource],
+    ) -> Result<WasapiSchedulerPump, WasapiMultiInputFanoutError> {
+        if captures.len() != self.channels.len() {
+            return Err(WasapiMultiInputFanoutError::InputCount);
+        }
+        let mut result = WasapiSchedulerPump::default();
+        for (index, capture) in captures.iter().enumerate() {
+            let bytes_per_frame = self.channels[index] * std::mem::size_of::<f32>();
+            if self.pending_packet_offsets[index] >= self.pending_packet_bytes[index] {
+                let Some((packet, packet_bytes)) = capture
+                    .next_packet_into(&mut self.capture_bytes[index], bytes_per_frame)
+                    .map_err(WasapiMultiInputFanoutError::Audio)?
+                else {
+                    continue;
+                };
+                if packet_bytes > self.capture_bytes[index].len() {
+                    return Err(WasapiMultiInputFanoutError::Audio(
+                        AudioError::BufferTooSmall {
+                            required: packet_bytes,
+                            available: self.capture_bytes[index].len(),
+                        },
+                    ));
+                }
+                let packet_frame_count = packet_bytes / bytes_per_frame;
+                if packet_bytes % bytes_per_frame != 0
+                    || usize::try_from(packet.frames).ok() != Some(packet_frame_count)
+                {
+                    return Err(WasapiMultiInputFanoutError::Audio(
+                        AudioError::InvalidFrameSize,
+                    ));
+                }
+                self.pending_packet_bytes[index] = packet_bytes;
+                self.pending_packet_offsets[index] = 0;
+                result.packets = result.packets.saturating_add(1);
+                result.captured_frames = result.captured_frames.saturating_add(packet.frames);
+            }
+            let packet_bytes = self.pending_packet_bytes[index];
+            let mut offset = self.pending_packet_offsets[index];
+            while offset < packet_bytes {
+                let consumed = self.accumulators[index]
+                    .push(&self.capture_bytes[index][offset..packet_bytes])
+                    .map_err(WasapiMultiInputFanoutError::Audio)?;
+                if consumed == 0 {
+                    // A device packet may be larger than the bounded
+                    // accumulator. Drain one quantum before retrying the
+                    // remainder; otherwise a perfectly valid large WASAPI
+                    // packet is reported as a buffer failure once the
+                    // accumulator reaches capacity.
+                    let Some(ring) = self.mixer.input_ring(index) else {
+                        return Err(WasapiMultiInputFanoutError::InputCount);
+                    };
+                    if ring.available() == 0
+                        || !self.accumulators[index]
+                            .pop_into(&mut self.source_blocks[index])
+                            .map_err(WasapiMultiInputFanoutError::Audio)?
+                    {
+                        break;
+                    }
+                    self.mixer
+                        .try_submit_input(
+                            index,
+                            self.mixer.generation(),
+                            &self.source_blocks[index],
+                        )
+                        .map_err(WasapiMultiInputFanoutError::Mixer)?;
+                    result.processed_quanta = result.processed_quanta.saturating_add(1);
+                    continue;
+                }
+                offset += consumed;
+                self.pending_packet_offsets[index] = offset;
+                while self.accumulators[index].pending_frames() >= self.quantum_frames {
+                    let Some(ring) = self.mixer.input_ring(index) else {
+                        return Err(WasapiMultiInputFanoutError::InputCount);
+                    };
+                    if ring.available() == 0 {
+                        break;
+                    }
+                    if !self.accumulators[index]
+                        .pop_into(&mut self.source_blocks[index])
+                        .map_err(WasapiMultiInputFanoutError::Audio)?
+                    {
+                        break;
+                    }
+                    let submitted = self
+                        .mixer
+                        .try_submit_input(
+                            index,
+                            self.mixer.generation(),
+                            &self.source_blocks[index],
+                        )
+                        .map_err(WasapiMultiInputFanoutError::Mixer)?;
+                    if !submitted {
+                        break;
+                    }
+                    result.processed_quanta = result.processed_quanta.saturating_add(1);
+                }
+            }
+            self.pending_packet_offsets[index] = offset;
+            if offset == packet_bytes {
+                self.pending_packet_bytes[index] = 0;
+                self.pending_packet_offsets[index] = 0;
+            }
+        }
+        Ok(result)
+    }
+
+    /// Pump one bounded packet per source and, when a coherent input quantum
+    /// is ready, hand it to the physical output fanout. Capture and render
+    /// lifecycle remain explicit to the caller; this helper only composes
+    /// their already-constructed worker seams.
+    pub fn pump_and_process_outputs(
+        &mut self,
+        captures: &[&dyn AudioCaptureSource],
+        outputs: &mut WasapiOutputFanout,
+    ) -> Result<(WasapiSchedulerPump, usize, WasapiSchedulerPump), WasapiMultiInputFanoutError>
+    {
+        let input_result = self.pump_inputs(captures)?;
+        let (delivered, output_result) =
+            outputs
+                .process_fanout_once(&mut self.mixer)
+                .map_err(|error| match error {
+                    WasapiOutputFanoutError::Audio(error) => {
+                        WasapiMultiInputFanoutError::Audio(error)
+                    }
+                    WasapiOutputFanoutError::Mixer(error) => {
+                        WasapiMultiInputFanoutError::Mixer(error)
+                    }
+                    WasapiOutputFanoutError::Capacity => WasapiMultiInputFanoutError::Capacity,
+                    WasapiOutputFanoutError::InvalidGeneration => {
+                        WasapiMultiInputFanoutError::Mixer(
+                            audiorouter_engine::MixerFanoutError::StaleGeneration,
+                        )
+                    }
+                })?;
+        Ok((input_result, delivered, output_result))
+    }
+
+    /// Pump one bounded packet per source and deliver the next coherent
+    /// quantum to caller-owned branch blocks and taps. This is the direct
+    /// virtual-sink/recorder/tool path; no physical render worker is needed.
+    pub fn pump_and_process_taps(
+        &mut self,
+        captures: &[&dyn AudioCaptureSource],
+        start_frame: u64,
+        destinations: &mut [&mut audiorouter_engine::AudioBlock],
+        taps: &[&dyn audiorouter_engine::AudioTap],
+    ) -> Result<(WasapiSchedulerPump, usize), WasapiMultiInputFanoutError> {
+        let input_result = self.pump_inputs(captures)?;
+        let delivered = self
+            .mixer
+            .process_once_with_taps(start_frame, destinations, taps)
+            .map_err(WasapiMultiInputFanoutError::Mixer)?;
+        Ok((input_result, delivered))
+    }
+
+    /// Pump one bounded packet per source and deliver each coherent output
+    /// branch to its own prebuilt tap set. This preserves branch isolation
+    /// while allowing a virtual sink, recorder, and tool observer to share
+    /// the same branch.
+    pub fn pump_and_process_tap_sets(
+        &mut self,
+        captures: &[&dyn AudioCaptureSource],
+        start_frame: u64,
+        destinations: &mut [&mut audiorouter_engine::AudioBlock],
+        tap_sets: &[&audiorouter_engine::AudioTapSet],
+    ) -> Result<(WasapiSchedulerPump, usize), WasapiMultiInputFanoutError> {
+        let input_result = self.pump_inputs(captures)?;
+        let delivered = self
+            .mixer
+            .process_once_with_tap_sets(start_frame, destinations, tap_sets)
+            .map_err(WasapiMultiInputFanoutError::Mixer)?;
+        Ok((input_result, delivered))
+    }
+}
+
+#[derive(Debug)]
+pub enum NativeMultiInputWorkerError {
+    Capacity,
+    Audio(AudioError),
+    Feeder(WasapiMultiInputFanoutError),
+    Output(WasapiOutputFanoutError),
+}
+
+/// Control-owned lifecycle wrapper for several exact capture clients feeding
+/// one generation-bound mixer. Construction is stopped-by-default. Starting
+/// is transactional: if one capture fails, already-started siblings are
+/// stopped before the error is returned. Pumping is bounded and never waits
+/// or allocates; teardown clears both device and feeder state.
+pub struct NativeMultiInputWorker {
+    captures: Vec<SharedCapture>,
+    feeder: WasapiMultiInputFanout,
+    outputs: Option<WasapiOutputFanout>,
+    running: bool,
+}
+
+impl NativeMultiInputWorker {
+    pub fn new(
+        captures: Vec<SharedCapture>,
+        feeder: WasapiMultiInputFanout,
+    ) -> Result<Self, NativeMultiInputWorkerError> {
+        if captures.is_empty()
+            || captures.len() > audiorouter_engine::MAX_AUDIO_TAPS
+            || captures.len() != feeder.input_count()
+        {
+            return Err(NativeMultiInputWorkerError::Capacity);
+        }
+        Ok(Self {
+            captures,
+            feeder,
+            outputs: None,
+            running: false,
+        })
+    }
+
+    /// Add an explicitly prepared physical output fan-out to this worker.
+    /// The output generation must be identical to the feeder generation;
+    /// ownership is transferred so capture, graph, and render lifecycle can
+    /// be rolled back as one unit.
+    pub fn with_outputs(
+        mut self,
+        outputs: WasapiOutputFanout,
+    ) -> Result<Self, NativeMultiInputWorkerError> {
+        if outputs.generation() != self.generation() {
+            return Err(NativeMultiInputWorkerError::Output(
+                WasapiOutputFanoutError::InvalidGeneration,
+            ));
+        }
+        self.outputs = Some(outputs);
+        Ok(self)
+    }
+
+    /// Attach one stopped physical output owner to this multi-input worker.
+    /// Replacement is rejected so a prepared render branch cannot be orphaned
+    /// or changed while capture is active.
+    pub fn attach_output_fanout(
+        &mut self,
+        outputs: WasapiOutputFanout,
+    ) -> Result<(), NativeMultiInputWorkerError> {
+        if self.running || self.outputs.is_some() {
+            return Err(NativeMultiInputWorkerError::Capacity);
+        }
+        if outputs.generation() != self.generation() {
+            return Err(NativeMultiInputWorkerError::Output(
+                WasapiOutputFanoutError::InvalidGeneration,
+            ));
+        }
+        self.outputs = Some(outputs);
+        Ok(())
+    }
+
+    /// Create and attach a tap-only owner for virtual/recording/tool branches.
+    /// Branch membership is fixed before start and cannot be changed by the
+    /// realtime pump.
+    pub fn attach_tap_only_branches(
+        &mut self,
+        tap_sets: Vec<audiorouter_engine::AudioTapSet>,
+        channels: usize,
+        quantum_frames: usize,
+    ) -> Result<(), NativeMultiInputWorkerError> {
+        if self.running || self.outputs.is_some() || tap_sets.is_empty() {
+            return Err(NativeMultiInputWorkerError::Capacity);
+        }
+        let mut outputs =
+            WasapiOutputFanout::new_tap_only(self.generation(), channels, quantum_frames)
+                .map_err(NativeMultiInputWorkerError::Output)?;
+        for tap_set in tap_sets {
+            outputs
+                .append_tap_branch(tap_set, channels, quantum_frames)
+                .map_err(NativeMultiInputWorkerError::Output)?;
+        }
+        self.outputs = Some(outputs);
+        Ok(())
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.running
+    }
+
+    pub fn input_count(&self) -> usize {
+        self.captures.len()
+    }
+
+    pub fn output_count(&self) -> usize {
+        self.outputs
+            .as_ref()
+            .map_or(0, WasapiOutputFanout::output_count)
+    }
+
+    pub fn has_output_owner(&self) -> bool {
+        self.outputs.is_some()
+    }
+
+    /// Return whether any exact capture or physical-render binding was
+    /// changed or removed. Virtual/recording tap branches have no endpoint
+    /// identity and remain governed by their own bridge/recorder lifecycle.
+    pub fn bindings_affected_by(&self, changes: &[EndpointChange]) -> bool {
+        self.captures.iter().any(|capture| {
+            changes
+                .iter()
+                .any(|change| endpoint_change_affects_id(change, capture.endpoint_id()))
+        }) || self
+            .outputs
+            .as_ref()
+            .is_some_and(|outputs| outputs.bindings_affected_by(changes))
+    }
+
+    pub fn output_node_ids(&self) -> &[audiorouter_domain::EntityId] {
+        self.feeder.mixer().output_node_ids()
+    }
+
+    /// Attach branch-local observers to the owned output fan-out before
+    /// startup. Reconfiguration while running is rejected so realtime tap
+    /// membership never changes on the audio path.
+    pub fn attach_output_branch_tap_sets(
+        &mut self,
+        tap_sets: Vec<audiorouter_engine::AudioTapSet>,
+    ) -> Result<(), NativeMultiInputWorkerError> {
+        if self.running {
+            return Err(NativeMultiInputWorkerError::Capacity);
+        }
+        self.outputs
+            .as_mut()
+            .ok_or(NativeMultiInputWorkerError::Capacity)?
+            .attach_branch_tap_sets(&tap_sets)
+            .map_err(NativeMultiInputWorkerError::Output)
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.feeder.mixer().generation().value()
+    }
+
+    pub fn set_privacy_muted(&self, muted: bool) {
+        self.feeder.mixer().set_privacy_muted(muted);
+    }
+
+    pub fn start(&mut self) -> Result<(), NativeMultiInputWorkerError> {
+        if self.running {
+            return Ok(());
+        }
+        for index in 0..self.captures.len() {
+            if let Err(error) = self.captures[index].start() {
+                for capture in self.captures[..index].iter_mut().rev() {
+                    let _ = capture.stop();
+                }
+                self.feeder.reset();
+                return Err(NativeMultiInputWorkerError::Audio(error));
+            }
+        }
+        if let Some(outputs) = self.outputs.as_mut() {
+            if let Err(error) = outputs.start() {
+                for capture in self.captures.iter_mut().rev() {
+                    let _ = capture.stop();
+                }
+                self.feeder.reset();
+                return Err(NativeMultiInputWorkerError::Output(
+                    WasapiOutputFanoutError::Audio(error),
+                ));
+            }
+        }
+        self.running = true;
+        Ok(())
+    }
+
+    pub fn stop(&mut self) -> Result<(), NativeMultiInputWorkerError> {
+        self.running = false;
+        let mut first_error = None;
+        if let Some(outputs) = self.outputs.as_mut() {
+            if let Err(error) = outputs.stop() {
+                first_error = Some(NativeMultiInputWorkerError::Output(
+                    WasapiOutputFanoutError::Audio(error),
+                ));
+            }
+        }
+        for capture in self.captures.iter_mut().rev() {
+            if let Err(error) = capture.stop() {
+                if first_error.is_none() {
+                    first_error = Some(NativeMultiInputWorkerError::Audio(error));
+                }
+            }
+        }
+        self.feeder.reset();
+        first_error.map_or(Ok(()), Err)
+    }
+
+    pub fn pump_available(
+        &mut self,
+        max_packets: u32,
+    ) -> Result<WasapiSchedulerPump, NativeMultiInputWorkerError> {
+        if !self.running {
+            return Err(NativeMultiInputWorkerError::Audio(
+                AudioError::ProcessingStateUnavailable,
+            ));
+        }
+        let captures: [&dyn AudioCaptureSource; audiorouter_engine::MAX_AUDIO_TAPS] =
+            std::array::from_fn(|index| {
+                self.captures
+                    .get(index)
+                    .map(|capture| capture as &dyn AudioCaptureSource)
+                    .unwrap_or_else(|| &self.captures[0] as &dyn AudioCaptureSource)
+            });
+        bounded_pump(max_packets, true, || {
+            self.feeder
+                .pump_inputs(&captures[..self.captures.len()])
+                .map_err(NativeMultiInputWorkerError::Feeder)
+        })
+    }
+
+    /// Pump capture packets, compose one coherent quantum, and give every
+    /// owned physical output one bounded drain opportunity. This is the
+    /// end-to-end native multi-input/many-physical-output seam; virtual
+    /// branches remain graph taps prepared by the control boundary.
+    pub fn pump_and_process_outputs(
+        &mut self,
+        max_packets: u32,
+    ) -> Result<(WasapiSchedulerPump, usize, WasapiSchedulerPump), NativeMultiInputWorkerError>
+    {
+        if !self.running {
+            return Err(NativeMultiInputWorkerError::Audio(
+                AudioError::ProcessingStateUnavailable,
+            ));
+        }
+        if self.outputs.is_none() {
+            return Err(NativeMultiInputWorkerError::Capacity);
+        }
+        let captures: [&dyn AudioCaptureSource; audiorouter_engine::MAX_AUDIO_TAPS] =
+            std::array::from_fn(|index| {
+                self.captures
+                    .get(index)
+                    .map(|capture| capture as &dyn AudioCaptureSource)
+                    .unwrap_or_else(|| &self.captures[0] as &dyn AudioCaptureSource)
+            });
+        let mut input_total = WasapiSchedulerPump::default();
+        let mut render_total = WasapiSchedulerPump::default();
+        let mut delivered_total = 0usize;
+        for _ in 0..max_packets {
+            let input = self
+                .feeder
+                .pump_inputs(&captures[..self.captures.len()])
+                .map_err(NativeMultiInputWorkerError::Feeder)?;
+            let (delivered, render) = self
+                .outputs
+                .as_mut()
+                .ok_or(NativeMultiInputWorkerError::Capacity)?
+                .process_fanout_once(self.feeder.mixer_mut())
+                .map_err(NativeMultiInputWorkerError::Output)?;
+            let made_progress = input.packets != 0
+                || input.processed_quanta != 0
+                || delivered != 0
+                || render.packets != 0
+                || render.rendered_frames != 0
+                || render.render_backpressure_events != 0;
+            input_total.accumulate(input);
+            render_total.accumulate(render);
+            delivered_total = delivered_total.saturating_add(delivered);
+            if !made_progress {
+                break;
+            }
+        }
+        Ok((input_total, delivered_total, render_total))
+    }
+}
+
+impl Drop for NativeMultiInputWorker {
+    fn drop(&mut self) {
+        let _ = self.stop();
     }
 }
 
@@ -5971,6 +7184,7 @@ pub enum NativeBridgeSessionError {
 pub struct NativeBridgeSession {
     hello: audiorouter_protocol::AudioBridgeHello,
     mapping_path: std::path::PathBuf,
+    owns_mapping: bool,
     region: NativeBridgeRegion,
     next_sequence: u64,
     last_heartbeat: std::time::Instant,
@@ -5991,6 +7205,7 @@ impl NativeBridgeSession {
         Ok(Self {
             hello,
             mapping_path,
+            owns_mapping: true,
             region,
             next_sequence: 0,
             last_heartbeat: std::time::Instant::now(),
@@ -6011,6 +7226,7 @@ impl NativeBridgeSession {
         Ok(Self {
             hello,
             mapping_path,
+            owns_mapping: false,
             region,
             next_sequence: 0,
             last_heartbeat: std::time::Instant::now(),
@@ -6104,6 +7320,28 @@ impl NativeBridgeSession {
             .map_err(NativeBridgeSessionError::Region)
     }
 
+    /// Release the mapped view and remove the file only when this session
+    /// created it. Opened driver-owned mappings are deliberately retained.
+    pub fn remove_owned_mapping(self) -> Result<(), NativeBridgeSessionError> {
+        let Self {
+            mapping_path,
+            owns_mapping,
+            region,
+            ..
+        } = self;
+        drop(region);
+        if !owns_mapping {
+            return Ok(());
+        }
+        match std::fs::remove_file(mapping_path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(NativeBridgeSessionError::Region(
+                NativeBridgeRegionError::Io(error.to_string()),
+            )),
+        }
+    }
+
     pub fn heartbeat(&mut self) -> Result<(), NativeBridgeSessionError> {
         self.heartbeat_at(std::time::Instant::now())
     }
@@ -6139,6 +7377,241 @@ impl NativeBridgeSession {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use audiorouter_engine::AudioTap;
+
+    #[test]
+    fn multi_input_feeder_submits_coherent_sources_to_both_outputs() {
+        use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+
+        let node = |id: &str, kind, direction: PortDirection| Node {
+            id: EntityId::new(id),
+            kind,
+            type_version: 1,
+            name: id.into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports: vec![Port {
+                name: "main".into(),
+                direction,
+                channels: 1,
+            }],
+        };
+        let session = Session {
+            id: EntityId::new("adapter-fanout"),
+            name: "adapter fanout".into(),
+            schema_version: 1,
+            revision: 0,
+            nodes: vec![
+                node("left", NodeKind::PhysicalInput, PortDirection::Output),
+                node("right", NodeKind::PhysicalInput, PortDirection::Output),
+                Node {
+                    id: EntityId::new("mixer"),
+                    kind: NodeKind::Mixer,
+                    type_version: 1,
+                    name: "mixer".into(),
+                    enabled: true,
+                    bypass: false,
+                    parameters: Default::default(),
+                    ports: vec![
+                        Port {
+                            name: "main".into(),
+                            direction: PortDirection::Input,
+                            channels: 1,
+                        },
+                        Port {
+                            name: "out".into(),
+                            direction: PortDirection::Output,
+                            channels: 1,
+                        },
+                    ],
+                },
+                node("first", NodeKind::PhysicalOutput, PortDirection::Input),
+                node("second", NodeKind::PhysicalOutput, PortDirection::Input),
+            ],
+            edges: vec![
+                Edge {
+                    id: EntityId::new("left-mixer"),
+                    source_node: EntityId::new("left"),
+                    source_port: "main".into(),
+                    destination_node: EntityId::new("mixer"),
+                    destination_port: "main".into(),
+                    matrix: vec![1.0],
+                    enabled: true,
+                },
+                Edge {
+                    id: EntityId::new("right-mixer"),
+                    source_node: EntityId::new("right"),
+                    source_port: "main".into(),
+                    destination_node: EntityId::new("mixer"),
+                    destination_port: "main".into(),
+                    matrix: vec![1.0],
+                    enabled: true,
+                },
+                Edge {
+                    id: EntityId::new("mixer-first"),
+                    source_node: EntityId::new("mixer"),
+                    source_port: "out".into(),
+                    destination_node: EntityId::new("first"),
+                    destination_port: "main".into(),
+                    matrix: vec![1.0],
+                    enabled: true,
+                },
+                Edge {
+                    id: EntityId::new("mixer-second"),
+                    source_node: EntityId::new("mixer"),
+                    source_port: "out".into(),
+                    destination_node: EntityId::new("second"),
+                    destination_port: "main".into(),
+                    matrix: vec![1.0],
+                    enabled: true,
+                },
+            ],
+        };
+        let graph = audiorouter_engine::compile_mixer_fanout_session(
+            &session,
+            audiorouter_engine::RuntimeGeneration::new(4),
+        )
+        .unwrap();
+        let mixer = audiorouter_engine::RealtimeMixerFanout::new(graph, 4, &[1, 1], 1, 2).unwrap();
+        let mut feeder = WasapiMultiInputFanout::new(mixer, &[1, 1], 2, 4).unwrap();
+
+        struct Source {
+            samples: [f32; 2],
+            reported_frames: u32,
+        }
+        impl AudioCaptureSource for Source {
+            fn next_packet_into(
+                &self,
+                destination: &mut [u8],
+                bytes_per_frame: usize,
+            ) -> Result<Option<(CapturePacket, usize)>, AudioError> {
+                let bytes = self.samples.len() * std::mem::size_of::<f32>();
+                assert_eq!(bytes_per_frame, std::mem::size_of::<f32>());
+                for (target, sample) in destination[..bytes].chunks_exact_mut(4).zip(self.samples) {
+                    target.copy_from_slice(&sample.to_ne_bytes());
+                }
+                Ok(Some((
+                    CapturePacket {
+                        frames: self.reported_frames,
+                        flags: 0,
+                        device_position: 0,
+                        qpc_position: 0,
+                    },
+                    bytes,
+                )))
+            }
+        }
+        let left = Source {
+            samples: [0.25, 0.25],
+            reported_frames: 2,
+        };
+        let right = Source {
+            samples: [0.5, 0.5],
+            reported_frames: 2,
+        };
+        let captures: [&dyn AudioCaptureSource; 2] = [&left, &right];
+        struct CountingTap(std::sync::atomic::AtomicUsize);
+        impl audiorouter_engine::AudioTap for CountingTap {
+            fn on_processed_block(
+                &self,
+                _start_frame: u64,
+                block: &audiorouter_engine::AudioBlock,
+            ) {
+                assert_eq!(block.channel(0).unwrap(), &[0.75, 0.75]);
+                self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
+        let first_tap = CountingTap(std::sync::atomic::AtomicUsize::new(0));
+        let second_tap = CountingTap(std::sync::atomic::AtomicUsize::new(0));
+        let mut first = audiorouter_engine::AudioBlock::new(1, 2).unwrap();
+        let mut second = audiorouter_engine::AudioBlock::new(1, 2).unwrap();
+        let mut destinations: [&mut audiorouter_engine::AudioBlock; 2] = [&mut first, &mut second];
+        let taps: [&dyn audiorouter_engine::AudioTap; 2] = [&first_tap, &second_tap];
+        let (result, delivered) = feeder
+            .pump_and_process_taps(&captures, 128, &mut destinations, &taps)
+            .unwrap();
+        assert_eq!(first.channel(0).unwrap(), &[0.75, 0.75]);
+        assert_eq!(second.channel(0).unwrap(), &[0.75, 0.75]);
+        assert_eq!(result.packets, 2);
+        assert_eq!(result.processed_quanta, 2);
+        assert_eq!(delivered, 2);
+        assert_eq!(first_tap.0.load(std::sync::atomic::Ordering::Relaxed), 1);
+        assert_eq!(second_tap.0.load(std::sync::atomic::Ordering::Relaxed), 1);
+        feeder.reset();
+        let branch_one_tap = CountingTap(std::sync::atomic::AtomicUsize::new(0));
+        let branch_two_tap = CountingTap(std::sync::atomic::AtomicUsize::new(0));
+        let mut first_tap_set = audiorouter_engine::AudioTapSet::new();
+        first_tap_set.add(branch_one_tap).unwrap();
+        first_tap_set
+            .add(CountingTap(std::sync::atomic::AtomicUsize::new(0)))
+            .unwrap();
+        let mut second_tap_set = audiorouter_engine::AudioTapSet::new();
+        second_tap_set.add(branch_two_tap).unwrap();
+        second_tap_set
+            .add(CountingTap(std::sync::atomic::AtomicUsize::new(0)))
+            .unwrap();
+        let mut first = audiorouter_engine::AudioBlock::new(1, 2).unwrap();
+        let mut second = audiorouter_engine::AudioBlock::new(1, 2).unwrap();
+        let mut destinations: [&mut audiorouter_engine::AudioBlock; 2] = [&mut first, &mut second];
+        let tap_sets: [&audiorouter_engine::AudioTapSet; 2] = [&first_tap_set, &second_tap_set];
+        let (result, delivered) = feeder
+            .pump_and_process_tap_sets(&captures, 256, &mut destinations, &tap_sets)
+            .unwrap();
+        assert_eq!(result.processed_quanta, 2);
+        assert_eq!(delivered, 2);
+        assert_eq!(first_tap_set.len(), 2);
+        assert_eq!(second_tap_set.len(), 2);
+
+        struct LargeSource {
+            samples: [f32; 4],
+        }
+        impl AudioCaptureSource for LargeSource {
+            fn next_packet_into(
+                &self,
+                destination: &mut [u8],
+                bytes_per_frame: usize,
+            ) -> Result<Option<(CapturePacket, usize)>, AudioError> {
+                assert_eq!(bytes_per_frame, std::mem::size_of::<f32>());
+                let bytes = self.samples.len() * std::mem::size_of::<f32>();
+                for (target, sample) in destination[..bytes].chunks_exact_mut(4).zip(self.samples) {
+                    target.copy_from_slice(&sample.to_ne_bytes());
+                }
+                Ok(Some((
+                    CapturePacket {
+                        frames: self.samples.len() as u32,
+                        flags: 0,
+                        device_position: 0,
+                        qpc_position: 0,
+                    },
+                    bytes,
+                )))
+            }
+        }
+        feeder.reset();
+        let large_left = LargeSource {
+            samples: [0.25, 0.25, 0.25, 0.25],
+        };
+        let large_right = LargeSource {
+            samples: [0.5, 0.5, 0.5, 0.5],
+        };
+        let large_captures: [&dyn AudioCaptureSource; 2] = [&large_left, &large_right];
+        let large_result = feeder.pump_inputs(&large_captures).unwrap();
+        assert_eq!(large_result.packets, 2);
+        assert_eq!(large_result.processed_quanta, 4);
+
+        let malformed = Source {
+            samples: [0.25, 0.25],
+            reported_frames: 1,
+        };
+        let malformed_captures: [&dyn AudioCaptureSource; 2] = [&malformed, &right];
+        assert!(matches!(
+            feeder.pump_inputs(&malformed_captures),
+            Err(WasapiMultiInputFanoutError::Audio(
+                AudioError::InvalidFrameSize
+            ))
+        ));
+    }
 
     #[cfg(windows)]
     #[test]
@@ -6211,18 +7684,145 @@ mod tests {
         let mut bridge = WasapiSchedulerBridge::new(2, 2, 64, 64).unwrap();
         let mut last_sequence = 0;
         let result = bridge
-            .pump_from_native_render_source(&Source { replay: false }, &Sink, &mut last_sequence)
+            .pump_from_native_render_source(
+                &Source { replay: false },
+                &Sink,
+                &mut last_sequence,
+                None,
+            )
             .unwrap();
         assert_eq!(result.packets, 1);
         assert_eq!(result.processed_quanta, 1);
         assert_eq!(last_sequence, 7);
 
         let result = bridge
-            .pump_from_native_render_source(&Source { replay: true }, &Sink, &mut last_sequence)
+            .pump_from_native_render_source(
+                &Source { replay: true },
+                &Sink,
+                &mut last_sequence,
+                None,
+            )
             .unwrap();
         assert_eq!(result.packets, 1);
         assert_eq!(result.processed_quanta, 1);
         assert_eq!(last_sequence, 7);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_render_source_pump_forwards_processed_quanta_to_tap_set() {
+        struct Source;
+
+        impl NativeRenderSource for Source {
+            fn read_into_after(
+                &self,
+                _minimum_sequence: u64,
+                samples: &mut [f32],
+            ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeControllerError>
+            {
+                samples[..128].fill(0.5);
+                Ok(audiorouter_protocol::AudioBridgeBlockHeader {
+                    generation: 1,
+                    sequence: 1,
+                    frames: 64,
+                    channels: 2,
+                    payload_bytes: 512,
+                })
+            }
+        }
+
+        struct Sink;
+        impl RenderSink for Sink {
+            fn submit_bytes(
+                &self,
+                _source: &[u8],
+                _bytes_per_frame: usize,
+            ) -> Result<u32, AudioError> {
+                Ok(0)
+            }
+        }
+
+        struct CountingTap(std::sync::Arc<std::sync::atomic::AtomicU64>);
+        impl AudioTap for CountingTap {
+            fn on_processed_block(
+                &self,
+                _start_frame: u64,
+                block: &audiorouter_engine::AudioBlock,
+            ) {
+                assert_eq!(block.channel(0).unwrap()[0], 0.5);
+                self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
+
+        let count = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let mut taps = audiorouter_engine::AudioTapSet::new();
+        taps.add(CountingTap(std::sync::Arc::clone(&count)))
+            .unwrap();
+        let mut bridge = WasapiSchedulerBridge::new(2, 2, 64, 64).unwrap();
+        bridge
+            .scheduler_mut()
+            .publish(audiorouter_engine::RuntimeGraph::prepare(
+                audiorouter_engine::RuntimeGeneration::new(1),
+                Vec::new(),
+            ));
+        let mut last_sequence = 0;
+        let result = bridge
+            .pump_from_native_render_source(&Source, &Sink, &mut last_sequence, Some(&taps))
+            .unwrap();
+        assert_eq!(result.processed_quanta, 1);
+        assert_eq!(count.load(std::sync::atomic::Ordering::Relaxed), 1);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_render_source_stale_block_is_submitted_as_silence() {
+        struct StaleSource;
+
+        impl NativeRenderSource for StaleSource {
+            fn read_into_after(
+                &self,
+                _minimum_sequence: u64,
+                _samples: &mut [f32],
+            ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeControllerError>
+            {
+                Err(NativeBridgeControllerError::Session(
+                    NativeBridgeSessionError::Region(NativeBridgeRegionError::StaleGeneration),
+                ))
+            }
+        }
+
+        struct CaptureSink(std::sync::Mutex<Vec<u8>>);
+
+        impl RenderSink for CaptureSink {
+            fn submit_bytes(
+                &self,
+                source: &[u8],
+                _bytes_per_frame: usize,
+            ) -> Result<u32, AudioError> {
+                self.0.lock().unwrap().extend_from_slice(source);
+                Ok(source.len() as u32 / 8)
+            }
+        }
+
+        let sink = CaptureSink(std::sync::Mutex::new(Vec::new()));
+        let mut bridge = WasapiSchedulerBridge::new(2, 2, 64, 64).unwrap();
+        bridge
+            .scheduler()
+            .publish(audiorouter_engine::RuntimeGraph::prepare(
+                audiorouter_engine::RuntimeGeneration::new(1),
+                Vec::new(),
+            ));
+        let mut last_sequence = 4;
+        let result = bridge
+            .pump_from_native_render_source(&StaleSource, &sink, &mut last_sequence, None)
+            .unwrap();
+
+        assert_eq!(result.packets, 1);
+        assert_eq!(result.processed_quanta, 1);
+        assert_eq!(last_sequence, 4);
+        let rendered = sink.0.lock().unwrap();
+        assert_eq!(rendered.len(), 64 * 2 * std::mem::size_of::<f32>());
+        assert!(rendered.iter().all(|byte| *byte == 0));
     }
 
     #[cfg(windows)]
@@ -6405,6 +8005,66 @@ mod tests {
         assert_eq!(total.rendered_frames, u32::MAX);
         assert_eq!(total.dropped_render_frames, u32::MAX);
         assert_eq!(total.render_backpressure_events, u32::MAX);
+    }
+
+    #[test]
+    fn ring_output_pump_drains_only_its_generation_without_blocking() {
+        struct Sink(std::sync::Mutex<Vec<u8>>);
+
+        impl RenderSink for Sink {
+            fn submit_bytes(
+                &self,
+                source: &[u8],
+                bytes_per_frame: usize,
+            ) -> Result<u32, AudioError> {
+                let frames = source.len() / bytes_per_frame;
+                self.0.lock().unwrap().extend_from_slice(source);
+                Ok(frames as u32)
+            }
+        }
+
+        let scheduler = audiorouter_engine::RealtimeScheduler::new(2, 2, 2).unwrap();
+        let generation = audiorouter_engine::RuntimeGeneration::new(3);
+        scheduler.publish(audiorouter_engine::RuntimeGraph::prepare(
+            generation,
+            Vec::new(),
+        ));
+        let ring = Arc::new(audiorouter_engine::AudioBlockRing::new(2, 2, 2).unwrap());
+        let tap = audiorouter_engine::AudioBlockRingTap::new(Arc::clone(&ring));
+        let mut input = scheduler.acquire_input().unwrap();
+        input.channel_mut(0).unwrap().copy_from_slice(&[0.25, 0.5]);
+        input
+            .channel_mut(1)
+            .unwrap()
+            .copy_from_slice(&[-0.25, -0.5]);
+        scheduler.submit_input(input).unwrap();
+        assert_eq!(
+            scheduler.process_once_with_tap(0, &tap).unwrap(),
+            Some(generation)
+        );
+
+        let sink = Sink(std::sync::Mutex::new(Vec::new()));
+        let mut pump = RingOutputPump::new(sink, ring, 3, 2, 2).unwrap();
+        let result = pump.pump_available(4).unwrap();
+        assert_eq!(result.packets, 1);
+        assert_eq!(result.rendered_frames, 2);
+        let bytes = pump.sink.0.lock().unwrap();
+        let samples = bytes
+            .chunks_exact(4)
+            .map(|sample| f32::from_ne_bytes(sample.try_into().unwrap()))
+            .collect::<Vec<_>>();
+        assert_eq!(samples, vec![0.25, -0.25, 0.5, -0.5]);
+
+        let stale_ring = Arc::new(audiorouter_engine::AudioBlockRing::new(1, 2, 2).unwrap());
+        let stale_tap = audiorouter_engine::AudioBlockRingTap::new(Arc::clone(&stale_ring));
+        let mut stale_input = audiorouter_engine::AudioBlock::new(2, 2).unwrap();
+        stale_input.channel_mut(0).unwrap().fill(1.0);
+        stale_input.channel_mut(1).unwrap().fill(1.0);
+        stale_tap.on_processed_block(0, &stale_input);
+        let mut stale_pump =
+            RingOutputPump::new(Sink(std::sync::Mutex::new(Vec::new())), stale_ring, 4, 2, 2)
+                .unwrap();
+        assert_eq!(stale_pump.pump_available(1).unwrap().packets, 0);
     }
 
     #[test]
@@ -7603,6 +9263,11 @@ mod tests {
     }
 
     #[test]
+    fn capture_polling_fallback_keeps_the_qualified_100ms_duration() {
+        assert_eq!(DEFAULT_CAPTURE_POLLING_BUFFER_100NS, 1_000_000);
+    }
+
+    #[test]
     fn native_bridge_region_round_trips_bounded_blocks_without_audio_access() {
         let path = std::env::temp_dir().join(format!(
             "audiorouter-bridge-{}-{}.slot",
@@ -7895,6 +9560,33 @@ mod tests {
         drop(reader);
         drop(writer);
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn native_bridge_session_owner_cleanup_removes_created_mapping() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-owned-mapping-{}-{}.slot",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let hello = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: "bus-cleanup".into(),
+            direction: audiorouter_protocol::AudioBridgeDirection::CaptureSink,
+            generation: 1,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            frames_per_quantum: 128,
+            lease_ms: 1_000,
+        };
+        let session = NativeBridgeSession::create(&path, hello).unwrap();
+        assert!(path.exists());
+        session.remove_owned_mapping().unwrap();
+        assert!(!path.exists());
     }
 
     #[test]

@@ -1,6 +1,8 @@
 param(
     [switch]$AllowLiveAudio,
     [Parameter(Mandatory = $true)][uint32]$ProcessId,
+    # Executable is the observed basename (for example, Zoom.exe). Supply
+    # the verified full path separately through ApplicationPath.
     [Parameter(Mandatory = $true)][string]$Executable,
     [Parameter(Mandatory = $true)][uint64]$CreationTime100ns,
     [ValidateSet('include', 'exclude')][string]$Mode = 'include',

@@ -109,8 +109,14 @@ const libraryKinds = [...library.matchAll(/kind:\s*"([^"]+)"/g)].map(
   (match) => match[1],
 );
 const discoveredProcessors = (schema.processors ?? []).map((processor) => processor.id);
+// The UI may expose several endpoint presentations that intentionally map to
+// one authoritative node kind (for example Physical output and Existing
+// virtual output both use the physicalOutput contract). Processor entries
+// must remain one-to-one so a duplicated processor cannot hide catalog drift.
 const duplicateLibraryKinds = libraryKinds.filter(
-  (kind, index) => libraryKinds.indexOf(kind) !== index,
+  (kind, index) =>
+    !["physicalInput", "physicalOutput"].includes(kind) &&
+    libraryKinds.indexOf(kind) !== index,
 );
 if (duplicateLibraryKinds.length > 0) {
   throw new Error(
@@ -121,7 +127,16 @@ const missingProcessors = discoveredProcessors.filter(
   (processor) => !libraryKinds.includes(processor),
 );
 const extraProcessors = libraryKinds.filter(
-  (kind) => !["mixer", "gain", "mute", "meter"].includes(kind)
+  (kind) => ![
+    "physicalInput",
+    "physicalOutput",
+    "testSignal",
+    "recorder",
+    "mixer",
+    "gain",
+    "mute",
+    "meter",
+  ].includes(kind)
     && !discoveredProcessors.includes(kind),
 );
 if (missingProcessors.length > 0 || extraProcessors.length > 0) {

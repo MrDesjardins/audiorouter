@@ -8,6 +8,73 @@
 
 #pragma warning (disable : 4127)
 
+// The project bridge carries bounded interleaved float32 quanta.  The
+// WaveRT endpoint formats intentionally remain the PCM formats advertised by
+// the endpoint tables (16-bit render and 32-bit capture), so conversion must
+// happen in the callback without allocation, waiting, logging, or control I/O.
+static __forceinline FLOAT ClampBridgeSample(_In_ FLOAT Sample)
+{
+    if (Sample != Sample || Sample <= -1.0F) {
+        return Sample != Sample ? 0.0F : -1.0F;
+    }
+    return Sample >= 1.0F ? 1.0F : Sample;
+}
+
+static __forceinline FLOAT ReadBridgePcmSample(
+    _In_reads_bytes_(sizeof(LONG)) const UCHAR* Source,
+    _In_ USHORT BitsPerSample)
+{
+    if (Source == NULL) {
+        return 0.0F;
+    }
+    if (BitsPerSample == 16) {
+        SHORT value = 0;
+        RtlCopyMemory(&value, Source, sizeof(value));
+        return static_cast<FLOAT>(value) / 32768.0F;
+    }
+    if (BitsPerSample == 32) {
+        LONG value = 0;
+        RtlCopyMemory(&value, Source, sizeof(value));
+        return static_cast<FLOAT>(value) / 2147483648.0F;
+    }
+    return 0.0F;
+}
+
+static __forceinline void WriteBridgePcmSample(
+    _Out_writes_bytes_(sizeof(LONG)) UCHAR* Destination,
+    _In_ USHORT BitsPerSample,
+    _In_ FLOAT Sample)
+{
+    if (Destination == NULL) {
+        return;
+    }
+    Sample = ClampBridgeSample(Sample);
+    if (BitsPerSample == 16) {
+        SHORT value = Sample <= -1.0F
+            ? static_cast<SHORT>(-32768)
+            : static_cast<SHORT>(Sample >= 1.0F ? 32767 : Sample * 32768.0F);
+        RtlCopyMemory(Destination, &value, sizeof(value));
+    } else if (BitsPerSample == 32) {
+        LONG value = Sample <= -1.0F
+            ? static_cast<LONG>(-2147483647L - 1L)
+            : static_cast<LONG>(Sample >= 1.0F ? 2147483647L : Sample * 2147483648.0F);
+        RtlCopyMemory(Destination, &value, sizeof(value));
+    }
+}
+
+static __forceinline BOOLEAN IsBridgePcmFormat(
+    _In_opt_ const WAVEFORMATEXTENSIBLE* Format)
+{
+    return Format != NULL &&
+        IsEqualGUIDAligned(Format->SubFormat, KSDATAFORMAT_SUBTYPE_PCM) &&
+        Format->Format.nChannels != 0 &&
+        Format->Format.nChannels <= AR_BRIDGE_MAX_CHANNELS &&
+        (Format->Format.wBitsPerSample == 16 ||
+         Format->Format.wBitsPerSample == 32) &&
+        Format->Format.nBlockAlign ==
+            Format->Format.nChannels * (Format->Format.wBitsPerSample / 8);
+}
+
 //=============================================================================
 // CMiniportWaveRTStream
 //=============================================================================
@@ -1596,7 +1663,7 @@ VOID CMiniportWaveRTStream::UpdatePosition
             m_bLastBufferRendered = TRUE;
         }
 
-        // Read from the render DMA for the capture-sink bridge. Diagnostic
+        // Read from the render DMA for the render-source bridge. Diagnostic
         // file output is intentionally not called from this callback: the
         // inherited SaveData path takes locks and queues work items.
         ReadBytes(ByteDisplacement);
@@ -1642,15 +1709,16 @@ ByteDisplacement - # of bytes to process.
     RefreshBridgePublishShape();
     ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
 
-    const BOOLEAN bridgeFormat =
-        m_pWfExt != NULL &&
-        m_pWfExt->Format.wBitsPerSample == sizeof(FLOAT) * 8 &&
-        m_pWfExt->Format.nBlockAlign ==
-            m_pWfExt->Format.nChannels * sizeof(FLOAT);
-    // The capture endpoint is the virtual sink for processed render audio.
-    // Only the negotiated float32 interleaved shape can use the bridge; an
-    // unavailable or incoherent block is rendered as silence.
+    const BOOLEAN bridgeFormat = IsBridgePcmFormat(m_pWfExt);
+    // The capture endpoint is the virtual sink for processed audio. The
+    // bridge remains float32, while this endpoint's advertised PCM shape is
+    // converted at the callback boundary; an unavailable or incoherent block
+    // is rendered as silence.
     const ULONG bridgeChannels = bridgeFormat ? m_pWfExt->Format.nChannels : 0;
+    const ULONG deviceFrameBytes = bridgeFormat
+        ? m_pWfExt->Format.nBlockAlign : 0;
+    const ULONG deviceBytesPerSample = bridgeFormat
+        ? m_pWfExt->Format.wBitsPerSample / 8 : 0;
 
     // Normally this will loop no more than once for a single wrap, but if
     // many bytes have been displaced then this may loops many times.
@@ -1659,44 +1727,55 @@ ByteDisplacement - # of bytes to process.
         ULONG runWrite = min(ByteDisplacement, m_ulDmaBufferSize - bufferOffset);
 
         if (!bridgeFormat || bridgeChannels > AR_BRIDGE_MAX_CHANNELS ||
-            runWrite < bridgeChannels * sizeof(FLOAT)) {
+            deviceFrameBytes == 0 || runWrite < deviceFrameBytes) {
             RtlZeroMemory(m_pDmaBuffer + bufferOffset, runWrite);
         } else {
-            ULONG frameBytes = bridgeChannels * sizeof(FLOAT);
-            ULONG frames = runWrite / frameBytes;
-            ULONG bytes = frames * frameBytes;
-            if (m_BridgeScratchFrameOffset >= m_BridgeScratchFrames) {
-                AR_BRIDGE_BLOCK_HEADER header = {};
-                NTSTATUS status = AudioRouterCopyLeaseBlockForDirection(
-                    AR_BRIDGE_DIRECTION_RENDER_SOURCE,
-                    m_BridgeReadSequence,
-                    m_BridgeScratch,
-                    ARRAYSIZE(m_BridgeScratch),
-                    &header);
-                if (!NT_SUCCESS(status) || header.Channels != bridgeChannels) {
-                    m_BridgeScratchFrames = 0;
+            ULONG frames = runWrite / deviceFrameBytes;
+            ULONG bytes = frames * deviceFrameBytes;
+            ULONG writtenFrames = 0;
+            while (writtenFrames < frames) {
+                if (m_BridgeScratchFrameOffset >= m_BridgeScratchFrames) {
+                    AR_BRIDGE_BLOCK_HEADER header = {};
+                    NTSTATUS status = AudioRouterCopyLeaseBlockForDirection(
+                        AR_BRIDGE_DIRECTION_CAPTURE_SINK,
+                        m_BridgeReadSequence,
+                        m_BridgeScratch,
+                        ARRAYSIZE(m_BridgeScratch),
+                        &header);
+                    if (!NT_SUCCESS(status) || header.Channels != bridgeChannels) {
+                        m_BridgeScratchFrames = 0;
+                        m_BridgeScratchFrameOffset = 0;
+                        break;
+                    }
+                    m_BridgeScratchFrames = header.Frames;
                     m_BridgeScratchFrameOffset = 0;
-                    RtlZeroMemory(m_pDmaBuffer + bufferOffset, runWrite);
-                    bufferOffset = (bufferOffset + runWrite) % m_ulDmaBufferSize;
-                    ByteDisplacement -= runWrite;
-                    continue;
+                    m_BridgeReadSequence = header.Sequence;
                 }
-                m_BridgeScratchFrames = header.Frames;
-                m_BridgeScratchFrameOffset = 0;
-                m_BridgeReadSequence = header.Sequence;
+                ULONG available = m_BridgeScratchFrames - m_BridgeScratchFrameOffset;
+                ULONG copyFrames = min(frames - writtenFrames, available);
+                for (ULONG frame = 0; frame < copyFrames; ++frame) {
+                    for (ULONG channel = 0; channel < bridgeChannels; ++channel) {
+                        WriteBridgePcmSample(
+                            m_pDmaBuffer + bufferOffset +
+                                (writtenFrames + frame) * deviceFrameBytes +
+                                channel * deviceBytesPerSample,
+                            static_cast<USHORT>(m_pWfExt->Format.wBitsPerSample),
+                            m_BridgeScratch[
+                                (m_BridgeScratchFrameOffset + frame) * bridgeChannels +
+                                channel]);
+                    }
+                }
+                m_BridgeScratchFrameOffset += copyFrames;
+                writtenFrames += copyFrames;
+                if (copyFrames == 0) {
+                    break;
+                }
             }
-            ULONG available = m_BridgeScratchFrames - m_BridgeScratchFrameOffset;
-            ULONG copyFrames = min(frames, available);
-            ULONG copyBytes = copyFrames * frameBytes;
-            RtlCopyMemory(
-                m_pDmaBuffer + bufferOffset,
-                m_BridgeScratch + m_BridgeScratchFrameOffset * bridgeChannels,
-                copyBytes);
-            if (copyBytes < bytes) {
-                RtlZeroMemory(m_pDmaBuffer + bufferOffset + copyBytes,
-                              bytes - copyBytes);
+            if (writtenFrames < frames) {
+                RtlZeroMemory(m_pDmaBuffer + bufferOffset +
+                                  writtenFrames * deviceFrameBytes,
+                              (frames - writtenFrames) * deviceFrameBytes);
             }
-            m_BridgeScratchFrameOffset += copyFrames;
             if (bytes < runWrite) {
                 RtlZeroMemory(m_pDmaBuffer + bufferOffset + bytes,
                               runWrite - bytes);
@@ -1731,11 +1810,7 @@ ByteDisplacement - # of bytes to process.
     }
     RefreshBridgePublishShape();
     ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
-    const BOOLEAN bridgeFormat =
-        m_pWfExt != NULL &&
-        m_pWfExt->Format.wBitsPerSample == sizeof(FLOAT) * 8 &&
-        m_pWfExt->Format.nBlockAlign ==
-            m_pWfExt->Format.nChannels * sizeof(FLOAT);
+    const BOOLEAN bridgeFormat = IsBridgePcmFormat(m_pWfExt);
 
     // Normally this will loop no more than once for a single wrap, but if
     // many bytes have been displaced then this may loops many times.
@@ -1743,6 +1818,8 @@ ByteDisplacement - # of bytes to process.
     {
         ULONG runWrite = min(ByteDisplacement, m_ulDmaBufferSize - bufferOffset);
         ULONG frameBytes = bridgeFormat ? m_pWfExt->Format.nBlockAlign : 0;
+        ULONG bytesPerSample = bridgeFormat
+            ? m_pWfExt->Format.wBitsPerSample / 8 : 0;
         ULONG frames = frameBytes == 0 ? 0 : runWrite / frameBytes;
         if (m_BridgePublishFrames != 0 && frames != 0) {
             ULONG consumedFrames = 0;
@@ -1755,15 +1832,25 @@ ByteDisplacement - # of bytes to process.
                 }
                 ULONG needed = m_BridgePublishFrames - m_BridgeScratchFrames;
                 ULONG copyFrames = min(needed, frames - consumedFrames);
-                RtlCopyMemory(
-                    m_BridgeScratch + m_BridgeScratchFrames * m_BridgePublishChannels,
-                    m_pDmaBuffer + bufferOffset + consumedFrames * frameBytes,
-                    copyFrames * frameBytes);
+                for (ULONG frame = 0; frame < copyFrames; ++frame) {
+                    for (ULONG channel = 0;
+                         channel < m_BridgePublishChannels; ++channel) {
+                        m_BridgeScratch[
+                            (m_BridgeScratchFrames + frame) *
+                                m_BridgePublishChannels + channel] =
+                            ReadBridgePcmSample(
+                                m_pDmaBuffer + bufferOffset +
+                                    (consumedFrames + frame) * frameBytes +
+                                    channel * bytesPerSample,
+                                static_cast<USHORT>(
+                                    m_pWfExt->Format.wBitsPerSample));
+                    }
+                }
                 m_BridgeScratchFrames += copyFrames;
                 consumedFrames += copyFrames;
                 if (m_BridgeScratchFrames == m_BridgePublishFrames) {
                     (void)AudioRouterPublishLeaseBlockForDirection(
-                        AR_BRIDGE_DIRECTION_CAPTURE_SINK,
+                        AR_BRIDGE_DIRECTION_RENDER_SOURCE,
                         static_cast<USHORT>(m_BridgePublishFrames),
                         static_cast<USHORT>(m_BridgePublishChannels),
                         m_BridgeScratch,
@@ -1785,15 +1872,9 @@ VOID CMiniportWaveRTStream::RefreshBridgePublishShape()
     ULONG previousChannels = m_BridgePublishChannels;
     USHORT frames = 0;
     USHORT channels = 0;
-    const BOOLEAN bridgeFormat =
-        !m_bCapture &&
-        m_pWfExt != NULL &&
-        m_pWfExt->Format.wBitsPerSample == sizeof(FLOAT) * 8 &&
-        m_pWfExt->Format.nBlockAlign ==
-            m_pWfExt->Format.nChannels * sizeof(FLOAT) &&
-        m_pWfExt->Format.nChannels <= AR_BRIDGE_MAX_CHANNELS;
+    const BOOLEAN bridgeFormat = !m_bCapture && IsBridgePcmFormat(m_pWfExt);
     if (bridgeFormat && NT_SUCCESS(AudioRouterGetLeaseShapeForDirection(
-            AR_BRIDGE_DIRECTION_CAPTURE_SINK, &frames, &channels)) &&
+            AR_BRIDGE_DIRECTION_RENDER_SOURCE, &frames, &channels)) &&
         channels == m_pWfExt->Format.nChannels) {
         m_BridgePublishFrames = frames;
         m_BridgePublishChannels = channels;

@@ -267,6 +267,14 @@ impl AudioBlockRing {
         self.free.capacity()
     }
 
+    pub fn channels(&self) -> usize {
+        self.free.shape.0
+    }
+
+    pub fn frames(&self) -> usize {
+        self.free.shape.1
+    }
+
     pub fn available(&self) -> usize {
         self.free.available()
     }
@@ -998,6 +1006,49 @@ pub struct AudioBlock {
 /// depend on a file encoder.
 pub trait AudioTap: Send + Sync {
     fn on_processed_block(&self, start_frame: u64, block: &AudioBlock);
+}
+
+/// Allocation-free realtime tap that publishes each processed quantum into a
+/// caller-owned bounded output ring. The ring is prepared off the callback;
+/// a full destination drops that quantum and increments `dropped`.
+pub struct AudioBlockRingTap {
+    destination: Arc<AudioBlockRing>,
+    dropped: AtomicU64,
+}
+
+impl AudioBlockRingTap {
+    pub fn new(destination: Arc<AudioBlockRing>) -> Self {
+        Self {
+            destination,
+            dropped: AtomicU64::new(0),
+        }
+    }
+
+    pub fn destination(&self) -> Arc<AudioBlockRing> {
+        Arc::clone(&self.destination)
+    }
+
+    pub fn dropped(&self) -> u64 {
+        self.dropped.load(Ordering::Relaxed)
+    }
+}
+
+impl AudioTap for AudioBlockRingTap {
+    fn on_processed_block(&self, _start_frame: u64, source: &AudioBlock) {
+        let Some(mut destination) = self.destination.try_acquire() else {
+            self.dropped.fetch_add(1, Ordering::Relaxed);
+            return;
+        };
+        if destination.copy_from(source).is_err() {
+            let _ = self.destination.try_recycle(destination);
+            self.dropped.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+        if let Err(destination) = self.destination.try_submit(destination) {
+            let _ = self.destination.try_recycle(destination);
+            self.dropped.fetch_add(1, Ordering::Relaxed);
+        }
+    }
 }
 
 /// A plugin stage prepared before graph publication.
@@ -2494,6 +2545,9 @@ impl<T: std::fmt::Debug> std::fmt::Debug for RealtimeDsp<T> {
 
 #[derive(Debug)]
 pub enum ProcessingStage {
+    TestSignal {
+        source: TestSignalSource,
+    },
     Gain {
         linear: f32,
     },
@@ -2538,6 +2592,58 @@ pub enum ProcessingStage {
     },
 }
 
+/// Allocation-free graph source used for deliberate route checks. The emitted
+/// frame counter is atomically claimed once per block so the callback never
+/// takes a lock or allocates while the source is active.
+#[derive(Debug)]
+pub struct TestSignalSource {
+    frequency_hz: f64,
+    amplitude: f32,
+    duration_frames: u64,
+    sample_rate_hz: f64,
+    emitted_frames: AtomicU64,
+}
+
+impl TestSignalSource {
+    pub fn new(frequency_hz: f64, level_db: f64, duration_ms: f64, sample_rate_hz: u32) -> Self {
+        let duration_frames = (duration_ms * f64::from(sample_rate_hz) / 1_000.0)
+            .round()
+            .max(1.0) as u64;
+        Self {
+            frequency_hz,
+            amplitude: 10.0_f32.powf((level_db as f32) / 20.0),
+            duration_frames,
+            sample_rate_hz: f64::from(sample_rate_hz),
+            emitted_frames: AtomicU64::new(0),
+        }
+    }
+
+    fn reset(&self) {
+        self.emitted_frames.store(0, Ordering::Release);
+    }
+
+    fn process(&self, block: &mut AudioBlock) {
+        let start = self
+            .emitted_frames
+            .fetch_add(block.frames() as u64, Ordering::AcqRel);
+        block.clear();
+        for frame in 0..block.frames() {
+            let frame_number = start.saturating_add(frame as u64);
+            if frame_number >= self.duration_frames {
+                continue;
+            }
+            let phase = std::f64::consts::TAU * self.frequency_hz * (frame_number as f64)
+                / self.sample_rate_hz;
+            let sample = self.amplitude * phase.sin() as f32;
+            for channel in 0..block.channels() {
+                if let Some(samples) = block.channel_mut(channel) {
+                    samples[frame] = sample;
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum MixerError {
     InvalidChannels,
@@ -2550,6 +2656,16 @@ pub enum MixerError {
 #[derive(Debug, Eq, PartialEq)]
 pub enum FanoutError {
     BranchCount,
+    Block(BlockError),
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum MixerFanoutError {
+    Mixer(MixerError),
+    BranchCount,
+    InputIndex,
+    InputGeneration,
+    StaleGeneration,
     Block(BlockError),
 }
 
@@ -2623,9 +2739,23 @@ pub struct CompiledMixerGraph {
     output_matrix: Vec<f32>,
 }
 
+/// A prepared bounded graph where multiple sources converge through one
+/// explicit mixer, pass through an optional prepared linear processor chain,
+/// and fan out to multiple destinations. The caller owns the preallocated
+/// source, scratch, and destination blocks.
+pub struct CompiledMixerFanoutGraph {
+    generation: RuntimeGeneration,
+    mixer: MixerStage,
+    processing_graph: Option<RuntimeGraph>,
+    privacy_mute: PrivacyMute,
+    input_node_ids: Vec<audiorouter_domain::EntityId>,
+    output_matrices: Vec<Vec<f32>>,
+    output_node_ids: Vec<audiorouter_domain::EntityId>,
+}
+
 /// A prepared bounded fan-out graph. One enabled source feeds up to eight
-/// physical outputs; each branch has its own channel matrix and destination
-/// block supplied by the caller.
+/// physical outputs or virtual capture sinks; each branch has its own channel
+/// matrix and destination block supplied by the caller.
 pub struct CompiledFanoutGraph {
     generation: RuntimeGeneration,
     matrices: Vec<Vec<f32>>,
@@ -2690,6 +2820,451 @@ impl CompiledMixerGraph {
             .map_err(MixerError::Block)?;
         destination.sanitize_non_finite();
         Ok(())
+    }
+}
+
+impl CompiledMixerFanoutGraph {
+    pub fn generation(&self) -> RuntimeGeneration {
+        self.generation
+    }
+
+    pub fn input_count(&self) -> usize {
+        self.mixer.input_count()
+    }
+
+    /// Return the validated source-node order used by the mixer input
+    /// matrices. Native adapters bind exact endpoint identities to this order.
+    pub fn input_node_ids(&self) -> &[audiorouter_domain::EntityId] {
+        &self.input_node_ids
+    }
+
+    pub fn branch_count(&self) -> usize {
+        self.output_matrices.len()
+    }
+
+    /// Return the validated destination-node order used by branch matrices.
+    /// Adapters use this identity to bind physical, virtual, and tool
+    /// consumers without guessing from endpoint enumeration order.
+    pub fn output_node_ids(&self) -> &[audiorouter_domain::EntityId] {
+        &self.output_node_ids
+    }
+
+    pub fn process(
+        &self,
+        sources: &[AudioBlock],
+        mixer_scratch: &mut AudioBlock,
+        destinations: &mut [&mut AudioBlock],
+    ) -> Result<(), MixerFanoutError> {
+        if destinations.len() != self.output_matrices.len() {
+            return Err(MixerFanoutError::BranchCount);
+        }
+        if sources.iter().any(|source| {
+            source.generation() != 0 && source.generation() != self.generation.value()
+        }) {
+            return Err(MixerFanoutError::StaleGeneration);
+        }
+        if destinations
+            .iter()
+            .zip(&self.output_matrices)
+            .any(|(destination, matrix)| {
+                matrix.len() != destination.channels() * mixer_scratch.channels()
+                    || destination.frames() != mixer_scratch.frames()
+            })
+        {
+            return Err(MixerFanoutError::Block(BlockError::ShapeMismatch));
+        }
+        self.mixer
+            .process(mixer_scratch, sources)
+            .map_err(MixerFanoutError::Mixer)?;
+        if let Some(processing_graph) = &self.processing_graph {
+            processing_graph.process(mixer_scratch);
+        }
+        self.privacy_mute.apply(mixer_scratch);
+        for (destination, matrix) in destinations.iter_mut().zip(&self.output_matrices) {
+            destination
+                .map_from(mixer_scratch, matrix)
+                .map_err(MixerFanoutError::Block)?;
+            destination.sanitize_non_finite();
+        }
+        Ok(())
+    }
+
+    /// Process one mixed quantum directly into independent bounded output
+    /// rings. Each branch owns its acquire/submit attempt: a full or
+    /// unavailable destination is dropped and does not block or suppress the
+    /// other branches. All ring storage is supplied by the caller and this
+    /// method performs no allocation, waiting, endpoint access, or logging.
+    pub fn process_to_rings(
+        &self,
+        sources: &[AudioBlock],
+        mixer_scratch: &mut AudioBlock,
+        destinations: &[&AudioBlockRing],
+    ) -> Result<usize, MixerFanoutError> {
+        if destinations.len() != self.output_matrices.len() {
+            return Err(MixerFanoutError::BranchCount);
+        }
+        if sources.iter().any(|source| {
+            source.generation() != 0 && source.generation() != self.generation.value()
+        }) {
+            return Err(MixerFanoutError::StaleGeneration);
+        }
+        if destinations
+            .iter()
+            .zip(&self.output_matrices)
+            .any(|(destination, matrix)| {
+                matrix.len() != destination.channels() * mixer_scratch.channels()
+                    || destination.frames() != mixer_scratch.frames()
+            })
+        {
+            return Err(MixerFanoutError::Block(BlockError::ShapeMismatch));
+        }
+        self.mixer
+            .process(mixer_scratch, sources)
+            .map_err(MixerFanoutError::Mixer)?;
+        if let Some(processing_graph) = &self.processing_graph {
+            processing_graph.process(mixer_scratch);
+        }
+        self.privacy_mute.apply(mixer_scratch);
+        let mut delivered = 0;
+        for (destination, matrix) in destinations.iter().zip(&self.output_matrices) {
+            let Some(mut block) = destination.try_acquire() else {
+                continue;
+            };
+            if block.map_from(mixer_scratch, matrix).is_err() {
+                let _ = destination.try_recycle(block);
+                return Err(MixerFanoutError::Block(BlockError::ShapeMismatch));
+            }
+            block.sanitize_non_finite();
+            block.generation = self.generation.value();
+            if destination.try_submit(block).is_ok() {
+                delivered += 1;
+            }
+        }
+        Ok(delivered)
+    }
+
+    /// Process one mixed quantum into independent output rings and notify
+    /// the prebuilt tap set belonging to each branch. A tap observes only
+    /// its branch after channel mapping, before the ring ownership transfer.
+    pub fn process_to_rings_with_tap_sets(
+        &self,
+        sources: &[AudioBlock],
+        mixer_scratch: &mut AudioBlock,
+        destinations: &[&AudioBlockRing],
+        tap_sets: &[&AudioTapSet],
+        start_frame: u64,
+    ) -> Result<usize, MixerFanoutError> {
+        if destinations.len() != self.output_matrices.len() || tap_sets.len() != destinations.len()
+        {
+            return Err(MixerFanoutError::BranchCount);
+        }
+        if sources.iter().any(|source| {
+            source.generation() != 0 && source.generation() != self.generation.value()
+        }) {
+            return Err(MixerFanoutError::StaleGeneration);
+        }
+        if destinations
+            .iter()
+            .zip(&self.output_matrices)
+            .any(|(destination, matrix)| {
+                matrix.len() != destination.channels() * mixer_scratch.channels()
+                    || destination.frames() != mixer_scratch.frames()
+            })
+        {
+            return Err(MixerFanoutError::Block(BlockError::ShapeMismatch));
+        }
+        self.mixer
+            .process(mixer_scratch, sources)
+            .map_err(MixerFanoutError::Mixer)?;
+        if let Some(processing_graph) = &self.processing_graph {
+            processing_graph.process(mixer_scratch);
+        }
+        self.privacy_mute.apply(mixer_scratch);
+        let mut delivered = 0;
+        for ((destination, matrix), tap_set) in
+            destinations.iter().zip(&self.output_matrices).zip(tap_sets)
+        {
+            let Some(mut block) = destination.try_acquire() else {
+                continue;
+            };
+            if block.map_from(mixer_scratch, matrix).is_err() {
+                let _ = destination.try_recycle(block);
+                return Err(MixerFanoutError::Block(BlockError::ShapeMismatch));
+            }
+            block.sanitize_non_finite();
+            block.generation = self.generation.value();
+            tap_set.notify(start_frame, &block);
+            if destination.try_submit(block).is_ok() {
+                delivered += 1;
+            }
+        }
+        Ok(delivered)
+    }
+}
+
+/// Realtime adapter for a prepared multi-input/many-output graph. Each input
+/// has a fixed-shape bounded ring; one complete generation-matched quantum is
+/// required from every input before any output branch is processed. Output
+/// rings remain owned by the endpoint adapter and are supplied as a prebuilt
+/// slice, allowing physical, virtual, recorder, or tool consumers to choose
+/// their own lifecycle without putting that ownership in the callback.
+pub struct RealtimeMixerFanout {
+    graph: CompiledMixerFanoutGraph,
+    inputs: Vec<AudioBlockRing>,
+    pending_inputs: Vec<Option<AudioBlock>>,
+    sources: Vec<AudioBlock>,
+    mixer_scratch: AudioBlock,
+}
+
+impl RealtimeMixerFanout {
+    pub fn new(
+        graph: CompiledMixerFanoutGraph,
+        input_capacity: usize,
+        source_channels: &[usize],
+        mixer_channels: usize,
+        frames: usize,
+    ) -> Result<Self, QueueError> {
+        if source_channels.len() != graph.input_count() {
+            return Err(QueueError::InvalidShape);
+        }
+        let mut inputs = Vec::with_capacity(source_channels.len());
+        let mut sources = Vec::with_capacity(source_channels.len());
+        for &channels in source_channels {
+            inputs.push(AudioBlockRing::new(input_capacity, channels, frames)?);
+            sources.push(AudioBlock::new(channels, frames).map_err(|_| QueueError::InvalidShape)?);
+        }
+        let pending_inputs = (0..source_channels.len()).map(|_| None).collect();
+        let mixer_scratch =
+            AudioBlock::new(mixer_channels, frames).map_err(|_| QueueError::InvalidShape)?;
+        Ok(Self {
+            graph,
+            inputs,
+            pending_inputs,
+            sources,
+            mixer_scratch,
+        })
+    }
+
+    /// Apply the process-local privacy latch to every branch after shared DSP
+    /// and before physical, virtual, recorder, or tool delivery. The atomic
+    /// flag is safe to update from the control plane; the block clear remains
+    /// allocation-free on the realtime path.
+    pub fn set_privacy_muted(&self, muted: bool) {
+        self.graph.privacy_mute.set_muted(muted);
+    }
+
+    pub fn generation(&self) -> RuntimeGeneration {
+        self.graph.generation()
+    }
+
+    pub fn input_count(&self) -> usize {
+        self.inputs.len()
+    }
+
+    pub fn branch_count(&self) -> usize {
+        self.graph.branch_count()
+    }
+
+    pub fn input_node_ids(&self) -> &[audiorouter_domain::EntityId] {
+        self.graph.input_node_ids()
+    }
+
+    pub fn output_node_ids(&self) -> &[audiorouter_domain::EntityId] {
+        self.graph.output_node_ids()
+    }
+
+    pub fn input_ring(&self, index: usize) -> Option<&AudioBlockRing> {
+        self.inputs.get(index)
+    }
+
+    /// Copy one decoded source quantum into an input-owned bounded ring. The
+    /// caller retains its block; a full ring reports `Ok(false)` and never
+    /// waits or allocates. Generation and shape are checked before any ring
+    /// mutation so endpoint adapters cannot bypass the graph contract.
+    pub fn try_submit_input(
+        &self,
+        index: usize,
+        generation: RuntimeGeneration,
+        source: &AudioBlock,
+    ) -> Result<bool, MixerFanoutError> {
+        if generation != self.generation() {
+            return Err(MixerFanoutError::InputGeneration);
+        }
+        if source.generation() != 0 && source.generation() != generation.value() {
+            return Err(MixerFanoutError::StaleGeneration);
+        }
+        let Some(ring) = self.inputs.get(index) else {
+            return Err(MixerFanoutError::InputIndex);
+        };
+        if source.channels() != ring.channels() || source.frames() != ring.frames() {
+            return Err(MixerFanoutError::Block(BlockError::ShapeMismatch));
+        }
+        let Some(mut destination) = ring.try_acquire() else {
+            return Ok(false);
+        };
+        if destination.copy_from(source).is_err() {
+            let _ = ring.try_recycle(destination);
+            return Err(MixerFanoutError::Block(BlockError::ShapeMismatch));
+        }
+        destination.generation = generation.value();
+        match ring.try_submit(destination) {
+            Ok(()) => Ok(true),
+            Err(destination) => {
+                let _ = ring.try_recycle(destination);
+                Ok(false)
+            }
+        }
+    }
+
+    /// Process one coherent quantum without waiting. Acquired source blocks
+    /// remain in fixed staging until every input has a current-generation
+    /// block, so a temporarily missing input cannot cause quanta from
+    /// different positions in time to be mixed together.
+    pub fn process_once(
+        &mut self,
+        destinations: &[&AudioBlockRing],
+    ) -> Result<usize, MixerFanoutError> {
+        if destinations.len() != self.graph.branch_count() {
+            return Err(MixerFanoutError::BranchCount);
+        }
+        let generation = self.generation().value();
+        for (ring, pending) in self.inputs.iter().zip(&mut self.pending_inputs) {
+            if pending.is_none() {
+                *pending = ring.try_receive_generation(generation);
+            }
+        }
+        if self.pending_inputs.iter().any(Option::is_none) {
+            return Ok(0);
+        }
+        for ((ring, pending), source) in self
+            .inputs
+            .iter()
+            .zip(self.pending_inputs.iter_mut())
+            .zip(&mut self.sources)
+        {
+            let Some(incoming) = pending.take() else {
+                return Ok(0);
+            };
+            let previous = std::mem::replace(source, incoming);
+            let _ = ring.try_recycle(previous);
+        }
+        self.graph
+            .process_to_rings(&self.sources, &mut self.mixer_scratch, destinations)
+    }
+
+    /// Process one coherent quantum into branch rings and notify each
+    /// branch's prebuilt tap set. This is the allocation-free seam used by
+    /// native physical outputs combined with virtual/recording/tool sinks.
+    pub fn process_once_to_rings_with_tap_sets(
+        &mut self,
+        start_frame: u64,
+        destinations: &[&AudioBlockRing],
+        tap_sets: &[&AudioTapSet],
+    ) -> Result<usize, MixerFanoutError> {
+        if destinations.len() != self.graph.branch_count() || tap_sets.len() != destinations.len() {
+            return Err(MixerFanoutError::BranchCount);
+        }
+        if !self.stage_coherent_inputs()? {
+            return Ok(0);
+        }
+        self.graph.process_to_rings_with_tap_sets(
+            &self.sources,
+            &mut self.mixer_scratch,
+            destinations,
+            tap_sets,
+            start_frame,
+        )
+    }
+
+    /// Process one coherent quantum into caller-owned branch blocks and
+    /// notify one prebuilt tap per branch. This is the direct path for
+    /// virtual capture sinks, recorders, and tool adapters that do not need a
+    /// physical render ring. Blocks and tap membership must be prepared by
+    /// the control boundary; this method performs no allocation, waiting, or
+    /// endpoint access.
+    fn stage_coherent_inputs(&mut self) -> Result<bool, MixerFanoutError> {
+        let generation = self.generation().value();
+        for (ring, pending) in self.inputs.iter().zip(&mut self.pending_inputs) {
+            if pending.is_none() {
+                *pending = ring.try_receive_generation(generation);
+            }
+        }
+        if self.pending_inputs.iter().any(Option::is_none) {
+            return Ok(false);
+        }
+        for ((ring, pending), source) in self
+            .inputs
+            .iter()
+            .zip(self.pending_inputs.iter_mut())
+            .zip(&mut self.sources)
+        {
+            let Some(incoming) = pending.take() else {
+                return Ok(false);
+            };
+            let previous = std::mem::replace(source, incoming);
+            let _ = ring.try_recycle(previous);
+        }
+        Ok(true)
+    }
+
+    pub fn process_once_with_taps(
+        &mut self,
+        start_frame: u64,
+        destinations: &mut [&mut AudioBlock],
+        taps: &[&dyn AudioTap],
+    ) -> Result<usize, MixerFanoutError> {
+        if destinations.len() != self.graph.branch_count() || taps.len() != destinations.len() {
+            return Err(MixerFanoutError::BranchCount);
+        }
+        if !self.stage_coherent_inputs()? {
+            return Ok(0);
+        }
+        self.graph
+            .process(&self.sources, &mut self.mixer_scratch, destinations)?;
+        for (tap, destination) in taps.iter().zip(destinations.iter()) {
+            tap.on_processed_block(start_frame, destination);
+        }
+        Ok(destinations.len())
+    }
+
+    /// Process one coherent quantum into caller-owned branch blocks and
+    /// notify a prebuilt tap set for each branch. Multiple observers may
+    /// therefore share one virtual, recording, or tool branch without
+    /// receiving audio from unrelated output branches.
+    pub fn process_once_with_tap_sets(
+        &mut self,
+        start_frame: u64,
+        destinations: &mut [&mut AudioBlock],
+        tap_sets: &[&AudioTapSet],
+    ) -> Result<usize, MixerFanoutError> {
+        if destinations.len() != self.graph.branch_count() || tap_sets.len() != destinations.len() {
+            return Err(MixerFanoutError::BranchCount);
+        }
+        if !self.stage_coherent_inputs()? {
+            return Ok(0);
+        }
+        self.graph
+            .process(&self.sources, &mut self.mixer_scratch, destinations)?;
+        for (tap_set, destination) in tap_sets.iter().zip(destinations.iter()) {
+            tap_set.notify(start_frame, destination);
+        }
+        Ok(destinations.len())
+    }
+
+    /// Recycle queued and staged source blocks at a stopped-stream or
+    /// generation handoff boundary. The prepared graph remains immutable and
+    /// the adapter can be dropped or replaced without replaying retained
+    /// input.
+    pub fn reset_inputs(&mut self) -> usize {
+        let mut recycled = self.inputs.iter().map(AudioBlockRing::recycle_all).sum();
+        for (ring, pending) in self.inputs.iter().zip(&mut self.pending_inputs) {
+            if let Some(block) = pending.take() {
+                if ring.try_recycle(block).is_ok() {
+                    recycled += 1;
+                }
+            }
+        }
+        recycled
     }
 }
 
@@ -3286,6 +3861,7 @@ pub fn compile_session_at_sample_rate_with_plugins(
                     | NodeKind::PhysicalOutput
                     | NodeKind::VirtualRenderSource
                     | NodeKind::VirtualCaptureSink
+                    | NodeKind::TestSignal
                     | NodeKind::Mixer
             ) {
                 push_stage!(node_id, ProcessingStage::Mute { muted: true });
@@ -3305,6 +3881,34 @@ pub fn compile_session_at_sample_rate_with_plugins(
             continue;
         }
         match node.kind {
+            NodeKind::TestSignal => {
+                let frequency_hz = node
+                    .parameters
+                    .get("frequencyHz")
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(440.0);
+                let level_db = node
+                    .parameters
+                    .get("levelDb")
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(-18.0);
+                let duration_ms = node
+                    .parameters
+                    .get("durationMs")
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(1_000.0);
+                push_stage!(
+                    node_id,
+                    ProcessingStage::TestSignal {
+                        source: TestSignalSource::new(
+                            frequency_hz,
+                            level_db,
+                            duration_ms,
+                            sample_rate_hz,
+                        ),
+                    }
+                );
+            }
             NodeKind::Gain => {
                 let gain_db = node
                     .parameters
@@ -3686,12 +4290,21 @@ pub fn compile_session_at_sample_rate_with_plugins(
                         .ok_or(GraphCompileError::UnsupportedTopology)?,
                 }
             ),
+            NodeKind::PhysicalOutput | NodeKind::VirtualCaptureSink => {
+                let index = stages
+                    .iter()
+                    .filter_map(|stage| match stage {
+                        ProcessingStage::Meter { index } => Some(*index),
+                        _ => None,
+                    })
+                    .max()
+                    .map_or(0, |index| index + 1);
+                push_stage!(node_id, ProcessingStage::Meter { index });
+            }
             NodeKind::PhysicalInput
             | NodeKind::ApplicationCapture
             | NodeKind::EndpointLoopback
-            | NodeKind::PhysicalOutput
             | NodeKind::VirtualRenderSource
-            | NodeKind::VirtualCaptureSink
             | NodeKind::Mixer
             | NodeKind::Recorder => {}
             NodeKind::Meter => {
@@ -3836,6 +4449,302 @@ pub fn compile_mixer_session(
     })
 }
 
+/// Compile an explicit mixer, optional linear processor chain, and bounded
+/// fan-out to multiple destinations. This is the portable preparation boundary
+/// for the common multi-input/many-output route; endpoint workers remain
+/// separate adapters.
+pub fn compile_mixer_fanout_session(
+    session: &audiorouter_domain::Session,
+    generation: RuntimeGeneration,
+) -> Result<CompiledMixerFanoutGraph, GraphCompileError> {
+    compile_mixer_fanout_session_with_plugins(
+        session,
+        generation,
+        &std::collections::HashMap::new(),
+    )
+}
+
+/// Compile the bounded mixer/fan-out topology with already-bound plugin
+/// stages. Plugin workers are prepared by the control/host layer; this
+/// function only retains their realtime processors for callback execution.
+pub fn compile_mixer_fanout_session_with_plugins(
+    session: &audiorouter_domain::Session,
+    generation: RuntimeGeneration,
+    plugins: &std::collections::HashMap<
+        audiorouter_domain::EntityId,
+        std::sync::Arc<dyn RealtimePluginProcessor>,
+    >,
+) -> Result<CompiledMixerFanoutGraph, GraphCompileError> {
+    use audiorouter_domain::{validate_session, NodeKind, PortDirection};
+    use std::collections::HashSet;
+
+    validate_session(session).map_err(GraphCompileError::InvalidGraph)?;
+    let mixers = session
+        .nodes
+        .iter()
+        .filter(|node| node.kind == NodeKind::Mixer && node.enabled && !node.bypass)
+        .collect::<Vec<_>>();
+    if mixers.len() != 1 {
+        return Err(GraphCompileError::UnsupportedTopology);
+    }
+    let mixer = mixers[0];
+    let incoming = session
+        .edges
+        .iter()
+        .filter(|edge| edge.enabled && edge.destination_node == mixer.id)
+        .collect::<Vec<_>>();
+    let outgoing = session
+        .edges
+        .iter()
+        .filter(|edge| edge.enabled && edge.source_node == mixer.id)
+        .collect::<Vec<_>>();
+    if incoming.len() < 2 || incoming.len() > MAX_MIXER_INPUTS {
+        return Err(GraphCompileError::UnsupportedTopology);
+    }
+    let mixer_input = mixer
+        .ports
+        .iter()
+        .find(|port| port.direction == PortDirection::Input)
+        .ok_or(GraphCompileError::UnsupportedTopology)?;
+    let mixer_output = mixer
+        .ports
+        .iter()
+        .find(|port| port.direction == PortDirection::Output)
+        .ok_or(GraphCompileError::UnsupportedTopology)?;
+    let mut participants = HashSet::new();
+    let mut matrices = Vec::with_capacity(incoming.len());
+    let mut input_node_ids = Vec::with_capacity(incoming.len());
+    for edge in incoming {
+        let source = session
+            .nodes
+            .iter()
+            .find(|node| node.id == edge.source_node)
+            .ok_or(GraphCompileError::UnsupportedTopology)?;
+        let source_port = source
+            .ports
+            .iter()
+            .find(|port| port.name == edge.source_port)
+            .filter(|port| port.direction == PortDirection::Output)
+            .ok_or(GraphCompileError::UnsupportedTopology)?;
+        if !source.enabled
+            || source.bypass
+            || edge.destination_port != mixer_input.name
+            || !participants.insert(source.id.clone())
+            || edge.matrix.len()
+                != usize::from(mixer_input.channels) * usize::from(source_port.channels)
+        {
+            return Err(GraphCompileError::UnsupportedTopology);
+        }
+        input_node_ids.push(source.id.clone());
+        matrices.push(edge.matrix.clone());
+    }
+    participants.insert(mixer.id.clone());
+    let mut processing_nodes = Vec::new();
+    let mut branch_edges = outgoing;
+    let mut branch_source_port = mixer_output.name.clone();
+    let mut branch_source_channels = mixer_output.channels;
+    let mut current_node_id = mixer.id.clone();
+    loop {
+        if branch_edges.len() != 1 || branch_edges[0].source_node != current_node_id {
+            break;
+        }
+        let edge = branch_edges[0];
+        let destination = session
+            .nodes
+            .iter()
+            .find(|node| node.id == edge.destination_node)
+            .ok_or(GraphCompileError::UnsupportedTopology)?;
+        if !matches!(
+            destination.kind,
+            NodeKind::Gain
+                | NodeKind::Mute
+                | NodeKind::Meter
+                | NodeKind::ParametricEq
+                | NodeKind::Compressor
+                | NodeKind::Gate
+                | NodeKind::Limiter
+                | NodeKind::Delay
+                | NodeKind::GraphicEq
+                | NodeKind::Pitch
+                | NodeKind::Plugin
+        ) {
+            break;
+        }
+        if !destination.enabled
+            || destination.bypass
+            || edge.source_port != branch_source_port
+            || edge.matrix.len() != usize::from(branch_source_channels).pow(2)
+        {
+            return Err(GraphCompileError::UnsupportedTopology);
+        }
+        let input = destination
+            .ports
+            .iter()
+            .find(|port| port.direction == PortDirection::Input)
+            .ok_or(GraphCompileError::UnsupportedTopology)?;
+        let output = destination
+            .ports
+            .iter()
+            .find(|port| port.direction == PortDirection::Output)
+            .ok_or(GraphCompileError::UnsupportedTopology)?;
+        if edge.destination_port != input.name || input.channels != branch_source_channels {
+            return Err(GraphCompileError::UnsupportedTopology);
+        }
+        if destination.kind == NodeKind::Plugin && !plugins.contains_key(&destination.id) {
+            return Err(GraphCompileError::UnsupportedTopology);
+        }
+        processing_nodes.push(destination.clone());
+        participants.insert(destination.id.clone());
+        current_node_id = destination.id.clone();
+        branch_source_port = output.name.clone();
+        branch_source_channels = output.channels;
+        branch_edges = session
+            .edges
+            .iter()
+            .filter(|candidate| candidate.enabled && candidate.source_node == current_node_id)
+            .collect();
+    }
+    if !(2..=MAX_FANOUT_BRANCHES).contains(&branch_edges.len()) {
+        return Err(GraphCompileError::UnsupportedTopology);
+    }
+    let mut output_matrices = Vec::with_capacity(branch_edges.len());
+    let mut output_node_ids = Vec::with_capacity(branch_edges.len());
+    let mut destinations = HashSet::with_capacity(branch_edges.len());
+    for edge in branch_edges {
+        let destination = session
+            .nodes
+            .iter()
+            .find(|node| node.id == edge.destination_node)
+            .ok_or(GraphCompileError::UnsupportedTopology)?;
+        let destination_port = destination
+            .ports
+            .iter()
+            .find(|port| port.name == edge.destination_port)
+            .filter(|port| port.direction == PortDirection::Input)
+            .ok_or(GraphCompileError::UnsupportedTopology)?;
+        if !matches!(
+            destination.kind,
+            NodeKind::PhysicalOutput | NodeKind::VirtualCaptureSink | NodeKind::Recorder
+        ) || !destination.enabled
+            || destination.bypass
+            || edge.source_node != current_node_id
+            || edge.source_port != branch_source_port
+            || !destinations.insert(destination.id.clone())
+            || edge.matrix.len()
+                != usize::from(destination_port.channels) * usize::from(branch_source_channels)
+        {
+            return Err(GraphCompileError::UnsupportedTopology);
+        }
+        participants.insert(destination.id.clone());
+        output_node_ids.push(destination.id.clone());
+        output_matrices.push(edge.matrix.clone());
+    }
+    if session
+        .nodes
+        .iter()
+        .any(|node| node.enabled && !participants.contains(&node.id))
+    {
+        return Err(GraphCompileError::UnsupportedTopology);
+    }
+    let processing_graph = if processing_nodes.is_empty() {
+        None
+    } else {
+        let source_id = audiorouter_domain::EntityId::new("__fanout_processing_source");
+        let sink_id = audiorouter_domain::EntityId::new("__fanout_processing_sink");
+        let source = audiorouter_domain::Node {
+            id: source_id.clone(),
+            kind: NodeKind::PhysicalInput,
+            type_version: 1,
+            name: "fanout processing source".into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports: vec![audiorouter_domain::Port {
+                name: "main".into(),
+                direction: PortDirection::Output,
+                channels: branch_source_channels,
+            }],
+        };
+        let sink = audiorouter_domain::Node {
+            id: sink_id.clone(),
+            kind: NodeKind::PhysicalOutput,
+            type_version: 1,
+            name: "fanout processing sink".into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports: vec![audiorouter_domain::Port {
+                name: "main".into(),
+                direction: PortDirection::Input,
+                channels: branch_source_channels,
+            }],
+        };
+        let mut nodes = vec![source];
+        nodes.extend(processing_nodes.iter().cloned());
+        nodes.push(sink);
+        let mut edges = Vec::with_capacity(nodes.len().saturating_sub(1));
+        for pair in nodes.windows(2) {
+            let source_port = pair[0]
+                .ports
+                .iter()
+                .find(|port| port.direction == PortDirection::Output)
+                .ok_or(GraphCompileError::UnsupportedTopology)?;
+            let destination_port = pair[1]
+                .ports
+                .iter()
+                .find(|port| port.direction == PortDirection::Input)
+                .ok_or(GraphCompileError::UnsupportedTopology)?;
+            if source_port.channels != destination_port.channels {
+                return Err(GraphCompileError::UnsupportedTopology);
+            }
+            edges.push(audiorouter_domain::Edge {
+                id: audiorouter_domain::EntityId::new(format!(
+                    "__fanout_processing_edge_{}",
+                    edges.len()
+                )),
+                source_node: pair[0].id.clone(),
+                source_port: source_port.name.clone(),
+                destination_node: pair[1].id.clone(),
+                destination_port: destination_port.name.clone(),
+                matrix: (0..usize::from(source_port.channels).pow(2))
+                    .map(|index| {
+                        if index % (usize::from(source_port.channels) + 1) == 0 {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    })
+                    .collect(),
+                enabled: true,
+            });
+        }
+        Some(compile_session_at_sample_rate_with_plugins(
+            &audiorouter_domain::Session {
+                id: audiorouter_domain::EntityId::new("__fanout_processing_session"),
+                name: "fanout processing".into(),
+                schema_version: 1,
+                revision: 0,
+                nodes,
+                edges,
+            },
+            generation,
+            INTERNAL_SAMPLE_RATE_HZ,
+            plugins,
+        )?)
+    };
+    let mixer = MixerStage::new(usize::from(mixer_input.channels), matrices)
+        .map_err(|_| GraphCompileError::UnsupportedTopology)?;
+    Ok(CompiledMixerFanoutGraph {
+        generation,
+        mixer,
+        processing_graph,
+        privacy_mute: PrivacyMute::default(),
+        input_node_ids,
+        output_matrices,
+        output_node_ids,
+    })
+}
+
 /// Compile the supported fan-out topology: one enabled source and multiple
 /// physical-output destinations, with no unrelated enabled edges.
 pub fn compile_fanout_session(
@@ -3879,7 +4788,13 @@ pub fn compile_fanout_session(
             .nodes
             .iter()
             .find(|node| node.id == edge.destination_node)
-            .filter(|node| node.kind == NodeKind::PhysicalOutput && node.enabled && !node.bypass)
+            .filter(|node| {
+                matches!(
+                    node.kind,
+                    NodeKind::PhysicalOutput | NodeKind::VirtualCaptureSink
+                ) && node.enabled
+                    && !node.bypass
+            })
             .ok_or(GraphCompileError::UnsupportedTopology)?;
         if !destinations.insert(destination.id.clone()) {
             return Err(GraphCompileError::UnsupportedTopology);
@@ -4137,6 +5052,7 @@ impl RuntimeProcessor {
     ) -> Option<RuntimeGeneration> {
         let generation = self.process(block);
         if generation.is_some() {
+            block.generation = generation.map_or(0, RuntimeGeneration::value);
             for tap in taps.iter().take(MAX_AUDIO_TAPS) {
                 tap.on_processed_block(start_frame, block);
             }
@@ -4154,6 +5070,7 @@ impl RuntimeProcessor {
     ) -> Option<RuntimeGeneration> {
         let generation = self.process(block);
         if generation.is_some() {
+            block.generation = generation.map_or(0, RuntimeGeneration::value);
             taps.notify(start_frame, block);
         }
         generation
@@ -4690,10 +5607,12 @@ impl RuntimeGraph {
     ) -> Option<BlockMeterSnapshot> {
         self.stage_node_ids
             .iter()
-            .position(|candidate| candidate == node_id)
-            .and_then(|index| match self.stages.get(index) {
-                Some(ProcessingStage::Meter { index }) => self.meter_snapshot(*index),
-                _ => None,
+            .enumerate()
+            .find_map(|(stage_index, candidate)| {
+                (candidate == node_id).then(|| match self.stages.get(stage_index) {
+                    Some(ProcessingStage::Meter { index }) => self.meter_snapshot(*index),
+                    _ => None,
+                })?
             })
     }
 
@@ -4783,6 +5702,7 @@ impl RuntimeGraph {
                         success = false;
                     }
                 }
+                ProcessingStage::TestSignal { source } => source.reset(),
                 ProcessingStage::Gain { .. }
                 | ProcessingStage::Mute { .. }
                 | ProcessingStage::ChannelMatrix { .. }
@@ -4806,6 +5726,7 @@ impl RuntimeGraph {
     fn process_inner(&self, block: &mut AudioBlock, metrics: Option<&CallbackMetrics>) -> usize {
         for stage in &self.stages {
             match stage {
+                ProcessingStage::TestSignal { source } => source.process(block),
                 ProcessingStage::Gain { linear } => block.apply_gain(*linear),
                 ProcessingStage::Mute { muted: true } => block.clear(),
                 ProcessingStage::Mute { muted: false } => {}
@@ -5171,6 +6092,31 @@ mod tests {
         );
         assert_eq!(tap.calls.load(Ordering::Relaxed), 1);
         assert_eq!(tap.last_frame.load(Ordering::Relaxed), 40);
+        let output = scheduler.receive_output().unwrap();
+        scheduler.output().try_recycle(output).unwrap();
+    }
+
+    #[test]
+    fn realtime_scheduler_tags_generation_before_output_taps_run() {
+        struct GenerationTap(AtomicU64);
+
+        impl AudioTap for GenerationTap {
+            fn on_processed_block(&self, _start_frame: u64, block: &AudioBlock) {
+                self.0.store(block.generation(), Ordering::Relaxed);
+            }
+        }
+
+        let scheduler = RealtimeScheduler::new(2, 1, 2).unwrap();
+        scheduler.publish(RuntimeGraph::prepare(RuntimeGeneration::new(7), vec![]));
+        let mut input = scheduler.acquire_input().unwrap();
+        input.channel_mut(0).unwrap().fill(0.5);
+        scheduler.submit_input(input).unwrap();
+        let tap = GenerationTap(AtomicU64::new(0));
+        assert_eq!(
+            scheduler.process_once_with_tap(0, &tap).unwrap(),
+            Some(RuntimeGeneration::new(7))
+        );
+        assert_eq!(tap.0.load(Ordering::Relaxed), 7);
         let output = scheduler.receive_output().unwrap();
         scheduler.output().try_recycle(output).unwrap();
     }
@@ -6777,6 +7723,38 @@ mod tests {
     }
 
     #[test]
+    fn test_signal_source_emits_bounded_tone_then_silence_and_resets() {
+        let source = TestSignalSource::new(440.0, -18.0, 5.0, 48_000);
+        let graph = RuntimeGraph::prepare(
+            RuntimeGeneration::new(17),
+            vec![ProcessingStage::TestSignal { source }],
+        );
+        let mut block = AudioBlock::new(2, 128).unwrap();
+        graph.process(&mut block);
+        assert!(block.all_finite());
+        assert!(block
+            .channel(0)
+            .unwrap()
+            .iter()
+            .any(|sample| sample.abs() > 0.05));
+        for _ in 0..3 {
+            graph.process(&mut block);
+        }
+        assert!(block
+            .channel(0)
+            .unwrap()
+            .iter()
+            .all(|sample| *sample == 0.0));
+        assert!(graph.reset_processing_state());
+        graph.process(&mut block);
+        assert!(block
+            .channel(0)
+            .unwrap()
+            .iter()
+            .any(|sample| sample.abs() > 0.05));
+    }
+
+    #[test]
     fn realtime_dsp_ownership_is_nonblocking_under_contention() {
         let cell = RealtimeDsp::new(0_u32);
         let nested_attempt = cell
@@ -6898,6 +7876,71 @@ mod tests {
         graph.process(&mut block);
         assert_eq!(graph.generation().value(), 3);
         assert_eq!(block.channel(0).unwrap(), &[0.0; 2]);
+    }
+
+    #[test]
+    fn compiler_prepares_test_signal_and_destination_meter() {
+        use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+        let session = Session {
+            id: EntityId::new("session"),
+            name: "test-signal-route".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![
+                Node {
+                    id: EntityId::new("signal"),
+                    kind: NodeKind::TestSignal,
+                    type_version: 1,
+                    name: "Test Signal".into(),
+                    enabled: true,
+                    bypass: false,
+                    parameters: [
+                        ("frequencyHz".into(), serde_json::json!(440.0)),
+                        ("levelDb".into(), serde_json::json!(-18.0)),
+                        ("durationMs".into(), serde_json::json!(1000.0)),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    ports: vec![Port {
+                        name: "out".into(),
+                        direction: PortDirection::Output,
+                        channels: 2,
+                    }],
+                },
+                Node {
+                    id: EntityId::new("output"),
+                    kind: NodeKind::PhysicalOutput,
+                    type_version: 1,
+                    name: "Output".into(),
+                    enabled: true,
+                    bypass: false,
+                    parameters: Default::default(),
+                    ports: vec![Port {
+                        name: "in".into(),
+                        direction: PortDirection::Input,
+                        channels: 2,
+                    }],
+                },
+            ],
+            edges: vec![Edge {
+                id: EntityId::new("signal-to-output"),
+                source_node: EntityId::new("signal"),
+                source_port: "out".into(),
+                destination_node: EntityId::new("output"),
+                destination_port: "in".into(),
+                matrix: vec![1.0, 0.0, 0.0, 1.0],
+                enabled: true,
+            }],
+        };
+        let graph = compile_session(&session, RuntimeGeneration::new(18)).unwrap();
+        let mut block = AudioBlock::new(2, 128).unwrap();
+        graph.process(&mut block);
+        let meter = graph
+            .meter_snapshot_for_node(&EntityId::new("output"))
+            .unwrap();
+        assert!(meter.peak_db.is_finite());
+        assert!(meter.peak_db < 0.0);
+        assert!(meter.channel_peak_abs.iter().any(|peak| *peak > 0.05));
     }
 
     #[test]
@@ -7258,6 +8301,154 @@ mod tests {
         block.channel_mut(0).unwrap().fill(0.25);
         graph.process(&mut block);
         assert_eq!(block.channel(0).unwrap(), &[0.5; 128]);
+    }
+
+    #[test]
+    fn mixer_fanout_runs_bound_plugin_before_every_branch() {
+        use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+        #[derive(Debug)]
+        struct Doubler;
+        impl RealtimePluginProcessor for Doubler {
+            fn process(&self, block: &mut AudioBlock) {
+                block.apply_gain(2.0);
+            }
+        }
+        let port = |name: &str, direction, channels| Port {
+            name: name.into(),
+            direction,
+            channels,
+        };
+        let endpoint = |id: &str, kind, direction| Node {
+            id: EntityId::new(id),
+            kind,
+            type_version: 1,
+            name: id.into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports: vec![port("main", direction, 1)],
+        };
+        let mixer = Node {
+            id: EntityId::new("mixer"),
+            kind: NodeKind::Mixer,
+            type_version: 1,
+            name: "mixer".into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports: vec![
+                port("main", PortDirection::Input, 1),
+                port("out", PortDirection::Output, 1),
+            ],
+        };
+        let plugin = Node {
+            id: EntityId::new("plugin"),
+            kind: NodeKind::Plugin,
+            type_version: 1,
+            name: "doubler".into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports: vec![
+                port("in", PortDirection::Input, 1),
+                port("out", PortDirection::Output, 1),
+            ],
+        };
+        let edge = |id: &str,
+                    source_node: &str,
+                    source_port: &str,
+                    destination_node: &str,
+                    destination_port: &str| Edge {
+            id: EntityId::new(id),
+            source_node: EntityId::new(source_node),
+            source_port: source_port.into(),
+            destination_node: EntityId::new(destination_node),
+            destination_port: destination_port.into(),
+            matrix: vec![1.0],
+            enabled: true,
+        };
+        let session = Session {
+            id: EntityId::new("plugin-fanout"),
+            name: "plugin fanout".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![
+                endpoint("left", NodeKind::PhysicalInput, PortDirection::Output),
+                endpoint("right", NodeKind::PhysicalInput, PortDirection::Output),
+                mixer,
+                plugin,
+                endpoint("first", NodeKind::PhysicalOutput, PortDirection::Input),
+                endpoint("second", NodeKind::PhysicalOutput, PortDirection::Input),
+            ],
+            edges: vec![
+                edge("left-mixer", "left", "main", "mixer", "main"),
+                edge("right-mixer", "right", "main", "mixer", "main"),
+                edge("mixer-plugin", "mixer", "out", "plugin", "in"),
+                edge("plugin-first", "plugin", "out", "first", "main"),
+                edge("plugin-second", "plugin", "out", "second", "main"),
+            ],
+        };
+        let plugins = std::collections::HashMap::from([(
+            EntityId::new("plugin"),
+            std::sync::Arc::new(Doubler) as std::sync::Arc<dyn RealtimePluginProcessor>,
+        )]);
+        let graph = compile_mixer_fanout_session_with_plugins(
+            &session,
+            RuntimeGeneration::new(91),
+            &plugins,
+        )
+        .unwrap();
+        let mut runtime = RealtimeMixerFanout::new(graph, 1, &[1, 1], 1, 2).unwrap();
+        let mut left = AudioBlock::new(1, 2).unwrap();
+        left.channel_mut(0).unwrap().fill(0.25);
+        let mut right = AudioBlock::new(1, 2).unwrap();
+        right.channel_mut(0).unwrap().fill(0.5);
+        runtime
+            .try_submit_input(0, RuntimeGeneration::new(91), &left)
+            .unwrap();
+        runtime
+            .try_submit_input(1, RuntimeGeneration::new(91), &right)
+            .unwrap();
+        let first = AudioBlockRing::new(1, 1, 2).unwrap();
+        let second = AudioBlockRing::new(1, 1, 2).unwrap();
+        assert_eq!(runtime.process_once(&[&first, &second]).unwrap(), 2);
+        let first_block = first.try_receive().unwrap();
+        let second_block = second.try_receive().unwrap();
+        assert_eq!(first_block.channel(0).unwrap(), &[1.5, 1.5]);
+        assert_eq!(second_block.channel(0).unwrap(), &[1.5, 1.5]);
+
+        let mut built_in_session = session.clone();
+        let built_in = built_in_session
+            .nodes
+            .iter_mut()
+            .find(|node| node.id == EntityId::new("plugin"))
+            .unwrap();
+        built_in.kind = NodeKind::Gain;
+        built_in
+            .parameters
+            .insert("gainDb".into(), serde_json::json!(6.0205999));
+        let built_in_graph =
+            compile_mixer_fanout_session(&built_in_session, RuntimeGeneration::new(92)).unwrap();
+        let mut built_in_runtime =
+            RealtimeMixerFanout::new(built_in_graph, 1, &[1, 1], 1, 2).unwrap();
+        built_in_runtime
+            .try_submit_input(0, RuntimeGeneration::new(92), &left)
+            .unwrap();
+        built_in_runtime
+            .try_submit_input(1, RuntimeGeneration::new(92), &right)
+            .unwrap();
+        let built_in_first = AudioBlockRing::new(1, 1, 2).unwrap();
+        let built_in_second = AudioBlockRing::new(1, 1, 2).unwrap();
+        assert_eq!(
+            built_in_runtime
+                .process_once(&[&built_in_first, &built_in_second])
+                .unwrap(),
+            2
+        );
+        assert!((built_in_first.try_receive().unwrap().channel(0).unwrap()[0] - 1.5).abs() < 0.001);
+        assert!(
+            (built_in_second.try_receive().unwrap().channel(0).unwrap()[0] - 1.5).abs() < 0.001
+        );
     }
 
     #[test]
@@ -7709,6 +8900,424 @@ mod tests {
             compile_fanout_session(&unrelated, RuntimeGeneration::new(7)),
             Err(GraphCompileError::UnsupportedTopology)
         ));
+
+        let mut virtual_fanout = session.clone();
+        let virtual_sink = virtual_fanout
+            .nodes
+            .iter_mut()
+            .find(|node| node.id == EntityId::new("right"))
+            .unwrap();
+        virtual_sink.kind = NodeKind::VirtualCaptureSink;
+        virtual_sink
+            .parameters
+            .insert("busId".into(), serde_json::json!("bus-1"));
+        let virtual_graph =
+            compile_fanout_session(&virtual_fanout, RuntimeGeneration::new(8)).unwrap();
+        assert_eq!(virtual_graph.branch_count(), 2);
+    }
+
+    #[test]
+    fn compiler_and_runtime_execute_mixer_to_many_outputs() {
+        use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+        let node = |id: &str, kind, direction: PortDirection| Node {
+            id: EntityId::new(id),
+            kind,
+            type_version: 1,
+            name: id.into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports: vec![Port {
+                name: "main".into(),
+                direction,
+                channels: 1,
+            }],
+        };
+        let session = Session {
+            id: EntityId::new("mixer-fanout-session"),
+            name: "mixer fan-out".into(),
+            schema_version: 1,
+            revision: 0,
+            nodes: vec![
+                node("left", NodeKind::PhysicalInput, PortDirection::Output),
+                node("right", NodeKind::PhysicalInput, PortDirection::Output),
+                Node {
+                    id: EntityId::new("mixer"),
+                    kind: NodeKind::Mixer,
+                    type_version: 1,
+                    name: "mixer".into(),
+                    enabled: true,
+                    bypass: false,
+                    parameters: Default::default(),
+                    ports: vec![
+                        Port {
+                            name: "main".into(),
+                            direction: PortDirection::Input,
+                            channels: 1,
+                        },
+                        Port {
+                            name: "out".into(),
+                            direction: PortDirection::Output,
+                            channels: 1,
+                        },
+                    ],
+                },
+                node("first", NodeKind::PhysicalOutput, PortDirection::Input),
+                node("second", NodeKind::PhysicalOutput, PortDirection::Input),
+            ],
+            edges: vec![
+                Edge {
+                    id: EntityId::new("left-mixer"),
+                    source_node: EntityId::new("left"),
+                    source_port: "main".into(),
+                    destination_node: EntityId::new("mixer"),
+                    destination_port: "main".into(),
+                    matrix: vec![1.0],
+                    enabled: true,
+                },
+                Edge {
+                    id: EntityId::new("right-mixer"),
+                    source_node: EntityId::new("right"),
+                    source_port: "main".into(),
+                    destination_node: EntityId::new("mixer"),
+                    destination_port: "main".into(),
+                    matrix: vec![1.0],
+                    enabled: true,
+                },
+                Edge {
+                    id: EntityId::new("mixer-first"),
+                    source_node: EntityId::new("mixer"),
+                    source_port: "out".into(),
+                    destination_node: EntityId::new("first"),
+                    destination_port: "main".into(),
+                    matrix: vec![1.0],
+                    enabled: true,
+                },
+                Edge {
+                    id: EntityId::new("mixer-second"),
+                    source_node: EntityId::new("mixer"),
+                    source_port: "out".into(),
+                    destination_node: EntityId::new("second"),
+                    destination_port: "main".into(),
+                    matrix: vec![1.0],
+                    enabled: true,
+                },
+            ],
+        };
+        let graph = compile_mixer_fanout_session(&session, RuntimeGeneration::new(12)).unwrap();
+        assert_eq!(graph.input_count(), 2);
+        assert_eq!(graph.branch_count(), 2);
+        let mut left = AudioBlock::new(1, 2).unwrap();
+        left.channel_mut(0).unwrap().fill(0.25);
+        let mut right = AudioBlock::new(1, 2).unwrap();
+        right.channel_mut(0).unwrap().fill(0.5);
+        let mut scratch = AudioBlock::new(1, 2).unwrap();
+        let mut first = AudioBlock::new(1, 2).unwrap();
+        let mut second = AudioBlock::new(1, 2).unwrap();
+        let mut destinations: [&mut AudioBlock; 2] = [&mut first, &mut second];
+        graph
+            .process(&[left, right], &mut scratch, &mut destinations)
+            .unwrap();
+        assert_eq!(first.channel(0).unwrap(), &[0.75, 0.75]);
+        assert_eq!(second.channel(0).unwrap(), &[0.75, 0.75]);
+
+        let first_ring = AudioBlockRing::new(1, 1, 2).unwrap();
+        let second_ring = AudioBlockRing::new(1, 1, 2).unwrap();
+        let mut ring_left = AudioBlock::new(1, 2).unwrap();
+        ring_left.channel_mut(0).unwrap().fill(0.25);
+        let mut ring_right = AudioBlock::new(1, 2).unwrap();
+        ring_right.channel_mut(0).unwrap().fill(0.5);
+        assert_eq!(
+            graph
+                .process_to_rings(
+                    &[ring_left, ring_right],
+                    &mut scratch,
+                    &[&first_ring, &second_ring],
+                )
+                .unwrap(),
+            2
+        );
+        assert_eq!(
+            first_ring.try_receive().unwrap().channel(0).unwrap(),
+            &[0.75, 0.75]
+        );
+        assert_eq!(
+            second_ring.try_receive().unwrap().channel(0).unwrap(),
+            &[0.75, 0.75]
+        );
+
+        let blocked_first = AudioBlockRing::new(1, 1, 2).unwrap();
+        let available_second = AudioBlockRing::new(1, 1, 2).unwrap();
+        let mut retained = AudioBlock::new(1, 2).unwrap();
+        retained.channel_mut(0).unwrap().fill(-1.0);
+        blocked_first.try_submit(retained).unwrap();
+        let mut next_left = AudioBlock::new(1, 2).unwrap();
+        next_left.channel_mut(0).unwrap().fill(0.25);
+        let mut next_right = AudioBlock::new(1, 2).unwrap();
+        next_right.channel_mut(0).unwrap().fill(0.5);
+        assert_eq!(
+            graph
+                .process_to_rings(
+                    &[next_left, next_right],
+                    &mut scratch,
+                    &[&blocked_first, &available_second],
+                )
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            blocked_first.try_receive().unwrap().channel(0).unwrap(),
+            &[-1.0, -1.0]
+        );
+        assert_eq!(
+            available_second.try_receive().unwrap().channel(0).unwrap(),
+            &[0.75, 0.75]
+        );
+
+        let runtime_graph =
+            compile_mixer_fanout_session(&session, RuntimeGeneration::new(12)).unwrap();
+        let mut runtime = RealtimeMixerFanout::new(runtime_graph, 1, &[1, 1], 1, 2).unwrap();
+        let runtime_first = AudioBlockRing::new(1, 1, 2).unwrap();
+        let runtime_second = AudioBlockRing::new(1, 1, 2).unwrap();
+        let mut runtime_left = AudioBlock::new(1, 2).unwrap();
+        runtime_left.channel_mut(0).unwrap().fill(0.25);
+        assert!(runtime
+            .try_submit_input(0, RuntimeGeneration::new(12), &runtime_left)
+            .unwrap());
+        let mut runtime_right = AudioBlock::new(1, 2).unwrap();
+        runtime_right.channel_mut(0).unwrap().fill(0.5);
+        assert!(runtime
+            .try_submit_input(1, RuntimeGeneration::new(12), &runtime_right)
+            .unwrap());
+        assert!(!runtime
+            .try_submit_input(0, RuntimeGeneration::new(12), &runtime_left)
+            .unwrap());
+        assert_eq!(
+            runtime.try_submit_input(2, RuntimeGeneration::new(12), &runtime_left),
+            Err(MixerFanoutError::InputIndex)
+        );
+        assert_eq!(
+            runtime.try_submit_input(0, RuntimeGeneration::new(13), &runtime_left),
+            Err(MixerFanoutError::InputGeneration)
+        );
+        let mut stale_runtime_left = AudioBlock::new(1, 2).unwrap();
+        stale_runtime_left.channel_mut(0).unwrap().fill(0.25);
+        stale_runtime_left.generation = 11;
+        assert_eq!(
+            runtime.try_submit_input(0, RuntimeGeneration::new(12), &stale_runtime_left),
+            Err(MixerFanoutError::StaleGeneration)
+        );
+        assert_eq!(
+            runtime
+                .process_once(&[&runtime_first, &runtime_second])
+                .unwrap(),
+            2
+        );
+        let first_output = runtime_first.try_receive().unwrap();
+        assert_eq!(first_output.channel(0).unwrap(), &[0.75, 0.75]);
+        runtime_first.try_recycle(first_output).unwrap();
+        let second_output = runtime_second.try_receive().unwrap();
+        assert_eq!(second_output.channel(0).unwrap(), &[0.75, 0.75]);
+        runtime_second.try_recycle(second_output).unwrap();
+
+        runtime.set_privacy_muted(true);
+        assert!(runtime
+            .try_submit_input(0, RuntimeGeneration::new(12), &runtime_left)
+            .unwrap());
+        assert!(runtime
+            .try_submit_input(1, RuntimeGeneration::new(12), &runtime_right)
+            .unwrap());
+        assert_eq!(
+            runtime
+                .process_once(&[&runtime_first, &runtime_second])
+                .unwrap(),
+            2
+        );
+        let muted_first = runtime_first.try_receive().unwrap();
+        assert_eq!(muted_first.channel(0).unwrap(), &[0.0, 0.0]);
+        runtime_first.try_recycle(muted_first).unwrap();
+        let muted_second = runtime_second.try_receive().unwrap();
+        assert_eq!(muted_second.channel(0).unwrap(), &[0.0, 0.0]);
+        runtime_second.try_recycle(muted_second).unwrap();
+
+        // The control-plane latch is published atomically. Repeatedly cross
+        // the boundary to prove that every newly muted quantum is silent on
+        // every fan-out branch, rather than only the first transition above.
+        for _ in 0..32 {
+            runtime.set_privacy_muted(false);
+            assert!(runtime
+                .try_submit_input(0, RuntimeGeneration::new(12), &runtime_left)
+                .unwrap());
+            assert!(runtime
+                .try_submit_input(1, RuntimeGeneration::new(12), &runtime_right)
+                .unwrap());
+            assert_eq!(
+                runtime
+                    .process_once(&[&runtime_first, &runtime_second])
+                    .unwrap(),
+                2
+            );
+            let active_first = runtime_first.try_receive().unwrap();
+            assert_eq!(active_first.channel(0).unwrap(), &[0.75, 0.75]);
+            runtime_first.try_recycle(active_first).unwrap();
+            let active_second = runtime_second.try_receive().unwrap();
+            assert_eq!(active_second.channel(0).unwrap(), &[0.75, 0.75]);
+            runtime_second.try_recycle(active_second).unwrap();
+
+            runtime.set_privacy_muted(true);
+            assert!(runtime
+                .try_submit_input(0, RuntimeGeneration::new(12), &runtime_left)
+                .unwrap());
+            assert!(runtime
+                .try_submit_input(1, RuntimeGeneration::new(12), &runtime_right)
+                .unwrap());
+            assert_eq!(
+                runtime
+                    .process_once(&[&runtime_first, &runtime_second])
+                    .unwrap(),
+                2
+            );
+            let next_muted_first = runtime_first.try_receive().unwrap();
+            assert_eq!(next_muted_first.channel(0).unwrap(), &[0.0, 0.0]);
+            runtime_first.try_recycle(next_muted_first).unwrap();
+            let next_muted_second = runtime_second.try_receive().unwrap();
+            assert_eq!(next_muted_second.channel(0).unwrap(), &[0.0, 0.0]);
+            runtime_second.try_recycle(next_muted_second).unwrap();
+        }
+
+        struct CountingTap(std::sync::atomic::AtomicUsize);
+        impl AudioTap for CountingTap {
+            fn on_processed_block(&self, _start_frame: u64, block: &AudioBlock) {
+                assert_eq!(block.channel(0).unwrap(), &[0.75, 0.75]);
+                self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
+        let tap_graph = compile_mixer_fanout_session(&session, RuntimeGeneration::new(12)).unwrap();
+        let mut tap_runtime = RealtimeMixerFanout::new(tap_graph, 1, &[1, 1], 1, 2).unwrap();
+        assert!(tap_runtime
+            .try_submit_input(0, RuntimeGeneration::new(12), &runtime_left)
+            .unwrap());
+        assert!(tap_runtime
+            .try_submit_input(1, RuntimeGeneration::new(12), &runtime_right)
+            .unwrap());
+        let mut tap_first = AudioBlock::new(1, 2).unwrap();
+        let mut tap_second = AudioBlock::new(1, 2).unwrap();
+        let first_tap = CountingTap(std::sync::atomic::AtomicUsize::new(0));
+        let second_tap = CountingTap(std::sync::atomic::AtomicUsize::new(0));
+        let mut tap_destinations: [&mut AudioBlock; 2] = [&mut tap_first, &mut tap_second];
+        let taps: [&dyn AudioTap; 2] = [&first_tap, &second_tap];
+        assert_eq!(
+            tap_runtime
+                .process_once_with_taps(128, &mut tap_destinations, &taps)
+                .unwrap(),
+            2
+        );
+        assert_eq!(first_tap.0.load(std::sync::atomic::Ordering::Relaxed), 1);
+        assert_eq!(second_tap.0.load(std::sync::atomic::Ordering::Relaxed), 1);
+
+        let missing_graph =
+            compile_mixer_fanout_session(&session, RuntimeGeneration::new(12)).unwrap();
+        let mut missing_runtime =
+            RealtimeMixerFanout::new(missing_graph, 1, &[1, 1], 1, 2).unwrap();
+        let missing_first = AudioBlockRing::new(1, 1, 2).unwrap();
+        let missing_second = AudioBlockRing::new(1, 1, 2).unwrap();
+        let mut retained_first = AudioBlock::new(1, 2).unwrap();
+        retained_first.channel_mut(0).unwrap().fill(6.0);
+        retained_first.generation = 12;
+        missing_runtime
+            .input_ring(0)
+            .unwrap()
+            .try_submit(retained_first)
+            .unwrap();
+        assert_eq!(
+            missing_runtime
+                .process_once(&[&missing_first, &missing_second])
+                .unwrap(),
+            0
+        );
+        assert!(missing_first.try_receive().is_none());
+        let mut retained_second = AudioBlock::new(1, 2).unwrap();
+        retained_second.channel_mut(0).unwrap().fill(0.5);
+        retained_second.generation = 12;
+        missing_runtime
+            .input_ring(1)
+            .unwrap()
+            .try_submit(retained_second)
+            .unwrap();
+        assert_eq!(
+            missing_runtime
+                .process_once(&[&missing_first, &missing_second])
+                .unwrap(),
+            2
+        );
+        assert_eq!(
+            missing_first.try_receive().unwrap().channel(0).unwrap(),
+            &[6.5, 6.5]
+        );
+
+        let mut stale_left = AudioBlock::new(1, 2).unwrap();
+        stale_left.channel_mut(0).unwrap().fill(0.25);
+        stale_left.generation = 11;
+        let mut protected_first = AudioBlock::new(1, 2).unwrap();
+        protected_first.channel_mut(0).unwrap().fill(4.0);
+        let mut protected_second = AudioBlock::new(1, 2).unwrap();
+        protected_second.channel_mut(0).unwrap().fill(5.0);
+        let mut protected_destinations: [&mut AudioBlock; 2] =
+            [&mut protected_first, &mut protected_second];
+        let fresh_right = AudioBlock::new(1, 2).unwrap();
+        assert_eq!(
+            graph.process(
+                &[stale_left, fresh_right],
+                &mut scratch,
+                &mut protected_destinations,
+            ),
+            Err(MixerFanoutError::StaleGeneration)
+        );
+        assert_eq!(protected_first.channel(0).unwrap(), &[4.0, 4.0]);
+        assert_eq!(protected_second.channel(0).unwrap(), &[5.0, 5.0]);
+
+        first.channel_mut(0).unwrap().fill(9.0);
+        let mut wrong = AudioBlock::new(2, 2).unwrap();
+        let mut invalid_destinations: [&mut AudioBlock; 2] = [&mut first, &mut wrong];
+        let invalid_left = AudioBlock::new(1, 2).unwrap();
+        let invalid_right = AudioBlock::new(1, 2).unwrap();
+        assert_eq!(
+            graph.process(
+                &[invalid_left, invalid_right],
+                &mut scratch,
+                &mut invalid_destinations,
+            ),
+            Err(MixerFanoutError::Block(BlockError::ShapeMismatch))
+        );
+        assert_eq!(first.channel(0).unwrap(), &[9.0, 9.0]);
+
+        let mut virtual_session = session.clone();
+        let virtual_sink = virtual_session
+            .nodes
+            .iter_mut()
+            .find(|node| node.id == EntityId::new("second"))
+            .unwrap();
+        virtual_sink.kind = NodeKind::VirtualCaptureSink;
+        virtual_sink
+            .parameters
+            .insert("busId".into(), serde_json::json!("bus-1"));
+        let virtual_graph =
+            compile_mixer_fanout_session(&virtual_session, RuntimeGeneration::new(13)).unwrap();
+        assert_eq!(virtual_graph.branch_count(), 2);
+
+        let mut recorder_session = session.clone();
+        let recorder = recorder_session
+            .nodes
+            .iter_mut()
+            .find(|node| node.id == EntityId::new("second"))
+            .unwrap();
+        recorder.kind = NodeKind::Recorder;
+        let recorder_graph =
+            compile_mixer_fanout_session(&recorder_session, RuntimeGeneration::new(14)).unwrap();
+        assert_eq!(
+            recorder_graph.output_node_ids(),
+            &[EntityId::new("first"), EntityId::new("second")]
+        );
     }
 
     #[test]
@@ -8315,6 +9924,65 @@ mod tests {
                 last_frame: AtomicU64::new(0),
             }),
             Err(AudioTapSetError::Capacity)
+        );
+    }
+
+    #[test]
+    fn ring_taps_fan_out_to_independent_bounded_output_workers() {
+        let first_ring = Arc::new(AudioBlockRing::new(1, 1, 2).unwrap());
+        let second_ring = Arc::new(AudioBlockRing::new(1, 1, 2).unwrap());
+        let first_tap = AudioBlockRingTap::new(Arc::clone(&first_ring));
+        let second_tap = AudioBlockRingTap::new(Arc::clone(&second_ring));
+        let mut taps = AudioTapSet::new();
+        taps.add(first_tap).unwrap();
+        taps.add(second_tap).unwrap();
+
+        let mut source = AudioBlock::new(1, 2).unwrap();
+        source.channel_mut(0).unwrap().copy_from_slice(&[0.25, 0.5]);
+        taps.on_processed_block(128, &source);
+
+        assert_eq!(
+            first_ring.try_receive().unwrap().channel(0).unwrap(),
+            &[0.25, 0.5]
+        );
+        assert_eq!(
+            second_ring.try_receive().unwrap().channel(0).unwrap(),
+            &[0.25, 0.5]
+        );
+    }
+
+    #[test]
+    fn scheduler_processes_one_quantum_into_multiple_output_rings() {
+        let scheduler = RealtimeScheduler::new(2, 1, 2).unwrap();
+        scheduler.publish(RuntimeGraph::prepare(RuntimeGeneration::new(8), vec![]));
+        let first_ring = Arc::new(AudioBlockRing::new(1, 1, 2).unwrap());
+        let second_ring = Arc::new(AudioBlockRing::new(1, 1, 2).unwrap());
+        let first_tap = AudioBlockRingTap::new(Arc::clone(&first_ring));
+        let second_tap = AudioBlockRingTap::new(Arc::clone(&second_ring));
+        let mut taps = AudioTapSet::new();
+        taps.add(first_tap).unwrap();
+        taps.add(second_tap).unwrap();
+
+        let mut input = scheduler.acquire_input().unwrap();
+        input
+            .channel_mut(0)
+            .unwrap()
+            .copy_from_slice(&[0.125, 0.25]);
+        scheduler.submit_input(input).unwrap();
+        assert_eq!(
+            scheduler
+                .process_once_with_tap_set(64, &taps)
+                .unwrap()
+                .map(RuntimeGeneration::value),
+            Some(8)
+        );
+        assert_eq!(
+            first_ring.try_receive().unwrap().channel(0).unwrap(),
+            &[0.125, 0.25]
+        );
+        assert_eq!(
+            second_ring.try_receive().unwrap().channel(0).unwrap(),
+            &[0.125, 0.25]
         );
     }
 

@@ -1,6 +1,10 @@
 # M01 — Domain, local API, storage, and CLI foundation
 
-Status: foundation implemented; M00 prerequisite and final acceptance remain open. Outcome: a headless, inspectable control system operating a deterministic fake engine.
+Status: foundation implemented; shared contracts, persistence, authorization,
+CLI/MCP parity, and deterministic headless behavior are current-track
+evidence-backed. Final release and Windows hardware acceptance remain open.
+Outcome: a headless, inspectable control system operating a deterministic fake
+engine and shared versioned API.
 
 ## Read first
 

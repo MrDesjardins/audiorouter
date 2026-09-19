@@ -10,8 +10,8 @@ export type DraftChange = {
 export const GAIN_MIN_DB = -60;
 export const GAIN_MAX_DB = 24;
 
-export type LibraryNodeKind = Extract<NodeKind, "physicalInput" | "physicalOutput" | "mixer" | "gain" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch">;
-export type InsertableProcessorKind = Exclude<LibraryNodeKind, "physicalInput" | "physicalOutput" | "mixer" | "meter">;
+export type LibraryNodeKind = Extract<NodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "mixer" | "gain" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch" | "recorder">;
+export type InsertableProcessorKind = Exclude<LibraryNodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "mixer" | "meter">;
 export type EqPresetId = "voiceNeutral" | "hum50Hz" | "hum60Hz";
 export type VoiceChainPresetId = "voiceNeutral" | "voiceGateAndCompression";
 
@@ -43,6 +43,11 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
     parameters: {},
     ports: [{ name: "in", direction: "input", channels: 2 }],
   },
+  testSignal: {
+    name: "Test Signal",
+    parameters: { frequencyHz: 440, levelDb: -18, durationMs: 1000 },
+    ports: [{ name: "out", direction: "output", channels: 2 }],
+  },
   mixer: {
     name: "Mixer",
     parameters: {},
@@ -71,6 +76,14 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
     name: "Meter",
     parameters: {},
     ports: [{ name: "in", direction: "input", channels: 1 }],
+  },
+  recorder: {
+    name: "Recorder",
+    parameters: {},
+    ports: [
+      { name: "in", direction: "input", channels: 1 },
+      { name: "out", direction: "output", channels: 1 },
+    ],
   },
   parametricEq: {
     name: "Parametric EQ",

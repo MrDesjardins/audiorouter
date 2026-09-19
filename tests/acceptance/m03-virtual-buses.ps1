@@ -81,17 +81,18 @@ try {
         }
         if (-not $overflowRejected) { throw 'ninth managed bus was not rejected at the declared capacity' }
 
-        $routeFile = Join-Path $fixtureRoot 'virtual-route-desktop.json'
+        $routeFile = Join-Path $fixtureRoot 'virtual-routes-reference.json'
         $routeApplied = Invoke-CliJson @(
             'virtual-routes', 'replace', '--base-revision', '0', '--file', $routeFile,
             '--idempotency-key', 'route-desktop', '--database', $database)
-        if ($routeApplied.revision -ne 1 -or $routeApplied.routes.Count -ne 1) {
-            throw 'explicit cross-session virtual route was not applied'
+        if ($routeApplied.revision -ne 1 -or $routeApplied.routes.Count -ne 3) {
+            throw 'reference cross-session virtual routes were not applied'
         }
         $routeListed = Invoke-CliJson @('virtual-routes', 'list', '--database', $database)
-        if ($routeListed.revision -ne 1 -or $routeListed.routes.Count -ne 1 -or
-            $routeListed.routes[0].busId -ne 'desktop-bus') {
-            throw 'explicit virtual route was not persisted across CLI processes'
+        $listedBusIds = @($routeListed.routes | ForEach-Object { $_.busId })
+        if ($routeListed.revision -ne 1 -or $routeListed.routes.Count -ne 3 -or
+            ($listedBusIds | Where-Object { $_ -notin @('desktop-bus', 'voice-bus', 'monitor-bus') }).Count -ne 0) {
+            throw 'reference virtual routes were not persisted across CLI processes'
         }
         $cycleRejected = $false
         try {

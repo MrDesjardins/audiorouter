@@ -1,5 +1,39 @@
 # M01 contracts and control-plane evidence
 
+## 2026-09-17 - endpoint presentation variant drift regression
+
+The UI now exposes an Existing virtual output shelf entry that intentionally
+maps to the authoritative `physicalOutput` node kind. The contract drift
+checker was corrected to allow duplicate physical endpoint presentations while
+continuing to reject duplicate processor entries. The checker passed with 86
+methods, 19 node kinds, 7 processors, and 20 event categories; contracts
+typecheck and the full M05 UI gate also passed.
+
+## 2026-09-17 - current Windows adapter capability availability
+
+The domain node registry now reports physical input/output, application
+capture, and endpoint loopback as implemented capabilities in the
+VB-Cable-first user-mode track. Runtime binding still requires an exact active
+endpoint or observed process identity, so missing devices remain explicit
+runtime-unavailable conditions rather than capability absence. Managed virtual
+render/capture nodes remain unavailable pending the deferred signed driver.
+The focused registry test and the full control library suite passed (175
+passed, 3 guarded-live ignored), strict control Clippy passed, contract drift
+passed (86 methods, 19 node kinds, 7 processors, 20 event categories), and
+the corrected `tests/acceptance/m01-cli.ps1` passed its public discovery,
+persistence, route-inspection, fake-lifecycle, bundle, and authorization
+checks. Documentation validation passed.
+
+## 2026-09-17 - persistence migration and backup safety refresh
+
+Focused locked storage verification passed three migration cases: durable
+session round-trip, recovery-retention policy, and rejection of a newer schema
+before migration writes. Six backup cases also passed: online backup round
+trip, restore to a new destination, oversized-output cleanup, refusal of
+relative/missing/live targets, and no-overwrite protection for existing
+recovery copies. These tests use disposable SQLite paths and do not touch
+audio endpoints or machine configuration.
+
 ## 2026-09-16 - explicit native endpoint rebind contract
 
 The shared API registry, discovery schemas, TypeScript method maps, and UI
@@ -778,6 +812,20 @@ accessed.
 Graph, startup, and virtual-device plan load/delete paths now enforce the same
 128-byte plan identity bound as their writes, and loaded durable IDs are
 revalidated before being returned. Storage coverage remains green at 51 tests
+
+## 2026-09-17 - current catalog drift refresh
+
+`node tools/contracts/check-drift.mjs` passed on the current tree:
+
+```text
+86 methods, 19 node kinds, 7 processors, and 20 event categories match
+the UI/CLI/Rust catalogs.
+```
+
+This verifies shared catalog parity across the contract package, Rust control
+catalog, CLI/MCP discovery, and UI adapter surface. It is a static contract
+consistency check; it does not qualify native audio, attended UI, or release
+packaging.
 with strict Clippy and formatting; no audio or machine configuration was
 accessed.
 
@@ -982,3 +1030,14 @@ to require `queueCapacity` and `maximumChunksPerPass`, matching the discovered
 Rust schema and runtime parser. Contract drift/typecheck, UI typecheck, 128 UI
 tests, and diff checks passed. This prevents typed clients from constructing a
 request that the authoritative API necessarily rejects.
+
+## 2026-09-18 - current CLI/API parity acceptance
+
+`tests/acceptance/m01-cli.ps1` passed on the current tree. This refreshes the
+offline discovery/help/schema, shared-dispatch, persistence, authorization,
+virtual-route, recording, recovery, startup, and MCP/CLI parity checks without
+opening an audio endpoint or changing driver or machine audio configuration.
+
+The current `tools/contracts/check-drift.mjs` rerun also passed: 86 methods,
+20 node kinds, 7 processors, and 20 event categories match the UI, CLI, and
+Rust catalogs.

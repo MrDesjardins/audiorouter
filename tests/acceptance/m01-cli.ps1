@@ -22,7 +22,9 @@ try {
 
     $nodes = cargo run --quiet -p audiorouter-cli -- --json nodes types | ConvertFrom-Json
     $physicalInput = $nodes | Where-Object { $_.type -eq "physical-input@1" }
-    if ($null -eq $physicalInput -or $physicalInput.availability.status -ne "unavailable") { throw "Physical input availability boundary missing" }
+    if ($null -eq $physicalInput -or $physicalInput.availability.status -ne "available") { throw "Physical input capability availability missing" }
+    $virtualRenderSource = $nodes | Where-Object { $_.type -eq "virtual-render-source@1" }
+    if ($null -eq $virtualRenderSource -or $virtualRenderSource.availability.status -ne "unavailable") { throw "Managed virtual-source availability boundary missing" }
     $nodeDetails = cargo run --quiet -p audiorouter-cli -- --json nodes describe | ConvertFrom-Json
     if ($nodeDetails.Count -ne $nodes.Count) { throw "Node description parity missing" }
 

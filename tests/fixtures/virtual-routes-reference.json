@@ -1,0 +1,17 @@
+[
+  {
+    "busId": "desktop-bus",
+    "producerSessionId": "session-fixture",
+    "consumerSessionId": "session-consumer"
+  },
+  {
+    "busId": "voice-bus",
+    "producerSessionId": "session-fixture",
+    "consumerSessionId": "session-consumer"
+  },
+  {
+    "busId": "monitor-bus",
+    "producerSessionId": "session-fixture",
+    "consumerSessionId": "session-consumer"
+  }
+]

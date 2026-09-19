@@ -115,7 +115,7 @@ describe("canvas library drop positions", () => {
     expect(onAddLibraryNode).toHaveBeenCalledWith("gate", { x: 0, y: 150 });
   });
 
-  it("offers physical endpoint nodes while keeping managed virtual nodes unavailable", () => {
+  it("offers physical and virtual endpoint nodes in the drag shelf", () => {
     const { getByLabelText } = render(createElement(SessionFlowCanvas, {
       session: demoSession,
       selectedNodeId: "mic",
@@ -128,7 +128,96 @@ describe("canvas library drop positions", () => {
     expect(shelf.getByRole("button", { name: "Gain" })).toBeTruthy();
     expect(shelf.getByRole("button", { name: "Physical input" })).toBeTruthy();
     expect(shelf.getByRole("button", { name: "Physical output" })).toBeTruthy();
-    expect(shelf.queryByRole("button", { name: "Virtual capture sink" })).toBeNull();
+    expect(shelf.getByRole("button", { name: "Existing virtual output" })).toBeTruthy();
+    expect(shelf.getByRole("button", { name: "Virtual capture sink" })).toBeTruthy();
+    expect(shelf.getByRole("button", { name: "Virtual render source" })).toBeTruthy();
+    expect(shelf.getByRole("button", { name: "Recorder" })).toBeTruthy();
+  });
+
+  it("keeps deferred managed virtual entries visible but unavailable", () => {
+    const onConnect = vi.fn();
+    const { getByLabelText } = render(createElement(SessionFlowCanvas, {
+      session: demoSession,
+      selectedNodeId: "mic",
+      onSelect: vi.fn(),
+      onConnect,
+      onAddLibraryNode: vi.fn(() => "processor-1"),
+    }));
+    const shelf = within(getByLabelText("Drag processors to canvas"));
+    expect(shelf.getByRole("button", { name: "Virtual capture sink" })).toHaveProperty("disabled", true);
+    expect(shelf.getByRole("button", { name: "Virtual render source" })).toHaveProperty("disabled", true);
+    expect(onConnect).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["Physical input", "physicalInput"],
+    ["Physical output", "physicalOutput"],
+    ["Mixer", "mixer"],
+    ["Compressor", "compressor"],
+    ["Recorder", "recorder"],
+  ])("places %s from the shelf through the draft adapter", (label, kind) => {
+    const onAddLibraryNode = vi.fn(() => `${kind}-1`);
+    const { getByLabelText } = render(createElement(SessionFlowCanvas, {
+      session: demoSession,
+      selectedNodeId: "mic",
+      onSelect: vi.fn(),
+      onConnect: vi.fn(),
+      onAddLibraryNode,
+    }));
+    const canvas = getByLabelText("Signal-flow graph");
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+      left: 100, top: 50, right: 900, bottom: 650, width: 800, height: 600,
+      x: 100, y: 50, toJSON: () => ({}),
+    });
+    const shelf = within(getByLabelText("Drag processors to canvas"));
+    const button = shelf.getByRole("button", { name: label });
+    const dataTransfer = {
+      types: ["application/x-audiorouter-library-kind"],
+      setData: vi.fn(),
+      getData: vi.fn(() => kind),
+    };
+    fireEvent.dragStart(button, { dataTransfer });
+    const drop = new Event("drop", { bubbles: true });
+    Object.defineProperties(drop, {
+      clientX: { value: 240 },
+      clientY: { value: 180 },
+      dataTransfer: { value: dataTransfer },
+    });
+    fireEvent(canvas, drop);
+
+    expect(onAddLibraryNode).toHaveBeenCalledWith(kind, { x: 120, y: 110 });
+    expect(JSON.parse(window.localStorage.getItem("audiorouter.ui.layout.demo-session") ?? "null")).toMatchObject({
+      [`${kind}-1`]: { x: 120, y: 110 },
+    });
+  });
+
+  it("retains the drop position when the app creates a virtual bus node", () => {
+    window.localStorage.clear();
+    const onConnect = vi.fn(() => "virtual-capture-sink-1");
+    const { getByLabelText } = render(createElement(SessionFlowCanvas, {
+      session: demoSession,
+      selectedNodeId: "mic",
+      onSelect: vi.fn(),
+      onConnect,
+      onAddLibraryNode: vi.fn(),
+    }));
+    const canvas = getByLabelText("Signal-flow graph");
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+      left: 100, top: 50, right: 900, bottom: 650, width: 800, height: 600,
+      x: 100, y: 50, toJSON: () => ({}),
+    });
+    const drop = new Event("drop", { bubbles: true });
+    Object.defineProperties(drop, {
+      clientX: { value: 240 },
+      clientY: { value: 180 },
+      dataTransfer: { value: { types: ["application/x-audiorouter-library-kind"], getData: () => "virtualCaptureSink" } },
+    });
+    fireEvent(canvas, drop);
+
+    expect(onConnect).toHaveBeenCalledWith(expect.objectContaining({ sourceHandle: "virtualCaptureSink" }), { x: 120, y: 110 });
+    expect(JSON.parse(window.localStorage.getItem("audiorouter.ui.layout.demo-session") ?? "null")).toEqual({
+      "virtual-capture-sink-1": { x: 120, y: 110 },
+    });
   });
 
   it("preserves both layout entries when processors are added rapidly", () => {

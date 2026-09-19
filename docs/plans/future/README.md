@@ -1,10 +1,16 @@
 # Future plans and explicit v1 exclusions
 
+The AudioRouter-owned kernel-driver, PortCls, production-signing, and
+clean-machine track is explicitly deferred to
+[M03-driver-signing.md](M03-driver-signing.md). It is not an active
+implementation task and must not be pulled into the VB-Cable-first completion
+track without a new explicit scope decision.
+
 These ideas are recorded for later prioritization. They are not authorized implementation tasks and do not delay v1 unless the user explicitly changes scope. Core user requests—routing, built-in voice effects including pitch, VST3, recording, virtual devices, visual editing, and API/CLI/MCP parity—remain in the v1 milestones. The VST2 row is now promoted to an explicitly authorized, gated M06 extension by the 2026-09-08 decision recorded in the active plan and delivery register.
 
 | Candidate | User value | Reconsider only when |
 | --- | --- | --- |
-| VST2/ReaPlugs legacy hosting or migration | Reuse exact existing effects | The gated M06 extension is implemented for user-installed x64 audio effects; rights, editor compatibility, independent coverage, maintenance, and release qualification remain required |
+| VST2/ReaPlugs legacy hosting or migration | Reuse exact existing effects | The explicitly authorized gated M06 extension is already tracked in the active milestone; further promotion beyond the current x64 worker evidence still requires rights, editor compatibility, independent coverage, maintenance, and release qualification |
 | Native ARM64 Windows | Support ARM laptops | Driver, plugin architecture, shell, and hardware test matrix funded; still Windows-only |
 | 8–64 channel virtual devices | DAW/multitrack studio routing | Stereo workflows stable and receiving-app/channel/driver constraints tested |
 | ASIO and exclusive-mode options | Lower latency on selected interfaces | Shared-mode targets met and ownership conflicts/driver licensing addressed |

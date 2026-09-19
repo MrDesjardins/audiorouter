@@ -40,7 +40,8 @@ export function DraftConnectionList({ session, onRemove, onToggle, onInsertProce
     else globalThis.dispatchEvent(new CustomEvent("audiorouter:insert-processor", { detail: { edgeId, kind } }));
   };
   return <section className="draft-connections" aria-labelledby="draft-connections-heading">
-    <h3 id="draft-connections-heading">Draft connections</h3>
+    <h3 id="draft-connections-heading">Connections in this draft</h3>
+    <p className="muted draft-connections-help">These are the audio links you are editing locally. They are not active until you click <strong>Plan changes</strong> and commit the validated plan. You can keep VoiceMeeter Banana open while exploring; close it only when it owns the exact endpoint AudioRouter needs to claim.</p>
     {session.edges.length === 0 ? <p className="muted">No draft connections.</p> : <ul aria-label="Draft connections">{session.edges.map((edge) => <li key={edge.id}>
       <span>{names.get(edge.sourceNode) ?? edge.sourceNode}:{edge.sourcePort} → {names.get(edge.destinationNode) ?? edge.destinationNode}:{edge.destinationPort} <small>{edge.enabled ? "enabled" : "disabled"}</small></span>
       <button type="button" className="secondary" onClick={() => onToggle(edge.id, !edge.enabled)}>{edge.enabled ? "Disable" : "Enable"}</button>

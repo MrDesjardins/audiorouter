@@ -1,6 +1,11 @@
 # Documentation map
 
-Status: implementation baseline with partial portable foundations, updated 2026-09-09. Requirements describe intended behavior unless the active plan/evidence explicitly records implementation and verification. Numeric budgets remain acceptance targets until measured. Native audio, driver, signing, packaging, and hardware gates are not implied by portable tests.
+Status: VB-Cable-first implementation baseline with guarded Windows user-mode
+evidence, updated 2026-09-17. Requirements describe intended behavior unless
+the active plan/evidence explicitly records implementation and verification.
+Numeric budgets remain acceptance targets until measured. Managed driver,
+signing, packaging, attended UI, physical-latency, and hardware gates are not
+implied by portable tests.
 
 ## How to read the specification
 

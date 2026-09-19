@@ -13,5 +13,9 @@ describe("native pump selection", () => {
     expect(selectNativePump("endpoint", false, true)).toBeNull();
     expect(selectNativePump("duplex", false, true)).toBe("duplex");
     expect(selectNativePump("duplex", true, false)).toBeNull();
+    expect(selectNativePump("render-source", false, false, true)).toBe("renderSource");
+    expect(selectNativePump("render-source", false, false, false)).toBeNull();
+    expect(selectNativePump("multi-input", false, false, false, true)).toBe("multiInput");
+    expect(selectNativePump("multi-input", false, false, false, false)).toBeNull();
   });
 });

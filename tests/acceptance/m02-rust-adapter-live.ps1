@@ -8,6 +8,11 @@ $ErrorActionPreference = 'Stop'
 if (-not $AllowLiveAudio) {
     throw 'Refusing live audio acceptance without explicit -AllowLiveAudio'
 }
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = [Security.Principal.WindowsPrincipal]::new($identity)
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    throw 'Refusing live audio acceptance without an elevated administrator process; rerun from an elevated shell'
+}
 if ($DurationMilliseconds -lt 100 -or $DurationMilliseconds -gt 5000) {
     throw 'DurationMilliseconds must be between 100 and 5000'
 }

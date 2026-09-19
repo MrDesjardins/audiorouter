@@ -1,5 +1,160 @@
 # M07 automation and recovery evidence
 
+## 2026-09-17 - full workspace regression refresh
+
+`cargo test --workspace --locked` passed all current package suites and
+doc-tests: CLI 36, MCP stdio 3, control 177 with 3 guarded live tests
+ignored, domain 65, DSP 34, engine 116, plugin-host 70, worker-process 13,
+protocol 8, recording 40, storage 92, transport 19, and Windows-audio 88.
+`cargo clippy --workspace --locked --all-targets --all-features -- -D
+warnings` also passed. This is current portable regression evidence; guarded
+live endpoint, attended UI, physical-latency, clean-release, and deferred
+driver/signing gates remain separate.
+
+## 2026-09-17 - elevated shell RPC requalification
+
+The elevated `m07-shell-rpc.ps1` acceptance passed the frontend-owned
+WebView2 startup, Tauri command, authenticated backend `system.describe`, and
+cleanup path. No audio endpoint or persistent machine configuration was
+changed. This verifies the shell transport boundary; it does not claim
+attended UI accessibility or automatic native audio restart.
+
+## 2026-09-17 - current headless parity refresh
+
+`m07-headless.ps1` passed CLI (36), MCP stdio (3), control (177 passed with
+three guarded live tests ignored), plugin-host (70), worker-process (13), M01
+CLI acceptance, and strict Rust checks. The run requalifies the shared
+versioned CLI/MCP/control boundary used by routing, recovery, recording,
+plugins, and the editor. No audio device, driver, or machine configuration
+changed.
+
+## 2026-09-17 - control-plane recovery suite refresh
+
+`cargo test --locked -p audiorouter-control` passed 177 tests, with three
+explicitly guarded live tests ignored. The run includes the recovery endpoint
+resnapshot publication regression plus lifecycle, authorization, persistence,
+privacy durability, recorder, virtual-route, and adapter-boundary coverage.
+This remains portable/control-plane evidence; guarded native and attended OS
+transition gates remain separate.
+
+## 2026-09-17 - recovery endpoint resnapshot regression refresh
+
+The focused control test
+`recovery_endpoint_resnapshot_publishes_a_bounded_device_change_event`
+passed. Resume now force-refreshes the endpoint monitor and retains only the
+relevant exact binding changes in the bounded `devices.changed` notification.
+This verifies the portable recovery publication contract; it does not claim
+actual OS power/session delivery, endpoint re-enumeration, or automatic native
+reopen.
+
+## 2026-09-17 - privacy latch propagation into native workers
+
+The durable `safety.setPrivacyMute` control state now applies its atomic
+process-local latch when attaching endpoint, process-loopback, multi-input,
+render-source, and duplex workers. The mixer fan-out graph clears its shared
+post-DSP block before any physical, virtual, recorder, or tool branch. Focused
+engine, control, and Windows-audio tests passed, including the fan-out silence
+regression and 88 Windows-audio tests. Live p95 mute timing and attended
+microphone-path measurement remain open; this is not evidence that AudioRouter
+disables other applications' direct microphone access.
+
+## 2026-09-17 - headless adapter requalification
+
+`m07-headless.ps1` passed CLI (36), MCP stdio (3), control (176 passed with
+three guarded live tests ignored), plugin-host (70), worker-process (13), M01
+CLI checks, and strict Rust checks. This requalifies the versioned
+CLI/MCP/control boundary used by native routing and the editor. No audio
+device, driver, or machine configuration changed.
+
+## 2026-09-16 - headless acceptance requalification
+
+`m07-headless.ps1` passed CLI (36), MCP stdio (3), control (178 total with 3
+guarded live tests ignored), plugin-host (70), worker-process (13), and the
+relevant strict Clippy checks. No audio device, driver, or machine
+configuration changed. This confirms headless adapter interoperability but
+does not qualify loaded-driver or external-application behavior.
+
+## 2026-09-16 - managed-device compensation rollback
+
+When native managed-device removal fails after the durable external-operation
+snapshot/journal commit, control now invokes a storage transaction that
+restores the previous virtual-bus snapshot and deletes the matching journal
+row. This prevents a retry from replaying a false completed result. The new
+storage regression passed; control (176 passed, 3 guarded live tests ignored)
+and storage (92 passed) suites passed. No driver or endpoint was opened.
+
+## 2026-09-16 - render-source MCP input bound parity
+
+Added the missing `MAX_ENTITY_ID_BYTES` bound to the CLI/MCP
+`pump_native_render_source.sessionId` schema, matching the authoritative
+control contract. A catalog regression assertion, 36 CLI tests, 3 MCP stdio
+tests, formatting, and documentation validation passed. No driver or
+endpoint was opened.
+
+## 2026-09-16 - native-routing schema bound parity correction
+
+Corrected the native-routing MCP schemas to match the authoritative control
+schemas exactly: session IDs, bus IDs, and branch node IDs use the domain
+entity bound (`MAX_ENTITY_ID_BYTES`, 128 bytes), while endpoint IDs, device
+paths, and mapping paths use the shared control-string bound (4096 bytes).
+The CLI assertions now cover the corrected split; 36 CLI tests, 3 MCP stdio
+tests, and formatting passed. No driver or endpoint was opened.
+
+## 2026-09-16 - strict lint requalification
+
+`cargo clippy -p audiorouter-control -p audiorouter-cli --locked --all-targets
+-- -D warnings` passed after the shared native-routing schema-bound updates.
+No driver or endpoint was opened.
+
+## 2026-09-16 - native routing MCP string bounds
+
+The MCP schemas for native output preparation and multi-input
+prepare/pump/branch binding now advertise the shared maximum for session IDs,
+endpoint IDs, and branch IDs. Schema assertions, 36 CLI tests, 3 MCP stdio
+tests, and formatting passed. No driver or endpoint was opened.
+
+## 2026-09-16 - headless acceptance after bridge schema alignment
+
+`tests/acceptance/m07-headless.ps1` passed the M01 CLI, MCP stdio, control,
+plugin-host, and worker-process stages after the shared bridge-bound update.
+No audio device, driver, or machine configuration was changed. This is
+headless adapter evidence and does not qualify loaded-driver or external-app
+behavior.
+
+## 2026-09-16 - shared MCP bridge string bounds
+
+CLI/MCP bridge schemas now use the exported control string limit for bridge bus
+IDs, device paths, and mapping paths, while `leaseMs` uses the shared protocol
+maximum. CLI/control verification passed (36 CLI tests, 3 MCP stdio tests, and
+178 control tests with 3 guarded live tests ignored); formatting passed. No
+driver or endpoint was opened.
+
+## 2026-09-16 - direct schema parity retry
+
+The direct `cargo run --quiet -p audiorouter-cli -- --json schema` command
+succeeded and reported protocol major 1 after the MCP bridge lease-bound fix.
+The `contracts` drift wrapper still fails because its child Cargo process is
+denied access to `target/debug/.cargo-build-lock`; TypeScript typecheck and
+CLI/MCP tests pass. This is a tooling-environment limitation, not a reported
+schema mismatch.
+
+## 2026-09-16 - MCP native bridge lease bound parity
+
+The MCP `prepare_native_bridge` schema now advertises the same shared
+`MAX_AUDIO_BRIDGE_LEASE_MS` upper bound enforced by the control dispatcher. The
+CLI/MCP suite passed 36 unit tests and 3 stdio integration tests, plus
+formatting. No driver or endpoint was opened.
+
+## 2026-09-16 - headless/API acceptance requalification
+
+`tests/acceptance/m07-headless.ps1` passed CLI 36 tests, MCP stdio 3 tests,
+control 173 tests with three guarded live tests intentionally ignored,
+plugin-host 70 tests, worker-process 13 tests, and associated typechecks. The
+run confirms shared authorized CLI/MCP dispatch, bounded plugin-worker
+transport, persistence/recovery, and automation parity. No audio device,
+driver, or machine configuration changed; native driver and external-app
+qualification remain separate gates.
+
 ## 2026-09-16 - all-features qualification after delay automation changes
 
 The full locked workspace was rerun after the M04 delay crossfade and rapid
@@ -1610,3 +1765,113 @@ control-plane instances and requires each persisted backend epoch to increase
 by exactly one. It passed in 0.42 seconds; the temporary database was removed.
 This is portable reconnect/resync identity evidence only and does not claim
 native process, endpoint, or audio restart.
+
+## 2026-09-17 - current headless requalification
+
+`tests/acceptance/m07-headless.ps1` passed on the current tree: 36 CLI tests,
+3 MCP stdio tests, 176 control tests with 3 explicitly guarded live tests
+ignored, 70 plugin-host tests, 13 worker-process tests, and the associated
+doc-tests. This refresh verifies shared API, CLI/MCP parity, persistence,
+authorization, recovery, and worker-boundary regressions. It does not claim
+attended UI, physical latency, managed-driver, signing, or clean-machine
+qualification.
+
+The current shell boundary also includes the reversible per-user HKCU startup
+helper. Its isolated enable/disable round trip was requalified on 2026-09-14;
+the helper accepts only its own exact executable registration and cleans up the
+temporary value. This qualifies registration ownership and cleanup, not
+attended sign-in/tray usability or automatic native audio restart.
+
+## 2026-09-17 - non-elevated startup-helper reattempt (historical)
+
+The guarded Windows registry test was first rerun from a non-elevated shell
+with
+`AUDIOROUTER_ALLOW_STARTUP_REGISTRY_TEST=1`:
+
+```text
+cargo test --manifest-path src-tauri/Cargo.toml startup::windows_registry::tests::opt_in_registry_round_trip_restores_an_unregistered_value --locked -- --exact --nocapture
+result: failed before the write with WIN32_ERROR(5) (access denied)
+```
+
+The read-only follow-up `reg.exe query
+HKCU\Software\Microsoft\Windows\CurrentVersion\Run /v AudioRouter` reported
+that the value was absent. No startup value was created or changed by this
+attempt. The 2026-09-14 helper result remains historical evidence from its
+original environment; current requalification needs a Windows policy context
+that permits this narrowly scoped per-user test. This result is superseded by
+the elevated qualification below.
+
+## 2026-09-17 - elevated startup-helper qualification
+
+The same opt-in registry round trip was then run from the authorized elevated
+context and passed:
+
+```text
+cargo test --manifest-path src-tauri/Cargo.toml startup::windows_registry::tests::opt_in_registry_round_trip_restores_an_unregistered_value --locked -- --exact --nocapture
+1 passed; 0 failed
+```
+
+The test temporarily owned only the exact `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\AudioRouter`
+value and restored the previously absent state. A read-only follow-up
+`reg.exe query ... /v AudioRouter` reported that the value/key was absent.
+This qualifies startup registration ownership and cleanup; attended sign-in,
+tray usability, and automatic native audio restart remain open.
+
+## 2026-09-17 - current shell-RPC requalification
+
+The elevated `tests/acceptance/m07-shell-rpc.ps1` acceptance passed on the
+current tree from WebView initialization through the Tauri command boundary to
+an authenticated backend `system.describe` response. No audio endpoint was
+opened and no startup, driver, signing, or persistent machine configuration
+was changed. This refreshes the shell transport boundary after the bounded OS
+transition forwarder change; attended UI/accessibility and real OS notification
+delivery remain separate gates.
+
+## 2026-09-17 - recovery contract and headless parity refresh
+
+After the resume endpoint-change retention fix, the shared contract drift check
+passed with 86 methods, 19 node kinds, 7 processors, and 20 event categories.
+`tests/acceptance/m07-headless.ps1` passed with CLI 36, MCP stdio 3, control
+177 plus 3 guarded-live tests ignored, plugin-host 70, worker-process 13, and
+all doc-tests. This confirms adapter/catalog parity and the recovery regression
+within the portable/headless boundary; it does not qualify attended UI or real
+OS-transition delivery.
+## 2026-09-18 - transport boundary and tray clarification
+
+The desktop shell continues to forward JSON-RPC through the authenticated
+same-user Windows named pipe. The tray now exposes the actual local transport
+and explicitly labels browser access unavailable; no IP/port or TCP listener is
+claimed. Firefox, browser-hosted assistants, and future MCP clients require a
+separately qualified loopback HTTP/WebSocket adapter with origin, enrollment,
+grant, rate-limit, reconnect, and shutdown controls.
+
+## 2026-09-18 - current M07 headless acceptance refresh
+
+`tests/acceptance/m07-headless.ps1` passed on the current tree. The run passed
+36 CLI tests, 3 MCP stdio tests, 177 control tests with 4 explicitly guarded
+live tests ignored, 70 plugin-host tests, 13 worker-process tests, the
+associated doc-tests, the M01 CLI acceptance, and `git diff --check`. This is
+headless/control-plane evidence only; it does not qualify attended UI, actual
+OS transition delivery, physical latency, managed-driver, signing, or
+clean-checkout release gates.
+
+## 2026-09-18 - elevated shell-RPC acceptance refresh
+
+The elevated `tests/acceptance/m07-shell-rpc.ps1` acceptance passed on the
+current tree. It verified WebView initialization through the Tauri command
+boundary to an authenticated backend `system.describe` response. The probe
+used disposable backend/process state and changed no audio endpoint or
+persistent machine configuration. This refresh does not qualify attended
+accessibility, real OS-transition delivery, native endpoint reopening, or
+release gates.
+
+The elevated `tests/acceptance/m07-shell-rpc.ps1` acceptance was rerun on
+2026-09-18 after the expected non-elevated administrator-only refusal. It
+passed WebView initialization through the Tauri command boundary to an
+authenticated backend `system.describe` response using disposable state. No
+audio endpoint or persistent machine configuration changed.
+
+The wrapper was rerun later on 2026-09-18 and reproduced the same 36 CLI, 3
+MCP stdio, 177 control plus 4 ignored guarded-live, 70 plugin-host, and 13
+worker-process results, with all associated doc-tests passing. It again made
+no audio-device, driver, or machine-configuration changes.

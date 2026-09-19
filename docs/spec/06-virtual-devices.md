@@ -2,6 +2,18 @@
 
 Milestone ownership: M00 driver decision/prototype; M03 endpoint functionality; M07 ownership/recovery; M08 production signing, installation, and uninstall.
 
+## Current scope decision (2026-09-17)
+
+AudioRouter-owned kernel virtual-device development is on hold because the
+project does not currently have the production signing and trusted installation
+authority required for a safe Windows release. The current product work uses
+an already-installed third-party VB-Cable pair, Voicemeeter, and physical
+WASAPI endpoints as external I/O boundaries. That path supports guarded
+user-mode routing, tool integration, and editor development, but it does not
+claim VDEV-01, VDEV-03, VDEV-09, AudioRouter-owned endpoint persistence, or a
+production virtual driver. The normative managed-device requirements remain
+unchanged and are deferred, not waived.
+
 ## Endpoint terminology
 
 A virtual bus has a user-facing name and may expose two Windows endpoints:
@@ -22,6 +34,12 @@ complementary `NativeBridgeInputWorker` now provides the render-source
 direction with stale-data and fail-closed behavior, but its loaded-driver,
 PortCls-owned callback, and end-to-end virtual-endpoint qualification remain
 separate integration gates.
+
+Control can transfer a prepared render-source lease into this stopped worker
+independently of the paired duplex path. The worker binds one exact physical
+render endpoint to the bus and graph generation, can run alongside the primary
+capture/graph worker, and is stopped before session retirement; its heartbeat
+and explicit detach remain control-plane operations.
 
 The complementary `NativeBridgeInputWorker` consumes only a newer
 render-source sequence and feeds the same bounded scheduler before submitting
@@ -49,7 +67,7 @@ Persistent endpoint identity and continuous processed audio are separate propert
 
 ## Interim and final delivery
 
-An already installed third-party virtual cable may support M00 experiments and M02 demos. Its channels, naming, license, and separate installation must be stated. It does not satisfy VDEV-01, VDEV-03, or VDEV-09. M03 must demonstrate AudioRouter-managed bus lifecycle with the selected driver; M08 must demonstrate the distributable signed package. If rights, signing, or driver feasibility cannot be secured, record the blocked gate and propose a concrete revised product scope to the user.
+An already installed third-party virtual cable is the supported external I/O boundary for the current VB-Cable-first delivery profile. Its channels, naming, license, and separate installation must be stated; explicit endpoint binding, graph routing, permissions, persistence of AudioRouter configuration, and fail-closed behavior still apply. Existing-device integration does not satisfy VDEV-01, VDEV-03, or VDEV-09 and must not be described as an AudioRouter managed bus. The M03/M08 managed-driver lifecycle remains a deferred profile with its own signing and installation gates.
 
 ## Test cases
 

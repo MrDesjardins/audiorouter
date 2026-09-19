@@ -7,9 +7,13 @@ export function processorParameterError(
   nodeKind: string,
   name: string,
   value: boolean | number | string,
+  nodeTypes: DiscoveryDocument["nodeTypes"] | null = null,
 ): string | null {
+  const wireKind = nodeKind.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
   const parameter = processors?.find((processor) => processor.id === nodeKind)?.parameters
-    .find((candidate) => candidate.name === name);
+    .find((candidate) => candidate.name === name)
+    ?? nodeTypes?.find((node) => node.type === `${wireKind}@1` || node.type === `${nodeKind}@1`)?.parameters
+      .find((candidate) => candidate.name === name);
   if (!parameter) return null;
   if (parameter.type === "number") {
     if (typeof value !== "number" || !Number.isFinite(value)) return `${name} must be finite`;

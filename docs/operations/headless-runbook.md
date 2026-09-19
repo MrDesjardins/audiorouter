@@ -1,6 +1,9 @@
 # AudioRouter headless runbook
 
-This runbook describes the currently verified portable control workflow. It does not claim that native audio routing, virtual devices, driver installation, or production signing are available.
+This runbook describes the currently verified portable control workflow. It
+does not by itself qualify live audio, managed virtual-device provisioning,
+driver installation, or production signing. Existing-device native routing is
+qualified separately through the guarded Windows acceptance wrappers.
 
 ## Inspect without side effects
 
@@ -239,6 +242,12 @@ Managed-device administration also has focused tools named
 requires an explicit bounded `busId` and `instanceId`. Both remain fail-closed
 until a qualified managed driver is installed, and neither tool changes the
 Windows default endpoint or other persistent audio settings.
+
+Multi-input routing is available through the focused MCP tools
+`prepare_native_multi_inputs`, `bind_native_multi_input_branches`, and
+`pump_native_multi_inputs`. They use exact capture IDs, generation-bound branch
+IDs, bounded packet budgets, and the same authorization as the shared API; they
+never select a fallback microphone or stream raw audio through MCP.
 
 Device and application discovery failures retain their structured JSON-RPC error
 data through the CLI and MCP boundaries. Inspect `data.code`, `data.hresult`,

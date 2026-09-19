@@ -235,6 +235,12 @@ describe("VB-Cable endpoint selection", () => {
     expect(formatNativePumpSummary(stats, false)).toBeNull();
   });
 
+  it("formats standalone render-source telemetry only for a running native route", () => {
+    const stats = { sessionId: demoSession.id, generation: 4, packets: 3, processedQuanta: 3, renderedFrames: 384, droppedRenderFrames: 1 };
+    expect(formatNativePumpSummary(stats, true)).toBe("native render-source 384 out / 3 quanta / 1 dropped");
+    expect(formatNativePumpSummary(stats, false)).toBeNull();
+  });
+
   it("formats recording duration from bounded frame metadata", () => {
     expect(formatRecordingDuration(480, 48000)).toBe("00:00:00.010");
     expect(formatRecordingDuration(180000, 48000)).toBe("00:00:03.750");
@@ -609,6 +615,33 @@ describe("keyboard connection dialog", () => {
     expect(JSON.parse(window.localStorage.getItem("audiorouter.ui.layout.demo-session") ?? "null")).toMatchObject({ "gain-1": { x: 0, y: 0 } });
   });
 
+  it.each([
+    ["Physical input", "physicalInput", "Physical input 1"],
+    ["Physical output", "physicalOutput", "Physical output 1"],
+    ["Existing virtual output", "physicalOutput", "Physical output 1"],
+    ["Recorder", "recorder", "Recorder 1"],
+  ])("routes the actual App draft adapter for %s shelf drops", async (label, kind, insertedName) => {
+    render(<App backend={connectedPreviewBackend()} />);
+    const dropSource = await screen.findByRole("button", { name: label });
+    const canvas = screen.getByLabelText("Signal-flow graph");
+    const values = new Map<string, string>();
+    const dataTransfer = {
+      types: ["application/x-audiorouter-library-kind"],
+      effectAllowed: "copy",
+      setData: (type: string, value: string) => values.set(type, value),
+      getData: (type: string) => values.get(type) ?? "",
+    };
+    fireEvent.dragStart(dropSource, { dataTransfer });
+    fireEvent.drop(canvas, { dataTransfer, clientX: 240, clientY: 180 });
+    await waitFor(() => expect(screen.getByText(`${insertedName} added to the draft. Review and plan the changes before committing.`)).toBeTruthy());
+  });
+
+  it("keeps managed virtual-bus drops unavailable in the VB-Cable-first profile", async () => {
+    render(<App backend={connectedPreviewBackend()} />);
+    expect(await screen.findByRole("button", { name: "Virtual capture sink" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Virtual render source" })).toHaveProperty("disabled", true);
+  });
+
   it("rejects canvas library drops while disconnected", async () => {
     render(<App backend={createDisconnectedBackend()} />);
     const dropSource = await screen.findByRole("button", { name: /^Gain$/ });
@@ -662,6 +695,40 @@ describe("keyboard connection dialog", () => {
     expect(screen.getByText(/Endpoint defaults, volume, and mute are never changed/)).toBeTruthy();
     fireEvent.click(within(endpointPanel).getByRole("button", { name: "Start session" }));
     await waitFor(() => expect(startSession).toHaveBeenCalledWith("demo-session", expect.any(String)));
+  });
+
+  it("sends the deliberate multi-input source order to the backend", async () => {
+    const makeCapture = (id: string, name: string) => ({
+      id,
+      name,
+      direction: "capture" as const,
+      state: "active" as const,
+      defaultRoles: [],
+      format: { sampleRateHz: 48000, channels: 2, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 8 },
+      periods: { default100ns: 100000, minimum100ns: 30000 },
+    });
+    const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: number, captureEndpointIds: string[]) => ({
+      sessionId,
+      generation,
+      state: "configured-stopped" as const,
+      captureEndpointIds,
+      sourceNodeIds: captureEndpointIds.map((_, index) => `source-${index}`),
+      branchNodeIds: ["output"],
+    }));
+    const backend = {
+      ...connectedPreviewBackend(),
+      listDevices: async () => [makeCapture("capture-first", "First"), makeCapture("capture-second", "Second"), makeCapture("capture-third", "Third")],
+      prepareNativeMultiInputs,
+    };
+    render(<App backend={backend} />);
+    const captureSelect = await screen.findByRole("listbox", { name: "Native multi-input capture endpoints" });
+    const options = within(captureSelect).getAllByRole("option") as HTMLOptionElement[];
+    options[0].selected = true;
+    options[1].selected = true;
+    fireEvent.change(captureSelect);
+    fireEvent.click(await screen.findByRole("button", { name: "Move capture-second up" }));
+    fireEvent.click(screen.getByRole("button", { name: "Prepare stopped multi-input" }));
+    await waitFor(() => expect(prepareNativeMultiInputs).toHaveBeenCalledWith("demo-session", 1, ["capture-second", "capture-first"]));
   });
 
   it("restores endpoint choices only when the exact IDs are still active", async () => {
@@ -936,6 +1003,24 @@ describe("keyboard connection dialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create recorder" }));
     await waitFor(() => expect(createRecorder).toHaveBeenCalledWith(expect.objectContaining({ recorderId: "voice-take", format: "wavPcm24", channels: 2, sampleRate: 48000, sequence: 1, dither: false })));
     expect(await screen.findByText(/Recorder voice-take created unarmed/)).toBeTruthy();
+  });
+
+  it("binds recorder creation to the selected dropped graph node", async () => {
+    const createRecorder = vi.fn(async (params: import("@audiorouter/contracts").MethodParams["recorders.create"]) => ({
+      sessionId: demoSession.id,
+      nodeId: params.nodeId ?? null,
+      recorderId: params.recorderId,
+      format: "wavPcm24" as const,
+      path: "C:\\Audio\\graph-take.wav",
+      state: "idle" as const,
+      armed: false as const,
+    }));
+    const backend = { ...connectedPreviewBackend(), createRecorder };
+    render(<App backend={backend} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Recorder" }));
+    expect((screen.getByRole("combobox", { name: "Graph recorder node" }) as HTMLSelectElement).value).toBe("recorder-1");
+    fireEvent.click(screen.getByRole("button", { name: "Create recorder" }));
+    await waitFor(() => expect(createRecorder).toHaveBeenCalledWith(expect.objectContaining({ nodeId: "recorder-1" })));
   });
 
   it("disables dither for Float32 recorder output", async () => {

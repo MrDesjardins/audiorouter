@@ -1,10 +1,11 @@
 # AudioRouter development quickstart
 
-This repository contains a tested control-plane and UI foundation, not a
-releasable audio router yet. Native end-to-end routing, managed virtual
-devices, the installer, and production signing remain unavailable. The steps
-below are safe, offline development checks: they do not change Windows audio
-defaults, volume, mute, privacy settings, drivers, or endpoint state.
+This repository contains a tested control plane, UI, and VB-Cable-first
+existing-device routing path, but it is not a releasable Windows installer
+yet. AudioRouter-owned managed virtual devices, the installer, and production
+signing remain unavailable. The steps below are safe development checks: they
+do not change Windows audio defaults, volume, mute, privacy settings, drivers,
+or endpoint state.
 
 ## 1. Prepare the toolchain
 
@@ -78,8 +79,30 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run-vb-cable-desktop
 
 Each ID must match exactly one active endpoint of its requested direction.
 
+### Route into Voicemeeter or another existing tool
+
+On a machine with Voicemeeter or VB-Cable already installed, use its existing
+Windows endpoints as the tool boundary. Select an existing virtual render
+endpoint (for example `CABLE Input` or `Voicemeeter Input`) as an AudioRouter
+output, and select the matching virtual capture endpoint (for example `CABLE
+Output` or `Voicemeeter Out B1`) in the receiving tool. Physical microphone
+and desktop captures can then be connected to that output through the same
+validated graph. In the editor, drag the capture into the **Existing virtual
+output** shelf destination (or a physical output), select the exact render
+endpoint in Endpoint binding, then use **Plan changes**,
+commit the draft, prepare the exact endpoints, and start the session.
+
+This workflow uses the installed third-party virtual driver and does not
+provision an AudioRouter-owned kernel endpoint. It is the supported
+current-machine VB-Cable-first path. AudioRouter-owned virtual-bus
+provisioning remains deferred to the separately signed managed-driver profile;
+that deferral does not prevent routing through explicitly selected existing
+VB-Cable, Voicemeeter, physical WASAPI, or other installed virtual endpoints.
+
 For an explicit application-capture qualification, use the guarded wrapper
-with the process identity returned by `apps list --json`:
+with the process identity returned by `apps list --json`. Pass the executable
+basename to `-Executable` and the verified full path separately to
+`-ApplicationPath`; the backend compares both fields independently:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m02-control-application-live.ps1 `
@@ -96,6 +119,29 @@ endpoint defaults, volume, mute, or the selected process.
 The same `run-vb-cable-desktop.ps1` file is included beside the executables in
 the prepared unsigned release directory, so an extracted development artifact
 can be started without a repository checkout.
+
+### Verify a signal without using a microphone
+
+For a bounded, explicitly authorized raw signal-path check, run an elevated
+PowerShell session from the repository root:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m00-native-loopback.ps1 -AllowLiveAudio
+```
+
+The harness generates a tone on `CABLE Input (VB-Audio Virtual Cable)`,
+captures `CABLE Output (VB-Audio Virtual Cable)`, and requires nonzero captured
+payload. It snapshots media-device state before and after and removes its
+temporary probe artifacts. This verifies the existing-device path only; it
+does not prove AudioRouter graph activation, UI meters, or an attended
+microphone route.
+
+For the intended UI workflow, the next M05 slice is a graph-native Test Signal
+node with destination meters. Until that node is implemented, use the raw
+smoke above or play a known tone from an already-running application through a
+deliberately selected existing endpoint. VoiceMeeter may remain open; stop or
+close it only if it owns the exact endpoint AudioRouter must prepare, and treat
+`deviceInUse` as an ownership diagnostic rather than changing defaults.
 
 ## 2. Run the safe acceptance checks
 
@@ -151,8 +197,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\\tests\\acceptance\\m02-ru
 This opens bounded capture and render streams, copies capture data into
 caller-owned memory, submits zero-valued render buffers, stops/resets both
 streams, and verifies the media-device identity/state snapshot is unchanged.
-It is intentionally opt-in and must not be treated as physical latency or
-graph-routing evidence.
+Run it from an elevated PowerShell session; the harness refuses before its
+PnP snapshot otherwise. It is intentionally opt-in and must not be treated as
+physical latency or graph-routing evidence.
 
 For an explicitly selected compatible digital cable pair, the route smoke
 passes captured frames through the generation-1 graph into the render client:
@@ -163,6 +210,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\\tests\\acceptance\\m02-ru
 
 This is opt-in live testing only; it does not change defaults, volume, mute,
 privacy, drivers, signing, or startup configuration.
+
+For the guarded multi-input/many-output acceptance, open an elevated PowerShell
+session and provide the explicit live-audio switch. The harness refuses before
+endpoint inventory when the process is not elevated:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m02-multi-input-native-live.ps1 -AllowLiveAudio
+```
+
+The selector chooses exact active stereo 48 kHz endpoints; supply
+`-CaptureEndpointIds` and `-RenderEndpointIds` with `|`-separated opaque IDs
+when deterministic endpoint selection is required. The run is bounded and
+process-scoped, and does not change persistent audio configuration.
 
 To inspect the active endpoint mix formats without opening an audio stream, run
 the read-only acceptance:
@@ -198,9 +258,11 @@ cargo run -p audiorouter-cli -- nodes types --json
 cargo run -p audiorouter-cli -- presets list --json
 ```
 
-The status output may report audio and virtual-device capabilities as
-`unavailable`. That is expected until the native graph and managed driver are
-implemented and qualified; it is not a failed installation.
+The status output reports the native graph and the explicitly discoverable
+existing endpoints available on the current machine. AudioRouter-owned
+virtual-device provisioning may still report `unavailable` because it belongs
+to the deferred managed-driver profile; that is not a failed installation and
+does not disable existing-device routing.
 
 ## 4. Use the UI and MCP safely
 
@@ -241,9 +303,10 @@ third-party virtual cable as if it were an AudioRouter-managed endpoint.
   all tested capture endpoints. `E_INVALIDARG` remains distinct from
   `AUDCLNT_E_DEVICE_IN_USE`, and ordinary tests do not work around either
   error by changing device settings.
-- The backend may report audio as unavailable even though portable graph and
-  DSP tests pass; the remaining unavailable capability is the native realtime
-  scheduler and endpoint routing integration.
+- The backend may report AudioRouter-owned managed-device capability as
+  unavailable even though existing-device routing, portable graph, and DSP
+  tests pass; the remaining unavailable capability is the signed managed
+  driver profile, not the VB-Cable-first endpoint boundary.
 - MSBuild FileTracker access errors are host/tool-process restrictions. Retry
   the same SDK acceptance command in an approved elevated build shell; do not
   disable Windows security features.

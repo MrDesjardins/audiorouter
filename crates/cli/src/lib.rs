@@ -2232,6 +2232,8 @@ fn mcp_tool_annotations(name: &str) -> Value {
             | "plan_startup"
             | "plan_virtual_device"
             | "plan_virtual_device_change"
+            | "pump_native_render_source"
+            | "pump_native_multi_inputs"
     );
     let destructive = matches!(
         name,
@@ -2261,6 +2263,14 @@ fn mcp_tools() -> Value {
         { "name": "list_virtual_devices", "description": "List managed virtual bus desired state without activating endpoints. Optional cursor/limit fields return bounded pages.", "inputSchema": { "type": "object", "properties": { "cursor": { "type": ["string", "null"], "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "maximum": 500 } }, "additionalProperties": false } },
         { "name": "list_virtual_routes", "description": "List explicit revisioned cross-session virtual-bus routes without activating endpoints.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "replace_virtual_routes", "description": "Replace explicit cross-session virtual-bus routes as one revisioned, idempotent operation; requires device-administration scope and does not activate endpoints.", "inputSchema": { "type": "object", "properties": { "baseRevision": { "type": "integer", "minimum": 0 }, "routes": { "type": "array", "maxItems": 64, "items": { "type": "object", "properties": { "busId": { "type": "string", "minLength": 1, "maxLength": 128 }, "producerSessionId": { "type": "string", "minLength": 1, "maxLength": 128 }, "consumerSessionId": { "type": "string", "minLength": 1, "maxLength": 128 } }, "required": ["busId", "producerSessionId", "consumerSessionId"], "additionalProperties": false } }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["baseRevision", "routes", "idempotencyKey"], "additionalProperties": false } },
+        { "name": "prepare_native_outputs", "description": "Prepare one-to-eight exact stopped physical render branches for a session generation; requires device-administration scope and never changes Windows defaults.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }, "generation": { "type": "integer", "minimum": 1 }, "renderEndpointIds": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "type": "string", "minLength": 1, "maxLength": audiorouter_control::MAX_CONTROL_STRING_BYTES } } }, "required": ["sessionId", "generation", "renderEndpointIds"], "additionalProperties": false } },
+        { "name": "prepare_native_multi_inputs", "description": "Prepare two-to-eight exact stopped capture clients for a validated mixer/fan-out graph; requires device-administration scope and never selects a fallback microphone.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }, "generation": { "type": "integer", "minimum": 1 }, "captureEndpointIds": { "type": "array", "minItems": 2, "maxItems": 8, "items": { "type": "string", "minLength": 1, "maxLength": audiorouter_control::MAX_CONTROL_STRING_BYTES } } }, "required": ["sessionId", "generation", "captureEndpointIds"], "additionalProperties": false } },
+        { "name": "pump_native_multi_inputs", "description": "Drain bounded capture, graph, and prepared physical/virtual/recording/tool branch work for an exact running multi-input generation; requires session-control scope.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }, "generation": { "type": "integer", "minimum": 1 }, "maxPackets": { "type": "integer", "minimum": 1, "maximum": 64 } }, "required": ["sessionId", "generation"], "additionalProperties": false } },
+        { "name": "bind_native_multi_input_branches", "description": "Bind exact ordered physical, virtual, recorder, and tool branch node IDs before starting a prepared multi-input worker; requires device-administration scope.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }, "generation": { "type": "integer", "minimum": 1 }, "branchNodeIds": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } } }, "required": ["sessionId", "generation", "branchNodeIds"], "additionalProperties": false } },
+        { "name": "prepare_native_bridge", "description": "Prepare one exact stopped project-driver render-source/capture-sink lease pair for an enabled bus; requires device-administration scope and a qualifying managed driver.", "inputSchema": { "type": "object", "properties": { "busId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }, "generation": { "type": "integer", "minimum": 1 }, "devicePath": { "type": "string", "minLength": 1, "maxLength": audiorouter_control::MAX_CONTROL_STRING_BYTES }, "renderMappingPath": { "type": "string", "minLength": 1, "maxLength": audiorouter_control::MAX_CONTROL_STRING_BYTES }, "captureMappingPath": { "type": "string", "minLength": 1, "maxLength": audiorouter_control::MAX_CONTROL_STRING_BYTES }, "leaseMs": { "type": "integer", "minimum": 1, "maximum": audiorouter_protocol::MAX_AUDIO_BRIDGE_LEASE_MS } }, "required": ["busId", "generation", "devicePath", "renderMappingPath", "captureMappingPath"], "additionalProperties": false } },
+        { "name": "detach_native_bridge", "description": "Detach one stopped project-driver lease pair for an exact virtual bus; requires device-administration scope.", "inputSchema": { "type": "object", "properties": { "busId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } }, "required": ["busId"], "additionalProperties": false } },
+        { "name": "heartbeat_native_bridges", "description": "Refresh all prepared project-driver bridge leases on the control thread; requires device-administration scope.", "inputSchema": { "type": "object", "additionalProperties": false } },
+        { "name": "pump_native_render_source", "description": "Drain bounded already-available audio from a running virtual render-source worker; requires session-control scope and an exact session generation.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }, "generation": { "type": "integer", "minimum": 1 }, "maxQuanta": { "type": "integer", "minimum": 1, "maximum": 64 } }, "required": ["sessionId", "generation"], "additionalProperties": false } },
         { "name": "plan_virtual_device", "description": "Validate a managed virtual bus lifecycle operation without applying it.", "inputSchema": { "type": "object", "properties": { "operation": { "type": "object" } }, "required": ["operation"], "additionalProperties": false } },
         { "name": "apply_virtual_device", "description": "Apply a validated managed virtual bus lifecycle plan.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["planId", "idempotencyKey"], "additionalProperties": false } },
         { "name": "provision_virtual_device", "description": "Provision one explicitly selected managed virtual device; requires device-administration scope and an idempotency key. The managed driver must be installed and qualified.", "inputSchema": { "type": "object", "properties": { "busId": { "type": "string", "minLength": 1, "maxLength": 128 }, "instanceId": { "type": "string", "minLength": 1, "maxLength": 256 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["busId", "instanceId", "idempotencyKey"], "additionalProperties": false } },
@@ -2343,6 +2353,14 @@ fn mcp_tool_call(
         "list_virtual_devices" => ("virtualDevices.list", Some(arguments)),
         "list_virtual_routes" => ("virtualRoutes.list", None),
         "replace_virtual_routes" => ("virtualRoutes.replace", Some(arguments)),
+        "prepare_native_outputs" => ("nativeOutputs.prepare", Some(arguments)),
+        "prepare_native_multi_inputs" => ("nativeMultiInputs.prepare", Some(arguments)),
+        "pump_native_multi_inputs" => ("nativeMultiInputs.pump", Some(arguments)),
+        "bind_native_multi_input_branches" => ("nativeMultiInputs.bindBranches", Some(arguments)),
+        "prepare_native_bridge" => ("nativeBridges.prepare", Some(arguments)),
+        "detach_native_bridge" => ("nativeBridges.detach", Some(arguments)),
+        "heartbeat_native_bridges" => ("nativeBridges.heartbeat", None),
+        "pump_native_render_source" => ("nativeRenderSources.pump", Some(arguments)),
         "plan_virtual_device" => ("virtualDevices.plan", Some(arguments)),
         "apply_virtual_device" => ("virtualDevices.apply", Some(arguments)),
         "provision_virtual_device" => ("virtualDevices.provision", Some(arguments)),
@@ -4182,8 +4200,84 @@ mod tests {
         let transition_content = transition["result"]["content"][0]["text"].as_str().unwrap();
         let transition_payload: Value = serde_json::from_str(transition_content).unwrap();
         assert_eq!(transition_payload["result"]["transition"], "lock");
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 50);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 58);
         let tools = mcp_tools();
+        let multi_input = tools
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|tool| tool["name"] == "prepare_native_multi_inputs")
+            .unwrap();
+        assert_eq!(
+            multi_input["inputSchema"]["properties"]["captureEndpointIds"]["minItems"],
+            2
+        );
+        assert_eq!(
+            multi_input["inputSchema"]["properties"]["captureEndpointIds"]["maxItems"],
+            8
+        );
+        assert_eq!(
+            multi_input["inputSchema"]["properties"]["captureEndpointIds"]["items"]["maxLength"],
+            audiorouter_control::MAX_CONTROL_STRING_BYTES
+        );
+        assert_eq!(
+            multi_input["inputSchema"]["properties"]["sessionId"]["maxLength"],
+            audiorouter_domain::MAX_ENTITY_ID_BYTES
+        );
+        let branch_binding = tools
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|tool| tool["name"] == "bind_native_multi_input_branches")
+            .unwrap();
+        assert_eq!(
+            branch_binding["inputSchema"]["properties"]["branchNodeIds"]["maxItems"],
+            8
+        );
+        let multi_pump = tools
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|tool| tool["name"] == "pump_native_multi_inputs")
+            .unwrap();
+        assert_eq!(
+            multi_pump["inputSchema"]["properties"]["maxPackets"]["maximum"],
+            64
+        );
+        let render_source_pump = tools
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|tool| tool["name"] == "pump_native_render_source")
+            .unwrap();
+        assert_eq!(
+            render_source_pump["inputSchema"]["properties"]["sessionId"]["maxLength"],
+            audiorouter_domain::MAX_ENTITY_ID_BYTES
+        );
+        let native_bridge = tools
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|tool| tool["name"] == "prepare_native_bridge")
+            .unwrap();
+        assert_eq!(
+            native_bridge["inputSchema"]["properties"]["leaseMs"]["maximum"],
+            audiorouter_protocol::MAX_AUDIO_BRIDGE_LEASE_MS
+        );
+        assert_eq!(
+            native_bridge["inputSchema"]["properties"]["busId"]["maxLength"],
+            audiorouter_domain::MAX_ENTITY_ID_BYTES
+        );
+        let detached_bridge = tools
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|tool| tool["name"] == "detach_native_bridge")
+            .unwrap();
+        assert_eq!(
+            detached_bridge["inputSchema"]["properties"]["busId"]["maxLength"],
+            audiorouter_domain::MAX_ENTITY_ID_BYTES
+        );
         let create_recorder = tools
             .as_array()
             .unwrap()
@@ -4236,6 +4330,14 @@ mod tests {
             ("remove_recording_entry", false, true, true),
             ("provision_virtual_device", false, false, true),
             ("remove_virtual_device", false, true, true),
+            ("prepare_native_outputs", false, false, true),
+            ("prepare_native_multi_inputs", false, false, true),
+            ("pump_native_multi_inputs", true, false, true),
+            ("bind_native_multi_input_branches", false, false, true),
+            ("prepare_native_bridge", false, false, true),
+            ("detach_native_bridge", false, false, true),
+            ("heartbeat_native_bridges", false, false, true),
+            ("pump_native_render_source", true, false, true),
             ("reveal_recording", false, false, false),
             ("call_api", false, false, false),
             ("os_transition", false, false, true),

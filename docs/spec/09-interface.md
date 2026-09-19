@@ -10,7 +10,15 @@ The canvas renders backend nodes, ports, edges, and statuses. It does not infer 
 
 ## Requirements
 
-- **UI-01 — First run.** Explain source → effects → destinations with a small working example. Check backend/driver/device readiness, offer the Gaming + Discord template, select mic/headphones, provision required virtual buses through the shared API, and guide third-party app selections. Include a meter/test step for each destination. Mic monitoring begins muted; recording begins unarmed.
+Current VB-Cable-first onboarding selects and verifies existing VB-Cable,
+Voicemeeter, physical WASAPI, or other installed virtual endpoints through the
+shared API, then guides third-party application selection. It must not imply
+that AudioRouter creates or installs a virtual device. The managed-bus
+provisioning language in UI-01 remains a deferred signed-driver-profile path;
+missing managed-driver capability is reported explicitly rather than treated
+as a failed current-profile setup.
+
+- **UI-01 — First run.** Explain source → effects → destinations with a small working example. Check backend/device readiness, offer the Gaming + Discord template, select mic/headphones and existing supported endpoints in the current VB-Cable-first profile, and guide third-party app selections. Managed virtual-bus provisioning remains a deferred signed-driver-profile option. Include a meter/test step for each destination. Mic monitoring begins muted; recording begins unarmed.
 - **UI-02 — Canvas.** Support add/search, drag, connect/disconnect, rename, duplicate, delete, multi-select, zoom/pan, fit, and tidy layout. Provide undo/redo for graph edits using backend revisions. A dragged preview is visually provisional until committed. Persist positions separately from audio state.
 - **UI-03 — Connections.** Label ports by role and channels; distinguish audio and sidechain ports. Highlight the full upstream/downstream path on selection. Show invalid target reasons before drop where known, then display backend rejection if state changed. Insert-a-mixer and remove-and-reconnect are explicit previewable operations.
 - **UI-04 — State.** Distinguish running/stopped, enabled/bypassed/muted, missing/faulted, and recording/paused using text/icons as well as color. Animate flow only when relevant activity exists; a static connected line means configured connectivity. Silent-but-valid is different from disconnected. Provide reduced-motion mode.
@@ -30,6 +38,34 @@ The canvas renders backend nodes, ports, edges, and statuses. It does not infer 
 Give nodes descriptive names such as `USB mic`, `Voice EQ`, and `To Discord`. Position sources on the left and sinks on the right. Offer mono-mic to stereo mapping automatically as an explicit edge matrix. Use preconfigured conservative voice presets and show their purpose. Do not make the user select a sample rate or buffer period during routine onboarding; show negotiated values under diagnostics.
 
 Device selection should show both a familiar label and a disambiguator such as USB interface/role. The user can audition input levels before starting a route, but any microphone test is an explicit capture action with visible state. Setup persists incomplete drafts without activating them.
+
+## Follow-up interaction slice
+
+The next M05 usability slice adds a bounded, graph-native **Test Signal**
+source and visible meters. The source must be an ordinary inspectable graph
+node, remain stopped/unarmed until the user deliberately starts the session,
+and expose frequency, level, and duration controls through the same validated
+parameter path as other nodes. It must not use Web Audio or browser microphone
+access. Destination meters must show signal presence, peak/RMS values, and
+clipping/stream state so a user can confirm a route before involving a
+microphone, VoiceMeeter, Discord, or another application.
+
+VoiceMeeter and other installed virtual endpoints are compatible exploration
+boundaries in the current VB-Cable-first profile. The UI should say that the
+third-party application may remain open; the user only needs to stop or close
+it when it owns the exact endpoint AudioRouter is explicitly preparing. The UI
+must distinguish “no signal,” “not prepared,” “stopped,” and “endpoint owned by
+another client.”
+
+The editor remains transport-independent: the same versioned backend contract
+must be usable by the desktop shell, CLI, and MCP. Browser access is not a
+current capability because the implemented transport is an authenticated
+same-user Windows named pipe; a loopback HTTP/WebSocket adapter requires a
+separate origin, enrollment, authorization, rate-limit, and lifecycle gate.
+
+The Test Signal acceptance must include: add source, set a conservative tone,
+connect it to a destination, plan/commit, start, observe meters, stop, and
+confirm that no endpoint default or persistent audio configuration changed.
 
 ## Verification
 

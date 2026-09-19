@@ -371,6 +371,19 @@ if ($publishHelper.Contains('KeAcquireSpinLock')) {
 
 $stream = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/minwavertstream.cpp') -Raw
 foreach ($required in @(
+        'IsBridgePcmFormat',
+        'ReadBridgePcmSample',
+        'WriteBridgePcmSample',
+        'KSDATAFORMAT_SUBTYPE_PCM',
+        'Format->Format.wBitsPerSample == 16',
+        'Format->Format.wBitsPerSample == 32',
+        'WriteBridgePcmSample(',
+        'ReadBridgePcmSample(')) {
+    if (-not $stream.Contains($required)) {
+        throw "WaveRT bridge PCM conversion guard is missing: $required"
+    }
+}
+foreach ($required in @(
         'AudioRouterCopyLeaseBlockForDirection',
         'AudioRouterPublishLeaseBlockForDirection',
         'AudioRouterGetLeaseShapeForDirection',
@@ -419,13 +432,19 @@ if (-not $readBytesSource.Contains('RefreshBridgePublishShape();')) {
 }
 $writeBytesSource = $stream.Substring($writeBytesStart, $readBytesStart - $writeBytesStart)
 if (-not $writeBytesSource.Contains('AudioRouterCopyLeaseBlockForDirection')) {
-    throw 'WaveRT render callback must consume only through the bounded bridge helper'
+    throw 'WaveRT capture callback must consume only through the bounded bridge helper'
 }
-if (-not $writeBytesSource.Contains('AR_BRIDGE_DIRECTION_RENDER_SOURCE')) {
-    throw 'WaveRT render callback must consume the render-source lease direction'
+if (-not $writeBytesSource.Contains('AR_BRIDGE_DIRECTION_CAPTURE_SINK')) {
+    throw 'WaveRT capture callback must consume the capture-sink lease direction'
 }
 if (-not $writeBytesSource.Contains('header.Channels != bridgeChannels')) {
     throw 'WaveRT render callback must reject a bridge channel-shape mismatch'
+}
+if (-not $writeBytesSource.Contains('while (writtenFrames < frames)')) {
+    throw 'WaveRT capture callback must drain successive bridge quanta within one DMA segment'
+}
+if (-not $writeBytesSource.Contains('writtenFrames += copyFrames')) {
+    throw 'WaveRT capture callback must advance bounded bridge-quantum consumption'
 }
 $callbackBoundaries = @(
     $stream.Substring($stream.IndexOf('VOID CMiniportWaveRTStream::WriteBytes'), $stream.IndexOf('VOID CMiniportWaveRTStream::ReadBytes') - $stream.IndexOf('VOID CMiniportWaveRTStream::WriteBytes')),
@@ -447,6 +466,12 @@ foreach ($callback in $callbackBoundaries) {
 }
 if (-not $readBytesSource.Contains('AudioRouterPublishLeaseBlockForDirection')) {
     throw 'WaveRT capture callback must publish only through the bounded bridge helper'
+}
+if (-not $readBytesSource.Contains('AR_BRIDGE_DIRECTION_RENDER_SOURCE')) {
+    throw 'WaveRT render callback must publish the render-source lease direction'
+}
+if (-not $stream.Substring($stream.IndexOf('VOID CMiniportWaveRTStream::RefreshBridgePublishShape')).Contains('AR_BRIDGE_DIRECTION_RENDER_SOURCE')) {
+    throw 'WaveRT render callback must negotiate the render-source lease shape'
 }
 if (-not $stream.Substring($stream.IndexOf('VOID CMiniportWaveRTStream::WriteBytes')).Contains('RtlZeroMemory')) {
     throw 'WaveRT render callback must retain a fail-closed silence path'

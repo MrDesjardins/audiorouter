@@ -1,6 +1,10 @@
 # M00 — Windows feasibility and architecture decisions
 
-Status: evidence collected; feasibility gate remains open. Prerequisite: specification baseline. Outcome: evidence-backed implementation choices before a large application is generated.
+Status: Windows feasibility evidence collected for the current VB-Cable-first
+track. The AudioRouter-owned driver/signing feasibility gate is deferred and
+remains open for the future signed track. Prerequisite: specification
+baseline. Outcome: evidence-backed implementation choices and explicit
+supported-device boundaries.
 
 ## Read first
 
@@ -20,7 +24,12 @@ Read [product](../spec/01-product.md), [architecture](../spec/03-architecture.md
 
 CAP-01–08 and ARCH-05/07/08 have prototype evidence adequate to implement, with supported/unsupported behavior distinguished. NFR-01–03 methods and baseline measurements exist. VDEV-02 has a feasible managed-driver design and credible production-signing route; actual production credentials/signature can remain an explicit M08 dependency. The golden UC-01 topology is shown to avoid recapturing its headphone output.
 
-A third-party cable can demonstrate audio flow but cannot satisfy managed provisioning feasibility by itself. If virtual driver creation/signing is not credible, mark that gate blocked and present a concrete decision to the user. Independent domain work may proceed only with this limitation stated; no full-product completion claim is allowed.
+A third-party cable can demonstrate audio flow but cannot satisfy managed
+provisioning feasibility by itself. If virtual driver creation/signing is not
+credible, mark that future managed-driver gate deferred and retain the decision
+record. Independent non-driver work may proceed to completion under the current
+VB-Cable-first profile; only the future managed-driver profile remains
+unqualified.
 
 ## Verification and artifacts
 

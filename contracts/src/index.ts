@@ -11,6 +11,7 @@ export type NodeKind =
   | "physicalOutput"
   | "virtualRenderSource"
   | "virtualCaptureSink"
+  | "testSignal"
   | "mixer"
   | "gain"
   | "mute"
@@ -251,6 +252,40 @@ export interface NativeEndpointPrepareResult {
   renderEndpointId: string;
 }
 
+export interface NativeOutputFanoutPrepareResult {
+  sessionId: EntityId;
+  generation: number;
+  state: "configured-stopped";
+  renderEndpointIds: string[];
+  outputCount: number;
+}
+
+export interface NativeMultiInputPrepareResult {
+  sessionId: EntityId;
+  generation: number;
+  state: "configured-stopped";
+  captureEndpointIds: string[];
+  sourceNodeIds: EntityId[];
+  branchNodeIds: EntityId[];
+}
+
+export interface NativeBridgePrepareResult {
+  busId: EntityId;
+  generation: number;
+  state: "configured-stopped";
+  directions: ["renderSource", "captureSink"];
+}
+
+export interface NativeBridgeDetachResult {
+  busId: EntityId;
+  state: "detached";
+}
+
+export interface NativeBridgeHeartbeatResult {
+  state: "healthy";
+  bindings: number;
+}
+
 export type NativeEndpointRebindResult = NativeEndpointPrepareResult;
 
 export interface NativeEndpointDetachResult {
@@ -291,6 +326,34 @@ export interface NativeDuplexPumpResult {
   generation: number;
   input: Omit<NativeEndpointPumpResult, "sessionId" | "generation" | "recorderChunksDrained">;
   output: Omit<NativeEndpointPumpResult, "sessionId" | "generation" | "recorderChunksDrained">;
+}
+
+export interface NativeRenderSourcePumpResult {
+  sessionId: EntityId;
+  generation: number;
+  packets: number;
+  processedQuanta: number;
+  renderedFrames: number;
+  droppedRenderFrames: number;
+}
+
+export interface NativeMultiInputPumpResult {
+  sessionId: EntityId;
+  generation: number;
+  inputs: number;
+  capturedFrames: number;
+  submittedQuanta: number;
+  outputCount: number;
+  deliveredQuanta: number;
+  renderedFrames: number;
+  renderBackpressureEvents: number;
+}
+
+export interface NativeMultiInputBranchBindingResult {
+  sessionId: EntityId;
+  generation: number;
+  branchNodeIds: EntityId[];
+  boundBranches: number;
 }
 
 export interface InactiveDeviceInfo {
@@ -526,7 +589,7 @@ export interface DiagnosticsSnapshot {
   storage: "memory" | "sqlite";
   audio: { state: "available" | "unavailable"; reason: string };
   nativeAdapter: "implemented-not-activated" | "configured-stopped" | "running";
-  nativeAdapterKind: "endpoint" | "duplex" | null;
+  nativeAdapterKind: "endpoint" | "duplex" | "render-source" | "multi-input" | null;
   nativeSessionId: EntityId | null;
   schedulerTelemetry: {
     activeGeneration: number | null;
@@ -898,12 +961,20 @@ export type ImplementedMethod =
   | "startup.apply"
   | "devices.list"
   | "nativeEndpoints.prepare"
+  | "nativeOutputs.prepare"
+  | "nativeMultiInputs.prepare"
+  | "nativeBridges.prepare"
+  | "nativeBridges.detach"
+  | "nativeBridges.heartbeat"
   | "nativeEndpoints.rebind"
   | "nativeEndpoints.detach"
   | "nativeDuplex.detach"
   | "nativeApplications.prepare"
   | "nativeEndpoints.pump"
   | "nativeDuplex.pump"
+  | "nativeRenderSources.pump"
+  | "nativeMultiInputs.pump"
+  | "nativeMultiInputs.bindBranches"
   | "plugins.scan"
   | "plugins.list"
   | "plugins.retry"
@@ -998,12 +1069,20 @@ export type MethodParams = {
   "startup.apply": { planId: EntityId; idempotencyKey: string };
   "devices.list": { cursor?: string; limit?: number; includeInactive?: boolean } | undefined;
   "nativeEndpoints.prepare": { sessionId: EntityId; captureEndpointId: string; renderEndpointId: string };
+  "nativeOutputs.prepare": { sessionId: EntityId; generation: number; renderEndpointIds: string[] };
+  "nativeMultiInputs.prepare": { sessionId: EntityId; generation: number; captureEndpointIds: string[] };
+  "nativeBridges.prepare": { busId: EntityId; generation: number; devicePath: string; renderMappingPath: string; captureMappingPath: string; leaseMs?: number };
+  "nativeBridges.detach": { busId: EntityId };
+  "nativeBridges.heartbeat": undefined;
   "nativeEndpoints.rebind": { sessionId: EntityId; captureEndpointId: string; renderEndpointId: string };
   "nativeEndpoints.detach": { sessionId: EntityId };
   "nativeDuplex.detach": { sessionId: EntityId };
   "nativeApplications.prepare": { sessionId: EntityId; processId: number; executable: string; executablePath?: string | null; creationTime100ns: string; mode: "include" | "exclude"; renderEndpointId: string };
   "nativeEndpoints.pump": { sessionId: EntityId; generation: number; maxPackets?: number };
   "nativeDuplex.pump": { sessionId: EntityId; generation: number; maxInputQuanta?: number; maxOutputPackets?: number };
+  "nativeRenderSources.pump": { sessionId: EntityId; generation: number; maxQuanta?: number };
+  "nativeMultiInputs.pump": { sessionId: EntityId; generation: number; maxPackets?: number };
+  "nativeMultiInputs.bindBranches": { sessionId: EntityId; generation: number; branchNodeIds: EntityId[] };
   "plugins.scan": { directory: string };
   "plugins.list": { directory: string };
   "plugins.retry": { directory: string; idempotencyKey: string };
@@ -1110,12 +1189,20 @@ export type MethodResult = {
   "startup.apply": StartupApplyResult;
   "devices.list": DeviceInfo[] | DeviceListPage;
   "nativeEndpoints.prepare": NativeEndpointPrepareResult;
+  "nativeOutputs.prepare": NativeOutputFanoutPrepareResult;
+  "nativeMultiInputs.prepare": NativeMultiInputPrepareResult;
+  "nativeBridges.prepare": NativeBridgePrepareResult;
+  "nativeBridges.detach": NativeBridgeDetachResult;
+  "nativeBridges.heartbeat": NativeBridgeHeartbeatResult;
   "nativeEndpoints.rebind": NativeEndpointRebindResult;
   "nativeEndpoints.detach": NativeEndpointDetachResult;
   "nativeDuplex.detach": NativeDuplexDetachResult;
   "nativeApplications.prepare": NativeApplicationPrepareResult;
   "nativeEndpoints.pump": NativeEndpointPumpResult;
   "nativeDuplex.pump": NativeDuplexPumpResult;
+  "nativeRenderSources.pump": NativeRenderSourcePumpResult;
+  "nativeMultiInputs.pump": NativeMultiInputPumpResult;
+  "nativeMultiInputs.bindBranches": NativeMultiInputBranchBindingResult;
   "plugins.scan": PluginScanResult;
   "plugins.list": PluginScanResult;
   "plugins.retry": PluginScanResult;

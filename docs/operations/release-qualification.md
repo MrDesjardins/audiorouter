@@ -3,8 +3,12 @@
 AudioRouter is not a releasable Windows installer yet. The portable control
 plane, CLI, MCP adapter, DSP, recording, plugin-worker, crash-recovery
 orchestration boundaries, and the shell-owned control backend are implemented
-and tested, but native routing, the owned virtual-device driver, production
-signing, and clean-machine qualification remain open.
+and tested. The current supported development I/O boundary is an existing
+VB-Cable/Voicemeeter installation plus physical WASAPI endpoints; the
+AudioRouter-owned virtual-device driver is on hold because production signing
+and trusted installation are unavailable. AudioRouter-owned managed-driver routing, production
+signing, and clean-machine qualification remain release gates, not completed
+features.
 
 ## Current verified artifacts
 
@@ -35,6 +39,32 @@ its exact disposable NSIS bundle directory on completion.
 
 ## Current qualification snapshot
 
+The 2026-09-17 refresh is the authoritative current status: M05 passes
+typecheck, 257 UI tests, and a disposable production build; M07 passes 36 CLI,
+3 MCP stdio, 177 control tests with 3 guarded live tests ignored, 70
+plugin-host, and 13 worker-process tests; and the full locked workspace passes
+its package suites and doc-tests. The VB-Cable/Focusrite-to-VB-Cable/DELL
+multi-input route also passed its bounded live acceptance. M08 artifact
+preparation was not rerun because the current Git tree is dirty and the
+release tool deliberately refuses to proceed. The guarded control-owned
+endpoint lifecycle also passed exact stopped rebind with Focusrite capture,
+DELL render, and P32p-30 fan-out endpoints; a separate two-capture/two-render
+run passed the multi-input/many-output lifecycle. These are existing-device
+shared-mode results, not physical-latency or OS-transition reopen evidence.
+An additional retry using exact CABLE Output capture, P32p-30 render, and DELL
+fan-out render passed 24,480 captured frames, 191 graph quanta, 24,448 primary
+rendered frames, 155 fan-out packets, and 19,840 fan-out rendered frames after
+the default CABLE render correctly reported `AUDCLNT_E_DEVICE_IN_USE`. The
+locked workspace regression subsequently passed all package suites and
+doc-tests. The disposable unsigned NSIS smoke also passed, producing a
+4,888,262-byte x64 bundle and removing it after manifest-integrity checks; the
+release preparation flow still stops at its clean-tree check.
+The latest guarded native lifecycle also toggled the durable privacy latch
+while the worker was active and verified both live states; the current Zoom
+identity passed the same bounded application lifecycle in exclude mode. These
+checks strengthen control propagation and observed-process evidence only; p95
+mute timing and universal application compatibility remain open.
+
 At the current repository revision, the safe, repository-local qualification
 surface is green:
 
@@ -43,15 +73,19 @@ surface is green:
   and strict workspace Clippy.
 - M04 passes 34 DSP and 40 recording tests, including the 60-second pitch
   boundary cases.
-- M05 passes TypeScript typecheck, 234 UI tests, and a disposable production
-  build.
+- M05 current acceptance passes TypeScript typecheck, 257 UI tests, and a
+  disposable production build; attended accessibility, scaling, first-run,
+  and live drag/drop review remain separate.
 - M06 passes with the pinned local VST3 SDK: 51 SDK self-tests, 1,598 official
   validator tests with zero failures, and the offline native loader.
-- M07 passes 36 CLI tests, 3 MCP stdio tests, 173 control tests (2 guarded live
-  tests ignored), 70 plugin-host tests, 13
-  worker-process tests, 26 shell tests, and strict Clippy, including durable
+- M07 current acceptance passes 36 CLI tests, 3 MCP stdio tests, 177 control
+  tests (3 guarded live tests ignored), 70 plugin-host tests, 13
+  worker-process tests, the shell tests, and strict Clippy, including durable
   shell safe-mode supervision.
-- M08 unsigned artifact preparation, provenance/SBOM, checksums, exact-content
+- The current contract drift checker passes with 86 methods, 20 node kinds,
+  7 processors, and 20 event categories matching across UI, CLI, and Rust
+  catalogs.
+- M08 historical clean-tree acceptance passed unsigned artifact preparation, provenance/SBOM, checksums, exact-content
   verification, and cleanup pass in a disposable output directory.
 - M00 native validation includes read-only endpoint-format inventory and
   compile-only probe checks on this machine. Visual Studio Community 2026,
@@ -64,8 +98,10 @@ The VST3 SDK is source-distributed and installed only at the ignored local
 path `third_party/vst3sdk`; it is not a system SDK or plugin registration.
 The documented unsigned NSIS smoke also produces and verifies a debug x64
 installer bundle without installing it; the output is removed afterward. These
-checks do not establish native end-to-end routing, a production driver,
-production signing, or clean-machine qualification.
+checks do not establish AudioRouter-owned managed-driver end-to-end routing, a
+production driver, production signing, or clean-machine qualification.
+Existing-device VB-Cable/Voicemeeter and physical WASAPI routing is covered
+separately by the guarded M02 evidence.
 
 ## Before any installation
 
@@ -126,7 +162,8 @@ blocker.
 
 - Production-signed virtual-device driver and normal Secure Boot/Memory
   Integrity qualification.
-- Native end-to-end routing, latency, drift, restart, and hardware evidence.
+- AudioRouter-owned managed-driver routing, latency, drift, restart, and
+  hardware evidence.
 - Signed binaries/packages, installer elevation behavior, upgrade/rollback, and
   clean-machine testing.
 - Full plugin worker sandbox enforcement and the tested compatibility matrix.

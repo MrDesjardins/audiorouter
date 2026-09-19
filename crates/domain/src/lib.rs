@@ -70,6 +70,7 @@ pub enum NodeKind {
     PhysicalOutput,
     VirtualRenderSource,
     VirtualCaptureSink,
+    TestSignal,
     Mixer,
     Gain,
     Mute,
@@ -86,13 +87,14 @@ pub enum NodeKind {
 }
 
 impl NodeKind {
-    pub const ALL: [Self; 19] = [
+    pub const ALL: [Self; 20] = [
         Self::PhysicalInput,
         Self::ApplicationCapture,
         Self::EndpointLoopback,
         Self::PhysicalOutput,
         Self::VirtualRenderSource,
         Self::VirtualCaptureSink,
+        Self::TestSignal,
         Self::Mixer,
         Self::Gain,
         Self::Mute,
@@ -116,6 +118,7 @@ impl NodeKind {
             Self::PhysicalOutput => "physical-output",
             Self::VirtualRenderSource => "virtual-render-source",
             Self::VirtualCaptureSink => "virtual-capture-sink",
+            Self::TestSignal => "test-signal",
             Self::Mixer => "mixer",
             Self::Gain => "gain",
             Self::Mute => "mute",
@@ -204,7 +207,7 @@ fn valid_creation_time(value: &serde_json::Value) -> bool {
     })
 }
 
-pub fn node_registry() -> [NodeTypeSpec; 19] {
+pub fn node_registry() -> [NodeTypeSpec; 20] {
     NodeKind::ALL.map(|kind| NodeTypeSpec {
         kind,
         version: 1,
@@ -213,6 +216,7 @@ pub fn node_registry() -> [NodeTypeSpec; 19] {
             | NodeKind::Gain
             | NodeKind::Mute
             | NodeKind::Meter
+            | NodeKind::TestSignal
             | NodeKind::ParametricEq => CapabilityAvailability::Available,
             NodeKind::Compressor => CapabilityAvailability::Available,
             NodeKind::Gate => CapabilityAvailability::Available,
@@ -221,12 +225,13 @@ pub fn node_registry() -> [NodeTypeSpec; 19] {
             NodeKind::GraphicEq => CapabilityAvailability::Available,
             NodeKind::Pitch => CapabilityAvailability::Available,
             NodeKind::Recorder => CapabilityAvailability::Available,
+            // M02 user-mode Windows adapters are implemented in the current
+            // VB-Cable-first track. Endpoint/process presence and exact
+            // identity are runtime binding checks, not capability absence.
             NodeKind::PhysicalInput
             | NodeKind::ApplicationCapture
             | NodeKind::EndpointLoopback
-            | NodeKind::PhysicalOutput => {
-                CapabilityAvailability::Unavailable("requires M02 Windows audio adapters")
-            }
+            | NodeKind::PhysicalOutput => CapabilityAvailability::Available,
             NodeKind::VirtualRenderSource | NodeKind::VirtualCaptureSink => {
                 CapabilityAvailability::Unavailable("requires M03 managed virtual driver")
             }
@@ -235,7 +240,11 @@ pub fn node_registry() -> [NodeTypeSpec; 19] {
             }
         },
         realtime_cost_class: match kind {
-            NodeKind::Mixer | NodeKind::Gain | NodeKind::Mute | NodeKind::Meter => "low",
+            NodeKind::Mixer
+            | NodeKind::Gain
+            | NodeKind::Mute
+            | NodeKind::Meter
+            | NodeKind::TestSignal => "low",
             NodeKind::ParametricEq => "medium",
             NodeKind::Compressor => "medium",
             NodeKind::Gate => "medium",
@@ -638,7 +647,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 78] = [
+pub const API_METHODS: [ApiMethodSpec; 86] = [
     ApiMethodSpec {
         name: "system.describe",
         permission: PermissionScope::Read,
@@ -815,6 +824,31 @@ pub const API_METHODS: [ApiMethodSpec; 78] = [
         side_effect: SideEffectClass::ExternalOperation,
     },
     ApiMethodSpec {
+        name: "nativeOutputs.prepare",
+        permission: PermissionScope::DeviceAdministration,
+        side_effect: SideEffectClass::ExternalOperation,
+    },
+    ApiMethodSpec {
+        name: "nativeMultiInputs.prepare",
+        permission: PermissionScope::DeviceAdministration,
+        side_effect: SideEffectClass::ExternalOperation,
+    },
+    ApiMethodSpec {
+        name: "nativeBridges.prepare",
+        permission: PermissionScope::DeviceAdministration,
+        side_effect: SideEffectClass::ExternalOperation,
+    },
+    ApiMethodSpec {
+        name: "nativeBridges.detach",
+        permission: PermissionScope::DeviceAdministration,
+        side_effect: SideEffectClass::ExternalOperation,
+    },
+    ApiMethodSpec {
+        name: "nativeBridges.heartbeat",
+        permission: PermissionScope::DeviceAdministration,
+        side_effect: SideEffectClass::ExternalOperation,
+    },
+    ApiMethodSpec {
         name: "nativeEndpoints.rebind",
         permission: PermissionScope::DeviceAdministration,
         side_effect: SideEffectClass::ExternalOperation,
@@ -841,6 +875,21 @@ pub const API_METHODS: [ApiMethodSpec; 78] = [
     },
     ApiMethodSpec {
         name: "nativeDuplex.pump",
+        permission: PermissionScope::SessionControl,
+        side_effect: SideEffectClass::ExternalOperation,
+    },
+    ApiMethodSpec {
+        name: "nativeRenderSources.pump",
+        permission: PermissionScope::SessionControl,
+        side_effect: SideEffectClass::ExternalOperation,
+    },
+    ApiMethodSpec {
+        name: "nativeMultiInputs.pump",
+        permission: PermissionScope::SessionControl,
+        side_effect: SideEffectClass::ExternalOperation,
+    },
+    ApiMethodSpec {
+        name: "nativeMultiInputs.bindBranches",
         permission: PermissionScope::SessionControl,
         side_effect: SideEffectClass::ExternalOperation,
     },
@@ -1495,6 +1544,15 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::Pitch, "cents") => value
                     .as_f64()
                     .is_some_and(|cents| cents.is_finite() && (-100.0..=100.0).contains(&cents)),
+                (NodeKind::TestSignal, "frequencyHz") => value.as_f64().is_some_and(|frequency| {
+                    frequency.is_finite() && (20.0..=20_000.0).contains(&frequency)
+                }),
+                (NodeKind::TestSignal, "levelDb") => value
+                    .as_f64()
+                    .is_some_and(|level| level.is_finite() && (-60.0..=0.0).contains(&level)),
+                (NodeKind::TestSignal, "durationMs") => value.as_f64().is_some_and(|duration| {
+                    duration.is_finite() && (1.0..=600_000.0).contains(&duration)
+                }),
                 (NodeKind::Plugin, "path") => value
                     .as_str()
                     .is_some_and(|path| !path.is_empty() && path.len() <= MAX_PLUGIN_PATH_BYTES),
@@ -3412,19 +3470,36 @@ mod tests {
     }
 
     #[test]
+    fn test_signal_parameters_are_bounded_and_typed() {
+        let mut signal = node("signal", NodeKind::TestSignal, PortDirection::Output);
+        signal
+            .parameters
+            .insert("frequencyHz".into(), serde_json::json!(440.0));
+        signal
+            .parameters
+            .insert("levelDb".into(), serde_json::json!(-18.0));
+        signal
+            .parameters
+            .insert("durationMs".into(), serde_json::json!(1000.0));
+        assert!(validate_session(&session(vec![signal.clone()], vec![])).is_ok());
+
+        signal
+            .parameters
+            .insert("frequencyHz".into(), serde_json::json!(1.0));
+        assert!(validate_session(&session(vec![signal], vec![])).is_err());
+    }
+
+    #[test]
     fn registry_reports_audio_and_processor_capabilities_explicitly() {
         let registry = node_registry();
-        assert_eq!(registry.len(), 19);
+        assert_eq!(registry.len(), 20);
         let physical = registry
             .iter()
             .find(|spec| spec.kind == NodeKind::PhysicalInput)
             .unwrap();
         assert_eq!(physical.kind.type_name(), "physical-input");
         assert_eq!(physical.version, 1);
-        assert_eq!(
-            physical.availability,
-            CapabilityAvailability::Unavailable("requires M02 Windows audio adapters")
-        );
+        assert_eq!(physical.availability, CapabilityAvailability::Available);
         let gain = registry
             .iter()
             .find(|spec| spec.kind == NodeKind::Gain)
@@ -3436,6 +3511,12 @@ mod tests {
             .unwrap();
         assert_eq!(recorder.kind.type_name(), "recorder");
         assert_eq!(recorder.availability, CapabilityAvailability::Available);
+        let test_signal = registry
+            .iter()
+            .find(|spec| spec.kind == NodeKind::TestSignal)
+            .unwrap();
+        assert_eq!(test_signal.kind.type_name(), "test-signal");
+        assert_eq!(test_signal.availability, CapabilityAvailability::Available);
         let virtual_source = registry
             .iter()
             .find(|spec| spec.kind == NodeKind::VirtualRenderSource)

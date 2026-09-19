@@ -1,6 +1,9 @@
 # M04 — Built-in effects and independent recording
 
-Status: portable DSP/recording foundation implemented; M03-dependent live acceptance remains open. Prerequisite: M03. Outcome: a complete headless voice-processing and game-recording alpha using built-in effects.
+Status: portable DSP/recording and current existing-device route integration
+are implemented; attended, long-duration, and physical-latency acceptance
+remain open. Prerequisite: M03 current-track routing. Outcome: a complete
+headless voice-processing and game-recording alpha using built-in effects.
 
 ## Read first
 

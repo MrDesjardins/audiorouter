@@ -132,6 +132,19 @@ fn main() -> Result<()> {
         }
         return Ok(());
     }
+    if std::env::args().nth(1).as_deref() == Some("raw-capture-init") {
+        let endpoint_id = std::env::args().nth(2).ok_or_else(|| {
+            windows::core::Error::new(
+                windows::core::HRESULT(0x80070057u32 as i32),
+                "capture endpoint ID is required",
+            )
+        })?;
+        if let Err(error) = raw_capture_initialize(&endpoint_id) {
+            eprintln!("raw_capture_init_error={error}");
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
     if std::env::args().nth(1).as_deref() == Some("adapter-control-route") {
         let duration_ms = std::env::args()
             .nth(2)
@@ -1005,10 +1018,26 @@ fn adapter_bridge_smoke(
         return Err(AudioError::InvalidFrameSize);
     }
     let endpoints = enumerate_active_endpoints()?;
-    let capture_info = select_endpoint(&endpoints, EndpointDirection::Capture, capture_id)
-        .ok_or(AudioError::InvalidFrameSize)?;
-    let render_info = select_endpoint(&endpoints, EndpointDirection::Render, render_id)
-        .ok_or(AudioError::InvalidFrameSize)?;
+    let capture_info = match select_endpoint(&endpoints, EndpointDirection::Capture, capture_id) {
+        Some(endpoint) => endpoint,
+        None => {
+            eprintln!(
+                "adapter_bridge_diagnostic=endpoint_not_present direction=capture requested={}",
+                capture_id.unwrap_or("automatic")
+            );
+            return Err(AudioError::InvalidFrameSize);
+        }
+    };
+    let render_info = match select_endpoint(&endpoints, EndpointDirection::Render, render_id) {
+        Some(endpoint) => endpoint,
+        None => {
+            eprintln!(
+                "adapter_bridge_diagnostic=endpoint_not_present direction=render requested={}",
+                render_id.unwrap_or("automatic")
+            );
+            return Err(AudioError::InvalidFrameSize);
+        }
+    };
     let mut monitor = EndpointMonitor::start()?;
     let mut capture = SharedCapture::open_refreshed_bound(&mut monitor, capture_info, 1_000_000)?;
     let mut render = SharedRender::open_refreshed_bound(&mut monitor, render_info, 1_000_000)?;
@@ -1091,6 +1120,16 @@ fn adapter_bridge_smoke(
             || u64::from(pump.processed_quanta) != tap.calls.load(std::sync::atomic::Ordering::Relaxed)
             || tap.non_finite_samples.load(std::sync::atomic::Ordering::Relaxed) != 0
         {
+            eprintln!(
+                "adapter_bridge_diagnostic=processing_boundary packets={} captured_frames={} processed_quanta={} tap_calls={} tap_non_finite_samples={} rendered_frames={} dropped_render_frames={}",
+                pump.packets,
+                pump.captured_frames,
+                pump.processed_quanta,
+                tap.calls.load(std::sync::atomic::Ordering::Relaxed),
+                tap.non_finite_samples.load(std::sync::atomic::Ordering::Relaxed),
+                pump.rendered_frames,
+                pump.dropped_render_frames,
+            );
             return Err(AudioError::InvalidFrameSize);
         }
         drop(recorder_tap);
@@ -1104,6 +1143,14 @@ fn adapter_bridge_smoke(
                 .len()
                 <= 128
         {
+            eprintln!(
+                "adapter_bridge_diagnostic=recording_boundary file_finalized={} state={} recording_file_bytes={}",
+                finalized.file_finalized,
+                finalized.state,
+                std::fs::metadata(&recording_path)
+                    .map(|metadata| metadata.len())
+                    .unwrap_or(0),
+            );
             return Err(AudioError::InvalidFrameSize);
         }
         println!(
@@ -1133,6 +1180,77 @@ fn adapter_bridge_smoke(
     let result = result.and(capture_stop).and(render_stop);
     drop(recording_cleanup);
     result
+}
+
+/// Reproduce the reference probe's capture-client initialization without the
+/// AudioRouter monitor, binding, or scheduler lifecycle. This is diagnostic
+/// only: it does not start the client or read audio buffers.
+fn raw_capture_initialize(endpoint_id: &str) -> std::result::Result<(), AudioError> {
+    use windows::Win32::Media::Audio::{
+        eCapture, IAudioClient, IMMDeviceEnumerator, MMDeviceEnumerator,
+        AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
+        AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE,
+    };
+    use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
+
+    let com = ComApartmentProbe::initialize()?;
+    let enumerator: IMMDeviceEnumerator = unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)? };
+    let devices = unsafe { enumerator.EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE)? };
+    let count = unsafe { devices.GetCount()? };
+    let mut selected = None;
+    for index in 0..count {
+        let device = unsafe { devices.Item(index)? };
+        let id = unsafe { device.GetId()?.to_string().map_err(|_| AudioError::InvalidUtf16)? };
+        if id == endpoint_id {
+            selected = Some(device);
+            break;
+        }
+    }
+    let device = selected.ok_or_else(|| AudioError::Windows(windows::core::Error::new(
+        windows::core::HRESULT(0x80070490u32 as i32),
+        "capture endpoint not found",
+    )))?;
+    let client: IAudioClient = unsafe { device.Activate(CLSCTX_ALL, None)? };
+    let format = unsafe { client.GetMixFormat()? };
+    let initialized = unsafe {
+        client.Initialize(
+            AUDCLNT_SHAREMODE_SHARED,
+            AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST,
+            1_000_000,
+            0,
+            format,
+            None,
+        )
+    };
+    unsafe { windows::Win32::System::Com::CoTaskMemFree(Some(format.cast())) };
+    initialized.map_err(|error| AudioError::WindowsOperation {
+        operation: "raw IAudioClient::Initialize(capture)",
+        error,
+    })?;
+    println!("raw_capture_init endpoint={} initialized=true", endpoint_id);
+    drop(com);
+    Ok(())
+}
+
+struct ComApartmentProbe;
+
+impl ComApartmentProbe {
+    fn initialize() -> std::result::Result<Self, AudioError> {
+        unsafe {
+            windows::Win32::System::Com::CoInitializeEx(
+                None,
+                windows::Win32::System::Com::COINIT_MULTITHREADED,
+            )
+            .ok()?;
+        }
+        Ok(Self)
+    }
+}
+
+impl Drop for ComApartmentProbe {
+    fn drop(&mut self) {
+        unsafe { windows::Win32::System::Com::CoUninitialize() }
+    }
 }
 
 struct TemporaryRecording {

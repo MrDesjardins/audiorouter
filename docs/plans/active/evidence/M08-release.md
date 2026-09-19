@@ -1,5 +1,95 @@
 # M08 release evidence
 
+## 2026-09-17 - current disposable NSIS smoke refresh
+
+The elevated `m08-installer-smoke.ps1` run produced a 4,888,262-byte x64
+unsigned NSIS bundle and removed the disposable bundle afterward. The run
+verified the expected output and unchanged `src-tauri/Cargo.toml`; it did not
+execute or install the bundle and changed no signing, driver, or audio
+configuration. This is unsigned bundler evidence only; clean-tree artifact
+preparation, production signing, installation, and release qualification remain
+open.
+
+## 2026-09-17 - disposable unsigned NSIS smoke refresh
+
+`tests/acceptance/m08-installer-smoke.ps1` passed after the pinned
+`@tauri-apps/cli@2.11.4` package was made available in the elevated build
+context. It produced a 4,877,364-byte x64 unsigned NSIS bundle, verified that
+the Tauri manifest remained unchanged, and removed the exact disposable bundle
+afterward. No installer execution, installation, signing, driver, or audio
+configuration action occurred. This does not close the clean-tree,
+production-signing, upgrade/rollback, or clean-machine gates.
+
+## 2026-09-17 - workspace regression after capability-boundary correction
+
+After physical/application/loopback node availability was corrected to match
+the implemented M02 user-mode adapters, the locked workspace regression passed
+again: CLI 36, MCP stdio 3, control 176 plus 3 guarded-live ignored, domain
+65, DSP 34, engine 116, plugin-host 70, worker-process 13, recording 40,
+storage 92, transport 19, Windows audio 88, and all doc-tests. This confirms
+the discovery change is compatible with shared API, control, engine, storage,
+and adapter behavior. It does not close endpoint presence, physical-latency,
+attended UI, clean-release, or deferred driver/signing gates.
+
+## 2026-09-17 - clean-tree release gate
+
+## 2026-09-17 - current formatting and lint gate
+
+`cargo fmt --all -- --check` and
+`cargo clippy --workspace --locked --all-targets --all-features -- -D
+warnings` both passed on the current tree. These are source-quality gates;
+they do not qualify a clean checkout, signed artifact, installer, hardware,
+attended UI, or deferred driver boundary.
+
+The guarded M08 release acceptance stopped before artifact creation because
+`prepare-artifacts.ps1` requires a clean Git working tree and the current
+checkout contains user changes. No stash, commit, reset, publication, driver,
+signing, or audio configuration action was performed. Release preparation
+remains unverified pending a clean checkout; this does not invalidate the
+existing portable and live routing evidence.
+
+## 2026-09-17 - current workspace quality refresh
+
+`cargo fmt --all -- --check` passed. The locked workspace regression also
+passed on the current tree: CLI 36, MCP stdio 3, control 176 plus 3 guarded
+live tests ignored, domain 65, DSP 34, engine 116, plugin-host 70,
+worker-process 13, recording 40, storage 92, transport 19, Windows-audio 88,
+and all doc-tests. This is current portable regression evidence; it does not
+close the clean-checkout, installer, signing, hardware, physical-latency,
+attended UI, or deferred-driver gates.
+
+## 2026-09-17 - traceability revalidation
+
+`m08-traceability.ps1` passed with all 159 normative requirement IDs covered
+by the delivery map, including multi-input/many-output routing, virtual bridge
+lease/generation contracts, shared CLI/MCP adapters, and M05 editor
+destinations. This is documentation coverage only and does not close the
+implementation, hardware, driver, signing, accessibility, latency, or release
+gates.
+
+## 2026-09-17 - recovery notification regression refresh
+
+The locked control library suite now passes 177 tests with three guarded live
+tests ignored after the resume endpoint-change retention fix. The added
+regression proves that a recovery resnapshot publishes the bounded
+`devices.changed` event; it does not close clean-checkout, signing, hardware,
+attended UI, or deferred-driver gates.
+
+## 2026-09-16 - normative traceability revalidation
+
+`m08-traceability.ps1` passed with all 159 normative requirement IDs covered
+by the delivery map, including current native bridge, multi-input/many-output,
+API/MCP, and visual-editor entries. This is documentation coverage only; it
+does not qualify implementation, hardware, driver, signing, accessibility,
+latency, or release gates.
+
+## 2026-09-16 - requirement traceability revalidation
+
+`tests/acceptance/m08-traceability.ps1` passed with all 159 normative
+requirement IDs covered by the delivery map. This is traceability evidence
+only and does not qualify implementation, hardware, driver, signing, or
+release gates.
+
 ## 2026-09-16 - elevated complete guarded acceptance at `1e9c60ce`
 
 The elevated `tests/acceptance/safe-all.ps1` chain passed with exit code 0 at
@@ -1541,3 +1631,69 @@ driver installation, production signing, clean-machine behavior, or physical
 latency. No driver was installed or loaded, and no signing mode, boot policy,
 plugin/startup registration, stream, default device, volume, mute, privacy,
 or persistent machine-audio configuration changed.
+# M08 release evidence
+
+## 2026-09-17 - current locked workspace regression
+
+`cargo test --workspace --locked -- --test-threads=1` passed on the current
+tree: CLI 36, MCP stdio 3, control 176 plus 3 guarded-live ignored, domain
+65, DSP 34, engine 116, plugin-host 70, worker-process 13, recording 40,
+storage 92, transport 19, Windows audio 88, and all doc-tests. This is a
+portable/shared-code regression result. It does not close guarded physical
+latency, attended UI/accessibility, real OS-transition delivery, plugin-rights
+or full-sandbox, clean-checkout release, or deferred driver/signing gates.
+
+The same current tree also passed `cargo fmt --all -- --check` and
+`cargo clippy --workspace --locked --all-targets --all-features -- -D
+warnings`. These are source-quality checks only; they do not change the
+deferred release, hardware, attended UI, sandbox, or driver gates.
+
+## 2026-09-17 - current artifact-preparation boundary
+
+The repository release entry point was invoked with a disposable output
+parent. It stopped at its intentional clean-tree guard with
+`release inputs must come from a clean Git working tree`, before building,
+creating artifacts, or changing project state. The disposable probe directory
+was removed afterward. The current worktree contains unrelated user changes
+and active documentation changes; no reset, stash, commit, or clean-tree
+bypass was attempted.
+
+## 2026-09-17 - post-privacy live-control workspace regression
+
+Following the guarded live privacy-propagation refresh, `cargo test
+--workspace --locked` passed across CLI 36, MCP stdio 3, control 177 plus 3
+guarded-live tests ignored, domain 65, DSP 34, engine 116, plugin-host 70,
+worker-process 13, protocol 8, recording 40, storage 92, transport 19,
+Windows audio 88, and all doc-tests. This confirms the live-control acceptance
+change did not regress portable behavior; it does not close the clean-release,
+hardware, attended UI, sandbox, signing, or deferred-driver gates.
+
+## 2026-09-18 - disposable unsigned NSIS smoke
+
+`tests/acceptance/m08-installer-smoke.ps1` passed after fetching the pinned
+Tauri CLI with the authorized package-network context. The debug x64 NSIS
+bundle produced `AudioRouter_0.1.0_x64-setup.exe` with a size of 4,887,249
+bytes. The script verified the source manifest hash and removed its disposable
+bundle directory afterward. This proves unsigned installer generation only;
+it does not qualify installation, signing, driver activation, clean-machine
+behavior, upgrade/rollback, or release publication.
+
+## 2026-09-18 - unsigned NSIS smoke requalification
+
+The same acceptance initially hit npm registry/cache `EACCES` in the restricted
+context; the authorized elevated retry passed. It produced the disposable
+debug x64 `AudioRouter_0.1.0_x64-setup.exe` bundle at 4,892,281 bytes,
+verified the source manifest hash, and removed its temporary bundle output.
+No installer execution, installation, signing, driver, or audio configuration
+action occurred. Clean-checkout, signing, install/upgrade/rollback, and
+managed-driver gates remain open.
+
+## 2026-09-18 - safe acceptance chain clean-tree boundary
+
+The administrator-authorized `tests/acceptance/safe-all.ps1` chain passed its
+available M00 through M07 compile, portable, SDK, plugin, shell, and
+documentation steps, then stopped at the M08 release step. The authoritative
+failure remained `tools/release/prepare-artifacts.ps1:39`: `release inputs must
+come from a clean Git working tree`. The runner removed 15 run-owned temporary
+children. No reset, stash, commit, or clean-tree bypass was attempted, so this
+is a confirmed release prerequisite rather than a release artifact result.

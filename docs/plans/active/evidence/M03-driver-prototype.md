@@ -1,5 +1,411 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-17 - signing material boundary
+
+The validation host has administrator access and a current-user `WDKTestCert`
+with a private key, but no production-trusted signing certificate was found.
+Windows rejected the unsigned package before adding it to the driver store.
+The local test certificate is developer-only and does not satisfy Secure Boot
+production trust; no certificate trust store, test-signing mode, Secure Boot,
+or boot policy was changed. Loaded-driver qualification therefore requires a
+production-signed package or an explicitly designated disposable test machine
+with an approved test-signing procedure.
+
+## 2026-09-17 - authorized x64 install boundary
+
+The scoped lifecycle preview reported a ready x64 package and no existing
+ownership state. The explicitly authorized install attempt invoked
+`pnputil /add-driver ... /install`, but Windows rejected the package with
+`No signature was present in the subject` (exit `-2146762496`); zero packages
+were added. Post-checks found no lifecycle state file, zero present
+`SWD\\AudioRouterVirtual` devices, and zero matching driver-store entries.
+Secure Boot remained enabled, and no test-signing or boot-policy change was
+made. A production- or explicitly test-signed package in an appropriate test
+environment is required before loaded PortCls qualification.
+
+## 2026-09-17 - signing prerequisite and managed lifecycle recheck
+
+The read-only `m03-signing-prerequisites.ps1` probe again stopped because
+`Win32_DeviceGuard` is unavailable on this host; VBS/HVCI evidence remains an
+environment boundary. Separately, `m03-virtual-buses.ps1` passed the bounded
+desired-state and persistence lifecycle. No signing mode, boot policy, driver,
+native device, endpoint, or audio configuration changed. These results do not
+close production signing or loaded PortCls qualification.
+
+## 2026-09-17 - portable bridge and x64 build requalification
+
+The Windows-audio bridge suite passed 88/88 tests, including coherent
+multi-input fan-out to multiple outputs, directional render-source and
+capture-sink publication, lease/generation checks, fail-closed stale and
+transient reads, resampling, and lifecycle rollback. The control suite passed
+175 tests with three guarded live tests ignored, including native bridge
+authorization/validation and virtual-route lifecycle coverage. The
+non-installing x64 M03 WDK build acceptance passed compilation,
+package/catalog signability, and source-contract checks. No driver was
+installed or loaded and no persistent audio configuration changed.
+
+The next M02/M03 gate is an isolated, separately authorized Windows
+environment that exposes the required signing/VBS evidence and permits
+driver installation/loading for endpoint-owned PortCls qualification.
+
+## 2026-09-17 - authorized temporary Software Device create/close probe
+
+After explicit user authorization, the native probe was run from an elevated
+PowerShell process with
+`--create --allow-device-create --instance codex-temp-bus --hold-ms 1000`.
+Windows reported `created instance=SWD\\AudioRouter\\codex-temp-bus`, the
+probe held the handle for the bounded one-second interval, closed it, and
+returned exit code 0. A subsequent elevated read-only
+`Get-PnpDevice -PresentOnly` query found zero present devices matching
+`SWD\\AudioRouterVirtual`. The executable/object outputs were removed.
+This is temporary Software Device API provisioning and cleanup evidence only;
+it does not claim driver installation, binding, signing, PortCls signal
+delivery, or production virtual audio endpoint qualification.
+
+## 2026-09-16 - source contract after capture-path correction
+
+The x64 and ARM64 non-installing `m03-driver-build.ps1` acceptances both
+passed WDK compilation, package/catalog signability, directional
+render-source/capture-sink bridge checks, lease/rundown identity, generation
+publication ordering, and fail-closed callback guards. No driver
+installation/loading, signing-mode, boot-policy, service, endpoint, or audio
+configuration action occurred.
+
+## 2026-09-16 - consolidated safe-chain recheck
+
+The non-installing `safe-all.ps1` chain passed M00 toolchain/native compile
+and M03 x64/ARM64 driver build/signability stages, then stopped at signing
+prerequisites because `Win32_DeviceGuard` is unavailable. Cleanup removed
+zero run-owned temporary children. No driver installation/loading,
+signing-mode, boot-policy, service, endpoint, or audio configuration action
+occurred.
+
+## 2026-09-16 - signing prerequisite recheck
+
+The read-only `m03-signing-prerequisites.ps1` probe stopped because this host
+does not expose `Win32_DeviceGuard`; VBS/HVCI state therefore remains
+unrecorded. No signing mode, boot policy, driver, endpoint, or audio
+configuration was changed. This is an environment evidence boundary, not a
+waiver of production signing requirements.
+
+## 2026-09-16 - x64 and ARM64 source-contract refresh
+
+`m03-driver-build.ps1` passed for both x64 and ARM64 on the current tree.
+The non-installing acceptance rechecked WDK compilation, package/catalog
+signability, directional render-source/capture-sink bridge checks,
+lease/rundown identity, generation publication ordering, and fail-closed
+WaveRT callback guards. No driver installation/loading, signing-mode,
+boot-policy, service, endpoint, or audio-configuration action occurred.
+Loaded PortCls transport, production signing, and clean-machine qualification
+remain open.
+
+## 2026-09-16 - consolidated safe-chain environment boundary
+
+`tests/acceptance/safe-all.ps1` passed M00 toolchain discovery/native compile
+and M03 x64/ARM64 driver build stages, then stopped at
+`m03-signing-prerequisites.ps1` because `Win32_DeviceGuard` is unavailable on
+this host. The acceptance cleanup removed zero run-owned temporary children.
+No driver installation/loading, signing-mode, boot-policy, service, endpoint,
+or audio configuration action occurred. A host exposing the required VBS
+query is still required for signing-prerequisite evidence.
+
+## 2026-09-16 - current x64 and ARM64 source-contract qualification
+
+The non-installing `m03-driver-build.ps1` acceptance passed for both x64 and
+ARM64 on the current tree. It rechecked WDK compilation, package/catalog
+signability, direction-aware render-source/capture-sink bridge publication,
+lease identity/rundown, generation publication ordering, and fail-closed
+WaveRT callback guards. No driver installation/loading, signing-mode,
+boot-policy, service, endpoint, or audio-configuration action occurred. This
+refreshes source/build evidence only; loaded PortCls transport, production
+signing, and clean-machine qualification remain open.
+
+## 2026-09-16 - virtual-bus lifecycle requalification
+
+`tests/acceptance/m03-virtual-buses.ps1` passed the safe managed desired-state
+and persistence lifecycle: eight-bus capacity, rename/enable/disable/delete,
+cross-session virtual-route persistence across CLI processes, cycle and
+conflicting-writer rejection, and stale-revision rejection. The harness made
+no native device provisioning, installation, loading, or audio-configuration
+change. This is control/persistence evidence; project-driver endpoint
+publication, loaded PortCls transport, and production signing remain open.
+
+## 2026-09-16 - x64 and ARM64 bridge requalification after M02 live run
+
+The non-installing acceptance passed for both
+`m03-driver-build.ps1 -Platform x64` and `-Platform ARM64` after the guarded
+live multi-input/many-output qualification. Both runs covered WDK compilation,
+package/catalog signability, direction-aware render-source and capture-sink
+bridge checks, lease ownership/rundown, generation publication ordering, and
+realtime fail-closed callback checks. No installation, loading, signing-mode,
+boot-policy, service, or audio-configuration action occurred. This is
+project-owned source/build evidence; loaded PortCls transport, production
+signing trust, and clean-machine endpoint qualification remain open.
+
+## 2026-09-16 - non-installing architecture requalification
+
+The x64 and ARM64 driver acceptances passed the project-owned WDK compile,
+catalog/signability, direction-aware render-source and capture-sink bridge,
+lease/generation, rundown, and fail-closed callback checks. The virtual-bus
+CLI acceptance also passed its desired-state and persistence lifecycle checks.
+No driver was installed or loaded, no signing mode or boot policy changed, and
+no audio configuration was modified. Production driver activation,
+clean-machine endpoint enumeration, and PortCls signal delivery remain open.
+
+## 2026-09-16 - x64 driver acceptance requalification
+
+`tests/acceptance/m03-driver-build.ps1 -Platform x64` passed the project-owned
+WDK compile, package/catalog signability checks, direction-aware WaveRT
+render-source and capture-sink callback guards, lease ownership/rundown
+validation, generation publication ordering, and fail-closed callback checks.
+The acceptance made no installation, loading, signing-mode, boot-policy,
+service, or audio-configuration change. This is source/build evidence only;
+production driver activation, clean-machine endpoint enumeration, and loaded
+PortCls signal delivery remain open.
+
+## 2026-09-16 - ARM64 driver acceptance requalification
+
+`tests/acceptance/m03-driver-build.ps1 -Platform ARM64` passed the project-owned
+WDK compile, package/catalog signability checks, direction-aware WaveRT
+render-source and capture-sink callback guards, lease ownership/rundown
+validation, generation publication ordering, and fail-closed callback checks.
+No installation, loading, signing-mode, boot-policy, service, or audio
+configuration action occurred. This completes the source/build evidence pair
+for x64 and ARM64; production signing trust, clean-machine qualification, and
+loaded PortCls signal delivery remain open.
+
+## 2026-09-16 - Software Device API capability probe
+
+`tests/acceptance/m03-swdevice-probe.ps1` compiled the native Software Device
+probe and passed its bounded dry-run for the `AudioRouter` enumerator,
+`HTREE\\ROOT\\0` parent, `SWD\\AudioRouterVirtual` hardware ID, and disposable
+instance identity. The temporary executable/object outputs were removed. This
+is no-side-effect capability evidence only: no software device, driver,
+endpoint, or persistent machine audio configuration was created.
+
+## 2026-09-16 - executable standalone tap handoff regression
+
+Added a Windows-audio unit regression that publishes a generation-bound graph,
+processes one synthetic render-source bridge block, and verifies a prebuilt
+`AudioTapSet` observes the processed quantum exactly once. The focused
+render-source pump tests passed 2/2. This is executable bridge/scheduler
+evidence without hardware access; loaded PortCls signal delivery remains
+unqualified.
+
+The same non-installing `m03-driver-build.ps1 -Platform ARM64` acceptance also
+passed on 2026-09-18, covering the ARM64 WDK compile, INF/package,
+signability/catalog, and lifecycle guard path. No installation, loading,
+signing-mode, boot-policy, service, or audio configuration action occurred.
+
+The no-side-effect `tests/acceptance/m03-swdevice-probe.ps1` acceptance also
+passed on 2026-09-18. Its native software-device API probe compiled and
+reported the bounded `SWD\\AudioRouterVirtual` dry-run plan, then removed its
+temporary executable/object. No software device, driver, endpoint, or machine
+audio configuration was created.
+
+## 2026-09-18 - x64 prototype build and signing prerequisite refresh
+
+`tests/acceptance/m03-driver-build.ps1` passed for the x64 project-owned
+prototype. The run covered WDK source-contract compilation, INF/package
+qualification, signability/catalog checks, and lifecycle guard cases without
+installation, loading, signing-mode, boot-policy, service, or audio
+configuration changes. The follow-up read-only
+`m03-signing-prerequisites.ps1` could not complete because this host does not
+expose `Win32_DeviceGuard`; no VBS or signing conclusion was inferred.
+
+## 2026-09-16 - bounded capture callback drains successive bridge quanta
+
+The project driver's capture-side WaveRT callback now loops over the bounded
+DMA displacement and consumes successive processed capture-sink bridge blocks,
+zero-filling only when the lease is unavailable or the bridge runs short. The
+callback remains allocation-free, nonblocking, and fail-closed. New source
+guards and the non-installing WDK acceptance passed for x64 and ARM64. This is
+source/build evidence; loaded PortCls delivery and endpoint timing remain
+unqualified.
+
+## 2026-09-16 - standalone render-source tap integration
+
+Standalone render-source pumping now uses a prebuilt `AudioTapSet` for the
+compiled graph, allowing processed quanta to reach virtual capture-sink
+writers and recorder nodes in addition to the selected physical render
+endpoint. Tap membership is established on the control thread and cleared on
+stop, detach, deletion, and crash recovery; the bounded pump never mutates
+tap membership. Focused control/Windows-audio suites passed (173 plus 2
+guarded-live ignores / 85 tests), and formatting passed. This remains
+portable/lifecycle evidence; loaded PortCls and external application
+qualification remain open.
+
+The matching `tests/acceptance/m03-driver-build.ps1 -Platform x64` rerun also
+passed the project-owned x64 WDK compile, signability, and catalog
+qualification path. No installation, loading, signing-mode, boot-policy,
+service, or audio configuration action occurred.
+
+The current `tests/acceptance/m03-swdevice-probe.ps1` acceptance also passed.
+It compiled the Windows Software Device API probe and completed the bounded
+`SWD\\AudioRouterVirtual` dry-run before removing its temporary executable.
+No software device, driver, endpoint, or machine audio configuration was
+created.
+
+## 2026-09-16 - full workspace requalification
+
+The locked Rust workspace passed all crate tests and doc-tests after the tap
+integration, including CLI/MCP (36 plus 3 stdio), control (173 plus 2
+guarded-live ignores), domain (65), DSP (34), engine (115), Windows-audio
+(85), and all remaining suites. No managed driver or virtual endpoint was
+activated; loaded PortCls and signing gates remain open.
+
+## 2026-09-16 - standalone render-source graph activation
+
+The control plane now compiles and publishes the authoritative session graph
+into an attached standalone `NativeBridgeInputWorker` before starting its
+render endpoint, with an exact running session generation check. This closes
+the prior path where the worker could start with no active scheduler graph and
+silently produce no routed output. Focused control/Windows-audio suites passed
+(173 plus 2 guarded-live ignores / 85 tests), and formatting passed. The
+standalone worker now carries the full prebuilt virtual capture-sink tap set;
+loaded PortCls and end-to-end endpoint qualification remain open.
+
+## 2026-09-16 - WaveRT bridge direction mapping
+
+Corrected the driver callback wiring so the render WaveRT stream publishes
+application audio through the `render-source` lease, and the capture WaveRT
+stream consumes processed audio from the `capture-sink` lease. The previous
+mapping was reversed and could not deliver the intended virtual input/output
+route. `tests/acceptance/m03-driver-build.ps1` now asserts both directions;
+x64 and ARM64 acceptance passed. This is source/build evidence only and does
+not qualify loaded PortCls ownership or external application compatibility.
+
+## 2026-09-16 - PCM bridge format boundary
+
+The project driver advertises 16-bit PCM render and 32-bit PCM capture
+formats. Its WaveRT callbacks now convert those endpoint samples to and from
+the bounded interleaved float32 bridge, retaining initialized-silence failure
+behavior and avoiding waits, allocation, logging, and control I/O in the
+callback. The guarded x64 and ARM64 M03 build acceptance passed with explicit
+source checks for both conversion directions. This repairs the build/source
+boundary but is not loaded PortCls or end-to-end virtual-endpoint evidence.
+
+## 2026-09-16 - x64 and ARM64 package/lifecycle requalification
+
+`tests/acceptance/m03-driver-build.ps1` passed for both `-Platform x64` and
+`-Platform ARM64`. The guarded acceptance covered endpoint identity and
+package completeness, preview-only install/uninstall plans, mandatory install
+consent, and refusal to uninstall an untracked package. Scope is project-owned
+WDK compile/signability and lifecycle-control evidence only: no installation,
+loading, signing-mode, boot-policy, service, or audio configuration action
+occurred. Loaded PortCls ownership and live virtual-endpoint qualification
+remain open.
+
+## 2026-09-16 - UI standalone render-source pump parity
+
+The UI typed backend now exposes `pumpNativeRenderSource`, and its scheduler
+selects that path only for the authoritative `render-source` adapter kind,
+with a bounded 64-quantum request and dedicated output telemetry. Forwarding,
+selection, and running/stopped telemetry regressions passed; the full UI
+suite passed 19 files/244 tests with TypeScript typecheck. No driver or
+endpoint was opened; loaded PortCls qualification remains open.
+
+## 2026-09-16 - cross-layer regression requalification
+
+The locked Rust workspace passed all crate tests and doc-tests after the
+Recorder graph-binding UI change, including control (173 tests plus 2
+guarded-live ignores), Windows-audio (85), engine (115), domain (65), DSP
+(34), CLI (36 plus 3 MCP stdio), and all remaining suites. The full UI suite
+also passed 19 files/242 tests with TypeScript typecheck. No driver was
+installed or loaded; this does not close managed PortCls or signing gates.
+
+## 2026-09-16 - render-source pump boundary regression
+
+Added focused control tests for `nativeRenderSources.pump`. A read-only
+client is denied before parameters are inspected, and discovery is asserted
+to require `sessionId`/`generation` while bounding `maxQuanta` to the native
+worker wake budget. The filtered control suite passed 2 tests; formatting
+passed. This remains portable API evidence, not driver or endpoint evidence.
+
+## 2026-09-16 - non-native virtual-bus acceptance requalification
+
+`tests/acceptance/m03-virtual-buses.ps1` passed after the shared
+`nativeRenderSources.pump` addition. The disposable-database run covered
+eight-bus capacity, revisioned three-route persistence, cycle and conflicting
+writer rejection, rename/enable/disable, and deletion. It performed no native
+provisioning, driver installation/loading, or audio configuration; this is
+desired-state and persistence evidence only.
+
+## 2026-09-16 - standalone render-source API parity
+
+Added `nativeRenderSources.pump` to the domain method registry, shared
+TypeScript contract, control schemas/dispatch, CLI/MCP focused tool catalog,
+and API reference. The method requires session-control authorization, a
+positive session generation, and a bounded `maxQuanta` budget; it cannot
+activate or attach a worker. Control/CLI tests passed (36 CLI, 3 MCP stdio,
+171 control plus 2 guarded-live ignores), contracts typecheck passed, and
+direct CLI schema generation passed. The contract-drift script could not run
+because its Node-spawned Cargo process was denied access to the target build
+lock; this environment limitation is recorded rather than waived. No driver
+or virtual endpoint was activated.
+
+## 2026-09-16 - standalone render-source worker lifecycle seam
+
+The control plane now consumes a validated render-source binding into a
+stopped `NativeBridgeInputWorker` independently of a duplex binding. It checks
+the enabled bus and nonzero graph generation before consuming the lease,
+starts/stops/pumps only for the matching running session generation, services
+heartbeats, deactivates the portable bridge on failure, and clears the worker
+on explicit detach, deletion, or crash recovery. A render-only worker is not
+accepted as graph-capable for plugin authorization. `cargo test -p
+audiorouter-control --locked -- --test-threads=1` passed 171 tests plus 2
+guarded-live ignores; `cargo test -p audiorouter-windows-audio --locked --
+--test-threads=1` passed 85 tests; strict Clippy and `cargo fmt --all
+--check` passed. This is control/adapter evidence only: no driver IOCTL,
+loaded PortCls callback, virtual endpoint compatibility, signing, or physical
+latency was exercised.
+
+The subsequent locked `cargo test --workspace --locked --
+--test-threads=1` requalification also passed all workspace crate tests and
+doc-tests, including control 171 plus 2 guarded-live ignores and
+Windows-audio 85 tests. No managed driver or virtual endpoint was activated.
+
+The follow-up conflict guard prevents a standalone render-source worker and a
+duplex worker from being attached concurrently, avoiding duplicate ownership
+of the same directional lease. Clippy, formatting, and the control suite
+remained green after this guard.
+
+## 2026-09-16 - canvas delivery routing coverage
+
+`ui/src/SessionFlowCanvas.test.ts` now covers exact-coordinate drag/drop for
+physical input, physical output, and mixer tools, in addition to the existing
+processor and virtual-bus paths. `npm.cmd test` passed 19 UI test files / 240
+tests and `npm.cmd run typecheck` passed. This is UI draft-adapter evidence;
+it does not prove endpoint activation, driver loading, signing, or hardware
+latency.
+
+## 2026-09-16 - safe-chain signing prerequisite environment limitation
+
+The complete `tests/acceptance/safe-all.ps1` chain was attempted after the
+bridge changes. Toolchain/native compile and both x64/ARM64 driver builds
+passed, but the chain stopped at signing prerequisites because
+`Win32_DeviceGuard` was unavailable and the script could not record the
+required VBS state. This attempt is not full-chain evidence. No installation,
+loading, signing-mode, boot-policy, service, or audio configuration action
+occurred; rerun on an environment exposing the required DeviceGuard query.
+
+## 2026-09-16 - x64 and ARM64 bridge build requalification
+
+`tests/acceptance/m03-driver-build.ps1` passed for both x64 and ARM64 after
+the bridge control changes, covering WDK compilation, catalog/signability, and
+the project-owned source contract. The checks performed no installation,
+loading, signing-mode, boot-policy, service, or audio configuration action.
+Loaded PortCls transport, production signing, and clean-machine qualification
+remain open.
+
+## 2026-09-16 - locked workspace requalification
+
+After the all-form heartbeat expansion, the locked Rust workspace passed all
+crate tests and doc-tests, including CLI/MCP (36 plus 3 stdio), control (171
+plus 2 guarded-live ignores), domain (65), DSP (34), engine (115), and
+Windows-audio (85). No driver or endpoint was opened. The separate safe-chain
+attempt remains limited by an unavailable `Win32_DeviceGuard` query.
+
 ## 2026-09-16 - M00 signing-toolchain prerequisite coverage
 
 The M00 toolchain gate now requires and reports the WDK `signtool.exe` path in
@@ -19,6 +425,25 @@ passed both driver source builds and the existing bridge/package guards. No
 signing, installation, loading, boot-policy change, or machine audio
 configuration change occurred. Production signing and isolated loaded-driver
 qualification remain open.
+
+## 2026-09-16 - transferred-worker heartbeat coverage
+
+The public `nativeBridges.heartbeat` control operation now refreshes both
+staged duplex bindings and a transferred `NativeBridgeDuplexWorker`. If the
+attached worker heartbeat fails, the control path deactivates the matching
+portable bridge and publishes the existing bus-scoped failure event. The
+control suite passed with 171 tests and 2 guarded-live ignores; strict Clippy
+and formatting passed. No driver or endpoint was opened. The loaded-driver
+heartbeat/cleanup run remains an authorized external gate.
+
+## 2026-09-16 - all prepared bridge forms are heartbeated
+
+The public heartbeat pass now services separately prepared capture-sink and
+render-source bindings in addition to staged duplex bindings and transferred
+duplex workers. It retains the first error after servicing all owners and
+keeps failed buses deactivated through the existing scoped failure event.
+Control tests passed with 171 tests and 2 guarded-live ignores; strict Clippy
+and formatting passed. No driver or endpoint was opened.
 
 ## 2026-09-16 - automated signing-prerequisite guard
 
@@ -278,6 +703,16 @@ partially constructed object when timer allocation or a later initialization
 step fails. The non-installing x64 WDK build/source-contract acceptance passed
 with zero signability errors/warnings and catalog generation. No driver was
 installed or loaded.
+
+## 2026-09-16 - stale render-source fail-closed output regression
+
+The native render-source pump now has an executable regression with a
+published runtime graph: a stale-generation bridge read submits a complete
+zeroed 64-frame stereo quantum, preserves the last consumed sequence, and
+continues bounded scheduler processing. The Windows-audio suite passed 85
+tests, strict Clippy and formatting passed, and no driver or endpoint was
+opened. This proves the user-mode privacy boundary; loaded PortCls transport,
+production signing, and physical/clean-machine qualification remain open.
 
 ## 2026-09-12 - content-rights boundary guard
 
@@ -1020,3 +1455,93 @@ default x64 and explicit ARM64 M03 steps included. The later M00/M01/M04/M05,
 M06, M07, M08, traceability, and documentation gates passed as well; 15
 run-owned temporary children were removed. No driver was installed or loaded
 and no persistent machine-audio configuration changed.
+## 2026-09-16 - shared project-driver bridge publication contract
+
+The shared API now exposes `nativeBridges.prepare`, `nativeBridges.detach`, and
+`nativeBridges.heartbeat` under `deviceAdministration`. Preparation derives
+matching protocol-1 render-source and capture-sink hellos from one enabled bus
+and positive generation, rejects any device path other than the exact
+`\\.\AudioRouterVirtualBridge` broker path, bounds lease/path inputs, and
+requires distinct absolute mapping paths. Detach closes only the requested
+paired lease; heartbeat runs on the control thread.
+
+Rust domain/control suites (65/171), CLI/MCP suites (36 unit plus 3 stdio),
+contracts typecheck, formatting, and diff checks passed. On non-Windows the
+dispatcher remains fail-closed. No project-owned driver was installed or
+loaded, and no mapping or endpoint was opened during portable validation; the
+driver IOCTL, PortCls callback, production signing, and isolated installation
+gates remain open.
+
+The control boundary also composes a prepared paired binding into a stopped
+`NativeBridgeDuplexWorker` from already-opened exact endpoint workers. It checks
+worker exclusivity and bus generation before removing the prepared binding,
+deactivates the portable fallback on transfer, and relies on worker drop for
+safe lease cleanup if attachment fails. This is composition evidence only; no
+managed-driver start, pump, heartbeat, or endpoint run was performed here.
+
+The MCP adapter now advertises focused `prepare_native_outputs`,
+`prepare_native_bridge`, `detach_native_bridge`, and `heartbeat_native_bridges`
+tools. They forward through the same discovered control methods and enrolled
+permission grant; the CLI generic `api call` remains available for full
+coverage. CLI/MCP verification passed with 36 unit tests and 3 stdio tests,
+including the 54-tool catalog. This adds adapter parity only and does not
+qualify driver transport or endpoint activation.
+
+Bridge owner cleanup was strengthened on 2026-09-16. A controller now drops
+its mapped view and removes each mapping file it created after a successful
+broker close; sessions opened against shared driver-owned mappings retain those
+files. Creation failures clean up their partial mapping before returning. The
+focused `native_bridge_session_owner_cleanup_removes_created_mapping`
+regression and the Windows-audio suite passed (84 tests), with strict Clippy
+green. This proves file/lease-owner cleanup logic only; no managed driver was
+installed or loaded.
+
+The locked Rust workspace was revalidated after this cleanup on 2026-09-16:
+all crate tests and doc-tests passed, including the Windows-audio suite (84
+tests). Strict Clippy passed for domain, engine, control, Windows-audio, and
+CLI; UI typecheck and the full UI suite passed separately (19 files, 236
+tests). Documentation acceptance passed for 54 Markdown files and 218 local
+links. No driver was installed or loaded. The remaining M03 evidence gate is
+an explicitly authorized isolated managed-driver start/pump/heartbeat/stop/
+detach run; production signing, physical latency, and clean-machine
+qualification remain open.
+
+## 2026-09-16 - heartbeat services all lease owners
+
+`nativeBridges.heartbeat` now continues to refresh an attached transferred
+duplex worker even when a staged binding reports an error in the same pass.
+The first error remains returned, and each failed bus is deactivated and
+reported through the existing scoped failure event. Control tests passed with
+171 tests and 2 guarded-live ignores; strict Clippy and formatting passed. No
+driver or endpoint was opened.
+
+The heartbeat audit was requalified on 2026-09-16 with the locked workspace:
+all crate tests and doc-tests passed, including 171 control tests plus 2
+guarded-live ignores and 85 Windows-audio tests. Strict Clippy and formatting
+passed. No driver or endpoint was opened; the remaining managed-driver lease,
+PortCls, signing, and clean-machine gates are unchanged.
+## 2026-09-16 - multi-input capture-sink lease servicing
+
+The bounded `nativeMultiInputs.pump` control path now services prepared
+capture-sink bridge leases before borrowing the native multi-input worker.
+Expired bindings are removed and their virtual routes deactivated through the
+existing fail-closed heartbeat path, preventing a long-running multi-input
+route from silently writing through an expired project-driver owner. This is
+portable control/lifecycle evidence; loaded PortCls delivery remains
+unqualified.
+
+## 2026-09-18 - signing prerequisite recheck
+
+The read-only `m03-signing-prerequisites.ps1` check was rerun and again stopped
+because `Win32_DeviceGuard` is unavailable on this host. No VBS/HVCI state,
+signing mode, driver package, service, boot policy, or audio configuration was
+changed; production signing and clean-machine driver qualification remain
+unverified.
+
+## 2026-09-18 - ARM64 build acceptance refresh
+
+`tests/acceptance/m03-driver-build.ps1 -Platform ARM64` passed the project-
+owned ARM64 WDK compile, signability, and catalog qualification path. No
+installation, loading, signing-mode, boot-policy, service, or audio
+configuration action occurred; production signing and clean-machine
+qualification remain open.

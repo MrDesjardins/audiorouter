@@ -1,5 +1,243 @@
 # M03 virtual-routing contract evidence
 
+## 2026-09-17 - current adapter-bridge recheck boundary
+
+The exact CABLE Output capture and CABLE Input render endpoint IDs remained in
+the active inventory. A non-elevated direct `adapter-bridge 100` probe returned
+`IAudioClient::Initialize(capture,polling)` HRESULT `0x80070057`, while the
+same raw Rust initialization and full bridge succeeded from an elevated
+process. The elevated bridge produced 4,800 captured frames, 37 processed
+quanta, 4,736 rendered frames, zero drops/xruns/deadline misses, and a
+25,072-byte finalized temporary recording. The capture adapter's exact
+`E_INVALIDARG` duration retry remains bounded and tested; the operative live
+qualification prerequisite is now recorded as the required elevated
+`deviceAdministration` execution context, not an endpoint-format failure.
+
+The authoritative elevated `m02-rust-adapter-bridge-live.ps1` acceptance then
+passed two 500 ms cycles on the same exact pair. Each cycle produced 51
+packets, 24,480 captured frames, 191 processed quanta, 24,448 rendered frames,
+zero non-finite tap samples, drops, xruns, or deadline misses, and a 25,072-byte
+finalized recording. Temporary streams and recordings were removed and media
+device state remained unchanged.
+
+## 2026-09-17 - current VB-Cable-first virtual-routing acceptance
+
+`tests/acceptance/m03-virtual-buses.ps1` passed the bounded desired-state
+planning and persistence lifecycle, including create/rename/enable/disable/
+delete operations, cross-session route persistence, cycle and conflicting-
+writer rejection, revision checks, and cleanup across separate CLI processes.
+The acceptance explicitly reported managed-device availability as
+`unavailable`; no native device provisioning, driver installation/loading, or
+machine audio configuration occurred. This is the current supported
+VB-Cable-first contract boundary, not managed-driver qualification.
+
+## 2026-09-16 - managed-device presence boundary
+
+An elevated read-only PnP query for `SWD\\AudioRouterVirtual*` returned no
+matching present device. The project-owned virtual endpoint is therefore not
+provisioned on this host. No device state changed; temporary creation remains
+an explicitly authorized isolated-environment operation.
+
+## 2026-09-16 - locked workspace requalification after lifecycle hardening
+
+The locked workspace unit/integration suites and doc-tests passed after the
+managed-device rollback and native schema updates. Relevant totals included
+control 175 passed with 3 guarded live tests ignored, storage 92, engine 116,
+Windows-audio 87, CLI 36, and transport 19, with the remaining crate suites
+also green. No driver or endpoint was opened; loaded PortCls and release
+hardware gates remain separate.
+
+## 2026-09-16 - managed virtual-bus lifecycle requalification
+
+`m03-virtual-buses.ps1` passed bounded create/rename/enable/disable/delete,
+cross-session route persistence, cycle/conflicting-writer rejection, and
+revision checks across separate CLI processes. This qualifies the durable
+desired-state lifecycle only; no native device provisioning, driver
+installation/loading, or audio configuration action occurred.
+
+## 2026-09-16 - managed software-device dry-run
+
+`m03-swdevice-probe.ps1` passed its native compile and default no-side-effect
+dry-run. The probe did not create a software device, install/load a driver,
+open an endpoint, or change machine audio configuration. Explicit
+administrator-authorized provisioning and loaded-driver endpoint qualification
+remain separate gates.
+
+## 2026-09-16 - locked workspace requalification
+
+The locked workspace test run passed across all crate unit/integration suites
+and doc-tests after the public bridge authorization and bounds additions. The
+control suite included 175 passing tests and three guarded live tests ignored;
+no driver or endpoint was opened. This is cross-layer portable evidence, not
+loaded PortCls transport qualification.
+
+## 2026-09-16 - full control requalification
+
+The locked control suite passed 175 tests with three explicitly guarded live
+tests ignored. This includes shared bridge authorization and bounds,
+generation/lease cleanup, virtual route isolation, and fail-closed recovery.
+No driver or endpoint was opened; loaded PortCls transport remains a separate
+gate.
+
+## 2026-09-16 - public bridge input bounds
+
+The Windows-gated control regression
+`native_bridge_preparation_rejects_unbounded_or_relative_inputs_before_driver_open`
+passes: zero lease, zero generation, and relative mapping paths are rejected
+at `prepare_native_bridge` before any driver open. Formatting passed. This is
+bounded API validation evidence and does not qualify loaded-driver transport.
+
+## 2026-09-16 - native bridge authorization boundary
+
+The control regression `native_bridge_preparation_requires_device_administration_before_parameters`
+passes: an operator without the dedicated `deviceAdministration` scope is
+rejected by `nativeBridges.prepare` before bridge parameters are processed or
+native bridge state is mutated. This is shared API authorization evidence and
+does not qualify loaded-driver transport.
+
+## 2026-09-16 - virtual shelf-drop placement regression
+
+The M05 canvas regression now covers a virtual capture-sink shelf drop through
+the App adapter: the existing bus ID prompt remains explicit, the returned
+node identity is retained, and the exact computed canvas position is persisted
+in presentation layout. The focused `SessionFlowCanvas` suite passed 14 tests
+with TypeScript typecheck green. This is stopped draft/UI evidence and does
+not claim managed-driver endpoint publication.
+
+## 2026-09-16 - explicit multi-input branch binding
+
+The shared API now exposes nativeMultiInputs.bindBranches. Control validates
+the running generation and exact ordered destination node IDs from the
+prepared fan-out graph, then attaches only the matching virtual-bus or exact
+recorder-node observer sets while the worker is stopped. Reordered, unknown, unsupported, or
+generation-stale branches fail before tap membership changes. This provides
+the control contract for drag/drop-authored virtual output branches; it is
+portable/control evidence and does not qualify a loaded driver or live
+multi-capture route.
+
+When a prepared multi-input graph contains only virtual capture-sink or
+recorder branches, binding creates a bounded tap-only output owner. Physical
+branches are rejected without a prepared physical render owner, preserving
+truthful endpoint state and branch isolation. The worker still starts and
+stops under the exact session generation; this remains portable evidence until
+the live project-driver bridge consumes the tap.
+
+Virtual-only multi-input routes now receive a tap-only output owner during
+branch binding, so virtual capture sinks and recorders are not discarded when
+no physical render endpoint is selected. Physical branches still require an
+exact prepared render owner; the live project-driver bridge and external
+application capture remain unqualified.
+
+The shared preparation API now also exposes `nativeMultiInputs.prepare`,
+returning the exact committed source and destination node order used for
+virtual branch binding. It is generation-bound and stopped until explicit
+session start; no endpoint substitution or implicit default selection occurs.
+
+## 2026-09-16 - bounded mixer/fanout ring handoff
+
+The engine now exposes `CompiledMixerFanoutGraph::process_to_rings` for the
+next native adapter boundary. It performs one validated multi-input mix and
+submits each physical-or-virtual branch to its own preallocated ring; a full
+branch is dropped independently, and destination shape errors are rejected
+before mixer mutation. The focused compiler/runtime regression and full engine
+suite passed 1/1 and 115/115. This does not qualify loaded PortCls transport or
+physical endpoint timing.
+
+## 2026-09-18 - virtual-bus CLI acceptance refresh
+
+`tests/acceptance/m03-virtual-buses.ps1` passed on the current tree, covering
+the bounded desired-state and persistence lifecycle, including capacity,
+route persistence, cycle/conflicting-writer rejection, and revision safety.
+The run performed no native device provisioning, driver installation/loading,
+or machine audio configuration.
+
+## 2026-09-18 - virtual-bus desired-state acceptance refresh
+
+`tests/acceptance/m03-virtual-buses.ps1` passed on the current tree. The run
+revalidated eight-bus capacity, create/rename/enable/disable/delete lifecycle,
+cross-session route persistence, cycle and conflicting-writer rejection, and
+revision safety across separate CLI processes. It performed no native device
+provisioning, driver installation/loading, or audio configuration action.
+
+## 2026-09-17 - current desired-state lifecycle refresh
+
+`tests/acceptance/m03-virtual-buses.ps1` passed on the current tree. The
+acceptance covered bounded desired-state planning, persistence, lifecycle,
+revision/conflict handling, and explicit unavailable managed-device
+provisioning. No native device was provisioned, installed, loaded, or changed;
+existing VB-Cable/Voicemeeter/physical endpoints remain the supported current
+profile boundary.
+
+## 2026-09-16 - direct fan-out supports virtual capture sinks
+
+The engine’s bounded direct fan-out compiler now accepts both physical output
+and virtual capture-sink destinations, each with its own validated channel
+matrix. A regression covers one source feeding two branches with one virtual
+sink; the engine suite passed all 115 tests and formatting passed. This is
+portable graph/runtime evidence and does not qualify loaded driver transport,
+virtual endpoint identity, or external application compatibility.
+
+The full locked Rust workspace was requalified after this change; all crate
+tests and doc-tests passed, including engine (115), control (173 plus 2
+guarded-live ignores), Windows-audio (85), CLI/MCP (36 plus 3 stdio), and the
+remaining suites. No managed driver or virtual endpoint was activated.
+
+## 2026-09-16 - latest guarded fan-out after bridge contract correction
+
+The elevated control-owned lifecycle was re-run with the exact existing
+VB-Cable capture endpoint and the two explicit render branches. The 500 ms
+run captured 24,000 frames, processed 187 quanta, rendered 23,936 primary
+frames, and rendered 23,424 fan-out frames (`fanout_packets=183`), then
+stopped cleanly. No persistent audio configuration changed. This is
+user-mode VB-Cable fan-out evidence; managed AudioRouter PortCls transport,
+virtual endpoint identity, production signing, and physical latency remain
+open.
+
+## 2026-09-16 - latest guarded multi-output native fan-out lifecycle
+
+Command:
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m02-control-native-live.ps1 -AllowLiveAudio -CaptureEndpointId
+'{0.0.1.00000000}.{06268191-5f8c-42ed-827e-d3c7a19637ed}' -RenderEndpointId
+'{0.0.0.00000000}.{81a91c6d-531c-4b80-853a-af1f4ebf50de}'
+-OutputFanoutEndpointIds
+'{0.0.0.00000000}.{d31b2d50-0969-4fdf-8961-ad642e573743}'`
+
+With elevated read-only Windows access, the 500 ms control-owned lifecycle
+used the exact active VB-Cable capture and two virtual render branches. It
+captured 23,520 frames, processed 183 quanta, rendered 23,424 primary frames,
+and rendered 23,424 fan-out frames, then stopped cleanly. Process environment
+was restored and no persistent audio configuration changed. This qualifies
+user-mode VB-Cable fan-out only; managed PortCls transport, production
+signing, physical latency, and clean-machine qualification remain open.
+
+## 2026-09-16 - earlier guarded multi-output native fan-out lifecycle
+
+Command:
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m02-control-native-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 500 -CaptureEndpointId
+'{0.0.1.00000000}.{06268191-5f8c-42ed-827e-d3c7a19637ed}'
+-RenderEndpointId
+'{0.0.0.00000000}.{81a91c6d-531c-4b80-853a-af1f4ebf50de}'
+-OutputFanoutEndpointIds
+'{0.0.0.00000000}.{d31b2d50-0969-4fdf-8961-ad642e573743}'`
+
+With elevated read-only Windows access, the control-owned lifecycle prepared
+the exact VB-Cable capture endpoint and two explicitly selected virtual render
+branches (`CABLE In 16ch` plus `Voicemeeter In 1`). The 500 ms run delivered
+23,520 captured frames, 183 processed quanta, 23,040 primary rendered frames,
+137 fan-out packets, and 17,536 fan-out rendered frames. Session stop and
+explicit fan-out detach completed successfully; no endpoint default, volume,
+mute, privacy, driver, signing, or persistent audio configuration changed.
+
+An initial attempt using the canonical `CABLE Input` render endpoint returned
+`AUDCLNT_E_DEVICE_IN_USE` during exact render initialization. The diagnostic
+remained distinct and the qualification retried with other exact active virtual
+render IDs; no endpoint was substituted automatically. This qualifies the
+current user-mode multi-output adapter path, not the managed AudioRouter driver,
+PortCls ownership, production signing, or physical latency.
+
 ## 2026-09-16 - endpoint invalidation survives read-only inventory
 
 The control seam now retains endpoint changes observed by `devices.list` while
@@ -158,9 +396,11 @@ plan. Focused storage/control tests and strict Clippy pass.
 
 Inventory results now include explicit capability flags, the required
 deviceAdministration privilege, restart impact, and client-impact metadata.
-All render/capture capabilities and endpoint IDs remain unavailable until the
-managed driver exists, preventing callers from mistaking desired state for
-provisioned Windows devices.
+At this historical managed-device checkpoint, the AudioRouter-owned
+render/capture capabilities and endpoint IDs remained unavailable until the
+managed driver existed, preventing callers from mistaking desired state for
+provisioned Windows devices. This does not describe the separately qualified
+existing VB-Cable/physical endpoint boundary used by the current profile.
 
 Lifecycle authorization is explicitly scoped to `deviceAdministration`; the
 read-only, editor, and operator convenience grants cannot plan or apply bus
@@ -397,6 +637,28 @@ strict Clippy, formatting, and documentation validation pass; driver
 installation and endpoint activation remain open.
 # M03 virtual routing evidence
 
+## 2026-09-17 - current virtual-bus lifecycle refresh
+
+`tests/acceptance/m03-virtual-buses.ps1` passed the current CLI desired-state
+and persistence gate: bounded create/rename/enable/disable/delete lifecycle,
+eight-bus capacity enforcement, persisted three-route cross-session topology,
+cycle/conflicting-writer/stale-revision rejection, and explicit
+managed-driver-unavailable reporting. The temporary database was removed.
+This qualifies the portable desired-state and existing-device routing boundary;
+it performs no native device provisioning, installation, loading, or audio
+configuration action.
+
+## 2026-09-16 - three-route reference CLI acceptance
+
+`tests/acceptance/m03-virtual-buses.ps1` now applies a three-route
+cross-session fixture for Desktop In, Voice Chat, and Monitor buses, then
+lists the routes from a separate CLI process and verifies all three stable bus
+identities. The same run retains cycle, conflicting-writer, stale-revision,
+eight-bus capacity, and disabled-before-delete checks. Acceptance passed.
+This proves desired-state and persistence routing only; no native device,
+driver, installation, loading, or persistent machine audio configuration was
+accessed.
+
 ## 2026-09-16 - exact endpoint invalidation policy
 
 The Windows endpoint worker now retains the exact capture/render endpoint IDs
@@ -429,3 +691,30 @@ stopped and removed temporary streams/files and verified media-device state was
 unchanged. This is existing user-mode VB-Cable evidence only; the managed
 AudioRouter driver, loaded PortCls transport, signing, and physical-latency
 gates remain open.
+# M03 virtual-routing evidence
+
+## 2026-09-17 - adapter-bridge endpoint-selection resolution
+
+The initial explicitly selected DELL/P32p-30 physical-render retries returned
+`adapter_bridge_error=audio frame size was invalid` before telemetry because
+those IDs were absent from the probe's current active inventory. Re-running
+`m02-rust-adapter-bridge-live.ps1 -AllowLiveAudio` with the exact current CABLE
+Output/CABLE Input pair passed two 500 ms cycles: 24,480 and 24,960 captured
+frames, 191 and 195 processed quanta, 24,448 and 24,960 rendered frames, zero
+drops/xruns/deadline misses, and 25,072-byte finalized temporary recordings.
+All temporary resources were removed and media-device state was unchanged.
+The physical-monitor pair remains unqualified by this probe because it is not
+present in its current active inventory. The probe now emits an explicit
+`adapter_bridge_diagnostic=endpoint_not_present` record before retaining the
+stable legacy HRESULT text, so future endpoint-availability failures are
+distinguishable from frame-shape failures.
+
+## 2026-09-16 - bounded mixer/fanout ring handoff
+
+The engine now exposes `CompiledMixerFanoutGraph::process_to_rings` for the
+next native adapter boundary. It performs one validated multi-input mix and
+submits each physical-or-virtual branch to its own preallocated ring; a full
+branch is dropped independently, and destination shape errors are rejected
+before mixer mutation. The focused compiler/runtime regression and full engine
+suite passed 1/1 and 115/115. This does not qualify loaded PortCls transport or
+physical endpoint timing.

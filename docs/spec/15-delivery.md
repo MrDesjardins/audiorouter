@@ -2,6 +2,19 @@
 
 Milestone ownership: all milestones. This is the stable release map; execution status lives in the [active plan](../plans/active/current.md).
 
+## Active scope decision (2026-09-17)
+
+The current delivery track is VB-Cable-first. The project-owned kernel driver,
+PortCls integration, production signing, and clean-machine driver installation
+are deferred because the required signing and trusted-installation path is not
+available. Existing VB-Cable/Voicemeeter and physical WASAPI endpoints remain
+the supported external I/O boundary for completing non-driver routing, tool,
+editor, processing, recording, automation, recovery, and documentation work.
+This is a scope deferral, not completion of the M03/M08 managed-driver gates;
+the current profile's supported-device requirements are evidenced through
+existing endpoints, while the managed VDEV and signed-release requirements are
+normative only for a future signed track.
+
 ## Milestone sequence
 
 | Milestone | Outcome | Prerequisites | Release gate |

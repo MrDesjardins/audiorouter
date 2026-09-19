@@ -1,5 +1,41 @@
 # M04 effects and recording evidence
 
+## 2026-09-17 - current portable M04 acceptance refresh
+
+`tests/acceptance/m04-dsp-recording.ps1` passed the current tree: 34 DSP tests,
+40 recording/recovery tests, workspace formatting, strict DSP/recording Clippy,
+and diff validation. The run covered bounded built-in processing, pitch,
+recording formats, metadata, segmentation, checkpoint recovery, and file
+integrity. This is portable processing/file-boundary evidence; native realtime
+hardware latency and attended UI gates remain separate.
+
+## 2026-09-17 - current DSP and recording acceptance refresh
+
+`tests/acceptance/m04-dsp-recording.ps1` passed 34 DSP tests and 40
+recording/recovery tests on the current tree. The run covered bounded finite
+processing, pitch duration and tone behavior, stateful dynamics/EQ/meter
+paths, WAV/FLAC metadata and frame integrity, segmentation, checkpoint
+recovery, and fail-closed worker errors. No audio device or machine
+configuration changed. These are portable processing/file-boundary results,
+not physical-latency, attended UI, or driver qualification.
+
+## 2026-09-16 - processing and recording requalification
+
+`m04-dsp-recording.ps1` passed 34 DSP tests and 40 recording/recovery tests.
+Coverage includes finite bounded processing, stereo dynamics, WAV/FLAC
+integrity, segmented frame boundaries, checkpoint recovery, and fail-closed
+worker errors. No audio device or machine configuration changed.
+
+## 2026-09-16 - M04 acceptance requalification
+
+`tests/acceptance/m04-dsp-recording.ps1` passed 34 DSP and 40 recording tests.
+Coverage includes bounded stateful processing, non-finite fail-closed output,
+WAV/FLAC frame and metadata integrity, recorder queue boundaries, segmented
+outputs, and recovery. The acceptance changed no audio device or machine
+configuration. This supports processing/recording branches in the native
+fan-out path; it is not loaded-driver, PortCls, external-application, or
+physical-latency evidence.
+
 ## 2026-09-16 - allocation-free delay transition smoothing
 
 `DelayLine` now crossfades between the previous and requested read taps over
@@ -1179,3 +1215,33 @@ idempotency options. It dispatches through the authorized `Record` scope and
 rejects unsupported format/channel/rate values before opening storage. CLI
 tests (31), strict Clippy, formatting, and diff checks passed; the backend
 still owns approved-root validation and file creation.
+
+## 2026-09-17 - current DSP and recording requalification
+
+`tests/acceptance/m04-dsp-recording.ps1` passed on the current tree:
+
+```text
+audiorouter_dsp: 34 passed; 0 failed
+audiorouter_recording: 40 passed; 0 failed
+```
+
+The DSP run includes bounded semitone/cent validation, bypass sanitization,
+streaming pitch state across blocks, steady-tone pitch behavior, and the
+sixty-second duration regression at both ±12 semitones. Recording coverage
+includes WAV/FLAC finalization, metadata, bounded queues, checkpoints,
+recovery, segmented output, and library refresh. This is portable processing
+and file-boundary evidence; it does not establish physical pitch quality,
+physical latency, or long-duration live audio performance.
+
+## 2026-09-18 - current DSP and recording acceptance refresh
+
+`tests/acceptance/m04-dsp-recording.ps1` passed again on the current tree:
+34 DSP tests, 40 recording tests, all associated doc-tests, formatting,
+strict package Clippy, and diff checks. The scope remains portable transfer
+functions, pitch/voice processing, file boundaries, checkpoints, recovery,
+segmentation, and library behavior; it does not establish physical pitch
+quality, physical latency, or long-duration live audio performance.
+
+The wrapper was rerun later on 2026-09-18 and again passed 34 DSP tests, 40
+recording tests, both crate doc-test sets, and its formatting/strict-Clippy/
+diff checks. No audio device or machine configuration was accessed.

@@ -1,5 +1,113 @@
 # Native endpoint and loopback requalification (2026-09-12)
 
+## 2026-09-17 - direct native CABLE signal-path refresh
+
+The elevated `m00-native-loopback.ps1 -AllowLiveAudio` acceptance passed with
+the exact installed VB-Cable pair: a temporary 1,500 ms tone rendered through
+`CABLE Input` and 1,000 ms capture through `CABLE Output` produced 207,516
+nonzero payload bytes. Native start/stop/reset cleanup passed, temporary probe
+artifacts were removed, and defaults, volume, mute, privacy, drivers, signing,
+and startup configuration were unchanged. This is direct existing-device
+signal-path evidence, not calibrated physical/acoustic latency evidence.
+
+## 2026-09-17 - event-driven CABLE lifecycle refresh
+
+The elevated `m00-native-event-live.ps1 -AllowLiveAudio -DurationMilliseconds
+500` acceptance passed event-callback capture and render on the exact CABLE
+pair: 24,000 captured frames and 27,840 submitted silent-render frames.
+Initialization, event registration, start, stop, reset, and cleanup passed;
+defaults, volume, mute, privacy, drivers, signing, and startup configuration
+were unchanged. This is existing-device event/lifecycle evidence, not a
+physical-latency measurement.
+
+## 2026-09-17 - Rust process-loopback include/exclude refresh
+
+The elevated `m00-rust-process-live.ps1 -AllowLiveAudio -DurationMilliseconds
+250` acceptance passed both include and exclude modes. Each bounded run
+reported 24 source packets, 10,584 source frames converted to 11,392 engine
+frames at 44.1-to-48 kHz, 89 scheduler quanta, generation 1, zero rejected
+packets, and zero scheduler xruns or queue overruns/underruns. Streams stopped
+and reset cleanly; media-device identity/state and persistent configuration
+were unchanged. This qualifies the Rust process-loopback adapter boundary,
+not universal application compatibility or physical latency.
+
+## 2026-09-17 - current native existing-device loopback rerun
+
+The elevated `m00-native-loopback.ps1 -AllowLiveAudio` acceptance passed again
+with the exact installed VB-Cable pair (`CABLE Input` render and `CABLE Output`
+capture): 55,858 nonzero captured bytes over a 500 ms capture while a 750 ms
+tone rendered. Temporary native probe artifacts were removed and defaults,
+volume, mute, privacy, drivers, signing, and startup configuration were
+unchanged. This confirms the existing-device signal path remains usable through
+the native reference probe while the Rust capture adapter's separate
+`E_INVALIDARG` boundary remains open.
+
+## 2026-09-17 - current event-driven CABLE lifecycle refresh
+
+The elevated `m00-native-event-live.ps1 -AllowLiveAudio -DurationMilliseconds
+500` acceptance passed on the exact CABLE Input render/CABLE Output capture
+pair. The event-driven capture completed with 24,480 frames and the silent
+render submitted 28,320 frames; initialization, event registration, start,
+stop, reset, and cleanup all passed. Defaults, volume, mute, privacy, drivers,
+signing, startup configuration, and persistent audio state were unchanged.
+This remains existing-device event-lifecycle evidence, not physical latency or
+production-driver evidence.
+
+## 2026-09-17 - current VB-Cable digital signal-path refresh
+
+The elevated `m00-native-loopback.ps1 -AllowLiveAudio` acceptance passed using
+the exact `CABLE Input (VB-Audio Virtual Cable)` render and `CABLE Output
+(VB-Audio Virtual Cable)` capture endpoints. A 1,000 ms capture observed
+213,044 nonzero payload bytes while a 1,500 ms tone rendered. Temporary probe
+processes and artifacts were removed; defaults, volume, mute, privacy, driver,
+signing, and startup configuration were unchanged. This is digital existing-
+device signal-path evidence, not calibrated physical or acoustic latency.
+
+## 2026-09-17 - current VB-Cable impulse correlation
+
+The elevated `m00-native-impulse.ps1 -AllowLiveAudio -ImpulseCount 100`
+acceptance used the exact existing VB-Cable render/capture pair and detected
+98 of 100 expected impulse groups. The p95 inter-impulse spacing error was
+zero frames and the estimated digital onset was 84.96 ms. Disposable probe
+artifacts were cleaned up and no persistent audio configuration changed. This
+is bounded digital signal-path evidence; the onset is not calibrated acoustic
+latency or a physical p95 gate.
+
+## 2026-09-17 - current VB-Cable event-driven lifecycle
+
+The elevated `m00-native-event-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 200` acceptance passed against the exact existing
+`CABLE Input (VB-Audio Virtual Cable)` render and `CABLE Output (VB-Audio
+Virtual Cable)` capture endpoints. Capture initialized and ran through its
+event path for 10,080 frames; silent render submitted 14,400 frames. Both
+streams stopped and cleaned up, and defaults, volume, mute, privacy, drivers,
+signing, startup, and persistent audio configuration remained unchanged.
+This is existing-device event-lifecycle evidence, not calibrated physical
+latency or production-driver qualification.
+
+## 2026-09-17 - VB-Cable digital impulse requalification
+
+The elevated `m00-native-impulse.ps1 -AllowLiveAudio -ImpulseCount 100` probe
+used the exact `CABLE Input (VB-Audio Virtual Cable)` render and `CABLE Output
+(VB-Audio Virtual Cable)` capture endpoints. It detected 97 of 100 expected
+impulse groups, measured zero p95 inter-impulse spacing error, and estimated a
+76.56 ms digital onset. Temporary probe artifacts were removed and the media
+snapshot remained unchanged. This is bounded digital signal-path evidence,
+not calibrated physical/acoustic latency, driver callback timing, or release
+qualification.
+
+## 2026-09-17 - current VB-Cable event lifecycle refresh
+
+The elevated `m00-native-event-live.ps1 -AllowLiveAudio -DurationMilliseconds
+200` acceptance passed against the exact existing VB-Cable pair. Capture
+initialized, registered its event, started, captured 9,600 frames, stopped,
+and reset; render initialized, registered its event, started, submitted
+13,920 silent frames, stopped, and reset. Temporary probe artifacts were
+removed and defaults, volume, mute, privacy, drivers, signing, startup, and
+persistent audio configuration remained unchanged. This is existing-device
+event lifecycle evidence, not calibrated physical latency or production-driver
+qualification.
+
 ## 2026-09-16 - guarded digital impulse correlation
 
 The guarded `m00-native-impulse.ps1 -AllowLiveAudio -ImpulseCount 100`
@@ -710,6 +818,18 @@ installed Visual Studio Community 2026/MSVC and Windows SDK/WDK toolchain.
 `main.cpp` compiled successfully, the temporary executable/object outputs were
 cleaned, and the probe was not executed. No audio stream, driver, signing mode,
 or machine configuration action occurred.
+
+## Toolchain compatibility refresh (2026-09-18)
+
+The read-only `m00-toolchain.ps1` acceptance passed with Visual Studio 18
+Community, MSVC 14.51.36231, Windows SDK/WDK `10.0.28000.0`, and the matching
+`signtool.exe`. No SDK installation, driver action, signing-mode change, or
+audio configuration action occurred.
+
+The read-only `m00-toolchain.ps1` compatibility check was rerun on 2026-09-18
+and passed with Visual Studio 18 Community, MSVC 14.51.36231, matching SDK/WDK
+10.0.28000.0, and the matching x64 `signtool.exe`. No SDK installation,
+driver action, signing-mode change, or audio configuration action occurred.
 
 The compile-only acceptance was requalified again at the current revision using
 the installed Visual Studio Community 2026/MSVC and Windows SDK/WDK toolchain.
@@ -1497,3 +1617,66 @@ This is digital signal-path evidence using an existing third-party virtual
 cable; it does not claim that AudioRouter creates or owns a managed virtual
 driver. Defaults, volume, mute, privacy, driver, signing, startup, and
 persistent machine audio configuration were unchanged.
+
+## Native event lifecycle refresh (2026-09-17)
+
+The explicitly authorized `m00-native-event-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 200` run passed against the existing VB-Audio pair:
+capture processed 9,600 frames and silent render submitted 14,400 frames.
+Both event-driven lifecycles stopped/reset successfully, temporary probe
+artifacts were removed, and the media-device snapshot remained unchanged. No
+defaults, volume, mute, privacy, driver, signing, startup, or persistent
+audio configuration changed. This remains event/lifecycle evidence only, not
+calibrated physical latency or managed-driver timing evidence.
+
+## Native digital impulse correlation refresh (2026-09-17)
+
+The explicitly authorized `m00-native-impulse.ps1 -AllowLiveAudio
+-ImpulseCount 100` run detected 97 of 100 expected impulse groups with zero
+p95 spacing error and an estimated digital onset of 87.71 ms. Temporary probe
+artifacts were cleaned and the acceptance scope remained limited to bounded
+signal correlation through the existing VB-Cable pair. This estimate is not
+calibrated acoustic/physical latency evidence and does not qualify managed
+driver timing.
+
+## Native probe compile refresh (2026-09-18)
+
+`tests/acceptance/m00-native-build.ps1` passed the compile-only native probe
+acceptance. No audio stream, driver, signing-mode, or machine-configuration
+action occurred; this is toolchain/native-boundary evidence only.
+
+## Native format inventory refresh (2026-09-18)
+
+The elevated read-only `m00-native-format-inventory.ps1` acceptance passed for
+34 active endpoints. Every endpoint returned successful mix-format activation
+metadata and a bounded rate/channel/bit-depth record; observed formats were
+48 kHz mono/stereo and 96 kHz mono/eight-channel float layouts. The media
+snapshot remained unchanged and temporary probe artifacts were removed. No
+stream, driver, or machine configuration action occurred.
+
+## Native event lifecycle refresh (2026-09-18)
+
+The elevated `m00-native-event-live.ps1 -AllowLiveAudio -DurationMilliseconds
+500` acceptance passed with exact CABLE Output capture and silent PD200X
+render endpoints. Capture processed 24,480 frames and render submitted 28,320
+frames; both event-driven lifecycles initialized, started, stopped, and reset
+successfully. Temporary probe artifacts were removed and the media-device
+snapshot remained unchanged. This is event/lifecycle evidence only and does
+not qualify calibrated physical latency, OS-transition reopen, or managed
+driver timing.
+
+The read-only inventory was rerun on 2026-09-18. The non-elevated attempt
+received `Get-PnpDevice` access denied (`0x80041003`); the authorized elevated
+retry passed for 34 active endpoints and reported bounded 48 kHz mono/stereo
+and 96 kHz mono/eight-channel float formats. No stream, driver, or machine
+configuration action occurred.
+
+## Native digital impulse correlation refresh (2026-09-18)
+
+The authorized `m00-native-impulse.ps1 -AllowLiveAudio -ImpulseCount 100`
+acceptance passed against the existing VB-Cable pair. It detected 97 of 100
+expected impulse groups, measured zero-frame p95 spacing error, and estimated
+an 81.02 ms digital onset. Temporary probe artifacts were removed. This is
+bounded software signal-correlation evidence only; the estimate is not
+calibrated acoustic/physical latency and does not qualify managed-driver
+callback timing.

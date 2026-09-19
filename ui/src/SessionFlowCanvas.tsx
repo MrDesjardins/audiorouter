@@ -25,10 +25,11 @@ type SessionFlowCanvasProps = {
   selectedNodeIds?: string[];
   onSelect: (id: string) => void;
   onSelectMany?: (ids: string[]) => void;
-  onConnect: (connection: Connection) => void;
+  onConnect: (connection: Connection, dropPosition?: { x: number; y: number }) => string | void;
   onRemoveConnection?: (edgeId: string) => void;
   onRemoveNode?: (nodeId: string) => void;
   onAddLibraryNode?: (kind: LibraryNodeKind, position: { x: number; y: number }) => string | void;
+  onAddVirtualBusNode?: (direction: "renderSource" | "captureSink", position: { x: number; y: number }) => string | void;
   canEdit?: boolean;
 };
 
@@ -60,7 +61,11 @@ function isLibraryNodeKind(value: string): value is LibraryNodeKind {
   return libraryEntries.some((entry) => entry.kind === value);
 }
 
-export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onRemoveNode, onAddLibraryNode, canEdit = true }: SessionFlowCanvasProps) {
+function isVirtualBusKind(value: string): value is "virtualRenderSource" | "virtualCaptureSink" {
+  return value === "virtualRenderSource" || value === "virtualCaptureSink";
+}
+
+export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onRemoveNode, onAddLibraryNode, onAddVirtualBusNode, canEdit = true }: SessionFlowCanvasProps) {
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
   const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey));
   const positionsRef = useRef(positions);
@@ -85,6 +90,24 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
       writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
     }
   };
+  const addVirtualBusNode = (direction: "renderSource" | "captureSink", position: { x: number; y: number }) => {
+    const nodeId = onAddVirtualBusNode?.(direction, position);
+    if (nodeId) {
+      const next = { ...positionsRef.current, [nodeId]: position };
+      positionsRef.current = next;
+      setPositions(next);
+      writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
+    }
+  };
+  const routeLibraryDrop = (kind: string, position: { x: number; y: number }) => {
+    const nodeId = onConnect({ source: LIBRARY_DROP_SOURCE, sourceHandle: kind, target: "__drop__", targetHandle: null }, position);
+    if (nodeId) {
+      const next = { ...positionsRef.current, [nodeId]: position };
+      positionsRef.current = next;
+      setPositions(next);
+      writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
+    }
+  };
   const nodes: FlowNode[] = session.nodes.map((node, index) => ({
     id: node.id,
     position: positions[node.id] ?? positionFor(index),
@@ -93,7 +116,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
         <div className="flow-node-content" aria-label={`${node.name}, ${node.kind}`}>
           {node.ports.filter((port) => port.direction === "input").map((port, portIndex) => <Handle key={`input-${port.name}`} type="target" id={port.name} position={Position.Left} style={{ top: `${35 + portIndex * 18}px` }} aria-label={`${node.name} ${port.name} input`} />)}
           <span className="node-kind">{node.kind}</span>
-          <strong>{node.name}</strong>
+          <div className="flow-node-title"><strong>{node.name}</strong>{canEdit && <button type="button" className="flow-node-delete" aria-label={`Delete ${node.name}`} title={`Delete ${node.name}`} onClick={(event) => { event.stopPropagation(); if (onRemoveNode) onRemoveNode(node.id); else globalThis.dispatchEvent(new CustomEvent("audiorouter:remove-node", { detail: { nodeId: node.id } })); }}>×</button>}</div>
           <small>{node.ports.length} port{node.ports.length === 1 ? "" : "s"} - {node.enabled ? "enabled" : "disabled"}</small>
           <span className="flow-port-list">{nodePortLabels(node).map((port) => <small key={port}>{port}</small>)}</span>
           {node.ports.filter((port) => port.direction === "output").map((port, portIndex) => <Handle key={`output-${port.name}`} type="source" id={port.name} position={Position.Right} style={{ top: `${35 + portIndex * 18}px` }} aria-label={`${node.name} ${port.name} output`} />)}
@@ -125,13 +148,14 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
   }));
 
   return (
-    <div className="session-flow-canvas" aria-label="Signal-flow graph" onDragOver={(event) => { if (event.dataTransfer.types.includes("application/x-audiorouter-library-kind")) event.preventDefault(); }} onDrop={(event) => { const kind = event.dataTransfer.getData("application/x-audiorouter-library-kind"); event.preventDefault(); if (!isLibraryNodeKind(kind)) return; const bounds = event.currentTarget.getBoundingClientRect(); const position = libraryDropPosition(event.clientX, event.clientY, bounds); if (onAddLibraryNode) addLibraryNode(kind, position); else onConnect({ source: LIBRARY_DROP_SOURCE, sourceHandle: kind, target: "__drop__", targetHandle: null }); }}>
-      <div className="canvas-library" aria-label="Drag processors to canvas"><strong>Drag or select to add</strong>{libraryEntries.filter((entry): entry is typeof entry & { kind: LibraryNodeKind } => entry.kind !== undefined).map((entry) => <button type="button" key={`drag-${entry.id}`} draggable={canEdit} disabled={!canEdit} onClick={() => addLibraryNode(entry.kind, positionFor(session.nodes.length))} onDragStart={(event) => { if (!canEdit) return; event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-audiorouter-library-kind", entry.kind); }}>{entry.label}</button>)}</div>
+    <div className="session-flow-canvas" aria-label="Signal-flow graph" onDragOver={(event) => { if (event.dataTransfer.types.includes("application/x-audiorouter-library-kind")) event.preventDefault(); }} onDrop={(event) => { const kind = event.dataTransfer.getData("application/x-audiorouter-library-kind"); event.preventDefault(); const bounds = event.currentTarget.getBoundingClientRect(); const position = libraryDropPosition(event.clientX, event.clientY, bounds); if (isLibraryNodeKind(kind)) { if (onAddLibraryNode) addLibraryNode(kind, position); else routeLibraryDrop(kind, position); } else if (isVirtualBusKind(kind)) { if (onAddVirtualBusNode) addVirtualBusNode(kind === "virtualRenderSource" ? "renderSource" : "captureSink", position); else routeLibraryDrop(kind, position); } }}>
+      <div className="canvas-library" aria-label="Drag processors to canvas"><strong>Drag or select to add</strong>{libraryEntries.filter((entry) => entry.kind !== undefined || entry.virtualKind !== undefined).map((entry) => { const kind = entry.kind ?? entry.virtualKind!; const unavailable = Boolean(entry.unavailableReason); return <button type="button" key={`drag-${entry.id}`} draggable={canEdit && !unavailable} disabled={!canEdit || unavailable} title={entry.unavailableReason} onClick={() => { if (unavailable) return; if (entry.kind) addLibraryNode(entry.kind, positionFor(session.nodes.length)); else if (onAddVirtualBusNode) addVirtualBusNode(entry.virtualKind === "virtualRenderSource" ? "renderSource" : "captureSink", positionFor(session.nodes.length)); else routeLibraryDrop(entry.virtualKind!, positionFor(session.nodes.length)); }} onDragStart={(event) => { if (!canEdit || unavailable) return; event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-audiorouter-library-kind", kind); }}>{entry.label}</button>; })}</div>
       <div className="session-flow-toolbar"><span className="muted">Positions are presentation-only.</span><span className="muted" role="status" aria-live="polite">{selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} selected</span><button type="button" className="secondary" onClick={tidyLayout}>Tidy layout</button><button type="button" className="secondary" onClick={() => { clearLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey); positionsRef.current = {}; setPositions({}); }}>Reset layout</button></div>
       <ReactFlow
         nodes={nodes}
         edges={edges}
         fitView
+        onInit={(instance) => { globalThis.requestAnimationFrame(() => instance.fitView({ padding: 0.2 })); }}
         nodesConnectable={canEdit}
         nodesDraggable
         selectionOnDrag

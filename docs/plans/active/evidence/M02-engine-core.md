@@ -1,5 +1,16 @@
 # M02 realtime engine core groundwork
 
+## 2026-09-17 - current elevated Rust process-loopback run
+
+The guarded `tests/acceptance/m00-rust-process-live.ps1 -AllowLiveAudio`
+acceptance passed both modes against the existing Windows audio boundary.
+Include and exclude each converted 11,025 source frames at 44.1 kHz into
+11,904 engine frames at 48 kHz across 93 quantum blocks. Both reported zero
+rejected packets, scheduler XRuns, and input/output overruns or underruns;
+streams stopped/reset and persistent audio configuration remained unchanged.
+This is asynchronous user-mode process-loopback and resampling evidence, not
+arbitrary process isolation, physical-latency, or production-driver evidence.
+
 ## 2026-09-12 - Non-blocking ownership for stateful DSP
 
 `RuntimeGraph` now protects each prepared stateful built-in processor with an
@@ -423,3 +434,33 @@ reported zero rejected packets and zero scheduler XRuns. Include produced
 unchanged and the adapter stopped/reset its streams. This is asynchronous
 user-mode process-loopback and resampling evidence, not production-driver or
 physical-latency evidence.
+
+## 2026-09-17 - current privacy and sibling-failure regressions
+
+The focused current-tree regressions passed:
+
+```text
+cargo test -p audiorouter-engine --locked privacy_mute_silences_only_the_process_local_block
+1 passed; 0 failed
+cargo test -p audiorouter-control --locked privacy_mute_is_authorized_and_durable_across_control_restart
+1 passed; 0 failed
+cargo test -p audiorouter-control --locked failed_node_recorder_does_not_stop_healthy_sibling
+1 passed; 0 failed
+```
+
+Together these verify process-local physical-capture silence, authorized
+durable privacy state across control restart, and sibling-route isolation when
+a recorder node fails. They do not disable other applications' direct
+microphone access or qualify Windows hardware privacy settings.
+
+## 2026-09-17 - current Rust process-loopback requalification
+
+The elevated `tests/acceptance/m00-rust-process-live.ps1 -AllowLiveAudio`
+acceptance passed in both modes. Include mode converted 10,584 source frames
+at 44.1 kHz into 11,392 engine frames at 48 kHz across 89 quantum blocks;
+exclude mode converted 11,025 source frames into 11,904 engine frames across
+93 blocks. Both modes reported zero rejected packets, scheduler XRuns, and
+input/output overruns or underruns. Streams stopped/reset and persistent audio
+configuration remained unchanged. This is asynchronous user-mode
+process-loopback and resampling evidence, not arbitrary process isolation,
+physical-latency, or production-driver evidence.

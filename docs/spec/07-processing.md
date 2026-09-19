@@ -76,6 +76,13 @@ and open/closed state per channel. A callback-owned state lock is never waited
 on by a telemetry reader, so a busy read returns unavailable and the audio path
 continues unchanged.
 
+The native multi-input/many-output preparation path reuses the same prepared
+processor stages for a bounded linear chain between the mixer and its physical,
+virtual, recording, or tool branches. Plugin stages must already have an exact
+isolated-worker binding; preparation and graph publication remain control-plane
+operations, while realtime execution performs no plugin IPC or dynamic
+membership changes.
+
 An inspected x64 VST2/VST3 result may be retained in a graph as a stopped,
 disabled plugin placeholder carrying its binary path, format, fingerprint, and
 class identity. A placeholder is authoring state only: activation must reject

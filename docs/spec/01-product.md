@@ -2,6 +2,17 @@
 
 Milestone ownership: M00 establishes feasibility; M01–M07 deliver behavior; M08 verifies the complete v1 release.
 
+## Revised current scope — VB-Cable first (2026-09-17)
+
+The current delivery track supports routing through already-installed VB-Cable,
+Voicemeeter, physical WASAPI, and other existing virtual endpoints. This
+provides the usable external-device boundary for the non-driver feature set.
+AudioRouter-owned virtual endpoint provisioning and persistence remain
+normative product requirements, but are deferred because production signing,
+trusted installation, and clean-machine driver qualification are not currently
+available. Existing-device routing must not be described as an AudioRouter
+driver or as completion of the managed virtual-device requirements.
+
 ## Product intent
 
 AudioRouter gives Windows users a visible, understandable path from a sound source through optional processing to one or more destinations. It combines routing and useful effects in one product. An external assistant can inspect and edit exactly the same configuration as the person using the canvas. An LLM is optional; audio operation must not depend on one.
@@ -12,7 +23,7 @@ The user's words “compensation tools with gates” are interpreted as dynamics
 
 - **PROD-01 — Platform.** v1 shall support Windows 11 x64 only. Windows 10, Linux, macOS, Windows Server, and Windows on ARM are not supported targets. M00 shall pin tested Windows 11 builds; M08 shall test the then-supported release matrix. Shared packages may be portable internally without creating a cross-platform support obligation.
 - **PROD-02 — Backend ownership.** Every supported audio/configuration action available in the UI shall be available through the public local API and CLI; MCP shall expose discovery and dispatch for the same actions subject to identical permissions. Presentation-only actions such as window placement need no audio API equivalent.
-- **PROD-03 — Primary workflow.** The product shall replace the need to combine a virtual mixer and a separate plugin host for the reference microphone/Discord/headphones/game-recording setup. A complete v1 shall include first-class virtual endpoint provisioning; use of a separately installed cable is an interim prototype path only.
+- **PROD-03 — Primary workflow.** The product shall replace the need to combine a virtual mixer and a separate plugin host for the reference microphone/Discord/headphones/game-recording setup. In the current VB-Cable-first delivery profile, the workflow binds and routes through explicitly selected existing VB-Cable, Voicemeeter, physical WASAPI, and other installed virtual endpoints. First-class AudioRouter-owned virtual endpoint provisioning belongs to the deferred managed-driver profile and is not required to complete the current profile.
 - **PROD-04 — Understandability.** Users shall see source, processing order, branching, active destinations, channel mapping, bypass, mute, error, and recording state without opening unrelated mixer applications. Templates and sensible defaults shall produce usable routes before advanced settings are needed.
 - **PROD-05 — Background operation.** Closing the editor shall leave explicitly running sessions operating. Saved endpoints shall survive a reboot. Audio processing may resume after user sign-in when enabled; operation before sign-in is outside v1.
 - **PROD-06 — Offline operation.** After installation, routing, effects, recording, editing, API discovery, and CLI/MCP operation shall function without an account, subscription, internet access, or cloud inference. An external LLM may have its own requirements, outside AudioRouter.
@@ -24,7 +35,7 @@ The user's words “compensation tools with gates” are interpreted as dynamics
 | Slice | Delivered value | Not a completion claim |
 | --- | --- | --- |
 | M00 feasibility | Measured Windows capture/render and a credible signed-driver path | No product yet |
-| M01–M02 foundation | Headless API, simulated graph, then physical audio and app capture | Virtual microphone workflow incomplete |
+| M01–M02 foundation | Headless API, simulated graph, physical audio, app capture, and existing-device virtual routing | AudioRouter-owned virtual microphone workflow deferred |
 | M03–M04 functional alpha | Virtual buses, built-in voice chain, recording, CLI routing | UX, plugin compatibility, recovery unfinished |
 | M05–M06 usable beta | Visual editor and isolated VST3/pitch support | Release hardening unfinished |
 | M07–M08 v1 | MCP parity, recovery, signed installation, acceptance evidence | Future feature list is excluded |

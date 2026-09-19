@@ -2,6 +2,15 @@
 
 Milestone ownership: M03 routes; M04 effects/recording; M05 guided setup; M07 automation; M08 end-to-end acceptance. Scenario IDs remain stable across implementations.
 
+## Current endpoint boundary
+
+For the revised VB-Cable-first track, the virtual endpoint names in these
+scenarios are satisfied by explicitly selected existing VB-Cable/Voicemeeter
+endpoints where available. The backend still owns graph validation, routing,
+permissions, persistence, and fail-closed behavior. AudioRouter-owned bus
+provisioning and driver lifecycle remain deferred and are not implied by these
+existing-device scenarios.
+
 ## UC-01: Gaming, voice chat, and separate recording
 
 Use three named virtual buses: `Desktop In` (apps render here), `Voice Chat` (Discord captures here), and `Game Recording` (OBS or another recorder captures here). Names are editable labels; the API stores stable IDs. Headphones are a physical render endpoint. The microphone is a physical capture endpoint.
@@ -92,6 +101,10 @@ Save and run the reference setup, opt into start-at-sign-in, reboot, and sign in
 
 ## UC-10: Entirely headless setup
 
-Using only CLI and a separately authorized driver installer, enumerate devices, create the buses, create and validate the graph, start it, change gain, inspect meters, record a file, export, stop, and restore from export with device rebinding.
+Using only CLI and an existing authorized VB-Cable/Voicemeeter installation,
+enumerate devices, bind the available endpoints, create and validate the
+graph, start it, change gain, inspect meters, record a file, export, stop, and
+restore from export with device rebinding. AudioRouter-owned bus provisioning
+is a separate deferred capability.
 
 **Acceptance:** all operations have structured results and meaningful exit codes. UI and MCP clients show the same configuration and failures. External app selection may still require that app's own UI; document this boundary in command output instead of claiming AudioRouter controls Discord internally.

@@ -1,6 +1,10 @@
 # M07 — MCP parity, persistence, and recovery hardening
 
-Status: MCP, persistence, and portable recovery orchestration implemented; sign-in background lifecycle and native restart acceptance remain open. Prerequisite: M06. Outcome: external assistants and people can safely share configuration, and approved sessions survive ordinary lifecycle events.
+Status: MCP, persistence, portable recovery orchestration, and the reversible
+per-user sign-in registration helper are implemented; attended shell/tray
+usability, OS-notification delivery, and native audio restart acceptance remain
+open. Prerequisite: M06. Outcome: external assistants and people can safely
+share configuration, and approved sessions survive ordinary lifecycle events.
 
 ## Read first
 
@@ -31,6 +35,21 @@ Run three-client concurrency, lost replies, repeated idempotency keys, server re
 No cloud model integration, provider account storage, remote HTTP/MCP control, arbitrary shell execution, or recording audio sent to LLM tools. A stdio MCP client runs locally within enrolled permissions. Keep migrations/backups and startup registration reversible; never silently restore expired/revoked grants.
 
 ## Handoff
+
+The current desktop/CLI/MCP baseline uses an authenticated same-user Windows
+named pipe. It does not expose an IP address or TCP port, and an arbitrary
+Firefox page cannot connect to it. A future browser adapter must forward the
+same generated JSON-RPC contract rather than create a second graph API, and
+must separately qualify loopback binding, exact origin policy, enrollment and
+revocation, mutation scopes, bounded frames/queues, rate limits, reconnect and
+shutdown behavior, and tray-visible endpoint state. Do not label a named pipe
+as browser-ready or display a fabricated IP/port.
+
+The tray must retain explicit Open, Close window, Quit and stop audio, privacy
+mute, session/recording status, and backend-transport status actions. The
+current shell shows the actual local pipe and explicitly reports browser
+access as unavailable; a future TCP/WebSocket listener may replace that text
+only after the security and lifecycle gate passes.
 
 Deliver the API parity checklist, tested MCP client/protocol versions, migration/recovery runbooks, security results, endurance data, and unresolved release risks. M08 should package and verify a complete implementation, not discover missing core features.
 

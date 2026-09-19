@@ -18,18 +18,20 @@ describe("node library search", () => {
     ]);
     expect(libraryEntries.find((entry) => entry.id === "physical-input")?.kind).toBe("physicalInput");
     expect(libraryEntries.find((entry) => entry.id === "physical-output")?.kind).toBe("physicalOutput");
+    expect(libraryEntries.find((entry) => entry.id === "existing-virtual-output")?.kind).toBe("physicalOutput");
   });
 
-  it("keeps virtual bus entries discoverable but unavailable", () => {
+  it("keeps virtual bus entries discoverable and typed for drag-and-drop", () => {
     expect(filterLibraryEntries(libraryEntries, "virtual bus").map((entry) => entry.id)).toEqual([
       "virtual-render-source",
       "virtual-capture-sink",
     ]);
-    expect(
-      libraryEntries.filter((entry) => entry.id.startsWith("virtual-")).every(
-        (entry) => entry.kind === undefined && entry.unavailableReason?.includes("M03") === true,
-      ),
-    ).toBe(true);
+    const renderSource = libraryEntries.find((entry) => entry.id === "virtual-render-source");
+    const captureSink = libraryEntries.find((entry) => entry.id === "virtual-capture-sink");
+    expect(renderSource?.virtualKind).toBe("virtualRenderSource");
+    expect(captureSink?.virtualKind).toBe("virtualCaptureSink");
+    expect(renderSource?.kind).toBeUndefined();
+    expect(captureSink?.unavailableReason).toBe("Requires the deferred AudioRouter-managed signed driver");
   });
 
   it("returns all entries for blank queries", () => {
@@ -43,9 +45,17 @@ describe("node library search", () => {
     expect(libraryEntryAccessibleLabel(libraryEntries.find((entry) => entry.id === "gain")!)).toBe("Gain, Effect");
   });
 
-  it("directs recorder actions to the dedicated recorder panel", () => {
+  it("exposes recorder graph placement while keeping actions in the recorder panel", () => {
     const recorder = libraryEntries.find((entry) => entry.id === "recorder");
-    expect(recorder?.unavailableReason).toBe("Use the Recorder panel to control recording");
-    expect(recorder?.kind).toBeUndefined();
+    expect(recorder?.kind).toBe("recorder");
+    expect(recorder?.unavailableReason).toBeUndefined();
+  });
+
+  it("exposes the graph-native Test Signal as an available source", () => {
+    expect(libraryEntries.find((entry) => entry.id === "test-signal")).toMatchObject({
+      label: "Test Signal",
+      category: "Source",
+      kind: "testSignal",
+    });
   });
 });

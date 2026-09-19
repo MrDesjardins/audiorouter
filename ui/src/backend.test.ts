@@ -286,6 +286,18 @@ describe("live event cursor", () => {
     expect(received).toEqual({ method: "recordings.list", params: { sessionId: demoSession.id, limit: 500 } });
   });
 
+  it("forwards native output fan-out preparation through the shared API", async () => {
+    let received: unknown;
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return { sessionId: demoSession.id, generation: 3, state: "configured-stopped", renderEndpointIds: ["render-a", "render-b"], outputCount: 2 };
+      },
+    } as never;
+    await expect(createLiveBackend(client, demoSession.id).prepareNativeOutputs!(demoSession.id, 3, ["render-a", "render-b"])).resolves.toMatchObject({ outputCount: 2 });
+    expect(received).toEqual({ method: "nativeOutputs.prepare", params: { sessionId: demoSession.id, generation: 3, renderEndpointIds: ["render-a", "render-b"] } });
+  });
+
   it("normalizes a paged recording response for the existing UI row contract", async () => {
     const row = { id: "take-1" };
     const client = {
@@ -455,6 +467,17 @@ describe("live event cursor", () => {
       method: "nativeDuplex.pump",
       params: { sessionId: demoSession.id, generation: 8, maxInputQuanta: 1, maxOutputPackets: 2 },
     });
+  });
+
+  it("forwards the bounded render-source pump with the exact session generation", async () => {
+    let received: unknown;
+    const result = { sessionId: demoSession.id, generation: 9, packets: 2, processedQuanta: 2, renderedFrames: 256, droppedRenderFrames: 0 };
+    const client = {
+      request: async (method: string, params: unknown) => { received = { method, params }; return result; },
+    } as never;
+    const backend = createLiveBackend(client, demoSession.id);
+    await expect(backend.pumpNativeRenderSource?.(demoSession.id, 9, 2)).resolves.toEqual(result);
+    expect(received).toEqual({ method: "nativeRenderSources.pump", params: { sessionId: demoSession.id, generation: 9, maxQuanta: 2 } });
   });
 
   it("forwards explicit plugin scan and inspection requests", async () => {

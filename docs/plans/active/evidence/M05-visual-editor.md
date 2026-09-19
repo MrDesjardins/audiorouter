@@ -1,5 +1,225 @@
 # M05 visual editor evidence
 
+## 2026-09-17 - continuation acceptance refresh
+
+`tests/acceptance/m05-ui.ps1` passed in the current worktree: TypeScript
+typecheck, all 19 UI test files with 257 tests, and the temporary four-file
+production build. The automated matrix still covers drag/drop into physical
+output, existing-virtual output through the supported physical-output branch,
+processors, and recorder destinations. No audio, driver, or machine
+configuration changed; attended accessibility, first-run, scaling, and live
+drag/drop review remain unverified without a targetable interactive surface.
+
+## 2026-09-17 - current automated editor acceptance refresh
+
+`tests/acceptance/m05-ui.ps1` passed TypeScript typecheck, all 19 UI test
+files, 257 tests, and a temporary four-file production build. The automated
+coverage includes draft graph editing, physical/processor/recorder
+destinations, and existing-virtual-output shelf drops. This remains automated
+UI evidence; attended keyboard/Narrator/scaling/first-run review and live
+drag-and-drop acceptance remain unverified because no targetable interactive
+surface is available.
+
+## 2026-09-17 - drag/drop evidence count refresh
+
+`tests/acceptance/m05-ui.ps1` passed again with TypeScript typecheck, 19 UI
+test files, 257 passing tests, and a disposable four-file production build.
+The current evidence was corrected so older requalification entries no longer
+report the superseded 246-test count. New App-level regressions exercise
+physical-input, physical-output, recorder, and existing-virtual-output drops
+through the real draft adapter. The existing-virtual-output entry maps to the
+supported physical-output branch; managed virtual-bus nodes remain explicitly
+deferred. Automated coverage still proves stopped draft placement for physical,
+existing-virtual, processor, and recorder nodes;
+attended accessibility, first-run, scaling, and live drag/drop remain open.
+
+## 2026-09-17 - attended review environment unavailable
+
+The Windows computer-use inventory returned no targetable applications or
+browsers, so an attended keyboard, Narrator, scaling, first-run, and live
+drag/drop review could not be performed. This is an environment limitation,
+not a pass. Automated UI evidence remains separate and the attended gate stays
+open.
+
+## 2026-09-17 - editor requalification
+
+`m05-ui.ps1` passed TypeScript typecheck, all 19 UI test files (256 tests),
+and the disposable four-file production build. The stopped-draft editor
+continues to cover drag/drop into physical, virtual, processor, and recorder
+destinations. This is UI-only evidence; attended accessibility, packaged
+shell, loaded driver, and live endpoint behavior remain separate gates.
+
+## 2026-09-16 - full editor requalification
+
+`m05-ui.ps1` passed TypeScript typecheck, all 19 UI test files (256 tests),
+and the disposable four-file production build after the native-routing
+adapter and lifecycle changes. The stopped-draft editor continues to cover
+drag/drop into physical, virtual, processor, and recorder destinations. No
+audio, driver, or machine configuration changed; attended accessibility,
+packaged shell, and loaded-endpoint behavior remain separate gates.
+
+## 2026-09-16 - full editor acceptance after virtual drop fix
+
+`tests/acceptance/m05-ui.ps1` passed TypeScript typecheck, all 19 UI test
+files/256 tests, and the disposable four-file production build after the
+virtual shelf-drop adapter change. This requalifies the integrated graph
+authoring surface, including multi-input controls, physical/virtual node
+placement, processor and recorder tooling, and route planning. It does not
+replace attended accessibility, packaged-shell, or loaded-driver endpoint
+evidence.
+
+## 2026-09-16 - virtual shelf-drop adapter position regression
+
+The App canvas adapter now returns the inserted virtual render-source or
+capture-sink node identity from a library drop, allowing the canvas to persist
+the exact bounded drop coordinates after the explicit existing-bus prompt.
+The focused `SessionFlowCanvas` and App accessibility suites passed together
+(99 tests), and TypeScript typecheck passed. This proves stopped draft
+authoring and presentation layout only; attended accessibility, packaged
+shell, and loaded-driver endpoint behavior remain separate gates.
+
+## 2026-09-16 - multi-input native routing controls
+
+The visual editor now exposes the shared `nativeMultiInputs.prepare` operation
+through a stopped-only panel for 2–8 exact active capture endpoints, retaining
+the user’s explicit source order. It recognizes the `multi-input` diagnostics
+adapter kind, reports bounded multi-input pump telemetry, and leaves branch
+binding to backend session start for physical outputs, virtual sinks,
+recorders, and tool observers. UI typechecking and all 245 UI tests passed;
+contracts typecheck and drift validation also passed. This is editor/API
+evidence, not live endpoint or driver qualification.
+
+The complete M05 acceptance was re-run after this integration: typecheck,
+19 UI test files/245 tests, and the temporary production build passed. The
+acceptance changed no audio, driver, or machine configuration.
+
+The source-order control was requalified after correcting native multi-select
+ordering behavior. Existing selections are retained in committed order while
+new selections are appended; the explicit reorder controls then determine the
+endpoint ID sequence sent to `nativeMultiInputs.prepare`. UI typecheck, 19 UI
+test files/245 tests, and the temporary production build passed.
+
+Direct interaction coverage now selects two exact active capture endpoints,
+uses the accessible move-up control, and asserts that the reordered endpoint
+ID sequence reaches `prepareNativeMultiInputs`. The current M05 acceptance
+passed with 19 UI test files/256 tests, typecheck, and a temporary production
+build; no audio, driver, or machine configuration changed.
+
+## 2026-09-16 - current UI acceptance requalification
+
+`tests/acceptance/m05-ui.ps1` passed at the current tree: TypeScript
+typecheck, 19 UI test files with 245 tests, and a temporary production build
+of four files. The build output was temporary and the acceptance scope changed
+no audio, driver, or machine configuration. This is presentation/editor
+evidence; backend commit validation and native endpoint qualification remain
+authoritative separate gates.
+
+## 2026-09-17 - destination binding boundary audit
+
+The authoritative graph schema confirms that `physicalOutput` nodes are
+destination topology nodes and do not store a machine-specific endpoint ID.
+Exact physical or existing-virtual endpoint identity is deliberately owned by
+the stopped native endpoint/fan-out binding API, which validates active IDs,
+format, ownership, and generation before opening audio. M05 shelf drops for
+physical input/output, existing virtual output, processors, and recorders
+therefore create valid draft destinations; the endpoint binding panel supplies
+the explicit existing-device selection before activation. This preserves
+portable graph import and avoids silently persisting machine-specific device
+identity. Automated drag/drop coverage passes; attended live drag/drop remains
+unverified.
+
+## 2026-09-17 - current UI and contract requalification
+
+`tests/acceptance/m05-ui.ps1` passed on the current tree with TypeScript
+typecheck, 19 UI test files and 257 tests, and a temporary four-file
+production build. The shared contract drift check also passed with 86 methods,
+19 node kinds, 7 processors, and 20 event categories. No audio endpoint,
+driver, or machine configuration was changed. This remains automated UI and
+contract evidence; attended accessibility, scaling, first-run, and live
+drag/drop acceptance remain unverified.
+
+## 2026-09-17 - current UI acceptance refresh
+
+`tests/acceptance/m05-ui.ps1` passed again on the current tree: TypeScript
+typecheck, 19 UI test files with 256 tests, and a temporary four-file
+production build. The temporary output was removed by the harness and no
+audio, driver, or machine configuration was changed. The CUA inventory still
+returned no targetable Windows applications or browsers, so attended keyboard,
+Narrator, scaling, first-run, and live drag/drop acceptance remains open.
+
+## 2026-09-17 - current automated UI requalification refresh
+
+`tests/acceptance/m05-ui.ps1` passed on the current tree: TypeScript
+typecheck, 19 UI test files with 256 tests, and a temporary four-file
+production build. This confirms the current editor, typed virtual-endpoint
+shelf drops, physical/processor/recorder destination draft connections, and
+accessibility regressions remain green. No audio, driver, or machine
+configuration changed. Attended keyboard, Narrator, scaling, first-run, and
+live drag/drop behavior remain unverified because no targetable interactive
+shell is available.
+
+## 2026-09-17 - attended shell availability recheck
+
+The already-built `src-tauri/target/debug/audiorouter-shell.exe` was launched
+as a disposable visible development process and remained running, but the
+authoritative computer-use inventory still returned no targetable Windows apps
+or browsers. The process was terminated after the check. This confirms the
+blocker is the automation surface's lack of a targetable app, not a missing
+AudioRouter shell binary; attended keyboard, Narrator, scaling, first-run,
+and live drag/drop acceptance remain unverified.
+
+## 2026-09-17 - current automated UI requalification
+
+`tests/acceptance/m05-ui.ps1` passed on the current tree: TypeScript
+typecheck, 19 UI test files with 256 tests, and a temporary four-file
+production build. The automated gate covers draft/editor behavior and does not
+replace attended keyboard, Narrator, scaling, first-run, or live drag-and-drop
+acceptance; no targetable desktop surface was available for that review.
+This earlier refresh covered typed virtual-bus shelf drops through the
+explicit callback; the current VB-Cable-first tree now disables those
+managed-driver entries and uses the supported Existing virtual output branch
+instead. The focused draft/canvas regressions verify source connections into
+physical output, processor, recorder, and existing virtual destinations.
+The focused draft/canvas regressions also verify source connections into
+physical output, processor, recorder, and existing virtual capture destinations.
+
+## 2026-09-16 - virtual endpoint graph connectivity regression
+
+Added draft-graph coverage for the complete virtual endpoint connection
+direction: a virtual render-source output can connect to a physical output,
+and a physical input output can connect to a virtual capture-sink input. The
+focused draft/canvas suite passed 32 tests; the full UI suite passed 19 files
+and 245 tests with TypeScript typecheck. This proves the UI draft adapter can
+represent the routes; backend commit validation and loaded virtual endpoint
+behavior remain authoritative.
+
+## 2026-09-16 - cross-layer requalification after recorder binding
+
+The full UI suite passed 19 files/242 tests and TypeScript typecheck passed
+after Recorder node selection was wired through `recorders.create`. The
+locked Rust workspace and doc-tests also passed. This confirms adapter
+regression coverage only; attended accessibility and real managed-driver
+routing remain open.
+
+## 2026-09-16 - recorder node binding through typed create
+
+The Recorder panel now enumerates draft recorder node identities and forwards
+the selected node as `nodeId` through the shared `recorders.create` adapter.
+Without a selected graph node it retains the session-level recorder path.
+The focused App/accessibility suite passed 83 tests and UI typecheck passed.
+No recorder was armed or started; backend commit, worker attachment, and file
+I/O remain explicit lifecycle operations.
+
+## 2026-09-16 - virtual bus drag/drop placement
+
+Virtual render-source and capture-sink library drops now carry the exact
+canvas coordinates through the existing app adapter and persist the returned
+node identity in the presentation layout, matching processor drops. The
+focused canvas regression and full UI suite passed (19 files, 237 tests), with
+TypeScript typecheck green. The deliberate existing-bus prompt and stopped
+draft/plan boundary remain intact. Manual visual/accessibility observation and
+loaded-driver routing remain open; no audio or machine configuration changed.
+
 ## 2026-09-16 - explicit endpoint invalidation recovery notice
 
 The live event loop now presents a bounded, actionable message when the
@@ -501,6 +721,11 @@ UI coverage is 21 tests; typecheck and production build pass. This operation
 clears recovery markers/latch state only and does not start audio or alter
 machine configuration.
 
+Diagnostics parity was also corrected: a prepared or running multi-input
+worker now reports its adapter kind and exact session ID with the same status
+semantics as other native workers. The focused control regression, strict
+Clippy, and UI typecheck passed.
+
 The UI status contract now includes the backend's privacy-mute persistence and
 effect metadata. Connected snapshot refreshes synchronize the visible safety
 latch from that authoritative value instead of relying on stale renderer
@@ -905,3 +1130,114 @@ coalesces an in-flight request, and retains the last known values on transient
 failure. It stops the timer when the session stops or backend disconnects. The
 live adapter regression and 18-file/167-test UI suite pass; no durable meter
 events, endpoint access, or machine audio configuration are involved.
+
+## 2026-09-16 - Native fan-out adapter seam
+
+The connected UI backend now exposes typed `prepareNativeOutputs`, forwarding
+the explicit session generation and one-to-eight render endpoint IDs to the
+shared `nativeOutputs.prepare` method. A focused backend regression verifies
+the exact method and payload; the disconnected backend remains incapable of
+native mutation. This adds the visible control surface but does not claim
+endpoint activation, physical latency, or managed-driver qualification.
+
+The native endpoint workspace also includes a physical render fan-out panel.
+It presents up to eight exact active render endpoints, requires an explicit
+positive generation, and forwards only the stopped preparation request through
+the typed UI backend. UI typecheck and the full UI suite passed with 236
+tests. The panel does not select defaults, alter volume/mute, or replace
+backend graph and endpoint validation; attended accessibility and live audio
+qualification remain open.
+# M05 visual editor evidence
+
+## 2026-09-16 - recorder drag/drop draft integration
+
+The Recorder library entry is now draggable/clickable as an available
+destination. The draft adapter creates a stopped recorder node with explicit
+one-channel `in` and `out` ports, allowing graph routes to be composed before
+the separate backend `recorders.create` operation attaches a file worker.
+Focused draft/canvas tests passed (31 tests), the full UI suite passed (19
+files, 241 tests), and UI typecheck passed. This is presentation/draft
+evidence only; no recorder was armed or started.
+# M05 visual editor evidence
+
+## 2026-09-16 - virtual endpoint graph connectivity regression
+
+Added draft-graph coverage for the complete virtual endpoint connection
+direction: a virtual render-source output can connect to a physical output,
+and a physical input output can connect to a virtual capture-sink input. The
+focused draft/canvas suite passed 32 tests; the full UI suite passed 19 files
+and 245 tests with TypeScript typecheck. This proves the UI draft adapter can
+represent the routes; backend commit validation and loaded virtual endpoint
+behavior remain authoritative.
+# M05 visual-editor evidence
+
+## 2026-09-16 - current UI acceptance requalification
+
+`tests/acceptance/m05-ui.ps1` passed at the current tree: TypeScript
+typecheck, 19 UI test files with 245 tests, and a temporary production build
+of four files. The build output was temporary and the acceptance scope changed
+no audio, driver, or machine configuration. This is presentation/editor
+evidence; backend commit validation and native endpoint qualification remain
+authoritative separate gates.
+## 2026-09-18 - editor simplification and next signal slice
+
+The current UI polish foregrounds the session list, left-to-right canvas,
+drag/drop library, adjacent inspector, and transport/status actions. It adds
+explicit canvas-node deletion, explains draft connections as uncommitted local
+edits, uses an expanding canvas layout, and re-fits ReactFlow after
+initialization. The shell adds a generated waveform tray icon. UI typecheck and
+all 257 UI tests passed; the Tauri shell passed `cargo check`.
+
+This remains portable/editor evidence. Tray rendering, attended scaling and
+accessibility, live drag/drop, microphone audibility, and graph-native
+Test Signal/meter playback remain unverified. The raw
+`m00-native-loopback.ps1 -AllowLiveAudio` smoke is a separate exact VB-Cable
+signal-path check and does not qualify the UI graph.
+
+## 2026-09-18 - graph-native Test Signal and destination meters
+
+Added the available `testSignal@1` node to the domain registry, shared
+TypeScript contract, control discovery, and editor library. Its validated
+parameters are frequency (20–20,000 Hz), level (-60–0 dBFS), and duration
+(1–600,000 ms), with a stopped/unarmed default. The realtime compiler emits a
+bounded sine source without callback allocation or blocking, resets its frame
+counter at the stopped boundary, and emits silence after the configured
+duration. Physical and virtual capture destinations now receive prepared
+backend meter stages keyed to their authored node identity, so destination
+peak/RMS/clipping observations use the existing redacted diagnostics contract.
+
+Focused Rust tests passed: domain 66, engine 118, and control 177 with 3
+guarded-live tests ignored. UI typecheck passed; the full UI suite passed 19
+files/259 tests. Contract drift passed with 86 methods, 20 node kinds, 7
+processors, and 20 event categories. Documentation validation passed with 56
+Markdown files and 224 local links. No endpoint, driver, or persistent audio
+configuration was accessed by these checks. Native plan/commit/start/meter/
+stop evidence and attended UI review remain Windows-gated and unverified.
+
+The selected-node telemetry renderer now labels the observed state as stopped,
+not prepared, endpoint owned by another client, no signal, or available. It
+derives ownership wording only from the backend's bounded diagnostic reason;
+it does not guess a replacement endpoint or alter device state. UI typecheck,
+the full 19-file/259-test suite, formatting, and diff checks passed. This is
+portable presentation evidence; exact native ownership and playback remain
+separate Windows acceptance gates.
+
+The inspector parameter path was audited and corrected on 2026-09-18: it now
+falls back from the built-in processor catalog to the discovered `nodeTypes`
+catalog, so `testSignal@1` renders frequency, level, and duration controls and
+uses the same bounded client-side validation before graph planning. The focused
+catalog regression and full UI suite passed; the suite now contains 260 tests.
+Backend validation remains authoritative at plan/commit time.
+
+## 2026-09-18 - native Test Signal and destination-meter acceptance
+
+The new explicit `tests/acceptance/m05-test-signal-native-live.ps1` wrapper
+passed in the elevated authorized Windows context against the exact CABLE
+capture and PD200X render endpoints. The guarded control test exercised
+plan/commit, stopped endpoint preparation, session start, bounded pumping,
+node-keyed destination-meter observation, session stop, and worker cleanup.
+It processed 187 quanta and observed a destination peak of `-18.000 dB`.
+No default device, volume, mute, privacy, driver, or persistent audio
+configuration changed. This closes the existing-device native Test Signal /
+meter workflow slice, but not attended accessibility, physical latency,
+endurance, OS-transition reopen, managed-driver, signing, or release gates.

@@ -3,6 +3,29 @@ import { appendApplicationCaptureNode, appendDraftConnection, appendEndpointLoop
 import { demoSession } from "./fixtures";
 
 describe("appendLibraryNode", () => {
+  it("adds a bounded Test Signal source with conservative defaults", () => {
+    const next = appendLibraryNode(demoSession, "testSignal");
+    expect(next.nodes.at(-1)).toMatchObject({
+      kind: "testSignal",
+      parameters: { frequencyHz: 440, levelDb: -18, durationMs: 1000 },
+      ports: [{ name: "out", direction: "output", channels: 2 }],
+    });
+  });
+
+  it("adds a recorder sink as a stopped graph draft node", () => {
+    const next = appendLibraryNode(demoSession, "recorder");
+    const recorder = next.nodes.at(-1);
+    expect(recorder).toMatchObject({
+      kind: "recorder",
+      enabled: true,
+      bypass: false,
+      ports: [
+        { name: "in", direction: "input", channels: 1 },
+        { name: "out", direction: "output", channels: 1 },
+      ],
+    });
+  });
+
   it("adds a valid built-in processor without changing revision or edges", () => {
     const next = appendLibraryNode(demoSession, "gain");
     const added = next.nodes.at(-1);
@@ -151,8 +174,44 @@ describe("appendVirtualBusNode", () => {
     expect(sink.edges).toEqual(demoSession.edges);
   });
 
+  it("connects virtual source and sink nodes to the surrounding graph", () => {
+    const withSource = appendVirtualBusNode(demoSession, "bus-1", "renderSource");
+    const withBoth = appendVirtualBusNode(withSource, "bus-1", "captureSink");
+    const routed = appendDraftConnection(
+      appendDraftConnection(
+        withBoth,
+        "virtual-render-source-1",
+        "out",
+        "headphones",
+        "in",
+      ),
+      "mic",
+      "out",
+      "virtual-capture-sink-1",
+      "in",
+    );
+    expect(routed.edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceNode: "virtual-render-source-1", destinationNode: "headphones" }),
+      expect.objectContaining({ sourceNode: "mic", destinationNode: "virtual-capture-sink-1" }),
+    ]));
+  });
+
   it("rejects an absent bus identity", () => {
     expect(() => appendVirtualBusNode(demoSession, " ", "captureSink")).toThrow("existing virtual bus identity");
+  });
+});
+
+describe("destination connection creation", () => {
+  it.each([
+    ["physical output", () => demoSession, "headphones", "in"],
+    ["processor", () => appendLibraryNode(demoSession, "compressor"), "compressor-1", "in"],
+    ["recorder", () => appendLibraryNode(demoSession, "recorder"), "recorder-1", "in"],
+    ["existing virtual capture sink", () => appendVirtualBusNode(demoSession, "cable-bus", "captureSink"), "virtual-capture-sink-1", "in"],
+  ])("connects a source into a %s destination", (_label, makeSession, destinationNode, destinationPort) => {
+    const next = appendDraftConnection(makeSession(), "mic", "out", destinationNode, destinationPort);
+    expect(next.edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceNode: "mic", sourcePort: "out", destinationNode, destinationPort }),
+    ]));
   });
 });
 

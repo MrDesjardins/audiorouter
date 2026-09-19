@@ -1,5 +1,882 @@
 # M02 audio-engine evidence
 
+## 2026-09-17 - latest five-cycle Rust bridge endurance refresh
+
+The elevated `m02-rust-adapter-bridge-live.ps1 -AllowLiveAudio` acceptance
+passed five 500 ms cycles on the exact CABLE Output/CABLE Input pair. The
+cycles reported 24,480/24,000/24,960/24,480/24,480 captured frames and
+24,448/23,936/24,960/24,448/24,448 rendered frames, with 191/187/195/191/191
+processed quanta respectively. Every cycle had zero dropped frames, xruns,
+deadline misses, or non-finite tap samples and finalized a 25,072-byte
+temporary recording. All temporary streams/recordings were removed and media
+device state remained unchanged.
+
+## 2026-09-17 - physical fan-out lifecycle refresh
+
+The elevated control-owned lifecycle passed with exact CABLE Output capture,
+Voicemeeter In 5 primary render, and PD200X physical render fan-out: 24,480
+captured frames, 191 processed quanta, 24,448 primary rendered frames, 169
+fan-out packets covering 21,632 physical rendered frames, and a 16.734 ms
+dispatch-to-processed-block privacy p95. Exact rebind, restart, and cleanup
+passed without changing defaults, volume, mute, privacy, drivers, signing, or
+persistent audio configuration. Focusrite render attempts remain recorded as
+the preserved endpoint-specific `deviceInUse` diagnostic.
+
+## 2026-09-17 - current application-capture identity refresh
+
+The elevated `m02-control-application-live.ps1 -AllowLiveAudio` acceptance
+passed both `include` and `exclude` modes for the currently running Zoom
+identity: PID `46448`, basename `Zoom.exe`, verified executable path
+`C:\Users\miste\AppData\Roaming\Zoom\bin\Zoom.exe`, and creation timestamp
+`134340804006036394`. Both modes routed to exact Voicemeeter In 5 and completed
+two bounded start/pump/stop cycles plus same-process worker restart. Media
+device identity/state was unchanged and all temporary resources were cleaned.
+This is current exact-process user-mode evidence, not universal application
+compatibility or attended UI evidence.
+
+## 2026-09-17 - multi-input/many-output topology refresh
+
+The elevated `m02-multi-input-native-live.ps1 -AllowLiveAudio` acceptance used
+exact CABLE Output and Analogue 1 + 2 (Focusrite) capture endpoints with
+Voicemeeter In 2 and Voicemeeter In 5 render endpoints. The bounded
+multi-input graph delivered 47,520 captured frames through 256 graph quanta
+and rendered 47,232 frames. Same-process stream cleanup passed, and defaults,
+volume, mute, privacy, driver, signing, and persistent audio configuration
+were unchanged. This is current existing-device multi-input/many-output
+evidence; it does not claim physical latency or managed-driver qualification.
+
+## 2026-09-17 - control-owned existing-device lifecycle refresh
+
+The elevated `m02-control-native-live.ps1 -AllowLiveAudio` acceptance first
+preserved the expected `AUDCLNT_E_DEVICE_IN_USE` diagnostic for the occupied
+default CABLE Input render endpoint. A retry with exact CABLE Output capture,
+Voicemeeter In 5 render, and CABLE In 16ch fan-out passed the same-process
+start/stop, rebind, restart, cleanup, and privacy checks: 24,000 captured
+frames, 187 processed quanta, 23,648 primary rendered frames, 166 fan-out
+packets covering 21,248 fan-out frames, and a 14.076 ms
+dispatch-to-processed-block privacy p95. Temporary streams were removed and
+no defaults, volume, mute, privacy, driver, signing, or persistent audio
+configuration changed. This is existing-device user-mode evidence, not
+physical-latency or managed-driver qualification.
+
+## 2026-09-17 - application-capture include/exclude requalification
+
+The elevated `m02-control-application-live.ps1 -AllowLiveAudio` acceptance
+passed both `include` and `exclude` modes against the exact current Zoom
+process identity: PID `21768`, observed basename `Zoom.exe`, verified full
+path, and creation time. Both modes used the exact existing CABLE Input render
+endpoint, completed two bounded start/pump/stop cycles plus same-process worker
+restart, and verified unchanged media-device identity/state. This qualifies
+the existing application/user-mode tool boundary; it does not claim attended
+UI drag/drop, universal application compatibility, or managed-driver behavior.
+The same two-mode acceptance was rerun elevated after the capture polling
+compatibility retry; both modes remained green and the PnP media snapshot was
+unchanged.
+
+A separate elevated include-mode rerun used the same verified Zoom identity
+with exact Voicemeeter In 5 as the render destination. Two bounded lifecycle
+cycles and same-process worker restart passed with unchanged media-device
+identity/state, extending application/tool routing evidence to an installed
+Voicemeeter virtual endpoint.
+The matching exclude-mode rerun against Voicemeeter In 5 also passed the same
+two-cycle and restart boundary with unchanged media-device state.
+
+The elevated `m02-rust-adapter-bridge-live.ps1 -AllowLiveAudio` acceptance also
+passed two 500 ms cycles against the exact CABLE Output capture/CABLE Input
+render pair. Each cycle delivered 24,480 captured frames through 191 processed
+quanta and rendered 24,448 frames with zero drops, xruns, deadline misses, or
+non-finite tap samples; each temporary recording finalized at 25,072 bytes.
+
+A bounded five-cycle endurance rerun on the same elevated exact pair passed
+with identical per-cycle counts: 51 packets, 24,480 captured frames, 191
+processed quanta, 24,448 rendered frames, zero drops/xruns/deadline misses or
+non-finite samples, and a 25,072-byte finalized recording per cycle. All
+temporary streams/recordings were removed and media-device state was unchanged.
+
+## 2026-09-17 - multi-input/many-output live requalification
+
+The latest elevated `m02-multi-input-native-live.ps1 -AllowLiveAudio` run used
+exact CABLE Output and Focusrite capture endpoints with Voicemeeter In 2 and
+CABLE Input render endpoints. It delivered 48,480 captured frames through 259
+graph quanta and rendered 47,712 frames; same-process cleanup passed without
+changing defaults, volume, mute, privacy, driver, signing, or persistent audio
+configuration. This directly requalifies many-output routing to an installed
+virtual endpoint plus an existing VB-Cable endpoint.
+
+A subsequent mixed-topology run used CABLE Output plus Focusrite capture and
+Voicemeeter In 5 plus CABLE Input render endpoints. It delivered 48,000
+captured frames through 273 graph quanta and rendered 47,712 frames; cleanup
+passed. Attempts using the currently occupied CABLE Input, Voicemeeter In 2,
+or Focusrite render endpoints returned the preserved `deviceInUse` diagnostic;
+the harness did not mask that ownership conflict or close external clients.
+
+The elevated `m02-multi-input-native-live.ps1 -AllowLiveAudio` acceptance used
+exact `CABLE Output (VB-Audio Virtual Cable)` and `Analogue 1 + 2 (Focusrite
+USB Audio)` capture endpoints plus exact `DELL U3223QE` and `P32p-30` render
+endpoints. The bounded route delivered 47,520 captured frames through 277
+graph quanta and rendered 48,512 frames. Same-process cleanup passed. Defaults,
+volume, mute, privacy, driver state, signing state, and persistent audio
+configuration were unchanged. This is current existing-device user-mode
+evidence, not managed-driver or calibrated physical-latency evidence.
+
+## 2026-09-17 - guarded native privacy processing-boundary timing
+
+The latest elevated `m02-control-native-live.ps1 -AllowLiveAudio` run used
+exact CABLE Output capture, Voicemeeter In 5 primary render, and CABLE Input
+fan-out endpoints. The shared control plane delivered 24,000 captured frames,
+187 processed quanta, 23,936 primary rendered frames, and 138 fan-out packets
+covering 17,664 fan-out rendered frames. Eight privacy transitions measured
+dispatch-to-processed-block p95 at 19.470 ms; exact rebind, restart, and
+cleanup passed without persistent audio configuration changes.
+
+The elevated `m02-control-native-live.ps1 -AllowLiveAudio` acceptance used
+exact `CABLE Output` capture, `P32p-30` render, and `DELL U3223QE` fan-out
+endpoints. It completed the existing lifecycle route with 24,000 captured
+frames, 187 processed quanta, 23,936 primary rendered frames, and 124 fan-out
+packets producing 15,872 rendered frames. Eight explicit privacy-mute
+transitions measured control-dispatch to the next processed block at p95
+22.132 ms. Stop, exact rebind, restart, and cleanup passed without changing
+defaults, volume, mute, privacy, driver state, signing state, or persistent
+audio configuration. This is bounded user-mode processing evidence, not a
+calibrated effective-output timestamp or attended microphone-path measurement.
+
+## 2026-09-17 - privacy mute reaches fan-out branches
+
+The realtime mixer fan-out now applies the process-local privacy latch after
+shared DSP and before every physical, virtual, recorder, or tool branch. The
+engine regression covers two-input/two-output fan-out silence and repeats 32
+mute/unmute transitions, asserting that the first processed block after every
+mute publication is silent on both branches. The native adapter exposes the
+same atomic latch through endpoint and process-loopback workers. The focused
+engine test passed, and the full engine suite passed 116 tests while the
+Windows-audio suite passed 88 tests. This proves bounded user-mode behavior,
+not the NFR-09 live p95 timing bound or other applications' direct microphone
+access.
+
+## 2026-09-17 - control-owned native lifecycle retry with alternate render
+
+The first guarded retry using the default CABLE render returned the preserved
+`AUDCLNT_E_DEVICE_IN_USE` diagnostic. A second run selected exact `CABLE
+Output` capture, `P32p-30` render, and `DELL U3223QE` fan-out render; it passed
+with 24,480 captured frames, 191 processed quanta, 24,448 primary rendered
+frames, and 155 fan-out packets producing 19,840 rendered frames. Stop,
+rebind, restart, and cleanup completed without changing defaults, volume,
+mute, privacy, drivers, signing, or persistent audio configuration.
+
+## 2026-09-17 - current VB-Cable multi-input/many-output rerun
+
+The elevated `tests/acceptance/m02-multi-input-native-live.ps1 -AllowLiveAudio`
+acceptance passed with exact `CABLE Output (VB-Audio Virtual Cable)` and
+`Analogue 1 + 2 (Focusrite USB Audio)` capture endpoints feeding exact
+`CABLE Input (VB-Audio Virtual Cable)` and `DELL U3223QE (NVIDIA High
+Definition Audio)` render endpoints. The bounded run captured 47,040 frames,
+delivered 244 graph quanta, and rendered 47,232 frames; same-process cleanup
+completed. Defaults, volume, mute, privacy, driver state, signing state, and
+persistent audio configuration were unchanged. This is existing-device
+user-mode evidence, not physical-latency or managed-driver evidence.
+
+## 2026-09-17 - multi-input packet backpressure fix and live requalification
+
+The first current-profile rerun with exact Voicemeeter plus Focusrite captures
+and DELL plus P32p-30 renders exposed a real adapter defect: a capture packet
+arriving while one source ring was temporarily full could be reported as
+`BufferTooSmall { required: 1280, available: 32768 }` even though the packet
+was within the preallocated bound. The feeder now retains the unread packet
+slice across bounded pumps and drains complete quanta before retrying; it does
+not overwrite or drop the unread source bytes. The focused regression and the
+full Windows-audio library suite passed (88/88).
+
+The elevated rerun of
+`tests/acceptance/m02-multi-input-native-live.ps1 -AllowLiveAudio` then passed
+with exact `Voicemeeter Out A1 (VB-Audio Voicemeeter VAIO)` and `Analogue 1 + 2
+(Focusrite USB Audio)` captures plus exact `DELL U3223QE` and `P32p-30` renders:
+47,040 captured frames, 274 delivered quanta, and 47,232 rendered frames.
+Same-process cleanup completed. No defaults, volume, mute, privacy, driver
+state, signing state, or persistent audio configuration changed. This is
+existing-device user-mode evidence; AudioRouter-owned driver/PortCls delivery,
+physical latency, and clean-machine release gates remain deferred.
+
+## 2026-09-17 - current application-capture identity diagnostic
+
+The first guarded retries supplied the full executable path in the adapter's
+basename `executable` field. The backend correctly failed closed with
+`invalidArgument: application process 9940 identity changed`, after the stale
+endpoint attempt had separately returned `configured render endpoint is not
+active`. No audio endpoint or persistent configuration changed. The test
+contract requires the basename in `executable` and the verified full path in
+`applicationPath`; the corrected invocation is recorded below.
+
+## 2026-09-17 - current inventory-visible application capture
+
+The guarded elevated application-capture acceptance then used the exact
+inventory-visible Zoom process identity (PID 21768, executable path, and
+creation timestamp) with the existing VB-Cable render endpoint. Include mode
+passed two bounded start/pump/stop cycles, same-process worker restart, and
+media-device before/after equality. No persistent audio configuration changed.
+This confirms the adapter's current identity binding and lifecycle path for
+the observed Zoom process; it does not claim universal process-loopback
+compatibility.
+
+## 2026-09-18 - explicit control-owned native lifecycle requalification
+
+The guarded `m02-control-native-live.ps1 -AllowLiveAudio` retry first
+preserved `deviceInUse` with HRESULT `0x8889000A` for the default CABLE render
+endpoint. A second run with exact `CABLE Output` capture and `Speakers
+(PD200X Podcast Microphone)` render passed one control-owned lifecycle:
+24,000 capture frames, 187 processed quanta, 23,936 rendered frames, 187
+fan-out packets, and 23,936 fan-out frames. The privacy mute dispatch-to-
+processed-block p95 was 11.007 ms. Stop, reset, exact rebind/restart, and
+cleanup passed; no persistent audio configuration changed.
+
+The guarded application-capture retry first rejected a rounded DMTF timestamp
+as `application process 71412 identity changed`; a direct
+`Process.StartTime.ToFileTimeUtc()` query supplied the exact identity
+`134342414024784043`. The rerun then passed include mode against
+`voicemeeterpro.exe` PID 71412, its verified full path, and exact PD200X render:
+two bounded start/pump/stop cycles and same-process worker restart completed
+with unchanged media-device state and no persistent audio configuration.
+
+The guarded `m02-control-route-live.ps1 -AllowLiveAudio -DurationMilliseconds
+500` acceptance also passed with exact CABLE Output capture and PD200X render:
+generation 1, 50 packets, 24,000 captured frames, 187 processed quanta,
+23,936 rendered frames, 95,788 recording bytes, one successful start/stop,
+one reset, one rejected pump, and 48 kHz capture/render rates. The worker was
+stopped/detached and defaults, volume, mute, privacy, drivers, signing,
+startup, endpoint registration, and persistent configuration were unchanged.
+
+The guarded `m02-multi-input-native-live.ps1 -AllowLiveAudio` acceptance was
+also rerun on 2026-09-18. It selected exact `CABLE Output` and Focusrite
+captures plus `CABLE Input` and DELL renders, then passed with 48,000 captured
+frames, 283 delivered quanta, and 47,808 rendered frames. Same-process cleanup
+passed without persistent audio configuration changes.
+
+## 2026-09-17 - corrected application identity qualification
+
+The explicitly authorized application-capture acceptance was rerun with the
+contract-correct identity split: basename in `executable`, full path in
+`applicationPath`, exact process creation timestamp, and the active VB-Cable
+render endpoint. Voicemeeter PID `9940` and Zoom PID `21768` each passed both
+include and exclude modes, with two bounded start/pump/stop cycles and
+same-process worker restart. Media-device identity/state remained unchanged
+and no endpoint or persistent media configuration changed. This qualifies the
+current user-mode application adapter for these observed processes; it does
+not claim universal process-loopback compatibility.
+
+## 2026-09-17 - current exact-endpoint rebind lifecycle
+
+The elevated `m02-control-native-live.ps1 -AllowLiveAudio` acceptance used
+the exact Focusrite capture endpoint, DELL physical render endpoint, and
+P32p-30 render fan-out endpoint. The 500-ms control-owned lifecycle captured
+23,040 frames, processed 180 quanta, rendered 23,040 primary frames, and
+rendered 20,864 fan-out frames. Same-process stop, exact endpoint rebind,
+restart, and cleanup passed. Defaults, volume, mute, privacy, drivers,
+signing, startup registration, and persistent audio configuration were not
+changed. This is existing-device lifecycle evidence, not physical-latency or
+AudioRouter-owned driver qualification.
+
+## 2026-09-17 - explicit multi-input/many-output requalification
+
+The elevated `m02-multi-input-native-live.ps1 -AllowLiveAudio` acceptance used
+exact `CABLE Output (VB-Audio Virtual Cable)` and `Analogue 1 + 2 (Focusrite
+USB Audio)` capture endpoints, plus exact `CABLE Input (VB-Audio Virtual
+Cable)` and `DELL U3223QE (NVIDIA High Definition Audio)` render endpoints.
+The bounded run captured 47,520 frames, delivered 295 quanta, rendered 47,520
+frames, and passed same-process cleanup. No default device, volume, mute,
+privacy, driver, or persistent audio configuration changed. This is supported
+existing-device route evidence, not AudioRouter driver or physical-latency
+qualification.
+
+## 2026-09-17 - Voicemeeter application-to-tool capture
+
+The guarded application-capture lifecycle used the exact verified
+`voicemeeterpro.exe` PID, executable path, and creation timestamp, captured in
+include mode into the existing CABLE Input render boundary, and passed two
+bounded start/pump/stop cycles with same-process worker restart. Media-device
+identity/state remained unchanged and temporary streams were cleaned up. This
+qualifies the current user-mode Voicemeeter/VB-Cable tool path; it does not
+claim process capture through an AudioRouter-owned virtual driver.
+
+## 2026-09-17 - explicit full VB-Cable/physical multi-route
+
+The guarded control acceptance used exact captures
+`CABLE Output (VB-Audio Virtual Cable)` and `Analogue 1 + 2 (Focusrite USB
+Audio)`, with exact renders `CABLE Input (VB-Audio Virtual Cable)` and `DELL
+U3223QE (NVIDIA High Definition Audio)`. The bounded 500-ms run captured
+47,520 frames, delivered 247 quanta, rendered 48,128 frames, and completed
+same-process cleanup without persistent audio configuration changes. This is
+the strongest current-machine user-mode multi-input/many-output evidence;
+AudioRouter-owned virtual endpoints and loaded PortCls transport remain
+separate gates.
+
+## 2026-09-17 - control-owned native fan-out qualification
+
+The automatic fan-out selection first exercised the exact
+`AUDCLNT_E_DEVICE_IN_USE` (`0x8889000A`) branch; the backend reported it as
+retryable endpoint contention. An explicit retry using the existing VB-Cable
+pair plus the known-working DELL physical render endpoint passed with 24,000
+captured frames, 187 processed quanta, 23,936 primary rendered frames, and
+23,168 fan-out rendered frames. Same-process start/stop cleanup passed and no
+persistent audio configuration changed. This is control/API multi-output
+evidence using existing endpoints; it does not qualify AudioRouter-owned
+kernel virtual endpoints.
+
+## 2026-09-17 - backend control-owned VB-Cable route
+
+The control-owned route acceptance passed against the exact existing VB-Cable
+capture/render pair. The 500-ms run published generation 1, captured 24,480
+frames, processed 191 quanta, rendered 24,448 frames, and reported one
+successful start, stop, and reset plus the expected rejected post-stop pump.
+The worker detached during cleanup and defaults, volume, mute, privacy,
+drivers, signing, startup configuration, and endpoint registration remained
+unchanged. This completes current-machine user-mode control-path evidence;
+AudioRouter-owned kernel virtual endpoints and loaded PortCls transport remain
+separate gates.
+
+## 2026-09-17 - VB-Cable user-mode routing qualification
+
+The guarded M02 multi-input route selected
+`CABLE Output (VB-Audio Virtual Cable)` plus Focusrite capture and
+`CABLE Input (VB-Audio Virtual Cable)` plus the DELL physical render endpoint.
+The 500-ms run captured 47,040 frames, delivered 309 quanta, rendered 46,272
+frames, and completed same-process cleanup without persistent audio changes.
+
+The Rust adapter bridge then passed against the exact VB-Cable pair with
+24,000 captured frames, 187 processed/tapped quanta, 23,936 rendered frames,
+a removed 25,072-byte temporary recording, and zero drops, XRuns, or deadline
+misses. This qualifies the current-machine user-mode path into existing
+VB-Cable/physical tools; it does not claim AudioRouter-owned virtual-driver
+endpoints or loaded PortCls transport.
+
+## 2026-09-16 - automatic endpoint selector qualification
+
+An elevated `-AllowLiveAudio` run without endpoint overrides selected exact
+CABLE Output + Focusrite capture and CABLE Input + Realtek render branches.
+The bounded route captured 46,656 frames, delivered 320 quanta, rendered
+46,272 frames, and completed same-process cleanup. No persistent audio
+configuration changed.
+
+## 2026-09-16 - Rust adapter elevation guard
+
+The Rust adapter live harness now requires an elevated administrator process
+before its PnP snapshot. Its non-elevated refusal returned exit code 1 before
+device access; an elevated 200-ms run passed with 10,080 captured frames, 78
+graph blocks, 9,984 scheduler frames, zero deadline misses/XRuns, and
+unchanged media identity/state. No persistent audio configuration changed.
+
+## 2026-09-16 - elevated preflight guard for multi-input acceptance
+
+The M02 harness now requires an elevated administrator process when
+`-AllowLiveAudio` is supplied, before endpoint inventory. Its non-elevated
+refusal returned exit code 1 without inventory; the subsequent elevated exact
+VB-Cable/Focusrite-to-VB-Cable/Realtek run passed with 47,520 captured frames,
+255 delivered quanta, 47,712 rendered frames, and clean same-process cleanup.
+No persistent audio configuration changed.
+
+## 2026-09-16 - capture fallback regression guard
+
+Added a focused Windows-audio regression asserting the qualified capture
+polling fallback remains `1_000_000` 100-ns units (100 ms), preventing an
+accidental one-second request from returning to the live path. The complete
+Windows-audio suite passed 88 tests and doc-tests with strict package Clippy;
+no live test or endpoint was opened by this verification.
+
+## 2026-09-16 - elevated multi-input/many-output qualification
+
+With elevated read-only device access, the explicitly authorized 500-ms
+acceptance passed using exact `CABLE Output (VB-Audio Virtual Cable)` and
+Focusrite capture endpoints plus exact `CABLE Input (VB-Audio Virtual Cable)`
+and Realtek render endpoints. It captured 47,520 frames, delivered 314
+bounded quanta, rendered 47,232 frames, and completed same-process cleanup.
+The earlier non-elevated `E_INVALIDARG` was not reproduced under the required
+elevated preflight. No persistent audio configuration changed. This qualifies
+user-mode WASAPI routing only, not loaded project-driver/PortCls transport.
+
+## 2026-09-16 - elevated Rust adapter bridge qualification
+
+The exact selected Rust adapter endpoint pair completed a bounded 500-ms
+cycle with 24,480 captured frames, 191 processed quanta, 24,448 scheduled
+render frames, zero deadline misses/XRuns, and unchanged media-device
+identity/state. This qualifies the user-mode adapter path only; physical
+latency and project-driver transport remain separate gates.
+
+## 2026-09-16 - guarded multi-input capture compatibility failure
+
+The explicitly authorized multi-input harness selected exact
+`CABLE Output (VB-Audio Virtual Cable)` plus `Analogue 1 + 2 (Focusrite USB
+Audio)` capture endpoints and failed before stream start at
+`IAudioClient::Initialize(capture,polling)` with `E_INVALIDARG`. Repeating
+with exact `CABLE Output` plus `Voicemeeter Out A1` produced the same result.
+The polling fallback was restored to the previously qualified 100-ms request
+(`1_000_000` 100-ns units), so this is not evidence of ownership contention;
+`AUDCLNT_E_DEVICE_IN_USE` remains separately classified. No stream completed,
+no defaults or persistent audio state changed. A separate Rust adapter probe
+was blocked by read-only `Get-PnpDevice` access denial.
+
+## 2026-09-16 - Windows-audio/native bridge contract requalification
+
+`cargo test -p audiorouter-windows-audio --locked -- --test-threads=1`
+passed 87 tests and doc-tests. Coverage includes coherent multi-input feeding
+to multiple outputs, directional bridge identity and bounded seqlock
+publication, lease/generation expiry, replay rejection, fail-closed stale and
+transient reads, resampling, and endpoint lifecycle rollback. No ignored live
+test was run; no hardware endpoint or driver was opened.
+
+## 2026-09-16 - multi-input acceptance refusal path
+
+Running `m02-multi-input-native-live.ps1` without `-AllowLiveAudio` refused
+before endpoint inventory or Cargo execution and returned exit code 1. The
+guard preserves explicit authorization for live multi-input/many-output audio
+and prevents accidental endpoint access.
+
+## 2026-09-16 - current guarded multi-input/many-output lifecycle
+
+`tests/acceptance/m02-multi-input-native-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 500` passed using exact active
+`CABLE Output (VB-Audio Virtual Cable)` capture and `CABLE Input (VB-Audio
+Virtual Cable)` render endpoints, with exact Focusrite capture and Realtek
+render branches. It captured 48,000 frames, delivered 309 bounded quanta,
+rendered 48,768 frames, and completed same-process cleanup. No persistent
+audio configuration changed. This qualifies current user-mode WASAPI routing,
+not project-driver/PortCls transport, production signing, physical latency,
+or clean-machine behavior.
+
+## 2026-09-16 - current guarded Rust adapter bridge cycle
+
+`tests/acceptance/m02-rust-adapter-bridge-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 500` passed one cycle against the explicitly selected
+existing VB-Cable pair. It reported 24,480 captured frames, 191 processed
+quanta, 24,448 rendered frames, 191 finite tap calls, zero dropped render
+frames, zero scheduler xruns, and zero deadline misses. Temporary stream and
+recording resources were removed, and the before/after media-device snapshot
+was unchanged. This is current user-mode bridge evidence and does not qualify
+the project driver, loaded PortCls transport, production signing, physical
+latency, or clean-machine behavior.
+
+## 2026-09-16 - default canonical-pair selector passed
+
+The hardened acceptance default path reported and selected canonical `CABLE
+Output (VB-Audio Virtual Cable)` and `CABLE Input (VB-Audio Virtual Cable)`
+endpoints, followed by non-CABLE exact stereo fallbacks. The guarded route
+passed with 47,520 captured frames, 296 delivered quanta, and 47,232 rendered
+frames, then cleanly stopped. The selector now avoids choosing a second
+conflicting CABLE variant by default while retaining explicit-ID overrides.
+No persistent audio, driver, signing, or machine configuration changed.
+
+## 2026-09-16 - VB-Audio preference in guarded harness
+
+The guarded multi-input acceptance now prefers active stereo 48 kHz float32
+endpoints whose verified names contain `CABLE` when callers do not supply
+explicit IDs, while retaining deterministic ordering and exact-ID overrides.
+The refusal path still requires `-AllowLiveAudio`. This improves repeatability
+of the canonical VB-Audio qualification without touching device state; the
+explicit endpoint run below remains the authoritative routing measurement.
+
+## 2026-09-16 - canonical VB-Audio pair passed
+
+The guarded acceptance explicitly bound `CABLE Output (VB-Audio Virtual
+Cable)` as one capture endpoint and `CABLE Input (VB-Audio Virtual Cable)` as
+one render endpoint, with a second exact VB-Audio capture/render endpoint. It
+passed with 47,040 captured frames, 244 delivered quanta, 48,064 rendered
+frames, and clean same-process teardown. This confirms the canonical pair's
+participation in the bounded user-mode multi-input/many-output route. The
+previous `deviceInUse` diagnostic is limited to the alternate second render
+selection and remains visible as such. No persistent audio, driver, signing,
+or machine configuration changed; managed-driver/PortCls delivery remains a
+separate gate.
+
+## 2026-09-16 - explicit VB-Audio capture and many-output qualification
+
+The guarded acceptance was explicitly bound to the canonical `CABLE Output
+(VB-Audio Virtual Cable)` capture endpoint, a second exact stereo VB-Audio
+capture, and two exact VB-Audio render endpoints. It passed with 47,040
+captured frames, 254 delivered quanta, 47,712 rendered frames, and clean
+same-process teardown. An earlier attempt including `CABLE Input (VB-Audio
+Virtual Cable)` failed at the second render initialization with structured
+`deviceInUse`, HRESULT `0x8889000A`; this was retained as an endpoint ownership
+diagnostic rather than treated as a format failure. The harness changed only
+process-scoped environment variables and restored them afterward. This is
+guarded user-mode endpoint evidence, not managed-driver or PortCls evidence.
+
+## 2026-09-16 - shared branch and lifecycle revalidation
+
+The focused current-state suites passed: control 173 passed with three
+explicitly guarded live tests ignored, engine 116 passed, and Windows-audio
+87 passed. These suites cover generation-bound multi-input start/stop,
+physical-prefix/tap-suffix branch binding, virtual capture and recorder tap
+delivery, coherent fan-out, and fail-closed stale bridge audio. This is
+portable/control evidence supporting the live M02 result; loaded PortCls,
+production signing/activation, physical latency, and clean-machine gates are
+not implied.
+
+## 2026-09-16 - guarded live multi-input/many-output lifecycle passed
+
+`tests/acceptance/m02-multi-input-native-live.ps1 -AllowLiveAudio` passed with
+elevated access against the exact active endpoint inventory, using the existing
+VB-Cable-capable shared WASAPI route. The lifecycle captured 47,040 frames,
+delivered 274 bounded quanta, and rendered 47,808 frames before clean
+same-process stop/teardown. The harness restored its process-scoped environment
+afterward and did not change endpoint defaults, volume, mute, privacy, driver,
+signing, boot, or persistent audio state. This is real user-mode endpoint
+qualification for multiple inputs and outputs; it is not evidence of loaded
+AudioRouter driver, PortCls, production signing, physical latency, or
+clean-machine behavior.
+
+## 2026-09-16 - native multi-input built-in processor alignment
+
+Native multi-input fan-out now reuses the prepared `RuntimeGraph` for a linear
+chain of supported built-in processors as well as pre-bound plugins. The graph
+is compiled before publication and processed once on the mixed block before
+branch mapping, retaining callback-safe state ownership and fail-closed stage
+behavior. The focused regression covers both a plugin and a built-in gain stage
+and proves both output branches receive the processed result. Engine/control
+tests and strict Clippy passed; live endpoint and driver delivery remain open.
+
+## 2026-09-16 - native multi-input plugin stage alignment
+
+The bounded native multi-input compiler now has a plugin-aware entry point.
+Control supplies the exact pre-bound plugin worker map, the compiler accepts
+only a linear plugin chain between the mixer and final fan-out branches, and
+`RealtimeMixerFanout` executes the immutable plugin stages before every branch
+mapping. `mixer_fanout_runs_bound_plugin_before_every_branch` passed, proving
+both output branches receive the processed signal. This is portable callback
+and control evidence; plugin worker activation, live endpoint delivery, and
+driver qualification remain separate gates.
+
+## 2026-09-17 - current application-capture requalification
+
+The elevated `tests/acceptance/m02-control-application-live.ps1` acceptance
+passed in both `include` and `exclude` modes against the exact running
+Voicemeeter process identity: PID `9940`, executable
+`C:\\Program Files (x86)\\VB\\Voicemeeter\\voicemeeterpro.exe`, and creation
+time `134340754148366929`. Each mode completed two bounded start/pump/stop
+cycles and same-process worker restart using the exact DELL physical render
+endpoint. The wrapper restored temporary environment values and verified
+unchanged media-device state. This is existing-device process-loopback
+evidence; arbitrary process isolation, PID-reuse recovery, physical latency,
+and production-driver ownership remain open.
+
+## 2026-09-16 - guarded multi-input reattempt
+
+`tests/acceptance/m02-multi-input-native-live.ps1 -AllowLiveAudio` was
+re-run against the current active endpoint inventory. The exact two-capture /
+two-render route again failed before worker start at
+`IAudioClient::Initialize(capture,polling)` with
+`0x80070057/E_INVALIDARG` (`invalidArgument`, non-retryable). The harness
+restored its process-scoped environment and made no driver, default endpoint,
+volume, mute, privacy, signing, or persistent audio-state change. This remains
+an environment/native endpoint qualification gate, not evidence of a routing
+or ownership conflict.
+
+## 2026-09-16 - recorder branch accepted by multi-input fanout
+
+The generation-bound mixer fanout compiler now accepts validated `Recorder`
+nodes as output branches in addition to physical outputs and virtual capture
+sinks. It retains the exact recorder node identity and matrix order so the
+control plane can attach the prebuilt recorder tap without changing the
+realtime path. The engine regression covers a mixed physical/recorder branch
+order; the focused engine/control/Windows-audio suites passed. This is
+portable graph evidence, not live endpoint or loaded-driver evidence.
+
+## 2026-09-16 - multi-input endpoint invalidation
+
+Endpoint notification handling now covers every exact capture binding owned by
+`NativeMultiInputWorker` and every physical render binding in its optional
+fanout. A changed or removed binding is retained by the read-only inventory,
+then the next bounded pump stops the worker and resets its feeder before
+returning a rebind-required failure; no replacement microphone or output is
+selected. Tap-only virtual/recording branches are unaffected by physical
+endpoint notifications. Focused engine/control/Windows-audio tests and strict
+Clippy passed. This is lifecycle evidence; live endpoint and loaded-driver
+qualification remain open.
+
+Control-plane multi-capture boundary (2026-09-16): ControlPlane now owns an
+optional generation-bound NativeMultiInputWorker. Attachment is stopped-only
+and rejects competing native ownership or a mismatched generation. Start
+requires the matching running session; stop, deletion, and crash recovery
+drop the exact worker. nativeMultiInputs.pump is present in the domain
+registry and control request/response schemas with SessionControl permission.
+Control/domain tests passed (175/65) and strict Clippy passed. The endpoint
+reports packets submitted to the prepared feeder only; it does not yet claim
+physical output or tool-tap delivery.
+
+NativeMultiInputWorker now optionally owns a generation-matched physical
+WasapiOutputFanout. The composed pump bounds capture packets, graph delivery,
+and per-output render drains; start rolls back captures if output start fails,
+and stop attempts output and capture cleanup before returning the first error.
+The control result reports output count, delivered quanta, rendered frames,
+and render backpressure. Tests passed (87 Windows-audio, 175 control) with
+strict Clippy. Virtual/tool tap composition and live multi-capture evidence
+remain open.
+
+Added branch-local tap-set processing to the portable fan-out seam. Each
+output branch can notify multiple prebuilt observers, preserving branch
+isolation for virtual capture sinks, recorders, and tool adapters. The
+Windows-audio regression exercises two branches and two observers per branch;
+engine/Windows-audio suites passed (115/87) with strict Clippy. This is
+portable evidence; native worker tap-set attachment and live qualification
+remain open.
+
+The physical output fan-out now supports explicit per-branch tap-set
+attachment, and its realtime path notifies those observers after channel
+mapping while preserving the output ring handoff. No implicit graph-to-tool
+mapping was added: the control contract must identify branch ownership before
+virtual or recording taps are attached.
+
+Compiled mixer fan-out graphs now retain destination node identity alongside
+each output matrix. The physical fan-out supports explicit tap-only branches
+for virtual sinks and preserves branch ordering; each branch tap set is
+notified with a monotonic quantum timeline after channel mapping. Engine and
+Windows-audio suites passed (115/87) with strict Clippy. Control-side
+branch-to-node attachment and live bridge qualification remain open.
+
+ControlPlane now exposes nativeMultiInputs.bindBranches. It validates the
+exact running generation and destination-node order from the prepared graph,
+then attaches only matching virtual-bus or exact recorder-node observers to
+stopped worker branches;
+unknown, reordered, or unsupported branch nodes fail before tap membership
+changes. Domain/control/engine/Windows-audio tests passed, and contracts/UI
+typechecks plus 245 UI tests passed. This is control/portable evidence and
+does not qualify loaded-driver or live multi-capture delivery.
+
+The branch binding now resolves node-owned recorder taps, with the legacy
+session recorder accepted only for a single enabled recorder node. Missing
+workers fail closed before worker mutation. Control tests (173) and strict
+Clippy passed; this remains portable evidence until a live recorder and native
+multi-input worker are qualified together.
+
+The control lifecycle now owns an attached NativeMultiInputWorker across
+session start/stop. Start publishes the exact runtime generation, activates
+virtual route bridges, binds the worker's retained branch order, and starts
+the worker; failure stops the worker and rolls back runtime/bridge state. Stop
+tears down the worker's captures and owned physical outputs. Sessions using
+this bounded mixer/fan-out worker are rejected as plugin-capable native graph
+sessions until plugin-stage execution is implemented. Control tests (173) and
+strict Clippy passed; this is lifecycle evidence, not live multi-capture
+qualification.
+
+The multi-input branch binder now creates a tap-only output fan-out for
+virtual/recording-only graphs and rejects physical branches when no physical
+output owner exists. This keeps virtual delivery on the same bounded worker
+lifecycle without silently reporting physical output success. Engine,
+Windows-audio, and control tests passed with strict Clippy; live bridge and
+hardware qualification remain open.
+
+The guarded multi-input acceptance was added and invoked with two exact active
+stereo capture IDs and two exact active stereo render IDs. It failed before
+worker start at `IAudioClient::Initialize(capture,polling)` with
+`0x80070057/E_INVALIDARG`; retries with another exact capture pair produced
+the same result. The existing single-capture control acceptance also failed at
+that native initialization point during the same recheck. This is recorded as
+an environment/native endpoint gate; no endpoint defaults, persistent audio
+settings, driver state, or signing state changed.
+
+Mixed preparation now preserves a validated physical-prefix/tap-suffix branch
+order: exact physical render workers are opened for the prefix and bounded
+empty tap branches reserve virtual/recorder destinations for later startup
+binding. Interleaved physical branches fail closed instead of being reordered.
+Windows-audio/control tests and strict Clippy passed; live qualification is
+still open.
+
+`nativeMultiInputs.prepare` now exposes the preparation seam through shared
+discovery and dispatch. It compiles the committed mixer/fan-out graph, checks
+the exact physical-input source order, channel count, 48 kHz IEEE float32
+format, and active endpoint identities, then opens all capture clients with
+transactional cleanup on failure. CLI/control tests, contracts/UI typechecks,
+drift validation, and documentation validation passed. This still does not
+qualify live multi-capture or physical output-owner delivery.
+
+## 2026-09-16 - multi-capture native lifecycle wrapper
+
+Added `NativeMultiInputWorker`, a stopped-by-default owner for several exact
+capture clients and one generation-bound feeder. Start rollback stops already
+started siblings; stop/drop stops all captures and resets feeder state. Pumping
+uses a fixed capture-reference array and the existing bounded packet budget.
+Windows-audio tests passed 87/87 with strict Clippy. Control-plane attachment
+and live endpoint qualification remain open.
+
+## 2026-09-16 - control ownership gap for live multi-capture
+
+The current control implementation was inspected: one
+`native_endpoint_worker` owns the capture/graph pump, while
+`native_output_fanout` only adds render-side branches. The new bounded
+multi-capture feeder is therefore not yet connected to session lifecycle,
+authorization, endpoint-change recovery, or per-source microphone privacy.
+This is the explicit next native implementation gate; no live multi-input
+qualification is claimed.
+
+## 2026-09-16 - live harness scope audit
+
+The guarded `m02-control-native-live.ps1` path was inspected and remains a
+single-capture lifecycle acceptance with optional multiple render outputs. It
+does not accept or open multiple capture bindings, so it cannot qualify the
+new multi-input feeder as live hardware evidence. Extending control-plane
+native session ownership for multiple exact captures is the next native gate.
+
+## 2026-09-16 - composed virtual/tool capture path
+
+The Windows-audio synthetic regression now calls
+`WasapiMultiInputFanout::pump_and_process_taps`: two capture packets are
+decoded, mixed, rendered into two caller-owned branch blocks, and delivered to
+two prebuilt taps exactly once. This exercises the direct virtual-sink,
+recorder, and tool-adapter composition without opening hardware; NativeBridge
+lease delivery remains separately gated.
+
+## 2026-09-16 - caller-owned tap branches
+
+`RealtimeMixerFanout::process_once_with_taps` now processes a coherent
+multi-input quantum into caller-owned branch blocks and invokes a prebuilt tap
+per branch. The regression verifies both branch taps observe the summed
+quantum exactly once. This provides the virtual-sink/recorder/tool handoff
+without endpoint allocation or waiting; native lease delivery remains a
+separate gate.
+
+## 2026-09-16 - multi-capture packet metadata validation
+
+The capture feeder now rejects a packet when its reported frame count does not
+match the copied byte payload divided by the fixed float32 channel stride.
+Metrics and accumulation happen only after this check, preserving fail-closed
+multi-device pacing. The Windows-audio suite passed 87/87 and strict Clippy
+passed.
+
+## 2026-09-16 - composed multi-input to physical-output worker path
+
+`WasapiMultiInputFanout::pump_and_process_outputs` now composes one bounded
+packet pump per source with the engine mixer and `WasapiOutputFanout` physical
+branch drains. It does not start/stop endpoints, allocate on the worker path,
+or bypass generation/shape validation. The Windows-audio suite passed 87/87
+with strict Clippy. This remains synthetic/user-mode adapter evidence, not a
+live hardware or loaded-driver qualification.
+
+## 2026-09-16 - bounded multi-capture feeder
+
+Added `WasapiMultiInputFanout`, which preallocates one bounded float32 packet
+accumulator, capture byte buffer, and source block per input. It pumps one
+packet per source, leaves complete data staged when that input ring is full,
+and submits through the engine-owned generation/shape boundary. Windows-audio
+tests passed 87/87 with strict Clippy. This is adapter contract evidence;
+physical multi-capture hardware and managed-driver delivery remain open.
+
+## 2026-09-16 - source-ring backpressure contract
+
+The multi-input adapter submission regression now fills an input ring and
+confirms the next submission returns bounded `false` without disturbing the
+queued quantum. This preserves independent capture pacing and prevents an
+early source from overwriting data while another source is delayed.
+
+## 2026-09-16 - physical fanout generation guard
+
+The Windows `WasapiOutputFanout::process_fanout_once` adapter now rejects a
+mixer generation that differs from its output-worker lease generation before
+building or publishing any destination quantum. This preserves generation
+identity across the engine/endpoint boundary; Windows-audio tests and strict
+Clippy passed. Loaded-driver delivery remains unqualified.
+
+## 2026-09-16 - Windows physical-output fanout adapter handoff
+
+`WasapiOutputFanout::process_fanout_once` now consumes the engine-owned
+`RealtimeMixerFanout`, writes one coherent quantum to independent physical
+output rings, and gives each running render worker one bounded drain attempt.
+The adapter uses a fixed destination-reference array and preserves branch-local
+backpressure. The Windows-audio suite passed 86/86 with strict Clippy. This
+proves the user-mode adapter handoff only; live multi-capture and managed
+driver/PortCls delivery remain unqualified.
+
+## 2026-09-16 - source generation enforced at adapter boundary
+
+`RealtimeMixerFanout::try_submit_input` rejects a source block carrying a
+stale nonzero generation before it can be copied into the input ring or
+relabeled. The focused multi-input fanout regression covers this rejection,
+alongside valid submission and control-generation validation. This is
+portable generation-safety evidence; native driver delivery remains open.
+
+## 2026-09-16 - validated adapter input submission
+
+`RealtimeMixerFanout::try_submit_input` now provides the endpoint-facing
+submission seam for decoded source blocks. It validates the input index,
+runtime generation, and fixed block shape before copying into the bounded
+input ring; a full ring returns `false` without waiting or allocation. The
+focused fanout regression covers successful submissions and distinct invalid
+index/generation outcomes, and the full engine suite passed 115/115. A live
+multi-capture WASAPI worker and loaded-driver delivery remain unqualified.
+
+## 2026-09-16 - guarded VB-Cable requalification after driver callback change
+
+The exact control-owned VB-Cable acceptance was rerun with the existing
+capture endpoint `{0.0.1.00000000}.{06268191-5f8c-42ed-827e-d3c7a19637ed}`, the
+primary render endpoint `{0.0.0.00000000}.{81a91c6d-531c-4b80-853a-af1f4ebf50de}`,
+and the explicit fan-out endpoint
+`{0.0.0.00000000}.{d31b2d50-0969-4fdf-8961-ad642e573743}`. The non-elevated
+attempt failed before routing with `E_INVALIDARG` from capture initialization;
+the elevated retry passed with 24,000 captured frames, 187 processed quanta,
+23,936 primary rendered frames, and 23,168 fan-out rendered frames, followed
+by clean stop. No persistent audio configuration changed. This qualifies the
+existing VB-Cable user-mode route only, not loaded AudioRouter PortCls
+transport.
+
+## 2026-09-16 - mixer/fanout ring handoff
+
+Added `CompiledMixerFanoutGraph::process_to_rings`, which performs one
+prevalidated multi-input mix and submits independent destination branches to
+caller-owned bounded rings. Full destination shape preflight occurs before
+mixer mutation; a full destination is dropped independently without blocking
+other branches. The focused `compiler_and_runtime_execute_mixer_to_many_outputs`
+test also fills one branch to prove the sibling branch still receives the
+quantum; it passed 1/1 and the full engine suite passed 115/115. No endpoint
+was opened; native device and loaded-driver transport remain separate gates.
+
+The mixer/fanout boundary now rejects any nonzero source block generation that
+does not match the prepared graph generation before mutating destinations.
+The focused regression verifies both the rejection and destination preservation
+(`compiler_and_runtime_execute_mixer_to_many_outputs`, 1/1). Generation-zero
+blocks remain accepted for unclaimed adapter input before the scheduler assigns
+ownership.
+
+`RealtimeMixerFanout` now provides the bounded runtime handoff: each input has
+a preallocated ring, missing input yields no output mutation, and each
+generation-matched quantum is delivered to caller-owned output rings. The
+compiler/runtime regression covers two input rings and two output rings; it
+passed 1/1, and the full engine suite passed 115/115. Native endpoint adapter
+integration remains open.
+
+The locked all-target workspace was requalified after the runtime seam change;
+all crate and integration suites passed, including engine (115), control (173
+plus 2 guarded-live ignores), Windows-audio (86), CLI/MCP, and the remaining
+crates. No endpoint or driver state was changed.
+
+The exact elevated VB-Cable control-owned acceptance was also rerun after the
+runtime seam change. It passed the 500 ms route with 24,000 captured frames,
+187 processed quanta, 23,936 primary rendered frames, and 23,936 fan-out
+rendered frames, followed by clean stop. This is user-mode VB-Cable evidence;
+loaded AudioRouter PortCls transport remains unqualified.
+
+Strict `cargo clippy --workspace --all-targets --locked -- -D warnings` passed
+after the mixer runtime addition. This checks the cross-crate ownership and
+API boundary but does not qualify realtime behavior on a loaded driver.
+
+## 2026-09-16 - latest guarded control-owned VB-Cable fan-out
+
+The elevated `tests/acceptance/m02-control-native-live.ps1 -AllowLiveAudio`
+run used the exact active `CABLE Output`, `CABLE In 16ch`, and `Voicemeeter
+In 1` endpoint IDs. The 500 ms control-owned lifecycle captured 24,000
+frames, processed 187 quanta, rendered 23,936 primary frames, and rendered
+23,424 fan-out frames (`fanout_packets=183`), then stopped cleanly. Temporary
+process environment values were restored and no persistent audio configuration
+changed. This qualifies user-mode VB-Cable fan-out, not managed PortCls
+transport, physical latency, or production signing.
+
+## 2026-09-16 - guarded control-owned VB-Cable fan-out requalification
+
+The elevated `tests/acceptance/m02-control-native-live.ps1 -AllowLiveAudio`
+run used exact active `CABLE Output`, `CABLE In 16ch`, and `Voicemeeter In 1`
+endpoint IDs. The 500 ms control-owned lifecycle captured 23,520 frames,
+processed 183 quanta, rendered 23,424 primary frames, and rendered 23,424
+fan-out frames, then stopped cleanly. The process environment was restored
+and no persistent audio configuration changed. A non-elevated retry of the
+same IDs failed before pumping at capture `E_INVALIDARG`; this is retained as
+a prerequisite distinction, not masked as device ownership contention.
+This qualifies user-mode VB-Cable fan-out, not managed PortCls transport,
+physical latency, or production signing.
+
 ## 2026-09-16 - guarded application-capture lifecycle
 
 `tests/acceptance/m02-control-application-live.ps1 -AllowLiveAudio` passed in
@@ -18,6 +895,14 @@ same-process worker restart, restored its temporary environment values, and
 verified unchanged media-device state. Include and exclude lifecycle coverage
 is user-mode process-loopback evidence, not arbitrary isolation or PID-reuse
 qualification.
+
+`nativeOutputs.prepare` can now attach exact stereo 48 kHz float32 render
+clients to an already-prepared multi-input worker when every committed output
+branch is a physical output in the retained order. The worker owns capture,
+graph, and render teardown as one lifecycle; mismatched topology or generation
+is rejected before attachment. Windows-audio/control tests and strict Clippy
+passed. Virtual-only output-owner composition and live hardware qualification
+remain open.
 
 ## 2026-09-16 - guarded Rust adapter route
 
@@ -285,6 +1170,29 @@ Temporary process environment values were cleared after the run. No endpoint
 default, volume, mute, driver, signing, startup, or persistent audio
 configuration changed. This is same-process restart evidence; process
 replacement/rebind endurance plus production-driver transport remain open.
+
+## 2026-09-18 - current native lifecycle requalification
+
+The elevated `tests/acceptance/m02-control-native-live.ps1` wrapper first
+preserved an endpoint-specific ownership failure: the selected
+`CABLE Input (VB-Audio Virtual Cable)` render endpoint returned
+`AUDCLNT_E_DEVICE_IN_USE` (`0x8889000A`, control code `deviceInUse`). A
+read-only inventory was then used to select the already qualified PD200X
+render endpoint. The exact CABLE capture plus PD200X render run passed with
+24,000 captured frames, 187 processed quanta, 23,936 rendered frames, 187
+fan-out packets, 23,936 fan-out frames, and a privacy dispatch-to-processed
+p95 of 11.215 ms. Same-process start/stop and cleanup passed without changing
+defaults, volume, mute, privacy, drivers, or persistent audio configuration.
+This remains existing-device lifecycle evidence, not physical/acoustic
+latency, OS-transition reopen, managed-driver, or release evidence.
+
+The elevated `tests/acceptance/m02-multi-input-native-live.ps1` acceptance
+also passed on the current tree with exact CABLE Output plus Focusrite
+capture, and DELL plus PD200X render endpoints. The bounded run captured
+47,520 frames, delivered 270 graph quanta, and rendered 48,000 frames before
+same-process cleanup. No persistent audio configuration changed. This
+refreshes multi-input/many-output lifecycle evidence only; it does not close
+physical latency, endurance, OS-transition reopen, or managed-driver gates.
 
 The reproducible wrapper
 `tests/acceptance/m02-control-application-live.ps1` now requires the process
@@ -878,7 +1786,16 @@ Rust stream qualification.
 
 Added `crates/windows-audio` as the first reusable Windows adapter boundary. It explicitly owns COM initialization/uninitialization, enumerates active capture and render endpoints, copies the COM-owned `WAVEFORMATEX` metadata before freeing it, and returns endpoint ID, direction, shared-mode periods, sample rate, channels, bits, and format tag. It also provides shared capture/render lifecycle wrappers with exact endpoint selection, bounded event-driven initialization, owned event handles, start/stop/reset, timeout waits, and packet/buffer operations that release device buffers immediately.
 
-The control plane now uses this adapter for `devices.list`, returning active endpoint IDs, direction, state, format, and period metadata. The adapter also provides an identity-preserving metadata snapshot diff for added, removed, and changed endpoints; it is a polling helper and does not silently rebind a missing device. `status.get` reports device discovery as available while full audio remains unavailable because the realtime graph and routing are not implemented. `apps.list` returns bounded process identities and, on Windows, the read-only audio-session observations described below.
+At this 2026-09-05 checkpoint, the control plane used this adapter for
+`devices.list`, returning active endpoint IDs, direction, state, format, and
+period metadata. The adapter also provides an identity-preserving metadata
+snapshot diff for added, removed, and changed endpoints; it is a polling helper
+and does not silently rebind a missing device. The checkpoint's `status.get`
+reported device discovery as available while the then-unimplemented realtime
+graph and routing remained unavailable. Later entries record the implemented
+graph and guarded existing-device route evidence. `apps.list` returns bounded
+process identities and, on Windows, the read-only audio-session observations
+described below.
 
 Endpoint topology notifications are now registered through an RAII `IMMNotificationClient` subscription. Every callback only sets an atomic dirty flag; the control plane must consume that flag and resnapshot, so callbacks never enumerate, allocate, lock, or rebind streams.
 
@@ -1347,6 +2264,43 @@ correction within the configured ±100 ppm bound. Media identity/state and
 temporary-artifact cleanup checks passed; no persistent audio configuration
 changed.
 
+## 2026-09-17 - live privacy propagation refresh
+
+The elevated, explicitly authorized
+`tests/acceptance/m02-control-native-live.ps1 -AllowLiveAudio` run used exact
+CABLE Output capture, P32p-30 render, and DELL fan-out render endpoints. The
+500 ms control-owned lifecycle delivered 23,520 captured frames, 183 processed
+quanta, 23,424 primary rendered frames, 113 fan-out packets, and 14,464
+fan-out rendered frames. While the native worker was active, the test toggled
+the durable privacy latch on and off and verified the live status response in
+both states; worker cleanup, exact stopped rebind, restart, and cleanup passed.
+No endpoint default, volume, mute, privacy, or persistent audio configuration
+was changed. This proves live control propagation, not calibrated effective
+output timing or attended microphone-path measurement.
+
+The applicable target is `NFR-09`: emergency mute within two audio blocks and
+local input-to-effective-mute p95 at or below 100 ms. The current run proves
+that the control latch reaches an active native worker and that the worker
+continues through the bounded lifecycle. A later bounded sample measured
+control-dispatch to the next processed block at 22.132 ms p95, but it does not
+expose a calibrated effective-mute timestamp at the native output boundary.
+A physical or instrumented local loopback measurement remains required before
+the full numeric requirement can be marked complete.
+
+## 2026-09-17 - current Zoom application-capture refresh
+
+The elevated, explicitly authorized
+`tests/acceptance/m02-control-application-live.ps1 -AllowLiveAudio` acceptance
+was rerun against the currently running Zoom process using its exact PID,
+`Zoom.exe` observed basename, verified full executable path, and creation
+timestamp. Include mode passed the control-owned application-capture lifecycle:
+two bounded start/pump/stop cycles, same-process worker restart, and unchanged
+media-device state. The harness restored its temporary environment after the
+run. No endpoint default, volume, mute, privacy, or persistent audio
+configuration changed. This qualifies the existing-application/user-mode tool
+boundary; attended drag-and-drop, physical latency, OS-transition delivery, and
+deferred driver/signing gates remain open.
+
 ## 2026-09-07 — Current-head Rust adapter route
 
 The authorized guarded route was replayed after the event-gated render and
@@ -1445,6 +2399,15 @@ run used zero-valued caller-owned render buffers, so `routed_frames=0` and
 It does not close endpoint-specific initialization failures, routed signal, or
 calibrated physical-latency gates. Media-device state and persistent audio
 configuration were unchanged.
+
+## 2026-09-18 - Rust adapter bridge requalification
+
+The guarded Rust adapter bridge acceptance passed two 500 ms cycles on the
+exact CABLE Output/PD200X pair. Cycle 1 captured/rendered 24,960 frames in
+195 quanta; cycle 2 captured 24,480 and rendered 24,448 in 191 quanta. Both
+reported 48 kHz stereo, zero non-finite tap samples, dropped frames, xruns,
+and deadline misses; temporary streams/recordings were removed and media
+device state remained unchanged.
 ## Production Rust adapter route run (2026-09-07)
 
 Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
@@ -2191,6 +3154,29 @@ formatting/diff checks passed. No endpoint was opened by these checks; managed
 driver ownership, production callback timing, signing, and physical latency
 remain open.
 
+## Guarded control rebind and multi-input refresh (2026-09-17)
+
+The elevated `m02-control-native-live.ps1` acceptance passed against the exact
+existing Focusrite capture endpoint, DELL physical render endpoint, and P32p-30
+physical output fan-out endpoint. The 500 ms control-owned lifecycle captured
+23,520 frames, processed 183 graph quanta, rendered 23,424 frames, and drained
+165 fan-out packets for 21,120 fan-out frames. The same test stopped the
+session, rebound the exact endpoint identities while stopped, restarted it,
+and stopped/cleaned up again.
+
+The elevated `m02-multi-input-native-live.ps1` acceptance also passed with
+exact Focusrite plus Voicemeeter capture endpoints and exact DELL plus P32p-30
+render endpoints. It captured 47,040 frames, delivered 302 graph quanta, and
+rendered 46,752 frames before same-process cleanup. No defaults, volume, mute,
+privacy, driver state, or persistent audio configuration changed.
+
+These are guarded existing-device shared-mode lifecycle and routing results;
+they do not establish physical latency, independent-clock drift, production
+driver behavior, or long-duration endurance. An earlier attempt using the
+CABLE Input render endpoint returned the distinct `AUDCLNT_E_DEVICE_IN_USE`
+diagnostic; the successful rerun used exact physical outputs and preserved
+that ownership diagnostic rather than masking it.
+
 ## 2026-09-11 — Control-thread notification refresh
 
 `ControlPlane` now lazily owns one `EndpointMonitor` after the first
@@ -2470,3 +3456,99 @@ restored. No persistent audio configuration, endpoint default, volume, mute,
 driver, or signing state was changed. This remains user-mode existing-device
 evidence; loaded AudioRouter driver/PortCls timing and physical-latency gates
 remain open.
+## 2026-09-16 - guarded native fan-out delivery
+
+The elevated, explicitly authorized `m02-control-native-live.ps1` lifecycle
+was rerun with the exact VB-Cable capture endpoint and two virtual render
+branches. It completed 23,520 captured frames, 183 processed quanta, 23,040
+primary rendered frames, 137 fan-out packets, and 17,536 fan-out rendered
+frames in 500 ms. The native session stopped and the auxiliary fan-out was
+detached cleanly. No persistent audio configuration changed. This is current
+Windows user-mode adapter evidence; managed-driver/PortCls transport,
+production signing, and physical-latency gates remain open.
+## 2026-09-16 - coherent multi-input fanout staging
+
+`RealtimeMixerFanout` now retains each acquired source block in fixed
+preallocated staging until all inputs for the quantum are available. A missing
+source therefore leaves destinations untouched and cannot advance only a
+subset of input timelines; the delayed-input regression passed in the focused
+engine test. `reset_inputs` also recycles staged blocks at stop/generation
+handoff. This is portable realtime-boundary evidence, not loaded-driver or
+physical-endpoint evidence.
+# 2026-09-16 - native multi-input plugin stage alignment
+
+The bounded native multi-input compiler now has a plugin-aware entry point.
+Control supplies the exact pre-bound plugin worker map, the compiler accepts
+only a linear plugin chain between the mixer and final fan-out branches, and
+`RealtimeMixerFanout` executes the immutable plugin stages before every branch
+mapping. `mixer_fanout_runs_bound_plugin_before_every_branch` passed, proving
+both output branches receive the processed signal. This is portable callback
+and control evidence; plugin worker activation, live endpoint delivery, and
+driver qualification remain separate gates.
+
+## 2026-09-17 - guarded exact-endpoint lifecycle refresh
+
+The elevated, explicitly authorized
+`tests/acceptance/m02-control-native-live.ps1 -AllowLiveAudio` run used the
+exact Focusrite capture endpoint, DELL primary render endpoint, and P32p-30
+fan-out render endpoint currently reported by `devices list`. The 500 ms
+control-owned lifecycle captured 23,520 frames, processed 183 graph quanta,
+rendered 23,424 primary frames, emitted 169 fan-out packets, and rendered
+21,632 fan-out frames. Stop, exact stopped rebind, restart, and cleanup all
+passed. No endpoint default, volume, mute, privacy, or persistent audio
+configuration changed. This refreshes existing-device user-mode evidence only;
+physical latency, OS-transition reopen, and deferred driver/signing gates
+remain open.
+
+## 2026-09-17 - Voicemeeter identity refresh remains fail-closed
+
+The explicitly authorized include and exclude application-capture retries were
+rerun with the currently observed Voicemeeter PID `9940`, executable path, and
+creation timestamp, plus the exact existing `CABLE Input` render endpoint.
+Both stopped before stream creation with the distinct
+`application process 9940 identity changed` diagnostic. A read-only elevated
+`apps list` inventory also did not expose PID `9940`, while the independent
+process snapshot still reported it. The adapter therefore preserved the
+fail-closed boundary instead of accepting an unverifiable process identity;
+this is an environment/session inventory limitation, not evidence of broad
+application-capture failure. No endpoint or persistent media configuration
+changed.
+
+## 2026-09-17 - current Zoom exclude-mode refresh
+
+The elevated, explicitly authorized
+`tests/acceptance/m02-control-application-live.ps1 -AllowLiveAudio` acceptance
+passed in `exclude` mode against the exact observed Zoom identity: PID `46448`,
+basename `Zoom.exe`, full path
+`C:\Users\miste\AppData\Roaming\Zoom\bin\Zoom.exe`, and creation timestamp
+`134340804006036394`. It completed two bounded start/pump/stop cycles, a
+same-process worker restart, and unchanged media-device state. No endpoint
+default, volume, mute, privacy, or persistent audio configuration changed.
+This is process-identity and user-mode adapter evidence for the observed Zoom
+instance; it is not a universal application-capture or process-loopback claim.
+
+## 2026-09-18 - Voicemeeter application-capture lifecycle refresh
+
+The elevated `m02-control-application-live.ps1` acceptance passed against the
+currently observed `voicemeeterpro.exe` process identity (PID 71412,
+creation-time identity `134342414024784043`, verified executable path) and the
+exact PD200X render endpoint. Include-mode application capture completed two
+bounded start/pump/stop cycles and a same-process worker restart. The media
+device snapshot remained unchanged; no process was started or stopped and no
+persistent audio configuration changed. This is process-identity lifecycle
+evidence, not protected-content coverage or full application compatibility.
+
+The same exact verified process identity and PD200X render also passed the
+guarded application-capture acceptance in `exclude` mode on 2026-09-18,
+covering two bounded start/pump/stop cycles and same-process worker restart
+with unchanged media-device state and no persistent audio configuration.
+
+## 2026-09-18 - Rust adapter route requalification
+
+The guarded Rust adapter route acceptance passed with exact CABLE Output capture
+and PD200X render endpoints: 48 kHz on both sides, 128-frame graph quantum,
+2.666667 ms graph deadline, 24,000 captured frames, 187 graph blocks, 23,936
+scheduler/routed frames, zero deadline misses, and maximum processing time of
+57,700 ns (p999 upper bound 65,536 ns). Temporary probe artifacts were
+removed; defaults, volume, mute, privacy, drivers, signing, and startup
+configuration were unchanged.

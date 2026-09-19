@@ -7,6 +7,7 @@ use audiorouter_domain::{
 use audiorouter_protocol::{decode_frame, encode_frame, JsonRpcRequest, JsonRpcResponse};
 use audiorouter_storage::Storage;
 use tauri::{
+    image::Image,
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
     Manager, Runtime, State, WebviewUrl, WebviewWindowBuilder,
@@ -23,6 +24,27 @@ const DEFAULT_PIPE_NAME: &str = r"\\.\pipe\audiorouter-control";
 const DEFAULT_DATABASE_DIRECTORY: &str = "AudioRouter";
 const DEFAULT_DATABASE_FILE: &str = "state.sqlite";
 const DESKTOP_SESSION_ID: &str = "desktop-session";
+
+fn audio_router_tray_icon() -> Image<'static> {
+    // Keep the tray asset local and deterministic: a cyan audio waveform on a
+    // dark rounded tile remains legible at the small Windows notification-area
+    // sizes without depending on an external file or installer path.
+    const SIZE: u32 = 32;
+    let mut rgba = Vec::with_capacity((SIZE * SIZE * 4) as usize);
+    let bars = [5_u32, 9, 14, 20, 25, 29];
+    for y in 0..SIZE {
+        for x in 0..SIZE {
+            let edge = x.min(y).min(SIZE - 1 - x).min(SIZE - 1 - y);
+            let rounded = edge >= 3 || ((x.abs_diff(3) + y.abs_diff(3)) <= 3) || ((x.abs_diff(28) + y.abs_diff(3)) <= 3) || ((x.abs_diff(3) + y.abs_diff(28)) <= 3) || ((x.abs_diff(28) + y.abs_diff(28)) <= 3);
+            let mut pixel = if rounded { [20, 30, 42, 255] } else { [0, 0, 0, 0] };
+            if rounded && bars.iter().any(|bar| x.abs_diff(*bar) <= 1 && y.abs_diff(16) <= (x.abs_diff(16) / 3 + 3)) {
+                pixel = [68, 204, 235, 255];
+            }
+            rgba.extend_from_slice(&pixel);
+        }
+    }
+    Image::new_owned(rgba, SIZE, SIZE)
+}
 
 fn transition_operation_key(sequence: usize) -> String {
     let timestamp = std::time::SystemTime::now()
@@ -725,6 +747,16 @@ fn main() {
                 false,
                 None::<&str>,
             )?;
+            let backend_endpoint = MenuItem::with_id(
+                app,
+                "backend-endpoint",
+                format!(
+                    "Backend: local Windows pipe ({}) · browser access unavailable",
+                    tray_pipe_name
+                ),
+                false,
+                None::<&str>,
+            )?;
             let pipe_name = tray_pipe_name.clone();
             let status_for_handler = status.clone();
             let recordings_for_handler = recordings.clone();
@@ -738,9 +770,11 @@ fn main() {
                     &refresh_status,
                     &status,
                     &recordings,
+                    &backend_endpoint,
                 ],
             )?;
             let _tray = TrayIconBuilder::with_id("audiorouter")
+                .icon(audio_router_tray_icon())
                 .menu(&menu)
                 .tooltip("AudioRouter")
                 .on_menu_event(move |app, event| {

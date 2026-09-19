@@ -76,12 +76,20 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `startup.apply` | `startupWrite` | mutating; requires an idempotency key |
 | `devices.list` | `read` | read-only |
 | `nativeEndpoints.prepare` | `deviceAdministration` | external operation; prepares exact stopped clients |
+| `nativeOutputs.prepare` | `deviceAdministration` | external operation; prepares 1–8 exact stopped stereo render clients for a generation |
+| `nativeMultiInputs.prepare` | `deviceAdministration` | external operation; prepares 2–8 exact stopped float32 capture clients for the committed mixer/fan-out source order, resolving any required pre-bound plugin stages |
+| `nativeBridges.prepare` | `deviceAdministration` | external operation; prepares an exact stopped project-driver render-source/capture-sink lease pair |
+| `nativeBridges.detach` | `deviceAdministration` | external operation; detaches an exact stopped project-driver lease pair |
+| `nativeBridges.heartbeat` | `deviceAdministration` | external operation; refreshes bounded project-driver leases |
 | `nativeEndpoints.rebind` | `deviceAdministration` | external operation; refreshes and reopens exact stopped clients |
 | `nativeEndpoints.detach` | `deviceAdministration` | external operation; detaches an exact stopped native worker |
 | `nativeDuplex.detach` | `deviceAdministration` | external operation; detaches an exact stopped project-driver bridge |
 | `nativeApplications.prepare` | `deviceAdministration` | external operation; prepares a verified stopped process-loopback capture and exact render client |
 | `nativeEndpoints.pump` | `sessionControl` | external operation; drains a bounded packet budget for the exact running native generation |
 | `nativeDuplex.pump` | `sessionControl` | external operation; drains independently bounded input and output work for the exact running duplex generation |
+| `nativeRenderSources.pump` | `sessionControl` | external operation; drains bounded work for the exact running standalone virtual render-source generation |
+| `nativeMultiInputs.pump` | `sessionControl` | external operation; drains bounded work from several exact capture workers into their prepared generation-bound feeder |
+| `nativeMultiInputs.bindBranches` | `sessionControl` | external operation; binds ordered validated output nodes to branch-local virtual, recording, and tool observers |
 | `plugins.scan` | `pluginScan` | read-only |
 | `plugins.list` | `pluginScan` | read-only |
 | `plugins.retry` | `pluginScan` | mutating; requires an idempotency key |
@@ -142,6 +150,21 @@ volume, or mute state. `nativeEndpoints.pump` requires the prepared session's
 current positive runtime generation and drains only already-available packets,
 up to the documented per-wake bound. It does not wait, rebind, select a
 replacement endpoint, or activate a stopped session.
+`nativeOutputs.prepare` requires the exact active render endpoint IDs for a
+prepared native session and opens each stopped output branch without changing
+system defaults, volume, or mute state. It accepts one through eight stereo,
+48 kHz, IEEE-float render endpoints and binds them to the supplied positive
+session generation; it never substitutes a missing endpoint or starts the
+session. The running session's bounded pump reports fan-out packet, frame, and
+backpressure counters alongside the primary native worker counters.
+`nativeBridges.prepare` requires an enabled virtual bus, a positive graph
+generation, the fixed `\\.\AudioRouterVirtualBridge` device path, and two
+distinct absolute mapping paths. The backend derives matching protocol hellos
+for both `renderSource` and `captureSink`, validates the bounded sample/lease
+shape, and leaves both leases stopped. `nativeBridges.detach` closes only the
+requested bus pair; `nativeBridges.heartbeat` refreshes all prepared pairs on
+the control thread. These methods do not install or load the driver, choose a
+Windows endpoint, or make a graph active.
 `nativeEndpoints.detach` requires the session to be stopped and removes only
 that session's stopped worker, allowing a deliberate exact-endpoint selection
 and preparation to follow.
@@ -164,6 +187,12 @@ and fail-closed rules to a paired native bridge worker. Its `maxInputQuanta`
 and `maxOutputPackets` budgets are independently bounded, and the response
 keeps input and output counters separate so a stalled direction is observable.
 
+`nativeRenderSources.pump` applies the same authentication and generation
+checks to a standalone render-source worker. Its `maxQuanta` budget is bounded
+and the response reports processed and rendered frames separately. This path
+can coexist with the primary capture/graph worker but does not make a render-
+only worker graph-capable for plugin authorization.
+
 The singular and plural session lifecycle names are compatibility aliases with
 the same authorization and behavior. Mutating graph and virtual-device calls
 require an idempotency key where the discovered input schema says so. For an
@@ -176,10 +205,10 @@ The current node catalog is available through `nodes.describe` and contains:
 
 | Type | Availability | Notes |
 | --- | --- | --- |
-| `physical-input@1` | unavailable | Requires M02 Windows audio adapters |
-| `application-capture@1` | unavailable | Requires M02 Windows audio adapters |
-| `endpoint-loopback@1` | unavailable | Requires M02 Windows audio adapters |
-| `physical-output@1` | unavailable | Requires M02 Windows audio adapters |
+| `physical-input@1` | available | Requires an exact active capture endpoint at runtime |
+| `application-capture@1` | available | Requires an observed process identity and exact render binding at runtime |
+| `endpoint-loopback@1` | available | Requires an exact active render endpoint at runtime |
+| `physical-output@1` | available | Requires an exact active render endpoint at runtime |
 | `virtual-render-source@1` | unavailable | Requires M03 managed virtual driver |
 | `virtual-capture-sink@1` | unavailable | Requires M03 managed virtual driver |
 | `recorder@1` | available | Bounded recording sink boundary; the runtime tap is attached by the control plane |
@@ -297,8 +326,11 @@ The UI requests this diagnostic snapshot at most once per second while a
 session is running. Diagnostics are not replayed or retained as meter events;
 the UI keeps the last successful snapshot if a refresh fails.
 
-The MCP stdio adapter exposes focused read/write tools and `call_api`; it uses
-the enrolled client identity and cannot bypass the backend permission checks.
+The MCP stdio adapter exposes focused read/write tools for graph, virtual-route,
+native-output, and project-driver bridge operations in addition to `call_api`;
+it uses the enrolled client identity and cannot bypass the backend permission
+checks. Native bridge preparation still requires the exact broker path and
+mapping inputs, and remains stopped until a qualifying managed driver exists.
 See the [headless runbook](headless-runbook.md) for launch and recovery
 examples. Native audio activation, managed endpoint provisioning, and signed
 driver actions remain unavailable and are reported as such by discovery.

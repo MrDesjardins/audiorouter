@@ -7,8 +7,8 @@
 use audiorouter_domain::{
     format_validation_errors, inspect_routes, node_registry, validate_session, ApiMethodSpec,
     CrashRecoveryTracker, EntityId, EventLog, EventReplayError, FakeRuntime, GraphStore, NodeKind,
-    PermissionScope, RecoveryDecision, RecoveryMode, RuntimeError, RuntimeState, Session,
-    VirtualBusRegistry, VirtualBusRouteRegistry, API_METHODS,
+    PermissionScope, PortDirection, RecoveryDecision, RecoveryMode, RuntimeError, RuntimeState,
+    Session, VirtualBusRegistry, VirtualBusRouteRegistry, API_METHODS,
 };
 use audiorouter_engine::{
     AudioBlock, AudioTap, AudioTapSet, RealtimePluginProcessor, RecorderTapBindings,
@@ -43,7 +43,7 @@ const MUTATION_BURST: f64 = 40.0;
 const MAX_MUTATION_BUCKETS: usize = 256;
 const MUTATION_BUCKET_RETENTION: Duration = Duration::from_secs(10 * 60);
 const MAX_CONTROL_VALUE_DEPTH: usize = 32;
-const MAX_CONTROL_STRING_BYTES: usize = 4096;
+pub const MAX_CONTROL_STRING_BYTES: usize = 4096;
 const MAX_CONTROL_VALUE_COUNT: usize = 8192;
 const MAX_EVENT_SUBSCRIPTION_ITEMS: usize = 500;
 const MAX_SESSION_LIST_ITEMS: usize = 500;
@@ -1782,6 +1782,21 @@ fn method_description(name: &str) -> &'static str {
         "nativeEndpoints.prepare" => {
             "Prepare exact capture/render clients without starting audio."
         }
+        "nativeOutputs.prepare" => {
+            "Prepare multiple exact physical render clients as independent bounded output branches without starting audio."
+        }
+        "nativeMultiInputs.prepare" => {
+            "Prepare multiple exact physical capture clients for a validated mixer/fan-out graph, including pre-bound plugin stages, without starting audio."
+        }
+        "nativeBridges.prepare" => {
+            "Prepare one exact project-driver render-source and capture-sink lease pair without starting audio."
+        }
+        "nativeBridges.detach" => {
+            "Detach one stopped project-driver bridge lease pair for an exact virtual bus."
+        }
+        "nativeBridges.heartbeat" => {
+            "Refresh all prepared project-driver bridge leases on the control thread."
+        }
         "nativeEndpoints.rebind" => {
             "Rebind an attached stopped native worker to refreshed exact endpoints without starting audio."
         }
@@ -1799,6 +1814,15 @@ fn method_description(name: &str) -> &'static str {
         }
         "nativeDuplex.pump" => {
             "Drain bounded already-available audio from both directions of a running duplex session."
+        }
+        "nativeRenderSources.pump" => {
+            "Drain bounded already-available audio from a running virtual render-source worker."
+        }
+        "nativeMultiInputs.pump" => {
+            "Drain bounded already-available audio from several capture workers into their prepared fan-out graph."
+        }
+        "nativeMultiInputs.bindBranches" => {
+            "Bind ordered validated fan-out destination nodes to branch-local virtual, recording, and tool observers."
         }
         "plugins.scan" => "Inspect an explicitly selected plugin directory without loading plugin code.",
         "plugins.list" => "List the last bounded plugin scan inventory without scanning or loading plugin code.",
@@ -1967,6 +1991,46 @@ fn method_input_schema(name: &str) -> Value {
             }),
             &["sessionId", "captureEndpointId", "renderEndpointId"],
         ),
+        "nativeOutputs.prepare" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "generation": { "type": "integer", "minimum": 1 },
+                "renderEndpointIds": { "type": "array", "minItems": 1, "maxItems": audiorouter_engine::MAX_AUDIO_TAPS, "items": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES } }
+            }),
+            &["sessionId", "generation", "renderEndpointIds"],
+        ),
+        "nativeMultiInputs.prepare" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "generation": { "type": "integer", "minimum": 1 },
+                "captureEndpointIds": { "type": "array", "minItems": 2, "maxItems": audiorouter_engine::MAX_MIXER_INPUTS, "items": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES } }
+            }),
+            &["sessionId", "generation", "captureEndpointIds"],
+        ),
+        "nativeBridges.prepare" => object_schema(
+            json!({
+                "busId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "generation": { "type": "integer", "minimum": 1 },
+                "devicePath": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES },
+                "renderMappingPath": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES },
+                "captureMappingPath": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES },
+                "leaseMs": { "type": "integer", "minimum": 1, "maximum": audiorouter_protocol::MAX_AUDIO_BRIDGE_LEASE_MS }
+            }),
+            &[
+                "busId",
+                "generation",
+                "devicePath",
+                "renderMappingPath",
+                "captureMappingPath",
+            ],
+        ),
+        "nativeBridges.detach" => object_schema(
+            json!({
+                "busId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
+            }),
+            &["busId"],
+        ),
+        "nativeBridges.heartbeat" => object_schema(json!({}), &[]),
         "nativeEndpoints.rebind" => object_schema(
             json!({
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
@@ -2022,6 +2086,35 @@ fn method_input_schema(name: &str) -> Value {
                 "maxOutputPackets": { "type": "integer", "minimum": 1, "maximum": audiorouter_windows_audio::MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE }
             }),
             &["sessionId", "generation"],
+        ),
+        "nativeRenderSources.pump" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "generation": { "type": "integer", "minimum": 1 },
+                "maxQuanta": { "type": "integer", "minimum": 1, "maximum": audiorouter_windows_audio::MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE }
+            }),
+            &["sessionId", "generation"],
+        ),
+        "nativeMultiInputs.pump" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "generation": { "type": "integer", "minimum": 1 },
+                "maxPackets": { "type": "integer", "minimum": 1, "maximum": audiorouter_windows_audio::MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE }
+            }),
+            &["sessionId", "generation"],
+        ),
+        "nativeMultiInputs.bindBranches" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "generation": { "type": "integer", "minimum": 1 },
+                "branchNodeIds": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": audiorouter_engine::MAX_AUDIO_TAPS,
+                    "items": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
+                }
+            }),
+            &["sessionId", "generation", "branchNodeIds"],
         ),
         "plugins.scan" => object_schema(
             json!({
@@ -2893,6 +2986,60 @@ fn method_output_schema(name: &str) -> Value {
             "required": ["sessionId", "state", "captureEndpointId", "renderEndpointId"],
             "additionalProperties": false
         }),
+        "nativeOutputs.prepare" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "generation": { "type": "integer", "minimum": 1 },
+                "state": { "const": "configured-stopped" },
+                "renderEndpointIds": { "type": "array", "minItems": 1, "maxItems": audiorouter_engine::MAX_AUDIO_TAPS, "items": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES } },
+                "outputCount": { "type": "integer", "minimum": 1, "maximum": audiorouter_engine::MAX_AUDIO_TAPS }
+            },
+            "required": ["sessionId", "generation", "state", "renderEndpointIds", "outputCount"],
+            "additionalProperties": false
+        }),
+        "nativeMultiInputs.prepare" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "generation": { "type": "integer", "minimum": 1 },
+                "state": { "const": "configured-stopped" },
+                "captureEndpointIds": { "type": "array", "minItems": 2, "maxItems": audiorouter_engine::MAX_MIXER_INPUTS, "items": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES } },
+                "sourceNodeIds": { "type": "array", "minItems": 2, "maxItems": audiorouter_engine::MAX_MIXER_INPUTS, "items": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } },
+                "branchNodeIds": { "type": "array", "minItems": 2, "maxItems": audiorouter_engine::MAX_AUDIO_TAPS, "items": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } }
+            },
+            "required": ["sessionId", "generation", "state", "captureEndpointIds", "sourceNodeIds", "branchNodeIds"],
+            "additionalProperties": false
+        }),
+        "nativeBridges.prepare" => json!({
+            "type": "object",
+            "properties": {
+                "busId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "generation": { "type": "integer", "minimum": 1 },
+                "state": { "const": "configured-stopped" },
+                "directions": { "const": ["renderSource", "captureSink"] }
+            },
+            "required": ["busId", "generation", "state", "directions"],
+            "additionalProperties": false
+        }),
+        "nativeBridges.detach" => json!({
+            "type": "object",
+            "properties": {
+                "busId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "state": { "const": "detached" }
+            },
+            "required": ["busId", "state"],
+            "additionalProperties": false
+        }),
+        "nativeBridges.heartbeat" => json!({
+            "type": "object",
+            "properties": {
+                "state": { "const": "healthy" },
+                "bindings": { "type": "integer", "minimum": 0 }
+            },
+            "required": ["state", "bindings"],
+            "additionalProperties": false
+        }),
         "nativeEndpoints.rebind" => json!({
             "type": "object",
             "properties": {
@@ -2986,6 +3133,51 @@ fn method_output_schema(name: &str) -> Value {
                 }
             },
             "required": ["sessionId", "generation", "input", "output"],
+            "additionalProperties": false
+        }),
+        "nativeRenderSources.pump" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "generation": { "type": "integer", "minimum": 1 },
+                "packets": { "type": "integer", "minimum": 0 },
+                "processedQuanta": { "type": "integer", "minimum": 0 },
+                "renderedFrames": { "type": "integer", "minimum": 0 },
+                "droppedRenderFrames": { "type": "integer", "minimum": 0 }
+            },
+            "required": ["sessionId", "generation", "packets", "processedQuanta", "renderedFrames", "droppedRenderFrames"],
+            "additionalProperties": false
+        }),
+        "nativeMultiInputs.pump" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "generation": { "type": "integer", "minimum": 1 },
+                "inputs": { "type": "integer", "minimum": 0 },
+                "capturedFrames": { "type": "integer", "minimum": 0 },
+                "submittedQuanta": { "type": "integer", "minimum": 0 },
+                "outputCount": { "type": "integer", "minimum": 0 },
+                "deliveredQuanta": { "type": "integer", "minimum": 0 },
+                "renderedFrames": { "type": "integer", "minimum": 0 },
+                "renderBackpressureEvents": { "type": "integer", "minimum": 0 }
+            },
+            "required": ["sessionId", "generation", "inputs", "capturedFrames", "submittedQuanta", "outputCount", "deliveredQuanta", "renderedFrames", "renderBackpressureEvents"],
+            "additionalProperties": false
+        }),
+        "nativeMultiInputs.bindBranches" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "generation": { "type": "integer", "minimum": 1 },
+                "branchNodeIds": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": audiorouter_engine::MAX_AUDIO_TAPS,
+                    "items": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
+                },
+                "boundBranches": { "type": "integer", "minimum": 1 }
+            },
+            "required": ["sessionId", "generation", "branchNodeIds", "boundBranches"],
             "additionalProperties": false
         }),
         "plugins.scan" | "plugins.list" | "plugins.retry" => json!({
@@ -3506,7 +3698,7 @@ fn diagnostics_output_schema() -> Value {
                 "additionalProperties": false
             },
             "nativeAdapter": { "enum": ["implemented-not-activated", "configured-stopped", "running"] },
-            "nativeAdapterKind": { "enum": ["endpoint", "duplex", null] },
+            "nativeAdapterKind": { "enum": ["endpoint", "duplex", "render-source", "multi-input", null] },
             "nativeSessionId": { "type": ["string", "null"], "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
             "schedulerTelemetry": {
                 "oneOf": [
@@ -4125,8 +4317,20 @@ pub struct ControlPlane {
     pending_endpoint_changes: Vec<audiorouter_windows_audio::EndpointChange>,
     native_endpoint_worker: Option<audiorouter_windows_audio::NativeAudioWorker>,
     native_endpoint_session: Option<EntityId>,
+    #[cfg(windows)]
+    native_multi_input_worker: Option<audiorouter_windows_audio::NativeMultiInputWorker>,
+    #[cfg(windows)]
+    native_multi_input_worker_session: Option<EntityId>,
+    #[cfg(windows)]
+    native_multi_input_worker_generation: Option<u64>,
     native_endpoint_taps: Option<AudioTapSet>,
     native_endpoint_rejections: u64,
+    #[cfg(windows)]
+    native_output_fanout: Option<audiorouter_windows_audio::WasapiOutputFanout>,
+    #[cfg(windows)]
+    native_output_fanout_session: Option<EntityId>,
+    #[cfg(windows)]
+    native_output_fanout_generation: Option<u64>,
     #[cfg(windows)]
     native_capture_sink_bindings:
         HashMap<EntityId, audiorouter_windows_audio::NativeBridgeCaptureSinkBinding>,
@@ -4141,6 +4345,14 @@ pub struct ControlPlane {
     native_duplex_worker_session: Option<EntityId>,
     #[cfg(windows)]
     native_duplex_worker_generation: Option<u64>,
+    #[cfg(windows)]
+    native_render_source_worker: Option<audiorouter_windows_audio::NativeBridgeInputWorker>,
+    #[cfg(windows)]
+    native_render_source_worker_session: Option<EntityId>,
+    #[cfg(windows)]
+    native_render_source_worker_generation: Option<u64>,
+    #[cfg(windows)]
+    native_render_source_taps: Option<AudioTapSet>,
     #[cfg(windows)]
     managed_software_devices: audiorouter_windows_audio::ManagedSoftwareDeviceInventory,
 }
@@ -4213,8 +4425,20 @@ impl ControlPlane {
             pending_endpoint_changes: Vec::new(),
             native_endpoint_worker: None,
             native_endpoint_session: None,
+            #[cfg(windows)]
+            native_multi_input_worker: None,
+            #[cfg(windows)]
+            native_multi_input_worker_session: None,
+            #[cfg(windows)]
+            native_multi_input_worker_generation: None,
             native_endpoint_taps: None,
             native_endpoint_rejections: 0,
+            #[cfg(windows)]
+            native_output_fanout: None,
+            #[cfg(windows)]
+            native_output_fanout_session: None,
+            #[cfg(windows)]
+            native_output_fanout_generation: None,
             #[cfg(windows)]
             native_capture_sink_bindings: HashMap::new(),
             #[cfg(windows)]
@@ -4228,6 +4452,14 @@ impl ControlPlane {
             #[cfg(windows)]
             native_duplex_worker_generation: None,
             #[cfg(windows)]
+            native_render_source_worker: None,
+            #[cfg(windows)]
+            native_render_source_worker_session: None,
+            #[cfg(windows)]
+            native_render_source_worker_generation: None,
+            #[cfg(windows)]
+            native_render_source_taps: None,
+            #[cfg(windows)]
             managed_software_devices:
                 audiorouter_windows_audio::ManagedSoftwareDeviceInventory::default(),
         }
@@ -4237,7 +4469,7 @@ impl ControlPlane {
         self.native_endpoint_worker.is_some() || {
             #[cfg(windows)]
             {
-                self.native_duplex_worker.is_some()
+                self.native_duplex_worker.is_some() || self.native_multi_input_worker.is_some()
             }
             #[cfg(not(windows))]
             {
@@ -4251,6 +4483,8 @@ impl ControlPlane {
             #[cfg(windows)]
             {
                 self.native_duplex_worker_session.as_ref() == Some(session_id)
+                    || self.native_multi_input_worker_session.as_ref() == Some(session_id)
+                    || self.native_render_source_worker_session.as_ref() == Some(session_id)
             }
             #[cfg(not(windows))]
             {
@@ -4278,10 +4512,484 @@ impl ControlPlane {
                 "native endpoint worker must be stopped before attachment".into(),
             ));
         }
+        worker.set_privacy_muted(self.privacy_muted);
         self.native_endpoint_worker = Some(audiorouter_windows_audio::NativeAudioWorker::Endpoint(
             worker,
         ));
         self.native_endpoint_session = Some(session_id);
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    /// Attach a stopped multi-capture worker to one known session. Its
+    /// prepared generation must match the session generation; start and pump
+    /// remain explicit control operations.
+    pub fn attach_native_multi_input_worker(
+        &mut self,
+        session_id: EntityId,
+        generation: u64,
+        worker: audiorouter_windows_audio::NativeMultiInputWorker,
+    ) -> Result<(), ControlError> {
+        self.get_session(&session_id)?;
+        if self.any_native_worker_attached() {
+            return Err(ControlError::InvalidRequest(
+                "native worker is already attached".into(),
+            ));
+        }
+        if generation == 0 || worker.generation() != generation || worker.is_running() {
+            return Err(ControlError::InvalidRequest(
+                "native multi-input worker must be stopped and match a nonzero generation".into(),
+            ));
+        }
+        worker.set_privacy_muted(self.privacy_muted);
+        self.native_multi_input_worker = Some(worker);
+        self.native_multi_input_worker_session = Some(session_id);
+        self.native_multi_input_worker_generation = Some(generation);
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    /// Prepare a stopped multi-capture worker from exact active endpoint
+    /// descriptors and the session's validated mixer/fan-out topology. The
+    /// descriptor order must match the compiler's retained source-node order;
+    /// no endpoint is selected by label, default role, or fallback.
+    pub fn prepare_native_multi_input_worker(
+        &mut self,
+        session_id: EntityId,
+        generation: u64,
+        captures: &[audiorouter_windows_audio::EndpointInfo],
+        buffer_duration_100ns: i64,
+        max_attempts: u32,
+        retry_delay_ms: u64,
+    ) -> Result<Value, ControlError> {
+        if generation == 0
+            || captures.len() < 2
+            || captures.len() > audiorouter_engine::MAX_MIXER_INPUTS
+        {
+            return Err(ControlError::InvalidRequest(
+                "multi-input preparation requires 2..8 captures and a nonzero generation".into(),
+            ));
+        }
+        self.get_session(&session_id)?;
+        if self.any_native_worker_attached() {
+            return Err(ControlError::InvalidRequest(
+                "native worker is already attached".into(),
+            ));
+        }
+        let session = self.get_session(&session_id)?.clone();
+        let plugin_stages =
+            self.prepare_plugin_stages(&session, audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ)?;
+        let compiled = audiorouter_engine::compile_mixer_fanout_session_with_plugins(
+            &session,
+            RuntimeGeneration::new(generation),
+            &plugin_stages,
+        )
+        .map_err(|error| {
+            ControlError::InvalidRequest(format!("multi-input graph rejected: {error:?}"))
+        })?;
+        let source_node_ids = compiled.input_node_ids().to_vec();
+        if source_node_ids.len() != captures.len() {
+            return Err(ControlError::InvalidRequest(
+                "capture count does not match the prepared graph source count".into(),
+            ));
+        }
+        let mixer_channels = session
+            .nodes
+            .iter()
+            .find(|node| node.kind == NodeKind::Mixer && node.enabled && !node.bypass)
+            .and_then(|node| {
+                node.ports
+                    .iter()
+                    .find(|port| port.direction == PortDirection::Input)
+            })
+            .map(|port| usize::from(port.channels))
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("prepared mixer input is missing".into())
+            })?;
+        let mut source_channels = Vec::with_capacity(source_node_ids.len());
+        for (node_id, endpoint) in source_node_ids.iter().zip(captures) {
+            let node = session
+                .nodes
+                .iter()
+                .find(|node| node.id == *node_id)
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest("prepared source node is missing".into())
+                })?;
+            if node.kind != NodeKind::PhysicalInput || !node.enabled || node.bypass {
+                return Err(ControlError::InvalidRequest(
+                    "multi-input capture sources must be enabled physical inputs".into(),
+                ));
+            }
+            let channels = node
+                .ports
+                .iter()
+                .find(|port| port.direction == PortDirection::Output)
+                .map(|port| usize::from(port.channels))
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest("physical input output port is missing".into())
+                })?;
+            if endpoint.direction != audiorouter_windows_audio::EndpointDirection::Capture
+                || !endpoint.is_ieee_float32()
+                || endpoint.sample_rate_hz != audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ
+                || usize::from(endpoint.channels) != channels
+            {
+                return Err(ControlError::InvalidRequest(
+                    "capture endpoints must exactly match the physical-input channel/rate/float32 contract".into(),
+                ));
+            }
+            source_channels.push(channels);
+        }
+        let mixer = audiorouter_engine::RealtimeMixerFanout::new(
+            compiled,
+            4,
+            &source_channels,
+            mixer_channels,
+            audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+        )
+        .map_err(|error| {
+            ControlError::InvalidRequest(format!(
+                "multi-input feeder preparation failed: {error:?}"
+            ))
+        })?;
+        if self.endpoint_monitor.is_none() {
+            self.endpoint_monitor = Some(
+                audiorouter_windows_audio::EndpointMonitor::start().map_err(audio_control_error)?,
+            );
+        }
+        let monitor = self
+            .endpoint_monitor
+            .as_mut()
+            .expect("endpoint monitor initialized above");
+        let mut capture_clients = Vec::with_capacity(captures.len());
+        for endpoint in captures {
+            match audiorouter_windows_audio::SharedCapture::open_refreshed_bound_with_retry(
+                monitor,
+                endpoint,
+                buffer_duration_100ns,
+                max_attempts,
+                retry_delay_ms,
+            ) {
+                Ok(client) => capture_clients.push(client),
+                Err(error) => return Err(audio_control_error(error)),
+            }
+        }
+        let feeder = audiorouter_windows_audio::WasapiMultiInputFanout::new(
+            mixer,
+            &source_channels,
+            audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+            audiorouter_windows_audio::MAX_FLOAT32_ACCUMULATOR_FRAMES,
+        )
+        .map_err(|error| {
+            ControlError::InvalidRequest(format!(
+                "multi-input feeder preparation failed: {error:?}"
+            ))
+        })?;
+        let worker =
+            audiorouter_windows_audio::NativeMultiInputWorker::new(capture_clients, feeder)
+                .map_err(|error| {
+                    ControlError::InvalidRequest(format!(
+                        "multi-input worker preparation failed: {error:?}"
+                    ))
+                })?;
+        self.attach_native_multi_input_worker(session_id.clone(), generation, worker)?;
+        self.pending_endpoint_changes.clear();
+        Ok(json!({
+            "sessionId": session_id,
+            "generation": generation,
+            "state": "configured-stopped",
+            "captureEndpointIds": captures.iter().map(|endpoint| endpoint.id.clone()).collect::<Vec<_>>(),
+            "sourceNodeIds": source_node_ids,
+            "branchNodeIds": self
+                .native_multi_input_worker
+                .as_ref()
+                .expect("worker attached above")
+                .output_node_ids(),
+        }))
+    }
+
+    #[cfg(windows)]
+    pub fn start_native_multi_input_worker(&mut self) -> Result<(), ControlError> {
+        let session_id = self
+            .native_multi_input_worker_session
+            .clone()
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("native multi-input worker is not attached".into())
+            })?;
+        let generation = self.native_multi_input_worker_generation.ok_or_else(|| {
+            ControlError::InvalidRequest("native multi-input worker generation is missing".into())
+        })?;
+        let runtime = self.runtimes.get(&session_id).ok_or_else(|| {
+            ControlError::InvalidRequest("native multi-input worker session is unavailable".into())
+        })?;
+        if runtime.state() != RuntimeState::Running || runtime.generation() != generation {
+            return Err(ControlError::InvalidRequest(
+                "native multi-input worker requires the matching running session generation".into(),
+            ));
+        }
+        self.native_multi_input_worker
+            .as_mut()
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("native multi-input worker is not attached".into())
+            })?
+            .start()
+            .map_err(|error| {
+                ControlError::InvalidRequest(format!("native input start failed: {error:?}"))
+            })
+    }
+
+    #[cfg(windows)]
+    pub fn stop_native_multi_input_worker(&mut self) -> Result<(), ControlError> {
+        if let Some(session_id) = self.native_multi_input_worker_session.as_ref() {
+            if self
+                .runtimes
+                .get(session_id)
+                .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
+            {
+                return Err(ControlError::InvalidRequest(
+                    "stop the session before stopping its native multi-input worker".into(),
+                ));
+            }
+        }
+        self.native_multi_input_worker
+            .as_mut()
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("native multi-input worker is not attached".into())
+            })?
+            .stop()
+            .map_err(|error| {
+                ControlError::InvalidRequest(format!("native input stop failed: {error:?}"))
+            })
+    }
+
+    #[cfg(windows)]
+    pub fn pump_native_multi_input_worker(
+        &mut self,
+        session_id: &EntityId,
+        generation: u64,
+        max_packets: u32,
+    ) -> Result<Value, ControlError> {
+        // Keep capture-sink leases alive before borrowing the realtime worker.
+        // A failed lease is removed and its virtual route is deactivated by
+        // the heartbeat helper, so the subsequent tap path remains
+        // fail-closed instead of writing through an expired owner.
+        self.heartbeat_native_capture_sink_bindings()?;
+        if self.native_multi_input_worker_session.as_ref() != Some(session_id)
+            || self.native_multi_input_worker_generation != Some(generation)
+        {
+            return Err(ControlError::InvalidRequest(
+                "native multi-input worker binding is stale for the session".into(),
+            ));
+        }
+        let runtime_generation = self
+            .runtimes
+            .get(session_id)
+            .filter(|runtime| runtime.state() == RuntimeState::Running)
+            .map(FakeRuntime::generation)
+            .ok_or_else(|| ControlError::InvalidRequest("session runtime is not running".into()))?;
+        if runtime_generation != generation {
+            return Err(ControlError::InvalidRequest(
+                "native multi-input worker generation is stale".into(),
+            ));
+        }
+        if self.poll_native_endpoint_lifecycle()? {
+            return Err(ControlError::InvalidRequest(
+                "native multi-input worker binding was invalidated; rebind before pumping".into(),
+            ));
+        }
+        let worker = self.native_multi_input_worker.as_mut().ok_or_else(|| {
+            ControlError::InvalidRequest("native multi-input worker is not attached".into())
+        })?;
+        let output_count = worker.output_count();
+        let (pump, delivered_quanta, render_pump) = if output_count > 0 {
+            let (input, delivered, render) =
+                worker
+                    .pump_and_process_outputs(max_packets)
+                    .map_err(|error| {
+                        ControlError::InvalidRequest(format!(
+                            "native input/output pump failed: {error:?}"
+                        ))
+                    })?;
+            (input, delivered, render)
+        } else {
+            let input = worker.pump_available(max_packets).map_err(|error| {
+                ControlError::InvalidRequest(format!("native input pump failed: {error:?}"))
+            })?;
+            (
+                input,
+                0,
+                audiorouter_windows_audio::WasapiSchedulerPump::default(),
+            )
+        };
+        Ok(json!({
+            "sessionId": session_id,
+            "generation": generation,
+            "inputs": pump.packets,
+            "capturedFrames": pump.captured_frames,
+            "submittedQuanta": pump.processed_quanta,
+            "outputCount": output_count,
+            "deliveredQuanta": delivered_quanta,
+            "renderedFrames": render_pump.rendered_frames,
+            "renderBackpressureEvents": render_pump.render_backpressure_events,
+        }))
+    }
+
+    #[cfg(windows)]
+    /// Bind branch-local virtual/recording/tool observers to the exact
+    /// validated output-node order retained by the prepared worker graph.
+    /// This is control-thread preparation and must complete while stopped.
+    pub fn bind_native_multi_input_branches(
+        &mut self,
+        session_id: &EntityId,
+        generation: u64,
+        branch_node_ids: &[EntityId],
+    ) -> Result<Value, ControlError> {
+        if self.native_multi_input_worker_session.as_ref() != Some(session_id)
+            || self.native_multi_input_worker_generation != Some(generation)
+        {
+            return Err(ControlError::InvalidRequest(
+                "native multi-input worker binding is stale for the session".into(),
+            ));
+        }
+        let runtime_generation = self
+            .runtimes
+            .get(session_id)
+            .filter(|runtime| runtime.state() == RuntimeState::Running)
+            .map(FakeRuntime::generation)
+            .ok_or_else(|| ControlError::InvalidRequest("session runtime is not running".into()))?;
+        if runtime_generation != generation {
+            return Err(ControlError::InvalidRequest(
+                "native multi-input worker generation is stale".into(),
+            ));
+        }
+        let expected = self
+            .native_multi_input_worker
+            .as_ref()
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("native multi-input worker is not attached".into())
+            })?
+            .output_node_ids()
+            .to_vec();
+        if expected != branch_node_ids {
+            return Err(ControlError::InvalidRequest(
+                "branch node IDs do not match the prepared graph output order".into(),
+            ));
+        }
+        let session = self.get_session(session_id)?.clone();
+        let has_output_owner = self
+            .native_multi_input_worker
+            .as_ref()
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("native multi-input worker is not attached".into())
+            })?
+            .has_output_owner();
+        if !has_output_owner
+            && branch_node_ids.iter().any(|node_id| {
+                session
+                    .nodes
+                    .iter()
+                    .any(|node| node.id == *node_id && node.kind == NodeKind::PhysicalOutput)
+            })
+        {
+            return Err(ControlError::InvalidRequest(
+                "physical output branches require a prepared output owner".into(),
+            ));
+        }
+        let mut tap_sets = Vec::with_capacity(branch_node_ids.len());
+        for node_id in branch_node_ids {
+            let node = session
+                .nodes
+                .iter()
+                .find(|node| &node.id == node_id)
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest("branch node is not in the session".into())
+                })?;
+            let taps = match node.kind {
+                NodeKind::PhysicalOutput => AudioTapSet::new(),
+                NodeKind::VirtualCaptureSink => {
+                    let bus_id = node
+                        .parameters
+                        .get("busId")
+                        .and_then(Value::as_str)
+                        .filter(|value| !value.is_empty())
+                        .map(EntityId::new)
+                        .ok_or_else(|| {
+                            ControlError::InvalidRequest(
+                                "virtual capture branch is missing its bus ID".into(),
+                            )
+                        })?;
+                    self.virtual_route_tap_set(
+                        session_id,
+                        std::slice::from_ref(&bus_id),
+                        generation,
+                    )?
+                }
+                NodeKind::Recorder => self.recorder_tap_set_for_node(session_id, node_id)?,
+                _ => {
+                    return Err(ControlError::InvalidRequest(
+                        "multi-input output branches must be physical outputs, virtual capture sinks, or recorders"
+                            .into(),
+                    ));
+                }
+            };
+            tap_sets.push(taps);
+        }
+        let worker = self.native_multi_input_worker.as_mut().ok_or_else(|| {
+            ControlError::InvalidRequest("native multi-input worker is not attached".into())
+        })?;
+        let bind_result = if !worker.has_output_owner() {
+            worker.attach_tap_only_branches(
+                tap_sets,
+                2,
+                audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+            )
+        } else {
+            worker.attach_output_branch_tap_sets(tap_sets)
+        };
+        bind_result.map_err(|error| {
+            ControlError::InvalidRequest(format!(
+                "native multi-input branch binding failed: {error:?}"
+            ))
+        })?;
+        Ok(json!({
+            "sessionId": session_id,
+            "generation": generation,
+            "branchNodeIds": branch_node_ids,
+            "boundBranches": branch_node_ids.len(),
+        }))
+    }
+
+    #[cfg(windows)]
+    /// Attach several stopped exact physical render workers to the one
+    /// control-owned capture/graph worker. The fan-out taps are merged into
+    /// the next matching graph generation; no output stream is started by
+    /// attachment.
+    pub fn attach_native_output_fanout(
+        &mut self,
+        session_id: EntityId,
+        generation: u64,
+        fanout: audiorouter_windows_audio::WasapiOutputFanout,
+    ) -> Result<(), ControlError> {
+        self.get_session(&session_id)?;
+        if self.native_endpoint_session.as_ref() != Some(&session_id)
+            || self.native_endpoint_worker.is_none()
+        {
+            return Err(ControlError::InvalidRequest(
+                "native output fan-out requires an attached endpoint worker".into(),
+            ));
+        }
+        if self.native_output_fanout.is_some() {
+            return Err(ControlError::InvalidRequest(
+                "native output fan-out is already attached".into(),
+            ));
+        }
+        if fanout.is_running() || fanout.generation() != generation || generation == 0 {
+            return Err(ControlError::InvalidRequest(
+                "native output fan-out must be stopped and match a nonzero generation".into(),
+            ));
+        }
+        self.native_output_fanout = Some(fanout);
+        self.native_output_fanout_session = Some(session_id);
+        self.native_output_fanout_generation = Some(generation);
         Ok(())
     }
 
@@ -4301,14 +5009,76 @@ impl ControlPlane {
                 "native worker is already attached".into(),
             ));
         }
+        if self.native_render_source_worker.is_some() {
+            return Err(ControlError::InvalidRequest(
+                "native render-source worker conflicts with a duplex worker".into(),
+            ));
+        }
         if worker.is_running() {
             return Err(ControlError::InvalidRequest(
                 "native duplex worker must be stopped before attachment".into(),
             ));
         }
+        worker.set_privacy_muted(self.privacy_muted);
         self.native_duplex_worker = Some(worker);
         self.native_duplex_worker_session = Some(session_id);
         self.native_duplex_worker_generation = Some(generation);
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    /// Transfer a prepared render-source lease into a stopped worker that
+    /// renders the virtual bus to one exact physical output. This worker may
+    /// coexist with the session's primary capture/graph worker, but its bus
+    /// and generation remain independently bound and its endpoint stays
+    /// stopped until session start.
+    pub fn attach_prepared_native_render_source_worker(
+        &mut self,
+        bus_id: &EntityId,
+        session_id: EntityId,
+        generation: u64,
+        render: audiorouter_windows_audio::SharedRender,
+        bridge: audiorouter_windows_audio::WasapiSchedulerBridge,
+    ) -> Result<(), ControlError> {
+        self.get_session(&session_id)?;
+        if generation == 0 {
+            return Err(ControlError::InvalidRequest(
+                "native render-source worker generation must be nonzero".into(),
+            ));
+        }
+        if self.native_render_source_worker.is_some() {
+            return Err(ControlError::InvalidRequest(
+                "native render-source worker is already attached".into(),
+            ));
+        }
+        if self.native_duplex_worker.is_some() {
+            return Err(ControlError::InvalidRequest(
+                "native render-source worker conflicts with a duplex worker".into(),
+            ));
+        }
+        let binding = self
+            .native_render_source_bindings
+            .get(bus_id)
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("native render-source binding is not prepared".into())
+            })?;
+        if binding.generation() != generation {
+            return Err(ControlError::InvalidRequest(
+                "native render-source binding generation is stale".into(),
+            ));
+        }
+        let binding = self
+            .native_render_source_bindings
+            .remove(bus_id)
+            .expect("binding was checked above");
+        self.deactivate_virtual_bridge(bus_id);
+        let worker = audiorouter_windows_audio::NativeBridgeInputWorker::from_render_source_binding(
+            binding, render, bridge,
+        );
+        worker.set_privacy_muted(self.privacy_muted);
+        self.native_render_source_worker = Some(worker);
+        self.native_render_source_worker_session = Some(session_id);
+        self.native_render_source_worker_generation = Some(generation);
         Ok(())
     }
 
@@ -4331,6 +5101,7 @@ impl ControlPlane {
                 "native application worker must be stopped before attachment".into(),
             ));
         }
+        worker.set_privacy_muted(self.privacy_muted);
         self.native_endpoint_worker =
             Some(audiorouter_windows_audio::NativeAudioWorker::ProcessLoopback(worker));
         self.native_endpoint_session = Some(session_id);
@@ -4500,6 +5271,209 @@ impl ControlPlane {
             self.pending_endpoint_changes.clear();
         }
         result
+    }
+
+    #[cfg(windows)]
+    /// Prepare several exact physical render clients as independent output
+    /// branches of one already-prepared native endpoint session. Every
+    /// endpoint is resolved from the current active inventory before opening;
+    /// no default or substitute endpoint is selected.
+    pub fn prepare_native_output_fanout(
+        &mut self,
+        session_id: EntityId,
+        generation: u64,
+        render_endpoint_ids: &[String],
+    ) -> Result<Value, ControlError> {
+        let multi_owner = self.native_multi_input_worker_session.as_ref() == Some(&session_id)
+            && self.native_multi_input_worker.is_some();
+        if (!multi_owner && render_endpoint_ids.is_empty())
+            || render_endpoint_ids.len() > audiorouter_engine::MAX_AUDIO_TAPS
+            || generation == 0
+        {
+            return Err(ControlError::InvalidRequest(
+                "output fan-out requires bounded endpoints and a nonzero generation".into(),
+            ));
+        }
+        let endpoint_owner = self.native_endpoint_session.as_ref() == Some(&session_id)
+            && self.native_endpoint_worker.is_some();
+        if !endpoint_owner && !multi_owner {
+            return Err(ControlError::InvalidRequest(
+                "output fan-out requires an attached native endpoint or multi-input worker".into(),
+            ));
+        }
+        if endpoint_owner && self.native_output_fanout.is_some() {
+            return Err(ControlError::InvalidRequest(
+                "native output fan-out is already attached".into(),
+            ));
+        }
+        if multi_owner {
+            let branch_node_ids = self
+                .native_multi_input_worker
+                .as_ref()
+                .expect("multi-input owner is attached")
+                .output_node_ids()
+                .to_vec();
+            let session = self.get_session(&session_id)?.clone();
+            let mut seen_tap_branch = false;
+            let physical_branch_count = branch_node_ids
+                .iter()
+                .filter(|node_id| {
+                    session.nodes.iter().any(|node| {
+                        node.id == **node_id
+                            && node.kind == NodeKind::PhysicalOutput
+                            && node.enabled
+                            && !node.bypass
+                    })
+                })
+                .count();
+            let branches_are_supported = branch_node_ids.iter().all(|node_id| {
+                let Some(node) = session.nodes.iter().find(|node| node.id == *node_id) else {
+                    return false;
+                };
+                let is_physical = node.kind == NodeKind::PhysicalOutput;
+                if !is_physical {
+                    seen_tap_branch = true;
+                }
+                !seen_tap_branch || !is_physical
+            });
+            if physical_branch_count != render_endpoint_ids.len() || !branches_are_supported {
+                return Err(ControlError::InvalidRequest(
+                    "multi-input output preparation requires exact render IDs for an initial physical branch prefix; virtual/recording branches follow it".into(),
+                ));
+            }
+        }
+        if render_endpoint_ids
+            .iter()
+            .any(|id| id.is_empty() || id.len() > MAX_CONTROL_STRING_BYTES)
+        {
+            return Err(ControlError::InvalidRequest(
+                "render endpoint IDs exceed the bounded control string limit".into(),
+            ));
+        }
+        let endpoints =
+            audiorouter_windows_audio::enumerate_active_endpoints().map_err(audio_control_error)?;
+        let mut outputs = Vec::with_capacity(render_endpoint_ids.len());
+        for (index, endpoint_id) in render_endpoint_ids.iter().enumerate() {
+            if render_endpoint_ids[..index]
+                .iter()
+                .any(|existing| existing == endpoint_id)
+            {
+                return Err(ControlError::InvalidRequest(
+                    "output fan-out endpoint IDs must be unique".into(),
+                ));
+            }
+            let endpoint = endpoints
+                .iter()
+                .find(|endpoint| {
+                    endpoint.id == *endpoint_id
+                        && endpoint.direction
+                            == audiorouter_windows_audio::EndpointDirection::Render
+                })
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest(
+                        "output fan-out endpoint is not an active exact inventory match".into(),
+                    )
+                })?;
+            if !endpoint.is_ieee_float32()
+                || endpoint.channels != 2
+                || endpoint.sample_rate_hz != audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ
+            {
+                return Err(ControlError::InvalidRequest(
+                    "output fan-out endpoints must be stereo 48 kHz IEEE float32".into(),
+                ));
+            }
+            let render = audiorouter_windows_audio::SharedRender::open(endpoint_id, 0)
+                .map_err(audio_control_error)?;
+            let ring = Arc::new(
+                audiorouter_engine::AudioBlockRing::new(
+                    4,
+                    2,
+                    audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+                )
+                .map_err(|_| {
+                    ControlError::InvalidRequest("output fan-out ring shape is invalid".into())
+                })?,
+            );
+            outputs.push((render, ring));
+        }
+        let mut fanout = if outputs.is_empty() {
+            audiorouter_windows_audio::WasapiOutputFanout::new_tap_only(
+                generation,
+                2,
+                audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+            )
+        } else {
+            audiorouter_windows_audio::WasapiOutputFanout::new(
+                outputs,
+                generation,
+                2,
+                audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+            )
+        }
+        .map_err(|error| {
+            ControlError::InvalidRequest(format!("output fan-out preparation failed: {error:?}"))
+        })?;
+        if multi_owner {
+            let branch_node_ids = self
+                .native_multi_input_worker
+                .as_ref()
+                .expect("multi-input owner is attached")
+                .output_node_ids()
+                .to_vec();
+            let session = self.get_session(&session_id)?.clone();
+            for node_id in branch_node_ids.iter().skip(render_endpoint_ids.len()) {
+                let channels = session
+                    .nodes
+                    .iter()
+                    .find(|node| node.id == *node_id)
+                    .and_then(|node| {
+                        node.ports
+                            .iter()
+                            .find(|port| port.direction == PortDirection::Input)
+                    })
+                    .map(|port| usize::from(port.channels))
+                    .ok_or_else(|| {
+                        ControlError::InvalidRequest("output branch input port is missing".into())
+                    })?;
+                if channels != 2 {
+                    return Err(ControlError::InvalidRequest(
+                        "multi-input tap-only output branches must be stereo".into(),
+                    ));
+                }
+                fanout
+                    .append_tap_branch(
+                        AudioTapSet::new(),
+                        channels,
+                        audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+                    )
+                    .map_err(|error| {
+                        ControlError::InvalidRequest(format!(
+                            "tap-only branch preparation failed: {error:?}"
+                        ))
+                    })?;
+            }
+        }
+        let output_count = fanout.output_count();
+        if multi_owner {
+            self.native_multi_input_worker
+                .as_mut()
+                .expect("multi-input owner is attached")
+                .attach_output_fanout(fanout)
+                .map_err(|error| {
+                    ControlError::InvalidRequest(format!(
+                        "multi-input output fan-out preparation failed: {error:?}"
+                    ))
+                })?;
+        } else {
+            self.attach_native_output_fanout(session_id.clone(), generation, fanout)?;
+        }
+        Ok(json!({
+            "sessionId": session_id,
+            "generation": generation,
+            "state": "configured-stopped",
+            "renderEndpointIds": render_endpoint_ids,
+            "outputCount": output_count,
+        }))
     }
 
     #[cfg(windows)]
@@ -4726,6 +5700,163 @@ impl ControlPlane {
     }
 
     #[cfg(windows)]
+    /// Prepare one paired project-driver bridge through the shared control
+    /// boundary. The caller supplies only an exact broker device path and two
+    /// new absolute mapping paths; hello identity is derived from the
+    /// requested bus/generation so adapters cannot disagree on direction or
+    /// protocol shape.
+    pub fn prepare_native_bridge(
+        &mut self,
+        bus_id: EntityId,
+        device_path: &str,
+        render_mapping_path: &str,
+        capture_mapping_path: &str,
+        generation: u64,
+        lease_ms: u32,
+    ) -> Result<Value, ControlError> {
+        if device_path != r"\\.\AudioRouterVirtualBridge" {
+            return Err(ControlError::InvalidRequest(
+                "native bridge device path is not the AudioRouter broker".into(),
+            ));
+        }
+        if generation == 0
+            || !(1..=audiorouter_protocol::MAX_AUDIO_BRIDGE_LEASE_MS).contains(&lease_ms)
+            || render_mapping_path.is_empty()
+            || capture_mapping_path.is_empty()
+            || render_mapping_path.len() > MAX_CONTROL_STRING_BYTES
+            || capture_mapping_path.len() > MAX_CONTROL_STRING_BYTES
+            || render_mapping_path == capture_mapping_path
+        {
+            return Err(ControlError::InvalidRequest(
+                "native bridge paths, lease, and generation are invalid".into(),
+            ));
+        }
+        let render_path = std::path::Path::new(render_mapping_path);
+        let capture_path = std::path::Path::new(capture_mapping_path);
+        if !render_path.is_absolute() || !capture_path.is_absolute() {
+            return Err(ControlError::InvalidRequest(
+                "native bridge mapping paths must be absolute".into(),
+            ));
+        }
+        let render_hello = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: bus_id.as_str().to_owned(),
+            direction: audiorouter_protocol::AudioBridgeDirection::RenderSource,
+            generation,
+            sample_rate_hz: audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ,
+            channels: 2,
+            frames_per_quantum: audiorouter_engine::PROCESSING_QUANTUM_FRAMES as u16,
+            lease_ms,
+        };
+        let capture_hello = audiorouter_protocol::AudioBridgeHello {
+            direction: audiorouter_protocol::AudioBridgeDirection::CaptureSink,
+            ..render_hello.clone()
+        };
+        self.prepare_native_duplex_binding(
+            bus_id.clone(),
+            device_path,
+            render_path,
+            capture_path,
+            render_hello,
+            capture_hello,
+        )?;
+        Ok(json!({
+            "busId": bus_id,
+            "generation": generation,
+            "state": "configured-stopped",
+            "directions": ["renderSource", "captureSink"]
+        }))
+    }
+
+    #[cfg(windows)]
+    pub fn detach_native_bridge(&mut self, bus_id: &EntityId) -> Result<Value, ControlError> {
+        if self
+            .native_render_source_worker
+            .as_ref()
+            .is_some_and(|worker| worker.bus_id() == *bus_id)
+        {
+            self.detach_native_render_source_worker()?;
+        } else if self.native_duplex_bindings.contains_key(bus_id) {
+            self.detach_native_duplex_binding(bus_id)?;
+        } else if self.native_render_source_bindings.contains_key(bus_id) {
+            self.detach_native_render_source_binding(bus_id)?;
+        } else {
+            self.detach_native_capture_sink_binding(bus_id)?;
+        }
+        Ok(json!({ "busId": bus_id, "state": "detached" }))
+    }
+
+    #[cfg(windows)]
+    pub fn heartbeat_native_bridges(&mut self) -> Result<Value, ControlError> {
+        let staged_bindings = self.native_capture_sink_bindings.len()
+            + self.native_render_source_bindings.len()
+            + self.native_duplex_bindings.len();
+        let mut first_error = self.heartbeat_native_capture_sink_bindings().err();
+        if let Err(error) = self.heartbeat_native_render_source_bindings() {
+            if first_error.is_none() {
+                first_error = Some(error);
+            }
+        }
+        if let Err(error) = self.heartbeat_native_duplex_bindings() {
+            if first_error.is_none() {
+                first_error = Some(error);
+            }
+        }
+        let worker_bus_id = self
+            .native_duplex_worker
+            .as_ref()
+            .map(audiorouter_windows_audio::NativeBridgeDuplexWorker::bus_id);
+        let worker_present = worker_bus_id.is_some();
+        if let Some(bus_id) = worker_bus_id.as_ref() {
+            let heartbeat_result = self
+                .native_duplex_worker
+                .as_mut()
+                .expect("native duplex worker remains present")
+                .heartbeat();
+            if let Err(error) = heartbeat_result {
+                self.deactivate_virtual_bridge(bus_id);
+                self.publish_virtual_bridge_failure(bus_id);
+                if first_error.is_none() {
+                    first_error = Some(ControlError::InvalidRequest(format!(
+                        "native duplex heartbeat failed; bridge deactivated: {error:?}"
+                    )));
+                }
+            }
+        }
+        let render_worker_bus_id = self
+            .native_render_source_worker
+            .as_ref()
+            .map(audiorouter_windows_audio::NativeBridgeInputWorker::bus_id);
+        let render_worker_present = render_worker_bus_id.is_some();
+        if let Some(bus_id) = render_worker_bus_id.as_ref() {
+            let heartbeat_result = self
+                .native_render_source_worker
+                .as_mut()
+                .expect("native render-source worker remains present")
+                .heartbeat();
+            if let Err(error) = heartbeat_result {
+                self.deactivate_virtual_bridge(bus_id);
+                self.publish_virtual_bridge_failure(bus_id);
+                if first_error.is_none() {
+                    first_error = Some(ControlError::InvalidRequest(format!(
+                        "native render-source worker heartbeat failed; bridge deactivated: {error:?}"
+                    )));
+                }
+            }
+        }
+        if let Some(error) = first_error {
+            return Err(error);
+        }
+        Ok(json!({
+            "state": "healthy",
+            "bindings": staged_bindings
+                + usize::from(worker_present)
+                + usize::from(render_worker_present)
+        }))
+    }
+
+    #[cfg(windows)]
     /// Service prepared capture-sink leases at their negotiated cadence.
     /// Failure containment remains per binding so another route can continue.
     pub fn heartbeat_native_capture_sink_bindings(&mut self) -> Result<(), ControlError> {
@@ -4913,6 +6044,53 @@ impl ControlPlane {
     }
 
     #[cfg(windows)]
+    /// Compose a prepared paired bridge binding with its already-opened,
+    /// stopped endpoint workers and attach the resulting duplex worker to one
+    /// session. Conflicting native workers are rejected before the lease is
+    /// consumed; a failed attachment drops the transferred lease safely.
+    pub fn attach_prepared_native_duplex_worker(
+        &mut self,
+        bus_id: &EntityId,
+        session_id: EntityId,
+        generation: u64,
+        input_render: audiorouter_windows_audio::SharedRender,
+        input_bridge: audiorouter_windows_audio::WasapiSchedulerBridge,
+        output_endpoint: audiorouter_windows_audio::WasapiEndpointWorker,
+    ) -> Result<(), ControlError> {
+        self.get_session(&session_id)?;
+        if generation == 0 {
+            return Err(ControlError::InvalidRequest(
+                "native duplex worker generation must be nonzero".into(),
+            ));
+        }
+        if self.any_native_worker_attached() {
+            return Err(ControlError::InvalidRequest(
+                "native worker is already attached".into(),
+            ));
+        }
+        let binding = self.native_duplex_bindings.get(bus_id).ok_or_else(|| {
+            ControlError::InvalidRequest("native duplex binding is not prepared".into())
+        })?;
+        if binding.generation() != generation {
+            return Err(ControlError::InvalidRequest(
+                "native duplex binding generation is stale".into(),
+            ));
+        }
+        let binding = self
+            .native_duplex_bindings
+            .remove(bus_id)
+            .expect("binding was checked above");
+        self.deactivate_virtual_bridge(bus_id);
+        let worker = audiorouter_windows_audio::NativeBridgeDuplexWorker::from_binding(
+            binding,
+            input_render,
+            input_bridge,
+            output_endpoint,
+        );
+        self.attach_native_duplex_worker(session_id, generation, worker)
+    }
+
+    #[cfg(windows)]
     /// Transfer a validated render-source lease to an endpoint worker. The
     /// generation is checked before removal so a stale graph cannot consume
     /// a binding prepared for an earlier graph.
@@ -4966,6 +6144,88 @@ impl ControlPlane {
     }
 
     #[cfg(windows)]
+    /// Start the attached physical output fan-out after its graph generation
+    /// has been published. A failed fan-out start is rolled back by stopping
+    /// any workers that were started by the fan-out itself.
+    pub fn start_native_output_fanout(&mut self) -> Result<(), ControlError> {
+        let session_id = self.native_output_fanout_session.clone().ok_or_else(|| {
+            ControlError::InvalidRequest("native output fan-out is not attached".into())
+        })?;
+        let generation = self.native_output_fanout_generation.ok_or_else(|| {
+            ControlError::InvalidRequest("native output fan-out generation is missing".into())
+        })?;
+        let runtime = self.runtimes.get(&session_id).ok_or_else(|| {
+            ControlError::InvalidRequest("native output fan-out session is not running".into())
+        })?;
+        if runtime.state() != RuntimeState::Running || runtime.generation() != generation {
+            return Err(ControlError::InvalidRequest(
+                "native output fan-out requires the matching running session generation".into(),
+            ));
+        }
+        self.native_output_fanout
+            .as_mut()
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("native output fan-out is not attached".into())
+            })?
+            .start()
+            .map_err(|error| {
+                ControlError::InvalidRequest(format!(
+                    "native output fan-out start failed: {error:?}"
+                ))
+            })
+    }
+
+    #[cfg(windows)]
+    /// Stop the output fan-out only after its owning session has stopped.
+    pub fn stop_native_output_fanout(&mut self) -> Result<(), ControlError> {
+        if let Some(session_id) = self.native_output_fanout_session.as_ref() {
+            if self
+                .runtimes
+                .get(session_id)
+                .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
+            {
+                return Err(ControlError::InvalidRequest(
+                    "stop the session before stopping its native output fan-out".into(),
+                ));
+            }
+        }
+        self.native_output_fanout
+            .as_mut()
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("native output fan-out is not attached".into())
+            })?
+            .stop()
+            .map_err(|error| {
+                ControlError::InvalidRequest(format!(
+                    "native output fan-out stop failed: {error:?}"
+                ))
+            })
+    }
+
+    #[cfg(windows)]
+    /// Detach only a stopped output fan-out and clear its generation binding.
+    pub fn detach_native_output_fanout(&mut self) -> Result<(), ControlError> {
+        if self
+            .native_output_fanout
+            .as_ref()
+            .is_some_and(|fanout| fanout.is_running())
+        {
+            return Err(ControlError::InvalidRequest(
+                "native output fan-out must be stopped before detachment".into(),
+            ));
+        }
+        if self.native_output_fanout.take().is_none() {
+            return Err(ControlError::InvalidRequest(
+                "native output fan-out is not attached".into(),
+            ));
+        }
+        self.native_output_fanout_session = None;
+        self.native_output_fanout_generation = None;
+        self.native_endpoint_taps = None;
+        Ok(())
+    }
+
+    #[cfg(windows)]
     /// Start an attached duplex bridge only for its exact running session
     /// generation. This does not discover endpoints or change defaults.
     pub fn start_native_duplex_worker(&mut self) -> Result<(), ControlError> {
@@ -4992,6 +6252,265 @@ impl ControlPlane {
             .map_err(|error| {
                 ControlError::InvalidRequest(format!("native duplex start failed: {error:?}"))
             })
+    }
+
+    #[cfg(windows)]
+    /// Start the attached render-source worker only for its exact running
+    /// session generation. The worker consumes virtual bridge blocks and
+    /// submits them to its already-opened physical render endpoint.
+    pub fn start_native_render_source_worker(&mut self) -> Result<(), ControlError> {
+        let session_id = self
+            .native_render_source_worker_session
+            .clone()
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("native render-source worker is not attached".into())
+            })?;
+        let expected_generation = self.native_render_source_worker_generation.ok_or_else(|| {
+            ControlError::InvalidRequest("native render-source worker generation is missing".into())
+        })?;
+        let runtime = self.runtimes.get(&session_id).ok_or_else(|| {
+            ControlError::InvalidRequest(
+                "native render-source worker session is not running".into(),
+            )
+        })?;
+        if runtime.state() != RuntimeState::Running || runtime.generation() != expected_generation {
+            return Err(ControlError::InvalidRequest(
+                "native render-source worker requires the matching running session generation"
+                    .into(),
+            ));
+        }
+        self.native_render_source_worker
+            .as_mut()
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("native render-source worker is not attached".into())
+            })?
+            .start()
+            .map_err(|error| {
+                ControlError::InvalidRequest(format!(
+                    "native render-source worker start failed: {error:?}"
+                ))
+            })
+    }
+
+    #[cfg(windows)]
+    /// Stop the render-source worker before its session is reported stopped.
+    pub fn stop_native_render_source_worker(&mut self) -> Result<(), ControlError> {
+        if let Some(session_id) = self.native_render_source_worker_session.as_ref() {
+            if self
+                .runtimes
+                .get(session_id)
+                .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
+            {
+                return Err(ControlError::InvalidRequest(
+                    "stop the session before stopping its native render-source worker".into(),
+                ));
+            }
+        }
+        self.native_render_source_worker
+            .as_mut()
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("native render-source worker is not attached".into())
+            })?
+            .stop()
+            .map_err(|error| {
+                ControlError::InvalidRequest(format!(
+                    "native render-source worker stop failed: {error:?}"
+                ))
+            })
+    }
+
+    #[cfg(windows)]
+    /// Detach only a stopped render-source worker and clear its session and
+    /// generation binding. Dropping the worker closes the transferred lease.
+    pub fn detach_native_render_source_worker(&mut self) -> Result<(), ControlError> {
+        if self
+            .native_render_source_worker
+            .as_ref()
+            .is_some_and(|worker| worker.is_running())
+        {
+            return Err(ControlError::InvalidRequest(
+                "native render-source worker must be stopped before detachment".into(),
+            ));
+        }
+        if self.native_render_source_worker.take().is_none() {
+            return Err(ControlError::InvalidRequest(
+                "native render-source worker is not attached".into(),
+            ));
+        }
+        self.native_render_source_worker_session = None;
+        self.native_render_source_worker_generation = None;
+        self.native_render_source_taps = None;
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    /// Pump bounded, nonblocking work from the render-source bridge.
+    pub fn pump_native_render_source_worker(
+        &mut self,
+        session_id: &EntityId,
+        generation: u64,
+        max_quanta: u32,
+    ) -> Result<Value, ControlError> {
+        if self.native_render_source_worker_session.as_ref() != Some(session_id)
+            || self.native_render_source_worker_generation != Some(generation)
+        {
+            return Err(ControlError::InvalidRequest(
+                "native render-source worker is not bound to the requested session generation"
+                    .into(),
+            ));
+        }
+        let runtime = self.runtimes.get(session_id).ok_or_else(|| {
+            ControlError::InvalidRequest(
+                "native render-source worker session is unavailable".into(),
+            )
+        })?;
+        if runtime.state() != RuntimeState::Running || runtime.generation() != generation {
+            return Err(ControlError::InvalidRequest(
+                "native render-source worker session generation is not running".into(),
+            ));
+        }
+        let taps = self.native_render_source_taps.take().ok_or_else(|| {
+            ControlError::InvalidRequest("native render-source graph taps are not prepared".into())
+        })?;
+        let worker = self.native_render_source_worker.as_mut().ok_or_else(|| {
+            ControlError::InvalidRequest("native render-source worker is not attached".into())
+        })?;
+        let result = worker
+            .pump_available_with_taps(max_quanta, &taps)
+            .map_err(|error| {
+                ControlError::InvalidRequest(format!(
+                    "native render-source worker pump failed: {error:?}"
+                ))
+            });
+        self.native_render_source_taps = Some(taps);
+        let pump = result?;
+        Ok(json!({
+            "sessionId": session_id,
+            "generation": generation,
+            "packets": pump.packets,
+            "processedQuanta": pump.processed_quanta,
+            "renderedFrames": pump.rendered_frames,
+            "droppedRenderFrames": pump.dropped_render_frames,
+        }))
+    }
+
+    #[cfg(windows)]
+    /// Detach only a stopped multi-input worker. Its feeder generation is
+    /// intentionally not rebound or silently advanced by detachment.
+    pub fn detach_native_multi_input_worker(&mut self) -> Result<(), ControlError> {
+        if self
+            .native_multi_input_worker
+            .as_ref()
+            .is_some_and(|worker| worker.is_running())
+        {
+            return Err(ControlError::InvalidRequest(
+                "native multi-input worker must be stopped before detachment".into(),
+            ));
+        }
+        if self.native_multi_input_worker.take().is_none() {
+            return Err(ControlError::InvalidRequest(
+                "native multi-input worker is not attached".into(),
+            ));
+        }
+        self.native_multi_input_worker_session = None;
+        self.native_multi_input_worker_generation = None;
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    /// Pump bounded capture, graph, and prepared branch work for the exact
+    /// running session generation. Physical output drains and branch-local
+    /// virtual/recording/tool taps are owned by the attached worker; this
+    /// control method only supplies the bounded scheduling budget.
+    fn dispatch_native_multi_input_pump(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("sessionId and generation are required".into())
+        })?;
+        let session_id = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(EntityId::new)
+            .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+        let generation = params
+            .get("generation")
+            .and_then(Value::as_u64)
+            .filter(|value| *value > 0)
+            .ok_or_else(|| ControlError::InvalidRequest("generation is required".into()))?;
+        let max_packets = params
+            .get("maxPackets")
+            .and_then(Value::as_u64)
+            .map(|value| {
+                u32::try_from(value)
+                    .map_err(|_| ControlError::InvalidRequest("maxPackets is out of range".into()))
+            })
+            .transpose()?
+            .unwrap_or(audiorouter_windows_audio::MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE);
+        self.pump_native_multi_input_worker(&session_id, generation, max_packets)
+    }
+
+    #[cfg(windows)]
+    fn dispatch_native_multi_input_bind_branches(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest(
+                "sessionId, generation, and branchNodeIds are required".into(),
+            )
+        })?;
+        let session_id = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(EntityId::new)
+            .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+        let generation = params
+            .get("generation")
+            .and_then(Value::as_u64)
+            .filter(|value| *value > 0)
+            .ok_or_else(|| ControlError::InvalidRequest("generation is required".into()))?;
+        let branch_node_ids = params
+            .get("branchNodeIds")
+            .and_then(Value::as_array)
+            .ok_or_else(|| ControlError::InvalidRequest("branchNodeIds is required".into()))?
+            .iter()
+            .map(|value| {
+                value
+                    .as_str()
+                    .filter(|value| !value.is_empty())
+                    .map(EntityId::new)
+                    .ok_or_else(|| {
+                        ControlError::InvalidRequest(
+                            "branchNodeIds must contain nonempty strings".into(),
+                        )
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        self.bind_native_multi_input_branches(&session_id, generation, &branch_node_ids)
+    }
+
+    #[cfg(not(windows))]
+    fn dispatch_native_multi_input_bind_branches(
+        &mut self,
+        _params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        Err(ControlError::InvalidRequest(
+            "native multi-input branch binding requires Windows".into(),
+        ))
+    }
+
+    #[cfg(not(windows))]
+    fn dispatch_native_multi_input_pump(
+        &mut self,
+        _params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        Err(ControlError::InvalidRequest(
+            "native multi-input pumping requires Windows".into(),
+        ))
     }
 
     #[cfg(windows)]
@@ -5115,6 +6634,16 @@ impl ControlPlane {
     /// Stop the explicitly attached endpoint pair and clear staged bridge
     /// audio. The worker remains attached and may be deliberately restarted.
     pub fn stop_native_endpoint_worker(&mut self) -> Result<(), ControlError> {
+        #[cfg(windows)]
+        if self
+            .native_output_fanout
+            .as_ref()
+            .is_some_and(|fanout| fanout.is_running())
+        {
+            return Err(ControlError::InvalidRequest(
+                "stop the native output fan-out before stopping the endpoint worker".into(),
+            ));
+        }
         if let Some(session_id) = self.native_endpoint_session.as_ref() {
             if self
                 .runtimes
@@ -5291,6 +6820,22 @@ impl ControlPlane {
             ControlError::InvalidRequest("native graph tap capacity exceeded".into())
         })?;
 
+        #[cfg(windows)]
+        if let Some(fanout) = self.native_output_fanout.as_ref() {
+            if self.native_output_fanout_session.as_ref() != Some(session_id)
+                || self.native_output_fanout_generation != Some(generation)
+            {
+                return Err(ControlError::InvalidRequest(
+                    "native output fan-out binding is stale for the graph generation".into(),
+                ));
+            }
+            recorder_taps.append(fanout.tap_set()).map_err(|_| {
+                ControlError::InvalidRequest(
+                    "native output fan-out exceeds graph tap capacity".into(),
+                )
+            })?;
+        }
+
         self.native_endpoint_worker
             .as_mut()
             .ok_or_else(|| {
@@ -5300,6 +6845,77 @@ impl ControlPlane {
             .scheduler_mut()
             .publish(graph);
         self.native_endpoint_taps = Some(recorder_taps);
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    /// Compile and publish the same authoritative graph for a standalone
+    /// virtual render-source worker. This worker has no physical capture
+    /// side, so it must receive its graph explicitly instead of appearing
+    /// healthy with an unprepared scheduler.
+    pub fn activate_native_render_source_graph(
+        &mut self,
+        session_id: &EntityId,
+        generation: u64,
+        sample_rate_hz: u32,
+    ) -> Result<(), ControlError> {
+        if self.native_render_source_worker_session.as_ref() != Some(session_id)
+            || self.native_render_source_worker.is_none()
+        {
+            return Err(ControlError::InvalidRequest(
+                "native render-source worker is not bound to the session".into(),
+            ));
+        }
+        let runtime_generation = self
+            .runtimes
+            .get(session_id)
+            .filter(|runtime| runtime.state() == RuntimeState::Running)
+            .map(FakeRuntime::generation)
+            .ok_or_else(|| ControlError::InvalidRequest("session runtime is not running".into()))?;
+        if runtime_generation != generation {
+            return Err(ControlError::InvalidRequest(
+                "native render-source worker generation is stale".into(),
+            ));
+        }
+        let session = self.get_session(session_id)?.clone();
+        let plugin_stages = self.prepare_plugin_stages(&session, sample_rate_hz)?;
+        let graph = audiorouter_engine::compile_session_at_sample_rate_with_plugins(
+            &session,
+            RuntimeGeneration::new(generation),
+            sample_rate_hz,
+            &plugin_stages,
+        )
+        .map_err(|error| {
+            ControlError::InvalidRequest(format!("native graph rejected: {error:?}"))
+        })?;
+        let recorder_node_ids = session
+            .nodes
+            .iter()
+            .filter(|node| node.enabled && node.kind == NodeKind::Recorder)
+            .map(|node| node.id.as_str())
+            .collect::<Vec<_>>();
+        let mut taps = if recorder_node_ids.is_empty() {
+            AudioTapSet::new()
+        } else {
+            let bindings =
+                self.recorder_tap_bindings(session_id, RuntimeGeneration::new(generation))?;
+            bindings
+                .tap_set_for_generation(RuntimeGeneration::new(generation), &recorder_node_ids)
+                .map_err(|_| {
+                    ControlError::InvalidRequest("recorder graph tap binding is invalid".into())
+                })?
+        };
+        let capture_bus_ids = session_virtual_capture_bus_ids(&session);
+        self.prepare_virtual_route_bridges(session_id, generation, &capture_bus_ids)?;
+        let virtual_taps = self.virtual_route_tap_set(session_id, &capture_bus_ids, generation)?;
+        taps.append(&virtual_taps).map_err(|_| {
+            ControlError::InvalidRequest("native render-source tap capacity exceeded".into())
+        })?;
+        self.native_render_source_worker
+            .as_mut()
+            .expect("worker presence checked above")
+            .publish_graph(graph);
+        self.native_render_source_taps = Some(taps);
         Ok(())
     }
 
@@ -5461,7 +7077,44 @@ impl ControlPlane {
         })?;
         let result = self.pump_native_endpoint_worker(session_id, generation, max_packets, &taps);
         self.native_endpoint_taps = Some(taps);
-        result
+        let primary = result?;
+        #[cfg(windows)]
+        let output_fanout = if let Some(fanout) = self.native_output_fanout.as_mut() {
+            if self.native_output_fanout_session.as_ref() != Some(session_id)
+                || self.native_output_fanout_generation != Some(generation)
+            {
+                return Err(ControlError::InvalidRequest(
+                    "native output fan-out binding is stale for the requested generation".into(),
+                ));
+            }
+            Some(fanout.pump_available(max_packets).map_err(|error| {
+                ControlError::InvalidRequest(format!(
+                    "native output fan-out pump failed: {error:?}"
+                ))
+            })?)
+        } else {
+            None
+        };
+        let mut response = json!({
+            "sessionId": session_id,
+            "generation": generation,
+            "packets": primary.get("packets").cloned().unwrap_or(Value::Null),
+            "capturedFrames": primary.get("capturedFrames").cloned().unwrap_or(Value::Null),
+            "processedQuanta": primary.get("processedQuanta").cloned().unwrap_or(Value::Null),
+            "renderedFrames": primary.get("renderedFrames").cloned().unwrap_or(Value::Null),
+            "droppedRenderFrames": primary.get("droppedRenderFrames").cloned().unwrap_or(Value::Null),
+            "renderBackpressureEvents": primary.get("renderBackpressureEvents").cloned().unwrap_or(Value::Null),
+            "recorderChunksDrained": primary.get("recorderChunksDrained").cloned().unwrap_or(Value::Null),
+        });
+        #[cfg(windows)]
+        if let Some(output) = output_fanout {
+            response["outputFanout"] = json!({
+                "packets": output.packets,
+                "renderedFrames": output.rendered_frames,
+                "renderBackpressureEvents": output.render_backpressure_events,
+            });
+        }
+        Ok(response)
     }
 
     /// Return bounded native endpoint lifecycle and control rejection counts
@@ -5564,6 +7217,12 @@ impl ControlPlane {
     /// Detach only a stopped native worker; this never affects unrelated
     /// endpoints or machine audio configuration.
     pub fn detach_native_endpoint_worker(&mut self) -> Result<(), ControlError> {
+        #[cfg(windows)]
+        if self.native_output_fanout.is_some() {
+            return Err(ControlError::InvalidRequest(
+                "detach the native output fan-out before detaching the endpoint worker".into(),
+            ));
+        }
         if let Some(session_id) = self.native_endpoint_session.as_ref() {
             if self
                 .runtimes
@@ -5732,8 +7391,20 @@ impl ControlPlane {
             pending_endpoint_changes: Vec::new(),
             native_endpoint_worker: None,
             native_endpoint_session: None,
+            #[cfg(windows)]
+            native_multi_input_worker: None,
+            #[cfg(windows)]
+            native_multi_input_worker_session: None,
+            #[cfg(windows)]
+            native_multi_input_worker_generation: None,
             native_endpoint_taps: None,
             native_endpoint_rejections: 0,
+            #[cfg(windows)]
+            native_output_fanout: None,
+            #[cfg(windows)]
+            native_output_fanout_session: None,
+            #[cfg(windows)]
+            native_output_fanout_generation: None,
             #[cfg(windows)]
             native_capture_sink_bindings: HashMap::new(),
             #[cfg(windows)]
@@ -5746,6 +7417,14 @@ impl ControlPlane {
             native_duplex_worker_session: None,
             #[cfg(windows)]
             native_duplex_worker_generation: None,
+            #[cfg(windows)]
+            native_render_source_worker: None,
+            #[cfg(windows)]
+            native_render_source_worker_session: None,
+            #[cfg(windows)]
+            native_render_source_worker_generation: None,
+            #[cfg(windows)]
+            native_render_source_taps: None,
             #[cfg(windows)]
             managed_software_devices:
                 audiorouter_windows_audio::ManagedSoftwareDeviceInventory::default(),
@@ -6506,6 +8185,45 @@ impl ControlPlane {
         Ok(())
     }
 
+    /// Build the bounded realtime observer set for one validated recorder
+    /// node. A node-owned worker is preferred; the legacy session worker is
+    /// accepted only when the session contains exactly one enabled recorder.
+    /// The returned set is immutable by convention after construction.
+    pub fn recorder_tap_set_for_node(
+        &self,
+        session_id: &EntityId,
+        node_id: &EntityId,
+    ) -> Result<AudioTapSet, ControlError> {
+        let session = self.get_session(session_id)?;
+        let recorder_nodes = session
+            .nodes
+            .iter()
+            .filter(|node| node.enabled && node.kind == NodeKind::Recorder)
+            .collect::<Vec<_>>();
+        let node = recorder_nodes
+            .iter()
+            .find(|node| node.id == *node_id)
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("enabled recorder node is not in the session".into())
+            })?;
+        let tap = if let Some(worker) = self.recorder_node_workers.get(&node.id) {
+            worker.shared_audio_tap()
+        } else if recorder_nodes.len() == 1 {
+            self.recorder_workers
+                .get(session_id)
+                .and_then(|worker| worker.shared_audio_tap())
+        } else {
+            None
+        }
+        .ok_or_else(|| {
+            ControlError::InvalidRequest("recorder node worker is not attached".into())
+        })?;
+        let mut set = AudioTapSet::new();
+        set.add_shared(tap)
+            .map_err(|_| ControlError::InvalidRequest("recorder tap capacity exceeded".into()))?;
+        Ok(set)
+    }
+
     /// Build the bounded engine observer set for one attached recorder. The
     /// returned set is immutable by convention after construction and can be
     /// handed to the realtime scheduler's tap-set method.
@@ -6986,6 +8704,28 @@ impl ControlPlane {
                 "stop the native duplex worker before deleting the session".into(),
             ));
         }
+        #[cfg(windows)]
+        if self.native_render_source_worker_session.as_ref() == Some(id)
+            && self
+                .native_render_source_worker
+                .as_ref()
+                .is_some_and(|worker| worker.is_running())
+        {
+            return Err(ControlError::InvalidRequest(
+                "stop the native render-source worker before deleting the session".into(),
+            ));
+        }
+        #[cfg(windows)]
+        if self.native_output_fanout_session.as_ref() == Some(id)
+            && self
+                .native_output_fanout
+                .as_ref()
+                .is_some_and(|fanout| fanout.is_running())
+        {
+            return Err(ControlError::InvalidRequest(
+                "stop the native output fan-out before deleting the session".into(),
+            ));
+        }
         let checkpoint = self.store.clone();
         if let Some(storage) = &self.storage {
             if let Err(error) = storage.delete_session(id) {
@@ -7009,6 +8749,25 @@ impl ControlPlane {
             self.native_duplex_worker.take();
             self.native_duplex_worker_session = None;
             self.native_duplex_worker_generation = None;
+        }
+        #[cfg(windows)]
+        if self.native_render_source_worker_session.as_ref() == Some(id) {
+            self.native_render_source_worker.take();
+            self.native_render_source_worker_session = None;
+            self.native_render_source_worker_generation = None;
+            self.native_render_source_taps = None;
+        }
+        #[cfg(windows)]
+        if self.native_output_fanout_session.as_ref() == Some(id) {
+            self.native_output_fanout.take();
+            self.native_output_fanout_session = None;
+            self.native_output_fanout_generation = None;
+        }
+        #[cfg(windows)]
+        if self.native_multi_input_worker_session.as_ref() == Some(id) {
+            self.native_multi_input_worker.take();
+            self.native_multi_input_worker_session = None;
+            self.native_multi_input_worker_generation = None;
         }
         self.runtimes.remove(id);
         for node in session
@@ -7099,6 +8858,11 @@ impl ControlPlane {
 
     fn node_parameter_schema(kind: audiorouter_domain::NodeKind) -> Value {
         match kind {
+            audiorouter_domain::NodeKind::TestSignal => json!([
+                { "name": "frequencyHz", "type": "number", "unit": "Hz", "minimum": 20.0, "maximum": 20000.0, "default": 440.0 },
+                { "name": "levelDb", "type": "number", "unit": "dBFS", "minimum": -60.0, "maximum": 0.0, "default": -18.0 },
+                { "name": "durationMs", "type": "number", "unit": "ms", "minimum": 1.0, "maximum": 600000.0, "default": 1000.0 }
+            ]),
             audiorouter_domain::NodeKind::Gain => json!([{
                 "name": "gainDb",
                 "type": "number",
@@ -7354,6 +9118,25 @@ impl ControlPlane {
         }
         #[cfg(windows)]
         if self
+            .native_output_fanout_session
+            .as_ref()
+            .is_some_and(|session_id| crashed_session_ids.contains(session_id))
+        {
+            if let Some(fanout) = self.native_output_fanout.as_mut() {
+                if let Err(error) = fanout.stop() {
+                    if native_recovery_error.is_none() {
+                        native_recovery_error = Some(ControlError::InvalidRequest(format!(
+                            "native output fan-out recovery stop failed: {error:?}"
+                        )));
+                    }
+                }
+            }
+            self.native_output_fanout = None;
+            self.native_output_fanout_session = None;
+            self.native_output_fanout_generation = None;
+        }
+        #[cfg(windows)]
+        if self
             .native_duplex_worker_session
             .as_ref()
             .is_some_and(|session_id| crashed_session_ids.contains(session_id))
@@ -7370,6 +9153,45 @@ impl ControlPlane {
             self.native_duplex_worker = None;
             self.native_duplex_worker_session = None;
             self.native_duplex_worker_generation = None;
+        }
+        #[cfg(windows)]
+        if self
+            .native_render_source_worker_session
+            .as_ref()
+            .is_some_and(|session_id| crashed_session_ids.contains(session_id))
+        {
+            if let Some(worker) = self.native_render_source_worker.as_mut() {
+                if let Err(error) = worker.stop() {
+                    if native_recovery_error.is_none() {
+                        native_recovery_error = Some(ControlError::InvalidRequest(format!(
+                            "native render-source recovery stop failed: {error:?}"
+                        )));
+                    }
+                }
+            }
+            self.native_render_source_worker = None;
+            self.native_render_source_worker_session = None;
+            self.native_render_source_worker_generation = None;
+            self.native_render_source_taps = None;
+        }
+        #[cfg(windows)]
+        if self
+            .native_multi_input_worker_session
+            .as_ref()
+            .is_some_and(|session_id| crashed_session_ids.contains(session_id))
+        {
+            if let Some(worker) = self.native_multi_input_worker.as_mut() {
+                if let Err(error) = worker.stop() {
+                    if native_recovery_error.is_none() {
+                        native_recovery_error = Some(ControlError::InvalidRequest(format!(
+                            "native multi-input recovery stop failed: {error:?}"
+                        )));
+                    }
+                }
+            }
+            self.native_multi_input_worker = None;
+            self.native_multi_input_worker_session = None;
+            self.native_multi_input_worker_generation = None;
         }
         for session_id in &crashed_session_ids {
             self.deactivate_virtual_route_bridges(session_id);
@@ -7467,7 +9289,9 @@ impl ControlPlane {
             }
             OsTransition::Resume => {
                 let endpoint_inventory = if let Some(monitor) = self.endpoint_monitor.as_mut() {
-                    monitor.refresh_changes().map_err(audio_control_error)?;
+                    let endpoint_changes =
+                        monitor.refresh_changes().map_err(audio_control_error)?;
+                    self.retain_endpoint_changes(&endpoint_changes);
                     "refreshed"
                 } else {
                     "notStarted"
@@ -7543,11 +9367,35 @@ impl ControlPlane {
         {
             return "running";
         }
+        #[cfg(windows)]
+        if self
+            .native_render_source_worker
+            .as_ref()
+            .is_some_and(|worker| worker.is_running())
+        {
+            return "running";
+        }
+        #[cfg(windows)]
+        if self
+            .native_multi_input_worker
+            .as_ref()
+            .is_some_and(|worker| worker.is_running())
+        {
+            return "running";
+        }
         if self.native_endpoint_worker.is_some() {
             return "configured-stopped";
         }
         #[cfg(windows)]
         if self.native_duplex_worker.is_some() {
+            return "configured-stopped";
+        }
+        #[cfg(windows)]
+        if self.native_render_source_worker.is_some() {
+            return "configured-stopped";
+        }
+        #[cfg(windows)]
+        if self.native_multi_input_worker.is_some() {
             return "configured-stopped";
         }
         "implemented-not-activated"
@@ -7561,6 +9409,14 @@ impl ControlPlane {
         if self.native_duplex_worker.is_some() {
             return self.native_duplex_worker_session.as_ref();
         }
+        #[cfg(windows)]
+        if self.native_render_source_worker.is_some() {
+            return self.native_render_source_worker_session.as_ref();
+        }
+        #[cfg(windows)]
+        if self.native_multi_input_worker.is_some() {
+            return self.native_multi_input_worker_session.as_ref();
+        }
         None
     }
 
@@ -7571,6 +9427,14 @@ impl ControlPlane {
         #[cfg(windows)]
         if self.native_duplex_worker.is_some() {
             return Some("duplex");
+        }
+        #[cfg(windows)]
+        if self.native_render_source_worker.is_some() {
+            return Some("render-source");
+        }
+        #[cfg(windows)]
+        if self.native_multi_input_worker.is_some() {
+            return Some("multi-input");
         }
         None
     }
@@ -7586,26 +9450,47 @@ impl ControlPlane {
         match state {
             "running" => (
                 "available",
-                if kind == Some("duplex") {
-                    "native duplex worker is running; production driver qualification remains open"
-                } else {
-                    "native endpoint worker is running; production driver qualification remains open"
+                match kind {
+                    Some("duplex") => {
+                        "native duplex worker is running; production driver qualification remains open"
+                    }
+                    Some("render-source") => {
+                        "native render-source worker is running; production driver qualification remains open"
+                    }
+                    Some("multi-input") => {
+                        "native multi-input worker is running; production driver qualification remains open"
+                    }
+                    _ => "native endpoint worker is running; production driver qualification remains open",
                 },
             ),
             "configured-stopped" => (
                 "unavailable",
-                if kind == Some("duplex") {
-                    "native duplex worker is prepared but stopped; start a session explicitly"
-                } else {
-                    "native endpoint worker is prepared but stopped; start a session explicitly"
+                match kind {
+                    Some("duplex") => {
+                        "native duplex worker is prepared but stopped; start a session explicitly"
+                    }
+                    Some("render-source") => {
+                        "native render-source worker is prepared but stopped; start a session explicitly"
+                    }
+                    Some("multi-input") => {
+                        "native multi-input worker is prepared but stopped; start a session explicitly"
+                    }
+                    _ => "native endpoint worker is prepared but stopped; start a session explicitly",
                 },
             ),
             _ => (
                 "unavailable",
-                if kind == Some("duplex") {
-                    "native duplex routing is implemented but not activated; exact bindings and a production driver are required"
-                } else {
-                    "native endpoint routing is implemented but not activated; exact bindings and a production driver are required"
+                match kind {
+                    Some("duplex") => {
+                        "native duplex routing is implemented but not activated; exact bindings and a production driver are required"
+                    }
+                    Some("render-source") => {
+                        "native render-source routing is implemented but not activated; exact bindings and a production driver are required"
+                    }
+                    Some("multi-input") => {
+                        "native multi-input routing is implemented but not activated; exact bindings and a production driver are required"
+                    }
+                    _ => "native endpoint routing is implemented but not activated; exact bindings and a production driver are required",
                 },
             ),
         }
@@ -8119,14 +10004,26 @@ impl ControlPlane {
             .any(|node| node.enabled && node.kind == NodeKind::Plugin);
         let native_endpoint_attached = self.native_endpoint_session.as_ref() == Some(id)
             && self.native_endpoint_worker.is_some();
+        let mut native_graph_attached = native_endpoint_attached;
         let mut native_attached = native_endpoint_attached;
         #[cfg(windows)]
         {
+            let native_multi_input_attached = self.native_multi_input_worker_session.as_ref()
+                == Some(id)
+                && self.native_multi_input_worker.is_some();
+            let native_duplex_attached = self.native_duplex_worker_session.as_ref() == Some(id)
+                && self.native_duplex_worker.is_some();
+            native_graph_attached = native_graph_attached || native_duplex_attached;
+            native_graph_attached = native_graph_attached
+                || (self.native_render_source_worker_session.as_ref() == Some(id)
+                    && self.native_render_source_worker.is_some());
             native_attached = native_attached
-                || (self.native_duplex_worker_session.as_ref() == Some(id)
-                    && self.native_duplex_worker.is_some());
+                || native_multi_input_attached
+                || native_duplex_attached
+                || (self.native_render_source_worker_session.as_ref() == Some(id)
+                    && self.native_render_source_worker.is_some());
         }
-        if has_enabled_plugin && !native_attached {
+        if has_enabled_plugin && !native_graph_attached {
             return Err(ControlError::InvalidRequest(
                 "enabled plugin nodes require an attached native endpoint session".into(),
             ));
@@ -8170,6 +10067,40 @@ impl ControlPlane {
         // samples could reach the endpoint.  Prepare and publish the graph
         // before starting the worker; any failure rolls back the runtime and
         // selected bridge generation so the session cannot be half-started.
+        #[cfg(windows)]
+        if self.native_multi_input_worker_session.as_ref() == Some(id)
+            && self.native_multi_input_worker.is_some()
+        {
+            let branch_node_ids = self
+                .native_multi_input_worker
+                .as_ref()
+                .expect("multi-input worker is attached")
+                .output_node_ids()
+                .to_vec();
+            let capture_bus_ids = session_virtual_capture_bus_ids(&session);
+            if let Err(error) = self
+                .prepare_virtual_route_bridges(id, generation, &capture_bus_ids)
+                .and_then(|_| {
+                    self.bind_native_multi_input_branches(id, generation, &branch_node_ids)
+                        .map(|_| ())
+                })
+                .and_then(|_| self.start_native_multi_input_worker())
+            {
+                let _ = self
+                    .native_multi_input_worker
+                    .as_mut()
+                    .expect("multi-input worker is attached")
+                    .stop();
+                if let Some(runtime) = self.runtimes.get_mut(id) {
+                    runtime.stop();
+                }
+                self.deactivate_virtual_route_bridges(id);
+                self.native_endpoint_taps = None;
+                self.native_render_source_taps = None;
+                return Err(error);
+            }
+        }
+
         if native_endpoint_attached {
             let sample_rate_hz = self
                 .native_endpoint_worker
@@ -8183,6 +10114,7 @@ impl ControlPlane {
                 }
                 self.deactivate_virtual_route_bridges(id);
                 self.native_endpoint_taps = None;
+                self.native_render_source_taps = None;
                 return Err(error);
             }
             let start_result = self
@@ -8197,7 +10129,26 @@ impl ControlPlane {
                 }
                 self.deactivate_virtual_route_bridges(id);
                 self.native_endpoint_taps = None;
+                self.native_render_source_taps = None;
                 return Err(error);
+            }
+            #[cfg(windows)]
+            if self.native_output_fanout_session.as_ref() == Some(id)
+                && self.native_output_fanout.is_some()
+            {
+                if let Err(error) = self.start_native_output_fanout() {
+                    let _ = self
+                        .native_endpoint_worker
+                        .as_mut()
+                        .expect("native_attached implies an endpoint worker")
+                        .stop();
+                    if let Some(runtime) = self.runtimes.get_mut(id) {
+                        runtime.stop();
+                    }
+                    self.deactivate_virtual_route_bridges(id);
+                    self.native_endpoint_taps = None;
+                    return Err(error);
+                }
             }
         }
         #[cfg(windows)]
@@ -8210,6 +10161,55 @@ impl ControlPlane {
                     runtime.stop();
                 }
                 self.deactivate_virtual_route_bridges(id);
+                return Err(error);
+            }
+        }
+        #[cfg(windows)]
+        if self.native_render_source_worker_session.as_ref() == Some(id)
+            && self.native_render_source_worker.is_some()
+        {
+            let sample_rate_hz = self
+                .native_render_source_worker
+                .as_ref()
+                .expect("native render-source worker is attached")
+                .bridge()
+                .sample_rate_hz();
+            if let Err(error) =
+                self.activate_native_render_source_graph(id, generation, sample_rate_hz)
+            {
+                let _ = self
+                    .native_duplex_worker
+                    .as_mut()
+                    .filter(|_| self.native_duplex_worker_session.as_ref() == Some(id))
+                    .map(audiorouter_windows_audio::NativeBridgeDuplexWorker::stop);
+                if let Some(runtime) = self.runtimes.get_mut(id) {
+                    runtime.stop();
+                }
+                self.deactivate_virtual_route_bridges(id);
+                self.native_endpoint_taps = None;
+                return Err(error);
+            }
+            if let Err(error) = self.start_native_render_source_worker() {
+                let _ = self
+                    .native_duplex_worker
+                    .as_mut()
+                    .filter(|_| self.native_duplex_worker_session.as_ref() == Some(id))
+                    .map(audiorouter_windows_audio::NativeBridgeDuplexWorker::stop);
+                let _ = self
+                    .native_endpoint_worker
+                    .as_mut()
+                    .filter(|_| self.native_endpoint_session.as_ref() == Some(id))
+                    .map(audiorouter_windows_audio::NativeAudioWorker::stop);
+                let _ = self
+                    .native_output_fanout
+                    .as_mut()
+                    .filter(|_| self.native_output_fanout_session.as_ref() == Some(id))
+                    .map(audiorouter_windows_audio::WasapiOutputFanout::stop);
+                if let Some(runtime) = self.runtimes.get_mut(id) {
+                    runtime.stop();
+                }
+                self.deactivate_virtual_route_bridges(id);
+                self.native_endpoint_taps = None;
                 return Err(error);
             }
         }
@@ -8323,12 +10323,33 @@ impl ControlPlane {
         // the exact bound worker before retiring the runtime generation; even
         // a worker stop error must not leave an audio client running against
         // a session that is reported stopped.
-        let native_attached = self.native_endpoint_session.as_ref() == Some(id)
-            && self.native_endpoint_worker.is_some();
+        let native_attached = (self.native_endpoint_session.as_ref() == Some(id)
+            && self.native_endpoint_worker.is_some())
+            || {
+                #[cfg(windows)]
+                {
+                    self.native_multi_input_worker_session.as_ref() == Some(id)
+                        && self.native_multi_input_worker.is_some()
+                }
+                #[cfg(not(windows))]
+                {
+                    false
+                }
+            };
         let native_stop_error = if self.native_endpoint_session.as_ref() == Some(id) {
             self.native_endpoint_worker
                 .as_mut()
                 .map(audiorouter_windows_audio::NativeAudioWorker::stop)
+                .transpose()
+                .err()
+        } else {
+            None
+        };
+        #[cfg(windows)]
+        let native_output_stop_error = if self.native_output_fanout_session.as_ref() == Some(id) {
+            self.native_output_fanout
+                .as_mut()
+                .map(audiorouter_windows_audio::WasapiOutputFanout::stop)
                 .transpose()
                 .err()
         } else {
@@ -8349,15 +10370,59 @@ impl ControlPlane {
         if let Some(runtime) = self.runtimes.get_mut(id) {
             runtime.stop();
         }
+        #[cfg(windows)]
+        {
+            self.native_render_source_taps = None;
+        }
+        #[cfg(windows)]
+        let native_render_source_stop_error =
+            if self.native_render_source_worker_session.as_ref() == Some(id) {
+                self.native_render_source_worker
+                    .as_mut()
+                    .map(audiorouter_windows_audio::NativeBridgeInputWorker::stop)
+                    .transpose()
+                    .err()
+            } else {
+                None
+            };
+        #[cfg(windows)]
+        let native_multi_input_stop_error =
+            if self.native_multi_input_worker_session.as_ref() == Some(id) {
+                self.native_multi_input_worker
+                    .as_mut()
+                    .map(audiorouter_windows_audio::NativeMultiInputWorker::stop)
+                    .transpose()
+                    .err()
+            } else {
+                None
+            };
         self.events
             .append(revision, None, "runtime.stopped", Some(id.clone()));
         if let Some(error) = native_stop_error {
             return Err(audio_control_error(error));
         }
         #[cfg(windows)]
+        if let Some(error) = native_output_stop_error {
+            return Err(ControlError::InvalidRequest(format!(
+                "native output fan-out stop failed: {error:?}"
+            )));
+        }
+        #[cfg(windows)]
         if let Some(error) = native_duplex_stop_error {
             return Err(ControlError::InvalidRequest(format!(
                 "native duplex worker stop failed: {error:?}"
+            )));
+        }
+        #[cfg(windows)]
+        if let Some(error) = native_render_source_stop_error {
+            return Err(ControlError::InvalidRequest(format!(
+                "native render-source worker stop failed: {error:?}"
+            )));
+        }
+        #[cfg(windows)]
+        if let Some(error) = native_multi_input_stop_error {
+            return Err(ControlError::InvalidRequest(format!(
+                "native multi-input worker stop failed: {error:?}"
             )));
         }
         Ok(json!({
@@ -8470,6 +10535,15 @@ impl ControlPlane {
                     "nativeEndpoints.prepare" => {
                         self.dispatch_native_endpoints_prepare(request.params)
                     }
+                    "nativeOutputs.prepare" => self.dispatch_native_outputs_prepare(request.params),
+                    "nativeMultiInputs.prepare" => {
+                        self.dispatch_native_multi_inputs_prepare(request.params)
+                    }
+                    "nativeBridges.prepare" => self.dispatch_native_bridges_prepare(request.params),
+                    "nativeBridges.detach" => self.dispatch_native_bridges_detach(request.params),
+                    "nativeBridges.heartbeat" => {
+                        self.dispatch_native_bridges_heartbeat(request.params)
+                    }
                     "nativeEndpoints.rebind" => {
                         self.dispatch_native_endpoints_rebind(request.params)
                     }
@@ -8482,6 +10556,15 @@ impl ControlPlane {
                     "nativeDuplex.detach" => self.dispatch_native_duplex_detach(request.params),
                     "nativeEndpoints.pump" => self.dispatch_native_endpoints_pump(request.params),
                     "nativeDuplex.pump" => self.dispatch_native_duplex_pump(request.params),
+                    "nativeRenderSources.pump" => {
+                        self.dispatch_native_render_source_pump(request.params)
+                    }
+                    "nativeMultiInputs.pump" => {
+                        self.dispatch_native_multi_input_pump(request.params)
+                    }
+                    "nativeMultiInputs.bindBranches" => {
+                        self.dispatch_native_multi_input_bind_branches(request.params)
+                    }
                     "plugins.scan" => self.dispatch_plugins_scan(request.params),
                     "plugins.list" => self.dispatch_plugins_list(request.params),
                     "plugins.retry" => self.dispatch_plugins_retry(request.params),
@@ -10314,6 +12397,21 @@ impl ControlPlane {
             storage.save_privacy_mute(muted).map_err(storage_error)?;
         }
         self.privacy_muted = muted;
+        if let Some(worker) = self.native_endpoint_worker.as_ref() {
+            worker.set_privacy_muted(muted);
+        }
+        #[cfg(windows)]
+        if let Some(worker) = self.native_multi_input_worker.as_ref() {
+            worker.set_privacy_muted(muted);
+        }
+        #[cfg(windows)]
+        if let Some(worker) = self.native_render_source_worker.as_ref() {
+            worker.set_privacy_muted(muted);
+        }
+        #[cfg(windows)]
+        if let Some(worker) = self.native_duplex_worker.as_ref() {
+            worker.set_privacy_muted(muted);
+        }
         self.events.append(
             0,
             None,
@@ -10541,7 +12639,7 @@ impl ControlPlane {
             // exists. Unrelated endpoint churn must not accumulate in the
             // control plane or invalidate a worker later; a later prepare
             // operation resolves the current snapshot itself.
-            let relevant_changes = self
+            let mut relevant_changes = self
                 .native_endpoint_worker
                 .as_ref()
                 .map(|worker| {
@@ -10554,6 +12652,15 @@ impl ControlPlane {
                         .collect::<Vec<_>>()
                 })
                 .unwrap_or_default();
+            #[cfg(windows)]
+            if let Some(worker) = self.native_multi_input_worker.as_ref() {
+                relevant_changes.extend(
+                    endpoint_changes
+                        .iter()
+                        .filter(|change| worker.bindings_affected_by(std::slice::from_ref(*change)))
+                        .cloned(),
+                );
+            }
             if !relevant_changes.is_empty() {
                 self.pending_endpoint_changes.extend(relevant_changes);
             }
@@ -10733,6 +12840,239 @@ impl ControlPlane {
             "captureEndpointId": capture_id,
             "renderEndpointId": render_id
         }))
+    }
+
+    #[cfg(windows)]
+    fn dispatch_native_outputs_prepare(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest(
+                "sessionId, generation, and renderEndpointIds are required".into(),
+            )
+        })?;
+        let session_id = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(EntityId::new)
+            .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+        let generation = params
+            .get("generation")
+            .and_then(Value::as_u64)
+            .filter(|value| *value > 0)
+            .ok_or_else(|| ControlError::InvalidRequest("generation is required".into()))?;
+        let endpoint_values = params
+            .get("renderEndpointIds")
+            .and_then(Value::as_array)
+            .ok_or_else(|| ControlError::InvalidRequest("renderEndpointIds is required".into()))?;
+        if endpoint_values.is_empty() || endpoint_values.len() > audiorouter_engine::MAX_AUDIO_TAPS
+        {
+            return Err(ControlError::InvalidRequest(
+                "renderEndpointIds must contain 1..8 endpoints".into(),
+            ));
+        }
+        let endpoint_ids = endpoint_values
+            .iter()
+            .map(|value| {
+                value
+                    .as_str()
+                    .filter(|id| !id.is_empty() && id.len() <= MAX_CONTROL_STRING_BYTES)
+                    .map(str::to_owned)
+                    .ok_or_else(|| {
+                        ControlError::InvalidRequest(
+                            "renderEndpointIds must contain bounded nonempty strings".into(),
+                        )
+                    })
+            })
+            .collect::<Result<Vec<_>, ControlError>>()?;
+        self.prepare_native_output_fanout(session_id, generation, &endpoint_ids)
+    }
+
+    #[cfg(windows)]
+    fn dispatch_native_multi_inputs_prepare(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest(
+                "sessionId, generation, and captureEndpointIds are required".into(),
+            )
+        })?;
+        let session_id = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(EntityId::new)
+            .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+        let generation = params
+            .get("generation")
+            .and_then(Value::as_u64)
+            .filter(|value| *value > 0)
+            .ok_or_else(|| ControlError::InvalidRequest("generation is required".into()))?;
+        let endpoint_values = params
+            .get("captureEndpointIds")
+            .and_then(Value::as_array)
+            .ok_or_else(|| ControlError::InvalidRequest("captureEndpointIds is required".into()))?;
+        if endpoint_values.len() < 2 || endpoint_values.len() > audiorouter_engine::MAX_MIXER_INPUTS
+        {
+            return Err(ControlError::InvalidRequest(
+                "captureEndpointIds must contain 2..8 endpoints".into(),
+            ));
+        }
+        let endpoint_ids = endpoint_values
+            .iter()
+            .map(|value| {
+                value
+                    .as_str()
+                    .filter(|id| !id.is_empty() && id.len() <= MAX_CONTROL_STRING_BYTES)
+                    .map(str::to_owned)
+                    .ok_or_else(|| {
+                        ControlError::InvalidRequest(
+                            "captureEndpointIds must contain bounded nonempty strings".into(),
+                        )
+                    })
+            })
+            .collect::<Result<Vec<_>, ControlError>>()?;
+        let endpoints =
+            audiorouter_windows_audio::enumerate_active_endpoints().map_err(audio_control_error)?;
+        let captures = endpoint_ids
+            .iter()
+            .map(|endpoint_id| {
+                endpoints
+                    .iter()
+                    .find(|endpoint| {
+                        endpoint.id == *endpoint_id
+                            && endpoint.direction
+                                == audiorouter_windows_audio::EndpointDirection::Capture
+                    })
+                    .cloned()
+                    .ok_or_else(|| {
+                        ControlError::InvalidRequest(
+                            "capture endpoint is not an active exact inventory match".into(),
+                        )
+                    })
+            })
+            .collect::<Result<Vec<_>, ControlError>>()?;
+        self.prepare_native_multi_input_worker(session_id, generation, &captures, 0, 3, 100)
+    }
+
+    #[cfg(not(windows))]
+    fn dispatch_native_multi_inputs_prepare(
+        &mut self,
+        _params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        Err(ControlError::InvalidRequest(
+            "native multi-input preparation requires Windows".into(),
+        ))
+    }
+
+    #[cfg(not(windows))]
+    fn dispatch_native_outputs_prepare(
+        &mut self,
+        _params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        Err(ControlError::InvalidRequest(
+            "native output fan-out preparation requires Windows".into(),
+        ))
+    }
+
+    #[cfg(windows)]
+    fn dispatch_native_bridges_prepare(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest(
+                "busId, generation, devicePath, and mapping paths are required".into(),
+            )
+        })?;
+        let text_param = |name: &str| {
+            params
+                .get(name)
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty() && value.len() <= MAX_CONTROL_STRING_BYTES)
+                .ok_or_else(|| ControlError::InvalidRequest(format!("{name} is required")))
+        };
+        let bus_id = text_param("busId").map(EntityId::new)?;
+        let generation = params
+            .get("generation")
+            .and_then(Value::as_u64)
+            .filter(|value| *value > 0)
+            .ok_or_else(|| ControlError::InvalidRequest("generation is required".into()))?;
+        let device_path = text_param("devicePath")?;
+        let render_mapping_path = text_param("renderMappingPath")?;
+        let capture_mapping_path = text_param("captureMappingPath")?;
+        let lease_ms = params
+            .get("leaseMs")
+            .and_then(Value::as_u64)
+            .map(|value| {
+                u32::try_from(value).map_err(|_| {
+                    ControlError::InvalidRequest("leaseMs exceeds the bounded integer range".into())
+                })
+            })
+            .transpose()?
+            .unwrap_or(1_000);
+        self.prepare_native_bridge(
+            bus_id,
+            device_path,
+            render_mapping_path,
+            capture_mapping_path,
+            generation,
+            lease_ms,
+        )
+    }
+
+    #[cfg(not(windows))]
+    fn dispatch_native_bridges_prepare(
+        &mut self,
+        _params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        Err(ControlError::InvalidRequest(
+            "native bridge preparation requires Windows".into(),
+        ))
+    }
+
+    fn dispatch_native_bridges_detach(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params =
+            params.ok_or_else(|| ControlError::InvalidRequest("busId is required".into()))?;
+        let bus_id = params
+            .get("busId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(EntityId::new)
+            .ok_or_else(|| ControlError::InvalidRequest("busId is required".into()))?;
+        #[cfg(windows)]
+        {
+            self.detach_native_bridge(&bus_id)
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = bus_id;
+            Err(ControlError::InvalidRequest(
+                "native bridge detachment requires Windows".into(),
+            ))
+        }
+    }
+
+    fn dispatch_native_bridges_heartbeat(
+        &mut self,
+        _params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        #[cfg(windows)]
+        {
+            self.heartbeat_native_bridges()
+        }
+        #[cfg(not(windows))]
+        {
+            Err(ControlError::InvalidRequest(
+                "native bridge heartbeat requires Windows".into(),
+            ))
+        }
     }
 
     #[cfg(windows)]
@@ -11011,6 +13351,47 @@ impl ControlPlane {
         ))
     }
 
+    #[cfg(windows)]
+    fn dispatch_native_render_source_pump(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("sessionId and generation are required".into())
+        })?;
+        let session_id = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(EntityId::new)
+            .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+        let generation = params
+            .get("generation")
+            .and_then(Value::as_u64)
+            .filter(|value| *value > 0)
+            .ok_or_else(|| ControlError::InvalidRequest("generation is required".into()))?;
+        let max_quanta = params
+            .get("maxQuanta")
+            .and_then(Value::as_u64)
+            .map(|value| {
+                u32::try_from(value)
+                    .map_err(|_| ControlError::InvalidRequest("maxQuanta is out of range".into()))
+            })
+            .transpose()?
+            .unwrap_or(audiorouter_windows_audio::MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE);
+        self.pump_native_render_source_worker(&session_id, generation, max_quanta)
+    }
+
+    #[cfg(not(windows))]
+    fn dispatch_native_render_source_pump(
+        &mut self,
+        _params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        Err(ControlError::InvalidRequest(
+            "native render-source pumping requires Windows".into(),
+        ))
+    }
+
     fn record_endpoint_changes(&mut self, changed: bool) {
         if changed {
             // EventLog is the bounded notification surface. Endpoint details
@@ -11018,6 +13399,45 @@ impl ControlPlane {
             // not duplicate an unbounded or stale device payload.
             self.events.append(0, None, "devices.changed", None);
         }
+    }
+
+    /// Retain endpoint changes discovered by a recovery resnapshot or a
+    /// read-only inventory call until a mutating native lifecycle boundary can
+    /// fail closed or explicitly rebind. Resume must not consume the changes
+    /// without publishing the same bounded event that `devices.list` emits.
+    fn retain_endpoint_changes(
+        &mut self,
+        endpoint_changes: &[audiorouter_windows_audio::EndpointChange],
+    ) {
+        if endpoint_changes.is_empty() {
+            return;
+        }
+        let mut relevant_changes = self
+            .native_endpoint_worker
+            .as_ref()
+            .map(|worker| {
+                endpoint_changes
+                    .iter()
+                    .filter(|change| {
+                        worker.endpoint_bindings_affected_by(std::slice::from_ref(*change))
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        #[cfg(windows)]
+        if let Some(worker) = self.native_multi_input_worker.as_ref() {
+            relevant_changes.extend(
+                endpoint_changes
+                    .iter()
+                    .filter(|change| worker.bindings_affected_by(std::slice::from_ref(*change)))
+                    .cloned(),
+            );
+        }
+        if !relevant_changes.is_empty() {
+            self.pending_endpoint_changes.extend(relevant_changes);
+        }
+        self.record_endpoint_changes(true);
     }
 
     /// Fail closed when the read-only endpoint monitor observes a change to
@@ -11028,16 +13448,24 @@ impl ControlPlane {
         &mut self,
         changes: &[audiorouter_windows_audio::EndpointChange],
     ) -> Result<(), ControlError> {
-        let invalidated = {
-            let Some(worker) = self.native_endpoint_worker.as_mut() else {
-                return Ok(());
-            };
-            if !worker.endpoint_bindings_affected_by(changes) || !worker.is_running() {
-                return Ok(());
+        let mut invalidated = false;
+        if let Some(worker) = self.native_endpoint_worker.as_mut() {
+            if worker.endpoint_bindings_affected_by(changes) && worker.is_running() {
+                worker.stop().map_err(audio_control_error)?;
+                invalidated = true;
             }
-            worker.stop().map_err(audio_control_error)?;
-            true
-        };
+        }
+        #[cfg(windows)]
+        if let Some(worker) = self.native_multi_input_worker.as_mut() {
+            if worker.bindings_affected_by(changes) && worker.is_running() {
+                worker.stop().map_err(|error| {
+                    ControlError::InvalidRequest(format!(
+                        "native multi-input invalidation stop failed: {error:?}"
+                    ))
+                })?;
+                invalidated = true;
+            }
+        }
         if !invalidated {
             return Ok(());
         }
@@ -11059,10 +13487,17 @@ impl ControlPlane {
         if changes.is_empty() {
             return Ok(false);
         }
-        let affected = self
+        let mut affected = self
             .native_endpoint_worker
             .as_ref()
             .is_some_and(|worker| worker.endpoint_bindings_affected_by(&changes));
+        #[cfg(windows)]
+        {
+            affected |= self
+                .native_multi_input_worker
+                .as_ref()
+                .is_some_and(|worker| worker.bindings_affected_by(&changes));
+        }
         self.invalidate_changed_native_endpoint_worker(&changes)?;
         self.record_endpoint_changes(true);
         Ok(affected)
@@ -11757,6 +14192,15 @@ impl ControlPlane {
         if method == "virtualDevices.remove" {
             if let Err(error) = self.managed_software_devices.remove(bus_id) {
                 self.virtual_buses = checkpoint;
+                if let Some(storage) = &self.storage {
+                    if let Err(rollback_error) = storage.rollback_virtual_buses_external_journal(
+                        &self.virtual_buses,
+                        &storage_key,
+                        &request_hash,
+                    ) {
+                        return Err(storage_error(rollback_error));
+                    }
+                }
                 return Err(software_device_control_error(error));
             }
         }
@@ -12214,6 +14658,17 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "nativeEndpoints.prepare" | "nativeEndpoints.rebind" => {
             &["sessionId", "captureEndpointId", "renderEndpointId"]
         }
+        "nativeOutputs.prepare" => &["sessionId", "generation", "renderEndpointIds"],
+        "nativeMultiInputs.prepare" => &["sessionId", "generation", "captureEndpointIds"],
+        "nativeBridges.prepare" => &[
+            "busId",
+            "generation",
+            "devicePath",
+            "renderMappingPath",
+            "captureMappingPath",
+        ],
+        "nativeBridges.detach" => &["busId"],
+        "nativeBridges.heartbeat" => &[],
         "nativeEndpoints.detach" => &["sessionId"],
         "nativeDuplex.detach" => &["sessionId"],
         "nativeApplications.prepare" => &[
@@ -12232,6 +14687,9 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
             "maxInputQuanta",
             "maxOutputPackets",
         ],
+        "nativeRenderSources.pump" => &["sessionId", "generation", "maxQuanta"],
+        "nativeMultiInputs.pump" => &["sessionId", "generation", "maxPackets"],
+        "nativeMultiInputs.bindBranches" => &["sessionId", "generation", "branchNodeIds"],
         "plugins.scan" => &["directory"],
         "plugins.list" => &["directory"],
         "plugins.retry" => &["directory", "idempotencyKey"],
@@ -12327,7 +14785,14 @@ fn is_mutating_method(method: &str) -> bool {
 }
 
 fn rate_limit_method(method: &str) -> bool {
-    is_mutating_method(method) && !matches!(method, "nativeEndpoints.pump" | "nativeDuplex.pump")
+    is_mutating_method(method)
+        && !matches!(
+            method,
+            "nativeEndpoints.pump"
+                | "nativeDuplex.pump"
+                | "nativeRenderSources.pump"
+                | "nativeMultiInputs.pump"
+        )
 }
 
 fn storage_error(error: StorageError) -> ControlError {
@@ -13198,6 +15663,22 @@ mod tests {
     #[test]
     fn native_capture_sink_binding_rejects_mismatched_hello_before_driver_open() {
         let mut plane = ControlPlane::default();
+        let error = plane
+            .prepare_native_bridge(
+                EntityId::new("bus-guard"),
+                r"\\.\NotAudioRouter",
+                r"C:\Temp\render.slot",
+                r"C:\Temp\capture.slot",
+                1,
+                1_000,
+            )
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            ControlError::InvalidRequest(message)
+                if message.contains("native bridge device path is not the AudioRouter broker")
+        ));
+        let mut plane = ControlPlane::default();
         let bus_id = EntityId::new("capture-bus");
         plane.create_virtual_bus(bus_id.clone(), "Capture").unwrap();
         let hello = audiorouter_protocol::AudioBridgeHello {
@@ -13223,6 +15704,44 @@ mod tests {
             error,
             ControlError::InvalidRequest(message)
                 if message == "native capture sink hello does not match the requested bus"
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_bridge_preparation_rejects_unbounded_or_relative_inputs_before_driver_open() {
+        let mut plane = ControlPlane::default();
+        let error = plane
+            .prepare_native_bridge(
+                EntityId::new("bounds-bus"),
+                r"\\.\AudioRouterVirtualBridge",
+                r"relative-render.slot",
+                r"C:\capture.slot",
+                1,
+                0,
+            )
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            ControlError::InvalidRequest(message)
+                if message == "native bridge paths, lease, and generation are invalid"
+        ));
+
+        let mut plane = ControlPlane::default();
+        let error = plane
+            .prepare_native_bridge(
+                EntityId::new("bounds-bus"),
+                r"\\.\AudioRouterVirtualBridge",
+                r"C:\render.slot",
+                r"C:\capture.slot",
+                0,
+                1_000,
+            )
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            ControlError::InvalidRequest(message)
+                if message == "native bridge paths, lease, and generation are invalid"
         ));
     }
 
@@ -13335,6 +15854,33 @@ mod tests {
         ));
         assert!(plane.native_endpoint_worker.is_none());
         assert!(plane.endpoint_monitor.is_none());
+    }
+
+    #[test]
+    fn recovery_endpoint_resnapshot_publishes_a_bounded_device_change_event() {
+        let mut plane = ControlPlane::default();
+        let endpoint = audiorouter_windows_audio::EndpointInfo {
+            id: "recovery-endpoint".into(),
+            direction: audiorouter_windows_audio::EndpointDirection::Render,
+            default_period_100ns: 100_000,
+            minimum_period_100ns: 30_000,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            bits_per_sample: 32,
+            format_tag: 3,
+            channel_mask: 3,
+            subformat_guid: "00000003-0000-0010-8000-00aa00389b71".into(),
+        };
+        let before = plane.events.latest_sequence();
+
+        plane
+            .retain_endpoint_changes(&[audiorouter_windows_audio::EndpointChange::Added(endpoint)]);
+
+        assert_eq!(plane.events.latest_sequence(), before + 1);
+        assert_eq!(
+            plane.events.since(before, 1).unwrap()[0].category,
+            "devices.changed"
+        );
     }
 
     #[test]
@@ -13609,6 +16155,12 @@ mod tests {
             .expect("AUDIOROUTER_CAPTURE_ENDPOINT_ID is required");
         let render_id = std::env::var("AUDIOROUTER_RENDER_ENDPOINT_ID")
             .expect("AUDIOROUTER_RENDER_ENDPOINT_ID is required");
+        let fanout_endpoint_ids = std::env::var("AUDIOROUTER_OUTPUT_FANOUT_ENDPOINT_IDS")
+            .unwrap_or_default()
+            .split('|')
+            .filter(|id| !id.is_empty())
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
         let endpoints = audiorouter_windows_audio::enumerate_active_endpoints().unwrap();
         let capture = endpoints
             .iter()
@@ -13847,6 +16399,11 @@ mod tests {
         plane
             .prepare_native_endpoint_worker(owned.id.clone(), &capture, &render, 0, 3, 100)
             .unwrap();
+        if !fanout_endpoint_ids.is_empty() {
+            plane
+                .prepare_native_output_fanout(owned.id.clone(), 1, &fanout_endpoint_ids)
+                .unwrap();
+        }
         let started = plane.session_start(&owned.id).unwrap();
         assert_eq!(started["runtime"], "native");
         assert_eq!(
@@ -13858,6 +16415,8 @@ mod tests {
         let mut captured_frames = 0_u64;
         let mut processed_quanta = 0_u64;
         let mut rendered_frames = 0_u64;
+        let mut fanout_packets = 0_u64;
+        let mut fanout_rendered_frames = 0_u64;
         while std::time::Instant::now() < deadline {
             let pump = plane
                 .pump_native_endpoint_worker_with_bound_taps(&owned.id, generation, 64)
@@ -13868,6 +16427,11 @@ mod tests {
                 processed_quanta.saturating_add(pump["processedQuanta"].as_u64().unwrap());
             rendered_frames =
                 rendered_frames.saturating_add(pump["renderedFrames"].as_u64().unwrap());
+            if let Some(fanout) = pump.get("outputFanout") {
+                fanout_packets = fanout_packets.saturating_add(fanout["packets"].as_u64().unwrap());
+                fanout_rendered_frames = fanout_rendered_frames
+                    .saturating_add(fanout["renderedFrames"].as_u64().unwrap());
+            }
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
         assert!(captured_frames > 0, "native worker did not capture frames");
@@ -13876,8 +16440,91 @@ mod tests {
             "native worker did not process graph quanta"
         );
         assert!(rendered_frames > 0, "native worker did not render frames");
+        if !fanout_endpoint_ids.is_empty() {
+            assert!(fanout_packets > 0, "output fan-out did not drain packets");
+            assert!(
+                fanout_rendered_frames > 0,
+                "output fan-out did not render frames"
+            );
+        }
         eprintln!(
-            "guarded_native_lifecycle capture_frames={captured_frames} processed_quanta={processed_quanta} rendered_frames={rendered_frames}"
+            "guarded_native_lifecycle capture_frames={captured_frames} processed_quanta={processed_quanta} rendered_frames={rendered_frames} fanout_packets={fanout_packets} fanout_rendered_frames={fanout_rendered_frames}"
+        );
+        let privacy_enabled = plane
+            .dispatch_privacy_mute(Some(json!({
+                "muted": true,
+                "idempotencyKey": "guarded-live-privacy-enable"
+            })))
+            .unwrap();
+        assert_eq!(privacy_enabled["muted"], true);
+        assert_eq!(
+            plane.status_snapshot().unwrap()["privacyMute"]["muted"],
+            true
+        );
+        let mut mute_dispatch_to_processed_block = Vec::with_capacity(8);
+        for sample in 0..8 {
+            let before = plane
+                .native_scheduler_telemetry()
+                .get("processedQuanta")
+                .and_then(Value::as_u64)
+                .unwrap_or(0);
+            let started = std::time::Instant::now();
+            let response = plane
+                .dispatch_privacy_mute(Some(json!({
+                    "muted": true,
+                    "idempotencyKey": format!("guarded-live-privacy-sample-{sample}"),
+                })))
+                .unwrap();
+            assert_eq!(response["muted"], true);
+            let deadline = started + std::time::Duration::from_millis(100);
+            let mut observed = false;
+            while std::time::Instant::now() < deadline {
+                let pump = plane
+                    .pump_native_endpoint_worker_with_bound_taps(&owned.id, generation, 64)
+                    .unwrap();
+                if pump["processedQuanta"].as_u64().unwrap_or(0) > 0 {
+                    observed = true;
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            assert!(observed, "privacy mute did not reach a processed block");
+            let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
+            mute_dispatch_to_processed_block.push(elapsed_ms);
+            let response = plane
+                .dispatch_privacy_mute(Some(json!({
+                    "muted": false,
+                    "idempotencyKey": format!("guarded-live-privacy-clear-{sample}"),
+                })))
+                .unwrap();
+            assert_eq!(response["muted"], false);
+            assert!(
+                plane
+                    .native_scheduler_telemetry()
+                    .get("processedQuanta")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0)
+                    >= before
+            );
+        }
+        mute_dispatch_to_processed_block.sort_by(f64::total_cmp);
+        let p95_index = (mute_dispatch_to_processed_block.len() * 95).div_ceil(100) - 1;
+        let p95_ms = mute_dispatch_to_processed_block[p95_index];
+        assert!(
+            p95_ms <= 100.0,
+            "privacy mute dispatch-to-processed p95 exceeded 100 ms: {p95_ms:.3} ms"
+        );
+        eprintln!("guarded_native_privacy_mute_dispatch_to_processed_p95_ms={p95_ms:.3}");
+        let privacy_disabled = plane
+            .dispatch_privacy_mute(Some(json!({
+                "muted": false,
+                "idempotencyKey": "guarded-live-privacy-disable"
+            })))
+            .unwrap();
+        assert_eq!(privacy_disabled["muted"], false);
+        assert_eq!(
+            plane.status_snapshot().unwrap()["privacyMute"]["muted"],
+            false
         );
         let stopped = plane.session_stop(&owned.id).unwrap();
         assert_eq!(stopped["runtime"], "native");
@@ -13885,6 +16532,9 @@ mod tests {
             plane.native_endpoint_lifecycle_telemetry()["successfulStops"],
             1
         );
+        if !fanout_endpoint_ids.is_empty() {
+            plane.detach_native_output_fanout().unwrap();
+        }
         plane
             .rebind_native_endpoint_worker(&owned.id, &capture_id, &render_id, 0, 3, 100)
             .unwrap();
@@ -13899,6 +16549,347 @@ mod tests {
             plane.native_endpoint_lifecycle_telemetry()["successfulStops"],
             2
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "requires explicit live endpoint IDs and AUDIOROUTER_ALLOW_LIVE_AUDIO=1"]
+    fn guarded_live_test_signal_reaches_destination_meter() {
+        if std::env::var("AUDIOROUTER_ALLOW_LIVE_AUDIO").as_deref() != Ok("1") {
+            return;
+        }
+        let capture_id = std::env::var("AUDIOROUTER_CAPTURE_ENDPOINT_ID")
+            .expect("AUDIOROUTER_CAPTURE_ENDPOINT_ID is required");
+        let render_id = std::env::var("AUDIOROUTER_RENDER_ENDPOINT_ID")
+            .expect("AUDIOROUTER_RENDER_ENDPOINT_ID is required");
+        let endpoints = audiorouter_windows_audio::enumerate_active_endpoints().unwrap();
+        let capture = endpoints
+            .iter()
+            .find(|endpoint| {
+                endpoint.id == capture_id
+                    && endpoint.direction == audiorouter_windows_audio::EndpointDirection::Capture
+            })
+            .expect("configured capture endpoint is not an active exact match")
+            .clone();
+        let render = endpoints
+            .iter()
+            .find(|endpoint| {
+                endpoint.id == render_id
+                    && endpoint.direction == audiorouter_windows_audio::EndpointDirection::Render
+            })
+            .expect("configured render endpoint is not an active exact match")
+            .clone();
+
+        let session_id = EntityId::new("guarded-live-test-signal");
+        let mut owned = session();
+        owned.id = session_id.clone();
+        owned.nodes = vec![
+            Node {
+                id: EntityId::new("test-signal"),
+                kind: NodeKind::TestSignal,
+                type_version: 1,
+                name: "Test Signal".into(),
+                enabled: true,
+                bypass: false,
+                parameters: [
+                    ("frequencyHz".into(), json!(440.0)),
+                    ("levelDb".into(), json!(-18.0)),
+                    ("durationMs".into(), json!(600_000.0)),
+                ]
+                .into_iter()
+                .collect(),
+                ports: vec![Port {
+                    name: "main".into(),
+                    direction: PortDirection::Output,
+                    channels: 2,
+                }],
+            },
+            Node {
+                id: EntityId::new("out"),
+                kind: NodeKind::PhysicalOutput,
+                type_version: 1,
+                name: "Destination".into(),
+                enabled: true,
+                bypass: false,
+                parameters: Default::default(),
+                ports: vec![Port {
+                    name: "main".into(),
+                    direction: PortDirection::Input,
+                    channels: 2,
+                }],
+            },
+        ];
+        owned.edges = vec![Edge {
+            id: EntityId::new("edge-test-signal-output"),
+            source_node: EntityId::new("test-signal"),
+            source_port: "main".into(),
+            destination_node: EntityId::new("out"),
+            destination_port: "main".into(),
+            matrix: vec![1.0, 0.0, 0.0, 1.0],
+            enabled: true,
+        }];
+
+        let mut plane = ControlPlane::default();
+        let mut initial = session();
+        initial.id = session_id.clone();
+        plane.insert_session(initial).unwrap();
+        let plan_id = plane.plan_graph(&session_id, 0, owned).unwrap();
+        let committed = plane
+            .commit_graph(&plan_id, 0, "guarded-test-signal")
+            .unwrap();
+        assert_eq!(committed["revision"], 1);
+        plane
+            .prepare_native_endpoint_worker(session_id.clone(), &capture, &render, 0, 3, 100)
+            .unwrap();
+        let started = plane.session_start(&session_id).unwrap();
+        let generation = started["generation"].as_u64().unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
+        let mut processed_quanta = 0_u64;
+        while std::time::Instant::now() < deadline {
+            let pump = plane
+                .pump_native_endpoint_worker_with_bound_taps(&session_id, generation, 64)
+                .unwrap();
+            processed_quanta =
+                processed_quanta.saturating_add(pump["processedQuanta"].as_u64().unwrap_or(0));
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(
+            processed_quanta > 0,
+            "Test Signal graph did not process quanta"
+        );
+        let telemetry = plane.native_node_telemetry();
+        let destination = telemetry
+            .as_array()
+            .and_then(|nodes| nodes.iter().find(|node| node["nodeId"] == "out"))
+            .expect("destination node telemetry is missing");
+        assert!(
+            destination["meter"]["peakDb"].as_f64().unwrap_or(-120.0) > -120.0,
+            "destination meter remained at the finite silence floor: {destination}"
+        );
+        eprintln!(
+            "guarded_test_signal_meter processed_quanta={} destination_peak_db={:.3}",
+            processed_quanta,
+            destination["meter"]["peakDb"].as_f64().unwrap_or(-120.0)
+        );
+        plane.session_stop(&session_id).unwrap();
+        plane.detach_native_endpoint_worker().unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "requires explicit multi-capture/render endpoint IDs and AUDIOROUTER_ALLOW_LIVE_AUDIO=1"]
+    fn guarded_live_native_multi_input_many_output_lifecycle() {
+        if std::env::var("AUDIOROUTER_ALLOW_LIVE_AUDIO").as_deref() != Ok("1") {
+            return;
+        }
+        let capture_ids = std::env::var("AUDIOROUTER_MULTI_CAPTURE_ENDPOINT_IDS")
+            .expect("AUDIOROUTER_MULTI_CAPTURE_ENDPOINT_IDS is required")
+            .split('|')
+            .filter(|id| !id.is_empty())
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        let render_ids = std::env::var("AUDIOROUTER_MULTI_RENDER_ENDPOINT_IDS")
+            .expect("AUDIOROUTER_MULTI_RENDER_ENDPOINT_IDS is required")
+            .split('|')
+            .filter(|id| !id.is_empty())
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        assert!(capture_ids.len() >= 2 && capture_ids.len() <= 8);
+        assert!(render_ids.len() >= 2 && render_ids.len() <= 8);
+        let endpoints = audiorouter_windows_audio::enumerate_active_endpoints().unwrap();
+        let captures = capture_ids
+            .iter()
+            .map(|id| {
+                endpoints
+                    .iter()
+                    .find(|endpoint| {
+                        endpoint.id == *id
+                            && endpoint.direction
+                                == audiorouter_windows_audio::EndpointDirection::Capture
+                    })
+                    .expect("configured capture endpoint is not an active exact match")
+                    .clone()
+            })
+            .collect::<Vec<_>>();
+        let _renders = render_ids
+            .iter()
+            .map(|id| {
+                endpoints
+                    .iter()
+                    .find(|endpoint| {
+                        endpoint.id == *id
+                            && endpoint.direction
+                                == audiorouter_windows_audio::EndpointDirection::Render
+                    })
+                    .expect("configured render endpoint is not an active exact match")
+                    .clone()
+            })
+            .collect::<Vec<_>>();
+        let mut plane = ControlPlane::default();
+        let session_id = EntityId::new("guarded-live-native-multi");
+        let owned = Session {
+            id: session_id.clone(),
+            name: "guarded multi-input many-output".into(),
+            schema_version: 1,
+            revision: 0,
+            nodes: vec![
+                Node {
+                    id: EntityId::new("input-a"),
+                    kind: NodeKind::PhysicalInput,
+                    type_version: 1,
+                    name: "Input A".into(),
+                    enabled: true,
+                    bypass: false,
+                    parameters: Default::default(),
+                    ports: vec![Port {
+                        name: "main".into(),
+                        direction: PortDirection::Output,
+                        channels: 2,
+                    }],
+                },
+                Node {
+                    id: EntityId::new("input-b"),
+                    kind: NodeKind::PhysicalInput,
+                    type_version: 1,
+                    name: "Input B".into(),
+                    enabled: true,
+                    bypass: false,
+                    parameters: Default::default(),
+                    ports: vec![Port {
+                        name: "main".into(),
+                        direction: PortDirection::Output,
+                        channels: 2,
+                    }],
+                },
+                Node {
+                    id: EntityId::new("mixer"),
+                    kind: NodeKind::Mixer,
+                    type_version: 1,
+                    name: "Mixer".into(),
+                    enabled: true,
+                    bypass: false,
+                    parameters: Default::default(),
+                    ports: vec![
+                        Port {
+                            name: "in".into(),
+                            direction: PortDirection::Input,
+                            channels: 2,
+                        },
+                        Port {
+                            name: "out".into(),
+                            direction: PortDirection::Output,
+                            channels: 2,
+                        },
+                    ],
+                },
+                Node {
+                    id: EntityId::new("output-a"),
+                    kind: NodeKind::PhysicalOutput,
+                    type_version: 1,
+                    name: "Output A".into(),
+                    enabled: true,
+                    bypass: false,
+                    parameters: Default::default(),
+                    ports: vec![Port {
+                        name: "main".into(),
+                        direction: PortDirection::Input,
+                        channels: 2,
+                    }],
+                },
+                Node {
+                    id: EntityId::new("output-b"),
+                    kind: NodeKind::PhysicalOutput,
+                    type_version: 1,
+                    name: "Output B".into(),
+                    enabled: true,
+                    bypass: false,
+                    parameters: Default::default(),
+                    ports: vec![Port {
+                        name: "main".into(),
+                        direction: PortDirection::Input,
+                        channels: 2,
+                    }],
+                },
+            ],
+            edges: vec![
+                Edge {
+                    id: EntityId::new("input-a-mixer"),
+                    source_node: EntityId::new("input-a"),
+                    source_port: "main".into(),
+                    destination_node: EntityId::new("mixer"),
+                    destination_port: "in".into(),
+                    matrix: vec![1.0, 0.0, 0.0, 1.0],
+                    enabled: true,
+                },
+                Edge {
+                    id: EntityId::new("input-b-mixer"),
+                    source_node: EntityId::new("input-b"),
+                    source_port: "main".into(),
+                    destination_node: EntityId::new("mixer"),
+                    destination_port: "in".into(),
+                    matrix: vec![1.0, 0.0, 0.0, 1.0],
+                    enabled: true,
+                },
+                Edge {
+                    id: EntityId::new("mixer-output-a"),
+                    source_node: EntityId::new("mixer"),
+                    source_port: "out".into(),
+                    destination_node: EntityId::new("output-a"),
+                    destination_port: "main".into(),
+                    matrix: vec![1.0, 0.0, 0.0, 1.0],
+                    enabled: true,
+                },
+                Edge {
+                    id: EntityId::new("mixer-output-b"),
+                    source_node: EntityId::new("mixer"),
+                    source_port: "out".into(),
+                    destination_node: EntityId::new("output-b"),
+                    destination_port: "main".into(),
+                    matrix: vec![1.0, 0.0, 0.0, 1.0],
+                    enabled: true,
+                },
+            ],
+        };
+        plane.insert_session(owned.clone()).unwrap();
+        plane
+            .prepare_native_multi_input_worker(session_id.clone(), 1, &captures, 0, 3, 100)
+            .unwrap();
+        plane
+            .prepare_native_output_fanout(session_id.clone(), 1, &render_ids)
+            .unwrap();
+        let started = plane.session_start(&session_id).unwrap();
+        let generation = started["generation"].as_u64().unwrap();
+        assert_eq!(generation, 1);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
+        let mut captured_frames = 0_u64;
+        let mut delivered_quanta = 0_u64;
+        let mut rendered_frames = 0_u64;
+        while std::time::Instant::now() < deadline {
+            let pump = plane
+                .pump_native_multi_input_worker(&session_id, generation, 64)
+                .unwrap();
+            captured_frames =
+                captured_frames.saturating_add(pump["capturedFrames"].as_u64().unwrap());
+            delivered_quanta =
+                delivered_quanta.saturating_add(pump["deliveredQuanta"].as_u64().unwrap());
+            rendered_frames =
+                rendered_frames.saturating_add(pump["renderedFrames"].as_u64().unwrap());
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(
+            captured_frames > 0,
+            "multi-input worker did not capture frames"
+        );
+        assert!(
+            delivered_quanta > 0,
+            "multi-input worker delivered no quanta"
+        );
+        assert!(rendered_frames > 0, "multi-input worker rendered no frames");
+        eprintln!(
+            "guarded_native_multi capture_frames={captured_frames} delivered_quanta={delivered_quanta} rendered_frames={rendered_frames}"
+        );
+        let stopped = plane.session_stop(&session_id).unwrap();
+        assert_eq!(stopped["state"], "stopped");
     }
 
     #[test]
@@ -14422,6 +17413,24 @@ mod tests {
             .unwrap()
             .iter()
             .any(|node| node["type"] == "physical-input@1"
+                && node["availability"]["status"] == "available"));
+        assert!(description["nodeTypes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|node| node["type"] == "application-capture@1"
+                && node["availability"]["status"] == "available"));
+        assert!(description["nodeTypes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|node| node["type"] == "endpoint-loopback@1"
+                && node["availability"]["status"] == "available"));
+        assert!(description["nodeTypes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|node| node["type"] == "virtual-render-source@1"
                 && node["availability"]["status"] == "unavailable"));
         assert_eq!(description["processors"].as_array().unwrap().len(), 7);
         assert_eq!(
@@ -15510,6 +18519,13 @@ mod tests {
             )
         );
         assert_eq!(
+            ControlPlane::audio_status_for("running", Some("multi-input")),
+            (
+                "available",
+                "native multi-input worker is running; production driver qualification remains open"
+            )
+        );
+        assert_eq!(
             ControlPlane::audio_status_for("unknown", None),
             (
                 "unavailable",
@@ -15643,6 +18659,44 @@ mod tests {
             plane.status_snapshot().unwrap()["activeSessionIds"],
             json!([])
         );
+    }
+
+    #[test]
+    fn os_transition_idempotency_replays_and_rejects_key_reuse() {
+        let mut plane = ControlPlane::default();
+        let mut value = session();
+        value.id = EntityId::new("idempotent-os-transition");
+        let session_id = value.id.clone();
+        plane.insert_session(value).unwrap();
+        plane.session_start(&session_id).unwrap();
+
+        let request = |transition: &str| JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(transition)),
+            method: "system.osTransition".into(),
+            params: Some(json!({
+                "transition": transition,
+                "idempotencyKey": "os-transition-replay"
+            })),
+        };
+        let first = plane.dispatch(request("sleep"));
+        let first_result = first.result.clone().expect("initial transition succeeds");
+        let replay = plane.dispatch(request("sleep"));
+        assert_eq!(replay.result, Some(first_result));
+        assert_eq!(
+            plane.status_snapshot().unwrap()["activeSessionIds"],
+            json!([])
+        );
+
+        let conflict = plane.dispatch(request("resume"));
+        assert_eq!(
+            conflict.error.as_ref().map(|error| error.code),
+            Some(-32602)
+        );
+        assert!(conflict
+            .error
+            .as_ref()
+            .is_some_and(|error| error.message.contains("idempotency")));
     }
 
     #[test]
@@ -19112,21 +22166,30 @@ mod tests {
         let mut plane = ControlPlane::default();
         let first_bus = EntityId::new("route-bus-1");
         let second_bus = EntityId::new("route-bus-2");
+        let third_bus = EntityId::new("route-bus-3");
         plane
             .create_virtual_bus(first_bus.clone(), "First")
             .unwrap();
         plane
             .create_virtual_bus(second_bus.clone(), "Second")
             .unwrap();
+        plane
+            .create_virtual_bus(third_bus.clone(), "Third")
+            .unwrap();
         let routes = VirtualBusRouteRegistry::new(vec![
             audiorouter_domain::VirtualBusRoute {
-                bus_id: first_bus,
+                bus_id: first_bus.clone(),
                 producer_session_id: EntityId::new("producer"),
                 consumer_session_id: EntityId::new("consumer"),
             },
             audiorouter_domain::VirtualBusRoute {
-                bus_id: second_bus,
+                bus_id: second_bus.clone(),
                 producer_session_id: EntityId::new("other-producer"),
+                consumer_session_id: EntityId::new("consumer"),
+            },
+            audiorouter_domain::VirtualBusRoute {
+                bus_id: third_bus.clone(),
+                producer_session_id: EntityId::new("producer"),
                 consumer_session_id: EntityId::new("consumer"),
             },
         ])
@@ -19137,11 +22200,34 @@ mod tests {
             .virtual_route_tap_set(&EntityId::new("producer"), &[], 1)
             .unwrap()
             .is_empty());
+        plane
+            .virtual_bridges
+            .get(&first_bus)
+            .unwrap()
+            .activate(1)
+            .unwrap();
+        plane
+            .virtual_bridges
+            .get(&third_bus)
+            .unwrap()
+            .activate(1)
+            .unwrap();
         assert_eq!(
             plane
                 .virtual_route_tap_set(
                     &EntityId::new("producer"),
-                    &[EntityId::new("route-bus-1")],
+                    &[first_bus.clone(), third_bus.clone()],
+                    1,
+                )
+                .unwrap()
+                .len(),
+            2
+        );
+        assert_eq!(
+            plane
+                .virtual_route_tap_set(
+                    &EntityId::new("producer"),
+                    std::slice::from_ref(&first_bus),
                     1,
                 )
                 .unwrap()
@@ -19151,7 +22237,7 @@ mod tests {
         assert!(plane
             .virtual_route_tap_set(
                 &EntityId::new("producer"),
-                &[EntityId::new("route-bus-2")],
+                std::slice::from_ref(&second_bus),
                 1,
             )
             .unwrap()
@@ -19426,6 +22512,29 @@ mod tests {
     }
 
     #[test]
+    fn native_bridge_preparation_requires_device_administration_before_parameters() {
+        let mut plane = ControlPlane::default();
+        let response = plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(96)),
+                method: "nativeBridges.prepare".into(),
+                params: Some(json!({
+                    "busId": "bus-guard",
+                    "generation": 1,
+                    "devicePath": "\\\\.\\AudioRouterVirtualBridge",
+                    "renderMappingPath": "C:\\render.slot",
+                    "captureMappingPath": "C:\\capture.slot",
+                })),
+            },
+            &ClientGrant::for_role(ClientRole::Operator),
+        );
+        assert_eq!(response.error.unwrap().code, -32001);
+        assert!(plane.native_duplex_bindings.is_empty());
+        assert!(plane.native_duplex_worker.is_none());
+    }
+
+    #[test]
     fn native_endpoint_detachment_requires_device_administration_and_exact_binding() {
         let mut plane = ControlPlane::default();
         let response = plane.dispatch_authorized(
@@ -19545,6 +22654,41 @@ mod tests {
                 json!(audiorouter_windows_audio::MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE)
             );
         }
+    }
+
+    #[test]
+    fn native_render_source_pump_requires_session_control_before_parameters() {
+        let mut plane = ControlPlane::default();
+        let response = plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(93)),
+                method: "nativeRenderSources.pump".into(),
+                params: None,
+            },
+            &ClientGrant::read_only(),
+        );
+        assert_eq!(response.error.unwrap().code, -32001);
+        assert_eq!(plane.native_endpoint_rejections, 0);
+    }
+
+    #[test]
+    fn native_render_source_pump_input_schema_bounds_quanta_budget() {
+        let description = ControlPlane::default().describe();
+        let method = description["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|method| method["name"] == "nativeRenderSources.pump")
+            .unwrap();
+        assert_eq!(
+            method["inputSchema"]["properties"]["maxQuanta"]["maximum"],
+            json!(audiorouter_windows_audio::MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE)
+        );
+        assert_eq!(
+            method["inputSchema"]["required"],
+            json!(["sessionId", "generation"])
+        );
     }
 
     #[test]

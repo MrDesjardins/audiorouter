@@ -2,8 +2,10 @@
 
 AudioRouter is designed for local, offline operation. The current repository
 does not upload audio, send recordings to an LLM, expose an HTTP control
-listener, or change Windows privacy settings. Native audio routing is still an
-unavailable capability in this development snapshot.
+listener, or change Windows privacy settings. Guarded Windows user-mode audio
+routing through explicitly selected existing VB-Cable, Voicemeeter, and
+physical WASAPI endpoints is qualified; AudioRouter-managed virtual-device
+provisioning remains unavailable.
 
 ## What is protected
 
@@ -48,9 +50,10 @@ itself.
 
 The process-local privacy latch silences physical-capture contributions inside
 AudioRouter and remains durable across the tested control restart path. It does
-not disable another Windows application's direct microphone access. Because
-the native graph is not yet active, the current build must report audio as
-unavailable rather than imply that the latch controls all system capture.
+not disable another Windows application's direct microphone access. Existing
+user-mode native routes must report their exact endpoint/process binding and
+fail closed when preparation or identity validation fails; managed driver
+endpoints remain unavailable and must not be represented as healthy zeros.
 
 Do not grant capture or recording scope to an automation client unless its
 requested action and approved file roots are understood. Review the concrete

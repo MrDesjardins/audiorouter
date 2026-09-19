@@ -54,6 +54,15 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- 2026-09-17 - Bounded multi-input pumps must retain unread packet slices.
+  Evidence: [M02 packet backpressure requalification](docs/plans/active/evidence/M02-audio-engine.md).
+  Scope: existing-device WASAPI multi-input routing. Consequence: drain
+  complete quanta between packet chunks and preserve the unread slice across
+  bounded pumps when an input ring is temporarily full; never classify that
+  pacing condition as a buffer overflow or overwrite the packet.
+
+- 2026-09-17 - Elevated live qualification and ownership diagnostics matter. Evidence: [M02 audio evidence](docs/plans/active/evidence/M02-audio-engine.md). Scope: existing-device Windows shared-mode lifecycle/rebind qualification. Consequence: run media-state snapshots in an elevated context when the host denies PnP inventory access, and preserve `AUDCLNT_E_DEVICE_IN_USE` from an occupied existing endpoint as a distinct retry/ownership diagnostic rather than masking it as a routing or format success.
+
 - 2026-09-11 - Check backup parents separately from the destination. Evidence:
   [storage backup regression](crates/storage/src/lib.rs). Scope: Windows
   SQLite backup destination validation. Consequence: reparse-ancestor checks

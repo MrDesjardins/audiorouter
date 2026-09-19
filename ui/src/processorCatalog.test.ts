@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { DiscoveryDocument } from "@audiorouter/contracts";
 import { processorAvailabilityText, processorLatencyText, processorParameterError, processorParametersText, type ProcessorDescriptor } from "./processorCatalog";
 
 const pitch: ProcessorDescriptor = {
@@ -41,5 +42,17 @@ describe("processor catalog presentation", () => {
     expect(processorParameterError([descriptor], "pitch", "semitones", 12)).toBeNull();
     expect(processorParameterError([descriptor], "pitch", "semitones", Number.NaN)).toContain("finite");
     expect(processorParameterError([descriptor], "pitch", "unknown", 1)).toBeNull();
+  });
+
+  it("uses the discovered node catalog for source parameters", () => {
+    const nodeType: DiscoveryDocument["nodeTypes"][number] = {
+      type: "testSignal@1",
+      availability: { status: "available" },
+      realtimeCostClass: "low",
+      latencySamples: 0,
+      parameters: [{ name: "frequencyHz", type: "number", unit: "Hz", minimum: 20, maximum: 20_000, default: 440 }],
+    };
+    expect(processorParameterError(null, "testSignal", "frequencyHz", 440, [nodeType])).toBeNull();
+    expect(processorParameterError(null, "testSignal", "frequencyHz", 1, [nodeType])).toContain("at least 20");
   });
 });

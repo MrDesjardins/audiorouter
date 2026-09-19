@@ -1133,6 +1133,51 @@ impl Storage {
         Ok(())
     }
 
+    /// Restore a virtual-bus snapshot and remove the external-operation
+    /// journal row as one transaction. This is used when a native operation
+    /// fails after its durable completion record was committed, so a retry
+    /// cannot observe a completed operation whose native owner was not
+    /// actually changed.
+    pub fn rollback_virtual_buses_external_journal(
+        &self,
+        registry: &VirtualBusRegistry,
+        idempotency_key: &str,
+        request_hash: &str,
+    ) -> Result<(), StorageError> {
+        validate_idempotency_key(idempotency_key)?;
+        validate_request_hash(request_hash)?;
+        let snapshots = registry.snapshots();
+        if snapshots.len() > audiorouter_domain::MAX_VIRTUAL_BUSES {
+            return Err(StorageError::InvalidSession(
+                "too many virtual buses".into(),
+            ));
+        }
+        let transaction = self.connection.unchecked_transaction()?;
+        let deleted = transaction.execute(
+            "DELETE FROM operation_journal WHERE idempotency_key = ?1 AND request_hash = ?2",
+            params![idempotency_key, request_hash],
+        )?;
+        if deleted != 1 {
+            return Err(StorageError::InvalidJournal(
+                "external operation journal row was not found during rollback".into(),
+            ));
+        }
+        transaction.execute("DELETE FROM virtual_buses", [])?;
+        for snapshot in snapshots {
+            transaction.execute(
+                "INSERT INTO virtual_buses(id, name, enabled, driver_instance_id) VALUES (?1, ?2, ?3, ?4)",
+                params![
+                    snapshot.id.as_str(),
+                    snapshot.name,
+                    i64::from(snapshot.enabled),
+                    snapshot.driver_instance_id
+                ],
+            )?;
+        }
+        transaction.commit()?;
+        Ok(())
+    }
+
     pub fn load_virtual_buses(&self) -> Result<VirtualBusRegistry, StorageError> {
         let mut statement = self
             .connection
@@ -4057,6 +4102,30 @@ mod tests {
             )
             .is_err());
         assert_eq!(storage.load_virtual_buses().unwrap().list().len(), 1);
+    }
+
+    #[test]
+    fn external_virtual_bus_journal_rollback_restores_snapshot_and_removes_result() {
+        let storage = Storage::open_memory().unwrap();
+        let mut committed = VirtualBusRegistry::default();
+        committed.create(EntityId::new("bus"), "Bus").unwrap();
+        storage
+            .save_virtual_buses_and_external_journal(
+                &committed,
+                "virtualDevices.remove",
+                "rollback-key",
+                "request-hash",
+                &serde_json::json!({ "state": "completed" }),
+            )
+            .unwrap();
+
+        let restored = VirtualBusRegistry::default();
+        storage
+            .rollback_virtual_buses_external_journal(&restored, "rollback-key", "request-hash")
+            .unwrap();
+
+        assert!(storage.load_virtual_buses().unwrap().list().is_empty());
+        assert!(storage.journal_result("rollback-key").unwrap().is_none());
     }
 
     #[test]
