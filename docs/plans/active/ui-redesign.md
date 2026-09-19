@@ -122,3 +122,8 @@ The first live refresh exposed a compatibility defect: the UI sent the
 optional `includeInactive` field, but the active backend schema rejects that
 field. The UI adapter now uses the accepted paged `devices.list` request with
 no extra parameter; the focused backend adapter tests pass.
+
+The live inventory confirmed active render endpoints, including the Focusrite
+speakers. The inspector now exposes the same exact render binding when a
+physical-output node is selected, rather than requiring the separate endpoint
+panel.
