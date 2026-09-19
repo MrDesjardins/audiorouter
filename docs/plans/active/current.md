@@ -1078,3 +1078,13 @@ all pass. Native post-fix drag verification remains open because the
 computer-use RPC surface became unavailable after the rebuilt shell was
 launched; do not count this change as attended drag evidence until the user or
 an available native surface confirms a node appears after dragging.
+
+The 2026-09-18 UI redesign slice is tracked in
+[the active redesign plan](ui-redesign.md) and commit `d3b2dbdf`. It adds an
+Ambient-inspired shared lighting treatment, Audio Hijack-inspired compact
+source/processor/output cards, inline bounded meters, an interactive
+eight-band EQ preview, and telemetry-driven active edge animation. The UI
+suite now passes 263 tests, typecheck, production build, and M05 acceptance.
+Native-shell visual inspection at 1280×720/maximized remains open because the
+attended computer-use surface is unavailable; do not treat the automated build
+as visual acceptance.
