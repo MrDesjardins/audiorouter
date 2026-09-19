@@ -141,3 +141,12 @@ The next visual pass aligns the canvas and inspector tops, replaces native
 checkboxes with compact toggle controls, applies explicit control contrast,
 moves layout actions outside the graph surface, removes the minimap, and makes
 the library palette scroll within short canvases.
+
+The 2026-09-18 component review removes the remaining raised/3D treatment from
+inspector text, numeric, and select controls, gives node-name and EQ values a
+full-width readable surface, and keeps dark/light theme contrast explicit.
+EQ band dragging now owns pointer state, captures the pointer on the SVG, and
+uses React Flow's `nodrag`/`nopan` affordances so a band gesture is not
+interpreted as moving the entire node. Keyboard band adjustment remains
+available. Native visual confirmation is still pending because the attended
+desktop surface inventory is empty.

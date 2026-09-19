@@ -2,7 +2,6 @@ import {
   Background,
   Controls,
   Handle,
-  MiniMap,
   Position,
   ReactFlow,
   type Connection,
@@ -134,6 +133,7 @@ export function telemetrySignalActive(telemetry: ReturnType<typeof nodeTelemetry
 
 function MiniEq({ node, onSetNodeParameter }: { node: Node; onSetNodeParameter?: SessionFlowCanvasProps["onSetNodeParameter"] }) {
   const bands = eqBandsFor(node);
+  const [dragBandIndex, setDragBandIndex] = useState<number | null>(null);
   const updateBand = (band: EqBand, event: PointerEvent<SVGSVGElement>) => {
     if (!onSetNodeParameter) return;
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -144,11 +144,11 @@ function MiniEq({ node, onSetNodeParameter }: { node: Node; onSetNodeParameter?:
     onSetNodeParameter(node.id, `band${band.index}FrequencyHz`, Math.round(frequencyHz));
     onSetNodeParameter(node.id, `band${band.index}GainDb`, Number(gainDb.toFixed(1)));
   };
-  return <div className="node-eq" aria-label="Equalizer response preview">
-    <svg viewBox="0 0 200 88" role="img" aria-label="Parametric EQ curve" onPointerMove={(event) => { const rawIndex = event.currentTarget.dataset.dragBand; if (!rawIndex) return; const index = Number(rawIndex); if (Number.isInteger(index) && index >= 0 && bands[index]) updateBand(bands[index], event); }} onPointerUp={(event) => { event.currentTarget.dataset.dragBand = ""; }}>
+  return <div className="node-eq nodrag nopan" aria-label="Equalizer response preview">
+    <svg className="nodrag nopan" viewBox="0 0 200 88" role="img" aria-label="Parametric EQ curve" onPointerMove={(event) => { if (dragBandIndex !== null && bands[dragBandIndex]) updateBand(bands[dragBandIndex], event); }} onPointerUp={(event) => { setDragBandIndex(null); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} onPointerCancel={(event) => { setDragBandIndex(null); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }}>
       <path className="eq-grid" d="M8 14H192M8 44H192M8 74H192M8 8V80M69 8V80M130 8V80M192 8V80" />
       <path className="eq-curve" d={bands.length ? `M8 44 ${bands.map((band) => `L ${eqX(band.frequencyHz).toFixed(1)} ${eqY(band.gainDb).toFixed(1)}`).join(" ")} L192 44` : "M8 44H192"} />
-      {bands.map((band) => <circle key={band.index} className="eq-band" cx={eqX(band.frequencyHz)} cy={eqY(band.gainDb)} r="4" tabIndex={0} role="slider" aria-valuemin={-12} aria-valuemax={12} aria-valuenow={band.gainDb} aria-label={`Band ${band.index + 1}, ${band.frequencyHz} Hz, ${band.gainDb} dB`} onKeyDown={(event) => { if (!onSetNodeParameter) return; const gainStep = event.key === "ArrowUp" ? 0.5 : event.key === "ArrowDown" ? -0.5 : 0; const frequencyStep = event.key === "ArrowRight" ? 1.08 : event.key === "ArrowLeft" ? 1 / 1.08 : 1; if (gainStep !== 0 || frequencyStep !== 1) { event.preventDefault(); if (gainStep !== 0) onSetNodeParameter(node.id, `band${band.index}GainDb`, Number(clamp(band.gainDb + gainStep, -12, 12).toFixed(1))); if (frequencyStep !== 1) onSetNodeParameter(node.id, `band${band.index}FrequencyHz`, Math.round(clamp(band.frequencyHz * frequencyStep, 20, 20_000))); } }} onPointerDown={(event) => { event.stopPropagation(); event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId); event.currentTarget.ownerSVGElement?.dataset && (event.currentTarget.ownerSVGElement.dataset.dragBand = String(band.index)); }} />)}
+      {bands.map((band) => <circle key={band.index} className="eq-band nodrag nopan" cx={eqX(band.frequencyHz)} cy={eqY(band.gainDb)} r="4" tabIndex={0} role="slider" aria-valuemin={-12} aria-valuemax={12} aria-valuenow={band.gainDb} aria-label={`Band ${band.index + 1}, ${band.frequencyHz} Hz, ${band.gainDb} dB`} onKeyDown={(event) => { if (!onSetNodeParameter) return; const gainStep = event.key === "ArrowUp" ? 0.5 : event.key === "ArrowDown" ? -0.5 : 0; const frequencyStep = event.key === "ArrowRight" ? 1.08 : event.key === "ArrowLeft" ? 1 / 1.08 : 1; if (gainStep !== 0 || frequencyStep !== 1) { event.preventDefault(); if (gainStep !== 0) onSetNodeParameter(node.id, `band${band.index}GainDb`, Number(clamp(band.gainDb + gainStep, -12, 12).toFixed(1))); if (frequencyStep !== 1) onSetNodeParameter(node.id, `band${band.index}FrequencyHz`, Math.round(clamp(band.frequencyHz * frequencyStep, 20, 20_000))); } }} onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); setDragBandIndex(bands.findIndex((candidate) => candidate.index === band.index)); event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId); }} />)}
     </svg>
     <div className="node-eq-scale"><span>20 Hz</span><span>1 kHz</span><span>20 kHz</span></div>
   </div>;
