@@ -946,6 +946,11 @@ artifacts were prepared and verified, and disposable outputs were removed.
 This closes unsigned artifact preparation only; signing, installer execution,
 clean-machine, managed-driver, and publication gates remain open.
 
+The active `tests/acceptance/safe-all.ps1` harness was narrowed to this
+VB-Cable-first track: deferred M03 driver-build, ARM64-driver, signing,
+Software Device API, and SysVAD steps remain available as separate future
+track scripts but are no longer run as active completion gates.
+
 The clean-commit guarded M05 Test Signal acceptance then passed against exact
 CABLE Output capture and CABLE Input render endpoints: 187 processed quanta,
 destination peak `-18.000 dB`, and successful plan/commit, start, meter,

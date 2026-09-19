@@ -6,12 +6,7 @@ $acceptanceRoot = Join-Path $repositoryRoot 'tests\acceptance'
 $steps = @(
     @{ Name = 'M00 toolchain compatibility'; Script = Join-Path $acceptanceRoot 'm00-toolchain.ps1' },
     @{ Name = 'M00 native compile'; Script = Join-Path $acceptanceRoot 'm00-native-build.ps1' },
-    @{ Name = 'M03 AudioRouter driver build'; Script = Join-Path $acceptanceRoot 'm03-driver-build.ps1' },
-    @{ Name = 'M03 AudioRouter ARM64 driver build'; Script = Join-Path $acceptanceRoot 'm03-driver-build.ps1'; Platform = 'ARM64' },
-    @{ Name = 'M03 signing prerequisites'; Script = Join-Path $acceptanceRoot 'm03-signing-prerequisites.ps1' },
-    @{ Name = 'M03 Software Device API probe'; Script = Join-Path $acceptanceRoot 'm03-swdevice-probe.ps1' },
     @{ Name = 'M00 native format inventory'; Script = Join-Path $acceptanceRoot 'm00-native-format-inventory.ps1' },
-    @{ Name = 'M00 pinned SysVAD qualification'; Script = Join-Path $repositoryRoot 'tools\m00-sysvad\qualify.ps1' },
     @{ Name = 'M01 CLI'; Script = Join-Path $acceptanceRoot 'm01-cli.ps1' },
     @{ Name = 'M03 virtual-bus CLI'; Script = Join-Path $acceptanceRoot 'm03-virtual-buses.ps1' },
     @{ Name = 'M04 DSP and recording'; Script = Join-Path $acceptanceRoot 'm04-dsp-recording.ps1' },
@@ -54,7 +49,7 @@ try {
     }
 
     Write-Output 'Safe acceptance chain passed.'
-    Write-Output 'Scope: compile/portable/SDK/reference-driver and frontend-owned shell transport qualification only; live audio, driver installation, signing-mode changes, plugin registration, startup registration, and machine audio configuration are excluded.'
+    Write-Output 'Scope: active VB-Cable-first compile/portable/SDK/plugin/frontend-owned shell qualification only; the deferred driver/signing/SysVAD track is excluded, as are live audio, driver installation, signing-mode changes, plugin registration, startup registration, and machine audio configuration.'
 } finally {
     $newTempChildren = @(Get-ChildItem -LiteralPath $tempRoot -Force | Where-Object {
         $_.Name.StartsWith('audiorouter-', [StringComparison]::OrdinalIgnoreCase) -and
