@@ -1410,6 +1410,7 @@ describe("keyboard connection dialog", () => {
     fireEvent.change(within(dialog).getByRole("combobox", { name: "Keyboard destination input port" }), { target: { value: "voice::in" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add connection to draft" }));
 
+    fireEvent.click(screen.getByRole("button", { name: "List view" }));
     fireEvent.click(screen.getAllByRole("button", { name: /Insert mixer on/ })[0]);
     expect(screen.getByText("Mixer inserted into the draft. Review and plan the changes before committing.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Remove and reconnect Mixer 1" }));
@@ -1424,6 +1425,7 @@ describe("keyboard connection dialog", () => {
     fireEvent.change(within(dialog).getByRole("combobox", { name: "Keyboard destination input port" }), { target: { value: "voice::in" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add connection to draft" }));
 
+    fireEvent.click(screen.getByRole("button", { name: "List view" }));
     fireEvent.click(screen.getByRole("button", { name: "Insert Gate" }));
     expect(screen.getByText("Gate 1 inserted into the draft. Review and plan the changes before committing.")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Gate 1" })).toBeTruthy();

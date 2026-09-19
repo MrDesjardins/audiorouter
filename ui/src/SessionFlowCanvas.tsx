@@ -1,11 +1,15 @@
 import {
   Background,
+  BaseEdge,
   Controls,
+  EdgeLabelRenderer,
+  getBezierPath,
   Handle,
   Position,
   ReactFlow,
   type Connection,
   type Edge as FlowEdge,
+  type EdgeProps,
   type Node as FlowNode,
   type ReactFlowInstance,
 } from "@xyflow/react";
@@ -16,6 +20,7 @@ import { clearLayout, readLayout, writeLayout, type LayoutPositions } from "./la
 import { nodePortLabels, relatedNodeIds } from "./graphView";
 import { libraryEntries } from "./library";
 import type { LibraryNodeKind } from "./draft";
+import { PROCESSOR_ACTIONS } from "./DraftConnectionList";
 
 export const LIBRARY_DROP_SOURCE = "__audiorouter_library_drop__";
 export const LIBRARY_DROP_MIME = "application/x-audiorouter-library-kind";
@@ -29,6 +34,8 @@ type SessionFlowCanvasProps = {
   onSelectMany?: (ids: string[]) => void;
   onConnect: (connection: Connection, dropPosition?: { x: number; y: number }) => string | void;
   onRemoveConnection?: (edgeId: string) => void;
+  onToggleConnection?: (edgeId: string, enabled: boolean) => void;
+  onInsertProcessor?: (edgeId: string, kind: import("./draft").InsertableProcessorKind) => void;
   onRemoveNode?: (nodeId: string) => void;
   onAddLibraryNode?: (kind: LibraryNodeKind, position: { x: number; y: number }) => string | void;
   onAddVirtualBusNode?: (direction: "renderSource" | "captureSink", position: { x: number; y: number }) => string | void;
@@ -54,6 +61,27 @@ function positionFor(index: number) {
     y: Math.floor(index / columns) * 150,
   };
 }
+
+function AudioEdgeActions({ id, sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition, data, style }: EdgeProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [path] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
+  const labelX = (sourceX + targetX) / 2;
+  const labelY = (sourceY + targetY) / 2;
+  const edgeData = data as { enabled?: boolean; active?: boolean; onToggle?: SessionFlowCanvasProps["onToggleConnection"]; onRemove?: SessionFlowCanvasProps["onRemoveConnection"]; onInsert?: SessionFlowCanvasProps["onInsertProcessor"]; canEdit?: boolean } | undefined;
+  return <>
+    <BaseEdge path={path} style={style} className={edgeData?.active ? "flow-edge-active" : undefined} />
+    <EdgeLabelRenderer>
+      <div className="edge-action-bar nodrag nopan" style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }} onPointerDown={(event) => event.stopPropagation()}>
+        <button type="button" className="edge-action-icon" disabled={!edgeData?.canEdit} aria-label={edgeData?.enabled ? `Disable connection ${id}` : `Enable connection ${id}`} title={edgeData?.enabled ? "Disable connection" : "Enable connection"} onClick={() => edgeData?.onToggle?.(id, !edgeData.enabled)}>{edgeData?.enabled ? "Ⅱ" : "▶"}</button>
+        <button type="button" className="edge-action-icon edge-action-remove" disabled={!edgeData?.canEdit} aria-label={`Remove connection ${id}`} title="Remove connection" onClick={() => edgeData?.onRemove?.(id)}>×</button>
+        <button type="button" className="edge-action-icon" disabled={!edgeData?.canEdit} aria-label={`Add processor to connection ${id}`} title="Add processor" onClick={() => setMenuOpen((open) => !open)}>＋</button>
+        {menuOpen && <div className="edge-insert-menu" role="menu" aria-label={`Add processor to connection ${id}`}>{PROCESSOR_ACTIONS.map((processor) => <button key={processor.kind} type="button" role="menuitem" onClick={() => { edgeData?.onInsert?.(id, processor.kind); setMenuOpen(false); }}>{processor.label}</button>)}</div>}
+      </div>
+    </EdgeLabelRenderer>
+  </>;
+}
+
+const edgeTypes = { audioActions: AudioEdgeActions };
 
 export function libraryDropPosition(clientX: number, clientY: number, bounds: Pick<DOMRect, "left" | "top">): { x: number; y: number } {
   const safeX = Number.isFinite(clientX) ? clientX : bounds.left;
@@ -102,6 +130,17 @@ function MiniMeter({ telemetry }: { telemetry: ReturnType<typeof nodeTelemetryFo
 type EqBand = { index: number; enabled: boolean; frequencyHz: number; gainDb: number; q: number; type: string };
 
 function eqBandsFor(node: Node): EqBand[] {
+  if (node.kind === "graphicEq") {
+    const frequencies = [31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16_000];
+    return frequencies.map((frequencyHz, index) => ({
+      index,
+      enabled: true,
+      frequencyHz,
+      gainDb: Number(node.parameters[`band${index}Db`] ?? 0),
+      q: 1,
+      type: "graphic",
+    }));
+  }
   return Array.from({ length: 8 }, (_, index) => {
     const prefix = `band${index}`;
     return {
@@ -112,7 +151,7 @@ function eqBandsFor(node: Node): EqBand[] {
       q: Number(node.parameters[`${prefix}Q`] ?? 1),
       type: String(node.parameters[`${prefix}Type`] ?? "peaking"),
     };
-  }).filter((band) => band.enabled || band.frequencyHz > 0);
+  }).filter((band) => band.enabled);
 }
 
 function eqX(frequencyHz: number) {
@@ -139,12 +178,16 @@ function MiniEq({ node, onSetNodeParameter }: { node: Node; onSetNodeParameter?:
     const bounds = event.currentTarget.getBoundingClientRect();
     const x = clamp(event.clientX - bounds.left - 8, 0, 184);
     const y = clamp(event.clientY - bounds.top, 0, 88);
-    const frequencyHz = 20 * (10 ** (x / 184 * 3));
     const gainDb = clamp((44 - y) / 2.45, -12, 12);
+    if (node.kind === "graphicEq") {
+      onSetNodeParameter(node.id, `band${band.index}Db`, Number(gainDb.toFixed(1)));
+      return;
+    }
+    const frequencyHz = 20 * (10 ** (x / 184 * 3));
     onSetNodeParameter(node.id, `band${band.index}FrequencyHz`, Math.round(frequencyHz));
     onSetNodeParameter(node.id, `band${band.index}GainDb`, Number(gainDb.toFixed(1)));
   };
-  return <div className="node-eq nodrag nopan" aria-label="Equalizer response preview">
+  return <div className={`node-eq nodrag nopan ${node.kind === "graphicEq" ? "node-eq-graphic" : "node-eq-parametric"}`} aria-label={`${node.kind === "graphicEq" ? "Graphic" : "Parametric"} equalizer response preview`}>
     <svg className="nodrag nopan" viewBox="0 0 200 88" role="img" aria-label="Parametric EQ curve" onPointerMove={(event) => { if (dragBandIndex !== null && bands[dragBandIndex]) updateBand(bands[dragBandIndex], event); }} onPointerUp={(event) => { setDragBandIndex(null); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} onPointerCancel={(event) => { setDragBandIndex(null); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }}>
       <path className="eq-grid" d="M8 14H192M8 44H192M8 74H192M8 8V80M69 8V80M130 8V80M192 8V80" />
       <path className="eq-curve" d={bands.length ? `M8 44 ${bands.map((band) => `L ${eqX(band.frequencyHz).toFixed(1)} ${eqY(band.gainDb).toFixed(1)}`).join(" ")} L192 44` : "M8 44H192"} />
@@ -160,10 +203,17 @@ function NodeVisual({ node, telemetry, onSetNodeParameter }: { node: Node; telem
   return <div className="node-activity" aria-label={node.enabled && !node.bypass ? "Processor ready" : "Processor inactive"}><span className="activity-dot" />{node.bypass ? "Bypassed" : node.enabled ? "Ready" : "Disabled"}</div>;
 }
 
-export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onRemoveNode, onAddLibraryNode, onAddVirtualBusNode, diagnostics, onSetNodeParameter, canEdit = true }: SessionFlowCanvasProps) {
+export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onToggleConnection, onInsertProcessor, onRemoveNode, onAddLibraryNode, onAddVirtualBusNode, diagnostics, onSetNodeParameter, canEdit = true }: SessionFlowCanvasProps) {
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
+  const portLayoutKey = `${layoutKey}.ports`;
   const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey));
+  const [portPositions, setPortPositions] = useState<Record<string, { x: number; y: number }>>(() => {
+    if (typeof window === "undefined") return {};
+    try { return JSON.parse(window.localStorage.getItem(portLayoutKey) ?? "{}") as Record<string, { x: number; y: number }>; } catch { return {}; }
+  });
   const positionsRef = useRef(positions);
+  const portPositionsRef = useRef(portPositions);
+  const portDragRef = useRef<{ key: string; pointerId: number } | null>(null);
   const flowInstanceRef = useRef<ReactFlowInstance | null>(null);
   const initialFitDoneRef = useRef(false);
   useEffect(() => {
@@ -171,7 +221,41 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
     const next = readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey);
     positionsRef.current = next;
     setPositions(next);
-  }, [layoutKey]);
+    if (typeof window !== "undefined") {
+      try {
+        const nextPorts = JSON.parse(window.localStorage.getItem(portLayoutKey) ?? "{}") as Record<string, { x: number; y: number }>;
+        portPositionsRef.current = nextPorts;
+        setPortPositions(nextPorts);
+      } catch {
+        portPositionsRef.current = {};
+        setPortPositions({});
+      }
+    }
+  }, [layoutKey, portLayoutKey]);
+  const updatePortPosition = (key: string, x: number, y: number) => {
+    const next = { ...portPositionsRef.current, [key]: { x: clamp(x, 0.03, 0.97), y: clamp(y, 0.08, 0.92) } };
+    portPositionsRef.current = next;
+    setPortPositions(next);
+    if (typeof window !== "undefined") window.localStorage.setItem(portLayoutKey, JSON.stringify(next));
+  };
+  const portPosition = (node: Node, port: Node["ports"][number], portIndex: number) => {
+    const key = `${node.id}:${port.direction}:${port.name}`;
+    const stored = portPositions[key];
+    if (stored) return { key, ...stored };
+    const sameDirection = node.ports.filter((candidate) => candidate.direction === port.direction).length;
+    return { key, x: port.direction === "input" ? 0.03 : 0.97, y: (portIndex + 1) / (sameDirection + 1) };
+  };
+  const handlePosition = (x: number, y: number) => {
+    const distances = { left: x, right: 1 - x, top: y, bottom: 1 - y };
+    const side = Object.entries(distances).sort(([, a], [, b]) => a - b)[0][0];
+    const position = side === "left" ? Position.Left : side === "right" ? Position.Right : side === "top" ? Position.Top : Position.Bottom;
+    return { position, style: { left: `${x * 100}%`, top: `${y * 100}%`, transform: "translate(-50%, -50%)" } };
+  };
+  const movePortFromPointer = (event: PointerEvent<HTMLDivElement>, key: string) => {
+    const bounds = event.currentTarget.closest(".react-flow__node")?.getBoundingClientRect();
+    if (!bounds) return;
+    updatePortPosition(key, (event.clientX - bounds.left) / bounds.width, (event.clientY - bounds.top) / bounds.height);
+  };
   useEffect(() => {
     if (initialFitDoneRef.current || !flowInstanceRef.current || session.nodes.length === 0) return;
     const frame = globalThis.requestAnimationFrame(() => flowInstanceRef.current?.fitView({ padding: 0.2 }));
@@ -220,13 +304,13 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
     data: {
       label: (
         <div className={`flow-node-content node-kind-${node.kind}`} aria-label={`${node.name}, ${node.kind}`}>
-          {node.ports.filter((port) => port.direction === "input").map((port, portIndex) => <Handle key={`input-${port.name}`} type="target" id={port.name} position={Position.Left} style={{ top: `${35 + portIndex * 18}px` }} aria-label={`${node.name} ${port.name} input`} />)}
+          {node.ports.filter((port) => port.direction === "input").map((port, portIndex) => { const placement = portPosition(node, port, portIndex); const handle = handlePosition(placement.x, placement.y); return <Handle key={`input-${port.name}`} type="target" id={port.name} position={handle.position} style={handle.style} aria-label={`${node.name} ${port.name} input`} title="Hold Shift and drag to reposition" onPointerDown={(event) => { if (!event.shiftKey) return; event.preventDefault(); event.stopPropagation(); portDragRef.current = { key: placement.key, pointerId: event.pointerId }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { if (portDragRef.current?.key === placement.key) movePortFromPointer(event, placement.key); }} onPointerUp={(event) => { if (portDragRef.current?.key !== placement.key) return; portDragRef.current = null; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} />; })}
           <div className="flow-node-kicker"><span className="node-kind">{node.kind}</span><span className={`node-state ${node.bypass ? "is-bypassed" : node.enabled ? "is-ready" : "is-disabled"}`}>{node.bypass ? "bypass" : node.enabled ? "ready" : "off"}</span></div>
           <div className="flow-node-title"><strong>{node.name}</strong>{canEdit && <button type="button" className="flow-node-delete" aria-label={`Delete ${node.name}`} title={`Delete ${node.name}`} onClick={(event) => { event.stopPropagation(); if (onRemoveNode) onRemoveNode(node.id); else globalThis.dispatchEvent(new CustomEvent("audiorouter:remove-node", { detail: { nodeId: node.id } })); }}>×</button>}</div>
           <NodeVisual node={node} telemetry={telemetry} onSetNodeParameter={onSetNodeParameter} />
           <small className="node-port-count">{node.ports.length} port{node.ports.length === 1 ? "" : "s"} · {node.enabled ? "enabled" : "disabled"}</small>
           <span className="flow-port-list">{nodePortLabels(node).map((port) => <small key={port}>{port}</small>)}</span>
-          {node.ports.filter((port) => port.direction === "output").map((port, portIndex) => <Handle key={`output-${port.name}`} type="source" id={port.name} position={Position.Right} style={{ top: `${35 + portIndex * 18}px` }} aria-label={`${node.name} ${port.name} output`} />)}
+          {node.ports.filter((port) => port.direction === "output").map((port, portIndex) => { const placement = portPosition(node, port, portIndex); const handle = handlePosition(placement.x, placement.y); return <Handle key={`output-${port.name}`} type="source" id={port.name} position={handle.position} style={handle.style} aria-label={`${node.name} ${port.name} output`} title="Hold Shift and drag to reposition" onPointerDown={(event) => { if (!event.shiftKey) return; event.preventDefault(); event.stopPropagation(); portDragRef.current = { key: placement.key, pointerId: event.pointerId }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { if (portDragRef.current?.key === placement.key) movePortFromPointer(event, placement.key); }} onPointerUp={(event) => { if (portDragRef.current?.key !== placement.key) return; portDragRef.current = null; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} />; })}
         </div>
       ),
     },
@@ -252,7 +336,8 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
     id: edge.id,
     source: edge.sourceNode,
     target: edge.destinationNode,
-    label: `${edge.sourcePort} → ${edge.destinationPort}`,
+    type: "audioActions",
+    data: { enabled: edge.enabled, active, onToggle: onToggleConnection, onRemove: onRemoveConnection, onInsert: onInsertProcessor, canEdit },
     deletable: canEdit && onRemoveConnection !== undefined,
     selectable: true,
     className: active ? "flow-edge-active" : undefined,
@@ -263,13 +348,12 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
 
   return (
     <>
-    <div className="canvas-layout-actions" aria-label="Canvas layout actions"><span className="muted" role="status" aria-live="polite">{selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} selected</span><button type="button" className="secondary" onClick={tidyLayout}>Tidy layout</button><button type="button" className="secondary" onClick={() => { clearLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey); positionsRef.current = {}; setPositions({}); }}>Reset layout</button></div>
+    <div className="canvas-layout-actions" aria-label="Canvas layout actions"><span className="muted" role="status" aria-live="polite">{selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} selected</span><button type="button" className="secondary" onClick={tidyLayout}>Tidy layout</button><button type="button" className="secondary" onClick={() => { clearLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey); if (typeof window !== "undefined") window.localStorage.removeItem(portLayoutKey); positionsRef.current = {}; portPositionsRef.current = {}; setPositions({}); setPortPositions({}); }}>Reset layout</button></div>
     <div className="session-flow-canvas" aria-label="Signal-flow graph" onDragOver={(event) => { if (!canEdit) return; event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }} onDrop={(event) => { const kind = readLibraryDropKind(event.dataTransfer); event.preventDefault(); const bounds = event.currentTarget.getBoundingClientRect(); const position = libraryDropPosition(event.clientX, event.clientY, bounds); if (isLibraryNodeKind(kind)) { if (onAddLibraryNode) addLibraryNode(kind, position); else routeLibraryDrop(kind, position); } else if (isVirtualBusKind(kind)) { if (onAddVirtualBusNode) addVirtualBusNode(kind === "virtualRenderSource" ? "renderSource" : "captureSink", position); else routeLibraryDrop(kind, position); } }}>
       <div className="canvas-library" aria-label="Drag processors to canvas"><strong>Drag or select to add</strong>{libraryEntries.filter((entry) => entry.kind !== undefined || entry.virtualKind !== undefined).map((entry) => { const kind = entry.kind ?? entry.virtualKind!; const unavailable = Boolean(entry.unavailableReason); return <button type="button" key={`drag-${entry.id}`} draggable={canEdit && !unavailable} disabled={!canEdit || unavailable} title={entry.unavailableReason} onClick={() => { if (unavailable) return; if (entry.kind) addLibraryNode(entry.kind, positionFor(session.nodes.length)); else if (onAddVirtualBusNode) addVirtualBusNode(entry.virtualKind === "virtualRenderSource" ? "renderSource" : "captureSink", positionFor(session.nodes.length)); else routeLibraryDrop(entry.virtualKind!, positionFor(session.nodes.length)); }} onDragStart={(event) => { if (!canEdit || unavailable) return; event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData(LIBRARY_DROP_MIME, kind); event.dataTransfer.setData(LIBRARY_DROP_TEXT_MIME, kind); }}>{entry.label}</button>; })}</div>
       <ReactFlow
         nodes={nodes}
         edges={edges}
-        fitView
         onInit={(instance) => { flowInstanceRef.current = instance; if (session.nodes.length > 0 && !initialFitDoneRef.current) { initialFitDoneRef.current = true; globalThis.requestAnimationFrame(() => instance.fitView({ padding: 0.2 })); } }}
         nodesConnectable={canEdit}
         nodesDraggable
@@ -277,6 +361,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
         onSelectionChange={({ nodes: selectedNodes }) => onSelectMany?.(selectedNodes.map((node) => node.id))}
         onNodeClick={(_, node) => onSelect(node.id)}
         onConnect={canEdit ? onConnect : undefined}
+        edgeTypes={edgeTypes}
         onEdgesDelete={canEdit && onRemoveConnection ? (deleted) => { for (const edgeId of deletedConnectionIds(deleted)) onRemoveConnection(edgeId); } : undefined}
         onNodesDelete={canEdit ? (deleted) => { for (const nodeId of deletedNodeIds(deleted)) { if (onRemoveNode) onRemoveNode(nodeId); else globalThis.dispatchEvent(new CustomEvent("audiorouter:remove-node", { detail: { nodeId } })); } } : undefined}
         onNodeDragStop={(_, node) => { const next = { ...positionsRef.current, [node.id]: node.position }; positionsRef.current = next; setPositions(next); writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next); }}
