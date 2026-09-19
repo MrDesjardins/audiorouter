@@ -968,3 +968,8 @@ The exact physical PD200X speaker/microphone impulse attempt was also run with
 artifacts were cleaned. The result preserves the current evidence boundary:
 digital CABLE correlation is repeatable, but calibrated acoustic/physical
 latency remains unverified.
+
+The user-authorized higher-volume Focusrite-headset retry detected 733 of
+1,000 physical impulse groups and correctly failed the ≥900 acceptance
+threshold. It remains insufficient for NFR-01; a wired Focusrite output-to-
+input loopback is still required for a stable calibrated measurement.

@@ -1690,3 +1690,11 @@ impulse groups and correctly rejected the run (`only 0 impulse groups
 detected; expected at least 90`). Temporary probe artifacts were cleaned.
 This confirms that the current setup does not provide a valid acoustic
 correlation result; it does not qualify calibrated physical latency.
+
+## Focusrite-headset acoustic retry (2026-09-18)
+
+After the headset level was increased, the guarded 1,000-impulse run from
+`Speakers (Focusrite USB Audio)` to `Microphone (PD200X Podcast Microphone)`
+detected 733 groups and rejected the run because at least 900 were required.
+This is an improved but still insufficient acoustic observation; it does not
+provide the cadence or calibrated p95 latency required by NFR-01.
