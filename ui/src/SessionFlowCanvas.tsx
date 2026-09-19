@@ -308,7 +308,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
       writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
     }
   };
-  const captureConnectionHandle = (event: MouseEvent<HTMLDivElement> | PointerEvent<HTMLDivElement>) => {
+  const captureConnectionHandle = (event: { target: EventTarget | null; clientX?: number; clientY?: number; button?: number }) => {
     const target = event.target as HTMLElement | null;
     const handle = target?.closest<HTMLElement>("[data-debug-handle-id]");
     if (!handle) return;
@@ -398,7 +398,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
         onNodeClick={(_, node) => onSelect(node.id)}
         onMouseDownCapture={captureConnectionHandle}
         onPointerDownCapture={captureConnectionHandle}
-        onConnectStart={(_, params) => logConnectionDebug("react-flow-connect-start", { handleType: params.handleType, nodeId: params.nodeId, handleId: params.handleId, capturedSource: sourceHandleRef.current, capturedTarget: targetHandleRef.current })}
+        onConnectStart={(event, params) => { captureConnectionHandle(event); logConnectionDebug("react-flow-connect-start", { handleType: params.handleType, nodeId: params.nodeId, handleId: params.handleId, capturedSource: sourceHandleRef.current, capturedTarget: targetHandleRef.current }); }}
         onConnectEnd={(_, connectionState) => logConnectionDebug("react-flow-connect-end", { inProgress: "inProgress" in connectionState ? connectionState.inProgress : false, fromNode: connectionState.fromNode?.id, fromHandle: connectionState.fromHandle?.id, toNode: connectionState.toNode?.id, toHandle: connectionState.toHandle?.id, toPosition: connectionState.toPosition })}
         onConnect={canEdit ? (connection) => { const rawSourceHandle = connection.sourceHandle ?? (sourceHandleRef.current?.nodeId === connection.source ? sourceHandleRef.current.handleId : null); const rawTargetHandle = connection.targetHandle ?? (targetHandleRef.current?.nodeId === connection.target ? targetHandleRef.current.handleId : null); logConnectionDebug("react-flow-connect", { source: connection.source, sourceHandle: connection.sourceHandle, recoveredSourceHandle: rawSourceHandle, target: connection.target, targetHandle: connection.targetHandle, recoveredTargetHandle: rawTargetHandle }); const source = logicalPortHandle(rawSourceHandle); const target = logicalPortHandle(rawTargetHandle); const normalized = { ...connection, sourceHandle: source.port, targetHandle: target.port }; const edgeId = onConnect(normalized); logConnectionDebug("draft-connect-result", { edgeId, normalizedSourceHandle: normalized.sourceHandle, normalizedTargetHandle: normalized.targetHandle, sourceSide: source.side, targetSide: target.side }); if (edgeId) { if (source.side) setEdgeSide(edgeId, "source", source.side); if (target.side) setEdgeSide(edgeId, "target", target.side); } sourceHandleRef.current = null; targetHandleRef.current = null; } : undefined}
         edgeTypes={edgeTypes}
