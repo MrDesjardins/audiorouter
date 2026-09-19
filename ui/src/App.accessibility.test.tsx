@@ -615,6 +615,22 @@ describe("keyboard connection dialog", () => {
     expect(JSON.parse(window.localStorage.getItem("audiorouter.ui.layout.demo-session") ?? "null")).toMatchObject({ "gain-1": { x: 0, y: 0 } });
   });
 
+  it("accepts the plain-text fallback used by native WebView drops", async () => {
+    render(<App backend={connectedPreviewBackend()} />);
+    const dropSource = await screen.findByRole("button", { name: /^Test Signal$/ });
+    const canvas = screen.getByLabelText("Signal-flow graph");
+    const dataTransfer = {
+      types: [],
+      effectAllowed: "copy",
+      setData: vi.fn(),
+      getData: (type: string) => type === "text/plain" ? "testSignal" : "",
+    };
+    fireEvent.dragStart(dropSource, { dataTransfer });
+    fireEvent.dragOver(canvas, { dataTransfer });
+    fireEvent.drop(canvas, { dataTransfer, clientX: 240, clientY: 180 });
+    await waitFor(() => expect(screen.getByText("Test Signal 1 added to the draft. Review and plan the changes before committing.")).toBeTruthy());
+  });
+
   it.each([
     ["Physical input", "physicalInput", "Physical input 1"],
     ["Physical output", "physicalOutput", "Physical output 1"],

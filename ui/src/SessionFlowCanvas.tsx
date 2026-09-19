@@ -18,6 +18,8 @@ import { libraryEntries } from "./library";
 import type { LibraryNodeKind } from "./draft";
 
 export const LIBRARY_DROP_SOURCE = "__audiorouter_library_drop__";
+export const LIBRARY_DROP_MIME = "application/x-audiorouter-library-kind";
+const LIBRARY_DROP_TEXT_MIME = "text/plain";
 
 type SessionFlowCanvasProps = {
   session: Session;
@@ -63,6 +65,10 @@ function isLibraryNodeKind(value: string): value is LibraryNodeKind {
 
 function isVirtualBusKind(value: string): value is "virtualRenderSource" | "virtualCaptureSink" {
   return value === "virtualRenderSource" || value === "virtualCaptureSink";
+}
+
+function readLibraryDropKind(dataTransfer: DataTransfer): string {
+  return dataTransfer.getData(LIBRARY_DROP_MIME) || dataTransfer.getData(LIBRARY_DROP_TEXT_MIME);
 }
 
 export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onRemoveNode, onAddLibraryNode, onAddVirtualBusNode, canEdit = true }: SessionFlowCanvasProps) {
@@ -148,8 +154,8 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
   }));
 
   return (
-    <div className="session-flow-canvas" aria-label="Signal-flow graph" onDragOver={(event) => { if (event.dataTransfer.types.includes("application/x-audiorouter-library-kind")) event.preventDefault(); }} onDrop={(event) => { const kind = event.dataTransfer.getData("application/x-audiorouter-library-kind"); event.preventDefault(); const bounds = event.currentTarget.getBoundingClientRect(); const position = libraryDropPosition(event.clientX, event.clientY, bounds); if (isLibraryNodeKind(kind)) { if (onAddLibraryNode) addLibraryNode(kind, position); else routeLibraryDrop(kind, position); } else if (isVirtualBusKind(kind)) { if (onAddVirtualBusNode) addVirtualBusNode(kind === "virtualRenderSource" ? "renderSource" : "captureSink", position); else routeLibraryDrop(kind, position); } }}>
-      <div className="canvas-library" aria-label="Drag processors to canvas"><strong>Drag or select to add</strong>{libraryEntries.filter((entry) => entry.kind !== undefined || entry.virtualKind !== undefined).map((entry) => { const kind = entry.kind ?? entry.virtualKind!; const unavailable = Boolean(entry.unavailableReason); return <button type="button" key={`drag-${entry.id}`} draggable={canEdit && !unavailable} disabled={!canEdit || unavailable} title={entry.unavailableReason} onClick={() => { if (unavailable) return; if (entry.kind) addLibraryNode(entry.kind, positionFor(session.nodes.length)); else if (onAddVirtualBusNode) addVirtualBusNode(entry.virtualKind === "virtualRenderSource" ? "renderSource" : "captureSink", positionFor(session.nodes.length)); else routeLibraryDrop(entry.virtualKind!, positionFor(session.nodes.length)); }} onDragStart={(event) => { if (!canEdit || unavailable) return; event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-audiorouter-library-kind", kind); }}>{entry.label}</button>; })}</div>
+    <div className="session-flow-canvas" aria-label="Signal-flow graph" onDragOver={(event) => { if (!canEdit) return; event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }} onDrop={(event) => { const kind = readLibraryDropKind(event.dataTransfer); event.preventDefault(); const bounds = event.currentTarget.getBoundingClientRect(); const position = libraryDropPosition(event.clientX, event.clientY, bounds); if (isLibraryNodeKind(kind)) { if (onAddLibraryNode) addLibraryNode(kind, position); else routeLibraryDrop(kind, position); } else if (isVirtualBusKind(kind)) { if (onAddVirtualBusNode) addVirtualBusNode(kind === "virtualRenderSource" ? "renderSource" : "captureSink", position); else routeLibraryDrop(kind, position); } }}>
+      <div className="canvas-library" aria-label="Drag processors to canvas"><strong>Drag or select to add</strong>{libraryEntries.filter((entry) => entry.kind !== undefined || entry.virtualKind !== undefined).map((entry) => { const kind = entry.kind ?? entry.virtualKind!; const unavailable = Boolean(entry.unavailableReason); return <button type="button" key={`drag-${entry.id}`} draggable={canEdit && !unavailable} disabled={!canEdit || unavailable} title={entry.unavailableReason} onClick={() => { if (unavailable) return; if (entry.kind) addLibraryNode(entry.kind, positionFor(session.nodes.length)); else if (onAddVirtualBusNode) addVirtualBusNode(entry.virtualKind === "virtualRenderSource" ? "renderSource" : "captureSink", positionFor(session.nodes.length)); else routeLibraryDrop(entry.virtualKind!, positionFor(session.nodes.length)); }} onDragStart={(event) => { if (!canEdit || unavailable) return; event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData(LIBRARY_DROP_MIME, kind); event.dataTransfer.setData(LIBRARY_DROP_TEXT_MIME, kind); }}>{entry.label}</button>; })}</div>
       <div className="session-flow-toolbar"><span className="muted">Positions are presentation-only.</span><span className="muted" role="status" aria-live="polite">{selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} selected</span><button type="button" className="secondary" onClick={tidyLayout}>Tidy layout</button><button type="button" className="secondary" onClick={() => { clearLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey); positionsRef.current = {}; setPositions({}); }}>Reset layout</button></div>
       <ReactFlow
         nodes={nodes}

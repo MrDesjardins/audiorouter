@@ -1064,3 +1064,17 @@ and 56 Markdown files/225 local links. Run-owned temporary children and
 installer output were removed. This refresh does not close the explicitly
 listed attended, physical-latency, OS-transition, redistribution/sandbox,
 signing, installation, or publication gates.
+
+## Native drag-and-drop defect follow-up (2026-09-18)
+
+The user reproduced that dragging a library control does not add it to the
+canvas in the attended shell. The UI drop path was hardened for WebView/native
+drag behavior: the shelf now supplies both the AudioRouter MIME type and a
+plain-text fallback, while the editable canvas accepts drag-over events even
+when the host exposes no drag MIME types and validates the payload at drop
+time. A focused regression covers the no-types/plain-text case. UI typecheck,
+261 Vitest tests, the production UI build, and `tests/acceptance/m05-ui.ps1`
+all pass. Native post-fix drag verification remains open because the
+computer-use RPC surface became unavailable after the rebuilt shell was
+launched; do not count this change as attended drag evidence until the user or
+an available native surface confirms a node appears after dragging.
