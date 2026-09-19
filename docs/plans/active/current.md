@@ -1017,6 +1017,13 @@ Until one of those external prerequisites changes, the next actionable work
 is documentation/audit maintenance; the plan must not be archived or marked
 complete on the basis of portable or unsigned evidence.
 
+The 2026-09-18 capability recheck also found no `chrome`, `msedge`, or
+`firefox` executable and no repository Playwright installation; the
+computer-use inventory remained `apps: []`, `browsers: []`. A browser-level
+test therefore cannot be started on this host, and even an available browser
+would cover only the WebView/page surface—not Narrator, the native Tauri
+window/tray, or actual Windows lock/sign-out/sleep transitions.
+
 The elevated `tests/acceptance/safe-all.ps1` chain was rerun after this
 reconciliation and passed end to end on the clean tree. It covered M00
 toolchain/native compile and 34-endpoint format inventory, M01 CLI, existing-
