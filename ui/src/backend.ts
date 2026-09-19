@@ -101,7 +101,7 @@ export interface UiBackend {
   listRecorders(): Promise<RecorderStatus[]>;
   listSessions(): Promise<Session[]>;
   listApplications(): Promise<ApplicationRow[]>;
-  listDevices(includeInactive?: boolean): Promise<DeviceListItem[]>;
+  listDevices(): Promise<DeviceListItem[]>;
   prepareNativeEndpoint?(sessionId: string, captureEndpointId: string, renderEndpointId: string): Promise<import("@audiorouter/contracts").NativeEndpointPrepareResult>;
   prepareNativeOutputs?(sessionId: string, generation: number, renderEndpointIds: string[]): Promise<NativeOutputFanoutPrepareResult>;
   prepareNativeMultiInputs?(sessionId: string, generation: number, captureEndpointIds: string[]): Promise<NativeMultiInputPrepareResult>;
@@ -514,10 +514,10 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
     async listApplications() {
       return client.request("applications.list", undefined);
     },
-    async listDevices(includeInactive = false) {
+    async listDevices() {
       return collectPagedRows((cursor) => client.request("devices.list", cursor === null
-        ? { limit: 500, ...(includeInactive ? { includeInactive: true } : {}) }
-        : { limit: 500, cursor, ...(includeInactive ? { includeInactive: true } : {}) }));
+        ? { limit: 500 }
+        : { limit: 500, cursor }));
     },
     async prepareNativeEndpoint(currentSessionId, captureEndpointId, renderEndpointId) {
       return client.request("nativeEndpoints.prepare", {

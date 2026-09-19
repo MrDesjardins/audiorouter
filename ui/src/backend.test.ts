@@ -394,18 +394,6 @@ describe("live event cursor", () => {
     expect(received).toEqual({ method: "devices.list", params: { limit: 500 } });
   });
 
-  it("requests inactive devices only when the caller opts in", async () => {
-    let received: unknown;
-    const client = {
-      request: async (method: string, params: unknown) => {
-        received = { method, params };
-        return { items: [], nextCursor: null };
-      },
-    } as never;
-    await expect(createLiveBackend(client, demoSession.id).listDevices(true)).resolves.toEqual([]);
-    expect(received).toEqual({ method: "devices.list", params: { limit: 500, includeInactive: true } });
-  });
-
   it("forwards native endpoint detachment for the exact session", async () => {
     let received: unknown;
     const result = { sessionId: demoSession.id, state: "detached" as const };

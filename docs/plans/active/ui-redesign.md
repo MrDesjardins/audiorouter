@@ -117,3 +117,8 @@ physical-input inspector with no active capture endpoints offers a device-list
 refresh and explains that a reboot is not normally required. `Plan changes`
 only validates and stages a backend plan; `Commit changes` is the explicit save
 operation, including when validation returns no warnings.
+
+The first live refresh exposed a compatibility defect: the UI sent the
+optional `includeInactive` field, but the active backend schema rejects that
+field. The UI adapter now uses the accepted paged `devices.list` request with
+no extra parameter; the focused backend adapter tests pass.
