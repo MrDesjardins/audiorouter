@@ -1697,3 +1697,13 @@ failure remained `tools/release/prepare-artifacts.ps1:39`: `release inputs must
 come from a clean Git working tree`. The runner removed 15 run-owned temporary
 children. No reset, stash, commit, or clean-tree bypass was attempted, so this
 is a confirmed release prerequisite rather than a release artifact result.
+
+## 2026-09-18 - clean committed unsigned release preparation
+
+After the current repository state was committed as `5d2123cd`,
+`tests/acceptance/m08-release.ps1` passed on the clean worktree. It compiled
+the optimized Rust release binaries, built the 214-module production UI,
+prepared and verified unsigned artifacts, and removed its disposable output.
+This closes unsigned artifact preparation for the committed VB-Cable-first
+track only; signing, installer execution/install-upgrade-rollback,
+clean-machine, managed-driver, and publication gates remain outside scope.

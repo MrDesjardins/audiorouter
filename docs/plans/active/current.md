@@ -938,3 +938,10 @@ endpoint re-enumeration, or endurance gates that were not observed. If no
 interactive or authorized transition surface is available, retain the exact
 blocked evidence and proceed with documentation-only audit maintenance; do
 not substitute portable tests for those Windows gates.
+
+The current committed clean tree (`5d2123cd`, `Complete VB-Cable-first
+milestone work`) passed `tests/acceptance/m08-release.ps1`. Optimized Rust
+release binaries and the 214-module production UI were built, unsigned
+artifacts were prepared and verified, and disposable outputs were removed.
+This closes unsigned artifact preparation only; signing, installer execution,
+clean-machine, managed-driver, and publication gates remain open.
