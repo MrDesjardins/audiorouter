@@ -1266,8 +1266,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     }
     if (!connection.source || !connection.sourceHandle || !connection.target || !connection.targetHandle) { setActionMessage("Choose a named output and input port."); return; }
     try {
-      recordDraftChange(appendDraftConnection(draft, connection.source, connection.sourceHandle, connection.target, connection.targetHandle));
+      const next = appendDraftConnection(draft, connection.source, connection.sourceHandle, connection.target, connection.targetHandle);
+      const createdEdge = next.edges.find((edge) => !draft.edges.some((existing) => existing.id === edge.id));
+      recordDraftChange(next);
       setActionMessage("Connection added to the draft. Review and plan the changes before committing.");
+      return createdEdge?.id;
     } catch (error) { setActionMessage(formatUiError(error, "Unable to add canvas connection.")); }
   };
   const openConnectionDialog = (event: React.MouseEvent<HTMLButtonElement>) => { connectionDialogReturnFocus.current = event.currentTarget; setConnectionDialogOpen(true); };
