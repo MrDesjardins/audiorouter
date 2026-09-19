@@ -71,6 +71,10 @@ function logicalPortHandle(handle: string | null | undefined) {
   return separator > 0 && EDGE_SIDES.includes(side) ? { port: handle.slice(0, separator), side } : { port: handle, side: undefined };
 }
 
+function logConnectionDebug(event: string, details: Record<string, unknown>) {
+  console.info(`[AudioRouter connection] ${event}`, { timestamp: new Date().toISOString(), ...details });
+}
+
 /** Returns only real graph edges from a canvas deletion event. */
 export function deletedConnectionIds(edges: Pick<FlowEdge, "id">[]): string[] {
   return edges.map((edge) => edge.id).filter((id) => id.length > 0);
@@ -310,13 +314,13 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
     data: {
       label: (
         <div className={`flow-node-content node-kind-${node.kind}`} aria-label={`${node.name}, ${node.kind}`}>
-          {node.ports.filter((port) => port.direction === "input").map((port, portIndex, ports) => { const offset = `${((portIndex + 1) / (ports.length + 1)) * 100}%`; return EDGE_SIDES.map((side) => <Handle key={`input-${port.name}-${side}`} type="target" id={edgeHandleId(port.name, side)} position={edgeSidePosition(side)} style={side === "left" || side === "right" ? { top: offset } : { left: offset }} aria-label={side === "left" ? `${node.name} ${port.name} input` : `${node.name} ${port.name} input ${side} connector`} />); })}
+          {node.ports.filter((port) => port.direction === "input").map((port, portIndex, ports) => { const offset = `${((portIndex + 1) / (ports.length + 1)) * 100}%`; return EDGE_SIDES.map((side) => <Handle key={`input-${port.name}-${side}`} type="target" id={edgeHandleId(port.name, side)} position={edgeSidePosition(side)} style={side === "left" || side === "right" ? { top: offset } : { left: offset }} aria-label={side === "left" ? `${node.name} ${port.name} input` : `${node.name} ${port.name} input ${side} connector`} data-debug-side={side} onPointerDown={(event) => logConnectionDebug("handle-pointer-down", { nodeId: node.id, nodeName: node.name, direction: "target", port: port.name, side, handleId: edgeHandleId(port.name, side), clientX: event.clientX, clientY: event.clientY, button: event.button })} />); })}
           <div className="flow-node-kicker"><span className="node-kind">{node.kind}</span><span className={`node-state ${node.bypass ? "is-bypassed" : node.enabled ? "is-ready" : "is-disabled"}`}>{node.bypass ? "bypass" : node.enabled ? "ready" : "off"}</span></div>
           <div className="flow-node-title"><strong>{node.name}</strong>{canEdit && <button type="button" className="flow-node-delete" aria-label={`Delete ${node.name}`} title={`Delete ${node.name}`} onClick={(event) => { event.stopPropagation(); if (onRemoveNode) onRemoveNode(node.id); else globalThis.dispatchEvent(new CustomEvent("audiorouter:remove-node", { detail: { nodeId: node.id } })); }}>×</button>}</div>
           <NodeVisual node={node} telemetry={telemetry} onSetNodeParameter={onSetNodeParameter} />
           <small className="node-port-count">{node.ports.length} port{node.ports.length === 1 ? "" : "s"} · {node.enabled ? "enabled" : "disabled"}</small>
           <span className="flow-port-list">{nodePortLabels(node).map((port) => <small key={port}>{port}</small>)}</span>
-          {node.ports.filter((port) => port.direction === "output").map((port, portIndex, ports) => { const offset = `${((portIndex + 1) / (ports.length + 1)) * 100}%`; return EDGE_SIDES.map((side) => <Handle key={`output-${port.name}-${side}`} type="source" id={edgeHandleId(port.name, side)} position={edgeSidePosition(side)} style={side === "left" || side === "right" ? { top: offset } : { left: offset }} aria-label={side === "right" ? `${node.name} ${port.name} output` : `${node.name} ${port.name} output ${side} connector`} />); })}
+          {node.ports.filter((port) => port.direction === "output").map((port, portIndex, ports) => { const offset = `${((portIndex + 1) / (ports.length + 1)) * 100}%`; return EDGE_SIDES.map((side) => <Handle key={`output-${port.name}-${side}`} type="source" id={edgeHandleId(port.name, side)} position={edgeSidePosition(side)} style={side === "left" || side === "right" ? { top: offset } : { left: offset }} aria-label={side === "right" ? `${node.name} ${port.name} output` : `${node.name} ${port.name} output ${side} connector`} data-debug-side={side} onPointerDown={(event) => logConnectionDebug("handle-pointer-down", { nodeId: node.id, nodeName: node.name, direction: "source", port: port.name, side, handleId: edgeHandleId(port.name, side), clientX: event.clientX, clientY: event.clientY, button: event.button })} />); })}
         </div>
       ),
     },
@@ -366,7 +370,9 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
         selectionOnDrag
         onSelectionChange={({ nodes: selectedNodes }) => onSelectMany?.(selectedNodes.map((node) => node.id))}
         onNodeClick={(_, node) => onSelect(node.id)}
-        onConnect={canEdit ? (connection) => { const source = logicalPortHandle(connection.sourceHandle); const target = logicalPortHandle(connection.targetHandle); const edgeId = onConnect({ ...connection, sourceHandle: source.port, targetHandle: target.port }); if (edgeId) { if (source.side) setEdgeSide(edgeId, "source", source.side); if (target.side) setEdgeSide(edgeId, "target", target.side); } } : undefined}
+        onConnectStart={(_, params) => logConnectionDebug("react-flow-connect-start", { handleType: params.handleType, nodeId: params.nodeId, handleId: params.handleId })}
+        onConnectEnd={(_, connectionState) => logConnectionDebug("react-flow-connect-end", { inProgress: "inProgress" in connectionState ? connectionState.inProgress : false, fromNode: connectionState.fromNode?.id, fromHandle: connectionState.fromHandle?.id, toNode: connectionState.toNode?.id, toHandle: connectionState.toHandle?.id, toPosition: connectionState.toPosition })}
+        onConnect={canEdit ? (connection) => { logConnectionDebug("react-flow-connect", { source: connection.source, sourceHandle: connection.sourceHandle, target: connection.target, targetHandle: connection.targetHandle }); const source = logicalPortHandle(connection.sourceHandle); const target = logicalPortHandle(connection.targetHandle); const normalized = { ...connection, sourceHandle: source.port, targetHandle: target.port }; const edgeId = onConnect(normalized); logConnectionDebug("draft-connect-result", { edgeId, normalizedSourceHandle: normalized.sourceHandle, normalizedTargetHandle: normalized.targetHandle, sourceSide: source.side, targetSide: target.side }); if (edgeId) { if (source.side) setEdgeSide(edgeId, "source", source.side); if (target.side) setEdgeSide(edgeId, "target", target.side); } } : undefined}
         edgeTypes={edgeTypes}
         onEdgesDelete={canEdit && onRemoveConnection ? (deleted) => { for (const edgeId of deletedConnectionIds(deleted)) onRemoveConnection(edgeId); } : undefined}
         onNodesDelete={canEdit ? (deleted) => { for (const nodeId of deletedNodeIds(deleted)) { if (onRemoveNode) onRemoveNode(nodeId); else globalThis.dispatchEvent(new CustomEvent("audiorouter:remove-node", { detail: { nodeId } })); } } : undefined}
