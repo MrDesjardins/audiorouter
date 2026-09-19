@@ -1032,6 +1032,11 @@ refreshes portable regression evidence only; the guarded-live tests remain
 explicitly opt-in and do not close the physical, attended, or OS-transition
 gates.
 
+Strict static verification was rerun afterward and passed: `cargo clippy
+--workspace --locked --all-targets --all-features -- -D warnings` and
+`cargo fmt --all -- --check`. No source or generated artifact changes were
+left by either check.
+
 The elevated `tests/acceptance/safe-all.ps1` chain was rerun after this
 reconciliation and passed end to end on the clean tree. It covered M00
 toolchain/native compile and 34-endpoint format inventory, M01 CLI, existing-
