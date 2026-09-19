@@ -911,7 +911,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   const refreshDevices = () => {
     const generation = ++deviceRefreshGeneration.current;
-    void backend.listDevices(true).then((items) => { if (generation !== deviceRefreshGeneration.current) return; setDevices(items); setDevicesError(null); }).catch((error) => { if (generation !== deviceRefreshGeneration.current) return; setDevices([]); setDevicesError(formatUiError(error, "Device inventory unavailable")); });
+    setActionMessage("Refreshing audio endpoints...");
+    void backend.listDevices(true).then((items) => { if (generation !== deviceRefreshGeneration.current) return; setDevices(items); setDevicesError(null); setActionMessage(items.length === 0 ? "Audio endpoint refresh completed: the backend returned no endpoints." : `Audio endpoint refresh completed: ${items.length} endpoint${items.length === 1 ? "" : "s"} found.`); }).catch((error) => { if (generation !== deviceRefreshGeneration.current) return; setDevices([]); const message = formatUiError(error, "Device inventory unavailable"); setDevicesError(message); setActionMessage(`Audio endpoint refresh failed: ${message}`); });
   };
   const refreshSessions = () => {
     const generation = ++sessionRefreshGeneration.current;
