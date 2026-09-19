@@ -973,3 +973,8 @@ The user-authorized higher-volume Focusrite-headset retry detected 733 of
 1,000 physical impulse groups and correctly failed the ≥900 acceptance
 threshold. It remains insufficient for NFR-01; a wired Focusrite output-to-
 input loopback is still required for a stable calibrated measurement.
+
+The subsequent retry detected 2,006 groups for 1,000 impulses with 471-frame
+p95 spacing error and an estimated 188.98 ms onset. It is explicitly rejected
+as a physical-latency result despite the wrapper exit code being zero because
+the cadence is not valid.

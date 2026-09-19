@@ -1698,3 +1698,11 @@ After the headset level was increased, the guarded 1,000-impulse run from
 detected 733 groups and rejected the run because at least 900 were required.
 This is an improved but still insufficient acoustic observation; it does not
 provide the cadence or calibrated p95 latency required by NFR-01.
+
+## Focusrite-headset acoustic retry (2026-09-18, second run)
+
+The same user-authorized 1,000-impulse Focusrite-output/PD200X-microphone run
+detected 2,006 groups, with 471-frame p95 inter-group spacing error and an
+estimated 188.98 ms onset. Although the wrapper returned success because its
+minimum-count check was met, the excess detections and cadence error make this
+an invalid physical-latency measurement. It does not close NFR-01.
