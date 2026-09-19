@@ -1241,3 +1241,12 @@ No default device, volume, mute, privacy, driver, or persistent audio
 configuration changed. This closes the existing-device native Test Signal /
 meter workflow slice, but not attended accessibility, physical latency,
 endurance, OS-transition reopen, managed-driver, signing, or release gates.
+## 2026-09-18 - clean-commit Test Signal meter qualification
+
+On committed tree `449ab5d9`, the guarded
+`m05-test-signal-native-live.ps1 -AllowLiveAudio` acceptance passed against
+the exact existing CABLE Output capture and CABLE Input render endpoints.
+The graph-native Test Signal reached the destination meter with 187 processed
+quanta and a destination peak of `-18.000 dB`; plan/commit, start, bounded
+meter observation, stop, and cleanup all passed. This remains existing-device
+and temporary-stream evidence, not attended UI or physical-latency evidence.

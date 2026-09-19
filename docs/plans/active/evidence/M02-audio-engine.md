@@ -2400,6 +2400,17 @@ It does not close endpoint-specific initialization failures, routed signal, or
 calibrated physical-latency gates. Media-device state and persistent audio
 configuration were unchanged.
 
+## 2026-09-18 - clean-commit Rust adapter bridge refresh
+
+On committed tree `449ab5d9`, the guarded two-cycle Rust adapter bridge passed
+with exact CABLE Output capture and CABLE Input render endpoints. Both 500 ms
+cycles ran at 48 kHz stereo with 24,480 captured frames, 191 processed
+quanta, 191 tap calls, 24,448 rendered frames, 25,072 recording bytes, and
+zero non-finite samples, dropped frames, scheduler xruns, or deadline misses.
+Temporary streams/recordings were removed and the media-device snapshot was
+unchanged. This is existing-device adapter evidence, not managed-driver or
+calibrated physical-latency evidence.
+
 ## 2026-09-18 - Rust adapter bridge requalification
 
 The guarded Rust adapter bridge acceptance passed two 500 ms cycles on the

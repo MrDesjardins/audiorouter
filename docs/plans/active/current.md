@@ -945,3 +945,9 @@ release binaries and the 214-module production UI were built, unsigned
 artifacts were prepared and verified, and disposable outputs were removed.
 This closes unsigned artifact preparation only; signing, installer execution,
 clean-machine, managed-driver, and publication gates remain open.
+
+The clean-commit guarded M05 Test Signal acceptance then passed against exact
+CABLE Output capture and CABLE Input render endpoints: 187 processed quanta,
+destination peak `-18.000 dB`, and successful plan/commit, start, meter,
+stop, and cleanup. This is existing-device graph evidence, not attended UI or
+physical-latency qualification.
