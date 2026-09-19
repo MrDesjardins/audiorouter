@@ -1016,3 +1016,17 @@ The remaining blockers are evidence or authority gaps, not uncommitted source:
 Until one of those external prerequisites changes, the next actionable work
 is documentation/audit maintenance; the plan must not be archived or marked
 complete on the basis of portable or unsigned evidence.
+
+The elevated `tests/acceptance/safe-all.ps1` chain was rerun after this
+reconciliation and passed end to end on the clean tree. It covered M00
+toolchain/native compile and 34-endpoint format inventory, M01 CLI, existing-
+device M03 routing, M04 DSP/recording, M05 typecheck/19 UI files/260 tests and
+temporary production build, M06 SDK/validator/VST3 worker/VST2 fixture gates,
+M07 headless and frontend-owned shell RPC, unsigned M08 artifact preparation
+and NSIS smoke, traceability, and documentation. The run reported 1,598
+plugin-validator tests passed, 181 control tests with four guarded-live tests
+ignored, a 4,895,384-byte disposable unsigned installer, 159 normative IDs,
+and 56 Markdown files/225 local links. Run-owned temporary children and
+installer output were removed. This refresh does not close the explicitly
+listed attended, physical-latency, OS-transition, redistribution/sandbox,
+signing, installation, or publication gates.
