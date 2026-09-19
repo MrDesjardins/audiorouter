@@ -14,7 +14,7 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { Fragment, useEffect, useRef, useState, type PointerEvent } from "react";
 import type { DiagnosticsSnapshot, Node, Session } from "@audiorouter/contracts";
 import { clearLayout, readLayout, writeLayout, type LayoutPositions } from "./layout";
 import { nodePortLabels, relatedNodeIds } from "./graphView";
@@ -251,11 +251,27 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
     const position = side === "left" ? Position.Left : side === "right" ? Position.Right : side === "top" ? Position.Top : Position.Bottom;
     return { position, style: { left: `${x * 100}%`, top: `${y * 100}%`, transform: "translate(-50%, -50%)" } };
   };
-  const movePortFromPointer = (event: PointerEvent<HTMLDivElement>, key: string) => {
+  const startPortDrag = (event: PointerEvent<HTMLElement>, key: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    portDragRef.current = { key, pointerId: event.pointerId };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const movePortFromPointer = (event: PointerEvent<HTMLElement>, key: string) => {
     const bounds = event.currentTarget.closest(".react-flow__node")?.getBoundingClientRect();
     if (!bounds) return;
     updatePortPosition(key, (event.clientX - bounds.left) / bounds.width, (event.clientY - bounds.top) / bounds.height);
   };
+  const stopPortDrag = (event: PointerEvent<HTMLElement>, key: string) => {
+    if (portDragRef.current?.key !== key) return;
+    portDragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+  const repositionGripStyle = (handle: ReturnType<typeof handlePosition>) => ({
+    ...handle.style,
+    marginLeft: handle.position === Position.Left ? "12px" : handle.position === Position.Right ? "-12px" : undefined,
+    marginTop: handle.position === Position.Top ? "12px" : handle.position === Position.Bottom ? "-12px" : undefined,
+  });
   useEffect(() => {
     if (initialFitDoneRef.current || !flowInstanceRef.current || session.nodes.length === 0) return;
     const frame = globalThis.requestAnimationFrame(() => flowInstanceRef.current?.fitView({ padding: 0.2 }));
@@ -304,13 +320,13 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
     data: {
       label: (
         <div className={`flow-node-content node-kind-${node.kind}`} aria-label={`${node.name}, ${node.kind}`}>
-          {node.ports.filter((port) => port.direction === "input").map((port, portIndex) => { const placement = portPosition(node, port, portIndex); const handle = handlePosition(placement.x, placement.y); return <Handle key={`input-${port.name}`} type="target" id={port.name} position={handle.position} style={handle.style} aria-label={`${node.name} ${port.name} input`} title="Hold Shift and drag to reposition" onPointerDown={(event) => { if (!event.shiftKey) return; event.preventDefault(); event.stopPropagation(); portDragRef.current = { key: placement.key, pointerId: event.pointerId }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { if (portDragRef.current?.key === placement.key) movePortFromPointer(event, placement.key); }} onPointerUp={(event) => { if (portDragRef.current?.key !== placement.key) return; portDragRef.current = null; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} />; })}
+          {node.ports.filter((port) => port.direction === "input").map((port, portIndex) => { const placement = portPosition(node, port, portIndex); const handle = handlePosition(placement.x, placement.y); return <Fragment key={`input-${port.name}`}><Handle type="target" id={port.name} position={handle.position} style={handle.style} aria-label={`${node.name} ${port.name} input`} title="Connection point" onPointerDown={(event) => { if (!event.shiftKey) return; startPortDrag(event, placement.key); }} onPointerMove={(event) => { if (portDragRef.current?.key === placement.key) movePortFromPointer(event, placement.key); }} onPointerUp={(event) => stopPortDrag(event, placement.key)} /><span className="port-reposition-grip nodrag nopan" role="button" tabIndex={0} aria-label={`Reposition ${node.name} ${port.name} input`} title="Drag to reposition input" style={repositionGripStyle(handle)} onPointerDown={(event) => startPortDrag(event, placement.key)} onPointerMove={(event) => { if (portDragRef.current?.key === placement.key) movePortFromPointer(event, placement.key); }} onPointerUp={(event) => stopPortDrag(event, placement.key)} onPointerCancel={(event) => stopPortDrag(event, placement.key)}>↕</span></Fragment>; })}
           <div className="flow-node-kicker"><span className="node-kind">{node.kind}</span><span className={`node-state ${node.bypass ? "is-bypassed" : node.enabled ? "is-ready" : "is-disabled"}`}>{node.bypass ? "bypass" : node.enabled ? "ready" : "off"}</span></div>
           <div className="flow-node-title"><strong>{node.name}</strong>{canEdit && <button type="button" className="flow-node-delete" aria-label={`Delete ${node.name}`} title={`Delete ${node.name}`} onClick={(event) => { event.stopPropagation(); if (onRemoveNode) onRemoveNode(node.id); else globalThis.dispatchEvent(new CustomEvent("audiorouter:remove-node", { detail: { nodeId: node.id } })); }}>×</button>}</div>
           <NodeVisual node={node} telemetry={telemetry} onSetNodeParameter={onSetNodeParameter} />
           <small className="node-port-count">{node.ports.length} port{node.ports.length === 1 ? "" : "s"} · {node.enabled ? "enabled" : "disabled"}</small>
           <span className="flow-port-list">{nodePortLabels(node).map((port) => <small key={port}>{port}</small>)}</span>
-          {node.ports.filter((port) => port.direction === "output").map((port, portIndex) => { const placement = portPosition(node, port, portIndex); const handle = handlePosition(placement.x, placement.y); return <Handle key={`output-${port.name}`} type="source" id={port.name} position={handle.position} style={handle.style} aria-label={`${node.name} ${port.name} output`} title="Hold Shift and drag to reposition" onPointerDown={(event) => { if (!event.shiftKey) return; event.preventDefault(); event.stopPropagation(); portDragRef.current = { key: placement.key, pointerId: event.pointerId }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { if (portDragRef.current?.key === placement.key) movePortFromPointer(event, placement.key); }} onPointerUp={(event) => { if (portDragRef.current?.key !== placement.key) return; portDragRef.current = null; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} />; })}
+          {node.ports.filter((port) => port.direction === "output").map((port, portIndex) => { const placement = portPosition(node, port, portIndex); const handle = handlePosition(placement.x, placement.y); return <Fragment key={`output-${port.name}`}><Handle type="source" id={port.name} position={handle.position} style={handle.style} aria-label={`${node.name} ${port.name} output`} title="Connection point" onPointerDown={(event) => { if (!event.shiftKey) return; startPortDrag(event, placement.key); }} onPointerMove={(event) => { if (portDragRef.current?.key === placement.key) movePortFromPointer(event, placement.key); }} onPointerUp={(event) => stopPortDrag(event, placement.key)} /><span className="port-reposition-grip nodrag nopan" role="button" tabIndex={0} aria-label={`Reposition ${node.name} ${port.name} output`} title="Drag to reposition output" style={repositionGripStyle(handle)} onPointerDown={(event) => startPortDrag(event, placement.key)} onPointerMove={(event) => { if (portDragRef.current?.key === placement.key) movePortFromPointer(event, placement.key); }} onPointerUp={(event) => stopPortDrag(event, placement.key)} onPointerCancel={(event) => stopPortDrag(event, placement.key)}>↕</span></Fragment>; })}
         </div>
       ),
     },

@@ -202,7 +202,7 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .session-flow-canvas .react-flow__node { min-width: 218px !important; padding: 0 !important; border: 1px solid #5d7180 !important; border-radius: 12px !important; color: var(--text-strong) !important; background: linear-gradient(145deg, #3b4853, #222a32) !important; box-shadow: inset 1px 1px 0 rgb(255 255 255 / 16%), 7px 10px 18px rgb(0 0 0 / 34%) !important; }
 .session-flow-canvas .react-flow__node:hover { box-shadow: inset 1px 1px 0 rgb(255 255 255 / 20%), 9px 15px 24px rgb(0 0 0 / 40%) !important; }
 .session-flow-canvas .react-flow__node.selected { border-color: var(--signal-hot) !important; box-shadow: inset 1px 1px 0 rgb(255 255 255 / 22%), 0 0 0 2px rgb(255 209 102 / 34%), 9px 15px 24px rgb(0 0 0 / 42%) !important; }
-.flow-node-content { min-height: 150px; padding: .72rem .8rem .65rem; gap: .38rem; }
+.flow-node-content { position: relative; min-height: 150px; padding: .72rem .8rem .65rem; gap: .38rem; }
 .flow-node-kicker { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
 .flow-node-content .node-kind { color: #8bd9eb; font-size: .62rem; letter-spacing: .12em; }
 .node-state { padding: .13rem .35rem; border: 1px solid rgb(255 255 255 / 18%); border-radius: 99px; color: var(--text-soft); font-size: .58rem; letter-spacing: .08em; text-transform: uppercase; }
@@ -214,6 +214,8 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .flow-port-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .18rem .35rem; padding-top: .12rem; }
 .flow-port-list small { overflow: hidden; color: #b3c0cd; font-size: .63rem; text-overflow: ellipsis; white-space: nowrap; }
 .session-flow-canvas .react-flow__handle { width: .72rem; height: .72rem; border: 2px solid #182027; background: var(--cyan); box-shadow: 0 0 0 2px rgb(37 184 223 / 24%), 0 0 12px rgb(37 184 223 / 55%); }
+.port-reposition-grip { position: absolute; z-index: 6; display: grid; width: 1.15rem; height: 1.15rem; place-items: center; border: 1px solid #b9d6e2; border-radius: 50%; color: #14212a; background: #8edcf0; box-shadow: 0 0 0 2px rgb(37 184 223 / 20%), 0 2px 6px rgb(0 0 0 / 30%); cursor: move; font-size: .65rem; font-weight: 800; line-height: 1; pointer-events: all; user-select: none; }
+.port-reposition-grip:hover, .port-reposition-grip:focus-visible { border-color: #fff; background: var(--signal-hot); outline: 2px solid rgb(255 209 102 / 35%); outline-offset: 2px; }
 .node-meter { display: grid; grid-template-columns: 24px 1fr; align-items: end; gap: .55rem; min-height: 48px; padding: .4rem .5rem; border: 1px solid rgb(0 0 0 / 25%); border-radius: 7px; background: rgb(13 17 21 / 34%); }
 .node-meter-track { position: relative; height: 42px; overflow: hidden; border-radius: 4px; background: linear-gradient(to top, #2d9e78 0 66%, #e9bf52 67% 84%, #d65d58 85%); }
 .node-meter-track::after { position: absolute; inset: 0; content: ""; background: repeating-linear-gradient(to top, transparent 0 7px, rgb(12 18 20 / 50%) 8px); }
