@@ -168,3 +168,8 @@ Connection creation now exposes four real handle positions for every logical
 port. The canvas normalizes the selected side back to the backend port identity
 and stores the selected source/target sides on the new edge, so a bottom-to-top
 connection is a normal supported graph edit rather than a visual-only path.
+The connection-start regression showed that React Flow can report a null
+handleId when its internal handle callback is bypassed. The node now captures
+the explicitly hit side during pointer capture and uses that identity as the
+fallback before normalizing the backend port. The focused canvas suite passes;
+attended browser confirmation remains required for the physical drag gesture.

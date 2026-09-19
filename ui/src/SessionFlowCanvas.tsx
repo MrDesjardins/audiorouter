@@ -15,7 +15,7 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import type { DiagnosticsSnapshot, Node, Session } from "@audiorouter/contracts";
 import { clearLayout, readLayout, writeLayout, type LayoutPositions } from "./layout";
 import { nodePortLabels, relatedNodeIds } from "./graphView";
@@ -310,19 +310,41 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
   };
   const nodes: FlowNode[] = session.nodes.map((node, index) => {
     const telemetry = nodeTelemetryFor(node, diagnostics);
+    const captureConnectionHandle = (event: MouseEvent<HTMLDivElement> | PointerEvent<HTMLDivElement>) => {
+      const target = event.target as HTMLElement | null;
+      const handle = target?.closest<HTMLElement>("[data-debug-handle-id]");
+      if (!handle) return;
+      const handleId = handle.dataset.debugHandleId;
+      const side = handle.dataset.debugSide as EdgeSide | undefined;
+      const direction = handle.dataset.debugDirection as "source" | "target" | undefined;
+      if (!handleId || !side || !direction) return;
+      const captured = { nodeId: node.id, handleId, side };
+      if (direction === "source") sourceHandleRef.current = captured;
+      else targetHandleRef.current = captured;
+      logConnectionDebug("handle-capture", {
+        nodeId: node.id,
+        nodeName: node.name,
+        direction,
+        side,
+        handleId,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        button: event.button,
+      });
+    };
     return ({
     id: node.id,
     position: positions[node.id] ?? positionFor(index),
     data: {
       label: (
-        <div className={`flow-node-content node-kind-${node.kind}`} aria-label={`${node.name}, ${node.kind}`}>
-          {node.ports.filter((port) => port.direction === "input").map((port, portIndex, ports) => { const offset = `${((portIndex + 1) / (ports.length + 1)) * 100}%`; return EDGE_SIDES.map((side) => <Handle key={`input-${port.name}-${side}`} type="target" id={edgeHandleId(port.name, side)} position={edgeSidePosition(side)} style={side === "left" || side === "right" ? { top: offset } : { left: offset }} aria-label={side === "left" ? `${node.name} ${port.name} input` : `${node.name} ${port.name} input ${side} connector`} data-debug-side={side} onMouseDown={(event) => { const handleId = edgeHandleId(port.name, side); targetHandleRef.current = { nodeId: node.id, handleId, side }; logConnectionDebug("handle-mousedown", { nodeId: node.id, nodeName: node.name, direction: "target", port: port.name, side, handleId, clientX: event.clientX, clientY: event.clientY, button: event.button }); }} onPointerDown={(event) => logConnectionDebug("handle-pointer-down", { nodeId: node.id, nodeName: node.name, direction: "target", port: port.name, side, handleId: edgeHandleId(port.name, side), clientX: event.clientX, clientY: event.clientY, button: event.button })} />); })}
+        <div className={`flow-node-content node-kind-${node.kind}`} aria-label={`${node.name}, ${node.kind}`} onMouseDownCapture={captureConnectionHandle} onPointerDownCapture={captureConnectionHandle}>
+          {node.ports.filter((port) => port.direction === "input").map((port, portIndex, ports) => { const offset = `${((portIndex + 1) / (ports.length + 1)) * 100}%`; return EDGE_SIDES.map((side) => { const handleId = edgeHandleId(port.name, side); return <Handle key={`input-${port.name}-${side}`} type="target" id={handleId} position={edgeSidePosition(side)} style={side === "left" || side === "right" ? { top: offset } : { left: offset }} aria-label={side === "left" ? `${node.name} ${port.name} input` : `${node.name} ${port.name} input ${side} connector`} data-debug-side={side} data-debug-direction="target" data-debug-handle-id={handleId} onMouseDown={(event) => { targetHandleRef.current = { nodeId: node.id, handleId, side }; logConnectionDebug("handle-mousedown", { nodeId: node.id, nodeName: node.name, direction: "target", port: port.name, side, handleId, clientX: event.clientX, clientY: event.clientY, button: event.button }); }} onPointerDown={(event) => logConnectionDebug("handle-pointer-down", { nodeId: node.id, nodeName: node.name, direction: "target", port: port.name, side, handleId, clientX: event.clientX, clientY: event.clientY, button: event.button })} />; }); })}
           <div className="flow-node-kicker"><span className="node-kind">{node.kind}</span><span className={`node-state ${node.bypass ? "is-bypassed" : node.enabled ? "is-ready" : "is-disabled"}`}>{node.bypass ? "bypass" : node.enabled ? "ready" : "off"}</span></div>
           <div className="flow-node-title"><strong>{node.name}</strong>{canEdit && <button type="button" className="flow-node-delete" aria-label={`Delete ${node.name}`} title={`Delete ${node.name}`} onClick={(event) => { event.stopPropagation(); if (onRemoveNode) onRemoveNode(node.id); else globalThis.dispatchEvent(new CustomEvent("audiorouter:remove-node", { detail: { nodeId: node.id } })); }}>×</button>}</div>
           <NodeVisual node={node} telemetry={telemetry} onSetNodeParameter={onSetNodeParameter} />
           <small className="node-port-count">{node.ports.length} port{node.ports.length === 1 ? "" : "s"} · {node.enabled ? "enabled" : "disabled"}</small>
           <span className="flow-port-list">{nodePortLabels(node).map((port) => <small key={port}>{port}</small>)}</span>
-          {node.ports.filter((port) => port.direction === "output").map((port, portIndex, ports) => { const offset = `${((portIndex + 1) / (ports.length + 1)) * 100}%`; return EDGE_SIDES.map((side) => <Handle key={`output-${port.name}-${side}`} type="source" id={edgeHandleId(port.name, side)} position={edgeSidePosition(side)} style={side === "left" || side === "right" ? { top: offset } : { left: offset }} aria-label={side === "right" ? `${node.name} ${port.name} output` : `${node.name} ${port.name} output ${side} connector`} data-debug-side={side} onMouseDown={(event) => { const handleId = edgeHandleId(port.name, side); sourceHandleRef.current = { nodeId: node.id, handleId, side }; logConnectionDebug("handle-mousedown", { nodeId: node.id, nodeName: node.name, direction: "source", port: port.name, side, handleId, clientX: event.clientX, clientY: event.clientY, button: event.button }); }} onPointerDown={(event) => logConnectionDebug("handle-pointer-down", { nodeId: node.id, nodeName: node.name, direction: "source", port: port.name, side, handleId: edgeHandleId(port.name, side), clientX: event.clientX, clientY: event.clientY, button: event.button })} />); })}
+          {node.ports.filter((port) => port.direction === "output").map((port, portIndex, ports) => { const offset = `${((portIndex + 1) / (ports.length + 1)) * 100}%`; return EDGE_SIDES.map((side) => { const handleId = edgeHandleId(port.name, side); return <Handle key={`output-${port.name}-${side}`} type="source" id={handleId} position={edgeSidePosition(side)} style={side === "left" || side === "right" ? { top: offset } : { left: offset }} aria-label={side === "right" ? `${node.name} ${port.name} output` : `${node.name} ${port.name} output ${side} connector`} data-debug-side={side} data-debug-direction="source" data-debug-handle-id={handleId} onMouseDown={(event) => { sourceHandleRef.current = { nodeId: node.id, handleId, side }; logConnectionDebug("handle-mousedown", { nodeId: node.id, nodeName: node.name, direction: "source", port: port.name, side, handleId, clientX: event.clientX, clientY: event.clientY, button: event.button }); }} onPointerDown={(event) => logConnectionDebug("handle-pointer-down", { nodeId: node.id, nodeName: node.name, direction: "source", port: port.name, side, handleId, clientX: event.clientX, clientY: event.clientY, button: event.button })} />; }); })}
         </div>
       ),
     },
