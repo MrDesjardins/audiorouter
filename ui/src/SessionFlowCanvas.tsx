@@ -310,7 +310,10 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
   };
   const captureConnectionHandle = (event: { target: EventTarget | null; clientX?: number; clientY?: number; button?: number }) => {
     const target = event.target as HTMLElement | null;
-    const handle = target?.closest<HTMLElement>("[data-debug-handle-id]");
+    let handle = target?.closest<HTMLElement>("[data-debug-handle-id]");
+    if (!handle && typeof document !== "undefined" && event.clientX !== undefined && event.clientY !== undefined) {
+      handle = document.elementsFromPoint(event.clientX, event.clientY).find((element): element is HTMLElement => element instanceof HTMLElement && Boolean(element.dataset.debugHandleId)) ?? null;
+    }
     if (!handle) return;
     const handleId = handle.dataset.debugHandleId;
     const side = handle.dataset.debugSide as EdgeSide | undefined;
