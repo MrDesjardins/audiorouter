@@ -31,7 +31,24 @@ describe("node library search", () => {
     expect(renderSource?.virtualKind).toBe("virtualRenderSource");
     expect(captureSink?.virtualKind).toBe("virtualCaptureSink");
     expect(renderSource?.kind).toBeUndefined();
-    expect(captureSink?.unavailableReason).toBe("Requires the deferred AudioRouter-managed signed driver");
+    expect(captureSink?.unavailableReason).toContain("Requires the deferred AudioRouter-managed signed driver");
+    expect(captureSink?.unavailableReason).toContain("Existing virtual output");
+  });
+
+  it("points the deferred managed-driver path at the free existing-endpoint alternative", () => {
+    const renderSource = libraryEntries.find((entry) => entry.id === "virtual-render-source");
+    expect(renderSource?.unavailableReason).toContain("Existing virtual input");
+    const existingInput = libraryEntries.find((entry) => entry.id === "existing-virtual-input");
+    const existingOutput = libraryEntries.find((entry) => entry.id === "existing-virtual-output");
+    expect(existingInput?.kind).toBe("physicalInput");
+    expect(existingInput?.note).toMatch(/voicemeeter/i);
+    expect(existingOutput?.note).toMatch(/voicemeeter/i);
+    expect(filterLibraryEntries(libraryEntries, "voicemeeter").map((entry) => entry.id).sort()).toEqual([
+      "existing-virtual-input",
+      "existing-virtual-output",
+      "virtual-capture-sink",
+      "virtual-render-source",
+    ]);
   });
 
   it("returns all entries for blank queries", () => {

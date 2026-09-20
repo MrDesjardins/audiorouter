@@ -2,17 +2,23 @@
 
 Milestone ownership: M00 driver decision/prototype; M03 endpoint functionality; M07 ownership/recovery; M08 production signing, installation, and uninstall.
 
-## Current scope decision (2026-09-17)
+## Current scope decision (2026-09-19, supersedes 2026-09-17)
 
-AudioRouter-owned kernel virtual-device development is on hold because the
-project does not currently have the production signing and trusted installation
-authority required for a safe Windows release. The current product work uses
-an already-installed third-party VB-Cable pair, Voicemeeter, and physical
-WASAPI endpoints as external I/O boundaries. That path supports guarded
-user-mode routing, tool integration, and editor development, but it does not
-claim VDEV-01, VDEV-03, VDEV-09, AudioRouter-owned endpoint persistence, or a
-production virtual driver. The normative managed-device requirements remain
-unchanged and are deferred, not waived.
+AudioRouter-owned kernel virtual-device development is set aside indefinitely
+by explicit user decision: production driver signing costs money the project
+does not have, and this is a deliberate scope boundary, not a temporary
+blocker awaiting a future signing budget. The project's supported and
+complete virtual-routing strategy is binding to already-installed
+third-party endpoints — VoiceMeeter Banana, VB-Cable, and physical WASAPI
+devices — as ordinary `physicalInput`/`physicalOutput` graph nodes. This is
+not an interim substitute for a managed bus; it is v1's permanent design.
+That path supports guarded user-mode routing, tool integration, and editor
+development, but it does not claim VDEV-01, VDEV-03, VDEV-09,
+AudioRouter-owned endpoint persistence, or a production virtual driver. The
+normative managed-device requirements below remain textually accurate for a
+possible future signed track but are explicitly excluded from this
+project's v1 completion target; see
+[the set-aside driver plan](../plans/future/M03-driver-signing.md).
 
 ## Endpoint terminology
 

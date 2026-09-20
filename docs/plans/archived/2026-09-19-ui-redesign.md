@@ -1,6 +1,9 @@
 # AudioRouter UI redesign plan
 
-Status: implementation in progress, 2026-09-18
+Status: implementation complete, archived 2026-09-19. Attended Windows
+Narrator, display-scaling, and live drag-and-drop verification remain open
+and are tracked centrally in [the active plan](../active/current.md) rather
+than duplicated here.
 
 ## Objective
 
@@ -58,10 +61,12 @@ selected processor without decoding a control-plane dashboard.
 - [x] Add focused canvas tests for EQ geometry and active-edge classification;
   meter rendering and reduced-motion behavior remain covered by the visual
   shell check below.
-- [ ] Run UI typecheck, Vitest, production build, M05 acceptance, and inspect
-  the rebuilt native shell at 1280×720 and maximized size. Automated checks
-  pass; native shell visual inspection remains pending because the attended
-  computer-use surface is currently unavailable.
+- [x] Run UI typecheck, Vitest, production build, and M05 acceptance; these
+  automated checks pass (262/262 tests as of 2026-09-19). Attended native
+  shell inspection at 1280×720/maximized happened once for the click-path and
+  first-run state (2026-09-18, recorded in [the active plan](../active/current.md));
+  Narrator, Windows display-scaling, and live drag-and-drop attended
+  verification remain open and are tracked there, not here.
 
 ## Acceptance checklist
 
@@ -173,3 +178,85 @@ handleId when its internal handle callback is bypassed. The node now captures
 the explicitly hit side during pointer capture and uses that identity as the
 fallback before normalizing the backend port. The focused canvas suite passes;
 attended browser confirmation remains required for the physical drag gesture.
+
+## 2026-09-19 connection-handle correctness and clobbered-notice fixes
+
+Correction: the 2026-09-18 entry above claimed a bottom-to-top connection was
+"a normal supported graph edit," but the target side was not actually
+preserved. `onConnectEnd` re-decoded the side from `pending.connection.targetHandle`,
+which had already been stripped to a bare port name by the initial `onConnect`
+handler, so `logicalPortHandle` always returned `side: undefined` for the
+target and every connection rendered as if dropped on the input's left side
+regardless of where the user actually released it. Source-side selection was
+unaffected because `sourceSide` was carried as its own field instead of being
+round-tripped through the stripped handle string, which is what hid the
+asymmetry. Fix: the raw (undecoded) target handle id is now preserved
+alongside the pending connection (`pendingConnectionRef.current.rawTargetHandle`)
+and `onConnectEnd` decodes the side from that raw value instead of the
+already-stripped port name.
+
+A second, structural defect was found and fixed in the same pass: for a node
+with exactly one input port and one output port, both ports' four side
+handles were positioned at the same 50% offset per side (offsets were
+computed independently per direction), so the two handle rings landed on
+identical pixels. The later-rendered output handle always won hit testing,
+making that node's input handle on any given side ungrabbable. `portOffset()`
+now slots every port against the node's *full* port list (not just
+same-direction ports), guaranteeing each port gets a distinct offset.
+
+A third defect, unrelated to handles: the shared `actionMessage` status
+banner was being clobbered. When a `virtualBridge.expired` or
+`devices.bindingInvalidated` event arrived, the intended safety notice
+("Virtual bridge lease expired...", "Native endpoint binding changed; audio
+is stopped...") was immediately overwritten by the same automatic resync
+path's unconditional `refreshDevices()` call, which set "Refreshing audio
+endpoints..." and then "Audio endpoint refresh completed...". A user could
+therefore never actually see the safety-relevant notice explaining why audio
+had stopped. `refreshDevices` now takes an `{ announce }` option (default
+`true`); the two automatic/background call sites (`refresh()` and the poll's
+event-driven resync branch) pass `announce: false`, while the "Refresh
+available inputs/outputs" inspector buttons keep the default announced
+behavior. This was caught by two pre-existing failing tests in
+`App.accessibility.test.tsx` that had been failing before this session
+started (present on `main` prior to any of today's changes) and are fixed by
+this change.
+
+Handle decluttering was also applied: idle handles now render at reduced
+opacity with a light glow, brighten on hover/focus, and fade further for
+non-matching handles while a connection is actively being dragged (using
+React Flow's own `connectionindicator` class, so idle appearance is
+unaffected).
+
+Verification: `npm run typecheck` is clean, and the full Vitest suite passes
+262/262 (previously 260/262, with the 2 failures above now fixed). The
+target-side and handle-overlap fixes were verified with real mouse drags in
+Chrome against a new no-backend harness (`ui/harness.html` +
+`ui/src/devHarness.tsx`) that mounts `SessionFlowCanvas` directly with a
+local demo session and `canEdit` always on. This exists because the app's
+backend transport is an authenticated same-user Windows named pipe that a
+browser can never reach (`docs/spec/10-api.md`), so the normal dev server
+always renders a disconnected, non-editable preview; the harness is the only
+way to exercise canvas drag/connect behavior without the native Windows
+shell. Two drags were verified this way: Microphone's bottom output handle to
+Headphones' top input handle (edge menu confirmed Source: bottom, Target:
+top), and Voice gain's right output handle to Headphones' left input handle
+(confirmed Source: right, Target: left). A third drag confirmed the
+handle-overlap fix by landing directly on Voice gain's now-separate input dot
+after the two ports were visually merged before the fix.
+
+The harness is retained as a standing dev tool for future non-attended UI
+verification, since the named-pipe transport boundary above means this class
+of manual canvas testing can never be done from a browser dev server against
+a live backend, attended or not.
+
+## Handoff
+
+This plan's implementation scope (redesigned node cards, inline telemetry,
+EQ preview, active-edge animation, four-sided connection handles, and the
+defects above) is complete and archived here. The remaining M05 gates —
+attended Windows Narrator, display-scaling, and live drag-and-drop
+verification — were never unique to this plan; they are tracked in
+[the active plan's explicit non-driver audit boundary](../active/current.md)
+and must be closed there, not by reopening this file. Rollback: revert the
+UI-only commits covering this plan's scope; the backend graph, persisted
+layout formats, and API contracts are unchanged by any of this work.

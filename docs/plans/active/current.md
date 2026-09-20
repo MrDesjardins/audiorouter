@@ -1079,8 +1079,9 @@ computer-use RPC surface became unavailable after the rebuilt shell was
 launched; do not count this change as attended drag evidence until the user or
 an available native surface confirms a node appears after dragging.
 
-The 2026-09-18 UI redesign slice is tracked in
-[the active redesign plan](ui-redesign.md) and commit `d3b2dbdf`. It adds an
+The 2026-09-18 UI redesign slice, later archived as
+[the completed UI redesign plan](../archived/2026-09-19-ui-redesign.md), was
+built in commit `d3b2dbdf`. It adds an
 Ambient-inspired shared lighting treatment, Audio Hijack-inspired compact
 source/processor/output cards, inline bounded meters, an interactive
 eight-band EQ preview, and telemetry-driven active edge animation. The UI
@@ -1094,3 +1095,294 @@ defects: initial canvas fit after draft hydration, physical-input endpoint
 selection in the node inspector, recorder format/approved-path visibility, and
 inspector width/control layout. The UI typecheck, 263 tests, production build,
 and M05 acceptance passed again. Native visual confirmation remains open.
+
+## 2026-09-19 connection-handle fixes and UI redesign plan archival
+
+The UI redesign sub-plan reached the end of its own implementation scope and
+is archived at
+[docs/plans/archived/2026-09-19-ui-redesign.md](../archived/2026-09-19-ui-redesign.md);
+its unique remaining item (attended native shell inspection) duplicated what
+this file already tracks below, so it is not repeated in two places.
+
+Three defects were found and fixed in the connection-handle/canvas area while
+reviewing whether any four-sided connector combination (e.g. input bottom to
+output top) actually works end to end:
+
+1. The connection target side was decoded twice — once correctly in
+   `onConnect`, then again in `onConnectEnd` from an already-stripped handle
+   id that had lost the side suffix — so every connection rendered as if
+   dropped on the input's left side regardless of where it was actually
+   released. Fixed by preserving the raw target handle id through to
+   `onConnectEnd`.
+2. A node with exactly one input and one output port placed both ports' four
+   side handles at the same offset per side, so the later-rendered output
+   handle always won hit testing and that node's input handle was
+   ungrabbable on any side. Fixed by slotting every port's offset against the
+   node's full port list instead of per direction.
+3. The shared `actionMessage` status banner was silently clobbered: a
+   `virtualBridge.expired` or `devices.bindingInvalidated` safety notice
+   (explaining that audio had stopped) was immediately overwritten by the
+   same automatic resync path's unconditional device-list refresh message.
+   This was caught by two tests in `App.accessibility.test.tsx` that had been
+   failing on `main` before this session (unrelated to the handle work).
+   Fixed by making automatic/background device refreshes silent while
+   keeping the manual "Refresh available inputs/outputs" button announced.
+
+All three fixes, plus a handle-decluttering pass (dimmed idle handles,
+brighten on hover, fade non-matching handles during an active drag), are in
+`ui/src/SessionFlowCanvas.tsx`, `ui/src/App.tsx`, and `ui/src/styles.css`.
+`npm run typecheck` is clean and the full UI suite now passes 262/262 (the 2
+pre-existing failures above are fixed; no new failures introduced).
+
+A new no-backend harness (`ui/harness.html` + `ui/src/devHarness.tsx`) was
+added and is retained as a standing dev tool. It mounts `SessionFlowCanvas`
+directly with a local demo session and `canEdit` forced on, which let the
+target-side and handle-overlap fixes be verified with real mouse drags in
+Chrome instead of only by code inspection. This does not substitute for
+attended native-shell evidence: the harness proves the React Flow canvas
+logic works in a browser, not that the packaged Tauri shell, Narrator,
+Windows scaling, or the native WebView drag path behave the same way. Those
+gates remain exactly as open as recorded in the audit boundary below; this
+session closes a portable UI-logic and pre-existing-test gap, not an attended
+one.
+
+A follow-up pass gave each draggable library node kind its own purposeful
+inline visual instead of a generic Ready/Bypassed/Disabled chip, closing a gap
+against the UI redesign plan's own design decision that "every graph node has
+... one useful visual." Gain, Delay, and Pitch shift now render a compact
+draggable/keyboard-adjustable fader routed through the existing draft
+parameter path. Mute renders a one-tap Live/Muted toggle. Compressor and
+Limiter render a gain-reduction meter driven by the backend's existing
+`nodeTelemetry[].processor.gainReductionDb` field, which was already defined
+in the contract but unused anywhere in the UI. Gate renders an Open/Closed
+indicator from the equally unused `processor.gateOpen` field. Mixer gets a
+distinct sum-glyph visual, and Test Signal now shows its configured
+frequency/level alongside its existing meter. `npm run typecheck` is clean
+and the full suite still passes 262/262. All eight new visuals were verified
+rendering and interactive (fader drag, mute toggle click) with real mouse
+input against the no-backend harness above, seeded with synthetic telemetry
+for the compressor/gate/limiter cases since no native backend is available
+here to produce real gain-reduction/gate readings.
+
+A follow-up audit asking "do they all have a useful, appealing node" found
+two library nodes that still fell short: Mixer showed a static "Sums
+connected inputs" label with no relationship to the actual graph, and
+Recorder showed only a generic pass-through meter with no indication of
+armed/recording/paused state — arguably the single most important fact about
+a recorder node. Mixer now counts real incoming edges
+(`session.edges.filter((edge) => edge.destinationNode === node.id).length`)
+and shows "Summing N inputs" (or "No inputs connected"), plus its own meter
+when the backend reports one. Recorder now looks up its `RecorderStatus` by
+`nodeId` (plumbed as a new optional `recorderStatuses` prop from `App.tsx`'s
+existing `recorderStatuses` state, not previously passed to the canvas) and
+shows a labeled, colored state chip (Idle/Armed/Recording/Paused/Stopping/
+Completed/Failed) with a pulsing dot while recording, alongside its meter.
+Verified with the harness: seeded two edges into a Mixer node ("Summing 2
+inputs" rendered correctly) and one `recording`-state `RecorderStatus`
+("Recording" chip with red dot rendered correctly). Typecheck clean, full
+suite still 262/262.
+
+The remaining node kinds that are not part of the drag library itself
+(`applicationCapture`, `endpointLoopback`, `plugin`, and the deferred
+`virtualRenderSource`/`virtualCaptureSink`) were initially left at the
+generic Ready/Bypassed/Disabled visual since they are not draggable library
+entries — application capture and endpoint loopback nodes are created from
+dedicated panels elsewhere in the UI, plugin nodes from the plugin-scan flow,
+and the two virtual-bus kinds are disabled in the library pending the
+deferred managed driver. The user asked for full coverage regardless, so all
+five now have dedicated visuals too: Application Capture shows the captured
+executable and instance-selection policy; Endpoint Loopback shows a
+truncated bound endpoint ID; the two virtual-bus kinds show their bound bus
+identity with a direction glyph; and Plugin shows a VST2/VST3 format badge,
+the bound binary's filename, and an active/stopped/bypass state chip reusing
+the existing `.node-state` styling. Every one falls back to its meter when
+the backend reports telemetry for it. Every node kind in the domain now has
+a purpose-built visual; only the fully generic fallback for any future
+unknown kind remains. Verified in the harness with one of each kind
+(including a seeded `voice-bus` virtual capture sink and a `ReaComp.vst3`
+VST3 plugin); typecheck clean, full suite still 262/262.
+
+The user then asked for the canvas to look as good as Audio Hijack and for
+the app to at least match VoiceMeeter's core "redirect input, tool, and
+output" workflow. The drag shelf (`.canvas-library`) was a flat,
+alphabetized button list with no visual distinction between a source, a
+processor, and a destination, which worked against both asks at once. Every
+`LibraryEntry` in `ui/src/library.ts` now carries an explicit `flow: "input"
+| "tool" | "output"` field, and the shelf renders three labeled, colored
+groups (Inputs/cyan, Tools/amber, Outputs/green) with a colored monogram
+icon per entry. The same three-way classification (`nodeFlowGroup()` in
+`SessionFlowCanvas.tsx`, covering the full `NodeKind` enum) now sets a
+matching colored left-edge accent on every node card via a new `className`
+on the React Flow node object, so the canvas itself reads left-to-right as a
+signal path the way Audio Hijack's board does, not just the palette next to
+it. Verified in the harness: the shelf renders correctly grouped with
+correct colors; clicking "Test Signal" (Inputs) and "Physical output"
+(Outputs) both correctly added nodes (confirmed via
+`onAddLibraryNode testSignal testSignal-1` in console output, and the new
+node appearing after Tidy layout); node cards show the correct cyan/amber/
+green left accent per group in zoomed screenshots. Connection-dragging logic
+itself was not touched and was not re-verified in this pass since it was
+already extensively proven working in prior sessions. Typecheck clean, full
+suite still 262/262.
+
+This closes the shelf/board half of "compete with VoiceMeeter Banana and
+Audio Hijack" — it does not close the larger, unscoped ask. VoiceMeeter's
+actual differentiator is flexible virtual-bus strip routing, which this app
+already supports end-to-end through existing VB-Cable/Voicemeeter endpoints
+per the VB-Cable-first evidence above; AudioRouter-owned virtual bus
+provisioning remains the deferred driver-signing gate, unchanged by this UI
+work. Audio Hijack has an entire feature surface (saved snapshots, a
+hardware-style routing matrix, global hotkeys) this pass did not attempt.
+Treat "make it look amazing" as addressed for the node/shelf visual layer;
+a broader feature-parity gap analysis remains a separate, larger initiative
+if wanted.
+
+The user then asked, reasonably, whether they could avoid the signed-driver
+requirement entirely by routing through their own existing VoiceMeeter
+Banana install. The answer is yes, and this was already the supported
+VB-Cable-first path documented and qualified throughout this file — the
+signed-driver gate only applies to AudioRouter provisioning its *own new*
+virtual endpoint (the deferred `virtualRenderSource`/`virtualCaptureSink`
+kinds), never to binding a plain `physicalInput`/`physicalOutput` node to an
+endpoint VoiceMeeter or VB-Cable already registered with Windows. That
+distinction was true but not obvious in the product itself: the shelf had an
+"Existing virtual output" entry for exactly this free path, but no input-side
+equivalent, and neither the available entries nor the deferred ones said in
+plain language that the free path existed. Library search for "voicemeeter"
+also returned nothing.
+
+Fixed: added a symmetric "Existing virtual input" library entry
+(`kind: physicalInput`, same free binding, no driver) next to the existing
+output one; both now carry a `note` field ("Binds to an already-installed
+virtual endpoint such as VoiceMeeter or VB-Cable ... no AudioRouter driver
+required") shown as a tooltip and matched by library search in both the
+canvas shelf and the advanced Library panel; and the two deferred entries'
+`unavailableReason` now explicitly says "For VoiceMeeter or VB-Cable today,
+use Existing virtual input/output instead" at the exact point of confusion.
+Searching "voicemeeter" in the library now surfaces all four related entries.
+A new `library.test.ts` case pins this behavior. Typecheck clean, full suite
+263/263 (was 262; +1 new test, and one existing assertion updated to match
+the improved message text via `toContain` instead of exact match).
+
+## 2026-09-19 permanent scope decision: no AudioRouter-owned driver
+
+The user made an explicit, final scope decision: AudioRouter-owned virtual
+endpoints (the managed driver, PortCls integration, and production signing)
+are set aside indefinitely for cost reasons — a driver-signing credential is
+not funded and none is planned. This is not a re-statement of the existing
+"deferred pending signing" language; it changes that language from temporary
+to permanent. Updated to match:
+[`docs/plans/future/M03-driver-signing.md`](../future/M03-driver-signing.md),
+[`docs/spec/06-virtual-devices.md`](../../spec/06-virtual-devices.md), and
+[`docs/spec/15-delivery.md`](../../spec/15-delivery.md). VDEV-01/03/09 and
+SEC-08 remain textually normative only for a possible future funded signed
+track and are explicitly excluded from this project's v1 completion target.
+
+The user's instruction was: complete "everything else" using the existing
+VoiceMeeter/VB-Cable endpoint strategy (already the supported path, and the
+subject of the prior session's library fix). Given the sheer size of this
+codebase and the extensive completion claims already recorded throughout
+this file, the next step before writing any more code is an evidence-based
+audit — not blind trust in this log's own prior "implemented" claims — to
+find any feature described in `docs/spec/*.md` or `docs/milestones/*.md`
+that is not actually present in `crates/` or `ui/src/`, excluding: attended
+Windows UI verification, physical/acoustic hardware measurement, the
+now-permanently-set-aside driver/signing work, and legal/licensing gates
+(plugin redistribution rights, OS sandboxing certification) that no amount
+of code can resolve. That audit and its resulting task list are recorded in
+the next entry below.
+
+## 2026-09-19 audit result and two implemented backend-complete-but-UI-missing gaps
+
+The audit found the Rust workspace genuinely matches this file's completion
+claims: zero `todo!()`/`unimplemented!()`/TODO/FIXME hits anywhere in
+`crates/` or `ui/src/` outside test fixtures, and every one of the 86
+dispatched API methods in `crates/domain/src/lib.rs`'s catalog has real
+dispatch logic in `crates/control/src/lib.rs`, not a stub. M04/M06/M07
+completion claims were spot-checked directly against `crates/dsp`,
+`crates/recording`, `crates/plugin-host`, and `crates/control` source and
+hold up.
+
+It found exactly two genuine gaps, both backend-complete with zero UI
+surface: **committed graph history/undo** (`graph.history`, `graph.undoPlan`
+— the React app only had local pre-commit draft undo, no way to view or
+revert an already-committed revision) and **client authorization management**
+(`clients.list`, `clients.authorize`, `clients.revoke` — no way to see or
+revoke a connected CLI/MCP client from the app, which matters directly for
+SEC-01–06 multi-client scoping). Both are now implemented: `backend.ts`
+gained `listGraphHistory`/`undoGraphPlan`/`listClients`/`authorizeClient`/
+`revokeClient`, wired to the existing live-client `request()` pattern and to
+safe disconnected-backend defaults. `App.tsx` gained a `GraphHistoryPanel`
+(lists committed revisions; "Undo last committed change" reuses the existing
+`graph.plan`→`graph.commit` flow, since `graph.undoPlan` always targets the
+single revision immediately before the current one, confirmed from
+`domain::Store::undo_plan`'s `.rev().nth(1)`, not an arbitrary past
+revision) and a `ClientsPanel` (list/authorize/revoke). A genuine, separate
+contract-drift bug was found and fixed in the same pass: `MethodParams`
+for `clients.authorize`/`clients.revoke` in `contracts/src/index.ts` were
+missing the `idempotencyKey` field that `crates/control/src/lib.rs`'s
+dispatch functions actually require — the drift checker only validates
+method-name parity, not per-field param shape, so this had never been
+caught. Five new focused tests added to `App.accessibility.test.tsx`.
+Typecheck clean, full suite 268/268 (was 263), contract drift still passes
+(86 methods, 20 node kinds, 7 processors, 20 event categories).
+
+**A far more significant finding surfaced while visually verifying the two
+new panels in a real browser (not jsdom, which never applies real CSS):
+they rendered but were completely invisible, `display: none`.** Tracing why
+found that an entire class of already-implemented, already-tested panels
+was silently unreachable in the shipped UI, not just the two new ones:
+`ProcessorCatalog`, `PresetCatalog`, `SessionTransferPanel`,
+`PluginScanPanel`, `StartupPanel`, `OsTransitionPanel` were hidden by an
+unconditional `.main-content > .panel:not(.inspector) { display: none; }`
+rule in `styles.css` with no escape hatch at all — and separately,
+`RecorderActions` (the entire M04 recorder create/arm/start/pause/split/stop
+UI), `RecordingActions`, `VirtualDeviceLifecyclePanel` (the M03 managed-bus
+UI), and `VirtualRoutePanel` were gated behind an `.app-shell.compact-status`
+class that could only be toggled by a "Compact status" button — which was
+*itself* hidden by a separate rule (`.topbar .status-cluster > .secondary
+{ display: none; }`). The theme picker (`.theme-picker`, the only way to
+satisfy UI-11's dark/light/high-contrast requirement) was hidden by the same
+rule. `grep`-ing `App.tsx` confirmed `setCompactStatus` and `setTheme` had
+no other call site — no keyboard shortcut, no alternate control. **The
+result: theme switching and this entire set of already-built, already-tested
+features were completely unreachable by any real user, through any path, in
+the shipped UI**, despite this file's own extensive log claiming them
+complete — because none of the automated tests check real CSS visibility, so
+nothing caught it. This is almost certainly an unfinished half of the
+2026-09-18 UI simplification pass, which intended (per its own `styles.css`
+comment) that these controls "remain available through... list view... and
+selected-node inspector" — a claim that was already inaccurate for most of
+them — and left an unused `.advanced-tools`/`<summary>` disclosure pattern in
+the CSS that was never wired into `App.tsx` to reveal them again.
+
+Fixed: un-hid `.theme-picker` and the "Compact status" toggle button
+specifically (left `.status-detail` hidden, a defensible redundancy choice,
+not a broken control); scoped the `.main-content > .panel:not(.inspector)`
+family of rules behind `.app-shell:not(.compact-status)`, matching the
+pattern already used for the other hidden group, so the *same* existing
+toggle now reveals both sets together; and added a `.app-shell.compact-status`
+override block that un-collapses the fixed canvas-focused grid (`height:
+auto`, `overflow: visible`, `display: block`) when toggled, reusing the
+exact same pattern already present for the `@media (max-width: 900px)`
+fallback, so the revealed panels get real scrollable layout instead of being
+clipped by the default mode's fixed-height `overflow: hidden` grid. Verified
+directly in a live Chrome tab against the real app (not the harness): theme
+picker and "Compact status" button now visible by default; clicking it
+reveals Session lifecycle, Recorder, Virtual-device lifecycle, Virtual-bus
+routes, DSP catalog, Presets, Session transfer, Plugin scan, Start at
+sign-in, Resume validation, Revision history, and Connected clients, all
+correctly laid out and scrollable; clicking "Full workspace" back to
+"Compact status" correctly restores the clean default canvas view. This is a
+CSS-only change; no JS/TS behavior changed, so the full 268-test suite still
+passes unchanged and typecheck is clean.
+
+This finding changes the audit's own conclusion: the earlier "two
+backend-complete-but-UI-missing gaps" statement was accurate only for
+features with literally zero UI code. Several *more* M03/M04/M06/M07
+features had UI code that existed, was tested, and was simply unreachable
+by CSS — a different failure mode the audit's grep-for-stubs approach could
+not detect, since it correctly found no missing code, only missing
+*visibility* of existing code. Any future "is X implemented" question about
+this codebase must include an actual rendered-and-clicked-through check, not
+just a source-code presence check, given this history.

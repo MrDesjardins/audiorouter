@@ -597,6 +597,71 @@ describe("VB-Cable endpoint selection", () => {
   });
 });
 
+describe("committed history and client authorization", () => {
+  it("lists committed revisions and disables undo with fewer than two", async () => {
+    const listGraphHistory = vi.fn(async () => ({ items: [demoSession], nextCursor: null }));
+    render(<App backend={{ ...connectedPreviewBackend(), listGraphHistory }} />);
+    await waitFor(() => expect(listGraphHistory).toHaveBeenCalledWith(demoSession.id, undefined, 10));
+    expect(await screen.findByText(`Revision ${demoSession.revision}`)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Undo last committed change" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("undoes the last committed change through the existing plan/commit path", async () => {
+    const listGraphHistory = vi.fn(async () => ({
+      items: [demoSession, { ...demoSession, revision: demoSession.revision - 1 }],
+      nextCursor: null,
+    }));
+    const undoGraphPlan = vi.fn(async () => ({ planId: "undo-plan-1", baseRevision: demoSession.revision, expiresInMs: 300000 }));
+    const commitGraph = vi.fn(async () => ({ sessionId: demoSession.id, revision: demoSession.revision + 1 }));
+    render(<App backend={{ ...connectedPreviewBackend(), listGraphHistory, undoGraphPlan, commitGraph }} />);
+    const undoButton = await screen.findByRole("button", { name: "Undo last committed change" });
+    expect((undoButton as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(undoButton);
+    await waitFor(() => expect(undoGraphPlan).toHaveBeenCalledWith(demoSession.id, demoSession.revision));
+    await waitFor(() => expect(commitGraph).toHaveBeenCalledWith("undo-plan-1", demoSession.revision, expect.any(String)));
+    expect(await screen.findByText("Reverted to the previous committed revision.")).toBeTruthy();
+  });
+
+  it("reports a failed undo without crashing", async () => {
+    const listGraphHistory = vi.fn(async () => ({ items: [demoSession, demoSession], nextCursor: null }));
+    const undoGraphPlan = vi.fn(async () => { throw new Error("no undo available"); });
+    render(<App backend={{ ...connectedPreviewBackend(), listGraphHistory, undoGraphPlan }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Undo last committed change" }));
+    expect(await screen.findByText(/no undo available/)).toBeTruthy();
+  });
+
+  it("lists known clients and authorizes a new one", async () => {
+    let clients = [{ clientId: "cli-1", role: "operator", revoked: false }];
+    const listClients = vi.fn(async () => clients);
+    const authorizeClient = vi.fn(async (clientId: string, role: "observer" | "editor" | "operator") => {
+      clients = [...clients, { clientId, role, revoked: false }];
+      return { clientId, role, revoked: false as const };
+    });
+    render(<App backend={{ ...connectedPreviewBackend(), listClients, authorizeClient }} />);
+    expect(await screen.findByText("cli-1")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("New client ID"), { target: { value: "mcp-2" } });
+    fireEvent.change(screen.getByLabelText("New client role"), { target: { value: "editor" } });
+    fireEvent.click(screen.getByRole("button", { name: "Authorize client" }));
+    await waitFor(() => expect(authorizeClient).toHaveBeenCalledWith("mcp-2", "editor", expect.any(String)));
+    expect(await screen.findByText("mcp-2")).toBeTruthy();
+    expect(await screen.findByText(/Authorized mcp-2 as editor/)).toBeTruthy();
+  });
+
+  it("revokes a known client", async () => {
+    let clients = [{ clientId: "cli-1", role: "operator", revoked: false }];
+    const listClients = vi.fn(async () => clients);
+    const revokeClient = vi.fn(async (clientId: string) => {
+      clients = clients.map((client) => (client.clientId === clientId ? { ...client, revoked: true } : client));
+      return { clientId, revoked: true as const, changed: true };
+    });
+    render(<App backend={{ ...connectedPreviewBackend(), listClients, revokeClient }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Revoke" }));
+    await waitFor(() => expect(revokeClient).toHaveBeenCalledWith("cli-1", expect.any(String)));
+    expect(await screen.findByText(/Revoked cli-1/)).toBeTruthy();
+    expect(await screen.findByText(/revoked/)).toBeTruthy();
+  });
+});
+
 describe("keyboard connection dialog", () => {
   it("adds a real processor draft through the canvas drag-and-drop shelf", async () => {
     render(<App backend={connectedPreviewBackend()} />);

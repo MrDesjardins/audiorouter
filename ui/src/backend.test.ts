@@ -146,6 +146,11 @@ describe("snapshot cache", () => {
       revealRecording: async () => { throw new Error("not connected"); },
       setRecordingMetadata: async () => { throw new Error("not connected"); },
       renameRecording: async () => { throw new Error("not connected"); },
+      listGraphHistory: async () => ({ items: [], nextCursor: null }),
+      undoGraphPlan: async () => { throw new Error("not connected"); },
+      listClients: async () => [],
+      authorizeClient: async () => { throw new Error("not connected"); },
+      revokeClient: async () => { throw new Error("not connected"); },
     };
     const second = await cache.refresh(failing);
     expect(first.snapshot?.session.id).toBe(demoSession.id);

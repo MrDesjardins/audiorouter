@@ -1,8 +1,10 @@
 # Archived plans
 
-No implementation plan has been completed and archived as a finished
-milestone yet. The superseded VB-Cable-first rebaseline is retained below as
-an execution-history record, not as a completed milestone.
+The UI redesign sub-plan below completed its own implementation scope and is
+archived as such; the superseded VB-Cable-first rebaseline is retained as an
+execution-history record, not as a completed milestone. Neither entry closes
+the attended Windows accessibility/hardware/release gates tracked in the
+active plan.
 
 This directory stores dated execution records, not copies of the entire specification. Use filenames such as `2026-09-05-M00-feasibility.md` when a milestone actually finishes; the example date is not a claim that M00 is complete.
 
@@ -12,6 +14,7 @@ Keep an index below with date, milestone/task, outcome, and path. Do not move st
 
 ## Index
 
+| 2026-09-19 | UI redesign (M05 visual editor) | Implementation scope complete: node cards, telemetry, EQ preview, four-sided connection handles, and three defect fixes (target-side persistence, handle overlap, clobbered safety notices). Attended Narrator/scaling/drag-drop verification is not closed and is tracked in the active plan. | [2026-09-19-ui-redesign.md](2026-09-19-ui-redesign.md) |
 | 2026-09-17 | VB-Cable-first rebaseline | Superseded before completion; preserves prior execution history and records the driver/signing deferral. | [2026-09-17-vb-cable-rebaseline.md](2026-09-17-vb-cable-rebaseline.md) |
 
 See the [active plan](../active/current.md) for current status and [future backlog](../future/README.md) for deferred scope.

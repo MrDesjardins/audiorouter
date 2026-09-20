@@ -2,18 +2,21 @@
 
 Milestone ownership: all milestones. This is the stable release map; execution status lives in the [active plan](../plans/active/current.md).
 
-## Active scope decision (2026-09-17)
+## Active scope decision (2026-09-19, supersedes 2026-09-17)
 
-The current delivery track is VB-Cable-first. The project-owned kernel driver,
-PortCls integration, production signing, and clean-machine driver installation
-are deferred because the required signing and trusted-installation path is not
-available. Existing VB-Cable/Voicemeeter and physical WASAPI endpoints remain
-the supported external I/O boundary for completing non-driver routing, tool,
-editor, processing, recording, automation, recovery, and documentation work.
-This is a scope deferral, not completion of the M03/M08 managed-driver gates;
-the current profile's supported-device requirements are evidenced through
-existing endpoints, while the managed VDEV and signed-release requirements are
-normative only for a future signed track.
+The delivery track is VB-Cable/Voicemeeter-first, permanently: the
+project-owned kernel driver, PortCls integration, and production signing are
+set aside by explicit user cost decision (a signing credential is not
+funded), not deferred pending a future budget. Existing VB-Cable/Voicemeeter
+and physical WASAPI endpoints are the project's complete, supported
+virtual-routing strategy for v1 — not an interim substitute for a managed
+bus. Completing "everything else" in this delivery map means every
+non-driver, non-signed-release requirement across M00–M08: routing, DSP,
+recording, automation, recovery, CLI/MCP parity, and the visual editor. It
+does not include VDEV-01/03/09, SEC-08, or M08's signed-installer/
+clean-machine gates, which remain normative only for a future funded signed
+track and are explicitly excluded from this project's v1 completion target.
+See [the set-aside driver plan](../plans/future/M03-driver-signing.md).
 
 ## Milestone sequence
 

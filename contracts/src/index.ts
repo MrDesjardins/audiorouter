@@ -1021,8 +1021,8 @@ export type MethodParams = {
   "system.quit": { idempotencyKey: string };
   "system.osTransition": { transition: OsTransition; idempotencyKey: string };
   "clients.list": undefined;
-  "clients.authorize": { clientId: string; role: "observer" | "editor" | "operator" };
-  "clients.revoke": { clientId: string };
+  "clients.authorize": { clientId: string; role: "observer" | "editor" | "operator"; idempotencyKey: string };
+  "clients.revoke": { clientId: string; idempotencyKey: string };
   "operations.get": { operationId: string };
   "operations.cancel": { operationId: string; idempotencyKey?: string };
   "recordings.list":

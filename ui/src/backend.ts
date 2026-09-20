@@ -63,6 +63,11 @@ export type ApplicationRow = ApplicationInfo;
 export type ProcessorResponseParams = NonNullable<MethodParams["processors.response"]>;
 export type ProcessorResponse = MethodResult["processors.response"];
 export type RecorderStatus = MethodResult["recorders.list"][number];
+export type ClientRow = MethodResult["clients.list"][number];
+export type ClientAuthorizeResult = MethodResult["clients.authorize"];
+export type ClientRevokeResult = MethodResult["clients.revoke"];
+export type GraphHistoryPage = MethodResult["graph.history"];
+export type GraphUndoPlanResult = MethodResult["graph.undoPlan"];
 
 /** Formats structured backend failures without losing actionable audio guidance. */
 export function formatUiError(error: unknown, fallback: string): string {
@@ -97,6 +102,8 @@ export interface UiBackend {
   inspectRoute(destinationNode: string): Promise<RouteInspection | null>;
   planGraph(candidate: Session): Promise<GraphPlanResult>;
   commitGraph(planId: string, baseRevision: number, idempotencyKey: string, acknowledgments?: string[]): Promise<GraphCommitResult>;
+  listGraphHistory(sessionId: string, cursor?: string, limit?: number): Promise<GraphHistoryPage>;
+  undoGraphPlan(sessionId: string, baseRevision: number): Promise<GraphUndoPlanResult>;
   listRecordings(sessionId?: string): Promise<RecordingRow[]>;
   listRecorders(): Promise<RecorderStatus[]>;
   listSessions(): Promise<Session[]>;
@@ -160,6 +167,9 @@ export interface UiBackend {
   applyStartup(planId: string, idempotencyKey: string): Promise<StartupApplyResult>;
   registerStartup?(enabled: boolean): Promise<string>;
   startupRegistrationStatus?(): Promise<"registered" | "unregistered">;
+  listClients(): Promise<ClientRow[]>;
+  authorizeClient(clientId: string, role: "observer" | "editor" | "operator", idempotencyKey: string): Promise<ClientAuthorizeResult>;
+  revokeClient(clientId: string, idempotencyKey: string): Promise<ClientRevokeResult>;
 }
 
 export type UiSnapshotState = {
@@ -263,6 +273,12 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     },
     async commitGraph() {
       throw new Error("The backend is disconnected; graph changes are unavailable.");
+    },
+    async listGraphHistory() {
+      return { items: [], nextCursor: null };
+    },
+    async undoGraphPlan() {
+      throw new Error("The backend is disconnected; undo is unavailable.");
     },
     async listRecordings() {
       return [];
@@ -418,6 +434,15 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     async applyStartup() {
       throw new Error("The backend is disconnected; startup apply is unavailable.");
     },
+    async listClients() {
+      return [];
+    },
+    async authorizeClient() {
+      throw new Error("The backend is disconnected; client authorization is unavailable.");
+    },
+    async revokeClient() {
+      throw new Error("The backend is disconnected; client revocation is unavailable.");
+    },
   };
 }
 
@@ -495,6 +520,16 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
         idempotencyKey,
         ...(acknowledgments === undefined ? {} : { acknowledgments }),
       });
+    },
+    async listGraphHistory(historySessionId, cursor, limit) {
+      return client.request("graph.history", {
+        sessionId: historySessionId,
+        ...(cursor === undefined ? {} : { cursor }),
+        ...(limit === undefined ? {} : { limit }),
+      });
+    },
+    async undoGraphPlan(undoSessionId, baseRevision) {
+      return client.request("graph.undoPlan", { sessionId: undoSessionId, baseRevision });
     },
     async listRecordings(recordingSessionId = sessionId) {
       return collectPagedRows(
@@ -721,6 +756,15 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
     },
     async applyStartup(planId, idempotencyKey) {
       return client.request("startup.apply", { planId, idempotencyKey });
+    },
+    async listClients() {
+      return client.request("clients.list", undefined);
+    },
+    async authorizeClient(clientId, role, idempotencyKey) {
+      return client.request("clients.authorize", { clientId, role, idempotencyKey });
+    },
+    async revokeClient(clientId, idempotencyKey) {
+      return client.request("clients.revoke", { clientId, idempotencyKey });
     },
     ...(registerStartup === undefined ? {} : { registerStartup }),
     ...(startupRegistrationStatus === undefined ? {} : { startupRegistrationStatus }),
