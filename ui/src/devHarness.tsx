@@ -55,13 +55,14 @@ const diagnostics: DiagnosticsSnapshot = {
   nativeSessionId: null,
   schedulerTelemetry: null,
   nodeTelemetry: [
-    { nodeId: "mic", kind: "physicalInput", meter: { peakDb: -12, rmsDb: -18, clippedSamples: 0, channelPeakDb: [-12], channelRmsDb: [-18], channelClippedSamples: [0] }, processor: null },
-    { nodeId: "test", kind: "testSignal", meter: { peakDb: -18, rmsDb: -20, clippedSamples: 0, channelPeakDb: [-18, -18], channelRmsDb: [-20, -20], channelClippedSamples: [0, 0] }, processor: null },
-    { nodeId: "comp", kind: "compressor", meter: null, processor: { gainReductionDb: [6.5], gateOpen: [] } },
-    { nodeId: "gate", kind: "gate", meter: null, processor: { gainReductionDb: [], gateOpen: [true] } },
-    { nodeId: "limiter", kind: "limiter", meter: null, processor: { gainReductionDb: [1.2], gateOpen: [] } },
-    { nodeId: "mixer", kind: "mixer", meter: { peakDb: -9, rmsDb: -14, clippedSamples: 0, channelPeakDb: [-9, -9], channelRmsDb: [-14, -14], channelClippedSamples: [0, 0] }, processor: null },
-    { nodeId: "recorder", kind: "recorder", meter: { peakDb: -9, rmsDb: -14, clippedSamples: 0, channelPeakDb: [-9], channelRmsDb: [-14], channelClippedSamples: [0] }, processor: null },
+    { nodeId: "mic", kind: "physicalInput", meter: { peakDb: -12, rmsDb: -18, clippedSamples: 0, channelPeakDb: [-12], channelRmsDb: [-18], channelClippedSamples: [0] }, processor: null, plugin: null },
+    { nodeId: "test", kind: "testSignal", meter: { peakDb: -18, rmsDb: -20, clippedSamples: 0, channelPeakDb: [-18, -18], channelRmsDb: [-20, -20], channelClippedSamples: [0, 0] }, processor: null, plugin: null },
+    { nodeId: "comp", kind: "compressor", meter: null, processor: { gainReductionDb: [6.5], gateOpen: [] }, plugin: null },
+    { nodeId: "gate", kind: "gate", meter: null, processor: { gainReductionDb: [], gateOpen: [true] }, plugin: null },
+    { nodeId: "limiter", kind: "limiter", meter: null, processor: { gainReductionDb: [1.2], gateOpen: [] }, plugin: null },
+    { nodeId: "mixer", kind: "mixer", meter: { peakDb: -9, rmsDb: -14, clippedSamples: 0, channelPeakDb: [-9, -9], channelRmsDb: [-14, -14], channelClippedSamples: [0, 0] }, processor: null, plugin: null },
+    { nodeId: "recorder", kind: "recorder", meter: { peakDb: -9, rmsDb: -14, clippedSamples: 0, channelPeakDb: [-9], channelRmsDb: [-14], channelClippedSamples: [0] }, processor: null, plugin: null },
+    { nodeId: "plugin", kind: "plugin", meter: null, processor: null, plugin: { state: "quarantined", failureCount: 3 } },
   ],
   privacyMute: { muted: false, persistence: "memory" },
   recovery: { safeMode: false, recentCrashes: 0, persistence: "memory" },
@@ -136,6 +137,7 @@ function Harness() {
         onSetNodeParameter={onSetNodeParameter}
         onAddLibraryNode={onAddLibraryNode}
         onAddVirtualBusNode={onAddVirtualBusNode}
+        onOpenPluginPicker={() => console.info("[Harness] onOpenPluginPicker")}
         onToggleConnection={(edgeId, enabled) => setSession((current) => ({ ...current, edges: current.edges.map((edge) => (edge.id === edgeId ? { ...edge, enabled } : edge)) }))}
       />
     </div>

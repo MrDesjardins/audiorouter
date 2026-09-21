@@ -260,11 +260,29 @@ export interface NativeOutputFanoutPrepareResult {
   outputCount: number;
 }
 
+export type NativeMultiInputSourceBinding =
+  | { kind: "physical"; endpointId: string }
+  | {
+      kind: "application";
+      processId: number;
+      executable: string;
+      executablePath: string | null;
+      creationTime100ns: string;
+      mode: "include" | "exclude";
+    };
+
+export interface NativeMultiInputPreparedSource {
+  kind: "physical" | "application";
+  endpointId?: string;
+  processId?: number;
+  executable?: string;
+}
+
 export interface NativeMultiInputPrepareResult {
   sessionId: EntityId;
   generation: number;
   state: "configured-stopped";
-  captureEndpointIds: string[];
+  sources: NativeMultiInputPreparedSource[];
   sourceNodeIds: EntityId[];
   branchNodeIds: EntityId[];
 }
@@ -621,6 +639,10 @@ export interface DiagnosticsSnapshot {
     processor: {
       gainReductionDb: number[];
       gateOpen: boolean[];
+    } | null;
+    plugin: {
+      state: "unknown" | "stopped" | "running" | "failed" | "quarantined";
+      failureCount: number;
     } | null;
   }>;
   privacyMute: { muted: boolean; persistence: "durable" | "memory" };
@@ -1070,7 +1092,7 @@ export type MethodParams = {
   "devices.list": { cursor?: string; limit?: number; includeInactive?: boolean } | undefined;
   "nativeEndpoints.prepare": { sessionId: EntityId; captureEndpointId: string; renderEndpointId: string };
   "nativeOutputs.prepare": { sessionId: EntityId; generation: number; renderEndpointIds: string[] };
-  "nativeMultiInputs.prepare": { sessionId: EntityId; generation: number; captureEndpointIds: string[] };
+  "nativeMultiInputs.prepare": { sessionId: EntityId; generation: number; sources: NativeMultiInputSourceBinding[] };
   "nativeBridges.prepare": { busId: EntityId; generation: number; devicePath: string; renderMappingPath: string; captureMappingPath: string; leaseMs?: number };
   "nativeBridges.detach": { busId: EntityId };
   "nativeBridges.heartbeat": undefined;

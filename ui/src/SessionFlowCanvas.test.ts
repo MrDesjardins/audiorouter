@@ -28,9 +28,9 @@ describe("canvas library drop positions", () => {
   });
 
   it("only marks a link active for a real bounded meter signal", () => {
-    expect(telemetrySignalActive({ nodeId: "meter", kind: "meter", meter: null, processor: null })).toBe(false);
-    expect(telemetrySignalActive({ nodeId: "meter", kind: "meter", meter: { peakDb: -60, rmsDb: -70, clippedSamples: 0, channelPeakDb: [], channelRmsDb: [], channelClippedSamples: [] }, processor: null })).toBe(false);
-    expect(telemetrySignalActive({ nodeId: "meter", kind: "meter", meter: { peakDb: -12, rmsDb: -18, clippedSamples: 0, channelPeakDb: [], channelRmsDb: [], channelClippedSamples: [] }, processor: null })).toBe(true);
+    expect(telemetrySignalActive({ nodeId: "meter", kind: "meter", meter: null, processor: null, plugin: null })).toBe(false);
+    expect(telemetrySignalActive({ nodeId: "meter", kind: "meter", meter: { peakDb: -60, rmsDb: -70, clippedSamples: 0, channelPeakDb: [], channelRmsDb: [], channelClippedSamples: [] }, processor: null, plugin: null })).toBe(false);
+    expect(telemetrySignalActive({ nodeId: "meter", kind: "meter", meter: { peakDb: -12, rmsDb: -18, clippedSamples: 0, channelPeakDb: [], channelRmsDb: [], channelClippedSamples: [] }, processor: null, plugin: null })).toBe(true);
   });
 
   it("converts viewport coordinates into bounded canvas coordinates", () => {
@@ -252,5 +252,45 @@ describe("canvas library drop positions", () => {
       "gain-1": { x: 0, y: 150 },
       "gain-2": { x: 0, y: 150 },
     });
+  });
+
+  it("labels input, native tool, VST, and output nodes with a distinct family badge", () => {
+    const sessionWithPlugin = {
+      ...demoSession,
+      nodes: [
+        ...demoSession.nodes,
+        {
+          id: "reacomp",
+          kind: "plugin" as const,
+          typeVersion: 1 as const,
+          name: "ReaComp",
+          enabled: false,
+          bypass: false,
+          parameters: { path: "C:\\Plugins\\ReaComp.vst3", format: "vst3", fingerprint: "abc", classId: "default" },
+          ports: [{ name: "in", direction: "input" as const, channels: 1 as const }, { name: "out", direction: "output" as const, channels: 1 as const }],
+        },
+      ],
+    };
+    const { getByLabelText } = render(createElement(SessionFlowCanvas, {
+      session: sessionWithPlugin,
+      selectedNodeId: "mic",
+      onSelect: vi.fn(),
+      onConnect: vi.fn(),
+    }));
+
+    const mic = within(getByLabelText("Microphone, physicalInput"));
+    expect(mic.getByText("Input")).toBeTruthy();
+    expect(mic.getByText("Physical Input")).toBeTruthy();
+
+    const gain = within(getByLabelText("Voice gain, gain"));
+    expect(gain.getByText("Native")).toBeTruthy();
+    expect(gain.getByText("Gain", { selector: ".node-kind" })).toBeTruthy();
+
+    const headphones = within(getByLabelText("Headphones, physicalOutput"));
+    expect(headphones.getByText("Output")).toBeTruthy();
+
+    const plugin = within(getByLabelText("ReaComp, plugin"));
+    expect(plugin.getByText("VST")).toBeTruthy();
+    expect(plugin.getByText("VST3 Plugin")).toBeTruthy();
   });
 });

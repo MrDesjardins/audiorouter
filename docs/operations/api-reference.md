@@ -77,7 +77,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `devices.list` | `read` | read-only |
 | `nativeEndpoints.prepare` | `deviceAdministration` | external operation; prepares exact stopped clients |
 | `nativeOutputs.prepare` | `deviceAdministration` | external operation; prepares 1–8 exact stopped stereo render clients for a generation |
-| `nativeMultiInputs.prepare` | `deviceAdministration` | external operation; prepares 2–8 exact stopped float32 capture clients for the committed mixer/fan-out source order, resolving any required pre-bound plugin stages |
+| `nativeMultiInputs.prepare` | `deviceAdministration` | external operation; prepares 2–8 exact stopped physical and/or application-capture clients for the committed mixer/fan-out source order, resolving any required pre-bound plugin stages |
 | `nativeBridges.prepare` | `deviceAdministration` | external operation; prepares an exact stopped project-driver render-source/capture-sink lease pair |
 | `nativeBridges.detach` | `deviceAdministration` | external operation; detaches an exact stopped project-driver lease pair |
 | `nativeBridges.heartbeat` | `deviceAdministration` | external operation; refreshes bounded project-driver leases |

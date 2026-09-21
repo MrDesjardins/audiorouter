@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendDraftConnection, appendEqPresetNode, appendLibraryNode, appendVoiceChainPreset, insertDraftMixer, insertDraftProcessor, removeDraftConnection, removeSinglePathDraftMixer, setDraftConnectionEnabled } from "./draft";
+import { appendDraftConnection, appendEqPresetNode, appendLibraryNode, appendVoiceChainPreset, defaultChannelMatrix, insertDraftMixer, insertDraftPluginProcessor, insertDraftProcessor, removeDraftConnection, removeSinglePathDraftMixer, setDraftConnectionEnabled } from "./draft";
 import { templateSession } from "./templates";
 import { demoSession } from "./fixtures";
 
@@ -23,6 +23,12 @@ describe("appendDraftConnection", () => {
     expect(next.edges[0].matrix).toEqual([1, 1]);
     expect(() => appendDraftConnection(next, "mic", "out", "headphones", "in")).toThrow("already in the draft");
     expect(() => appendDraftConnection(next, "voice", "out", "headphones", "in")).toThrow("already has a connection");
+  });
+
+  it("downmixes a stereo source into a mono destination instead of dropping a channel", () => {
+    const stereoSource = { ...demoSession, nodes: demoSession.nodes.map((node) => node.id === "mic" ? { ...node, ports: [{ ...node.ports[0], channels: 2 as 1 | 2 }] } : node) };
+    const next = appendDraftConnection(stereoSource, "mic", "out", "voice", "in");
+    expect(next.edges[0].matrix).toEqual([0.5, 0.5]);
   });
 
   it("removes only the requested draft edge", () => {
@@ -61,7 +67,7 @@ describe("appendDraftConnection", () => {
       { name: "in", direction: "input", channels: 2 },
       { name: "out", direction: "output", channels: 2 },
     ]);
-    expect(inserted.edges.at(-1)?.matrix).toEqual([1, 0]);
+    expect(inserted.edges.at(-1)?.matrix).toEqual([0.5, 0.5]);
   });
 
   it("preserves a custom matrix on the downstream preview edge", () => {
@@ -88,6 +94,65 @@ describe("appendDraftConnection", () => {
     ]);
     expect(inserted.edges.at(-1)?.matrix).toEqual([0.5]);
     expect(inserted.revision).toBe(demoSession.revision);
+  });
+
+  it("inserts a scanned VST plugin on an existing path as a disabled placeholder", () => {
+    const connected = appendDraftConnection(demoSession, "mic", "out", "voice", "in");
+    const custom = { ...connected, edges: connected.edges.map((edge) => ({ ...edge, matrix: [0.5] })) };
+    const entry = {
+      path: "C:\\Plugins\\ReaComp.vst3",
+      identity: {
+        path: "C:\\Plugins\\ReaComp.vst3",
+        binaryPath: "C:\\Plugins\\ReaComp.vst3",
+        format: "vst3" as const,
+        architecture: "x64" as const,
+        fileBytes: 8192,
+        sha256: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+        vendor: "Cockos",
+        version: "1.0",
+        classIds: ["reacomp-class"],
+        compatibility: "supportedVst3X64" as const,
+      },
+      error: null,
+      errorCode: null,
+    };
+    const inserted = insertDraftPluginProcessor(custom, "edge-1", entry);
+
+    const plugin = inserted.nodes.find((node) => node.kind === "plugin");
+    expect(plugin).toMatchObject({
+      id: "plugin-1",
+      name: "Cockos 1",
+      enabled: false,
+      parameters: expect.objectContaining({ path: "C:\\Plugins\\ReaComp.vst3", format: "vst3" }),
+    });
+    expect(plugin?.ports.every((port) => port.channels === 1)).toBe(true);
+    expect(inserted.edges.map((edge) => [edge.sourceNode, edge.destinationNode])).toEqual([
+      ["mic", "plugin-1"],
+      ["plugin-1", "voice"],
+    ]);
+    expect(inserted.edges.at(-1)?.matrix).toEqual([0.5]);
+    expect(inserted.revision).toBe(demoSession.revision);
+  });
+
+  it("rejects inserting a plugin into an unknown connection", () => {
+    const entry = {
+      path: "C:\\Plugins\\ReaComp.vst3",
+      identity: {
+        path: "C:\\Plugins\\ReaComp.vst3",
+        binaryPath: "C:\\Plugins\\ReaComp.vst3",
+        format: "vst3" as const,
+        architecture: "x64" as const,
+        fileBytes: 8192,
+        sha256: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+        vendor: "Cockos",
+        version: "1.0",
+        classIds: ["reacomp-class"],
+        compatibility: "supportedVst3X64" as const,
+      },
+      error: null,
+      errorCode: null,
+    };
+    expect(() => insertDraftPluginProcessor(demoSession, "missing-edge", entry)).toThrow("Unknown draft connection");
   });
 
   it("inserts every advertised in-house processor on a connected path", () => {
@@ -145,5 +210,23 @@ describe("appendDraftConnection", () => {
     const inserted = insertDraftMixer(connected, "edge-1");
     const malformed = { ...inserted, edges: inserted.edges.map((edge) => edge.sourceNode === "mic" ? { ...edge, matrix: [] } : edge) };
     expect(() => removeSinglePathDraftMixer(malformed, "mixer-1")).toThrow("valid channel matrices");
+  });
+});
+
+describe("defaultChannelMatrix", () => {
+  it("maps mono to mono as identity", () => {
+    expect(defaultChannelMatrix(1, 1)).toEqual([1]);
+  });
+
+  it("fans mono out to stereo by duplicating the source into both channels", () => {
+    expect(defaultChannelMatrix(1, 2)).toEqual([1, 1]);
+  });
+
+  it("maps stereo to stereo as identity, not a diagonal-adjacent swap", () => {
+    expect(defaultChannelMatrix(2, 2)).toEqual([1, 0, 0, 1]);
+  });
+
+  it("downmixes stereo into mono by averaging both source channels", () => {
+    expect(defaultChannelMatrix(2, 1)).toEqual([0.5, 0.5]);
   });
 });

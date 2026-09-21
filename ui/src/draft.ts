@@ -348,6 +348,32 @@ export function appendVoiceChainPreset(session: Session, presetId: VoiceChainPre
   return next;
 }
 
+/**
+ * Builds a default channel matrix for connecting a source port to a
+ * destination port. Fanning a narrower source out to a wider destination
+ * (e.g. mono -> stereo) duplicates the source into every destination
+ * channel. Fanning a wider source into a narrower destination (e.g.
+ * stereo -> mono) downmixes by averaging every source channel instead of
+ * silently keeping only the first one and dropping the rest.
+ */
+export function defaultChannelMatrix(sourceChannels: number, destinationChannels: number): number[] {
+  const matrix = Array.from({ length: destinationChannels * sourceChannels }, () => 0);
+  if (sourceChannels <= destinationChannels) {
+    for (let destinationChannel = 0; destinationChannel < destinationChannels; destinationChannel += 1) {
+      const sourceChannel = Math.min(destinationChannel, sourceChannels - 1);
+      matrix[destinationChannel * sourceChannels + sourceChannel] = 1;
+    }
+  } else {
+    const gain = 1 / sourceChannels;
+    for (let destinationChannel = 0; destinationChannel < destinationChannels; destinationChannel += 1) {
+      for (let sourceChannel = 0; sourceChannel < sourceChannels; sourceChannel += 1) {
+        matrix[destinationChannel * sourceChannels + sourceChannel] = gain;
+      }
+    }
+  }
+  return matrix;
+}
+
 /** Adds a topology edge to a local draft; backend validation still gates commit. */
 export function appendDraftConnection(
   session: Session,
@@ -370,11 +396,7 @@ export function appendDraftConnection(
   if (destinationNode.kind !== "mixer" && session.edges.some((edge) => edge.destinationNode === destinationNodeId && edge.destinationPort === destinationPortName)) {
     throw new Error("That input already has a connection");
   }
-  const matrix = Array.from({ length: destinationPort.channels * sourcePort.channels }, () => 0);
-  for (let destinationChannel = 0; destinationChannel < destinationPort.channels; destinationChannel += 1) {
-    const sourceChannel = Math.min(destinationChannel, sourcePort.channels - 1);
-    matrix[destinationChannel * sourcePort.channels + sourceChannel] = 1;
-  }
+  const matrix = defaultChannelMatrix(sourcePort.channels, destinationPort.channels);
   let suffix = 1;
   let id = `edge-${suffix}`;
   while (session.edges.some((edge) => edge.id === id)) {
@@ -442,6 +464,45 @@ export function insertDraftProcessor(
   return {
     ...downstream,
     edges: downstream.edges.map((candidate) => candidate.sourceNode === processor.id && candidate.destinationNode === edge.destinationNode
+      ? { ...candidate, matrix: [...edge.matrix] }
+      : candidate),
+  };
+}
+
+/** Inserts a scanned VST2/VST3 plugin directly into one draft connection,
+ * the same edge-splice shape as `insertDraftProcessor` uses for built-in
+ * processors. The plugin is added disabled, matching `appendPluginPlaceholderNode`'s
+ * fail-closed default; the dry signal passes through unaffected until it is
+ * bound to an isolated worker and explicitly enabled. */
+export function insertDraftPluginProcessor(
+  session: Session,
+  edgeId: EntityId,
+  entry: PluginScanEntry,
+): Session {
+  const edge = session.edges.find((candidate) => candidate.id === edgeId);
+  if (!edge) throw new Error(`Unknown draft connection: ${edgeId}`);
+  const sourceNode = session.nodes.find((node) => node.id === edge.sourceNode);
+  const destinationNode = session.nodes.find((node) => node.id === edge.destinationNode);
+  const sourcePort = sourceNode?.ports.find((port) => port.name === edge.sourcePort);
+  const destinationPort = destinationNode?.ports.find((port) => port.name === edge.destinationPort);
+  if (!sourcePort || sourcePort.direction !== "output" || !destinationPort || destinationPort.direction !== "input") {
+    throw new Error("Inserted plugin requires valid source and destination ports");
+  }
+  const withoutEdge = removeDraftConnection(session, edgeId);
+  const withPlugin = appendPluginPlaceholderNode(withoutEdge, entry);
+  const plugin = withPlugin.nodes.at(-1);
+  if (!plugin) throw new Error("Unable to create an inserted plugin");
+  const resized = {
+    ...withPlugin,
+    nodes: withPlugin.nodes.map((node) => node.id === plugin.id
+      ? { ...node, ports: node.ports.map((port) => ({ ...port, channels: sourcePort.channels })) }
+      : node),
+  };
+  const upstream = appendDraftConnection(resized, edge.sourceNode, edge.sourcePort, plugin.id, "in");
+  const downstream = appendDraftConnection(upstream, plugin.id, "out", edge.destinationNode, edge.destinationPort);
+  return {
+    ...downstream,
+    edges: downstream.edges.map((candidate) => candidate.sourceNode === plugin.id && candidate.destinationNode === edge.destinationNode
       ? { ...candidate, matrix: [...edge.matrix] }
       : candidate),
   };

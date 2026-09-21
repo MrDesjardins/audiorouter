@@ -111,7 +111,7 @@ export interface UiBackend {
   listDevices(): Promise<DeviceListItem[]>;
   prepareNativeEndpoint?(sessionId: string, captureEndpointId: string, renderEndpointId: string): Promise<import("@audiorouter/contracts").NativeEndpointPrepareResult>;
   prepareNativeOutputs?(sessionId: string, generation: number, renderEndpointIds: string[]): Promise<NativeOutputFanoutPrepareResult>;
-  prepareNativeMultiInputs?(sessionId: string, generation: number, captureEndpointIds: string[]): Promise<NativeMultiInputPrepareResult>;
+  prepareNativeMultiInputs?(sessionId: string, generation: number, sources: import("@audiorouter/contracts").NativeMultiInputSourceBinding[]): Promise<NativeMultiInputPrepareResult>;
   rebindNativeEndpoint?(sessionId: string, captureEndpointId: string, renderEndpointId: string): Promise<import("@audiorouter/contracts").NativeEndpointRebindResult>;
   detachNativeEndpoint?(sessionId: string): Promise<import("@audiorouter/contracts").NativeEndpointDetachResult>;
   detachNativeDuplex?(sessionId: string): Promise<import("@audiorouter/contracts").NativeDuplexDetachResult>;
@@ -568,11 +568,11 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
         renderEndpointIds,
       });
     },
-    async prepareNativeMultiInputs(currentSessionId, generation, captureEndpointIds) {
+    async prepareNativeMultiInputs(currentSessionId, generation, sources) {
       return client.request("nativeMultiInputs.prepare", {
         sessionId: currentSessionId,
         generation,
-        captureEndpointIds,
+        sources,
       });
     },
     async rebindNativeEndpoint(currentSessionId, captureEndpointId, renderEndpointId) {

@@ -1356,33 +1356,161 @@ selected-node inspector" — a claim that was already inaccurate for most of
 them — and left an unused `.advanced-tools`/`<summary>` disclosure pattern in
 the CSS that was never wired into `App.tsx` to reveal them again.
 
-Fixed: un-hid `.theme-picker` and the "Compact status" toggle button
-specifically (left `.status-detail` hidden, a defensible redundancy choice,
-not a broken control); scoped the `.main-content > .panel:not(.inspector)`
-family of rules behind `.app-shell:not(.compact-status)`, matching the
-pattern already used for the other hidden group, so the *same* existing
-toggle now reveals both sets together; and added a `.app-shell.compact-status`
-override block that un-collapses the fixed canvas-focused grid (`height:
-auto`, `overflow: visible`, `display: block`) when toggled, reusing the
-exact same pattern already present for the `@media (max-width: 900px)`
-fallback, so the revealed panels get real scrollable layout instead of being
-clipped by the default mode's fixed-height `overflow: hidden` grid. Verified
-directly in a live Chrome tab against the real app (not the harness): theme
-picker and "Compact status" button now visible by default; clicking it
-reveals Session lifecycle, Recorder, Virtual-device lifecycle, Virtual-bus
-routes, DSP catalog, Presets, Session transfer, Plugin scan, Start at
-sign-in, Resume validation, Revision history, and Connected clients, all
-correctly laid out and scrollable; clicking "Full workspace" back to
-"Compact status" correctly restores the clean default canvas view. This is a
-CSS-only change; no JS/TS behavior changed, so the full 268-test suite still
-passes unchanged and typecheck is clean.
+## 2026-09-20 full stack code review
 
-This finding changes the audit's own conclusion: the earlier "two
-backend-complete-but-UI-missing gaps" statement was accurate only for
-features with literally zero UI code. Several *more* M03/M04/M06/M07
-features had UI code that existed, was tested, and was simply unreachable
-by CSS — a different failure mode the audit's grep-for-stubs approach could
-not detect, since it correctly found no missing code, only missing
-*visibility* of existing code. Any future "is X implemented" question about
-this codebase must include an actual rendered-and-clicked-through check, not
-just a source-code presence check, given this history.
+The user asked for a full code review, backend then frontend. The `code-review`
+skill is diff/PR-oriented and found nothing to review (the working tree was
+clean and the last commit didn't touch `crates/`), so this was done manually:
+parallel review forks for the backend crates (`domain`+`protocol` and
+`control` succeeded cleanly; the `engine`+`dsp` fork got derailed by its own
+inherited context — it spent its entire budget reasoning about the earlier
+rate-limit failures instead of reviewing anything, a real risk worth knowing
+about when forking after a notification-heavy stretch of conversation), then
+direct grep-first review of the remaining crates and the full `ui/src` tree
+by the top-level session once fork reliability became suspect.
+
+**Backend (~77k lines across 11 crates): no confirmed correctness or security
+bugs.** Verified, not just inspected: the named-pipe transport's same-user
+claim (real owner-only ACL plus an explicit SID comparison before any request
+is read, no TOCTOU, non-Windows stub fails closed); plugin-host's identity
+revalidation (every real `control` call site uses the `*_verified_*` spawn
+path, never the unverified one); storage's ZIP bundle import (correct
+component-based `..` detection, not string matching, plus symlink/reparse
+rejection); and engine's `RealtimeDsp` lock-free gate (correct Acquire/Release
+ordering with a drop-guard, and fail-closed contention handling applied
+consistently everywhere traced). One minor, non-bug duplication note in
+`protocol/lib.rs`'s two near-identical frame-decode functions.
+
+**Frontend (~8,200 lines): one confirmed bug, now fixed.**
+`ui/src/draft.ts`'s `appendDraftConnection` built its default channel matrix
+with `Math.min(destinationChannel, sourcePort.channels - 1)`, which correctly
+fans a mono source out to a stereo destination but, for the reverse case,
+only ever gave the source's first (left) channel any gain — connecting a
+stereo output into a mono input silently dropped the right channel entirely,
+with no downmix and no warning. Every other frontend file was read in full
+(all small utility/panel files, `host.ts`, `graphView.ts`, `layout.ts`,
+`processorCatalog.ts`) and found clean; `App.tsx`/`backend.ts`/
+`SessionFlowCanvas.tsx` were not re-read fresh line-by-line since they were
+extensively edited and live-browser-verified earlier this same session.
+
+Fixed by extracting a `defaultChannelMatrix(sourceChannels, destinationChannels)`
+helper in `draft.ts`: when the source has more channels than the destination,
+every destination channel now averages all source channels (gain
+`1/sourceChannels` each) instead of keeping only the first. The mono→stereo
+and equal-channel-count cases are unchanged (still identity/duplication).
+One pre-existing test (`draft-connection.test.ts`) had pinned the buggy
+`[1, 0]` default for a stereo→mono case inside an `insertDraftMixer` round
+trip; corrected it to the now-correct `[0.5, 0.5]`, and added a direct
+`appendDraftConnection` integration test plus four `defaultChannelMatrix`
+unit tests covering all four 1/2-channel combinations. Typecheck clean, full
+suite 273/273 (was 268; +5 new, 1 corrected).
+
+## 2026-09-20 VST plugin hosting completion, archived
+
+The VST plugin hosting sub-plan (shelf-reachable add/remove/manage, canvas
+VST-vs-native visual identity, mixed physical/application multi-input mixing,
+isolated-worker health visibility, and edge quick-insert) reached the end of
+its own implementation scope and is archived at
+[docs/plans/archived/2026-09-20-vst-plugin-hosting.md](../archived/2026-09-20-vst-plugin-hosting.md),
+including a dispatch-blocking `validate_method_params` allow-list bug found
+and fixed during a full post-implementation review. No attended Windows
+evidence was produced or claimed; every check was portable (`cargo test
+--workspace`, clippy, the UI suite, typecheck, the contract drift checker,
+and the docs validator), so this closes a portable-completeness gap only, not
+any attended gate tracked elsewhere in this file. Final counts: control 179
+tests (was 177), engine 119 (was 118), plugin-host 71 (was 70), full UI suite
+282/282 (was 273).
+
+## 2026-09-20 closed one self-identified gap: multi-input worker plugin/processor telemetry
+
+Follow-up to the archived VST plugin hosting plan above. Asked to scope what
+was independently achievable without the deferred driver or attended UI
+verification, an audit of the active plan's own tracked non-driver gaps
+found most genuinely require hardware, physical measurement, legal review,
+or a clean release worktree — none of that is something this session can
+do. One gap was a real, portable, code-only completeness item the archived
+plan's own "known limits" section had just flagged: the separate multi-input
+mixer worker never reported any node telemetry at all (unlike the default
+single endpoint/duplex worker, which already reports meter/processor/plugin
+telemetry), because `CompiledMixerFanoutGraph` had no telemetry accessors —
+only the endpoint-worker's `RuntimeGraph` did.
+
+Fixed by adding `processor_telemetry_for_node`/`plugin_health_for_node` to
+`CompiledMixerFanoutGraph` (delegating to its existing `processing_graph:
+Option<RuntimeGraph>`, the shared post-mixer chain) and mirrored wrapper
+methods on `RealtimeMixerFanout` and `NativeMultiInputWorker`
+(`crates/engine`, `crates/windows-audio`). `crates/control` gained a
+`native_multi_input_node_telemetry()` mirroring the existing
+`native_node_telemetry()`, merged into the same `nodeTelemetry` diagnostics
+array (the two native worker types are mutually exclusive per session, so
+concatenation is safe and one side is always empty). No contract or UI
+change was needed: the UI already looks up telemetry generically by node ID
+into one shared array, so a plugin running inside a multi-input session's
+post-mixer chain now shows worker health in the canvas, inspector, and
+"loaded plugins" list exactly like the default single-chain path, with zero
+UI code changes.
+
+Scope explicitly not attempted: adding meter instrumentation for the mixer's
+input sources, its own combined signal, or its output branches. None of that
+existed before either, and building it is a separate, larger
+realtime-instrumentation task (new lock-free meter state threaded through
+`RealtimeMixerFanout::pump_inputs`/`process`), not a small extension of what
+already existed for the endpoint-worker path the way processor/plugin
+telemetry was.
+
+Everything else on the active plan's non-driver list — attended
+accessibility/scaling/drag-drop verification, real OS-transition delivery
+(lock/sign-out/sleep/resume), physical latency/hardware calibration, VST
+redistribution rights and a broader third-party compatibility matrix, and
+release artifact preparation (blocked by the current dirty worktree) —
+was assessed and is *not* something this session can close alone: each
+needs either the user's interactive machine, real hardware, or a legal/rights
+decision. The existing Job-Object-based worker sandbox (kill-on-close,
+single-process limit, 512 MB memory cap) was also reviewed; it already
+provides real resource/lifecycle containment, but true filesystem/network
+sandboxing (e.g. AppContainer or a restricted token) is a separate,
+security-sensitive design task, not something to bolt on quickly, and was
+correctly left out of this pass rather than attempted partially.
+
+Verification: `cargo test --workspace --lib` all green (engine 120, was 119;
+control 179 unchanged; every other crate unchanged), `cargo clippy
+--workspace --all-targets` zero warnings, `tools/contracts/check-drift.mjs`
+clean, UI typecheck clean, full UI suite 282/282 unchanged. Nothing
+committed; awaiting the user's go-ahead to push.
+
+## 2026-09-20 ran the portable safe acceptance chain; found and fixed a real `cargo fmt` gap
+
+Asked to keep doing whatever was autonomously possible, ran the project's own
+documented "safe" acceptance scripts (native compile, VST3 SDK build +
+validator + offline loader, native VST3 worker, VST2 chunk-state fixture,
+CLI, headless, M08 traceability, docs) — the exact set the repository
+defines as running with no live audio, no driver/installer changes, and no
+machine configuration changes, so it was safe to run unattended. All of it
+had never been run this session; `cargo test`/`vitest`/clippy/drift-check
+are not the same invocation path as these wrapper scripts (they also cover
+the native C++ VST3 SDK/CMake build, which cargo never touches).
+
+Result: everything passed except `m04-dsp-recording.ps1`, which failed on
+its embedded `cargo fmt --check` step — five files from this session's Rust
+edits (`crates/cli`, `crates/control`, `crates/engine`, `crates/plugin-host`)
+had never been run through `cargo fmt`. This was a real, if low-severity,
+gap: nothing was behaviorally wrong, but the tree did not actually pass the
+project's own formatting gate. Fixed by running `cargo fmt` (mechanical,
+zero behavior change) and confirming `cargo fmt --check` passes; re-ran the
+full workspace test suite, clippy, the drift checker, and the specific
+`m04-dsp-recording.ps1` script afterward, all clean.
+
+Everything else confirmed passing and unaffected by this session's work:
+M00 native probe compile, M00 native format inventory (34 endpoints), M01
+CLI, M06 VST3 SDK (pinned checkout, build, validator — 1,598 + 94 tests,
+offline loader, AGain main/auxiliary-bus classes, five-class mda matrix),
+M06 native VST3 worker (isolated single-stream/auxiliary-bus processing,
+restart/quarantine recovery, state restoration, shutdown), M06 VST2
+chunk-state/legacy-main fixture at 44.1/48/96 kHz, M07 headless (CLI 36,
+control 179, plugin-host 71, worker-process 13), M08 traceability (159
+normative requirement IDs covered), and documentation validation.
+
+This closes out the "do what you can" pass: every other open item on the
+active plan's non-driver list genuinely requires the user's interactive
+machine, real hardware, or a rights/legal decision, and was not attempted.
+Nothing committed; awaiting the user's go-ahead to push.

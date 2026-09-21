@@ -17,7 +17,7 @@ use std::os::windows::io::AsRawHandle;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering},
     mpsc::{self, Receiver},
     Arc, Mutex,
 };
@@ -3686,8 +3686,33 @@ pub struct PluginRuntimeBridge {
     output: Arc<ArrayQueue<PluginQuantum>>,
     running: Arc<AtomicBool>,
     failed: Arc<AtomicBool>,
+    health_state: Arc<AtomicU8>,
+    health_failure_count: Arc<AtomicU32>,
     parameters: Arc<Mutex<Vec<ParameterEvent>>>,
     worker: Option<JoinHandle<()>>,
+}
+
+const WORKER_STATE_STOPPED: u8 = 0;
+const WORKER_STATE_RUNNING: u8 = 1;
+const WORKER_STATE_FAILED: u8 = 2;
+const WORKER_STATE_QUARANTINED: u8 = 3;
+
+fn encode_worker_state(state: WorkerState) -> u8 {
+    match state {
+        WorkerState::Stopped => WORKER_STATE_STOPPED,
+        WorkerState::Running => WORKER_STATE_RUNNING,
+        WorkerState::Failed => WORKER_STATE_FAILED,
+        WorkerState::Quarantined => WORKER_STATE_QUARANTINED,
+    }
+}
+
+fn decode_worker_state(value: u8) -> WorkerState {
+    match value {
+        WORKER_STATE_RUNNING => WorkerState::Running,
+        WORKER_STATE_FAILED => WorkerState::Failed,
+        WORKER_STATE_QUARANTINED => WorkerState::Quarantined,
+        _ => WorkerState::Stopped,
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -3738,9 +3763,13 @@ impl PluginRuntimeBridge {
         }
         let running = Arc::new(AtomicBool::new(true));
         let failed = Arc::new(AtomicBool::new(false));
+        let health_state = Arc::new(AtomicU8::new(encode_worker_state(worker.state())));
+        let health_failure_count = Arc::new(AtomicU32::new(0));
         let parameters = Arc::new(Mutex::new(Vec::new()));
         let thread_running = Arc::clone(&running);
         let thread_failed = Arc::clone(&failed);
+        let thread_health_state = Arc::clone(&health_state);
+        let thread_health_failure_count = Arc::clone(&health_failure_count);
         let thread_free = Arc::clone(&free);
         let thread_input = Arc::clone(&input);
         let thread_output = Arc::clone(&output);
@@ -3787,6 +3816,7 @@ impl PluginRuntimeBridge {
                         .lock()
                         .map(|value| value.clone())
                         .unwrap_or_default();
+                    let mut should_stop = false;
                     match worker.process(frame, parameters, Instant::now()) {
                         Ok(result)
                             if result.channels == channels as u16
@@ -3812,8 +3842,18 @@ impl PluginRuntimeBridge {
                             if let Err(quantum) = thread_output.push(quantum) {
                                 let _ = thread_free.push(quantum);
                             }
-                            break;
+                            samples = vec![0.0; channels * frames];
+                            should_stop = true;
                         }
+                    }
+                    thread_health_state
+                        .store(encode_worker_state(worker.state()), Ordering::Release);
+                    if let Some(diagnostic) = worker.failure_diagnostic() {
+                        thread_health_failure_count
+                            .store(diagnostic.failure_count, Ordering::Release);
+                    }
+                    if should_stop {
+                        break;
                     }
                 }
             })
@@ -3824,6 +3864,8 @@ impl PluginRuntimeBridge {
             output,
             running,
             failed,
+            health_state,
+            health_failure_count,
             parameters,
             worker: Some(worker_thread),
         }))
@@ -3831,6 +3873,19 @@ impl PluginRuntimeBridge {
 
     pub fn failed(&self) -> bool {
         self.failed.load(Ordering::Acquire)
+    }
+
+    /// The isolated worker's last-observed supervisor state. Published by the
+    /// runtime thread after every processed quantum; a caller never blocks or
+    /// crosses into plugin IPC to read it.
+    pub fn health_state(&self) -> WorkerState {
+        decode_worker_state(self.health_state.load(Ordering::Acquire))
+    }
+
+    /// The isolated worker's cumulative bounded-window failure count, from
+    /// the same supervisor ledger that drives quarantine.
+    pub fn health_failure_count(&self) -> u32 {
+        self.health_failure_count.load(Ordering::Acquire)
     }
 
     pub fn queued_input(&self) -> usize {
@@ -3896,6 +3951,19 @@ impl audiorouter_engine::RealtimePluginProcessor for PluginRuntimeBridge {
 
     fn reset(&self) -> bool {
         !self.failed()
+    }
+
+    fn health(&self) -> audiorouter_engine::PluginWorkerHealth {
+        let state = match self.health_state() {
+            WorkerState::Stopped => audiorouter_engine::PluginWorkerState::Stopped,
+            WorkerState::Running => audiorouter_engine::PluginWorkerState::Running,
+            WorkerState::Failed => audiorouter_engine::PluginWorkerState::Failed,
+            WorkerState::Quarantined => audiorouter_engine::PluginWorkerState::Quarantined,
+        };
+        audiorouter_engine::PluginWorkerHealth {
+            state,
+            failure_count: self.health_failure_count(),
+        }
     }
 }
 
@@ -6614,6 +6682,23 @@ mod tests {
         }
         assert!(received, "worker result did not reach the realtime bridge");
         assert!(!bridge.failed());
+        assert_eq!(bridge.health_state(), WorkerState::Running);
+        assert_eq!(bridge.health_failure_count(), 0);
+        let health = RealtimePluginProcessor::health(bridge.as_ref());
+        assert_eq!(health.state, audiorouter_engine::PluginWorkerState::Running);
+        assert_eq!(health.failure_count, 0);
+    }
+
+    #[test]
+    fn worker_state_encoding_round_trips_every_variant() {
+        for state in [
+            WorkerState::Stopped,
+            WorkerState::Running,
+            WorkerState::Failed,
+            WorkerState::Quarantined,
+        ] {
+            assert_eq!(decode_worker_state(encode_worker_state(state)), state);
+        }
     }
 
     #[test]

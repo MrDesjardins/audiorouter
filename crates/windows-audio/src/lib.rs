@@ -5672,13 +5672,67 @@ pub enum NativeMultiInputWorkerError {
     Output(WasapiOutputFanoutError),
 }
 
+/// One mixer input source, opened as either an exact physical capture
+/// endpoint or a revalidated process-loopback (application) capture. Both
+/// variants already implement `AudioCaptureSource`/`EndpointLifecycle`; this
+/// wrapper only unifies their lifecycle so `NativeMultiInputWorker` can mix
+/// microphone and application sources in one generation-bound feeder without
+/// giving either variant special-cased realtime handling.
+pub enum MultiInputCaptureSource {
+    Physical(SharedCapture),
+    ApplicationLoopback(ProcessLoopbackCapture),
+}
+
+impl MultiInputCaptureSource {
+    /// The bound physical endpoint id, when this source is a physical
+    /// capture. An application-loopback source has no device-endpoint
+    /// identity and is never invalidated by an `EndpointChange`.
+    pub fn physical_endpoint_id(&self) -> Option<&str> {
+        match self {
+            Self::Physical(capture) => Some(capture.endpoint_id()),
+            Self::ApplicationLoopback(_) => None,
+        }
+    }
+}
+
+impl EndpointLifecycle for MultiInputCaptureSource {
+    fn start(&mut self) -> Result<(), AudioError> {
+        match self {
+            Self::Physical(capture) => capture.start(),
+            Self::ApplicationLoopback(capture) => capture.start(),
+        }
+    }
+
+    fn stop(&mut self) -> Result<(), AudioError> {
+        match self {
+            Self::Physical(capture) => capture.stop(),
+            Self::ApplicationLoopback(capture) => capture.stop(),
+        }
+    }
+}
+
+impl AudioCaptureSource for MultiInputCaptureSource {
+    fn next_packet_into(
+        &self,
+        destination: &mut [u8],
+        bytes_per_frame: usize,
+    ) -> Result<Option<(CapturePacket, usize)>, AudioError> {
+        match self {
+            Self::Physical(capture) => capture.next_packet_into(destination, bytes_per_frame),
+            Self::ApplicationLoopback(capture) => {
+                capture.next_packet_into(destination, bytes_per_frame)
+            }
+        }
+    }
+}
+
 /// Control-owned lifecycle wrapper for several exact capture clients feeding
 /// one generation-bound mixer. Construction is stopped-by-default. Starting
 /// is transactional: if one capture fails, already-started siblings are
 /// stopped before the error is returned. Pumping is bounded and never waits
 /// or allocates; teardown clears both device and feeder state.
 pub struct NativeMultiInputWorker {
-    captures: Vec<SharedCapture>,
+    captures: Vec<MultiInputCaptureSource>,
     feeder: WasapiMultiInputFanout,
     outputs: Option<WasapiOutputFanout>,
     running: bool,
@@ -5686,7 +5740,7 @@ pub struct NativeMultiInputWorker {
 
 impl NativeMultiInputWorker {
     pub fn new(
-        captures: Vec<SharedCapture>,
+        captures: Vec<MultiInputCaptureSource>,
         feeder: WasapiMultiInputFanout,
     ) -> Result<Self, NativeMultiInputWorkerError> {
         if captures.is_empty()
@@ -5786,9 +5840,11 @@ impl NativeMultiInputWorker {
     /// identity and remain governed by their own bridge/recorder lifecycle.
     pub fn bindings_affected_by(&self, changes: &[EndpointChange]) -> bool {
         self.captures.iter().any(|capture| {
-            changes
-                .iter()
-                .any(|change| endpoint_change_affects_id(change, capture.endpoint_id()))
+            capture.physical_endpoint_id().is_some_and(|endpoint_id| {
+                changes
+                    .iter()
+                    .any(|change| endpoint_change_affects_id(change, endpoint_id))
+            })
         }) || self
             .outputs
             .as_ref()
@@ -5797,6 +5853,25 @@ impl NativeMultiInputWorker {
 
     pub fn output_node_ids(&self) -> &[audiorouter_domain::EntityId] {
         self.feeder.mixer().output_node_ids()
+    }
+
+    /// Read processor telemetry by authored node identity from the prepared
+    /// mixer/fan-out graph's shared post-mixer chain. Best-effort
+    /// diagnostics read; never waits for the realtime callback.
+    pub fn processor_telemetry_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<audiorouter_engine::ProcessorTelemetry> {
+        self.feeder.mixer().processor_telemetry_for_node(node_id)
+    }
+
+    /// Read isolated-worker plugin health by authored node identity from the
+    /// prepared mixer/fan-out graph's shared post-mixer chain.
+    pub fn plugin_health_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<audiorouter_engine::PluginWorkerHealth> {
+        self.feeder.mixer().plugin_health_for_node(node_id)
     }
 
     /// Attach branch-local observers to the owned output fan-out before

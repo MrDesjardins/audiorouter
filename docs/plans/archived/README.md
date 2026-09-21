@@ -14,6 +14,7 @@ Keep an index below with date, milestone/task, outcome, and path. Do not move st
 
 ## Index
 
+| 2026-09-20 | VST plugin hosting completion | Implementation scope complete: shelf-reachable plugin add/remove/manage, canvas VST-vs-native visual identity, mixed physical/application multi-input mixing, isolated-worker health visibility, edge quick-insert, and a dispatch-blocking allow-list bug found and fixed during review. No attended Windows evidence; portable verification only. | [2026-09-20-vst-plugin-hosting.md](2026-09-20-vst-plugin-hosting.md) |
 | 2026-09-19 | UI redesign (M05 visual editor) | Implementation scope complete: node cards, telemetry, EQ preview, four-sided connection handles, and three defect fixes (target-side persistence, handle overlap, clobbered safety notices). Attended Narrator/scaling/drag-drop verification is not closed and is tracked in the active plan. | [2026-09-19-ui-redesign.md](2026-09-19-ui-redesign.md) |
 | 2026-09-17 | VB-Cable-first rebaseline | Superseded before completion; preserves prior execution history and records the driver/signing deferral. | [2026-09-17-vb-cable-rebaseline.md](2026-09-17-vb-cable-rebaseline.md) |
 

@@ -76,19 +76,48 @@ and open/closed state per channel. A callback-owned state lock is never waited
 on by a telemetry reader, so a busy read returns unavailable and the audio path
 continues unchanged.
 
+A bound plugin worker's PLUG-05 supervisor state (stopped/running/failed/
+quarantined) and its bounded failure count are surfaced through the same
+read-only diagnostics boundary as a `plugin` field per node, alongside meter
+and processor telemetry. The isolated worker's own background thread
+publishes this through plain atomics after every processed quantum, so a
+reader never blocks or crosses into plugin IPC. Both the native
+endpoint/duplex worker's path and the separate multi-input worker's shared
+post-mixer processing chain report processor and plugin telemetry through
+the same merged `nodeTelemetry` array; the multi-input worker still has no
+meter instrumentation for its mixer input sources, the mixer's own combined
+signal, or its output branches, since none of that existed before and adding
+it is a separate, larger realtime-instrumentation task. The UI shows plugin
+state in the plugin's own inspector at all times, and as a visible alert on
+the canvas node and in a "loaded plugins" list only once a worker has
+actually failed or been quarantined, regardless of which native worker is
+running it.
+
 The native multi-input/many-output preparation path reuses the same prepared
 processor stages for a bounded linear chain between the mixer and its physical,
 virtual, recording, or tool branches. Plugin stages must already have an exact
 isolated-worker binding; preparation and graph publication remain control-plane
 operations, while realtime execution performs no plugin IPC or dynamic
-membership changes.
+membership changes. Mixer input sources may be enabled physical-input nodes,
+enabled application-capture nodes bound to a currently observed process
+identity, or a mix of both in the same generation; each application source
+re-supplies and revalidates its full observed identity (process ID,
+executable, creation time) the same way the single-source application worker
+does, rather than trusting a session's persisted node parameters alone.
 
 An inspected x64 VST2/VST3 result may be retained in a graph as a stopped,
 disabled plugin placeholder carrying its binary path, format, fingerprint, and
 class identity. A placeholder is authoring state only: activation must reject
 it until an isolated worker is bound and its identity is revalidated. It must
 never be treated as a transparent processor or silently replaced with dry
-protected-path audio.
+protected-path audio. Adding, removing, and reviewing every loaded plugin
+placeholder is reachable directly from the canvas shelf (a picker dialog
+listing what is already loaded alongside the existing scan/add flow) and from
+each plugin node's own inspector, not only through the advanced/background
+scan panel; a plugin can also be inserted directly into an existing
+connection the same one-click way a built-in processor can, splicing it in as
+a disabled (dry pass-through) placeholder rather than requiring the edge to
+be rebuilt manually.
 
 ## Initial parameter contract
 

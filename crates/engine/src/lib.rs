@@ -1065,6 +1065,35 @@ pub trait RealtimePluginProcessor: Send + Sync + std::fmt::Debug {
     fn reset(&self) -> bool {
         true
     }
+
+    /// Best-effort worker health for diagnostics. This is a plain read of
+    /// already-published state (never blocking, never crossing into plugin
+    /// IPC), so a hand-built test double can safely rely on the default.
+    fn health(&self) -> PluginWorkerHealth {
+        PluginWorkerHealth::default()
+    }
+}
+
+/// Isolated-worker lifecycle state surfaced to diagnostics for a `plugin`
+/// node. Mirrors `audiorouter_plugin_host::WorkerState` without creating a
+/// dependency from this crate on the plugin-host crate (which itself depends
+/// on this one for `RealtimePluginProcessor`).
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum PluginWorkerState {
+    /// No worker-host implementation has reported real state (e.g. a test
+    /// double), or the node has no bound worker at all.
+    #[default]
+    Unknown,
+    Stopped,
+    Running,
+    Failed,
+    Quarantined,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct PluginWorkerHealth {
+    pub state: PluginWorkerState,
+    pub failure_count: u32,
 }
 
 /// Maximum number of independent realtime observers supported by one
@@ -2849,6 +2878,31 @@ impl CompiledMixerFanoutGraph {
         &self.output_node_ids
     }
 
+    /// Read processor telemetry for a node in the shared post-mixer chain
+    /// (the bounded linear path between the mixer and its branches). `None`
+    /// for a mixer input/output/branch node, an unknown node, or a chain
+    /// node that is not a dynamics processor.
+    pub fn processor_telemetry_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<ProcessorTelemetry> {
+        self.processing_graph
+            .as_ref()?
+            .processor_telemetry_for_node(node_id)
+    }
+
+    /// Read isolated-worker plugin health for a node in the shared
+    /// post-mixer chain, the same best-effort diagnostics read as the
+    /// single-chain graph's `plugin_health_for_node`.
+    pub fn plugin_health_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<PluginWorkerHealth> {
+        self.processing_graph
+            .as_ref()?
+            .plugin_health_for_node(node_id)
+    }
+
     pub fn process(
         &self,
         sources: &[AudioBlock],
@@ -3071,6 +3125,25 @@ impl RealtimeMixerFanout {
 
     pub fn output_node_ids(&self) -> &[audiorouter_domain::EntityId] {
         self.graph.output_node_ids()
+    }
+
+    /// Read processor telemetry by authored node identity from the
+    /// currently held mixer/fan-out graph. Best-effort diagnostics read;
+    /// never waits for the realtime callback.
+    pub fn processor_telemetry_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<ProcessorTelemetry> {
+        self.graph.processor_telemetry_for_node(node_id)
+    }
+
+    /// Read isolated-worker plugin health by authored node identity from the
+    /// currently held mixer/fan-out graph.
+    pub fn plugin_health_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<PluginWorkerHealth> {
+        self.graph.plugin_health_for_node(node_id)
     }
 
     pub fn input_ring(&self, index: usize) -> Option<&AudioBlockRing> {
@@ -4991,6 +5064,18 @@ impl RuntimeProcessor {
             .and_then(|graph| graph.meter_snapshot_for_node(node_id))
     }
 
+    /// Read plugin worker health by authored node identity from the published
+    /// graph. This is a best-effort diagnostics read and never waits for the
+    /// realtime callback or the isolated worker.
+    pub fn plugin_health_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<PluginWorkerHealth> {
+        self.publication
+            .load()
+            .and_then(|graph| graph.plugin_health_for_node(node_id))
+    }
+
     /// Return the negotiated rate of the currently published graph. This is
     /// a control/diagnostics read of immutable graph metadata; `None` means
     /// the processor has not been activated.
@@ -5611,6 +5696,24 @@ impl RuntimeGraph {
             .find_map(|(stage_index, candidate)| {
                 (candidate == node_id).then(|| match self.stages.get(stage_index) {
                     Some(ProcessingStage::Meter { index }) => self.meter_snapshot(*index),
+                    _ => None,
+                })?
+            })
+    }
+
+    /// Read the isolated worker's best-effort health for an authored `plugin`
+    /// node identity. `None` means the node is unknown, not a plugin stage,
+    /// or (a disabled/dry-bypassed plugin placeholder) has no bound worker.
+    pub fn plugin_health_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<PluginWorkerHealth> {
+        self.stage_node_ids
+            .iter()
+            .enumerate()
+            .find_map(|(stage_index, candidate)| {
+                (candidate == node_id).then(|| match self.stages.get(stage_index) {
+                    Some(ProcessingStage::Plugin { processor }) => Some(processor.health()),
                     _ => None,
                 })?
             })
@@ -8304,6 +8407,120 @@ mod tests {
     }
 
     #[test]
+    fn plugin_health_for_node_reads_the_bound_worker_and_is_none_elsewhere() {
+        use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+        #[derive(Debug)]
+        struct QuarantinedDoubler;
+        impl RealtimePluginProcessor for QuarantinedDoubler {
+            fn process(&self, block: &mut AudioBlock) {
+                block.apply_gain(2.0);
+            }
+            fn health(&self) -> PluginWorkerHealth {
+                PluginWorkerHealth {
+                    state: PluginWorkerState::Quarantined,
+                    failure_count: 3,
+                }
+            }
+        }
+        let port = |name: &str, direction| Port {
+            name: name.into(),
+            direction,
+            channels: 1,
+        };
+        let plugin = Node {
+            id: EntityId::new("plugin"),
+            kind: NodeKind::Plugin,
+            type_version: 1,
+            name: "Flaky effect".into(),
+            enabled: true,
+            bypass: false,
+            parameters: [
+                ("path".into(), serde_json::json!("C:\\Plugins\\effect.dll")),
+                ("format".into(), serde_json::json!("vst2")),
+                (
+                    "fingerprint".into(),
+                    serde_json::json!(
+                        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                    ),
+                ),
+                ("classId".into(), serde_json::json!("effect-class")),
+            ]
+            .into_iter()
+            .collect(),
+            ports: vec![
+                port("in", PortDirection::Input),
+                port("out", PortDirection::Output),
+            ],
+        };
+        let source = Node {
+            id: EntityId::new("source"),
+            kind: NodeKind::PhysicalInput,
+            type_version: 1,
+            name: "Source".into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports: vec![port("main", PortDirection::Output)],
+        };
+        let sink = Node {
+            id: EntityId::new("sink"),
+            kind: NodeKind::PhysicalOutput,
+            type_version: 1,
+            name: "Sink".into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports: vec![port("main", PortDirection::Input)],
+        };
+        let edge = |id: &str,
+                    source_node: &str,
+                    source_port: &str,
+                    destination_node: &str,
+                    destination_port: &str| Edge {
+            id: EntityId::new(id),
+            source_node: EntityId::new(source_node),
+            source_port: source_port.into(),
+            destination_node: EntityId::new(destination_node),
+            destination_port: destination_port.into(),
+            matrix: vec![1.0],
+            enabled: true,
+        };
+        let session = Session {
+            id: EntityId::new("plugin-health"),
+            name: "plugin-health".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![source, plugin, sink],
+            edges: vec![
+                edge("source-plugin", "source", "main", "plugin", "in"),
+                edge("plugin-sink", "plugin", "out", "sink", "main"),
+            ],
+        };
+        let plugins = std::collections::HashMap::from([(
+            EntityId::new("plugin"),
+            std::sync::Arc::new(QuarantinedDoubler) as std::sync::Arc<dyn RealtimePluginProcessor>,
+        )]);
+        let graph = compile_session_at_sample_rate_with_plugins(
+            &session,
+            RuntimeGeneration::new(53),
+            INTERNAL_SAMPLE_RATE_HZ,
+            &plugins,
+        )
+        .unwrap();
+        let health = graph
+            .plugin_health_for_node(&EntityId::new("plugin"))
+            .unwrap();
+        assert_eq!(health.state, PluginWorkerState::Quarantined);
+        assert_eq!(health.failure_count, 3);
+        assert!(graph
+            .plugin_health_for_node(&EntityId::new("source"))
+            .is_none());
+        assert!(graph
+            .plugin_health_for_node(&EntityId::new("missing"))
+            .is_none());
+    }
+
+    #[test]
     fn mixer_fanout_runs_bound_plugin_before_every_branch() {
         use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
         #[derive(Debug)]
@@ -8449,6 +8666,121 @@ mod tests {
         assert!(
             (built_in_second.try_receive().unwrap().channel(0).unwrap()[0] - 1.5).abs() < 0.001
         );
+    }
+
+    #[test]
+    fn mixer_fanout_plugin_health_reaches_the_realtime_wrapper() {
+        use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+        #[derive(Debug)]
+        struct QuarantinedDoubler;
+        impl RealtimePluginProcessor for QuarantinedDoubler {
+            fn process(&self, block: &mut AudioBlock) {
+                block.apply_gain(2.0);
+            }
+            fn health(&self) -> PluginWorkerHealth {
+                PluginWorkerHealth {
+                    state: PluginWorkerState::Quarantined,
+                    failure_count: 5,
+                }
+            }
+        }
+        let port = |name: &str, direction, channels| Port {
+            name: name.into(),
+            direction,
+            channels,
+        };
+        let endpoint = |id: &str, kind, direction| Node {
+            id: EntityId::new(id),
+            kind,
+            type_version: 1,
+            name: id.into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports: vec![port("main", direction, 1)],
+        };
+        let mixer = Node {
+            id: EntityId::new("mixer"),
+            kind: NodeKind::Mixer,
+            type_version: 1,
+            name: "mixer".into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports: vec![
+                port("main", PortDirection::Input, 1),
+                port("out", PortDirection::Output, 1),
+            ],
+        };
+        let plugin = Node {
+            id: EntityId::new("plugin"),
+            kind: NodeKind::Plugin,
+            type_version: 1,
+            name: "flaky".into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports: vec![
+                port("in", PortDirection::Input, 1),
+                port("out", PortDirection::Output, 1),
+            ],
+        };
+        let edge = |id: &str,
+                    source_node: &str,
+                    source_port: &str,
+                    destination_node: &str,
+                    destination_port: &str| Edge {
+            id: EntityId::new(id),
+            source_node: EntityId::new(source_node),
+            source_port: source_port.into(),
+            destination_node: EntityId::new(destination_node),
+            destination_port: destination_port.into(),
+            matrix: vec![1.0],
+            enabled: true,
+        };
+        let session = Session {
+            id: EntityId::new("plugin-fanout-health"),
+            name: "plugin fanout health".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![
+                endpoint("left", NodeKind::PhysicalInput, PortDirection::Output),
+                endpoint("right", NodeKind::PhysicalInput, PortDirection::Output),
+                mixer,
+                plugin,
+                endpoint("first", NodeKind::PhysicalOutput, PortDirection::Input),
+                endpoint("second", NodeKind::PhysicalOutput, PortDirection::Input),
+            ],
+            edges: vec![
+                edge("left-mixer", "left", "main", "mixer", "main"),
+                edge("right-mixer", "right", "main", "mixer", "main"),
+                edge("mixer-plugin", "mixer", "out", "plugin", "in"),
+                edge("plugin-first", "plugin", "out", "first", "main"),
+                edge("plugin-second", "plugin", "out", "second", "main"),
+            ],
+        };
+        let plugins = std::collections::HashMap::from([(
+            EntityId::new("plugin"),
+            std::sync::Arc::new(QuarantinedDoubler) as std::sync::Arc<dyn RealtimePluginProcessor>,
+        )]);
+        let graph = compile_mixer_fanout_session_with_plugins(
+            &session,
+            RuntimeGeneration::new(93),
+            &plugins,
+        )
+        .unwrap();
+        let runtime = RealtimeMixerFanout::new(graph, 1, &[1, 1], 1, 2).unwrap();
+        let health = runtime
+            .plugin_health_for_node(&EntityId::new("plugin"))
+            .unwrap();
+        assert_eq!(health.state, PluginWorkerState::Quarantined);
+        assert_eq!(health.failure_count, 5);
+        assert!(runtime
+            .plugin_health_for_node(&EntityId::new("mixer"))
+            .is_none());
+        assert!(runtime
+            .processor_telemetry_for_node(&EntityId::new("plugin"))
+            .is_none());
     }
 
     #[test]

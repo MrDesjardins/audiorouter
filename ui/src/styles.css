@@ -59,6 +59,9 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
 .theme-high-contrast .connection-dialog { background: #000; }
 .draft-connections { margin-top: 1rem; }
 .draft-connections li { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.loaded-plugins-panel ul { display: grid; gap: .4rem; margin: 0; padding: 0; list-style: none; }
+.loaded-plugins-panel li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; padding: .4rem .6rem; border: 1px solid rgb(255 255 255 / 10%); border-radius: 6px; }
+.loaded-plugins-panel li.selected { border-color: var(--vst-accent, #c792ea); background: rgb(199 146 234 / 10%); }
 .template-picker { display: grid; gap: .5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #293344; }
 .template-picker label { display: grid; gap: .25rem; }
 .library-search { display: grid; gap: .25rem; margin-bottom: .75rem; }
@@ -179,6 +182,8 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
   --cyan: #25b8df;
   --cyan-deep: #087ea8;
   --good: #72e3a2;
+  --vst-accent: #c792ea;
+  --danger: #ff6b6b;
   --text-strong: #f6f8fb;
   --text-soft: #aeb9c8;
 }
@@ -216,7 +221,8 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .session-flow-canvas .react-flow__node:hover { box-shadow: inset 1px 1px 0 rgb(255 255 255 / 20%), 9px 15px 24px rgb(0 0 0 / 40%) !important; }
 .session-flow-canvas .react-flow__node.selected { border-color: var(--signal-hot) !important; box-shadow: inset 1px 1px 0 rgb(255 255 255 / 22%), 0 0 0 2px rgb(255 209 102 / 34%), 9px 15px 24px rgb(0 0 0 / 42%) !important; }
 .flow-node-content { min-height: 150px; padding: .72rem .8rem .65rem; gap: .38rem; }
-.flow-node-kicker { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.flow-node-kicker { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem; }
+.flow-node-kicker .node-state { margin-left: auto; }
 .flow-node-content .node-kind { color: #8bd9eb; font-size: .62rem; letter-spacing: .12em; }
 .node-state { padding: .13rem .35rem; border: 1px solid rgb(255 255 255 / 18%); border-radius: 99px; color: var(--text-soft); font-size: .58rem; letter-spacing: .08em; text-transform: uppercase; }
 .node-state.is-ready { color: #aaffc7; border-color: rgb(114 227 162 / 45%); background: rgb(63 167 105 / 22%); }
@@ -306,6 +312,11 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .node-plugin-header { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
 .node-plugin-format { padding: .1rem .4rem; border-radius: 99px; color: #172033; font-size: .6rem; font-weight: 700; letter-spacing: .04em; background: var(--signal-hot); }
 .node-plugin-file { overflow: hidden; color: #c7d2dc; font-size: .68rem; text-overflow: ellipsis; white-space: nowrap; }
+.node-plugin-health-alert { padding: .2rem .4rem; border: 1px solid rgb(255 107 107 / 45%); border-radius: 5px; color: #ffb3b3; font-size: .62rem; font-weight: 600; background: rgb(255 107 107 / 14%); }
+.plugin-worker-health { display: grid; gap: .2rem; padding: .4rem .5rem; border: 1px solid rgb(255 255 255 / 12%); border-radius: 6px; }
+.plugin-worker-health.is-alert { border-color: rgb(255 107 107 / 45%); background: rgb(255 107 107 / 10%); }
+.plugin-worker-health.is-alert strong { color: var(--danger, #ff6b6b); }
+.loaded-plugins-panel li.is-alert { border-color: rgb(255 107 107 / 45%); background: rgb(255 107 107 / 10%); }
 .session-flow-canvas .react-flow__edge-path { stroke: #647585; stroke-width: 2.5; fill: none; }
 .session-flow-canvas .react-flow__edge.flow-edge-active .react-flow__edge-path { stroke: var(--signal); stroke-width: 3.5; stroke-dasharray: 2 8; animation: signal-flow 720ms linear infinite; filter: drop-shadow(0 0 3px rgb(246 169 40 / 70%)); }
 @keyframes signal-flow { to { stroke-dashoffset: -10; } }
@@ -437,4 +448,10 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .session-flow-canvas .react-flow__node.flow-node-input { border-left: 4px solid var(--cyan, #25b8df) !important; }
 .session-flow-canvas .react-flow__node.flow-node-tool { border-left: 4px solid var(--signal-hot, #ffd166) !important; }
 .session-flow-canvas .react-flow__node.flow-node-output { border-left: 4px solid var(--good, #72e3a2) !important; }
+.session-flow-canvas .react-flow__node.flow-node-vst { border-left: 4px solid var(--vst-accent, #c792ea) !important; box-shadow: inset 2px 0 0 var(--vst-accent, #c792ea); }
+.node-kind-family { padding: .13rem .35rem; border-radius: 99px; font-size: .56rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+.node-kind-family-input { color: #0c2733; background: var(--cyan, #25b8df); }
+.node-kind-family-output { color: #0c2b1c; background: var(--good, #72e3a2); }
+.node-kind-family-native { color: #2c2308; background: var(--signal-hot, #ffd166); }
+.node-kind-family-vst { color: #241633; background: var(--vst-accent, #c792ea); }
 @media (max-width: 900px) { .main-content { grid-template-columns: 1fr; } }

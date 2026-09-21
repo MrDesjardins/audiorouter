@@ -44,6 +44,7 @@ type SessionFlowCanvasProps = {
   diagnostics?: DiagnosticsSnapshot | null;
   recorderStatuses?: RecorderStatus[];
   onSetNodeParameter?: (nodeId: string, name: string, value: boolean | number | string) => void;
+  onOpenPluginPicker?: (edgeId?: string) => void;
   canEdit?: boolean;
 };
 
@@ -94,6 +95,46 @@ function nodeFlowGroup(kind: NodeKind): LibraryFlowGroup {
 const FLOW_GROUPS: LibraryFlowGroup[] = ["input", "tool", "output"];
 const FLOW_GROUP_LABELS: Record<LibraryFlowGroup, string> = { input: "Inputs", tool: "Tools", output: "Outputs" };
 
+type NodeKindFamily = "input" | "native" | "vst" | "output";
+const NODE_KIND_FAMILY_LABELS: Record<NodeKindFamily, string> = { input: "Input", native: "Native", vst: "VST", output: "Output" };
+
+/** Beyond input/tool/output signal-flow position, a "tool" is either a
+ * built-in native processor or an isolated-worker VST plugin; those are
+ * visually and operationally very different (a VST loads user-supplied code
+ * from disk in its own process), so this is called out as its own family
+ * rather than folded into the generic "tool" label. */
+function nodeKindFamily(kind: NodeKind): NodeKindFamily {
+  const group = nodeFlowGroup(kind);
+  if (group === "input") return "input";
+  if (group === "output") return "output";
+  return kind === "plugin" ? "vst" : "native";
+}
+
+const NODE_KIND_LABELS: Partial<Record<NodeKind, string>> = {
+  physicalInput: "Physical Input",
+  physicalOutput: "Physical Output",
+  applicationCapture: "App Capture",
+  endpointLoopback: "Endpoint Loopback",
+  virtualRenderSource: "Virtual Source",
+  virtualCaptureSink: "Virtual Sink",
+  testSignal: "Test Signal",
+  parametricEq: "Parametric EQ",
+  graphicEq: "Graphic EQ",
+};
+
+/** A readable node-kind label for the canvas card. A plugin's label names
+ * its exact loaded format (VST2/VST3) instead of the generic "Plugin", since
+ * that is the single most useful fact distinguishing it from a native tool. */
+function humanizeNodeKind(node: Node): string {
+  if (node.kind === "plugin") {
+    const format = node.parameters.format;
+    return format === "vst3" ? "VST3 Plugin" : format === "vst2" ? "VST2 Plugin" : "VST Plugin";
+  }
+  const known = NODE_KIND_LABELS[node.kind];
+  if (known) return known;
+  return node.kind.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/^./, (char) => char.toUpperCase());
+}
+
 function edgeHandleId(portName: string, side: EdgeSide) {
   return `${portName}__edge_${side}`;
 }
@@ -143,7 +184,7 @@ function AudioEdgeActions({ id, source, target, sourceX, sourceY, targetX, targe
   const [menuOpen, setMenuOpen] = useState(false);
   const sourceNode = useInternalNode(source);
   const targetNode = useInternalNode(target);
-  const edgeData = data as { enabled?: boolean; active?: boolean; sourceSide?: EdgeSide; targetSide?: EdgeSide; onSetSide?: (edgeId: string, endpoint: "source" | "target", side: EdgeSide) => void; onToggle?: SessionFlowCanvasProps["onToggleConnection"]; onRemove?: SessionFlowCanvasProps["onRemoveConnection"]; onInsert?: SessionFlowCanvasProps["onInsertProcessor"]; canEdit?: boolean } | undefined;
+  const edgeData = data as { enabled?: boolean; active?: boolean; sourceSide?: EdgeSide; targetSide?: EdgeSide; onSetSide?: (edgeId: string, endpoint: "source" | "target", side: EdgeSide) => void; onToggle?: SessionFlowCanvasProps["onToggleConnection"]; onRemove?: SessionFlowCanvasProps["onRemoveConnection"]; onInsert?: SessionFlowCanvasProps["onInsertProcessor"]; onOpenPluginPicker?: SessionFlowCanvasProps["onOpenPluginPicker"]; canEdit?: boolean } | undefined;
   const sourceSide = edgeData?.sourceSide ?? "right";
   const targetSide = edgeData?.targetSide ?? "left";
   const sourcePoint = edgePoint(sourceNode, sourceSide, sourceX, sourceY);
@@ -156,7 +197,7 @@ function AudioEdgeActions({ id, source, target, sourceX, sourceY, targetX, targe
         <button type="button" className="edge-action-icon" disabled={!edgeData?.canEdit} aria-label={edgeData?.enabled ? `Disable connection ${id}` : `Enable connection ${id}`} title={edgeData?.enabled ? "Disable connection" : "Enable connection"} onClick={() => edgeData?.onToggle?.(id, !edgeData.enabled)}>{edgeData?.enabled ? "Ⅱ" : "▶"}</button>
         <button type="button" className="edge-action-icon edge-action-remove" disabled={!edgeData?.canEdit} aria-label={`Remove connection ${id}`} title="Remove connection" onClick={() => edgeData?.onRemove?.(id)}>×</button>
         <button type="button" className="edge-action-icon" disabled={!edgeData?.canEdit} aria-label={`Add processor to connection ${id}`} title="Add processor" onClick={() => setMenuOpen((open) => !open)}>＋</button>
-        {menuOpen && <div className="edge-insert-menu" role="menu" aria-label={`Configure connection ${id}`}><div className="edge-side-picker"><strong>Source side</strong>{EDGE_SIDES.map((side) => <button key={`source-${side}`} type="button" className={sourceSide === side ? "is-selected" : ""} role="menuitem" onClick={() => edgeData?.onSetSide?.(id, "source", side)}>{side}</button>)}</div><div className="edge-side-picker"><strong>Target side</strong>{EDGE_SIDES.map((side) => <button key={`target-${side}`} type="button" className={targetSide === side ? "is-selected" : ""} role="menuitem" onClick={() => edgeData?.onSetSide?.(id, "target", side)}>{side}</button>)}</div><div className="edge-processor-picker"><strong>Add processor</strong>{PROCESSOR_ACTIONS.map((processor) => <button key={processor.kind} type="button" role="menuitem" onClick={() => { edgeData?.onInsert?.(id, processor.kind); setMenuOpen(false); }}>{processor.label}</button>)}</div></div>}
+        {menuOpen && <div className="edge-insert-menu" role="menu" aria-label={`Configure connection ${id}`}><div className="edge-side-picker"><strong>Source side</strong>{EDGE_SIDES.map((side) => <button key={`source-${side}`} type="button" className={sourceSide === side ? "is-selected" : ""} role="menuitem" onClick={() => edgeData?.onSetSide?.(id, "source", side)}>{side}</button>)}</div><div className="edge-side-picker"><strong>Target side</strong>{EDGE_SIDES.map((side) => <button key={`target-${side}`} type="button" className={targetSide === side ? "is-selected" : ""} role="menuitem" onClick={() => edgeData?.onSetSide?.(id, "target", side)}>{side}</button>)}</div><div className="edge-processor-picker"><strong>Add processor</strong>{PROCESSOR_ACTIONS.map((processor) => <button key={processor.kind} type="button" role="menuitem" onClick={() => { edgeData?.onInsert?.(id, processor.kind); setMenuOpen(false); }}>{processor.label}</button>)}<button type="button" role="menuitem" onClick={() => { edgeData?.onOpenPluginPicker?.(id); setMenuOpen(false); }}>VST plugin…</button></div></div>}
       </div>
     </EdgeLabelRenderer>
   </>;
@@ -443,9 +484,12 @@ function PluginVisual({ node, telemetry }: { node: Node; telemetry: ReturnType<t
   const format = node.parameters.format;
   const formatLabel = format === "vst3" ? "VST3" : format === "vst2" ? "VST2" : "Plugin";
   const fileName = basename(String(node.parameters.path ?? ""));
+  const health = telemetry?.plugin ?? null;
+  const healthAlert = health?.state === "failed" || health?.state === "quarantined";
   return <div className="node-plugin">
     <div className="node-plugin-header"><span className="node-plugin-format">{formatLabel}</span><span className={`node-state ${node.bypass ? "is-bypassed" : node.enabled ? "is-ready" : "is-disabled"}`}>{node.bypass ? "bypass" : node.enabled ? "active" : "stopped"}</span></div>
     <div className="node-plugin-file" title={fileName}>{fileName}</div>
+    {healthAlert && <div className="node-plugin-health-alert" role="alert">{health.state === "quarantined" ? `Quarantined (${health.failureCount} failures)` : "Worker failed"}</div>}
     {telemetry?.meter && <MiniMeter telemetry={telemetry} />}
   </div>;
 }
@@ -470,7 +514,7 @@ function NodeVisual({ node, telemetry, onSetNodeParameter, recorderStatus, mixer
   return <div className="node-activity" aria-label={node.enabled && !node.bypass ? "Processor ready" : "Processor inactive"}><span className="activity-dot" />{node.bypass ? "Bypassed" : node.enabled ? "Ready" : "Disabled"}</div>;
 }
 
-export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onToggleConnection, onInsertProcessor, onRemoveNode, onAddLibraryNode, onAddVirtualBusNode, diagnostics, recorderStatuses = [], onSetNodeParameter, canEdit = true }: SessionFlowCanvasProps) {
+export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onToggleConnection, onInsertProcessor, onRemoveNode, onAddLibraryNode, onAddVirtualBusNode, diagnostics, recorderStatuses = [], onSetNodeParameter, onOpenPluginPicker, canEdit = true }: SessionFlowCanvasProps) {
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
   const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey));
   const edgeLayoutKey = `${layoutKey}.edges`;
@@ -587,7 +631,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
       label: (
         <div className={`flow-node-content node-kind-${node.kind}`} aria-label={`${node.name}, ${node.kind}`} onMouseDownCapture={captureConnectionHandle} onPointerDownCapture={captureConnectionHandle}>
           {node.ports.filter((port) => port.direction === "input").map((port) => { const offset = portOffset(node, port); return EDGE_SIDES.map((side) => { const handleId = edgeHandleId(port.name, side); return <Handle key={`input-${port.name}-${side}`} type="target" id={handleId} position={edgeSidePosition(side)} style={side === "left" || side === "right" ? { top: offset } : { left: offset }} aria-label={side === "left" ? `${node.name} ${port.name} input` : `${node.name} ${port.name} input ${side} connector`} data-debug-side={side} data-debug-direction="target" data-debug-handle-id={handleId} onMouseDown={(event) => { targetHandleRef.current = { nodeId: node.id, handleId, side }; logConnectionDebug("handle-mousedown", { nodeId: node.id, nodeName: node.name, direction: "target", port: port.name, side, handleId, clientX: event.clientX, clientY: event.clientY, button: event.button }); }} onPointerDown={(event) => logConnectionDebug("handle-pointer-down", { nodeId: node.id, nodeName: node.name, direction: "target", port: port.name, side, handleId, clientX: event.clientX, clientY: event.clientY, button: event.button })} />; }); })}
-          <div className="flow-node-kicker"><span className="node-kind">{node.kind}</span><span className={`node-state ${node.bypass ? "is-bypassed" : node.enabled ? "is-ready" : "is-disabled"}`}>{node.bypass ? "bypass" : node.enabled ? "ready" : "off"}</span></div>
+          <div className="flow-node-kicker"><span className={`node-kind-family node-kind-family-${nodeKindFamily(node.kind)}`}>{NODE_KIND_FAMILY_LABELS[nodeKindFamily(node.kind)]}</span><span className="node-kind">{humanizeNodeKind(node)}</span><span className={`node-state ${node.bypass ? "is-bypassed" : node.enabled ? "is-ready" : "is-disabled"}`}>{node.bypass ? "bypass" : node.enabled ? "ready" : "off"}</span></div>
           <div className="flow-node-title"><strong>{node.name}</strong>{canEdit && <button type="button" className="flow-node-delete" aria-label={`Delete ${node.name}`} title={`Delete ${node.name}`} onClick={(event) => { event.stopPropagation(); if (onRemoveNode) onRemoveNode(node.id); else globalThis.dispatchEvent(new CustomEvent("audiorouter:remove-node", { detail: { nodeId: node.id } })); }}>×</button>}</div>
           <NodeVisual node={node} telemetry={telemetry} onSetNodeParameter={onSetNodeParameter} recorderStatus={recorderStatus} mixerInputCount={mixerInputCount} />
           <small className="node-port-count">{node.ports.length} port{node.ports.length === 1 ? "" : "s"} · {node.enabled ? "enabled" : "disabled"}</small>
@@ -596,7 +640,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
         </div>
       ),
     },
-    className: `flow-node-${nodeFlowGroup(node.kind)}`,
+    className: `flow-node-${nodeFlowGroup(node.kind)}${node.kind === "plugin" ? " flow-node-vst" : ""}`,
     draggable: true,
     selectable: true,
     deletable: canEdit,
@@ -620,7 +664,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
     source: edge.sourceNode,
     target: edge.destinationNode,
     type: "audioActions",
-    data: { enabled: edge.enabled, active, sourceSide: edgeSides[edge.id]?.source, targetSide: edgeSides[edge.id]?.target, onSetSide: setEdgeSide, onToggle: onToggleConnection, onRemove: onRemoveConnection, onInsert: onInsertProcessor, canEdit },
+    data: { enabled: edge.enabled, active, sourceSide: edgeSides[edge.id]?.source, targetSide: edgeSides[edge.id]?.target, onSetSide: setEdgeSide, onToggle: onToggleConnection, onRemove: onRemoveConnection, onInsert: onInsertProcessor, onOpenPluginPicker, canEdit },
     deletable: canEdit && onRemoveConnection !== undefined,
     selectable: true,
     className: active ? "flow-edge-active" : undefined,
@@ -641,6 +685,10 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
             return <div key={group} className={`canvas-library-group canvas-library-group-${group}`}>
               <span className="canvas-library-group-label">{FLOW_GROUP_LABELS[group]}</span>
               {entries.map((entry) => libraryButton(entry))}
+              {group === "tool" && <button type="button" className="canvas-library-item" disabled={!canEdit} onClick={() => onOpenPluginPicker?.()}>
+                <span className="canvas-library-item-icon" aria-hidden="true">P</span>
+                <span>Plugin (VST2/VST3)</span>
+              </button>}
             </div>;
           })}
         </div>

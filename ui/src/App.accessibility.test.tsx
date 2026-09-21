@@ -427,6 +427,110 @@ describe("VB-Cable endpoint selection", () => {
     expect(screen.getByText(/added a stopped plugin placeholder/i)).toBeTruthy();
   });
 
+  it("adds a plugin from the canvas shelf picker, selects it, and shows its identity in the inspector", async () => {
+    const backend = {
+      ...connectedPreviewBackend(),
+      scanPlugins: async () => ({
+        directory: "C:\\Plugins",
+        entries: [{
+          path: "C:\\Plugins\\ReaComp.vst3",
+          identity: {
+            path: "C:\\Plugins\\ReaComp.vst3",
+            binaryPath: "C:\\Plugins\\ReaComp.vst3",
+            format: "vst3" as const,
+            architecture: "x64" as const,
+            fileBytes: 8192,
+            sha256: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+            vendor: "Cockos",
+            version: "1.0",
+            classIds: ["reacomp-class"],
+            compatibility: "supportedVst3X64" as const,
+          },
+          error: null,
+          errorCode: null,
+        }],
+      }),
+    };
+    render(<App backend={backend} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Plugin (VST2/VST3)" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add a VST2/VST3 plugin" });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Absolute plugin directory" }), { target: { value: "C:\\Plugins" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Scan directory" }));
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Add to draft: C:\\Plugins\\ReaComp.vst3" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a VST2/VST3 plugin" })).toBeNull());
+    expect(await screen.findByText(/added a stopped plugin placeholder/i)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Cockos 1" })).toBeTruthy();
+    const identityPanel = within(screen.getByLabelText("VST plugin binding"));
+    expect(identityPanel.getByText("VST3 plugin loaded from disk")).toBeTruthy();
+    expect(identityPanel.getByText("ReaComp.vst3")).toBeTruthy();
+    expect((identityPanel.getByLabelText("Plugin binary path") as HTMLInputElement).value).toBe("C:\\Plugins\\ReaComp.vst3");
+  });
+
+  it("lists loaded plugins in the picker and unloads one on confirmation", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const backend = {
+      ...connectedPreviewBackend(),
+      scanPlugins: async () => ({
+        directory: "C:\\Plugins",
+        entries: [{
+          path: "C:\\Plugins\\ReaComp.vst3",
+          identity: {
+            path: "C:\\Plugins\\ReaComp.vst3",
+            binaryPath: "C:\\Plugins\\ReaComp.vst3",
+            format: "vst3" as const,
+            architecture: "x64" as const,
+            fileBytes: 8192,
+            sha256: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+            vendor: "Cockos",
+            version: "1.0",
+            classIds: ["reacomp-class"],
+            compatibility: "supportedVst3X64" as const,
+          },
+          error: null,
+          errorCode: null,
+        }],
+      }),
+    };
+    render(<App backend={backend} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Plugin (VST2/VST3)" }));
+    let dialog = await screen.findByRole("dialog", { name: "Add a VST2/VST3 plugin" });
+    expect(within(dialog).getByText(/no vst2\/vst3 plugin is loaded/i)).toBeTruthy();
+
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Absolute plugin directory" }), { target: { value: "C:\\Plugins" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Scan directory" }));
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Add to draft: C:\\Plugins\\ReaComp.vst3" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a VST2/VST3 plugin" })).toBeNull());
+
+    fireEvent.click(screen.getByRole("button", { name: "Plugin (VST2/VST3)" }));
+    dialog = await screen.findByRole("dialog", { name: "Add a VST2/VST3 plugin" });
+    const loaded = within(within(dialog).getByRole("list", { name: "Loaded plugins" }));
+    expect(loaded.getByText(/Cockos 1/)).toBeTruthy();
+    expect(loaded.getByText(/ReaComp\.vst3/)).toBeTruthy();
+
+    fireEvent.click(loaded.getByRole("button", { name: "Unload" }));
+    expect(window.confirm).toHaveBeenCalled();
+    await waitFor(() => expect(within(dialog).getByText(/no vst2\/vst3 plugin is loaded/i)).toBeTruthy());
+    expect(await screen.findByText(/unloaded from the draft/i)).toBeTruthy();
+  });
+
+  it("closes the plugin picker on Escape without adding anything, and restores focus", async () => {
+    render(<App backend={connectedPreviewBackend()} />);
+    const opener = screen.getByRole("button", { name: "Plugin (VST2/VST3)" });
+    opener.focus();
+    fireEvent.click(opener);
+    const dialog = await screen.findByRole("dialog", { name: "Add a VST2/VST3 plugin" });
+    expect(document.activeElement).toBe(within(dialog).getByRole("textbox", { name: "Absolute plugin directory" }));
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a VST2/VST3 plugin" })).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    expect(screen.queryByText(/added a stopped plugin placeholder/i)).toBeNull();
+  });
+
+  it("disables the plugin shelf entry while the backend is disconnected", () => {
+    render(<App />);
+    expect((screen.getByRole("button", { name: "Plugin (VST2/VST3)" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("clears stale plugin inspection when selecting another scan result", async () => {
     let scanCount = 0;
     const backend = {
@@ -788,12 +892,12 @@ describe("keyboard connection dialog", () => {
       format: { sampleRateHz: 48000, channels: 2, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 8 },
       periods: { default100ns: 100000, minimum100ns: 30000 },
     });
-    const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: number, captureEndpointIds: string[]) => ({
+const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: number, sources: import("@audiorouter/contracts").NativeMultiInputSourceBinding[]) => ({
       sessionId,
       generation,
       state: "configured-stopped" as const,
-      captureEndpointIds,
-      sourceNodeIds: captureEndpointIds.map((_, index) => `source-${index}`),
+      sources: sources.map((source) => source.kind === "physical" ? { kind: "physical" as const, endpointId: source.endpointId } : { kind: "application" as const, processId: source.processId, executable: source.executable }),
+      sourceNodeIds: sources.map((_, index) => `source-${index}`),
       branchNodeIds: ["output"],
     }));
     const backend = {
@@ -809,7 +913,81 @@ describe("keyboard connection dialog", () => {
     fireEvent.change(captureSelect);
     fireEvent.click(await screen.findByRole("button", { name: "Move capture-second up" }));
     fireEvent.click(screen.getByRole("button", { name: "Prepare stopped multi-input" }));
-    await waitFor(() => expect(prepareNativeMultiInputs).toHaveBeenCalledWith("demo-session", 1, ["capture-second", "capture-first"]));
+    await waitFor(() => expect(prepareNativeMultiInputs).toHaveBeenCalledWith("demo-session", 1, [
+      { kind: "physical", endpointId: "capture-second" },
+      { kind: "physical", endpointId: "capture-first" },
+    ]));
+  });
+
+  it("mixes a physical capture endpoint with an enabled application-capture node into one multi-input binding list", async () => {
+    const makeCapture = (id: string, name: string) => ({
+      id,
+      name,
+      direction: "capture" as const,
+      state: "active" as const,
+      defaultRoles: [],
+      format: { sampleRateHz: 48000, channels: 2, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 8 },
+      periods: { default100ns: 100000, minimum100ns: 30000 },
+    });
+    const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: number, sources: import("@audiorouter/contracts").NativeMultiInputSourceBinding[]) => ({
+      sessionId,
+      generation,
+      state: "configured-stopped" as const,
+      sources: sources.map((source) => source.kind === "physical" ? { kind: "physical" as const, endpointId: source.endpointId } : { kind: "application" as const, processId: source.processId, executable: source.executable }),
+      sourceNodeIds: sources.map((_, index) => `source-${index}`),
+      branchNodeIds: ["output"],
+    }));
+    const sessionWithApplicationNode = {
+      ...demoSession,
+      nodes: [
+        ...demoSession.nodes,
+        {
+          id: "zoom-capture",
+          kind: "applicationCapture" as const,
+          typeVersion: 1 as const,
+          name: "Zoom capture",
+          enabled: true,
+          bypass: false,
+          parameters: {
+            executable: "Zoom.exe",
+            executablePath: "C:\\Zoom\\Zoom.exe",
+            processPolicy: "selectedInstance",
+            processId: 4242,
+            creationTime100ns: "999999999",
+          },
+          ports: [{ name: "out", direction: "output" as const, channels: 2 as const }],
+        },
+      ],
+    };
+    const backend = {
+      ...createDisconnectedBackend(sessionWithApplicationNode),
+      connected: true,
+      listDevices: async () => [makeCapture("capture-mic", "Microphone")],
+      prepareNativeMultiInputs,
+    };
+    render(<App backend={backend} />);
+
+    const physicalSelect = await screen.findByRole("listbox", { name: "Native multi-input capture endpoints" });
+    (within(physicalSelect).getAllByRole("option")[0] as HTMLOptionElement).selected = true;
+    fireEvent.change(physicalSelect);
+
+    const applicationSelect = screen.getByRole("listbox", { name: "Native multi-input application sources" });
+    const applicationOptions = await within(applicationSelect).findAllByRole("option");
+    (applicationOptions[0] as HTMLOptionElement).selected = true;
+    fireEvent.change(applicationSelect);
+
+    fireEvent.click(screen.getByRole("button", { name: "Prepare stopped multi-input" }));
+    await waitFor(() => expect(prepareNativeMultiInputs).toHaveBeenCalledWith(demoSession.id, 1, [
+      { kind: "physical", endpointId: "capture-mic" },
+      {
+        kind: "application",
+        processId: 4242,
+        executable: "Zoom.exe",
+        executablePath: "C:\\Zoom\\Zoom.exe",
+        creationTime100ns: "999999999",
+        mode: "include",
+      },
+    ]));
   });
 
   it("restores endpoint choices only when the exact IDs are still active", async () => {
@@ -1497,6 +1675,52 @@ describe("keyboard connection dialog", () => {
     for (const label of ["Gain", "Mute", "Parametric EQ", "Graphic EQ", "Compressor", "Gate", "Limiter", "Delay", "Pitch"]) {
       expect(screen.getAllByRole("button", { name: `Insert ${label}` })).toHaveLength(2);
     }
+  });
+
+  it("inserts a scanned VST plugin directly into a connected draft path from the list view", async () => {
+    const backend = {
+      ...connectedPreviewBackend(),
+      scanPlugins: async () => ({
+        directory: "C:\\Plugins",
+        entries: [{
+          path: "C:\\Plugins\\ReaComp.vst3",
+          identity: {
+            path: "C:\\Plugins\\ReaComp.vst3",
+            binaryPath: "C:\\Plugins\\ReaComp.vst3",
+            format: "vst3" as const,
+            architecture: "x64" as const,
+            fileBytes: 8192,
+            sha256: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+            vendor: "Cockos",
+            version: "1.0",
+            classIds: ["reacomp-class"],
+            compatibility: "supportedVst3X64" as const,
+          },
+          error: null,
+          errorCode: null,
+        }],
+      }),
+    };
+    render(<App backend={backend} />);
+    fireEvent.click(screen.getByRole("button", { name: "Keyboard connection dialog" }));
+    const dialog = await screen.findByRole("dialog", { name: "Keyboard connection" });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Keyboard source output port" }), { target: { value: "mic::out" } });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Keyboard destination input port" }), { target: { value: "voice::in" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add connection to draft" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "List view" }));
+    fireEvent.click(screen.getByRole("button", { name: "Insert VST plugin" }));
+
+    const pickerDialog = await screen.findByRole("dialog", { name: "Insert a VST2/VST3 plugin into this connection" });
+    fireEvent.change(within(pickerDialog).getByRole("textbox", { name: "Absolute plugin directory" }), { target: { value: "C:\\Plugins" } });
+    fireEvent.click(within(pickerDialog).getByRole("button", { name: "Scan directory" }));
+    fireEvent.click(await within(pickerDialog).findByRole("button", { name: "Add to draft: C:\\Plugins\\ReaComp.vst3" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Insert a VST2/VST3 plugin into this connection" })).toBeNull());
+    expect(await screen.findByText(/inserted a stopped plugin placeholder into the connection/i)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Cockos 1" })).toBeTruthy();
+    expect(screen.getByText(/Microphone:out → Cockos 1:in/)).toBeTruthy();
+    expect(screen.getByText(/Cockos 1:out → Voice gain:in/)).toBeTruthy();
   });
 
   it("disables topology mutations when no backend connection context exists", () => {
