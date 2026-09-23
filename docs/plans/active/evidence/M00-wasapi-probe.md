@@ -1986,8 +1986,11 @@ After the user reconnected the loopback, the same guarded wrapper passed with
 groups on the physical capture and 614 on the virtual capture, with zero
 dropped frames on both sides. The internal route reported `route=true`, 800
 packets, 384,000 captured frames, 3,000 processed quanta, 384,000 rendered
-frames, and 1,536,044 finalized recording bytes; lifecycle start/stop/reset
-all succeeded. The disconnected-loopback attempt above remains a
+frames, one reported rejected pump, and 1,536,044 finalized recording bytes;
+lifecycle start/stop/reset all succeeded. The one rejection is deliberate:
+the acceptance first sends a stale generation and requires it to fail before
+continuing with the active generation. It is not a runtime audio-path failure.
+The disconnected-loopback attempt above remains a
 non-qualifying setup failure and is superseded by this passing rerun for
 current route status.
 
