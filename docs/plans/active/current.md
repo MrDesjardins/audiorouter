@@ -1801,3 +1801,36 @@ This closes out the "do what you can" pass: every other open item on the
 active plan's non-driver list genuinely requires the user's interactive
 machine, real hardware, or a rights/legal decision, and was not attempted.
 Nothing committed; awaiting the user's go-ahead to push.
+
+## 2026-09-22 pushed MP3 changes; guarded mic rerun was non-qualifying
+
+Committed and pushed the current MP3 recording and acceptance work as
+`08c6b982` (`Add MP3 recording and guarded microphone acceptance`). The
+installed-plugin read-only check had found the expected ReaPlugs directory;
+the live scenario was then attempted with the guarded NFR-02 wrapper.
+
+The first attempt ran from a non-elevated shell and stopped before opening
+audio because Windows denied the required before-run PnP media snapshot. A
+retry with elevated execution access passed the snapshot and ran the bounded
+AudioRouter `adapter-control-route` for 8 seconds: 801 packets, 384,480
+captured frames, 3,003 processed quanta, 384,384 rendered frames, and a
+finalized 1,537,580-byte temporary recording. The native probe submitted
+314,016 render frames and emitted 654 impulses, but detected zero impulse
+groups on either capture stream (`pairs=0/500`), so the wrapper correctly
+failed without reporting latency. The user reported that the loopback was
+disconnected during this run; treat this as a known setup-related,
+non-qualifying attempt, not an NFR-02 regression. Temporary route/probe
+artifacts were cleaned by the wrapper. Reconnect the loopback before repeating
+this live scenario.
+
+The explicit installed ReaEQ worker acceptance passed at 44.1, 48, and 96
+kHz, plus both editor-containment checks. The selected DLL's SHA-256 remained
+`c200e540c26ac793b43611aaceb4aa42cdd2829cdfbf0d60494716d9bdde8a7d`.
+This confirms the isolated plugin worker separately; it does not yet prove a
+single live microphone-to-VB-Cable graph with ReaEQ inserted. The current
+computer-use inventory exposed no targetable Windows app, so UI-based graph
+setup/verification remains pending. Next: with the loopback connected and
+interactive shell available, qualify one microphone-to-VB-Cable session with
+an approved ReaPlugs processor in the graph, then verify the receiving
+application gets the processed signal. The unsigned installer smoke remains
+an M08 packaging gate and is not a prerequisite for MP3 recording behavior.

@@ -1960,3 +1960,20 @@ scope on this one reference device, under the revised ≤160 ms target. It is
 not validated on any other hardware or microphone, and the cross-run
 variance noted above (larger than NFR-01's) remains an open characterization
 question rather than a blocking one.
+
+## 2026-09-22 guarded rerun: disconnected loopback, no latency result
+
+The guarded `tests/acceptance/m02-nfr02-mic-virtual-capture.ps1 -AllowLiveAudio`
+was attempted again. A non-elevated invocation stopped at the initial
+`Get-PnpDevice` snapshot with `HRESULT 0x80041003` (access denied), before
+audio opened. The elevated retry passed the snapshot and route lifecycle, but
+the capture probe emitted 654 impulses while detecting zero impulse groups
+on both the physical and VB-Cable captures (`nfr02_pairs=0`, target 500).
+AudioRouter's internal route itself reported success: 801 packets, 384,480
+captured frames, 3,003 processed quanta, 384,384 rendered frames, zero
+reported drops, and a finalized 1,537,580-byte temporary recording. The
+user reported the loopback was disconnected during this run. Therefore this
+is a setup-related non-qualifying attempt; it provides no latency measurement
+and does not change the earlier five successful NFR-02 measurements. The
+wrapper removed its temporary probe, object, route log, and recording data.
+Reconnect the loopback before the next live correlation run.
