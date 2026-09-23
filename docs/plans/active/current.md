@@ -1802,7 +1802,7 @@ active plan's non-driver list genuinely requires the user's interactive
 machine, real hardware, or a rights/legal decision, and was not attempted.
 Nothing committed; awaiting the user's go-ahead to push.
 
-## 2026-09-22 pushed MP3 changes; guarded mic rerun was non-qualifying
+## 2026-09-22 pushed MP3 changes; mic route requalified after reconnect
 
 Committed and pushed the current MP3 recording and acceptance work as
 `08c6b982` (`Add MP3 recording and guarded microphone acceptance`). The
@@ -1822,6 +1822,17 @@ disconnected during this run; treat this as a known setup-related,
 non-qualifying attempt, not an NFR-02 regression. Temporary route/probe
 artifacts were cleaned by the wrapper. Reconnect the loopback before repeating
 this live scenario.
+
+After the user reconnected the loopback, the same guarded wrapper passed:
+`pairs=500/500`, p95 117.403 ms (min 116.139, p50 116.848, max 128.688 ms),
+within the 160 ms target. It detected 627 physical-mic and 614 virtual-capture
+impulse groups, with zero dropped frames. The internal route reported 800
+packets, 384,000 captured and rendered frames, 3,000 processed quanta, and
+1,536,044 finalized recording bytes. This requalifies the real microphone-to-
+VB-Cable route on the reference setup. The isolated ReaEQ worker check also
+passed as recorded above, but the combined live graph with ReaEQ inserted and
+receiving-app confirmation remain pending; no targetable Windows app was
+available through the computer-use surface.
 
 The explicit installed ReaEQ worker acceptance passed at 44.1, 48, and 96
 kHz, plus both editor-containment checks. The selected DLL's SHA-256 remained

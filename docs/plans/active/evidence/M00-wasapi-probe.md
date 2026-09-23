@@ -1977,3 +1977,24 @@ is a setup-related non-qualifying attempt; it provides no latency measurement
 and does not change the earlier five successful NFR-02 measurements. The
 wrapper removed its temporary probe, object, route log, and recording data.
 Reconnect the loopback before the next live correlation run.
+
+## 2026-09-22 rerun after loopback reconnect: passed
+
+After the user reconnected the loopback, the same guarded wrapper passed with
+`pairs=500/500`, p95 117.403 ms (min 116.139 ms, p50 116.848 ms, max
+128.688 ms), below the 160 ms threshold. The probe detected 627 impulse
+groups on the physical capture and 614 on the virtual capture, with zero
+dropped frames on both sides. The internal route reported `route=true`, 800
+packets, 384,000 captured frames, 3,000 processed quanta, 384,000 rendered
+frames, and 1,536,044 finalized recording bytes; lifecycle start/stop/reset
+all succeeded. The disconnected-loopback attempt above remains a
+non-qualifying setup failure and is superseded by this passing rerun for
+current route status.
+
+This requalifies microphone capture through the AudioRouter production graph
+and into the VB-Cable virtual capture path on the reference setup. The probe's
+Scope line is explicit that the graph route is the current `adapter-control-
+route` chain; this run did not insert ReaEQ or verify a receiving application.
+The installed ReaEQ worker check remains separate. A single live graph with
+the approved VST inserted is still needed to complete the user's requested
+end-to-end scenario.
