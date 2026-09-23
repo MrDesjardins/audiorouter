@@ -831,8 +831,13 @@ fn verified_worker_loads_and_processes_an_opt_in_vst2_fixture() {
     let mut samples = vec![0.0; 256];
     samples[2] = 0.1;
     samples[3] = -0.1;
-    let frame =
-        WorkerFrame::new(1, worker_clock_tick().saturating_add(10_000), 2, samples).unwrap();
+    let frame = WorkerFrame::new(
+        1,
+        worker_clock_tick().saturating_add(10_000),
+        2,
+        samples.clone(),
+    )
+    .unwrap();
     let processed = worker
         .process(
             frame,
@@ -852,6 +857,34 @@ fn verified_worker_loads_and_processes_an_opt_in_vst2_fixture() {
         )
         .expect("VST2 worker processing");
     assert!(processed.samples.iter().all(|sample| sample.is_finite()));
+    if let Some(gain_parameter) = descriptors
+        .iter()
+        .find(|descriptor| descriptor.title.ends_with("-Gain"))
+    {
+        let changed = worker
+            .process(
+                WorkerFrame::new(2, worker_clock_tick().saturating_add(10_000), 2, samples)
+                    .unwrap(),
+                vec![audiorouter_plugin_host::ParameterEvent {
+                    parameter_id: gain_parameter.parameter_id,
+                    normalized_value: if gain_parameter.default_value <= 0.5 {
+                        0.75
+                    } else {
+                        0.25
+                    },
+                    sample_offset: 0,
+                }],
+                Instant::now(),
+            )
+            .expect("VST2 worker applies an explicit non-default parameter");
+        assert!(changed.samples.iter().all(|sample| sample.is_finite()));
+        assert!(
+            changed.samples.iter().zip(&processed.samples).any(|(changed, baseline)| {
+                (changed - baseline).abs() > 1.0e-5
+            }),
+            "a plugin exposing a Gain parameter must alter processed samples when its normalized value changes"
+        );
+    }
     let latency = worker
         .report_latency(
             WorkerLatency::new(0, sample_rate_hz).unwrap(),

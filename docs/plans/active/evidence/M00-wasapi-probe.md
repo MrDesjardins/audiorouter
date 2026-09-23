@@ -2001,3 +2001,58 @@ route` chain; this run did not insert ReaEQ or verify a receiving application.
 The installed ReaEQ worker check remains separate. A single live graph with
 the approved VST inserted is still needed to complete the user's requested
 end-to-end scenario.
+
+## 2026-09-22 installed ReaEQ in the live microphone route
+
+The first combined run confirmed that the exact ReaEQ worker started in the
+real graph (`running`, zero failures) but only 405 of 500 requested impulse
+groups reached VB-Cable; no latency result was accepted. The plugin bridge was
+using a two-quantum bounded handoff while the WASAPI packet pump can submit
+several 128-frame graph quanta in one packet burst. Raising the production
+bridge's preallocated queue depth to its already-defined eight-slot cap
+resolved that observed starvation without introducing callback waits.
+
+The follow-up guarded live route passed at 500/500 pairs with ReaEQ active,
+123.773 ms p95 (121.795 ms min, 122.642 ms p50, 124.337 ms max), below the
+160 ms M02 threshold. The route completed 1,202 capture packets, 576,576
+captured frames, 4,504 processed quanta, 576,512 rendered frames, and
+2,306,092 finalized recording bytes. ReaEQ reported `running` with zero
+failures and its scanned binary SHA-256 remained
+`c200e540c26ac793b43611aaceb4aa42cdd2829cdfbf0d60494716d9bdde8a7d`.
+
+The worker-described ReaEQ parameter catalog exposed `1-Gain` as parameter 1
+(default 0.25). Setting it to normalized value 0.75 in the session graph also
+passed the guarded live route at 500/500 pairs and 136.783 ms p95 (127.199 ms
+min, 134.777 ms p50, 138.630 ms max); the plugin worker stayed healthy and the
+binary fingerprint was unchanged. In a separate opt-in real-DLL worker test,
+changing a plugin's exposed `*-Gain` parameter produced finite output samples
+that differed from the default-parameter result. The UI regression covers
+explicit scan of a VST2 result with no static class IDs, node insertion,
+worker-described controls, and editing a parameter into the graph draft.
+
+The final wrapper was rerun after adding explicit checks for the accepted
+parameter ID, running/zero-failure worker state, exact selected SHA-256, and
+media snapshot stability. It again passed 500/500 pairs at 139.115 ms p95
+(137.779 ms min, 138.348 ms p50, 140.352 ms max), with zero dropped frames,
+1,201 packets, 576,480 captured frames, 4,503 processed quanta, 576,384
+rendered frames, and a 2,305,580-byte temporary recording. A same-session
+rerun of the unchanged no-plugin command also passed 500/500 at 115.155 ms
+p95 with zero drops, confirming that the default route path remains intact.
+
+A second installed ReaPlugs VST2 effect, ReaComp, was then selected by its
+explicit absolute path and run through the same live production graph. Its
+isolated worker reported `running`, zero failures, and unchanged SHA-256
+`4c0862ab3cfd8a0345481b4792c07bf8d5a9761014f217d4e13669bf8143c7a0`; the
+probe passed 500/500 pairs at 124.283 ms p95 with zero dropped frames. This is
+a second binary-specific route observation, not a blanket claim for every
+installed VST effect.
+
+These results demonstrate installed ReaEQ discovery/worker binding, generic
+parameter editing, actual parameter application, and altered processing in
+the real microphone-to-VB-Cable route on this machine. The test harness builds
+the temporary graph directly through the control layer; it is not attended UI
+interaction/listening in a receiving application. The vendor's native editor
+window is still not wired into the UI, and broad rights/editor compatibility,
+W2 timing/soak, and other hardware remain open gates. Both failed/partial and
+passing artifacts were cleaned; no endpoint defaults, mixer settings, or
+plugin binary were changed.

@@ -405,12 +405,18 @@ describe("VB-Cable endpoint selection", () => {
             sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             vendor: "Test Vendor",
             version: "1.0",
-            classIds: ["test-class"],
+            classIds: [],
             compatibility: "supportedVst2X64Gated" as const,
           },
           error: null,
           errorCode: null,
         }],
+      }),
+      describePluginParameters: async (path: string) => ({
+        path,
+        sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        format: "vst2" as const,
+        parameters: [{ parameterId: 1, title: "1-Gain", defaultValue: 0.25, minimum: 0, maximum: 1 }],
       }),
     };
     render(<App backend={backend} />);
@@ -423,8 +429,10 @@ describe("VB-Cable endpoint selection", () => {
     const pluginNode = await screen.findByRole("button", { name: /Test Vendor.*plugin/ });
     expect(pluginNode).toBeTruthy();
     fireEvent.click(pluginNode);
-    expect(screen.getByText(/Plugin parameters unavailable|Loading bounded parameters/i)).toBeTruthy();
-    expect(screen.getByText(/added a stopped plugin placeholder/i)).toBeTruthy();
+    const gainSlider = await screen.findByRole("slider", { name: "1-Gain slider" });
+    fireEvent.change(gainSlider, { target: { value: "0.75" } });
+    expect((gainSlider as HTMLInputElement).value).toBe("0.75");
+    expect(await screen.findByText("Draft updated. Review and plan the changes before committing.")).toBeTruthy();
   });
 
   it("adds a plugin from the canvas shelf picker, selects it, and shows its identity in the inspector", async () => {

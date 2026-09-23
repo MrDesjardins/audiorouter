@@ -10257,7 +10257,7 @@ impl ControlPlane {
                 worker,
                 channels,
                 audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
-                2,
+                8,
             )
             .map_err(|error| {
                 ControlError::InvalidRequest(format!("plugin runtime bridge failed: {error:?}"))

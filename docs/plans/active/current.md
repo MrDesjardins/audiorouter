@@ -1839,11 +1839,111 @@ acceptance's deliberate stale-generation rejection check before normal
 generation pumping, not an audio-path failure. This requalifies the real
 microphone-to-VB-Cable route on the reference setup.
 
-The combined live graph and receiving-application check remain pending. The
-documented disposable desktop launcher was attempted, but the computer-use
-surface exposed no apps; the idle shell was closed and its temporary database
-cleaned without starting audio. Next: make an interactive shell available,
-insert the approved ReaPlugs processor into the microphone-to-VB-Cable graph,
-and confirm the receiving app gets processed audio. The unsigned installer
-smoke remains an M08 packaging gate and is not a prerequisite for MP3
-recording behavior.
+The combined live graph check is completed below. Attended UI interaction and
+receiving-application listening remain unverified because the computer-use
+surface exposed no apps; the earlier idle shell was closed and its temporary
+database cleaned without starting audio. The unsigned installer smoke remains
+an M08 packaging gate and is not a prerequisite for MP3 recording behavior.
+
+## 2026-09-22 M02/M06 end-to-end installed-plugin workflow
+
+Objective: make installed supported plugins usable end to end: explicitly
+scan/select an exact plugin, add/insert it as a graph node, inspect/edit its
+parameters in the AudioRouter UI, bind it to the isolated worker, and prove
+that a non-default plugin setting changes signal in a real microphone route.
+The native vendor editor window is a separate capability; generic parameter
+editing is the required configuration path for this task unless existing
+contracts reveal a safe already-supported editor route.
+
+Requirements: CAP-02/03, GRAPH-01/06/14, DSP-01, PLUG-01/03/05/07,
+SEC-07, NFR-02, QUAL-01/02/03, ENG-04. This is a single reference-machine
+integration experiment; it does not qualify all plugins or close the broader
+M06 rights, sandbox, W2 timing, or compatibility gates.
+
+Prerequisites: Windows 11 x64, elevated PowerShell for the existing before/
+after media inventory, the connected reference microphone loopback, active
+Focusrite capture and VB-Cable render/capture endpoints, the existing isolated
+plugin worker, and the exact local `reaeq-standalone.dll` whose recorded hash
+is `c200e540c26ac793b43611aaceb4aa42cdd2829cdfbf0d60494716d9bdde8a7d`.
+The user explicitly authorized live microphone routing. Do not change Windows
+defaults, endpoint volume/mute, privacy, driver, or startup state.
+
+Decision: keep the existing non-plugin acceptance behavior unchanged. Use the
+existing explicit local scan, draft-node insertion, generic parameter panel,
+verified worker binding, and graph processing boundaries; repair only
+evidence-backed gaps. VST2 metadata does not publish VST3-style class IDs, so
+the graph's existing `default` placeholder token is not plugin identity:
+binary path plus the freshly rescanned SHA-256 remain authoritative for VST2
+worker authorization. Do not synthesize or present a plugin-reported class ID.
+The plugin remains user-installed and is never copied or modified. The guarded
+live proof must set a real non-default parameter; a controlled same-input
+real-DLL worker regression must demonstrate a processed-signal difference.
+Both require worker health and exact binary identity evidence.
+
+Ordered tasks and outcome:
+
+1. Trace and test scanner → UI picker → draft insertion/splice → parameter
+   descriptors/editor → commit → runtime worker binding and parameter events.
+   Done for the exercised path: VST2 placeholder insertion accepts an empty
+   static class-ID list via the same neutral `default` authoring token already
+   used by the UI; the scanned canonical binary path and SHA-256 remain the
+   actual worker identity. The focused UI test now selects this entry, inserts
+   it, loads worker-described generic controls, and changes `1-Gain` in draft.
+2. Complete the bounded `adapter-control-vst2-route` live route. Its chain is
+   microphone capture → gain → enabled ReaEQ worker → recorder/output branch;
+   support a selected non-default plugin parameter. Done; the exact ReaEQ
+   route binds parameter ID 1 (`1-Gain`) at normalized 0.75. A real-DLL worker
+   regression confirms that changing an exposed `*-Gain` value changes
+   processed samples for the same input.
+3. Extend the guarded NFR-02 PowerShell wrapper with explicit `-PluginPath`;
+   retain exact endpoints, media snapshots, cleanup, latency checks, binary
+   fingerprint checks, worker health, and optional described parameter input.
+   Done; the route uses the exact scanned identity and checks worker health,
+   fingerprint, parameter acknowledgement, paired output, and the NFR-02 gate.
+4. Verification completed for this bounded slice: locked probe build, focused
+   UI test/typecheck, control and plugin-host suites, opt-in real ReaEQ worker
+   parameter-difference test, and guarded live runs with default/non-default
+   ReaEQ and ReaComp. Exact results are in [M00 probe evidence](evidence/M00-wasapi-probe.md)
+   and the [plugin compatibility snapshot](../../operations/plugin-compatibility.md).
+
+Validation matrix: scanner and UI identify exact supported VST2/VST3 format,
+draft insertion keeps identity/path/fingerprint, parameter changes traverse
+the backend to the isolated worker, runtime telemetry stays healthy, and the
+graph remains fail-closed. Probe builds with `--locked`; no-plugin M02
+acceptance stays unchanged; plugin mode rejects unsupported/non-x64/changed
+binaries. Live run requires all 500 signal pairs, p95 ≤160 ms,
+`plugin_worker_state=running`, zero worker failures, and unchanged DLL/media
+identity; the opt-in worker regression must show finite output that differs
+for a non-default parameter.
+Any failed guard yields no pass claim.
+
+Result: the initial plugin route at a two-slot queue depth was healthy but lost
+enough correlated output for only 405/500 pairs. Increasing the already-bounded
+plugin handoff to its existing eight-slot maximum recovered the signal path.
+The final non-default `1-Gain=0.75` live route passed 500/500 pairs at
+139.115 ms p95 (160 ms threshold), with the verified ReaEQ worker running at
+zero failures and its SHA-256 unchanged; an earlier repeat was 136.783 ms.
+The default-parameter plugin route also passed at 123.773 ms p95, and the
+unchanged no-plugin route passed 500/500 at 115.155 ms p95 after the change.
+The production route uses an eight-slot
+preallocated queue to absorb native capture packet bursts; callback behavior
+remains nonblocking and fail-closed.
+
+Risks: VST2 remains a gated local extension; no change here establishes rights,
+vendor-editor window support, W2 callback timing/soak, or broad plugin
+compatibility. A signal metric plus a real-DLL worker parameter regression
+proves processing alteration, but does not replace attended UI interaction or
+listening in the receiving application.
+
+The full locked workspace tests and full UI suite passed. Strict all-features
+workspace Clippy currently reports an existing `too_many_arguments` lint in
+`finalized_mp3_recording` (`crates/control/src/lib.rs`, unrelated to plugin
+hosting); the plugin-host package and M00 probe Clippy checks passed cleanly.
+
+Rollback: the new invocation is opt-in and separate; revert only the plugin
+workflow/probe changes if they fail or perturb existing M02 behavior. The
+original no-plugin route and its evidence remain intact. Next action: retain
+this ReaEQ workflow as the reference acceptance, wire a tested native editor
+window only if that richer UX is needed, and qualify attended selection/commit
+plus listening when the shell is targetable. Do not infer release availability
+from this reference-machine result.

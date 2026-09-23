@@ -606,3 +606,34 @@ an effect with fixed controls. Its auxiliary-bus layout was not qualified:
 the generic probe requests a mono secondary bus while COMPER declares that bus
 stereo. It is therefore recorded as single-stream-only compatibility, not as
 multi-bus support.
+
+## 2026-09-22 ReaEQ graph integration
+
+The exact installed ReaEQ VST2 DLL above was added to a bounded AudioRouter
+microphone-capture → gain → plugin → recorder/render graph. The isolated worker
+reported `running`, zero failures, and the exact scan SHA-256. ReaEQ's worker
+described 12 generic parameters, including `1-Gain` (parameter ID 1, default
+0.25). A non-default value (0.75) was stored on the graph node and applied by
+the worker; the separate local-DLL worker regression confirmed that changing
+an exposed `*-Gain` value changes the processed output samples.
+
+The guarded live NFR-02 run with that non-default setting detected 500/500
+impulse pairs from the Focusrite loopback into VB-Cable at 136.783 ms p95
+(160 ms threshold), with worker health clean and the DLL fingerprint
+unchanged. The run is reference-machine evidence for ReaEQ only. It validates
+AudioRouter's generic parameter controls; the vendor's own native editor
+window is not wired into this UI build. It does not qualify other binaries,
+third-party rights, attended listening in a receiving application, the broad
+M06 compatibility matrix, W2 timing/soak, or release availability.
+
+The final wrapper assertion rerun passed the same non-default parameter at
+500/500 pairs and 139.115 ms p95, including an explicit parameter-acknowledge
+check and unchanged device/plugin identities. The unchanged no-plugin route
+also passed 500/500 at 115.155 ms p95 after the bounded queue-depth adjustment.
+
+A second installed effect, `reacomp-standalone.dll`, also ran in the same live
+graph with `running` worker health, zero failures, unchanged SHA-256
+`4c0862ab3cfd8a0345481b4792c07bf8d5a9761014f217d4e13669bf8143c7a0`, and
+500/500 pairs at 124.283 ms p95. That adds a second local binary-specific
+integration result; it is not an unrestricted compatibility claim for the
+remaining VST2/VST3 inventory.

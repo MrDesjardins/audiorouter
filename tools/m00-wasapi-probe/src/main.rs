@@ -153,12 +153,46 @@ fn main() -> Result<()> {
         let capture_id = std::env::args().nth(3);
         let render_id = std::env::args().nth(4);
         if let (Some(capture_id), Some(render_id)) = (capture_id, render_id) {
-            if let Err(error) = adapter_control_route(duration_ms, &capture_id, &render_id) {
+            if let Err(error) = adapter_control_route(duration_ms, &capture_id, &render_id, None, None) {
                 eprintln!("adapter_control_route_error={error}");
                 std::process::exit(1);
             }
         } else {
             eprintln!("adapter_control_route_error=capture and render endpoint IDs are required");
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
+    if std::env::args().nth(1).as_deref() == Some("adapter-control-vst2-route") {
+        let duration_ms = std::env::args()
+            .nth(2)
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(500);
+        let capture_id = std::env::args().nth(3);
+        let render_id = std::env::args().nth(4);
+        let plugin_path = std::env::args().nth(5);
+        let parameter_id_arg = std::env::args().nth(6);
+        let parameter_value_arg = std::env::args().nth(7);
+        let parameter = match (parameter_id_arg, parameter_value_arg) {
+            (None, None) => Some(None),
+            (Some(id), Some(value)) => id.parse::<u32>().ok().zip(value.parse::<f32>().ok()).map(Some),
+            _ => None,
+        };
+        if let (Some(capture_id), Some(render_id), Some(plugin_path), Some(parameter)) =
+            (capture_id, render_id, plugin_path, parameter)
+        {
+            if let Err(error) = adapter_control_route(
+                duration_ms,
+                &capture_id,
+                &render_id,
+                Some(&plugin_path),
+                parameter,
+            ) {
+                eprintln!("adapter_control_vst2_route_error={error}");
+                std::process::exit(1);
+            }
+        } else {
+            eprintln!("adapter_control_vst2_route_error=capture ID, render ID, and explicit VST2 plugin path are required");
             std::process::exit(1);
         }
         return Ok(());
@@ -187,10 +221,157 @@ fn main() -> Result<()> {
     }
 }
 
+fn scanned_vst2_node(
+    control: &mut audiorouter_control::ControlPlane,
+    plugin_path: &str,
+    channels: u8,
+    parameter: Option<(u32, f32)>,
+) -> std::result::Result<(Node, String), String> {
+    let selected_path = std::path::Path::new(plugin_path);
+    if !selected_path.is_absolute() {
+        return Err("VST2 plugin path must be absolute".into());
+    }
+    let selected_path = std::fs::canonicalize(selected_path)
+        .map_err(|error| format!("VST2 plugin path could not be resolved: {error}"))?;
+    let directory = selected_path
+        .parent()
+        .ok_or_else(|| "VST2 plugin path has no parent directory".to_owned())?;
+    let directory_text = directory.to_string_lossy().into_owned();
+    let selected_path_text = selected_path.to_string_lossy().into_owned();
+    let response = control.dispatch(audiorouter_protocol::JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(serde_json::json!(1)),
+        method: "plugins.scan".into(),
+        params: Some(serde_json::json!({ "directory": directory_text })),
+    });
+    let inventory = response.result.ok_or_else(|| {
+        response
+            .error
+            .map_or_else(|| "VST2 plugin scan failed".to_owned(), |error| error.message)
+    })?;
+    let entry = inventory
+        .get("entries")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .find(|entry| {
+            entry.get("path").and_then(serde_json::Value::as_str)
+                == Some(selected_path_text.as_str())
+        })
+        .ok_or_else(|| "selected VST2 binary was not returned by the exact directory scan".to_owned())?;
+    let identity = entry
+        .get("identity")
+        .filter(|identity| !identity.is_null())
+        .ok_or_else(|| {
+            entry
+                .get("error")
+                .and_then(serde_json::Value::as_str)
+                .map_or_else(
+                    || "selected VST2 binary has no verified plugin identity".to_owned(),
+                    |error| format!("selected VST2 binary is unsupported: {error}"),
+                )
+        })?;
+    if identity.get("format").and_then(serde_json::Value::as_str) != Some("vst2")
+        || identity
+            .get("architecture")
+            .and_then(serde_json::Value::as_str)
+            != Some("x64")
+        || identity
+            .get("compatibility")
+            .and_then(serde_json::Value::as_str)
+            != Some("supportedVst2X64Gated")
+    {
+        return Err("selected plugin is not an approved x64 VST2 audio effect".into());
+    }
+    let fingerprint = identity
+        .get("sha256")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| "selected VST2 identity has no SHA-256 fingerprint".to_owned())?;
+    let parameters_response = control.dispatch(audiorouter_protocol::JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(serde_json::json!(2)),
+        method: "plugins.parameters".into(),
+        params: Some(serde_json::json!({ "path": selected_path_text.clone() })),
+    });
+    let parameters = parameters_response.result.ok_or_else(|| {
+        parameters_response.error.map_or_else(
+            || "selected VST2 parameters could not be described".to_owned(),
+            |error| format!("selected VST2 parameters could not be described: {}", error.message),
+        )
+    })?;
+    println!(
+        "adapter_control_plugin_parameters={}",
+        serde_json::to_string(&parameters).unwrap_or_else(|_| "<serialization failed>".into())
+    );
+    let selected_parameter = parameter
+        .map(|(parameter_id, value)| {
+            let descriptor = parameters
+                .get("parameters")
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+                .find(|descriptor| {
+                    descriptor.get("parameterId").and_then(serde_json::Value::as_u64)
+                        == Some(u64::from(parameter_id))
+                })
+                .ok_or_else(|| format!("plugin parameter ID {parameter_id} is not exposed"))?;
+            let minimum = descriptor.get("minimum").and_then(serde_json::Value::as_f64)
+                .ok_or_else(|| format!("plugin parameter ID {parameter_id} has no minimum"))?;
+            let maximum = descriptor.get("maximum").and_then(serde_json::Value::as_f64)
+                .ok_or_else(|| format!("plugin parameter ID {parameter_id} has no maximum"))?;
+            if !value.is_finite() || f64::from(value) < minimum || f64::from(value) > maximum {
+                return Err(format!("plugin parameter ID {parameter_id} value is outside {minimum}..={maximum}"));
+            }
+            let title = descriptor.get("title").and_then(serde_json::Value::as_str).unwrap_or("unnamed");
+            println!("adapter_control_plugin_parameter_set id={parameter_id} title={title} normalized_value={value}");
+            Ok((parameter_id, value))
+        })
+        .transpose()?;
+    // VST3 class IDs come from the bundle metadata. VST2 has no equivalent
+    // static class ID in this scanner; the UI already uses this explicit
+    // placeholder, while activation authorization is the exact path+SHA-256.
+    let class_id = identity
+        .get("classIds")
+        .and_then(serde_json::Value::as_array)
+        .and_then(|class_ids| class_ids.first())
+        .and_then(serde_json::Value::as_str)
+        .filter(|class_id| !class_id.is_empty())
+        .unwrap_or("default");
+    let plugin_node = Node {
+        id: EntityId::new("plugin"),
+        kind: NodeKind::Plugin,
+        type_version: 1,
+        name: "Selected VST2 worker".into(),
+        enabled: true,
+        bypass: false,
+        parameters: serde_json::Map::from_iter([
+            ("path".into(), serde_json::json!(selected_path_text)),
+            ("format".into(), serde_json::json!("vst2")),
+            ("fingerprint".into(), serde_json::json!(fingerprint)),
+            ("classId".into(), serde_json::json!(class_id)),
+        ].into_iter().chain(selected_parameter.map(|(id, value)| (format!("pluginParameter:{id}"), serde_json::json!(value))))),
+        ports: vec![
+            Port {
+                name: "in".into(),
+                direction: PortDirection::Input,
+                channels,
+            },
+            Port {
+                name: "out".into(),
+                direction: PortDirection::Output,
+                channels,
+            },
+        ],
+    };
+    Ok((plugin_node, fingerprint.to_owned()))
+}
+
 fn adapter_control_route(
     duration_ms: u64,
     capture_id: &str,
     render_id: &str,
+    plugin_path: Option<&str>,
+    plugin_parameter: Option<(u32, f32)>,
 ) -> std::result::Result<(), String> {
     // Extended from an original 2,000 ms cap to accommodate NFR-02
     // mic-to-virtual-capture latency measurement, which needs the route
@@ -237,6 +418,17 @@ fn adapter_control_route(
     let gain_id = EntityId::new("gain");
     let recorder_id = EntityId::new("recorder");
     let output_id = EntityId::new("output");
+    let mut control = audiorouter_control::ControlPlane::default();
+    let plugin_info = if let Some(plugin_path) = plugin_path {
+        Some(scanned_vst2_node(
+            &mut control,
+            plugin_path,
+            channel_count,
+            plugin_parameter,
+        )?)
+    } else {
+        None
+    };
     let ports = |direction| {
         vec![Port {
             name: "main".into(),
@@ -249,7 +441,8 @@ fn adapter_control_route(
         name: "native control probe".into(),
         schema_version: 1,
         revision: 0,
-        nodes: vec![
+        nodes: {
+            let mut nodes = vec![
             Node {
                 id: input_id.clone(),
                 kind: NodeKind::PhysicalInput,
@@ -315,8 +508,14 @@ fn adapter_control_route(
                 parameters: Default::default(),
                 ports: ports(PortDirection::Input),
             },
-        ],
-        edges: vec![
+            ];
+            if let Some((plugin_node, _)) = &plugin_info {
+                nodes.insert(2, plugin_node.clone());
+            }
+            nodes
+        },
+        edges: {
+            let mut edges = vec![
             Edge {
                 id: EntityId::new("probe-input-recorder"),
                 source_node: input_id,
@@ -334,7 +533,7 @@ fn adapter_control_route(
             },
             Edge {
                 id: EntityId::new("probe-gain-recorder"),
-                source_node: gain_id,
+                source_node: gain_id.clone(),
                 source_port: "out".into(),
                 destination_node: recorder_id.clone(),
                 destination_port: "in".into(),
@@ -349,7 +548,7 @@ fn adapter_control_route(
             },
             Edge {
                 id: EntityId::new("probe-recorder-output"),
-                source_node: recorder_id,
+                source_node: recorder_id.clone(),
                 source_port: "out".into(),
                 destination_node: output_id,
                 destination_port: "main".into(),
@@ -362,9 +561,45 @@ fn adapter_control_route(
                     .collect(),
                 enabled: true,
             },
-        ],
+            ];
+            if let Some((plugin_node, _)) = &plugin_info {
+                edges[1] = Edge {
+                    id: EntityId::new("probe-gain-plugin"),
+                    source_node: gain_id.clone(),
+                    source_port: "out".into(),
+                    destination_node: plugin_node.id.clone(),
+                    destination_port: "in".into(),
+                    matrix: (0..channels)
+                        .flat_map(|row| {
+                            (0..channels).map(move |column| {
+                                if row == column { 1.0 } else { 0.0 }
+                            })
+                        })
+                        .collect(),
+                    enabled: true,
+                };
+                edges.insert(
+                    2,
+                    Edge {
+                        id: EntityId::new("probe-plugin-recorder"),
+                        source_node: plugin_node.id.clone(),
+                        source_port: "out".into(),
+                        destination_node: recorder_id.clone(),
+                        destination_port: "in".into(),
+                        matrix: (0..channels)
+                            .flat_map(|row| {
+                                (0..channels).map(move |column| {
+                                    if row == column { 1.0 } else { 0.0 }
+                                })
+                            })
+                            .collect(),
+                        enabled: true,
+                    },
+                );
+            }
+            edges
+        },
     };
-    let mut control = audiorouter_control::ControlPlane::default();
     let recording_root = std::env::temp_dir().join(format!(
         "audiorouter-control-route-{}",
         std::process::id()
@@ -436,6 +671,45 @@ fn adapter_control_route(
         rendered_frames = rendered_frames.saturating_add(result["renderedFrames"].as_u64().unwrap_or(0));
         std::thread::sleep(Duration::from_millis(1));
     }
+    let plugin_health = if plugin_info.is_some() {
+        let diagnostics = control.dispatch(audiorouter_protocol::JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(serde_json::json!(3)),
+            method: "system.diagnostics".into(),
+            params: Some(serde_json::json!({})),
+        });
+        let diagnostics = diagnostics.result.ok_or_else(|| {
+            diagnostics.error.map_or_else(
+                || "plugin worker diagnostics were unavailable".to_owned(),
+                |error| error.message,
+            )
+        })?;
+        let health = diagnostics
+            .get("nodeTelemetry")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+            .find(|node| node.get("nodeId").and_then(serde_json::Value::as_str) == Some("plugin"))
+            .and_then(|node| node.get("plugin"))
+            .filter(|health| !health.is_null())
+            .ok_or_else(|| "selected VST2 worker health telemetry was unavailable".to_owned())?;
+        let state = health
+            .get("state")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("unknown");
+        let failure_count = health
+            .get("failureCount")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(u64::MAX);
+        if state != "running" || failure_count != 0 {
+            return Err(format!(
+                "selected VST2 worker was not healthy after live routing: state={state} failure_count={failure_count}"
+            ));
+        }
+        Some((state.to_owned(), failure_count))
+    } else {
+        None
+    };
     control
         .control_recorder_node(
             &EntityId::new("recorder"),
@@ -462,6 +736,14 @@ fn adapter_control_route(
         return Err(format!(
             "control route reported no complete audio work: packets={packets} captured_frames={captured_frames} processed_quanta={processed_quanta} rendered_frames={rendered_frames}"
         ));
+    }
+    if let (Some((plugin_node, fingerprint)), Some((state, failure_count))) =
+        (&plugin_info, plugin_health)
+    {
+        println!(
+            "adapter_control_plugin plugin_node={} plugin_worker_state={} plugin_failure_count={} plugin_sha256={}",
+            plugin_node.id.as_str(), state, failure_count, fingerprint
+        );
     }
     println!(
         "adapter_control_route route=true generation={generation} packets={packets} captured_frames={captured_frames} processed_quanta={processed_quanta} rendered_frames={rendered_frames} recording_bytes={recording_bytes} start_attempts={} successful_starts={} stop_attempts={} successful_stops={} reset_successes={} rejected_pumps={} capture_rate_hz={} render_rate_hz={}",

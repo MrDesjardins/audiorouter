@@ -211,6 +211,48 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\\tests\\acceptance\\m02-ru
 This is opt-in live testing only; it does not change defaults, volume, mute,
 privacy, drivers, signing, or startup configuration.
 
+For an explicitly selected installed x64 VST2 effect on the guarded
+mic-to-VB-Cable route, use the M02 NFR-02 wrapper with an absolute plugin path:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m02-nfr02-mic-virtual-capture.ps1 `
+  -AllowLiveAudio `
+  -PluginPath 'C:\Program Files\VSTPlugins\ReaPlugs\reaeq-standalone.dll'
+```
+
+In the connected UI, open the canvas shelf's “Plugin (VST2/VST3)” picker,
+explicitly scan the plugin's folder, add or insert the verified result, select
+its node, then edit the worker-described parameter controls in the inspector.
+Plan and commit the graph before starting the session; plugin nodes begin as
+stopped placeholders. VST2 binaries such as ReaPlugs do not publish VST3 class
+IDs, so the picker uses a neutral authoring placeholder while execution remains
+bound to the exact rescanned path and SHA-256. The vendor's native editor window
+is not wired into this build; generic parameter controls are the supported
+configuration UI.
+
+To exercise one non-default ReaEQ setting in the guarded live route, use its
+worker-reported `1-Gain` parameter (ID 1) at normalized value 0.75:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m02-nfr02-mic-virtual-capture.ps1 `
+  -AllowLiveAudio `
+  -RouteDurationMilliseconds 12000 `
+  -PluginPath 'C:\Program Files\VSTPlugins\ReaPlugs\reaeq-standalone.dll' `
+  -PluginParameterId 1 `
+  -PluginParameterValue 0.75
+```
+
+Run in elevated PowerShell so the before/after media snapshots work, and only
+with the physical loopback connected. This scans the selected DLL's containing
+directory, inserts that exact verified plugin into the temporary production
+graph, and requires 500 paired signals, p95 no greater than 160 ms, a running
+plugin worker with zero reported failures, an unchanged binary fingerprint,
+and unchanged media-device state. It restores the caller's
+`AUDIOROUTER_PLUGIN_WORKER_PATH`, removes temporary route/recording artifacts,
+and does not change Windows defaults, endpoint volume/mute, privacy, driver,
+signing, or startup configuration. ReaEQ remains a user-installed fixture and
+is not copied or redistributed.
+
 For the guarded multi-input/many-output acceptance, open an elevated PowerShell
 session and provide the explicit live-audio switch. The harness refuses before
 endpoint inventory when the process is not elevated:

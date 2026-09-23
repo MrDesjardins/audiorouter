@@ -632,6 +632,7 @@ dependencies = [
  "audiorouter-control",
  "audiorouter-domain",
  "audiorouter-engine",
+ "audiorouter-protocol",
  "audiorouter-recording",
  "audiorouter-windows-audio",
  "serde_json",
