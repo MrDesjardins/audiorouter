@@ -12,8 +12,8 @@ Reference workload W1: 48 kHz graph, 128-frame quantum if M00 confirms it, mono 
 
 | ID | Target and measurement | Gate |
 | --- | --- | --- |
-| NFR-01 | W1 wired mic-to-headphones physical loopback latency p95 ≤30 ms over 1,000 impulses; publish min/p50/p95/max and negotiated buffers | M02 baseline, M04 W1, M08 |
-| NFR-02 | W1 mic-to-virtual-capture latency p95 ≤40 ms measured by a timestamped local capture client; excludes Discord network/codec delay | M03/M04/M08 |
+| NFR-01 | W1 wired mic-to-headphones physical loopback latency (WASAPI shared mode, AudioRouter's production sharing model) p95 ≤250 ms over 1,000 impulses; publish min/p50/p95/max and negotiated buffers. Revised 2026-09-21 from an original ≤30 ms target after calibrated measurement on a real reference device; see the decision record in the active plan and its evidence file | M02 baseline, M04 W1, M08 |
+| NFR-02 | W1 mic-to-virtual-capture latency p95 ≤160 ms measured by a timestamped local capture client through the real AudioRouter engine route; excludes Discord network/codec delay. Revised 2026-09-21 from an original ≤40 ms target after calibrated measurement on a real reference device; see the decision record in the active plan and its evidence file | M03/M04/M08 |
 | NFR-03 | AudioRouter-added scheduling/buffering delay ≤10 ms p95 excluding device periods and declared DSP lookahead; instrument each term rather than subtracting guessed hardware latency | M02/M08 |
 | NFR-04 | Realtime callback execution p99.9 <50% of its quantum deadline for W1; zero missed callbacks attributable to the engine during 8-hour W1 soak on reference PC | M02/M04/M08 |
 | NFR-05 | W1 backend plus recorder CPU average ≤10% of total machine capacity, p95 ≤20%; engine working set ≤250 MiB; idle stopped backend ≤60 MiB | M04/M08 |

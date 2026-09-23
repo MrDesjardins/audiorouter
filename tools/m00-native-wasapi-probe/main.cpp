@@ -20,6 +20,8 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <algorithm>
+#include <numeric>
 #include <ksmedia.h>
 #include <wrl.h>
 #include <wrl/implements.h>
@@ -643,6 +645,703 @@ static int render_data_probe(UINT target_index, DWORD duration_ms, bool tone,
     return SUCCEEDED(hr) && submitted_frames > 0 && tone_written && impulses_written ? 0 : 1;
 }
 
+// Owns exactly one activated shared-mode WASAPI endpoint (device, client,
+// negotiated mix format, and its audio clock). Single-threaded, single-run
+// lifetime: constructed and released within one call to
+// impulse_loopback_probe, never shared across threads or outlives that call.
+struct LoopbackStreamState {
+    IMMDevice* device = nullptr;
+    // IAudioClient3 is interface-compatible with IAudioClient (it inherits
+    // Initialize, Start, Stop, GetService, etc. unchanged) and additionally
+    // exposes GetSharedModeEnginePeriod/InitializeSharedAudioStream, the
+    // Windows 10+ low-latency shared-mode path; activating it directly lets
+    // the same struct serve both the legacy and low-latency init calls.
+    IAudioClient3* client = nullptr;
+    WAVEFORMATEX* format = nullptr;
+    IAudioClock* clock = nullptr;
+    UINT64 clock_frequency = 0;
+    HANDLE ready_event = nullptr;
+
+    void release() {
+        if (clock) { clock->Release(); clock = nullptr; }
+        if (format) { CoTaskMemFree(format); format = nullptr; }
+        if (client) { client->Release(); client = nullptr; }
+        if (device) { device->Release(); device = nullptr; }
+        if (ready_event) { CloseHandle(ready_event); ready_event = nullptr; }
+    }
+};
+
+// event_driven registers a per-stream notification handle and initializes
+// with AUDCLNT_STREAMFLAGS_EVENTCALLBACK; a small polled buffer cannot be
+// serviced reliably from a single cooperative loop shared with the other
+// stream (observed as tens of thousands of dropped capture frames), so the
+// loopback probe runs each stream event-driven on its own thread instead.
+// low_latency uses IAudioClient3::GetSharedModeEnginePeriod to discover this
+// driver's minimum supported shared-mode engine period in frames, then
+// InitializeSharedAudioStream with that period, instead of the legacy
+// Initialize call whose small hnsBufferDuration requests Windows silently
+// clamps to its own default engine period for shared streams.
+static bool activate_shared_stream(IMMDeviceEnumerator* enumerator, EDataFlow flow, UINT index,
+                                   LoopbackStreamState& state, const char* label,
+                                   bool event_driven = false, REFERENCE_TIME buffer_100ns = 0,
+                                   bool low_latency = false) {
+    IMMDeviceCollection* devices = nullptr;
+    HRESULT hr = enumerator->EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE, &devices);
+    print_hr((std::string(label) + "_enum").c_str(), hr);
+    if (FAILED(hr)) return false;
+    UINT count = 0;
+    devices->GetCount(&count);
+    if (index >= count) {
+        std::cout << label << "_index_out_of_range=" << index << " count=" << count << '\n';
+        devices->Release();
+        return false;
+    }
+    hr = devices->Item(index, &state.device);
+    print_hr((std::string(label) + "_item").c_str(), hr);
+    devices->Release();
+    if (FAILED(hr)) return false;
+    hr = state.device->Activate(__uuidof(IAudioClient3), CLSCTX_ALL, nullptr,
+                                reinterpret_cast<void**>(&state.client));
+    print_hr((std::string(label) + "_activate").c_str(), hr);
+    if (FAILED(hr)) return false;
+    hr = state.client->GetMixFormat(&state.format);
+    print_hr((std::string(label) + "_get_mix_format").c_str(), hr);
+    if (FAILED(hr)) return false;
+    std::cout << label << "_"; print_format(state.format);
+    if (event_driven) {
+        state.ready_event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+        if (!state.ready_event) {
+            print_hr((std::string(label) + "_create_event").c_str(), HRESULT_FROM_WIN32(GetLastError()));
+            return false;
+        }
+    }
+    DWORD stream_flags = AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST;
+    if (event_driven) stream_flags |= AUDCLNT_STREAMFLAGS_EVENTCALLBACK;
+    if (low_latency) {
+        UINT32 default_period_frames = 0, fundamental_period_frames = 0;
+        UINT32 min_period_frames = 0, max_period_frames = 0;
+        hr = state.client->GetSharedModeEnginePeriod(state.format, &default_period_frames,
+                                                      &fundamental_period_frames, &min_period_frames,
+                                                      &max_period_frames);
+        print_hr((std::string(label) + "_get_shared_mode_engine_period").c_str(), hr);
+        if (FAILED(hr)) return false;
+        std::cout << label << "_engine_period_frames default=" << default_period_frames
+                  << " fundamental=" << fundamental_period_frames
+                  << " min=" << min_period_frames << " max=" << max_period_frames << '\n';
+        // InitializeSharedAudioStream requires AUDCLNT_STREAMFLAGS_EVENTCALLBACK
+        // and rejects AUTOCONVERTPCM/NOPERSIST here (AUDCLNT_E_INVALID_DEVICE_PERIOD
+        // even for an in-range period) since the exact negotiated mix format is
+        // passed directly with no conversion needed.
+        const DWORD low_latency_flags = event_driven ? AUDCLNT_STREAMFLAGS_EVENTCALLBACK : 0;
+        hr = state.client->InitializeSharedAudioStream(low_latency_flags, min_period_frames, state.format,
+                                                        nullptr);
+        print_hr((std::string(label) + "_initialize_shared_audio_stream").c_str(), hr);
+    } else {
+        // A zero buffer duration in shared mode asks WASAPI for its minimal
+        // engine-period buffer instead of the large diagnostic buffer the
+        // other probes in this file use; a large buffer would add its own
+        // size directly to the measured round trip and defeat this
+        // measurement. buffer_100ns lets a caller request a smaller
+        // explicit buffer than the engine's own default-with-zero choice,
+        // though the legacy Initialize call clamps this to the engine's
+        // own default period regardless (see low_latency above).
+        hr = state.client->Initialize(AUDCLNT_SHAREMODE_SHARED, stream_flags, buffer_100ns, 0,
+                                      state.format, nullptr);
+        print_hr((std::string(label) + "_initialize").c_str(), hr);
+    }
+    if (FAILED(hr)) return false;
+    if (event_driven) {
+        hr = state.client->SetEventHandle(state.ready_event);
+        print_hr((std::string(label) + "_set_event").c_str(), hr);
+        if (FAILED(hr)) return false;
+    }
+    hr = state.client->GetService(__uuidof(IAudioClock), reinterpret_cast<void**>(&state.clock));
+    print_hr((std::string(label) + "_get_clock").c_str(), hr);
+    if (FAILED(hr)) return false;
+    hr = state.clock->GetFrequency(&state.clock_frequency);
+    print_hr((std::string(label) + "_clock_frequency").c_str(), hr);
+    return SUCCEEDED(hr);
+}
+
+// Extrapolates the 100ns-unit QPC time at which this stream's position was
+// (or will be) zero, from one GetPosition sample. Two samples taken at the
+// start and end of a run bound clock drift over that run; both anchors are
+// reported so drift is visible rather than silently absorbed.
+static bool clock_anchor_100ns(IAudioClock* clock, UINT64 frequency, double& anchor_100ns) {
+    if (!clock || frequency == 0) return false;
+    UINT64 position = 0;
+    UINT64 qpc_100ns = 0;
+    if (FAILED(clock->GetPosition(&position, &qpc_100ns))) return false;
+    anchor_100ns = static_cast<double>(qpc_100ns) -
+                  (static_cast<double>(position) / static_cast<double>(frequency)) * 1.0e7;
+    return true;
+}
+
+// Single-process wired physical loopback: renders impulses to render_index
+// and captures from capture_index concurrently, using each stream's own
+// IAudioClock (rather than independent process-launch timestamps) to
+// compute a calibrated per-impulse round-trip latency distribution. This is
+// the NFR-01 measurement path; it measures the raw WASAPI/driver/cable
+// round trip only, not AudioRouter's own graph-dispatch latency (tracked
+// separately).
+static int impulse_loopback_probe(UINT render_index, UINT capture_index, DWORD impulse_count,
+                                  REFERENCE_TIME buffer_100ns = 0, bool low_latency = false) {
+    IMMDeviceEnumerator* enumerator = nullptr;
+    HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+                                  __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
+    if (FAILED(hr)) { print_hr("loopback_enumerator", hr); return 1; }
+
+    LoopbackStreamState render_state;
+    LoopbackStreamState capture_state;
+    bool ok = activate_shared_stream(enumerator, eRender, render_index, render_state, "loopback_render",
+                                     true, buffer_100ns, low_latency);
+    if (ok) ok = activate_shared_stream(enumerator, eCapture, capture_index, capture_state, "loopback_capture",
+                                        true, buffer_100ns, low_latency);
+    enumerator->Release();
+    if (!ok) { render_state.release(); capture_state.release(); return 1; }
+
+    const bool capture_is_float32 = capture_state.format->wBitsPerSample == 32 &&
+        (capture_state.format->wFormatTag == WAVE_FORMAT_IEEE_FLOAT ||
+         (capture_state.format->wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
+          capture_state.format->cbSize >= sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX) &&
+          reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(capture_state.format)->SubFormat ==
+              KSDATAFORMAT_SUBTYPE_IEEE_FLOAT));
+    if (!capture_is_float32) {
+        std::cout << "loopback_capture_requires_32bit_float=1\n";
+        render_state.release(); capture_state.release();
+        return 1;
+    }
+
+    IAudioRenderClient* render_service = nullptr;
+    hr = render_state.client->GetService(__uuidof(IAudioRenderClient), reinterpret_cast<void**>(&render_service));
+    print_hr("loopback_render_get_service", hr);
+    IAudioCaptureClient* capture_service = nullptr;
+    if (SUCCEEDED(hr)) {
+        hr = capture_state.client->GetService(__uuidof(IAudioCaptureClient), reinterpret_cast<void**>(&capture_service));
+        print_hr("loopback_capture_get_service", hr);
+    }
+    if (FAILED(hr)) {
+        if (render_service) render_service->Release();
+        render_state.release(); capture_state.release();
+        return 1;
+    }
+
+    UINT32 render_buffer_size = 0;
+    render_state.client->GetBufferSize(&render_buffer_size);
+    UINT32 capture_buffer_size = 0;
+    capture_state.client->GetBufferSize(&capture_buffer_size);
+    REFERENCE_TIME render_default_period = 0, render_minimum_period = 0;
+    render_state.client->GetDevicePeriod(&render_default_period, &render_minimum_period);
+    REFERENCE_TIME capture_default_period = 0, capture_minimum_period = 0;
+    capture_state.client->GetDevicePeriod(&capture_default_period, &capture_minimum_period);
+    std::cout << "loopback_render_buffer_frames=" << render_buffer_size
+              << " loopback_capture_buffer_frames=" << capture_buffer_size
+              << " loopback_render_default_period_100ns=" << render_default_period
+              << " loopback_capture_default_period_100ns=" << capture_default_period
+              << " loopback_render_minimum_period_100ns=" << render_minimum_period
+              << " loopback_capture_minimum_period_100ns=" << capture_minimum_period << '\n';
+    REFERENCE_TIME render_stream_latency = 0, capture_stream_latency = 0;
+    render_state.client->GetStreamLatency(&render_stream_latency);
+    capture_state.client->GetStreamLatency(&capture_stream_latency);
+    std::cout << "loopback_render_stream_latency_100ns=" << render_stream_latency
+              << " loopback_capture_stream_latency_100ns=" << capture_stream_latency << '\n';
+    std::cout << "loopback_render_clock_frequency=" << render_state.clock_frequency
+              << " loopback_render_format_rate=" << render_state.format->nSamplesPerSec
+              << " loopback_capture_clock_frequency=" << capture_state.clock_frequency
+              << " loopback_capture_format_rate=" << capture_state.format->nSamplesPerSec << '\n';
+
+    const UINT32 interval = render_state.format->nSamplesPerSec / 100; // fixed 10 ms cadence
+    const DWORD render_duration_ms = static_cast<DWORD>(impulse_count) * 10;
+    const DWORD capture_duration_ms = render_duration_ms + 1000;
+
+    UINT64 impulse_sample_index = 0;
+    UINT64 impulses_emitted = 0;
+    UINT32 render_submitted_frames = 0;
+    UINT64 capture_frames_received = 0;
+    UINT64 capture_dropped_frames = 0;
+
+    // Each detected impulse's timestamp is taken directly from
+    // IAudioCaptureClient::GetBuffer's own per-packet device position and
+    // QPC timestamp, rather than reconstructed from an accumulated sample
+    // count; this stays correct even if a buffer overrun drops packets; the
+    // dropped-frame count above is reported, not hidden, when this happens.
+    std::vector<double> capture_group_qpc_100ns;
+    const UINT32 channels = capture_state.format->nChannels;
+    const double capture_rate = static_cast<double>(capture_state.format->nSamplesPerSec);
+
+    std::atomic<bool> stop_requested{false};
+
+    // A polled small buffer (~22 ms here) cannot be serviced reliably by a
+    // single cooperative loop alternating between two streams; each stream
+    // therefore runs event-driven on its own OS thread, woken directly by
+    // WASAPI when its buffer needs service.
+    std::thread render_thread([&] {
+        while (!stop_requested.load(std::memory_order_relaxed)) {
+            const DWORD wait = WaitForSingleObject(render_state.ready_event, 100);
+            if (wait == WAIT_FAILED) break;
+            if (wait == WAIT_TIMEOUT) continue;
+            UINT32 padding = 0;
+            if (FAILED(render_state.client->GetCurrentPadding(&padding))) continue;
+            const UINT32 available = render_buffer_size - padding;
+            if (available == 0) continue;
+            BYTE* data = nullptr;
+            if (FAILED(render_service->GetBuffer(available, &data))) continue;
+            const UINT64 before = impulse_sample_index;
+            render_impulses(data, available, render_state.format, impulse_sample_index);
+            impulses_emitted += (impulse_sample_index / interval) - (before / interval);
+            render_service->ReleaseBuffer(available, 0);
+            render_submitted_frames += available;
+        }
+    });
+
+    std::thread capture_thread([&] {
+        bool have_capture_position = false;
+        UINT64 expected_next_position = 0;
+        INT64 last_hit_position = -1000000;
+        while (!stop_requested.load(std::memory_order_relaxed)) {
+            const DWORD wait = WaitForSingleObject(capture_state.ready_event, 100);
+            if (wait == WAIT_FAILED) break;
+            if (wait == WAIT_TIMEOUT) continue;
+            for (;;) {
+                UINT32 frames = 0;
+                if (FAILED(capture_service->GetNextPacketSize(&frames)) || frames == 0) break;
+                BYTE* data = nullptr;
+                DWORD flags = 0;
+                UINT64 position = 0;
+                UINT64 timestamp = 0;
+                if (FAILED(capture_service->GetBuffer(&data, &frames, &flags, &position, &timestamp))) break;
+                if (have_capture_position && position > expected_next_position) {
+                    capture_dropped_frames += position - expected_next_position;
+                }
+                have_capture_position = true;
+                expected_next_position = position + frames;
+                capture_frames_received += frames;
+                if ((flags & AUDCLNT_BUFFERFLAGS_SILENT) == 0 && data) {
+                    const auto* samples = reinterpret_cast<const float*>(data);
+                    for (UINT32 frame = 0; frame < frames; ++frame) {
+                        float peak = 0.0f;
+                        for (UINT32 channel = 0; channel < channels; ++channel) {
+                            const float sample = std::fabs(samples[static_cast<size_t>(frame) * channels + channel]);
+                            if (sample > peak) peak = sample;
+                        }
+                        const INT64 device_frame = static_cast<INT64>(position) + frame;
+                        if (peak > 0.05f && device_frame > last_hit_position + 8) {
+                            capture_group_qpc_100ns.push_back(static_cast<double>(timestamp) +
+                                (static_cast<double>(frame) / capture_rate) * 1.0e7);
+                            last_hit_position = device_frame;
+                        }
+                    }
+                }
+                capture_service->ReleaseBuffer(frames);
+            }
+        }
+    });
+
+    hr = capture_state.client->Start();
+    print_hr("loopback_capture_start", hr);
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    if (SUCCEEDED(hr)) hr = render_state.client->Start();
+    print_hr("loopback_render_start", hr);
+    double render_anchor_start = 0.0;
+    clock_anchor_100ns(render_state.clock, render_state.clock_frequency, render_anchor_start);
+
+    if (SUCCEEDED(hr)) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(capture_duration_ms));
+    }
+    stop_requested.store(true, std::memory_order_relaxed);
+    SetEvent(render_state.ready_event);
+    SetEvent(capture_state.ready_event);
+    render_thread.join();
+    capture_thread.join();
+
+    double render_anchor_end = 0.0;
+    clock_anchor_100ns(render_state.clock, render_state.clock_frequency, render_anchor_end);
+
+    print_hr("loopback_render_stop", render_state.client->Stop());
+    print_hr("loopback_capture_stop", capture_state.client->Stop());
+    render_state.client->Reset();
+    capture_state.client->Reset();
+
+    std::cout << "loopback_render_submitted_frames=" << render_submitted_frames
+              << " loopback_impulses_emitted=" << impulses_emitted
+              << " loopback_capture_frames=" << capture_frames_received
+              << " loopback_capture_dropped_frames=" << capture_dropped_frames << '\n';
+    std::cout << "loopback_render_clock_drift_100ns=" << (render_anchor_end - render_anchor_start) << '\n';
+    std::cout << std::fixed << std::setprecision(1)
+              << "loopback_render_anchor_start_100ns=" << render_anchor_start
+              << " loopback_render_anchor_end_100ns=" << render_anchor_end
+              << " loopback_first_group_qpc_100ns="
+              << (capture_group_qpc_100ns.empty() ? 0.0 : capture_group_qpc_100ns.front())
+              << '\n';
+    std::cout.unsetf(std::ios::floatfield);
+    std::cout.precision(6);
+    std::cout << "loopback_detected_groups=" << capture_group_qpc_100ns.size() << '\n';
+
+    render_service->Release();
+    capture_service->Release();
+
+    const UINT64 target_pairs = std::min<UINT64>(impulse_count, impulses_emitted);
+    const UINT64 pairs = std::min<UINT64>(capture_group_qpc_100ns.size(), target_pairs);
+    if (target_pairs == 0 || pairs < (target_pairs * 9 / 10)) {
+        std::cout << "loopback_insufficient_pairs=1 pairs=" << pairs
+                  << " target_pairs=" << target_pairs << '\n';
+        render_state.release(); capture_state.release();
+        return 1;
+    }
+
+    // Render has no per-buffer timestamp API, so its side is measured via
+    // IAudioClock. GetPosition's device position advances in this driver's
+    // own native unit (empirically the byte rate reported by GetFrequency
+    // here, not necessarily the format's frame rate), so frame indices are
+    // converted via nBlockAlign before dividing by frequency. Capture uses
+    // the WASAPI-supplied per-packet QPC timestamp directly, on the same
+    // performance-counter timeline as the render anchor.
+    //
+    // The render anchor deliberately uses the END-of-run sample alone, not
+    // an average with the start sample: `render-clock-ramp` diagnostics
+    // showed this driver's render position stays at exactly 0 for a real
+    // ~41-45ms engine warm-up after Start() before advancing at the steady
+    // rate GetFrequency predicts (confirmed to matching sub-millisecond
+    // precision once running). The start-of-run anchor is sampled during
+    // that unreliable warm-up window and is therefore biased ~41-45ms
+    // early; the end-of-run anchor is extrapolated backward from confirmed
+    // steady-state data and is not.
+    const double render_anchor = render_anchor_end;
+    std::vector<double> latencies_ms;
+    latencies_ms.reserve(static_cast<size_t>(pairs));
+    for (UINT64 k = 0; k < pairs; ++k) {
+        const double render_frame_time_100ns = render_anchor +
+            (static_cast<double>(k) * interval * render_state.format->nBlockAlign /
+             static_cast<double>(render_state.clock_frequency)) * 1.0e7;
+        latencies_ms.push_back(
+            (capture_group_qpc_100ns[static_cast<size_t>(k)] - render_frame_time_100ns) / 10000.0);
+    }
+    std::sort(latencies_ms.begin(), latencies_ms.end());
+    auto percentile = [&](double p) {
+        const size_t idx = static_cast<size_t>(std::min<double>(
+            static_cast<double>(latencies_ms.size() - 1), std::floor(p * latencies_ms.size())));
+        return latencies_ms[idx];
+    };
+    const double mean = std::accumulate(latencies_ms.begin(), latencies_ms.end(), 0.0) /
+                        static_cast<double>(latencies_ms.size());
+    std::cout << "loopback_pairs=" << pairs
+              << " loopback_latency_min_ms=" << latencies_ms.front()
+              << " loopback_latency_p50_ms=" << percentile(0.50)
+              << " loopback_latency_p95_ms=" << percentile(0.95)
+              << " loopback_latency_max_ms=" << latencies_ms.back()
+              << " loopback_latency_mean_ms=" << mean << '\n';
+    std::cout << "Scope: raw WASAPI render-write to capture-read round trip over the wired "
+                 "physical cable, calibrated via the render IAudioClock and the capture "
+                 "per-packet QPC timestamp on a shared performance-counter timeline; excludes "
+                 "any AudioRouter graph/dispatch processing latency, which is tracked "
+                 "separately.\n";
+
+    render_state.release();
+    capture_state.release();
+    return 0;
+}
+
+// Captures a stream's own impulse-arrival timestamps: a persistent worker
+// thread that drains packets from `service`, peak-detects impulses using
+// each packet's own device position and QPC timestamp (immune to render
+// warm-up bias since nothing is extrapolated from a Start()-time sample),
+// and appends (device_frame, qpc_100ns) pairs to `groups`. Shared by both
+// capture sides of capture_loopback_probe.
+struct CaptureGroup {
+    INT64 device_frame;
+    double qpc_100ns;
+};
+
+static void run_capture_worker(LoopbackStreamState& state, IAudioCaptureClient* service,
+                               std::atomic<bool>& stop_requested, std::vector<CaptureGroup>& groups,
+                               UINT64& frames_received, UINT64& dropped_frames) {
+    const UINT32 channels = state.format->nChannels;
+    bool have_position = false;
+    UINT64 expected_next_position = 0;
+    INT64 last_hit_position = -1000000;
+    while (!stop_requested.load(std::memory_order_relaxed)) {
+        const DWORD wait = WaitForSingleObject(state.ready_event, 100);
+        if (wait == WAIT_FAILED) break;
+        if (wait == WAIT_TIMEOUT) continue;
+        for (;;) {
+            UINT32 frames = 0;
+            if (FAILED(service->GetNextPacketSize(&frames)) || frames == 0) break;
+            BYTE* data = nullptr;
+            DWORD flags = 0;
+            UINT64 position = 0;
+            UINT64 timestamp = 0;
+            if (FAILED(service->GetBuffer(&data, &frames, &flags, &position, &timestamp))) break;
+            if (have_position && position > expected_next_position) {
+                dropped_frames += position - expected_next_position;
+            }
+            have_position = true;
+            expected_next_position = position + frames;
+            frames_received += frames;
+            if ((flags & AUDCLNT_BUFFERFLAGS_SILENT) == 0 && data) {
+                const auto* samples = reinterpret_cast<const float*>(data);
+                for (UINT32 frame = 0; frame < frames; ++frame) {
+                    float peak = 0.0f;
+                    for (UINT32 channel = 0; channel < channels; ++channel) {
+                        const float sample = std::fabs(samples[static_cast<size_t>(frame) * channels + channel]);
+                        if (sample > peak) peak = sample;
+                    }
+                    const INT64 device_frame = static_cast<INT64>(position) + frame;
+                    if (peak > 0.05f && device_frame > last_hit_position + 8) {
+                        groups.push_back(CaptureGroup{
+                            device_frame,
+                            static_cast<double>(timestamp) +
+                                (static_cast<double>(frame) / static_cast<double>(state.format->nSamplesPerSec))
+                                    * 1.0e7});
+                        last_hit_position = device_frame;
+                    }
+                }
+            }
+            service->ReleaseBuffer(frames);
+        }
+    }
+}
+
+// NFR-02 measurement: mic-to-virtual-capture latency. A render stream
+// (render_index) generates impulses into a physical loop feeding the "mic"
+// capture endpoint (capture_a_index); a second, independent capture stream
+// on the virtual capture endpoint (capture_b_index, e.g. a VB-Cable output
+// an AudioRouter-routed session feeds) times the same impulses' arrival
+// after engine processing. Both sides are ordinary WASAPI capture streams
+// timestamped via IAudioCaptureClient::GetBuffer's own per-packet device
+// position and QPC timestamp, so unlike NFR-01 there is no render-side
+// IAudioClock anchor and no associated warm-up bias to correct for. The
+// caller is responsible for having a live AudioRouter route already running
+// from capture_a_index's physical endpoint to whatever virtual render
+// endpoint feeds capture_b_index before invoking this.
+static int capture_loopback_probe(UINT render_index, UINT capture_a_index, UINT capture_b_index,
+                                  DWORD impulse_count) {
+    IMMDeviceEnumerator* enumerator = nullptr;
+    HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+                                  __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
+    if (FAILED(hr)) { print_hr("nfr02_enumerator", hr); return 1; }
+
+    LoopbackStreamState render_state, capture_a_state, capture_b_state;
+    bool ok = activate_shared_stream(enumerator, eRender, render_index, render_state, "nfr02_render", true);
+    if (ok) ok = activate_shared_stream(enumerator, eCapture, capture_a_index, capture_a_state, "nfr02_capture_a", true);
+    if (ok) ok = activate_shared_stream(enumerator, eCapture, capture_b_index, capture_b_state, "nfr02_capture_b", true);
+    enumerator->Release();
+    if (!ok) { render_state.release(); capture_a_state.release(); capture_b_state.release(); return 1; }
+
+    auto is_float32 = [](const WAVEFORMATEX* format) {
+        return format->wBitsPerSample == 32 &&
+            (format->wFormatTag == WAVE_FORMAT_IEEE_FLOAT ||
+             (format->wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
+              format->cbSize >= sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX) &&
+              reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(format)->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT));
+    };
+    if (!is_float32(capture_a_state.format) || !is_float32(capture_b_state.format)) {
+        std::cout << "nfr02_capture_requires_32bit_float=1\n";
+        render_state.release(); capture_a_state.release(); capture_b_state.release();
+        return 1;
+    }
+
+    IAudioRenderClient* render_service = nullptr;
+    hr = render_state.client->GetService(__uuidof(IAudioRenderClient), reinterpret_cast<void**>(&render_service));
+    print_hr("nfr02_render_get_service", hr);
+    IAudioCaptureClient* capture_a_service = nullptr;
+    if (SUCCEEDED(hr)) {
+        hr = capture_a_state.client->GetService(__uuidof(IAudioCaptureClient), reinterpret_cast<void**>(&capture_a_service));
+        print_hr("nfr02_capture_a_get_service", hr);
+    }
+    IAudioCaptureClient* capture_b_service = nullptr;
+    if (SUCCEEDED(hr)) {
+        hr = capture_b_state.client->GetService(__uuidof(IAudioCaptureClient), reinterpret_cast<void**>(&capture_b_service));
+        print_hr("nfr02_capture_b_get_service", hr);
+    }
+    if (FAILED(hr)) {
+        if (render_service) render_service->Release();
+        if (capture_a_service) capture_a_service->Release();
+        render_state.release(); capture_a_state.release(); capture_b_state.release();
+        return 1;
+    }
+
+    UINT32 render_buffer_size = 0;
+    render_state.client->GetBufferSize(&render_buffer_size);
+    const UINT32 interval = render_state.format->nSamplesPerSec / 100;
+    const DWORD render_duration_ms = static_cast<DWORD>(impulse_count) * 10;
+    const DWORD capture_duration_ms = render_duration_ms + 1500;
+
+    UINT64 impulse_sample_index = 0;
+    UINT64 impulses_emitted = 0;
+    UINT32 render_submitted_frames = 0;
+    UINT64 capture_a_frames = 0, capture_a_dropped = 0;
+    UINT64 capture_b_frames = 0, capture_b_dropped = 0;
+    std::vector<CaptureGroup> groups_a, groups_b;
+    std::atomic<bool> stop_requested{false};
+
+    std::thread render_thread([&] {
+        while (!stop_requested.load(std::memory_order_relaxed)) {
+            const DWORD wait = WaitForSingleObject(render_state.ready_event, 100);
+            if (wait == WAIT_FAILED) break;
+            if (wait == WAIT_TIMEOUT) continue;
+            UINT32 padding = 0;
+            if (FAILED(render_state.client->GetCurrentPadding(&padding))) continue;
+            const UINT32 available = render_buffer_size - padding;
+            if (available == 0) continue;
+            BYTE* data = nullptr;
+            if (FAILED(render_service->GetBuffer(available, &data))) continue;
+            const UINT64 before = impulse_sample_index;
+            render_impulses(data, available, render_state.format, impulse_sample_index);
+            impulses_emitted += (impulse_sample_index / interval) - (before / interval);
+            render_service->ReleaseBuffer(available, 0);
+            render_submitted_frames += available;
+        }
+    });
+    std::thread capture_a_thread([&] {
+        run_capture_worker(capture_a_state, capture_a_service, stop_requested, groups_a,
+                           capture_a_frames, capture_a_dropped);
+    });
+    std::thread capture_b_thread([&] {
+        run_capture_worker(capture_b_state, capture_b_service, stop_requested, groups_b,
+                           capture_b_frames, capture_b_dropped);
+    });
+
+    hr = capture_b_state.client->Start();
+    print_hr("nfr02_capture_b_start", hr);
+    if (SUCCEEDED(hr)) hr = capture_a_state.client->Start();
+    print_hr("nfr02_capture_a_start", hr);
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    if (SUCCEEDED(hr)) hr = render_state.client->Start();
+    print_hr("nfr02_render_start", hr);
+
+    if (SUCCEEDED(hr)) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(capture_duration_ms));
+    }
+    stop_requested.store(true, std::memory_order_relaxed);
+    SetEvent(render_state.ready_event);
+    SetEvent(capture_a_state.ready_event);
+    SetEvent(capture_b_state.ready_event);
+    render_thread.join();
+    capture_a_thread.join();
+    capture_b_thread.join();
+
+    render_state.client->Stop();
+    capture_a_state.client->Stop();
+    capture_b_state.client->Stop();
+    render_state.client->Reset();
+    capture_a_state.client->Reset();
+    capture_b_state.client->Reset();
+
+    std::cout << "nfr02_render_submitted_frames=" << render_submitted_frames
+              << " nfr02_impulses_emitted=" << impulses_emitted
+              << " nfr02_capture_a_frames=" << capture_a_frames
+              << " nfr02_capture_a_dropped_frames=" << capture_a_dropped
+              << " nfr02_capture_b_frames=" << capture_b_frames
+              << " nfr02_capture_b_dropped_frames=" << capture_b_dropped << '\n';
+    std::cout << "nfr02_groups_a=" << groups_a.size() << " nfr02_groups_b=" << groups_b.size() << '\n';
+
+    render_service->Release();
+    capture_a_service->Release();
+    capture_b_service->Release();
+
+    const UINT64 target_pairs = std::min<UINT64>(impulse_count, impulses_emitted);
+    const UINT64 pairs = std::min<UINT64>({groups_a.size(), groups_b.size(), static_cast<size_t>(target_pairs)});
+    if (target_pairs == 0 || pairs < (target_pairs * 9 / 10)) {
+        std::cout << "nfr02_insufficient_pairs=1 pairs=" << pairs << " target_pairs=" << target_pairs << '\n';
+        render_state.release(); capture_a_state.release(); capture_b_state.release();
+        return 1;
+    }
+
+    std::vector<double> latencies_ms;
+    latencies_ms.reserve(static_cast<size_t>(pairs));
+    for (UINT64 k = 0; k < pairs; ++k) {
+        latencies_ms.push_back(
+            (groups_b[static_cast<size_t>(k)].qpc_100ns - groups_a[static_cast<size_t>(k)].qpc_100ns) / 10000.0);
+    }
+    std::sort(latencies_ms.begin(), latencies_ms.end());
+    auto percentile = [&](double p) {
+        const size_t idx = static_cast<size_t>(std::min<double>(
+            static_cast<double>(latencies_ms.size() - 1), std::floor(p * latencies_ms.size())));
+        return latencies_ms[idx];
+    };
+    const double mean = std::accumulate(latencies_ms.begin(), latencies_ms.end(), 0.0) /
+                        static_cast<double>(latencies_ms.size());
+    std::cout << "nfr02_pairs=" << pairs
+              << " nfr02_latency_min_ms=" << latencies_ms.front()
+              << " nfr02_latency_p50_ms=" << percentile(0.50)
+              << " nfr02_latency_p95_ms=" << percentile(0.95)
+              << " nfr02_latency_max_ms=" << latencies_ms.back()
+              << " nfr02_latency_mean_ms=" << mean << '\n';
+    std::cout << "Scope: mic-capture-to-virtual-capture round trip through whatever AudioRouter "
+                 "route was live during this run, timestamped via each capture stream's own "
+                 "per-packet QPC timestamp on a shared performance-counter timeline; requires "
+                 "the caller to have started that route separately. Excludes Discord/OBS-side "
+                 "network or codec delay.\n";
+
+    render_state.release();
+    capture_a_state.release();
+    capture_b_state.release();
+    return 0;
+}
+
+// Diagnostic only: samples IAudioClock::GetPosition repeatedly in the first
+// ~300ms after Start() to see directly whether the render clock's position
+// advances linearly from t=0, or stays near zero for an initial "ramp-up"
+// window before locking into steady playback. Used to investigate whether
+// an anchor sampled immediately after Start() is biased relative to one
+// sampled after the stream has been running for a while.
+static int render_clock_ramp_probe(UINT render_index, bool low_latency) {
+    IMMDeviceEnumerator* enumerator = nullptr;
+    HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+                                  __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
+    if (FAILED(hr)) { print_hr("ramp_enumerator", hr); return 1; }
+    LoopbackStreamState state;
+    bool ok = activate_shared_stream(enumerator, eRender, render_index, state, "ramp_render", true, 0,
+                                     low_latency);
+    enumerator->Release();
+    if (!ok) { state.release(); return 1; }
+
+    IAudioRenderClient* render_service = nullptr;
+    hr = state.client->GetService(__uuidof(IAudioRenderClient), reinterpret_cast<void**>(&render_service));
+    print_hr("ramp_get_service", hr);
+    if (FAILED(hr)) { state.release(); return 1; }
+    UINT32 buffer_size = 0;
+    state.client->GetBufferSize(&buffer_size);
+
+    const auto start_time = std::chrono::steady_clock::now();
+    hr = state.client->Start();
+    print_hr("ramp_start", hr);
+    if (FAILED(hr)) { render_service->Release(); state.release(); return 1; }
+
+    for (int sample = 0; sample < 40; ++sample) {
+        WaitForSingleObject(state.ready_event, 20);
+        UINT32 padding = 0;
+        if (SUCCEEDED(state.client->GetCurrentPadding(&padding))) {
+            const UINT32 available = buffer_size - padding;
+            if (available != 0) {
+                BYTE* data = nullptr;
+                if (SUCCEEDED(render_service->GetBuffer(available, &data))) {
+                    std::memset(data, 0, static_cast<size_t>(available) * state.format->nBlockAlign);
+                    render_service->ReleaseBuffer(available, 0);
+                }
+            }
+        }
+        UINT64 position = 0, qpc_100ns = 0;
+        const HRESULT position_hr = state.clock->GetPosition(&position, &qpc_100ns);
+        const double elapsed_ms = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - start_time).count();
+        const double implied_seconds = static_cast<double>(position) / static_cast<double>(state.clock_frequency);
+        std::cout << std::fixed << std::setprecision(3)
+                  << "ramp_sample=" << sample << " elapsed_ms=" << elapsed_ms
+                  << " position=" << position << " implied_elapsed_s=" << implied_seconds
+                  << " position_hr=0x" << std::hex << static_cast<unsigned long>(position_hr) << std::dec
+                  << '\n';
+    }
+    std::cout.unsetf(std::ios::floatfield);
+    std::cout.precision(6);
+
+    state.client->Stop();
+    state.client->Reset();
+    render_service->Release();
+    state.release();
+    return 0;
+}
+
 static int render_session_inventory(UINT target_index) {
     IMMDeviceEnumerator* enumerator = nullptr;
     HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
@@ -897,6 +1596,32 @@ int main(int argc, char** argv) {
         DWORD duration_ms = argc > 2 ? static_cast<DWORD>(std::strtoul(argv[2], nullptr, 10)) : 1000;
         UINT target_index = argc > 3 ? static_cast<UINT>(std::strtoul(argv[3], nullptr, 10)) : 0;
         int result = render_data_probe(target_index, duration_ms, false, true);
+        CoUninitialize();
+        return result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "capture-loopback") == 0) {
+        DWORD impulse_count = argc > 2 ? static_cast<DWORD>(std::strtoul(argv[2], nullptr, 10)) : 1000;
+        UINT render_index = argc > 3 ? static_cast<UINT>(std::strtoul(argv[3], nullptr, 10)) : 0;
+        UINT capture_a_index = argc > 4 ? static_cast<UINT>(std::strtoul(argv[4], nullptr, 10)) : 0;
+        UINT capture_b_index = argc > 5 ? static_cast<UINT>(std::strtoul(argv[5], nullptr, 10)) : 0;
+        int result = capture_loopback_probe(render_index, capture_a_index, capture_b_index, impulse_count);
+        CoUninitialize();
+        return result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "render-clock-ramp") == 0) {
+        UINT render_index = argc > 2 ? static_cast<UINT>(std::strtoul(argv[2], nullptr, 10)) : 0;
+        bool low_latency = argc > 3 && std::strcmp(argv[3], "low-latency") == 0;
+        int result = render_clock_ramp_probe(render_index, low_latency);
+        CoUninitialize();
+        return result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "impulse-loopback") == 0) {
+        DWORD impulse_count = argc > 2 ? static_cast<DWORD>(std::strtoul(argv[2], nullptr, 10)) : 1000;
+        UINT render_index = argc > 3 ? static_cast<UINT>(std::strtoul(argv[3], nullptr, 10)) : 0;
+        UINT capture_index = argc > 4 ? static_cast<UINT>(std::strtoul(argv[4], nullptr, 10)) : 0;
+        REFERENCE_TIME buffer_100ns = argc > 5 ? static_cast<REFERENCE_TIME>(std::strtoull(argv[5], nullptr, 10)) : 0;
+        bool low_latency = argc > 6 && std::strcmp(argv[6], "low-latency") == 0;
+        int result = impulse_loopback_probe(render_index, capture_index, impulse_count, buffer_100ns, low_latency);
         CoUninitialize();
         return result;
     }

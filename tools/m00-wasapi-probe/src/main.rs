@@ -192,8 +192,14 @@ fn adapter_control_route(
     capture_id: &str,
     render_id: &str,
 ) -> std::result::Result<(), String> {
-    if !(100..=2_000).contains(&duration_ms) {
-        return Err("duration must be between 100 and 2000 ms".into());
+    // Extended from an original 2,000 ms cap to accommodate NFR-02
+    // mic-to-virtual-capture latency measurement, which needs the route
+    // alive for the full duration of an external 1,000-impulse capture
+    // correlation run (tools/m00-native-wasapi-probe's capture-loopback
+    // mode); still bounded so a guarded live-audio call cannot run
+    // indefinitely.
+    if !(100..=12_000).contains(&duration_ms) {
+        return Err("duration must be between 100 and 12000 ms".into());
     }
     let mut monitor = EndpointMonitor::start().map_err(|error| format!("monitor: {error:?}"))?;
     let capture_info = monitor

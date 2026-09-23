@@ -25,11 +25,17 @@ const DEFAULT_DATABASE_DIRECTORY: &str = "AudioRouter";
 const DEFAULT_DATABASE_FILE: &str = "state.sqlite";
 const DESKTOP_SESSION_ID: &str = "desktop-session";
 
-fn audio_router_tray_icon() -> Image<'static> {
-    // Keep the tray asset local and deterministic: a cyan audio waveform on a
+fn audio_router_tray_icon(muted: bool) -> Image<'static> {
+    // Keep the tray asset local and deterministic: an audio waveform on a
     // dark rounded tile remains legible at the small Windows notification-area
     // sizes without depending on an external file or installer path.
+    // Privacy mute is a safety-relevant latch (see safety.setPrivacyMute);
+    // toggling it previously had no glanceable feedback beyond a menu-item
+    // label the user had to reopen the tray to read. The bar color switches
+    // cyan/live -> red/muted so the taskbar icon itself reflects the current
+    // state without opening the menu.
     const SIZE: u32 = 32;
+    let bar_color: [u8; 4] = if muted { [233, 107, 107, 255] } else { [68, 204, 235, 255] };
     let mut rgba = Vec::with_capacity((SIZE * SIZE * 4) as usize);
     let bars = [5_u32, 9, 14, 20, 25, 29];
     for y in 0..SIZE {
@@ -38,7 +44,7 @@ fn audio_router_tray_icon() -> Image<'static> {
             let rounded = edge >= 3 || ((x.abs_diff(3) + y.abs_diff(3)) <= 3) || ((x.abs_diff(28) + y.abs_diff(3)) <= 3) || ((x.abs_diff(3) + y.abs_diff(28)) <= 3) || ((x.abs_diff(28) + y.abs_diff(28)) <= 3);
             let mut pixel = if rounded { [20, 30, 42, 255] } else { [0, 0, 0, 0] };
             if rounded && bars.iter().any(|bar| x.abs_diff(*bar) <= 1 && y.abs_diff(16) <= (x.abs_diff(16) / 3 + 3)) {
-                pixel = [68, 204, 235, 255];
+                pixel = bar_color;
             }
             rgba.extend_from_slice(&pixel);
         }
@@ -773,8 +779,28 @@ fn main() {
                     &backend_endpoint,
                 ],
             )?;
+            // Best-effort: reflect the backend's actual current privacy-mute
+            // state in the initial icon rather than always assuming unmuted.
+            // A prior fix that always started the icon at "unmuted" produced
+            // no visible color change on the FIRST toggle whenever the
+            // backend's real prior state was already muted (e.g. a restarted
+            // shell reattaching to a persistent backend) — the icon and the
+            // true state silently disagreed until a second toggle. Falls
+            // back to unmuted if the backend isn't reachable yet at startup.
+            let initial_muted = forward_rpc_request(
+                &JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(serde_json::json!("tray-privacy-initial")),
+                    method: "status.get".into(),
+                    params: None,
+                },
+                &pipe_name,
+            )
+            .ok()
+            .and_then(|response| tray_privacy_muted(&response))
+            .unwrap_or(false);
             let _tray = TrayIconBuilder::with_id("audiorouter")
-                .icon(audio_router_tray_icon())
+                .icon(audio_router_tray_icon(initial_muted))
                 .menu(&menu)
                 .tooltip("AudioRouter")
                 .on_menu_event(move |app, event| {
@@ -852,6 +878,14 @@ fn main() {
                                     } else {
                                         "Privacy mute disabled"
                                     });
+                                    // The menu-item text alone required reopening the
+                                    // tray menu to see whether the toggle took effect,
+                                    // reported as no visible feedback for a
+                                    // safety-relevant latch. The icon itself now
+                                    // reflects state at a glance from the taskbar.
+                                    if let Some(tray) = app.tray_by_id("audiorouter") {
+                                        let _ = tray.set_icon(Some(audio_router_tray_icon(muted)));
+                                    }
                                 }
                                 None => {
                                     let _ =

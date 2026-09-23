@@ -1506,10 +1506,10 @@ fn recorder_command(args: &[&str]) -> Result<Value, CliError> {
         let format = option_value(args, "--format")?;
         if !matches!(
             format,
-            "wavPcm16" | "wavPcm24" | "wavFloat32" | "flac16" | "flac24"
+            "wavPcm16" | "wavPcm24" | "wavFloat32" | "flac16" | "flac24" | "mp3"
         ) {
             return Err(CliError::InvalidArguments(
-                "--format must be wavPcm16, wavPcm24, wavFloat32, flac16, or flac24".into(),
+                "--format must be wavPcm16, wavPcm24, wavFloat32, flac16, flac24, or mp3".into(),
             ));
         }
         let channels = option_value(args, "--channels")?
@@ -1623,7 +1623,7 @@ fn recorder_command(args: &[&str]) -> Result<Value, CliError> {
 }
 
 fn default_recorder_dither(format: &str, no_dither: bool) -> bool {
-    format != "wavFloat32" && !no_dither
+    !matches!(format, "wavFloat32" | "mp3") && !no_dither
 }
 
 fn session_command(args: &[&str]) -> Result<Value, CliError> {

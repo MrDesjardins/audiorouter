@@ -1710,3 +1710,253 @@ an invalid physical-latency measurement. It does not close NFR-01.
 The physical-latency gate is parked until a loopback cable is available. The
 current USB PD200X microphone plus Focusrite headset arrangement is not a
 stable wired reference; no acoustic result is promoted to NFR-01 evidence.
+
+## Calibrated wired loopback measurement, NFR-01 result (2026-09-21)
+
+The user connected a wired 1/4" TRS instrument cable between the Scarlett
+Solo's headphone/speaker output and its dedicated Instrument input, providing
+the stable wired reference the prior entries above identified as missing.
+Read-only inventory confirmed the exact endpoints: render `Speakers
+(Focusrite USB Audio)`, capture `Analogue 1 + 2 (Focusrite USB Audio)`.
+
+Getting a trustworthy calibrated measurement required a new single-process
+tool rather than the existing two-process `impulse`/`capture-file` commands,
+because the two-process onset estimate (used above) is dominated by OS
+process-launch scheduling noise rather than real audio latency. Added
+`impulse-loopback` to `tools/m00-native-wasapi-probe/main.cpp` and
+`tests/acceptance/m00-native-impulse-loopback.ps1`: render is timed via
+`IAudioClock` (start/end anchors on a common QPC timeline), capture is timed
+via `IAudioCaptureClient::GetBuffer`'s own per-packet device position and QPC
+timestamp, and each of 1,000 impulses is paired into a latency sample,
+publishing min/p50/p95/max and negotiated buffers as NFR-01 requires.
+
+Live iteration surfaced and fixed several real defects before the result
+could be trusted:
+- This Focusrite driver's `IAudioClock::GetFrequency` reports the byte rate
+  (`nAvgBytesPerSec`), not the frame rate; frame indices needed `*
+  nBlockAlign` before dividing by that frequency, or computed latency was
+  off by a large, non-obvious factor.
+- The `hnsBufferDuration=1000000` (100 ms) value copied from this file's
+  other diagnostic-only probes added its own size directly to the measured
+  round trip (an initial run showed a suspiciously exact, jitter-free
+  ~206.48 ms on every one of 1,000 impulses — the signature of a fixed
+  buffer offset, not real latency); switched to a `0` (minimal engine-period)
+  shared-mode buffer.
+- A single thread cooperatively polling both render and capture could not
+  service the resulting ~22 ms buffer; an interim run measured 37,632
+  dropped capture frames and produced an implausible 206–998 ms spread.
+  Replaced with two event-driven threads (`AUDCLNT_STREAMFLAGS_EVENTCALLBACK`
+  plus per-stream `WaitForSingleObject`), which produced zero dropped frames.
+- A `std::cout` precision/format leak in an added diagnostic line caused a
+  later value to print in truncated scientific notation; the acceptance
+  wrapper's regex silently mis-parsed it as a passing `p95=2`, a false pass
+  caught only by cross-checking the raw anchor values printed alongside it,
+  not by the wrapper's own exit code. This is a reminder that a green exit
+  code from a text-parsing wrapper is not sufficient evidence by itself;
+  the underlying numbers must be sanity-checked.
+
+With all of the above fixed, four independent elevated runs against the
+wired Focusrite loopback each passed group detection (1,000/1,000 paired,
+zero dropped capture frames) and were tightly reproducible (sub-2 ms spread
+within each run): p95 results were 206.748 ms and 213.97 ms (two further
+runs fell in the same ~205–214 ms band). `GetStreamLatency` reported 0 for
+both streams when queried pre-`Start`, which is inconclusive rather than
+corroborating either way.
+
+**Result: NFR-01 fails on this configuration.** Measured wired physical
+loopback p95 ≈ 207–214 ms against the ≤30 ms target, using WASAPI shared
+mode (AudioRouter's production sharing model, not exclusive/ASIO) on this
+Scarlett Solo and its current driver. This is treated as a genuine
+calibrated measurement and a real (failing) NFR-01 result, not a parked gate
+and not a probe defect: the cable, gain staging, zero-drop capture, and
+cross-stream QPC calibration are independently confirmed sound. No default
+device, volume, mute, privacy, or persistent audio configuration was changed
+by any run in this session.
+
+Open follow-up, not yet decided: whether NFR-01 is achievable only via a
+lower-latency mode (a smaller explicit engine period, or exclusive mode if
+this driver supports it), or whether the ≤30 ms target needs revisiting for
+the shared-mode production architecture. Either requires an explicit
+decision record in the active plan, not a silent relaxation. NFR-02/QUAL-04
+remain unmeasured and should reuse this same `impulse-loopback` tool once a
+target render/capture pair is chosen for those specific measurements.
+
+## NFR-01 calibration correction and buffer/period investigation (2026-09-21)
+
+Continued investigation into whether tightening the shared-mode buffer could
+close the gap to the ≤30 ms target uncovered a real calibration bias in the
+render-side anchor, and separately produced two negative findings about
+buffer/period tuning on this hardware.
+
+**Render-side warm-up bias found and fixed.** Added a `render-clock-ramp`
+diagnostic command that samples `IAudioClock::GetPosition` every ~10 ms for
+the first ~400 ms after `Start()`. It showed this driver's render position
+stays at exactly 0 for a real ~41–45 ms engine warm-up before advancing;
+once running, the rate matches `GetFrequency()` to sub-millisecond precision
+over a 340 ms window (130,808 position units / 384000 Hz = 340.6 ms against
+340.29 ms of measured real time). The previously reported ~207–214 ms figures
+used `(anchor_start + anchor_end) / 2`, which bakes in half of this ~41–45 ms
+warm-up bias because the start anchor is sampled during the unreliable
+warm-up window. Switched to using `anchor_end` alone (extrapolated backward
+from confirmed steady-state data, not the unreliable startup moment) as the
+theoretically correct choice, since NFR-01 concerns ongoing per-signal
+latency during a session, not a one-time cold-start delay.
+
+**Corrected result: p95 ≈ 185.5–185.6 ms**, reproduced across two full
+1,000-impulse runs on the default (~22 ms) shared buffer (185.627 ms and
+185.512 ms respectively, tight ~1.3 ms internal spread each run). This
+remains a clear NFR-01 fail (roughly 6× the ≤30 ms target) but is a more
+accurate figure than the earlier ~207–214 ms estimate, which is superseded.
+
+**Buffer/period tuning does not close the gap.** Two negative results:
+- An explicit smaller `hnsBufferDuration` (e.g. 30000 = 3 ms, matching this
+  driver's reported minimum period) is silently clamped by the classic
+  `IAudioClient::Initialize` shared-mode path to the same ~22 ms buffer
+  regardless (`loopback_render_buffer_frames` stayed at 1056 either way).
+- Added `IAudioClient3`/`GetSharedModeEnginePeriod`/`InitializeSharedAudioStream`
+  support (Windows 10+ low-latency shared mode, still shared — compatible
+  with AudioRouter's multi-app routing requirement, not exclusive/ASIO).
+  This driver reports a fixed 480-frame (10 ms) engine period with
+  `default = fundamental = min = max`, i.e. no low-latency period is
+  available below the standard 10 ms on this hardware. The `render-clock-ramp`
+  diagnostic confirmed this path has the identical ~41–45 ms render warm-up
+  as the legacy path, so it does not change the underlying round trip either.
+
+**Known unresolved loose end:** the full `impulse-loopback` run against the
+low-latency `IAudioClient3` path produced an invalid, physically-impossible
+negative latency distribution (bulk ≈ −14 ms with a −215 ms outlier),
+despite the render-only ramp diagnostic showing identical, correct behavior
+in isolation. This points at a capture-side pairing issue specific to that
+path (most likely the first one or two impulses being dropped or coalesced
+during the shared ~41–45 ms warm-up, shifting the index alignment between
+predicted render impulses and detected capture groups), not yet root-caused.
+It does not affect the corrected standard-path result above, which does not
+use the low-latency path at all.
+
+**Conclusion for the open NFR-01 decision:** buffer/engine-period tuning is
+ruled out as a fix on this specific Focusrite Scarlett Solo — the device's
+own low-latency engine period floor is 10 ms (not lower), and neither
+buffer size nor low-latency-mode activation changed the measured ~185 ms
+round trip. Closing the gap to ≤30 ms, if pursued, would need a different
+mechanism (e.g. WASAPI exclusive mode, different hardware, or a different
+driver) — a decision still not made here — or the target itself needs
+revisiting for this shared-mode production architecture.
+
+## DEC-14: target revised to ≤250 ms p95, gate closed on this device (2026-09-21)
+
+The user approved revising the NFR-01 target; see
+[DEC-14 in the decision register](../../../spec/15-delivery.md#initial-decision-register)
+and the corresponding [14-quality.md](../../../spec/14-quality.md) update. The
+acceptance wrapper's default threshold was updated to match
+(`-P95ThresholdMs 250.0`), and a formal rerun against the exact wired
+Focusrite pair passed: `pairs=1000/1000 min=154.605ms p50=155.402ms
+p95=185.129ms max=185.881ms threshold_p95<=250ms`.
+
+This run's distribution is worth recording honestly rather than silently
+accepting the pass: it was bimodal, with the bulk of samples clustered near
+155 ms and only the top ~5% jumping to ~185 ms, unlike the three prior runs
+(184.3–186.0 ms) which were tightly clustered throughout with under 1.5 ms
+of internal spread. `loopback_render_clock_drift_100ns` was also higher this
+run (50.2 ms) than prior runs (32–46 ms). This looks like genuine run-to-run
+USB/OS scheduling jitter rather than a new measurement bug — the worst-case
+tail matches the other three confirmed runs almost exactly, and percentile
+reporting is exactly the right tool for characterizing this kind of
+variability — but it is flagged here rather than treated as identical to
+the earlier tightly-clustered runs.
+
+NFR-01 is treated as closed for the VB-Cable-first / non-driver completion
+scope on this one reference device, under the revised ≤250 ms target. It is
+not validated on any other hardware.
+
+## NFR-02 mic-to-virtual-capture latency measurement (2026-09-21)
+
+Implemented and ran NFR-02 (W1 mic-to-virtual-capture latency p95 ≤40 ms,
+timestamped local capture client, excluding Discord network/codec delay).
+Unlike NFR-01, both ends of this measurement are ordinary WASAPI *capture*
+streams (physical mic input, and the virtual capture endpoint an app like
+Discord/OBS would read from), so it uses each stream's own per-packet
+device position and QPC timestamp directly — no `IAudioClock` render anchor
+and no associated warm-up bias to correct for.
+
+Added a `capture-loopback` mode to
+`tools/m00-native-wasapi-probe/main.cpp` (`capture_loopback_probe`): one
+render stream drives impulses into the wired physical loop feeding the mic
+input (reusing the same Focusrite `Speakers`→`Analogue 1 + 2` Instrument-mode
+setup from NFR-01), while two independent capture threads — one on the
+physical mic input, one on the virtual capture endpoint — each record
+(device_frame, QPC timestamp) pairs for detected impulses using the same
+per-packet peak-detection technique proven for NFR-01's capture side. This
+requires an actual live AudioRouter route already running from the physical
+mic to whatever virtual render endpoint feeds the virtual capture side; the
+tool itself does not create that route.
+
+The live route was provided by the existing `tools/m00-wasapi-probe` Rust
+adapter probe's `adapter-control-route` command, which builds and runs a
+real control-owned session through the production graph/scheduler
+(`PhysicalInput → Gain(-6dB) → Recorder → PhysicalOutput`) — not a shortcut.
+Its guarded duration bound was extended from 2,000 ms to 12,000 ms
+(`tools/m00-wasapi-probe/src/main.rs:195`) specifically for this use, since
+the external capture-correlation run needs the route alive for several
+seconds; the other two functions sharing the same bound pattern
+(`process_loopback_smoke`, `adapter_bridge_smoke`) were left unchanged.
+
+New wrapper `tests/acceptance/m02-nfr02-mic-virtual-capture.ps1` orchestrates
+both tools: builds each, resolves endpoint indices/IDs from a fresh
+inventory, starts the Rust route as a background process (Focusrite
+`Analogue 1 + 2` capture → `CABLE Input` render, 8,000 ms), gives it a
+500 ms head start, then runs the native capture-loopback probe (500
+impulses, ~6.5 s) reading Focusrite `Speakers`/`Analogue 1 + 2`/`CABLE
+Output`, confirms both processes reported success and media-device state
+was unchanged, and checks the resulting p95 against the NFR-02 threshold.
+One wrapper bug was found and fixed during development: `Process.ExitCode`
+read immediately after `WaitForExit()` on a `-PassThru` process was
+unreliable without a `.Refresh()` call first, producing a false failure
+despite the route's own output clearly showing `route=true` and every
+success counter at 1 — caught by checking the underlying output text, not
+by the (bugged) numeric check.
+
+**Result: NFR-02 fails.** Four runs — two ad hoc via direct tool invocation,
+one exploratory 1000-impulse run whose route duration mismatch correctly
+produced insufficient pairs (an expected timing-mismatch artifact, not a new
+bug — the route stopped after 8 s while the probe kept running impulses for
+~11.5 s, so the tail impulses correctly showed as undetected on the virtual
+side), and one through the finished, automated wrapper — measured p95 of
+97.521 ms, 102.874 ms, 115.461 ms, and 110.881 ms respectively. All runs
+showed zero dropped frames on both capture sides. Unlike NFR-01's tightly
+clustered runs (sub-2 ms internal spread), NFR-02 runs show more run-to-run
+variance (roughly 97–115 ms across separate route/engine startups); each
+individual run's own internal spread stays under ~13 ms, so this reads as
+real session/engine startup jitter across independent route launches, not
+measurement noise within a run.
+
+This measures the AudioRouter-routed path end to end (physical mic capture
+→ real engine graph/scheduler → virtual render → virtual capture read), not
+a synthetic bypass. It fails the original ≤40 ms target by roughly 2.5–2.9×,
+a smaller relative margin than NFR-01's original ~6× miss, consistent with
+this path skipping one physical DAC/ADC stage that NFR-01's full physical
+loopback includes. No default device, volume, mute, privacy, driver,
+signing, or startup configuration was changed by any of these runs; the
+Rust route's own graph/session was disposable per run.
+
+Open, not yet decided: whether NFR-02's ≤40 ms target should also be
+revised, following the same DEC-14 pattern applied to NFR-01, or whether a
+different mechanism should be pursued first. This decision was intentionally
+left for explicit user input rather than assumed from the NFR-01 precedent.
+
+## DEC-15: target revised to ≤160 ms p95, gate closed (2026-09-21)
+
+The user approved revising the NFR-02 target following the DEC-14 pattern;
+see [DEC-15 in the decision register](../../../spec/15-delivery.md#initial-decision-register)
+and the corresponding [14-quality.md](../../../spec/14-quality.md) update.
+The acceptance wrapper's default threshold was updated to match
+(`-P95ThresholdMs 160.0`), and a fifth confirmation run passed:
+`pairs=500/500 p95=109.699ms threshold_p95<=160ms`, consistent with the
+established 97.5–115.5 ms band across all five runs (min=107.501ms,
+p50=108.86ms, max=110.554ms this run; zero dropped frames on both capture
+sides).
+
+NFR-02 is treated as closed for the VB-Cable-first / non-driver completion
+scope on this one reference device, under the revised ≤160 ms target. It is
+not validated on any other hardware or microphone, and the cross-run
+variance noted above (larger than NFR-01's) remains an open characterization
+question rather than a blocking one.

@@ -15,7 +15,7 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
 .session-name { display: grid; gap: .3rem; color: #bdc9dc; font-size: .78rem; max-width: 28rem; }
 .session-name input { border: 1px solid #384458; border-radius: 6px; color: inherit; background: #1a2130; padding: .45rem; font: inherit; font-size: 1.35rem; font-weight: 600; }
 .sidebar { padding: 1.4rem 1rem; border-right: 1px solid #293344; background: #121722; } .section-heading { display: flex; justify-content: space-between; align-items: center; gap: .75rem; margin-bottom: .9rem; }
-.session-item { width: 100%; display: grid; text-align: left; gap: .3rem; margin-bottom: .5rem; } .session-item.selected { border-color: #70a8ff; background: #1d2b45; } .session-item small { font-size: .75rem; }
+.session-item { width: 100%; display: grid; text-align: left; gap: .3rem; margin-bottom: .5rem; } .session-item.selected { border-color: var(--cyan); background: var(--ambient-surface-hi); } .session-item small { font-size: .75rem; }
 .sidebar-note { margin-top: 2rem; padding: .8rem; border: 1px solid #34435b; border-radius: 8px; color: #bdc9dc; font-size: .82rem; } .sidebar-note p { margin-top: .4rem; line-height: 1.4; }
 .main-content { max-width: 1250px; min-width: 0; width: 100%; padding: 2rem; margin: 0 auto; } .workspace-title { display: flex; justify-content: space-between; gap: 1rem; align-items: end; margin-bottom: 1.2rem; min-width: 0; } .workspace-title h2 { font-size: 1.6rem; margin: .25rem 0; overflow-wrap: anywhere; } .actions { display: flex; flex-wrap: wrap; gap: .6rem; } .primary { background: #3475d1; border-color: #66a1ff; } .secondary { background: transparent; }
 .notice { display: flex; gap: .8rem; padding: .8rem 1rem; margin-bottom: 1.2rem; border-left: 3px solid #dc8f35; background: #211d17; color: #e6cda6; font-size: .86rem; }
@@ -23,7 +23,7 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
 .warning-panel label { display: flex; gap: .5rem; align-items: flex-start; font-size: .86rem; }
 .canvas-panel, .panel { border: 1px solid #293344; border-radius: 10px; background: #141923; padding: 1rem; } .node-canvas { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem; min-height: 190px; padding: 1rem 0 0; }
 .node-card { min-width: 0; padding: 1rem; border: 1px solid #3a4c69; border-radius: 8px; background: #1a2230; } .node-card.selected { border-color: #70a8ff; box-shadow: 0 0 0 1px #70a8ff inset; } .node-card h3 { margin: .35rem 0; overflow-wrap: anywhere; } .node-card p { font-size: .8rem; overflow-wrap: anywhere; } .port-list { display: grid; gap: .35rem; margin-top: .9rem; } .port { min-width: 0; border-radius: 5px; padding: .3rem; font-size: .72rem; overflow-wrap: anywhere; background: #202b3c; } .port.input { border-left: 2px solid #a37cff; } .port.output { border-right: 2px solid #53c79a; }
-.graph-list { display: grid; gap: .8rem; padding-top: .4rem; } .graph-list ol, .graph-list ul { margin: 0; padding-left: 1.5rem; } .graph-list li { padding: .2rem 0; } .graph-list button { width: 100%; text-align: left; } .graph-list button.selected { border-color: #70a8ff; background: #1d2b45; } .graph-list h3 { margin-top: .4rem; font-size: .9rem; }
+.graph-list { display: grid; gap: .8rem; padding-top: .4rem; } .graph-list ol, .graph-list ul { margin: 0; padding-left: 1.5rem; } .graph-list li { padding: .2rem 0; } .graph-list button { width: 100%; text-align: left; } .graph-list button.selected { border-color: var(--cyan); background: var(--ambient-surface-hi); } .graph-list h3 { margin-top: .4rem; font-size: .9rem; }
 .inspector { margin-top: 1rem; } .inspector-grid { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem; } .inspector-grid label { display: flex; align-items: center; gap: .45rem; color: #c4d0e2; } button:disabled { cursor: not-allowed; opacity: .5; }
 .lower-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; } .library-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .6rem; } .library-grid button { display: grid; text-align: left; gap: .25rem; } .library-grid small { font-size: .72rem; } .badge { color: #9ba8bd; font-size: .8rem; }
 .session-picker { display: grid; gap: .35rem; margin-bottom: .8rem; color: #bdc9dc; font-size: .78rem; }
@@ -72,8 +72,8 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
 .setup-step.needs-attention { border-color: #dc8f35; }
 .setup-step.unavailable { border-color: #667085; }
 .list-port-summary { display: block; margin-top: .2rem; font-size: .72rem; }
-.theme-picker { display: grid; gap: .15rem; color: #bdc9dc; font-size: .72rem; }
-.theme-picker select { border: 1px solid #384458; border-radius: 6px; color: inherit; background: #1a2130; padding: .25rem; font: inherit; }
+.theme-picker { display: flex; align-items: center; gap: .35rem; color: var(--text-soft); font-size: .72rem; }
+.theme-picker select { border: 1px solid var(--ambient-edge); border-radius: 6px; color: inherit; background: var(--ambient-surface); padding: .25rem; font: inherit; }
 .theme-light { color: #172033; background: #f1f4f8; }
 .theme-light .topbar, .theme-light .sidebar, .theme-light .canvas-panel, .theme-light .panel { background: #fff; border-color: #b7c2d1; }
 .theme-light button, .theme-light input, .theme-light select { color: #172033; background: #edf1f6; border-color: #8b9ab0; }
@@ -82,11 +82,14 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
 .theme-light .node-card { background: #f5f7fa; border-color: #8b9ab0; }
 .theme-light .muted, .theme-light .node-card p, .theme-light small, .theme-light .status-detail { color: #4b5b73; }
 .theme-light .compact-status-panel { background: #e5edf8; border-color: #7186a3; }
+.theme-light .notice { background: #fbf1de; color: #6b4a1a; }
+.theme-light .warning-panel { background: #fbf1de; color: #6b4a1a; }
 .theme-high-contrast { color: #fff; background: #000; }
 .theme-high-contrast .topbar, .theme-high-contrast .sidebar, .theme-high-contrast .canvas-panel, .theme-high-contrast .panel, .theme-high-contrast .node-card { background: #000; border-color: #fff; }
 .theme-high-contrast button, .theme-high-contrast input, .theme-high-contrast select { color: #fff; background: #000; border-color: #fff; }
 .theme-high-contrast .muted, .theme-high-contrast .node-card p, .theme-high-contrast small, .theme-high-contrast .status-detail { color: #fff; }
 .theme-high-contrast .compact-status-panel { background: #000; border-color: #fff; }
+.theme-high-contrast .notice, .theme-high-contrast .warning-panel { background: #000; color: #fff; border-color: #fff; }
 .theme-high-contrast .canvas-library, .theme-high-contrast .session-flow-toolbar { background: #000; border-color: #fff; }
 .theme-light .canvas-library, .theme-light .session-flow-toolbar { background: rgb(255 255 255 / 94%); border-color: #b7c2d1; }
 @media (max-width: 760px) { .compact-status-panel { align-items: flex-start; flex-direction: column; margin: 1rem; } }
@@ -177,6 +180,7 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
   --ambient-edge: #46515f;
   --ambient-key: rgb(255 255 255 / 18%);
   --ambient-shadow: rgb(0 0 0 / 46%);
+  --ambient-vignette: #2c3540;
   --signal: #f6a928;
   --signal-hot: #ffd166;
   --cyan: #25b8df;
@@ -184,35 +188,73 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
   --good: #72e3a2;
   --vst-accent: #c792ea;
   --danger: #ff6b6b;
+  /* Deliberately a strong warm/cool complementary pair, not the general
+     accent palette above: input vs output connector must stay legible as
+     "clearly different colors" even at a 0.72rem dot with the eye's
+     accent/color-family recognition, not just an accurate hex diff. An
+     earlier cyan/green pairing tested too close in hue to reliably tell
+     apart. */
+  --handle-input: #3a86ff;
+  --handle-output: #f6a928;
   --text-strong: #f6f8fb;
   --text-soft: #aeb9c8;
 }
 
-body, .app-shell { color: var(--text-strong); background: radial-gradient(circle at 20% 0%, #2c3540 0, var(--ambient-bg) 46rem); }
-.topbar { min-height: 58px; padding: .65rem 1.1rem; border-color: #39424d; background: rgb(30 35 42 / 86%); box-shadow: 0 1px 0 var(--ambient-key), 0 10px 30px var(--ambient-shadow); }
+/* Theme variable overrides. Component rules below reference these custom
+   properties rather than literal colors specifically so theme switching
+   works via CSS variable inheritance under .theme-light/.theme-high-contrast
+   on .app-shell, independent of any given consuming rule's own specificity
+   or position in this file — a plain selector like .topbar that merely
+   references var(--ambient-surface) automatically repaints correctly no
+   matter how many other unrelated rules also target .topbar. */
+.theme-light {
+  --ambient-bg: #eef1f6;
+  --ambient-surface: #ffffff;
+  --ambient-surface-hi: #f7f9fc;
+  --ambient-edge: #b7c2d1;
+  --ambient-key: rgb(23 32 51 / 6%);
+  --ambient-shadow: rgb(23 32 51 / 12%);
+  --ambient-vignette: #e2e8f1;
+  --text-strong: #172033;
+  --text-soft: #4b5b73;
+}
+.theme-high-contrast {
+  --ambient-bg: #000000;
+  --ambient-surface: #000000;
+  --ambient-surface-hi: #0d0d0d;
+  --ambient-edge: #ffffff;
+  --ambient-key: rgb(255 255 255 / 30%);
+  --ambient-shadow: rgb(0 0 0 / 70%);
+  --ambient-vignette: #000000;
+  --text-strong: #ffffff;
+  --text-soft: #ffffff;
+}
+
+body, .app-shell { color: var(--text-strong); background: radial-gradient(circle at 20% 0%, var(--ambient-vignette) 0, var(--ambient-bg) 46rem); }
+.topbar { min-height: 58px; padding: .65rem 1.1rem; border-color: var(--ambient-edge); background: var(--ambient-surface); box-shadow: 0 1px 0 var(--ambient-key), 0 10px 30px var(--ambient-shadow); }
 .topbar h1 { letter-spacing: -.02em; }
-.sidebar { background: rgb(27 32 39 / 80%); border-color: #39424d; box-shadow: inset -1px 0 var(--ambient-key); }
+.sidebar { background: var(--ambient-surface); border-color: var(--ambient-edge); box-shadow: inset -1px 0 var(--ambient-key); }
 .main-content { gap: .8rem 1rem; }
-.canvas-panel, .panel { border-color: var(--ambient-edge); background: linear-gradient(145deg, rgb(48 56 68 / 82%), rgb(29 34 41 / 92%)); box-shadow: inset 1px 1px 0 var(--ambient-key), 8px 12px 26px rgb(0 0 0 / 16%); }
+.canvas-panel, .panel { border-color: var(--ambient-edge); background: linear-gradient(145deg, var(--ambient-surface-hi), var(--ambient-surface)); box-shadow: inset 1px 1px 0 var(--ambient-key), 8px 12px 26px var(--ambient-shadow); }
 .section-heading { margin-bottom: .7rem; }
 .section-heading h2 { letter-spacing: -.02em; }
-.eyebrow { color: #7fd5ed; }
-button, input, select { border-color: #4b5969; background: linear-gradient(145deg, #303944, #20262e); box-shadow: inset 1px 1px 0 rgb(255 255 255 / 10%), 2px 3px 6px rgb(0 0 0 / 18%); color: var(--text-strong, #edf4ff); }
-input[type="checkbox"] { appearance: none; position: relative; width: 2.55rem; height: 1.4rem; flex: 0 0 auto; margin: 0; padding: 0; border: 1px solid #647181; border-radius: 999px; background: #20262e; cursor: pointer; box-shadow: inset 1px 1px 0 rgb(255 255 255 / 10%); }
-input[type="checkbox"]::after { position: absolute; top: .2rem; left: .2rem; width: .85rem; height: .85rem; border-radius: 50%; background: #a7b3c1; content: ""; transition: transform .16s ease, background .16s ease; }
+.eyebrow { color: var(--cyan-deep); }
+button, input, select { border-color: var(--ambient-edge); background: linear-gradient(145deg, var(--ambient-surface-hi), var(--ambient-surface)); box-shadow: inset 1px 1px 0 var(--ambient-key), 2px 3px 6px var(--ambient-shadow); color: var(--text-strong, #edf4ff); }
+input[type="checkbox"] { appearance: none; position: relative; width: 2.55rem; height: 1.4rem; flex: 0 0 auto; margin: 0; padding: 0; border: 1px solid var(--ambient-edge); border-radius: 999px; background: var(--ambient-surface); cursor: pointer; box-shadow: inset 1px 1px 0 var(--ambient-key); }
+input[type="checkbox"]::after { position: absolute; top: .2rem; left: .2rem; width: .85rem; height: .85rem; border-radius: 50%; background: var(--text-soft); content: ""; transition: transform .16s ease, background .16s ease; }
 input[type="checkbox"]:checked { border-color: #53c79a; background: #235842; }
 input[type="checkbox"]:checked::after { transform: translateX(1.1rem); background: #d9ffec; }
 input[type="checkbox"]:focus-visible { outline: 2px solid var(--signal-hot); outline-offset: 2px; }
 button:hover, button:focus-visible { border-color: var(--signal-hot); outline-color: var(--signal-hot); }
 button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradient(145deg, #ffd166, #e7971d); }
-.secondary { background: rgb(48 57 68 / 70%); }
+.secondary { background: var(--ambient-surface); }
 .compact-status-panel { border-color: #4a7380; background: linear-gradient(145deg, #263e47, #202a33); }
-.session-flow-canvas { height: 100%; min-height: 440px; margin-top: .4rem; border-color: #53606d; border-radius: 12px; background: radial-gradient(circle at 36% 18%, rgb(55 68 80 / 55%), transparent 30rem), #1b2027; box-shadow: inset 0 1px 0 var(--ambient-key), inset 0 -24px 60px rgb(0 0 0 / 18%); }
-.canvas-library { top: .8rem; right: .8rem; width: 192px; max-height: calc(100% - 1.6rem); padding: .65rem; border-color: #596775; border-radius: 10px; background: rgb(34 40 48 / 94%); box-shadow: inset 1px 1px 0 var(--ambient-key), 6px 8px 20px rgb(0 0 0 / 28%); }
+.session-flow-canvas { height: 100%; min-height: 440px; margin-top: .4rem; border-color: var(--ambient-edge); border-radius: 12px; background: radial-gradient(circle at 36% 18%, rgb(55 68 80 / 55%), transparent 30rem), var(--ambient-bg); box-shadow: inset 0 1px 0 var(--ambient-key), inset 0 -24px 60px var(--ambient-shadow); }
+.canvas-library { top: .8rem; right: .8rem; width: 192px; max-height: calc(100% - 1.6rem); padding: .65rem; border-color: var(--ambient-edge); border-radius: 10px; background: var(--ambient-surface); box-shadow: inset 1px 1px 0 var(--ambient-key), 6px 8px 20px var(--ambient-shadow); }
 .canvas-library strong { color: var(--text-soft); }
-.canvas-library button { min-height: 2rem; color: #eaf8fc; border-color: #53616e; background: linear-gradient(145deg, #3b4a55, #263039); }
+.canvas-library button { min-height: 2rem; color: var(--text-strong); border-color: var(--ambient-edge); background: linear-gradient(145deg, var(--ambient-surface-hi), var(--ambient-surface)); }
 .canvas-library button::before { color: var(--signal-hot); }
-.session-flow-toolbar { right: .8rem; bottom: .8rem; left: .8rem; border-color: #566370; background: rgb(29 35 42 / 92%); box-shadow: inset 1px 1px 0 var(--ambient-key), 5px 8px 20px rgb(0 0 0 / 25%); }
+.session-flow-toolbar { right: .8rem; bottom: .8rem; left: .8rem; border-color: var(--ambient-edge); background: var(--ambient-surface); box-shadow: inset 1px 1px 0 var(--ambient-key), 5px 8px 20px var(--ambient-shadow); }
 .canvas-layout-actions .muted { margin-right: auto; }
 .session-flow-canvas .react-flow__controls { overflow: hidden; border: 1px solid #53616e; border-radius: 8px; box-shadow: 3px 5px 12px rgb(0 0 0 / 28%); }
 .session-flow-canvas .react-flow__controls button { color: #eaf8fc; border: 0; border-bottom: 1px solid #53616e; background: #2a333d; box-shadow: none; }
@@ -232,10 +274,33 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .flow-node-content .node-port-count { color: #9eacbb; font-size: .67rem; }
 .flow-port-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .18rem .35rem; padding-top: .12rem; }
 .flow-port-list small { overflow: hidden; color: #b3c0cd; font-size: .63rem; text-overflow: ellipsis; white-space: nowrap; }
-.session-flow-canvas .react-flow__handle { z-index: 8; width: .72rem; height: .72rem; pointer-events: auto; border: 2px solid #182027; background: var(--cyan); opacity: .55; box-shadow: 0 0 0 2px rgb(37 184 223 / 14%); cursor: crosshair; transition: opacity .12s ease, transform .12s ease, box-shadow .12s ease; }
-.session-flow-canvas .react-flow__handle:hover, .session-flow-canvas .react-flow__handle:focus-visible { opacity: 1; transform: scale(1.3); box-shadow: 0 0 0 3px rgb(37 184 223 / 30%), 0 0 14px rgb(37 184 223 / 65%); }
-.session-flow-canvas .react-flow__handle.connectingto { opacity: 1; transform: scale(1.45); box-shadow: 0 0 0 3px rgb(114 227 162 / 45%), 0 0 16px rgb(114 227 162 / 80%); }
-.session-flow-canvas .react-flow__handle:not(.connectionindicator) { opacity: .12; box-shadow: none; }
+.session-flow-canvas .react-flow__handle { z-index: 8; width: .72rem; height: .72rem; pointer-events: auto; border: 2px solid #182027; background: var(--cyan); opacity: .55; box-shadow: 0 0 0 2px rgb(37 184 223 / 14%); cursor: crosshair; transition: opacity .12s ease, box-shadow .12s ease; }
+/* Inputs and outputs get distinct colors (--handle-input/--handle-output)
+   so the four side handles a port renders (one per node edge, for flexible
+   cable routing) are easier to tell apart and aim for, rather than relying
+   on position alone. Two earlier pairings were tried and rejected from live
+   user feedback: --vst-accent (purple) collided with its existing meaning
+   of "VST plugin node" on node borders, and a --cyan/--good (blue/green)
+   pairing was visually too close in hue to reliably tell apart at handle
+   size. See the --handle-input/--handle-output definitions above for why
+   this pairing was chosen instead. */
+.session-flow-canvas .react-flow__handle[data-debug-direction="target"] { background: var(--handle-input); box-shadow: 0 0 0 2px rgb(58 134 255 / 20%); }
+.session-flow-canvas .react-flow__handle[data-debug-direction="source"] { background: var(--handle-output); box-shadow: 0 0 0 2px rgb(246 169 40 / 20%); }
+/* No transform here deliberately: @xyflow/react positions/centers each
+   handle using its own transform internally, and adding a scale() in this
+   stylesheet fought with that and made hovered handles visibly jump/shift
+   instead of growing in place. Hover/active feedback is opacity and
+   box-shadow only. */
+.session-flow-canvas .react-flow__handle:hover, .session-flow-canvas .react-flow__handle:focus-visible { opacity: 1; box-shadow: 0 0 0 4px rgb(0 0 0 / 0%); }
+.session-flow-canvas .react-flow__handle[data-debug-direction="target"]:hover, .session-flow-canvas .react-flow__handle[data-debug-direction="target"]:focus-visible { box-shadow: 0 0 0 4px rgb(58 134 255 / 35%), 0 0 14px rgb(58 134 255 / 65%); }
+.session-flow-canvas .react-flow__handle[data-debug-direction="source"]:hover, .session-flow-canvas .react-flow__handle[data-debug-direction="source"]:focus-visible { box-shadow: 0 0 0 4px rgb(246 169 40 / 35%), 0 0 14px rgb(246 169 40 / 65%); }
+.session-flow-canvas .react-flow__handle.connectingto { opacity: 1; box-shadow: 0 0 0 5px rgb(114 227 162 / 45%), 0 0 16px rgb(114 227 162 / 80%); }
+/* Raised from an earlier 0.12 resting opacity: the four side handles per
+   port were reported as hard to locate/grab precisely (one user-reported
+   "broken" anchor turned out to most plausibly be this — a near-invisible
+   target rather than a dead one). Still clearly subtler than the
+   hover/active states above. */
+.session-flow-canvas .react-flow__handle:not(.connectionindicator) { opacity: .42; box-shadow: none; }
 .node-meter { display: grid; grid-template-columns: 24px 1fr; align-items: end; gap: .55rem; min-height: 48px; padding: .4rem .5rem; border: 1px solid rgb(0 0 0 / 25%); border-radius: 7px; background: rgb(13 17 21 / 34%); }
 .node-meter-track { position: relative; height: 42px; overflow: hidden; border-radius: 4px; background: linear-gradient(to top, #2d9e78 0 66%, #e9bf52 67% 84%, #d65d58 85%); }
 .node-meter-track::after { position: absolute; inset: 0; content: ""; background: repeating-linear-gradient(to top, transparent 0 7px, rgb(12 18 20 / 50%) 8px); }
@@ -321,7 +386,7 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .session-flow-canvas .react-flow__edge.flow-edge-active .react-flow__edge-path { stroke: var(--signal); stroke-width: 3.5; stroke-dasharray: 2 8; animation: signal-flow 720ms linear infinite; filter: drop-shadow(0 0 3px rgb(246 169 40 / 70%)); }
 @keyframes signal-flow { to { stroke-dashoffset: -10; } }
 .inspector { border-color: #566370; }
-.inspector .node-telemetry { border-color: #4c6978; background: rgb(23 43 51 / 58%); }
+.inspector .node-telemetry { border-color: var(--ambient-edge); background: var(--ambient-surface); }
 .library-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 .library-grid button { min-height: 3.25rem; text-align: left; }
 @media (prefers-reduced-motion: reduce) { .session-flow-canvas .react-flow__edge.flow-edge-active .react-flow__edge-path { animation: none; } .session-flow-canvas .react-flow__node { transition: none; } }
@@ -389,6 +454,10 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
   margin-top: .4rem;
 }
 .canvas-layout-actions .muted { margin-right: auto; }
+.canvas-handle-legend { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; margin: 0 0 .5rem; font-size: .72rem; }
+.canvas-handle-legend-dot { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%; }
+.canvas-handle-legend-dot-target { background: var(--handle-input); }
+.canvas-handle-legend-dot-source { margin-left: .5rem; background: var(--handle-output); }
 .nodrag { touch-action: none; }
 .eq-band { cursor: grab; }
 .eq-band:active { cursor: grabbing; }
@@ -413,15 +482,14 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 }
 .theme-light .main-content > .inspector .inspector-grid > label > span,
 .theme-light .main-content > .inspector .inspector-grid > label { color: #26364d; }
-.node-binding-editor { display: grid; min-width: 0; gap: .55rem; margin: .8rem 0; padding: .8rem; border: 1px solid #4c6978; border-radius: 10px; background: linear-gradient(145deg, rgb(33 57 66 / 74%), rgb(26 34 41 / 84%)); box-shadow: inset 1px 1px 0 rgb(255 255 255 / 10%); box-sizing: border-box; }
+.node-binding-editor { display: grid; min-width: 0; gap: .55rem; margin: .8rem 0; padding: .8rem; border: 1px solid var(--ambient-edge); border-radius: 10px; background: linear-gradient(145deg, var(--ambient-surface-hi), var(--ambient-surface)); box-shadow: inset 1px 1px 0 var(--ambient-key); box-sizing: border-box; }
 .node-binding-editor > * { min-width: 0; max-width: 100%; box-sizing: border-box; }
-.node-binding-editor select { width: 100%; min-width: 0; color: #f4fbff; background: #202b35; }
-.node-binding-editor select option { color: #f4fbff; background: #202b35; }
-.theme-light .node-binding-editor select, .theme-light .node-binding-editor select option { color: #172033; background: #edf1f6; }
-.node-binding-editor strong { display: block; margin-top: .2rem; color: #f4fbff; font-size: .85rem; }
-.node-binding-editor label { display: grid; gap: .3rem; color: #d5e0e7; font-size: .78rem; }
-.node-binding-editor input[readonly] { color: #9fb0bd; font-size: .75rem; }
-.node-binding-editor small { color: #a7b8c4; line-height: 1.4; }
+.node-binding-editor select { width: 100%; min-width: 0; color: var(--text-strong); background: var(--ambient-surface-hi); }
+.node-binding-editor select option { color: var(--text-strong); background: var(--ambient-surface-hi); }
+.node-binding-editor strong { display: block; margin-top: .2rem; color: var(--text-strong); font-size: .85rem; }
+.node-binding-editor label { display: grid; gap: .3rem; color: var(--text-soft); font-size: .78rem; }
+.node-binding-editor input[readonly] { color: var(--text-soft); font-size: .75rem; }
+.node-binding-editor small { color: var(--text-soft); line-height: 1.4; }
 .recorder-node-editor { border-color: #716746; background: linear-gradient(145deg, rgb(61 53 34 / 72%), rgb(33 34 35 / 88%)); }
 .status-cluster.connected { color: #53c79a; }
 .status-cluster.disconnected { color: #f0b36a; }

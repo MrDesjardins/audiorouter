@@ -50,7 +50,7 @@ after the initial 47-method reference.
 | `recordings.rename` | `record` | external operation; requires an idempotency key |
 | `recordings.removeEntry` | `record` | mutating; requires an idempotency key |
 | `recordings.recycle` | `record` | preview is read-only; confirmed recycling requires an idempotency key |
-| `safety.setPrivacyMute` | `capture` | mutating; requires an idempotency key |
+| `safety.setPrivacyMute` | `sessionControl` | mutating; requires an idempotency key |
 | `recovery.clearSafeMode` | `sessionControl` | mutating; requires an idempotency key |
 
 `recordings.recovery` accepts either a `recordingId` for one checkpoint or an
@@ -66,6 +66,11 @@ file worker and lifecycle state are attached to that validated recorder node.
 `recorders.list` reports `nodeId` for node-targeted entries and keeps it absent
 for compatibility session entries; results are bounded and deterministically
 ordered.
+The recorder `format` accepts `wavPcm16`, `wavPcm24`, `wavFloat32`, `flac16`,
+`flac24`, or `mp3`. MP3 is fixed at 192 kbps, supports mono/stereo at 44.1 or
+48 kHz, disables dither, and rejects split requests. Its finalized library
+metadata reports `format: "mp3"`; preview performs a bounded MP3 frame-header
+check and reports file size.
 `recovery.clearSafeMode` clears durable crash markers and the safe-mode latch
 atomically with its idempotent journal result; if that journal write cannot be
 committed, recovery state remains unchanged.

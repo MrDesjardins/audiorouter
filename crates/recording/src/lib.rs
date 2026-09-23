@@ -3,6 +3,7 @@
 //! The writer only operates on a caller-provided `Write + Seek` destination.
 //! It does not open paths, create files, or perform realtime scheduling.
 
+use mp3lame_encoder::{Bitrate, Builder, FlushGap, InterleavedPcm, MonoPcm, Quality, VbrMode};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -82,7 +83,10 @@ impl RecordingPathPolicy {
         extension: &str,
     ) -> Result<(PathBuf, std::fs::File), PathPolicyError> {
         let extension = sanitize_component(extension);
-        if !matches!(extension.to_ascii_lowercase().as_str(), "wav" | "flac") {
+        if !matches!(
+            extension.to_ascii_lowercase().as_str(),
+            "wav" | "flac" | "mp3"
+        ) {
             return Err(PathPolicyError::UnsupportedExtension);
         }
         let filename = format!(
@@ -684,12 +688,214 @@ pub enum RecordingError {
     InvalidMetadata,
     InvalidWav,
     FlacEncode(String),
+    Mp3Encode(String),
     Io(std::io::Error),
 }
 
 impl From<std::io::Error> for RecordingError {
     fn from(error: std::io::Error) -> Self {
         Self::Io(error)
+    }
+}
+
+/// Incremental MP3 writer used only on the recorder worker thread. LAME is
+/// configured with the graph's exact mono/stereo shape and sample rate; the
+/// realtime tap only queues bounded PCM chunks and never enters this encoder.
+pub struct Mp3Writer<W: Write> {
+    output: W,
+    encoder: mp3lame_encoder::Encoder,
+    channels: u16,
+    sample_rate: u32,
+    frames: u64,
+}
+
+impl<W: Write> Mp3Writer<W> {
+    pub fn new(output: W, channels: u16, sample_rate: u32) -> Result<Self, RecordingError> {
+        if !matches!(channels, 1 | 2) {
+            return Err(RecordingError::InvalidChannels);
+        }
+        if !matches!(sample_rate, 44_100 | 48_000) {
+            return Err(RecordingError::InvalidSampleRate);
+        }
+        let encoder = Builder::new()
+            .ok_or_else(|| RecordingError::Mp3Encode("LAME allocation failed".into()))?
+            .with_num_channels(channels as u8)
+            .map_err(|error| RecordingError::Mp3Encode(error.to_string()))?
+            .with_sample_rate(sample_rate)
+            .map_err(|error| RecordingError::Mp3Encode(error.to_string()))?
+            .with_brate(Bitrate::Kbps192)
+            .map_err(|error| RecordingError::Mp3Encode(error.to_string()))?
+            .with_quality(Quality::Good)
+            .map_err(|error| RecordingError::Mp3Encode(error.to_string()))?
+            .with_vbr_mode(VbrMode::Mtrh)
+            .map_err(|error| RecordingError::Mp3Encode(error.to_string()))?
+            .with_to_write_vbr_tag(false)
+            .map_err(|error| RecordingError::Mp3Encode(error.to_string()))?
+            .build()
+            .map_err(|error| RecordingError::Mp3Encode(error.to_string()))?;
+        Ok(Self {
+            output,
+            encoder,
+            channels,
+            sample_rate,
+            frames: 0,
+        })
+    }
+
+    pub fn write_interleaved(&mut self, samples: &[f32]) -> Result<u64, RecordingError> {
+        let channels = usize::from(self.channels);
+        if samples.is_empty() || samples.len() % channels != 0 {
+            return Err(RecordingError::InvalidSampleCount);
+        }
+        let mut encoded =
+            Vec::with_capacity(mp3lame_encoder::max_required_buffer_size(samples.len()));
+        let result = if self.channels == 1 {
+            self.encoder.encode_to_vec(MonoPcm(samples), &mut encoded)
+        } else {
+            self.encoder
+                .encode_to_vec(InterleavedPcm(samples), &mut encoded)
+        };
+        result.map_err(|error| RecordingError::Mp3Encode(error.to_string()))?;
+        self.output.write_all(&encoded)?;
+        let frames = (samples.len() / channels) as u64;
+        self.frames = self
+            .frames
+            .checked_add(frames)
+            .ok_or(RecordingError::TooManyFrames)?;
+        Ok(frames)
+    }
+
+    pub fn finish(mut self) -> Result<(W, u64), RecordingError> {
+        let mut encoded = Vec::with_capacity(7200);
+        self.encoder
+            .flush_to_vec::<FlushGap>(&mut encoded)
+            .map_err(|error| RecordingError::Mp3Encode(error.to_string()))?;
+        self.output.write_all(&encoded)?;
+        Ok((self.output, self.frames))
+    }
+
+    pub fn channels(&self) -> u16 {
+        self.channels
+    }
+    pub fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+}
+
+/// Lifecycle wrapper for the bounded MP3 writer. MP3 does not support the
+/// recorder's segment rotation contract yet, so manual/automatic splitting is
+/// rejected by the control adapter until a gapless part policy is defined.
+pub struct Mp3Recorder<W: Write> {
+    writer: Option<Mp3Writer<W>>,
+    controller: RecorderController,
+    channels: u16,
+    next_frame: Option<u64>,
+}
+
+impl<W: Write> Mp3Recorder<W> {
+    pub fn new(output: W, channels: u16, sample_rate: u32) -> Result<Self, RecordingError> {
+        Ok(Self {
+            writer: Some(Mp3Writer::new(output, channels, sample_rate)?),
+            controller: RecorderController::new(),
+            channels,
+            next_frame: None,
+        })
+    }
+
+    pub fn state(&self) -> RecorderState {
+        self.controller.state()
+    }
+    pub fn arm(&mut self) -> Result<(), RecorderError> {
+        self.controller.arm()
+    }
+    pub fn start(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.controller.start(frame)?;
+        self.next_frame = Some(frame);
+        Ok(())
+    }
+    pub fn pause(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.controller.pause(frame)
+    }
+    pub fn resume(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.controller.resume(frame)?;
+        self.next_frame = Some(frame);
+        Ok(())
+    }
+    pub fn split(&mut self, _frame: u64) -> Result<(), RecorderError> {
+        Err(RecorderError::InvalidTransition {
+            state: self.state(),
+            action: "split",
+        })
+    }
+    pub fn drain_queue(
+        &mut self,
+        queue: &RecordingQueue,
+        maximum_chunks: usize,
+    ) -> Result<usize, RecordingError> {
+        if !matches!(
+            self.state(),
+            RecorderState::Recording | RecorderState::Stopping
+        ) {
+            return Err(RecordingError::NotRecording);
+        }
+        let mut drained = 0;
+        while drained < maximum_chunks {
+            let Some(chunk) = queue.try_pop() else { break };
+            let expected = self.next_frame.unwrap_or(chunk.start_frame);
+            if chunk.start_frame != expected
+                || chunk.samples.len() % usize::from(self.channels) != 0
+            {
+                self.controller.fail();
+                return Err(RecordingError::FrameDiscontinuity {
+                    expected,
+                    actual: chunk.start_frame,
+                });
+            }
+            let frames = (chunk.samples.len() / usize::from(self.channels)) as u64;
+            self.writer
+                .as_mut()
+                .ok_or(RecordingError::NotRecording)?
+                .write_interleaved(&chunk.samples)?;
+            let end = expected
+                .checked_add(frames)
+                .ok_or(RecordingError::TooManyFrames)?;
+            self.controller
+                .advance(end)
+                .map_err(RecordingError::Controller)?;
+            self.next_frame = Some(end);
+            queue.recycle(chunk);
+            drained += 1;
+        }
+        Ok(drained)
+    }
+    pub fn stop_and_drain(
+        &mut self,
+        queue: &RecordingQueue,
+        frame: u64,
+        maximum_chunks: usize,
+    ) -> Result<usize, RecordingError> {
+        let drained = self.drain_queue(queue, maximum_chunks)?;
+        if !queue.is_empty() {
+            return Err(RecordingError::QueueNotEmpty);
+        }
+        if self.state() != RecorderState::Stopping {
+            self.controller
+                .request_stop(frame)
+                .map_err(RecordingError::Controller)?;
+        }
+        self.controller
+            .complete()
+            .map_err(RecordingError::Controller)?;
+        Ok(drained)
+    }
+    pub fn finish(mut self) -> Result<(W, u64), RecordingError> {
+        if self.state() != RecorderState::Completed {
+            return Err(RecordingError::NotRecording);
+        }
+        self.writer
+            .take()
+            .ok_or(RecordingError::NotRecording)?
+            .finish()
     }
 }
 
@@ -1171,8 +1377,14 @@ impl FlacBufferEncoder {
 pub enum RecordingFileStatus {
     Present(WavFileInfo),
     FlacPresent(FlacFileInfo),
+    Mp3Present(Mp3FileInfo),
     Missing,
     Invalid,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Mp3FileInfo {
+    pub file_bytes: u64,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -1541,6 +1753,21 @@ pub fn inspect_recording(
             Err(error) => Err(error),
         };
     }
+    if path
+        .as_ref()
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("mp3"))
+    {
+        return match inspect_mp3_file(path) {
+            Ok(info) => Ok(RecordingFileStatus::Mp3Present(info)),
+            Err(RecordingError::InvalidWav) => Ok(RecordingFileStatus::Invalid),
+            Err(RecordingError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+                Ok(RecordingFileStatus::Missing)
+            }
+            Err(error) => Err(error),
+        };
+    }
     match inspect_wav_file(path) {
         Ok(info) => Ok(RecordingFileStatus::Present(info)),
         Err(RecordingError::InvalidWav) => Ok(RecordingFileStatus::Invalid),
@@ -1549,6 +1776,21 @@ pub fn inspect_recording(
         }
         Err(error) => Err(error),
     }
+}
+
+/// Performs a bounded structural check of an MP3 output without decoding it.
+pub fn inspect_mp3_file(path: impl AsRef<std::path::Path>) -> Result<Mp3FileInfo, RecordingError> {
+    let mut file = std::fs::File::open(path)?;
+    let file_bytes = file.metadata()?.len();
+    if file_bytes < 128 {
+        return Err(RecordingError::InvalidWav);
+    }
+    let mut header = [0u8; 2];
+    file.read_exact(&mut header)?;
+    if !(header[0] == 0xff && header[1] & 0xe0 == 0xe0) {
+        return Err(RecordingError::InvalidWav);
+    }
+    Ok(Mp3FileInfo { file_bytes })
 }
 
 /// Inspects FLAC's STREAMINFO metadata without decoding audio frames.
@@ -3573,10 +3815,8 @@ mod tests {
         std::fs::create_dir(&root).unwrap();
         assert_eq!(sanitize_component("CON:take?.wav"), "CON_take_.wav");
         let policy = RecordingPathPolicy::new(&root).unwrap();
-        assert!(matches!(
-            policy.create_file("voice", "main", 0, "mp3"),
-            Err(PathPolicyError::UnsupportedExtension)
-        ));
+        let (mp3_path, _mp3_file) = policy.create_file("voice", "main", 0, "mp3").unwrap();
+        assert!(mp3_path.ends_with("voice-main-0.mp3"));
         let (path, _file) = policy.create_file("voice/main", "CON", 1, "wav").unwrap();
         assert!(path.starts_with(policy.root()));
         assert!(matches!(
@@ -4045,6 +4285,65 @@ mod tests {
         assert!(after < before);
         assert_eq!(inspect_flac_file(&path).unwrap().frames, 3);
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn mp3_writer_emits_bounded_encoder_output_and_flushes() {
+        let mut writer = Mp3Writer::new(Cursor::new(Vec::new()), 2, 48_000).unwrap();
+        let samples = (0..4096)
+            .map(|index| ((index as f32) * 0.017).sin() * 0.25)
+            .collect::<Vec<_>>();
+        assert_eq!(writer.write_interleaved(&samples).unwrap(), 2048);
+        let (output, frames) = writer.finish().unwrap();
+        assert_eq!(frames, 2048);
+        assert!(output.into_inner().len() > 128);
+    }
+
+    #[test]
+    fn mp3_inspection_accepts_encoder_output_and_rejects_invalid_files() {
+        let mut writer = Mp3Writer::new(Cursor::new(Vec::new()), 1, 44_100).unwrap();
+        writer.write_interleaved(&vec![0.0; 2048]).unwrap();
+        let (output, _) = writer.finish().unwrap();
+        let valid_path = std::env::temp_dir().join(format!(
+            "audiorouter-recording-inspect-{}.mp3",
+            std::process::id()
+        ));
+        std::fs::write(&valid_path, output.into_inner()).unwrap();
+        assert!(matches!(
+            inspect_mp3_file(&valid_path),
+            Ok(Mp3FileInfo { file_bytes }) if file_bytes >= 128
+        ));
+
+        let invalid_path = std::env::temp_dir().join(format!(
+            "audiorouter-recording-invalid-{}.mp3",
+            std::process::id()
+        ));
+        std::fs::write(&invalid_path, vec![0u8; 128]).unwrap();
+        assert!(matches!(
+            inspect_mp3_file(&invalid_path),
+            Err(RecordingError::InvalidWav)
+        ));
+        let _ = std::fs::remove_file(valid_path);
+        let _ = std::fs::remove_file(invalid_path);
+    }
+
+    #[test]
+    fn mp3_recorder_preserves_frame_boundaries_and_rejects_split() {
+        let mut recorder = Mp3Recorder::new(Cursor::new(Vec::new()), 1, 44_100).unwrap();
+        recorder.arm().unwrap();
+        recorder.start(7).unwrap();
+        let queue = RecordingQueue::new(2).unwrap();
+        queue
+            .try_push(RecordingChunk {
+                start_frame: 7,
+                samples: vec![0.1, 0.2, 0.3],
+            })
+            .unwrap();
+        assert_eq!(recorder.drain_queue(&queue, 1).unwrap(), 1);
+        assert!(recorder.split(10).is_err());
+        recorder.stop_and_drain(&queue, 10, 1).unwrap();
+        let (_, frames) = recorder.finish().unwrap();
+        assert_eq!(frames, 3);
     }
 
     #[test]

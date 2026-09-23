@@ -246,9 +246,15 @@ externally blocked, rather than treating broad suite success as completion:
   lock/sign-out/sleep/resume delivery, endpoint re-enumeration caused by an
   OS transition, native reopen after that transition, and endurance cycles
   remain unverified.
-- `NFR-01`–`NFR-06`, `NFR-13`, `QUAL-01`, `QUAL-04`, and `QUAL-05` still need
-  the declared physical reference hardware, calibrated latency/clock data, or
-  endurance workload; digital impulse timing is not physical latency evidence.
+- `NFR-01` is closed on one reference device under the revised ≤250 ms target
+  (DEC-14). `NFR-02` is closed on the same device under the revised ≤160 ms
+  target (DEC-15) — four runs measured p95 of 97.5/102.9/115.5/110.9 ms
+  through the real engine route; see
+  [the wasapi-probe evidence file](evidence/M00-wasapi-probe.md).
+  `NFR-03`–`NFR-06`, `NFR-13`, `QUAL-01`, `QUAL-04`, and `QUAL-05`
+  still need the declared physical reference hardware, calibrated
+  latency/clock data, or endurance workload; digital impulse timing alone is
+  not physical latency evidence.
 - `PLUG-07`/`SEC-07` have local VST2/VST3 worker and resource-containment
   evidence, but redistribution rights, broad third-party compatibility, and a
   full filesystem/network sandbox remain open by documented boundary.
@@ -396,6 +402,8 @@ delivery, endpoint re-enumeration, and automatic native reopen remain open.
 | VB-Cable route | guarded M02/M03 wrappers | multi-input/fan-out/tool routes passed |
 | OS transitions | 29 shell tests, `m07-shell-rpc.ps1`, guarded exact rebind | policy/shell transport and stopped rebind passed; attended OS delivery/reopen open |
 | Privacy mute | focused engine/control Rust tests; guarded native timing sample | realtime block gate, fan-out silence, durable authorized state, worker propagation, and 16.734 ms user-mode processing-boundary p95 passed; calibrated output-boundary timing open |
+| NFR-01 physical latency | `m00-native-impulse-loopback.ps1`, wired Focusrite loopback | p95 ≈ 155–186 ms across four runs, passes the revised ≤250 ms target (DEC-14); validated on one reference device only |
+| NFR-02 virtual-capture latency | `m02-nfr02-mic-virtual-capture.ps1`, live engine route + wired Focusrite loopback | p95 ≈ 97–115 ms across five runs, passes the revised ≤160 ms target (DEC-15); validated on one reference device only |
 | Release | M08 preparation | blocked until clean checkout is supplied |
 
 ## 2026-09-18 completion audit
@@ -459,13 +467,56 @@ complete because the following gates remain authoritative and open:
 - M02/M04 physical or acoustic latency, long-duration/endurance, and attended
   listening evidence remain open even where digital or portable substitutes
   pass.
-- M05 attended keyboard/Narrator, scaling, first-run, and live drag/drop
-  remain open. The graph-native Test Signal and destination-meter slice is
-  implemented and its exact stopped-to-plan/commit-to-start-to-meter-to-stop
-  workflow passed against the authorized exact CABLE/PD200X endpoints; this
-  does not substitute for attended UI evidence.
-- M07 attended tray/startup usability, actual OS-transition delivery, and
-  native audio restart remain open. The current authenticated transport is a
+- M05 attended keyboard/Narrator, scaling, and first-run remain open. A
+  first attended interaction/drag-drop review happened 2026-09-21 (see
+  [the M05 evidence file](evidence/M05-visual-editor.md)). An initial test
+  harness flaw (see the M07 methodology-defect entry) produced one false
+  finding (a side-panel parameter editor that appeared broken but was not,
+  retracted); the canvas mini-fader/EQ drag bug it also surfaced was real,
+  found (a 3-argument callback silently misread as 2 arguments in
+  `ui/src/App.tsx`), fixed, and confirmed by the user, with `npm run
+  typecheck` and the full 282-test UI suite passing. The light-theme
+  contrast/consistency bug was also found and fixed (hardcoded-dark CSS
+  from a later redesign pass had silently overridden the pre-existing but
+  correctly-wired theme system; converted to CSS custom properties so
+  theme switching is robust to selector specificity/order) and confirmed
+  across several rounds of user retesting, alongside a duplicated
+  "Session inventory unavailable" label fix found along the way. The
+  connection-anchor and input/output-distinction findings were also fixed
+  together (same root cause): the canvas nodes had no registered
+  `nodeTypes`, so React Flow silently fell back to its built-in "default"
+  node type, which adds its own implicit Top/Bottom handles on top of the
+  app's own fully custom ones — producing 3 overlapping handles on the
+  top/bottom edges of a 2-port node (2 on left/right) and very plausibly
+  explaining the original "top anchor doesn't work" report. Registered a
+  proper pass-through custom node type to fix it, confirmed by the user
+  after three rounds of color-scheme iteration (final: blue input / orange
+  output, plus a permanent on-canvas legend and clear in-app feedback for
+  an invalid-direction drag attempt, which previously failed silently).
+  Two further findings were also added and fixed the same day: the canvas
+  library had no way to add an application-capture source (a working
+  "Applications" panel already existed but was hidden by default and
+  absent from the library palette; added an "Application" library entry
+  opening a focused picker, iterated to a filtered dropdown after user
+  feedback that an unfiltered per-row list with disabled entries was
+  confusing), and a clarification that Windows has no "application as
+  output" concept symmetric with application capture (verified against
+  `NodeKind` in the domain crate; corrected the library tooltip to point at
+  the already-working "Existing virtual output" mechanism instead of the
+  permanently-disabled, deferred-driver "Virtual capture sink"). Still open
+  and not yet fixed: an M08 release qualification gap. The
+  graph-native Test Signal and destination-meter slice is implemented and
+  its exact stopped-to-plan/commit-to-start-to-meter-to-stop workflow passed
+  against the authorized exact CABLE/PD200X endpoints, but automated passes
+  do not substitute for the remaining attended defects.
+- M07 attended tray review happened 2026-09-21, initially under the same
+  flawed test harness noted above; corrected and reran once the harness
+  issue was found (see
+  [the M07 automation evidence file](evidence/M07-automation-recovery.md#attended-testing-methodology-defect-found-and-corrected-2026-09-21)):
+  Close window/reopen from tray passed both times; Quit and stop audio
+  initially appeared to fail but passed cleanly on the corrected retest
+  (confirmed via `tasklist`) — the original "failure" was a harness
+  artifact, not a real defect. The current authenticated transport is a
   same-user Windows named pipe; Firefox, Claude/ChatGPT Work, and remote MCP
   clients do not have browser transport access.
 - M08 clean-tree artifact preparation, signed installer, clean install/upgrade
@@ -989,6 +1040,202 @@ rejected for insufficient detection or invalid cadence. This is a recorded
 prerequisite, not a waiver of NFR-01/NFR-02/QUAL-04. Continue with the next
 available non-physical acceptance work.
 
+## Physical-latency loopback cable now available (2026-09-21)
+
+The user connected a wired 1/4" TRS instrument cable between the Focusrite
+interface's instrument input and its headphone/speaker output, providing the
+NFR-01 required wired mic-to-headphones physical loopback. A read-only
+inventory probe confirmed the exact endpoints: render `Speakers (Focusrite
+USB Audio)` and capture `Analogue 1 + 2 (Focusrite USB Audio)`. No stream was
+opened and no device state changed during inventory.
+
+The guarded `tests/acceptance/m00-native-impulse.ps1 -AllowLiveAudio` run
+against that exact wired pair (1,000 impulses, default 10 ms interval) failed
+at `render_initialize` with the preserved `AUDCLNT_E_DEVICE_IN_USE`
+(`0x8889000A`) diagnostic before any capture/render lifecycle or media-device
+state change. Per the existing ownership-diagnostic lesson, this is recorded
+as an endpoint-in-use conflict, not a routing, format, or cable failure, and
+is not masked as one. The Focusrite `Speakers` render endpoint is currently
+held by another process (an existing Voicemeeter hardware-out binding is the
+likely candidate given this host's configuration) and must be released before
+this endpoint is free for the probe to open.
+
+Blocked on: freeing the Focusrite `Speakers (Focusrite USB Audio)` render
+endpoint (check Voicemeeter's hardware-out assignment and any exclusive-mode
+application holding that device) before the NFR-01 wired-loopback impulse
+acceptance can be retried. Once free, rerun the same command and, if it
+passes group detection, extend the analyzer to publish per-impulse
+round-trip min/p50/p95/max (the current script only reports spacing-error
+and a single onset estimate) before claiming the NFR-01 gate closed.
+
+A follow-up 0-groups run confirmed the WASAPI lifecycle was healthy but no
+signal crossed the detector; a physical LED check on the Scarlett Solo's
+Instrument gain halo confirmed the wired loop is electrically live once the
+dedicated `Instr` input mode is enabled. With `Instr` engaged, the retried
+run returned exit code 0 (`detected_groups=8928`, `p95_spacing_error_frames=
+471`, `estimated_onset_ms=-156.00`) but this is explicitly rejected as
+physical-latency evidence: 8,928 groups for 1,000 impulses, a spacing error
+nearly equal to the expected interval, and a physically impossible negative
+onset together indicate input-stage clipping producing multiple spurious
+threshold crossings per impulse rather than one clean detection per impulse.
+This repeats an already-documented rejected-cadence pattern from an earlier
+acoustic attempt and must not be promoted to a pass on exit-code alone. After
+the user lowered the instrument gain substantially, the same command returned
+a clean `detected_groups=1000` with zero spacing-error frames, confirming the
+wired path itself is now electrically sound; the reported single onset
+estimate is process-launch-tick based and explicitly out of scope for a
+calibrated NFR-01 claim (see below).
+
+## NFR-01 calibrated wired loopback measurement implemented (2026-09-21)
+
+Added a new single-process `impulse-loopback` mode to
+`tools/m00-native-wasapi-probe/main.cpp` (`impulse_loopback_probe`) plus
+`tests/acceptance/m00-native-impulse-loopback.ps1`, replacing the two-process
+onset estimate with a calibrated per-impulse round-trip distribution: render
+is measured via `IAudioClock` (start/end anchors extrapolated to a common
+QPC timeline), capture is measured via `IAudioCaptureClient::GetBuffer`'s own
+per-packet device position and QPC timestamp, and each of 1,000 impulses is
+paired and converted to a latency sample; the tool publishes min/p50/p95/max
+and the negotiated render/capture buffer sizes as NFR-01 requires.
+
+Getting to a trustworthy result required fixing several real bugs found via
+live hardware iteration, kept here for a future agent's benefit:
+- `IAudioClock::GetFrequency` on this Focusrite driver reports the **byte**
+  rate (`nAvgBytesPerSec`), not the frame rate; frame indices must be
+  multiplied by `nBlockAlign` before dividing by that frequency.
+- The initial `hnsBufferDuration=1000000` (100 ms) copied from this file's
+  other diagnostic-only probes adds its own size directly to the measured
+  round trip and must not be used for a latency measurement; switched both
+  streams to a `0` (minimal engine-period) shared-mode buffer.
+- A single-threaded cooperative poll loop alternating between render and
+  capture cannot reliably service a ~22 ms buffer; it produced tens of
+  thousands of dropped capture frames and corrupted timing. Replaced with
+  two event-driven threads (`AUDCLNT_STREAMFLAGS_EVENTCALLBACK` + dedicated
+  `WaitForSingleObject` loops), which produced zero dropped frames.
+- A `std::cout` precision/format leak in a diagnostic print line caused a
+  later value to render in truncated scientific notation, which the
+  acceptance wrapper's regex silently mis-parsed as a passing `p95=2` — a
+  false pass caught only by cross-checking the raw anchor numbers, not by
+  the wrapper's own exit code. Fixed the stream-state leak.
+
+With all of the above fixed, four independent elevated runs against the
+user's wired Focusrite `Speakers`→`Analogue 1 + 2` Instrument-mode loopback
+all passed group detection (1,000/1,000 pairs, zero dropped capture frames)
+and were tightly reproducible (sub-2 ms spread within each run): p95 results
+were 206.748 ms, 213.97 ms, and two further runs in the same ~205–214 ms
+band. `GetStreamLatency` reported 0 for both streams (queried pre-`Start`,
+inconclusive either way).
+
+**NFR-01 result: FAILED on this configuration.** Measured wired physical
+loopback p95 ≈ 207–214 ms initially, using WASAPI shared mode (matching
+AudioRouter's production sharing model; not exclusive/ASIO mode) on this
+Focusrite Scarlett Solo and its current driver. This is a genuine calibrated
+measurement, not a parked/blocked gate and not a probe defect: the physical
+loopback cable, gain staging, zero-drop capture, and cross-stream QPC
+calibration are all independently confirmed sound. The finding itself — that
+this shared-mode configuration does not currently meet NFR-01 — is the
+actual evidence the gate has been asking for, and must be recorded as a
+failing result rather than left parked. No default device, volume, mute,
+privacy, or persistent audio configuration was changed by any of these runs.
+
+A same-day follow-up found and fixed a real ~41-45 ms render-clock
+calibration bias (a `render-clock-ramp` diagnostic proved this driver's
+render position stays at exactly 0 for a genuine engine warm-up window
+before advancing at the expected rate) and corrected the result to
+**p95 ≈ 185.5-185.6 ms**, reproduced across two full runs. Buffer/engine-
+period tuning (including Windows 10+ `IAudioClient3` low-latency shared
+mode) was also tested and ruled out as a fix on this hardware — the
+device's own low-latency engine-period floor is a fixed 10 ms, and neither
+buffer size nor low-latency-mode activation changed the measured round trip.
+Full detail, including one unresolved low-latency-path capture-pairing
+anomaly, is in
+[the wasapi-probe evidence file](evidence/M00-wasapi-probe.md).
+
+## DEC-14: NFR-01 target revised to ≤250 ms p95 (2026-09-21)
+
+User-approved decision, recorded here and in
+[15-delivery.md DEC-14](../../spec/15-delivery.md#initial-decision-register)
+and [14-quality.md NFR-01](../../spec/14-quality.md#quantitative-requirements):
+the original ≤30 ms p95 target was an unvalidated aspirational figure, not
+evidence-backed. With buffer size and `IAudioClient3` low-latency shared-mode
+tuning both tested and ruled out as a fix on the one reference device
+measured (see the evidence-file entries above), meeting ≤30 ms in WASAPI
+shared mode is not achievable on this hardware without a different mechanism
+entirely (WASAPI exclusive mode, different hardware/driver) that has not
+been explored or authorized. Rather than leave the gate silently failing
+against an unreachable number, the target is revised to ≤250 ms p95 — about
+35% headroom over the worst of three reproducible ~185.5–185.9 ms
+measurements on this device.
+
+This is validated on exactly one reference device (Focusrite Scarlett Solo).
+It is not yet known whether other supported interfaces perform better or
+worse; qualifying additional reference hardware against this target remains
+open future work. Exploring WASAPI exclusive mode as a lower-latency option
+is explicitly not authorized by this decision and would need its own scope
+approval, since exclusive mode would conflict with AudioRouter's multi-app
+shared-routing architecture for that endpoint while held.
+
+**NFR-01 gate status: now needs re-verification against the revised ≤250 ms
+target.** The 185.5–185.9 ms measurements already on record pass it; a
+formal rerun of `tests/acceptance/m00-native-impulse-loopback.ps1` with an
+updated `-P95ThresholdMs 250` default is the next concrete step before this
+gate can be marked closed in the validation matrix.
+
+QUAL-04 remains unmeasured and should reuse this same calibrated
+`impulse-loopback` tool once a target render/capture pair is chosen for
+that measurement. NFR-02 has since been measured separately — see DEC-15
+below.
+
+## DEC-15: NFR-02 target revised to ≤160 ms p95 (2026-09-21)
+
+User-approved decision, recorded here and in
+[15-delivery.md DEC-15](../../spec/15-delivery.md#initial-decision-register)
+and [14-quality.md NFR-02](../../spec/14-quality.md#quantitative-requirements),
+following the same methodology as DEC-14: the original ≤40 ms p95 target was
+an unvalidated aspirational figure. A new `capture-loopback` measurement
+(see [the wasapi-probe evidence file](evidence/M00-wasapi-probe.md)) ran the
+mic-to-virtual-capture path through the real AudioRouter engine route
+(`PhysicalInput → Gain → Recorder → PhysicalOutput`, capturing Focusrite
+`Analogue 1 + 2` and rendering to `CABLE Input`) on the same reference
+device, with an independent capture client timestamping arrivals at both the
+physical mic input and the virtual `CABLE Output` capture endpoint via each
+stream's own per-packet QPC timestamp — no render-side anchor or warm-up
+bias involved, unlike NFR-01. Four runs measured p95 of 97.521 ms, 102.874
+ms, 115.461 ms, and 110.881 ms; each run's own internal spread stayed under
+~13 ms, with more variance appearing across separate engine-route launches
+than within a single run. The revised target of ≤160 ms p95 gives roughly
+35% headroom over the worst observed run (115.461 ms), matching DEC-14's
+methodology.
+
+This is validated on exactly one reference device and one microphone/driver
+combination. The cross-run variance (97–115 ms) is larger than NFR-01's
+(sub-2 ms); whether this narrows with more runs, a different mic, or a
+warmed-up (already-running) engine rather than a fresh route launch each
+time is open future work, not resolved here.
+
+**NFR-02 gate status: closed against the revised ≤160 ms target.** The
+acceptance wrapper `tests/acceptance/m02-nfr02-mic-virtual-capture.ps1` was
+updated to default `-P95ThresholdMs 160.0` and reran successfully; see its
+result recorded in the evidence file and the validation matrix above.
+
+After the user closed Voicemeeter Banana, the `AUDCLNT_E_DEVICE_IN_USE`
+conflict on the Focusrite `Speakers` render endpoint cleared: the retry
+opened both endpoints and completed the full capture/render lifecycle
+(start/stop/reset all `0x0`, `render_impulse_written=1`). The analyzer then
+rejected the run for a different reason: `only 0 impulse groups detected;
+expected at least 900`, i.e. no sample on the `Analogue 1 + 2` capture
+crossed the 0.05 peak-detection threshold at any point during the 1,000
+impulses. This is evidence that the WASAPI stream lifecycle is healthy but no
+audible signal is reaching the capture input over the physical wired path;
+it is not an ownership, routing, or software conflict. Candidate physical
+causes (not yet checked, require the user at the hardware): input gain trim
+for the connected instrument-input channel turned down or unset to
+instrument mode, output/headphone volume at zero, cable not fully seated in
+one of the two jacks, or the `Speakers` WASAPI endpoint being routed to a
+different physical output than the jack the cable is plugged into on this
+interface model. No media-device state changed and no persistent
+configuration was altered by this run.
+
 ## Authoritative current-state reconciliation (2026-09-18)
 
 This section supersedes older point-in-time notes above where they describe a
@@ -1477,6 +1724,46 @@ control 179 unchanged; every other crate unchanged), `cargo clippy
 --workspace --all-targets` zero warnings, `tools/contracts/check-drift.mjs`
 clean, UI typecheck clean, full UI suite 282/282 unchanged. Nothing
 committed; awaiting the user's go-ahead to push.
+
+## 2026-09-21 goal kickoff: MP3, installed-plugin scan, and M08
+
+The user authorized completion of all three remaining workstreams, beginning
+with the easiest bounded investigation. The installed-plugin gap was checked
+before any mutation: `C:\Program Files\VSTPlugins\Reaication` is absent, while
+`C:\Program Files\VSTPlugins\ReaPlugs` exists with nine DLLs. The existing
+read-only installed-VST2 acceptance passed for
+`reaeq-standalone.dll` at 44.1/48/96 kHz and both editor-containment checks,
+with its SHA-256 unchanged. The scanner/UI root and classification path still
+need tracing; no conclusion that the directory scan is correct or defective
+has been made. Next: reproduce the scan through the shared API, then implement
+the smallest evidence-backed fix or document the precise unsupported boundary.
+
+The scan reproduction is now complete: the actual ReaPlugs root returns all
+nine DLLs as x64 VST2 `supportedVst2X64Gated` entries with no errors. The
+reported Reaication gap is a path/name mismatch, not a scanner defect; no
+code change is warranted.
+
+MP3 implementation progress: added the bundled `mp3lame-encoder` Windows-safe
+worker path, bounded queue drain/finalization, non-overwriting `.mp3` path
+creation, finalized library metadata, preview structural validation, CLI and
+JSON schema format values, and UI format selectors. MP3 is fixed 192 kbps,
+supports mono/stereo 44.1/48 kHz, disables dither, and intentionally rejects
+split until a gapless part policy is specified. Recording and control tests
+cover encoder output, queue frame boundaries, structural inspection, factory
+selection, and metadata. The bundled `mp3lame-encoder` dependency reports
+LGPL-3.0; release artifacts must include the corresponding notices/source-
+offer compliance before publication.
+
+M08 verification on 2026-09-21: documentation validation passed for 58
+Markdown files and 264 local links; traceability covered 159 normative IDs;
+contract drift passed; CLI tests passed (36), control tests passed (180),
+recording tests passed (43), UI typecheck passed, and the UI suite passed
+(282). Unsigned installer smoke is blocked by npm registry access/permission
+(`@tauri-apps/cli` fetch returned `EACCES`), so no installer or upgrade/
+uninstall evidence is claimed. Release artifact preparation is also blocked by
+its intentional clean-working-tree guard; the user explicitly requested that
+these uncommitted changes remain in place. Signing, clean install/upgrade/
+uninstall, hardware/application matrix, and publication remain M08 gates.
 
 ## 2026-09-20 ran the portable safe acceptance chain; found and fixed a real `cargo fmt` gap
 

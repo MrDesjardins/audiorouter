@@ -1875,3 +1875,170 @@ The wrapper was rerun later on 2026-09-18 and reproduced the same 36 CLI, 3
 MCP stdio, 177 control plus 4 ignored guarded-live, 70 plugin-host, and 13
 worker-process results, with all associated doc-tests passing. It again made
 no audio-device, driver, or machine-configuration changes.
+
+## 2026-09-21 - first attended tray review (initial methodology flaw, corrected)
+
+Alongside the same-day attended editor review (see
+[the M05 evidence file](M05-visual-editor.md)), the user exercised the tray
+menu on the debug shell launched per `src-tauri/README.md`'s disposable
+interactive control-plane check (see that entry for the launch-sequencing
+note about needing the Vite dev server running first). This first pass used
+a flawed test harness (see "Attended-testing methodology defect" below) and
+its findings are superseded by the corrected retest that follows.
+
+Initial (superseded) observations:
+- Close window / reopen from tray: passed.
+- Toggle privacy mute: inconclusive, no visible status change apparent.
+- Quit and stop audio: appeared to fail — `audiorouter-shell.exe` stayed
+  running after the click while the externally-launched `audiorouter-cli.exe`
+  backend process had exited.
+
+## Attended-testing methodology defect found and corrected (2026-09-21)
+
+The agent had been launching a standalone `audiorouter-cli.exe backend serve
+--database ... --pipe ...` process and pointing the shell at it via
+`AUDIOROUTER_CONTROL_PIPE`, per the exact recipe in
+`src-tauri/README.md`'s "Interactive control-plane check". That CLI path
+calls `serve_control_connections_for_current_user`
+(`crates/transport/src/lib.rs:715`), which the crate's own doc comment on
+the neighboring function identifies as "the bounded acceptance helper" —
+explicitly distinct from `serve_control_connections_forever_for_current_user`
+(`crates/transport/src/lib.rs:733`), documented as "the production backend
+path" that runs "for the lifetime of the hosting process". A pure-isolation
+test confirmed the bounded server survives 10+ seconds with no client ever
+connecting, but reproducibly exits (code 0, no stdout/stderr output at all)
+within ~300 ms of the shell actually connecting to it — expected behavior
+for a bounded diagnostic helper, not a backend crash.
+
+The shell's own normal default launch path never uses this bounded CLI
+command at all: `src-tauri/src/main.rs:453` spawns
+`serve_control_connections_forever_with_grant` directly on a background
+thread within the shell process itself. Launching the shell plainly (no
+`AUDIOROUTER_CONTROL_PIPE` override) with only `AUDIOROUTER_DATABASE` set to
+a disposable test path gives a stable, persistent, realistic embedded
+backend — matching real end-user usage — without needing any external
+backend process at all.
+
+This single methodology error explained several apparent defects from the
+same-day review that were not real product bugs:
+- The missing Gain-node side-panel parameter editor (see the corrected M05
+  entry) — the bounded backend most likely exited before ever delivering a
+  complete `system.describe` discovery response.
+- The "Gaming + Discord" session shown throughout testing was the app's
+  built-in disconnected-preview fixture (`fixtures.ts`'s `demoSession`), not
+  evidence of a broken connection — the disposable test databases were
+  simply empty (no session had been created in them), which is a correct,
+  by-design fallback, not a bug.
+- The "Quit and stop audio did nothing" finding below.
+
+## Corrected attended tray retest (2026-09-21, embedded-backend shell)
+
+With the shell launched correctly (plain launch, `AUDIOROUTER_DATABASE` set
+to a disposable path containing one real created session with a `gain`
+node, no `AUDIOROUTER_CONTROL_PIPE` override) and confirmed stable via
+`tasklist` after several seconds:
+
+- **Close window / reopen from tray: still passes**, consistent with the
+  first pass.
+- **Quit and stop audio: passes.** The user reported the window closed
+  cleanly; independently verified via `tasklist` that `audiorouter-shell.exe`
+  had fully exited afterward. The earlier "failed" finding is retracted — it
+  was solely an artifact of the bounded-backend test harness described
+  above, not a real defect.
+- **Toggle privacy mute: still no visible UI change**, reproduced a second
+  time under the corrected, stable setup. This is now a confirmed, genuine
+  finding (not a harness artifact): the safety-relevant privacy mute toggle
+  in the tray menu gives no visible confirmation that it did anything,
+  whether or not the underlying backend state actually changed. Not yet
+  root-caused or fixed; the underlying backend state was not independently
+  queried to determine whether the toggle succeeded silently or failed
+  silently.
+
+None of the remaining open items (light theme contrast and connection anchor
+clarity) are fixed or regression-tested yet; this entry is the
+attended-evidence record only. MP3 is now implemented and the installed-plugin
+scan gap is resolved as a path/name mismatch; M08 release qualification still
+has open signing, installer, and licensing evidence. No default device, volume, mute, privacy, driver, signing, or
+persistent audio/machine configuration was changed by this review; all
+launched instances used disposable temp databases.
+
+## Tray privacy-mute toggle: root cause found and fixed (2026-09-21)
+
+Added a visible icon-color affordance for the mute latch (`audio_router_tray_icon`
+in `src-tauri/src/main.rs`: cyan bars when live, red when muted; the tray
+click handler queries `status.get` for current state and repaints the icon
+after `safety.setPrivacyMute` succeeds) and confirmed via a startup sync
+query that the icon correctly reflected true backend state on launch. The
+click itself, however, still produced no visible change, including after
+confirming independently via CLI that `safety.setPrivacyMute` and the
+default pipe both worked correctly in isolation.
+
+Root cause, found by adding temporary `eprintln!` diagnostics around both
+`forward_rpc_request` calls in the `"privacy"` match arm and capturing
+stderr from a plainly-launched shell (per the methodology entry above) while
+the user clicked the tray item twice: the toggle request was not failing
+transport-wise at all. It reached the backend and was rejected by the
+authorization layer on every attempt:
+
+```
+[tray-privacy] toggle_response = ... error: JsonRpcError { code: -32001,
+message: "permission denied: Capture", ... }
+```
+
+`safety.setPrivacyMute` was classified in `API_METHODS`
+(`crates/domain/src/lib.rs`) as requiring `PermissionScope::Capture`. The
+desktop shell's own client grant, `ClientGrant::for_desktop_shell()`
+(`crates/control/src/lib.rs:4252`), deliberately never includes `Capture` —
+enforced by an explicit existing test
+(`crates/control/src/lib.rs:23039`,
+`assert!(!ClientGrant::for_desktop_shell().allows(PermissionScope::Capture))`).
+So the tray (and any UI path using the same shell-owned pipe connection)
+could never have succeeded at this call; the click-handling code itself had
+no bug at all — it was correctly displaying the "Privacy mute change
+refused" outcome, just with no visible affordance for that specific failure
+text since the icon logic only ran on the `Some` branch.
+
+This is an authorization/architecture question, not a bug to patch
+silently — `Capture` is meant to gate actually reading/starting live audio,
+which is a materially different authority than flipping a safety-reducing
+mute latch off. Per `docs/spec/09-interface.md` UI-10, the tray is
+explicitly specified to carry mic privacy mute controls, so some
+shell-reachable scope must authorize this call. Given the choice between
+(a) reclassifying `safety.setPrivacyMute` to `PermissionScope::SessionControl`
+(already held by the shell), (b) granting the shell blanket `Capture`
+authority, or (c) leaving it unfixed pending a decision, the user chose (a).
+
+**Decision record:** `safety.setPrivacyMute`'s required permission changed
+from `Capture` to `SessionControl` in `crates/domain/src/lib.rs`'s
+`API_METHODS` table. `docs/operations/api-reference.md`'s method table
+updated to match (`capture` → `sessionControl`). No other spec references
+the scope by name. `ClientGrant::for_desktop_shell()` and the built-in role
+grants are unchanged — the shell still holds no blanket `Capture` authority
+for any other capture-gated method; only this one method's classification
+moved.
+
+**Regression coverage:** extended
+`privacy_mute_is_authorized_and_durable_across_control_restart`
+(`crates/control/src/lib.rs`) to assert `ClientGrant::for_desktop_shell()`
+can successfully call `safety.setPrivacyMute` (toggle off, then re-latch
+on), in addition to the pre-existing assertion that a read-only grant is
+still denied.
+
+**Checks run:**
+- `cargo test -p audiorouter-domain -p audiorouter-control --lib` — 66 + 180
+  passed, 0 failed (includes the new regression assertion and the
+  pre-existing `built_in_roles_are_deny_by_default_for_sensitive_scopes`
+  test, which still confirms the shell holds no `Capture` scope generally).
+- Rebuilt `audiorouter-shell.exe` (debug), relaunched plainly against the
+  same disposable `AUDIOROUTER_DATABASE` used throughout this review (no
+  pipe override), with the temporary diagnostics removed before the final
+  build. User confirmed by attended click-testing: toggling now visibly
+  flips the tray icon between red (muted) and cyan (live) in both
+  directions ("Work!").
+
+This closes the privacy-mute tray feedback gap. It was never a UI click
+bug; it was a backend authorization boundary that the tray-icon feature had
+been built against without noticing the denial, because the icon-repaint
+code only ran on a successful response and the failure path's menu-text
+update ("Privacy mute change refused") was easy to miss without reopening
+the tray menu.

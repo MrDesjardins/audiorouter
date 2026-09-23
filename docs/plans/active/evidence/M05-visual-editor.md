@@ -1250,3 +1250,278 @@ The graph-native Test Signal reached the destination meter with 187 processed
 quanta and a destination peak of `-18.000 dB`; plan/commit, start, bounded
 meter observation, stop, and cleanup all passed. This remains existing-device
 and temporary-stream evidence, not attended UI or physical-latency evidence.
+
+## 2026-09-21 - first attended visual/interaction review (real defects found)
+
+The Windows computer-use surface remained unavailable in every prior attempt
+(`apps: []`, `browsers: []`), so no attended UI evidence existed before this
+entry despite repeated automated-test passes. This session had no
+computer-use/screen tool either, so the user drove the review directly: the
+debug shell (`src-tauri/target/debug/audiorouter-shell.exe`) was launched
+against a disposable database/pipe per the documented interactive
+control-plane check in `src-tauri/README.md`, with the Vite UI dev server
+(`npm run dev --prefix ui`) started first so the shell's devUrl
+(`http://localhost:5173`) actually resolved — an initial attempt without the
+dev server running showed "can't reach this page" in the shell window; this
+was a launch-sequencing mistake on the agent's part, not a product defect.
+
+The user then interacted with the running editor (session "Gaming +
+Discord", physical input → Voice gain → physical output) and reported the
+following, each a genuine finding, not yet triaged into requirement IDs or
+fixed:
+
+1. **Light theme contrast/completeness bug. FIXED 2026-09-21.** Screenshot
+   attached by the user (`LightTheme.png`) showed the theme selector set to
+   "Light", but the top bar, left sidebar, and canvas remained dark/near-black
+   with low-contrast text, while the right-hand inspector panel correctly
+   rendered light. Root cause: `ui/src/App.tsx` correctly applied the
+   `theme-light`/`theme-high-contrast` class to `.app-shell` all along (the
+   React wiring was never broken), but a later "Audio board redesign" CSS
+   pass (`ui/src/styles.css`) had re-defined `.topbar`, `.sidebar`,
+   `.canvas-panel`/`.panel`, `button`/`input`/`select`, `.compact-status-panel`,
+   `.session-flow-canvas`, `.canvas-library`, `.session-flow-toolbar`, the
+   node-telemetry panel, and the endpoint-binding editor using hardcoded
+   dark literal colors instead of the file's own `--ambient-*`/`--text-*`
+   CSS custom properties, so those elements never varied regardless of the
+   theme class. Fixed by (a) adding real `.theme-light`/`.theme-high-contrast`
+   overrides for the `--ambient-bg`/`--ambient-surface`/`--ambient-surface-hi`/
+   `--ambient-edge`/`--ambient-key`/`--ambient-shadow`/`--text-strong`/
+   `--text-soft` custom properties, and (b) converting every hardcoded-literal
+   rule listed above to reference those variables — variable inheritance
+   means a consuming rule now repaints correctly regardless of its own
+   selector specificity or position in the file, avoiding a fragile
+   specificity/order fight with the pre-existing theme-scoped overrides.
+   Iteratively found and fixed three further instances of the same pattern
+   during user retesting: the selected-session-item sidebar highlight
+   (`.session-item.selected`/`.graph-list button.selected`, hardcoded navy),
+   the `.notice`/`.warning-panel` banners (hardcoded dark amber-brown, no
+   light/high-contrast variant existed at all — added dedicated overrides),
+   and the `.theme-picker` control (hardcoded colors plus a stacked
+   label-above-select grid layout that visually misaligned it against the
+   adjacent single-line "Compact status"/"Reconnect" buttons — switched to
+   an inline flex layout and variable-based colors). Also fixed in the same
+   pass: the duplicated `Session inventory unavailable: Session inventory
+   unavailable` label (`ui/src/App.tsx`) — `formatUiError`'s fallback string
+   already equals the JSX's hardcoded prefix when the caught value isn't a
+   proper `Error` instance; removed the redundant prefix. User confirmed
+   the fix across several rounds of live retesting via the corrected
+   embedded-backend shell launch method; `npm run typecheck` and the full
+   282-test suite passed after every change with no regressions. The
+   `Last known backend state is stale: Event subscription failed` message
+   noted alongside the original screenshot was not investigated further —
+   it did not reappear during retesting and was not the user's complaint.
+2. **Node connection dragging is confusing/broken for one anchor. FIXED
+   2026-09-21 (same root cause as item 6 below).** Dragging from the Voice
+   Gain node's right-edge top output anchor to another node's input anchor
+   did nothing; only the node's bottom anchor could be dragged to make a
+   connection. See item 6 for the root cause and fix — a duplicate,
+   unstyled default handle was overlapping the two real ones specifically
+   on the top and bottom edges, making precise clicking there unreliable.
+   Not independently re-verified against this exact original repro (right
+   output → left input) after the fix, but the underlying duplicate-handle
+   defect it was traced to is fixed and regression-tested.
+3. **Node parameter dB value cannot be typed.** Opening the Voice Gain
+   node's property panel, the numeric dB value could not be selected/edited
+   by clicking into it. **Retracted 2026-09-21** — this was a test-harness
+   artifact, not a real defect; see the methodology-defect entry in
+   [the M07 evidence file](M07-automation-recovery.md#attended-testing-methodology-defect-found-and-corrected-2026-09-21).
+   With the shell launched correctly (embedded persistent backend, a real
+   created session), the side panel correctly shows and allows editing the
+   Gain node's dB parameter. The panel was empty during the original review
+   because the diagnostic backend process used to launch the shell exits
+   after a bounded number of requests by design, most likely before ever
+   delivering a complete parameter-schema response.
+4. **Node parameter slider (canvas mini-fader) cannot be dragged. FIXED
+   2026-09-21.** The Voice Gain node's inline canvas slider showed a
+   draggable-looking bar with the correct drag cursor on hover, but
+   left/right mouse movement did not move the bar or change the value. Root
+   cause found in `ui/src/App.tsx`: the canvas's inline parameter controls
+   (`SessionFlowCanvas`'s `MiniFader`/`MiniEq`/mute-toggle) call
+   `onSetNodeParameter(nodeId, name, value)` — a 3-argument contract meant
+   to target an arbitrary node — but the function wired to that prop,
+   `changeNodeParameter`, only accepted `(name, value)` and always operated
+   on `selectedNode.id`, ignoring the rest. JavaScript silently drops extra
+   call arguments rather than erroring, so `nodeId` was misread as the
+   parameter name and `name` (e.g. the literal string `"gainDb"`) as the
+   value, which validation then correctly rejected every time — explaining
+   why dragging visibly did nothing. Fixed by splitting the function into
+   `changeNodeParameterOn(nodeId, name, value)` (looks up the target node
+   by the given ID rather than assuming the selection) and a
+   `changeNodeParameter(name, value)` wrapper for the side panel's existing
+   2-argument callers; the canvas is now wired to the former. User confirmed
+   after the fix: "I can drag and change the EQ values from the node now."
+   `npm run typecheck` and the full `npm test -- --run` suite (282 tests)
+   both passed after the change with no regressions.
+5. **Same non-editable-parameter behavior on other node types. FIXED
+   2026-09-21 (same root cause as item 4).** Gate and Graphic EQ were also
+   tried and exhibited the identical argument-mismatch bug for their own
+   inline canvas controls (`MiniEq`'s per-band drag handlers use the same
+   3-argument `onSetNodeParameter` call). Covered by the same fix as item 4;
+   user confirmed EQ dragging now works in the same retest.
+6. **Input/output anchor visual distinction is unclear. FIXED 2026-09-21,
+   after three iterative rounds of live user feedback and one real
+   duplicate-handle bug found along the way.** Nodes with both input and
+   output anchors made it hard to tell which anchor was which.
+   - **Round 1**: colored input handles `--vst-accent` (purple) and output
+     handles `--good` (green), matching the pre-existing `.port.input`/
+     `.port.output` list-view convention, and raised the resting opacity of
+     unfocused handles from 0.12 to 0.42 (barely visible at rest was itself
+     a likely contributor to "anchor doesn't work" reports — a target you
+     can't see is hard to click precisely). User reported connecting
+     purple→purple failed while green→purple worked — correct behavior, not
+     a bug (a connection must run output→input; input→input is invalid by
+     definition), but proved purple/green weren't legible enough for the
+     user to tell apart, and that no in-app feedback explained *why* the
+     invalid attempt did nothing.
+   - **Discovered while investigating round 1**: purple was already used
+     elsewhere for a *different* meaning — `.flow-node-vst`'s node-border
+     accent marks a node as a VST plugin. Reusing it for "input connector"
+     was a self-inflicted collision that added to the confusion.
+   - **Round 2**: switched input to `--cyan` (matching the existing
+     `flow-node-input` node-border/library-palette "input category" color
+     instead of an unrelated pairing) and added a permanent legend above
+     the canvas (`ui/src/App.tsx`, `.canvas-handle-legend`) plus actual
+     user-facing feedback for invalid-direction attempts: added an
+     `onConnectionRejected` callback prop to `SessionFlowCanvasProps`
+     (`ui/src/SessionFlowCanvas.tsx`), wired in `onConnectEnd` by detecting
+     `connectionState.fromHandle.type === connectionState.toHandle.type`
+     when no connection resulted, surfaced via `setActionMessage` in
+     `App.tsx`. Same turn, user also reported hovering an anchor made it
+     "move oddly" — root cause: the hover rule's `transform: scale(1.3)`
+     fought with `@xyflow/react`'s own internal positioning transform on
+     the handle element; removed the transform-based hover growth entirely
+     in favor of opacity/box-shadow-only feedback, which cannot conflict
+     with positioning.
+   - **Round 3**: user reported cyan and green "look very much the same" and
+     asked for two more distinct colors. Introduced dedicated
+     `--handle-input`/`--handle-output` variables using a deliberately
+     high-contrast warm/cool complementary pair (blue `#3a86ff` / orange
+     `#f6a928`) instead of reusing the general accent palette, since the
+     goal is category-recognition at a 0.72rem dot, not an accurate but
+     visually-similar hex distinction.
+   - **Real bug found while verifying round 3**: user's screenshot
+     (`3colors.png`) showed **3 dots on the top and bottom edges but only 2
+     on left/right** of a 2-port node — a genuine defect, not a color
+     perception issue, confirmed still present after a full process +
+     dev-server restart (ruling out stale HMR). Root cause: the node
+     objects passed to `<ReactFlow>` had no `type` field, and no
+     `nodeTypes` prop was registered on the `<ReactFlow>` element, so React
+     Flow silently fell back to its **built-in "default" node type** to
+     render `data.label` — and that built-in type automatically adds its
+     *own* implicit target/source `Handle` at Top/Bottom, on top of the
+     app's own fully custom `Handle` components already rendered inside
+     `data.label`. This exactly explains the observed 3-on-top/bottom,
+     2-on-left/right pattern (the built-in default only adds Top/Bottom,
+     never Left/Right), and very plausibly explains item 2's original "top
+     anchor doesn't work" report too: three closely-packed, partially
+     unstyled/overlapping targets near the top edge make precise clicking
+     unreliable. Fixed by registering a trivial pass-through custom node
+     component (`FlowNodeRenderer`, module-scope `NODE_TYPES` map — kept at
+     module scope since recreating the `nodeTypes` object on every render
+     is a documented React Flow foot-gun that forces internal remounts),
+     giving every node `type: "flowNode"`, and passing `nodeTypes={NODE_TYPES}`
+     to `<ReactFlow>`. User confirmed after this fix: exactly 2 dots on
+     every edge, correct colors.
+   - `npm run typecheck` and the full `npm test -- --run` suite (282 tests)
+     passed after every round of this fix with no regressions.
+7. **MP3 recording option — implemented 2026-09-21.** The Recorder node and
+   action editor now offer fixed-profile MP3 (192 kbps). The backend uses the
+   bundled LAME encoder on the recorder worker, supports mono/stereo 44.1/48
+   kHz, persists `format: "mp3"` with `dither: false`, and rejects split
+   requests. Recording and control regression tests cover bounded encoding,
+   frame-boundary draining, structural inspection, factory selection, and
+   persisted metadata. Release qualification still must verify the bundled
+   LGPL-3.0 encoder's notices/source obligations before shipping an installer.
+8. **Plugin directory scan gap — resolved 2026-09-21.** The user-mentioned
+   `C:\Program Files\VSTPlugins\Reaication` path does not exist on this
+   machine; the installed directory is `C:\Program Files\VSTPlugins\ReaPlugs`.
+   That directory does contain real DLLs (`reacomp-standalone.dll`,
+   `reagate-standalone.dll`, `reaeq-standalone.dll`, etc., confirmed present
+   on disk with a read-only listing). Their `-standalone` naming is a
+   plausible, not yet verified, explanation: ReaPlugs ships both
+   host-loadable and standalone-wrapped binary variants, and this project's
+   own validated lesson ("Plugin directory names are not format evidence",
+   2026-09-08) already established that a prior ReaPlugs/ReaJS VST2
+   candidate was correctly rejected here for a real PE-export/format reason,
+   not a scanner bug. The shared CLI scan below now confirms the actual
+   directory contents and closes this investigation as a path/name mismatch,
+   not a scanner defect.
+
+   **Investigation refresh (2026-09-21):** The user-mentioned
+   `C:\Program Files\VSTPlugins\Reaication` path does not exist on this
+   machine; the installed directory is `C:\Program Files\VSTPlugins\ReaPlugs`.
+   Its nine DLLs include `reaeq-standalone.dll` (296,960 bytes). The existing
+   read-only `m06-vst2-installed.ps1` qualification passed for that exact
+   binary at 44.1, 48, and 96 kHz, including the bounded native-editor and
+   supervised-timeout checks; SHA-256
+   `c200e540c26ac793b43611aaceb4aa42cdd2829cdfbf0d60494716d9bdde8a7d`
+   remained unchanged. This proves at least one installed candidate is a
+   valid, worker-compatible VST2 effect; it does not yet prove that the
+   directory scanner should admit every `-standalone` DLL or that the UI scan
+   root is configured to include this directory.
+
+   The shared CLI scan was then run against the actual absolute ReaPlugs root:
+   `cargo run -p audiorouter-cli -- plugins scan --directory
+   'C:\Program Files\VSTPlugins\ReaPlugs'`. It returned all nine DLLs with
+   no scan errors; each was classified as x64 VST2 and
+   `supportedVst2X64Gated`. This closes the scanner investigation as a
+   path/name mismatch rather than a scanner defect. The UI still requires the
+   user to enter the real installed root; no machine-specific default or
+   automatic discovery is claimed.
+9. **Feature gap: no way to add an application-capture source from the
+   canvas library. FIXED 2026-09-21.** The working "Applications" panel
+   (list running processes, "Add capture source" button calling the
+   existing `appendApplicationCaptureNode`) already existed, but only in
+   the "Full workspace" view, hidden by default in the focused canvas view
+   and absent from the canvas library palette entirely — so a user starting
+   from the canvas (the default view) had no visible path to it. Added an
+   "Application" entry to the library's INPUTS group
+   (`ui/src/SessionFlowCanvas.tsx`) that opens a new focused picker dialog
+   (`ui/src/App.tsx`, mirroring the existing VST-plugin-picker dialog
+   pattern: same focus trap, Escape-to-close, return-focus behavior) built
+   on the same existing `applications`/`appendApplicationCaptureNode`
+   logic, not a reimplementation. Iterated twice on user feedback: the
+   first version listed every running process with a button per row
+   (including ones with no observed audio capture, which were visibly
+   present but disabled with no explanation); changed to a single dropdown
+   showing only applications with an observed capture source, with a
+   one-line note naming how many others are hidden and why, plus a single
+   "Add capture source" action for the current dropdown selection. `npm run
+   typecheck` and the full 282-test suite passed after each round; user
+   confirmed the final dropdown version.
+10. **Clarified: there is no "application as output" — Windows cannot
+    target a specific application for render the way it can target one for
+    capture. FIXED 2026-09-21.** User asked whether an application could be
+    selected as an output the same way as input. Verified directly against
+    `crates/domain/src/lib.rs`'s `NodeKind` enum: there is `ApplicationCapture`
+    but no render/output equivalent — this is a genuine Windows/WASAPI
+    platform asymmetry (an application's own audio *sessions* are
+    enumerable and capturable, but there is no OS mechanism to inject audio
+    into a specific running application by picking it from a list; an
+    application must select its own input device). Rather than build a
+    misleading picker for a capability that does not exist, clarified the
+    existing correct mechanism in place: routing into a virtual endpoint
+    (e.g. VB-Cable) that the target application then selects as its own
+    microphone/input in its own settings — this project's "Existing virtual
+    output" library entry already does exactly this. Initially pointed the
+    user at "Virtual capture sink" instead, which was wrong: that entry is
+    correctly, permanently disabled (`ui/src/library.ts`) pending the
+    deferred, not-yet-signed AudioRouter-managed driver, a real project
+    scope boundary documented throughout this plan, not a bug — its own
+    tooltip already says to use "Existing virtual output" today. Split the
+    shared `NO_DRIVER_NOTE` tooltip text into direction-specific
+    `NO_DRIVER_INPUT_NOTE`/`NO_DRIVER_OUTPUT_NOTE` variants so the output
+    entry's tooltip explicitly explains the "select the same virtual
+    endpoint here and in the target application's own settings" mechanism.
+    User confirmed the updated tooltip. `npm run typecheck` and the full
+    282-test suite passed with no regressions.
+
+Items 1, 2, 4, 5, 6, 9, and 10 are fixed and regression-tested (typecheck + full UI
+suite); item 3 is retracted as a test-harness artifact. Items 7 and 8
+remain open, not yet triaged into requirement IDs or fixed. This entry is
+the attended-evidence record only. The launched shell/backend/dev-server
+instances used disposable temp databases; no default device, volume, mute,
+privacy, driver, signing, or persistent audio/machine configuration was
+changed. The tray-specific checklist items are recorded separately in
+[the M07 evidence file](M07-automation-recovery.md), including the same
+test-harness methodology defect this entry's item 3 was traced to.

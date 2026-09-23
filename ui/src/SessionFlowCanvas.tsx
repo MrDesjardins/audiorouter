@@ -12,10 +12,11 @@ import {
   type Edge as FlowEdge,
   type EdgeProps,
   type Node as FlowNode,
+  type NodeProps,
   type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import type { DiagnosticsSnapshot, Node, NodeKind, Session } from "@audiorouter/contracts";
 import { clearLayout, readLayout, writeLayout, type LayoutPositions } from "./layout";
 import { nodePortLabels, relatedNodeIds } from "./graphView";
@@ -45,8 +46,27 @@ type SessionFlowCanvasProps = {
   recorderStatuses?: RecorderStatus[];
   onSetNodeParameter?: (nodeId: string, name: string, value: boolean | number | string) => void;
   onOpenPluginPicker?: (edgeId?: string) => void;
+  onOpenApplicationPicker?: () => void;
+  onConnectionRejected?: (message: string) => void;
   canEdit?: boolean;
 };
+
+// Every node below renders its own complete set of Handle components (one
+// per port per side, via EDGE_SIDES) inside data.label. Without an explicit
+// custom node type, React Flow falls back to its built-in "default" node
+// type, which *also* renders its own implicit target/source Handle at
+// Top/Bottom in addition to whatever data.label contains — producing a
+// visible extra handle on the top and bottom edges only (matching a
+// user-reported "3 dots on top/bottom, 2 on left/right" screenshot). A
+// bare pass-through component registered as the node type renders only
+// data.label, with no implicit handles of its own. Defined at module scope
+// so its identity is stable across renders; recreating this object on
+// every render is a documented React Flow foot-gun that forces internal
+// node type remounts.
+function FlowNodeRenderer({ data }: NodeProps) {
+  return <>{(data as { label?: ReactNode }).label}</>;
+}
+const NODE_TYPES = { flowNode: FlowNodeRenderer };
 
 type EdgeSide = "left" | "right" | "top" | "bottom";
 const EDGE_SIDES: EdgeSide[] = ["left", "right", "top", "bottom"];
@@ -514,7 +534,7 @@ function NodeVisual({ node, telemetry, onSetNodeParameter, recorderStatus, mixer
   return <div className="node-activity" aria-label={node.enabled && !node.bypass ? "Processor ready" : "Processor inactive"}><span className="activity-dot" />{node.bypass ? "Bypassed" : node.enabled ? "Ready" : "Disabled"}</div>;
 }
 
-export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onToggleConnection, onInsertProcessor, onRemoveNode, onAddLibraryNode, onAddVirtualBusNode, diagnostics, recorderStatuses = [], onSetNodeParameter, onOpenPluginPicker, canEdit = true }: SessionFlowCanvasProps) {
+export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onToggleConnection, onInsertProcessor, onRemoveNode, onAddLibraryNode, onAddVirtualBusNode, diagnostics, recorderStatuses = [], onSetNodeParameter, onOpenPluginPicker, onOpenApplicationPicker, onConnectionRejected, canEdit = true }: SessionFlowCanvasProps) {
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
   const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey));
   const edgeLayoutKey = `${layoutKey}.edges`;
@@ -626,6 +646,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
     const mixerInputCount = node.kind === "mixer" ? session.edges.filter((edge) => edge.destinationNode === node.id).length : 0;
     return ({
     id: node.id,
+    type: "flowNode",
     position: positions[node.id] ?? positionFor(index),
     data: {
       label: (
@@ -685,6 +706,10 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
             return <div key={group} className={`canvas-library-group canvas-library-group-${group}`}>
               <span className="canvas-library-group-label">{FLOW_GROUP_LABELS[group]}</span>
               {entries.map((entry) => libraryButton(entry))}
+              {group === "input" && <button type="button" className="canvas-library-item" disabled={!canEdit} onClick={() => onOpenApplicationPicker?.()}>
+                <span className="canvas-library-item-icon" aria-hidden="true">A</span>
+                <span>Application</span>
+              </button>}
               {group === "tool" && <button type="button" className="canvas-library-item" disabled={!canEdit} onClick={() => onOpenPluginPicker?.()}>
                 <span className="canvas-library-item-icon" aria-hidden="true">P</span>
                 <span>Plugin (VST2/VST3)</span>
@@ -695,6 +720,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        nodeTypes={NODE_TYPES}
         onInit={(instance) => { flowInstanceRef.current = instance; if (session.nodes.length > 0 && !initialFitDoneRef.current) { initialFitDoneRef.current = true; globalThis.requestAnimationFrame(() => instance.fitView({ padding: 0.2 })); } }}
         nodesConnectable={canEdit}
         nodesDraggable
@@ -704,7 +730,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
         onMouseDownCapture={captureConnectionHandle}
         onPointerDownCapture={captureConnectionHandle}
         onConnectStart={(event, params) => { sourceHandleRef.current = null; targetHandleRef.current = null; pendingConnectionRef.current = null; captureConnectionHandle(event); logConnectionDebug("react-flow-connect-start", { handleType: params.handleType, nodeId: params.nodeId, handleId: params.handleId, capturedSource: sourceHandleRef.current, capturedTarget: targetHandleRef.current }); }}
-        onConnectEnd={(event, connectionState) => { const clientX = "clientX" in event ? event.clientX : undefined; const clientY = "clientY" in event ? event.clientY : undefined; captureConnectionHandle(event); const pending = pendingConnectionRef.current; if (pending && connectionState.toNode?.id === pending.connection.target) { const targetNode = session.nodes.find((node) => node.id === pending.connection.target); let rawTargetHandle = pending.rawTargetHandle ?? (targetHandleRef.current?.nodeId === pending.connection.target ? targetHandleRef.current.handleId : null); if (!rawTargetHandle && targetNode && clientX !== undefined && clientY !== undefined && typeof document !== "undefined") { const nodeElement = Array.from(document.querySelectorAll<HTMLElement>(".react-flow__node")).find((element) => element.dataset.id === targetNode.id); const bounds = nodeElement?.getBoundingClientRect(); if (bounds) { const distances: Record<EdgeSide, number> = { left: Math.abs(clientX - bounds.left), right: Math.abs(clientX - bounds.right), top: Math.abs(clientY - bounds.top), bottom: Math.abs(clientY - bounds.bottom) }; const side = EDGE_SIDES.reduce((closest, candidate) => distances[candidate] < distances[closest] ? candidate : closest, "left" as EdgeSide); const port = targetNode.ports.find((candidate) => candidate.direction === "input")?.name; if (port) { rawTargetHandle = edgeHandleId(port, side); targetHandleRef.current = { nodeId: targetNode.id, handleId: rawTargetHandle, side }; } } } const target = logicalPortHandle(rawTargetHandle); const finalConnection = { ...pending.connection, targetHandle: target.port }; const edgeId = onConnect(finalConnection); logConnectionDebug("draft-connect-result", { edgeId, normalizedSourceHandle: finalConnection.sourceHandle, normalizedTargetHandle: finalConnection.targetHandle, sourceSide: pending.sourceSide, targetSide: target.side }); if (edgeId) { if (pending.sourceSide) setEdgeSide(edgeId, "source", pending.sourceSide); if (target.side) setEdgeSide(edgeId, "target", target.side); } } pendingConnectionRef.current = null; sourceHandleRef.current = null; targetHandleRef.current = null; logConnectionDebug("react-flow-connect-end", { inProgress: "inProgress" in connectionState ? connectionState.inProgress : false, fromNode: connectionState.fromNode?.id, fromHandle: connectionState.fromHandle?.id, toNode: connectionState.toNode?.id, toHandle: connectionState.toHandle?.id, toPosition: connectionState.toPosition }); }}
+        onConnectEnd={(event, connectionState) => { const clientX = "clientX" in event ? event.clientX : undefined; const clientY = "clientY" in event ? event.clientY : undefined; captureConnectionHandle(event); const pending = pendingConnectionRef.current; if (pending && connectionState.toNode?.id === pending.connection.target) { const targetNode = session.nodes.find((node) => node.id === pending.connection.target); let rawTargetHandle = pending.rawTargetHandle ?? (targetHandleRef.current?.nodeId === pending.connection.target ? targetHandleRef.current.handleId : null); if (!rawTargetHandle && targetNode && clientX !== undefined && clientY !== undefined && typeof document !== "undefined") { const nodeElement = Array.from(document.querySelectorAll<HTMLElement>(".react-flow__node")).find((element) => element.dataset.id === targetNode.id); const bounds = nodeElement?.getBoundingClientRect(); if (bounds) { const distances: Record<EdgeSide, number> = { left: Math.abs(clientX - bounds.left), right: Math.abs(clientX - bounds.right), top: Math.abs(clientY - bounds.top), bottom: Math.abs(clientY - bounds.bottom) }; const side = EDGE_SIDES.reduce((closest, candidate) => distances[candidate] < distances[closest] ? candidate : closest, "left" as EdgeSide); const port = targetNode.ports.find((candidate) => candidate.direction === "input")?.name; if (port) { rawTargetHandle = edgeHandleId(port, side); targetHandleRef.current = { nodeId: targetNode.id, handleId: rawTargetHandle, side }; } } } const target = logicalPortHandle(rawTargetHandle); const finalConnection = { ...pending.connection, targetHandle: target.port }; const edgeId = onConnect(finalConnection); logConnectionDebug("draft-connect-result", { edgeId, normalizedSourceHandle: finalConnection.sourceHandle, normalizedTargetHandle: finalConnection.targetHandle, sourceSide: pending.sourceSide, targetSide: target.side }); if (edgeId) { if (pending.sourceSide) setEdgeSide(edgeId, "source", pending.sourceSide); if (target.side) setEdgeSide(edgeId, "target", target.side); } } else if (!pending && connectionState.fromHandle && connectionState.toHandle && connectionState.fromHandle.type === connectionState.toHandle.type) { onConnectionRejected?.(connectionState.fromHandle.type === "target" ? "That drag started and ended on an input; drag from an output (orange) to an input (blue) instead." : "That drag started and ended on an output; drag from an output (orange) to an input (blue) instead."); } pendingConnectionRef.current = null; sourceHandleRef.current = null; targetHandleRef.current = null; logConnectionDebug("react-flow-connect-end", { inProgress: "inProgress" in connectionState ? connectionState.inProgress : false, fromNode: connectionState.fromNode?.id, fromHandle: connectionState.fromHandle?.id, toNode: connectionState.toNode?.id, toHandle: connectionState.toHandle?.id, toPosition: connectionState.toPosition }); }}
         onConnect={canEdit ? (connection) => { const rawSourceHandle = connection.sourceHandle ?? (sourceHandleRef.current?.nodeId === connection.source ? sourceHandleRef.current.handleId : null); const rawTargetHandle = connection.targetHandle ?? (targetHandleRef.current?.nodeId === connection.target ? targetHandleRef.current.handleId : null); logConnectionDebug("react-flow-connect", { source: connection.source, sourceHandle: connection.sourceHandle, recoveredSourceHandle: rawSourceHandle, target: connection.target, targetHandle: connection.targetHandle, recoveredTargetHandle: rawTargetHandle }); const source = logicalPortHandle(rawSourceHandle); const target = logicalPortHandle(rawTargetHandle); pendingConnectionRef.current = { connection: { ...connection, sourceHandle: source.port, targetHandle: target.port }, sourceSide: source.side, targetSide: target.side, rawTargetHandle }; } : undefined}
         edgeTypes={edgeTypes}
         onEdgesDelete={canEdit && onRemoveConnection ? (deleted) => { for (const edgeId of deletedConnectionIds(deleted)) onRemoveConnection(edgeId); } : undefined}

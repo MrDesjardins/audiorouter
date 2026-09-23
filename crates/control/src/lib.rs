@@ -19,8 +19,8 @@ use audiorouter_protocol::{
     MAX_METHOD_NAME_BYTES, MAX_REQUEST_ID_BYTES,
 };
 use audiorouter_recording::{
-    BufferedFlacRecorder, PathPolicyError, RecorderController, RecorderState, RecordingChunk,
-    RecordingError, RecordingPathPolicy, RecordingQueue, SegmentedWavRecorder,
+    BufferedFlacRecorder, Mp3Recorder, PathPolicyError, RecorderController, RecorderState,
+    RecordingChunk, RecordingError, RecordingPathPolicy, RecordingQueue, SegmentedWavRecorder,
     StreamingFlacRecorder, StreamingFlacWriter, WavFormat, WavRecorder, WavWriter,
 };
 use audiorouter_storage::{
@@ -128,7 +128,10 @@ fn effective_wav_dither(format: WavFormat, requested: bool) -> bool {
 }
 
 fn default_dither_for_format(format: FileRecorderFormat) -> bool {
-    !matches!(format, FileRecorderFormat::Wav(WavFormat::Float32))
+    !matches!(
+        format,
+        FileRecorderFormat::Wav(WavFormat::Float32) | FileRecorderFormat::Mp3
+    )
 }
 
 /// Explicit identity required before a file worker may publish a library row.
@@ -220,6 +223,55 @@ fn finalized_wav_recording(
         sample_rate: info.sample_rate,
         frames: info.frames,
         file_bytes: info.file_bytes,
+        start_time: start_time.to_owned(),
+        state: "completed".into(),
+        missing: false,
+        title: None,
+        artist: None,
+        comment: None,
+        dither,
+        conversion,
+    })
+}
+
+fn finalized_mp3_recording(
+    identity: &FileRecordingIdentity,
+    run_id: &str,
+    start_time: &str,
+    channels: u16,
+    sample_rate: u32,
+    frames: u64,
+    dither: bool,
+    conversion: String,
+) -> Result<FinalizedRecording, String> {
+    let file_bytes = std::fs::metadata(&identity.path)
+        .map_err(|error| format!("MP3 recording metadata failed: {error}"))?
+        .len();
+    let path = identity
+        .path
+        .to_str()
+        .ok_or_else(|| "MP3 recording path is not valid Unicode".to_owned())?
+        .to_owned();
+    let id = format!(
+        "{}-{}-{}",
+        identity.session_id, identity.recorder_id, run_id
+    );
+    if id.len() > MAX_RECORDING_ID_BYTES
+        || identity.session_id.is_empty()
+        || identity.recorder_id.is_empty()
+    {
+        return Err("MP3 recording identity exceeds its bound".into());
+    }
+    Ok(FinalizedRecording {
+        id,
+        session_id: identity.session_id.clone(),
+        recorder_id: identity.recorder_id.clone(),
+        path,
+        format: "mp3".into(),
+        channels,
+        sample_rate,
+        frames,
+        file_bytes,
         start_time: start_time.to_owned(),
         state: "completed".into(),
         missing: false,
@@ -524,6 +576,7 @@ impl RecorderWorker for WavRecorderWorker {
 pub enum FileRecorderFormat {
     Wav(WavFormat),
     Flac { bits_per_sample: u8 },
+    Mp3,
 }
 
 impl FileRecorderFormat {
@@ -531,6 +584,7 @@ impl FileRecorderFormat {
         match self {
             Self::Wav(_) => "wav",
             Self::Flac { .. } => "flac",
+            Self::Mp3 => "mp3",
         }
     }
 }
@@ -665,6 +719,31 @@ pub fn create_file_recorder_with_config(
                 config.channels,
                 config.sample_rate,
                 bits_per_sample,
+                config.dither,
+                config.queue_capacity,
+                config.maximum_chunks_per_pass,
+            )?;
+            worker.set_library_identity(identity);
+            (path, Box::new(worker))
+        }
+        FileRecorderFormat::Mp3 => {
+            let (path, file) = policy
+                .create_file(
+                    config.session_id,
+                    config.recorder_id,
+                    config.sequence,
+                    config.format.extension(),
+                )
+                .map_err(format_path_policy_error)?;
+            let identity = FileRecordingIdentity {
+                session_id: config.session_id.to_owned(),
+                recorder_id: config.recorder_id.to_owned(),
+                path: path.clone(),
+            };
+            let mut worker = Mp3RecorderWorker::new(
+                file,
+                config.channels,
+                config.sample_rate,
                 config.dither,
                 config.queue_capacity,
                 config.maximum_chunks_per_pass,
@@ -1530,6 +1609,195 @@ impl RecorderWorker for StreamingFlacRecorderWorker {
     }
 }
 
+/// Concrete incremental MP3 worker. Encoding and file I/O happen only while
+/// the lifecycle thread drains the bounded queue; the realtime tap remains a
+/// queue-only operation.
+pub struct Mp3RecorderWorker {
+    recorder: Option<Mp3Recorder<std::fs::File>>,
+    queue: Arc<RecordingQueue>,
+    maximum_chunks_per_pass: usize,
+    channels: u16,
+    sample_rate: u32,
+    dither: bool,
+    library_identity: Option<FileRecordingIdentity>,
+    started_at: Option<String>,
+    run_id: Option<String>,
+    finalized_recordings: Vec<FinalizedRecording>,
+}
+
+impl Mp3RecorderWorker {
+    pub fn new(
+        output: std::fs::File,
+        channels: u16,
+        sample_rate: u32,
+        dither: bool,
+        queue_capacity: usize,
+        maximum_chunks_per_pass: usize,
+    ) -> Result<Self, String> {
+        if maximum_chunks_per_pass == 0 {
+            return Err("maximum recorder drain pass must be positive".into());
+        }
+        let recorder = Mp3Recorder::new(output, channels, sample_rate)
+            .map_err(|error| format!("MP3 writer initialization failed: {error:?}"))?;
+        let queue = RecordingQueue::new_pooled(
+            queue_capacity,
+            usize::from(channels),
+            (audiorouter_recording::MAX_RECORDING_CHUNK_SAMPLES / usize::from(channels)).max(1),
+        )
+        .map_err(|error| format!("recording queue initialization failed: {error:?}"))?;
+        Ok(Self {
+            recorder: Some(recorder),
+            queue: Arc::new(queue),
+            maximum_chunks_per_pass,
+            channels,
+            sample_rate,
+            dither,
+            library_identity: None,
+            started_at: None,
+            run_id: None,
+            finalized_recordings: Vec::new(),
+        })
+    }
+
+    pub fn set_library_identity(&mut self, identity: FileRecordingIdentity) {
+        self.library_identity = Some(identity);
+    }
+    pub fn try_push(&self, chunk: RecordingChunk) -> Result<(), RecordingChunk> {
+        self.queue.try_push(chunk)
+    }
+    pub fn audio_tap(&self) -> RecorderAudioTap {
+        RecorderAudioTap::new(self.queue.clone())
+    }
+    fn mark_started(&mut self) {
+        self.started_at = Some(unix_epoch_seconds().to_string());
+        self.run_id = Some(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+                .to_string(),
+        );
+    }
+}
+
+impl RecorderWorker for Mp3RecorderWorker {
+    fn shared_audio_tap(&self) -> Option<Arc<dyn AudioTap>> {
+        Some(Arc::new(self.audio_tap()))
+    }
+    fn set_library_identity(&mut self, identity: FileRecordingIdentity) -> Result<(), String> {
+        self.set_library_identity(identity);
+        Ok(())
+    }
+    fn finalized_recordings(&self) -> Vec<FinalizedRecording> {
+        self.finalized_recordings.clone()
+    }
+    fn drain_pending(&mut self, maximum_chunks: usize) -> Result<usize, String> {
+        let Some(recorder) = self.recorder.as_mut() else {
+            return Ok(0);
+        };
+        if !matches!(
+            recorder.state(),
+            RecorderState::Recording | RecorderState::Stopping
+        ) {
+            return Ok(0);
+        }
+        recorder
+            .drain_queue(&self.queue, maximum_chunks)
+            .map_err(|error| format!("MP3 recorder drain failed: {error:?}"))
+    }
+    fn arm(&mut self) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "MP3 recorder is already finalized".to_owned())?
+            .arm()
+            .map_err(|error| format!("MP3 recorder arm failed: {error:?}"))
+    }
+    fn start(&mut self, frame: u64) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "MP3 recorder is already finalized".to_owned())?
+            .start(frame)
+            .map_err(|error| format!("MP3 recorder start failed: {error:?}"))?;
+        self.mark_started();
+        Ok(())
+    }
+    fn pause(&mut self, frame: u64) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "MP3 recorder is already finalized".to_owned())?
+            .pause(frame)
+            .map_err(|error| format!("MP3 recorder pause failed: {error:?}"))
+    }
+    fn resume(&mut self, frame: u64) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "MP3 recorder is already finalized".to_owned())?
+            .resume(frame)
+            .map_err(|error| format!("MP3 recorder resume failed: {error:?}"))
+    }
+    fn split(&mut self, _frame: u64) -> Result<(), String> {
+        Err("MP3 recorder splitting is not supported".into())
+    }
+    fn finalize(&mut self, frame: u64) -> Result<RecorderFinalizationOutcome, String> {
+        let mut recorder = self
+            .recorder
+            .take()
+            .ok_or_else(|| "MP3 recorder was finalized more than once".to_owned())?;
+        let mut completed = false;
+        for _ in 0..MAX_RECORDER_FINALIZATION_PASSES {
+            match recorder.stop_and_drain(&self.queue, frame, self.maximum_chunks_per_pass) {
+                Ok(_) => {
+                    completed = true;
+                    break;
+                }
+                Err(RecordingError::QueueNotEmpty) => continue,
+                Err(error) => {
+                    self.recorder = Some(recorder);
+                    return Err(format!("MP3 recorder finalization failed: {error:?}"));
+                }
+            }
+        }
+        if !completed {
+            self.recorder = Some(recorder);
+            return Err("MP3 recorder finalization exceeded its bounded drain budget".into());
+        }
+        let (mut output, frames) = recorder
+            .finish()
+            .map_err(|error| format!("MP3 file finalization failed: {error:?}"))?;
+        std::io::Write::flush(&mut output)
+            .and_then(|()| output.sync_all())
+            .map_err(|error| format!("MP3 file sync failed: {error}"))?;
+        if let Some(identity) = &self.library_identity {
+            let start_time = self
+                .started_at
+                .as_deref()
+                .ok_or_else(|| "MP3 finalized before start".to_owned())?;
+            let run_id = self
+                .run_id
+                .as_deref()
+                .ok_or_else(|| "MP3 finalized without a run identity".to_owned())?;
+            self.finalized_recordings = vec![finalized_mp3_recording(
+                identity,
+                run_id,
+                start_time,
+                self.channels,
+                self.sample_rate,
+                frames,
+                self.dither,
+                format!(
+                    "targetSampleRate={};channels={};format=mp3;bitrateKbps=192",
+                    self.sample_rate, self.channels
+                ),
+            )?];
+        }
+        Ok(RecorderFinalizationOutcome {
+            state: "completed".into(),
+            file_finalized: true,
+            recoverable: false,
+        })
+    }
+}
+
 /// Allocation-free bridge from a processed engine block to a pooled recorder.
 /// The worker owns the queue's consumer side; this tap owns no audio buffers
 /// and only uses chunks acquired from the worker's preallocated pool.
@@ -1748,7 +2016,7 @@ fn method_description(name: &str) -> &'static str {
         "operations.cancel" => "Cancel a pending operation when it has not completed.",
         "recordings.list" => "List persisted recording metadata without touching audio files.",
         "recorders.list" => "List live in-memory recorder states and frame boundaries.",
-        "recorders.create" => "Create and attach an unarmed file recorder under the approved root. Omitted dither defaults to TPDF for integer output and is disabled for Float32.",
+                "recorders.create" => "Create and attach an unarmed file recorder under the approved root. Omitted dither defaults to TPDF for integer output and is disabled for Float32 and MP3.",
         "recorders.arm" => "Arm a session recorder without opening an audio device.",
         "recorders.start" => "Start a recorder at an explicit engine frame boundary.",
         "recorders.pause" => "Pause a recorder at an explicit engine frame boundary.",
@@ -1950,11 +2218,11 @@ fn method_input_schema(name: &str) -> Value {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "nodeId": { "type": ["string", "null"], "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "recorderId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
-                "format": { "enum": ["wavPcm16", "wavPcm24", "wavFloat32", "flac16", "flac24"] },
+                "format": { "enum": ["wavPcm16", "wavPcm24", "wavFloat32", "flac16", "flac24", "mp3"] },
                 "sequence": { "type": "integer", "minimum": 0 },
                 "channels": { "type": "integer", "enum": [1, 2] },
                 "sampleRate": { "type": "integer", "enum": [44100, 48000] },
-                "dither": { "type": "boolean", "description": "Optional; defaults to TPDF for integer WAV/FLAC and false for WAV Float32." },
+                "dither": { "type": "boolean", "description": "Optional; defaults to TPDF for integer WAV/FLAC and false for WAV Float32 or MP3." },
                 "queueCapacity": { "type": "integer", "minimum": 1, "maximum": audiorouter_recording::MAX_RECORDING_QUEUE_CHUNKS },
                 "maximumChunksPerPass": { "type": "integer", "minimum": 1 },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
@@ -2441,7 +2709,7 @@ fn method_output_schema(name: &str) -> Value {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "nodeId": { "type": ["string", "null"], "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "recorderId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
-                "format": { "enum": ["wavPcm16", "wavPcm24", "wavFloat32", "flac16", "flac24"] },
+                "format": { "enum": ["wavPcm16", "wavPcm24", "wavFloat32", "flac16", "flac24", "mp3"] },
                 "path": { "type": "string", "minLength": 1 },
                 "state": { "const": "idle" },
                 "armed": { "const": false }
@@ -3817,7 +4085,7 @@ fn recording_item_schema() -> Value {
             "recorderId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
             "nodeId": { "type": ["string", "null"], "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
             "path": { "type": "string", "minLength": 1 },
-            "format": { "enum": ["wav", "flac"] },
+            "format": { "enum": ["wav", "flac", "mp3"] },
             "channels": { "enum": [1, 2] },
             "sampleRate": { "enum": [44100, 48000] },
             "frames": { "type": "integer", "minimum": 0 },
@@ -11650,6 +11918,7 @@ impl ControlPlane {
             "flac24" => FileRecorderFormat::Flac {
                 bits_per_sample: 24,
             },
+            "mp3" => FileRecorderFormat::Mp3,
             _ => {
                 return Err(ControlError::InvalidRequest(
                     "unsupported recorder format".into(),
@@ -12224,6 +12493,11 @@ impl ControlPlane {
                 "sampleRate": info.sample_rate,
                 "bitsPerSample": info.bits_per_sample,
                 "frames": info.frames,
+                "fileBytes": info.file_bytes
+            }),
+            audiorouter_recording::RecordingFileStatus::Mp3Present(info) => json!({
+                "status": "present",
+                "format": "mp3",
                 "fileBytes": info.file_bytes
             }),
             audiorouter_recording::RecordingFileStatus::Missing => json!({ "status": "missing" }),
@@ -18835,7 +19109,7 @@ mod tests {
         assert_eq!(
             recordings["outputSchema"]["oneOf"][1]["properties"]["items"]["items"]["properties"]
                 ["format"]["enum"],
-            json!(["wav", "flac"])
+            json!(["wav", "flac", "mp3"])
         );
         assert_eq!(
             recordings["outputSchema"]["oneOf"][1]["properties"]["nextCursor"]["type"],
@@ -19604,6 +19878,29 @@ mod tests {
             &ClientGrant::read_only(),
         );
         assert_eq!(denied.error.unwrap().code, -32001);
+        // Regression for a desktop-shell tray/UI toggle that was silently
+        // refused: the desktop shell grant must be sufficient on its own,
+        // without also requiring Capture (which it never holds).
+        let shell_toggled = first.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(20)),
+                method: "safety.setPrivacyMute".into(),
+                params: Some(json!({ "muted": false, "idempotencyKey": "privacy-2" })),
+            },
+            &ClientGrant::for_desktop_shell(),
+        );
+        assert_eq!(shell_toggled.result.unwrap()["muted"], false);
+        let shell_relatched = first.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(20)),
+                method: "safety.setPrivacyMute".into(),
+                params: Some(json!({ "muted": true, "idempotencyKey": "privacy-3" })),
+            },
+            &ClientGrant::for_desktop_shell(),
+        );
+        assert_eq!(shell_relatched.result.unwrap()["muted"], true);
         drop(first);
         let mut second = ControlPlane::with_storage("second", Storage::open(&path).unwrap());
         let status = second
@@ -21638,7 +21935,7 @@ mod tests {
         assert!(!required.iter().any(|value| value == "dither"));
         assert_eq!(
             schema["properties"]["dither"]["description"],
-            "Optional; defaults to TPDF for integer WAV/FLAC and false for WAV Float32."
+            "Optional; defaults to TPDF for integer WAV/FLAC and false for WAV Float32 or MP3."
         );
     }
 
@@ -21947,6 +22244,7 @@ mod tests {
         assert!(!default_dither_for_format(FileRecorderFormat::Wav(
             WavFormat::Float32
         )));
+        assert!(!default_dither_for_format(FileRecorderFormat::Mp3));
     }
 
     #[test]
@@ -22251,6 +22549,53 @@ mod tests {
             finalized[0].conversion,
             "targetSampleRate=48000;channels=1;bitsPerSample=16"
         );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn recorder_factory_selects_mp3_worker_and_persists_metadata() {
+        let run_id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("audiorouter-control-mp3-factory-{run_id}"));
+        std::fs::create_dir_all(&root).unwrap();
+        let policy = RecordingPathPolicy::new(&root).unwrap();
+        let config = FileRecorderConfig {
+            version: FILE_RECORDER_CONFIG_VERSION,
+            session_id: "session",
+            recorder_id: "voice",
+            sequence: 0,
+            format: FileRecorderFormat::Mp3,
+            channels: 1,
+            sample_rate: 48_000,
+            dither: false,
+            queue_capacity: 8,
+            maximum_chunks_per_pass: 1,
+        };
+        let (path, mut worker) = create_file_recorder_with_config(&policy, &config).unwrap();
+        worker.arm().unwrap();
+        worker.start(0).unwrap();
+        let tap = worker.shared_audio_tap().unwrap();
+        let mut block = AudioBlock::new(1, 4).unwrap();
+        block
+            .channel_mut(0)
+            .unwrap()
+            .copy_from_slice(&[0.25, -0.25, 0.1, -0.1]);
+        tap.on_processed_block(0, &block);
+        assert_eq!(worker.drain_pending(1).unwrap(), 1);
+        assert_eq!(worker.finalize(4).unwrap().state, "completed");
+        assert_eq!(
+            path.extension().and_then(|extension| extension.to_str()),
+            Some("mp3")
+        );
+        assert!(std::fs::metadata(&path).unwrap().len() > 128);
+        let finalized = worker.finalized_recordings();
+        assert_eq!(finalized.len(), 1);
+        assert_eq!(finalized[0].format, "mp3");
+        assert_eq!(finalized[0].frames, 4);
+        assert!(!finalized[0].dither);
+        assert!(finalized[0].conversion.contains("bitrateKbps=192"));
         let _ = std::fs::remove_dir_all(root);
     }
 

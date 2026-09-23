@@ -209,7 +209,7 @@ export interface RecorderLifecycleResult {
   lastFrame?: number | null;
 }
 
-export type RecorderFileFormat = "wavPcm16" | "wavPcm24" | "wavFloat32" | "flac16" | "flac24";
+export type RecorderFileFormat = "wavPcm16" | "wavPcm24" | "wavFloat32" | "flac16" | "flac24" | "mp3";
 
 export interface RecorderCreateResult {
   sessionId: EntityId;
@@ -833,6 +833,11 @@ export type RecordingPreview =
       sampleRate: number;
       bitsPerSample: number;
       frames: number;
+      fileBytes: number;
+    }
+  | {
+      status: "present";
+      format: "mp3";
       fileBytes: number;
     }
   | { status: "missing" | "invalid" };

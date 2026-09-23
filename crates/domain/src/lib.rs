@@ -780,7 +780,7 @@ pub const API_METHODS: [ApiMethodSpec; 86] = [
     },
     ApiMethodSpec {
         name: "safety.setPrivacyMute",
-        permission: PermissionScope::Capture,
+        permission: PermissionScope::SessionControl,
         side_effect: SideEffectClass::Mutating,
     },
     ApiMethodSpec {

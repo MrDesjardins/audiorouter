@@ -20,16 +20,25 @@ export type LibraryEntry = {
 };
 
 const NO_DRIVER_NOTE = "Binds to an already-installed virtual endpoint such as VoiceMeeter or VB-Cable, the same as any physical device — no AudioRouter driver required.";
+const NO_DRIVER_INPUT_NOTE = `${NO_DRIVER_NOTE} To capture audio that another application sent to this same virtual endpoint, use this node.`;
+// Windows has no way to send audio directly to a specific running
+// application by picking it from a list (unlike capture, which can target
+// a process); an application must choose its own input device. Routing
+// here into a virtual endpoint, then selecting that same endpoint as the
+// microphone/input inside the target application (Discord, Zoom, OBS,
+// etc.), is the actual mechanism — this note exists specifically to answer
+// "how do I send audio to another app" without a misleading picker.
+const NO_DRIVER_OUTPUT_NOTE = `${NO_DRIVER_NOTE} To send this audio into another application, select the SAME virtual endpoint here and as that application's own microphone/input device in its own settings — Windows has no way to target an application directly.`;
 
 export const libraryEntries: LibraryEntry[] = [
   { id: "physical-input", label: "Physical input", category: "Source", flow: "input", kind: "physicalInput" },
   { id: "test-signal", label: "Test Signal", category: "Source", flow: "input", kind: "testSignal" },
   { id: "application-capture", label: "Application capture", category: "Source", flow: "input", unavailableReason: "Select a verified running application in Audio sources" },
   { id: "endpoint-loopback", label: "Endpoint loopback", category: "Source", flow: "input", unavailableReason: "Select an exact active render endpoint in Endpoint binding" },
-  { id: "existing-virtual-input", label: "Existing virtual input", category: "Virtual endpoint", flow: "input", kind: "physicalInput", note: NO_DRIVER_NOTE },
+  { id: "existing-virtual-input", label: "Existing virtual input", category: "Virtual endpoint", flow: "input", kind: "physicalInput", note: NO_DRIVER_INPUT_NOTE },
   { id: "virtual-render-source", label: "Virtual render source", category: "Virtual bus", flow: "input", unavailableReason: "Requires the deferred AudioRouter-managed signed driver. For VoiceMeeter or VB-Cable today, use Existing virtual input instead.", virtualKind: "virtualRenderSource" },
   { id: "physical-output", label: "Physical output", category: "Destination", flow: "output", kind: "physicalOutput" },
-  { id: "existing-virtual-output", label: "Existing virtual output", category: "Virtual endpoint", flow: "output", kind: "physicalOutput", note: NO_DRIVER_NOTE },
+  { id: "existing-virtual-output", label: "Existing virtual output", category: "Virtual endpoint", flow: "output", kind: "physicalOutput", note: NO_DRIVER_OUTPUT_NOTE },
   { id: "virtual-capture-sink", label: "Virtual capture sink", category: "Virtual bus", flow: "output", unavailableReason: "Requires the deferred AudioRouter-managed signed driver. For VoiceMeeter or VB-Cable today, use Existing virtual output instead.", virtualKind: "virtualCaptureSink" },
   { id: "gain", label: "Gain", category: "Effect", flow: "tool", kind: "gain" },
   { id: "mixer", label: "Mixer", category: "Routing", flow: "tool", kind: "mixer" },
