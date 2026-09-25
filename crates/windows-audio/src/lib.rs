@@ -1910,6 +1910,28 @@ impl Float32PacketAccumulator {
         Ok(bytes)
     }
 
+    /// Append mono float32 input to a stereo graph quantum by copying each
+    /// sample into both output channels. Returns the number of mono source
+    /// bytes consumed so callers can retain any bounded remainder.
+    pub fn push_mono_as_stereo(&mut self, source: &[u8]) -> Result<usize, AudioError> {
+        if self.channels != 2 || source.len() % std::mem::size_of::<f32>() != 0 {
+            return Err(AudioError::InvalidFrameSize);
+        }
+        let capacity_frames = self.bytes.len() / (2 * std::mem::size_of::<f32>());
+        let writable_frames = capacity_frames.saturating_sub(self.pending_frames);
+        let frames = writable_frames.min(source.len() / std::mem::size_of::<f32>());
+        let destination_start = self.pending_frames * 2 * std::mem::size_of::<f32>();
+        for frame in 0..frames {
+            let source_start = frame * std::mem::size_of::<f32>();
+            let destination_frame = destination_start + frame * 2 * std::mem::size_of::<f32>();
+            let sample = &source[source_start..source_start + std::mem::size_of::<f32>()];
+            self.bytes[destination_frame..destination_frame + 4].copy_from_slice(sample);
+            self.bytes[destination_frame + 4..destination_frame + 8].copy_from_slice(sample);
+        }
+        self.pending_frames += frames;
+        Ok(frames * std::mem::size_of::<f32>())
+    }
+
     /// Decode one complete quantum into a caller-owned engine block. Returns
     /// `false` when fewer than one quantum is pending; the pending bytes stay
     /// intact for the next packet.
@@ -2140,6 +2162,8 @@ pub struct WasapiSchedulerBridge {
     render_pending: Vec<u8>,
     bridge_samples: Vec<f32>,
     render_pending_bytes: usize,
+    capture_channels: usize,
+    capture_bytes_per_frame: usize,
     bytes_per_frame: usize,
     quantum_frames: usize,
     sample_rate_hz: u32,
@@ -2161,13 +2185,8 @@ impl WasapiSchedulerBridge {
             || render.direction != EndpointDirection::Render
             || !capture.is_ieee_float32()
             || !render.is_ieee_float32()
-            || capture.channels != render.channels
-            || capture.bits_per_sample != render.bits_per_sample
-            || capture.format_tag != render.format_tag
-            || capture.channel_mask != render.channel_mask
-            || !capture
-                .subformat_guid
-                .eq_ignore_ascii_case(&render.subformat_guid)
+            || !(1..=2).contains(&capture.channels)
+            || render.channels != 2
         {
             return Err(AudioError::InvalidFrameSize);
         }
@@ -2198,26 +2217,30 @@ impl WasapiSchedulerBridge {
             || render.direction != EndpointDirection::Render
             || !capture.is_ieee_float32()
             || !render.is_ieee_float32()
-            || capture.channels != render.channels
-            || capture.bits_per_sample != render.bits_per_sample
-            || capture.format_tag != render.format_tag
-            || capture.channel_mask != render.channel_mask
-            || !capture
-                .subformat_guid
-                .eq_ignore_ascii_case(&render.subformat_guid)
+            || !(1..=2).contains(&capture.channels)
+            || render.channels != 2
         {
             return Err(AudioError::InvalidFrameSize);
         }
         let mut bridge = Self::new_at_sample_rate(
             ring_capacity,
-            usize::from(capture.channels),
+            usize::from(render.channels),
             quantum_frames,
             max_packet_frames,
             graph_sample_rate_hz,
         )?;
+        bridge.capture_channels = usize::from(capture.channels);
+        bridge.capture_bytes_per_frame = capture.bytes_per_frame()?;
+        bridge.capture_bytes = vec![
+            0;
+            max_packet_frames
+                .checked_mul(bridge.capture_bytes_per_frame)
+                .ok_or(AudioError::InvalidFrameSize)?
+        ];
+        bridge.capture_samples = vec![0.0; max_packet_frames * bridge.capture_channels];
         if capture.sample_rate_hz != graph_sample_rate_hz {
             bridge.capture_resampler = Some(InterleavedStreamingResampler::new(
-                usize::from(capture.channels),
+                usize::from(render.channels),
                 max_packet_frames.max(quantum_frames),
                 capture.sample_rate_hz,
                 graph_sample_rate_hz,
@@ -2296,6 +2319,8 @@ impl WasapiSchedulerBridge {
             render_pending: vec![0; render_pending],
             bridge_samples: vec![0.0; max_packet_frames * channels],
             render_pending_bytes: 0,
+            capture_channels: channels,
+            capture_bytes_per_frame: bytes_per_frame,
             bytes_per_frame,
             quantum_frames,
             sample_rate_hz,
@@ -2513,7 +2538,7 @@ impl WasapiSchedulerBridge {
         let mut result = WasapiSchedulerPump::default();
         self.drain_render_pending(render, &mut result)?;
         let Some((packet, packet_bytes)) =
-            capture.next_packet_into(&mut self.capture_bytes, self.bytes_per_frame)?
+            capture.next_packet_into(&mut self.capture_bytes, self.capture_bytes_per_frame)?
         else {
             return Ok(result);
         };
@@ -2522,9 +2547,7 @@ impl WasapiSchedulerBridge {
         if let Some(resampler) = self.capture_resampler.as_mut() {
             let samples = usize::try_from(packet.frames)
                 .ok()
-                .and_then(|frames| {
-                    frames.checked_mul(self.bytes_per_frame / std::mem::size_of::<f32>())
-                })
+                .and_then(|frames| frames.checked_mul(self.capture_channels))
                 .ok_or(AudioError::InvalidFrameSize)?;
             if samples > self.capture_samples.len() {
                 return Err(AudioError::BufferTooSmall {
@@ -2538,8 +2561,20 @@ impl WasapiSchedulerBridge {
             {
                 *destination = f32::from_ne_bytes([source[0], source[1], source[2], source[3]]);
             }
-            let accepted = resampler.push(&self.capture_samples[..samples])?;
-            if accepted != samples / (self.bytes_per_frame / std::mem::size_of::<f32>()) {
+            let frames = samples / self.capture_channels;
+            if self.capture_channels == 1 {
+                for frame in 0..frames {
+                    let sample = self.capture_samples[frame];
+                    self.bridge_samples[frame * 2] = sample;
+                    self.bridge_samples[frame * 2 + 1] = sample;
+                }
+            } else {
+                self.bridge_samples[..samples].copy_from_slice(&self.capture_samples[..samples]);
+            }
+            let graph_channels = self.bytes_per_frame / std::mem::size_of::<f32>();
+            let graph_samples = frames * graph_channels;
+            let accepted = resampler.push(&self.bridge_samples[..graph_samples])?;
+            if accepted != frames {
                 return Err(AudioError::BufferTooSmall {
                     required: packet_bytes,
                     available: 0,
@@ -2550,14 +2585,18 @@ impl WasapiSchedulerBridge {
         }
         let mut offset = 0;
         while offset < packet_bytes {
-            let consumed = self
-                .accumulator
-                .push(&self.capture_bytes[offset..packet_bytes])?;
+            let consumed = if self.capture_channels == 1 {
+                self.accumulator
+                    .push_mono_as_stereo(&self.capture_bytes[offset..packet_bytes])?
+            } else {
+                self.accumulator
+                    .push(&self.capture_bytes[offset..packet_bytes])?
+            };
             offset += consumed;
             self.process_ready(render, &mut result, tap, deadline)?;
             if consumed == 0 {
                 return Err(AudioError::BufferTooSmall {
-                    required: self.bytes_per_frame,
+                    required: self.capture_bytes_per_frame,
                     available: 0,
                 });
             }
@@ -8301,6 +8340,30 @@ mod tests {
     }
 
     #[test]
+    fn packet_accumulator_duplicates_mono_frames_into_stereo_graph() {
+        let mut accumulator = Float32PacketAccumulator::new(2, 2, 4).unwrap();
+        let source = [0.25_f32, -0.5, 0.75];
+        let bytes: Vec<u8> = source
+            .iter()
+            .flat_map(|sample| sample.to_ne_bytes())
+            .collect();
+        assert_eq!(accumulator.push_mono_as_stereo(&bytes[..8]).unwrap(), 8);
+        assert_eq!(accumulator.pending_frames(), 2);
+
+        let mut block = audiorouter_engine::AudioBlock::new(2, 2).unwrap();
+        assert!(accumulator.pop_into(&mut block).unwrap());
+        assert_eq!(block.channel(0).unwrap(), &[0.25, -0.5]);
+        assert_eq!(block.channel(1).unwrap(), &[0.25, -0.5]);
+
+        assert_eq!(accumulator.push_mono_as_stereo(&bytes[8..]).unwrap(), 4);
+        assert_eq!(accumulator.pending_frames(), 1);
+        assert!(matches!(
+            accumulator.push_mono_as_stereo(&[0, 1, 2]),
+            Err(AudioError::InvalidFrameSize)
+        ));
+    }
+
+    #[test]
     fn packet_accumulator_reports_backpressure_without_dropping_source_shape() {
         let mut accumulator = Float32PacketAccumulator::new(1, 2, 2).unwrap();
         let source = [0.0_f32, 1.0, 2.0, 3.0];
@@ -8524,6 +8587,40 @@ mod tests {
         let bridge =
             WasapiSchedulerBridge::new_for_endpoints(2, &capture, &render, 128, 256).unwrap();
         assert_eq!(bridge.sample_rate_hz(), 44_100);
+    }
+
+    #[test]
+    fn scheduler_bridge_accepts_mono_capture_into_stereo_render() {
+        let capture = EndpointInfo {
+            id: "pd200x-mono".into(),
+            direction: EndpointDirection::Capture,
+            default_period_100ns: 100_000,
+            minimum_period_100ns: 30_000,
+            sample_rate_hz: 48_000,
+            channels: 1,
+            bits_per_sample: 32,
+            format_tag: 3,
+            channel_mask: 0,
+            subformat_guid: "{00000003-0000-0010-8000-00AA00389B71}".into(),
+        };
+        let render = EndpointInfo {
+            id: "cable-a-stereo".into(),
+            direction: EndpointDirection::Render,
+            default_period_100ns: 100_000,
+            minimum_period_100ns: 20_000,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            bits_per_sample: 32,
+            format_tag: 0xfffe,
+            channel_mask: 3,
+            subformat_guid: "{00000003-0000-0010-8000-00AA00389B71}".into(),
+        };
+        let bridge =
+            WasapiSchedulerBridge::new_for_endpoints(2, &capture, &render, 128, 256).unwrap();
+        assert_eq!(bridge.capture_channels, 1);
+        assert_eq!(bridge.capture_bytes_per_frame, 4);
+        assert_eq!(bridge.bytes_per_frame, 8);
+        assert!(bridge.capture_resampler.is_none());
     }
 
     #[test]

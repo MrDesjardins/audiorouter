@@ -3,8 +3,9 @@
 import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import type { Session } from "@audiorouter/contracts";
 import { demoSession } from "./fixtures";
-import { deletedConnectionIds, deletedNodeIds, eqBandCoordinates, libraryDropPosition, telemetrySignalActive } from "./SessionFlowCanvas";
+import { AudioFileNodeControls, deletedConnectionIds, deletedNodeIds, edgeSignalForConnection, eqBandCoordinates, libraryDropPosition, signalStrokeWidth, telemetrySignalActive, testSignalHasPhysicalOutputPath } from "./SessionFlowCanvas";
 import { SessionFlowCanvas } from "./SessionFlowCanvas";
 
 beforeAll(() => {
@@ -20,6 +21,51 @@ beforeAll(() => {
 
 afterEach(cleanup);
 
+const testSignalSession: Session = {
+  ...demoSession,
+  nodes: [
+    { id: "signal", kind: "testSignal", typeVersion: 1, name: "Test Signal", enabled: true, bypass: false, parameters: { frequencyHz: 440, levelDb: -30, durationMs: 10_000 }, ports: [{ name: "main", direction: "output", channels: 2 }] },
+    { id: "gain", kind: "gain", typeVersion: 1, name: "Gain", enabled: true, bypass: false, parameters: { gainDb: 0 }, ports: [{ name: "in", direction: "input", channels: 2 }, { name: "out", direction: "output", channels: 2 }] },
+    { id: "output", kind: "physicalOutput", typeVersion: 1, name: "Output", enabled: true, bypass: false, parameters: {}, ports: [{ name: "main", direction: "input", channels: 2 }] },
+  ],
+  edges: [
+    { id: "signal-gain", sourceNode: "signal", sourcePort: "main", destinationNode: "gain", destinationPort: "in", matrix: [1, 0, 0, 1], enabled: true },
+    { id: "gain-output", sourceNode: "gain", sourcePort: "out", destinationNode: "output", destinationPort: "main", matrix: [1, 0, 0, 1], enabled: true },
+  ],
+};
+
+describe("Test Signal playback path", () => {
+  it("shows measured Test Signal and file playback even when capture privacy mute is latched", () => {
+    const diagnostics = { audio: { state: "available", reason: "" }, privacyMute: { muted: true }, nodeTelemetry: [{ nodeId: "output", meter: { peakDb: -15, rmsDb: -18 } }] } as Parameters<typeof edgeSignalForConnection>[2];
+    for (const edge of testSignalSession.edges) expect(edgeSignalForConnection(edge, testSignalSession, diagnostics, true, true).state).toBe("active");
+    const fileSession: Session = { ...testSignalSession, nodes: testSignalSession.nodes.map((node) => node.id === "signal" ? { ...node, kind: "audioFile" } : node) };
+    expect(edgeSignalForConnection(fileSession.edges[1], fileSession, diagnostics, true, true).state).toBe("active");
+    const captureSession: Session = { ...testSignalSession, nodes: testSignalSession.nodes.map((node) => node.id === "signal" ? { ...node, kind: "physicalInput" } : node) };
+    for (const edge of captureSession.edges) expect(edgeSignalForConnection(edge, captureSession, diagnostics, true, true).state).toBe("muted");
+  });
+
+  it("keeps Play disabled until a committed graph reaches an enabled physical output", () => {
+    expect(testSignalHasPhysicalOutputPath(testSignalSession, "signal")).toBe(true);
+    expect(testSignalHasPhysicalOutputPath({ ...testSignalSession, edges: [] }, "signal")).toBe(false);
+    expect(testSignalHasPhysicalOutputPath({ ...testSignalSession, nodes: testSignalSession.nodes.map((node) => node.id === "output" ? { ...node, enabled: false } : node) }, "signal")).toBe(false);
+  });
+});
+
+describe("Audio file source controls", () => {
+  it("keeps the compact node transport wired to the selected source", () => {
+    const node = { id: "file", kind: "audioFile" as const, typeVersion: 1 as const, name: "Calibration sample", enabled: true, bypass: false, parameters: { mediaId: "media-1", fileName: "voice.wav", loop: false }, ports: [{ name: "out", direction: "output" as const, channels: 2 as const }] };
+    const transport = vi.fn();
+    const { getByRole, queryByRole } = render(createElement(AudioFileNodeControls, { node, state: "paused", onTransport: transport }));
+    fireEvent.click(getByRole("button", { name: "Play Calibration sample" }));
+    expect(transport).toHaveBeenCalledWith("file", "play");
+    expect((getByRole("button", { name: "Stop Calibration sample" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(queryByRole("button", { name: "Pause Calibration sample" })).toBeNull();
+    cleanup();
+    const playing = render(createElement(AudioFileNodeControls, { node, state: "playing", onTransport: transport }));
+    expect((playing.getByRole("button", { name: "Stop Calibration sample" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+});
+
 describe("canvas library drop positions", () => {
   it("maps EQ bands across the audible frequency range", () => {
     expect(eqBandCoordinates(20, 0).x).toBeCloseTo(8);
@@ -31,6 +77,51 @@ describe("canvas library drop positions", () => {
     expect(telemetrySignalActive({ nodeId: "meter", kind: "meter", meter: null, processor: null, plugin: null })).toBe(false);
     expect(telemetrySignalActive({ nodeId: "meter", kind: "meter", meter: { peakDb: -60, rmsDb: -70, clippedSamples: 0, channelPeakDb: [], channelRmsDb: [], channelClippedSamples: [] }, processor: null, plugin: null })).toBe(false);
     expect(telemetrySignalActive({ nodeId: "meter", kind: "meter", meter: { peakDb: -12, rmsDb: -18, clippedSamples: 0, channelPeakDb: [], channelRmsDb: [], channelClippedSamples: [] }, processor: null, plugin: null })).toBe(true);
+  });
+
+  it("maps fresh backend volume to a bounded thick directional-flow presentation", () => {
+    const session = {
+      ...demoSession,
+      edges: [
+        { id: "mic-voice", sourceNode: "mic", sourcePort: "out", destinationNode: "voice", destinationPort: "in", matrix: [], enabled: true },
+        { id: "voice-headphones", sourceNode: "voice", sourcePort: "out", destinationNode: "headphones", destinationPort: "in", matrix: [], enabled: true },
+      ],
+    };
+    const diagnostics = {
+      build: "test", backend: "control-plane" as const, storage: "memory" as const,
+      audio: { state: "available" as const, reason: "" }, nativeAdapter: "running" as const,
+      nativeAdapterKind: null, nativeSessionId: null,
+      schedulerTelemetry: { activeGeneration: 4, activeSampleRateHz: 48_000, inputOverruns: 0, inputUnderruns: 0, outputOverruns: 0, outputUnderruns: 0, processedQuanta: 1, repairedSamples: 0, xruns: 0, processingTimeNsTotal: 0, processingTimeNsMax: 0, deadlineMisses: 0, deadlineLatenessNsTotal: 0, deadlineLatenessNsMax: 0 },
+      nodeTelemetry: [{ nodeId: "headphones", kind: "physicalOutput", meter: { peakDb: -8, rmsDb: -18, clippedSamples: 0, channelPeakDb: [-8, -8], channelRmsDb: [-18, -18], channelClippedSamples: [0, 0] }, processor: null, plugin: null }],
+      privacyMute: { muted: false, persistence: "memory" as const }, recovery: { safeMode: false, recentCrashes: 0, persistence: "memory" as const }, eventLog: { latestSequence: 0, retained: 0 }, redacted: true as const,
+    };
+    const edge = session.edges[0];
+    const active = edgeSignalForConnection(edge, session, diagnostics, true, true);
+    expect(active).toMatchObject({ active: true, state: "active", levelDb: -18 });
+    expect(signalStrokeWidth(active.levelDb)).toBeGreaterThan(2.5);
+    expect(signalStrokeWidth(-60)).toBe(2.5);
+    expect(signalStrokeWidth(-100)).toBe(2.5);
+    expect(signalStrokeWidth(20)).toBeLessThanOrEqual(12.5);
+    expect(edgeSignalForConnection(edge, session, diagnostics, false, true).state).toBe("stopped");
+    expect(edgeSignalForConnection(edge, session, diagnostics, true, false).state).toBe("stale");
+    expect(edgeSignalForConnection(edge, session, { ...diagnostics, privacyMute: { muted: true, persistence: "memory" } }, true, true).state).toBe("muted");
+    expect(edgeSignalForConnection(edge, session, { ...diagnostics, nodeTelemetry: [{ ...diagnostics.nodeTelemetry[0], meter: { ...diagnostics.nodeTelemetry[0].meter!, rmsDb: -80 } }] }, true, true).state).toBe("silent");
+    expect(edgeSignalForConnection({ ...edge, enabled: false }, session, diagnostics, true, true).state).toBe("disabled");
+
+  });
+
+  it("keeps meter inference bounded to an unambiguous downstream chain", () => {
+    const branched = {
+      ...demoSession,
+      nodes: [...demoSession.nodes, { id: "other", kind: "gain" as const, typeVersion: 1 as const, name: "Other", enabled: true, bypass: false, parameters: {}, ports: [{ name: "in", direction: "input" as const, channels: 1 as const }, { name: "out", direction: "output" as const, channels: 1 as const }] }],
+      edges: [
+        { id: "mic-voice", sourceNode: "mic", sourcePort: "out", destinationNode: "voice", destinationPort: "in", matrix: [], enabled: true },
+        { id: "voice-headphones", sourceNode: "voice", sourcePort: "out", destinationNode: "headphones", destinationPort: "in", matrix: [], enabled: true },
+        { id: "voice-other", sourceNode: "voice", sourcePort: "out", destinationNode: "other", destinationPort: "in", matrix: [], enabled: true },
+      ],
+    };
+    const diag = { audio: { state: "available" as const, reason: "" }, privacyMute: { muted: false }, nodeTelemetry: [{ nodeId: "headphones", meter: { rmsDb: -18, peakDb: -8 } }] } as Parameters<typeof edgeSignalForConnection>[2];
+    expect(edgeSignalForConnection(branched.edges[0], branched, diag, true, true).state).toBe("unmetered");
   });
 
   it("converts viewport coordinates into bounded canvas coordinates", () => {
@@ -124,10 +215,10 @@ describe("canvas library drop positions", () => {
 
     fireEvent.click(getByRole("button", { name: "Gate" }));
 
-    expect(onAddLibraryNode).toHaveBeenCalledWith("gate", { x: 0, y: 150 });
+    expect(onAddLibraryNode).toHaveBeenCalledWith("gate", { x: 840, y: 0 });
   });
 
-  it("offers physical and virtual endpoint nodes in the drag shelf", () => {
+  it("offers device nodes and distinguishes deferred managed virtual buses", () => {
     const { getByLabelText } = render(createElement(SessionFlowCanvas, {
       session: demoSession,
       selectedNodeId: "mic",
@@ -138,9 +229,8 @@ describe("canvas library drop positions", () => {
     const shelf = within(getByLabelText("Drag processors to canvas"));
 
     expect(shelf.getByRole("button", { name: "Gain" })).toBeTruthy();
-    expect(shelf.getByRole("button", { name: "Physical input" })).toBeTruthy();
-    expect(shelf.getByRole("button", { name: "Physical output" })).toBeTruthy();
-    expect(shelf.getByRole("button", { name: "Existing virtual output" })).toBeTruthy();
+    expect(shelf.getByRole("button", { name: "Input device" })).toBeTruthy();
+    expect(shelf.getByRole("button", { name: "Output device" })).toBeTruthy();
     expect(shelf.getByRole("button", { name: "Virtual capture sink" })).toBeTruthy();
     expect(shelf.getByRole("button", { name: "Virtual render source" })).toBeTruthy();
     expect(shelf.getByRole("button", { name: "Recorder" })).toBeTruthy();
@@ -162,8 +252,8 @@ describe("canvas library drop positions", () => {
   });
 
   it.each([
-    ["Physical input", "physicalInput"],
-    ["Physical output", "physicalOutput"],
+    ["Input device", "physicalInput"],
+    ["Output device", "physicalOutput"],
     ["Mixer", "mixer"],
     ["Compressor", "compressor"],
     ["Recorder", "recorder"],
@@ -249,8 +339,8 @@ describe("canvas library drop positions", () => {
     fireEvent.click(shelf.getByRole("button", { name: "Gain" }));
 
     expect(JSON.parse(window.localStorage.getItem("audiorouter.ui.layout.demo-session") ?? "null")).toEqual({
-      "gain-1": { x: 0, y: 150 },
-      "gain-2": { x: 0, y: 150 },
+      "gain-1": { x: 840, y: 0 },
+      "gain-2": { x: 0, y: 230 },
     });
   });
 

@@ -10,7 +10,7 @@ export type DraftChange = {
 export const GAIN_MIN_DB = -60;
 export const GAIN_MAX_DB = 24;
 
-export type LibraryNodeKind = Extract<NodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "mixer" | "gain" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch" | "recorder">;
+export type LibraryNodeKind = Extract<NodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "audioFile" | "mixer" | "gain" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch" | "recorder">;
 export type InsertableProcessorKind = Exclude<LibraryNodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "mixer" | "meter">;
 export type EqPresetId = "voiceNeutral" | "hum50Hz" | "hum60Hz";
 export type VoiceChainPresetId = "voiceNeutral" | "voiceGateAndCompression";
@@ -20,7 +20,7 @@ const parametricEqDefaults: Record<string, boolean | number | string> = {
   q: 1,
   gainDb: 0,
 };
-for (let index = 0; index < 8; index += 1) {
+for (let index = 0; index < 16; index += 1) {
   parametricEqDefaults[`band${index}Enabled`] = false;
   parametricEqDefaults[`band${index}Type`] = "peaking";
   parametricEqDefaults[`band${index}FrequencyHz`] = 1000;
@@ -48,6 +48,11 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
     parameters: { frequencyHz: 440, levelDb: -18, durationMs: 1000 },
     ports: [{ name: "out", direction: "output", channels: 2 }],
   },
+  audioFile: {
+    name: "Audio file",
+    parameters: { mediaId: "", loop: false },
+    ports: [{ name: "out", direction: "output", channels: 2 }],
+  },
   mixer: {
     name: "Mixer",
     parameters: {},
@@ -60,85 +65,85 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
     name: "Gain",
     parameters: { gainDb: 0 },
     ports: [
-      { name: "in", direction: "input", channels: 1 },
-      { name: "out", direction: "output", channels: 1 },
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
     ],
   },
   mute: {
     name: "Mute",
     parameters: { muted: false },
     ports: [
-      { name: "in", direction: "input", channels: 1 },
-      { name: "out", direction: "output", channels: 1 },
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
     ],
   },
   meter: {
     name: "Meter",
     parameters: {},
-    ports: [{ name: "in", direction: "input", channels: 1 }],
+    ports: [{ name: "in", direction: "input", channels: 2 }],
   },
   recorder: {
     name: "Recorder",
     parameters: {},
     ports: [
-      { name: "in", direction: "input", channels: 1 },
-      { name: "out", direction: "output", channels: 1 },
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
     ],
   },
   parametricEq: {
-    name: "Parametric EQ",
+    name: "Advanced EQ",
     parameters: parametricEqDefaults,
     ports: [
-      { name: "in", direction: "input", channels: 1 },
-      { name: "out", direction: "output", channels: 1 },
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
     ],
   },
   compressor: {
     name: "Compressor",
     parameters: { thresholdDb: -18, ratio: 3, attackMs: 10, releaseMs: 150, kneeDb: 6, makeupDb: 0 },
     ports: [
-      { name: "in", direction: "input", channels: 1 },
-      { name: "out", direction: "output", channels: 1 },
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
     ],
   },
   gate: {
     name: "Gate",
     parameters: { thresholdDb: -45, rangeDb: 60, hysteresisDb: 3, ratio: 4, attackMs: 5, holdMs: 50, releaseMs: 150 },
     ports: [
-      { name: "in", direction: "input", channels: 1 },
-      { name: "out", direction: "output", channels: 1 },
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
     ],
   },
   limiter: {
     name: "Limiter",
     parameters: { ceilingDb: -1, lookaheadMs: 5, releaseMs: 100 },
     ports: [
-      { name: "in", direction: "input", channels: 1 },
-      { name: "out", direction: "output", channels: 1 },
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
     ],
   },
   delay: {
     name: "Delay",
     parameters: { delayMs: 0 },
     ports: [
-      { name: "in", direction: "input", channels: 1 },
-      { name: "out", direction: "output", channels: 1 },
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
     ],
   },
   graphicEq: {
     name: "Graphic EQ",
     parameters: { band0Db: 0, band1Db: 0, band2Db: 0, band3Db: 0, band4Db: 0, band5Db: 0, band6Db: 0, band7Db: 0, band8Db: 0, band9Db: 0 },
     ports: [
-      { name: "in", direction: "input", channels: 1 },
-      { name: "out", direction: "output", channels: 1 },
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
     ],
   },
   pitch: {
     name: "Pitch shift",
     parameters: { semitones: 0, cents: 0 },
     ports: [
-      { name: "in", direction: "input", channels: 1 },
-      { name: "out", direction: "output", channels: 1 },
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
     ],
   },
 };
@@ -432,6 +437,21 @@ export function insertDraftMixer(session: Session, edgeId: EntityId): Session {
   const upstream = appendDraftConnection(widthMatched, edge.sourceNode, edge.sourcePort, mixer.id, "in");
   const split = appendDraftConnection(upstream, mixer.id, "out", edge.destinationNode, edge.destinationPort);
   return { ...split, edges: split.edges.map((candidate) => candidate.sourceNode === mixer.id && candidate.destinationNode === edge.destinationNode ? { ...candidate, matrix: [...edge.matrix] } : candidate) };
+}
+
+/** Turns a second direct source-to-output connection into a visible mixer. */
+export function addSourceToOccupiedOutput(
+  session: Session,
+  occupiedEdgeId: EntityId,
+  sourceNodeId: EntityId,
+  sourcePortName: string,
+): Session {
+  const occupied = session.edges.find((edge) => edge.id === occupiedEdgeId);
+  if (!occupied) throw new Error("The output connection changed; try again");
+  const mixerSession = insertDraftMixer(session, occupiedEdgeId);
+  const mixer = mixerSession.nodes.at(-1);
+  if (!mixer || mixer.kind !== "mixer") throw new Error("Unable to add a mixer to the output");
+  return appendDraftConnection(mixerSession, sourceNodeId, sourcePortName, mixer.id, "in");
 }
 
 /** Inserts a built-in processor directly into one draft connection. */

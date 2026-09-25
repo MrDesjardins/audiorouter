@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendApplicationCaptureNode, appendDraftConnection, appendEndpointLoopbackNode, appendLibraryNode, appendPluginPlaceholderNode, appendVirtualBusNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, removeDraftNode, resetNodeDraftParameters, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
+import { addSourceToOccupiedOutput, appendApplicationCaptureNode, appendDraftConnection, appendEndpointLoopbackNode, appendLibraryNode, appendPluginPlaceholderNode, appendVirtualBusNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, removeDraftNode, resetNodeDraftParameters, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
 import { demoSession } from "./fixtures";
 
 describe("appendLibraryNode", () => {
@@ -20,8 +20,8 @@ describe("appendLibraryNode", () => {
       enabled: true,
       bypass: false,
       ports: [
-        { name: "in", direction: "input", channels: 1 },
-        { name: "out", direction: "output", channels: 1 },
+        { name: "in", direction: "input", channels: 2 },
+        { name: "out", direction: "output", channels: 2 },
       ],
     });
   });
@@ -38,8 +38,8 @@ describe("appendLibraryNode", () => {
       parameters: { gainDb: 0 },
     });
     expect(added?.ports).toEqual([
-      { name: "in", direction: "input", channels: 1 },
-      { name: "out", direction: "output", channels: 1 },
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
     ]);
     expect(next.revision).toBe(demoSession.revision);
     expect(next.edges).toEqual(demoSession.edges);
@@ -211,6 +211,20 @@ describe("destination connection creation", () => {
     const next = appendDraftConnection(makeSession(), "mic", "out", destinationNode, destinationPort);
     expect(next.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({ sourceNode: "mic", sourcePort: "out", destinationNode, destinationPort }),
+    ]));
+  });
+
+  it("inserts a visible mixer when a second source is connected to the occupied physical output", () => {
+    const baseRoute = appendDraftConnection(demoSession, "mic", "out", "headphones", "in");
+    const signal = appendLibraryNode(baseRoute, "testSignal");
+    const routed = addSourceToOccupiedOutput(signal, "edge-1", "testSignal-1", "out");
+    const mixer = routed.nodes.find((node) => node.kind === "mixer");
+    expect(mixer).toBeDefined();
+    expect(routed.edges.filter((edge) => edge.destinationNode === mixer?.id && edge.destinationPort === "in")).toHaveLength(2);
+    expect(routed.edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceNode: "mic", destinationNode: mixer?.id }),
+      expect.objectContaining({ sourceNode: "testSignal-1", destinationNode: mixer?.id }),
+      expect.objectContaining({ sourceNode: mixer?.id, destinationNode: "headphones" }),
     ]));
   });
 });

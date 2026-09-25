@@ -11,7 +11,7 @@ calculated at a different rate.
 ## Requirements
 
 - **DSP-01 — Core controls.** Every processor shall expose typed parameters, units, defaults, valid ranges, versioned presets, reset, bypass, mute where appropriate, meters, latency, and failure behavior through the node registry/API. Built-ins are usable without external plugins. Displayed values must match effective backend values.
-- **DSP-02 — EQ.** Supply a ten-band graphic EQ and an eight-band parametric EQ. Parametric bands support peaking, low/high shelf, high/low pass, and notch; each band has enable, frequency, Q, and applicable gain/slope. A visual response curve is computed from the same coefficient specification as DSP and does not become a separate source of truth.
+- **DSP-02 — EQ.** Supply a ten-band graphic EQ and a bounded sixteen-band parametric EQ. Parametric bands support peaking, low/high shelf, high/low pass, and notch; each band has enable, frequency, Q, and applicable gain/slope. Its Advanced EQ editor allows points to be added, selected, moved on a logarithmic frequency/linear dB graph, and removed without changing node type. Pass and notch filters have no applicable gain. A visual response curve is computed from the same coefficient specification as DSP and does not become a separate source of truth. The per-node parameter limit must admit all sixteen bands and retained legacy values (83 parameters in the current default, within the 96-parameter bound).
 - **DSP-03 — Dynamics.** Supply a compressor with threshold, ratio, attack, release, knee, makeup gain, and linked stereo detection; and a gate/downward expander with threshold, hysteresis, ratio/range, attack, hold, and release. A gate is amplitude-based, not a substitute for frequency filtering. Basic mode groups advanced controls while preserving direct API access.
 - **DSP-04 — Limiting/gain.** Gain supports attenuation, boost, and click-free mute. Limiter supports output ceiling and disclosed lookahead/release. v1 guarantees a tested sample-peak ceiling; do not call it true-peak protection unless oversampling/inter-sample testing is implemented. Gain reduction and clipping have distinct meters.
 - **DSP-05 — Delay.** Delay adds 0–1,000 ms with bounded preallocation and de-clicked parameter transitions. It supports manual audio/video alignment and is separate from automatic mixer path compensation. Do not promise perceptually seamless large delay changes; report a rebuilding/warming state if needed.
@@ -127,7 +127,7 @@ These ranges are product decisions, subject to signal tests; defaults are normat
 | --- | --- | --- |
 | Gain | -60 to +24 dB; separate mute | 0 dB, unmuted |
 | Graphic EQ | 31.5/63/125/250/500/1k/2k/4k/8k/16k Hz, ±18 dB | Flat |
-| Parametric EQ | 20–20,000 Hz; Q 0.1–20; gain ±24 dB; pass slope 12/24 dB per octave | All eight bands disabled |
+| Parametric EQ / Advanced EQ | Up to 16 points; 20–20,000 Hz; Q 0.1–20; gain ±24 dB where applicable; pass slope 12/24 dB per octave | All bands disabled |
 | Compressor | threshold -60–0 dBFS; ratio 1–20; attack 0.1–200 ms; release 10–2,000 ms; knee 0–24 dB; makeup 0–24 dB | -18 dBFS, 3:1, 10 ms, 150 ms, 6 dB knee, 0 dB makeup |
 | Gate/expander | threshold -80–0 dBFS; hysteresis 0–12 dB; ratio 1–20; range 0–80 dB; attack 0.1–100 ms; hold 0–1,000 ms; release 10–2,000 ms | -45 dBFS, 3 dB, 4:1, 60 dB range, 5/50/150 ms |
 | Limiter | ceiling -12–0 dBFS; lookahead 0–10 ms; release 10–1,000 ms | -1 dBFS, 5 ms, 100 ms |

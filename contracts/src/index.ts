@@ -24,7 +24,8 @@ export type NodeKind =
   | "graphicEq"
   | "pitch"
   | "recorder"
-  | "plugin";
+  | "plugin"
+  | "audioFile";
 
 export type PortDirection = "input" | "output";
 
@@ -219,6 +220,17 @@ export interface RecorderCreateResult {
   path: string;
   state: "idle";
   armed: false;
+}
+
+export interface TemporaryAudioImportResult {
+  mediaId: EntityId;
+  fileName: "Temporary voice take.wav";
+  format: "wav";
+  durationMs: number;
+  channels: 1 | 2;
+  sampleRateHz: number;
+  expiresAt: number;
+  sourceRemoved: true;
 }
 
 export interface RecordingListPage {
@@ -723,6 +735,8 @@ export interface SessionStartResult {
   state: "running";
   generation: number;
   runtime: "fake" | "native";
+  preview?: boolean;
+  savedRevision?: number;
 }
 
 export interface SessionStopResult {
@@ -965,6 +979,12 @@ export type ImplementedMethod =
   | "operations.get"
   | "operations.cancel"
   | "recordings.list"
+  | "audioMedia.beginUpload"
+  | "audioMedia.uploadChunk"
+  | "audioMedia.finishUpload"
+  | "audioMedia.importTemporaryRecording"
+  | "audioMedia.delete"
+  | "audioSources.transport"
   | "recorders.list"
   | "recorders.create"
   | "recorders.arm"
@@ -1055,6 +1075,12 @@ export type MethodParams = {
   "recordings.list":
     | { sessionId?: EntityId | null; cursor?: string | null; limit?: number }
     | undefined;
+  "audioMedia.beginUpload": { fileName: string; sizeBytes: number };
+  "audioMedia.uploadChunk": { uploadId: EntityId; chunkIndex: number; dataBase64: string };
+  "audioMedia.finishUpload": { uploadId: EntityId };
+  "audioMedia.importTemporaryRecording": { recordingId: EntityId };
+  "audioMedia.delete": { mediaId: EntityId };
+  "audioSources.transport": { sessionId: EntityId; nodeId: EntityId; action: "play" | "pause" | "stop" | "status" };
   "recorders.list": undefined;
   "recorders.create": {
     sessionId: EntityId;
@@ -1069,12 +1095,12 @@ export type MethodParams = {
     maximumChunksPerPass: number;
     idempotencyKey: string;
   };
-  "recorders.arm": { sessionId: EntityId; idempotencyKey?: string };
-  "recorders.start": { sessionId: EntityId; frame: number; idempotencyKey?: string };
-  "recorders.pause": { sessionId: EntityId; frame: number; idempotencyKey?: string };
-  "recorders.resume": { sessionId: EntityId; frame: number; idempotencyKey?: string };
-  "recorders.split": { sessionId: EntityId; frame: number; idempotencyKey?: string };
-  "recorders.stop": { sessionId: EntityId; frame: number; idempotencyKey?: string };
+  "recorders.arm": { sessionId: EntityId; nodeId?: EntityId; idempotencyKey?: string };
+  "recorders.start": { sessionId: EntityId; nodeId?: EntityId; frame: number; idempotencyKey?: string };
+  "recorders.pause": { sessionId: EntityId; nodeId?: EntityId; frame: number; idempotencyKey?: string };
+  "recorders.resume": { sessionId: EntityId; nodeId?: EntityId; frame: number; idempotencyKey?: string };
+  "recorders.split": { sessionId: EntityId; nodeId?: EntityId; frame: number; idempotencyKey?: string };
+  "recorders.stop": { sessionId: EntityId; nodeId?: EntityId; frame: number; idempotencyKey?: string };
   "recordings.get": { recordingId: EntityId };
   "recordings.recovery": { recordingId?: EntityId; cursor?: EntityId; limit?: number } | undefined;
   "recordings.reveal": { recordingId: EntityId };
@@ -1169,8 +1195,8 @@ export type MethodParams = {
     idempotencyKey: string;
     acknowledgments?: string[] | null;
   };
-  "session.start": { sessionId: EntityId; idempotencyKey?: string };
-  "sessions.start": { sessionId: EntityId; idempotencyKey?: string };
+  "session.start": { sessionId: EntityId; idempotencyKey?: string; candidate?: Session };
+  "sessions.start": { sessionId: EntityId; idempotencyKey?: string; candidate?: Session };
   "session.stop": { sessionId: EntityId; idempotencyKey?: string };
   "sessions.stop": { sessionId: EntityId; idempotencyKey?: string };
 };
@@ -1193,6 +1219,12 @@ export type MethodResult = {
   "operations.get": OperationCompleted | OperationUnknown;
   "operations.cancel": OperationCancelled;
   "recordings.list": RecordingRow[] | RecordingListPage;
+  "audioMedia.beginUpload": { uploadId: EntityId; chunkBytes: number };
+  "audioMedia.uploadChunk": { receivedBytes: number; nextChunkIndex: number };
+  "audioMedia.finishUpload": { mediaId: EntityId; fileName: string; format: "wav" | "mp3"; durationMs: number; channels: 1 | 2; sampleRateHz: number };
+  "audioMedia.importTemporaryRecording": TemporaryAudioImportResult;
+  "audioMedia.delete": { deleted: boolean };
+  "audioSources.transport": { sessionId: EntityId; nodeId: EntityId; state: "playing" | "paused" | "stopped"; loop: boolean };
   "recorders.list": Array<{ sessionId: EntityId; nodeId?: EntityId | null; state: "idle" | "armed" | "recording" | "paused" | "stopping" | "completed" | "failed"; lastFrame: number | null }>;
   "recorders.create": RecorderCreateResult;
   "recorders.arm": RecorderLifecycleResult;

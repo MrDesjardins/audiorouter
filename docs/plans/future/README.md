@@ -10,6 +10,7 @@ These ideas are recorded for later prioritization. They are not authorized imple
 
 | Candidate | User value | Reconsider only when |
 | --- | --- | --- |
+| [Spatial audio](spatial-audio.md) | Directional game playback to headphones or speakers | Channel/layout contract, binaural or speaker rendering method, listening/measurement criteria, and acceptable latency are specified |
 | VST2/ReaPlugs legacy hosting or migration | Reuse exact existing effects | The explicitly authorized gated M06 extension is already tracked in the active milestone; further promotion beyond the current x64 worker evidence still requires rights, editor compatibility, independent coverage, maintenance, and release qualification |
 | Native ARM64 Windows | Support ARM laptops | Driver, plugin architecture, shell, and hardware test matrix funded; still Windows-only |
 | 8–64 channel virtual devices | DAW/multitrack studio routing | Stereo workflows stable and receiving-app/channel/driver constraints tested |

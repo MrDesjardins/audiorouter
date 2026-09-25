@@ -11,17 +11,16 @@ use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::RemoteDesktop::{
-    WTSRegisterSessionNotification, WTSUnRegisterSessionNotification,
-    NOTIFY_FOR_THIS_SESSION,
+    WTSRegisterSessionNotification, WTSUnRegisterSessionNotification, NOTIFY_FOR_THIS_SESSION,
 };
+use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW,
     GetWindowLongPtrW, PostQuitMessage, PostThreadMessageW, RegisterClassW, SetWindowLongPtrW,
-    TranslateMessage, CREATESTRUCTW, GWLP_USERDATA, HWND_MESSAGE, MSG, WM_APP, WM_NCCREATE,
-    WM_NCDESTROY, WM_POWERBROADCAST, WM_WTSSESSION_CHANGE, WNDCLASSW, PBT_APMRESUMEAUTOMATIC,
-    PBT_APMSUSPEND, WTS_SESSION_LOCK, WTS_SESSION_LOGOFF,
+    TranslateMessage, CREATESTRUCTW, GWLP_USERDATA, HWND_MESSAGE, MSG, PBT_APMRESUMEAUTOMATIC,
+    PBT_APMSUSPEND, WM_APP, WM_NCCREATE, WM_NCDESTROY, WM_POWERBROADCAST, WM_WTSSESSION_CHANGE,
+    WNDCLASSW, WTS_SESSION_LOCK, WTS_SESSION_LOGOFF,
 };
-use windows::Win32::System::Threading::GetCurrentThreadId;
 
 const STOP_MESSAGE: u32 = WM_APP + 1;
 const WINDOW_CLASS: PCWSTR = w!("AudioRouterOsTransitionListener");
@@ -40,11 +39,7 @@ fn transition_for_message(message: u32, parameter: u32) -> Option<OsTransition> 
 /// control plane. The window procedure owns only this bounded, nonblocking
 /// handoff; a full queue deliberately drops the notification because the
 /// control plane can resynchronize from its authoritative state.
-fn forward_transition(
-    sender: &SyncSender<OsTransition>,
-    message: u32,
-    parameter: u32,
-) -> bool {
+fn forward_transition(sender: &SyncSender<OsTransition>, message: u32, parameter: u32) -> bool {
     let Some(transition) = transition_for_message(message, parameter) else {
         return false;
     };
@@ -79,16 +74,17 @@ impl Drop for OsTransitionListener {
         // The message is posted to the listener thread's queue and never
         // waits on the window procedure. A shutdown race is harmless because
         // the thread also exits when its message queue closes.
-        let _ = unsafe {
-            PostThreadMessageW(self.thread_id, STOP_MESSAGE, WPARAM(0), LPARAM(0))
-        };
+        let _ = unsafe { PostThreadMessageW(self.thread_id, STOP_MESSAGE, WPARAM(0), LPARAM(0)) };
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
         }
     }
 }
 
-fn run_message_loop(sender: SyncSender<OsTransition>, ready_sender: mpsc::SyncSender<Result<u32, String>>) {
+fn run_message_loop(
+    sender: SyncSender<OsTransition>,
+    ready_sender: mpsc::SyncSender<Result<u32, String>>,
+) {
     let result = unsafe { create_message_window(sender) };
     let Ok((thread_id, window)) = result else {
         let error = result
@@ -120,8 +116,8 @@ fn run_message_loop(sender: SyncSender<OsTransition>, ready_sender: mpsc::SyncSe
 }
 
 unsafe fn create_message_window(sender: SyncSender<OsTransition>) -> Result<(u32, HWND), String> {
-    let instance = GetModuleHandleW(None)
-        .map_err(|error| format!("GetModuleHandleW failed: {error}"))?;
+    let instance =
+        GetModuleHandleW(None).map_err(|error| format!("GetModuleHandleW failed: {error}"))?;
     let class = WNDCLASSW {
         lpfnWndProc: Some(window_proc),
         hInstance: instance.into(),
@@ -188,10 +184,22 @@ mod tests {
 
     #[test]
     fn maps_power_and_session_notifications_without_side_effects() {
-        assert_eq!(transition_for_message(WM_POWERBROADCAST, PBT_APMSUSPEND), Some(OsTransition::Sleep));
-        assert_eq!(transition_for_message(WM_POWERBROADCAST, PBT_APMRESUMEAUTOMATIC), Some(OsTransition::Resume));
-        assert_eq!(transition_for_message(WM_WTSSESSION_CHANGE, WTS_SESSION_LOCK), Some(OsTransition::Lock));
-        assert_eq!(transition_for_message(WM_WTSSESSION_CHANGE, WTS_SESSION_LOGOFF), Some(OsTransition::SignOut));
+        assert_eq!(
+            transition_for_message(WM_POWERBROADCAST, PBT_APMSUSPEND),
+            Some(OsTransition::Sleep)
+        );
+        assert_eq!(
+            transition_for_message(WM_POWERBROADCAST, PBT_APMRESUMEAUTOMATIC),
+            Some(OsTransition::Resume)
+        );
+        assert_eq!(
+            transition_for_message(WM_WTSSESSION_CHANGE, WTS_SESSION_LOCK),
+            Some(OsTransition::Lock)
+        );
+        assert_eq!(
+            transition_for_message(WM_WTSSESSION_CHANGE, WTS_SESSION_LOGOFF),
+            Some(OsTransition::SignOut)
+        );
     }
 
     #[test]
@@ -204,7 +212,11 @@ mod tests {
     #[test]
     fn forwards_recognized_notifications_without_waiting_on_a_full_queue() {
         let (sender, receiver) = mpsc::sync_channel(1);
-        assert!(forward_transition(&sender, WM_POWERBROADCAST, PBT_APMSUSPEND));
+        assert!(forward_transition(
+            &sender,
+            WM_POWERBROADCAST,
+            PBT_APMSUSPEND
+        ));
         assert_eq!(receiver.try_recv(), Ok(OsTransition::Sleep));
 
         assert!(forward_transition(
@@ -212,7 +224,11 @@ mod tests {
             WM_POWERBROADCAST,
             PBT_APMRESUMEAUTOMATIC,
         ));
-        assert!(forward_transition(&sender, WM_WTSSESSION_CHANGE, WTS_SESSION_LOCK));
+        assert!(forward_transition(
+            &sender,
+            WM_WTSSESSION_CHANGE,
+            WTS_SESSION_LOCK
+        ));
         assert_eq!(receiver.try_recv(), Ok(OsTransition::Resume));
         assert!(receiver.try_recv().is_err());
     }

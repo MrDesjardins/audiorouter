@@ -72,6 +72,15 @@ export type GraphUndoPlanResult = MethodResult["graph.undoPlan"];
 /** Formats structured backend failures without losing actionable audio guidance. */
 export function formatUiError(error: unknown, fallback: string): string {
   if (!(error instanceof Error)) return fallback;
+  if (/0x88890004/i.test(error.message) || (error instanceof AudioRouterRpcError && (error.data?.code === "deviceInvalidated" || (typeof error.data?.hresult === "number" && (error.data.hresult >>> 0) === 0x88890004)))) {
+    return "The selected audio device changed or disconnected. Stop audio, refresh the device list, then select the exact input and output again. Play will reopen those devices. If one is missing, reconnect it before retrying.";
+  }
+  if (/0x8889000a/i.test(error.message) || (error instanceof AudioRouterRpcError && typeof error.data?.hresult === "number" && (error.data.hresult >>> 0) === 0x8889000A)) {
+    return "The selected audio device is in use by another application. Choose a different output in Devices, or release this exact device in the application using it, then prepare it again.";
+  }
+  if (/native graph rejected: UnsupportedTopology/.test(error.message)) {
+    return "This route includes an audio combination the current engine cannot play. Try a separate Test Signal → Physical Output route, or remove one source and connect the remaining source directly to the output. Your saved route was not changed.";
+  }
   if (!(error instanceof AudioRouterRpcError) || !error.data) return error.message;
   const { code, hresult, remediation, retryable } = error.data;
   const hresultText = typeof hresult === "number"
@@ -96,14 +105,19 @@ export type UiBackendSnapshot = {
 /** The UI consumes snapshots, keeping protocol and native transport details out of React. */
 export interface UiBackend {
   readonly connected: boolean;
-  snapshot(): Promise<UiBackendSnapshot>;
+  snapshot(sessionId?: string): Promise<UiBackendSnapshot>;
   refreshDiagnostics(): Promise<DiagnosticsSnapshot>;
   subscribe(afterSequence?: number, sessionId?: string, backendEpoch?: number, categories?: StateEventCategory[]): Promise<EventsSubscribeResult>;
-  inspectRoute(destinationNode: string): Promise<RouteInspection | null>;
+  inspectRoute(destinationNode: string, sessionId?: string): Promise<RouteInspection | null>;
   planGraph(candidate: Session): Promise<GraphPlanResult>;
   commitGraph(planId: string, baseRevision: number, idempotencyKey: string, acknowledgments?: string[]): Promise<GraphCommitResult>;
   listGraphHistory(sessionId: string, cursor?: string, limit?: number): Promise<GraphHistoryPage>;
   undoGraphPlan(sessionId: string, baseRevision: number): Promise<GraphUndoPlanResult>;
+  beginAudioUpload(fileName: string, sizeBytes: number): Promise<MethodResult["audioMedia.beginUpload"]>;
+  uploadAudioChunk(uploadId: string, chunkIndex: number, dataBase64: string): Promise<MethodResult["audioMedia.uploadChunk"]>;
+  finishAudioUpload(uploadId: string): Promise<MethodResult["audioMedia.finishUpload"]>;
+  importTemporaryRecording(recordingId: string): Promise<MethodResult["audioMedia.importTemporaryRecording"]>;
+  transportAudioSource(sessionId: string, nodeId: string, action: "play" | "pause" | "stop" | "status"): Promise<MethodResult["audioSources.transport"]>;
   listRecordings(sessionId?: string): Promise<RecordingRow[]>;
   listRecorders(): Promise<RecorderStatus[]>;
   listSessions(): Promise<Session[]>;
@@ -148,16 +162,16 @@ export interface UiBackend {
   removeRecordingEntry(recordingId: string, idempotencyKey?: string): Promise<RecordingRemoveResult>;
   recycleRecording(recordingId: string, confirm: boolean, idempotencyKey?: string): Promise<RecordingRecycleResult>;
   createRecorder(params: MethodParams["recorders.create"]): Promise<RecorderCreateResult>;
-  armRecorder(sessionId: string, idempotencyKey?: string): Promise<RecorderLifecycleResult>;
-  startRecorder(sessionId: string, frame: number, idempotencyKey?: string): Promise<RecorderLifecycleResult>;
-  pauseRecorder(sessionId: string, frame: number, idempotencyKey?: string): Promise<RecorderLifecycleResult>;
-  resumeRecorder(sessionId: string, frame: number, idempotencyKey?: string): Promise<RecorderLifecycleResult>;
-  splitRecorder(sessionId: string, frame: number, idempotencyKey?: string): Promise<RecorderLifecycleResult>;
-  stopRecorder(sessionId: string, frame: number, idempotencyKey?: string): Promise<RecorderLifecycleResult>;
+  armRecorder(sessionId: string, idempotencyKey?: string, nodeId?: string): Promise<RecorderLifecycleResult>;
+  startRecorder(sessionId: string, frame: number, idempotencyKey?: string, nodeId?: string): Promise<RecorderLifecycleResult>;
+  pauseRecorder(sessionId: string, frame: number, idempotencyKey?: string, nodeId?: string): Promise<RecorderLifecycleResult>;
+  resumeRecorder(sessionId: string, frame: number, idempotencyKey?: string, nodeId?: string): Promise<RecorderLifecycleResult>;
+  splitRecorder(sessionId: string, frame: number, idempotencyKey?: string, nodeId?: string): Promise<RecorderLifecycleResult>;
+  stopRecorder(sessionId: string, frame: number, idempotencyKey?: string, nodeId?: string): Promise<RecorderLifecycleResult>;
   createSession(session: Session, idempotencyKey?: string): Promise<SessionCreateResult>;
   duplicateSession(sourceSessionId: string, sessionId: string, name?: string, idempotencyKey?: string): Promise<SessionCreateResult>;
   deleteSession(sessionId: string, idempotencyKey?: string): Promise<SessionDeleteResult>;
-  startSession(sessionId: string, idempotencyKey?: string): Promise<SessionStartResult>;
+  startSession(sessionId: string, idempotencyKey?: string, candidate?: Session): Promise<SessionStartResult>;
   stopSession(sessionId: string, idempotencyKey?: string): Promise<SessionStopResult>;
   exportSession(sessionId: string): Promise<Session>;
   planSessionImport(session: Session): Promise<SessionImportPlanResult>;
@@ -187,7 +201,7 @@ export class SnapshotCache {
     return this.state;
   }
 
-  async refresh(backend: UiBackend): Promise<UiSnapshotState> {
+  async refresh(backend: UiBackend, sessionId?: string): Promise<UiSnapshotState> {
     const generation = ++this.refreshGeneration;
     let lastError: unknown = undefined;
     // The native shell may still be creating its per-user pipe/backend when
@@ -196,7 +210,7 @@ export class SnapshotCache {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       if (generation !== this.refreshGeneration) return this.state;
       try {
-        const snapshot = await backend.snapshot();
+        const snapshot = await backend.snapshot(sessionId);
         if (generation !== this.refreshGeneration) return this.state;
         this.state = { snapshot, stale: false, error: null };
         return this.state;
@@ -280,6 +294,11 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     async undoGraphPlan() {
       throw new Error("The backend is disconnected; undo is unavailable.");
     },
+    async beginAudioUpload() { throw new Error("The backend is disconnected; audio import is unavailable."); },
+    async uploadAudioChunk() { throw new Error("The backend is disconnected; audio import is unavailable."); },
+    async finishAudioUpload() { throw new Error("The backend is disconnected; audio import is unavailable."); },
+    async importTemporaryRecording() { throw new Error("The backend is disconnected; temporary audio import is unavailable."); },
+    async transportAudioSource() { throw new Error("The backend is disconnected; audio playback is unavailable."); },
     async listRecordings() {
       return [];
     },
@@ -482,12 +501,12 @@ async function collectPagedRows<T>(request: PagedRequest): Promise<T[]> {
 export function createLiveBackend(client: AudioRouterClient, sessionId: string, registerStartup?: (enabled: boolean) => Promise<string>, startupRegistrationStatus?: () => Promise<"registered" | "unregistered">): UiBackend {
   return {
     connected: true,
-    async snapshot() {
+    async snapshot(selectedSessionId = sessionId) {
       const [status, diagnostics, discovery, session] = await Promise.all([
         client.request("status.get", undefined),
         client.request("system.diagnostics", undefined),
         client.request("system.describe", undefined),
-        client.request("sessions.get", { sessionId }),
+        client.request("sessions.get", { sessionId: selectedSessionId }),
       ]);
       return { status, diagnostics, discovery, session };
     },
@@ -503,12 +522,12 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
         ...(categories === undefined ? {} : { categories }),
       });
     },
-    async inspectRoute(destinationNode) {
-      return client.request("routes.inspect", { sessionId, destinationNode });
+    async inspectRoute(destinationNode, selectedSessionId = sessionId) {
+      return client.request("routes.inspect", { sessionId: selectedSessionId, destinationNode });
     },
     async planGraph(candidate) {
       return client.request("graph.plan", {
-        sessionId,
+        sessionId: candidate.id,
         baseRevision: candidate.revision,
         candidate,
       });
@@ -530,6 +549,21 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
     },
     async undoGraphPlan(undoSessionId, baseRevision) {
       return client.request("graph.undoPlan", { sessionId: undoSessionId, baseRevision });
+    },
+    async beginAudioUpload(fileName, sizeBytes) {
+      return client.request("audioMedia.beginUpload", { fileName, sizeBytes });
+    },
+    async uploadAudioChunk(uploadId, chunkIndex, dataBase64) {
+      return client.request("audioMedia.uploadChunk", { uploadId, chunkIndex, dataBase64 });
+    },
+    async finishAudioUpload(uploadId) {
+      return client.request("audioMedia.finishUpload", { uploadId });
+    },
+    async importTemporaryRecording(recordingId) {
+      return client.request("audioMedia.importTemporaryRecording", { recordingId });
+    },
+    async transportAudioSource(currentSessionId, nodeId, action) {
+      return client.request("audioSources.transport", { sessionId: currentSessionId, nodeId, action });
     },
     async listRecordings(recordingSessionId = sessionId) {
       return collectPagedRows(
@@ -706,23 +740,23 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
     async createRecorder(params) {
       return client.request("recorders.create", params);
     },
-    async armRecorder(recorderSessionId, idempotencyKey) {
-      return client.request("recorders.arm", { sessionId: recorderSessionId, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+    async armRecorder(recorderSessionId, idempotencyKey, nodeId) {
+      return client.request("recorders.arm", { sessionId: recorderSessionId, ...(nodeId === undefined ? {} : { nodeId }), ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
     },
-    async startRecorder(recorderSessionId, frame, idempotencyKey) {
-      return client.request("recorders.start", { sessionId: recorderSessionId, frame, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+    async startRecorder(recorderSessionId, frame, idempotencyKey, nodeId) {
+      return client.request("recorders.start", { sessionId: recorderSessionId, frame, ...(nodeId === undefined ? {} : { nodeId }), ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
     },
-    async pauseRecorder(recorderSessionId, frame, idempotencyKey) {
-      return client.request("recorders.pause", { sessionId: recorderSessionId, frame, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+    async pauseRecorder(recorderSessionId, frame, idempotencyKey, nodeId) {
+      return client.request("recorders.pause", { sessionId: recorderSessionId, frame, ...(nodeId === undefined ? {} : { nodeId }), ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
     },
-    async resumeRecorder(recorderSessionId, frame, idempotencyKey) {
-      return client.request("recorders.resume", { sessionId: recorderSessionId, frame, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+    async resumeRecorder(recorderSessionId, frame, idempotencyKey, nodeId) {
+      return client.request("recorders.resume", { sessionId: recorderSessionId, frame, ...(nodeId === undefined ? {} : { nodeId }), ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
     },
-    async splitRecorder(recorderSessionId, frame, idempotencyKey) {
-      return client.request("recorders.split", { sessionId: recorderSessionId, frame, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+    async splitRecorder(recorderSessionId, frame, idempotencyKey, nodeId) {
+      return client.request("recorders.split", { sessionId: recorderSessionId, frame, ...(nodeId === undefined ? {} : { nodeId }), ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
     },
-    async stopRecorder(recorderSessionId, frame, idempotencyKey) {
-      return client.request("recorders.stop", { sessionId: recorderSessionId, frame, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+    async stopRecorder(recorderSessionId, frame, idempotencyKey, nodeId) {
+      return client.request("recorders.stop", { sessionId: recorderSessionId, frame, ...(nodeId === undefined ? {} : { nodeId }), ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
     },
     async createSession(session, idempotencyKey) {
       return client.request("sessions.create", { session, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
@@ -733,8 +767,8 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
     async deleteSession(sessionId, idempotencyKey) {
       return client.request("sessions.delete", { sessionId, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
     },
-    async startSession(startSessionId, idempotencyKey) {
-      return client.request("session.start", { sessionId: startSessionId, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+    async startSession(startSessionId, idempotencyKey, candidate) {
+      return client.request("session.start", { sessionId: startSessionId, ...(idempotencyKey === undefined ? {} : { idempotencyKey }), ...(candidate === undefined ? {} : { candidate }) });
     },
     async stopSession(stopSessionId, idempotencyKey) {
       return client.request("session.stop", { sessionId: stopSessionId, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });

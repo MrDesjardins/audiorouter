@@ -53,9 +53,37 @@ volume/mute, driver state, or startup registration.
 
 The fresh desktop session starts with a neutral 0 dB Gain node between the
 selected input and output. Adjusting that node is a real graph change: use
-**Plan changes**, commit the validated plan, and restart the session if it was
+  **Save route**; the backend validates it and saves it automatically when there
+  are no warnings. Review and confirm any warnings. Restart the session if it was
 already running. The same path is used for EQ, gate, compressor, limiter, and
 other built-in processors added from the canvas.
+
+An ordinary input port accepts one incoming connection. If a Physical output
+already receives another source, dragging Test Signal to that input shows the
+current source and offers **Replace input connection**. This changes only the
+draft; **Undo** restores the old edge, and **Save route** persists the chosen
+route. To combine both sources in the graph, add a visible Mixer and connect
+them through it rather than stacking two edges on the output port. Native
+activation of a combined route still requires its own validation. The current
+single-endpoint engine supports one stereo Physical Input and one stereo Test
+Signal feeding the same Mixer and one Physical Output. Other source mixes may
+still return an unsupported-route message before audio starts.
+
+The **Input device** tool accepts a Windows capture endpoint, whether it is a
+microphone or an installed virtual capture bus. The **Output device** tool
+accepts a Windows playback endpoint. Existing virtual devices are chosen in
+these device pickers. To route system sound whose Windows default playback
+device is **Voicemeeter Input**, enable **B1** on the Voicemeeter strip
+receiving that sound. In AudioRouter, select **Voicemeeter Out B1** as the
+Input device capture endpoint, connect it to the Output device, and select
+the intended speakers (for example, Focusrite) as the output endpoint.
+Voicemeeter Input itself is a playback endpoint, so it does not appear in the
+AudioRouter capture picker. AudioRouter does not change Voicemeeter's B1
+switch or the Windows default device. This B1 path requires the Voicemeeter
+mixer to run: the virtual driver exposes the endpoints, while Voicemeeter
+produces the B1 mix. To route system sound without running Voicemeeter, set
+Windows playback to **CABLE Input**, then select **CABLE Output** as the
+AudioRouter capture endpoint and the intended speakers as its output.
 
 The defaults are `CABLE Output (VB-Audio Virtual Cable)` capture and `CABLE
 Input (VB-Audio Virtual Cable)` render for deliberate loopback testing. To use
@@ -79,6 +107,43 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run-vb-cable-desktop
 
 Each ID must match exactly one active endpoint of its requested direction.
 
+### When Play says audio is not prepared
+
+**Backend ready** confirms the control connection. To play a route:
+
+1. In **Devices → Endpoint binding**, select exact active capture and render
+   endpoints. The current native adapter requires both even for Test Signal;
+   it never chooses a microphone automatically. Existing physical/VB-Cable
+   endpoints do not need the AudioRouter virtual driver.
+2. Press **Play** in the header to activate the visible canvas route. Unsaved
+   changes are previewed without saving. Test Signal and Audio File stay
+   stopped until played on their nodes. **Save** when you want to keep the
+   route.
+3. Press **Play** on a Test Signal or Audio File node to start that source.
+   Its **Stop** button stops only that source; header **Stop** stops the route.
+   If an endpoint is unavailable or occupied, resolve that named endpoint's
+   error and retry.
+
+If preparation reports missing `deviceAdministration`, an enrolled operator
+can quit the shell and relaunch the same executable/database from PowerShell
+with `$env:AUDIOROUTER_ALLOW_DEVICE_ADMIN = '1'` in that process environment.
+The disposable launcher above already provides that process-scoped opt-in.
+This does not grant permissions to third-party CLI/MCP clients.
+
+New built-in processing nodes use stereo ports to match the Test Signal,
+microphone and physical-output defaults. A mono microphone capture is copied
+to both stereo graph channels at the WASAPI boundary, so a single-channel
+device such as the PD200X can feed stereo processors and a stereo VB-Cable
+output. The graph remains stereo after that explicit conversion. Older saved
+routes containing a stereo-to-mono connection may still be rejected at Start;
+rebuild those paths with matching channel counts and save them. An endpoint
+already owned by another application reports a device-in-use error; select
+another exact output or release that endpoint before preparing again.
+
+Background refreshes keep local edits. If another client commits a newer
+revision, the editor preserves the draft and reports a conflict. Copy any edits
+you want to keep before choosing **Discard edits** to load the saved revision.
+
 ### Route into Voicemeeter or another existing tool
 
 On a machine with Voicemeeter or VB-Cable already installed, use its existing
@@ -89,8 +154,8 @@ Output` or `Voicemeeter Out B1`) in the receiving tool. Physical microphone
 and desktop captures can then be connected to that output through the same
 validated graph. In the editor, drag the capture into the **Existing virtual
 output** shelf destination (or a physical output), select the exact render
-endpoint in Endpoint binding, then use **Plan changes**,
-commit the draft, prepare the exact endpoints, and start the session.
+endpoint in Endpoint binding, then use **Save route**, prepare the exact
+endpoints, and start the session.
 
 This workflow uses the installed third-party virtual driver and does not
 provision an AudioRouter-owned kernel endpoint. It is the supported
@@ -310,7 +375,7 @@ does not disable existing-device routing.
 
 The UI can inspect the disconnected/demo state, edit a local draft, inspect
 routes, and display device/application/recording metadata when connected to a
-backend. Use the Gate, Parametric EQ, Compressor, or Limiter action on any
+backend. Use the Gate, Advanced EQ, Compressor, or Limiter action on any
 connected draft path to insert that processor between the existing nodes; the
 insertion and its parameters are real draft changes, not canvas-only
 decoration. The Presets panel can also expand EQ presets and the voice-chain
@@ -318,6 +383,11 @@ presets into ordinary draft nodes. A voice chain is inserted into the first
 compatible connected path when one exists; otherwise its nodes remain
 unconnected for explicit user wiring. Draft changes are not committed until an
 authorized plan/apply flow.
+In Advanced EQ properties, use Add point or double-click the logarithmic graph
+to create a filter. Drag a point to set frequency and applicable gain, then
+choose Peaking, Low/High shelf, Low/High pass, or Notch and set Q precisely.
+Remove point disables that band. The backend bounds the node to sixteen bands;
+older saved `parametricEq@1` nodes use the same editor and retain their sound.
 The Session transfer panel exports the selected stopped configuration as a
 local `.audiorouter.json` file. Import first validates the file through the
 backend, then requires the separate Commit stopped import action; imported

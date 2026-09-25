@@ -8,7 +8,7 @@ const REMOVE_MIXER_ACTION = "__audiorouter_remove_mixer__";
 export const PROCESSOR_ACTIONS: Array<{ kind: InsertableProcessorKind; label: string }> = [
   { kind: "gain", label: "Gain" },
   { kind: "mute", label: "Mute" },
-  { kind: "parametricEq", label: "Parametric EQ" },
+  { kind: "parametricEq", label: "Advanced EQ" },
   { kind: "graphicEq", label: "Graphic EQ" },
   { kind: "compressor", label: "Compressor" },
   { kind: "gate", label: "Gate" },

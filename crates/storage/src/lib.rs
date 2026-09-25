@@ -28,6 +28,8 @@ pub const MAX_PENDING_PLAN_RECORDS: usize = 100;
 pub const MAX_CLIENT_ENROLLMENTS: usize = 256;
 /// Maximum number of recent idempotency outcomes retained by SQLite.
 pub const MAX_OPERATION_JOURNAL_ENTRIES: usize = 4_096;
+pub const MAX_AUDIO_MEDIA_BYTES: usize = 64 * 1024 * 1024;
+pub const MAX_AUDIO_MEDIA_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
 
 #[derive(Debug)]
 pub enum StorageError {
@@ -37,6 +39,7 @@ pub enum StorageError {
     InvalidSession(String),
     InvalidBundle(String),
     InvalidRecording(String),
+    InvalidAudioMedia(String),
     InvalidPluginState(String),
     InvalidEnrollment(String),
     InvalidPlan(String),
@@ -70,7 +73,7 @@ pub const MAX_REQUEST_HASH_BYTES: usize = 128;
 pub const MAX_SESSION_LIST_ITEMS: usize = 500;
 /// Highest schema migration this binary knows how to apply. Newer databases
 /// must be opened by a newer binary rather than silently written by this one.
-pub const MAX_SCHEMA_VERSION: i64 = 3;
+pub const MAX_SCHEMA_VERSION: i64 = 4;
 /// One extra row is permitted so callers can detect a full page.
 pub const MAX_SESSION_HISTORY_ITEMS: usize = 101;
 /// Maximum number of directory entries inspected by recovery retention.
@@ -549,6 +552,72 @@ impl Storage {
         Ok(storage)
     }
 
+    /// Persist a user-selected audio file under an opaque ID, keeping graph
+    /// sessions independent of arbitrary external filesystem paths.
+    pub fn store_audio_media(
+        &self,
+        id: &str,
+        file_name: &str,
+        format: &str,
+        bytes: &[u8],
+        expires_at_unix: Option<i64>,
+    ) -> Result<(), StorageError> {
+        self.connection.execute(
+            "DELETE FROM audio_media WHERE expires_at IS NOT NULL AND expires_at <= unixepoch()",
+            [],
+        )?;
+        if id.is_empty()
+            || id.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES
+            || file_name.is_empty()
+            || file_name.len() > 256
+            || !matches!(format, "wav" | "mp3")
+            || bytes.is_empty()
+            || bytes.len() > MAX_AUDIO_MEDIA_BYTES
+        {
+            return Err(StorageError::InvalidAudioMedia(
+                "audio media metadata or size is outside its supported bound".into(),
+            ));
+        }
+        let total_bytes: u64 = self.connection.query_row(
+            "SELECT COALESCE(SUM(length(bytes)), 0) FROM audio_media",
+            [],
+            |row| row.get(0),
+        )?;
+        if total_bytes.saturating_add(bytes.len() as u64) > MAX_AUDIO_MEDIA_TOTAL_BYTES {
+            return Err(StorageError::InvalidAudioMedia(
+                "audio media library exceeds the 512 MiB storage limit".into(),
+            ));
+        }
+        self.connection.execute(
+            "INSERT INTO audio_media(id, file_name, format, bytes, expires_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![id, file_name, format, bytes, expires_at_unix],
+        )?;
+        Ok(())
+    }
+
+    pub fn load_audio_media(
+        &self,
+        id: &str,
+    ) -> Result<Option<(String, String, Vec<u8>)>, StorageError> {
+        self.connection
+            .query_row(
+                "SELECT file_name, format, bytes FROM audio_media
+                 WHERE id = ?1 AND (expires_at IS NULL OR expires_at > unixepoch())",
+                [id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .optional()
+            .map_err(StorageError::from)
+    }
+
+    pub fn delete_audio_media(&self, id: &str) -> Result<bool, StorageError> {
+        Ok(self
+            .connection
+            .execute("DELETE FROM audio_media WHERE id = ?1", [id])?
+            > 0)
+    }
+
     /// Reject malformed SQLite before migrations can make any changes. This
     /// is intentionally a read-only check; recovery uses an explicit backup
     /// or restore destination instead of modifying the damaged source.
@@ -890,6 +959,14 @@ impl Storage {
                  state_sha256 TEXT NOT NULL,
                  size_bytes INTEGER NOT NULL
              );
+             CREATE TABLE IF NOT EXISTS audio_media (
+                 id TEXT PRIMARY KEY,
+                 file_name TEXT NOT NULL,
+                 format TEXT NOT NULL CHECK(format IN ('wav', 'mp3')),
+                 bytes BLOB NOT NULL,
+                 expires_at INTEGER,
+                 created_at INTEGER NOT NULL DEFAULT (unixepoch())
+             );
              CREATE INDEX IF NOT EXISTS plugin_states_plugin_id ON plugin_states(plugin_id);
              INSERT OR IGNORE INTO schema_migrations(version) VALUES (1);",
         )?;
@@ -947,6 +1024,14 @@ impl Storage {
         }
         self.connection.execute(
             "INSERT OR IGNORE INTO schema_migrations(version) VALUES (3)",
+            [],
+        )?;
+        self.connection.execute(
+            "INSERT OR IGNORE INTO schema_migrations(version) VALUES (4)",
+            [],
+        )?;
+        self.connection.execute(
+            "DELETE FROM audio_media WHERE expires_at IS NOT NULL AND expires_at <= unixepoch()",
             [],
         )?;
         self.connection.execute(
@@ -6098,5 +6183,53 @@ mod tests {
         assert_eq!(storage.load_recording_root().unwrap(), Some(root.clone()));
         std::fs::remove_dir_all(&root).unwrap();
         assert!(storage.load_recording_root().is_err());
+    }
+
+    #[test]
+    fn audio_media_is_opaque_bounded_and_deletable() {
+        let storage = Storage::open_memory().unwrap();
+        let bytes = b"RIFF-WAVE-test";
+        storage
+            .store_audio_media("media-1", "voice.wav", "wav", bytes, None)
+            .unwrap();
+        assert_eq!(
+            storage.load_audio_media("media-1").unwrap(),
+            Some(("voice.wav".into(), "wav".into(), bytes.to_vec()))
+        );
+        assert!(matches!(
+            storage.store_audio_media(
+                "media-too-large",
+                "voice.wav",
+                "wav",
+                &vec![0; MAX_AUDIO_MEDIA_BYTES + 1],
+                None
+            ),
+            Err(StorageError::InvalidAudioMedia(_))
+        ));
+        assert!(storage.delete_audio_media("media-1").unwrap());
+        assert_eq!(storage.load_audio_media("media-1").unwrap(), None);
+    }
+
+    #[test]
+    fn expired_audio_media_is_unavailable_and_pruned_before_next_insert() {
+        let storage = Storage::open_memory().unwrap();
+        storage
+            .store_audio_media(
+                "expired-media",
+                "Temporary voice take.wav",
+                "wav",
+                b"expired",
+                Some(0),
+            )
+            .unwrap();
+        assert_eq!(storage.load_audio_media("expired-media").unwrap(), None);
+        storage
+            .store_audio_media("current-media", "voice.wav", "wav", b"current", None)
+            .unwrap();
+        let count: i64 = storage
+            .connection
+            .query_row("SELECT COUNT(*) FROM audio_media", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
     }
 }

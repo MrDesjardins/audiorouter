@@ -37,7 +37,7 @@ pub const MAX_PORTS_PER_NODE: usize = 16;
 pub const MAX_CHANNEL_MATRIX_COEFFICIENTS: usize = 4;
 pub const MAX_EVENT_CATEGORY_BYTES: usize = 128;
 pub const MAX_EVENT_OPERATION_ID_BYTES: usize = 128;
-pub const MAX_PARAMETERS_PER_NODE: usize = 64;
+pub const MAX_PARAMETERS_PER_NODE: usize = 96;
 pub const MAX_PARAMETER_NAME_BYTES: usize = 128;
 pub const MAX_PLUGIN_PATH_BYTES: usize = 512;
 pub const MAX_PLUGIN_FINGERPRINT_BYTES: usize = 64;
@@ -84,10 +84,11 @@ pub enum NodeKind {
     Pitch,
     Recorder,
     Plugin,
+    AudioFile,
 }
 
 impl NodeKind {
-    pub const ALL: [Self; 20] = [
+    pub const ALL: [Self; 21] = [
         Self::PhysicalInput,
         Self::ApplicationCapture,
         Self::EndpointLoopback,
@@ -108,6 +109,7 @@ impl NodeKind {
         Self::Pitch,
         Self::Recorder,
         Self::Plugin,
+        Self::AudioFile,
     ];
 
     pub fn type_name(self) -> &'static str {
@@ -132,6 +134,7 @@ impl NodeKind {
             Self::Pitch => "pitch",
             Self::Recorder => "recorder",
             Self::Plugin => "plugin",
+            Self::AudioFile => "audio-file",
         }
     }
 }
@@ -162,7 +165,7 @@ fn valid_parametric_band_parameter(name: &str, value: &serde_json::Value) -> boo
     let Ok(index) = index.parse::<usize>() else {
         return false;
     };
-    if index >= 8 {
+    if index >= 16 {
         return false;
     }
     match parameter {
@@ -207,7 +210,7 @@ fn valid_creation_time(value: &serde_json::Value) -> bool {
     })
 }
 
-pub fn node_registry() -> [NodeTypeSpec; 20] {
+pub fn node_registry() -> [NodeTypeSpec; 21] {
     NodeKind::ALL.map(|kind| NodeTypeSpec {
         kind,
         version: 1,
@@ -225,6 +228,7 @@ pub fn node_registry() -> [NodeTypeSpec; 20] {
             NodeKind::GraphicEq => CapabilityAvailability::Available,
             NodeKind::Pitch => CapabilityAvailability::Available,
             NodeKind::Recorder => CapabilityAvailability::Available,
+            NodeKind::AudioFile => CapabilityAvailability::Available,
             // M02 user-mode Windows adapters are implemented in the current
             // VB-Cable-first track. Endpoint/process presence and exact
             // identity are runtime binding checks, not capability absence.
@@ -245,6 +249,7 @@ pub fn node_registry() -> [NodeTypeSpec; 20] {
             | NodeKind::Mute
             | NodeKind::Meter
             | NodeKind::TestSignal => "low",
+            NodeKind::AudioFile => "low",
             NodeKind::ParametricEq => "medium",
             NodeKind::Compressor => "medium",
             NodeKind::Gate => "medium",
@@ -647,7 +652,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 86] = [
+pub const API_METHODS: [ApiMethodSpec; 92] = [
     ApiMethodSpec {
         name: "system.describe",
         permission: PermissionScope::Read,
@@ -707,6 +712,36 @@ pub const API_METHODS: [ApiMethodSpec; 86] = [
         name: "recordings.list",
         permission: PermissionScope::Record,
         side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "audioMedia.beginUpload",
+        permission: PermissionScope::GraphWrite,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "audioMedia.uploadChunk",
+        permission: PermissionScope::GraphWrite,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "audioMedia.finishUpload",
+        permission: PermissionScope::GraphWrite,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "audioMedia.importTemporaryRecording",
+        permission: PermissionScope::Record,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "audioMedia.delete",
+        permission: PermissionScope::GraphWrite,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "audioSources.transport",
+        permission: PermissionScope::SessionControl,
+        side_effect: SideEffectClass::Mutating,
     },
     ApiMethodSpec {
         name: "recorders.list",
@@ -1552,6 +1587,13 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                     .is_some_and(|level| level.is_finite() && (-60.0..=0.0).contains(&level)),
                 (NodeKind::TestSignal, "durationMs") => value.as_f64().is_some_and(|duration| {
                     duration.is_finite() && (1.0..=600_000.0).contains(&duration)
+                }),
+                (NodeKind::AudioFile, "mediaId") => {
+                    valid_bounded_string(value, MAX_ENTITY_ID_BYTES)
+                }
+                (NodeKind::AudioFile, "loop") => value.is_boolean(),
+                (NodeKind::AudioFile, "fileName") => value.as_str().is_some_and(|name| {
+                    !name.is_empty() && name.len() <= 255 && !name.chars().any(char::is_control)
                 }),
                 (NodeKind::Plugin, "path") => value
                     .as_str()
@@ -2922,20 +2964,20 @@ mod tests {
 
         let mut eq = node("eq", NodeKind::ParametricEq, PortDirection::Input);
         eq.parameters
-            .insert("band7Type".into(), serde_json::json!("notch"));
+            .insert("band15Type".into(), serde_json::json!("notch"));
         eq.parameters
-            .insert("band7Enabled".into(), serde_json::json!(true));
+            .insert("band15Enabled".into(), serde_json::json!(true));
         assert!(
             validate_session(&session(vec![eq.clone()], vec![])).is_ok(),
             "valid EQ parameters rejected: {:?}",
             validate_session(&session(vec![eq.clone()], vec![]))
         );
         eq.parameters
-            .insert("band7Type".into(), serde_json::json!("unsupported"));
+            .insert("band15Type".into(), serde_json::json!("unsupported"));
         assert!(validate_session(&session(vec![eq], vec![]))
             .unwrap_err()
             .iter()
-            .any(|error| matches!(error, ValidationError::InvalidParameter { path } if path == "nodes[0].parameters.band7Type")));
+            .any(|error| matches!(error, ValidationError::InvalidParameter { path } if path == "nodes[0].parameters.band15Type")));
     }
 
     #[test]
@@ -3492,7 +3534,7 @@ mod tests {
     #[test]
     fn registry_reports_audio_and_processor_capabilities_explicitly() {
         let registry = node_registry();
-        assert_eq!(registry.len(), 20);
+        assert_eq!(registry.len(), 21);
         let physical = registry
             .iter()
             .find(|spec| spec.kind == NodeKind::PhysicalInput)
@@ -3517,6 +3559,12 @@ mod tests {
             .unwrap();
         assert_eq!(test_signal.kind.type_name(), "test-signal");
         assert_eq!(test_signal.availability, CapabilityAvailability::Available);
+        let audio_file = registry
+            .iter()
+            .find(|spec| spec.kind == NodeKind::AudioFile)
+            .unwrap();
+        assert_eq!(audio_file.kind.type_name(), "audio-file");
+        assert_eq!(audio_file.availability, CapabilityAvailability::Available);
         let virtual_source = registry
             .iter()
             .find(|spec| spec.kind == NodeKind::VirtualRenderSource)
@@ -3803,6 +3851,33 @@ mod tests {
                     && *requested == MAX_PARAMETERS_PER_NODE + 1
                     && *maximum == MAX_PARAMETERS_PER_NODE
         )));
+    }
+
+    #[test]
+    fn accepts_fully_populated_sixteen_band_eq_parameter_map() {
+        let mut eq = node("eq", NodeKind::ParametricEq, PortDirection::Input);
+        eq.parameters
+            .insert("frequencyHz".into(), serde_json::json!(1000));
+        eq.parameters.insert("q".into(), serde_json::json!(1));
+        eq.parameters.insert("gainDb".into(), serde_json::json!(0));
+        for index in 0..16 {
+            eq.parameters
+                .insert(format!("band{index}Enabled"), serde_json::json!(true));
+            eq.parameters.insert(
+                format!("band{index}Type"),
+                serde_json::json!("peaking"),
+            );
+            eq.parameters.insert(
+                format!("band{index}FrequencyHz"),
+                serde_json::json!(1000),
+            );
+            eq.parameters
+                .insert(format!("band{index}Q"), serde_json::json!(1));
+            eq.parameters
+                .insert(format!("band{index}GainDb"), serde_json::json!(0));
+        }
+        assert_eq!(eq.parameters.len(), 83);
+        assert!(validate_session(&session(vec![eq], vec![])).is_ok());
     }
 
     #[test]

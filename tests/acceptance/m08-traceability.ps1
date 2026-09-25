@@ -33,7 +33,8 @@ $missing = @($normativeIds | Where-Object {
     -not ($traceRanges | Where-Object { $_.Family -eq $id.Family -and $id.Number -ge $_.Start -and $id.Number -le $_.End })
 })
 if ($missing.Count -gt 0) {
-    throw "Requirement traceability is missing $($missing.Count) normative IDs: $($missing | ForEach-Object { \"$($_.Family)-$($_.Number.ToString('00'))\" } -join ', ')"
+    $missingLabels = @($missing | ForEach-Object { "$($_.Family)-$($_.Number.ToString('00'))" }) -join ', '
+    throw "Requirement traceability is missing $($missing.Count) normative IDs: $missingLabels"
 }
 
 Write-Output "M08 traceability acceptance passed: $($normativeIds.Count) normative requirement IDs covered by the delivery map"

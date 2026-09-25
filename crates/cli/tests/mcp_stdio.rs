@@ -33,9 +33,18 @@ fn send(input: &mut impl Write, output: &mut impl BufRead, message: Value) -> Va
 
 #[test]
 fn mcp_stdio_client_interoperates_with_cli_process() {
-    let database = std::env::temp_dir().join(format!(
-        "audiorouter-mcp-stdio-{}.sqlite",
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let local_app_data = std::env::temp_dir().join(format!(
+        "audiorouter-mcp-stdio-local-{}-{stamp}",
         std::process::id()
+    ));
+    std::fs::create_dir_all(&local_app_data).unwrap();
+    let database = std::env::temp_dir().join(format!(
+        "audiorouter-mcp-stdio-{}-{stamp}.sqlite",
+        std::process::id(),
     ));
     let _ = std::fs::remove_file(&database);
     let storage = Storage::open(&database).unwrap();
@@ -54,6 +63,7 @@ fn mcp_stdio_client_interoperates_with_cli_process() {
             "--database",
             database.to_str().unwrap(),
         ])
+        .env("LOCALAPPDATA", &local_app_data)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -225,9 +235,58 @@ fn mcp_stdio_client_interoperates_with_cli_process() {
     );
     assert_eq!(denied["result"]["isError"], true);
 
+    let redaction = send(
+        &mut input,
+        &mut output,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 23,
+            "method": "tools/call",
+            "params": { "name": "call_api", "arguments": { "method": "nodes.describe", "params": { "kind": "gain", "secret": "private-audio-fixture" } } }
+        }),
+    );
+    assert_eq!(redaction["result"]["isError"], true);
+
     drop(input);
     assert!(child.wait().unwrap().success());
+    let activity_path = local_app_data
+        .join("AudioRouter")
+        .join("logs")
+        .join("mcp-activity.jsonl");
+    let activity_text = std::fs::read_to_string(&activity_path).unwrap();
+    let activity = activity_text
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap())
+        .collect::<Vec<_>>();
+    let denied_activity = activity
+        .iter()
+        .find(|entry| entry["tool"] == "list_devices" && entry["outcome"] == "error")
+        .expect("the actual MCP tools/call is recorded");
+    assert_eq!(denied_activity["errorKind"], "toolError");
+    assert_eq!(denied_activity["argumentFields"], json!(["limit"]));
+    assert!(!activity_text.contains("\"limit\":0"));
+    let redacted_activity = activity
+        .iter()
+        .find(|entry| entry["tool"] == "call_api")
+        .expect("the actual call_api request is recorded");
+    assert_eq!(
+        redacted_activity["argumentFields"],
+        json!(["method", "params"])
+    );
+    assert!(!activity_text.contains("private-audio-fixture"));
     std::fs::remove_file(database).unwrap();
+    let _ = std::fs::remove_file(std::env::temp_dir().join(format!(
+        "audiorouter-mcp-stdio-{}-{stamp}.sqlite-wal",
+        std::process::id(),
+    )));
+    let _ = std::fs::remove_file(std::env::temp_dir().join(format!(
+        "audiorouter-mcp-stdio-{}-{stamp}.sqlite-shm",
+        std::process::id(),
+    )));
+    std::fs::remove_file(activity_path).unwrap();
+    std::fs::remove_dir(local_app_data.join("AudioRouter").join("logs")).unwrap();
+    std::fs::remove_dir(local_app_data.join("AudioRouter")).unwrap();
+    std::fs::remove_dir(local_app_data).unwrap();
 }
 
 #[cfg(windows)]

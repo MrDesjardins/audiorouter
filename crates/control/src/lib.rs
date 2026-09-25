@@ -11,7 +11,7 @@ use audiorouter_domain::{
     Session, VirtualBusRegistry, VirtualBusRouteRegistry, API_METHODS,
 };
 use audiorouter_engine::{
-    AudioBlock, AudioTap, AudioTapSet, RealtimePluginProcessor, RecorderTapBindings,
+    AudioBlock, AudioTap, AudioTapSet, DecodedAudio, RealtimePluginProcessor, RecorderTapBindings,
     RuntimeGeneration, VirtualBusBridgeSet, VirtualBusBridgeSetError,
 };
 use audiorouter_protocol::{
@@ -64,13 +64,15 @@ const MAX_RECORDER_FINALIZATION_PASSES: usize = 4096;
 /// Maximum number of queued recorder chunks drained per native pump and per
 /// attached worker. This keeps recording I/O bounded per control request.
 const MAX_RECORDER_PUMP_CHUNKS: usize = 4;
-const MAX_RESPONSE_BANDS: usize = 8;
+const MAX_RESPONSE_BANDS: usize = audiorouter_dsp::PARAMETRIC_EQ_BANDS;
 const MAX_RESPONSE_FREQUENCIES: usize = 256;
 const MAX_MEMORY_OPERATION_OUTCOMES: usize = 100;
 /// Maximum number of distinct plugin scan roots retained for `plugins.list`.
 const MAX_PLUGIN_INVENTORY_ROOTS: usize = 64;
 const MAX_PLAN_REQUIRED_SCOPES: usize = 1;
 const MAX_PLAN_WARNINGS: usize = 1;
+const AUDIO_UPLOAD_CHUNK_BYTES: usize = 192 * 1024;
+const AUDIO_UPLOAD_TTL: Duration = Duration::from_secs(30 * 60);
 const STATE_CATEGORIES: [&str; 20] = [
     "session.created",
     "session.deleted",
@@ -95,6 +97,80 @@ const STATE_CATEGORIES: [&str; 20] = [
 ];
 const APPLICATION_SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_millis(100);
 const VIRTUAL_DEVICE_PLAN_TTL: Duration = Duration::from_secs(5 * 60);
+
+fn decode_base64_chunk(value: &str) -> Result<Vec<u8>, ControlError> {
+    fn digit(byte: u8) -> Option<u8> {
+        match byte {
+            b'A'..=b'Z' => Some(byte - b'A'),
+            b'a'..=b'z' => Some(byte - b'a' + 26),
+            b'0'..=b'9' => Some(byte - b'0' + 52),
+            b'+' => Some(62),
+            b'/' => Some(63),
+            _ => None,
+        }
+    }
+    if value.is_empty()
+        || value.len() > AUDIO_UPLOAD_CHUNK_BYTES * 4 / 3 + 8
+        || value.len() % 4 != 0
+    {
+        return Err(ControlError::InvalidRequest(
+            "audio upload chunk size or base64 framing is invalid".into(),
+        ));
+    }
+    let bytes = value.as_bytes();
+    let mut output = Vec::with_capacity(bytes.len() / 4 * 3);
+    for (index, group) in bytes.chunks_exact(4).enumerate() {
+        let last = index + 1 == bytes.len() / 4;
+        let a = digit(group[0]).ok_or_else(|| {
+            ControlError::InvalidRequest("audio upload chunk is not valid base64".into())
+        })?;
+        let b = digit(group[1]).ok_or_else(|| {
+            ControlError::InvalidRequest("audio upload chunk is not valid base64".into())
+        })?;
+        output.push((a << 2) | (b >> 4));
+        match (group[2], group[3]) {
+            (b'=', b'=') if last => {
+                if b & 0x0f != 0 {
+                    return Err(ControlError::InvalidRequest(
+                        "audio upload chunk has invalid base64 padding".into(),
+                    ));
+                }
+            }
+            (c, b'=') if last => {
+                let c = digit(c).ok_or_else(|| {
+                    ControlError::InvalidRequest("audio upload chunk is not valid base64".into())
+                })?;
+                if c & 0x03 != 0 {
+                    return Err(ControlError::InvalidRequest(
+                        "audio upload chunk has invalid base64 padding".into(),
+                    ));
+                }
+                output.push((b << 4) | (c >> 2));
+            }
+            (c, d) => {
+                if c == b'=' || d == b'=' {
+                    return Err(ControlError::InvalidRequest(
+                        "audio upload chunk has invalid base64 padding".into(),
+                    ));
+                }
+                let c = digit(c).ok_or_else(|| {
+                    ControlError::InvalidRequest("audio upload chunk is not valid base64".into())
+                })?;
+                let d = digit(d).ok_or_else(|| {
+                    ControlError::InvalidRequest("audio upload chunk is not valid base64".into())
+                })?;
+                output.push((b << 4) | (c >> 2));
+                output.push((c << 6) | d);
+            }
+        }
+    }
+    if output.len() > AUDIO_UPLOAD_CHUNK_BYTES {
+        return Err(ControlError::InvalidRequest(
+            "audio upload chunk exceeds its size limit".into(),
+        ));
+    }
+    Ok(output)
+}
 
 fn session_runtime_label(native_attached: bool) -> &'static str {
     if native_attached {
@@ -2015,6 +2091,12 @@ fn method_description(name: &str) -> &'static str {
         "operations.get" => "Read the durable outcome of an idempotent operation.",
         "operations.cancel" => "Cancel a pending operation when it has not completed.",
         "recordings.list" => "List persisted recording metadata without touching audio files.",
+        "audioMedia.beginUpload" => "Begin a bounded WAV/MP3 upload that will be decoded off the audio callback and stored under an opaque backend media ID.",
+        "audioMedia.uploadChunk" => "Append the next ordered bounded chunk of a selected WAV/MP3 file.",
+        "audioMedia.finishUpload" => "Validate, decode, and persist a complete WAV/MP3 audio source.",
+        "audioMedia.importTemporaryRecording" => "Convert a completed temporary-take WAV into expiring graph media, then remove its temporary recording file and library entry.",
+        "audioMedia.delete" => "Delete imported audio media that is not referenced by any session graph.",
+        "audioSources.transport" => "Play or stop one prepared Test Signal or audio-file source without stopping other graph routes; pause applies to audio files.",
         "recorders.list" => "List live in-memory recorder states and frame boundaries.",
                 "recorders.create" => "Create and attach an unarmed file recorder under the approved root. Omitted dither defaults to TPDF for integer output and is disabled for Float32 and MP3.",
         "recorders.arm" => "Arm a session recorder without opening an audio device.",
@@ -2127,7 +2209,7 @@ fn method_description(name: &str) -> &'static str {
         "graph.plan" => "Validate and preview a graph candidate without mutation.",
         "graph.commit" => "Commit an unexpired graph plan with idempotent mutation.",
         "session.start" | "sessions.start" => {
-            "Start a session runtime through the available backend."
+            "Start a committed route, or temporarily preview a validated candidate graph without saving a new session revision. Candidate preview requires both sessionControl and graphWrite grants plus a prepared single-endpoint native route."
         }
         "session.stop" | "sessions.stop" => {
             "Stop a session runtime and publish its lifecycle result."
@@ -2211,6 +2293,47 @@ fn method_input_schema(name: &str) -> Value {
                 "limit": { "type": "integer", "minimum": 1, "maximum": MAX_RECORDING_LIST_ITEMS }
             }),
             &[],
+        ),
+        "audioMedia.beginUpload" => object_schema(
+            json!({
+                "fileName": { "type": "string", "minLength": 1, "maxLength": 256 },
+                "sizeBytes": { "type": "integer", "minimum": 1, "maximum": audiorouter_storage::MAX_AUDIO_MEDIA_BYTES }
+            }),
+            &["fileName", "sizeBytes"],
+        ),
+        "audioMedia.uploadChunk" => object_schema(
+            json!({
+                "uploadId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "chunkIndex": { "type": "integer", "minimum": 0, "maximum": 1024 },
+                "dataBase64": { "type": "string", "minLength": 4, "maxLength": AUDIO_UPLOAD_CHUNK_BYTES * 4 / 3 + 8 }
+            }),
+            &["uploadId", "chunkIndex", "dataBase64"],
+        ),
+        "audioMedia.finishUpload" => object_schema(
+            json!({
+                "uploadId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
+            }),
+            &["uploadId"],
+        ),
+        "audioMedia.importTemporaryRecording" => object_schema(
+            json!({
+                "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES }
+            }),
+            &["recordingId"],
+        ),
+        "audioMedia.delete" => object_schema(
+            json!({
+                "mediaId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
+            }),
+            &["mediaId"],
+        ),
+        "audioSources.transport" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "action": { "enum": ["play", "pause", "stop", "status"] }
+            }),
+            &["sessionId", "nodeId", "action"],
         ),
         "recorders.list" => object_schema(json!({}), &[]),
         "recorders.create" => object_schema(
@@ -2556,7 +2679,15 @@ fn method_input_schema(name: &str) -> Value {
             }),
             &["sessionId", "idempotencyKey"],
         ),
-        "session.start" | "sessions.start" | "session.stop" | "sessions.stop" => object_schema(
+        "session.start" | "sessions.start" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES },
+                "candidate": session_item_schema()
+            }),
+            &["sessionId", "idempotencyKey"],
+        ),
+        "session.stop" | "sessions.stop" => object_schema(
             json!({
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
@@ -3009,7 +3140,9 @@ fn method_output_schema(name: &str) -> Value {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "state": { "const": "running" },
                 "generation": { "type": "integer", "minimum": 1 },
-                "runtime": { "enum": ["fake", "native"] }
+                "runtime": { "enum": ["fake", "native"] },
+                "preview": { "type": "boolean" },
+                "savedRevision": { "type": "integer", "minimum": 0 }
             },
             "required": ["sessionId", "state", "generation", "runtime"],
             "additionalProperties": false
@@ -3715,6 +3848,52 @@ fn method_output_schema(name: &str) -> Value {
                 ]
             })
         }
+        "audioMedia.beginUpload" => json!({
+            "type": "object", "properties": {
+                "uploadId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "chunkBytes": { "const": AUDIO_UPLOAD_CHUNK_BYTES }
+            }, "required": ["uploadId", "chunkBytes"], "additionalProperties": false
+        }),
+        "audioMedia.uploadChunk" => json!({
+            "type": "object", "properties": {
+                "receivedBytes": { "type": "integer", "minimum": 0, "maximum": audiorouter_storage::MAX_AUDIO_MEDIA_BYTES },
+                "nextChunkIndex": { "type": "integer", "minimum": 0, "maximum": 1024 }
+            }, "required": ["receivedBytes", "nextChunkIndex"], "additionalProperties": false
+        }),
+        "audioMedia.finishUpload" => json!({
+            "type": "object", "properties": {
+                "mediaId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "fileName": { "type": "string", "minLength": 1, "maxLength": 256 },
+                "format": { "enum": ["wav", "mp3"] },
+                "durationMs": { "type": "integer", "minimum": 1, "maximum": 120000 },
+                "channels": { "type": "integer", "enum": [1, 2] },
+                "sampleRateHz": { "type": "integer", "minimum": 8000, "maximum": 192000 }
+            }, "required": ["mediaId", "fileName", "format", "durationMs", "channels", "sampleRateHz"], "additionalProperties": false
+        }),
+        "audioMedia.importTemporaryRecording" => json!({
+            "type": "object", "properties": {
+                "mediaId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "fileName": { "const": "Temporary voice take.wav" },
+                "format": { "const": "wav" },
+                "durationMs": { "type": "integer", "minimum": 1, "maximum": 120000 },
+                "channels": { "type": "integer", "enum": [1, 2] },
+                "sampleRateHz": { "type": "integer", "minimum": 8000, "maximum": 192000 },
+                "expiresAt": { "type": "integer", "minimum": 0 },
+                "sourceRemoved": { "const": true }
+            }, "required": ["mediaId", "fileName", "format", "durationMs", "channels", "sampleRateHz", "expiresAt", "sourceRemoved"], "additionalProperties": false
+        }),
+        "audioMedia.delete" => json!({
+            "type": "object", "properties": { "deleted": { "type": "boolean" } },
+            "required": ["deleted"], "additionalProperties": false
+        }),
+        "audioSources.transport" => json!({
+            "type": "object", "properties": {
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "state": { "enum": ["playing", "paused", "stopped"] },
+                "loop": { "type": "boolean" }
+            }, "required": ["sessionId", "nodeId", "state", "loop"], "additionalProperties": false
+        }),
         "recordings.get" => recording_item_schema(),
         "recordings.recovery" => json!({
             "oneOf": [{
@@ -4515,13 +4694,16 @@ impl ClientGrant {
     }
 
     /// Grant the desktop shell's explicitly local user surface the startup
-    /// capability in addition to ordinary operator controls. This is not an
-    /// enrolled role and must not be used for remote, MCP, or CLI clients.
+    /// capability and permission to create explicitly requested recordings
+    /// in approved roots. Record does not authorize opening capture devices;
+    /// this is not an enrolled role and must not be used for remote, MCP, or
+    /// CLI clients.
     pub fn for_desktop_shell() -> Self {
         Self::with_scopes([
             PermissionScope::Read,
             PermissionScope::GraphWrite,
             PermissionScope::SessionControl,
+            PermissionScope::Record,
             PermissionScope::StartupWrite,
         ])
     }
@@ -4580,6 +4762,13 @@ pub struct ControlPlane {
     recorder_node_sessions: HashMap<EntityId, EntityId>,
     recording_policy: Option<RecordingPathPolicy>,
     storage: Option<Storage>,
+    audio_upload: Option<AudioMediaUpload>,
+    next_audio_upload: u64,
+    next_audio_media: u64,
+    audio_file_sources:
+        HashMap<(EntityId, EntityId), std::sync::Arc<audiorouter_engine::AudioFileSource>>,
+    test_signal_sources:
+        HashMap<(EntityId, EntityId), std::sync::Arc<audiorouter_engine::TestSignalSource>>,
     enrollments: HashMap<String, (ClientRole, bool)>,
     events: EventLog,
     mutation_limiter: MutationRateLimiter,
@@ -4614,6 +4803,8 @@ pub struct ControlPlane {
     pending_endpoint_changes: Vec<audiorouter_windows_audio::EndpointChange>,
     native_endpoint_worker: Option<audiorouter_windows_audio::NativeAudioWorker>,
     native_endpoint_session: Option<EntityId>,
+    native_endpoint_worker_secondary: Option<audiorouter_windows_audio::NativeAudioWorker>,
+    native_endpoint_session_secondary: Option<EntityId>,
     #[cfg(windows)]
     native_multi_input_worker: Option<audiorouter_windows_audio::NativeMultiInputWorker>,
     #[cfg(windows)]
@@ -4621,6 +4812,7 @@ pub struct ControlPlane {
     #[cfg(windows)]
     native_multi_input_worker_generation: Option<u64>,
     native_endpoint_taps: Option<AudioTapSet>,
+    native_endpoint_taps_secondary: Option<AudioTapSet>,
     native_endpoint_rejections: u64,
     #[cfg(windows)]
     native_output_fanout: Option<audiorouter_windows_audio::WasapiOutputFanout>,
@@ -4654,6 +4846,16 @@ pub struct ControlPlane {
     managed_software_devices: audiorouter_windows_audio::ManagedSoftwareDeviceInventory,
 }
 
+struct AudioMediaUpload {
+    id: String,
+    file_name: String,
+    format: String,
+    expected_bytes: usize,
+    next_chunk: u32,
+    bytes: Vec<u8>,
+    started_at: Instant,
+}
+
 impl Default for ControlPlane {
     fn default() -> Self {
         Self::new("dev")
@@ -4675,6 +4877,90 @@ fn session_virtual_capture_bus_ids(session: &Session) -> Vec<EntityId> {
 }
 
 impl ControlPlane {
+    fn compile_session_graph_with_audio(
+        &mut self,
+        session: &Session,
+        generation: RuntimeGeneration,
+        sample_rate_hz: u32,
+        plugins: &HashMap<EntityId, Arc<dyn RealtimePluginProcessor>>,
+    ) -> Result<audiorouter_engine::RuntimeGraph, ControlError> {
+        let mut media = HashMap::<String, Arc<DecodedAudio>>::new();
+        for node in session
+            .nodes
+            .iter()
+            .filter(|node| node.enabled && node.kind == NodeKind::AudioFile)
+        {
+            let media_id = node
+                .parameters
+                .get("mediaId")
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest(
+                        "select a WAV or MP3 file for every Audio File source".into(),
+                    )
+                })?;
+            if media.contains_key(media_id) {
+                continue;
+            }
+            let (_, format, bytes) = self
+                .storage
+                .as_ref()
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest("audio source storage is unavailable".into())
+                })?
+                .load_audio_media(media_id)
+                .map_err(storage_error)?
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest(
+                        "audio source media is missing; select the file again".into(),
+                    )
+                })?;
+            let decoded = audiorouter_engine::decode_audio_bytes(bytes, &format, sample_rate_hz)
+                .map_err(|error| {
+                    ControlError::InvalidRequest(format!(
+                        "audio source could not be decoded: {error}"
+                    ))
+                })?;
+            media.insert(media_id.to_owned(), Arc::new(decoded));
+        }
+        let graph = audiorouter_engine::compile_session_at_sample_rate_with_plugins_and_audio(
+            session,
+            generation,
+            sample_rate_hz,
+            plugins,
+            &media,
+        )
+        .map_err(|error| {
+            ControlError::InvalidRequest(format!("native graph rejected: {error:?}"))
+        })?;
+        self.audio_file_sources
+            .retain(|(owner_session, _), _| owner_session != &session.id);
+        self.test_signal_sources
+            .retain(|(owner_session, _), _| owner_session != &session.id);
+        for node in session
+            .nodes
+            .iter()
+            .filter(|node| node.kind == NodeKind::AudioFile)
+        {
+            if let Some(source) = graph.audio_file_source_for_node(&node.id) {
+                self.audio_file_sources
+                    .insert((session.id.clone(), node.id.clone()), source);
+            }
+        }
+        for node in session
+            .nodes
+            .iter()
+            .filter(|node| node.kind == NodeKind::TestSignal)
+        {
+            if let Some(source) = graph.test_signal_source_for_node(&node.id) {
+                self.test_signal_sources
+                    .insert((session.id.clone(), node.id.clone()), source);
+            }
+        }
+        Ok(graph)
+    }
+
     pub fn new(build: impl Into<String>) -> Self {
         Self {
             store: GraphStore::default(),
@@ -4687,6 +4973,11 @@ impl ControlPlane {
             recorder_node_sessions: HashMap::new(),
             recording_policy: None,
             storage: None,
+            audio_upload: None,
+            next_audio_upload: 1,
+            next_audio_media: 1,
+            audio_file_sources: HashMap::new(),
+            test_signal_sources: HashMap::new(),
             enrollments: HashMap::new(),
             events: EventLog::new(1),
             mutation_limiter: MutationRateLimiter::default(),
@@ -4722,6 +5013,8 @@ impl ControlPlane {
             pending_endpoint_changes: Vec::new(),
             native_endpoint_worker: None,
             native_endpoint_session: None,
+            native_endpoint_worker_secondary: None,
+            native_endpoint_session_secondary: None,
             #[cfg(windows)]
             native_multi_input_worker: None,
             #[cfg(windows)]
@@ -4729,6 +5022,7 @@ impl ControlPlane {
             #[cfg(windows)]
             native_multi_input_worker_generation: None,
             native_endpoint_taps: None,
+            native_endpoint_taps_secondary: None,
             native_endpoint_rejections: 0,
             #[cfg(windows)]
             native_output_fanout: None,
@@ -4763,7 +5057,9 @@ impl ControlPlane {
     }
 
     fn any_native_worker_attached(&self) -> bool {
-        self.native_endpoint_worker.is_some() || {
+        self.native_endpoint_worker.is_some()
+            || self.native_endpoint_worker_secondary.is_some()
+            || {
             #[cfg(windows)]
             {
                 self.native_duplex_worker.is_some() || self.native_multi_input_worker.is_some()
@@ -4775,8 +5071,81 @@ impl ControlPlane {
         }
     }
 
+    fn native_endpoint_worker_for_session(
+        &self,
+        session_id: &EntityId,
+    ) -> Option<&audiorouter_windows_audio::NativeAudioWorker> {
+        if self.native_endpoint_session.as_ref() == Some(session_id) {
+            self.native_endpoint_worker.as_ref()
+        } else if self.native_endpoint_session_secondary.as_ref() == Some(session_id) {
+            self.native_endpoint_worker_secondary.as_ref()
+        } else {
+            None
+        }
+    }
+
+    fn native_endpoint_worker_for_session_mut(
+        &mut self,
+        session_id: &EntityId,
+    ) -> Option<&mut audiorouter_windows_audio::NativeAudioWorker> {
+        if self.native_endpoint_session.as_ref() == Some(session_id) {
+            self.native_endpoint_worker.as_mut()
+        } else if self.native_endpoint_session_secondary.as_ref() == Some(session_id) {
+            self.native_endpoint_worker_secondary.as_mut()
+        } else {
+            None
+        }
+    }
+
+    fn native_endpoint_session_is_attached(&self, session_id: &EntityId) -> bool {
+        self.native_endpoint_worker_for_session(session_id).is_some()
+    }
+
+    fn native_endpoint_worker_slot_for_session_mut(
+        &mut self,
+        session_id: &EntityId,
+    ) -> Option<&mut Option<audiorouter_windows_audio::NativeAudioWorker>> {
+        if self.native_endpoint_session.as_ref() == Some(session_id) {
+            Some(&mut self.native_endpoint_worker)
+        } else if self.native_endpoint_session_secondary.as_ref() == Some(session_id) {
+            Some(&mut self.native_endpoint_worker_secondary)
+        } else {
+            None
+        }
+    }
+
+    fn native_endpoint_taps_for_session_mut(
+        &mut self,
+        session_id: &EntityId,
+    ) -> Option<&mut Option<AudioTapSet>> {
+        if self.native_endpoint_session.as_ref() == Some(session_id) {
+            Some(&mut self.native_endpoint_taps)
+        } else if self.native_endpoint_session_secondary.as_ref() == Some(session_id) {
+            Some(&mut self.native_endpoint_taps_secondary)
+        } else {
+            None
+        }
+    }
+
+    fn native_endpoint_has_capacity(&self) -> bool {
+        (self.native_endpoint_worker.is_none() || self.native_endpoint_worker_secondary.is_none())
+            && {
+                #[cfg(windows)]
+                {
+                    self.native_multi_input_worker.is_none()
+                        && self.native_duplex_worker.is_none()
+                }
+                #[cfg(not(windows))]
+                {
+                    true
+                }
+            }
+    }
+
     fn native_worker_attached_to(&self, session_id: &EntityId) -> bool {
-        self.native_endpoint_session.as_ref() == Some(session_id) || {
+        self.native_endpoint_session.as_ref() == Some(session_id)
+            || self.native_endpoint_session_secondary.as_ref() == Some(session_id)
+            || {
             #[cfg(windows)]
             {
                 self.native_duplex_worker_session.as_ref() == Some(session_id)
@@ -4799,9 +5168,11 @@ impl ControlPlane {
         worker: audiorouter_windows_audio::WasapiEndpointWorker,
     ) -> Result<(), ControlError> {
         self.get_session(&session_id)?;
-        if self.any_native_worker_attached() {
+        if self.native_endpoint_session_is_attached(&session_id)
+            || !self.native_endpoint_has_capacity()
+        {
             return Err(ControlError::InvalidRequest(
-                "native endpoint worker is already attached".into(),
+                "native endpoint workers are at capacity or the session is already attached".into(),
             ));
         }
         if worker.is_running() {
@@ -4810,10 +5181,14 @@ impl ControlPlane {
             ));
         }
         worker.set_privacy_muted(self.privacy_muted);
-        self.native_endpoint_worker = Some(audiorouter_windows_audio::NativeAudioWorker::Endpoint(
-            worker,
-        ));
-        self.native_endpoint_session = Some(session_id);
+        let worker = audiorouter_windows_audio::NativeAudioWorker::Endpoint(worker);
+        if self.native_endpoint_worker.is_none() {
+            self.native_endpoint_worker = Some(worker);
+            self.native_endpoint_session = Some(session_id);
+        } else {
+            self.native_endpoint_worker_secondary = Some(worker);
+            self.native_endpoint_session_secondary = Some(session_id);
+        }
         Ok(())
     }
 
@@ -5343,9 +5718,7 @@ impl ControlPlane {
         fanout: audiorouter_windows_audio::WasapiOutputFanout,
     ) -> Result<(), ControlError> {
         self.get_session(&session_id)?;
-        if self.native_endpoint_session.as_ref() != Some(&session_id)
-            || self.native_endpoint_worker.is_none()
-        {
+        if !self.native_endpoint_session_is_attached(&session_id) {
             return Err(ControlError::InvalidRequest(
                 "native output fan-out requires an attached endpoint worker".into(),
             ));
@@ -5584,9 +5957,11 @@ impl ControlPlane {
         retry_delay_ms: u64,
     ) -> Result<(), ControlError> {
         self.get_session(&session_id)?;
-        if self.any_native_worker_attached() {
+        if self.native_endpoint_session_is_attached(&session_id)
+            || !self.native_endpoint_has_capacity()
+        {
             return Err(ControlError::InvalidRequest(
-                "native endpoint worker is already attached".into(),
+                "native endpoint worker limit reached or session is already attached".into(),
             ));
         }
         let bridge =
@@ -5667,8 +6042,7 @@ impl ControlPlane {
                 "output fan-out requires bounded endpoints and a nonzero generation".into(),
             ));
         }
-        let endpoint_owner = self.native_endpoint_session.as_ref() == Some(&session_id)
-            && self.native_endpoint_worker.is_some();
+        let endpoint_owner = self.native_endpoint_session_is_attached(&session_id);
         if !endpoint_owner && !multi_owner {
             return Err(ControlError::InvalidRequest(
                 "output fan-out requires an attached native endpoint or multi-input worker".into(),
@@ -5863,7 +6237,7 @@ impl ControlPlane {
         retry_delay_ms: u64,
     ) -> Result<(), ControlError> {
         self.get_session(session_id)?;
-        if self.native_endpoint_session.as_ref() != Some(session_id) {
+        if !self.native_endpoint_session_is_attached(session_id) {
             return Err(ControlError::InvalidRequest(
                 "native endpoint worker is not bound to the session".into(),
             ));
@@ -5882,37 +6256,48 @@ impl ControlPlane {
                 audiorouter_windows_audio::EndpointMonitor::start().map_err(audio_control_error)?,
             );
         }
-        let monitor = self
-            .endpoint_monitor
-            .as_mut()
-            .expect("endpoint monitor initialized above");
-        monitor.refresh_changes().map_err(audio_control_error)?;
-        let capture = monitor
-            .snapshot()
-            .iter()
-            .find(|endpoint| {
-                endpoint.id == capture_endpoint_id
-                    && endpoint.direction == audiorouter_windows_audio::EndpointDirection::Capture
-            })
-            .cloned()
-            .ok_or_else(|| ControlError::InvalidRequest("capture endpoint is not active".into()))?;
-        let render = monitor
-            .snapshot()
-            .iter()
-            .find(|endpoint| {
-                endpoint.id == render_endpoint_id
-                    && endpoint.direction == audiorouter_windows_audio::EndpointDirection::Render
-            })
-            .cloned()
-            .ok_or_else(|| ControlError::InvalidRequest("render endpoint is not active".into()))?;
+        let (capture, render) = {
+            let monitor = self
+                .endpoint_monitor
+                .as_mut()
+                .expect("endpoint monitor initialized above");
+            monitor.refresh_changes().map_err(audio_control_error)?;
+            let capture = monitor
+                .snapshot()
+                .iter()
+                .find(|endpoint| {
+                    endpoint.id == capture_endpoint_id
+                        && endpoint.direction
+                            == audiorouter_windows_audio::EndpointDirection::Capture
+                })
+                .cloned()
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest("capture endpoint is not active".into())
+                })?;
+            let render = monitor
+                .snapshot()
+                .iter()
+                .find(|endpoint| {
+                    endpoint.id == render_endpoint_id
+                        && endpoint.direction
+                            == audiorouter_windows_audio::EndpointDirection::Render
+                })
+                .cloned()
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest("render endpoint is not active".into())
+                })?;
+            (capture, render)
+        };
+        let mut monitor = self.endpoint_monitor.take().ok_or_else(|| {
+            ControlError::InvalidRequest("endpoint monitor is not available".into())
+        })?;
         let result = self
-            .native_endpoint_worker
-            .as_mut()
+            .native_endpoint_worker_for_session_mut(session_id)
             .ok_or_else(|| {
                 ControlError::InvalidRequest("native endpoint worker is not attached".into())
             })?
             .rebind_with_refreshed_bound_with_retry(
-                monitor,
+                &mut monitor,
                 &capture,
                 &render,
                 buffer_duration_100ns,
@@ -5920,6 +6305,7 @@ impl ControlPlane {
                 retry_delay_ms,
             )
             .map_err(audio_control_error);
+        self.endpoint_monitor = Some(monitor);
         if result.is_ok() {
             self.pending_endpoint_changes.clear();
         }
@@ -6507,8 +6893,7 @@ impl ControlPlane {
                 "native endpoint worker requires a running session".into(),
             ));
         }
-        self.native_endpoint_worker
-            .as_mut()
+        self.native_endpoint_worker_for_session_mut(&session_id)
             .ok_or_else(|| {
                 ControlError::InvalidRequest("native endpoint worker is not attached".into())
             })?
@@ -7048,7 +7433,7 @@ impl ControlPlane {
         max_packets: u32,
         tap: &dyn AudioTap,
     ) -> Result<Value, ControlError> {
-        if self.native_endpoint_session.as_ref() != Some(session_id) {
+        if !self.native_endpoint_session_is_attached(session_id) {
             self.native_endpoint_rejections = self.native_endpoint_rejections.saturating_add(1);
             return Err(ControlError::InvalidRequest(
                 "native endpoint worker is not bound to the session".into(),
@@ -7073,7 +7458,9 @@ impl ControlPlane {
             ));
         }
         let pump = {
-            let worker = self.native_endpoint_worker.as_mut().ok_or_else(|| {
+            let worker = self
+                .native_endpoint_worker_for_session_mut(session_id)
+                .ok_or_else(|| {
                 ControlError::InvalidRequest("native endpoint worker is not attached".into())
             })?;
             if worker.bridge().scheduler().telemetry().active_generation
@@ -7136,12 +7523,17 @@ impl ControlPlane {
         generation: u64,
         sample_rate_hz: u32,
     ) -> Result<(), ControlError> {
-        if self.native_endpoint_session.as_ref() != Some(session_id) {
-            return Err(ControlError::InvalidRequest(
-                "native endpoint worker is not bound to the session".into(),
-            ));
-        }
-        if self.native_endpoint_worker.is_none() {
+        self.activate_native_graph_candidate(session_id, generation, sample_rate_hz, None)
+    }
+
+    fn activate_native_graph_candidate(
+        &mut self,
+        session_id: &EntityId,
+        generation: u64,
+        sample_rate_hz: u32,
+        candidate: Option<&Session>,
+    ) -> Result<(), ControlError> {
+        if !self.native_endpoint_session_is_attached(session_id) {
             return Err(ControlError::InvalidRequest(
                 "native endpoint worker is not attached".into(),
             ));
@@ -7157,7 +7549,9 @@ impl ControlPlane {
                 "native endpoint worker generation is stale".into(),
             ));
         }
-        let session = self.get_session(session_id)?.clone();
+        let session = candidate
+            .cloned()
+            .unwrap_or_else(|| self.get_session(session_id).expect("loaded above").clone());
         let recorder_node_ids = session
             .nodes
             .iter()
@@ -7176,15 +7570,12 @@ impl ControlPlane {
                 })?
         };
         let plugin_stages = self.prepare_plugin_stages(&session, sample_rate_hz)?;
-        let graph = audiorouter_engine::compile_session_at_sample_rate_with_plugins(
+        let graph = self.compile_session_graph_with_audio(
             &session,
             RuntimeGeneration::new(generation),
             sample_rate_hz,
             &plugin_stages,
-        )
-        .map_err(|error| {
-            ControlError::InvalidRequest(format!("native graph rejected: {error:?}"))
-        })?;
+        )?;
 
         let capture_bus_ids = session_virtual_capture_bus_ids(&session);
         self.prepare_virtual_route_bridges(session_id, generation, &capture_bus_ids)?;
@@ -7209,15 +7600,19 @@ impl ControlPlane {
             })?;
         }
 
-        self.native_endpoint_worker
-            .as_mut()
+        self.native_endpoint_worker_for_session_mut(session_id)
             .ok_or_else(|| {
                 ControlError::InvalidRequest("native endpoint worker is not attached".into())
             })?
             .bridge_mut()
             .scheduler_mut()
             .publish(graph);
-        self.native_endpoint_taps = Some(recorder_taps);
+        let taps = self
+            .native_endpoint_taps_for_session_mut(session_id)
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("native endpoint worker is not attached".into())
+            })?;
+        *taps = Some(recorder_taps);
         Ok(())
     }
 
@@ -7252,15 +7647,12 @@ impl ControlPlane {
         }
         let session = self.get_session(session_id)?.clone();
         let plugin_stages = self.prepare_plugin_stages(&session, sample_rate_hz)?;
-        let graph = audiorouter_engine::compile_session_at_sample_rate_with_plugins(
+        let graph = self.compile_session_graph_with_audio(
             &session,
             RuntimeGeneration::new(generation),
             sample_rate_hz,
             &plugin_stages,
-        )
-        .map_err(|error| {
-            ControlError::InvalidRequest(format!("native graph rejected: {error:?}"))
-        })?;
+        )?;
         let recorder_node_ids = session
             .nodes
             .iter()
@@ -7444,12 +7836,20 @@ impl ControlPlane {
     ) -> Result<Value, ControlError> {
         #[cfg(windows)]
         self.heartbeat_native_capture_sink_bindings()?;
-        let taps = self.native_endpoint_taps.take().ok_or_else(|| {
+        let Some(taps_slot) = self.native_endpoint_taps_for_session_mut(session_id) else {
+            self.native_endpoint_rejections = self.native_endpoint_rejections.saturating_add(1);
+            return Err(ControlError::InvalidRequest(
+                "native graph recorder taps are not prepared".into(),
+            ));
+        };
+        let taps = taps_slot.take().ok_or_else(|| {
             self.native_endpoint_rejections = self.native_endpoint_rejections.saturating_add(1);
             ControlError::InvalidRequest("native graph recorder taps are not prepared".into())
         })?;
         let result = self.pump_native_endpoint_worker(session_id, generation, max_packets, &taps);
-        self.native_endpoint_taps = Some(taps);
+        if let Some(taps_slot) = self.native_endpoint_taps_for_session_mut(session_id) {
+            *taps_slot = Some(taps);
+        }
         let primary = result?;
         #[cfg(windows)]
         let output_fanout = if let Some(fanout) = self.native_output_fanout.as_mut() {
@@ -7658,39 +8058,60 @@ impl ControlPlane {
     /// Detach only a stopped native worker; this never affects unrelated
     /// endpoints or machine audio configuration.
     pub fn detach_native_endpoint_worker(&mut self) -> Result<(), ControlError> {
+        let session_id = self
+            .native_endpoint_session
+            .clone()
+            .or_else(|| self.native_endpoint_session_secondary.clone())
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("native endpoint worker is not attached".into())
+            })?;
+        self.detach_native_endpoint_worker_for_session(&session_id)
+    }
+
+    fn detach_native_endpoint_worker_for_session(
+        &mut self,
+        session_id: &EntityId,
+    ) -> Result<(), ControlError> {
         #[cfg(windows)]
-        if self.native_output_fanout.is_some() {
+        if self.native_output_fanout_session.as_ref() == Some(session_id)
+            && self.native_output_fanout.is_some()
+        {
             return Err(ControlError::InvalidRequest(
                 "detach the native output fan-out before detaching the endpoint worker".into(),
             ));
         }
-        if let Some(session_id) = self.native_endpoint_session.as_ref() {
-            if self
-                .runtimes
-                .get(session_id)
-                .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
-            {
-                return Err(ControlError::InvalidRequest(
-                    "stop the session before detaching its native endpoint worker".into(),
-                ));
-            }
+        if self.runtimes.get(session_id).is_some_and(|runtime| runtime.state() == RuntimeState::Running)
+        {
+            return Err(ControlError::InvalidRequest(
+                "stop the session before detaching its native endpoint worker".into(),
+            ));
+        }
+        if !self.native_endpoint_session_is_attached(session_id) {
+            return Err(ControlError::InvalidRequest(
+                "native endpoint worker is not attached to the session".into(),
+            ));
         }
         if self
-            .native_endpoint_worker
-            .as_ref()
+            .native_endpoint_worker_for_session(session_id)
             .is_some_and(audiorouter_windows_audio::NativeAudioWorker::is_running)
         {
             return Err(ControlError::InvalidRequest(
                 "native endpoint worker must be stopped before detachment".into(),
             ));
         }
-        if self.native_endpoint_worker.take().is_none() {
+        let Some(worker_slot) = self.native_endpoint_worker_slot_for_session_mut(session_id) else {
             return Err(ControlError::InvalidRequest(
                 "native endpoint worker is not attached".into(),
             ));
+        };
+        worker_slot.take();
+        if self.native_endpoint_session.as_ref() == Some(session_id) {
+            self.native_endpoint_session = None;
+            self.native_endpoint_taps = None;
+        } else {
+            self.native_endpoint_session_secondary = None;
+            self.native_endpoint_taps_secondary = None;
         }
-        self.native_endpoint_session = None;
-        self.native_endpoint_taps = None;
         Ok(())
     }
 
@@ -7797,6 +8218,11 @@ impl ControlPlane {
             recorder_node_sessions: HashMap::new(),
             recording_policy,
             storage: Some(storage),
+            audio_upload: None,
+            next_audio_upload: 1,
+            next_audio_media: 1,
+            audio_file_sources: HashMap::new(),
+            test_signal_sources: HashMap::new(),
             enrollments: HashMap::new(),
             events: EventLog::new(backend_epoch),
             mutation_limiter: MutationRateLimiter::default(),
@@ -7832,6 +8258,8 @@ impl ControlPlane {
             pending_endpoint_changes: Vec::new(),
             native_endpoint_worker: None,
             native_endpoint_session: None,
+            native_endpoint_worker_secondary: None,
+            native_endpoint_session_secondary: None,
             #[cfg(windows)]
             native_multi_input_worker: None,
             #[cfg(windows)]
@@ -7839,6 +8267,7 @@ impl ControlPlane {
             #[cfg(windows)]
             native_multi_input_worker_generation: None,
             native_endpoint_taps: None,
+            native_endpoint_taps_secondary: None,
             native_endpoint_rejections: 0,
             #[cfg(windows)]
             native_output_fanout: None,
@@ -9124,11 +9553,9 @@ impl ControlPlane {
                 "stop the session before deleting it".into(),
             ));
         }
-        if self.native_endpoint_session.as_ref() == Some(id)
-            && self
-                .native_endpoint_worker
-                .as_ref()
-                .is_some_and(audiorouter_windows_audio::NativeAudioWorker::is_running)
+        if self
+            .native_endpoint_worker_for_session(id)
+            .is_some_and(audiorouter_windows_audio::NativeAudioWorker::is_running)
         {
             return Err(ControlError::InvalidRequest(
                 "stop the native endpoint worker before deleting the session".into(),
@@ -9180,10 +9607,17 @@ impl ControlPlane {
         // ownership, not durable session state. Retain it through the
         // persistence operation so a failed delete leaves the owner intact;
         // only a successful store mutation may clear the binding and taps.
-        if self.native_endpoint_session.as_ref() == Some(id) {
-            self.native_endpoint_worker.take();
+        if self.native_endpoint_session_is_attached(id) {
+            if let Some(worker_slot) = self.native_endpoint_worker_slot_for_session_mut(id) {
+                worker_slot.take();
+            }
+            if self.native_endpoint_session.as_ref() == Some(id) {
             self.native_endpoint_session = None;
             self.native_endpoint_taps = None;
+            } else {
+                self.native_endpoint_session_secondary = None;
+                self.native_endpoint_taps_secondary = None;
+            }
         }
         #[cfg(windows)]
         if self.native_duplex_worker_session.as_ref() == Some(id) {
@@ -9364,7 +9798,7 @@ impl ControlPlane {
             json!({ "name": "q", "type": "number", "minimum": 0.1, "maximum": 20.0, "default": 1.0 }),
             json!({ "name": "gainDb", "type": "number", "unit": "dB", "minimum": -24.0, "maximum": 24.0, "default": 0.0 }),
         ];
-        for index in 0..8 {
+        for index in 0..audiorouter_dsp::PARAMETRIC_EQ_BANDS {
             parameters.extend([
                 json!({ "name": format!("band{index}Enabled"), "type": "boolean", "default": false }),
                 json!({ "name": format!("band{index}Type"), "type": "string", "enum": ["peaking", "lowShelf", "highShelf", "lowPass", "highPass", "notch"], "default": "peaking" }),
@@ -9543,19 +9977,27 @@ impl ControlPlane {
         // reports an error, while the first error remains visible to the
         // supervisor.
         let mut native_recovery_error = None;
-        if self
-            .native_endpoint_session
-            .as_ref()
-            .is_some_and(|session_id| crashed_session_ids.contains(session_id))
-        {
-            if let Some(worker) = self.native_endpoint_worker.as_mut() {
+        for session_id in crashed_session_ids.clone() {
+            if self.native_endpoint_session_is_attached(&session_id) {
+                if let Some(worker) = self.native_endpoint_worker_for_session_mut(&session_id) {
                 if let Err(error) = worker.stop() {
                     native_recovery_error = Some(audio_control_error(error));
                 }
+                }
+                let _ = self.detach_native_endpoint_worker_for_session(&session_id);
             }
-            self.native_endpoint_worker = None;
-            self.native_endpoint_session = None;
-            self.native_endpoint_taps = None;
+            if self.native_endpoint_session.as_ref() == Some(&session_id)
+                && self.native_endpoint_worker.is_none()
+            {
+                self.native_endpoint_session = None;
+                self.native_endpoint_taps = None;
+            }
+            if self.native_endpoint_session_secondary.as_ref() == Some(&session_id)
+                && self.native_endpoint_worker_secondary.is_none()
+            {
+                self.native_endpoint_session_secondary = None;
+                self.native_endpoint_taps_secondary = None;
+            }
         }
         #[cfg(windows)]
         if self
@@ -9797,6 +10239,10 @@ impl ControlPlane {
             .native_endpoint_worker
             .as_ref()
             .is_some_and(audiorouter_windows_audio::NativeAudioWorker::is_running)
+            || self
+                .native_endpoint_worker_secondary
+                .as_ref()
+                .is_some_and(audiorouter_windows_audio::NativeAudioWorker::is_running)
         {
             return "running";
         }
@@ -9824,7 +10270,7 @@ impl ControlPlane {
         {
             return "running";
         }
-        if self.native_endpoint_worker.is_some() {
+        if self.native_endpoint_worker.is_some() || self.native_endpoint_worker_secondary.is_some() {
             return "configured-stopped";
         }
         #[cfg(windows)]
@@ -9843,8 +10289,11 @@ impl ControlPlane {
     }
 
     fn native_session_id(&self) -> Option<&EntityId> {
-        if self.native_endpoint_worker.is_some() {
-            return self.native_endpoint_session.as_ref();
+        if self.native_endpoint_worker.is_some() || self.native_endpoint_worker_secondary.is_some() {
+            return self
+                .native_endpoint_session
+                .as_ref()
+                .or(self.native_endpoint_session_secondary.as_ref());
         }
         #[cfg(windows)]
         if self.native_duplex_worker.is_some() {
@@ -9862,7 +10311,7 @@ impl ControlPlane {
     }
 
     fn native_adapter_kind(&self) -> Option<&'static str> {
-        if self.native_endpoint_worker.is_some() {
+        if self.native_endpoint_worker.is_some() || self.native_endpoint_worker_secondary.is_some() {
             return Some("endpoint");
         }
         #[cfg(windows)]
@@ -9893,15 +10342,15 @@ impl ControlPlane {
                 "available",
                 match kind {
                     Some("duplex") => {
-                        "native duplex worker is running; production driver qualification remains open"
+                        "native duplex audio is running; managed driver qualification remains open"
                     }
                     Some("render-source") => {
-                        "native render-source worker is running; production driver qualification remains open"
+                        "native render-source audio is running; managed driver qualification remains open"
                     }
                     Some("multi-input") => {
-                        "native multi-input worker is running; production driver qualification remains open"
+                        "native multi-input audio is running"
                     }
-                    _ => "native endpoint worker is running; production driver qualification remains open",
+                    _ => "native endpoint audio is running",
                 },
             ),
             "configured-stopped" => (
@@ -9923,15 +10372,15 @@ impl ControlPlane {
                 "unavailable",
                 match kind {
                     Some("duplex") => {
-                        "native duplex routing is implemented but not activated; exact bindings and a production driver are required"
+                        "native duplex audio is not prepared; configure exact endpoints and the managed virtual bridge before starting"
                     }
                     Some("render-source") => {
-                        "native render-source routing is implemented but not activated; exact bindings and a production driver are required"
+                        "native render-source audio is not prepared; configure exact endpoints and the managed virtual bridge before starting"
                     }
                     Some("multi-input") => {
-                        "native multi-input routing is implemented but not activated; exact bindings and a production driver are required"
+                        "multi-input audio is not prepared; select exact sources and outputs in Devices, prepare them, then Start session"
                     }
-                    _ => "native endpoint routing is implemented but not activated; exact bindings and a production driver are required",
+                    _ => "audio is not prepared; in Devices, select exact capture and render endpoints, then Prepare native endpoints and Start session",
                 },
             ),
         }
@@ -10437,14 +10886,58 @@ impl ControlPlane {
     }
 
     pub fn session_start(&mut self, id: &EntityId) -> Result<Value, ControlError> {
+        self.session_start_with_candidate(id, None)
+    }
+
+    pub fn session_preview_start(
+        &mut self,
+        id: &EntityId,
+        candidate: &Session,
+    ) -> Result<Value, ControlError> {
+        self.session_start_with_candidate(id, Some(candidate))
+    }
+
+    fn session_start_with_candidate(
+        &mut self,
+        id: &EntityId,
+        candidate: Option<&Session>,
+    ) -> Result<Value, ControlError> {
         self.ensure_session_loaded(id)?;
-        let session = self.get_session(id)?.clone();
+        let saved_session = self.get_session(id)?.clone();
+        let saved_revision = saved_session.revision;
+        let session = if let Some(candidate) = candidate {
+            if candidate.id != *id || candidate.revision != saved_session.revision {
+                return Err(ControlError::InvalidRequest(
+                    "preview candidate must target the current saved session revision".into(),
+                ));
+            }
+            if !self.native_endpoint_session_is_attached(id)
+                || self.native_multi_input_worker_session.as_ref() == Some(id)
+            {
+                return Err(ControlError::InvalidRequest(
+                "temporary draft preview requires a prepared single-endpoint audio route. Multiple capture-source mixes currently require saving the Mixer route and preparing the exact sources and outputs in Devices".into(),
+                ));
+            }
+            self.validate_plugin_placeholders(candidate)?;
+            candidate.clone()
+        } else {
+            saved_session
+        };
+        if candidate.is_some()
+            && self
+                .runtimes
+                .get(id)
+                .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
+        {
+            return Err(ControlError::InvalidRequest(
+                "stop the active session before previewing a changed route".into(),
+            ));
+        }
         let has_enabled_plugin = session
             .nodes
             .iter()
             .any(|node| node.enabled && node.kind == NodeKind::Plugin);
-        let native_endpoint_attached = self.native_endpoint_session.as_ref() == Some(id)
-            && self.native_endpoint_worker.is_some();
+        let native_endpoint_attached = self.native_endpoint_session_is_attached(id);
         let mut native_graph_attached = native_endpoint_attached;
         let mut native_attached = native_endpoint_attached;
         #[cfg(windows)]
@@ -10544,23 +11037,28 @@ impl ControlPlane {
 
         if native_endpoint_attached {
             let sample_rate_hz = self
-                .native_endpoint_worker
-                .as_ref()
+                .native_endpoint_worker_for_session(id)
                 .expect("native_attached implies an endpoint worker")
                 .bridge()
                 .sample_rate_hz();
-            if let Err(error) = self.activate_native_graph(id, generation, sample_rate_hz) {
+            let activated = if candidate.is_some() {
+                self.activate_native_graph_candidate(id, generation, sample_rate_hz, Some(&session))
+            } else {
+                self.activate_native_graph(id, generation, sample_rate_hz)
+            };
+            if let Err(error) = activated {
                 if let Some(runtime) = self.runtimes.get_mut(id) {
                     runtime.stop();
                 }
                 self.deactivate_virtual_route_bridges(id);
-                self.native_endpoint_taps = None;
+                if let Some(taps) = self.native_endpoint_taps_for_session_mut(id) {
+                    *taps = None;
+                }
                 self.native_render_source_taps = None;
                 return Err(error);
             }
             let start_result = self
-                .native_endpoint_worker
-                .as_mut()
+                .native_endpoint_worker_for_session_mut(id)
                 .expect("native_attached implies an endpoint worker")
                 .start()
                 .map_err(audio_control_error);
@@ -10569,7 +11067,9 @@ impl ControlPlane {
                     runtime.stop();
                 }
                 self.deactivate_virtual_route_bridges(id);
-                self.native_endpoint_taps = None;
+                if let Some(taps) = self.native_endpoint_taps_for_session_mut(id) {
+                    *taps = None;
+                }
                 self.native_render_source_taps = None;
                 return Err(error);
             }
@@ -10579,15 +11079,16 @@ impl ControlPlane {
             {
                 if let Err(error) = self.start_native_output_fanout() {
                     let _ = self
-                        .native_endpoint_worker
-                        .as_mut()
+                        .native_endpoint_worker_for_session_mut(id)
                         .expect("native_attached implies an endpoint worker")
                         .stop();
                     if let Some(runtime) = self.runtimes.get_mut(id) {
                         runtime.stop();
                     }
                     self.deactivate_virtual_route_bridges(id);
-                    self.native_endpoint_taps = None;
+                    if let Some(taps) = self.native_endpoint_taps_for_session_mut(id) {
+                        *taps = None;
+                    }
                     return Err(error);
                 }
             }
@@ -10660,7 +11161,9 @@ impl ControlPlane {
             "sessionId": id,
             "state": "running",
             "generation": generation,
-            "runtime": session_runtime_label(native_attached)
+            "runtime": session_runtime_label(native_attached),
+            "preview": candidate.is_some(),
+            "savedRevision": saved_revision
         }))
     }
 
@@ -10764,8 +11267,7 @@ impl ControlPlane {
         // the exact bound worker before retiring the runtime generation; even
         // a worker stop error must not leave an audio client running against
         // a session that is reported stopped.
-        let native_attached = (self.native_endpoint_session.as_ref() == Some(id)
-            && self.native_endpoint_worker.is_some())
+        let native_attached = self.native_endpoint_session_is_attached(id)
             || {
                 #[cfg(windows)]
                 {
@@ -10777,9 +11279,8 @@ impl ControlPlane {
                     false
                 }
             };
-        let native_stop_error = if self.native_endpoint_session.as_ref() == Some(id) {
-            self.native_endpoint_worker
-                .as_mut()
+        let native_stop_error = if self.native_endpoint_session_is_attached(id) {
+            self.native_endpoint_worker_for_session_mut(id)
                 .map(audiorouter_windows_audio::NativeAudioWorker::stop)
                 .transpose()
                 .err()
@@ -10960,6 +11461,22 @@ impl ControlPlane {
                     "operations.get" => self.dispatch_operation_get(request.params),
                     "operations.cancel" => self.dispatch_operation_cancel(request.params),
                     "recordings.list" => self.dispatch_recordings_list(request.params),
+                    "audioMedia.beginUpload" => {
+                        self.dispatch_audio_media_begin_upload(request.params)
+                    }
+                    "audioMedia.uploadChunk" => {
+                        self.dispatch_audio_media_upload_chunk(request.params)
+                    }
+                    "audioMedia.finishUpload" => {
+                        self.dispatch_audio_media_finish_upload(request.params)
+                    }
+                    "audioMedia.importTemporaryRecording" => {
+                        self.dispatch_audio_media_import_temporary_recording(request.params)
+                    }
+                    "audioMedia.delete" => self.dispatch_audio_media_delete(request.params),
+                    "audioSources.transport" => {
+                        self.dispatch_audio_source_transport(request.params)
+                    }
                     "recorders.list" => self.dispatch_recorders_list(request.params),
                     "recorders.create" => self.dispatch_recorder_create(request.params),
                     "recorders.arm" | "recorders.start" | "recorders.pause"
@@ -11108,6 +11625,23 @@ impl ControlPlane {
                 id,
                 -32001,
                 format!("permission denied: {:?}", spec.permission),
+            );
+            if let Some(error) = response.error.as_mut() {
+                error.data = Some(application_error_data("permissionDenied"));
+            }
+            return response;
+        }
+        if matches!(request.method.as_str(), "session.start" | "sessions.start")
+            && request
+                .params
+                .as_ref()
+                .is_some_and(|params| params.get("candidate").is_some())
+            && !grant.allows(PermissionScope::GraphWrite)
+        {
+            let mut response = JsonRpcResponse::failure(
+                id,
+                -32001,
+                "permission denied: GraphWrite is required to preview an edited route",
             );
             if let Some(error) = response.error.as_mut() {
                 error.data = Some(application_error_data("permissionDenied"));
@@ -11398,14 +11932,24 @@ impl ControlPlane {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        let candidate = params
+            .get("candidate")
+            .cloned()
+            .map(serde_json::from_value::<Session>)
+            .transpose()
+            .map_err(|error| ControlError::InvalidRequest(format!("invalid preview candidate: {error}")))?;
         let operation = (
             self.scoped_idempotency_key("sessions.start", idempotency_key),
-            Self::request_hash(&json!({ "sessionId": id, "action": "start" })),
+            Self::request_hash(&json!({ "sessionId": id, "action": "start", "candidate": candidate })),
         );
         if let Some(previous) = self.lookup_idempotent_result(&operation.0, &operation.1)? {
             return Ok(previous);
         }
-        let result = self.session_start(&id)?;
+        let result = if let Some(candidate) = candidate.as_ref() {
+            self.session_preview_start(&id, candidate)?
+        } else {
+            self.session_start(&id)?
+        };
         self.journal_idempotent_result(&operation.0, "sessions.start", &operation.1, &result)?;
         Ok(result)
     }
@@ -12171,6 +12715,390 @@ impl ControlPlane {
         Ok(result)
     }
 
+    fn dispatch_audio_media_begin_upload(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("fileName and sizeBytes are required".into())
+        })?;
+        let file_name = params
+            .get("fileName")
+            .and_then(Value::as_str)
+            .filter(|name| {
+                !name.is_empty()
+                    && name.len() <= 256
+                    && !name.chars().any(|ch| matches!(ch, '/' | '\\' | ':'))
+            })
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("fileName must be a simple WAV or MP3 filename".into())
+            })?;
+        let format = file_name
+            .rsplit_once('.')
+            .map(|(_, extension)| extension.to_ascii_lowercase())
+            .filter(|extension| matches!(extension.as_str(), "wav" | "mp3"))
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("only WAV and MP3 files are supported".into())
+            })?;
+        let size_bytes = params
+            .get("sizeBytes")
+            .and_then(Value::as_u64)
+            .filter(|size| (1..=audiorouter_storage::MAX_AUDIO_MEDIA_BYTES as u64).contains(size))
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("audio file size is empty or exceeds 64 MiB".into())
+            })? as usize;
+        if self
+            .audio_upload
+            .as_ref()
+            .is_some_and(|upload| upload.started_at.elapsed() <= AUDIO_UPLOAD_TTL)
+        {
+            return Err(ControlError::InvalidRequest(
+                "an audio upload is already in progress".into(),
+            ));
+        }
+        self.audio_upload = None;
+        let id = format!("audio-upload-{}", self.next_audio_upload);
+        self.next_audio_upload = self.next_audio_upload.checked_add(1).ok_or_else(|| {
+            ControlError::InvalidRequest("audio upload ID space exhausted".into())
+        })?;
+        self.audio_upload = Some(AudioMediaUpload {
+            id: id.clone(),
+            file_name: file_name.to_owned(),
+            format,
+            expected_bytes: size_bytes,
+            next_chunk: 0,
+            bytes: Vec::with_capacity(size_bytes),
+            started_at: Instant::now(),
+        });
+        Ok(json!({ "uploadId": id, "chunkBytes": AUDIO_UPLOAD_CHUNK_BYTES }))
+    }
+
+    fn dispatch_audio_media_upload_chunk(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("upload chunk parameters are required".into())
+        })?;
+        let id = params.get("uploadId").and_then(Value::as_str).unwrap_or("");
+        let index = params
+            .get("chunkIndex")
+            .and_then(Value::as_u64)
+            .and_then(|index| u32::try_from(index).ok())
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("chunkIndex must be a bounded integer".into())
+            })?;
+        let encoded = params
+            .get("dataBase64")
+            .and_then(Value::as_str)
+            .ok_or_else(|| ControlError::InvalidRequest("dataBase64 is required".into()))?;
+        let chunk = decode_base64_chunk(encoded)?;
+        let upload = self
+            .audio_upload
+            .as_mut()
+            .filter(|upload| upload.id == id && upload.started_at.elapsed() <= AUDIO_UPLOAD_TTL)
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("audio upload is missing or expired".into())
+            })?;
+        if index != upload.next_chunk
+            || chunk.is_empty()
+            || upload
+                .bytes
+                .len()
+                .checked_add(chunk.len())
+                .map_or(true, |length| length > upload.expected_bytes)
+        {
+            return Err(ControlError::InvalidRequest(
+                "audio upload chunks must be nonempty, ordered, and within the declared file size"
+                    .into(),
+            ));
+        }
+        upload.bytes.extend_from_slice(&chunk);
+        upload.next_chunk = upload.next_chunk.checked_add(1).ok_or_else(|| {
+            ControlError::InvalidRequest("audio upload chunk index exhausted".into())
+        })?;
+        Ok(json!({ "receivedBytes": upload.bytes.len(), "nextChunkIndex": upload.next_chunk }))
+    }
+
+    fn dispatch_audio_media_finish_upload(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let id = params
+            .as_ref()
+            .and_then(|value| value.get("uploadId"))
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let upload = self
+            .audio_upload
+            .take()
+            .filter(|upload| upload.id == id && upload.started_at.elapsed() <= AUDIO_UPLOAD_TTL)
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("audio upload is missing or expired".into())
+            })?;
+        if upload.bytes.len() != upload.expected_bytes {
+            self.audio_upload = Some(upload);
+            return Err(ControlError::InvalidRequest(
+                "audio upload is incomplete".into(),
+            ));
+        }
+        let decoded = audiorouter_engine::decode_audio_bytes(
+            upload.bytes.clone(),
+            &upload.format,
+            audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ,
+        )
+        .map_err(|error| {
+            ControlError::InvalidRequest(format!("audio file could not be imported: {error}"))
+        })?;
+        let media_id = loop {
+            let candidate = format!("audio-media-{}", self.next_audio_media);
+            self.next_audio_media = self.next_audio_media.checked_add(1).ok_or_else(|| {
+                ControlError::InvalidRequest("audio media ID space exhausted".into())
+            })?;
+            if self
+                .storage
+                .as_ref()
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest("persistent backend storage is unavailable".into())
+                })?
+                .load_audio_media(&candidate)
+                .map_err(storage_error)?
+                .is_none()
+            {
+                break candidate;
+            }
+        };
+        let storage = self.storage.as_ref().ok_or_else(|| {
+            ControlError::InvalidRequest("audio import requires persistent backend storage".into())
+        })?;
+        storage
+            .store_audio_media(
+                &media_id,
+                &upload.file_name,
+                &upload.format,
+                &upload.bytes,
+                None,
+            )
+            .map_err(storage_error)?;
+        let duration_ms =
+            (decoded.frames() as u64 * 1000 / u64::from(decoded.sample_rate_hz)).max(1);
+        Ok(
+            json!({ "mediaId": media_id, "fileName": upload.file_name, "format": upload.format,
+            "durationMs": duration_ms, "channels": decoded.channels, "sampleRateHz": decoded.sample_rate_hz }),
+        )
+    }
+
+    fn dispatch_audio_media_import_temporary_recording(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let recording_id = params
+            .as_ref()
+            .and_then(|value| value.get("recordingId"))
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("recordingId is required".into()))?;
+        let storage = self.storage.as_ref().ok_or_else(|| {
+            ControlError::InvalidRequest(
+                "temporary audio import requires persistent backend storage".into(),
+            )
+        })?;
+        let record = storage
+            .get_recording(recording_id)
+            .map_err(storage_error)?
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("temporary WAV recording was not found".into())
+            })?;
+        if !record.recorder_id.starts_with("audio-file-take-")
+            || record.format != "wav"
+            || record.state != "completed"
+            || record.missing
+        {
+            return Err(ControlError::InvalidRequest(
+                "only completed temporary WAV takes can be imported".into(),
+            ));
+        }
+        let duration_ms = record.frames.saturating_mul(1000) / u64::from(record.sample_rate.max(1));
+        if duration_ms == 0
+            || duration_ms > 120_000
+            || record.file_bytes == 0
+            || record.file_bytes > audiorouter_storage::MAX_AUDIO_MEDIA_BYTES as u64
+        {
+            return Err(ControlError::InvalidRequest(
+                "temporary WAV take exceeds the 120-second or 64 MiB limit".into(),
+            ));
+        }
+        let path = std::path::Path::new(&record.path);
+        audiorouter_storage::validate_recording_file_path(path).map_err(storage_error)?;
+        let metadata =
+            std::fs::metadata(path).map_err(|error| storage_error(StorageError::Io(error)))?;
+        if metadata.len() != record.file_bytes
+            || metadata.len() > audiorouter_storage::MAX_AUDIO_MEDIA_BYTES as u64
+        {
+            return Err(ControlError::InvalidRequest(
+                "temporary WAV file size changed or exceeds its bound".into(),
+            ));
+        }
+        let wav_info = audiorouter_recording::inspect_wav_file(path).map_err(|error| {
+            ControlError::InvalidRequest(format!("temporary WAV header is invalid: {error:?}"))
+        })?;
+        if u64::from(wav_info.channels) != u64::from(record.channels)
+            || wav_info.sample_rate != record.sample_rate
+            || wav_info.frames != record.frames
+            || wav_info.file_bytes != record.file_bytes
+        {
+            return Err(ControlError::InvalidRequest(
+                "temporary WAV metadata does not match its completed recording".into(),
+            ));
+        }
+        let bytes = std::fs::read(path).map_err(|error| storage_error(StorageError::Io(error)))?;
+        let decoded = audiorouter_engine::decode_audio_bytes(
+            bytes.clone(),
+            "wav",
+            audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ,
+        )
+        .map_err(|error| {
+            ControlError::InvalidRequest(format!("temporary WAV could not be decoded: {error}"))
+        })?;
+        let media_id = loop {
+            let candidate = format!("audio-media-{}", self.next_audio_media);
+            self.next_audio_media = self.next_audio_media.checked_add(1).ok_or_else(|| {
+                ControlError::InvalidRequest("audio media ID space exhausted".into())
+            })?;
+            if storage
+                .load_audio_media(&candidate)
+                .map_err(storage_error)?
+                .is_none()
+            {
+                break candidate;
+            }
+        };
+        let expires_at = unix_epoch_seconds().saturating_add(24 * 60 * 60);
+        storage
+            .store_audio_media(
+                &media_id,
+                "Temporary voice take.wav",
+                "wav",
+                &bytes,
+                Some(expires_at),
+            )
+            .map_err(storage_error)?;
+        if let Err(error) = std::fs::remove_file(path) {
+            let _ = storage.delete_audio_media(&media_id);
+            return Err(storage_error(StorageError::Io(error)));
+        }
+        if let Err(error) = storage.remove_recording_entry(recording_id) {
+            let _ = storage.save_recording(&record);
+            let _ = storage.delete_audio_media(&media_id);
+            return Err(storage_error(error));
+        }
+        Ok(
+            json!({ "mediaId": media_id, "fileName": "Temporary voice take.wav", "format": "wav",
+            "durationMs": (decoded.frames() as u64 * 1000 / u64::from(decoded.sample_rate_hz)).max(1),
+            "channels": decoded.channels, "sampleRateHz": decoded.sample_rate_hz,
+            "expiresAt": expires_at, "sourceRemoved": true }),
+        )
+    }
+
+    fn dispatch_audio_media_delete(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let media_id = params
+            .as_ref()
+            .and_then(|value| value.get("mediaId"))
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let referenced = self
+            .store
+            .sessions(audiorouter_domain::MAX_SESSIONS_GLOBAL)
+            .iter()
+            .any(|session| {
+                session.nodes.iter().any(|node| {
+                    node.kind == NodeKind::AudioFile
+                        && node.parameters.get("mediaId").and_then(Value::as_str) == Some(media_id)
+                })
+            });
+        if referenced {
+            return Err(ControlError::InvalidRequest(
+                "audio media is still referenced by a session".into(),
+            ));
+        }
+        let deleted = self
+            .storage
+            .as_ref()
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("persistent backend storage is unavailable".into())
+            })?
+            .delete_audio_media(media_id)
+            .map_err(storage_error)?;
+        Ok(json!({ "deleted": deleted }))
+    }
+
+    fn dispatch_audio_source_transport(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("sessionId, nodeId, and action are required".into())
+        })?;
+        let session_id = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .map(EntityId::new)
+            .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+        let node_id = params
+            .get("nodeId")
+            .and_then(Value::as_str)
+            .map(EntityId::new)
+            .ok_or_else(|| ControlError::InvalidRequest("nodeId is required".into()))?;
+        let action = params.get("action").and_then(Value::as_str).unwrap_or("");
+        if !matches!(action, "play" | "pause" | "stop" | "status") {
+            return Err(ControlError::InvalidRequest(
+                "action must be play, pause, stop, or status".into(),
+            ));
+        }
+        if !self
+            .runtimes
+            .get(&session_id)
+            .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
+        {
+            return Err(ControlError::InvalidRequest(
+                "start the prepared session before controlling its audio source".into(),
+            ));
+        }
+        let key = (session_id.clone(), node_id.clone());
+        if let Some(source) = self.test_signal_sources.get(&key) {
+            match action {
+                "play" => source.play(),
+                "stop" => source.stop(),
+                "pause" => {
+                    return Err(ControlError::InvalidRequest(
+                        "Test Signal supports play and stop, not pause".into(),
+                    ));
+                }
+                _ => {}
+            }
+            return Ok(json!({ "sessionId": session_id, "nodeId": node_id,
+                "state": if source.is_playing() { "playing" } else { "stopped" },
+                "loop": false }));
+        }
+        let source = self.audio_file_sources.get(&key).ok_or_else(|| {
+            ControlError::InvalidRequest(
+                "audio source is not prepared for this running session".into(),
+            )
+        })?;
+        match action {
+            "play" => source.play(),
+            "pause" => source.pause(),
+            "stop" => source.stop(),
+            _ => {}
+        }
+        Ok(json!({ "sessionId": session_id, "nodeId": node_id,
+            "state": source.transport_state(),
+            "loop": source.is_looping() }))
+    }
+
     fn dispatch_recordings_list(&self, params: Option<Value>) -> Result<Value, ControlError> {
         let params = params.unwrap_or_else(|| json!({}));
         let session_id = params.get("sessionId").and_then(Value::as_str);
@@ -12858,6 +13786,9 @@ impl ControlPlane {
         if let Some(worker) = self.native_endpoint_worker.as_ref() {
             worker.set_privacy_muted(muted);
         }
+        if let Some(worker) = self.native_endpoint_worker_secondary.as_ref() {
+            worker.set_privacy_muted(muted);
+        }
         #[cfg(windows)]
         if let Some(worker) = self.native_multi_input_worker.as_ref() {
             worker.set_privacy_muted(muted);
@@ -13097,19 +14028,22 @@ impl ControlPlane {
             // exists. Unrelated endpoint churn must not accumulate in the
             // control plane or invalidate a worker later; a later prepare
             // operation resolves the current snapshot itself.
-            let mut relevant_changes = self
-                .native_endpoint_worker
-                .as_ref()
-                .map(|worker| {
-                    endpoint_changes
-                        .iter()
-                        .filter(|change| {
-                            worker.endpoint_bindings_affected_by(std::slice::from_ref(*change))
-                        })
-                        .cloned()
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
+            let mut relevant_changes = [
+                self.native_endpoint_worker.as_ref(),
+                self.native_endpoint_worker_secondary.as_ref(),
+            ]
+            .into_iter()
+            .flatten()
+            .flat_map(|worker| {
+                endpoint_changes
+                    .iter()
+                    .filter(|change| {
+                        worker.endpoint_bindings_affected_by(std::slice::from_ref(*change))
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
             #[cfg(windows)]
             if let Some(worker) = self.native_multi_input_worker.as_ref() {
                 relevant_changes.extend(
@@ -13684,12 +14618,12 @@ impl ControlPlane {
             .map(EntityId::new)
             .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
         self.get_session(&session_id)?;
-        if self.native_endpoint_session.as_ref() != Some(&session_id) {
+        if !self.native_endpoint_session_is_attached(&session_id) {
             return Err(ControlError::InvalidRequest(
                 "native endpoint worker is not attached to this session".into(),
             ));
         }
-        self.detach_native_endpoint_worker()?;
+        self.detach_native_endpoint_worker_for_session(&session_id)?;
         Ok(json!({ "sessionId": session_id, "state": "detached" }))
     }
 
@@ -14002,10 +14936,18 @@ impl ControlPlane {
         changes: &[audiorouter_windows_audio::EndpointChange],
     ) -> Result<(), ControlError> {
         let mut invalidated = false;
-        if let Some(worker) = self.native_endpoint_worker.as_mut() {
-            if worker.endpoint_bindings_affected_by(changes) && worker.is_running() {
-                worker.stop().map_err(audio_control_error)?;
-                invalidated = true;
+        for session_id in [
+            self.native_endpoint_session.clone(),
+            self.native_endpoint_session_secondary.clone(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if let Some(worker) = self.native_endpoint_worker_for_session_mut(&session_id) {
+                if worker.endpoint_bindings_affected_by(changes) && worker.is_running() {
+                    worker.stop().map_err(audio_control_error)?;
+                    invalidated = true;
+                }
             }
         }
         #[cfg(windows)]
@@ -14040,10 +14982,13 @@ impl ControlPlane {
         if changes.is_empty() {
             return Ok(false);
         }
-        let mut affected = self
-            .native_endpoint_worker
-            .as_ref()
-            .is_some_and(|worker| worker.endpoint_bindings_affected_by(&changes));
+        let mut affected = [
+            self.native_endpoint_worker.as_ref(),
+            self.native_endpoint_worker_secondary.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .any(|worker| worker.endpoint_bindings_affected_by(&changes));
         #[cfg(windows)]
         {
             affected |= self
@@ -14952,7 +15897,7 @@ impl ControlPlane {
                 "frequenciesHz count is outside the bounded response limit".into(),
             ));
         }
-        let mut bands = [None; 8];
+        let mut bands = [None; audiorouter_dsp::PARAMETRIC_EQ_BANDS];
         let band_values = params["bands"]
             .as_array()
             .ok_or_else(|| ControlError::InvalidRequest("bands is required".into()))?;
@@ -15134,7 +16079,24 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         return Ok(());
     };
     let mut value_count = 0;
-    validate_control_value_budget(params, 0, &mut value_count)?;
+    if method == "audioMedia.uploadChunk" {
+        let mut bounded = params.clone();
+        let encoded = bounded
+            .get("dataBase64")
+            .and_then(Value::as_str)
+            .ok_or_else(|| ControlError::InvalidRequest("dataBase64 is required".into()))?;
+        if encoded.len() > AUDIO_UPLOAD_CHUNK_BYTES * 4 / 3 + 8 {
+            return Err(ControlError::InvalidRequest(
+                "audio upload chunk exceeds its size limit".into(),
+            ));
+        }
+        if let Some(object) = bounded.as_object_mut() {
+            object.insert("dataBase64".into(), Value::String(String::new()));
+        }
+        validate_control_value_budget(&bounded, 0, &mut value_count)?;
+    } else {
+        validate_control_value_budget(params, 0, &mut value_count)?;
+    }
     let Some(object) = params.as_object() else {
         return Err(ControlError::InvalidRequest(
             "method params must be an object".into(),
@@ -15145,7 +16107,10 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "sessions.importPlan" => &["session"],
         "sessions.importCommit" => &["planId", "idempotencyKey"],
         "sessions.delete" => &["sessionId", "idempotencyKey"],
-        "session.start" | "sessions.start" | "session.stop" | "sessions.stop" => {
+        "session.start" | "sessions.start" => {
+            &["sessionId", "idempotencyKey", "candidate"]
+        }
+        "session.stop" | "sessions.stop" => {
             &["sessionId", "idempotencyKey"]
         }
         "sessions.list" => &["cursor", "limit"],
@@ -15176,6 +16141,12 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "operations.get" => &["operationId"],
         "operations.cancel" => &["operationId", "idempotencyKey"],
         "recordings.list" => &["sessionId", "cursor", "limit"],
+        "audioMedia.beginUpload" => &["fileName", "sizeBytes"],
+        "audioMedia.uploadChunk" => &["uploadId", "chunkIndex", "dataBase64"],
+        "audioMedia.finishUpload" => &["uploadId"],
+        "audioMedia.importTemporaryRecording" => &["recordingId"],
+        "audioMedia.delete" => &["mediaId"],
+        "audioSources.transport" => &["sessionId", "nodeId", "action"],
         "recorders.list" => &[],
         "recorders.create" => &[
             "sessionId",
@@ -15357,6 +16328,7 @@ fn storage_error(error: StorageError) -> ControlError {
         StorageError::InvalidSession(message)
         | StorageError::InvalidBundle(message)
         | StorageError::InvalidRecording(message)
+        | StorageError::InvalidAudioMedia(message)
         | StorageError::InvalidPluginState(message)
         | StorageError::InvalidEnrollment(message)
         | StorageError::InvalidPlan(message)
@@ -15539,6 +16511,48 @@ mod tests {
     use super::*;
     use audiorouter_domain::{Edge, Node, NodeKind, Port, PortDirection};
     use audiorouter_engine::{RuntimeGeneration, RuntimeGraph, RuntimeProcessor};
+
+    fn encode_test_base64(bytes: &[u8]) -> String {
+        const TABLE: &[u8; 64] =
+            b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let mut output = String::new();
+        for chunk in bytes.chunks(3) {
+            let a = chunk[0];
+            let b = *chunk.get(1).unwrap_or(&0);
+            let c = *chunk.get(2).unwrap_or(&0);
+            output.push(TABLE[(a >> 2) as usize] as char);
+            output.push(TABLE[(((a & 3) << 4) | (b >> 4)) as usize] as char);
+            output.push(if chunk.len() > 1 {
+                TABLE[(((b & 15) << 2) | (c >> 6)) as usize] as char
+            } else {
+                '='
+            });
+            output.push(if chunk.len() > 2 {
+                TABLE[(c & 63) as usize] as char
+            } else {
+                '='
+            });
+        }
+        output
+    }
+
+    fn tiny_test_wav() -> Vec<u8> {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(b"RIFF");
+        bytes.extend_from_slice(&38u32.to_le_bytes());
+        bytes.extend_from_slice(b"WAVEfmt ");
+        bytes.extend_from_slice(&16u32.to_le_bytes());
+        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&8_000u32.to_le_bytes());
+        bytes.extend_from_slice(&16_000u32.to_le_bytes());
+        bytes.extend_from_slice(&2u16.to_le_bytes());
+        bytes.extend_from_slice(&16u16.to_le_bytes());
+        bytes.extend_from_slice(b"data");
+        bytes.extend_from_slice(&2u32.to_le_bytes());
+        bytes.extend_from_slice(&4096i16.to_le_bytes());
+        bytes
+    }
 
     struct TestRecorderWorker;
 
@@ -16385,7 +17399,9 @@ mod tests {
             channel_mask: 3,
             subformat_guid: "00000003-0000-0010-8000-00aa00389b71".into(),
         };
-        let capture = endpoint(audiorouter_windows_audio::EndpointDirection::Capture, 1);
+        // Mono capture is intentionally supported for microphone routes and
+        // duplicated into the stereo graph. Three channels remain invalid.
+        let capture = endpoint(audiorouter_windows_audio::EndpointDirection::Capture, 3);
         let render = endpoint(audiorouter_windows_audio::EndpointDirection::Render, 2);
 
         let error = plane
@@ -17196,6 +18212,13 @@ mod tests {
             .unwrap();
         let started = plane.session_start(&session_id).unwrap();
         let generation = started["generation"].as_u64().unwrap();
+        plane
+            .dispatch_audio_source_transport(Some(json!({
+                "sessionId": session_id,
+                "nodeId": "test-signal",
+                "action": "play"
+            })))
+            .unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
         let mut processed_quanta = 0_u64;
         while std::time::Instant::now() < deadline {
@@ -17878,6 +18901,28 @@ mod tests {
                 enabled: true,
             }],
         }
+    }
+
+    #[test]
+    fn test_signal_transport_controls_only_the_prepared_source() {
+        let mut plane = ControlPlane::default();
+        let owned = session();
+        plane.insert_session(owned.clone()).unwrap();
+        plane.session_start(&owned.id).unwrap();
+        let node_id = EntityId::new("tone");
+        let source = std::sync::Arc::new(audiorouter_engine::TestSignalSource::new(
+            440.0, -18.0, 1_000.0, 48_000,
+        ));
+        plane.test_signal_sources.insert(
+            (owned.id.clone(), node_id.clone()),
+            std::sync::Arc::clone(&source),
+        );
+        let request = |action| json!({ "sessionId": owned.id, "nodeId": node_id, "action": action });
+        assert_eq!(plane.dispatch_audio_source_transport(Some(request("status"))).unwrap()["state"], "stopped");
+        assert_eq!(plane.dispatch_audio_source_transport(Some(request("play"))).unwrap()["state"], "playing");
+        assert_eq!(plane.dispatch_audio_source_transport(Some(request("stop"))).unwrap()["state"], "stopped");
+        assert!(plane.dispatch_audio_source_transport(Some(request("pause"))).is_err());
+        assert_eq!(plane.status_snapshot().unwrap()["activeSessionIds"][0], owned.id.as_str());
     }
 
     #[test]
@@ -19332,7 +20377,7 @@ mod tests {
             ControlPlane::audio_status_for("running", Some("endpoint")),
             (
                 "available",
-                "native endpoint worker is running; production driver qualification remains open"
+                "native endpoint audio is running"
             )
         );
         assert_eq!(
@@ -19346,14 +20391,14 @@ mod tests {
             ControlPlane::audio_status_for("running", Some("multi-input")),
             (
                 "available",
-                "native multi-input worker is running; production driver qualification remains open"
+                "native multi-input audio is running"
             )
         );
         assert_eq!(
             ControlPlane::audio_status_for("unknown", None),
             (
                 "unavailable",
-                "native endpoint routing is implemented but not activated; exact bindings and a production driver are required"
+                "audio is not prepared; in Devices, select exact capture and render endpoints, then Prepare native endpoints and Start session"
             )
         );
     }
@@ -19381,7 +20426,7 @@ mod tests {
         assert_eq!(result["activeSessionCount"], 0);
         assert_eq!(
             result["reason"],
-            "native endpoint routing is implemented but not activated; exact bindings and a production driver are required"
+            "audio is not prepared; in Devices, select exact capture and render endpoints, then Prepare native endpoints and Start session"
         );
         assert_eq!(result["eventCursor"]["latestSequence"], 1);
     }
@@ -22600,6 +23645,34 @@ mod tests {
     }
 
     #[test]
+    fn draft_preview_requires_prepared_native_route_and_does_not_save_candidate() {
+        let mut plane = ControlPlane::default();
+        let saved = session();
+        plane.insert_session(saved.clone()).unwrap();
+        let mut candidate = saved.clone();
+        candidate.name = "temporary audition".into();
+        let error = plane
+            .session_preview_start(&saved.id, &candidate)
+            .unwrap_err();
+        let ControlError::InvalidRequest(message) = error else {
+            panic!("expected native preview preparation guidance");
+        };
+        assert!(message.contains("prepared single-endpoint audio route"));
+        assert_eq!(plane.get_session(&saved.id).unwrap(), &saved);
+        assert!(!plane
+            .runtimes
+            .get(&saved.id)
+            .is_some_and(|runtime| runtime.state() == RuntimeState::Running));
+
+        let request = json!({
+            "sessionId": saved.id,
+            "candidate": candidate,
+            "idempotencyKey": "preview-contract"
+        });
+        assert!(validate_method_params("session.start", Some(&request)).is_ok());
+    }
+
+    #[test]
     fn keyed_session_lifecycle_replays_and_conflicts_durably() {
         let storage = Storage::open_memory().unwrap();
         let mut plane = ControlPlane::with_storage("lifecycle-idempotency", storage);
@@ -23381,7 +24454,9 @@ mod tests {
         assert!(!ClientGrant::for_role(ClientRole::Operator).allows(PermissionScope::Capture));
         assert!(!ClientGrant::for_role(ClientRole::Operator).allows(PermissionScope::StartupWrite));
         assert!(ClientGrant::for_desktop_shell().allows(PermissionScope::StartupWrite));
+        assert!(ClientGrant::for_desktop_shell().allows(PermissionScope::Record));
         assert!(!ClientGrant::for_desktop_shell().allows(PermissionScope::Capture));
+        assert!(!ClientGrant::for_desktop_shell().allows(PermissionScope::DeviceAdministration));
         assert!(!ClientGrant::for_role(ClientRole::Operator)
             .allows(PermissionScope::DeviceAdministration));
         assert!(!ClientGrant::read_only().allows(PermissionScope::PluginScan));
@@ -23501,6 +24576,28 @@ mod tests {
             &ClientGrant::with_scopes([PermissionScope::StartupWrite]),
         );
         assert!(allowed.result.is_some());
+    }
+
+    #[test]
+    fn draft_preview_requires_graph_write_in_addition_to_session_control() {
+        let saved = session();
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(94)),
+            method: "session.start".into(),
+            params: Some(json!({
+                "sessionId": saved.id,
+                "candidate": saved,
+                "idempotencyKey": "preview-permission"
+            })),
+        };
+        let denied = ControlPlane::default().dispatch_authorized(
+            request,
+            &ClientGrant::with_scopes([PermissionScope::SessionControl]),
+        );
+        let error = denied.error.unwrap();
+        assert_eq!(error.code, -32001);
+        assert_eq!(error.data.unwrap()["code"], "permissionDenied");
     }
 
     #[test]
@@ -23920,6 +25017,22 @@ mod tests {
         assert_eq!(result["frequenciesHz"], json!([100.0, 1000.0, 10000.0]));
         assert_eq!(result["magnitudeDb"].as_array().unwrap().len(), 3);
         assert!(result["magnitudeDb"][1].as_f64().unwrap() > 5.0);
+        let flat_band = json!({"enabled": false, "type": "peaking", "frequencyHz": 1000.0, "q": 1.0, "gainDb": 0.0});
+        let bounded_bands = vec![flat_band.clone(); MAX_RESPONSE_BANDS];
+        let maximum = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(3)),
+            method: "processors.response".into(),
+            params: Some(json!({"sampleRateHz": 48_000.0, "bands": bounded_bands, "frequenciesHz": [1000.0]})),
+        });
+        assert!(maximum.error.is_none());
+        let too_many = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(4)),
+            method: "processors.response".into(),
+            params: Some(json!({"sampleRateHz": 48_000.0, "bands": vec![flat_band; MAX_RESPONSE_BANDS + 1], "frequenciesHz": [1000.0]})),
+        });
+        assert!(too_many.error.is_some());
         let invalid = plane.dispatch(JsonRpcRequest {
             jsonrpc: "2.0".into(),
             id: Some(json!(2)),
@@ -23927,5 +25040,182 @@ mod tests {
             params: Some(json!({"sampleRateHz": 48_000.0, "bands": [], "frequenciesHz": []})),
         });
         assert!(invalid.error.is_some());
+    }
+
+    #[test]
+    fn audio_media_api_uploads_and_decodes_a_bounded_wav() {
+        let storage = Storage::open_memory().unwrap();
+        let mut plane = ControlPlane::with_storage("audio-upload", storage);
+        let wav = tiny_test_wav();
+        let begin = plane
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: "audioMedia.beginUpload".into(),
+                params: Some(json!({"fileName":"voice.wav", "sizeBytes":wav.len()})),
+            })
+            .result
+            .unwrap();
+        let upload_id = begin["uploadId"].as_str().unwrap();
+        let chunk = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(), id: Some(json!(2)), method: "audioMedia.uploadChunk".into(),
+            params: Some(json!({"uploadId":upload_id, "chunkIndex":0, "dataBase64":encode_test_base64(&wav)})),
+        });
+        assert_eq!(chunk.result.unwrap()["receivedBytes"], json!(wav.len()));
+        let finish = plane
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(3)),
+                method: "audioMedia.finishUpload".into(),
+                params: Some(json!({"uploadId":upload_id})),
+            })
+            .result
+            .unwrap();
+        assert_eq!(finish["format"], "wav");
+        assert_eq!(finish["channels"], 1);
+        assert_eq!(finish["durationMs"], 1);
+        assert!(finish["mediaId"]
+            .as_str()
+            .unwrap()
+            .starts_with("audio-media-"));
+    }
+
+    #[test]
+    fn temporary_take_import_is_bounded_expires_and_removes_only_its_own_file() {
+        let storage = Storage::open_memory().unwrap();
+        let mut plane = ControlPlane::with_storage("temporary-take", storage);
+        let wav = {
+            let samples = [0i16; 48];
+            let mut bytes = Vec::with_capacity(36 + samples.len() * 2);
+            bytes.extend_from_slice(b"RIFF");
+            bytes.extend_from_slice(&(36u32 + (samples.len() * 2) as u32).to_le_bytes());
+            bytes.extend_from_slice(b"WAVEfmt ");
+            bytes.extend_from_slice(&16u32.to_le_bytes());
+            bytes.extend_from_slice(&1u16.to_le_bytes());
+            bytes.extend_from_slice(&1u16.to_le_bytes());
+            bytes.extend_from_slice(&48_000u32.to_le_bytes());
+            bytes.extend_from_slice(&96_000u32.to_le_bytes());
+            bytes.extend_from_slice(&2u16.to_le_bytes());
+            bytes.extend_from_slice(&16u16.to_le_bytes());
+            bytes.extend_from_slice(b"data");
+            bytes.extend_from_slice(&((samples.len() * 2) as u32).to_le_bytes());
+            for sample in samples {
+                bytes.extend_from_slice(&sample.to_le_bytes());
+            }
+            bytes
+        };
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-temporary-take-{}.wav",
+            std::process::id()
+        ));
+        std::fs::write(&path, &wav).unwrap();
+        plane
+            .storage
+            .as_ref()
+            .unwrap()
+            .save_recording(&audiorouter_storage::RecordingRecord {
+                id: "session-audio-file-take-test-run".into(),
+                session_id: "session".into(),
+                recorder_id: "audio-file-take-test".into(),
+                path: path.to_string_lossy().into_owned(),
+                format: "wav".into(),
+                channels: 1,
+                sample_rate: 48_000,
+                frames: 48,
+                file_bytes: wav.len() as u64,
+                start_time: "2026-09-22T00:00:00Z".into(),
+                state: "completed".into(),
+                missing: false,
+                title: None,
+                artist: None,
+                comment: None,
+                dither: false,
+                conversion: "temporary take".into(),
+            })
+            .unwrap();
+        let denied = plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(0)),
+                method: "audioMedia.importTemporaryRecording".into(),
+                params: Some(json!({"recordingId":"session-audio-file-take-test-run"})),
+            },
+            &ClientGrant::read_only(),
+        );
+        assert_eq!(denied.error.unwrap().code, -32001);
+        assert!(
+            path.exists(),
+            "a denied import must not touch the temporary file"
+        );
+        let result = plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: "audioMedia.importTemporaryRecording".into(),
+                params: Some(json!({"recordingId":"session-audio-file-take-test-run"})),
+            },
+            &ClientGrant::with_scopes([PermissionScope::Read, PermissionScope::Record]),
+        );
+        assert!(
+            result.error.is_none(),
+            "temporary take import error: {:?}",
+            result.error
+        );
+        let result = result.result.unwrap();
+        assert_eq!(result["format"], "wav");
+        assert_eq!(result["sourceRemoved"], true);
+        assert!(result["expiresAt"].as_i64().unwrap() > unix_epoch_seconds());
+        assert!(!path.exists());
+        let media_id = result["mediaId"].as_str().unwrap();
+        assert!(plane
+            .storage
+            .as_ref()
+            .unwrap()
+            .load_audio_media(media_id)
+            .unwrap()
+            .is_some());
+        assert!(plane
+            .storage
+            .as_ref()
+            .unwrap()
+            .get_recording("session-audio-file-take-test-run")
+            .unwrap()
+            .is_none());
+
+        let ordinary = path.with_file_name("audiorouter-ordinary-recording.wav");
+        std::fs::write(&ordinary, &wav).unwrap();
+        plane
+            .storage
+            .as_ref()
+            .unwrap()
+            .save_recording(&audiorouter_storage::RecordingRecord {
+                id: "ordinary-recording-run".into(),
+                session_id: "session".into(),
+                recorder_id: "normal-recorder".into(),
+                path: ordinary.to_string_lossy().into_owned(),
+                format: "wav".into(),
+                channels: 1,
+                sample_rate: 48_000,
+                frames: 48,
+                file_bytes: wav.len() as u64,
+                start_time: "2026-09-22T00:00:00Z".into(),
+                state: "completed".into(),
+                missing: false,
+                title: None,
+                artist: None,
+                comment: None,
+                dither: false,
+                conversion: "test".into(),
+            })
+            .unwrap();
+        let rejected = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "audioMedia.importTemporaryRecording".into(),
+            params: Some(json!({"recordingId":"ordinary-recording-run"})),
+        });
+        assert!(rejected.error.is_some());
+        assert!(ordinary.exists(), "ordinary recordings are not consumed");
+        let _ = std::fs::remove_file(ordinary);
     }
 }

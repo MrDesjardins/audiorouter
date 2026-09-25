@@ -13,10 +13,10 @@ use tauri::{
     Manager, Runtime, State, WebviewUrl, WebviewWindowBuilder,
 };
 
-mod startup;
 mod backend_supervisor;
 #[cfg(windows)]
 mod os_transition_windows;
+mod startup;
 
 use backend_supervisor::{BackendRestartDecision, BackendSupervisor};
 
@@ -24,6 +24,125 @@ const DEFAULT_PIPE_NAME: &str = r"\\.\pipe\audiorouter-control";
 const DEFAULT_DATABASE_DIRECTORY: &str = "AudioRouter";
 const DEFAULT_DATABASE_FILE: &str = "state.sqlite";
 const DESKTOP_SESSION_ID: &str = "desktop-session";
+const DIAGNOSTIC_LOG_LIMIT_BYTES: u64 = 5 * 1024 * 1024;
+
+/// Append bounded, privacy-conscious control-flow diagnostics for failures
+/// that cannot be inspected through the WebView console in an attended shell.
+/// Request parameters and audio/media data are never written to this log.
+fn log_shell_rpc(request: &JsonRpcRequest, response: &Result<JsonRpcResponse, String>) {
+    if matches!(
+        request.method.as_str(),
+        "nativeBridges.heartbeat"
+            | "nativeEndpoints.pump"
+            | "nativeDuplex.pump"
+            | "nativeRenderSources.pump"
+            | "nativeMultiInputs.pump"
+    ) {
+        return;
+    }
+    static LOG_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+    let Some(root) = std::env::var_os("LOCALAPPDATA")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("TEMP").map(std::path::PathBuf::from))
+    else {
+        return;
+    };
+    let directory = root.join(DEFAULT_DATABASE_DIRECTORY).join("logs");
+    let lock = LOG_LOCK.get_or_init(|| std::sync::Mutex::new(()));
+    let Ok(_guard) = lock.lock() else { return };
+    let Some(_cross_process_guard) =
+        audiorouter_transport::acquire_diagnostic_mutex("AudioRouter.ShellDiagnostics")
+    else {
+        return;
+    };
+    write_shell_rpc_log(&directory, request, response);
+}
+
+fn write_shell_rpc_log(
+    directory: &std::path::Path,
+    request: &JsonRpcRequest,
+    response: &Result<JsonRpcResponse, String>,
+) {
+    use std::io::Write;
+    let path = directory.join("shell.jsonl");
+    if std::fs::create_dir_all(directory).is_err() {
+        return;
+    }
+    if std::fs::metadata(&path)
+        .map(|metadata| metadata.len() >= DIAGNOSTIC_LOG_LIMIT_BYTES)
+        .unwrap_or(false)
+    {
+        let previous = directory.join("shell.previous.jsonl");
+        let _ = std::fs::remove_file(&previous);
+        let _ = std::fs::rename(&path, previous);
+    }
+    let (outcome, detail) = match response {
+        Ok(response) => {
+            if let Some(error) = response.error.as_ref() {
+                (
+                    "error",
+                    serde_json::json!({
+                        "code": error.code,
+                        "kind": error.data.as_ref().and_then(|data| data.get("code")).and_then(serde_json::Value::as_str).map(|kind| kind.chars().take(64).collect::<String>()),
+                        "hresult": error.data.as_ref().and_then(|data| data.get("hresult")),
+                        "retryable": error.data.as_ref().and_then(|data| data.get("retryable")),
+                        "reason": if request.method == "session.start" && error.message.contains("native graph rejected: UnsupportedTopology") { Some("UnsupportedTopology") } else { None },
+                    }),
+                )
+            } else {
+                let result = response.result.as_ref();
+                let summary = match request.method.as_str() {
+                    "sessions.get" => result.map(|value| serde_json::json!({
+                        "revision": value.get("revision"),
+                        "nodes": value.get("nodes").and_then(serde_json::Value::as_array).map(Vec::len),
+                        "edges": value.get("edges").and_then(serde_json::Value::as_array).map(Vec::len),
+                    })),
+                    "sessions.list" => result.map(|value| {
+                        let items = value.get("items").and_then(serde_json::Value::as_array);
+                        serde_json::json!({
+                            "sessionCount": items.map(Vec::len),
+                            "graphs": items.map(|items| items.iter().map(|item| serde_json::json!({
+                                "revision": item.get("revision"),
+                                "nodes": item.get("nodes").and_then(serde_json::Value::as_array).map(Vec::len),
+                                "edges": item.get("edges").and_then(serde_json::Value::as_array).map(Vec::len),
+                            })).collect::<Vec<_>>()),
+                        })
+                    }),
+                    _ => result.map(|value| serde_json::json!({
+                        "state": value.get("state"),
+                        "generation": value.get("generation"),
+                    })),
+                };
+                ("ok", summary.unwrap_or(serde_json::Value::Null))
+            }
+        }
+        Err(_) => (
+            "transportError",
+            serde_json::json!({"kind": "transportError"}),
+        ),
+    };
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis())
+        .unwrap_or_default();
+    let entry = serde_json::json!({
+        "timeUnixMs": now_ms,
+        "processId": std::process::id(),
+        "method": request.method.chars().take(96).collect::<String>(),
+        "sessionId": request.params.as_ref().and_then(|params| params.get("sessionId")),
+        "outcome": outcome,
+        "detail": detail,
+    });
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
+        let _ = serde_json::to_writer(&mut file, &entry);
+        let _ = file.write_all(b"\n");
+        let _ = file.flush();
+    }
+}
 
 fn audio_router_tray_icon(muted: bool) -> Image<'static> {
     // Keep the tray asset local and deterministic: an audio waveform on a
@@ -35,15 +154,31 @@ fn audio_router_tray_icon(muted: bool) -> Image<'static> {
     // cyan/live -> red/muted so the taskbar icon itself reflects the current
     // state without opening the menu.
     const SIZE: u32 = 32;
-    let bar_color: [u8; 4] = if muted { [233, 107, 107, 255] } else { [68, 204, 235, 255] };
+    let bar_color: [u8; 4] = if muted {
+        [233, 107, 107, 255]
+    } else {
+        [68, 204, 235, 255]
+    };
     let mut rgba = Vec::with_capacity((SIZE * SIZE * 4) as usize);
     let bars = [5_u32, 9, 14, 20, 25, 29];
     for y in 0..SIZE {
         for x in 0..SIZE {
             let edge = x.min(y).min(SIZE - 1 - x).min(SIZE - 1 - y);
-            let rounded = edge >= 3 || ((x.abs_diff(3) + y.abs_diff(3)) <= 3) || ((x.abs_diff(28) + y.abs_diff(3)) <= 3) || ((x.abs_diff(3) + y.abs_diff(28)) <= 3) || ((x.abs_diff(28) + y.abs_diff(28)) <= 3);
-            let mut pixel = if rounded { [20, 30, 42, 255] } else { [0, 0, 0, 0] };
-            if rounded && bars.iter().any(|bar| x.abs_diff(*bar) <= 1 && y.abs_diff(16) <= (x.abs_diff(16) / 3 + 3)) {
+            let rounded = edge >= 3
+                || ((x.abs_diff(3) + y.abs_diff(3)) <= 3)
+                || ((x.abs_diff(28) + y.abs_diff(3)) <= 3)
+                || ((x.abs_diff(3) + y.abs_diff(28)) <= 3)
+                || ((x.abs_diff(28) + y.abs_diff(28)) <= 3);
+            let mut pixel = if rounded {
+                [20, 30, 42, 255]
+            } else {
+                [0, 0, 0, 0]
+            };
+            if rounded
+                && bars
+                    .iter()
+                    .any(|bar| x.abs_diff(*bar) <= 1 && y.abs_diff(16) <= (x.abs_diff(16) / 3 + 3))
+            {
                 pixel = bar_color;
             }
             rgba.extend_from_slice(&pixel);
@@ -68,6 +203,7 @@ struct ShellState {
     pipe_name: String,
     session_id: String,
     probe_file: Option<std::path::PathBuf>,
+    database_path: std::path::PathBuf,
 }
 
 #[tauri::command]
@@ -76,6 +212,7 @@ fn rpc_request(
     state: State<'_, ShellState>,
 ) -> Result<JsonRpcResponse, String> {
     let response = forward_rpc_request(&request, &state.pipe_name);
+    log_shell_rpc(&request, &response);
     if request.method == "system.describe" {
         if let Some(path) = &state.probe_file {
             // The probe is diagnostic-only. Preserve the production command's
@@ -140,6 +277,79 @@ fn forward_rpc_request(
 #[tauri::command]
 fn session_id(state: State<'_, ShellState>) -> String {
     state.session_id.clone()
+}
+
+#[tauri::command]
+fn mcp_activity_list() -> Result<Vec<serde_json::Value>, String> {
+    let root = std::env::var_os("LOCALAPPDATA")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("TEMP").map(std::path::PathBuf::from))
+        .ok_or_else(|| "local application-data directory is unavailable".to_owned())?;
+    let directory = root.join(DEFAULT_DATABASE_DIRECTORY).join("logs");
+    let mut records = Vec::new();
+    for name in ["mcp-activity.previous.jsonl", "mcp-activity.jsonl"] {
+        let path = directory.join(name);
+        let Ok(metadata) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.len() > 256 * 1024 {
+            continue;
+        }
+        let contents = std::fs::read_to_string(path)
+            .map_err(|error| format!("MCP activity log read failed: {error}"))?;
+        for line in contents.lines() {
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(line) {
+                if value.get("tool").is_some() && value.get("outcome").is_some() {
+                    records.push(value);
+                }
+            }
+        }
+    }
+    Ok(records.into_iter().rev().take(100).collect())
+}
+
+#[tauri::command]
+fn backend_diagnostics_list() -> Result<Vec<serde_json::Value>, String> {
+    let root = std::env::var_os("LOCALAPPDATA")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("TEMP").map(std::path::PathBuf::from))
+        .ok_or_else(|| "local application-data directory is unavailable".to_owned())?;
+    let directory = root.join(DEFAULT_DATABASE_DIRECTORY).join("logs");
+    let mut records = Vec::new();
+    for name in ["backend.previous.jsonl", "backend.jsonl"] {
+        let path = directory.join(name);
+        let Ok(metadata) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if !metadata.is_file()
+            || metadata.file_type().is_symlink()
+            || metadata.len() > DIAGNOSTIC_LOG_LIMIT_BYTES
+        {
+            continue;
+        }
+        let contents = std::fs::read_to_string(path)
+            .map_err(|error| format!("backend diagnostics read failed: {error}"))?;
+        for line in contents.lines() {
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(line) {
+                records.push(value);
+            }
+        }
+    }
+    Ok(records.into_iter().rev().take(100).collect())
+}
+
+#[tauri::command]
+fn mcp_setup_info(state: State<'_, ShellState>) -> Result<serde_json::Value, String> {
+    let executable = std::env::current_exe()
+        .map_err(|error| format!("shell executable lookup failed: {error}"))?;
+    let cli = executable.with_file_name("audiorouter-cli.exe");
+    Ok(serde_json::json!({
+        "cliPath": cli.to_string_lossy(),
+        "cliAvailableBesideShell": cli.is_file(),
+        "databasePath": state.database_path.to_string_lossy(),
+        "pipeName": state.pipe_name,
+        "transport": "local named pipe",
+    }))
 }
 
 /// Apply the current user's reversible sign-in registration. This command is
@@ -434,6 +644,9 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                             PermissionScope::Read,
                             PermissionScope::GraphWrite,
                             PermissionScope::SessionControl,
+                            // Explicitly requested recording in approved
+                            // roots is allowed; device capture stays separate.
+                            PermissionScope::Record,
                             // Startup registration is a separate explicit
                             // capability. The desktop shell exposes it only
                             // to the current user's local control surface;
@@ -446,9 +659,10 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                         .is_some_and(|(role, revoked)| role == "operator" && !revoked)
                     {
                         // The shell is the enrolled operator's local UI. It
-                        // may request startup registration explicitly, but
-                        // still receives no capture or device-administration
-                        // authority through this path.
+                        // may request startup registration explicitly and may
+                        // create an explicitly requested recording in an
+                        // approved root, but receives no capture or device-
+                        // administration authority through this path.
                         ClientGrant::for_desktop_shell()
                     } else {
                         plane
@@ -671,10 +885,16 @@ fn refresh_tray_status<R: Runtime>(
 fn main() {
     let pipe_name =
         std::env::var("AUDIOROUTER_CONTROL_PIPE").unwrap_or_else(|_| DEFAULT_PIPE_NAME.to_owned());
+    let database_path = std::env::var_os("AUDIOROUTER_DATABASE")
+        .map(std::path::PathBuf::from)
+        .map(Ok)
+        .unwrap_or_else(default_database_path)
+        .unwrap_or_default();
     let state = ShellState {
         pipe_name,
         session_id: DESKTOP_SESSION_ID.to_owned(),
         probe_file: std::env::var_os("AUDIOROUTER_SHELL_PROBE_FILE").map(std::path::PathBuf::from),
+        database_path,
     };
     let _backend = start_owned_backend(&state.pipe_name).unwrap_or_else(|error| {
         eprintln!("AudioRouter backend unavailable: {error}");
@@ -688,6 +908,9 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             rpc_request,
             session_id,
+            mcp_activity_list,
+            backend_diagnostics_list,
+            mcp_setup_info,
             startup_register,
             startup_status
         ])
@@ -1246,6 +1469,112 @@ mod tests {
         assert_eq!(std::fs::read(&path).unwrap(), br#"{"ok":true}"#);
         assert!(write_probe_marker(&path, b"replacement").is_err());
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn shell_rpc_log_records_graph_counts_without_graph_contents() {
+        let directory = std::env::temp_dir().join(format!(
+            "audiorouter-shell-log-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let _ = std::fs::remove_dir_all(&directory);
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(serde_json::json!(1)),
+            method: "sessions.get".into(),
+            params: Some(serde_json::json!({"sessionId":"test-session"})),
+        };
+        let response = Ok(JsonRpcResponse {
+            jsonrpc: "2.0".into(),
+            id: request.id.clone(),
+            result: Some(serde_json::json!({
+                "id":"test-session",
+                "revision":7,
+                "nodes":[{"id":"private-node-name"}],
+                "edges":[{}],
+                "runtime":{"detail":"private-runtime-detail"}
+            })),
+            error: None,
+        });
+        write_shell_rpc_log(&directory, &request, &response);
+        let log = std::fs::read_to_string(directory.join("shell.jsonl")).unwrap();
+        let entry: serde_json::Value = serde_json::from_str(log.trim()).unwrap();
+        assert_eq!(entry["method"], "sessions.get");
+        assert_eq!(entry["detail"]["revision"], 7);
+        assert_eq!(entry["detail"]["nodes"], 1);
+        assert_eq!(entry["detail"]["edges"], 1);
+        assert!(!log.contains("private-node-name"));
+        assert!(!log.contains("private-runtime-detail"));
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn shell_rpc_failure_log_keeps_safe_kind_and_omits_message() {
+        let directory = std::env::temp_dir().join(format!(
+            "audiorouter-shell-error-log-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&directory);
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(serde_json::json!(2)),
+            method: "graph.commit".into(),
+            params: Some(serde_json::json!({"secret":"private-name"})),
+        };
+        let response = Ok(JsonRpcResponse {
+            jsonrpc: "2.0".into(),
+            id: request.id.clone(),
+            result: None,
+            error: Some(audiorouter_protocol::JsonRpcError {
+                code: -32001,
+                message: "permission denied: GraphWrite private-name".into(),
+                data: Some(serde_json::json!({"code":"permissionDenied"})),
+            }),
+        });
+        write_shell_rpc_log(&directory, &request, &response);
+        let log = std::fs::read_to_string(directory.join("shell.jsonl")).unwrap();
+        let entry: serde_json::Value = serde_json::from_str(log.trim()).unwrap();
+        assert_eq!(entry["detail"]["code"], -32001);
+        assert_eq!(entry["detail"]["kind"], "permissionDenied");
+        assert!(!log.contains("private-name"));
+        assert!(!log.contains("GraphWrite"));
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn shell_start_failure_log_records_bounded_topology_reason() {
+        let directory = std::env::temp_dir().join(format!(
+            "audiorouter-shell-topology-log-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&directory);
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(serde_json::json!(3)),
+            method: "session.start".into(),
+            params: Some(serde_json::json!({"sessionId":"session"})),
+        };
+        let response = Ok(JsonRpcResponse {
+            jsonrpc: "2.0".into(),
+            id: request.id.clone(),
+            result: None,
+            error: Some(audiorouter_protocol::JsonRpcError {
+                code: -32602,
+                message: "native graph rejected: UnsupportedTopology private-path".into(),
+                data: Some(serde_json::json!({"code":"invalidRequest"})),
+            }),
+        });
+        write_shell_rpc_log(&directory, &request, &response);
+        let log = std::fs::read_to_string(directory.join("shell.jsonl")).unwrap();
+        let entry: serde_json::Value = serde_json::from_str(log.trim()).unwrap();
+        assert_eq!(entry["detail"]["reason"], "UnsupportedTopology");
+        assert_eq!(entry["detail"]["kind"], "invalidRequest");
+        assert!(!log.contains("private-path"));
+        std::fs::remove_dir_all(directory).unwrap();
     }
 
     #[cfg(windows)]

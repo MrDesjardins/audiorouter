@@ -1,5 +1,80 @@
 # M05 visual editor evidence
 
+## 2026-09-23 refresh, playback and canvas measurement defects
+
+Scope: UI-01/02/04/05/07/08/09/12/15; selected-session graph API behavior;
+existing-device Test Signal playback. The prior dirty working tree is preserved;
+no user session was migrated or replaced.
+
+Reproduction and fixes:
+
+- Freshly deserialized sessions triggered an effect that discarded local edits,
+  selection and messages. Refresh now reconciles graph content/revision;
+  external edits conflict explicitly with a dirty draft.
+- Stale creation responses/snapshots could override newer committed data.
+  Inventory prefers newer revisions; commit adopts its revision immediately.
+  Startup preview revision is not treated as saved backend data.
+- Graph planning and inspection used the startup session after a UI session
+  switch. Requests now carry the candidate/selected session ID.
+- Start ran the older saved graph while the canvas held unsaved changes, and
+  called a simulated runtime audio success. It now refuses unsaved changes,
+  checks native readiness and guides endpoint preparation. Unexpected simulated
+  starts are stopped and reported. Backend status no longer claims a production
+  virtual driver is required for physical/VB-Cable endpoints.
+- Consecutive Audio File updates discarded the uploaded media ID while saving
+  its filename. Draft updates now compose using the latest draft reference;
+  imports check the active session before updating the editor.
+- A repeated browser lifecycle run failed 2/3 times: nodes remained in graph
+  data but were hidden and edges disappeared. Controlled React Flow nodes were
+  recreated at 20 Hz without measured sizes. Keeping dimensions, selection and
+  drag positions fixed it; the same run passed 3/3. The final browser suite also
+  checks that each node remains visible.
+- Capture privacy mute incorrectly hid measured synthetic-source flow.
+  Capture-only branches remain muted; Test Signal/Audio File branches can show
+  reported output levels. No backend privacy behavior changed.
+
+Executed on Windows 11:
+
+- `npm.cmd run typecheck`: passed.
+- `npm.cmd test`: 22 files / 309 tests passed, including fresh-snapshot,
+  external-conflict, commit/start, selected-session and fake-runtime regressions.
+- `npm.cmd run e2e`: all 15 tests passed. The stateful in-memory fixture persists
+  commits, returns fresh objects, and simulates lifecycle and changing meters.
+  Assertions cover visible nodes across polling, animated dash offset, changing
+  stroke width and animation stopping. This is rendering evidence, not hardware.
+- `cargo test -p audiorouter-control audio_status_names_the_attached_worker_kind
+  -- --exact tests::audio_status_names_the_attached_worker_kind`: 1 passed.
+- `cargo test -p audiorouter-control status_snapshot_tracks_sessions_and_event_cursor
+  -- --exact tests::status_snapshot_tracks_sessions_and_event_cursor`: 1 passed.
+- `m05-test-signal-native-live.ps1 -AllowLiveAudio` with exact observed active
+  CABLE Output/Input IDs: passed, **180 quanta**, **-18.000 dB destination peak**,
+  then stop and detach. The surrounding elevated command compared Media PnP
+  identities/state and endpoint inventory/default roles before and afterward:
+  unchanged. Initial non-elevated PnP access failed before any stream opened.
+- `npm.cmd run build`: initially EPERM replacing an existing generated asset;
+  the elevated retry passed after verifying dist was the project directory.
+- `cargo check --manifest-path src-tauri/Cargo.toml --locked`: passed.
+- Documentation validation after evidence updates: 58 Markdown files / 277
+  local links passed; `git diff --check`: passed.
+
+Screenshots inspected in `%TEMP%/audiorouter-designer-review/`:
+`playback-setup-guidance.png` and `playback-lifecycle-fixture.png`. They show
+setup instructions, clear Devices selection, stable nodes and the thick
+directional connection. They contain simulated meter data.
+
+Desktop build limitation: `cargo build --manifest-path src-tauri/Cargo.toml
+--locked` linked a fresh `debug/deps/audiorouter_shell.exe`, then failed to replace
+the existing `debug/audiorouter-shell.exe` with Windows access denied, including
+an elevated retry. The fresh executable is available as
+`src-tauri/target/debug/audiorouter-shell-review-20260923.exe`. The prior shell
+was not terminated or relaunched. Native attended UI/playback on the user's saved
+graph, microphone/application animation, accessibility and release gates remain
+open. The current adapter still needs explicitly chosen capture and render
+endpoints, including for Test Signal.
+
+Review executable SHA-256:
+`A3C4BF6B072331C0586C1FF4EFFFAFED85ED268F8378B74638DADE82447296F4`.
+
 ## 2026-09-17 - continuation acceptance refresh
 
 `tests/acceptance/m05-ui.ps1` passed in the current worktree: TypeScript
@@ -1525,3 +1600,767 @@ privacy, driver, signing, or persistent audio/machine configuration was
 changed. The tray-specific checklist items are recorded separately in
 [the M07 evidence file](M07-automation-recovery.md), including the same
 test-harness methodology defect this entry's item 3 was traced to.
+
+## 2026-09-22 signal-flow visualization implementation
+
+Implemented UI-15 in `ui/src/SessionFlowCanvas.tsx` and `ui/src/styles.css`.
+Canvas edges now show a directional moving highlight when fresh backend meter
+telemetry confirms signal. Stroke width scales from bounded RMS level and
+smooths through CSS transitions. Active, silent, muted, disabled, stale,
+unavailable, unmetered, and faulted states have distinct styling and an
+accessible edge label; reduced-motion and high-contrast styles are covered by
+the existing accessibility mechanisms. The feature uses existing diagnostics
+refresh and adds no audio processing or polling.
+
+The control/engine diagnostics path does not meter every microphone,
+application-capture, or processor boundary. For a single unbranched path, the
+canvas can use the next downstream meter as end-to-end evidence. It stops
+inferring across mixers and ambiguous fan-out. Thus it shows that signal
+reaches a downstream measured point, but does not localize the exact blocking
+processor inside an unmetered span. Exact per-edge fault localization would
+need a separately specified backend metering extension.
+
+Verification on Windows 11, 2026-09-22: `npm.cmd run typecheck` passed;
+focused `SessionFlowCanvas.test.ts` passed 21/21; `tests/acceptance/m05-ui.ps1`
+passed typecheck, 19 UI files / 284 tests, and temporary production build;
+`tests/acceptance/docs.ps1` passed 58 Markdown files / 266 local links;
+`tests/acceptance/m08-traceability.ps1` passed with 160 normative IDs; and
+`git diff --check` passed. No live audio or attended shell check was run, so
+microphone/application visual confirmation and Narrator/reduced-motion review
+remain open.
+
+## 2026-09-22 Test Signal canvas Play/Stop controls
+
+Added separate Play and Stop buttons to each Test Signal canvas card. The
+buttons use the existing authorized `session.start`/`session.stop` actions;
+they start or stop the whole session, and the card says so. Play is disabled
+until the current graph is committed, the enabled signal path reaches an
+enabled physical output, and backend diagnostics confirm this session has a
+prepared stopped endpoint worker. The card identifies `deviceAdministration`
+as the endpoint-preparation requirement. This adds no renderer audio path or
+permission bypass. The controls stop event propagation so they remain usable
+inside React Flow and expose their action names to assistive technology.
+
+Validation on Windows 11, 2026-09-22: `npm.cmd run typecheck` passed;
+focused canvas and control tests passed (28 tests); `tests/acceptance/m05-ui.ps1`
+passed typecheck, 20 UI test files/291 tests, and a temporary production build;
+`tests/acceptance/docs.ps1` passed 58 Markdown files/267 local links;
+`tests/acceptance/m08-traceability.ps1` passed with 160 normative IDs; and
+`git diff --check` passed. `rtk` is not installed in this environment.
+
+Live playback remains unverified. The visible session graph is configured, but
+the current shell rejected `nativeEndpoints.prepare` with
+`permissionDenied: DeviceAdministration`; no native worker was attached and no
+audio was played. The UI controls therefore remain unavailable until an
+authorized exact endpoint preparation succeeds. Attended Play/Stop, flow
+animation, Narrator, reduced-motion, contrast, and scaling checks remain open.
+
+## 2026-09-22 media source request and Test Signal usability follow-up
+
+Audited the requested WAV/MP3 source and temporary voice take workflow. The
+domain registry currently has 20 node kinds and the engine's generated
+TestSignal is its only authored audio source. No WAV/MP3 decoder or source-media
+API exists. The recording crate has MP3 encoding, while `recordings.preview`
+only inspects metadata and there is no temporary-take-to-graph-source flow.
+Implementing this correctly requires backend decode off the callback, bounded
+media ownership/lifetime, temporary capture with explicit permission and
+cleanup, and a graph source transport contract. The renderer must not play the
+file directly because that audio would bypass the routed graph and flow meters.
+
+As a small UI correction, reduced the Test Signal node to 184px and shortened
+its inline readiness text. The existing session Play/Stop actions remain
+disabled until the graph and exact endpoint are prepared. The current shell was
+previously denied that preparation with `permissionDenied: DeviceAdministration`;
+no authorization was changed and no audio was played.
+
+Validation: `npm.cmd run typecheck` passed; the focused Test Signal controls
+suite passed (6 tests); `git diff --check` passed. Full M05 validation and
+attended audio/animation remain open. This is not evidence that WAV/MP3 playback
+or temporary voice recording is implemented.
+
+## 2026-09-22 WAV/MP3 graph source implementation
+
+Added `audioFile` as a persisted graph input with opaque backend media IDs.
+Media uploads are ordered and size bounded; the backend decodes WAV/MP3 and
+resamples off the callback, and the graph source reads immutable decoded
+samples with bounded atomics in the callback. The node exposes compact
+Play/Stop controls; Pause/Resume, file import, descriptive status, and looping
+are in the inspector. Play starts the session when needed and source transport is
+node-scoped. Test Signal stays 184px wide.
+
+Portable evidence: `cargo test -p audiorouter-domain --locked` passed (66),
+the engine graph-source regression passed, `cargo test -p audiorouter-control
+--locked` passed (180; 4 guarded-live ignored), the storage media
+persistence/bounds regression passed, M05 UI acceptance passed typecheck and
+20 files/292 tests plus temporary production build, and contract drift passed
+(91 methods, 21 node kinds, 7 processors, 20 event categories). These checks
+do not qualify attended device playback. `rtk` was unavailable, so documented
+raw commands were used.
+
+Temporary microphone recording remains unimplemented. On 2026-09-22 the user
+explicitly authorized the local desktop shell to receive `Record` for
+intentional takes in approved recording roots. `Capture` and
+`DeviceAdministration` remain separate and are not included in the shell's
+ordinary grant. The backend still needs a bounded recorder-to-temporary-media
+workflow with cleanup and graph playback before the UI can expose a take
+control. Renderer microphone capture remains disallowed. The source tests and
+session-flow UI tests passed, including 23/23 canvas tests for telemetry-based
+edge presentation, but no attended UI was available (`cua.getState()` returned
+no apps or browsers). Exact endpoint preparation still requires
+`DeviceAdministration`; no live audio or animation was observed.
+
+## 2026-09-22 temporary voice take and visual preview follow-up
+
+The local shell's explicitly authorized `Record` scope now supports a bounded
+temporary-take flow from an already-running route's enabled Recorder node. The
+backend accepts only a completed WAV with the temporary recorder identity,
+checks file size/duration and WAV metadata, imports decoded audio as 24-hour
+media, and removes the source recording and library row. Expired media is
+excluded from reads and pruned. The UI offers a 120-second maximum take,
+stop/import, and ordinary Audio File source playback after plan/commit. No
+renderer microphone path was added and the shell still lacks `Capture` and
+`DeviceAdministration`.
+
+Checks on Windows 11: the locked workspace Rust suite passed; the full UI suite
+passed 20 files / 294 tests; M05 acceptance passed typecheck, tests, and a
+temporary production build; contract drift passed (92 methods); docs validation
+passed (58 Markdown files / 267 links); M08 traceability passed (160 IDs).
+The browser-only three-node harness shows simulated meter readings and clear
+edge lines. It is a visual layout check, not real audio evidence. The attended
+10-second sound/animation check remains open because no app is exposed by the
+computer-use surface and exact endpoint preparation returned
+`permissionDenied: DeviceAdministration`.
+
+## 2026-09-22 hover and visible edge motion follow-up
+
+After the user reported a bouncing Test Signal node and stationary dashed flow,
+the canvas hover style was narrowed to a static border cue; the previous large
+shadow lift made the card appear to jump. Meter-responsive width is now drawn
+as a solid amber base, with an independent narrow animated dash overlay for
+fresh active edges. This prevents the dash gaps from collapsing visually when
+the responsive stroke becomes thick. The local harness now marks its graph as
+running and uses fake input/output readings so the active edge appearance is
+visible. Reduced-motion mode still turns off movement; inactive/stale/muted/
+faulted paths remain static.
+
+Verification: focused canvas/Test Signal tests passed (29); UI typecheck passed;
+M05 acceptance passed 20 files / 294 tests and the temporary production build.
+The Chromium harness screenshot at
+`%TEMP%\audiorouter-flow-preview\flow-active-overlay.png` visibly shows the
+solid level stroke plus a pale dash overlay. It is simulated visual evidence,
+not live audio. The user's report confirms the prior attended interface showed
+stationary lines; a subsequent live check was not possible because the
+computer-use surface exposes no apps/browsers.
+
+## 2026-09-22 Play report: canvas nodes disappeared
+
+The user reports that all canvas nodes disappeared immediately after pressing
+Play. Read-only checks found the shell process responding and the Vite page
+returning HTTP 200. No matching Windows Application Error/Windows Error
+Reporting event was found for the recent window. No attended app surface was
+available, and the existing shell did not write persistent diagnostics; the
+historical session RPC and opened database therefore could not be verified.
+No graph recovery, app restart, or session mutation was attempted.
+
+Added shell JSONL logging for session start/stop/get/list to
+`%LOCALAPPDATA%\\AudioRouter\\logs\\shell.jsonl`. It captures sanitized RPC
+outcome and session revision/node/edge counts, excludes graph/request contents
+and audio data, and rotates at 5 MiB to one previous file. A focused regression
+checks count logging and content exclusion. All 30 shell tests passed. The
+shell-specific Cargo lockfile was updated after crate index access succeeded.
+An isolated dev shell build passed at
+`%TEMP%\\audiorouter-diagnostic-build\\debug\\audiorouter-shell.exe`; the
+normal target could not be overwritten while the old shell held the executable.
+This logger is not active in the already-running shell until that shell is
+relaunched. No session or app restart was done. `rustfmt --check` reports
+pre-existing formatting in the untouched tray-icon block; `git diff --check`
+passed. New logger and test code are formatted.
+
+## 2026-09-22 tabbed workbench, diagnostics, MCP setup, and browser E2E
+
+Replaced the former session rail and stacked default workspace with a central
+canvas and a right-side nine-tab workbench: Tools, Properties, Session, Setup,
+Devices, Recording, Advanced, MCP, and Logs. Session selection/name/revision,
+duplicate/delete, draft undo/redo/discard, plan, warning acknowledgement, and
+commit are in Session. Device setup, recording operations, and advanced client,
+startup, OS transition, graph history, and plugin scan controls are reachable
+in dedicated tabs. Tab selection has an explicit cyan state and semantic
+`role=tab`/`aria-selected` state. The top button now reads Show status/Hide
+status; the workspace retains task tabs in either status mode.
+
+MCP UI displays exact CLI/database/named-pipe paths from the desktop bridge,
+builds copyable Codex TOML and Claude Code PowerShell setup, and shows a
+redacted activity stream. It explains observer-first authorization and local
+stdio transport. The browser-only preview uses marked placeholders because it
+has no Tauri bridge; it does not expose a browser-to-backend transport.
+Frontend keeps a bounded in-memory exception/checkpoint list. Shell and backend
+write rotating JSONL RPC logs with method/outcome/timestamp and safe summaries;
+MCP activity retains client/tool/outcome/safe argument field names only. High
+rate bridge pumps/heartbeats are excluded; no realtime callback logging,
+request parameter values, audio, or model reasoning are added. All three log
+writers serialize local concurrent writes/rotation. Backend, MCP, and shell
+writers acquire same-user Windows named mutexes around rotation and append;
+abandoned ownership is recoverable after process exit. Caller-controlled MCP
+client/tool/field names are length/count bounded; failure logs use a whitelisted
+error category rather than raw error text. Shell graph summaries omit session
+IDs and runtime detail.
+
+### Verification evidence
+
+- Windows 11 UI: `npm.cmd run typecheck` passed; `npm.cmd test` passed 20/20
+  files and 294/294 tests; Playwright browser E2E passed 6/6 (latest rerun
+  2026-09-23). E2E covers all
+  16 exposed built-in node kinds, an 11-node multi-source/processing/output
+  composition and mute edit, one draggable source-to-output connection,
+  1280x720 canvas width, workspace tabs, MCP snippet expansion/copy feedback,
+  and Logs. This is UI/harness coverage; it does not exercise an actual audio
+  backend or prove every complex route can be connected and committed. A
+  ten-edge pointer-drag experiment failed under overlapping rapid node
+  placement; that brittle test was removed. Multi-source composition is
+  currently asserted without committing connected edges, which remains open.
+- Rust: full `cargo test --workspace --locked --quiet` passed; backend log
+  redaction/category tests passed 2/2; named mutex concurrency regression
+  passed; MCP activity redaction/category/bounds tests passed 3/3; stdio/backend
+  MCP interop passed 3/3; Tauri shell tests passed 31/31. Separate transport
+  and shell authenticated-pipe test binaries were run concurrently after the
+  cross-process lock was added; both passed.
+- Contracts: drift passed (92 methods, 21 node kinds, 7 processors, 20 event
+  categories); documentation links passed (58 Markdown files / 272 links);
+  requirement traceability passed (162 IDs); `git diff --check` passed.
+- Designer screenshots at `%TEMP%\audiorouter-designer-review\`: Tools,
+  Session, Properties, Setup, Devices, Recording, Advanced, MCP, Logs, dark,
+  light, and high-contrast. At 1280x720, review found unstyled native endpoint
+  selectors and labels running together in Devices. Shared styles now provide
+  stacked labels, full-width rounded selectors, and single-column aligned
+  actions; the refreshed screenshot confirms the change. Session name and
+  session selection controls now use the same stacked rounded-field treatment;
+  the refreshed Session screenshot was reviewed. The 1440x1000 view
+  shows the wider canvas, 3x3 tab rail, visible selection, rounded input
+  surfaces, and themed scrollbars. Review also caught clipped long MCP
+  commands; they now wrap within the panel. A desktop-only live snippet and
+  actual shell activity were not available to the browser preview.
+
+### Limits and next evidence
+
+No app surface was available for attended shell interaction. The currently
+running legacy shell's database/session is unidentified, so it was not
+restarted or mutated. The guarded live loopback/Test Signal test was not run;
+no sound was started. External Codex/Claude enrollment, real UI-to-MCP tool
+call/activity, Narrator, and live animated edge confirmation remain open.
+The pre-fix local backend JSONL contains two malformed lines generated by
+concurrent test processes before cross-process locking was implemented; the
+reader ignores malformed lines, and later concurrent authenticated pipe tests
+completed successfully after the named mutex change. A post-test line audit
+found 35 backend lines (33 valid, 2 historical malformed), 25 valid MCP lines,
+and no shell log file. New concurrent writes appended valid records; no new
+malformed line appeared. These records came from test processes, not an
+attended product route. The existing PID 53576
+predates the shell logger, and `shell.jsonl` is not present until the updated
+shell starts.
+The Playwright suite does not yet implement a fully connected multi-branch
+plan/commit route matrix; that remains necessary for complete graph E2E
+qualification. `rtk` was unavailable, and direct PowerShell commands were
+used instead. The touched CLI/transport packages and Tauri `main.rs` pass
+scoped rustfmt checks. Whole-crate Tauri rustfmt still flags pre-existing
+formatting in untouched `startup.rs`, `backend_supervisor.rs`, and
+`os_transition_windows.rs`; they were restored after confirming the changes
+were formatter-only.
+
+## 2026-09-23 - connected draft route E2E supplement
+
+This entry supersedes the earlier statement above that the Playwright suite
+did not implement a connected multi-branch plan/commit route. The browser E2E
+suite now uses `ui/route-harness.html` and a controlled fake `AppBackend`. The
+route test creates Test Signal, physical input, Audio File, application
+capture, and endpoint loopback sources; a mixer and gain/EQ/compressor/limiter/
+mute chain; and meter, recorder, and physical output branches. It first
+confirms the planner rejects the disconnected graph, uses the Setup workbench
+to add 13 edges, captures the graph screenshot, then plans and commits revision
+8. The controlled planner checks endpoint existence/direction, channel matrix
+dimensions and finite [-2,2] coefficients, duplicate connections, the
+single-incoming-edge rule outside mixers, and a connected source-to-output
+path. It does not exercise the Rust graph validator, endpoint availability,
+device I/O, or audio transport. Treat this as UI and draft-adapter coverage,
+not physical audio acceptance.
+
+`npm.cmd run typecheck`, `npm.cmd run test` (20 files / 294 tests), and
+`npm.cmd run e2e` (7/7) passed on Windows 11. Contract drift, documentation
+validation (58 Markdown files / 273 local links), M08 traceability (162
+normative IDs), and `git diff --check` passed. The production UI bundle built
+successfully into `%TEMP%\audiorouter-ui-build-review`; Vite could not empty the
+normal `ui/dist` because a bundle was locked (`EPERM`), so the running shell was
+not disturbed. Screenshot:
+`%TEMP%\audiorouter-designer-review\workspace-complex-route.png`.
+Visual review confirms the wider canvas and tabbed sidebar remain legible with
+the 13-edge graph; Setup is scrolled partway down after adding links. No app or
+browser was available through the computer-use surface, so live shell/MCP and
+physical loopback remain unverified.
+
+## 2026-09-23 - status view navigation review
+
+The old `Show status`/full-workspace CSS expanded every legacy panel into a
+long page and duplicated controls already grouped under workbench tabs. It now
+shows a compact session/status strip while keeping the focused canvas and
+right-side tab layout. The Playwright check verifies those legacy panels stay
+hidden, the selected Session tab is preserved, and the sidebar stays visible.
+Virtual-device lifecycle and route controls are included under Devices. The
+full status screenshot was reviewed at
+`%TEMP%\audiorouter-designer-review\workspace-status.png`; its session summary
+and two actions align above the canvas and tabs. Typecheck, UI tests (294/294),
+and Playwright (7/7) passed after the layout and stricter route-planner checks.
+The production UI build also passed in the fresh temporary output directory
+`%TEMP%\audiorouter-ui-build-review-0923b`; contract drift, docs validation
+(58 Markdown files / 273 links), M08 traceability (162 IDs), and
+`git diff --check` passed. A new Windows process inspection confirmed only the
+legacy shell is visible and its executable path is hidden; its diagnostic log
+is absent, and backend/MCP logs have not been written since 2026-09-22.
+
+## 2026-09-23 - Audio File UI flow and MCP guide reachability
+
+The route harness supplies a canned WAV upload contract. A Playwright flow
+selects an Audio File node, uploads a small WAV-shaped fixture, verifies the
+returned filename/status, toggles looping, and confirms Play and Stop remain
+disabled before graph commit. This proves UI upload sequencing and draft
+controls only: the fake backend returns metadata and does not parse, decode,
+persist, or play the fixture. Real decoding/playback remains covered by the
+engine/control/storage suites and guarded native acceptance, not by this
+browser test.
+
+The MCP workspace E2E scrolls its right-side tab content to the final setup
+instructions and asserts they are visible. Screenshot review found the guide
+below the initial viewport, so this makes discoverability an explicit
+regression check while retaining the compact workbench. Dark, light,
+high-contrast, MCP, and status screenshots were reviewed under
+`%TEMP%\audiorouter-designer-review\`.
+
+Verification on Windows 11: focused Audio File and workspace/MCP E2E passed
+2/2; the simple Test Signal-to-Physical Output route and full multi-source
+route also plan and commit in the fake harness; full Playwright passed 11/11.
+The diagnostics E2E feeds a redacted MCP request and backend graph-commit
+denial through the simulated Tauri bridge, then verifies MCP activity,
+backend diagnostics, and client graph checkpoints are visible in their tabs.
+UI typecheck and unit/component suite passed (294/294); production build
+passed at `%TEMP%\audiorouter-ui-build-review-0923c`; contract drift, docs
+validation (58 files / 273 links), traceability (162 IDs), and `git diff
+--check` passed. No CUA desktop/browser surface was available; real MCP
+client enrollment, current shell logs, guarded playback, and live animated
+edges remain unverified. A read-only audit found 35 backend JSONL rows (33
+parseable, 2 malformed historical rows), including five `graph.commit`
+errors (three typed `permissionDenied`); the MCP log had 25 parseable rows,
+including ten errors (six typed `toolError`); no shell log exists. The safe
+log schema intentionally excludes raw runtime error messages and arguments,
+so this stale evidence cannot explain the user's node disappearance. Do not
+infer that those historical auth/test events describe the current session.
+MCP stdio/backend interop passed 3/3; backend diagnostic privacy/concurrency
+passed 3/3; MCP activity redaction/bounds passed 3/3. These are process/pipe
+fixtures and do not prove an external Codex or Claude client is enrolled.
+
+The MCP stdio process integration additionally sets a unique temporary
+`LOCALAPPDATA` for the spawned CLI child, calls actual `tools/call` requests,
+then parses that process's `mcp-activity.jsonl`. It verifies a tool request,
+outcome/error category, safe argument field names, and absence of a nested
+secret sentinel value. The test therefore validates the real stdio server and
+writer together and no longer appends these integration rows to the user's
+local app log. The full `mcp_stdio` target passed 3/3 on Windows; one initial
+probe supplied an unsupported extra top-level field and was correctly rejected,
+so it was replaced with a schema-valid `call_api` request carrying the sentinel
+inside opaque params. Rustfmt check passed after formatting that assertion.
+
+## 2026-09-23 - persistent renderer diagnostics
+
+The client diagnostic ring now survives WebView reloads using local storage:
+at most 80 entries, each capped at 320 characters. It records graph node/edge
+counts and revision, plus UI error category and script basename/line. It omits
+raw exception/rejection text, absolute paths, audio, parameters, and node
+names. The UI labels the retention and privacy behavior. A regression dispatches
+a synthetic error containing a private audio path, verifies the persisted JSON
+excludes that path, unmounts/remounts the App, and verifies the prior error
+category and graph checkpoint are restored. If browser storage is disabled or
+full, diagnostics remain available in memory for that run.
+
+Validation on the final sanitized code: persistent-diagnostics regression
+passed; typecheck passed; production bundle passed at
+`%TEMP%\audiorouter-ui-build-review-0923d`; full UI suite passed 21 files / 297
+tests; Playwright passed 11/11. Focused MCP stdio/backend (3), backend
+diagnostic (3), and MCP activity (3) Rust test groups passed. No shell restart,
+database/session inspection beyond read-only checks, or physical audio action
+was performed.
+
+## 2026-09-23 - browser layout and Recording tab review
+
+The user reported that the canvas/right workbench were clipped by vertical
+scrolling and that Recording showed raw-looking recorder and sample-rate
+controls. Reviewed the disconnected React route harness in Chromium via
+Playwright at 1280x720, 1440x900, and 1920x1080. Before the fix, the page hid
+overflow while the workspace extended four pixels beyond the viewport: the
+header is 58px but the workspace height subtracted 54px. The Recording form's
+fieldset and labels had no workbench layout rules, so controls collapsed into
+inline widths. The browser review confirms the canvas and tab rail fit inside
+the viewport at all three sizes, with no document scrollbar. The recorder
+fields now use stacked labels, rounded full-width inputs, and grouped settings;
+the default recording ID is `voice-recording` and the selected rate is clearly
+`48 kHz`.
+
+Evidence screenshot: `%TEMP%\audiorouter-designer-review\recording-tab-current.png`.
+This is a browser-only preview with a simulated backend; it does not prove the
+native shell's effective DPI/window sizing or live recording behavior.
+Validation on Windows 11: focused layout/Recording Playwright passed; full
+Playwright passed 12/12; UI typecheck passed; Vitest passed 21 files / 297
+tests; production build passed to `%TEMP%\audiorouter-ui-build-review-layout`;
+`git diff --check` passed.
+
+## 2026-09-23 - compact status viewport regression and endpoint E2E coverage
+
+The status-view browser review at 1280x720 found that enabling the status strip
+expanded the document to 2403px and left the graph at its old viewport zoom.
+The workspace now reserves the header/status/workspace as bounded viewport
+rows, the canvas graph viewport flexes within its panel, and a significant
+React Flow viewport resize triggers fit-to-view (with reduced-motion duration
+disabled when requested by the OS). The 1280x720 regression checks no page
+scroll, panel containment, and that every graph node remains inside the graph
+viewport. It also selects Properties while compact status is open and verifies
+the inspector remains reachable without growing the page.
+
+Expanded Playwright coverage adds an existing-virtual-input -> Gain ->
+existing-virtual-output route, then plans and commits it through the route
+harness. It checks that virtual-render-source and virtual-capture-sink entries
+remain disabled and explain the deferred managed-driver requirement. This is
+UI/contract-harness evidence only; it does not qualify installed endpoint
+binding or physical audio.
+
+Visual evidence: `%TEMP%\audiorouter-designer-review\workspace-status-1280x720.png`
+and `workspace-status-properties-1280x720.png`. At 1280x720, document height is
+720px; the canvas and all three graph nodes are within bounds in the normal
+compact-status screenshot. The property inspector has its own scroll area at
+this short height, while the canvas and top-level window remain fixed.
+
+## 2026-09-23 - attended shell handover, route compatibility, and interaction review
+
+The user-launched review UI initially connected to an older shell's default
+control pipe. A named-pipe owner check identified PID 53576; that backend
+returned the obsolete production-driver message and lacked the current
+desktop recording grant. After both idle shells were stopped, the relinked
+`audiorouter-shell-review-20260923.exe` owned the pipe and returned the current
+status and grant. The saved `desktop-session` stayed at revision 4 with two
+nodes and one edge. The final relinked executable SHA256 was
+`D3409349C075F078D0FDDBB5557963C2EAA585B1DE54A65374B483560FADE11B`;
+its current process at this check was PID 82224. The process was launched with
+`AUDIOROUTER_ALLOW_DEVICE_ADMIN=1` after the operator's earlier enrollment.
+
+The original Test Signal -> Gain -> Output draft exposed a real compiler
+compatibility defect. The UI had created Gain with one-channel ports between
+two-channel endpoints. Browser planning accepted it; native Start rejected it
+as `UnsupportedTopology`. Built-in processor defaults now use two-channel
+ports, and the UI explains older incompatible routes in plain terms. The
+native compiler still rejects channel-changing and branching saved routes at
+Start; backend plan validation for those shapes remains follow-up work.
+
+The guarded `tests/acceptance/m05-live-test-signal.ps1` check used exact
+existing VB-Cable capture/render IDs, generated a separate Test Signal ->
+Gain -> Physical Output session, and pumped audio for 10.01 seconds: 597 pump
+calls, 3,553 processed quanta, zero XRuns. It stopped and detached the worker;
+endpoint states matched before and after. The successful session
+`m05-signal-1790226441` remains saved as “10 second Test Signal to Gain to
+Output” and was prepared again, stopped, on the exact VB-Cable pair in the
+review shell. Three failed, agent-created probe sessions were deleted after
+exact ID/name and idle checks; `desktop-session` was not changed.
+
+An attempt to prepare the Focusrite speakers returned
+`IAudioClient::Initialize(render)` HRESULT `0x8889000A` (device in use). No
+stream started on that endpoint. The successful VB-Cable render check proves
+the native graph and pump path but does not prove audible speaker output or
+the attended WebView animation. The user can select the saved test session
+and press Play; live visual and audible acceptance remains open.
+
+The interaction slice removed failed-Play/Start tab jumps, kept Tools open
+across repeated adds, made node deletion immediate and undoable with Delete,
+preserved full visibility of unselected paths, added connection tooltips and
+distinct pause/add/remove icons, reduced the status and tab-rail footprint,
+and changed Session to one picker plus on-demand Rename and Save route. Browser
+screenshots were inspected at 1280x720, 1440x900, and 1920x1080, including
+`%TEMP%\audiorouter-designer-review\workspace-complex-route.png`. Computer Use
+could not attach to the Windows native pipe, so no screenshot of the running
+desktop shell was obtained.
+
+Windows checks: UI typecheck passed; production UI build and forced shell
+relink passed; Playwright 16/16 passed; full Vitest 22 files / 310 tests
+passed; documentation validation passed (58 Markdown files / 279 local
+links); `git diff --check` passed. The Playwright route fixture checks
+visibility and animation using simulated backend meters; the guarded native
+pump independently checks real VB-Cable endpoints. Neither substitutes for
+the user's attended visual acceptance on the current desktop window.
+
+## 2026-09-23 - occupied Physical output connection diagnosis
+
+The user reported that a newly added Test Signal would not connect to a
+Physical output. The running review shell remained responsive as PID 82224.
+Its `shell.jsonl` contained routine `events.subscribe` polling but no graph
+request around the report. The backend JSONL had no current rows. This is
+expected for a draft connection, which is handled in the renderer before any
+plan/commit RPC. The renderer's console-only connection trace was unavailable
+because Computer Use exposed no attached desktop app or browser.
+
+A read-only, elevated `sessions.get` through the shell's local control pipe
+showed `desktop-session` revision 4: `desktop-input` (Physical input,
+`main:output:2`) already connects to `desktop-output` (Physical output,
+`main:input:2`) by enabled `desktop-edge`. `appendDraftConnection` rejected a
+second edge to that non-Mixer input with `That input already has a connection`,
+as required by GRAPH-02. The user's new node and attempted edge were local
+draft state and cannot be reconstructed from the saved session or shell log.
+No session or audio endpoint was modified during this diagnosis.
+
+Both canvas drag and keyboard/form connection actions now share the same
+draft connection path. On an occupied input, the workbench names the current
+source and offers **Replace input connection**. This removes the old edge and
+adds the chosen source as one local, undoable draft change; it requires an
+explicit **Save route** before persistence. A client diagnostic records the
+occupied-input category without node names or parameters. A Mixer remains an
+explicit graph operation for combining sources.
+
+Windows verification: UI typecheck passed; full Vitest 22 files / 310 tests
+passed after updating a stale message assertion; Playwright passed 17/17,
+including an occupied Headphones input, replacement and Undo; production UI
+build passed after an elevated retry to replace generated `ui/dist` files;
+shell `cargo build --locked` passed after cleaning only the shell package;
+docs validation passed (58 Markdown files / 279 links); `git diff --check`
+passed. The new side-by-side executable is
+`src-tauri/target/debug/audiorouter-shell-review-20260923-connection.exe`,
+SHA256 `109B4A57B1D8B72098DFBBFEE3B36066A1767D47688E65A924483E684E135759`.
+The existing shell was left running to preserve the user's unsaved draft; the
+new binary has not been attended-tested on the current window. The immediate
+old-shell workaround is to remove the existing input-to-output edge in the
+draft, connect Test Signal to the freed output input, and save after review.
+
+## 2026-09-24 Properties sizing, output summing, and Test Signal feedback
+
+The shell log was checked again after the reported Play attempt. It contains
+polling (`events.subscribe`) but no `session.start` call at the reported time,
+so the click did not reach the backend lifecycle handler. The renderer had a
+second gate: Test Signal Play was disabled while any graph plan was pending,
+even when the draft already matched the committed session. That stale-plan
+condition is removed; a route mismatch still produces explicit feedback rather
+than starting a different saved graph. A native audition of an unsaved draft
+is not yet implemented; endpoint workers are compiled from a committed session
+and the current API cannot prepare/start a candidate graph without persisting
+it. This remains an open API/runtime task, not a passing audio result.
+
+Properties had a short workbench row and a separate selected-node row. The
+Properties tab now keeps the workbench across the full sidebar and places the
+selected-node controls below its tabs with an independent scroll region. For a
+second source connected to an occupied Physical Output, the editor now inserts
+an explicit visible Mixer into the draft and connects both sources to it. The
+operation is undoable; graph validation and the existing explicit Mixer
+contract remain authoritative. Native multi-input preparation currently binds
+Physical Input and Application Capture sources; Test Signal or Audio File
+inside such a mix still needs native source scheduling before it can be called
+playable.
+
+Verification on Windows: UI typecheck passed; Vitest passed 22 files / 311
+tests; Playwright passed 18/18 including the new output summing and full-height
+Properties checks. Vite production build passed to
+`%TEMP%\audiorouter-ui-review-20260924` after the running shell locked the
+existing `ui/dist` asset (`EPERM`). `git diff --check` passed. No native
+endpoint was started and the current shell was left running. Browser results
+validate interaction/layout only, not audible output.
+
+### 2026-09-24 candidate preview follow-up
+
+The previous paragraph is superseded on Test Signal preview behavior. The
+shared `session.start` control method now accepts an optional candidate
+session. The UI validates a dirty draft with `graph.plan`; the backend checks
+the candidate's stored base revision and requires both SessionControl and
+GraphWrite. It compiles the candidate into an already prepared single-endpoint
+native scheduler without committing or changing the saved revision. Existing
+`session.stop` ends the preview. Control tests verify authorization, stale or
+unprepared-route rejection, and that preview does not change persistence; the
+Playwright harness verifies the UI flow and unchanged saved revision. These
+tests are not evidence of audible native playback. Multi-capture workers still
+use the committed graph and do not preview Test Signal or Audio File mixed with
+capture sources.
+
+Current verification: UI typecheck; Vitest 22 files / 311 tests; Playwright
+19/19; `cargo test -p audiorouter-control --locked` (184 passed, 4 ignored);
+Vite production build; `cargo build --locked --manifest-path
+src-tauri/Cargo.toml`; docs validation (58 Markdown files / 281 local links);
+and `git diff --check`. The new side-by-side shell is
+`src-tauri/target/debug/audiorouter-shell-review-20260924-preview.exe`, SHA256
+`FE488467E3688B4ECAC3D5C0CBE0F3B07D72BD1DE87FFF0567085CDFEAEBA8AB`. The
+existing shell PID 82224 remains running with the user's current draft; this
+binary has not been launched to avoid interfering with that state. Native
+audible acceptance remains open.
+
+### 2026-09-24 workspace sizing and controls follow-up
+
+Properties was reproduced in the compact status view: the compact canvas
+spanned two rows while a later Properties rule created three, causing the
+canvas and sidebar to shrink. The compact Properties layout now uses one
+viewport row for the canvas and sidebar; the inspector overlays only the
+sidebar below its tabs. Playwright compared both column heights before and
+after opening Properties at 1280x720 with less than 3 px variation. Browser
+screenshots of normal and compact Properties were inspected; the selected node
+controls now begin directly below the tab rail, and the document does not
+scroll vertically at 1280x720, 1440x900, or 1920x1080.
+
+The header now shows Save, Play/Stop, and stopped/starting/running audio state.
+Session retains session management and undo/revert actions without exposing
+plan and revision steps. For an unprepared route, Play attempts preparation
+using only the exact endpoint choices already made. Missing choices and
+authorization failures remain visible as action messages. The Devices tab
+explains why the current adapter needs a separate capture binding for Test
+Signal and presents manual preparation/recovery controls. This is a known
+runtime limitation: the Test Signal plus Physical Output route still needs a
+selected capture endpoint until a render-only worker is implemented. Browser
+fixtures prove the UI control path only, not audible native output.
+
+Windows checks: UI typecheck, production Vite build, Vitest 22 files / 311
+tests, Playwright 19/19, and a forced shell relink passed. The review binary is
+`src-tauri/target/debug/audiorouter-shell-review-20260924-workspace.exe`,
+SHA256 `AB2FF89D5B1C274F65EEE7A4DEB243064D9ACBAC65FD47C994724ACF03438FF2`.
+The current running shell and draft were not modified. Computer Use returned
+`{"apps":[],"browsers":[]}` despite shell PID 82224 still running; no safe
+desktop handover or native Play in the new shell was possible.
+
+### 2026-09-24 attended Play failure and exact Mixer repair
+
+The updated workspace shell PID 51844 loaded `desktop-session` revision 11
+(Physical Input and Test Signal -> Mixer -> Physical Output). Local
+`shell.jsonl` recorded repeated `nativeEndpoints.prepare` errors, then one
+successful preparation followed by repeated `session.start` `-32602` errors.
+An elevated, read-only local pipe check showed the selected exact endpoints
+were CABLE Output capture and Focusrite Speakers render. A direct start of the
+saved graph returned `native graph rejected: UnsupportedTopology`. No active
+session or native audio was reported. The UI's prior generic message incorrectly
+suggested adding a Mixer or matching channel counts, although both were present.
+
+A separate temporary candidate containing only Test Signal -> Physical Output
+started natively as generation 10 for 10 seconds, with
+`system.diagnostics.audio.state=available`, then stopped. The saved graph stayed
+at revision 11. This proves a native start/stop and availability report, not
+that the user heard a tone; listening confirmation remains pending. Calling
+`audioSources.transport` during an earlier probe returned “audio source is not
+prepared,” because that API controls Audio File, while Test Signal emits on
+session start. That first preview was stopped immediately.
+
+The engine now prepares the exact saved two-source stereo shape by composing
+its explicit matrices and adding a bounded Test Signal stage to the one
+physical capture block before the output meter. Capture and Test Signal each
+have source meters, so incoming edge activity can be attributed without
+using post-Mixer output as evidence for a silent branch. It still rejects unhandled
+third sources. The shell log records stable topology reason and structured
+audio error kind/HRESULT/retryability without arbitrary error text. Commands
+run on Windows: engine 125 passed, control 184 passed/4 ignored, shell logging
+regression passed, Vitest 311 passed on a full rerun, Playwright 19 passed,
+TypeScript/Vite review build passed, shell debug build passed, and
+`git diff --check` passed. An initial concurrent full Vitest run had one
+transient lifecycle timeout; that test passed alone and in the subsequent full
+run. The new shell is
+`src-tauri/target/debug/audiorouter-shell-review-20260924-mixer.exe`, SHA256
+`463F79AC1E85B0356203A60FCEBA6336220991031877CED4CF6E817685B44456`.
+The old shell remains open until its draft is preserved, so the new mixed route
+has not yet received attended native playback evidence.
+
+Attended continuation: the user closed the old shell, then the review shell
+PID 60912 opened the same default database and loaded desktop revision 11.
+`nativeEndpoints.prepare` succeeded for the selected pair. The shell log
+recorded `session.start` successful as native generations 1, 2, and 3, with
+matching successful `session.stop` calls; the first run stayed active for
+about 24 seconds. The user explicitly reported hearing the Test Signal and
+seeing an orange connection with an arrow. The exact moving-dash and
+volume-width behavior is still being checked separately. A prior direct RPC
+preview's silence was caused by the diagnostic script not calling the native
+endpoint pump; that script's `audio.state=available` alone was not an audible
+qualification. The ordinary UI does call the bounded pump while running.
+
+## 2026-09-24 installed virtual endpoint tool clarification
+
+The tool shelf exposed two input cards and two output cards, but each pair
+created the same `physicalInput` or `physicalOutput` graph kind. The labels
+made `Voicemeeter Input` (Windows playback) look selectable as an AudioRouter
+capture endpoint. Consolidated each pair into one device card, and added
+capture/render guidance in the tooltips, input binding picker, and quickstart.
+Existing saved graph kinds and endpoint bindings are unchanged. The current
+native path can take the Voicemeeter B1 capture endpoint; direct render
+endpoint loopback remains unqualified in this shell.
+
+Windows verification: `npm.cmd run typecheck` passed; `npm.cmd test` passed
+22 files / 310 tests; `npm.cmd run e2e` passed 19/19 Chromium checks;
+`npm.cmd run build -- --outDir dist-review-20260924-device` and
+`cargo build --manifest-path src-tauri/Cargo.toml --locked` with that asset
+directory passed; docs validation passed 58 files / 282 local links;
+`git diff --check` passed. The first UI build failed `EPERM` creating the
+review output directory and succeeded when rerun elevated. This is UI and
+build evidence only; Voicemeeter B1 playback into the Focusrite has not been
+attend-tested. The earlier running shell was left open and unchanged.
+
+## 2026-09-24 Voicemeeter transition invalidated stopped worker
+
+After Voicemeeter opened, the attended shell PID 60912 logged two
+`session.start` failures with `kind=deviceInvalidated`, HRESULT `0x88890004`,
+and `retryable=true`; recent `devices.list` calls succeeded. There was no
+`nativeEndpoints.rebind` between the inventory refresh and those starts.
+The UI had skipped preparation whenever a stopped worker was attached,
+regardless of whether its WASAPI clients were invalidated or the user had
+selected another exact endpoint pair. This is a likely root cause, although
+the log did not identify which client rejected Start.
+
+The UI now rebinds the attached stopped worker to the selected exact IDs
+before Play, and gives an actionable invalidation message. A component
+regression asserts rebind occurs before start; error formatting has a focused
+regression. Windows checks: typecheck passed; Vitest 22 files / 312 tests
+passed; Playwright 19/19 passed; production frontend and shell builds passed;
+docs validation passed 58 files / 282 links; `git diff --check` passed.
+The final side-by-side shell is
+`src-tauri/target/debug/audiorouter-shell-review-20260924-rebind.exe`,
+SHA256 `E21E65C8F2D12419ACABF81027BBB8892607FC29FB0F80BBF585EA01B5B99CD7`.
+No live audio success is claimed for this build yet. The current shell remains
+open; it is unsafe to replace it without handing over possible unsaved edits.
+
+## 2026-09-24 route Play and Test Signal transport
+
+The top Play previously started the route and made Test Signal emit by default.
+The engine now starts Test Signal silent and exposes atomic per-source
+play/stop state. `audioSources.transport` controls the prepared tone in a
+running route. Canvas node Play may start a stopped route first; node Stop
+stops only that tone. Route Status no longer duplicates top Play/Stop.
+
+Windows evidence: `cargo test -p audiorouter-engine --locked --quiet` passed
+125 tests; `cargo test -p audiorouter-control --locked --quiet` passed 185 tests
+with 4 ignored; UI Vitest passed 312 tests; `npm.cmd run e2e` passed 20/20
+Chromium checks, including separate route/source transport; contract drift
+passed; production frontend and Tauri builds passed; docs validation passed
+58 files / 282 links; `git diff --check` passed. The initial frontend build
+was denied while creating its output directory and succeeded elevated. RTK
+was unavailable. Side-by-side shell:
+`src-tauri/target/debug/audiorouter-shell-review-20260924-routeplay.exe`
+(SHA256 `3FEB9648FF67727E54D0C0ED790B7D6B298B0455ACA5BCBF53EFFE7BDF415BE4`).
+The earlier shell was left open because its canvas may contain unsaved work.
+Live audio from this build awaits an attended handoff and listening check.
+
+## 2026-09-24 Advanced EQ from supplied visual reference
+
+Inspected `C:\Users\miste\Downloads\EqualizerSteelseriesGG.png`: a dark
+log-frequency graph, coloured filter points, a combined response trace, and
+precise filter controls. The implementation promotes the existing parametric
+processor as Advanced EQ while retaining `parametricEq@1` persisted identity.
+The bounded audio stage, node validator, discovery catalog, and response API
+now accept sixteen bands. Properties exposes point add, graph double-click,
+selection, pointer drag, six filter shapes, precise frequency/gain/Q controls,
+and point removal. Pass and notch filters do not expose an inapplicable gain
+field. The response is supplied by the backend coefficient implementation.
+The domain's per-node parameter bound increased from 64 to 96 because the
+full default EQ map has 83 parameters; a focused validation regression passes.
+
+Windows results: DSP 34, domain 67 including the full-EQ regression, engine
+125, control 185 (4 ignored), UI Vitest 314, and Playwright 21/21 passed,
+including an actual browser point drag; contract drift, production UI/Tauri
+builds, docs validation (59 files/284 links), and `git diff --check` passed.
+`cargo fmt --all -- --check` reports existing formatting diffs elsewhere in
+the dirty control/engine files and was not applied globally. The inspected
+[browser screenshot](advanced-eq-browser-preview.png) uses a deterministic
+in-memory audio harness; its curve is simulated, while production uses
+`processors.response`. The side-by-side review shell is
+`src-tauri/target/debug/audiorouter-shell-review-20260924-advanced-eq.exe`
+(SHA256 `4FAA8877A6B28DE9355D2CFD064F4FFE0B684565CBC9B4E2BA1346555D7DB56E`).
+No attended hearing or live response check was performed. No shell was open
+before launch; the updated review shell was started as PID 63692 and is
+responding.

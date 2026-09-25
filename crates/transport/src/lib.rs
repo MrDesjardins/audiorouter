@@ -18,6 +18,161 @@ pub enum TransportError {
 /// connection. This keeps subscription/session lifetimes bounded while still
 /// matching the control API's maximum page size.
 pub const MAX_SESSION_FRAMES: usize = 500;
+const BACKEND_DIAGNOSTIC_LIMIT_BYTES: u64 = 5 * 1024 * 1024;
+
+/// Cross-process serialization for bounded diagnostic-file rotation and writes.
+/// Names are fixed, same-user, `Local\` objects supplied only by this app.
+#[cfg(windows)]
+pub struct DiagnosticMutexGuard(windows::Win32::Foundation::HANDLE);
+
+#[cfg(windows)]
+impl Drop for DiagnosticMutexGuard {
+    fn drop(&mut self) {
+        // SAFETY: this handle was created by `CreateMutexW` and the successful
+        // wait below grants this thread ownership. Drop releases that ownership
+        // once, then closes the single owned handle.
+        unsafe {
+            let _ = windows::Win32::System::Threading::ReleaseMutex(self.0);
+            let _ = windows::Win32::Foundation::CloseHandle(self.0);
+        }
+    }
+}
+
+/// Acquire a named, same-logon-session mutex for a short local file operation.
+/// The wait occurs only on a control/logging thread, never in an audio callback.
+#[cfg(windows)]
+pub fn acquire_diagnostic_mutex(name: &str) -> Option<DiagnosticMutexGuard> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::{WAIT_ABANDONED, WAIT_OBJECT_0};
+    use windows::Win32::System::Threading::{CreateMutexW, WaitForSingleObject, INFINITE};
+    if name.is_empty()
+        || name.len() > 96
+        || !name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+    {
+        return None;
+    }
+    let wide_name = format!("Local\\{name}")
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    // SAFETY: `wide_name` is NUL-terminated and remains alive for the call;
+    // default security gives the mutex the current user's inherited ACL.
+    let handle = unsafe { CreateMutexW(None, false, PCWSTR(wide_name.as_ptr())) }.ok()?;
+    // SAFETY: `handle` is the valid owned handle returned above. An abandoned
+    // mutex is also acquired and must be released by the returned guard.
+    let result = unsafe { WaitForSingleObject(handle, INFINITE) };
+    if result == WAIT_OBJECT_0 || result == WAIT_ABANDONED {
+        Some(DiagnosticMutexGuard(handle))
+    } else {
+        // SAFETY: the wait failed, so close the one valid owned handle.
+        unsafe {
+            let _ = windows::Win32::Foundation::CloseHandle(handle);
+        }
+        None
+    }
+}
+
+/// Control-plane-side request summaries for attended desktop diagnosis.
+/// Parameter values and response payloads are deliberately excluded; this is
+/// called on the transport thread and never from the realtime audio callback.
+fn log_backend_rpc(frame: &[u8], responses: &[Vec<u8>]) {
+    use std::io::Write;
+    static LOG_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+    let lock = LOG_LOCK.get_or_init(|| std::sync::Mutex::new(()));
+    let Ok(_guard) = lock.lock() else { return };
+    #[cfg(windows)]
+    let Some(_cross_process_guard) = acquire_diagnostic_mutex("AudioRouter.BackendDiagnostics") else {
+        return;
+    };
+    let root = std::env::var_os("LOCALAPPDATA")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("TEMP").map(std::path::PathBuf::from));
+    let Some(directory) = root.map(|root| root.join("AudioRouter").join("logs")) else {
+        return;
+    };
+    if std::fs::create_dir_all(&directory).is_err() {
+        return;
+    }
+    let path = directory.join("backend.jsonl");
+    if std::fs::metadata(&path)
+        .map(|metadata| metadata.len() >= BACKEND_DIAGNOSTIC_LIMIT_BYTES)
+        .unwrap_or(false)
+    {
+        let previous = directory.join("backend.previous.jsonl");
+        let _ = std::fs::remove_file(&previous);
+        let _ = std::fs::rename(&path, previous);
+    }
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis())
+        .unwrap_or_default();
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
+        for record in backend_rpc_log_records(frame, responses, now_ms) {
+            if serde_json::to_writer(&mut file, &record).is_ok() {
+                let _ = file.write_all(b"\n");
+            }
+        }
+        let _ = file.flush();
+    }
+}
+
+fn backend_rpc_log_records(
+    frame: &[u8],
+    responses: &[Vec<u8>],
+    now_ms: u128,
+) -> Vec<serde_json::Value> {
+    use audiorouter_protocol::{decode_rpc_frame, RpcMessage};
+    let Ok(message) = decode_rpc_frame(frame) else {
+        return Vec::new();
+    };
+    let requests = match message {
+        RpcMessage::Single(request) => vec![request],
+        RpcMessage::Batch(requests) => requests,
+    };
+    let requests = requests
+        .into_iter()
+        .filter(|request| !is_high_frequency_rpc(&request.method))
+        .collect::<Vec<_>>();
+    let response_values = responses
+        .iter()
+        .filter_map(|frame| audiorouter_protocol::decode_frame::<serde_json::Value>(frame).ok())
+        .collect::<Vec<_>>();
+    requests.into_iter().map(|request| {
+        let response = response_values.iter().find(|response| response.get("id") == request.id.as_ref());
+        let error_code = response.and_then(|value| value.pointer("/error/code")).cloned();
+        let error_kind = response
+            .and_then(|value| value.pointer("/error/data/code"))
+            .and_then(serde_json::Value::as_str)
+            .filter(|kind| matches!(*kind, "permissionDenied" | "revisionConflict" | "rateLimited" | "invalidParams" | "notFound" | "unavailable" | "unsupported" | "internalError"))
+            .map(str::to_owned);
+        let state = response.and_then(|value| value.get("result")).map(|result| serde_json::json!({
+            "revision": result.get("revision"),
+            "nodes": result.get("nodes").and_then(serde_json::Value::as_array).map(Vec::len),
+            "edges": result.get("edges").and_then(serde_json::Value::as_array).map(Vec::len),
+            "state": result.get("state"),
+            "generation": result.get("generation"),
+        }));
+        let method = request.method.chars().take(96).collect::<String>();
+        serde_json::json!({ "timeUnixMs": now_ms, "method": method, "outcome": if error_code.is_some() { "error" } else { "ok" }, "errorCode": error_code, "errorKind": error_kind, "summary": state })
+    }).collect()
+}
+
+fn is_high_frequency_rpc(method: &str) -> bool {
+    matches!(
+        method,
+        "nativeBridges.heartbeat"
+            | "nativeEndpoints.pump"
+            | "nativeDuplex.pump"
+            | "nativeRenderSources.pump"
+            | "nativeMultiInputs.pump"
+    )
+}
 
 fn validate_response_count(responses: usize) -> Result<(), TransportError> {
     if responses == 0 || responses > MAX_SESSION_FRAMES {
@@ -647,6 +802,7 @@ pub fn serve_control_connections(
             let responses = plane
                 .dispatch_frame_authorized_for_client(frame, &client_id, &grant)
                 .map_err(|error| TransportError::Protocol(error.to_string()))?;
+            log_backend_rpc(frame, &responses);
             if responses.is_empty() {
                 Ok(None)
             } else {
@@ -902,6 +1058,69 @@ mod tests {
     use super::*;
     use audiorouter_control::{ClientGrant, ClientRole, ControlPlane};
     use audiorouter_protocol::encode_frame;
+
+    #[test]
+    fn backend_diagnostics_keep_method_and_graph_counts_without_rpc_params() {
+        let request = encode_frame(&serde_json::json!({
+            "jsonrpc":"2.0", "id":7, "method":"sessions.get",
+            "params":{"sessionId":"private-session", "secret":"private-value"}
+        }))
+        .unwrap();
+        let response = encode_frame(&serde_json::json!({
+            "jsonrpc":"2.0", "id":7,
+            "result":{"revision":9, "nodes":[{"id":"one"},{"id":"two"}], "edges":[{"id":"edge"}]}
+        }))
+        .unwrap();
+        let records = backend_rpc_log_records(&request, &[response], 1234);
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0]["method"], "sessions.get");
+        assert_eq!(records[0]["summary"]["revision"], 9);
+        assert_eq!(records[0]["summary"]["nodes"], 2);
+        assert_eq!(records[0]["summary"]["edges"], 1);
+        assert!(!records[0].to_string().contains("private-value"));
+        assert!(!records[0].to_string().contains("private-session"));
+    }
+
+    #[test]
+    fn backend_diagnostics_keep_safe_error_category_without_error_text() {
+        let request = encode_frame(&serde_json::json!({
+            "jsonrpc":"2.0", "id":8, "method":"graph.commit",
+            "params":{"sessionId":"private-session", "name":"private-name"}
+        }))
+        .unwrap();
+        let response = encode_frame(&serde_json::json!({
+            "jsonrpc":"2.0", "id":8,
+            "error":{"code":-32001, "message":"permission denied: GraphWrite private-name", "data":{"code":"permissionDenied"}}
+        })).unwrap();
+        let records = backend_rpc_log_records(&request, &[response], 1234);
+        assert_eq!(records[0]["outcome"], "error");
+        assert_eq!(records[0]["errorCode"], -32001);
+        assert_eq!(records[0]["errorKind"], "permissionDenied");
+        assert!(!records[0].to_string().contains("private-name"));
+        assert!(!records[0].to_string().contains("GraphWrite"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn diagnostic_mutex_serializes_concurrent_log_writers() {
+        let name = format!("AudioRouter.TestDiagnostics.{}", std::process::id());
+        let first = acquire_diagnostic_mutex(&name).expect("first mutex owner");
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (finished_tx, finished_rx) = std::sync::mpsc::channel();
+        let worker_name = name.clone();
+        let worker = std::thread::spawn(move || {
+            started_tx.send(()).unwrap();
+            let _second = acquire_diagnostic_mutex(&worker_name).expect("second mutex owner");
+            finished_tx.send(()).unwrap();
+        });
+        started_rx.recv().unwrap();
+        assert!(finished_rx.try_recv().is_err());
+        drop(first);
+        finished_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("second writer enters after first releases");
+        worker.join().unwrap();
+    }
 
     #[test]
     fn checked_io_count_rejects_zero_and_overreported_bytes() {

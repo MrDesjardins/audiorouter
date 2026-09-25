@@ -15,10 +15,9 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
-The current catalog contains 77 methods, including backend-owned quit/finalize,
-session portability,
-recorder lifecycle, plugin inventory/retry, and startup plan/apply methods added
-after the initial 47-method reference.
+The current catalog contains 92 methods, including backend-owned quit/finalize,
+session portability, bounded WAV/MP3 media import, source transport, recorder
+lifecycle, plugin inventory/retry, and startup plan/apply methods.
 
 | Method | Permission | Side effect |
 | --- | --- | --- |
@@ -34,6 +33,12 @@ after the initial 47-method reference.
 | `operations.get` | `read` | read-only |
 | `operations.cancel` | `sessionControl` | mutating; requires an idempotency key |
 | `recordings.list` | `record` | read-only |
+| `audioMedia.beginUpload` | `graphWrite` | mutating; starts one bounded WAV/MP3 upload |
+| `audioMedia.uploadChunk` | `graphWrite` | mutating; appends the next ordered bounded upload chunk |
+| `audioMedia.finishUpload` | `graphWrite` | mutating; validates, decodes, and stores opaque media |
+| `audioMedia.importTemporaryRecording` | `record` | mutating; imports only a completed `audio-file-take-*` WAV, removes its temporary file/library row, and expires the graph media after 24 hours |
+| `audioMedia.delete` | `graphWrite` | mutating; deletes media only when no session references it |
+| `audioSources.transport` | `sessionControl` | mutating; plays/stops a prepared Test Signal or plays/pauses/stops a prepared Audio File in a running session; `status` reads source state |
 | `recorders.list` | `record` | read-only |
 | `recorders.create` | `record` | mutating; requires an idempotency key |
 | `recorders.arm` | `record` | mutating; requires an idempotency key |
@@ -128,8 +133,8 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `sessions.delete` | `graphWrite` | mutating; requires an idempotency key |
 | `graph.plan` | `graphWrite` | plan-only |
 | `graph.commit` | `graphWrite` | mutating; requires an idempotency key |
-| `session.start` | `sessionControl` | external operation; requires an idempotency key |
-| `sessions.start` | `sessionControl` | external operation; requires an idempotency key |
+| `session.start` | `sessionControl` | external operation; requires an idempotency key; optional `candidate` starts a temporary preview without saving the session revision |
+| `sessions.start` | `sessionControl` | external operation; requires an idempotency key; optional `candidate` starts a temporary preview without saving the session revision |
 | `session.stop` | `sessionControl` | external operation; requires an idempotency key |
 | `sessions.stop` | `sessionControl` | external operation; requires an idempotency key |
 
@@ -231,7 +236,7 @@ The current node catalog is available through `nodes.describe` and contains:
 
 The separately reported `processors` catalog in `system.describe` documents the
 implemented DSP primitives and their typed parameter ranges. `parametricEq` is
-available as the corresponding eight-band graph node (legacy `frequencyHz`,
+available as the corresponding sixteen-band graph node (legacy `frequencyHz`,
 `q`, and `gainDb` fields remain as band-0 compatibility aliases), and `compressor` is
 available as graph dynamics nodes, `delay` is available as a preallocated graph
 time stage, `graphicEq` is available as a fixed ten-band graph EQ, and `pitch`

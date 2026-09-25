@@ -18,7 +18,8 @@ describe("node library search", () => {
     ]);
     expect(libraryEntries.find((entry) => entry.id === "physical-input")?.kind).toBe("physicalInput");
     expect(libraryEntries.find((entry) => entry.id === "physical-output")?.kind).toBe("physicalOutput");
-    expect(libraryEntries.find((entry) => entry.id === "existing-virtual-output")?.kind).toBe("physicalOutput");
+    expect(libraryEntries.filter((entry) => entry.kind === "physicalInput")).toHaveLength(1);
+    expect(libraryEntries.filter((entry) => entry.kind === "physicalOutput")).toHaveLength(1);
   });
 
   it("keeps virtual bus entries discoverable and typed for drag-and-drop", () => {
@@ -32,20 +33,21 @@ describe("node library search", () => {
     expect(captureSink?.virtualKind).toBe("virtualCaptureSink");
     expect(renderSource?.kind).toBeUndefined();
     expect(captureSink?.unavailableReason).toContain("Requires the deferred AudioRouter-managed signed driver");
-    expect(captureSink?.unavailableReason).toContain("Existing virtual output");
+    expect(captureSink?.unavailableReason).toContain("Output device");
   });
 
   it("points the deferred managed-driver path at the free existing-endpoint alternative", () => {
     const renderSource = libraryEntries.find((entry) => entry.id === "virtual-render-source");
-    expect(renderSource?.unavailableReason).toContain("Existing virtual input");
-    const existingInput = libraryEntries.find((entry) => entry.id === "existing-virtual-input");
-    const existingOutput = libraryEntries.find((entry) => entry.id === "existing-virtual-output");
+    expect(renderSource?.unavailableReason).toContain("Input device");
+    const existingInput = libraryEntries.find((entry) => entry.id === "physical-input");
+    const existingOutput = libraryEntries.find((entry) => entry.id === "physical-output");
     expect(existingInput?.kind).toBe("physicalInput");
-    expect(existingInput?.note).toMatch(/voicemeeter/i);
-    expect(existingOutput?.note).toMatch(/voicemeeter/i);
+    expect(existingInput?.note).toMatch(/voicemeeter out b1/i);
+    expect(existingInput?.note).toMatch(/voicemeeter input is a playback endpoint/i);
+    expect(existingOutput?.note).toMatch(/virtual playback/i);
     expect(filterLibraryEntries(libraryEntries, "voicemeeter").map((entry) => entry.id).sort()).toEqual([
-      "existing-virtual-input",
-      "existing-virtual-output",
+      "physical-input",
+      "physical-output",
       "virtual-capture-sink",
       "virtual-render-source",
     ]);

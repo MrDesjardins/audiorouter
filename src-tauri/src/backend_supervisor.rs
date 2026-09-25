@@ -88,7 +88,10 @@ mod tests {
                 delay: Duration::from_millis(100)
             }
         );
-        assert_eq!(supervisor.failure_count(start + FAILURE_WINDOW + Duration::from_secs(2)), 1);
+        assert_eq!(
+            supervisor.failure_count(start + FAILURE_WINDOW + Duration::from_secs(2)),
+            1
+        );
     }
 
     #[test]

@@ -23,7 +23,7 @@ backend-owned graph without a UI.
 
 ARCH-04–09/11; live GRAPH-01–09/11–13; CAP-01–08/11 basic recovery; NFR-01/03/04/09/13 baseline; QUAL-01/02/04/05 have real and simulated evidence as applicable. Windows include/exclude behavior matches the advertised source scope.
 
-Route a microphone to two physical outputs and a selected app to one output using CLI. Show channel mapping and levels. Run 8-hour dual-clock tests and simulated ±100 ppm mismatch. Reconfigure gain/topology under a steady signal; no torn graph or unexplained discontinuity occurs. Repeated source branches open a single compatible capture stream. Missing pinned mic never falls back to another microphone. Attempted render-loopback feedback is rejected.
+Route a microphone to two physical outputs and a selected app to one output using CLI. In one session, also qualify two independently processed capture paths with separate destinations (for example, game capture -> game EQ -> headphone output and microphone capture -> voice EQ -> virtual microphone output) plus an explicitly selected recording mix. Show that no game audio enters the voice-microphone destination unless the graph explicitly connects it. Show channel mapping and per-path levels. Run 8-hour dual-clock tests and simulated ±100 ppm mismatch. Reconfigure gain/topology under a steady signal; no torn graph or unexplained discontinuity occurs. Repeated source branches open a single compatible capture stream. Missing pinned mic never falls back to another microphone. Attempted render-loopback feedback is rejected.
 
 ## Verification
 

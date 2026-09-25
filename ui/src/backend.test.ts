@@ -26,7 +26,16 @@ describe("disconnected backend", () => {
 });
 
 describe("UI error formatting", () => {
-  it("keeps audio category, HRESULT, remediation, and retry guidance", () => {
+  it("explains how to recover an invalidated exact endpoint", () => {
+    const error = new AudioRouterRpcError({
+      code: -32000,
+      message: "Windows audio error 0x88890004",
+      data: { code: "deviceInvalidated", fieldPath: null, resourceIds: [], retryable: true, remediation: "Refresh endpoint inventory.", hresult: 0x88890004 },
+    });
+    expect(formatUiError(error, "Start failed")).toContain("select the exact input and output again");
+  });
+
+  it("gives an actionable explanation for an occupied audio endpoint", () => {
     const error = new AudioRouterRpcError({
       code: -32010,
       message: "Windows audio endpoint enumeration failed.",
@@ -40,8 +49,12 @@ describe("UI error formatting", () => {
       },
     });
     expect(formatUiError(error, "fallback")).toBe(
-      "Windows audio endpoint enumeration failed. [deviceInUse, HRESULT 0x8889000A] Retry after the owning stream releases the endpoint. Retry may succeed.",
+      "The selected audio device is in use by another application. Choose a different output in Devices, or release this exact device in the application using it, then prepare it again.",
     );
+  });
+
+  it("explains an unsupported audio route without blaming channel counts", () => {
+    expect(formatUiError(new Error("native graph rejected: UnsupportedTopology"), "Start failed")).toContain("audio combination");
   });
 
   it("uses the fallback for non-error failures", () => {
@@ -148,6 +161,11 @@ describe("snapshot cache", () => {
       renameRecording: async () => { throw new Error("not connected"); },
       listGraphHistory: async () => ({ items: [], nextCursor: null }),
       undoGraphPlan: async () => { throw new Error("not connected"); },
+      beginAudioUpload: async () => { throw new Error("not connected"); },
+      uploadAudioChunk: async () => { throw new Error("not connected"); },
+      finishAudioUpload: async () => { throw new Error("not connected"); },
+      importTemporaryRecording: async () => { throw new Error("not connected"); },
+      transportAudioSource: async () => { throw new Error("not connected"); },
       listClients: async () => [],
       authorizeClient: async () => { throw new Error("not connected"); },
       revokeClient: async () => { throw new Error("not connected"); },
@@ -248,6 +266,19 @@ describe("live event cursor", () => {
     const refreshed = await createLiveBackend(client, demoSession.id).refreshDiagnostics();
     expect(refreshed).toEqual(diagnostics);
     expect(requests.at(-1)).toBe("system.diagnostics");
+  });
+
+  it("targets the selected session for snapshots, plans, and route inspection", async () => {
+    const requests: { method: string; params: unknown }[] = [];
+    const client = { request: async (method: string, params: unknown) => { requests.push({ method, params }); return {}; } } as never;
+    const backend = createLiveBackend(client, "startup-session");
+    const candidate = { ...demoSession, id: "selected-session" };
+    await backend.snapshot(candidate.id);
+    await backend.planGraph(candidate);
+    await backend.inspectRoute("out", candidate.id);
+    expect(requests.find((request) => request.method === "sessions.get")?.params).toEqual({ sessionId: candidate.id });
+    expect(requests.find((request) => request.method === "graph.plan")?.params).toEqual({ sessionId: candidate.id, baseRevision: candidate.revision, candidate });
+    expect(requests.find((request) => request.method === "routes.inspect")?.params).toEqual({ sessionId: candidate.id, destinationNode: "out" });
   });
 
   it("forwards the backend epoch and bounded cursor to the shared client", async () => {
@@ -719,9 +750,12 @@ describe("live event cursor", () => {
     } as never;
     const backend = createLiveBackend(client, demoSession.id);
     await expect(backend.startSession(demoSession.id)).resolves.toMatchObject({ state: "running" });
+    const candidate = { ...demoSession, name: "temporary preview" };
+    await expect(backend.startSession(demoSession.id, "preview-key", candidate)).resolves.toMatchObject({ state: "running" });
     await expect(backend.stopSession(demoSession.id)).resolves.toMatchObject({ state: "stopped" });
     expect(received).toEqual([
       { method: "session.start", params: { sessionId: demoSession.id } },
+      { method: "session.start", params: { sessionId: demoSession.id, idempotencyKey: "preview-key", candidate } },
       { method: "session.stop", params: { sessionId: demoSession.id } },
     ]);
   });
@@ -740,6 +774,20 @@ describe("live event cursor", () => {
     expect(received).toEqual([
       { method: "recorders.arm", params: { sessionId: demoSession.id, idempotencyKey: "arm-key" } },
       { method: "recorders.start", params: { sessionId: demoSession.id, frame: 12, idempotencyKey: "start-key" } },
+    ]);
+  });
+
+  it("routes graph-recorder commands by node and imports temporary takes through the backend", async () => {
+    const received: unknown[] = [];
+    const client = { request: async (method: string, params: unknown) => { received.push({ method, params }); return method === "audioMedia.importTemporaryRecording" ? { mediaId: "audio-media-temp", fileName: "Temporary voice take.wav", format: "wav", durationMs: 1200, channels: 1, sampleRateHz: 48000, expiresAt: 1, sourceRemoved: true } : { sessionId: demoSession.id, state: "recording", parts: [], pauses: [], lastFrame: 12 }; } } as never;
+    const backend = createLiveBackend(client, demoSession.id);
+    await backend.startRecorder(demoSession.id, 12, "take-start", "voice-recorder");
+    await backend.stopRecorder(demoSession.id, 60, "take-stop", "voice-recorder");
+    await backend.importTemporaryRecording("recording-temp");
+    expect(received).toEqual([
+      { method: "recorders.start", params: { sessionId: demoSession.id, frame: 12, nodeId: "voice-recorder", idempotencyKey: "take-start" } },
+      { method: "recorders.stop", params: { sessionId: demoSession.id, frame: 60, nodeId: "voice-recorder", idempotencyKey: "take-stop" } },
+      { method: "audioMedia.importTemporaryRecording", params: { recordingId: "recording-temp" } },
     ]);
   });
 

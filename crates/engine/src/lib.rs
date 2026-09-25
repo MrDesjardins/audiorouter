@@ -27,6 +27,11 @@ pub const MAX_DRIFT_CORRECTION_PPM: f64 = 999_999.0;
 /// This matches the DSP meter's ten-second configurable upper bound.
 pub const MAX_RMS_WINDOW_SAMPLES: usize = INTERNAL_SAMPLE_RATE_HZ as usize * 10;
 
+mod audio_file_source;
+pub use audio_file_source::{
+    decode_audio_bytes, decode_audio_file, AudioFileDecodeError, AudioFileSource, DecodedAudio,
+};
+
 const PCM16_QUANTUM_SAMPLES: usize = MAX_CHANNELS * PROCESSING_QUANTUM_FRAMES;
 pub const MAX_PCM16_PACKET_FRAMES: usize = 4_096;
 
@@ -2574,8 +2579,16 @@ impl<T: std::fmt::Debug> std::fmt::Debug for RealtimeDsp<T> {
 
 #[derive(Debug)]
 pub enum ProcessingStage {
+    AudioFile {
+        source: Arc<AudioFileSource>,
+    },
     TestSignal {
-        source: TestSignalSource,
+        source: Arc<TestSignalSource>,
+    },
+    MixTestSignal {
+        source: Arc<TestSignalSource>,
+        gains: [f32; 2],
+        source_meter_gains: [f32; 2],
     },
     Gain {
         linear: f32,
@@ -2631,6 +2644,8 @@ pub struct TestSignalSource {
     duration_frames: u64,
     sample_rate_hz: f64,
     emitted_frames: AtomicU64,
+    playing: AtomicBool,
+    meter: BlockMeter,
 }
 
 impl TestSignalSource {
@@ -2644,14 +2659,37 @@ impl TestSignalSource {
             duration_frames,
             sample_rate_hz: f64::from(sample_rate_hz),
             emitted_frames: AtomicU64::new(0),
+            playing: AtomicBool::new(false),
+            meter: BlockMeter::default(),
         }
+    }
+
+    pub fn play(&self) {
+        self.emitted_frames.store(0, Ordering::Release);
+        self.playing.store(true, Ordering::Release);
+    }
+
+    pub fn stop(&self) {
+        self.playing.store(false, Ordering::Release);
+        self.reset();
+    }
+
+    pub fn is_playing(&self) -> bool {
+        self.playing.load(Ordering::Acquire)
+            && self.emitted_frames.load(Ordering::Acquire) < self.duration_frames
     }
 
     fn reset(&self) {
         self.emitted_frames.store(0, Ordering::Release);
+        self.meter.reset();
     }
 
     fn process(&self, block: &mut AudioBlock) {
+        if !self.playing.load(Ordering::Acquire) {
+            block.clear();
+            self.meter.observe(block);
+            return;
+        }
         let start = self
             .emitted_frames
             .fetch_add(block.frames() as u64, Ordering::AcqRel);
@@ -2670,6 +2708,49 @@ impl TestSignalSource {
                 }
             }
         }
+        self.meter.observe(block);
+    }
+
+    /// Add a prepared stereo signal to an existing capture block. The two
+    /// gains already include both explicit edge matrices; no scratch block,
+    /// allocation, or control-plane access occurs on the callback path.
+    fn mix_into_stereo(
+        &self,
+        block: &mut AudioBlock,
+        gains: [f32; 2],
+        source_meter_gains: [f32; 2],
+    ) {
+        debug_assert_eq!(block.channels(), 2);
+        if !self.playing.load(Ordering::Acquire) {
+            self.meter.reset();
+            return;
+        }
+        let start = self
+            .emitted_frames
+            .fetch_add(block.frames() as u64, Ordering::AcqRel);
+        let mut peak = [0.0_f32; 2];
+        let mut square_sum = [0.0_f32; 2];
+        let mut clipped = [0_u64; 2];
+        for frame in 0..block.frames() {
+            let frame_number = start.saturating_add(frame as u64);
+            if frame_number >= self.duration_frames {
+                continue;
+            }
+            let phase = std::f64::consts::TAU * self.frequency_hz * (frame_number as f64)
+                / self.sample_rate_hz;
+            let sample = self.amplitude * phase.sin() as f32;
+            for (channel, gain) in gains.iter().enumerate() {
+                if let Some(samples) = block.channel_mut(channel) {
+                    samples[frame] += sample * gain;
+                }
+                let metered = sample * source_meter_gains[channel];
+                peak[channel] = peak[channel].max(metered.abs());
+                square_sum[channel] += metered * metered;
+                clipped[channel] += u64::from(metered.abs() > 1.0);
+            }
+        }
+        self.meter
+            .observe_generated_stereo(peak, square_sum, clipped, block.frames());
     }
 }
 
@@ -3474,6 +3555,33 @@ impl BlockMeter {
         self.clipped_samples.fetch_add(clipped, Ordering::Relaxed);
     }
 
+    fn observe_generated_stereo(
+        &self,
+        peak: [f32; 2],
+        square_sum: [f32; 2],
+        clipped: [u64; 2],
+        frames: usize,
+    ) {
+        let denominator = frames.max(1) as f32;
+        update_atomic_peak(&self.peak_bits, peak[0].max(peak[1]));
+        self.rms_bits.store(
+            ((square_sum[0] + square_sum[1]) / (2.0 * denominator))
+                .sqrt()
+                .to_bits(),
+            Ordering::Relaxed,
+        );
+        for channel in 0..2 {
+            update_atomic_peak(&self.channel_peak_bits[channel], peak[channel]);
+            self.channel_rms_bits[channel].store(
+                (square_sum[channel] / denominator).sqrt().to_bits(),
+                Ordering::Relaxed,
+            );
+            self.channel_clipped_samples[channel].fetch_add(clipped[channel], Ordering::Relaxed);
+        }
+        self.clipped_samples
+            .fetch_add(clipped[0] + clipped[1], Ordering::Relaxed);
+    }
+
     pub fn peak_abs(&self) -> f32 {
         f32::from_bits(self.peak_bits.load(Ordering::Relaxed))
     }
@@ -3711,6 +3819,168 @@ pub enum GraphCompileError {
     InvalidGraph(Vec<audiorouter_domain::ValidationError>),
     UnsupportedTopology,
     InvalidSampleRate,
+    MissingAudioMedia(String),
+}
+
+/// The single-endpoint worker already supplies one physical capture block.
+/// This exact mixer shape adds one bounded generated signal to that block.
+/// Other mixer shapes use the multi-input worker or remain unsupported.
+fn compile_capture_test_signal_mixer(
+    session: &audiorouter_domain::Session,
+    generation: RuntimeGeneration,
+    sample_rate_hz: u32,
+    plugins: &std::collections::HashMap<
+        audiorouter_domain::EntityId,
+        std::sync::Arc<dyn RealtimePluginProcessor>,
+    >,
+    audio_media: &std::collections::HashMap<String, Arc<DecodedAudio>>,
+) -> Option<Result<RuntimeGraph, GraphCompileError>> {
+    use audiorouter_domain::NodeKind;
+
+    if session.nodes.len() != 4 || session.edges.len() != 3 {
+        return None;
+    }
+    let capture = session
+        .nodes
+        .iter()
+        .find(|node| node.kind == NodeKind::PhysicalInput)?;
+    let signal = session
+        .nodes
+        .iter()
+        .find(|node| node.kind == NodeKind::TestSignal)?;
+    let mixer = session
+        .nodes
+        .iter()
+        .find(|node| node.kind == NodeKind::Mixer)?;
+    let output = session
+        .nodes
+        .iter()
+        .find(|node| node.kind == NodeKind::PhysicalOutput)?;
+    if session
+        .nodes
+        .iter()
+        .any(|node| !node.enabled || node.bypass)
+        || session.edges.iter().any(|edge| !edge.enabled)
+    {
+        return None;
+    }
+    let capture_edge = session
+        .edges
+        .iter()
+        .find(|edge| edge.source_node == capture.id && edge.destination_node == mixer.id)?;
+    let signal_edge = session
+        .edges
+        .iter()
+        .find(|edge| edge.source_node == signal.id && edge.destination_node == mixer.id)?;
+    let output_edge = session
+        .edges
+        .iter()
+        .find(|edge| edge.source_node == mixer.id && edge.destination_node == output.id)?;
+    if capture_edge.matrix.len() != 4
+        || signal_edge.matrix.len() != 4
+        || output_edge.matrix.len() != 4
+        || capture_edge.destination_port != signal_edge.destination_port
+    {
+        return None;
+    }
+    // Destination-major 2x2 matrix composition. The signal has equal values
+    // in both channels, so each combined row reduces to one scalar gain.
+    let compose = |upstream: &[f32], downstream: &[f32]| -> [f32; 4] {
+        let mut result = [0.0; 4];
+        for destination in 0..2 {
+            for source in 0..2 {
+                result[destination * 2 + source] = (0..2)
+                    .map(|middle| {
+                        downstream[destination * 2 + middle] * upstream[middle * 2 + source]
+                    })
+                    .sum();
+            }
+        }
+        result
+    };
+    let capture_matrix = compose(&capture_edge.matrix, &output_edge.matrix);
+    let signal_matrix = compose(&signal_edge.matrix, &output_edge.matrix);
+    let mut linear = session.clone();
+    linear.nodes = vec![capture.clone(), output.clone()];
+    let mut edge = capture_edge.clone();
+    edge.destination_node = output.id.clone();
+    edge.destination_port = output_edge.destination_port.clone();
+    // The derived validation graph uses an identity edge. The already
+    // validated authored matrices are composed into the prepared stage below;
+    // their product may legitimately exceed an individual edge's [-2, 2]
+    // coefficient bound.
+    edge.matrix = vec![1.0, 0.0, 0.0, 1.0];
+    linear.edges = vec![edge];
+    let mut graph = match compile_session_at_sample_rate_with_plugins_and_audio(
+        &linear,
+        generation,
+        sample_rate_hz,
+        plugins,
+        audio_media,
+    ) {
+        Ok(graph) => graph,
+        Err(error) => return Some(Err(error)),
+    };
+    let frequency_hz = signal
+        .parameters
+        .get("frequencyHz")
+        .and_then(|value| value.as_f64())
+        .unwrap_or(440.0);
+    let level_db = signal
+        .parameters
+        .get("levelDb")
+        .and_then(|value| value.as_f64())
+        .unwrap_or(-18.0);
+    let duration_ms = signal
+        .parameters
+        .get("durationMs")
+        .and_then(|value| value.as_f64())
+        .unwrap_or(1_000.0);
+    let Some(ProcessingStage::ChannelMatrix { coefficients }) = graph
+        .stages
+        .iter_mut()
+        .find(|stage| matches!(stage, ProcessingStage::ChannelMatrix { .. }))
+    else {
+        return Some(Err(GraphCompileError::UnsupportedTopology));
+    };
+    *coefficients = capture_matrix.to_vec();
+    let capture_meter_index = graph.meters.len();
+    graph.meters.push(BlockMeter::default());
+    let capture_matrix_index = graph
+        .stages
+        .iter()
+        .position(|stage| matches!(stage, ProcessingStage::ChannelMatrix { .. }))
+        .expect("derived linear graph contains the edge matrix");
+    graph.stages.insert(
+        capture_matrix_index,
+        ProcessingStage::Meter {
+            index: capture_meter_index,
+        },
+    );
+    graph
+        .stage_node_ids
+        .insert(capture_matrix_index, capture.id.clone());
+    let meter_index = graph
+        .stages
+        .iter()
+        .rposition(|stage| matches!(stage, ProcessingStage::Meter { .. }))
+        .unwrap_or(graph.stages.len());
+    graph.stages.insert(
+        meter_index,
+        ProcessingStage::MixTestSignal {
+            source: Arc::new(TestSignalSource::new(frequency_hz, level_db, duration_ms, sample_rate_hz)),
+            gains: [
+                signal_matrix[0] + signal_matrix[1],
+                signal_matrix[2] + signal_matrix[3],
+            ],
+            source_meter_gains: [
+                signal_edge.matrix[0] + signal_edge.matrix[1],
+                signal_edge.matrix[2] + signal_edge.matrix[3],
+            ],
+        },
+    );
+    graph.stage_node_ids.insert(meter_index, signal.id.clone());
+    Some(Ok(graph))
 }
 
 /// Prepare the currently supported processing subset of a validated domain
@@ -3755,6 +4025,28 @@ pub fn compile_session_at_sample_rate_with_plugins(
         std::sync::Arc<dyn RealtimePluginProcessor>,
     >,
 ) -> Result<RuntimeGraph, GraphCompileError> {
+    compile_session_at_sample_rate_with_plugins_and_audio(
+        session,
+        generation,
+        sample_rate_hz,
+        plugins,
+        &HashMap::new(),
+    )
+}
+
+/// Prepare a graph with bound plugin stages and previously decoded audio
+/// assets. Audio files are decoded/resampled before this call and copied only
+/// through `Arc`; playback in the graph callback remains allocation-free.
+pub fn compile_session_at_sample_rate_with_plugins_and_audio(
+    session: &audiorouter_domain::Session,
+    generation: RuntimeGeneration,
+    sample_rate_hz: u32,
+    plugins: &std::collections::HashMap<
+        audiorouter_domain::EntityId,
+        std::sync::Arc<dyn RealtimePluginProcessor>,
+    >,
+    audio_media: &std::collections::HashMap<String, Arc<DecodedAudio>>,
+) -> Result<RuntimeGraph, GraphCompileError> {
     use audiorouter_domain::{validate_session, NodeKind};
     use std::collections::{HashMap, VecDeque};
 
@@ -3762,6 +4054,11 @@ pub fn compile_session_at_sample_rate_with_plugins(
         return Err(GraphCompileError::InvalidSampleRate);
     }
     validate_session(session).map_err(GraphCompileError::InvalidGraph)?;
+    if let Some(result) =
+        compile_capture_test_signal_mixer(session, generation, sample_rate_hz, plugins, audio_media)
+    {
+        return result;
+    }
     let enabled_edges = session
         .edges
         .iter()
@@ -3935,6 +4232,7 @@ pub fn compile_session_at_sample_rate_with_plugins(
                     | NodeKind::VirtualRenderSource
                     | NodeKind::VirtualCaptureSink
                     | NodeKind::TestSignal
+                    | NodeKind::AudioFile
                     | NodeKind::Mixer
             ) {
                 push_stage!(node_id, ProcessingStage::Mute { muted: true });
@@ -3954,6 +4252,31 @@ pub fn compile_session_at_sample_rate_with_plugins(
             continue;
         }
         match node.kind {
+            NodeKind::AudioFile => {
+                let media_id = node
+                    .parameters
+                    .get("mediaId")
+                    .and_then(|value| value.as_str())
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| GraphCompileError::MissingAudioMedia(String::new()))?;
+                let audio = audio_media
+                    .get(media_id)
+                    .cloned()
+                    .ok_or_else(|| GraphCompileError::MissingAudioMedia(media_id.to_owned()))?;
+                let looping = node
+                    .parameters
+                    .get("loop")
+                    .and_then(|value| value.as_bool())
+                    .unwrap_or(false);
+                let source = AudioFileSource::new(audio, looping)
+                    .map_err(|_| GraphCompileError::MissingAudioMedia(media_id.to_owned()))?;
+                push_stage!(
+                    node_id,
+                    ProcessingStage::AudioFile {
+                        source: Arc::new(source)
+                    }
+                );
+            }
             NodeKind::TestSignal => {
                 let frequency_hz = node
                     .parameters
@@ -3973,12 +4296,12 @@ pub fn compile_session_at_sample_rate_with_plugins(
                 push_stage!(
                     node_id,
                     ProcessingStage::TestSignal {
-                        source: TestSignalSource::new(
+                        source: Arc::new(TestSignalSource::new(
                             frequency_hz,
                             level_db,
                             duration_ms,
                             sample_rate_hz,
-                        ),
+                        )),
                     }
                 );
             }
@@ -5608,6 +5931,40 @@ impl RuntimeGraph {
         self.generation
     }
 
+    /// Return the lock-free transport handle for an authored audio-file node.
+    /// Control code can drive play/pause/stop without rebuilding the graph.
+    pub fn audio_file_source_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<Arc<AudioFileSource>> {
+        self.stage_node_ids
+            .iter()
+            .enumerate()
+            .find_map(|(index, candidate)| {
+                (candidate == node_id).then(|| match self.stages.get(index) {
+                    Some(ProcessingStage::AudioFile { source }) => Some(Arc::clone(source)),
+                    _ => None,
+                })?
+            })
+    }
+
+    /// Return the lock-free transport handle for an authored Test Signal.
+    pub fn test_signal_source_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<Arc<TestSignalSource>> {
+        self.stage_node_ids
+            .iter()
+            .enumerate()
+            .find_map(|(index, candidate)| {
+                (candidate == node_id).then(|| match self.stages.get(index) {
+                    Some(ProcessingStage::TestSignal { source })
+                    | Some(ProcessingStage::MixTestSignal { source, .. }) => Some(Arc::clone(source)),
+                    _ => None,
+                })?
+            })
+    }
+
     /// Return the rate used to prepare every stateful stage in this graph.
     /// This is immutable graph metadata and is safe to read from a retained
     /// realtime snapshot without consulting control-plane state.
@@ -5696,6 +6053,10 @@ impl RuntimeGraph {
             .find_map(|(stage_index, candidate)| {
                 (candidate == node_id).then(|| match self.stages.get(stage_index) {
                     Some(ProcessingStage::Meter { index }) => self.meter_snapshot(*index),
+                    Some(ProcessingStage::TestSignal { source })
+                    | Some(ProcessingStage::MixTestSignal { source, .. }) => {
+                        Some(source.meter.snapshot())
+                    }
                     _ => None,
                 })?
             })
@@ -5724,6 +6085,13 @@ impl RuntimeGraph {
     pub fn reset_meters(&self) {
         for meter in &self.meters {
             meter.reset();
+        }
+        for stage in &self.stages {
+            match stage {
+                ProcessingStage::TestSignal { source }
+                | ProcessingStage::MixTestSignal { source, .. } => source.meter.reset(),
+                _ => {}
+            }
         }
     }
 
@@ -5805,7 +6173,9 @@ impl RuntimeGraph {
                         success = false;
                     }
                 }
-                ProcessingStage::TestSignal { source } => source.reset(),
+                ProcessingStage::AudioFile { source } => source.stop(),
+                ProcessingStage::TestSignal { source } => source.stop(),
+                ProcessingStage::MixTestSignal { source, .. } => source.stop(),
                 ProcessingStage::Gain { .. }
                 | ProcessingStage::Mute { .. }
                 | ProcessingStage::ChannelMatrix { .. }
@@ -5829,7 +6199,15 @@ impl RuntimeGraph {
     fn process_inner(&self, block: &mut AudioBlock, metrics: Option<&CallbackMetrics>) -> usize {
         for stage in &self.stages {
             match stage {
+                ProcessingStage::AudioFile { source } => source.process(block),
                 ProcessingStage::TestSignal { source } => source.process(block),
+                ProcessingStage::MixTestSignal {
+                    source,
+                    gains,
+                    source_meter_gains,
+                } => {
+                    source.mix_into_stereo(block, *gains, *source_meter_gains);
+                }
                 ProcessingStage::Gain { linear } => block.apply_gain(*linear),
                 ProcessingStage::Mute { muted: true } => block.clear(),
                 ProcessingStage::Mute { muted: false } => {}
@@ -7672,7 +8050,7 @@ mod tests {
         let stage = ProcessingStage::ParametricEq {
             left: Box::new(RealtimeDsp::new(
                 audiorouter_dsp::ParametricEq::new(
-                    [Some(params), None, None, None, None, None, None, None],
+                    std::array::from_fn(|index| (index == 0).then_some(params)),
                     1,
                 )
                 .unwrap(),
@@ -7827,12 +8205,15 @@ mod tests {
 
     #[test]
     fn test_signal_source_emits_bounded_tone_then_silence_and_resets() {
-        let source = TestSignalSource::new(440.0, -18.0, 5.0, 48_000);
+        let source = Arc::new(TestSignalSource::new(440.0, -18.0, 5.0, 48_000));
         let graph = RuntimeGraph::prepare(
             RuntimeGeneration::new(17),
-            vec![ProcessingStage::TestSignal { source }],
+            vec![ProcessingStage::TestSignal { source: Arc::clone(&source) }],
         );
         let mut block = AudioBlock::new(2, 128).unwrap();
+        graph.process(&mut block);
+        assert!(block.channel(0).unwrap().iter().all(|sample| *sample == 0.0));
+        source.play();
         graph.process(&mut block);
         assert!(block.all_finite());
         assert!(block
@@ -7849,6 +8230,9 @@ mod tests {
             .iter()
             .all(|sample| *sample == 0.0));
         assert!(graph.reset_processing_state());
+        graph.process(&mut block);
+        assert!(block.channel(0).unwrap().iter().all(|sample| *sample == 0.0));
+        source.play();
         graph.process(&mut block);
         assert!(block
             .channel(0)
@@ -8037,6 +8421,7 @@ mod tests {
         };
         let graph = compile_session(&session, RuntimeGeneration::new(18)).unwrap();
         let mut block = AudioBlock::new(2, 128).unwrap();
+        graph.test_signal_source_for_node(&EntityId::new("signal")).unwrap().play();
         graph.process(&mut block);
         let meter = graph
             .meter_snapshot_for_node(&EntityId::new("output"))
@@ -8044,6 +8429,148 @@ mod tests {
         assert!(meter.peak_db.is_finite());
         assert!(meter.peak_db < 0.0);
         assert!(meter.channel_peak_abs.iter().any(|peak| *peak > 0.05));
+        assert!(
+            graph
+                .meter_snapshot_for_node(&EntityId::new("signal"))
+                .unwrap()
+                .rms_db
+                > -40.0
+        );
+    }
+
+    #[test]
+    fn compiler_mixes_test_signal_with_one_physical_capture() {
+        use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+        let node = |id: &str, kind: NodeKind, ports: Vec<Port>| Node {
+            id: EntityId::new(id),
+            kind,
+            type_version: 1,
+            name: id.into(),
+            enabled: true,
+            bypass: false,
+            parameters: if id == "signal" {
+                [
+                    ("frequencyHz".into(), serde_json::json!(1_000.0)),
+                    ("levelDb".into(), serde_json::json!(-20.0)),
+                    ("durationMs".into(), serde_json::json!(100.0)),
+                ]
+                .into_iter()
+                .collect()
+            } else {
+                Default::default()
+            },
+            ports,
+        };
+        let input = |name: &str| Port {
+            name: name.into(),
+            direction: PortDirection::Input,
+            channels: 2,
+        };
+        let output = |name: &str| Port {
+            name: name.into(),
+            direction: PortDirection::Output,
+            channels: 2,
+        };
+        let edge = |id: &str,
+                    source: &str,
+                    source_port: &str,
+                    destination: &str,
+                    destination_port: &str,
+                    matrix: Vec<f32>| Edge {
+            id: EntityId::new(id),
+            source_node: EntityId::new(source),
+            source_port: source_port.into(),
+            destination_node: EntityId::new(destination),
+            destination_port: destination_port.into(),
+            matrix,
+            enabled: true,
+        };
+        let session = Session {
+            id: EntityId::new("session"),
+            name: "capture-plus-signal".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![
+                node("capture", NodeKind::PhysicalInput, vec![output("out")]),
+                node("signal", NodeKind::TestSignal, vec![output("out")]),
+                node("mixer", NodeKind::Mixer, vec![input("in"), output("out")]),
+                node("speaker", NodeKind::PhysicalOutput, vec![input("in")]),
+            ],
+            edges: vec![
+                edge(
+                    "capture-mix",
+                    "capture",
+                    "out",
+                    "mixer",
+                    "in",
+                    vec![1.0, 0.0, 0.0, 1.0],
+                ),
+                edge(
+                    "signal-mix",
+                    "signal",
+                    "out",
+                    "mixer",
+                    "in",
+                    vec![1.0, 0.0, 0.0, 1.0],
+                ),
+                edge(
+                    "mix-speaker",
+                    "mixer",
+                    "out",
+                    "speaker",
+                    "in",
+                    vec![0.5, 0.0, 0.0, 1.0],
+                ),
+            ],
+        };
+        let graph = compile_session(&session, RuntimeGeneration::new(19)).unwrap();
+        let mut block = AudioBlock::new(2, 128).unwrap();
+        graph.test_signal_source_for_node(&EntityId::new("signal")).unwrap().play();
+        block.channel_mut(0).unwrap().fill(0.2);
+        block.channel_mut(1).unwrap().fill(0.1);
+        graph.process(&mut block);
+        let tone = 0.1 * (std::f32::consts::TAU * 1_000.0 / 48_000.0).sin();
+        assert!((block.channel(0).unwrap()[1] - (0.2 + tone) * 0.5).abs() < 0.0001);
+        assert!((block.channel(1).unwrap()[1] - (0.1 + tone)).abs() < 0.0001);
+        assert_eq!(graph.generation().value(), 19);
+        assert!(
+            graph
+                .meter_snapshot_for_node(&EntityId::new("capture"))
+                .unwrap()
+                .rms_db
+                > -20.0
+        );
+        assert!(
+            graph
+                .meter_snapshot_for_node(&EntityId::new("signal"))
+                .unwrap()
+                .rms_db
+                > -35.0
+        );
+        assert!(
+            graph
+                .meter_snapshot_for_node(&EntityId::new("speaker"))
+                .unwrap()
+                .rms_db
+                > -20.0
+        );
+
+        let mut extra_source = session.clone();
+        extra_source
+            .nodes
+            .push(node("signal-2", NodeKind::TestSignal, vec![output("out")]));
+        extra_source.edges.push(edge(
+            "third-input",
+            "signal-2",
+            "out",
+            "mixer",
+            "in",
+            vec![1.0, 0.0, 0.0, 1.0],
+        ));
+        assert!(matches!(
+            compile_session(&extra_source, RuntimeGeneration::new(20)),
+            Err(GraphCompileError::UnsupportedTopology)
+        ));
     }
 
     #[test]
@@ -10350,5 +10877,58 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    #[test]
+    fn audio_file_source_compiles_into_graph_and_processes_samples() {
+        use audiorouter_domain::{EntityId, Node, NodeKind, Port, PortDirection, Session};
+        let node_id = EntityId::new("audio-file");
+        let session = Session {
+            id: EntityId::new("audio-file-session"),
+            name: "Audio file source".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![Node {
+                id: node_id.clone(),
+                kind: NodeKind::AudioFile,
+                type_version: 1,
+                name: "Audio file".into(),
+                enabled: true,
+                bypass: false,
+                parameters: serde_json::json!({"mediaId":"media-1","loop":false})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+                ports: vec![Port {
+                    name: "out".into(),
+                    direction: PortDirection::Output,
+                    channels: 2,
+                }],
+            }],
+            edges: vec![],
+        };
+        assert!(matches!(
+            compile_session_at_sample_rate(&session, RuntimeGeneration::new(10), 48_000),
+            Err(GraphCompileError::MissingAudioMedia(_))
+        ));
+        let audio = Arc::new(DecodedAudio {
+            channels: 2,
+            sample_rate_hz: 48_000,
+            samples: vec![0.5, -0.5, 0.25, -0.25].into(),
+        });
+        let graph = compile_session_at_sample_rate_with_plugins_and_audio(
+            &session,
+            RuntimeGeneration::new(11),
+            48_000,
+            &HashMap::new(),
+            &HashMap::from([("media-1".to_owned(), audio)]),
+        )
+        .unwrap();
+        let source = graph.audio_file_source_for_node(&node_id).unwrap();
+        source.play();
+        let mut block = AudioBlock::new(2, 2).unwrap();
+        graph.process(&mut block);
+        assert_eq!(block.channel(0).unwrap(), &[0.5, 0.25]);
+        assert_eq!(block.channel(1).unwrap(), &[-0.5, -0.25]);
     }
 }

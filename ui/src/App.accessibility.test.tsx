@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { App, DIAGNOSTICS_REFRESH_INTERVAL_MS, findVbCableCaptureEndpointId, findVbCableEndpointPair, formatNativePumpSummary, formatRecordingDuration, WORKSPACE_EVENT_CATEGORIES } from "./App";
+import { App, DIAGNOSTICS_REFRESH_INTERVAL_MS, findVbCableCaptureEndpointId, findVbCableEndpointPair, formatNativePumpSummary, formatRecordingDuration, recorderHasCaptureSource, WORKSPACE_EVENT_CATEGORIES } from "./App";
 import { createDisconnectedBackend } from "./backend";
 import { DraftConnectionList, insertMixerActionId, removeMixerActionId } from "./DraftConnectionList";
 import { appendDraftConnection, insertDraftMixer } from "./draft";
@@ -15,6 +15,10 @@ import type { EventsSubscribeResult, RecordingRow, VirtualDeviceInfo } from "@au
 
 function connectedPreviewBackend() {
   return { ...createDisconnectedBackend(), connected: true };
+}
+
+async function preparedDiagnostics() {
+  return { ...await createDisconnectedBackend().refreshDiagnostics(), nativeSessionId: demoSession.id, nativeAdapter: "configured-stopped" as const, nativeAdapterKind: "endpoint" as const };
 }
 
 beforeAll(() => {
@@ -33,7 +37,40 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
+describe("persistent client diagnostics", () => {
+  it("restores graph checkpoints after reload without persisting raw error text or paths", async () => {
+    const first = render(<App backend={connectedPreviewBackend()} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Logs" }));
+    expect(await screen.findByText(/Graph checkpoint: \d+ nodes, \d+ connections; revision \d+/)).toBeTruthy();
+
+    window.dispatchEvent(new ErrorEvent("error", {
+      message: "private audio path C:\\private\\voice.wav",
+      filename: "C:\\Program Files\\AudioRouter\\assets\\bundle.js",
+      lineno: 42,
+      colno: 7,
+      error: new TypeError("private audio path C:\\private\\voice.wav"),
+    }));
+    const persisted = window.localStorage.getItem("audiorouter.client-diagnostics.v1") ?? "";
+    expect(persisted).toContain("TypeError");
+    expect(persisted).toContain("bundle.js:42:7");
+    expect(persisted).not.toContain("voice.wav");
+    expect(persisted).not.toContain("C:\\Program Files");
+
+    first.unmount();
+    render(<App backend={connectedPreviewBackend()} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Logs" }));
+    expect(await screen.findByText(/UI error \(TypeError\) at bundle\.js:42:7/)).toBeTruthy();
+  });
+});
+
 describe("VB-Cable endpoint selection", () => {
+  it("offers temporary take recording only for Recorder branches fed by a physical or application capture source", () => {
+    const recorder = { id: "take-recorder", kind: "recorder" as const, typeVersion: 1 as const, name: "Voice take", enabled: true, bypass: false, parameters: {}, ports: [{ name: "in", direction: "input" as const, channels: 1 as const }, { name: "out", direction: "output" as const, channels: 1 as const }] };
+    const wired: typeof demoSession = { ...demoSession, nodes: [...demoSession.nodes, recorder], edges: [{ id: "mic-to-recorder", sourceNode: "mic", sourcePort: "out", destinationNode: recorder.id, destinationPort: "in", matrix: [], enabled: true }] };
+    expect(recorderHasCaptureSource(wired, recorder.id)).toBe(true);
+    expect(recorderHasCaptureSource({ ...wired, edges: [] }, recorder.id)).toBe(false);
+  });
+
   it("shows native startup registration status independently of backend capability", async () => {
     render(<App backend={{
       ...connectedPreviewBackend(),
@@ -280,7 +317,7 @@ describe("VB-Cable endpoint selection", () => {
 
   it("keeps the backend-authored audio reason visible in the status summary", async () => {
     render(<App backend={createDisconnectedBackend()} />);
-    expect(await screen.findByText(/unavailable audio \(The control backend is disconnected\.\)/)).toBeTruthy();
+    expect(await screen.findByText(/Audio unavailable: The control backend is disconnected\./)).toBeTruthy();
   });
 
   it("shows backend-authored recovery safe mode and recent crash count", async () => {
@@ -318,16 +355,17 @@ describe("VB-Cable endpoint selection", () => {
     expect(screen.getByRole("button", { name: "Clear safe mode" }).hasAttribute("disabled")).toBe(true);
   });
 
-  it("offers a persisted compact route status view with live controls", async () => {
+  it("offers a persisted compact route status without a duplicate Play control", async () => {
     render(<App backend={connectedPreviewBackend()} />);
-    const toggle = await screen.findByRole("button", { name: "Compact status" });
+    const toggle = await screen.findByRole("button", { name: "Show status" });
     expect(toggle.getAttribute("aria-pressed")).toBe("false");
     fireEvent.click(toggle);
     expect(screen.getByRole("region", { name: "Compact route status" })).toBeTruthy();
-    expect(within(screen.getByRole("region", { name: "Compact route status" })).getByRole("button", { name: "Start session" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Full workspace" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(screen.getByRole("region", { name: "Compact route status" })).queryByRole("button", { name: "Start" })).toBeNull();
+    expect(within(screen.getByRole("region", { name: "Compact route status" })).getByRole("button", { name: /Mic muted|Mute mic/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Hide status" }).getAttribute("aria-pressed")).toBe("true");
     expect(window.localStorage.getItem("audiorouter.ui.compact-status")).toBe("true");
-    fireEvent.click(screen.getByRole("button", { name: "Full workspace" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hide status" }));
     expect(screen.queryByRole("region", { name: "Compact route status" })).toBeNull();
     expect(window.localStorage.getItem("audiorouter.ui.compact-status")).toBe("false");
   });
@@ -336,7 +374,7 @@ describe("VB-Cable endpoint selection", () => {
     let releaseStart!: (value: { sessionId: string; state: "running"; runtime: "fake"; generation: number }) => void;
     const result = new Promise<{ sessionId: string; state: "running"; runtime: "fake"; generation: number }>((resolve) => { releaseStart = resolve; });
     const startSession = vi.fn(() => result);
-    render(<App backend={{ ...connectedPreviewBackend(), startSession }} />);
+    render(<App backend={{ ...connectedPreviewBackend(), startSession, refreshDiagnostics: preparedDiagnostics }} />);
     const lifecycle = screen.getByRole("region", { name: "Session lifecycle" });
     fireEvent.click(within(lifecycle).getByRole("button", { name: "Start session" }));
     await screen.findByText("Starting session...");
@@ -663,8 +701,8 @@ describe("VB-Cable endpoint selection", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Native render endpoint" }), { target: { value: "render-focusrite" } });
     fireEvent.click(screen.getByRole("button", { name: "Prepare native endpoints" }));
     await waitFor(() => expect(prepareNativeEndpoint).toHaveBeenCalledWith("demo-session", "capture-vb", "render-focusrite"));
-    expect(await screen.findByText(/\[deviceInUse, HRESULT 0x8889000A\]/)).toBeTruthy();
-    expect(screen.getByText(/select another endpoint, or close it and retry/i)).toBeTruthy();
+    expect(await screen.findByText(/selected audio device is in use by another application/i)).toBeTruthy();
+    expect(screen.getByText(/choose a different output in Devices, or release this exact device/i)).toBeTruthy();
   });
 
   it("detaches a stopped native worker before deliberate endpoint replacement", async () => {
@@ -809,9 +847,8 @@ describe("keyboard connection dialog", () => {
   });
 
   it.each([
-    ["Physical input", "physicalInput", "Physical input 1"],
-    ["Physical output", "physicalOutput", "Physical output 1"],
-    ["Existing virtual output", "physicalOutput", "Physical output 1"],
+    ["Input device", "physicalInput", "Physical input 1"],
+    ["Output device", "physicalOutput", "Physical output 1"],
     ["Recorder", "recorder", "Recorder 1"],
   ])("routes the actual App draft adapter for %s shelf drops", async (label, kind, insertedName) => {
     render(<App backend={connectedPreviewBackend()} />);
@@ -869,7 +906,7 @@ describe("keyboard connection dialog", () => {
       renderEndpointId,
     }));
     const startSession = vi.fn(async () => ({ sessionId: "demo-session", state: "running" as const, runtime: "fake" as const, generation: 1 }));
-    const backend = { ...connectedPreviewBackend(), listDevices: async () => [inactive, capture, renderDevice], prepareNativeEndpoint, startSession };
+    const backend = { ...connectedPreviewBackend(), listDevices: async () => [inactive, capture, renderDevice], prepareNativeEndpoint, startSession, refreshDiagnostics: preparedDiagnostics };
 
     render(<App backend={backend} />);
 
@@ -1072,7 +1109,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     fireEvent.click(within(dialog).getByRole("button", { name: "Add connection to draft" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Keyboard connection" })).toBeNull());
-    expect(screen.getByText("Connection added to the draft. Review and plan the changes before committing.")).toBeTruthy();
+    expect(screen.getByText("Connection added to the draft. Save route when you are ready.")).toBeTruthy();
   });
 
   it("plans a keyboard-created connection through the graph backend", async () => {
@@ -1095,8 +1132,6 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     fireEvent.click(within(dialog).getByRole("button", { name: "Add connection to draft" }));
     fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Commit changes" })).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: "Commit changes" }));
     await waitFor(() => expect(commitGraph).toHaveBeenCalledWith("connection-plan", demoSession.revision, expect.any(String)));
     expect(planGraph).toHaveBeenCalledWith(expect.objectContaining({
       edges: expect.arrayContaining([
@@ -1250,8 +1285,6 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     fireEvent.click(plan);
     expect(planGraph).toHaveBeenCalledTimes(1);
     releasePlan({ planId: "graph-plan", baseRevision: demoSession.revision, expiresInMs: 30000, diff: [], warnings: [], affectedDestinations: [], requiredScopes: [] });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Commit changes" })).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: "Commit changes" }));
     await waitFor(() => expect(commitGraph).toHaveBeenCalledTimes(1));
   });
 
@@ -1388,13 +1421,13 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     expect((precise as HTMLInputElement).value).toBe("0");
     fireEvent.change(slider, { target: { value: "-6" } });
     expect((precise as HTMLInputElement).value).toBe("-6");
-    expect(screen.getByText("Draft effect: gainDb: 0 → -6. Plan changes to validate and commit.")).toBeTruthy();
+    expect(screen.getByText("Unsaved changes: gainDb: 0 → -6. Press Play to try them, or Save to keep them.")).toBeTruthy();
   });
 
   it("renders the backend-derived EQ response for a draft EQ node", async () => {
     const processorResponse = vi.fn(async () => ({ frequenciesHz: [20, 1000, 20000], magnitudeDb: [0, -6, 0] }));
     render(<App backend={{ ...connectedPreviewBackend(), processorResponse }} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Parametric EQ, Effect" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Advanced EQ, Effect/ }));
 
     expect(await screen.findByRole("img", { name: "Parametric EQ magnitude response" })).toBeTruthy();
     expect(processorResponse).toHaveBeenCalledWith(expect.objectContaining({ sampleRateHz: 48000, frequenciesHz: expect.any(Array), bands: expect.any(Array) }));
@@ -1444,15 +1477,13 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     fireEvent.change(await screen.findByRole("spinbutton", { name: "thresholdDb precise value" }), { target: { value: "-30" } });
     fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Commit changes" })).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: "Commit changes" }));
     await waitFor(() => expect(commitGraph).toHaveBeenCalledWith("gate-plan", demoSession.revision, expect.any(String)));
     expect(planGraph).toHaveBeenCalledWith(expect.objectContaining({
       nodes: expect.arrayContaining([
         expect.objectContaining({ kind: "gate", parameters: expect.objectContaining({ thresholdDb: -30 }) }),
       ]),
     }));
-    expect(await screen.findByText("Committed revision 8. Reconnect to refresh the authoritative view.")).toBeTruthy();
+    expect(await screen.findByText("Route saved (revision 8). Prepare devices before playing.")).toBeTruthy();
   });
 
   it("commits a dropped pitch parameter through the graph backend", async () => {
@@ -1494,8 +1525,6 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     fireEvent.change(await screen.findByRole("spinbutton", { name: "semitones precise value" }), { target: { value: "5" } });
     fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Commit changes" })).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: "Commit changes" }));
     await waitFor(() => expect(commitGraph).toHaveBeenCalledWith("pitch-plan", demoSession.revision, expect.any(String)));
     expect(planGraph).toHaveBeenCalledWith(expect.objectContaining({
       nodes: expect.arrayContaining([
@@ -1543,8 +1572,6 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     fireEvent.change(await screen.findByRole("spinbutton", { name: "ratio precise value" }), { target: { value: "6" } });
     fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Commit changes" })).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: "Commit changes" }));
     await waitFor(() => expect(commitGraph).toHaveBeenCalledWith("compressor-plan", demoSession.revision, expect.any(String)));
     expect(planGraph).toHaveBeenCalledWith(expect.objectContaining({
       nodes: expect.arrayContaining([
@@ -1592,8 +1619,6 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     fireEvent.change(await screen.findByRole("spinbutton", { name: "ceilingDb precise value" }), { target: { value: "-3" } });
     fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Commit changes" })).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: "Commit changes" }));
     await waitFor(() => expect(commitGraph).toHaveBeenCalledWith("limiter-plan", demoSession.revision, expect.any(String)));
     expect(planGraph).toHaveBeenCalledWith(expect.objectContaining({
       nodes: expect.arrayContaining([
@@ -1612,8 +1637,8 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     };
     render(<App backend={backend} />);
     fireEvent.click(await screen.findByRole("button", { name: "Add EQ to draft" }));
-    expect(screen.getByText("Parametric EQ 1 added to the draft. Review and plan the changes before committing.")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Parametric EQ 1" })).toBeTruthy();
+    expect(screen.getByText("Advanced EQ 1 added to the draft. Review and plan the changes before committing.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Advanced EQ 1" })).toBeTruthy();
   });
 
   it("expands a voice-chain preset into ordinary draft processors", async () => {
@@ -1636,7 +1661,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     fireEvent.click(await screen.findByRole("button", { name: "Tidy layout" }));
     expect(JSON.parse(window.localStorage.getItem("audiorouter.ui.layout.demo-session") ?? "null")).toMatchObject({
       mic: { x: 0, y: 0 },
-      voice: { x: 260, y: 0 },
+      voice: { x: 280, y: 0 },
     });
   });
 
@@ -1680,7 +1705,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     fireEvent.click(screen.getByRole("button", { name: "Insert Gate" }));
     expect(screen.getByText("Gate 1 inserted into the draft. Review and plan the changes before committing.")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Gate 1" })).toBeTruthy();
-    for (const label of ["Gain", "Mute", "Parametric EQ", "Graphic EQ", "Compressor", "Gate", "Limiter", "Delay", "Pitch"]) {
+    for (const label of ["Gain", "Mute", "Advanced EQ", "Graphic EQ", "Compressor", "Gate", "Limiter", "Delay", "Pitch"]) {
       expect(screen.getAllByRole("button", { name: `Insert ${label}` })).toHaveLength(2);
     }
   });
@@ -1749,10 +1774,10 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
 
     fireEvent.click(screen.getByRole("button", { name: "Insert mixer on Microphone to Voice gain" }));
     expect(onRemove).toHaveBeenCalledWith(insertMixerActionId("edge-1"));
-    for (const label of ["Gain", "Mute", "Parametric EQ", "Graphic EQ", "Compressor", "Gate", "Limiter", "Delay", "Pitch"]) {
+    for (const label of ["Gain", "Mute", "Advanced EQ", "Graphic EQ", "Compressor", "Gate", "Limiter", "Delay", "Pitch"]) {
       expect(screen.getByRole("button", { name: `Insert ${label}` })).toBeTruthy();
     }
-    fireEvent.click(screen.getByRole("button", { name: "Insert Parametric EQ" }));
+    fireEvent.click(screen.getByRole("button", { name: "Insert Advanced EQ" }));
     expect(onInsertProcessor).toHaveBeenCalledWith("edge-1", "parametricEq");
   });
 
@@ -1767,7 +1792,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
 
     const routePanel = screen.getByRole("region", { name: "Receives audio from" });
     fireEvent.click(within(routePanel).getByRole("button", { name: "Refresh" }));
-    await waitFor(() => expect(inspectRoute).toHaveBeenCalledWith("mic"));
+    await waitFor(() => expect(inspectRoute).toHaveBeenCalledWith("mic", demoSession.id));
     expect(await within(routePanel).findByRole("list", { name: "Reported audio paths" })).toBeTruthy();
     expect(within(routePanel).getByText(/Path 1: Microphone \[enabled\] → Voice gain \[enabled\]/)).toBeTruthy();
     expect(within(routePanel).getByText(/Channel map: \[1\]/)).toBeTruthy();

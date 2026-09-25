@@ -2139,13 +2139,17 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
             "tools/list" if initialized => Some(json!({
                 "jsonrpc": "2.0", "id": id, "result": { "tools": mcp_tools() }
             })),
-            "tools/call" if initialized => Some(mcp_tool_call(
-                &mut plane,
-                &client_id,
-                &grant,
-                pipe_name.as_deref(),
-                &message,
-            )),
+            "tools/call" if initialized => {
+                let response = mcp_tool_call(
+                    &mut plane,
+                    &client_id,
+                    &grant,
+                    pipe_name.as_deref(),
+                    &message,
+                );
+                log_mcp_tool_activity(&client_id, &message, &response);
+                Some(response)
+            }
             "resources/list" if initialized => Some(json!({
                 "jsonrpc": "2.0", "id": id, "result": { "resources": mcp_resources() }
             })),
@@ -2178,6 +2182,135 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
         }
     }
     Ok(())
+}
+
+/// Keep an auditable, local summary of assistant tool use. Argument values are
+/// deliberately excluded because call_api may contain private configuration or
+/// opaque media; only safe argument field names and outcome are recorded.
+fn log_mcp_tool_activity(client_id: &str, request: &Value, response: &Value) {
+    use std::io::Write;
+    static LOG_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+    let lock = LOG_LOCK.get_or_init(|| std::sync::Mutex::new(()));
+    let Ok(_guard) = lock.lock() else { return };
+    #[cfg(windows)]
+    let Some(_cross_process_guard) =
+        audiorouter_transport::acquire_diagnostic_mutex("AudioRouter.McpActivity")
+    else {
+        return;
+    };
+    let Some(root) = std::env::var_os("LOCALAPPDATA")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("TEMP").map(std::path::PathBuf::from))
+    else {
+        return;
+    };
+    let directory = root.join("AudioRouter").join("logs");
+    if std::fs::create_dir_all(&directory).is_err() {
+        return;
+    }
+    let path = directory.join("mcp-activity.jsonl");
+    const LIMIT: u64 = 256 * 1024;
+    if std::fs::metadata(&path)
+        .map(|metadata| metadata.len() >= LIMIT)
+        .unwrap_or(false)
+    {
+        let previous = directory.join("mcp-activity.previous.jsonl");
+        let _ = std::fs::remove_file(&previous);
+        let _ = std::fs::rename(&path, previous);
+    }
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or_default();
+    let record = mcp_tool_activity_record(client_id, request, response, now_ms);
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
+        let _ = serde_json::to_writer(&mut file, &record);
+        let _ = file.write_all(b"\n");
+        let _ = file.flush();
+    }
+}
+
+fn mcp_tool_activity_record(
+    client_id: &str,
+    request: &Value,
+    response: &Value,
+    now_ms: u128,
+) -> Value {
+    let tool = request
+        .pointer("/params/name")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown")
+        .chars()
+        .filter(|character| !character.is_control())
+        .take(96)
+        .collect::<String>();
+    let keys = request
+        .pointer("/params/arguments")
+        .and_then(Value::as_object)
+        .map(|object| {
+            object
+                .keys()
+                .filter(|key| {
+                    ![
+                        "token",
+                        "secret",
+                        "password",
+                        "credential",
+                        "audio",
+                        "media",
+                        "data",
+                        "content",
+                        "path",
+                    ]
+                    .iter()
+                    .any(|sensitive| {
+                        key.as_bytes()
+                            .windows(sensitive.len())
+                            .any(|window| window.eq_ignore_ascii_case(sensitive.as_bytes()))
+                    })
+                })
+                .take(32)
+                .map(|key| {
+                    key.chars()
+                        .filter(|character| !character.is_control())
+                        .take(64)
+                        .collect::<String>()
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let failed = response
+        .pointer("/result/isError")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+        || response.get("error").is_some();
+    let error_kind = response
+        .pointer("/error/data/code")
+        .and_then(Value::as_str)
+        .filter(|kind| {
+            matches!(
+                *kind,
+                "permissionDenied"
+                    | "revisionConflict"
+                    | "rateLimited"
+                    | "invalidParams"
+                    | "notFound"
+                    | "unavailable"
+                    | "unsupported"
+                    | "internalError"
+            )
+        })
+        .or_else(|| failed.then_some("toolError"));
+    let client_id = client_id
+        .chars()
+        .filter(|character| !character.is_control())
+        .take(128)
+        .collect::<String>();
+    serde_json::json!({ "timeUnixMs": now_ms, "clientId": client_id, "tool": tool, "argumentFields": keys, "outcome": if failed { "error" } else { "ok" }, "errorKind": error_kind })
 }
 
 fn option_value_owned(args: &[String], option: &str) -> Result<String, CliError> {
@@ -2586,6 +2719,72 @@ fn mcp_tool_error(id: Option<Value>, message: &str) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mcp_activity_records_tool_identity_and_safe_argument_names_only() {
+        let request = serde_json::json!({
+            "params": { "name": "call_api", "arguments": {
+                "sessionId": "session-private", "secretToken": "do-not-log", "filePath": "C:/private.wav", "mediaId": "private-media", "revision": 4
+            }}
+        });
+        let response =
+            serde_json::json!({ "result": { "isError": true, "text": "private response" } });
+        let record = mcp_tool_activity_record("assistant-client", &request, &response, 1234);
+        assert_eq!(record["tool"], "call_api");
+        assert_eq!(record["outcome"], "error");
+        assert_eq!(record["timeUnixMs"], 1234);
+        assert_eq!(
+            record["argumentFields"],
+            serde_json::json!(["revision", "sessionId"])
+        );
+        let encoded = record.to_string();
+        for private in [
+            "do-not-log",
+            "C:/private.wav",
+            "private-media",
+            "session-private",
+            "private response",
+        ] {
+            assert!(!encoded.contains(private));
+        }
+        assert_eq!(record["errorKind"], "toolError");
+    }
+
+    #[test]
+    fn mcp_activity_records_safe_json_rpc_error_category_only() {
+        let request =
+            serde_json::json!({"params":{"name":"apply_graph_change","arguments":{"revision":7}}});
+        let response = serde_json::json!({"error":{"code":-32001,"message":"private server detail","data":{"code":"permissionDenied"}}});
+        let record = mcp_tool_activity_record("assistant-client", &request, &response, 1234);
+        assert_eq!(record["errorKind"], "permissionDenied");
+        assert_eq!(record["outcome"], "error");
+        assert!(!record.to_string().contains("private server detail"));
+    }
+
+    #[test]
+    fn mcp_activity_field_list_is_bounded_for_large_valid_requests() {
+        let long_field = "visible".repeat(100);
+        let arguments = (0..80)
+            .map(|index| (format!("{long_field}-{index}"), Value::Null))
+            .collect::<serde_json::Map<String, Value>>();
+        let request =
+            serde_json::json!({"params":{"name":"tool".repeat(80),"arguments":arguments}});
+        let record = mcp_tool_activity_record(
+            &"client".repeat(80),
+            &request,
+            &serde_json::json!({"result":{}}),
+            1234,
+        );
+        assert_eq!(record["argumentFields"].as_array().unwrap().len(), 32);
+        assert!(record["argumentFields"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|field| field.as_str().unwrap().len() <= 64));
+        assert!(record["tool"].as_str().unwrap().len() <= 96);
+        assert!(record["clientId"].as_str().unwrap().len() <= 128);
+        assert!(record.to_string().len() < 10_000);
+    }
 
     #[test]
     fn recorder_dither_defaults_follow_output_precision() {

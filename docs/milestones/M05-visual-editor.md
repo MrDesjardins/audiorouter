@@ -19,10 +19,13 @@ through the desktop UI and guided external-app steps.
 5. Add route explanations, conflict/reconnect handling, visible privacy/recording state, recoverable device/plugin placeholders, and clear stop-versus-close semantics.
 6. Add tray controls, optional compact/pinned meters, shortcuts with conflict detection, theme/high contrast, reduced motion, scaling, and keyboard/list alternative to the canvas.
 7. Test with external CLI edits, Windows Narrator, keyboard-only routes, and first-time users. Record findings and fix workflow failures before completing the gate.
+8. Render directional audio flow between graph nodes from fresh backend meter telemetry, with a level-responsive thick edge stroke, smoothed/clamped width, explicit inactive/stale/fault states, and accessible reduced-motion alternatives. This remains a view of backend telemetry and must not introduce a renderer audio engine or unbounded polling.
+9. Put Play and Stop controls on Test Signal canvas nodes. They control only the tone through the authorized source transport, starting the canvas route first when necessary. Header Play/Stop controls the canvas route; leave exact endpoint preparation and its authorization as explicit prerequisites.
+10. Add a compact Audio File graph source with bounded backend WAV/MP3 import, per-node Play/Pause/Stop, loop configuration in the inspector, and no renderer audio path. Temporary takes use an already-routed Recorder node and the local shell's explicitly authorized `Record` scope; they expire after 24 hours. Do not add renderer microphone capture, `Capture`, or `DeviceAdministration` through this feature.
 
 ## Acceptance gate
 
-UI-01–14 applicable baseline; PROD-02/04; SEC-05; NFR-06/08/14/15 UI portions. UC-01/02/03/08 can be completed from the UI, with external app selections clearly distinguished from AudioRouter settings. Corresponding API/CLI graphs are equivalent. A node dragged to a different position never changes its route.
+UI-01–15 applicable baseline; PROD-02/04; SEC-05; NFR-06/08/14/15 UI portions. UC-01/02/03/08 can be completed from the UI, with external app selections clearly distinguished from AudioRouter settings. Corresponding API/CLI graphs are equivalent. A node dragged to a different position never changes its route. UI-15 requires deterministic level-to-stroke rendering coverage and attended Windows confirmation that microphone and application audio visibly traverse the expected edges.
 
 Keyboard-only users can build and inspect the same routes; high-contrast/reduced-motion/200% scaling work. A missing device, backend disconnect, rejected value, stale revision, and recording failure each has an actionable visible state. Capture and processing continue with the editor closed.
 
@@ -38,19 +41,25 @@ Do not implement audio DSP in browser APIs or duplicate graph validation in Reac
 
 ## Next M05 slice
 
-Implement the graph-native Test Signal source and destination meter view before
-claiming the attended “hear the change” workflow. The source should generate a
-bounded deterministic tone inside the backend graph, use ordinary node
-parameters and plan/commit semantics, and remain inactive until explicit
-session start. The UI should show per-node/destination signal presence, peak,
-RMS, clipping, and stopped/not-prepared/owned-by-another-client state.
+The graph-native Test Signal source, destination meter view, and in-card
+source Play/Stop controls are implemented. The source generates a bounded
+deterministic tone inside the backend graph and uses ordinary parameters and
+plan/commit semantics. Source Play can start a stopped route, then starts the
+tone; source Stop keeps the route running. These controls do not replace exact
+endpoint preparation. On a committed,
+routed, enabled Test Signal, Play stays actionable while endpoint preparation
+is missing so the backend can return the actionable start failure. Attended playback
+and the live meter/flow check remain required before claiming the “hear the
+change” workflow.
 
 The primary manual route is: keep VoiceMeeter open if desired, add Test Signal
-and a destination, plan and commit, prepare the exact existing endpoint, start,
-and verify the destination meter. Then replace Test Signal with a deliberate
+and an enabled physical output, plan and commit, prepare the exact existing
+endpoint, click Play on the Test Signal node, and verify the destination meter.
+Stop the tone from the node control, then stop the route from the header. Then replace Test Signal with a deliberate
 physical-input or application-capture source and compare the same meters. This
 does not imply that VoiceMeeter is closed, that AudioRouter owns its virtual
-driver, or that browser clients are supported.
+driver, or that browser clients are supported. The header route controls and
+node source controls have distinct scopes.
 
 The current raw signal-path smoke remains separate:
 `tests/acceptance/m00-native-loopback.ps1 -AllowLiveAudio` generates a tone

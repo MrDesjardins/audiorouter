@@ -186,6 +186,7 @@ declare global {
     __AUDIO_ROUTER_SESSION_ID__?: unknown;
     __AUDIO_ROUTER_FRONTEND_PROBE__?: boolean;
     __TAURI__?: unknown;
+    __TAURI_INTERNALS__?: { invoke?: (command: string, args?: Record<string, unknown>) => Promise<unknown> };
     chrome?: { webview?: unknown };
   }
 }

@@ -25,6 +25,12 @@ OS-visible virtual capture devices are available according to Windows/app microp
 
 ## Authorization UX
 
+The explicitly local desktop shell may hold `recording.write` so the user can
+start an intentional recording in an approved root. This does not imply
+`audio.capture` or `devices.admin`; endpoint capture/preparation remains a
+separate authorization decision. Remote, CLI, and MCP grants do not inherit
+the desktop-shell scope.
+
 Show the concrete action and affected resources: for example, “Allow this client to edit Gaming and record under D:\\Recordings.” Do not ask for a universal “AI access” grant. Existing grants may persist until revoked, with last-used time and scope visible. Driver install uses Windows elevation; granting API device administration alone cannot bypass the OS prompt.
 
 Do not add confirmation to every gain tweak. Require specific authorization where it matters: first client enrollment, newly permitted capture/file roots, driver lifecycle/elevation, and destructive file actions. Read-only inspection works with read scope and does not activate audio.

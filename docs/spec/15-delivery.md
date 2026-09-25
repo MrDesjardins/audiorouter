@@ -56,11 +56,12 @@ The ranges below include every normative ID; each milestone must attach evidence
 | REC-01–08, REC-10–12 | M04/M05 | UC-08, frame/file/path tests |
 | PLUG-07 | M06 extension/M08 | Native x64 VST2 adapter, worker containment, rights, compatibility, and failure evidence |
 | REC-09 | M04/M07 | UC-08, crash/disk-failure recovery |
-| UI-01–14 | M05/M07 | UC-01–10, keyboard/Narrator/usability |
+| UI-01–15 | M05/M07 | UC-01–10, keyboard/Narrator/usability |
 | API-01–07, API-09–12 | M01, each feature extension | UC-07/10, protocol/parity tests |
 | API-08 | M01 baseline; M07 hardening | Reconnect/backpressure/resync |
 | AUTO-01–05 | M01, each feature extension | UC-10, executable PowerShell fixture |
 | AUTO-06–12 | M07 | UC-07/10, MCP permission/parity |
+| AUTO-13–14 | M05/M07 | Assistant setup/activity, bounded privacy-safe diagnostics |
 | STATE-01–07, STATE-12 | M01, M07 hardening | Import/migration/corruption fixtures |
 | STATE-08–11 | M07 | UC-06/09, startup/sign-out/recovery |
 | SEC-01–06, SEC-10, SEC-12 | M01, M07 audit | Scope, pipe, shell, abuse cases |

@@ -35,7 +35,13 @@ The important scopes are deliberately separate:
 - `pluginScan` — inspect explicitly selected plugin files.
 - `deviceAdministration` — plan/apply managed virtual-device desired state.
 - `startup.write` — authorize startup desired-state changes; native OS
-  registration is performed only by the explicit desktop shell command.
+registration is performed only by the explicit desktop shell command.
+
+The enrolled local desktop shell also has the `recording.write` (`Record`)
+scope for recording actions the user explicitly starts in an approved root.
+This grant does not include `audio.capture` or `deviceAdministration`; opening
+or preparing an input endpoint remains separately authorized. CLI and MCP
+clients do not inherit this local-shell grant.
 
 A generic read grant cannot elevate itself to another scope. Revoked or
 unknown clients are denied before method dispatch. Imported bundles do not
