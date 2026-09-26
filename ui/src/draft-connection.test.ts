@@ -96,7 +96,7 @@ describe("appendDraftConnection", () => {
     expect(inserted.revision).toBe(demoSession.revision);
   });
 
-  it("inserts a scanned VST plugin on an existing path as a disabled placeholder", () => {
+  it("inserts a scanned VST plugin on an existing path as an enabled node named after its file", () => {
     const connected = appendDraftConnection(demoSession, "mic", "out", "voice", "in");
     const custom = { ...connected, edges: connected.edges.map((edge) => ({ ...edge, matrix: [0.5] })) };
     const entry = {
@@ -121,8 +121,8 @@ describe("appendDraftConnection", () => {
     const plugin = inserted.nodes.find((node) => node.kind === "plugin");
     expect(plugin).toMatchObject({
       id: "plugin-1",
-      name: "Cockos 1",
-      enabled: false,
+      name: "ReaComp 1",
+      enabled: true,
       parameters: expect.objectContaining({ path: "C:\\Plugins\\ReaComp.vst3", format: "vst3" }),
     });
     expect(plugin?.ports.every((port) => port.channels === 1)).toBe(true);

@@ -1,5 +1,9 @@
 //! Allocation-free built-in DSP primitives for M04.
 
+pub mod restoration;
+pub mod spectral;
+pub mod timeshift;
+
 use std::f32::consts::PI;
 
 #[derive(Clone, Copy, Debug, PartialEq)]

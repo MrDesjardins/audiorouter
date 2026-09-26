@@ -52,8 +52,11 @@ const MAX_REVISION_CURSOR_BYTES: usize = 20;
 const MAX_GRAPH_DIFF_ITEMS: usize = 3;
 const MAX_GRAPH_AFFECTED_DESTINATIONS: usize = audiorouter_domain::MAX_NODES_PER_SESSION;
 const MAX_DEVICE_LIST_ITEMS: usize = 500;
+const APPLICATION_CAPTURE_LIVENESS_POLL: Duration = Duration::from_secs(1);
+const APPLICATION_CAPTURE_RETRY_MIN: Duration = Duration::from_secs(1);
+const APPLICATION_CAPTURE_RETRY_MAX: Duration = Duration::from_secs(5);
 const MAX_VIRTUAL_DEVICE_LIST_ITEMS: usize = 500;
-const MAX_PROCESSOR_CATALOG_ITEMS: usize = 7;
+const MAX_PROCESSOR_CATALOG_ITEMS: usize = 32;
 /// Maximum simultaneously armed/active recorder controllers across sessions.
 const MAX_ACTIVE_RECORDERS: usize = audiorouter_engine::MAX_AUDIO_TAPS;
 /// Maximum number of bounded queue-drain passes a recorder finalization may
@@ -73,7 +76,7 @@ const MAX_PLAN_REQUIRED_SCOPES: usize = 1;
 const MAX_PLAN_WARNINGS: usize = 1;
 const AUDIO_UPLOAD_CHUNK_BYTES: usize = 192 * 1024;
 const AUDIO_UPLOAD_TTL: Duration = Duration::from_secs(30 * 60);
-const STATE_CATEGORIES: [&str; 20] = [
+const STATE_CATEGORIES: [&str; 21] = [
     "session.created",
     "session.deleted",
     "graph.committed",
@@ -94,6 +97,7 @@ const STATE_CATEGORIES: [&str; 20] = [
     "recording.renamed",
     "recording.entryRemoved",
     "recording.recycled",
+    "application.captureStateChanged",
 ];
 const APPLICATION_SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_millis(100);
 const VIRTUAL_DEVICE_PLAN_TTL: Duration = Duration::from_secs(5 * 60);
@@ -2096,6 +2100,7 @@ fn method_description(name: &str) -> &'static str {
         "audioMedia.finishUpload" => "Validate, decode, and persist a complete WAV/MP3 audio source.",
         "audioMedia.importTemporaryRecording" => "Convert a completed temporary-take WAV into expiring graph media, then remove its temporary recording file and library entry.",
         "audioMedia.delete" => "Delete imported audio media that is not referenced by any session graph.",
+        "timeShift.transport" => "Pause, resume, jump back or forward 10 s, or return to live on one running Time Shift node; status reads its buffer.",
         "audioSources.transport" => "Play or stop one prepared Test Signal or audio-file source without stopping other graph routes; pause applies to audio files.",
         "recorders.list" => "List live in-memory recorder states and frame boundaries.",
                 "recorders.create" => "Create and attach an unarmed file recorder under the approved root. Omitted dither defaults to TPDF for integer output and is disabled for Float32 and MP3.",
@@ -2176,8 +2181,12 @@ fn method_description(name: &str) -> &'static str {
         }
         "plugins.scan" => "Inspect an explicitly selected plugin directory without loading plugin code.",
         "plugins.list" => "List the last bounded plugin scan inventory without scanning or loading plugin code.",
+        "plugins.inventory" => "List every remembered plugin scan (one per scanned folder, persisted across restarts) without scanning or loading plugin code.",
         "plugins.retry" => "Explicitly refresh a plugin inventory after a prior scan failure or quarantine decision.",
         "plugins.inspect" => "Inspect one explicitly selected plugin binary without loading plugin code.",
+        "plugins.saveState" => "Capture the opaque state of a plugin node in a playing route and store it; set the returned stateId on the node to restore it on the next start.",
+        "plugins.openEditor" => "Open the native editor of a plugin node in a playing route inside a parent window owned by the calling desktop shell.",
+        "plugins.closeEditor" => "Close a plugin node editor and apply its edits to the instance that processes audio.",
         "plugins.parameters" => "Load one currently scanned plugin in its isolated worker and return bounded parameter descriptors.",
         "virtualDevices.list" => "List managed virtual bus desired state without activating endpoints.",
         "virtualDevices.plan" => "Validate a managed virtual bus lifecycle change without applying it.",
@@ -2327,6 +2336,14 @@ fn method_input_schema(name: &str) -> Value {
             }),
             &["mediaId"],
         ),
+        "timeShift.transport" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "action": { "enum": ["pause", "resume", "back", "forward", "live", "status"] }
+            }),
+            &["sessionId", "nodeId", "action"],
+        ),
         "audioSources.transport" => object_schema(
             json!({
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
@@ -2388,7 +2405,7 @@ fn method_input_schema(name: &str) -> Value {
                 "generation": { "type": "integer", "minimum": 1 },
                 "renderEndpointIds": { "type": "array", "minItems": 1, "maxItems": audiorouter_engine::MAX_AUDIO_TAPS, "items": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES } }
             }),
-            &["sessionId", "generation", "renderEndpointIds"],
+            &["sessionId", "renderEndpointIds"],
         ),
         "nativeMultiInputs.prepare" => object_schema(
             json!({
@@ -2399,7 +2416,7 @@ fn method_input_schema(name: &str) -> Value {
                     { "properties": { "kind": { "const": "application" }, "processId": { "type": "integer", "minimum": 1 }, "executable": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES }, "executablePath": { "type": ["string", "null"] }, "creationTime100ns": { "type": "string", "minLength": 1, "maxLength": 20 }, "mode": { "enum": ["include", "exclude"] } }, "required": ["kind", "processId", "executable", "creationTime100ns", "mode"], "additionalProperties": false }
                 ] } }
             }),
-            &["sessionId", "generation", "sources"],
+            &["sessionId", "sources"],
         ),
         "nativeBridges.prepare" => object_schema(
             json!({
@@ -2522,6 +2539,7 @@ fn method_input_schema(name: &str) -> Value {
             }),
             &["directory"],
         ),
+        "plugins.inventory" => object_schema(json!({}), &[]),
         "plugins.retry" => object_schema(
             json!({
                 "directory": { "type": "string", "minLength": 1 },
@@ -2540,6 +2558,22 @@ fn method_input_schema(name: &str) -> Value {
                 "path": { "type": "string", "minLength": 1 }
             }),
             &["path"],
+        ),
+        "plugins.saveState" | "plugins.closeEditor" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
+            }),
+            &["sessionId", "nodeId"],
+        ),
+        "plugins.openEditor" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "parentWindow": { "type": "integer", "minimum": 1 },
+                "ownerProcessId": { "type": "integer", "minimum": 1, "maximum": u32::MAX }
+            }),
+            &["sessionId", "nodeId", "parentWindow", "ownerProcessId"],
         ),
         "virtualDevices.list" => object_schema(
             json!({
@@ -3584,6 +3618,39 @@ fn method_output_schema(name: &str) -> Value {
             "required": ["sessionId", "generation", "branchNodeIds", "boundBranches"],
             "additionalProperties": false
         }),
+        "plugins.saveState" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "stateId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "sizeBytes": { "type": "integer", "minimum": 1 }
+            },
+            "required": ["sessionId", "nodeId", "stateId", "sizeBytes"],
+            "additionalProperties": false
+        }),
+        "plugins.openEditor" | "plugins.closeEditor" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "state": { "enum": ["open", "closed"] }
+            },
+            "required": ["sessionId", "nodeId", "state"],
+            "additionalProperties": false
+        }),
+        "plugins.inventory" => json!({
+            "type": "object",
+            "properties": {
+                "inventories": {
+                    "type": "array",
+                    "maxItems": MAX_PLUGIN_INVENTORY_ROOTS,
+                    "items": method_output_schema("plugins.list")
+                }
+            },
+            "required": ["inventories"],
+            "additionalProperties": false
+        }),
         "plugins.scan" | "plugins.list" | "plugins.retry" => json!({
             "type": "object",
             "properties": {
@@ -3886,6 +3953,16 @@ fn method_output_schema(name: &str) -> Value {
             "type": "object", "properties": { "deleted": { "type": "boolean" } },
             "required": ["deleted"], "additionalProperties": false
         }),
+        "timeShift.transport" => json!({
+            "type": "object", "properties": {
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "state": { "enum": ["live", "delayed", "paused"] },
+                "delaySeconds": { "type": "number", "minimum": 0 },
+                "bufferedSeconds": { "type": "number", "minimum": 0 },
+                "capacitySeconds": { "type": "number", "minimum": 0 }
+            }, "required": ["sessionId", "nodeId", "state", "delaySeconds", "bufferedSeconds", "capacitySeconds"], "additionalProperties": false
+        }),
         "audioSources.transport" => json!({
             "type": "object", "properties": {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
@@ -4148,7 +4225,22 @@ fn diagnostics_output_schema() -> Value {
                 "additionalProperties": false
             },
             "nativeAdapter": { "enum": ["implemented-not-activated", "configured-stopped", "running"] },
-            "nativeAdapterKind": { "enum": ["endpoint", "duplex", "render-source", "multi-input", null] },
+            "nativeAdapterKind": { "enum": ["endpoint", "process-loopback", "duplex", "render-source", "multi-input", null] },
+            "applicationCaptureStates": {
+                "type": "array",
+                "maxItems": audiorouter_engine::MAX_MIXER_INPUTS,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                        "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                        "state": { "enum": ["configured-stopped", "connected", "app-closed", "reconnecting", "ambiguous", "output-unavailable", "unsupported", "failed"] },
+                        "detail": { "type": "string", "maxLength": 256 }
+                    },
+                    "required": ["sessionId", "nodeId", "state", "detail"],
+                    "additionalProperties": false
+                }
+            },
             "nativeSessionId": { "type": ["string", "null"], "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
             "schedulerTelemetry": {
                 "oneOf": [
@@ -4214,7 +4306,8 @@ fn diagnostics_output_schema() -> Value {
                             },
                             "required": ["state", "failureCount"],
                             "additionalProperties": false
-                        }
+                        },
+                        "noiseProfile": { "type": "string", "pattern": "^[0-9a-fA-F]{128}$" }
                     },
                     "required": ["nodeId", "kind", "meter", "processor", "plugin"],
                     "additionalProperties": false
@@ -4250,7 +4343,7 @@ fn diagnostics_output_schema() -> Value {
             },
             "redacted": { "const": true }
         },
-        "required": ["build", "backend", "storage", "audio", "nativeAdapter", "nativeAdapterKind", "nativeSessionId", "schedulerTelemetry", "nodeTelemetry", "privacyMute", "recovery", "eventLog", "redacted"],
+        "required": ["build", "backend", "storage", "audio", "nativeAdapter", "nativeAdapterKind", "nativeSessionId", "schedulerTelemetry", "nodeTelemetry", "applicationCaptureStates", "privacyMute", "recovery", "eventLog", "redacted"],
         "additionalProperties": false
     })
 }
@@ -4697,7 +4790,9 @@ impl ClientGrant {
     /// capability and permission to create explicitly requested recordings
     /// in approved roots. Record does not authorize opening capture devices;
     /// this is not an enrolled role and must not be used for remote, MCP, or
-    /// CLI clients.
+    /// CLI clients. PluginScan (explicit metadata scans of chosen folders;
+    /// plugins only ever execute in isolated workers) was authorized for the
+    /// local shell by the user on 2026-09-25.
     pub fn for_desktop_shell() -> Self {
         Self::with_scopes([
             PermissionScope::Read,
@@ -4705,6 +4800,7 @@ impl ClientGrant {
             PermissionScope::SessionControl,
             PermissionScope::Record,
             PermissionScope::StartupWrite,
+            PermissionScope::PluginScan,
         ])
     }
 
@@ -4777,7 +4873,11 @@ pub struct ControlPlane {
     operation_order: VecDeque<String>,
     idempotency_hashes: HashMap<String, String>,
     application_snapshot: Option<(Instant, Value)>,
+    application_capture_runtime: Option<ApplicationCaptureRuntime>,
     plugin_inventories: HashMap<String, Value>,
+    /// Live plugin runtime bridges by (session, node), for state capture and
+    /// the native editor. Weak: a bridge lives only as long as its graph.
+    plugin_bridges: std::sync::Mutex<HashMap<(EntityId, EntityId), std::sync::Weak<audiorouter_plugin_host::PluginRuntimeBridge>>>,
     plugin_inventory_order: VecDeque<String>,
     privacy_muted: bool,
     startup_enabled: bool,
@@ -4811,6 +4911,8 @@ pub struct ControlPlane {
     native_multi_input_worker_session: Option<EntityId>,
     #[cfg(windows)]
     native_multi_input_worker_generation: Option<u64>,
+    #[cfg(windows)]
+    multi_input_application_sources: Vec<MultiInputApplicationSource>,
     native_endpoint_taps: Option<AudioTapSet>,
     native_endpoint_taps_secondary: Option<AudioTapSet>,
     native_endpoint_rejections: u64,
@@ -4856,10 +4958,102 @@ struct AudioMediaUpload {
     started_at: Instant,
 }
 
+/// Restart tracking for one application source feeding the native
+/// multi-input Mixer. While the application is closed its input carries
+/// silence so the other sources keep playing.
+#[cfg(windows)]
+struct MultiInputApplicationSource {
+    session_id: EntityId,
+    node_id: EntityId,
+    input_index: usize,
+    executable: String,
+    /// Persisted selector from the node; restart matching starts here.
+    executable_path: Option<String>,
+    current_executable_path: Option<String>,
+    process_id: u32,
+    creation_time_100ns: u64,
+    mode: audiorouter_windows_audio::ProcessLoopbackMode,
+    state: &'static str,
+    detail: &'static str,
+    next_probe_at: Instant,
+    retry_delay: Duration,
+}
+
+#[derive(Clone)]
+struct ApplicationCaptureRuntime {
+    session_id: EntityId,
+    node_id: EntityId,
+    executable: String,
+    /// Persisted selector from the graph node; restart matching starts here.
+    executable_path: Option<String>,
+    /// Observed path of the process currently bound, which can differ from
+    /// the selector after a self-updating app moves to a new version folder.
+    current_executable_path: Option<String>,
+    selected_process_id: u32,
+    selected_creation_time_100ns: u64,
+    process_id: u32,
+    creation_time_100ns: u64,
+    mode: audiorouter_windows_audio::ProcessLoopbackMode,
+    state: &'static str,
+    detail: &'static str,
+    next_probe_at: Instant,
+    retry_delay: Duration,
+}
+
 impl Default for ControlPlane {
     fn default() -> Self {
         Self::new("dev")
     }
+}
+
+/// Issuer of native-editor parent capabilities. The key never leaves this
+/// process; it is derived once per backend run from process-local entropy.
+fn editor_authorization_issuer() -> &'static audiorouter_plugin_host::EditorParentAuthorizationIssuer {
+    static ISSUER: std::sync::OnceLock<audiorouter_plugin_host::EditorParentAuthorizationIssuer> = std::sync::OnceLock::new();
+    ISSUER.get_or_init(|| {
+        use sha2::Digest;
+        let mut digest = sha2::Sha256::new();
+        digest.update(std::process::id().to_le_bytes());
+        digest.update(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |elapsed| elapsed.as_nanos())
+                .to_le_bytes(),
+        );
+        digest.update((&ISSUER as *const _ as usize).to_le_bytes());
+        audiorouter_plugin_host::EditorParentAuthorizationIssuer::from_key(digest.finalize().into())
+    })
+}
+
+/// Whether a remembered scan entry is the plugin at `path`. A node may carry
+/// either the scanned path or the canonical binary path (`\\?\C:\...`), so
+/// both are accepted, compared without the verbatim prefix and without case
+/// (Windows paths). The binary fingerprint is still checked by the caller.
+fn scan_entry_matches_path(entry: &Value, path: &str) -> bool {
+    fn normalized(path: &str) -> String {
+        path.strip_prefix(r"\\?\").unwrap_or(path).to_ascii_lowercase()
+    }
+    let wanted = normalized(path);
+    [
+        entry.get("path").and_then(Value::as_str),
+        entry
+            .get("identity")
+            .and_then(|identity| identity.get("binaryPath"))
+            .and_then(Value::as_str),
+    ]
+    .into_iter()
+    .flatten()
+    .any(|candidate| normalized(candidate) == wanted)
+}
+
+/// A short, bounded human-readable reason for a control error.
+fn control_error_message(error: &ControlError) -> String {
+    let text = match error {
+        ControlError::InvalidRequest(message) => message.clone(),
+        ControlError::Audio { message, .. } => message.clone(),
+        other => format!("{other:?}"),
+    };
+    text.chars().take(240).collect()
 }
 
 fn session_virtual_capture_bus_ids(session: &Session) -> Vec<EntityId> {
@@ -4877,18 +5071,23 @@ fn session_virtual_capture_bus_ids(session: &Session) -> Vec<EntityId> {
 }
 
 impl ControlPlane {
-    fn compile_session_graph_with_audio(
+    /// Decode, at the graph rate, the stored media referenced by enabled
+    /// Audio File sources and FIR Filter impulse responses. Runs on the
+    /// control thread before compilation, never in the callback.
+    fn session_audio_media(
         &mut self,
         session: &Session,
-        generation: RuntimeGeneration,
         sample_rate_hz: u32,
-        plugins: &HashMap<EntityId, Arc<dyn RealtimePluginProcessor>>,
-    ) -> Result<audiorouter_engine::RuntimeGraph, ControlError> {
+    ) -> Result<HashMap<String, Arc<DecodedAudio>>, ControlError> {
         let mut media = HashMap::<String, Arc<DecodedAudio>>::new();
         for node in session
             .nodes
             .iter()
-            .filter(|node| node.enabled && node.kind == NodeKind::AudioFile)
+            .filter(|node| {
+                node.enabled
+                    && (node.kind == NodeKind::AudioFile
+                        || (node.kind == NodeKind::FirFilter && node.parameters.contains_key("mediaId")))
+            })
         {
             let media_id = node
                 .parameters
@@ -4924,8 +5123,34 @@ impl ControlPlane {
                 })?;
             media.insert(media_id.to_owned(), Arc::new(decoded));
         }
+        Ok(media)
+    }
+
+    fn compile_session_graph_with_audio(
+        &mut self,
+        session: &Session,
+        generation: RuntimeGeneration,
+        sample_rate_hz: u32,
+        plugins: &HashMap<EntityId, Arc<dyn RealtimePluginProcessor>>,
+    ) -> Result<audiorouter_engine::RuntimeGraph, ControlError> {
+        let media = self.session_audio_media(session, sample_rate_hz)?;
+        // The application (process-loopback) worker opens no physical capture,
+        // so a turned-off microphone or Test Signal left wired into a Mixer
+        // only adds silence and is dropped before compiling. Endpoint routes
+        // keep those nodes: a disabled physical input's mute stage is what
+        // silences the microphone that worker actually captures.
+        let application_worker = self
+            .application_capture_runtime
+            .as_ref()
+            .is_some_and(|binding| binding.session_id == session.id)
+            && self.native_adapter_kind() == Some("process-loopback");
+        let pruned = if application_worker {
+            audiorouter_engine::prune_inactive_upstream(session)
+        } else {
+            std::borrow::Cow::Borrowed(session)
+        };
         let graph = audiorouter_engine::compile_session_at_sample_rate_with_plugins_and_audio(
-            session,
+            pruned.as_ref(),
             generation,
             sample_rate_hz,
             plugins,
@@ -4986,7 +5211,9 @@ impl ControlPlane {
             operation_order: VecDeque::new(),
             idempotency_hashes: HashMap::new(),
             application_snapshot: None,
+            application_capture_runtime: None,
             plugin_inventories: HashMap::new(),
+            plugin_bridges: Default::default(),
             plugin_inventory_order: VecDeque::new(),
             privacy_muted: false,
             startup_enabled: false,
@@ -5021,6 +5248,8 @@ impl ControlPlane {
             native_multi_input_worker_session: None,
             #[cfg(windows)]
             native_multi_input_worker_generation: None,
+            #[cfg(windows)]
+            multi_input_application_sources: Vec::new(),
             native_endpoint_taps: None,
             native_endpoint_taps_secondary: None,
             native_endpoint_rejections: 0,
@@ -5253,13 +5482,18 @@ impl ControlPlane {
                 "native worker is already attached".into(),
             ));
         }
-        let session = self.get_session(&session_id)?.clone();
+        // Disabled sources left wired into the Mixer are not captured by this
+        // worker (only bound sources are opened), so they are dropped rather
+        // than rejecting the route.
+        let session = audiorouter_engine::prune_inactive_upstream(self.get_session(&session_id)?).into_owned();
         let plugin_stages =
             self.prepare_plugin_stages(&session, audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ)?;
-        let compiled = audiorouter_engine::compile_mixer_fanout_session_with_plugins(
+        let media = self.session_audio_media(&session, audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ)?;
+        let compiled = audiorouter_engine::compile_mixer_fanout_session_with_plugins_and_audio(
             &session,
             RuntimeGeneration::new(generation),
             &plugin_stages,
+            &media,
         )
         .map_err(|error| {
             ControlError::InvalidRequest(format!("multi-input graph rejected: {error:?}"))
@@ -5273,7 +5507,7 @@ impl ControlPlane {
         let mixer_channels = session
             .nodes
             .iter()
-            .find(|node| node.kind == NodeKind::Mixer && node.enabled && !node.bypass)
+            .find(|node| matches!(node.kind, NodeKind::Mixer | NodeKind::InputSwitch) && node.enabled && !node.bypass)
             .and_then(|node| {
                 node.ports
                     .iter()
@@ -5373,6 +5607,7 @@ impl ControlPlane {
             );
         }
         let mut capture_clients = Vec::with_capacity(bindings.len());
+        let mut application_sources = Vec::new();
         for binding in bindings {
             match binding {
                 NativeMultiInputSourceBinding::Physical(endpoint) => {
@@ -5400,21 +5635,68 @@ impl ControlPlane {
                     expected_creation_time_100ns,
                     mode,
                 } => {
-                    audiorouter_windows_audio::bind_application_with_path(
+                    // A closed application does not block the Mixer route: its
+                    // input starts silent and reconnects when the app starts.
+                    let bound = match audiorouter_windows_audio::bind_application_or_restarted(
                         *process_id,
                         expected_executable,
                         *expected_executable_path,
-                        Some(*expected_creation_time_100ns),
-                    )
-                    .map_err(audio_control_error)?;
-                    let capture =
-                        audiorouter_windows_audio::ProcessLoopbackCapture::open(*process_id, *mode)
-                            .map_err(audio_control_error)?;
-                    capture_clients.push(
-                        audiorouter_windows_audio::MultiInputCaptureSource::ApplicationLoopback(
-                            capture,
+                        *expected_creation_time_100ns,
+                    ) {
+                        Ok(application) => Some(application),
+                        Err(
+                            audiorouter_windows_audio::AudioError::ApplicationNotFound { .. }
+                            | audiorouter_windows_audio::AudioError::ApplicationIdentityChanged { .. }
+                            | audiorouter_windows_audio::AudioError::ApplicationRestartNotFound { .. },
+                        ) if expected_executable_path.is_some() => None,
+                        Err(error) => return Err(audio_control_error(error)),
+                    };
+                    let (capture, application) = match bound {
+                        Some(application) => (
+                            audiorouter_windows_audio::MultiInputCaptureSource::ApplicationLoopback(
+                                audiorouter_windows_audio::ProcessLoopbackCapture::open(
+                                    application.process_id,
+                                    *mode,
+                                )
+                                .map_err(audio_control_error)?,
+                            ),
+                            Some(application),
                         ),
-                    );
+                        None => (
+                            audiorouter_windows_audio::MultiInputCaptureSource::Silence(
+                                audiorouter_windows_audio::SilentCapture::new(
+                                    audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+                                ),
+                            ),
+                            None,
+                        ),
+                    };
+                    application_sources.push(MultiInputApplicationSource {
+                        session_id: session_id.clone(),
+                        node_id: source_node_ids[capture_clients.len()].clone(),
+                        input_index: capture_clients.len(),
+                        executable: (*expected_executable).to_owned(),
+                        executable_path: expected_executable_path.map(str::to_owned),
+                        current_executable_path: application
+                            .as_ref()
+                            .and_then(|application| application.executable_path.clone()),
+                        process_id: application.as_ref().map_or(0, |application| application.process_id),
+                        creation_time_100ns: application
+                            .as_ref()
+                            .and_then(|application| application.creation_time_100ns)
+                            .unwrap_or(*expected_creation_time_100ns),
+                        mode: *mode,
+                        state: "configured-stopped",
+                        detail: "Prepared for this application. Start the route to capture audio.",
+                        // A closed application is looked for right away.
+                        next_probe_at: if application.is_some() {
+                            Instant::now() + APPLICATION_CAPTURE_LIVENESS_POLL
+                        } else {
+                            Instant::now()
+                        },
+                        retry_delay: APPLICATION_CAPTURE_RETRY_MIN,
+                    });
+                    capture_clients.push(capture);
                 }
             }
         }
@@ -5437,6 +5719,7 @@ impl ControlPlane {
                     ))
                 })?;
         self.attach_native_multi_input_worker(session_id.clone(), generation, worker)?;
+        self.multi_input_application_sources = application_sources;
         self.pending_endpoint_changes.clear();
         Ok(json!({
             "sessionId": session_id,
@@ -5544,6 +5827,44 @@ impl ControlPlane {
                 "native multi-input worker binding was invalidated; rebind before pumping".into(),
             ));
         }
+        self.maintain_multi_input_applications(session_id, false);
+        match self.pump_native_multi_input_worker_once(session_id, generation, max_packets) {
+            Err(error)
+                if self
+                    .multi_input_application_sources
+                    .iter()
+                    .any(|source| &source.session_id == session_id) =>
+            {
+                // A closed application can fail its capture before the next
+                // one-second probe. Check now: if an input was switched to
+                // silence the other sources resume on the next pump.
+                if self.maintain_multi_input_applications(session_id, true) {
+                    Ok(json!({
+                        "sessionId": session_id,
+                        "generation": generation,
+                        "inputs": 0,
+                        "capturedFrames": 0,
+                        "submittedQuanta": 0,
+                        "outputCount": self.native_multi_input_worker.as_ref().map_or(0, |worker| worker.output_count()),
+                        "deliveredQuanta": 0,
+                        "renderedFrames": 0,
+                        "renderBackpressureEvents": 0,
+                    }))
+                } else {
+                    Err(error)
+                }
+            }
+            result => result,
+        }
+    }
+
+    #[cfg(windows)]
+    fn pump_native_multi_input_worker_once(
+        &mut self,
+        session_id: &EntityId,
+        generation: u64,
+        max_packets: u32,
+    ) -> Result<Value, ControlError> {
         let worker = self.native_multi_input_worker.as_mut().ok_or_else(|| {
             ControlError::InvalidRequest("native multi-input worker is not attached".into())
         })?;
@@ -5866,9 +6187,14 @@ impl ControlPlane {
         let process_id_value = serde_json::Value::from(u64::from(config.process_id));
         let creation_time_value =
             serde_json::Value::from(config.expected_creation_time_100ns.to_string());
-        let has_matching_capture = session.nodes.iter().any(|node| {
+        let matching_capture_node = session.nodes.iter().find(|node| {
             node.enabled
                 && node.kind == NodeKind::ApplicationCapture
+                && node
+                    .parameters
+                    .get("processPolicy")
+                    .and_then(Value::as_str)
+                    == Some("selectedInstance")
                 && node
                     .parameters
                     .get("processId")
@@ -5883,11 +6209,11 @@ impl ControlPlane {
                     .get("creationTime100ns")
                     .is_some_and(|value| value == &creation_time_value)
         });
-        if !has_matching_capture {
+        let Some(matching_capture_node) = matching_capture_node else {
             return Err(ControlError::InvalidRequest(
                 "application worker requires a matching enabled applicationCapture node".into(),
             ));
-        }
+        };
         if self.any_native_worker_attached() {
             return Err(ControlError::InvalidRequest(
                 "native worker is already attached".into(),
@@ -5901,16 +6227,21 @@ impl ControlPlane {
                 "process-loopback render binding must be stereo IEEE float32".into(),
             ));
         }
-        audiorouter_windows_audio::bind_application_with_path(
+        let application = audiorouter_windows_audio::bind_application_or_restarted(
             config.process_id,
             config.expected_executable,
             config.expected_executable_path,
-            Some(config.expected_creation_time_100ns),
+            config.expected_creation_time_100ns,
         )
         .map_err(audio_control_error)?;
-        let capture =
-            audiorouter_windows_audio::ProcessLoopbackCapture::open(config.process_id, config.mode)
-                .map_err(audio_control_error)?;
+        let application_creation_time_100ns = application
+            .creation_time_100ns
+            .unwrap_or(config.expected_creation_time_100ns);
+        let capture = audiorouter_windows_audio::ProcessLoopbackCapture::open(
+            application.process_id,
+            config.mode,
+        )
+        .map_err(audio_control_error)?;
         let monitor = if let Some(monitor) = self.endpoint_monitor.as_mut() {
             monitor
         } else {
@@ -5938,7 +6269,369 @@ impl ControlPlane {
         self.attach_native_application_worker(
             session_id,
             audiorouter_windows_audio::ProcessLoopbackWorker::new(capture, render_client, bridge),
-        )
+        )?;
+        self.application_capture_runtime = Some(ApplicationCaptureRuntime {
+            session_id: session.id.clone(),
+            node_id: matching_capture_node.id.clone(),
+            executable: config.expected_executable.to_owned(),
+            executable_path: config.expected_executable_path.map(str::to_owned),
+            current_executable_path: application.executable_path.clone(),
+            selected_process_id: config.process_id,
+            selected_creation_time_100ns: config.expected_creation_time_100ns,
+            process_id: application.process_id,
+            creation_time_100ns: application_creation_time_100ns,
+            mode: config.mode,
+            state: "configured-stopped",
+            detail: "Prepared for this application. Start the route to capture audio.",
+            next_probe_at: Instant::now() + APPLICATION_CAPTURE_LIVENESS_POLL,
+            retry_delay: APPLICATION_CAPTURE_RETRY_MIN,
+        });
+        Ok(())
+    }
+
+    fn set_application_capture_state(&mut self, state: &'static str, detail: &'static str) {
+        let Some(binding) = self.application_capture_runtime.as_mut() else {
+            return;
+        };
+        if binding.state == state && binding.detail == detail {
+            return;
+        }
+        binding.state = state;
+        binding.detail = detail;
+        let session_id = binding.session_id.clone();
+        let revision = self
+            .store
+            .session(&session_id)
+            .map_or(0, |session| session.revision);
+        self.events.append(
+            revision,
+            None,
+            "application.captureStateChanged",
+            Some(session_id),
+        );
+    }
+
+    fn application_capture_states(&self) -> Value {
+        let running = |session_id: &EntityId| {
+            self.runtimes
+                .get(session_id)
+                .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
+        };
+        let stopped = (
+            "configured-stopped",
+            "Prepared for this application. Start the route to capture audio.",
+        );
+        let mut states = Vec::new();
+        if let Some(binding) = self.application_capture_runtime.as_ref() {
+            let (state, detail) = if running(&binding.session_id) {
+                (binding.state, binding.detail)
+            } else {
+                stopped
+            };
+            states.push(json!({
+                "sessionId": binding.session_id,
+                "nodeId": binding.node_id,
+                "state": state,
+                "detail": detail,
+            }));
+        }
+        #[cfg(windows)]
+        for source in &self.multi_input_application_sources {
+            let (state, detail) = if running(&source.session_id) {
+                (source.state, source.detail)
+            } else {
+                stopped
+            };
+            states.push(json!({
+                "sessionId": source.session_id,
+                "nodeId": source.node_id,
+                "state": state,
+                "detail": detail,
+            }));
+        }
+        Value::Array(states)
+    }
+
+    #[cfg(windows)]
+    fn application_capture_runtime_is_current(
+        &self,
+        binding: &ApplicationCaptureRuntime,
+    ) -> bool {
+        self.store.session(&binding.session_id).is_some_and(|session| {
+            session.nodes.iter().any(|node| {
+                node.id == binding.node_id
+                    && node.kind == NodeKind::ApplicationCapture
+                    && node.enabled
+                    && node.parameters.get("processPolicy").and_then(Value::as_str)
+                        == Some("selectedInstance")
+                    && node
+                        .parameters
+                        .get("executable")
+                        .and_then(Value::as_str)
+                        .is_some_and(|value| value.eq_ignore_ascii_case(&binding.executable))
+                    && node
+                        .parameters
+                        .get("executablePath")
+                        .and_then(Value::as_str)
+                        .is_some_and(|value| {
+                            binding.executable_path.as_deref().is_some_and(|expected| {
+                                value.eq_ignore_ascii_case(expected)
+                            })
+                        })
+                    && node
+                        .parameters
+                        .get("processId")
+                        .and_then(Value::as_u64)
+                        == Some(u64::from(binding.selected_process_id))
+                    && node
+                        .parameters
+                        .get("creationTime100ns")
+                        .and_then(Value::as_str)
+                        .and_then(|value| value.parse::<u64>().ok())
+                        == Some(binding.selected_creation_time_100ns)
+            })
+        })
+    }
+
+    /// Observe process exit and reconnect only to a unique full-path match.
+    /// Called from the bounded control-plane audio pump, never from the audio
+    /// callback. One process snapshot per second bounds discovery overhead.
+    #[cfg(windows)]
+    fn maintain_application_capture(
+        &mut self,
+        session_id: &EntityId,
+        force_probe: bool,
+    ) -> Result<bool, ControlError> {
+        let now = Instant::now();
+        let Some(mut binding) = self
+            .application_capture_runtime
+            .clone()
+            .filter(|binding| &binding.session_id == session_id)
+        else {
+            return Ok(false);
+        };
+        if !self
+            .runtimes
+            .get(session_id)
+            .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
+        {
+            self.set_application_capture_state(
+                "configured-stopped",
+                "Prepared for this application. Start the route to capture audio.",
+            );
+            return Ok(false);
+        }
+        if !force_probe && now < binding.next_probe_at {
+            return Ok(binding.state != "connected");
+        }
+        binding.next_probe_at = now + APPLICATION_CAPTURE_LIVENESS_POLL;
+        let applications = match audiorouter_windows_audio::enumerate_applications() {
+            Ok(applications) => applications,
+            Err(_) => {
+                if let Some(worker) = self.native_endpoint_worker_for_session_mut(session_id) {
+                    let _ = worker.stop();
+                }
+                self.set_application_capture_state(
+                    "failed",
+                    "Windows could not check this application. Audio is paused while AudioRouter retries.",
+                );
+                if let Some(current) = self.application_capture_runtime.as_mut() {
+                    current.next_probe_at = now + binding.retry_delay;
+                    current.retry_delay = (binding.retry_delay * 2).min(APPLICATION_CAPTURE_RETRY_MAX);
+                }
+                return Ok(true);
+            }
+        };
+        if !self.application_capture_runtime_is_current(&binding) {
+            if let Some(worker) = self.native_endpoint_worker_for_session_mut(session_id) {
+                let _ = worker.stop();
+            }
+            self.set_application_capture_state(
+                "unsupported",
+                "The application source changed while audio was running. Stop the route and prepare the updated source again.",
+            );
+            if let Some(current) = self.application_capture_runtime.as_mut() {
+                current.next_probe_at = now + APPLICATION_CAPTURE_RETRY_MAX;
+            }
+            return Ok(true);
+        }
+        let current_is_alive = applications.iter().any(|application| {
+            application.process_id == binding.process_id
+                && application.creation_time_100ns == Some(binding.creation_time_100ns)
+                && application
+                    .executable
+                    .eq_ignore_ascii_case(&binding.executable)
+                && binding.current_executable_path.as_deref().is_some_and(|expected| {
+                    application
+                        .executable_path
+                        .as_deref()
+                        .is_some_and(|actual| actual.eq_ignore_ascii_case(expected))
+                })
+        });
+        if current_is_alive {
+            self.set_application_capture_state(
+                "connected",
+                "Connected to this application. Audio flow appears when the app produces sound.",
+            );
+            if let Some(current) = self.application_capture_runtime.as_mut() {
+                current.next_probe_at = now + APPLICATION_CAPTURE_LIVENESS_POLL;
+                current.retry_delay = APPLICATION_CAPTURE_RETRY_MIN;
+            }
+            return Ok(false);
+        }
+
+        if self
+            .native_endpoint_worker_for_session(session_id)
+            .is_some_and(audiorouter_windows_audio::NativeAudioWorker::is_running)
+        {
+            if let Some(worker) = self.native_endpoint_worker_for_session_mut(session_id) {
+                worker.stop().map_err(audio_control_error)?;
+            }
+        }
+        if binding.executable_path.is_none() {
+            self.set_application_capture_state(
+                "unsupported",
+                "This app cannot be safely matched after restart. Choose it again from the application picker.",
+            );
+            if let Some(current) = self.application_capture_runtime.as_mut() {
+                current.next_probe_at = now + APPLICATION_CAPTURE_RETRY_MAX;
+            }
+            return Ok(true);
+        }
+
+        match audiorouter_windows_audio::resolve_application_restart_with_path(
+            &applications,
+            &binding.executable,
+            binding.executable_path.as_deref(),
+        ) {
+            Err(audiorouter_windows_audio::AudioError::ApplicationRestartNotFound { .. }) => {
+                self.set_application_capture_state(
+                    "app-closed",
+                    "Application is closed. Audio is silent; AudioRouter will reconnect when it starts.",
+                );
+                if let Some(current) = self.application_capture_runtime.as_mut() {
+                    current.next_probe_at = now + APPLICATION_CAPTURE_RETRY_MIN;
+                    current.retry_delay = APPLICATION_CAPTURE_RETRY_MIN;
+                }
+                Ok(true)
+            }
+            Err(audiorouter_windows_audio::AudioError::ApplicationRestartAmbiguous { .. }) => {
+                self.set_application_capture_state(
+                    "ambiguous",
+                    "More than one matching app is running. Close extra instances or choose the intended one again.",
+                );
+                if let Some(current) = self.application_capture_runtime.as_mut() {
+                    current.next_probe_at = now + APPLICATION_CAPTURE_LIVENESS_POLL;
+                }
+                Ok(true)
+            }
+            Err(audiorouter_windows_audio::AudioError::ApplicationRestartIdentityUnavailable { .. }) => {
+                self.set_application_capture_state(
+                    "unsupported",
+                    "Windows cannot verify this app identity. Choose it again from the application picker.",
+                );
+                if let Some(current) = self.application_capture_runtime.as_mut() {
+                    current.next_probe_at = now + APPLICATION_CAPTURE_RETRY_MAX;
+                }
+                Ok(true)
+            }
+            Err(_) => {
+                self.set_application_capture_state(
+                    "failed",
+                    "Application capture could not be checked. Audio remains silent while AudioRouter retries.",
+                );
+                if let Some(current) = self.application_capture_runtime.as_mut() {
+                    current.next_probe_at = now + binding.retry_delay;
+                    current.retry_delay = (binding.retry_delay * 2).min(APPLICATION_CAPTURE_RETRY_MAX);
+                }
+                Ok(true)
+            }
+            Ok(application) => {
+                self.set_application_capture_state(
+                    "reconnecting",
+                    "Application started. Reconnecting its audio source.",
+                );
+                let Some(creation_time_100ns) = application.creation_time_100ns else {
+                    self.set_application_capture_state(
+                        "unsupported",
+                        "Windows cannot verify this app identity. Choose it again from the application picker.",
+                    );
+                    if let Some(current) = self.application_capture_runtime.as_mut() {
+                        current.next_probe_at = now + APPLICATION_CAPTURE_RETRY_MAX;
+                    }
+                    return Ok(true);
+                };
+                let capture = audiorouter_windows_audio::bind_application_with_path(
+                    application.process_id,
+                    &binding.executable,
+                    application.executable_path.as_deref(),
+                    Some(creation_time_100ns),
+                )
+                .and_then(|_| {
+                    audiorouter_windows_audio::ProcessLoopbackCapture::open(
+                        application.process_id,
+                        binding.mode,
+                    )
+                });
+                match capture {
+                    Ok(capture) => {
+                        let rebind_result = self
+                            .native_endpoint_worker_for_session_mut(session_id)
+                            .ok_or_else(|| "application worker is no longer attached".to_owned())
+                            .and_then(|worker| {
+                                worker
+                                    .replace_process_capture(capture)
+                                    .map_err(|_| "could not replace the process capture".to_owned())?;
+                                if !worker.is_running() {
+                                    worker
+                                        .start()
+                                        .map_err(|_| "could not restart the audio worker".to_owned())?;
+                                }
+                                Ok(())
+                            });
+                        match rebind_result {
+                            Ok(()) => {
+                                if let Some(current) = self.application_capture_runtime.as_mut() {
+                                    current.process_id = application.process_id;
+                                    current.creation_time_100ns = creation_time_100ns;
+                                    current.current_executable_path =
+                                        application.executable_path.clone();
+                                    current.next_probe_at = now + APPLICATION_CAPTURE_LIVENESS_POLL;
+                                    current.retry_delay = APPLICATION_CAPTURE_RETRY_MIN;
+                                }
+                                self.set_application_capture_state(
+                                    "connected",
+                                    "Connected to the restarted application. Audio flow appears when it produces sound.",
+                                );
+                                Ok(false)
+                            }
+                            Err(_) => {
+                                self.set_application_capture_state(
+                                    "failed",
+                                    "The app is running, but Windows could not restart its audio route. AudioRouter will retry.",
+                                );
+                                if let Some(current) = self.application_capture_runtime.as_mut() {
+                                    current.next_probe_at = now + binding.retry_delay;
+                                    current.retry_delay = (binding.retry_delay * 2).min(APPLICATION_CAPTURE_RETRY_MAX);
+                                }
+                                Ok(true)
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        self.set_application_capture_state(
+                            "failed",
+                            "The app is running, but Windows could not reopen its audio source. AudioRouter will retry.",
+                        );
+                        if let Some(current) = self.application_capture_runtime.as_mut() {
+                            current.next_probe_at = now + binding.retry_delay;
+                            current.retry_delay = (binding.retry_delay * 2).min(APPLICATION_CAPTURE_RETRY_MAX);
+                        }
+                        Ok(true)
+                    }
+                }
+            }
+        }
     }
 
     /// Prepare a stopped native worker from two endpoint descriptors returned
@@ -7172,6 +7865,8 @@ impl ControlPlane {
         }
         self.native_multi_input_worker_session = None;
         self.native_multi_input_worker_generation = None;
+        #[cfg(windows)]
+        self.multi_input_application_sources.clear();
         Ok(())
     }
 
@@ -7456,6 +8151,21 @@ impl ControlPlane {
             return Err(ControlError::InvalidRequest(
                 "native endpoint worker binding was invalidated; rebind before pumping".into(),
             ));
+        }
+        #[cfg(windows)]
+        if self.maintain_application_capture(session_id, false)? {
+            let recorder_chunks_drained = self.drain_attached_recorders()?;
+            return Ok(json!({
+                "sessionId": session_id,
+                "generation": generation,
+                "packets": 0,
+                "capturedFrames": 0,
+                "processedQuanta": 0,
+                "renderedFrames": 0,
+                "droppedRenderFrames": 0,
+                "renderBackpressureEvents": 0,
+                "recorderChunksDrained": recorder_chunks_drained,
+            }));
         }
         let pump = {
             let worker = self
@@ -7940,10 +8650,16 @@ impl ControlPlane {
     /// graph. This walks the immutable committed session only on the
     /// diagnostics thread; processor reads remain best-effort and lock-free.
     fn native_node_telemetry(&self) -> Value {
-        let (Some(worker), Some(session_id)) = (
-            self.native_endpoint_worker.as_ref(),
-            self.native_endpoint_session.as_ref(),
-        ) else {
+        let session_id = self
+            .application_capture_runtime
+            .as_ref()
+            .map(|binding| &binding.session_id)
+            .or(self.native_endpoint_session.as_ref())
+            .or(self.native_endpoint_session_secondary.as_ref());
+        let Some(session_id) = session_id else {
+            return json!([]);
+        };
+        let Some(worker) = self.native_endpoint_worker_for_session(session_id) else {
             return json!([]);
         };
         let Some(session) = self.store.session(session_id) else {
@@ -7985,16 +8701,21 @@ impl ControlPlane {
                         "failureCount": health.failure_count,
                     })
                 });
-                if meter.is_none() && processor_telemetry.is_none() && plugin_health.is_none() {
+                let noise_profile = processor.noise_profile_for_node(&node.id);
+                if meter.is_none() && processor_telemetry.is_none() && plugin_health.is_none() && noise_profile.is_none() {
                     return None;
                 }
-                Some(json!({
+                let mut item = json!({
                     "nodeId": node.id,
                     "kind": node.kind.type_name(),
                     "meter": meter,
                     "processor": processor_telemetry,
                     "plugin": plugin_health,
-                }))
+                });
+                if let Some(profile) = noise_profile {
+                    item["noiseProfile"] = json!(profile);
+                }
+                Some(item)
             })
             .collect::<Vec<_>>()
             .into()
@@ -8040,16 +8761,21 @@ impl ControlPlane {
                         "failureCount": health.failure_count,
                     })
                 });
-                if processor_telemetry.is_none() && plugin_health.is_none() {
+                let noise_profile = worker.noise_profile_for_node(&node.id);
+                if processor_telemetry.is_none() && plugin_health.is_none() && noise_profile.is_none() {
                     return None;
                 }
-                Some(json!({
+                let mut item = json!({
                     "nodeId": node.id,
                     "kind": node.kind.type_name(),
                     "meter": Value::Null,
                     "processor": processor_telemetry,
                     "plugin": plugin_health,
-                }))
+                });
+                if let Some(profile) = noise_profile {
+                    item["noiseProfile"] = json!(profile);
+                }
+                Some(item)
             })
             .collect::<Vec<_>>()
             .into()
@@ -8111,6 +8837,13 @@ impl ControlPlane {
         } else {
             self.native_endpoint_session_secondary = None;
             self.native_endpoint_taps_secondary = None;
+        }
+        if self
+            .application_capture_runtime
+            .as_ref()
+            .is_some_and(|binding| &binding.session_id == session_id)
+        {
+            self.application_capture_runtime = None;
         }
         Ok(())
     }
@@ -8207,7 +8940,7 @@ impl ControlPlane {
         // read and validated successfully; failed startup must not mutate the
         // durable database while reporting an initialization error.
         let backend_epoch = storage.claim_backend_epoch()?;
-        Ok(Self {
+        let mut plane = Self {
             store,
             build: build.into(),
             runtimes: HashMap::new(),
@@ -8231,7 +8964,9 @@ impl ControlPlane {
             operation_order: VecDeque::new(),
             idempotency_hashes: HashMap::new(),
             application_snapshot: None,
+            application_capture_runtime: None,
             plugin_inventories: HashMap::new(),
+            plugin_bridges: Default::default(),
             plugin_inventory_order: VecDeque::new(),
             privacy_muted,
             startup_enabled,
@@ -8266,6 +9001,8 @@ impl ControlPlane {
             native_multi_input_worker_session: None,
             #[cfg(windows)]
             native_multi_input_worker_generation: None,
+            #[cfg(windows)]
+            multi_input_application_sources: Vec::new(),
             native_endpoint_taps: None,
             native_endpoint_taps_secondary: None,
             native_endpoint_rejections: 0,
@@ -8298,7 +9035,9 @@ impl ControlPlane {
             #[cfg(windows)]
             managed_software_devices:
                 audiorouter_windows_audio::ManagedSoftwareDeviceInventory::default(),
-        })
+        };
+        plane.restore_plugin_inventories();
+        Ok(plane)
     }
 
     pub fn with_storage(build: impl Into<String>, storage: Storage) -> Self {
@@ -8334,6 +9073,19 @@ impl ControlPlane {
     }
 
     fn remember_plugin_inventory(&mut self, directory: String, result: Value) {
+        self.insert_plugin_inventory(directory, result);
+        // Best effort: a failed save only means the next restart rescans.
+        if let Some(storage) = &self.storage {
+            let inventories = self
+                .plugin_inventory_order
+                .iter()
+                .filter_map(|directory| self.plugin_inventories.get(directory).cloned())
+                .collect::<Vec<_>>();
+            let _ = storage.save_plugin_inventories(&Value::Array(inventories));
+        }
+    }
+
+    fn insert_plugin_inventory(&mut self, directory: String, result: Value) {
         if !self.plugin_inventories.contains_key(&directory) {
             self.plugin_inventory_order.push_back(directory.clone());
         }
@@ -8343,6 +9095,37 @@ impl ControlPlane {
                 self.plugin_inventories.remove(&oldest);
             }
         }
+    }
+
+    /// Reload remembered scan results at startup (metadata only; nothing is
+    /// loaded or executed, and each add still re-verifies the binary hash).
+    fn restore_plugin_inventories(&mut self) {
+        let Some(storage) = &self.storage else { return };
+        let Ok(inventories) = storage.load_plugin_inventories() else { return };
+        for inventory in inventories.into_iter().take(MAX_PLUGIN_INVENTORY_ROOTS) {
+            let Some(directory) = inventory
+                .get("directory")
+                .and_then(Value::as_str)
+                .filter(|directory| std::path::Path::new(directory).is_absolute())
+                .map(str::to_owned)
+            else {
+                continue;
+            };
+            if inventory.get("entries").is_some_and(Value::is_array) {
+                self.insert_plugin_inventory(directory, inventory);
+            }
+        }
+    }
+
+    /// Every remembered plugin scan, newest folder last (`plugins.list` with
+    /// no directory).
+    fn remembered_plugin_inventories(&self) -> Value {
+        Value::Array(
+            self.plugin_inventory_order
+                .iter()
+                .filter_map(|directory| self.plugin_inventories.get(directory).cloned())
+                .collect(),
+        )
     }
 
     fn operation_lookup_keys(&self, operation_id: &str) -> Vec<String> {
@@ -9643,6 +10426,8 @@ impl ControlPlane {
             self.native_multi_input_worker.take();
             self.native_multi_input_worker_session = None;
             self.native_multi_input_worker_generation = None;
+            #[cfg(windows)]
+            self.multi_input_application_sources.clear();
         }
         self.runtimes.remove(id);
         for node in session
@@ -9788,6 +10573,56 @@ impl ControlPlane {
                 { "name": "cents", "type": "number", "unit": "cents", "minimum": -100.0, "maximum": 100.0, "default": 0.0 }
             ]),
             audiorouter_domain::NodeKind::Plugin => json!([]),
+            audiorouter_domain::NodeKind::Volume => json!([{
+                "name": "percent",
+                "type": "number",
+                "unit": "%",
+                "minimum": 0.0,
+                "maximum": 200.0,
+                "default": 100.0
+            }]),
+            audiorouter_domain::NodeKind::BassTreble => json!([
+                { "name": "bassDb", "type": "number", "unit": "dB", "minimum": -12.0, "maximum": 12.0, "default": 0.0 },
+                { "name": "trebleDb", "type": "number", "unit": "dB", "minimum": -12.0, "maximum": 12.0, "default": 0.0 }
+            ]),
+            audiorouter_domain::NodeKind::Dehum => json!([
+                { "name": "frequencyHz", "type": "number", "unit": "Hz", "minimum": 45.0, "maximum": 65.0, "default": 60.0 },
+                { "name": "amountPercent", "type": "number", "unit": "%", "minimum": 0.0, "maximum": 100.0, "default": 50.0 },
+                { "name": "harmonics", "type": "number", "step": 1.0, "minimum": 1.0, "maximum": 8.0, "default": 4.0 }
+            ]),
+            audiorouter_domain::NodeKind::Denoise => json!([
+                { "name": "reductionPercent", "type": "number", "unit": "%", "minimum": 0.0, "maximum": 100.0, "default": 70.0 },
+                { "name": "floorPercent", "type": "number", "unit": "%", "minimum": 0.0, "maximum": 100.0, "default": 10.0 },
+                { "name": "learning", "type": "boolean", "default": false }
+            ]),
+            audiorouter_domain::NodeKind::TimeShift => json!([
+                { "name": "bufferSeconds", "type": "number", "step": 1.0, "unit": "s", "minimum": 10.0, "maximum": 120.0, "default": 60.0 }
+            ]),
+            audiorouter_domain::NodeKind::FirFilter => json!([
+                { "name": "wetPercent", "type": "number", "unit": "%", "minimum": 0.0, "maximum": 100.0, "default": 100.0 },
+                { "name": "gainDb", "type": "number", "unit": "dB", "minimum": -24.0, "maximum": 12.0, "default": 0.0 }
+            ]),
+            audiorouter_domain::NodeKind::SpeechDenoise => json!([
+                { "name": "strengthPercent", "type": "number", "unit": "%", "minimum": 0.0, "maximum": 100.0, "default": 70.0 }
+            ]),
+            audiorouter_domain::NodeKind::InputSwitch => json!([
+                { "name": "selected", "type": "string", "enum": ["a", "b"], "default": "a" },
+                { "name": "fade", "type": "string", "enum": ["normal", "slow"], "default": "normal" }
+            ]),
+            audiorouter_domain::NodeKind::Declick => json!([
+                { "name": "thresholdPercent", "type": "number", "unit": "%", "minimum": 0.0, "maximum": 100.0, "default": 50.0 }
+            ]),
+            // Per-input volume is keyed by the upstream node id, so it is
+            // described as a parameter family rather than a fixed name.
+            audiorouter_domain::NodeKind::Mixer => json!([{
+                "name": audiorouter_domain::MIXER_INPUT_VOLUME_PREFIX,
+                "namePattern": "inputVolume:<upstreamNodeId>",
+                "type": "number",
+                "unit": "%",
+                "minimum": 0.0,
+                "maximum": 100.0,
+                "default": 100.0
+            }]),
             _ => json!([]),
         }
     }
@@ -9869,8 +10704,31 @@ impl ControlPlane {
                     { "name": "semitones", "type": "number", "unit": "semitones", "minimum": -12.0, "maximum": 12.0, "default": 0.0 },
                     { "name": "cents", "type": "number", "unit": "cents", "minimum": -100.0, "maximum": 100.0, "default": 0.0 }
                 ]
-            }
+            },
+            Self::catalog_entry("volume", audiorouter_domain::NodeKind::Volume, "level"),
+            Self::catalog_entry("bassTreble", audiorouter_domain::NodeKind::BassTreble, "equalizer"),
+            Self::catalog_entry("dehum", audiorouter_domain::NodeKind::Dehum, "restoration"),
+            Self::catalog_entry("declick", audiorouter_domain::NodeKind::Declick, "restoration"),
+            Self::catalog_entry("denoise", audiorouter_domain::NodeKind::Denoise, "restoration"),
+            Self::catalog_entry("speechDenoise", audiorouter_domain::NodeKind::SpeechDenoise, "restoration"),
+            Self::catalog_entry("firFilter", audiorouter_domain::NodeKind::FirFilter, "convolution"),
+            Self::catalog_entry("timeShift", audiorouter_domain::NodeKind::TimeShift, "time"),
+            Self::catalog_entry("inputSwitch", audiorouter_domain::NodeKind::InputSwitch, "routing")
         ])
+    }
+
+    /// Catalog entry for a processor whose parameters and latency come from
+    /// the node registry, so discovery and the catalog cannot disagree.
+    fn catalog_entry(id: &str, kind: audiorouter_domain::NodeKind, category: &str) -> Value {
+        let latency = audiorouter_domain::node_registry()
+            .iter()
+            .find(|spec| spec.kind == kind)
+            .map_or(0, |spec| spec.latency_samples);
+        json!({
+            "id": id, "version": 1, "category": category,
+            "availability": { "status": "available" }, "latencySamples": latency,
+            "parameters": Self::node_parameter_schema(kind)
+        })
     }
 
     fn recovery_status(&mut self) -> Result<(usize, bool), ControlError> {
@@ -10075,6 +10933,8 @@ impl ControlPlane {
             self.native_multi_input_worker = None;
             self.native_multi_input_worker_session = None;
             self.native_multi_input_worker_generation = None;
+            #[cfg(windows)]
+            self.multi_input_application_sources.clear();
         }
         for session_id in &crashed_session_ids {
             self.deactivate_virtual_route_bridges(session_id);
@@ -10310,7 +11170,260 @@ impl ControlPlane {
         None
     }
 
+    /// Keep each application source of a running multi-input Mixer bound to
+    /// its application across restarts (CAP-06/CAP-11). Called from the
+    /// control-plane pump, never the audio callback; one process snapshot per
+    /// second bounds the cost. An exited application's input is replaced by
+    /// silence so the other sources keep playing, then reattached to the
+    /// unique matching restarted instance. Returns whether any input changed.
+    #[cfg(windows)]
+    fn maintain_multi_input_applications(&mut self, session_id: &EntityId, force: bool) -> bool {
+        let now = Instant::now();
+        let due = |source: &MultiInputApplicationSource| {
+            &source.session_id == session_id && (force || source.next_probe_at <= now)
+        };
+        if !self.multi_input_application_sources.iter().any(due) {
+            return false;
+        }
+        let applications = match audiorouter_windows_audio::enumerate_applications() {
+            Ok(applications) => applications,
+            Err(_) => {
+                for source in self.multi_input_application_sources.iter_mut().filter(|source| due(source)) {
+                    source.state = "failed";
+                    source.detail = "Windows could not check this application. AudioRouter will retry.";
+                    source.next_probe_at = now + source.retry_delay;
+                    source.retry_delay = (source.retry_delay * 2).min(APPLICATION_CAPTURE_RETRY_MAX);
+                }
+                return false;
+            }
+        };
+        let mut changed = false;
+        for index in 0..self.multi_input_application_sources.len() {
+            if !due(&self.multi_input_application_sources[index]) {
+                continue;
+            }
+            let (input_index, executable, executable_path, current_path, process_id, creation_time, mode) = {
+                let source = &self.multi_input_application_sources[index];
+                (
+                    source.input_index,
+                    source.executable.clone(),
+                    source.executable_path.clone(),
+                    source.current_executable_path.clone(),
+                    source.process_id,
+                    source.creation_time_100ns,
+                    source.mode,
+                )
+            };
+            let Some(worker) = self.native_multi_input_worker.as_mut() else {
+                return changed;
+            };
+            let silent = worker.capture_is_silent(input_index);
+            let alive = applications.iter().any(|application| {
+                application.process_id == process_id
+                    && application.creation_time_100ns == Some(creation_time)
+                    && application.executable.eq_ignore_ascii_case(&executable)
+                    && current_path.as_deref().is_some_and(|expected| {
+                        application
+                            .executable_path
+                            .as_deref()
+                            .is_some_and(|actual| actual.eq_ignore_ascii_case(expected))
+                    })
+            });
+            let update = |sources: &mut Vec<MultiInputApplicationSource>, state, detail, delay: Duration| {
+                let source = &mut sources[index];
+                source.state = state;
+                source.detail = detail;
+                source.next_probe_at = now + delay;
+            };
+            if alive && !silent {
+                update(
+                    &mut self.multi_input_application_sources,
+                    "connected",
+                    "Connected to this application. Audio flow appears when the app produces sound.",
+                    APPLICATION_CAPTURE_LIVENESS_POLL,
+                );
+                self.multi_input_application_sources[index].retry_delay = APPLICATION_CAPTURE_RETRY_MIN;
+                continue;
+            }
+            if !silent {
+                let silence = audiorouter_windows_audio::MultiInputCaptureSource::Silence(
+                    audiorouter_windows_audio::SilentCapture::new(audiorouter_engine::PROCESSING_QUANTUM_FRAMES),
+                );
+                if worker.replace_capture(input_index, silence).is_ok() {
+                    changed = true;
+                }
+            }
+            if executable_path.is_none() {
+                update(
+                    &mut self.multi_input_application_sources,
+                    "unsupported",
+                    "This app cannot be safely matched after restart. Choose it again in the node properties.",
+                    APPLICATION_CAPTURE_RETRY_MAX,
+                );
+                continue;
+            }
+            match audiorouter_windows_audio::resolve_application_restart_with_path(
+                &applications,
+                &executable,
+                executable_path.as_deref(),
+            ) {
+                Err(audiorouter_windows_audio::AudioError::ApplicationRestartNotFound { .. }) => update(
+                    &mut self.multi_input_application_sources,
+                    "app-closed",
+                    "Application is closed. Its input is silent; the other sources keep playing. AudioRouter reconnects when it starts.",
+                    APPLICATION_CAPTURE_RETRY_MIN,
+                ),
+                Err(audiorouter_windows_audio::AudioError::ApplicationRestartAmbiguous { .. }) => update(
+                    &mut self.multi_input_application_sources,
+                    "ambiguous",
+                    "More than one matching app is running. Close extra instances or choose the intended one again.",
+                    APPLICATION_CAPTURE_LIVENESS_POLL,
+                ),
+                Err(audiorouter_windows_audio::AudioError::ApplicationRestartIdentityUnavailable { .. }) => update(
+                    &mut self.multi_input_application_sources,
+                    "unsupported",
+                    "Windows cannot verify this app identity. Choose it again in the node properties.",
+                    APPLICATION_CAPTURE_RETRY_MAX,
+                ),
+                Err(_) => {
+                    let delay = self.multi_input_application_sources[index].retry_delay;
+                    update(
+                        &mut self.multi_input_application_sources,
+                        "failed",
+                        "Application capture could not be checked. Its input is silent while AudioRouter retries.",
+                        delay,
+                    );
+                    self.multi_input_application_sources[index].retry_delay =
+                        (delay * 2).min(APPLICATION_CAPTURE_RETRY_MAX);
+                }
+                Ok(application) => {
+                    let reopened = audiorouter_windows_audio::bind_application_with_path(
+                        application.process_id,
+                        &executable,
+                        application.executable_path.as_deref(),
+                        application.creation_time_100ns,
+                    )
+                    .and_then(|_| audiorouter_windows_audio::ProcessLoopbackCapture::open(application.process_id, mode));
+                    let replaced = match (reopened, self.native_multi_input_worker.as_mut()) {
+                        (Ok(capture), Some(worker)) => worker
+                            .replace_capture(
+                                input_index,
+                                audiorouter_windows_audio::MultiInputCaptureSource::ApplicationLoopback(capture),
+                            )
+                            .is_ok(),
+                        _ => false,
+                    };
+                    if replaced {
+                        changed = true;
+                        let source = &mut self.multi_input_application_sources[index];
+                        source.process_id = application.process_id;
+                        source.creation_time_100ns = application.creation_time_100ns.unwrap_or(creation_time);
+                        source.current_executable_path = application.executable_path.clone();
+                        source.retry_delay = APPLICATION_CAPTURE_RETRY_MIN;
+                        update(
+                            &mut self.multi_input_application_sources,
+                            "connected",
+                            "Connected to the restarted application. Audio flow appears when it produces sound.",
+                            APPLICATION_CAPTURE_LIVENESS_POLL,
+                        );
+                    } else {
+                        let delay = self.multi_input_application_sources[index].retry_delay;
+                        update(
+                            &mut self.multi_input_application_sources,
+                            "failed",
+                            "The app is running, but Windows could not reopen its audio. AudioRouter will retry.",
+                            delay,
+                        );
+                        self.multi_input_application_sources[index].retry_delay =
+                            (delay * 2).min(APPLICATION_CAPTURE_RETRY_MAX);
+                    }
+                }
+            }
+        }
+        changed
+    }
+
+    /// Recompile a running session's saved graph into its attached native
+    /// adapter so parameter edits are heard immediately. Returns the adapter
+    /// kind that was updated, `None` when no native adapter is attached, or an
+    /// error when the change needs a stop and fresh preparation.
+    fn republish_running_native_graph(
+        &mut self,
+        session_id: &EntityId,
+        generation: u64,
+    ) -> Result<Option<&'static str>, ControlError> {
+        if self.native_endpoint_session_is_attached(session_id) {
+            let sample_rate_hz = self
+                .native_endpoint_worker_for_session(session_id)
+                .expect("attached above")
+                .bridge()
+                .sample_rate_hz();
+            self.activate_native_graph(session_id, generation, sample_rate_hz)?;
+            return Ok(Some(self.native_adapter_kind().unwrap_or("endpoint")));
+        }
+        #[cfg(windows)]
+        if self.native_multi_input_worker_session.as_ref() == Some(session_id)
+            && self.native_multi_input_worker.is_some()
+        {
+            let session =
+                audiorouter_engine::prune_inactive_upstream(self.get_session(session_id)?).into_owned();
+            let plugin_stages =
+                self.prepare_plugin_stages(&session, audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ)?;
+            let worker_generation = self.native_multi_input_worker_generation.unwrap_or(generation);
+            let media = self.session_audio_media(&session, audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ)?;
+            let compiled = audiorouter_engine::compile_mixer_fanout_session_with_plugins_and_audio(
+                &session,
+                RuntimeGeneration::new(worker_generation),
+                &plugin_stages,
+                &media,
+            )
+            .map_err(|error| ControlError::InvalidRequest(format!("multi-input graph rejected: {error:?}")))?;
+            self.native_multi_input_worker
+                .as_mut()
+                .expect("attached above")
+                .replace_mixer_graph(compiled)
+                .map_err(|_| {
+                    ControlError::InvalidRequest(
+                        "the Mixer's sources or outputs changed; stop and press Play to apply".into(),
+                    )
+                })?;
+            return Ok(Some("multi-input"));
+        }
+        Ok(None)
+    }
+
+    /// The generation a native preparation targets: the explicit
+    /// `generation` parameter when present, otherwise the generation the
+    /// session's next `session.start` will assign. A running session has no
+    /// "next" generation for a new worker and must be stopped first.
+    fn requested_or_next_generation(
+        &self,
+        params: &Value,
+        session_id: &EntityId,
+    ) -> Result<u64, ControlError> {
+        match params.get("generation") {
+            Some(value) => value
+                .as_u64()
+                .filter(|value| *value > 0)
+                .ok_or_else(|| ControlError::InvalidRequest("generation must be a positive integer".into())),
+            None => match self.runtimes.get(session_id) {
+                Some(runtime) if runtime.state() == RuntimeState::Running => Err(ControlError::InvalidRequest(
+                    "stop the session before preparing native audio for its next start".into(),
+                )),
+                Some(runtime) => Ok(runtime.generation().saturating_add(1)),
+                None => Ok(1),
+            },
+        }
+    }
+
     fn native_adapter_kind(&self) -> Option<&'static str> {
+        if self
+            .application_capture_runtime
+            .as_ref()
+            .is_some_and(|binding| self.native_endpoint_session_is_attached(&binding.session_id))
+        {
+            return Some("process-loopback");
+        }
         if self.native_endpoint_worker.is_some() || self.native_endpoint_worker_secondary.is_some() {
             return Some("endpoint");
         }
@@ -10341,6 +11454,9 @@ impl ControlPlane {
             "running" => (
                 "available",
                 match kind {
+                    Some("process-loopback") => {
+                        "verified application audio is connected to the selected render endpoint"
+                    }
                     Some("duplex") => {
                         "native duplex audio is running; managed driver qualification remains open"
                     }
@@ -10356,6 +11472,9 @@ impl ControlPlane {
             "configured-stopped" => (
                 "unavailable",
                 match kind {
+                    Some("process-loopback") => {
+                        "application capture is prepared but stopped; the canvas shows application exit and reconnection status"
+                    }
                     Some("duplex") => {
                         "native duplex worker is prepared but stopped; start a session explicitly"
                     }
@@ -10561,7 +11680,7 @@ impl ControlPlane {
                     .into_iter()
                     .flatten()
                     .any(|entry| {
-                        entry.get("path").and_then(Value::as_str) == Some(path)
+                        scan_entry_matches_path(entry, path)
                             && entry
                                 .get("identity")
                                 .and_then(|identity| identity.get("format"))
@@ -10633,7 +11752,7 @@ impl ControlPlane {
                 .ok_or_else(|| {
                     ControlError::InvalidRequest("plugin fingerprint is missing".into())
                 })?;
-            let (_entry, root) = self
+            let (entry, root) = self
                 .plugin_inventories
                 .iter()
                 .filter_map(|(root, inventory)| {
@@ -10641,7 +11760,7 @@ impl ControlPlane {
                         .get("entries")
                         .and_then(Value::as_array)?
                         .iter()
-                        .find(|entry| entry.get("path").and_then(Value::as_str) == Some(path))?;
+                        .find(|entry| scan_entry_matches_path(entry, path))?;
                     let entry_fingerprint = entry
                         .get("identity")
                         .and_then(|identity| identity.get("sha256"))
@@ -10655,8 +11774,10 @@ impl ControlPlane {
                     )
                 })?;
             let configured_root = std::path::PathBuf::from(root);
+            // Re-inspect using the path exactly as scanned under its root.
+            let scanned_path = entry.get("path").and_then(Value::as_str).unwrap_or(path);
             let verified = audiorouter_plugin_host::inspect_binary(
-                std::path::Path::new(path),
+                std::path::Path::new(scanned_path),
                 std::slice::from_ref(&configured_root),
             )
             .map_err(|error| {
@@ -10702,6 +11823,15 @@ impl ControlPlane {
                 )
             }
             .map_err(|error| ControlError::InvalidRequest(format!("plugin worker launch failed: {error:?}")))?;
+            let mut worker = worker;
+            if let Some(state_id) = node.parameters.get("stateId").and_then(Value::as_str) {
+                // A stored state that is missing or fails verification is
+                // reported instead of silently starting from defaults.
+                let asset = self.load_plugin_state_asset(state_id, fingerprint)?;
+                worker.restore_state(asset, Instant::now()).map_err(|error| {
+                    ControlError::InvalidRequest(format!("plugin state restore failed: {error:?}"))
+                })?;
+            }
             let bridge = audiorouter_plugin_host::PluginRuntimeBridge::start(
                 worker,
                 channels,
@@ -10732,9 +11862,57 @@ impl ControlPlane {
                     "plugin parameter template rejected: {error:?}"
                 ))
             })?;
+            if let Ok(mut bridges) = self.plugin_bridges.lock() {
+                bridges.retain(|_, bridge| bridge.strong_count() > 0);
+                bridges.insert((session.id.clone(), node.id.clone()), Arc::downgrade(&bridge));
+            }
             stages.insert(node.id.clone(), bridge as Arc<dyn RealtimePluginProcessor>);
         }
         Ok(stages)
+    }
+
+    /// The live runtime bridge of a plugin node in a playing route.
+    fn plugin_bridge(
+        &self,
+        session_id: &EntityId,
+        node_id: &EntityId,
+    ) -> Result<Arc<audiorouter_plugin_host::PluginRuntimeBridge>, ControlError> {
+        self.plugin_bridges
+            .lock()
+            .ok()
+            .and_then(|bridges| bridges.get(&(session_id.clone(), node_id.clone())).and_then(std::sync::Weak::upgrade))
+            .ok_or_else(|| ControlError::InvalidRequest("the plugin is available while its route is playing".into()))
+    }
+
+    /// Read and verify a stored plugin state for the plugin binary it was
+    /// captured from.
+    fn load_plugin_state_asset(
+        &self,
+        state_id: &str,
+        plugin_sha256: &str,
+    ) -> Result<audiorouter_plugin_host::PluginStateAsset, ControlError> {
+        let storage = self
+            .storage
+            .as_ref()
+            .ok_or_else(|| ControlError::InvalidRequest("plugin state storage is unavailable".into()))?;
+        let root = storage
+            .plugin_state_directory()
+            .ok_or_else(|| ControlError::InvalidRequest("plugin state storage is unavailable".into()))?;
+        let record = storage
+            .list_plugin_states(Some(plugin_sha256))
+            .map_err(storage_error)?
+            .into_iter()
+            .find(|record| record.id == state_id)
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("the saved plugin state is missing or belongs to a different plugin binary".into())
+            })?;
+        audiorouter_plugin_host::read_state_asset(
+            &root,
+            std::path::Path::new(&record.path),
+            record.version,
+            &record.state_sha256,
+        )
+        .map_err(|error| ControlError::InvalidRequest(format!("saved plugin state is unreadable: {error:?}")))
     }
 
     pub fn commit_graph(
@@ -10876,8 +12054,21 @@ impl ControlPlane {
                 "runtime.activated",
                 Some(result.session_id.clone()),
             );
-            response["activation"] =
-                json!({ "state": "running", "generation": generation, "runtime": "fake" });
+            // Apply the saved change to the audio already playing (GRAPH-08):
+            // a parameter edit such as a Volume or Mixer input slider takes
+            // effect without Stop/Play. A topology change that the running
+            // adapter cannot absorb reports `restartRequired` instead.
+            let native = match self.republish_running_native_graph(&result.session_id, generation) {
+                Ok(Some(adapter)) => json!({ "state": "applied", "adapter": adapter }),
+                Ok(None) => Value::Null,
+                Err(error) => json!({ "state": "restartRequired", "reason": control_error_message(&error) }),
+            };
+            response["activation"] = json!({
+                "state": "running",
+                "generation": generation,
+                "runtime": if native.is_null() { "fake" } else { "native" },
+                "native": native,
+            });
         } else {
             response["activation"] = json!({ "state": "pending", "runtime": "fake" });
         }
@@ -11057,21 +12248,42 @@ impl ControlPlane {
                 self.native_render_source_taps = None;
                 return Err(error);
             }
-            let start_result = self
-                .native_endpoint_worker_for_session_mut(id)
-                .expect("native_attached implies an endpoint worker")
-                .start()
-                .map_err(audio_control_error);
-            if let Err(error) = start_result {
-                if let Some(runtime) = self.runtimes.get_mut(id) {
-                    runtime.stop();
+            #[cfg(windows)]
+            let application_waiting = self
+                .application_capture_runtime
+                .as_ref()
+                .is_some_and(|binding| binding.session_id == *id)
+                && self.maintain_application_capture(id, true)?;
+            #[cfg(not(windows))]
+            let application_waiting = false;
+            if !application_waiting {
+                let start_result = self
+                    .native_endpoint_worker_for_session_mut(id)
+                    .expect("native_attached implies an endpoint worker")
+                    .start()
+                    .map_err(audio_control_error);
+                if let Err(error) = start_result {
+                    if let Some(runtime) = self.runtimes.get_mut(id) {
+                        runtime.stop();
+                    }
+                    self.deactivate_virtual_route_bridges(id);
+                    if let Some(taps) = self.native_endpoint_taps_for_session_mut(id) {
+                        *taps = None;
+                    }
+                    self.native_render_source_taps = None;
+                    return Err(error);
                 }
-                self.deactivate_virtual_route_bridges(id);
-                if let Some(taps) = self.native_endpoint_taps_for_session_mut(id) {
-                    *taps = None;
+                #[cfg(windows)]
+                if self
+                    .application_capture_runtime
+                    .as_ref()
+                    .is_some_and(|binding| binding.session_id == *id)
+                {
+                    self.set_application_capture_state(
+                        "connected",
+                        "Connected to this application. Audio flow appears when the app produces sound.",
+                    );
                 }
-                self.native_render_source_taps = None;
-                return Err(error);
             }
             #[cfg(windows)]
             if self.native_output_fanout_session.as_ref() == Some(id)
@@ -11313,6 +12525,17 @@ impl ControlPlane {
             runtime.stop();
         }
         #[cfg(windows)]
+        if self
+            .application_capture_runtime
+            .as_ref()
+            .is_some_and(|binding| &binding.session_id == id)
+        {
+            self.set_application_capture_state(
+                "configured-stopped",
+                "Prepared for this application. Start the route to capture audio.",
+            );
+        }
+        #[cfg(windows)]
         {
             self.native_render_source_taps = None;
         }
@@ -11438,6 +12661,7 @@ impl ControlPlane {
                         "nativeSessionId": self.native_session_id().map(EntityId::as_str),
                         "schedulerTelemetry": self.native_scheduler_telemetry(),
                         "nodeTelemetry": node_telemetry,
+                        "applicationCaptureStates": self.application_capture_states(),
                         "privacyMute": {
                             "muted": self.privacy_muted,
                             "persistence": if self.storage.is_some() { "durable" } else { "memory" }
@@ -11477,6 +12701,7 @@ impl ControlPlane {
                     "audioSources.transport" => {
                         self.dispatch_audio_source_transport(request.params)
                     }
+                    "timeShift.transport" => self.dispatch_time_shift_transport(request.params),
                     "recorders.list" => self.dispatch_recorders_list(request.params),
                     "recorders.create" => self.dispatch_recorder_create(request.params),
                     "recorders.arm" | "recorders.start" | "recorders.pause"
@@ -11536,9 +12761,13 @@ impl ControlPlane {
                     }
                     "plugins.scan" => self.dispatch_plugins_scan(request.params),
                     "plugins.list" => self.dispatch_plugins_list(request.params),
+                    "plugins.inventory" => Ok(json!({ "inventories": self.remembered_plugin_inventories() })),
                     "plugins.retry" => self.dispatch_plugins_retry(request.params),
                     "plugins.inspect" => self.dispatch_plugins_inspect(request.params),
                     "plugins.parameters" => self.dispatch_plugins_parameters(request.params),
+                    "plugins.saveState" => self.dispatch_plugins_save_state(request.params),
+                    "plugins.openEditor" => self.dispatch_plugins_editor(request.params, true),
+                    "plugins.closeEditor" => self.dispatch_plugins_editor(request.params, false),
                     "virtualDevices.list" => self.dispatch_virtual_devices_list(request.params),
                     "virtualDevices.plan" => self.dispatch_virtual_devices_plan(request.params),
                     "virtualDevices.apply" => self.dispatch_virtual_devices_apply(request.params),
@@ -14250,11 +15479,7 @@ impl ControlPlane {
             .filter(|value| !value.is_empty())
             .map(EntityId::new)
             .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
-        let generation = params
-            .get("generation")
-            .and_then(Value::as_u64)
-            .filter(|value| *value > 0)
-            .ok_or_else(|| ControlError::InvalidRequest("generation is required".into()))?;
+        let generation = self.requested_or_next_generation(&params, &session_id)?;
         let endpoint_values = params
             .get("renderEndpointIds")
             .and_then(Value::as_array)
@@ -14306,11 +15531,7 @@ impl ControlPlane {
             .filter(|value| !value.is_empty())
             .map(EntityId::new)
             .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
-        let generation = params
-            .get("generation")
-            .and_then(Value::as_u64)
-            .filter(|value| *value > 0)
-            .ok_or_else(|| ControlError::InvalidRequest("generation is required".into()))?;
+        let generation = self.requested_or_next_generation(&params, &session_id)?;
         let source_values = params
             .get("sources")
             .and_then(Value::as_array)
@@ -14618,6 +15839,20 @@ impl ControlPlane {
             .map(EntityId::new)
             .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
         self.get_session(&session_id)?;
+        if !self.native_endpoint_session_is_attached(&session_id)
+            && self.native_multi_input_worker_session.as_ref() == Some(&session_id)
+        {
+            // The multi-input Mixer worker (and the outputs it owns) is
+            // released the same way, so Play can switch a stopped session to
+            // another adapter.
+            if self.runtimes.get(&session_id).is_some_and(|runtime| runtime.state() == RuntimeState::Running) {
+                return Err(ControlError::InvalidRequest(
+                    "stop the session before detaching its native multi-input worker".into(),
+                ));
+            }
+            self.detach_native_multi_input_worker()?;
+            return Ok(json!({ "sessionId": session_id, "state": "detached" }));
+        }
         if !self.native_endpoint_session_is_attached(&session_id) {
             return Err(ControlError::InvalidRequest(
                 "native endpoint worker is not attached to this session".into(),
@@ -15157,7 +16392,7 @@ impl ControlPlane {
         &self,
         path: &str,
     ) -> Result<(audiorouter_plugin_host::PluginIdentity, std::path::PathBuf), ControlError> {
-        let (root, fingerprint) = self
+        let (root, fingerprint, scanned_path) = self
             .plugin_inventories
             .iter()
             .filter_map(|(root, inventory)| {
@@ -15165,12 +16400,13 @@ impl ControlPlane {
                     .get("entries")
                     .and_then(Value::as_array)?
                     .iter()
-                    .find(|entry| entry.get("path").and_then(Value::as_str) == Some(path))?;
+                    .find(|entry| scan_entry_matches_path(entry, path))?;
                 let fingerprint = entry
                     .get("identity")
                     .and_then(|identity| identity.get("sha256"))
                     .and_then(Value::as_str)?;
-                Some((root, fingerprint))
+                let scanned_path = entry.get("path").and_then(Value::as_str)?;
+                Some((root, fingerprint, scanned_path))
             })
             .next()
             .ok_or_else(|| {
@@ -15179,8 +16415,9 @@ impl ControlPlane {
                 )
             })?;
         let root = std::path::PathBuf::from(root);
+        // Re-inspect using the path exactly as scanned under its root.
         let identity = audiorouter_plugin_host::inspect_binary(
-            std::path::Path::new(path),
+            std::path::Path::new(scanned_path),
             std::slice::from_ref(&root),
         )
         .map_err(|error| {
@@ -15199,6 +16436,98 @@ impl ControlPlane {
             ));
         }
         Ok((identity, root))
+    }
+
+    fn plugin_node_request(params: &Option<Value>) -> Result<(EntityId, EntityId), ControlError> {
+        let text = |name: &str| {
+            params
+                .as_ref()
+                .and_then(|params| params.get(name))
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty() && value.len() <= audiorouter_domain::MAX_ENTITY_ID_BYTES)
+                .map(EntityId::new)
+                .ok_or_else(|| ControlError::InvalidRequest(format!("{name} is required")))
+        };
+        Ok((text("sessionId")?, text("nodeId")?))
+    }
+
+    /// Capture a playing plugin's state from its processing instance and
+    /// store it (PLUG-04: versioned, size-limited, hashed). The caller sets
+    /// the returned `stateId` on the node so the next start restores it.
+    fn dispatch_plugins_save_state(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let (session_id, node_id) = Self::plugin_node_request(&params)?;
+        let fingerprint = self
+            .get_session(&session_id)?
+            .nodes
+            .iter()
+            .find(|node| node.id == node_id && node.kind == NodeKind::Plugin)
+            .and_then(|node| node.parameters.get("fingerprint").and_then(Value::as_str).map(str::to_owned))
+            .ok_or_else(|| ControlError::InvalidRequest("nodeId is not a plugin node in this session".into()))?;
+        let asset = self
+            .plugin_bridge(&session_id, &node_id)?
+            .save_state()
+            .map_err(|error| ControlError::InvalidRequest(format!("plugin state capture failed: {error}")))?;
+        let storage = self
+            .storage
+            .as_ref()
+            .ok_or_else(|| ControlError::InvalidRequest("plugin state storage is unavailable".into()))?;
+        let root = storage
+            .plugin_state_directory()
+            .ok_or_else(|| ControlError::InvalidRequest("plugin state storage is unavailable".into()))?;
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_nanos());
+        let state_id = format!("plugin-state-{}-{nanos}", &asset.sha256[..16]);
+        let path = audiorouter_plugin_host::write_state_asset(&root, &state_id, &asset)
+            .map_err(|error| ControlError::InvalidRequest(format!("plugin state write failed: {error:?}")))?;
+        storage
+            .save_plugin_state(&audiorouter_storage::PluginStateRecord {
+                id: state_id.clone(),
+                plugin_id: fingerprint.clone(),
+                plugin_sha256: fingerprint,
+                version: asset.version,
+                path: path.to_string_lossy().into_owned(),
+                state_sha256: asset.sha256.clone(),
+                size_bytes: asset.bytes.len() as u64,
+            })
+            .map_err(storage_error)?;
+        Ok(json!({ "sessionId": session_id, "nodeId": node_id, "stateId": state_id, "sizeBytes": asset.bytes.len() }))
+    }
+
+    /// Open or close a playing plugin's native editor. The parent window must
+    /// exist and belong to `ownerProcessId` (the worker checks it again).
+    fn dispatch_plugins_editor(&mut self, params: Option<Value>, open: bool) -> Result<Value, ControlError> {
+        let (session_id, node_id) = Self::plugin_node_request(&params)?;
+        let bridge = self.plugin_bridge(&session_id, &node_id)?;
+        if open {
+            let number = |name: &str| {
+                params
+                    .as_ref()
+                    .and_then(|params| params.get(name))
+                    .and_then(Value::as_u64)
+                    .filter(|value| *value > 0)
+            };
+            let parent_window = number("parentWindow")
+                .ok_or_else(|| ControlError::InvalidRequest("parentWindow is required".into()))?;
+            let owner_process_id = number("ownerProcessId")
+                .and_then(|value| u32::try_from(value).ok())
+                .ok_or_else(|| ControlError::InvalidRequest("ownerProcessId is required".into()))?;
+            let authorization = editor_authorization_issuer()
+                .issue(parent_window, owner_process_id)
+                .map_err(|error| ControlError::InvalidRequest(format!("editor authorization failed: {error:?}")))?;
+            bridge.open_editor(authorization).map_err(|error| {
+                ControlError::InvalidRequest(if error.contains("editorUnavailable") || error.contains("UnsupportedFeature") {
+                    "this plugin has no editor window AudioRouter can open (VST3 editors are not supported yet); use its parameters in Properties".into()
+                } else {
+                    format!("plugin editor failed to open: {error}")
+                })
+            })?;
+        } else {
+            bridge
+                .close_editor()
+                .map_err(|error| ControlError::InvalidRequest(format!("plugin editor failed to close: {error}")))?;
+        }
+        Ok(json!({ "sessionId": session_id, "nodeId": node_id, "state": if open { "open" } else { "closed" } }))
     }
 
     fn dispatch_plugins_parameters(&self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -15848,6 +17177,46 @@ impl ControlPlane {
         Ok(result)
     }
 
+    /// Drive the shared Time Shift buffer of a running node. Commands are
+    /// queued lock-free and applied by the audio thread at the next block;
+    /// the returned status therefore reflects the previous block.
+    fn dispatch_time_shift_transport(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| ControlError::InvalidRequest("sessionId, nodeId, and action are required".into()))?;
+        let text = |name: &str| {
+            params
+                .get(name)
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty() && value.len() <= audiorouter_domain::MAX_ENTITY_ID_BYTES)
+                .ok_or_else(|| ControlError::InvalidRequest(format!("{name} is required")))
+        };
+        let session_id = text("sessionId")?;
+        let node_id = text("nodeId")?;
+        let command = match text("action")? {
+            "pause" => Some(audiorouter_dsp::timeshift::TimeShiftCommand::Pause),
+            "resume" => Some(audiorouter_dsp::timeshift::TimeShiftCommand::Resume),
+            "back" => Some(audiorouter_dsp::timeshift::TimeShiftCommand::Back),
+            "forward" => Some(audiorouter_dsp::timeshift::TimeShiftCommand::Forward),
+            "live" => Some(audiorouter_dsp::timeshift::TimeShiftCommand::Live),
+            "status" => None,
+            _ => return Err(ControlError::InvalidRequest("action must be pause, resume, back, forward, live, or status".into())),
+        };
+        let state = audiorouter_engine::time_shift_state(session_id, node_id).ok_or_else(|| {
+            ControlError::InvalidRequest("Time Shift is available while its route is playing".into())
+        })?;
+        if let Some(command) = command {
+            state.post(command);
+        }
+        let status = state.status();
+        Ok(json!({
+            "sessionId": session_id,
+            "nodeId": node_id,
+            "state": if status.paused { "paused" } else if status.delay_seconds > 0.0 { "delayed" } else { "live" },
+            "delaySeconds": status.delay_seconds,
+            "bufferedSeconds": status.buffered_seconds,
+            "capacitySeconds": status.capacity_seconds,
+        }))
+    }
+
     fn dispatch_apps_list(&mut self) -> Result<Value, ControlError> {
         if let Some((captured_at, snapshot)) = &self.application_snapshot {
             if captured_at.elapsed() < APPLICATION_SNAPSHOT_TTL {
@@ -16147,6 +17516,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "audioMedia.importTemporaryRecording" => &["recordingId"],
         "audioMedia.delete" => &["mediaId"],
         "audioSources.transport" => &["sessionId", "nodeId", "action"],
+        "timeShift.transport" => &["sessionId", "nodeId", "action"],
         "recorders.list" => &[],
         "recorders.create" => &[
             "sessionId",
@@ -16216,9 +17586,12 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "nativeMultiInputs.bindBranches" => &["sessionId", "generation", "branchNodeIds"],
         "plugins.scan" => &["directory"],
         "plugins.list" => &["directory"],
+        "plugins.inventory" => &[],
         "plugins.retry" => &["directory", "idempotencyKey"],
         "plugins.inspect" => &["path"],
         "plugins.parameters" => &["path"],
+        "plugins.saveState" | "plugins.closeEditor" => &["sessionId", "nodeId"],
+        "plugins.openEditor" => &["sessionId", "nodeId", "parentWindow", "ownerProcessId"],
         "virtualDevices.list" => &["cursor", "limit"],
         "virtualDevices.plan" => &["operation"],
         "virtualDevices.apply" => &["planId", "idempotencyKey"],
@@ -19301,7 +20674,7 @@ mod tests {
             .iter()
             .any(|node| node["type"] == "virtual-render-source@1"
                 && node["availability"]["status"] == "unavailable"));
-        assert_eq!(description["processors"].as_array().unwrap().len(), 7);
+        assert_eq!(description["processors"].as_array().unwrap().len(), 16);
         assert_eq!(
             description["processors"][0]["availability"]["status"],
             "available"
@@ -19398,7 +20771,7 @@ mod tests {
             params: None,
         });
         let result = processors.result.unwrap();
-        assert_eq!(result.as_array().unwrap().len(), 7);
+        assert_eq!(result.as_array().unwrap().len(), 16);
         assert_eq!(result[0]["availability"]["status"], "available");
     }
 
@@ -24455,6 +25828,7 @@ mod tests {
         assert!(!ClientGrant::for_role(ClientRole::Operator).allows(PermissionScope::StartupWrite));
         assert!(ClientGrant::for_desktop_shell().allows(PermissionScope::StartupWrite));
         assert!(ClientGrant::for_desktop_shell().allows(PermissionScope::Record));
+        assert!(ClientGrant::for_desktop_shell().allows(PermissionScope::PluginScan));
         assert!(!ClientGrant::for_desktop_shell().allows(PermissionScope::Capture));
         assert!(!ClientGrant::for_desktop_shell().allows(PermissionScope::DeviceAdministration));
         assert!(!ClientGrant::for_role(ClientRole::Operator)
@@ -25217,5 +26591,84 @@ mod tests {
         assert!(rejected.error.is_some());
         assert!(ordinary.exists(), "ordinary recordings are not consumed");
         let _ = std::fs::remove_file(ordinary);
+    }
+}
+
+#[cfg(test)]
+mod next_generation_tests {
+    use super::*;
+
+    fn session() -> Session {
+        Session {
+            id: EntityId::new("next-generation"),
+            name: "next generation".into(),
+            schema_version: 1,
+            revision: 0,
+            nodes: vec![],
+            edges: vec![],
+        }
+    }
+
+    #[test]
+    fn native_preparation_defaults_to_the_next_start_generation() {
+        let mut plane = ControlPlane::new("next-generation");
+        let id = session().id;
+        plane.insert_session(session()).unwrap();
+        assert_eq!(plane.requested_or_next_generation(&json!({}), &id).unwrap(), 1);
+        assert_eq!(plane.requested_or_next_generation(&json!({ "generation": 5 }), &id).unwrap(), 5);
+        assert!(plane.requested_or_next_generation(&json!({ "generation": 0 }), &id).is_err());
+        plane.session_start(&id).unwrap();
+        // A running session has no next generation for a new worker.
+        assert!(plane.requested_or_next_generation(&json!({}), &id).is_err());
+        plane.session_stop(&id).unwrap();
+        assert_eq!(plane.requested_or_next_generation(&json!({}), &id).unwrap(), 2);
+    }
+}
+
+#[cfg(test)]
+mod plugin_inventory_tests {
+    use super::*;
+
+    #[test]
+    fn remembered_plugin_scans_survive_a_backend_restart() {
+        let unique = format!("{}-{:?}", std::process::id(), std::thread::current().id()).replace(['(', ')'], "");
+        let database = std::env::temp_dir().join(format!("audiorouter-plugin-inventory-{unique}.sqlite"));
+        let folder = std::env::temp_dir().join(format!("audiorouter-plugin-inventory-folder-{unique}"));
+        let _ = std::fs::remove_file(&database);
+        std::fs::create_dir_all(&folder).unwrap();
+        let directory = folder.to_string_lossy().into_owned();
+        {
+            let mut plane = ControlPlane::with_storage("first", Storage::open(&database).unwrap());
+            plane
+                .dispatch_plugins_scan(Some(json!({ "directory": directory })))
+                .unwrap();
+        }
+        let plane = ControlPlane::with_storage("second", Storage::open(&database).unwrap());
+        let remembered = plane.remembered_plugin_inventories();
+        assert_eq!(remembered.as_array().unwrap().len(), 1);
+        assert_eq!(remembered[0]["directory"], json!(directory));
+        assert!(remembered[0]["entries"].is_array());
+        drop(plane);
+        let _ = std::fs::remove_file(&database);
+        let _ = std::fs::remove_dir_all(&folder);
+    }
+}
+
+#[cfg(test)]
+mod scan_entry_path_tests {
+    use super::*;
+
+    #[test]
+    fn scan_entries_match_the_scanned_or_canonical_binary_path() {
+        let entry = json!({
+            "path": r"C:\Program Files\VSTPlugins\ReaPlugs\reaeq-standalone.dll",
+            "identity": { "binaryPath": r"\\?\C:\Program Files\VSTPlugins\ReaPlugs\reaeq-standalone.dll" }
+        });
+        // The scanned path, the canonical binary path a node may carry, and a
+        // different letter case all identify the same plugin.
+        assert!(scan_entry_matches_path(&entry, r"C:\Program Files\VSTPlugins\ReaPlugs\reaeq-standalone.dll"));
+        assert!(scan_entry_matches_path(&entry, r"\\?\C:\Program Files\VSTPlugins\ReaPlugs\reaeq-standalone.dll"));
+        assert!(scan_entry_matches_path(&entry, r"c:\program files\vstplugins\reaplugs\REAEQ-STANDALONE.dll"));
+        assert!(!scan_entry_matches_path(&entry, r"C:\Program Files\VSTPlugins\ReaPlugs\reacomp-standalone.dll"));
     }
 }

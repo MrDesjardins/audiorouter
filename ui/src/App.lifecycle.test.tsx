@@ -37,6 +37,7 @@ async function fixture(savedSession = demoSession) {
 }
 
 const sessionPanel = () => within(document.querySelector<HTMLElement>(".right-workbench")!);
+const messageBar = () => within(document.querySelector<HTMLElement>(".global-action-message")!);
 function addGain() { fireEvent.click(screen.getByRole("tab", { name: "Tools" })); fireEvent.click(sessionPanel().getByRole("button", { name: /^Gain / })); }
 function start() { fireEvent.click(within(screen.getByRole("region", { name: "Session lifecycle" })).getByRole("button", { name: "Start session" })); }
 
@@ -69,7 +70,7 @@ describe("session refresh and playback regressions", () => {
     fireEvent.change(sessionPanel().getByLabelText("Session name"), { target: { value: "My unsaved name" } });
     changeSaved();
     await act(async () => refresh());
-    await sessionPanel().findByText(/Your draft is preserved/);
+    await messageBar().findByText(/Your draft is preserved/);
     expect((sessionPanel().getByLabelText("Session name") as HTMLInputElement).value).toBe("My unsaved name");
     fireEvent.click(sessionPanel().getByRole("button", { name: "Revert edits" }));
     expect((sessionPanel().getByLabelText("Session name") as HTMLInputElement).value).toBe("Changed externally");
@@ -83,11 +84,11 @@ describe("session refresh and playback regressions", () => {
     const count = view.container.querySelectorAll(".react-flow__node").length;
     start();
     await waitFor(() => expect(backend.startSession).toHaveBeenCalledWith(demoSession.id, expect.any(String), expect.objectContaining({ nodes: expect.arrayContaining([expect.objectContaining({ kind: "gain" })]) })));
-    await sessionPanel().findByText(/Temporary preview is running.*saved session is unchanged/);
+    await messageBar().findByText(/Temporary preview is running.*saved session is unchanged/);
     await act(async () => refresh());
     await waitFor(() => expect(backend.snapshot.mock.calls.length).toBeGreaterThan(1));
     expect(view.container.querySelectorAll(".react-flow__node").length).toBe(count);
-    expect(sessionPanel().getByText(/Temporary preview is running/)).toBeTruthy();
+    expect(messageBar().getByText(/Temporary preview is running/)).toBeTruthy();
     expect((await backend.snapshot()).session.revision).toBe(demoSession.revision);
   });
 
@@ -99,13 +100,13 @@ describe("session refresh and playback regressions", () => {
     const count = view.container.querySelectorAll(".react-flow__node").length;
     fireEvent.click(screen.getByRole("tab", { name: "Session" }));
     fireEvent.click(within(document.querySelector<HTMLElement>(".topbar")!).getByRole("button", { name: "Save" }));
-    await sessionPanel().findByText(/Route saved/);
+    await messageBar().findByText(/Route saved/);
     start();
     await waitFor(() => expect(backend.startSession).toHaveBeenCalledWith(demoSession.id, expect.any(String)));
-    await sessionPanel().findByText(/Audio session is running/);
+    await messageBar().findByText(/Audio session is running/);
     await act(async () => refresh());
     expect(view.container.querySelectorAll(".react-flow__node").length).toBe(count);
-    expect(sessionPanel().getByText(/Audio session is running/)).toBeTruthy();
+    expect(messageBar().getByText(/Audio session is running/)).toBeTruthy();
   });
 
   it("guides users to Devices without starting a simulated session when audio is unprepared", async () => {
@@ -114,7 +115,7 @@ describe("session refresh and playback regressions", () => {
     render(<App backend={backend} />);
     await waitFor(() => expect(backend.listSessions).toHaveBeenCalled());
     start();
-    await sessionPanel().findByText(/No audio started. Select the speaker or headphone device/);
+    await messageBar().findByText(/No audio started. Select the speaker or headphone device/);
     expect(screen.getByRole("tab", { name: "Tools" }).getAttribute("aria-selected")).toBe("true");
     fireEvent.click(screen.getByRole("tab", { name: "Devices" }));
     expect(screen.getByRole("tab", { name: "Devices" }).getAttribute("aria-selected")).toBe("true");
@@ -126,7 +127,7 @@ describe("session refresh and playback regressions", () => {
     render(<App backend={{ ...backend, startSession: async () => ({ sessionId: demoSession.id, state: "running", generation: 1, runtime: "fake" }) }} />);
     await waitFor(() => expect(backend.listSessions).toHaveBeenCalled());
     start();
-    await sessionPanel().findByText(/No audio played/);
+    await messageBar().findByText(/No audio played/);
     expect(backend.stopSession).toHaveBeenCalledWith(demoSession.id, expect.any(String));
     expect(screen.queryByText(/Audio session is running/)).toBeNull();
   });

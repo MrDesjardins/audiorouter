@@ -16,6 +16,8 @@ use tauri::{
 mod backend_supervisor;
 #[cfg(windows)]
 mod os_transition_windows;
+#[cfg(windows)]
+mod plugin_editor_windows;
 mod startup;
 
 use backend_supervisor::{BackendRestartDecision, BackendSupervisor};
@@ -233,6 +235,66 @@ fn rpc_request(
         }
     }
     response
+}
+
+/// Open a playing plugin node's own editor in a native window owned by this
+/// shell. The backend authorizes the window for this process and asks the
+/// isolated worker to create the editor inside it; closing the window closes
+/// the editor and applies its edits to the audio instance.
+#[tauri::command]
+fn open_plugin_editor(
+    session_id: String,
+    node_id: String,
+    title: String,
+    state: State<'_, ShellState>,
+) -> Result<JsonRpcResponse, String> {
+    #[cfg(windows)]
+    {
+        let request = |method: &str, extra: serde_json::Value| {
+            let mut params = serde_json::json!({ "sessionId": session_id, "nodeId": node_id });
+            if let (Some(params), Some(extra)) = (params.as_object_mut(), extra.as_object()) {
+                params.extend(extra.clone());
+            }
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(serde_json::json!(format!("plugin-editor-{method}"))),
+                method: method.into(),
+                params: Some(params),
+            }
+        };
+        let opened = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let close_request = request("plugins.closeEditor", serde_json::json!({}));
+        let close_pipe = state.pipe_name.clone();
+        let close_opened = std::sync::Arc::clone(&opened);
+        let title = if title.trim().is_empty() { "Plugin editor".to_owned() } else { title.chars().take(120).collect() };
+        let window = plugin_editor_windows::open_host_window(
+            &format!("{title} — AudioRouter"),
+            800,
+            600,
+            Box::new(move || {
+                if close_opened.load(std::sync::atomic::Ordering::Acquire) {
+                    let response = forward_rpc_request(&close_request, &close_pipe);
+                    log_shell_rpc(&close_request, &response);
+                }
+            }),
+        )?;
+        let open_request = request(
+            "plugins.openEditor",
+            serde_json::json!({ "parentWindow": window as u64, "ownerProcessId": std::process::id() }),
+        );
+        let response = forward_rpc_request(&open_request, &state.pipe_name);
+        log_shell_rpc(&open_request, &response);
+        match &response {
+            Ok(result) if result.error.is_none() => opened.store(true, std::sync::atomic::Ordering::Release),
+            _ => plugin_editor_windows::close_host_window(window),
+        }
+        response
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (session_id, node_id, title, state);
+        Err("plugin editors are only available on Windows".into())
+    }
 }
 
 fn write_probe_marker(path: &std::path::Path, contents: &[u8]) -> Result<(), String> {
@@ -652,6 +714,9 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                             // to the current user's local control surface;
                             // device administration and capture remain opt-in.
                             PermissionScope::StartupWrite,
+                            // Metadata scans of chosen plugin folders were
+                            // authorized for the local shell on 2026-09-25.
+                            PermissionScope::PluginScan,
                             PermissionScope::DeviceAdministration,
                         ])
                     } else if enrollment
@@ -907,6 +972,7 @@ fn main() {
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             rpc_request,
+            open_plugin_editor,
             session_id,
             mcp_activity_list,
             backend_diagnostics_list,

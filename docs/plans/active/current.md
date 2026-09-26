@@ -10,7 +10,91 @@ AudioRouter-owned kernel driver, PortCls activation, production signing, and
 clean-machine driver qualification are deferred; they remain documented
 requirements but are not active completion gates for this plan.
 
-## Current implementation task — media source and Test Signal usability (2026-09-22)
+## Current implementation task — per-source volume, Mixer reconnect, advanced tools (2026-09-25)
+
+- **Objective:** (1) Let a Mixer route that includes application sources run
+  from Play and reconnect a restarted application without stopping the other
+  sources. (2) Add native per-source volume: a one-in/one-out **Volume** tool
+  (0–200 %), and per-input Mixer volume sliders (0–100 %) on the node face and
+  in the inspector. (3) Add native equivalents of the Audio Hijack advanced
+  blocks: Declick, Dehum, Denoise (learned noise profile), FIR Filter (impulse
+  response), Input Switch (A/B with 0.5 s / 2 s crossfade), Speech Denoise,
+  Sync, and Time Shift (pause / jump back / jump forward / live).
+- **Requirements:** GRAPH-02/04/05/08/13/15; DSP-01/04/05/07/08; CAP-06/11/13;
+  UI-01/02/04/05/09; API parameter validation (10-api). New DSP IDs are added to
+  `docs/spec/07-processing.md` as each tool lands (DSP-10 onward).
+- **Reference:** Rogue Amoeba Audio Hijack manual, "Advanced blocks" and the
+  Mixer block (fetched 2026-09-25). Its behavior is a UX reference only; no code
+  or assets are used.
+- **Prerequisites and constraints:** No new crates. `microfft` 0.6 (already
+  locked through `pitch_shift`, `size-1024`) provides the FFT for STFT tools and
+  uniformly partitioned convolution. All realtime state is preallocated at
+  compile time, with no allocation, locks or I/O in the callback. Parameter
+  changes ramp (default 10 ms). Cloud inference is not permitted (AGENTS.md).
+  Live audio acceptance needs attended Windows evidence; portable tests are not
+  Windows evidence.
+- **Decisions:**
+  - **D1 — Sync is the existing Delay (DSP-05, 0–1000 ms).** It is presented in
+    the tool library as "Sync (delay)" instead of a duplicate node kind.
+  - **D2 — Volume is a new `volume` node kind.** `percent` runs 0–200 on a
+    linear scale, click-free ramp. It is kept separate from `gain` (dB) because
+    the user asked for percentage-based per-source volume.
+  - **D3 — Mixer per-input volume.** Stored as Mixer parameters
+    `inputVolume:<upstreamNodeId>` (0–100 %, default 100) and applied as a
+    ramped per-input gain inside `MixerStage`. The default is unity when
+    absent; stale keys are ignored by compile and removed by the UI when an
+    input is disconnected.
+  - **D4 — Per-input chains.** The Mixer compilers accept a linear processor
+    chain between each source and the Mixer (Volume, Gain, EQ, Sync, …),
+    compiled per input. This makes Volume usable in multi-source routes.
+  - **D5 — Speech Denoise is local.** It is a speech-band-weighted spectral
+    Wiener filter with minimum-statistics noise tracking, not a machine
+    learning model. The UI and spec say so. Adopting a local ML model (for
+    example RNNoise) would need a separate dependency and licence decision.
+  - **D6 — Stateful tools.** Denoise "learn noise", Time Shift transport and
+    Input Switch selection are control RPCs, like the Audio File transport.
+    They reach the callback through lock-free atomics.
+  - **D7 — Bounds.** FIR impulse response ≤ 2 s (stored as audio media and
+    decoded off the callback). Time Shift buffer ≤ 120 s, preallocated. Dehum
+    fundamental is 50 or 60 Hz ±5 Hz, with up to 8 harmonics.
+- **Ordered tasks:**
+  1. Volume node end to end (domain, engine and DSP, discovery, contracts, UI
+     library, inspector slider, node-face slider).
+  2. Mixer per-input volume: `MixerStage` ramped per-input gains, domain
+     validation, node-face and inspector sliders.
+  3. Per-input chains in the Mixer compilers (D4).
+  4. Play prepares `nativeMultiInputs.prepare` for mixed routes. Add a
+     multi-input application-capture runtime that replaces only the exited
+     source's capture and keeps other inputs live; the source is silent while
+     its application is closed.
+  5. Sync presentation (D1); Dehum; Declick.
+  6. Input Switch (two inputs, crossfade).
+  7. Denoise with learned profile; Speech Denoise (D5).
+  8. FIR Filter with impulse-response media.
+  9. Time Shift with transport RPCs.
+  10. Spec and docs updates, then attended acceptance.
+- **Validation matrix:** DSP unit tests per tool: unity and bounds, ramp
+  continuity, NaN/denormal safety, and a known-signal response (hum notch
+  depth, click repair, noise reduction on synthetic noise, FIR impulse
+  identity, delay alignment, Time Shift jump positions). Engine compile tests
+  for per-input chains and pruning. Domain validation tests for every new
+  parameter. Control tests for the multi-input reconnect state machine using
+  portable resolver fixtures. UI tests for the library entries, sliders and
+  Play routing. Attended: Discord + microphone + Test Signal through Volume
+  into the Mixer with a Discord restart.
+- **Evidence:** this plan; `docs/plans/active/evidence/M05-visual-editor.md`
+  for UI; `M02-audio-engine.md` for live routes.
+- **Risks:** Per-input chains increase callback work; a per-input processing
+  budget is enforced through the existing realtime cost classes. STFT tools add
+  latency (≈21 ms at 1024/48 kHz), which must be disclosed as
+  `latency_samples`. A long FIR costs CPU, which the 2 s bound limits. Replacing
+  a single multi-input capture must not glitch the other inputs.
+- **Rollback:** Each task is independently revertible. New node kinds are
+  additive; removing a kind requires migrating saved sessions that use it, so
+  the kinds ship only after their tests pass.
+- **Next action:** Task 1 (Volume node).
+
+## Previous implementation task — media source and Test Signal usability (2026-09-22)
 
 - **Objective:** Add a graph-native WAV/MP3 playback source with play/pause/stop,
   looping, and an explicit temporary voice-recording workflow for calibration;
@@ -3261,3 +3345,672 @@ two-worker backend trial, then detached successfully. Neither route was
 started; that evidence is not a same-session qualification. Command outcomes,
 limitations, and the next acceptance scenario are recorded in
 [2026-09-24 route review evidence](evidence/2026-09-24-siege-mic-route-review.md).
+
+### 2026-09-24 application-capture picker discoverability and theme
+
+Objective: make the application-source picker easy to find in the right Tools
+tab, style its native application selector for the active theme, and explain
+that Application Capture is a source into the graph rather than a way to inject
+audio into another application. Requirements: UI-01/09/11, CAP-05/06/09.
+Prerequisites: existing application inventory, process-loopback worker, and
+virtual endpoint routing remain unchanged. The user screenshot shows the
+picker action above the tool search and a dark-theme selector whose option list
+is unreadable.
+
+Decisions: move the application picker action into the Inputs group, give it a
+distinct app-to-graph icon and short supporting label, and scope native
+select/option colors and `color-scheme` to the picker dialog for dark, light,
+and high-contrast themes. Explain in the picker that application capture is
+input-only; sending processed audio into an app requires an Output device node
+targeting an installed virtual playback endpoint and selecting its paired
+capture endpoint in that app. Do not imply that AudioRouter can directly
+assign a process output or that this workflow needs AudioRouter's deferred
+managed driver when using an existing VB-Cable/Voicemeeter endpoint.
+
+Ordered tasks: (1) place the application source action under Inputs in the
+Tools tab and keep its icon/helper copy; (2) theme the picker select and native options with readable contrast;
+(3) clarify one-way application capture and virtual-endpoint output in the
+picker/source guidance; (4) inspect the diff and run available non-test static
+checks.
+Validation: review the rendered UI if a browser surface is available, inspect
+the final source diff, and run `git diff --check`. Do not claim attended shell
+or live audio evidence from a source-only review.
+
+Risk: Windows native option-list rendering can differ from the select control;
+set both `color-scheme` and explicit option foreground/background colors.
+Rollback: revert only the picker markup, scoped styles, and this plan entry; no
+graph schema, backend, device, or session changes are involved. Next: complete
+the UI adjustment and report that Application Capture only contributes audio
+to an AudioRouter input path.
+
+Outcome: the Tools sidebar search is separate from the application-source
+action, which sits under the Inputs group with a window/audio icon and a concise
+description. Code inspection confirmed the chooser directly creates the
+`applicationCapture` graph node; the separate disabled “Application capture”
+catalog card had no independent behavior and duplicated the chooser. It has
+been removed from the tool catalog. The chooser and source guidance distinguish
+input capture from sending route audio through an installed virtual output.
+The application-picker select and options use theme-aware foreground,
+background, and native color-scheme settings for dark, light, and high-contrast
+themes. Per the user's follow-up, the chooser was moved from the Add tools intro
+into the Inputs group. Removal of the redundant catalog entry is the current
+change; verification is recorded below.
+
+### 2026-09-24 application process exit and restart reconnection plan
+
+Objective: keep an application-capture graph source configured when its target
+application exits, show its stopped/reconnecting/connected state, and resume
+capture automatically when exactly one safely verified matching application
+instance starts again. Requirements: CAP-05/06/11/13, GRAPH-09/14/15,
+API-04/08, UI-04/08/15, NFR-08.
+
+Evidence and gap: `appendApplicationCaptureNode` currently persists executable,
+optional executable path, and (when available) the selected PID plus process
+creation time. The native worker preparation path binds to that exact instance.
+`resolve_application_restart_with_path` already provides a unique-match
+resolver, but code search found no product-runtime caller. Canvas rendering has
+no process-liveness state, and application inventory refreshes on general
+snapshot events rather than reliably reporting each app source's lifecycle.
+The picker currently tells users that restart requires deliberate
+re-selection, which conflicts with CAP-06's unique verified restart binding.
+
+Decisions: persist a restart-safe selector based on verified executable and
+full path identity; treat PID and creation time as the current instance lease,
+never as the saved selector. On exit, preserve the node and route, report that
+source as stopped/silent, and stop or release only that process-capture worker.
+Reconnect with bounded backoff and process/session notifications where
+available. Rebind automatically only when one candidate matches the verified
+selector. Keep the source silent and report an actionable ambiguous state when
+there are zero or multiple matches, path/identity cannot be verified, or the
+process is unsupported. Never broaden a selected-instance source to all
+instances, bind by basename alone, or fall back to a microphone/endpoint.
+Expose per-node lifecycle through the versioned backend snapshot/event contract
+so the canvas can show Stopped, Reconnecting, Connected, Ambiguous, and
+Unsupported distinctly. Signal-flow animation still requires fresh audio
+telemetry; process presence alone must not animate a route.
+
+Ordered tasks: (1) trace current Windows process observation, worker ownership,
+session generation, and API event/snapshot pathways; map the current node
+selector and policy semantics; (2) add a bounded backend lifecycle/rebind state
+machine using verified executable plus full-path identity and unique-match
+resolution, with exact creation-time checks against PID reuse; release only the
+exited source worker and recover it without restarting unrelated sources where
+the existing session activation policy permits; (3) publish privacy-safe
+per-source lifecycle transitions and actionable errors through the shared API;
+(4) show status on the canvas and in Properties, retaining the node and keeping
+meters/edge animation inactive until fresh signal arrives; correct picker help
+text to describe automatic unique-match reconnection and manual ambiguity
+resolution; (5) add regressions for exit, unique restart, multiple matching
+instances, PID reuse, executable/path mismatch, unsupported/protected process,
+backoff bounds, repeated crash/restart, and unaffected parallel route paths;
+(6) qualify Discord and Siege close/reopen behavior on Windows with exact
+process identity and audio evidence, plus API/UI acceptance and documentation.
+
+Prerequisites: Windows process notification or a measured bounded inventory
+polling strategy; exact application identity from the existing inventory;
+backend worker lifecycle control; Windows machine with Discord/Siege available
+for attended acceptance. Hardware and a driver are not required for process
+loopback, but live source audio still needs an authorized output route.
+
+Validation matrix: backend transition tests cover exit without node deletion,
+unique verified restart, ambiguous duplicate instances, stale PID reuse,
+identity/path mismatch, process crash loops, bounded reconnect cadence, and
+per-path failure isolation. Contract tests verify stable status/event fields
+and redaction. UI checks verify clear text/icon status, no false signal animation
+while the app is merely open, and fresh meter-driven animation after audio
+resumes. Windows acceptance records OS/app versions, selector path, observed
+PID/creation-time changes, lifecycle events, capture/render meters before exit
+and after restart, and confirms unrelated routes remain healthy. A portable
+simulation is not Windows reconnection evidence.
+
+Risks: process-loopback support and inventory visibility vary by app and Windows
+state; matching by executable path can still yield multiple legitimate
+instances. Rebinding must not widen capture scope or restart the whole graph
+unexpectedly. A source-only failure policy must align with CAP-13's declared
+all-or-nothing activation policy. Process notifications may be unavailable or
+missed, so any polling fallback needs bounded rate and stale-state behavior.
+
+Rollback: disable automatic worker rebind while retaining the graph node and
+explicit stopped/ambiguous status; preserve the last verified selector and
+existing exact-instance preparation path. Do not delete or rewrite user graph
+nodes during recovery.
+
+Next action: after implementation and portable verification, run the attended
+Windows close/reopen acceptance with Discord and Siege only when those apps can
+be safely restarted without interrupting the user's active work. Do not claim
+live restart recovery until that acceptance passes.
+
+Implementation started on 2026-09-24. Trace confirmed the current application
+route uses one `ProcessLoopbackWorker` attached to a session and an explicitly
+selected render endpoint. It can be restarted with a newly verified capture
+client while retaining the graph scheduler/render binding. The runtime helper
+for unique process matching exists but has no caller. The initial implementation
+will use a bounded one-second process-inventory poll while that worker is
+running (no process-start notification integration exists yet), then apply a
+capped retry delay if verified activation fails. Per-source lifecycle will be
+carried in the existing versioned diagnostics snapshot and refreshed by the
+existing one-second UI diagnostics poll; no audio payload or executable path
+will be added to that status. This implementation preserves the existing
+single application-worker/topology limitation and does not claim independent
+multi-path processing.
+
+Implementation update on 2026-09-24: added a one-second lifecycle poll on the
+control-plane pump, exact PID plus creation-time exit detection, and automatic
+reattachment through the existing process-loopback worker while retaining the
+compiled graph and render endpoint. Rebind requires the persisted executable
+and full path; the worker stream reset clears queued audio before resumed
+playback. The diagnostics snapshot and `application.captureStateChanged` event
+report privacy-safe per-node states, and canvas nodes/edges remain inactive
+until the source is connected and new audio telemetry arrives. Errors are
+bounded/retried with a one-second to five-second backoff. Windows inventory now
+includes parent PID internally so same-image child processes (as in
+Electron/Chromium apps) fold under a unique matching root; independent roots
+remain ambiguous. The Discord process inventory showed several same-path
+processes, so this root grouping was added before considering the matcher safe
+for common desktop apps. We did not terminate the live Discord process.
+
+Verification on 2026-09-24: `cargo test -p audiorouter-windows-audio --locked`
+passed (91 tests), `cargo test -p audiorouter-control --locked` passed (185
+passed, 4 ignored), UI `npm.cmd run typecheck` passed, UI `npm.cmd test` passed
+(315 tests), and `git diff --check` passed. Windows machine was available, but the live Discord
+close/reopen and audio-resumption acceptance was not run to avoid interrupting
+the user's active process. `cargo fmt --check` reports formatting differences
+across the workspace, including existing and touched code; applying workspace
+formatting would produce unrelated churn, so it was not applied. `rtk` is not
+installed in this environment.
+
+Remaining risk/gate: process tree identity grouping and lifecycle are covered
+by portable regression tests, but real Discord/Siege restart, process-loopback
+audio after rebind, and unrelated live-route continuity still require attended
+Windows evidence. Per-source unsupported states are actionable and fail closed;
+CAP-13 all-or-nothing route compatibility remains to be confirmed during that
+acceptance.
+
+Attended test setup on 2026-09-24: the saved `desktop-session` was inspected
+read-only and contains a physical-input/test-signal/mixer/physical-output graph,
+not an application-capture source. To preserve it, a byte-identical database
+copy was made under the ignored `target/discord-test-profile/` workspace path,
+and a separate temporary `Discord reconnect check (temporary)` session was
+added there with a selected Discord root identity and physical output. The
+main LocalAppData database was not modified. The updated debug shell was built
+and launched against this isolated profile. No session-start or reconnect
+evidence has been recorded yet; next action is to select that temporary session
+in the visible UI, choose the Focusrite render endpoint if prompted, start it,
+and observe the connected/closed/reconnected states while Discord is restarted.
+
+Attended Discord restart attempt on 2026-09-25: the rebuilt debug shell (PID
+4248) was launched with `AUDIOROUTER_DATABASE` pointed at
+`target/discord-test-profile/state.sqlite`, and the user closed and reopened
+Discord several times. No UI change was observed. The shell log
+(`%LOCALAPPDATA%\AudioRouter\logs\shell.jsonl`) shows that the UI stayed on
+`desktop-session`, and no `sessions.start` was issued for
+`discord-reconnect-check`, so the lifecycle poll was never exercised. That
+restart attempt therefore produced no reconnect evidence. Separately, Discord
+self-updated during the restarts, moving from `app-1.0.9258\Discord.exe` to
+`app-1.0.9259\Discord.exe`. `resolve_application_restart_with_path` requires
+an exact persisted full-path match, so even a started session would report
+`ApplicationRestartNotFound` and would not reattach after an update of a
+Squirrel-style versioned install. Whether restart identity may accept a
+version-directory change needs a decision before any change is made, because
+the exact-path rule is deliberately fail-closed.
+
+UI follow-up on 2026-09-25 (attended feedback, UI-04): (1) the
+application-capture inspector now has an application selector
+(`ApplicationCaptureBinding` in `ui/src/App.tsx`, backed by
+`rebindApplicationCaptureNode` in `ui/src/draft.ts`). It swaps executable,
+path, policy, PID and creation time as one undoable draft change and keeps the
+node id, connections and other parameters. The selector is disabled while the
+session runs. (2) The "Add an application capture source" picker previously
+listed only processes with `captureCapability === "observed"`, which means a
+*microphone* session, so Discord disappeared once it was restarted outside a
+call. Process loopback captures what an app plays, so the picker and inspector
+now list every running application via `applicationCaptureChoices`. Processes
+with audio sessions come first, and other same-path helper processes fold into
+their earliest-created instance. (3) New application-capture nodes are created
+enabled; they were disabled before, which drew the connection as an
+unexplained orange dash. Capture still begins only when the session is
+explicitly started. The canvas legend is now a per-state list with line
+samples. Verification: UI `npm.cmd run typecheck` passed and `npm.cmd test`
+passed (319 tests, including new rebind, choice-grouping and legend-coverage
+regressions). Attended visual check in the running debug shell is still
+pending.
+
+Attended follow-up on 2026-09-25: Play returned `permissionDenied` for
+`nativeEndpoints.prepare` (`DeviceAdministration`) because the shell had been
+launched without the documented `AUDIOROUTER_ALLOW_DEVICE_ADMIN=1` opt-in. It
+was relaunched with that opt-in against the same isolated database (PID 69308,
+stderr confirms the grant). The node header chip previously showed a generic
+"ready" for every enabled node, which contradicted a disconnected application
+source. `nodeHeaderState` in `ui/src/SessionFlowCanvas.tsx` now shows
+application-source states: live, reconnecting, stopped, app closed, pick
+instance, pick app, retrying, not prepared. Non-live states use an attention
+style. UI typecheck passed, and `npm.cmd test` passed (321 tests).
+
+Open decision: the user proposed reconnecting by application name when a
+restarted process has a new PID. While a session runs, the backend already
+re-resolves by executable plus exact path and a unique root. The remaining
+gaps are (a) prepare with a saved PID that has exited, which fails instead of
+using the same resolver, and (b) Squirrel-style version-folder path changes.
+(b) relaxes the fail-closed identity rule, so it needs an explicit decision
+record before implementation.
+
+Decision on 2026-09-25 (user-approved, CAP-06): application restart identity
+now accepts a self-updated version directory. `resolve_application_restart_with_path`
+(`crates/windows-audio/src/lib.rs`) prefers an exact persisted full-path
+match. Only when no exact path is running does it accept a path that differs in
+exactly one `app-<digits[.digits]>` directory, with an identical file name,
+depth and all other components. The unique-root/ambiguity rules still apply,
+and pure name matching was declined as unsafe. Preparing a source whose saved
+PID has exited now falls back to the same resolver through
+`bind_application_or_restarted`. This covers `nativeApplications.prepare` and
+the application sources of `nativeMultiInputs.prepare`. A reused PID for a
+different executable still fails closed because the resolver re-verifies
+name, path and creation time. The application-capture runtime tracks
+`current_executable_path` separately from the persisted selector, so a
+reconnected process in a new version folder is not re-detected as exited on
+every liveness poll. Spec CAP-06 was updated. AGENTS.md now makes the attended
+launch recipe `AUDIOROUTER_DATABASE` plus `AUDIOROUTER_ALLOW_DEVICE_ADMIN=1`
+(user preference).
+Verification: `cargo test -p audiorouter-windows-audio --locked` passed (92,
+including the new `restart_binding_follows_one_self_updated_version_directory`),
+and `cargo test -p audiorouter-control --locked` passed (185 passed, 4 ignored).
+Live Discord close/reopen/update acceptance is still pending attended evidence.
+
+Attended follow-up on 2026-09-25 (Play with application capture): Play always
+prepared the physical capture/render pair (`nativeEndpoints.prepare`).
+`session.start` then rejected a graph that contained an application source
+(`UnsupportedTopology` in the shell log). Mixing mic + Test Signal + Discord
+into one Mixer is also beyond the current engine's compile topologies. The UI
+also never pumped a `process-loopback` adapter, so the backend's
+liveness/reconnect maintenance (run inside `nativeEndpoints.pump`) could not
+run from the canvas. Changes: `applicationOnlyRouteSource` (`ui/src/draft.ts`)
+detects a saved route whose only enabled source is one bound application.
+`startSession` then prepares `nativeApplications.prepare` (include tree,
+exact output from Physical Output Properties) instead of the endpoint pair,
+detaching any stale worker for that session first. `selectNativePump` maps
+`process-loopback` to the endpoint pump. The picker now shows one entry per
+executable path (the earliest-created instance, normally the tree root)
+instead of one per audio-session helper process. UI typecheck passed, and
+`npm.cmd test` passed (323 tests). Mixed application + physical/test-signal
+routes still require the Many-input panel and do not reconnect automatically.
+Attended Discord evidence is still pending.
+
+Attended follow-up on 2026-09-25 (message visibility): the user retried Play
+on `desktop-session`, whose mic and Test Signal sources are still enabled
+beside Discord. Play therefore took the endpoint path and hit the generic
+`UnsupportedTopology` message again. The top message bar also showed action
+messages only on the Properties tab; other tabs placed them in a small
+sidebar line and showed the default "Connect a source…" hint on top.
+Changes: the top bar (`global-action-message`) is now the single location for
+action messages on every tab. It carries the sidebar's Replace input
+connection / Open Devices / Open Session actions and a dismiss button, and the
+duplicate sidebar copy was removed. `actionMessageTone` (`ui/src/actionMessage.ts`)
+classifies failure phrasing so errors render red with an icon and
+`role="alert"`, in the dark, light and high-contrast themes. Play now blocks a
+route that mixes an application source with other enabled sources, and says
+which sources to turn off (`mixedApplicationRouteOtherSources`), instead of
+reaching the engine's generic topology error. Lifecycle tests that located
+messages inside the sidebar now read the top bar. UI typecheck passed, and
+`npm.cmd test` passed (325 tests).
+
+Attended follow-up on 2026-09-25 (disabled sources on a Mixer): the saved
+`desktop-session` (revision 16) had its microphone and Test Signal disabled
+but still wired into `mixer-1` by enabled edges, beside the enabled Discord
+source. The shell log showed the old endpoint path (`nativeEndpoints.rebind`
+then `session.start` returning `UnsupportedTopology`), so the WebView was
+still running pre-change JS. Hot reload had not applied, and the shell was
+restarted. Separately, the general compiler counts every enabled edge, so a
+Mixer fed by disabled sources is rejected as a multi-input topology even when
+only one source is live. Added `audiorouter_engine::prune_inactive_upstream`,
+which iteratively removes disabled nodes with no live enabled input, together
+with their edges. The control plane applies it in
+`compile_session_graph_with_audio` only when this session's attached adapter
+is the process-loopback application worker. Endpoint routes deliberately keep
+disabled physical inputs, because their mute stage silences the microphone
+that worker really captures (privacy). Verification:
+`cargo test -p audiorouter-engine --locked` passed (126, including the new
+`pruning_drops_only_disabled_sources_nothing_feeds`), and
+`cargo test -p audiorouter-control --locked` passed (185 passed, 4 ignored).
+The debug shell was rebuilt and relaunched with the standard recipe.
+
+Attended acceptance on 2026-09-25, Discord restart while the route runs
+(user-observed success). Environment: Windows 11 Home 10.0.26200, debug shell
+PID 35308 launched with `AUDIOROUTER_DATABASE=target/discord-test-profile/state.sqlite`
+and `AUDIOROUTER_ALLOW_DEVICE_ADMIN=1`, and Discord
+`...\Discord\app-1.0.9259\Discord.exe`. Route: saved `desktop-session`
+revision 16, with Discord application capture into `mixer-1` into the
+physical output, and the microphone and Test Signal disabled but still wired.
+The shell log (`%LOCALAPPDATA%\AudioRouter\logs\shell.jsonl`, processId 35308)
+records `nativeApplications.prepare` ok, `session.start` generation 1 ok, a
+user `session.stop`, and `session.start` generation 2 ok. The user then quit
+and reopened Discord. The new Discord root started at 17:22:08 as PID 83496
+(the node was saved with PID 24264), and no further start or prepare RPC was
+issued. The user reported that the route reconnected and audio resumed
+("it worked"). Per-pump RPCs are not written to the shell log, so the node
+state transitions are user-observed rather than logged.
+Still unverified live: reconnect across a Discord self-update into a new
+`app-<version>` folder (covered only by the portable resolver test); mixed
+application + physical/Test Signal routes, which remain Many-input-only
+without automatic reconnect; and Siege close/reopen. Next action: exercise a
+Discord version-folder update when one is available, then decide whether
+mixed application routes should run from Play (a multi-input worker with the
+reconnect runtime).
+
+Progress on 2026-09-25, tasks 1–2 (Volume tool, Mixer per-input volume):
+- Added a `volume` node kind: domain registry and `percent` validation 0–200;
+  the engine compiles it to a linear `Gain` stage and allows it wherever Gain
+  is a pass-through/bypass processor; discovery advertises `percent`.
+- Added Mixer `inputVolume:<upstreamNodeId>` (0–100) through
+  `audiorouter_domain::mixer_input_volume`. It is applied by scaling the input
+  matrix in every mixer compile path: the linear single-live-input path,
+  `compile_mixer_session`, `compile_mixer_fanout_session_with_plugins`, and
+  the capture + Test Signal mixer.
+- UI: Volume library entry, defaults and node-face fader. Mixer node-face
+  per-input faders and a "Mixer inputs" inspector section (`mixerInputs`,
+  `mixerInputVolumeKey` in `ui/src/draft.ts`). The generic parameter editor
+  skips parameter families. Delay is presented as "Sync (delay)" (D1), and its
+  canvas fader range is corrected from 0–2000 to the backend's 0–1000 ms.
+- Spec: DSP-10 added.
+- Verification: domain tests 68, engine tests 127 (new Volume compile test and
+  per-input mixer assertion), control tests 185 (4 ignored), UI typecheck,
+  and UI tests 327. Updated test expectations for the Volume library entry and
+  the renamed Sync insert label.
+- Limitation: parameter edits republish the compiled graph, so Volume and
+  Mixer input changes step exactly as Gain does today (no cross-graph ramp).
+
+Progress on 2026-09-25, task 3 (per-input chains, D4):
+`compile_mixer_fanout_session_with_plugins` now walks upstream from each Mixer
+input through linear chain processors (`is_chain_processor`: Gain, Volume,
+Mute, Meter, EQs, dynamics, Delay/Sync, Pitch, bound Plugin) to the real
+source. `input_node_ids` still names the real sources for native binding. Each
+chain compiles through the extracted `compile_processor_chain` helper (shared
+with the post-Mixer chain) and runs in `CompiledMixerFanoutGraph::mix_inputs`
+on a block preallocated at `PROCESSING_QUANTUM_FRAMES`. That block is gated by
+`RealtimeDsp` (fail-closed: contention silences only that input for one
+quantum). The Mixer mixes input by input through `MixerStage::mix_input`.
+Per-input volume keys on the node directly upstream of the Mixer, matching
+the UI. A processor fed by more than one connection is rejected. Chains are
+capped at `MAX_MIXER_INPUT_CHAIN_NODES` = 16. The fan-out output minimum was
+relaxed from 2 to 1 so a plain "Mixer → speakers" route compiles on the
+multi-input path. Telemetry and plugin-health lookups also search input
+chains. Verification: engine 128 (new
+`mixer_fanout_runs_a_volume_chain_before_one_input_and_allows_one_output`),
+control 185 (4 ignored), and windows-audio 92.
+
+Checkpoint on 2026-09-25 before task 4: the native multi-input path
+(`nativeMultiInputs.prepare`) has no output-device argument. Its branches are
+delivered through a separate branch-ring and output pipeline, which (per the
+2026-09-24 Siege review) has never been exercised on live endpoints. Task 4
+therefore needs Play to orchestrate output and input preparation in compiled
+input order (`input_node_ids`), plus a per-source application-capture runtime
+inside the multi-input worker, and then attended qualification. Until then,
+tasks 1–3 are usable live on the qualified application-worker path
+(one live source → Volume → Mixer → output, with disabled sources pruned).
+The debug shell was rebuilt and relaunched with the standard recipe.
+
+Plan update on 2026-09-25 (user request): add task 5b, a **Bass & Treble**
+tool with two sliders; and fix the missing Volume icon in the tool library.
+
+Progress on 2026-09-25, task 5 (Sync, Dehum, Declick) and 5b (Bass & Treble):
+- Domain: new kinds `bassTreble` (bassDb/trebleDb ±12), `dehum`
+  (frequencyHz 45–65, amountPercent 0–100, harmonics 1–8), and `declick`
+  (thresholdPercent 0–100; `latency_samples` = `DECLICK_LATENCY_SAMPLES` 64).
+- DSP: `audiorouter_dsp::restoration::Declicker`, a mono second-difference
+  detector with a 40 ms warm-up and linear-interpolation repair inside a
+  64-sample lookahead ring. Allocation-free.
+- Engine: Bass & Treble and Dehum compile to the existing `ParametricEq`
+  stage (shelves; Q-20 peaking cuts per harmonic). Declick adds a
+  `ProcessingStage::Declick` with per-channel `RealtimeDsp` state and reset.
+  All three are accepted as chain/bypass processors, including Mixer input
+  chains.
+- Control discovery parameters; UI library entries (new "Restoration"
+  category), icons for Volume and all planned tools, node-face faders
+  (Bass/Treble pair, Dehum amount, Declick threshold), Dehum 50/60 Hz preset
+  buttons, and the insert-on-connection list.
+- Spec: DSP-11, DSP-12, DSP-13.
+- Verification: dsp restoration tests 3 (click repair, bit-exact
+  pass-through, non-finite safety); engine test
+  `restoration_and_tone_tools_compile_and_shape_known_signals` (60 Hz hum
+  < 10 % with 1 kHz within 5 %, +12 dB bass > 3×, −12 dB treble < 0.4×,
+  Declick transparent); domain 68, engine 129, control 185 (4 ignored), and
+  UI 327.
+
+Progress on 2026-09-25, task 4 (Mixer routes with applications from Play;
+per-source reconnect):
+- Control: `nativeMultiInputs.prepare` and `nativeOutputs.prepare` accept an
+  omitted `generation` and default to the session's next start generation
+  (`requested_or_next_generation`). A running session is refused. The
+  schemas and contract were updated. `nativeEndpoints.detach` also releases a
+  stopped session's multi-input worker. Multi-input prepare prunes disabled,
+  unfed sources (safe here: only bound sources are opened).
+- Per-source application runtime (`MultiInputApplicationSource`, one per
+  application input). `maintain_multi_input_applications` runs from the
+  multi-input pump with a one-second probe. An exited application's input is
+  swapped to `MultiInputCaptureSource::Silence` so the other inputs keep
+  playing. The replacement is found with the CAP-06 resolver (exact path,
+  else one version directory), re-opened, and swapped in with
+  `NativeMultiInputWorker::replace_capture`, which resets only that input's
+  partial packet. A pump error while an application source exists forces an
+  immediate probe, and a successful swap turns the error into a zero-progress
+  pump. An application closed at prepare time starts silent (`app-closed`)
+  instead of failing the route. States are reported per node through
+  `applicationCaptureStates` (maxItems raised to 8).
+- UI: Play detects a saved single-Mixer route mixing applications with at
+  most one input device (`mixerRouteSources` and `pruneInactiveUpstream`
+  mirror the engine). It detaches a stale worker, prepares sources in engine
+  input order and the selected output, then starts; the pump uses the
+  multi-input path. Unsupported mixes (Test Signal or Audio File with an
+  application, or more than one input device) get specific messages.
+- Verification: windows-audio 93 (new `silent_capture_offers_bounded_zeroed_packets`),
+  control 185 (4 ignored), UI typecheck, and UI 330 (route-source and pruning
+  tests).
+- Not yet exercised live: multi-input output delivery, the silence pacing
+  assumption, loopback behavior at process exit, and reconnect. This is the
+  first attended check in the manual test pass.
+
+Progress on 2026-09-25, live parameter changes (found while wiring task 4):
+a `graph.commit` on a running session only restarted the fake runtime; no
+native graph was republished, so saved slider changes (Gain included) were
+not heard until Stop/Play. Now `republish_running_native_graph` recompiles
+the saved graph into the attached adapter: endpoint and process-loopback
+routes use `activate_native_graph`, and the multi-input Mixer uses
+`RealtimeMixerFanout::replace_graph`, which swaps between pumps, requires the
+same generation, sources and branches, and keeps the privacy latch. The commit
+result reports `activation.native` = `applied` or `restartRequired` (reason);
+the contract type was updated. UI: `finishGraphSave` reports whether a save
+reached the playing audio, and while a session runs, parameter-only edits
+(`isParameterOnlyChange`) auto-save after a 400 ms pause, so sliders act
+live. Topology edits still need Save, then Stop/Play. Verification: control
+186 (new `native_preparation_defaults_to_the_next_start_generation`), UI 331.
+
+Progress on 2026-09-25, task 6 (Input Switch, DSP-14): new `inputSwitch`
+kind (`selected` a/b, `fade` normal/slow; ports a, b, out). The multi-input
+compiler accepts it as the convergence node (exactly two inputs, one per
+side, unity input volume). `InputSwitchState` holds an equal-power position
+advanced per block, `MixerStage::mix_input_ramped` applies per-frame gains,
+and `replace_graph` carries the position into the recompiled graph so a live
+switch crossfades. The linear path passes the single live input only when its
+side is selected. UI: library entry, A/B node buttons (Shift = slow fade), and
+route detection for Play. Verification: engine 130 (new
+`input_switch_passes_one_side_and_crossfades_after_a_live_switch`: equal-power
+midpoint and full B after 0.5 s); UI draft tests 36.
+
+Progress on 2026-09-25, task 7 (Denoise, Speech Denoise; DSP-15/16):
+`audiorouter_dsp::spectral` adds a self-contained radix-2 FFT (so no
+`Cargo.lock` change), an STFT framework (1024/256, sqrt-Hann WOLA, 1024-sample
+latency), `Denoiser` (learned profile, over-subtraction, smoothed gains,
+remaining floor) and `SpeechDenoiser` (minimum statistics with ×2.5 bias
+compensation and a 20-frame warm-up, decision-directed Wiener gain, speech-band
+floors). Profiles serialize as 64 log bands × 1 dB (128 hex characters).
+Engine: `ProcessingStage::Denoise` and `SpeechDenoise` (per channel,
+`RealtimeDsp`) and `noise_profile_for_node` from the runtime graph through
+the published processor, fan-out graph and multi-input worker. Control:
+discovery parameters and an optional `noiseProfile` in node telemetry while
+learning (schema and contract). Domain: `denoise` (reductionPercent,
+floorPercent, learning, noiseProfile) and `speechDenoise` (strengthPercent),
+both with `latency_samples` 1024. UI: library entries, node faders and
+status, and a "Learn noise / Stop learning and keep profile" inspector flow
+(learning and profile saves apply live). Measured in unit tests: learned
+profile −18.6 dB on white noise with a 1 kHz tone kept; Speech Denoise
+−15.5 dB on steady noise with a syllable-gated tone kept at 99 %.
+Verification: dsp 42, engine 131, control 186, UI 332.
+
+Progress on 2026-09-25, task 8 (FIR Filter, DSP-17):
+`audiorouter_dsp::spectral::Convolver` performs uniformly partitioned
+overlap-save convolution (512/1024, frequency-domain delay line, IR at most
+96 000 samples, unit-energy normalization, wet/dry mix with an aligned dry
+delay). New `firFilter` kind (mediaId, fileName, wetPercent, gainDb;
+latency 512). The engine builds a `ProcessingStage::Fir` from decoded media
+(left/right from IR channels 0/1) and passes audio through when no IR is set.
+Control: media loading is extracted into `session_audio_media` (Audio File
+and FIR); a new `compile_mixer_fanout_session_with_plugins_and_audio`
+carries media into Mixer input and post-Mixer chains, used by multi-input
+prepare and live republish. UI: library entry, node face (IR name, Mix
+fader), and an impulse-response picker in the inspector. Chunked upload is
+extracted into `ui/src/audioUpload.ts`, shared with Audio File. Verification:
+dsp convolver tests (match direct convolution within 1e-3; impulse delay;
+50 % mix; non-finite safety); engine 131, control 186, UI 333.
+
+Progress on 2026-09-25, task 9 (Time Shift, DSP-18): `audiorouter_dsp::timeshift`
+(`TimeShift` ring up to 120 s, a lock-free `TimeShiftTransport` command
+mailbox and status, bounded rewind, 256-sample fade-in after jumps). Engine:
+a `TimeShiftState` shared through a compile-time registry keyed by session
+and node (weak references; never locked on the audio thread), so a live
+recompile reuses the recording. Mixer chain sessions are named
+`<session>::<chain>` to share the key. `ProcessingStage::TimeShift` handles
+it, and `time_shift_state` gives control access. Control/API: new
+`timeShift.transport` (pause, resume, back, forward, live, status) with
+SessionControl permission, schemas, description, contract, API-reference
+row, and API_METHODS count 93. UI: library entry, node transport buttons with
+live/delayed/paused status, and a once-per-second status poll while running.
+Verification: dsp timeshift 2, engine 132 (new
+`time_shift_buffer_survives_recompilation_and_obeys_transport`), domain 68,
+control 186, UI 333.
+
+Follow-up on 2026-09-25 (UI-01/05, right-sidebar controls): the Advanced and
+MCP tabs (and the other sidebar tabs) used the global bevelled-gradient
+input/select style, native white dropdown lists, an unstyled file picker, and
+inline label/field/button flow. `ui/src/styles.css` now gives text-like
+inputs, selects and textareas inside `.right-workbench` the flat rounded
+Properties style, with a dark `color-scheme` and option colors, in the dark,
+light and high-contrast themes. Checkboxes, sliders and file inputs are
+excluded; the file picker gets its own themed button. Labels that wrap a
+field stack the caption above a full-width field. Plugin-scan placeholders
+rendered doubled backslashes (`C:\Plugins`) because JSX attribute strings
+do not unescape; fixed. Verified with Edge/Playwright screenshots of the
+expanded Advanced and MCP tabs against the Vite server (all text fields and
+selects computed flat, 9 px radius, dark scheme). UI 333 passed.
+
+Contract drift found and fixed: the nine new tools were node kinds but absent
+from the processor catalog (`processors.list`), so `check:drift` failed.
+`processor_catalog` now adds them through `catalog_entry`, which takes
+parameters and latency from the node registry (catalog limit 7 → 32; control
+test counts updated). `npm run check:drift` passed (93 methods, 30 node kinds,
+16 processors, 21 event categories); control 186.
+
+VST workflow review: plugins are added from the canvas shelf's
+"Plugin (VST2/VST3)" picker (scan a folder → add or insert the verified result
+→ edit worker-described parameters in Properties), not from the Tools tab.
+Every `plugins.*` method requires `PluginScan`, which both desktop-shell
+grants deliberately withhold (2026-09-22 decision), so scanning from the app
+is refused. Enabling it needs an explicit user authorization decision.
+
+## VST workflow (2026-09-25, user-approved scope: all four items)
+
+User decision (2026-09-25): allow plugin scanning in the desktop app by default
+and implement (1) the scanning permission, (2) Tools-tab plugins with a
+standard-folder scan and remembered results, (3) the vendor editor window, and
+(4) saving plugin state with the route.
+
+- **(1) Permission — pending, blocked.** The edit adding
+  `PermissionScope::PluginScan` to `ClientGrant::for_desktop_shell()`
+  (`crates/control/src/lib.rs`) and to the explicit device-admin opt-in grant
+  (`src-tauri/src/main.rs`) was refused by the agent's auto-mode safety
+  classifier as a permission grant. Per policy it was not worked around. The
+  user must apply it (or approve the edit). Until then, every `plugins.*`
+  method, including those below, is denied in the desktop shell. The CLI with
+  an enrolled role is unaffected.
+- **(2) Tools tab — done.** Storage persists scan inventories
+  (`control_settings` key `pluginInventories`, ≤ 4 MiB, malformed state ignored),
+  and control restores them at startup. A side effect fixes a latent defect:
+  plugin preparation requires a matching remembered scan, so saved plugin
+  routes previously failed after every app restart until a rescan. New
+  read-only `plugins.inventory` (PluginScan). UI: a "Plugins (VST2/VST3)"
+  group in the Tools tab (`PluginToolsGroup`; `pluginCatalog` lists supported
+  x64 plugins, deduplicated, sorted), **Scan standard folders**
+  (`STANDARD_PLUGIN_FOLDERS`), **Scan another folder…** (existing picker), and
+  a refresh when the picker closes.
+- **(4) State — done.** `PluginRuntimeBridge` has a request mailbox served by
+  the plugin runtime thread between frames (never the audio callback):
+  `save_state`, `open_editor`, `close_editor`. New `plugins.saveState` writes
+  the asset with `write_state_asset` under `<database dir>/plugin-states/` and a
+  `plugin_states` record keyed by the plugin SHA-256; the UI sets node
+  parameter `stateId` (domain-validated). `prepare_plugin_stages` restores it
+  (`read_state_asset`, hash-verified) before the bridge starts and fails
+  visibly if it is missing or belongs to another binary. Live bridges are
+  tracked weakly by (session, node).
+- **(3) Editor — implemented, VST2 only.** The VST2 editor runs a second plugin
+  instance inside the worker. It now starts from the processing instance's
+  state (`Open` carries state) and hands its state back on `Close`, which the
+  worker applies to the processing instance. New `plugins.openEditor` and
+  `plugins.closeEditor`; the control plane issues the parent-window
+  authorization from a per-run key. The shell's `open_plugin_editor` command
+  creates a resizable top-level host window on its own message-loop thread
+  (`src-tauri/src/plugin_editor_windows.rs`); closing it calls `closeEditor`
+  first. UI: Properties → **Open plugin editor** / **Save plugin settings**.
+  VST3 `IPlugView` editors remain unsupported, with a clear message.
+- **Evidence:** new opt-in fixture test
+  `runtime_bridge_saves_state_and_opens_the_editor_in_a_pumping_parent`
+  passed with ReaEQ (`reaeq-standalone.dll`). This is the first successful
+  VST2 editor open/close in this repository. The earlier "non-returning
+  editor" results came from containment tests that deliberately block the
+  parent's thread; a cross-process child window needs its parent thread to
+  pump messages. The existing ReaEQ fixture tests still pass (load/process,
+  editor-thread bound, supervised timeout kill). Three other opt-in tests fail
+  when pointed at ReaEQ because they require dedicated fault, non-finite and
+  chunk fixtures by file name; this is not a regression. Also passing:
+  plugin-host 71 + 13, control 187, storage 94, domain 68, UI 334, drift
+  (97 methods), and shell `cargo check`.
+- **Limits and risks:** editor edits reach the audio when the editor window
+  closes (no live sync while open). `plugins.openEditor` trusts a caller that
+  names a window owned by an existing process; the worker re-checks
+  ownership. It is local-only and PluginScan-gated. The editor window has not
+  been exercised attended in the shell.
+- **Next action:** the user applies the PluginScan grant, then an attended
+  test: scan standard folders → add ReaEQ → play → open editor → change →
+  close → save settings → restart route.
+
+Follow-up on 2026-09-25 (user report: VST picker field styling; scan denial
+shown as plain text):
+- Global form-control style: `styles.css` now separates the base rule. Buttons
+  keep the bevel; `input, select, textarea` get the flat app field style at
+  element specificity (dark `color-scheme`, themed options, focus, disabled,
+  placeholder, range reset, file picker and `::file-selector-button`), with
+  light and high-contrast variants. The redundant `.right-workbench` field
+  overrides were removed; only the sidebar caption-above-field layout remains.
+  Verified with Edge/Playwright: the picker markup (text, select, textarea,
+  file) computes flat, 9 px, dark; canvas, top bar and Tools tab render
+  correctly.
+- AGENTS.md gains a "UI conventions" section (app field style, stacked
+  captions, three-theme visual check) and two validated lessons (this user
+  preference; Bash backslash collapse).
+- Panel status lines: new `PanelMessage` renders error-phrased messages
+  (`actionMessageTone`) as a red `role="alert"` block. Used by 9 panel
+  messages including the plugin scan panel, 4 other status lines, and the
+  plugin editor hint. `formatUiError` turns `permission denied: <Scope> …`
+  into a readable sentence naming the missing permission. The disconnected
+  top-bar message no longer shows a doubled period.
+- The user's scan returned `permission denied: PluginScan`, confirming that
+  the pending grant (VST item 1) is the blocker.
+- Verification: UI typecheck; UI tests 335 (new permission-message test);
+  backend tests 64.
+
+VST item (1) resolved on 2026-09-25: the user explicitly instructed the agent
+to apply the PluginScan grant ("You do it"). `PermissionScope::PluginScan` is
+now in `ClientGrant::for_desktop_shell()` (with a control test assertion) and
+in the explicit device-admin opt-in grant in `src-tauri/src/main.rs`. The
+desktop shell still withholds `Capture`, and `DeviceAdministration` remains
+opt-in. Scans read metadata only; plugin code runs only in isolated workers.
+The AGENTS.md lesson on shell grants was updated. Verification: control 187
+passed; the shell was rebuilt and relaunched with the standard recipe
+(PID 56608). Attended check pending: Scan standard folders from the Tools tab.

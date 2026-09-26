@@ -39,6 +39,7 @@ lifecycle, plugin inventory/retry, and startup plan/apply methods.
 | `audioMedia.importTemporaryRecording` | `record` | mutating; imports only a completed `audio-file-take-*` WAV, removes its temporary file/library row, and expires the graph media after 24 hours |
 | `audioMedia.delete` | `graphWrite` | mutating; deletes media only when no session references it |
 | `audioSources.transport` | `sessionControl` | mutating; plays/stops a prepared Test Signal or plays/pauses/stops a prepared Audio File in a running session; `status` reads source state |
+| `timeShift.transport` | `sessionControl` | mutating; pauses, resumes, jumps back/forward 10 s, or returns to live on a running Time Shift node; `status` reads its delay and buffer |
 | `recorders.list` | `record` | read-only |
 | `recorders.create` | `record` | mutating; requires an idempotency key |
 | `recorders.arm` | `record` | mutating; requires an idempotency key |
@@ -86,8 +87,8 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `startup.apply` | `startupWrite` | mutating; requires an idempotency key |
 | `devices.list` | `read` | read-only |
 | `nativeEndpoints.prepare` | `deviceAdministration` | external operation; prepares exact stopped clients |
-| `nativeOutputs.prepare` | `deviceAdministration` | external operation; prepares 1–8 exact stopped stereo render clients for a generation |
-| `nativeMultiInputs.prepare` | `deviceAdministration` | external operation; prepares 2–8 exact stopped physical and/or application-capture clients for the committed mixer/fan-out source order, resolving any required pre-bound plugin stages |
+| `nativeOutputs.prepare` | `deviceAdministration` | external operation; prepares 1–8 exact stopped stereo render clients for a generation (default: the session's next start generation) |
+| `nativeMultiInputs.prepare` | `deviceAdministration` | external operation; prepares 2–8 exact stopped physical and/or application-capture clients for the committed mixer/fan-out source order, resolving any required pre-bound plugin stages; `generation` defaults to the next start generation, and a closed application input starts silent and reconnects |
 | `nativeBridges.prepare` | `deviceAdministration` | external operation; prepares an exact stopped project-driver render-source/capture-sink lease pair |
 | `nativeBridges.detach` | `deviceAdministration` | external operation; detaches an exact stopped project-driver lease pair |
 | `nativeBridges.heartbeat` | `deviceAdministration` | external operation; refreshes bounded project-driver leases |
@@ -102,6 +103,10 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `nativeMultiInputs.bindBranches` | `sessionControl` | external operation; binds ordered validated output nodes to branch-local virtual, recording, and tool observers |
 | `plugins.scan` | `pluginScan` | read-only |
 | `plugins.list` | `pluginScan` | read-only |
+| `plugins.inventory` | `pluginScan` | read-only; every remembered scan (one per folder), persisted across restarts; never scans or loads plugin code |
+| `plugins.saveState` | `pluginScan` | mutating; captures a playing plugin node's opaque state, stores it under the database's `plugin-states` folder, and returns a `stateId` to set on the node |
+| `plugins.openEditor` | `pluginScan` | external operation; opens a playing VST2 plugin's own editor inside a parent window owned by `ownerProcessId` (the desktop shell); VST3 editors are unsupported |
+| `plugins.closeEditor` | `pluginScan` | external operation; closes the editor and applies its edits to the instance that processes audio |
 | `plugins.retry` | `pluginScan` | mutating; requires an idempotency key |
 | `plugins.inspect` | `pluginScan` | read-only |
 | `plugins.parameters` | `pluginScan` | external operation; bounded descriptors from the exact revalidated plugin worker |

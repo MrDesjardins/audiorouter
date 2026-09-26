@@ -1123,8 +1123,12 @@ fn window_owner_process_id(window: usize) -> Option<u32> {
 
 #[cfg(windows)]
 enum EditorThreadCommand {
-    Open(usize, u32, String, Sender<Result<(), String>>),
-    Close(Sender<Result<(), String>>),
+    /// Open the editor; the optional state is the processing instance's
+    /// current state, loaded first so the editor shows the live settings.
+    Open(usize, u32, String, Option<Vec<u8>>, Sender<Result<(), String>>),
+    /// Close the editor and return its state so the worker can apply the
+    /// edits to the processing instance.
+    Close(Sender<Result<Option<Vec<u8>>, String>>),
     Shutdown,
 }
 
@@ -1162,6 +1166,7 @@ impl Vst2EditorThread {
         parent_window: usize,
         owner_process_id: u32,
         authorization_token: &str,
+        initial_state: Option<Vec<u8>>,
     ) -> Result<(), String> {
         let (response, receiver) = mpsc::channel();
         self.commands
@@ -1169,6 +1174,7 @@ impl Vst2EditorThread {
                 parent_window,
                 owner_process_id,
                 authorization_token.to_owned(),
+                initial_state,
                 response,
             ))
             .map_err(|_| "editor UI thread stopped".to_string())?;
@@ -1177,7 +1183,9 @@ impl Vst2EditorThread {
             .map_err(|_| "editor UI thread timed out".to_string())?
     }
 
-    pub fn close(&self) -> Result<(), String> {
+    /// Close the editor, returning the editor instance's state (when the
+    /// plugin exposes one) so edits can be applied to the processing instance.
+    pub fn close(&self) -> Result<Option<Vec<u8>>, String> {
         let (response, receiver) = mpsc::channel();
         self.commands
             .send(EditorThreadCommand::Close(response))
@@ -1201,7 +1209,7 @@ fn editor_thread_main(path: std::path::PathBuf, receiver: Receiver<EditorThreadC
     loop {
         pump_editor_messages();
         match receiver.recv_timeout(Duration::from_millis(10)) {
-            Ok(EditorThreadCommand::Open(parent, owner_pid, token, response)) => {
+            Ok(EditorThreadCommand::Open(parent, owner_pid, token, initial_state, response)) => {
                 let result = if token.is_empty() {
                     Err("editor authorization token is missing".to_string())
                 } else if !is_window_handle(parent)
@@ -1216,6 +1224,11 @@ fn editor_thread_main(path: std::path::PathBuf, receiver: Receiver<EditorThreadC
                             .map_err(|error| format!("VST2 editor load failed: {error:?}")),
                     };
                     plugin.and_then(|plugin| {
+                        // Best effort: a plugin without chunk support still
+                        // opens with its own defaults.
+                        if let Some(state) = initial_state.as_deref() {
+                            let _ = plugin.restore_state(state);
+                        }
                         plugin
                             .open_editor(parent, owner_pid)
                             .map_err(|error| format!("VST2 editor open failed: {error:?}"))
@@ -1228,8 +1241,10 @@ fn editor_thread_main(path: std::path::PathBuf, receiver: Receiver<EditorThreadC
                     .as_mut()
                     .ok_or_else(|| "editor is not open".to_string())
                     .and_then(|plugin| {
+                        let state = plugin.save_state().ok();
                         plugin
                             .close_editor()
+                            .map(|()| state)
                             .map_err(|error| format!("VST2 editor close failed: {error:?}"))
                     });
                 let _ = response.send(result);

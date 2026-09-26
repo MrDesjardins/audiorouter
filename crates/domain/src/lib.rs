@@ -39,6 +39,28 @@ pub const MAX_EVENT_CATEGORY_BYTES: usize = 128;
 pub const MAX_EVENT_OPERATION_ID_BYTES: usize = 128;
 pub const MAX_PARAMETERS_PER_NODE: usize = 96;
 pub const MAX_PARAMETER_NAME_BYTES: usize = 128;
+/// Mixer parameter prefix for a per-input volume in percent (0–100), keyed by
+/// the id of the node feeding that input: `inputVolume:<nodeId>`.
+pub const MIXER_INPUT_VOLUME_PREFIX: &str = "inputVolume:";
+/// Declick lookahead: a detected click is repaired from samples on both
+/// sides, so output is delayed by this many samples (disclosed latency).
+pub const DECLICK_LATENCY_SAMPLES: u32 = 64;
+/// Denoise and Speech Denoise analyze 1024-sample frames; output is delayed
+/// by one frame.
+pub const SPECTRAL_LATENCY_SAMPLES: u32 = 1024;
+/// The FIR filter convolves in 512-sample blocks; output lags by one block.
+pub const FIR_LATENCY_SAMPLES: u32 = 512;
+
+/// Linear gain for a Mixer input; absent or invalid values are unity.
+pub fn mixer_input_volume(mixer: &Node, upstream: &EntityId) -> f32 {
+    mixer
+        .parameters
+        .get(&format!("{MIXER_INPUT_VOLUME_PREFIX}{}", upstream.as_str()))
+        .and_then(serde_json::Value::as_f64)
+        .filter(|percent| percent.is_finite() && (0.0..=100.0).contains(percent))
+        .map_or(1.0, |percent| (percent / 100.0) as f32)
+}
+
 pub const MAX_PLUGIN_PATH_BYTES: usize = 512;
 pub const MAX_PLUGIN_FINGERPRINT_BYTES: usize = 64;
 pub const MAX_PLUGIN_CLASS_ID_BYTES: usize = 64;
@@ -85,10 +107,19 @@ pub enum NodeKind {
     Recorder,
     Plugin,
     AudioFile,
+    Volume,
+    BassTreble,
+    Dehum,
+    Declick,
+    InputSwitch,
+    Denoise,
+    SpeechDenoise,
+    FirFilter,
+    TimeShift,
 }
 
 impl NodeKind {
-    pub const ALL: [Self; 21] = [
+    pub const ALL: [Self; 30] = [
         Self::PhysicalInput,
         Self::ApplicationCapture,
         Self::EndpointLoopback,
@@ -110,6 +141,15 @@ impl NodeKind {
         Self::Recorder,
         Self::Plugin,
         Self::AudioFile,
+        Self::Volume,
+        Self::BassTreble,
+        Self::Dehum,
+        Self::Declick,
+        Self::InputSwitch,
+        Self::Denoise,
+        Self::SpeechDenoise,
+        Self::FirFilter,
+        Self::TimeShift,
     ];
 
     pub fn type_name(self) -> &'static str {
@@ -135,6 +175,15 @@ impl NodeKind {
             Self::Recorder => "recorder",
             Self::Plugin => "plugin",
             Self::AudioFile => "audio-file",
+            Self::Volume => "volume",
+            Self::BassTreble => "bass-treble",
+            Self::Dehum => "dehum",
+            Self::Declick => "declick",
+            Self::InputSwitch => "input-switch",
+            Self::Denoise => "denoise",
+            Self::SpeechDenoise => "speech-denoise",
+            Self::FirFilter => "fir-filter",
+            Self::TimeShift => "time-shift",
         }
     }
 }
@@ -210,13 +259,14 @@ fn valid_creation_time(value: &serde_json::Value) -> bool {
     })
 }
 
-pub fn node_registry() -> [NodeTypeSpec; 21] {
+pub fn node_registry() -> [NodeTypeSpec; 30] {
     NodeKind::ALL.map(|kind| NodeTypeSpec {
         kind,
         version: 1,
         availability: match kind {
             NodeKind::Mixer
             | NodeKind::Gain
+            | NodeKind::Volume
             | NodeKind::Mute
             | NodeKind::Meter
             | NodeKind::TestSignal
@@ -225,6 +275,16 @@ pub fn node_registry() -> [NodeTypeSpec; 21] {
             NodeKind::Gate => CapabilityAvailability::Available,
             NodeKind::Limiter => CapabilityAvailability::Available,
             NodeKind::Delay => CapabilityAvailability::Available,
+            NodeKind::BassTreble
+            | NodeKind::Dehum
+            | NodeKind::Declick
+            | NodeKind::InputSwitch
+            | NodeKind::Denoise
+            | NodeKind::SpeechDenoise
+            | NodeKind::FirFilter
+            | NodeKind::TimeShift => {
+                CapabilityAvailability::Available
+            }
             NodeKind::GraphicEq => CapabilityAvailability::Available,
             NodeKind::Pitch => CapabilityAvailability::Available,
             NodeKind::Recorder => CapabilityAvailability::Available,
@@ -246,23 +306,29 @@ pub fn node_registry() -> [NodeTypeSpec; 21] {
         realtime_cost_class: match kind {
             NodeKind::Mixer
             | NodeKind::Gain
+            | NodeKind::Volume
             | NodeKind::Mute
             | NodeKind::Meter
-            | NodeKind::TestSignal => "low",
+            | NodeKind::TestSignal
+            | NodeKind::InputSwitch => "low",
             NodeKind::AudioFile => "low",
             NodeKind::ParametricEq => "medium",
             NodeKind::Compressor => "medium",
             NodeKind::Gate => "medium",
             NodeKind::Limiter => "low",
             NodeKind::Delay => "medium",
+            NodeKind::BassTreble | NodeKind::Dehum | NodeKind::Declick | NodeKind::TimeShift => "medium",
             NodeKind::GraphicEq => "medium",
-            NodeKind::Pitch => "high",
+            NodeKind::Pitch | NodeKind::Denoise | NodeKind::SpeechDenoise | NodeKind::FirFilter => "high",
             NodeKind::Plugin => "worker-bound",
             _ => "device-bound",
         },
         latency_samples: match kind {
             NodeKind::Pitch => 1_024,
             NodeKind::Limiter => 240,
+            NodeKind::Declick => DECLICK_LATENCY_SAMPLES,
+            NodeKind::Denoise | NodeKind::SpeechDenoise => SPECTRAL_LATENCY_SAMPLES,
+            NodeKind::FirFilter => FIR_LATENCY_SAMPLES,
             _ => 0,
         },
     })
@@ -652,7 +718,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 92] = [
+pub const API_METHODS: [ApiMethodSpec; 97] = [
     ApiMethodSpec {
         name: "system.describe",
         permission: PermissionScope::Read,
@@ -740,6 +806,11 @@ pub const API_METHODS: [ApiMethodSpec; 92] = [
     },
     ApiMethodSpec {
         name: "audioSources.transport",
+        permission: PermissionScope::SessionControl,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "timeShift.transport",
         permission: PermissionScope::SessionControl,
         side_effect: SideEffectClass::Mutating,
     },
@@ -939,6 +1010,11 @@ pub const API_METHODS: [ApiMethodSpec; 92] = [
         side_effect: SideEffectClass::ReadOnly,
     },
     ApiMethodSpec {
+        name: "plugins.inventory",
+        permission: PermissionScope::PluginScan,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
         name: "plugins.retry",
         permission: PermissionScope::PluginScan,
         side_effect: SideEffectClass::Mutating,
@@ -950,6 +1026,21 @@ pub const API_METHODS: [ApiMethodSpec; 92] = [
     },
     ApiMethodSpec {
         name: "plugins.parameters",
+        permission: PermissionScope::PluginScan,
+        side_effect: SideEffectClass::ExternalOperation,
+    },
+    ApiMethodSpec {
+        name: "plugins.saveState",
+        permission: PermissionScope::PluginScan,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "plugins.openEditor",
+        permission: PermissionScope::PluginScan,
+        side_effect: SideEffectClass::ExternalOperation,
+    },
+    ApiMethodSpec {
+        name: "plugins.closeEditor",
         permission: PermissionScope::PluginScan,
         side_effect: SideEffectClass::ExternalOperation,
     },
@@ -1496,6 +1587,64 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::Gain, "gainDb") => value
                     .as_f64()
                     .is_some_and(|gain| gain.is_finite() && (-60.0..=24.0).contains(&gain)),
+                (NodeKind::BassTreble, "bassDb" | "trebleDb") => value
+                    .as_f64()
+                    .is_some_and(|gain| gain.is_finite() && (-12.0..=12.0).contains(&gain)),
+                (NodeKind::Dehum, "frequencyHz") => value.as_f64().is_some_and(|frequency| {
+                    frequency.is_finite() && (45.0..=65.0).contains(&frequency)
+                }),
+                (NodeKind::Dehum, "amountPercent") => value
+                    .as_f64()
+                    .is_some_and(|amount| amount.is_finite() && (0.0..=100.0).contains(&amount)),
+                (NodeKind::Dehum, "harmonics") => value
+                    .as_u64()
+                    .is_some_and(|harmonics| (1..=8).contains(&harmonics)),
+                (NodeKind::Denoise, "reductionPercent" | "floorPercent")
+                | (NodeKind::SpeechDenoise, "strengthPercent") => value
+                    .as_f64()
+                    .is_some_and(|percent| percent.is_finite() && (0.0..=100.0).contains(&percent)),
+                (NodeKind::Denoise, "learning") => value.is_boolean(),
+                (NodeKind::TimeShift, "bufferSeconds") => value
+                    .as_u64()
+                    .is_some_and(|seconds| (10..=120).contains(&seconds)),
+                (NodeKind::FirFilter, "mediaId") => valid_bounded_string(value, MAX_ENTITY_ID_BYTES),
+                (NodeKind::FirFilter, "fileName") => value.as_str().is_some_and(|name| {
+                    !name.is_empty() && name.len() <= 255 && !name.chars().any(char::is_control)
+                }),
+                (NodeKind::FirFilter, "wetPercent") => value
+                    .as_f64()
+                    .is_some_and(|percent| percent.is_finite() && (0.0..=100.0).contains(&percent)),
+                (NodeKind::FirFilter, "gainDb") => value
+                    .as_f64()
+                    .is_some_and(|gain| gain.is_finite() && (-24.0..=12.0).contains(&gain)),
+                // 64 bands, two hex digits each (see the DSP noise profile).
+                (NodeKind::Denoise, "noiseProfile") => value.as_str().is_some_and(|profile| {
+                    profile.len() == 128 && profile.bytes().all(|byte| byte.is_ascii_hexdigit())
+                }),
+                (NodeKind::InputSwitch, "selected") => {
+                    value.as_str().is_some_and(|side| matches!(side, "a" | "b"))
+                }
+                (NodeKind::InputSwitch, "fade") => {
+                    value.as_str().is_some_and(|fade| matches!(fade, "normal" | "slow"))
+                }
+                (NodeKind::Declick, "thresholdPercent") => value.as_f64().is_some_and(|threshold| {
+                    threshold.is_finite() && (0.0..=100.0).contains(&threshold)
+                }),
+                (NodeKind::Volume, "percent") => value
+                    .as_f64()
+                    .is_some_and(|percent| percent.is_finite() && (0.0..=200.0).contains(&percent)),
+                // Per-input Mixer volume, keyed by the node feeding that input
+                // (GRAPH-04). Keys for inputs that are no longer connected are
+                // inert and ignored by compilation.
+                (NodeKind::Mixer, name) if name.starts_with(MIXER_INPUT_VOLUME_PREFIX) => {
+                    let upstream = &name[MIXER_INPUT_VOLUME_PREFIX.len()..];
+                    !upstream.is_empty()
+                        && upstream.len() <= MAX_ENTITY_ID_BYTES
+                        && !upstream.chars().any(char::is_control)
+                        && value.as_f64().is_some_and(|percent| {
+                            percent.is_finite() && (0.0..=100.0).contains(&percent)
+                        })
+                }
                 (NodeKind::Mute, "muted") => value.is_boolean(),
                 (NodeKind::ParametricEq, "frequencyHz") => {
                     value.as_f64().is_some_and(|frequency| {
@@ -1605,6 +1754,8 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                     fingerprint.len() == MAX_PLUGIN_FINGERPRINT_BYTES
                         && fingerprint.bytes().all(|byte| byte.is_ascii_hexdigit())
                 }),
+                // Stored plugin state (an entity id), restored before the worker runs.
+                (NodeKind::Plugin, "stateId") => valid_bounded_string(value, MAX_ENTITY_ID_BYTES),
                 (NodeKind::Plugin, "classId") => value.as_str().is_some_and(|class_id| {
                     !class_id.is_empty() && class_id.len() <= MAX_PLUGIN_CLASS_ID_BYTES
                 }),
@@ -2885,6 +3036,34 @@ mod tests {
     }
 
     #[test]
+    fn validates_volume_percent_and_mixer_input_volume() {
+        let mut volume = node("volume", NodeKind::Volume, PortDirection::Input);
+        volume.parameters.insert("percent".into(), serde_json::json!(110.0));
+        assert!(validate_session(&session(vec![volume.clone()], vec![])).is_ok());
+        for invalid in [serde_json::json!(-1.0), serde_json::json!(200.5), serde_json::json!("50")] {
+            volume.parameters.insert("percent".into(), invalid);
+            assert!(validate_session(&session(vec![volume.clone()], vec![])).is_err());
+        }
+
+        let mut mixer = node("mixer", NodeKind::Mixer, PortDirection::Input);
+        mixer.parameters.insert("inputVolume:discord".into(), serde_json::json!(50.0));
+        mixer.parameters.insert("inputVolume:mic".into(), serde_json::json!(80.0));
+        assert!(validate_session(&session(vec![mixer.clone()], vec![])).is_ok());
+        assert_eq!(mixer_input_volume(&mixer, &EntityId::new("discord")), 0.5);
+        assert_eq!(mixer_input_volume(&mixer, &EntityId::new("unset")), 1.0);
+        for (name, value) in [
+            ("inputVolume:mic", serde_json::json!(101.0)),
+            ("inputVolume:", serde_json::json!(50.0)),
+            ("inputVolume:bad\u{7}", serde_json::json!(50.0)),
+            ("outputVolume:mic", serde_json::json!(50.0)),
+        ] {
+            let mut invalid = mixer.clone();
+            invalid.parameters.insert(name.into(), value);
+            assert!(validate_session(&session(vec![invalid], vec![])).is_err(), "{name}");
+        }
+    }
+
+    #[test]
     fn validates_processor_parameters_and_rejects_unknown_values() {
         let mut gain = node("gain", NodeKind::Gain, PortDirection::Input);
         gain.parameters
@@ -3534,7 +3713,7 @@ mod tests {
     #[test]
     fn registry_reports_audio_and_processor_capabilities_explicitly() {
         let registry = node_registry();
-        assert_eq!(registry.len(), 21);
+        assert_eq!(registry.len(), 30);
         let physical = registry
             .iter()
             .find(|spec| spec.kind == NodeKind::PhysicalInput)

@@ -68,6 +68,8 @@ pub const MAX_RECORDING_ID_BYTES: usize = 128;
 pub const MAX_RECORDING_METADATA_CHARS: usize = 256;
 pub const MAX_RECORDING_LIST_ITEMS: usize = 500;
 pub const MAX_PLUGIN_STATE_LIST_ITEMS: usize = 500;
+/// Upper bound for persisted plugin scan metadata (all remembered folders).
+pub const MAX_PLUGIN_INVENTORY_BYTES: usize = 4 * 1024 * 1024;
 pub const MAX_IDEMPOTENCY_KEY_BYTES: usize = 128;
 pub const MAX_REQUEST_HASH_BYTES: usize = 128;
 pub const MAX_SESSION_LIST_ITEMS: usize = 500;
@@ -1323,6 +1325,39 @@ impl Storage {
             .map(|routes| routes.unwrap_or_default())
     }
 
+    /// Persist the most recent plugin scan results (metadata only, keyed by
+    /// scanned directory) so the plugin list survives a restart without
+    /// rescanning. Bounded by `MAX_PLUGIN_INVENTORY_BYTES`.
+    pub fn save_plugin_inventories(&self, inventories: &serde_json::Value) -> Result<(), StorageError> {
+        let value = serde_json::to_string(inventories)?;
+        if value.len() > MAX_PLUGIN_INVENTORY_BYTES {
+            return Err(StorageError::InvalidSession("plugin inventory is too large to persist".into()));
+        }
+        self.connection.execute(
+            "INSERT INTO control_settings(key, value) VALUES ('pluginInventories', ?1)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            params![value],
+        )?;
+        Ok(())
+    }
+
+    /// Load persisted plugin scan results; malformed or oversized state is
+    /// ignored (an empty list) rather than blocking startup.
+    pub fn load_plugin_inventories(&self) -> Result<Vec<serde_json::Value>, StorageError> {
+        let value = self
+            .connection
+            .query_row(
+                "SELECT value FROM control_settings WHERE key = 'pluginInventories'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        Ok(value
+            .filter(|value| value.len() <= MAX_PLUGIN_INVENTORY_BYTES)
+            .and_then(|value| serde_json::from_str::<Vec<serde_json::Value>>(&value).ok())
+            .unwrap_or_default())
+    }
+
     /// Persist routes together with their control-plane revision. The object
     /// wrapper is forward-compatible with the earlier raw-registry format.
     pub fn save_virtual_bus_route_state(
@@ -2085,6 +2120,14 @@ impl Storage {
             "UPDATE recordings SET title = ?2, artist = ?3, comment = ?4 WHERE id = ?1",
             params![id, title, artist, comment],
         )? == 1)
+    }
+
+    /// Folder for plugin state files, next to the database (created on
+    /// demand). `None` for an in-memory store.
+    pub fn plugin_state_directory(&self) -> Option<std::path::PathBuf> {
+        let directory = self.database_path.as_ref()?.parent()?.join("plugin-states");
+        std::fs::create_dir_all(&directory).ok()?;
+        Some(directory)
     }
 
     pub fn save_plugin_state(&self, state: &PluginStateRecord) -> Result<(), StorageError> {

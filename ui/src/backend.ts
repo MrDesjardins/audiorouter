@@ -81,6 +81,11 @@ export function formatUiError(error: unknown, fallback: string): string {
   if (/native graph rejected: UnsupportedTopology/.test(error.message)) {
     return "This route includes an audio combination the current engine cannot play. Try a separate Test Signal → Physical Output route, or remove one source and connect the remaining source directly to the output. Your saved route was not changed.";
   }
+  const permission = /permission denied:\s*([A-Za-z]+)/i.exec(error.message);
+  if (permission || (error instanceof AudioRouterRpcError && error.data?.code === "permissionDenied")) {
+    const scope = permission?.[1] ?? "the required";
+    return `Permission denied: this app is not granted the ${scope} permission needed for this action, so the backend refused it. Nothing was changed.`;
+  }
   if (!(error instanceof AudioRouterRpcError) || !error.data) return error.message;
   const { code, hresult, remediation, retryable } = error.data;
   const hresultText = typeof hresult === "number"
@@ -118,14 +123,15 @@ export interface UiBackend {
   finishAudioUpload(uploadId: string): Promise<MethodResult["audioMedia.finishUpload"]>;
   importTemporaryRecording(recordingId: string): Promise<MethodResult["audioMedia.importTemporaryRecording"]>;
   transportAudioSource(sessionId: string, nodeId: string, action: "play" | "pause" | "stop" | "status"): Promise<MethodResult["audioSources.transport"]>;
+  transportTimeShift?(sessionId: string, nodeId: string, action: MethodParams["timeShift.transport"]["action"]): Promise<MethodResult["timeShift.transport"]>;
   listRecordings(sessionId?: string): Promise<RecordingRow[]>;
   listRecorders(): Promise<RecorderStatus[]>;
   listSessions(): Promise<Session[]>;
   listApplications(): Promise<ApplicationRow[]>;
   listDevices(): Promise<DeviceListItem[]>;
   prepareNativeEndpoint?(sessionId: string, captureEndpointId: string, renderEndpointId: string): Promise<import("@audiorouter/contracts").NativeEndpointPrepareResult>;
-  prepareNativeOutputs?(sessionId: string, generation: number, renderEndpointIds: string[]): Promise<NativeOutputFanoutPrepareResult>;
-  prepareNativeMultiInputs?(sessionId: string, generation: number, sources: import("@audiorouter/contracts").NativeMultiInputSourceBinding[]): Promise<NativeMultiInputPrepareResult>;
+  prepareNativeOutputs?(sessionId: string, generation: number | undefined, renderEndpointIds: string[]): Promise<NativeOutputFanoutPrepareResult>;
+  prepareNativeMultiInputs?(sessionId: string, generation: number | undefined, sources: import("@audiorouter/contracts").NativeMultiInputSourceBinding[]): Promise<NativeMultiInputPrepareResult>;
   rebindNativeEndpoint?(sessionId: string, captureEndpointId: string, renderEndpointId: string): Promise<import("@audiorouter/contracts").NativeEndpointRebindResult>;
   detachNativeEndpoint?(sessionId: string): Promise<import("@audiorouter/contracts").NativeEndpointDetachResult>;
   detachNativeDuplex?(sessionId: string): Promise<import("@audiorouter/contracts").NativeDuplexDetachResult>;
@@ -140,6 +146,10 @@ export interface UiBackend {
   listPresets(): Promise<DiscoveryDocument["presets"]>;
   scanPlugins(directory: string): Promise<PluginScanResult>;
   listPlugins(directory: string): Promise<PluginScanResult>;
+  /** Every remembered scan (persisted by the backend); optional for older backends. */
+  pluginInventory?(): Promise<MethodResult["plugins.inventory"]>;
+  /** Capture a playing plugin node state and store it; returns its stateId. */
+  savePluginState?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.saveState"]>;
   retryPlugins(directory: string, idempotencyKey: string): Promise<PluginScanResult>;
   inspectPlugin(path: string): Promise<PluginScanEntry>;
   describePluginParameters(path: string): Promise<PluginParametersResult>;
@@ -260,6 +270,7 @@ const disconnectedDiagnostics: DiagnosticsSnapshot = {
   nativeSessionId: null,
   schedulerTelemetry: null,
   nodeTelemetry: [],
+  applicationCaptureStates: [],
   privacyMute: { muted: true, persistence: "memory" },
   recovery: { safeMode: false, recentCrashes: 0, persistence: "memory" },
   eventLog: { latestSequence: 0, retained: 0 },
@@ -562,6 +573,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
     async importTemporaryRecording(recordingId) {
       return client.request("audioMedia.importTemporaryRecording", { recordingId });
     },
+    async transportTimeShift(currentSessionId, nodeId, action) {
+      return client.request("timeShift.transport", { sessionId: currentSessionId, nodeId, action });
+    },
     async transportAudioSource(currentSessionId, nodeId, action) {
       return client.request("audioSources.transport", { sessionId: currentSessionId, nodeId, action });
     },
@@ -660,6 +674,12 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
     },
     async scanPlugins(directory) {
       return client.request("plugins.scan", { directory });
+    },
+    async savePluginState(currentSessionId, nodeId) {
+      return client.request("plugins.saveState", { sessionId: currentSessionId, nodeId });
+    },
+    async pluginInventory() {
+      return client.request("plugins.inventory", {});
     },
     async listPlugins(directory) {
       return client.request("plugins.list", { directory });

@@ -10,7 +10,7 @@ export type LibraryEntry = {
   label: string;
   category: string;
   flow: LibraryFlowGroup;
-  kind?: Extract<NodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "audioFile" | "mixer" | "gain" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch" | "recorder">;
+  kind?: Extract<NodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "audioFile" | "mixer" | "gain" | "volume" | "bassTreble" | "dehum" | "declick" | "inputSwitch" | "denoise" | "speechDenoise" | "firFilter" | "timeShift" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch" | "recorder">;
   /** Helper text shown as a tooltip and matched by search, even for an
    * available entry. Used to point at the free existing-endpoint path
    * (VoiceMeeter, VB-Cable) instead of the deferred signed-driver one. */
@@ -33,13 +33,21 @@ export const libraryEntries: LibraryEntry[] = [
   { id: "physical-input", label: "Input device", category: "Source", flow: "input", kind: "physicalInput", note: INPUT_DEVICE_NOTE },
   { id: "test-signal", label: "Test Signal", category: "Source", flow: "input", kind: "testSignal" },
   { id: "audio-file", label: "Audio file", category: "Source", flow: "input", kind: "audioFile", note: "Play a WAV or MP3 through the graph. Select media in the node properties." },
-  { id: "application-capture", label: "Application capture", category: "Source", flow: "input", unavailableReason: "Select a verified running application in Audio sources" },
   { id: "endpoint-loopback", label: "Endpoint loopback", category: "Source", flow: "input", unavailableReason: "Select an exact active render endpoint in Endpoint binding" },
   { id: "virtual-render-source", label: "Virtual render source", category: "Virtual bus", flow: "input", unavailableReason: "Requires the deferred AudioRouter-managed signed driver. For an installed Voicemeeter or VB-Cable capture endpoint today, use Input device instead.", virtualKind: "virtualRenderSource" },
   { id: "physical-output", label: "Output device", category: "Destination", flow: "output", kind: "physicalOutput", note: OUTPUT_DEVICE_NOTE },
   { id: "virtual-capture-sink", label: "Virtual capture sink", category: "Virtual bus", flow: "output", unavailableReason: "Requires the deferred AudioRouter-managed signed driver. For an installed Voicemeeter or VB-Cable playback endpoint today, use Output device instead.", virtualKind: "virtualCaptureSink" },
+  { id: "volume", label: "Volume", category: "Effect", flow: "tool", kind: "volume", note: "Set one source's level in percent (0–200 %) before it reaches a Mixer." },
   { id: "gain", label: "Gain", category: "Effect", flow: "tool", kind: "gain" },
+  { id: "bass-treble", label: "Bass & Treble", category: "Effect", flow: "tool", kind: "bassTreble", note: "Two sliders: boost or cut bass (below ~120 Hz) and treble (above ~6 kHz) by up to 12 dB." },
+  { id: "dehum", label: "Dehum", category: "Restoration", flow: "tool", kind: "dehum", note: "Remove low-frequency electrical hum at 50 or 60 Hz and its harmonics." },
+  { id: "declick", label: "Declick", category: "Restoration", flow: "tool", kind: "declick", note: "Repair clicks, pops, and crackle. A lower threshold repairs more but may alter sharp sounds. Adds about 1.3 ms of delay." },
+  { id: "denoise", label: "Denoise", category: "Restoration", flow: "tool", kind: "denoise", note: "Learn a steady noise (fan, hiss, hum) while nothing else plays, then remove it. Adds about 21 ms of delay." },
+  { id: "speech-denoise", label: "Speech Denoise", category: "Restoration", flow: "tool", kind: "speechDenoise", note: "Automatically reduce background noise around speech. Runs locally with a spectral method, not a machine-learning model. Adds about 21 ms of delay." },
+  { id: "fir-filter", label: "FIR Filter", category: "Effect", flow: "tool", kind: "firFilter", note: "Convolve audio with an impulse response (WAV or MP3, up to 2 s) to emulate a room, speaker, or device. Adds about 11 ms of delay." },
+  { id: "time-shift", label: "Time Shift", category: "Effect", flow: "tool", kind: "timeShift", note: "A DVR for live audio: pause, jump back or forward 10 s, and return to live. Keeps up to 120 s." },
   { id: "mixer", label: "Mixer", category: "Routing", flow: "tool", kind: "mixer" },
+  { id: "input-switch", label: "Input Switch", category: "Routing", flow: "tool", kind: "inputSwitch", note: "Pass either input A or input B. Switching crossfades over 0.5 s (Shift-click for 2 s)." },
   { id: "recorder", label: "Recorder", category: "Output", flow: "tool", kind: "recorder" },
   { id: "mute", label: "Mute", category: "Effect", flow: "tool", kind: "mute" },
   { id: "meter", label: "Meter", category: "Monitor", flow: "tool", kind: "meter" },
@@ -47,7 +55,7 @@ export const libraryEntries: LibraryEntry[] = [
   { id: "compressor", label: "Compressor", category: "Effect", flow: "tool", kind: "compressor" },
   { id: "gate", label: "Gate", category: "Effect", flow: "tool", kind: "gate" },
   { id: "limiter", label: "Limiter", category: "Effect", flow: "tool", kind: "limiter" },
-  { id: "delay", label: "Delay", category: "Effect", flow: "tool", kind: "delay" },
+  { id: "delay", label: "Sync (delay)", category: "Effect", flow: "tool", kind: "delay", note: "Delay audio by 0–1000 ms to line it up with video or another source. Chain several for longer delays." },
   { id: "graphic-eq", label: "Graphic EQ", category: "Effect", flow: "tool", kind: "graphicEq" },
   { id: "pitch", label: "Pitch shift", category: "Effect", flow: "tool", kind: "pitch" },
 ];

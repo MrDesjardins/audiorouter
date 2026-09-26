@@ -3,19 +3,17 @@ import { filterLibraryEntries, libraryEntries, libraryEntryAccessibleLabel } fro
 
 describe("node library search", () => {
   it("matches labels, categories, and availability reasons", () => {
-    expect(filterLibraryEntries(libraryEntries, "effect").map((entry) => entry.id)).toEqual(["gain", "mute", "parametric-eq", "compressor", "gate", "limiter", "delay", "graphic-eq", "pitch"]);
-    expect(filterLibraryEntries(libraryEntries, "verified running application").map((entry) => entry.id)).toEqual([
-      "application-capture",
-    ]);
+    expect(filterLibraryEntries(libraryEntries, "effect").map((entry) => entry.id)).toEqual(["volume", "gain", "bass-treble", "fir-filter", "time-shift", "mute", "parametric-eq", "compressor", "gate", "limiter", "delay", "graphic-eq", "pitch"]);
+    expect(filterLibraryEntries(libraryEntries, "verified running application").map((entry) => entry.id)).toEqual([]);
   });
 
-  it("keeps identity-bound sources discoverable with actionable prerequisites", () => {
-    const entries = libraryEntries.filter((entry) => entry.id === "application-capture" || entry.id === "endpoint-loopback");
-    expect(entries.map((entry) => entry.id)).toEqual(["application-capture", "endpoint-loopback"]);
+  it("keeps endpoint loopback discoverable with its actionable prerequisite", () => {
+    const entries = libraryEntries.filter((entry) => entry.id === "endpoint-loopback");
+    expect(entries.map((entry) => entry.id)).toEqual(["endpoint-loopback"]);
     expect(entries.map((entry) => entry.unavailableReason)).toEqual([
-      "Select a verified running application in Audio sources",
       "Select an exact active render endpoint in Endpoint binding",
     ]);
+    expect(libraryEntries.some((entry) => entry.id === "application-capture")).toBe(false);
     expect(libraryEntries.find((entry) => entry.id === "physical-input")?.kind).toBe("physicalInput");
     expect(libraryEntries.find((entry) => entry.id === "physical-output")?.kind).toBe("physicalOutput");
     expect(libraryEntries.filter((entry) => entry.kind === "physicalInput")).toHaveLength(1);
@@ -58,9 +56,6 @@ describe("node library search", () => {
   });
 
   it("includes unavailable reasons in accessible library labels", () => {
-    expect(libraryEntryAccessibleLabel(libraryEntries.find((entry) => entry.id === "application-capture")!)).toBe(
-      "Application capture, Source, unavailable: Select a verified running application in Audio sources",
-    );
     expect(libraryEntryAccessibleLabel(libraryEntries.find((entry) => entry.id === "gain")!)).toBe("Gain, Effect");
   });
 

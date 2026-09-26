@@ -44,6 +44,7 @@ const diagnostics: DiagnosticsSnapshot = {
     { nodeId: "gain", kind: "gain", meter: null, processor: null, plugin: null },
     { nodeId: "headphones", kind: "physicalOutput", meter: { peakDb: -9, rmsDb: -14, clippedSamples: 0, channelPeakDb: [-9, -9], channelRmsDb: [-14, -14], channelClippedSamples: [0, 0] }, processor: null, plugin: null },
   ],
+  applicationCaptureStates: [],
   privacyMute: { muted: false, persistence: "memory" },
   recovery: { safeMode: false, recentCrashes: 0, persistence: "memory" },
   eventLog: { latestSequence: 0, retained: 0 },

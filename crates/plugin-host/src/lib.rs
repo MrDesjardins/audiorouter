@@ -3689,8 +3689,20 @@ pub struct PluginRuntimeBridge {
     health_state: Arc<AtomicU8>,
     health_failure_count: Arc<AtomicU32>,
     parameters: Arc<Mutex<Vec<ParameterEvent>>>,
+    requests: Arc<Mutex<std::collections::VecDeque<BridgeRequest>>>,
     worker: Option<JoinHandle<()>>,
 }
+
+/// Control request served by the plugin runtime thread between audio frames
+/// (it owns the worker process). Never used from the audio callback.
+enum BridgeRequest {
+    SaveState(std::sync::mpsc::Sender<Result<PluginStateAsset, String>>),
+    OpenEditor(EditorParentAuthorization, std::sync::mpsc::Sender<Result<(), String>>),
+    CloseEditor(std::sync::mpsc::Sender<Result<(), String>>),
+}
+
+/// How long a control request waits for the runtime thread.
+const BRIDGE_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
 const WORKER_STATE_STOPPED: u8 = 0;
 const WORKER_STATE_RUNNING: u8 = 1;
@@ -3766,6 +3778,8 @@ impl PluginRuntimeBridge {
         let health_state = Arc::new(AtomicU8::new(encode_worker_state(worker.state())));
         let health_failure_count = Arc::new(AtomicU32::new(0));
         let parameters = Arc::new(Mutex::new(Vec::new()));
+        let requests = Arc::new(Mutex::new(std::collections::VecDeque::<BridgeRequest>::new()));
+        let thread_requests = Arc::clone(&requests);
         let thread_running = Arc::clone(&running);
         let thread_failed = Arc::clone(&failed);
         let thread_health_state = Arc::clone(&health_state);
@@ -3780,6 +3794,28 @@ impl PluginRuntimeBridge {
                 let mut sequence = 1_u64;
                 let mut samples = vec![0.0_f32; channels * frames];
                 while thread_running.load(Ordering::Acquire) {
+                    // Serve control requests between frames; the worker
+                    // protocol is strictly request/response, so they cannot
+                    // interleave with a frame in flight.
+                    let pending = thread_requests
+                        .try_lock()
+                        .ok()
+                        .and_then(|mut queue| queue.pop_front());
+                    if let Some(request) = pending {
+                        let now = Instant::now();
+                        match request {
+                            BridgeRequest::SaveState(reply) => {
+                                let _ = reply.send(worker.save_state(now).map_err(|error| format!("{error:?}")));
+                            }
+                            BridgeRequest::OpenEditor(authorization, reply) => {
+                                let _ = reply.send(worker.open_editor(&authorization, now).map_err(|error| format!("{error:?}")));
+                            }
+                            BridgeRequest::CloseEditor(reply) => {
+                                let _ = reply.send(worker.close_editor(now).map_err(|error| format!("{error:?}")));
+                            }
+                        }
+                        continue;
+                    }
                     let Some(mut quantum) = thread_input.pop() else {
                         std::thread::yield_now();
                         continue;
@@ -3867,12 +3903,42 @@ impl PluginRuntimeBridge {
             health_state,
             health_failure_count,
             parameters,
+            requests,
             worker: Some(worker_thread),
         }))
     }
 
     pub fn failed(&self) -> bool {
         self.failed.load(Ordering::Acquire)
+    }
+
+    fn request<T>(
+        &self,
+        make: impl FnOnce(std::sync::mpsc::Sender<Result<T, String>>) -> BridgeRequest,
+    ) -> Result<T, String> {
+        let (reply, receiver) = std::sync::mpsc::channel();
+        self.requests
+            .lock()
+            .map_err(|_| "plugin runtime is unavailable".to_string())?
+            .push_back(make(reply));
+        receiver
+            .recv_timeout(BRIDGE_REQUEST_TIMEOUT)
+            .map_err(|_| "plugin runtime did not respond".to_string())?
+    }
+
+    /// Capture the processing instance's opaque state (control thread).
+    pub fn save_state(&self) -> Result<PluginStateAsset, String> {
+        self.request(BridgeRequest::SaveState)
+    }
+
+    /// Open the plugin's own editor inside an authorized parent window.
+    pub fn open_editor(&self, authorization: EditorParentAuthorization) -> Result<(), String> {
+        self.request(|reply| BridgeRequest::OpenEditor(authorization, reply))
+    }
+
+    /// Close the editor; the worker applies its edits to the processing instance.
+    pub fn close_editor(&self) -> Result<(), String> {
+        self.request(BridgeRequest::CloseEditor)
     }
 
     /// The isolated worker's last-observed supervisor state. Published by the

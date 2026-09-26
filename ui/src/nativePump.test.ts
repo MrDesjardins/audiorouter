@@ -11,6 +11,8 @@ describe("native pump selection", () => {
   it("selects only the available matching adapter", () => {
     expect(selectNativePump("endpoint", true, false)).toBe("endpoint");
     expect(selectNativePump("endpoint", false, true)).toBeNull();
+    expect(selectNativePump("process-loopback", true, false)).toBe("endpoint");
+    expect(selectNativePump("process-loopback", false, true)).toBeNull();
     expect(selectNativePump("duplex", false, true)).toBe("duplex");
     expect(selectNativePump("duplex", true, false)).toBeNull();
     expect(selectNativePump("render-source", false, false, true)).toBe("renderSource");

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { addSourceToOccupiedOutput, appendApplicationCaptureNode, appendDraftConnection, appendEndpointLoopbackNode, appendLibraryNode, appendPluginPlaceholderNode, appendVirtualBusNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, removeDraftNode, resetNodeDraftParameters, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
+import type { ApplicationInfo, Session } from "@audiorouter/contracts";
+import { addSourceToOccupiedOutput, appendApplicationCaptureNode, applicationCaptureChoices, applicationOnlyRouteSource, isParameterOnlyChange, pluginCatalog, STANDARD_PLUGIN_FOLDERS, mixerInputs, mixerRouteSources, pruneInactiveUpstream, mixerInputVolumeKey, mixedApplicationRouteOtherSources, rebindApplicationCaptureNode, appendDraftConnection, appendEndpointLoopbackNode, appendLibraryNode, appendPluginPlaceholderNode, appendVirtualBusNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, removeDraftNode, resetNodeDraftParameters, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
 import { demoSession } from "./fixtures";
 
 describe("appendLibraryNode", () => {
@@ -51,7 +52,7 @@ describe("appendLibraryNode", () => {
     expect(twice.nodes.slice(-2).map((node) => node.id)).toEqual(["meter-1", "meter-2"]);
   });
 
-  it("adds supported scan identity as a stopped plugin placeholder", () => {
+  it("adds a supported scan identity as an enabled plugin node", () => {
     const next = appendPluginPlaceholderNode(demoSession, {
       path: "C:\\Plugins\\effect.dll",
       identity: {
@@ -71,7 +72,8 @@ describe("appendLibraryNode", () => {
     });
     expect(next.nodes.at(-1)).toMatchObject({
       kind: "plugin",
-      enabled: false,
+      enabled: true,
+      name: "effect 1",
       parameters: { format: "vst2", fingerprint: expect.any(String), classId: "test-class" },
     });
     expect(next.edges).toEqual(demoSession.edges);
@@ -229,8 +231,78 @@ describe("destination connection creation", () => {
   });
 });
 
+describe("application capture identity", () => {
+  const app = (processId: number, executable: string, executablePath: string, creationTime100ns: string, audioSessionCount = 0): ApplicationInfo => ({
+    processId, executable, executablePath, creationTime100ns,
+    audioActivity: audioSessionCount > 0 ? "active" : "none",
+    captureCapability: "notObserved",
+    audioSessionCount, activeAudioSessionCount: audioSessionCount, captureSessionCount: 0, renderSessionCount: audioSessionCount,
+    audioDisplayNames: [],
+  });
+
+  it("lists running applications without a microphone session and folds same-path helpers", () => {
+    const discordRoot = app(36808, "Discord.exe", "C:\\Discord\\app-1.0.9259\\Discord.exe", "100");
+    const discordHelper = app(26164, "Discord.exe", "C:\\Discord\\app-1.0.9259\\Discord.exe", "101");
+    const browser = app(9, "browser.exe", "C:\\Browser\\browser.exe", "50", 1);
+    const choices = applicationCaptureChoices([discordHelper, browser, discordRoot]);
+    expect(choices.withAudio).toEqual([browser]);
+    expect(choices.other).toEqual([discordRoot]);
+  });
+
+  it("shows one entry for an application whose helper processes use audio", () => {
+    const root = app(36808, "Discord.exe", "C:\\Discord\\app-1.0.9259\\Discord.exe", "100");
+    const voice = app(51156, "Discord.exe", "C:\\Discord\\app-1.0.9259\\Discord.exe", "105", 1);
+    const media = app(53964, "Discord.exe", "C:\\Discord\\app-1.0.9259\\Discord.exe", "104", 2);
+    expect(applicationCaptureChoices([voice, media, root])).toEqual({ withAudio: [root], other: [] });
+  });
+
+  it("identifies a route whose only enabled source is one bound application", () => {
+    const withApp = appendApplicationCaptureNode({ ...demoSession, nodes: demoSession.nodes.filter((node) => !["physicalInput", "testSignal", "audioFile"].includes(node.kind)) }, app(7, "Discord.exe", "C:\\Discord\\app-1\\Discord.exe", "1"));
+    expect(applicationOnlyRouteSource(withApp)?.kind).toBe("applicationCapture");
+    expect(applicationOnlyRouteSource(demoSession)).toBeNull();
+    const withMic = { ...withApp, nodes: [...withApp.nodes, { ...withApp.nodes.at(-1)!, id: "mic", kind: "physicalInput" as const, parameters: {} }] };
+    expect(applicationOnlyRouteSource(withMic)).toBeNull();
+    const disabledMic = { ...withMic, nodes: withMic.nodes.map((node) => node.id === "mic" ? { ...node, enabled: false } : node) };
+    expect(applicationOnlyRouteSource(disabledMic)?.kind).toBe("applicationCapture");
+    const appId = withApp.nodes.at(-1)!.id;
+    expect(mixedApplicationRouteOtherSources(withMic, appId).map((node) => node.id)).toEqual(["mic"]);
+    expect(mixedApplicationRouteOtherSources(disabledMic, appId)).toEqual([]);
+  });
+
+  it("rebinds a node in place, keeping its id, connections, and custom settings", () => {
+    const withNode = appendApplicationCaptureNode(demoSession, app(1284, "Discord.exe", "C:\\Discord\\app-1.0.9258\\Discord.exe", "100"));
+    const nodeId = withNode.nodes.at(-1)!.id;
+    const custom = setNodeDraftParameter(withNode, nodeId, "muted", true);
+    const next = rebindApplicationCaptureNode(custom, nodeId, app(36808, "Discord.exe", "C:\\Discord\\app-1.0.9259\\Discord.exe", "200"));
+    const node = next.nodes.find((candidate) => candidate.id === nodeId)!;
+    expect(next.nodes).toHaveLength(custom.nodes.length);
+    expect(next.edges).toEqual(custom.edges);
+    expect(node.name).toBe("Discord.exe capture 1");
+    expect(node.parameters).toEqual({
+      muted: true,
+      executable: "Discord.exe",
+      executablePath: "C:\\Discord\\app-1.0.9259\\Discord.exe",
+      processPolicy: "selectedInstance",
+      processId: 36808,
+      creationTime100ns: "200",
+    });
+  });
+
+  it("renames only generated names and drops a stale instance identity", () => {
+    const withNode = appendApplicationCaptureNode(demoSession, app(1, "game.exe", "C:\\game.exe", "1"));
+    const nodeId = withNode.nodes.at(-1)!.id;
+    const renamed = rebindApplicationCaptureNode(withNode, nodeId, { ...app(2, "chat.exe", "C:\\chat.exe", "2"), creationTime100ns: null });
+    const node = renamed.nodes.find((candidate) => candidate.id === nodeId)!;
+    expect(node.name).toBe("chat.exe capture 1");
+    expect(node.parameters).toEqual({ executable: "chat.exe", executablePath: "C:\\chat.exe", processPolicy: "allVerifiedInstances" });
+    const custom = setNodeDraftName(withNode, nodeId, "Voice chat");
+    expect(rebindApplicationCaptureNode(custom, nodeId, app(3, "chat.exe", "C:\\chat.exe", "3")).nodes.find((candidate) => candidate.id === nodeId)!.name).toBe("Voice chat");
+    expect(() => rebindApplicationCaptureNode(withNode, withNode.nodes[0].id, app(3, "chat.exe", "C:\\chat.exe", "3"))).toThrow(/application capture node/);
+  });
+});
+
 describe("appendApplicationCaptureNode", () => {
-  it("creates a stopped capture source bound to the observed process identity", () => {
+  it("creates an enabled capture source bound to the observed process identity", () => {
     const next = appendApplicationCaptureNode(demoSession, {
       processId: 42,
       executable: "game.exe",
@@ -247,7 +319,7 @@ describe("appendApplicationCaptureNode", () => {
     expect(next.nodes.at(-1)).toMatchObject({
       id: "application-capture-1",
       kind: "applicationCapture",
-      enabled: false,
+      enabled: true,
       parameters: {
         executable: "game.exe",
         executablePath: "C:\\Games\\game.exe",
@@ -257,5 +329,117 @@ describe("appendApplicationCaptureNode", () => {
       },
       ports: [{ name: "out", direction: "output", channels: 2 }],
     });
+  });
+});
+
+describe("per-source volume", () => {
+  const mixerSession = (): Session => {
+    let next = appendLibraryNode(demoSession, "mixer");
+    next = appendLibraryNode(next, "volume");
+    const mixerId = next.nodes.find((node) => node.kind === "mixer")!.id;
+    const volumeId = next.nodes.find((node) => node.kind === "volume")!.id;
+    next = appendDraftConnection(next, "mic", "out", volumeId, "in");
+    next = appendDraftConnection(next, volumeId, "out", mixerId, "in");
+    return next;
+  };
+
+  it("adds a Volume tool at 100 % and validates its range", () => {
+    const session = mixerSession();
+    const volume = session.nodes.find((node) => node.kind === "volume")!;
+    expect(volume.parameters).toEqual({ percent: 100 });
+    expect(setNodeDraftParameter(session, volume.id, "percent", 110).nodes.find((node) => node.id === volume.id)!.parameters.percent).toBe(110);
+    expect(() => setNodeDraftParameter(session, volume.id, "percent", 201)).toThrow(/0 and 200/);
+  });
+
+  it("lists Mixer inputs with a default of 100 % and stores per-input volume by upstream node", () => {
+    const session = mixerSession();
+    const mixer = session.nodes.find((node) => node.kind === "mixer")!;
+    const [input] = mixerInputs(session, mixer.id);
+    expect(input.upstream.kind).toBe("volume");
+    expect(input.percent).toBe(100);
+    const key = mixerInputVolumeKey(input.upstream.id);
+    expect(key).toBe(`inputVolume:${input.upstream.id}`);
+    const updated = setNodeDraftParameter(session, mixer.id, key, 50);
+    expect(mixerInputs(updated, mixer.id)[0].percent).toBe(50);
+    expect(() => setNodeDraftParameter(session, mixer.id, key, 101)).toThrow(/0 and 100/);
+    expect(mixerInputs(session, "missing")).toEqual([]);
+  });
+});
+
+describe("Mixer route sources", () => {
+  const app = (processId: number): ApplicationInfo => ({ processId, executable: "Discord.exe", executablePath: "C:\\Discord\\app-1\\Discord.exe", creationTime100ns: "1", audioActivity: "active", captureCapability: "notObserved", audioSessionCount: 1, activeAudioSessionCount: 1, captureSessionCount: 0, renderSessionCount: 1, audioDisplayNames: [] });
+  const route = (): Session => {
+    let next = appendLibraryNode({ ...demoSession, nodes: demoSession.nodes.filter((node) => node.kind !== "gain"), edges: [] }, "mixer");
+    next = appendLibraryNode(next, "testSignal");
+    next = appendApplicationCaptureNode(next, app(7));
+    next = appendLibraryNode(next, "volume");
+    const id = (kind: string) => next.nodes.find((node) => node.kind === kind)!.id;
+    next = appendDraftConnection(next, id("applicationCapture"), "out", id("volume"), "in");
+    next = appendDraftConnection(next, id("volume"), "out", id("mixer"), "in");
+    next = appendDraftConnection(next, "mic", "out", id("mixer"), "in");
+    next = appendDraftConnection(next, id("testSignal"), "out", id("mixer"), "in");
+    return next;
+  };
+
+  it("walks processor chains to the real sources in Mixer connection order", () => {
+    expect(mixerRouteSources(route())?.map((node) => node.kind)).toEqual(["applicationCapture", "physicalInput", "testSignal"]);
+  });
+
+  it("prunes disabled sources that nothing feeds, like the engine", () => {
+    const session = route();
+    const withoutTone = { ...session, nodes: session.nodes.map((node) => node.kind === "testSignal" ? { ...node, enabled: false } : node) };
+    expect(mixerRouteSources(withoutTone)?.map((node) => node.kind)).toEqual(["applicationCapture", "physicalInput"]);
+    expect(pruneInactiveUpstream(withoutTone).edges.some((edge) => edge.sourceNode.startsWith("testSignal"))).toBe(false);
+    expect(pruneInactiveUpstream(session)).toBe(session);
+  });
+
+  it("returns null without exactly one enabled Mixer", () => {
+    expect(mixerRouteSources(demoSession)).toBeNull();
+  });
+});
+
+describe("isParameterOnlyChange", () => {
+  it("accepts slider-style edits and rejects topology, flag, and name changes", () => {
+    const withVolume = appendLibraryNode(demoSession, "volume");
+    const volumeId = withVolume.nodes.at(-1)!.id;
+    const saved = appendDraftConnection(withVolume, "mic", "out", volumeId, "in");
+    expect(isParameterOnlyChange(saved, saved)).toBe(false);
+    expect(isParameterOnlyChange(saved, setNodeDraftParameter(saved, volumeId, "percent", 50))).toBe(true);
+    expect(isParameterOnlyChange(saved, appendLibraryNode(saved, "gain"))).toBe(false);
+    expect(isParameterOnlyChange(saved, setNodeDraftName(saved, volumeId, "Discord level"))).toBe(false);
+    expect(isParameterOnlyChange(saved, { ...saved, nodes: saved.nodes.map((node) => node.id === volumeId ? { ...node, enabled: false } : node) })).toBe(false);
+    expect(saved.edges.length).toBeGreaterThan(0);
+    expect(isParameterOnlyChange(saved, { ...setNodeDraftParameter(saved, volumeId, "percent", 50), edges: saved.edges.slice(1) })).toBe(false);
+  });
+});
+
+describe("Input Switch routes", () => {
+  it("treats an Input Switch as the convergence node for Play", () => {
+    let next = appendLibraryNode({ ...demoSession, nodes: demoSession.nodes.filter((node) => node.kind !== "gain"), edges: [] }, "inputSwitch");
+    next = appendApplicationCaptureNode(next, { processId: 9, executable: "Spotify.exe", executablePath: "C:\\Spotify\\Spotify.exe", creationTime100ns: "3", audioActivity: "active", captureCapability: "notObserved", audioSessionCount: 1, activeAudioSessionCount: 1, captureSessionCount: 0, renderSessionCount: 1, audioDisplayNames: [] });
+    const switchId = next.nodes.find((node) => node.kind === "inputSwitch")!.id;
+    const appId = next.nodes.find((node) => node.kind === "applicationCapture")!.id;
+    next = appendDraftConnection(next, appId, "out", switchId, "a");
+    next = appendDraftConnection(next, "mic", "out", switchId, "b");
+    expect(next.nodes.find((node) => node.id === switchId)!.parameters).toEqual({ selected: "a", fade: "normal" });
+    expect(mixerRouteSources(next)?.map((node) => node.kind)).toEqual(["applicationCapture", "physicalInput"]);
+    expect(() => appendDraftConnection(next, "mic", "out", switchId, "a")).toThrow(/already has a connection/);
+  });
+});
+
+describe("pluginCatalog", () => {
+  const entry = (path: string, sha256: string, format: "vst3" | "vst2", compatibility: "supportedVst3X64" | "supportedVst2X64Gated" | "unsupportedFormat") => ({
+    path,
+    identity: { path, binaryPath: path, format, architecture: "x64" as const, fileBytes: 1, sha256, vendor: "Cockos", version: "1", classIds: [], compatibility },
+    error: null,
+    errorCode: null,
+  });
+  it("lists supported plugins once each, sorted by name, with format and folder", () => {
+    const catalog = pluginCatalog([
+      { directory: "C:\\A", entries: [entry("C:\\A\\ReaEQ.dll", "aa", "vst2", "supportedVst2X64Gated"), entry("C:\\A\\old32.dll", "bb", "vst2", "unsupportedFormat")] },
+      { directory: "C:\\B", entries: [entry("C:\\A\\ReaEQ.dll", "aa", "vst2", "supportedVst2X64Gated"), entry("C:\\B\\Compressor.vst3", "cc", "vst3", "supportedVst3X64")] },
+    ]);
+    expect(catalog.map((item) => [item.name, item.format, item.folder])).toEqual([["Compressor", "VST3", "C:\\B"], ["ReaEQ", "VST2", "C:\\A"]]);
+    expect(STANDARD_PLUGIN_FOLDERS).toContain("C:\\Program Files\\Common Files\\VST3");
   });
 });

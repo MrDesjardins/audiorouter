@@ -9,7 +9,7 @@ export function selectNativePump(
   multiInputAvailable = false,
 ): NativePumpKind | null {
   if (kind === "duplex") return duplexAvailable ? "duplex" : null;
-  if (kind === "endpoint") return endpointAvailable ? "endpoint" : null;
+  if (kind === "endpoint" || kind === "process-loopback") return endpointAvailable ? "endpoint" : null;
   if (kind === "render-source") return renderSourceAvailable ? "renderSource" : null;
   if (kind === "multi-input") return multiInputAvailable ? "multiInput" : null;
   return null;

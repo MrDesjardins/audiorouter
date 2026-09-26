@@ -3237,6 +3237,24 @@ impl ProcessLoopbackWorker {
         })
     }
 
+    /// Replace only the process capture client while retaining the prepared
+    /// graph scheduler and exact render endpoint. This supports a verified
+    /// application restart without recompiling or restarting unrelated graph
+    /// state. The replacement client is already identity-checked by the
+    /// control plane and must be stopped when supplied.
+    pub fn replace_capture(
+        &mut self,
+        capture: ProcessLoopbackCapture,
+    ) -> Result<(), AudioError> {
+        let was_running = self.running;
+        self.stop()?;
+        self.capture = capture;
+        if was_running {
+            self.start()?;
+        }
+        Ok(())
+    }
+
     pub fn wait_for_data(&self, timeout_ms: u32) -> Result<bool, AudioError> {
         self.capture.wait_for_data(timeout_ms)
     }
@@ -3283,6 +3301,18 @@ pub enum NativeAudioWorker {
 }
 
 impl NativeAudioWorker {
+    /// Replace an application process capture while keeping its graph and
+    /// render endpoint binding. Endpoint workers reject this operation.
+    pub fn replace_process_capture(
+        &mut self,
+        capture: ProcessLoopbackCapture,
+    ) -> Result<(), AudioError> {
+        match self {
+            Self::Endpoint(_) => Err(AudioError::ProcessingStateUnavailable),
+            Self::ProcessLoopback(worker) => worker.replace_capture(capture),
+        }
+    }
+
     pub fn set_privacy_muted(&self, muted: bool) {
         match self {
             Self::Endpoint(worker) => worker.set_privacy_muted(muted),
@@ -3472,6 +3502,9 @@ fn saturating_increment(counter: &AtomicU64) {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ApplicationInfo {
     pub process_id: u32,
+    /// Parent process identity from the same Toolhelp snapshot. Used only to
+    /// collapse verified same-image helper processes into their app root.
+    pub parent_process_id: u32,
     pub executable: String,
     /// Verified full executable path when Windows permits limited process
     /// inspection. This distinguishes same-named binaries in different
@@ -5522,6 +5555,20 @@ impl WasapiMultiInputFanout {
         self.mixer.reset_inputs()
     }
 
+    /// Discard one input's partial packet and accumulated frames when its
+    /// capture source is replaced, without disturbing the other inputs.
+    pub fn reset_input(&mut self, index: usize) {
+        if let Some(accumulator) = self.accumulators.get_mut(index) {
+            accumulator.reset();
+        }
+        if let Some(bytes) = self.pending_packet_bytes.get_mut(index) {
+            *bytes = 0;
+        }
+        if let Some(offset) = self.pending_packet_offsets.get_mut(index) {
+            *offset = 0;
+        }
+    }
+
     /// Pump at most one currently available packet from each capture source.
     /// Complete quanta are copied through the engine-owned generation and
     /// shape boundary. If a source ring is full, its accumulator remains
@@ -5720,6 +5767,53 @@ pub enum NativeMultiInputWorkerError {
 pub enum MultiInputCaptureSource {
     Physical(SharedCapture),
     ApplicationLoopback(ProcessLoopbackCapture),
+    /// Stand-in for an application that has closed: it offers silent
+    /// packets so the Mixer keeps producing the other inputs. The feeder's
+    /// bounded input ring paces it to the live inputs.
+    Silence(SilentCapture),
+}
+
+/// Silent capture used while an application source is unavailable.
+#[derive(Clone, Copy, Debug)]
+pub struct SilentCapture {
+    frames_per_packet: usize,
+}
+
+impl SilentCapture {
+    pub fn new(frames_per_packet: usize) -> Self {
+        Self {
+            frames_per_packet: frames_per_packet.clamp(1, 4_096),
+        }
+    }
+}
+
+impl AudioCaptureSource for SilentCapture {
+    fn next_packet_into(
+        &self,
+        destination: &mut [u8],
+        bytes_per_frame: usize,
+    ) -> Result<Option<(CapturePacket, usize)>, AudioError> {
+        if bytes_per_frame == 0 {
+            return Err(AudioError::InvalidFrameSize);
+        }
+        let frames = self
+            .frames_per_packet
+            .min(destination.len() / bytes_per_frame);
+        if frames == 0 {
+            return Ok(None);
+        }
+        let bytes = frames * bytes_per_frame;
+        destination[..bytes].fill(0);
+        Ok(Some((
+            CapturePacket {
+                frames: frames as u32,
+                flags: 0x2, // AUDCLNT_BUFFERFLAGS_SILENT
+                device_position: 0,
+                qpc_position: 0,
+            },
+            bytes,
+        )))
+    }
 }
 
 impl MultiInputCaptureSource {
@@ -5729,7 +5823,7 @@ impl MultiInputCaptureSource {
     pub fn physical_endpoint_id(&self) -> Option<&str> {
         match self {
             Self::Physical(capture) => Some(capture.endpoint_id()),
-            Self::ApplicationLoopback(_) => None,
+            Self::ApplicationLoopback(_) | Self::Silence(_) => None,
         }
     }
 }
@@ -5739,6 +5833,7 @@ impl EndpointLifecycle for MultiInputCaptureSource {
         match self {
             Self::Physical(capture) => capture.start(),
             Self::ApplicationLoopback(capture) => capture.start(),
+            Self::Silence(_) => Ok(()),
         }
     }
 
@@ -5746,6 +5841,7 @@ impl EndpointLifecycle for MultiInputCaptureSource {
         match self {
             Self::Physical(capture) => capture.stop(),
             Self::ApplicationLoopback(capture) => capture.stop(),
+            Self::Silence(_) => Ok(()),
         }
     }
 }
@@ -5761,6 +5857,7 @@ impl AudioCaptureSource for MultiInputCaptureSource {
             Self::ApplicationLoopback(capture) => {
                 capture.next_packet_into(destination, bytes_per_frame)
             }
+            Self::Silence(capture) => capture.next_packet_into(destination, bytes_per_frame),
         }
     }
 }
@@ -5913,6 +6010,11 @@ impl NativeMultiInputWorker {
         self.feeder.mixer().plugin_health_for_node(node_id)
     }
 
+    /// Learned noise profile of a learning Denoise node in the Mixer graph.
+    pub fn noise_profile_for_node(&self, node_id: &audiorouter_domain::EntityId) -> Option<String> {
+        self.feeder.mixer().noise_profile_for_node(node_id)
+    }
+
     /// Attach branch-local observers to the owned output fan-out before
     /// startup. Reconfiguration while running is rejected so realtime tap
     /// membership never changes on the audio path.
@@ -5964,6 +6066,43 @@ impl NativeMultiInputWorker {
         }
         self.running = true;
         Ok(())
+    }
+
+    /// Replace one input's capture (for example an exited application with
+    /// silence, or silence with the restarted application) while the other
+    /// inputs keep running. Called only from the control thread between
+    /// pumps; that input's partial packet is discarded so no stale audio is
+    /// completed across the boundary. The replacement is started when the
+    /// worker is running; on failure the previous capture is kept.
+    pub fn replace_capture(
+        &mut self,
+        index: usize,
+        mut capture: MultiInputCaptureSource,
+    ) -> Result<(), NativeMultiInputWorkerError> {
+        if index >= self.captures.len() {
+            return Err(NativeMultiInputWorkerError::Capacity);
+        }
+        if self.running {
+            capture.start().map_err(NativeMultiInputWorkerError::Audio)?;
+        }
+        let mut previous = std::mem::replace(&mut self.captures[index], capture);
+        let _ = previous.stop();
+        self.feeder.reset_input(index);
+        Ok(())
+    }
+
+    /// Swap in a recompiled Mixer graph of the same shape while running
+    /// (live parameter change). Control thread only, between pumps.
+    pub fn replace_mixer_graph(
+        &mut self,
+        graph: audiorouter_engine::CompiledMixerFanoutGraph,
+    ) -> Result<(), audiorouter_engine::MixerFanoutError> {
+        self.feeder.mixer_mut().replace_graph(graph)
+    }
+
+    /// Whether an input currently carries the silent stand-in.
+    pub fn capture_is_silent(&self, index: usize) -> bool {
+        matches!(self.captures.get(index), Some(MultiInputCaptureSource::Silence(_)))
     }
 
     pub fn stop(&mut self) -> Result<(), NativeMultiInputWorkerError> {
@@ -6417,6 +6556,7 @@ pub fn enumerate_applications() -> Result<Vec<ApplicationInfo>, AudioError> {
                     creation_time_100ns.map_or((None, None), |(creation, path)| (creation, path));
                 applications.push(ApplicationInfo {
                     process_id: entry.th32ProcessID,
+                    parent_process_id: entry.th32ParentProcessID,
                     executable,
                     executable_path,
                     creation_time_100ns,
@@ -6549,8 +6689,8 @@ pub fn bind_application(
 }
 
 /// Resolve an application using the complete observed executable identity.
-/// Callers that persist a path should use this variant so two same-named
-/// binaries in different locations cannot inherit one another's binding.
+/// Restart matching requires a verified full path; basename-only selectors
+/// are insufficient for automatic rebinding.
 pub fn bind_application_with_path(
     process_id: u32,
     expected_executable: &str,
@@ -6582,8 +6722,9 @@ pub fn bind_application_with_path(
 }
 
 /// Resolve a persisted executable selector after a backend restart. A PID is
-/// deliberately not used here: exactly one case-insensitive executable match
-/// with a creation timestamp is required, otherwise rebinding remains silent.
+/// deliberately not used here: exactly one case-insensitive executable and
+/// full-path match with a creation timestamp is required, otherwise rebinding
+/// remains silent.
 pub fn resolve_application_restart(
     applications: &[ApplicationInfo],
     expected_executable: &str,
@@ -6591,44 +6732,172 @@ pub fn resolve_application_restart(
     resolve_application_restart_with_path(applications, expected_executable, None)
 }
 
-/// Resolve a persisted restart selector using basename, optional full path,
-/// and creation identity. A supplied path is required to be observed exactly
-/// (case-insensitively) before a candidate can be returned.
+/// Resolve a persisted restart selector using basename, full path, and
+/// creation identity. The path must be observed exactly (case-insensitively)
+/// before a candidate can be returned.
 pub fn resolve_application_restart_with_path(
     applications: &[ApplicationInfo],
     expected_executable: &str,
     expected_executable_path: Option<&str>,
 ) -> Result<ApplicationInfo, AudioError> {
-    let matches = applications
+    let Some(expected_executable_path) = expected_executable_path else {
+        return Err(AudioError::ApplicationRestartIdentityUnavailable {
+            executable: expected_executable.to_owned(),
+        });
+    };
+    let name_matches = applications
         .iter()
-        .filter(|application| {
-            application
-                .executable
-                .eq_ignore_ascii_case(expected_executable)
-                && expected_executable_path.map_or(true, |expected| {
-                    application
+        .filter(|application| application.executable.eq_ignore_ascii_case(expected_executable))
+        .collect::<Vec<_>>();
+    let path_matches = |same_path: fn(&str, &str) -> bool| {
+        applications
+            .iter()
+            .filter(|application| {
+                application
+                    .executable
+                    .eq_ignore_ascii_case(expected_executable)
+                    && application
                         .executable_path
                         .as_deref()
-                        .is_some_and(|actual| actual.eq_ignore_ascii_case(expected))
-                })
-        })
-        .collect::<Vec<_>>();
-    let Some(application) = matches.first() else {
+                        .is_some_and(|actual| same_path(expected_executable_path, actual))
+            })
+            .collect::<Vec<_>>()
+    };
+    // An exact path always wins. Only when none is running may a self-updating
+    // install (for example `...\Discord\app-1.0.9259\Discord.exe`) match the
+    // same install root in another version directory.
+    let mut matches = path_matches(|expected, actual| actual.eq_ignore_ascii_case(expected));
+    if matches.is_empty() {
+        matches = path_matches(same_versioned_install);
+    }
+    let Some(_) = matches.first() else {
+        if name_matches
+            .iter()
+            .any(|application| application.executable_path.is_none())
+        {
+            return Err(AudioError::ApplicationRestartIdentityUnavailable {
+                executable: expected_executable.to_owned(),
+            });
+        }
         return Err(AudioError::ApplicationRestartNotFound {
             executable: expected_executable.to_owned(),
         });
     };
-    if matches.len() != 1 {
+    // Electron/Chromium applications commonly have several processes with
+    // the same executable path. A process-loopback binding to their common
+    // root captures that process tree; only independent roots are ambiguous.
+    let roots = matches
+        .iter()
+        .copied()
+        .filter(|candidate| {
+            !matches.iter().any(|other| {
+                other.process_id != candidate.process_id
+                    && is_process_ancestor(other, candidate, applications)
+            })
+        })
+        .collect::<Vec<_>>();
+    if roots.len() != 1 {
         return Err(AudioError::ApplicationRestartAmbiguous {
             executable: expected_executable.to_owned(),
         });
     }
+    let application = roots[0];
     if application.creation_time_100ns.is_none() {
         return Err(AudioError::ApplicationRestartIdentityUnavailable {
             executable: expected_executable.to_owned(),
         });
     }
     Ok((*application).clone())
+}
+
+/// Resolve an application for preparation. The saved PID and creation time
+/// are tried first; if that exact process has exited, the same unique
+/// full-path (or same-install version-directory) restart rule used by a
+/// running route selects its replacement. Other identity failures, such as a
+/// reused PID belonging to a different executable, still fail closed.
+pub fn bind_application_or_restarted(
+    process_id: u32,
+    expected_executable: &str,
+    expected_executable_path: Option<&str>,
+    expected_creation_time_100ns: u64,
+) -> Result<ApplicationInfo, AudioError> {
+    match bind_application_with_path(
+        process_id,
+        expected_executable,
+        expected_executable_path,
+        Some(expected_creation_time_100ns),
+    ) {
+        Err(AudioError::ApplicationNotFound { .. } | AudioError::ApplicationIdentityChanged { .. }) => {
+            let replacement = resolve_application_restart_with_path(
+                &enumerate_applications()?,
+                expected_executable,
+                expected_executable_path,
+            )?;
+            bind_application_with_path(
+                replacement.process_id,
+                &replacement.executable,
+                replacement.executable_path.as_deref(),
+                replacement.creation_time_100ns,
+            )
+        }
+        result => result,
+    }
+}
+
+/// True when two executable paths are the same install except for exactly one
+/// Squirrel-style `app-<version>` directory (as used by Discord, Slack, and
+/// other self-updating Electron apps). The executable file name, every other
+/// directory, and the directory depth must match case-insensitively.
+fn same_versioned_install(expected: &str, actual: &str) -> bool {
+    fn is_version_directory(component: &str) -> bool {
+        let Some(version) = component
+            .get(..4)
+            .filter(|prefix| prefix.eq_ignore_ascii_case("app-"))
+            .and_then(|_| component.get(4..))
+        else {
+            return false;
+        };
+        !version.is_empty()
+            && version.split('.').all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+    }
+    let expected = expected.split(['\\', '/']).collect::<Vec<_>>();
+    let actual = actual.split(['\\', '/']).collect::<Vec<_>>();
+    if expected.len() != actual.len() || expected.len() < 3 {
+        return false;
+    }
+    let last = expected.len() - 1;
+    let mut version_changes = 0;
+    for (index, (left, right)) in expected.iter().zip(&actual).enumerate() {
+        if left.eq_ignore_ascii_case(right) {
+            continue;
+        }
+        if index == last || !is_version_directory(left) || !is_version_directory(right) {
+            return false;
+        }
+        version_changes += 1;
+    }
+    version_changes == 1
+}
+
+fn is_process_ancestor(
+    possible_ancestor: &ApplicationInfo,
+    child: &ApplicationInfo,
+    processes: &[ApplicationInfo],
+) -> bool {
+    let mut parent_id = child.parent_process_id;
+    for _ in 0..processes.len() {
+        if parent_id == 0 || parent_id == child.process_id {
+            return false;
+        }
+        if parent_id == possible_ancestor.process_id {
+            return true;
+        }
+        let Some(parent) = processes.iter().find(|process| process.process_id == parent_id) else {
+            return false;
+        };
+        parent_id = parent.parent_process_id;
+    }
+    false
 }
 
 unsafe fn enumerate_after_com_init() -> Result<Vec<EndpointInfo>, AudioError> {
@@ -9045,41 +9314,139 @@ mod tests {
     }
 
     #[test]
+    fn silent_capture_offers_bounded_zeroed_packets() {
+        let silence = SilentCapture::new(128);
+        let mut destination = vec![0xAA_u8; 2 * 4 * 200];
+        let (packet, bytes) = silence.next_packet_into(&mut destination, 8).unwrap().unwrap();
+        assert_eq!(packet.frames, 128);
+        assert_eq!(bytes, 128 * 8);
+        assert!(destination[..bytes].iter().all(|byte| *byte == 0));
+        assert!(destination[bytes..].iter().all(|byte| *byte == 0xAA));
+        // A smaller caller buffer bounds the packet instead of overflowing.
+        let mut small = vec![1_u8; 8 * 10];
+        let (packet, bytes) = silence.next_packet_into(&mut small, 8).unwrap().unwrap();
+        assert_eq!((packet.frames, bytes), (10, 80));
+        assert!(silence.next_packet_into(&mut small, 0).is_err());
+        let source = MultiInputCaptureSource::Silence(silence);
+        assert_eq!(source.physical_endpoint_id(), None);
+    }
+
+    #[test]
+    fn restart_binding_follows_one_self_updated_version_directory() {
+        let process = |process_id, parent_process_id, path: &str, creation| ApplicationInfo {
+            process_id,
+            parent_process_id,
+            executable: "Discord.exe".into(),
+            executable_path: Some(path.into()),
+            creation_time_100ns: Some(creation),
+        };
+        let saved = r"C:\Users\u\AppData\Local\Discord\app-1.0.9258\Discord.exe";
+        let updated = r"C:\Users\u\AppData\Local\Discord\app-1.0.9259\Discord.exe";
+        let root = process(36808, 1, updated, 100);
+        let helper = process(26164, 36808, updated, 101);
+        assert_eq!(
+            resolve_application_restart_with_path(&[helper.clone(), root.clone()], "discord.exe", Some(saved))
+                .unwrap()
+                .process_id,
+            36808
+        );
+        // An exact path match is preferred over a version-directory match.
+        let exact = process(9, 1, saved, 50);
+        assert_eq!(
+            resolve_application_restart_with_path(&[root.clone(), exact.clone()], "Discord.exe", Some(saved))
+                .unwrap()
+                .process_id,
+            9
+        );
+        // Another install root, a different executable directory, or a
+        // non-version directory change never matches.
+        for other in [
+            r"C:\Users\other\AppData\Local\Discord\app-1.0.9259\Discord.exe",
+            r"C:\Users\u\AppData\Local\Evil\app-1.0.9259\Discord.exe",
+            r"C:\Users\u\AppData\Local\Discord\payload\Discord.exe",
+            r"C:\Users\u\AppData\Local\Discord\app-1.0.9259\sub\Discord.exe",
+            r"C:\Users\u\AppData\Local\Discord\app-\Discord.exe",
+            r"C:\Users\u\AppData\Local\Discord\app-1..2\Discord.exe",
+        ] {
+            assert!(
+                matches!(
+                    resolve_application_restart_with_path(&[process(5, 1, other, 1)], "Discord.exe", Some(saved)),
+                    Err(AudioError::ApplicationRestartNotFound { .. })
+                ),
+                "{other}"
+            );
+        }
+        // Two independent updated roots remain ambiguous.
+        let second_root = process(77, 1, updated, 300);
+        assert!(matches!(
+            resolve_application_restart_with_path(&[root, second_root], "Discord.exe", Some(saved)),
+            Err(AudioError::ApplicationRestartAmbiguous { .. })
+        ));
+        assert!(!same_versioned_install(
+            r"C:\A\app-1.0\x\app-1.0\Discord.exe",
+            r"C:\A\app-2.0\x\app-2.0\Discord.exe"
+        ));
+    }
+
+    #[test]
     fn restart_binding_requires_one_verified_executable_identity() {
         let candidate = ApplicationInfo {
             process_id: 7,
+            parent_process_id: 0,
             executable: "Game.EXE".into(),
-            executable_path: None,
+            executable_path: Some(r"C:\Games\Game.EXE".into()),
             creation_time_100ns: Some(42),
         };
         assert_eq!(
-            resolve_application_restart(std::slice::from_ref(&candidate), "game.exe").unwrap(),
+            resolve_application_restart_with_path(
+                std::slice::from_ref(&candidate),
+                "game.exe",
+                Some(r"c:\games\game.exe"),
+            )
+            .unwrap(),
             candidate
         );
         assert!(matches!(
-            resolve_application_restart(&[], "game.exe"),
+            resolve_application_restart_with_path(&[], "game.exe", Some(r"C:\Games\Game.EXE")),
             Err(AudioError::ApplicationRestartNotFound { .. })
         ));
         assert!(matches!(
-            resolve_application_restart(
+            resolve_application_restart_with_path(
                 &[
                     candidate.clone(),
                     ApplicationInfo {
                         process_id: 8,
+                        parent_process_id: 0,
                         ..candidate.clone()
                     }
                 ],
-                "game.exe"
+                "game.exe",
+                Some(r"C:\Games\Game.EXE")
             ),
             Err(AudioError::ApplicationRestartAmbiguous { .. })
         ));
         assert!(matches!(
-            resolve_application_restart(
+            resolve_application_restart_with_path(
                 &[ApplicationInfo {
                     creation_time_100ns: None,
                     ..candidate
                 }],
-                "game.exe"
+                "game.exe",
+                Some(r"C:\Games\Game.EXE")
+            ),
+            Err(AudioError::ApplicationRestartIdentityUnavailable { .. })
+        ));
+        assert!(matches!(
+            resolve_application_restart_with_path(
+                &[ApplicationInfo {
+                    process_id: 8,
+                    parent_process_id: 0,
+                    executable: "game.exe".into(),
+                    executable_path: Some(r"C:\Games\Game.EXE".into()),
+                    creation_time_100ns: Some(43),
+                }],
+                "game.exe",
+                None,
             ),
             Err(AudioError::ApplicationRestartIdentityUnavailable { .. })
         ));
@@ -9090,12 +9457,14 @@ mod tests {
         let applications = [
             ApplicationInfo {
                 process_id: 7,
+                parent_process_id: 0,
                 executable: "Game.EXE".into(),
                 executable_path: Some(r"C:\Games\Game.EXE".into()),
                 creation_time_100ns: Some(42),
             },
             ApplicationInfo {
                 process_id: 8,
+                parent_process_id: 0,
                 executable: "game.exe".into(),
                 executable_path: Some(r"C:\Tools\Game.EXE".into()),
                 creation_time_100ns: Some(43),
@@ -9123,11 +9492,12 @@ mod tests {
                     executable_path: None,
                     creation_time_100ns: Some(44),
                     process_id: 9,
+                    parent_process_id: 0,
                 }],
                 "game.exe",
                 Some(r"C:\Games\Game.EXE")
             ),
-            Err(AudioError::ApplicationRestartNotFound { .. })
+            Err(AudioError::ApplicationRestartIdentityUnavailable { .. })
         ));
         assert!(matches!(
             resolve_application_restart_with_path(
@@ -9136,12 +9506,45 @@ mod tests {
                     executable_path: Some(r"C:\Games\Game.EXE".into()),
                     creation_time_100ns: None,
                     process_id: 9,
+                    parent_process_id: 0,
                 }],
                 "game.exe",
                 Some(r"C:\Games\Game.EXE")
             ),
             Err(AudioError::ApplicationRestartIdentityUnavailable { .. })
         ));
+    }
+
+    #[test]
+    fn restart_binding_collapses_same_image_process_tree_to_its_root() {
+        let root = ApplicationInfo {
+            process_id: 10,
+            parent_process_id: 1,
+            executable: "Discord.exe".into(),
+            executable_path: Some(r"C:\Apps\Discord.exe".into()),
+            creation_time_100ns: Some(100),
+        };
+        let helper = ApplicationInfo {
+            process_id: 11,
+            parent_process_id: 10,
+            creation_time_100ns: Some(110),
+            ..root.clone()
+        };
+        let renderer = ApplicationInfo {
+            process_id: 12,
+            parent_process_id: 11,
+            creation_time_100ns: Some(120),
+            ..root.clone()
+        };
+        assert_eq!(
+            resolve_application_restart_with_path(
+                &[root.clone(), helper, renderer],
+                "discord.exe",
+                Some(r"c:\apps\discord.exe"),
+            )
+            .unwrap(),
+            root
+        );
     }
 
     #[cfg(windows)]
@@ -9272,18 +9675,21 @@ mod tests {
         let mut applications = vec![
             ApplicationInfo {
                 process_id: 20,
+                parent_process_id: 0,
                 executable: "zeta.exe".into(),
                 executable_path: None,
                 creation_time_100ns: Some(2),
             },
             ApplicationInfo {
                 process_id: 4,
+                parent_process_id: 0,
                 executable: "Audio.exe".into(),
                 executable_path: None,
                 creation_time_100ns: Some(1),
             },
             ApplicationInfo {
                 process_id: 3,
+                parent_process_id: 0,
                 executable: "audio.exe".into(),
                 executable_path: None,
                 creation_time_100ns: Some(0),

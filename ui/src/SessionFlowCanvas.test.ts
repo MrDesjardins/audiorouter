@@ -5,7 +5,7 @@ import { createElement } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Session } from "@audiorouter/contracts";
 import { demoSession } from "./fixtures";
-import { AudioFileNodeControls, deletedConnectionIds, deletedNodeIds, edgeSignalForConnection, eqBandCoordinates, libraryDropPosition, signalStrokeWidth, telemetrySignalActive, testSignalHasPhysicalOutputPath } from "./SessionFlowCanvas";
+import { AudioFileNodeControls, SIGNAL_FLOW_LEGEND, nodeHeaderState, deletedConnectionIds, deletedNodeIds, edgeSignalForConnection, eqBandCoordinates, libraryDropPosition, signalStrokeWidth, telemetrySignalActive, testSignalHasPhysicalOutputPath } from "./SessionFlowCanvas";
 import { SessionFlowCanvas } from "./SessionFlowCanvas";
 
 beforeAll(() => {
@@ -30,6 +30,19 @@ const testSignalSession: Session = {
   ],
   edges: [
     { id: "signal-gain", sourceNode: "signal", sourcePort: "main", destinationNode: "gain", destinationPort: "in", matrix: [1, 0, 0, 1], enabled: true },
+    { id: "gain-output", sourceNode: "gain", sourcePort: "out", destinationNode: "output", destinationPort: "main", matrix: [1, 0, 0, 1], enabled: true },
+  ],
+};
+
+const applicationCaptureSession: Session = {
+  ...testSignalSession,
+  nodes: [
+    { id: "discord", kind: "applicationCapture", typeVersion: 1, name: "Discord capture", enabled: true, bypass: false, parameters: { executable: "Discord.exe", executablePath: "C:\\Apps\\Discord.exe", processPolicy: "selectedInstance", processId: 42, creationTime100ns: "123" }, ports: [{ name: "main", direction: "output", channels: 2 }] },
+    { id: "gain", kind: "gain", typeVersion: 1, name: "Gain", enabled: true, bypass: false, parameters: { gainDb: 0 }, ports: [{ name: "in", direction: "input", channels: 2 }, { name: "out", direction: "output", channels: 2 }] },
+    { id: "output", kind: "physicalOutput", typeVersion: 1, name: "Output", enabled: true, bypass: false, parameters: {}, ports: [{ name: "main", direction: "input", channels: 2 }] },
+  ],
+  edges: [
+    { id: "discord-gain", sourceNode: "discord", sourcePort: "main", destinationNode: "gain", destinationPort: "in", matrix: [1, 0, 0, 1], enabled: true },
     { id: "gain-output", sourceNode: "gain", sourcePort: "out", destinationNode: "output", destinationPort: "main", matrix: [1, 0, 0, 1], enabled: true },
   ],
 };
@@ -93,6 +106,7 @@ describe("canvas library drop positions", () => {
       nativeAdapterKind: null, nativeSessionId: null,
       schedulerTelemetry: { activeGeneration: 4, activeSampleRateHz: 48_000, inputOverruns: 0, inputUnderruns: 0, outputOverruns: 0, outputUnderruns: 0, processedQuanta: 1, repairedSamples: 0, xruns: 0, processingTimeNsTotal: 0, processingTimeNsMax: 0, deadlineMisses: 0, deadlineLatenessNsTotal: 0, deadlineLatenessNsMax: 0 },
       nodeTelemetry: [{ nodeId: "headphones", kind: "physicalOutput", meter: { peakDb: -8, rmsDb: -18, clippedSamples: 0, channelPeakDb: [-8, -8], channelRmsDb: [-18, -18], channelClippedSamples: [0, 0] }, processor: null, plugin: null }],
+      applicationCaptureStates: [],
       privacyMute: { muted: false, persistence: "memory" as const }, recovery: { safeMode: false, recentCrashes: 0, persistence: "memory" as const }, eventLog: { latestSequence: 0, retained: 0 }, redacted: true as const,
     };
     const edge = session.edges[0];
@@ -108,6 +122,24 @@ describe("canvas library drop positions", () => {
     expect(edgeSignalForConnection(edge, session, { ...diagnostics, nodeTelemetry: [{ ...diagnostics.nodeTelemetry[0], meter: { ...diagnostics.nodeTelemetry[0].meter!, rmsDb: -80 } }] }, true, true).state).toBe("silent");
     expect(edgeSignalForConnection({ ...edge, enabled: false }, session, diagnostics, true, true).state).toBe("disabled");
 
+  });
+
+  it("keeps application paths visibly inactive until a restarted process is connected", () => {
+    const diagnostics = {
+      build: "test", backend: "control-plane" as const, storage: "memory" as const,
+      audio: { state: "available" as const, reason: "" }, nativeAdapter: "running" as const,
+      nativeAdapterKind: "process-loopback" as const, nativeSessionId: applicationCaptureSession.id,
+      schedulerTelemetry: null,
+      nodeTelemetry: [{ nodeId: "output", kind: "physicalOutput", meter: { peakDb: -8, rmsDb: -18, clippedSamples: 0, channelPeakDb: [-8, -8], channelRmsDb: [-18, -18], channelClippedSamples: [0, 0] }, processor: null, plugin: null }],
+      applicationCaptureStates: [{ sessionId: applicationCaptureSession.id, nodeId: "discord", state: "app-closed" as const, detail: "Application is closed." }],
+      privacyMute: { muted: false, persistence: "memory" as const }, recovery: { safeMode: false, recentCrashes: 0, persistence: "memory" as const }, eventLog: { latestSequence: 0, retained: 0 }, redacted: true as const,
+    };
+    expect(edgeSignalForConnection(applicationCaptureSession.edges[0], applicationCaptureSession, diagnostics, true, true).state).toBe("unavailable");
+    expect(edgeSignalForConnection(applicationCaptureSession.edges[1], applicationCaptureSession, diagnostics, true, true).state).toBe("unavailable");
+    const reconnected = { ...diagnostics, applicationCaptureStates: [{ ...diagnostics.applicationCaptureStates[0], state: "connected" as const }] };
+    expect(edgeSignalForConnection(applicationCaptureSession.edges[1], applicationCaptureSession, reconnected, true, true).state).toBe("active");
+    const { getByText } = render(createElement(SessionFlowCanvas, { session: applicationCaptureSession, selectedNodeId: "discord", diagnostics, sessionRunning: true, onSelect: vi.fn(), onConnect: vi.fn() }));
+    expect(getByText("App closed · reconnecting")).toBeTruthy();
   });
 
   it("keeps meter inference bounded to an unambiguous downstream chain", () => {
@@ -382,5 +414,32 @@ describe("canvas library drop positions", () => {
     const plugin = within(getByLabelText("ReaComp, plugin"));
     expect(plugin.getByText("VST")).toBeTruthy();
     expect(plugin.getByText("VST3 Plugin")).toBeTruthy();
+  });
+});
+
+describe("signal flow legend", () => {
+  it("explains every connection line state the canvas can draw", () => {
+    const explained = new Set<string>(SIGNAL_FLOW_LEGEND.map((item) => item.state));
+    const aliases: Record<string, string> = { muted: "disabled", stale: "unavailable", stopped: "configured", unmetered: "configured" };
+    for (const state of ["active", "silent", "muted", "disabled", "stale", "unavailable", "faulted", "stopped", "unmetered"]) {
+      expect(explained.has(aliases[state] ?? state), state).toBe(true);
+    }
+  });
+});
+
+describe("node header state", () => {
+  const appNode = { id: "app", kind: "applicationCapture", typeVersion: 1, name: "Discord.exe capture 1", enabled: true, bypass: false, parameters: { executable: "Discord.exe" }, ports: [] } as Session["nodes"][number];
+  const capture = (state: string) => ({ sessionId: "s", nodeId: "app", state, detail: "detail" }) as never;
+
+  it("does not call an unbound or closed application source ready", () => {
+    expect(nodeHeaderState(appNode, null)).toEqual({ label: "not prepared", tone: "attention" });
+    expect(nodeHeaderState(appNode, capture("app-closed"))).toEqual({ label: "app closed", tone: "attention" });
+    expect(nodeHeaderState(appNode, capture("connected"))).toEqual({ label: "live", tone: "ready" });
+  });
+
+  it("keeps the generic chip for other nodes and respects bypass and disabled", () => {
+    expect(nodeHeaderState({ ...appNode, kind: "gain" }, null)).toEqual({ label: "ready", tone: "ready" });
+    expect(nodeHeaderState({ ...appNode, enabled: false }, capture("connected"))).toEqual({ label: "off", tone: "disabled" });
+    expect(nodeHeaderState({ ...appNode, bypass: true }, null)).toEqual({ label: "bypass", tone: "bypassed" });
   });
 });

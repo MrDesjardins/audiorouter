@@ -1645,6 +1645,7 @@ fn dedicated_vst2_editor_thread_bounds_a_nonreturning_native_editor() {
         parent as usize,
         std::process::id().saturating_add(1),
         "acceptance-token",
+        None,
     );
     assert!(
         wrong_owner
@@ -1653,8 +1654,8 @@ fn dedicated_vst2_editor_thread_bounds_a_nonreturning_native_editor() {
         "an HWND bound to another owner process must be rejected: {wrong_owner:?}"
     );
     let result = editor
-        .open(parent as usize, std::process::id(), "acceptance-token")
-        .and_then(|_| editor.close());
+        .open(parent as usize, std::process::id(), "acceptance-token", None)
+        .and_then(|_| editor.close().map(|_| ()));
     drop(editor);
     // SAFETY: The handle was returned by CreateWindowExW and is no longer
     // needed after the editor has closed.
@@ -2517,4 +2518,80 @@ fn supervised_worker_contains_a_real_hang_fixture() {
     );
     let status = worker.shutdown().expect("reap supervised hang fixture");
     assert!(!status.success());
+}
+
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[link(name = "user32")]
+unsafe extern "system" {
+    fn PeekMessageW(message: *mut [usize; 6], window: *mut std::ffi::c_void, min: u32, max: u32, remove: u32) -> i32;
+    fn TranslateMessage(message: *const [usize; 6]) -> i32;
+    fn DispatchMessageW(message: *const [usize; 6]) -> isize;
+}
+
+/// Mirrors the desktop shell: the editor parent lives on its own thread that
+/// keeps pumping messages (a cross-process child window needs its parent's
+/// thread to respond), unlike the containment tests whose parent thread is
+/// blocked on purpose.
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[test]
+#[ignore = "requires AUDIOROUTER_VST2_FIXTURE pointing to an approved local VST2 DLL and a Windows desktop"]
+fn runtime_bridge_saves_state_and_opens_the_editor_in_a_pumping_parent() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let plugin_path = PathBuf::from(
+        std::env::var("AUDIOROUTER_VST2_FIXTURE").expect("set AUDIOROUTER_VST2_FIXTURE"),
+    );
+    let root = plugin_path.parent().expect("fixture parent").to_path_buf();
+    let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root)).expect("inspect fixture");
+    let worker = SupervisedWorkerProcess::spawn_verified_with_sample_rate(
+        fixture_worker_path(),
+        &identity,
+        std::slice::from_ref(&root),
+        2,
+        48_000,
+        Instant::now(),
+    )
+    .expect("spawn VST2 worker");
+    let bridge = audiorouter_plugin_host::PluginRuntimeBridge::start(worker, 2, 128, 8).expect("bridge");
+
+    match bridge.save_state() {
+        Ok(state) => assert!(!state.bytes.is_empty() && state.bytes.len() <= 512 * 1024),
+        Err(error) => assert!(error.contains("StateUnsupported"), "unexpected state result: {error}"),
+    }
+
+    let stop = Arc::new(AtomicBool::new(false));
+    let (window_sender, window_receiver) = std::sync::mpsc::channel();
+    let pump_stop = Arc::clone(&stop);
+    let pump = std::thread::spawn(move || {
+        let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+        let title: Vec<u16> = "AudioRouter editor host test\0".encode_utf16().collect();
+        // SAFETY: NUL-terminated buffers outlive the synchronous call; style 0 keeps it hidden.
+        let parent = unsafe {
+            CreateWindowExW(0, class.as_ptr(), title.as_ptr(), 0, 0, 0, 800, 600, std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut())
+        };
+        window_sender.send(parent as usize).expect("send parent");
+        let mut message = [0usize; 6];
+        while !pump_stop.load(Ordering::Acquire) {
+            // SAFETY: standard non-blocking message pump for this thread's windows.
+            unsafe {
+                while PeekMessageW(&mut message, std::ptr::null_mut(), 0, 0, 1) != 0 {
+                    TranslateMessage(&message);
+                    DispatchMessageW(&message);
+                }
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        // SAFETY: the window was created on this thread and the editor is closed.
+        unsafe { DestroyWindow(parent as *mut std::ffi::c_void) };
+    });
+    let parent = window_receiver.recv().expect("parent window");
+    assert_ne!(parent, 0, "editor parent creation failed");
+    let authorization = audiorouter_plugin_host::EditorParentAuthorizationIssuer::from_key([5; 32])
+        .issue(parent as u64, std::process::id())
+        .expect("authorization");
+    let opened = bridge.open_editor(authorization);
+    let closed = opened.as_ref().ok().map(|()| bridge.close_editor());
+    stop.store(true, Ordering::Release);
+    pump.join().expect("pump thread");
+    opened.expect("the editor opens when its parent thread pumps messages");
+    closed.expect("close attempted").expect("the editor closes and hands back its state");
 }

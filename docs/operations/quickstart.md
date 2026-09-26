@@ -285,15 +285,25 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m02-nfr02
   -PluginPath 'C:\Program Files\VSTPlugins\ReaPlugs\reaeq-standalone.dll'
 ```
 
-In the connected UI, open the canvas shelf's “Plugin (VST2/VST3)” picker,
-explicitly scan the plugin's folder, add or insert the verified result, select
-its node, then edit the worker-described parameter controls in the inspector.
-Plan and commit the graph before starting the session; plugin nodes begin as
-stopped placeholders. VST2 binaries such as ReaPlugs do not publish VST3 class
-IDs, so the picker uses a neutral authoring placeholder while execution remains
-bound to the exact rescanned path and SHA-256. The vendor's native editor window
-is not wired into this build; generic parameter controls are the supported
-configuration UI.
+In the connected UI, open the Tools tab: its "Plugins (VST2/VST3)" group lists
+every supported plugin from remembered scans (scan results persist across
+restarts). Use **Scan standard folders** for Windows' usual VST3/VST2 folders,
+or **Scan another folder…** (the canvas shelf's “Plugin (VST2/VST3)” picker) for
+any other folder. Click a plugin to add it, or insert it on a connection, then
+select its node and edit the worker-described parameters in Properties. Scans
+read metadata only; plugin code runs only in an isolated worker process, bound
+to the exact rescanned path and SHA-256. VST2 binaries such as ReaPlugs do not
+publish VST3 class IDs, so a neutral authoring placeholder is used.
+
+While the route plays, **Open plugin editor** (VST2, desktop app) shows the
+vendor's own window; closing it applies the edits to the audio. **Save plugin
+settings** stores the plugin's full state with the route (`plugins.saveState`),
+and it is restored every time the route starts. VST3 editor windows are not
+supported yet; VST3 plugins are configured through their parameters.
+
+Scanning and plugin actions require the `pluginScan` permission. The desktop
+shell grant does not include it yet (see the active plan's pending decision),
+so in the app these actions currently report "permission denied".
 
 To exercise one non-default ReaEQ setting in the guarded live route, use its
 worker-reported `1-Gain` parameter (ID 1) at normalized value 0.75:

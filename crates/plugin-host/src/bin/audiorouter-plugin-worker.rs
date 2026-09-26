@@ -325,7 +325,12 @@ fn run() -> Result<(), String> {
                     Some(editor) => usize::try_from(parent_window)
                         .map_err(|_| "invalid parent window".to_string())
                         .and_then(|parent| {
-                            editor.open(parent, parent_process_id, &authorization_token)
+                            // The editor is a separate instance: start it from
+                            // the processing instance's current settings.
+                            let current = vst2_plugin
+                                .as_mut()
+                                .and_then(|plugin| plugin.save_state().ok());
+                            editor.open(parent, parent_process_id, &authorization_token, current)
                         }),
                     None => Err("editorUnavailable".to_string()),
                 };
@@ -347,10 +352,16 @@ fn run() -> Result<(), String> {
             }
             WorkerMessage::EditorClose => {
                 #[cfg(windows)]
-                let result = vst2_editor.as_ref().map_or_else(
-                    || Err("editorUnavailable".to_string()),
-                    Vst2EditorThread::close,
-                );
+                let result = vst2_editor
+                    .as_ref()
+                    .map_or_else(|| Err("editorUnavailable".to_string()), Vst2EditorThread::close)
+                    .map(|state| {
+                        // Apply the edits made in the editor to the instance
+                        // that processes audio.
+                        if let (Some(state), Some(plugin)) = (state, vst2_plugin.as_mut()) {
+                            let _ = plugin.restore_state(&state);
+                        }
+                    });
                 #[cfg(not(windows))]
                 let result: Result<(), String> = Err("editorUnavailable".into());
                 match result {

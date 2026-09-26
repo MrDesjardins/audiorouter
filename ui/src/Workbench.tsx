@@ -2,14 +2,24 @@ import type { LibraryEntry } from "./library";
 import type { Session } from "@audiorouter/contracts";
 import { useState, type ReactNode } from "react";
 
-const TOOL_ICONS: Record<string, string> = { "physical-input": "◉", "test-signal": "∿", "audio-file": "♫", "application-capture": "▣", "endpoint-loopback": "↶", "virtual-render-source": "⊞", "physical-output": "◎", "virtual-capture-sink": "⊟", gain: "◢", mixer: "⋈", recorder: "●", mute: "⊘", meter: "▥", "parametric-eq": "⌁", compressor: "⤓", gate: "⊐", limiter: "⊤", delay: "◷", "graphic-eq": "▤", pitch: "↟" };
+const TOOL_ICONS: Record<string, string> = { volume: "◖", "bass-treble": "♮", dehum: "≁", declick: "⌇", denoise: "░", "speech-denoise": "☊", "fir-filter": "⧉", "input-switch": "⇄", "time-shift": "↺", "physical-input": "◉", "test-signal": "∿", "audio-file": "♫", "endpoint-loopback": "↶", "virtual-render-source": "⊞", "physical-output": "◎", "virtual-capture-sink": "⊟", gain: "◢", mixer: "⋈", recorder: "●", mute: "⊘", meter: "▥", "parametric-eq": "⌁", compressor: "⤓", gate: "⊐", limiter: "⊤", delay: "◷", "graphic-eq": "▤", pitch: "↟" };
 const TOOL_HELP: Record<string, string> = { "physical-input": "Bring sound from a microphone, line input, or installed virtual capture bus into the route.", "test-signal": "Generate a steady test tone to check the route.", "physical-output": "Send the route to speakers, headphones, or an installed virtual playback device.", gain: "Raise or lower the level of sound passing through.", mixer: "Combine several sound sources into one route.", recorder: "Record sound passing through this point.", mute: "Silence this part of the route without removing it.", meter: "See the level of sound at this point.", "parametric-eq": "Shape chosen frequency ranges.", compressor: "Reduce the difference between loud and quiet sound.", gate: "Reduce sound below a chosen level.", limiter: "Keep peaks below a chosen level.", delay: "Shift sound later in time.", "graphic-eq": "Adjust fixed frequency bands.", pitch: "Change the pitch of sound." };
+
+function ApplicationSourceAction({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
+  return <button type="button" className="secondary application-source-action" onClick={onClick} disabled={disabled}>
+    <svg className="application-source-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <rect x="3" y="4" width="14" height="15" rx="2" />
+      <path d="M3 8h14M7 6h.01M10 6h.01M19 10v4m-2-2h4" />
+    </svg>
+    <span><strong>Choose an application source</strong><small>Capture audio from a running app into this route</small></span>
+  </button>;
+}
 
 export type WorkbenchTab = "tools" | "properties" | "session" | "setup" | "devices" | "recording" | "advanced" | "mcp" | "diagnostics";
 export type McpActivity = { timeUnixMs: number; clientId: string; tool: string; argumentFields: string[]; outcome: string; errorKind?: string | null };
 export type McpSetupInfo = { cliPath: string; cliAvailableBesideShell: boolean; databasePath: string; pipeName: string; transport: string };
 
-export function Workbench({ tab, onTab, tools, connected, onAdd, onApplicationPicker, librarySearch, onLibrarySearch, onNewSession, onDuplicate, onDelete, onUndo, onRedo, onDiscard, actionMessage, onReplaceInputConnection, sessions, selectedSessionId, onSelectSession, sessionName, onNameChange, diagnostics, backendActivity, mcpActivity, mcpSetupInfo, clientsPanel, setupContent, devicesContent, recordingContent, advancedContent }: {
+export function Workbench({ tab, onTab, tools, connected, onAdd, onApplicationPicker, librarySearch, onLibrarySearch, onNewSession, onDuplicate, onDelete, onUndo, onRedo, onDiscard, actionMessage, onReplaceInputConnection, sessions, selectedSessionId, onSelectSession, sessionName, onNameChange, diagnostics, backendActivity, mcpActivity, mcpSetupInfo, clientsPanel, setupContent, devicesContent, recordingContent, advancedContent, pluginsContent }: {
   tab: WorkbenchTab; onTab: (tab: WorkbenchTab) => void; tools: LibraryEntry[]; connected: boolean;
   onAdd: (kind: NonNullable<LibraryEntry["kind"]>) => void; onNewSession: () => void; onDuplicate: () => void;
   onApplicationPicker: () => void; librarySearch: string; onLibrarySearch: (value: string) => void;
@@ -20,7 +30,7 @@ export function Workbench({ tab, onTab, tools, connected, onAdd, onApplicationPi
   sessionName: string; onNameChange: (name: string) => void;
   revision?: number; warnings?: string[]; acknowledgedWarnings?: string[]; onAcknowledgeWarning?: (warning: string, checked: boolean) => void;
   diagnostics: string[]; backendActivity: Record<string, unknown>[]; mcpActivity: McpActivity[]; mcpSetupInfo: McpSetupInfo | null; clientsPanel: ReactNode;
-  setupContent: ReactNode; devicesContent: ReactNode; recordingContent: ReactNode; advancedContent: ReactNode;
+  setupContent: ReactNode; devicesContent: ReactNode; recordingContent: ReactNode; advancedContent: ReactNode; pluginsContent?: ReactNode;
 }) {
   const [mcpClientId, setMcpClientId] = useState("audiorouter-local");
   const [copyMessage, setCopyMessage] = useState("");
@@ -36,9 +46,24 @@ export function Workbench({ tab, onTab, tools, connected, onAdd, onApplicationPi
   const tabs: [WorkbenchTab, string][] = [["tools", "Tools"], ["properties", "Properties"], ["session", "Session"], ["setup", "Setup"], ["devices", "Devices"], ["recording", "Recording"], ["advanced", "Advanced"], ["mcp", "MCP"], ["diagnostics", "Logs"]];
   return <aside className="right-workbench" aria-label="Tools and settings">
     <div className="workbench-tabs" role="tablist" aria-label="Right sidebar">{tabs.map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? "active" : ""} onClick={() => onTab(id)}>{label}</button>)}</div>
-    {actionMessage && tab !== "properties" && <div className="workbench-action-message" role="status" aria-live="polite"><span>{actionMessage}</span>{onReplaceInputConnection && <button type="button" className="secondary" onClick={onReplaceInputConnection}>Replace input connection</button>}{actionMessage.includes("Open Devices") && <button type="button" className="secondary" onClick={() => onTab("devices")}>Open Devices</button>}{actionMessage.includes("Open Session") && <button type="button" className="secondary" onClick={() => onTab("session")}>Open Session</button>}</div>}
-    {tab === "tools" && <div className="workbench-tool-search"><label>Find a tool<input type="search" aria-label="Find a tool" value={librarySearch} onChange={(event) => onLibrarySearch(event.target.value)} placeholder="Input, gain, recorder…" /></label><button type="button" className="secondary" onClick={onApplicationPicker} disabled={!connected}>Choose an application source</button></div>}
-    {tab === "tools" && <section className="workbench-page" role="tabpanel" aria-label="Tools"><p className="eyebrow">Build a route</p><h2>Add tools</h2><p className="muted">Add and connect tools, press Play to hear the route, then use Save at the top to keep it.</p>{(["input", "tool", "output"] as const).map((flow) => <section className="tool-group" key={flow}><h3>{flow === "input" ? "Inputs" : flow === "tool" ? "Processing" : "Outputs"}</h3>{tools.filter((entry) => entry.flow === flow).map((entry) => { const help = entry.unavailableReason ?? entry.note ?? TOOL_HELP[entry.id] ?? entry.category; return <button className="tool-card" key={entry.id} type="button" onClick={() => entry.kind && onAdd(entry.kind)} disabled={!connected || !entry.kind} title={help} aria-description={help}><span className="tool-card-icon" aria-hidden="true">{TOOL_ICONS[entry.id]}</span><span><strong>{entry.label}</strong><small>{help}</small></span></button>; })}</section>)}</section>}
+    {tab === "tools" && <div className="workbench-tool-search"><label>Find a tool<input type="search" aria-label="Find a tool" value={librarySearch} onChange={(event) => onLibrarySearch(event.target.value)} placeholder="Input, gain, recorder…" /></label></div>}
+    {tab === "tools" && <section className="workbench-page" role="tabpanel" aria-label="Tools">
+      <p className="eyebrow">Build a route</p>
+      <h2>Add tools</h2>
+      <p className="muted">Add and connect tools, press Play to hear the route, then use Save at the top to keep it.</p>
+      {(["input", "tool", "output"] as const).map((flow) => <section className="tool-group" key={flow}>
+        <h3>{flow === "input" ? "Inputs" : flow === "tool" ? "Processing" : "Outputs"}</h3>
+        {flow === "input" && <ApplicationSourceAction onClick={onApplicationPicker} disabled={!connected} />}
+        {tools.filter((entry) => entry.flow === flow).map((entry) => {
+          const help = entry.unavailableReason ?? entry.note ?? TOOL_HELP[entry.id] ?? entry.category;
+          return <button className="tool-card" key={entry.id} type="button" onClick={() => entry.kind && onAdd(entry.kind)} disabled={!connected || !entry.kind} title={help} aria-description={help}>
+            <span className="tool-card-icon" aria-hidden="true">{TOOL_ICONS[entry.id]}</span>
+            <span><strong>{entry.label}</strong><small>{help}</small></span>
+          </button>;
+        })}
+        {flow === "tool" && pluginsContent}
+      </section>)}
+    </section>}
     {tab === "properties" && <section className="workbench-page" role="tabpanel"><h2>Node properties</h2><p className="muted">Select a node on the canvas to edit it here.</p></section>}
     {tab === "setup" && <section className="workbench-page" role="tabpanel"><h2>First route</h2><p className="muted">Follow these steps to hear a route.</p><ol><li>Add a Test Signal, audio file, or microphone input.</li><li>Add Gain or another processing tool if needed.</li><li>Add a Physical Output and choose your speaker or headphone device in its Properties.</li><li>Connect the nodes and press Play. If an extra device selection is needed, the message will tell you where to make it.</li><li>Press Save at the top when you want to keep this setup.</li></ol>{setupContent}</section>}
     {tab === "devices" && <section className="workbench-page" role="tabpanel"><h2>Audio devices</h2><p className="muted">Choose the speaker or headphone device in the Physical Output node’s Properties. Choose a microphone in Physical Input Properties if the route uses one. Play prepares these exact devices when permission allows. This tab shows device details and recovery controls.</p>{devicesContent}</section>}

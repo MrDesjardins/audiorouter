@@ -25,7 +25,16 @@ export type NodeKind =
   | "pitch"
   | "recorder"
   | "plugin"
-  | "audioFile";
+  | "audioFile"
+  | "volume"
+  | "bassTreble"
+  | "dehum"
+  | "declick"
+  | "inputSwitch"
+  | "denoise"
+  | "speechDenoise"
+  | "firFilter"
+  | "timeShift";
 
 export type PortDirection = "input" | "output";
 
@@ -151,7 +160,7 @@ export interface GraphCommitResult {
   idempotentReplay?: boolean;
   activation?:
     | { state: "pending"; runtime: "fake" }
-    | { state: "running"; generation: number; runtime: "fake" };
+    | { state: "running"; generation: number; runtime: "fake" | "native"; native?: { state: "applied"; adapter: string } | { state: "restartRequired"; reason: string } | null };
 }
 
 export interface OperationCompleted {
@@ -619,7 +628,7 @@ export interface DiagnosticsSnapshot {
   storage: "memory" | "sqlite";
   audio: { state: "available" | "unavailable"; reason: string };
   nativeAdapter: "implemented-not-activated" | "configured-stopped" | "running";
-  nativeAdapterKind: "endpoint" | "duplex" | "render-source" | "multi-input" | null;
+  nativeAdapterKind: "endpoint" | "process-loopback" | "duplex" | "render-source" | "multi-input" | null;
   nativeSessionId: EntityId | null;
   schedulerTelemetry: {
     activeGeneration: number | null;
@@ -656,6 +665,14 @@ export interface DiagnosticsSnapshot {
       state: "unknown" | "stopped" | "running" | "failed" | "quarantined";
       failureCount: number;
     } | null;
+    /** Present while a Denoise node is learning: its current noise profile. */
+    noiseProfile?: string;
+  }>;
+  applicationCaptureStates: Array<{
+    sessionId: EntityId;
+    nodeId: EntityId;
+    state: "configured-stopped" | "connected" | "app-closed" | "reconnecting" | "ambiguous" | "output-unavailable" | "unsupported" | "failed";
+    detail: string;
   }>;
   privacyMute: { muted: boolean; persistence: "durable" | "memory" };
   recovery: { safeMode: boolean; recentCrashes: number; persistence: "durable" | "memory" };
@@ -886,7 +903,8 @@ export type StateEventCategory =
   | "recording.metadataChanged"
   | "recording.renamed"
   | "recording.entryRemoved"
-  | "recording.recycled";
+  | "recording.recycled"
+  | "application.captureStateChanged";
 
 export interface StateEvent {
   sequence: number;
@@ -985,6 +1003,7 @@ export type ImplementedMethod =
   | "audioMedia.importTemporaryRecording"
   | "audioMedia.delete"
   | "audioSources.transport"
+  | "timeShift.transport"
   | "recorders.list"
   | "recorders.create"
   | "recorders.arm"
@@ -1024,6 +1043,10 @@ export type ImplementedMethod =
   | "nativeMultiInputs.bindBranches"
   | "plugins.scan"
   | "plugins.list"
+  | "plugins.inventory"
+  | "plugins.saveState"
+  | "plugins.openEditor"
+  | "plugins.closeEditor"
   | "plugins.retry"
   | "plugins.inspect"
   | "plugins.parameters"
@@ -1080,6 +1103,7 @@ export type MethodParams = {
   "audioMedia.finishUpload": { uploadId: EntityId };
   "audioMedia.importTemporaryRecording": { recordingId: EntityId };
   "audioMedia.delete": { mediaId: EntityId };
+  "timeShift.transport": { sessionId: EntityId; nodeId: EntityId; action: "pause" | "resume" | "back" | "forward" | "live" | "status" };
   "audioSources.transport": { sessionId: EntityId; nodeId: EntityId; action: "play" | "pause" | "stop" | "status" };
   "recorders.list": undefined;
   "recorders.create": {
@@ -1122,8 +1146,8 @@ export type MethodParams = {
   "startup.apply": { planId: EntityId; idempotencyKey: string };
   "devices.list": { cursor?: string; limit?: number; includeInactive?: boolean } | undefined;
   "nativeEndpoints.prepare": { sessionId: EntityId; captureEndpointId: string; renderEndpointId: string };
-  "nativeOutputs.prepare": { sessionId: EntityId; generation: number; renderEndpointIds: string[] };
-  "nativeMultiInputs.prepare": { sessionId: EntityId; generation: number; sources: NativeMultiInputSourceBinding[] };
+  "nativeOutputs.prepare": { sessionId: EntityId; generation?: number; renderEndpointIds: string[] };
+  "nativeMultiInputs.prepare": { sessionId: EntityId; generation?: number; sources: NativeMultiInputSourceBinding[] };
   "nativeBridges.prepare": { busId: EntityId; generation: number; devicePath: string; renderMappingPath: string; captureMappingPath: string; leaseMs?: number };
   "nativeBridges.detach": { busId: EntityId };
   "nativeBridges.heartbeat": undefined;
@@ -1138,6 +1162,10 @@ export type MethodParams = {
   "nativeMultiInputs.bindBranches": { sessionId: EntityId; generation: number; branchNodeIds: EntityId[] };
   "plugins.scan": { directory: string };
   "plugins.list": { directory: string };
+  "plugins.inventory": Record<string, never>;
+  "plugins.saveState": { sessionId: EntityId; nodeId: EntityId };
+  "plugins.openEditor": { sessionId: EntityId; nodeId: EntityId; parentWindow: number; ownerProcessId: number };
+  "plugins.closeEditor": { sessionId: EntityId; nodeId: EntityId };
   "plugins.retry": { directory: string; idempotencyKey: string };
   "plugins.inspect": { path: string };
   "plugins.parameters": { path: string };
@@ -1224,6 +1252,7 @@ export type MethodResult = {
   "audioMedia.finishUpload": { mediaId: EntityId; fileName: string; format: "wav" | "mp3"; durationMs: number; channels: 1 | 2; sampleRateHz: number };
   "audioMedia.importTemporaryRecording": TemporaryAudioImportResult;
   "audioMedia.delete": { deleted: boolean };
+  "timeShift.transport": { sessionId: EntityId; nodeId: EntityId; state: "live" | "delayed" | "paused"; delaySeconds: number; bufferedSeconds: number; capacitySeconds: number };
   "audioSources.transport": { sessionId: EntityId; nodeId: EntityId; state: "playing" | "paused" | "stopped"; loop: boolean };
   "recorders.list": Array<{ sessionId: EntityId; nodeId?: EntityId | null; state: "idle" | "armed" | "recording" | "paused" | "stopping" | "completed" | "failed"; lastFrame: number | null }>;
   "recorders.create": RecorderCreateResult;
@@ -1264,6 +1293,10 @@ export type MethodResult = {
   "nativeMultiInputs.bindBranches": NativeMultiInputBranchBindingResult;
   "plugins.scan": PluginScanResult;
   "plugins.list": PluginScanResult;
+  "plugins.inventory": { inventories: PluginScanResult[] };
+  "plugins.saveState": { sessionId: EntityId; nodeId: EntityId; stateId: string; sizeBytes: number };
+  "plugins.openEditor": { sessionId: EntityId; nodeId: EntityId; state: "open" | "closed" };
+  "plugins.closeEditor": { sessionId: EntityId; nodeId: EntityId; state: "open" | "closed" };
   "plugins.retry": PluginScanResult;
   "plugins.inspect": PluginScanEntry;
   "plugins.parameters": PluginParametersResult;

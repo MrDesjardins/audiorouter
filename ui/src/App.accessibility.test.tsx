@@ -427,7 +427,7 @@ describe("VB-Cable endpoint selection", () => {
     await waitFor(() => expect(prepareNativeApplication).toHaveBeenCalledWith(expect.objectContaining({ mode: "exclude" })));
   });
 
-  it("adds a verified scanned plugin as a stopped draft placeholder", async () => {
+  it("adds a verified scanned plugin to the draft, named after its file", async () => {
     const backend = {
       ...connectedPreviewBackend(),
       scanPlugins: async () => ({
@@ -461,10 +461,10 @@ describe("VB-Cable endpoint selection", () => {
     fireEvent.change(await screen.findByRole("textbox", { name: "Absolute plugin directory" }), { target: { value: "C:\\Plugins" } });
     fireEvent.click(screen.getByRole("button", { name: "Scan directory" }));
     fireEvent.click(await screen.findByRole("button", { name: "Select for inspection" }));
-    expect(screen.queryByRole("button", { name: "Test Vendor 1 plugin" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Effect 1 plugin" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Add to draft: C:\\Plugins\\Effect.dll" }));
     fireEvent.click(screen.getByRole("button", { name: "List view" }));
-    const pluginNode = await screen.findByRole("button", { name: /Test Vendor.*plugin/ });
+    const pluginNode = await screen.findByRole("button", { name: /Effect 1.*plugin/ });
     expect(pluginNode).toBeTruthy();
     fireEvent.click(pluginNode);
     const gainSlider = await screen.findByRole("slider", { name: "1-Gain slider" });
@@ -505,7 +505,7 @@ describe("VB-Cable endpoint selection", () => {
     fireEvent.click(await within(dialog).findByRole("button", { name: "Add to draft: C:\\Plugins\\ReaComp.vst3" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a VST2/VST3 plugin" })).toBeNull());
     expect(await screen.findByText(/added a stopped plugin placeholder/i)).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Cockos 1" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "ReaComp 1" })).toBeTruthy();
     const identityPanel = within(screen.getByLabelText("VST plugin binding"));
     expect(identityPanel.getByText("VST3 plugin loaded from disk")).toBeTruthy();
     expect(identityPanel.getByText("ReaComp.vst3")).toBeTruthy();
@@ -550,7 +550,7 @@ describe("VB-Cable endpoint selection", () => {
     fireEvent.click(screen.getByRole("button", { name: "Plugin (VST2/VST3)" }));
     dialog = await screen.findByRole("dialog", { name: "Add a VST2/VST3 plugin" });
     const loaded = within(within(dialog).getByRole("list", { name: "Loaded plugins" }));
-    expect(loaded.getByText(/Cockos 1/)).toBeTruthy();
+    expect(loaded.getByText(/ReaComp 1/)).toBeTruthy();
     expect(loaded.getByText(/ReaComp\.vst3/)).toBeTruthy();
 
     fireEvent.click(loaded.getByRole("button", { name: "Unload" }));
@@ -1705,7 +1705,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     fireEvent.click(screen.getByRole("button", { name: "Insert Gate" }));
     expect(screen.getByText("Gate 1 inserted into the draft. Review and plan the changes before committing.")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Gate 1" })).toBeTruthy();
-    for (const label of ["Gain", "Mute", "Advanced EQ", "Graphic EQ", "Compressor", "Gate", "Limiter", "Delay", "Pitch"]) {
+    for (const label of ["Volume", "Gain", "Mute", "Advanced EQ", "Graphic EQ", "Compressor", "Gate", "Limiter", "Sync (delay)", "Pitch"]) {
       expect(screen.getAllByRole("button", { name: `Insert ${label}` })).toHaveLength(2);
     }
   });
@@ -1751,9 +1751,9 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
 
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Insert a VST2/VST3 plugin into this connection" })).toBeNull());
     expect(await screen.findByText(/inserted a stopped plugin placeholder into the connection/i)).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Cockos 1" })).toBeTruthy();
-    expect(screen.getByText(/Microphone:out → Cockos 1:in/)).toBeTruthy();
-    expect(screen.getByText(/Cockos 1:out → Voice gain:in/)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "ReaComp 1" })).toBeTruthy();
+    expect(screen.getByText(/Microphone:out → ReaComp 1:in/)).toBeTruthy();
+    expect(screen.getByText(/ReaComp 1:out → Voice gain:in/)).toBeTruthy();
   });
 
   it("disables topology mutations when no backend connection context exists", () => {
@@ -1774,7 +1774,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
 
     fireEvent.click(screen.getByRole("button", { name: "Insert mixer on Microphone to Voice gain" }));
     expect(onRemove).toHaveBeenCalledWith(insertMixerActionId("edge-1"));
-    for (const label of ["Gain", "Mute", "Advanced EQ", "Graphic EQ", "Compressor", "Gate", "Limiter", "Delay", "Pitch"]) {
+    for (const label of ["Volume", "Gain", "Mute", "Advanced EQ", "Graphic EQ", "Compressor", "Gate", "Limiter", "Sync (delay)", "Pitch"]) {
       expect(screen.getByRole("button", { name: `Insert ${label}` })).toBeTruthy();
     }
     fireEvent.click(screen.getByRole("button", { name: "Insert Advanced EQ" }));

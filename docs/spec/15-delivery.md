@@ -53,6 +53,7 @@ The ranges below include every normative ID; each milestone must attach evidence
 | VDEV-09 | M00 strategy; M08 shipping | Secure Boot/HVCI installation |
 | DSP-01–05, DSP-07–09 | M04 | UC-02, transfer-function vectors |
 | DSP-06, PLUG-01–06 | M06 | UC-02/06, pitch/worker/format evidence |
+| DSP-10–18 | M04/M05 | UC-02, DSP/engine unit tests (per-tool response, latency, bounds), attended manual pass pending |
 | REC-01–08, REC-10–12 | M04/M05 | UC-08, frame/file/path tests |
 | PLUG-07 | M06 extension/M08 | Native x64 VST2 adapter, worker containment, rights, compatibility, and failure evidence |
 | REC-09 | M04/M07 | UC-08, crash/disk-failure recovery |

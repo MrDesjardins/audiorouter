@@ -10,8 +10,8 @@ export type DraftChange = {
 export const GAIN_MIN_DB = -60;
 export const GAIN_MAX_DB = 24;
 
-export type LibraryNodeKind = Extract<NodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "audioFile" | "mixer" | "gain" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch" | "recorder">;
-export type InsertableProcessorKind = Exclude<LibraryNodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "mixer" | "meter">;
+export type LibraryNodeKind = Extract<NodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "audioFile" | "mixer" | "gain" | "volume" | "bassTreble" | "dehum" | "declick" | "inputSwitch" | "denoise" | "speechDenoise" | "firFilter" | "timeShift" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch" | "recorder">;
+export type InsertableProcessorKind = Exclude<LibraryNodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "mixer" | "inputSwitch" | "meter">;
 export type EqPresetId = "voiceNeutral" | "hum50Hz" | "hum60Hz";
 export type VoiceChainPresetId = "voiceNeutral" | "voiceGateAndCompression";
 
@@ -56,6 +56,79 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
   mixer: {
     name: "Mixer",
     parameters: {},
+    ports: [
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
+    ],
+  },
+  volume: {
+    name: "Volume",
+    parameters: { percent: 100 },
+    ports: [
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
+    ],
+  },
+  timeShift: {
+    name: "Time Shift",
+    parameters: { bufferSeconds: 60 },
+    ports: [
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
+    ],
+  },
+  firFilter: {
+    name: "FIR Filter",
+    parameters: { wetPercent: 100, gainDb: 0 },
+    ports: [
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
+    ],
+  },
+  denoise: {
+    name: "Denoise",
+    parameters: { reductionPercent: 70, floorPercent: 10, learning: false },
+    ports: [
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
+    ],
+  },
+  speechDenoise: {
+    name: "Speech Denoise",
+    parameters: { strengthPercent: 70 },
+    ports: [
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
+    ],
+  },
+  inputSwitch: {
+    name: "Input Switch",
+    parameters: { selected: "a", fade: "normal" },
+    ports: [
+      { name: "a", direction: "input", channels: 2 },
+      { name: "b", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
+    ],
+  },
+  bassTreble: {
+    name: "Bass & Treble",
+    parameters: { bassDb: 0, trebleDb: 0 },
+    ports: [
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
+    ],
+  },
+  dehum: {
+    name: "Dehum",
+    parameters: { frequencyHz: 60, amountPercent: 50, harmonics: 4 },
+    ports: [
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
+    ],
+  },
+  declick: {
+    name: "Declick",
+    parameters: { thresholdPercent: 50 },
     ports: [
       { name: "in", direction: "input", channels: 2 },
       { name: "out", direction: "output", channels: 2 },
@@ -123,7 +196,7 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
     ],
   },
   delay: {
-    name: "Delay",
+    name: "Sync",
     parameters: { delayMs: 0 },
     ports: [
       { name: "in", direction: "input", channels: 2 },
@@ -147,6 +220,46 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
     ],
   },
 };
+
+/**
+ * True when `draft` differs from `saved` only in node parameter values: same
+ * nodes (ids, kinds, names, flags, ports) and identical connections. Such an
+ * edit can be applied to running audio without re-preparing devices.
+ */
+export function isParameterOnlyChange(saved: Session, draft: Session): boolean {
+  if (saved.id !== draft.id || saved.name !== draft.name || saved.nodes.length !== draft.nodes.length) return false;
+  if (JSON.stringify(saved.edges) !== JSON.stringify(draft.edges)) return false;
+  let parameterChanged = false;
+  for (let index = 0; index < saved.nodes.length; index += 1) {
+    const before = saved.nodes[index];
+    const after = draft.nodes[index];
+    if (before.id !== after.id || before.kind !== after.kind || before.name !== after.name || before.enabled !== after.enabled || before.bypass !== after.bypass || JSON.stringify(before.ports) !== JSON.stringify(after.ports)) return false;
+    if (JSON.stringify(before.parameters) !== JSON.stringify(after.parameters)) parameterChanged = true;
+  }
+  return parameterChanged;
+}
+
+/** Mixer parameter prefix for per-input volume, keyed by the upstream node id (GRAPH-04). */
+export const MIXER_INPUT_VOLUME_PREFIX = "inputVolume:";
+
+export function mixerInputVolumeKey(upstreamNodeId: EntityId): string {
+  return `${MIXER_INPUT_VOLUME_PREFIX}${upstreamNodeId}`;
+}
+
+/** Connected Mixer inputs in connection order, with each input's volume percent (default 100). */
+export function mixerInputs(session: Session, mixerId: EntityId): Array<{ edgeId: EntityId; upstream: Session["nodes"][number]; percent: number; enabled: boolean }> {
+  const mixer = session.nodes.find((node) => node.id === mixerId);
+  if (!mixer || mixer.kind !== "mixer") return [];
+  return session.edges
+    .filter((edge) => edge.destinationNode === mixerId)
+    .flatMap((edge) => {
+      const upstream = session.nodes.find((node) => node.id === edge.sourceNode);
+      if (!upstream) return [];
+      const raw = mixer.parameters[mixerInputVolumeKey(upstream.id)];
+      const percent = typeof raw === "number" && Number.isFinite(raw) ? Math.min(100, Math.max(0, raw)) : 100;
+      return [{ edgeId: edge.id, upstream, percent, enabled: edge.enabled && upstream.enabled }];
+    });
+}
 
 /** Adds one supported built-in processor to a draft without mutating its revision or edges. */
 export function appendLibraryNode(
@@ -178,18 +291,11 @@ export function appendLibraryNode(
   };
 }
 
-/** Adds a verified application identity as a stopped process-capture source. */
-export function appendApplicationCaptureNode(session: Session, application: ApplicationInfo): Session {
+function applicationIdentityParameters(application: ApplicationInfo): Record<string, boolean | number | string> {
   if (!application.executable || application.processId < 1) {
     throw new Error("Only a verified running application can be added to the graph");
   }
   const selectedInstance = application.creationTime100ns !== null;
-  let suffix = 1;
-  let id = `application-capture-${suffix}`;
-  while (session.nodes.some((node) => node.id === id)) {
-    suffix += 1;
-    id = `application-capture-${suffix}`;
-  }
   const parameters: Record<string, boolean | number | string> = {
     executable: application.executable,
     processPolicy: selectedInstance ? "selectedInstance" : "allVerifiedInstances",
@@ -199,6 +305,129 @@ export function appendApplicationCaptureNode(session: Session, application: Appl
     parameters.creationTime100ns = application.creationTime100ns!;
   }
   if (application.executablePath !== null) parameters.executablePath = application.executablePath;
+  return parameters;
+}
+
+/** Stable picker key for one exact process instance. */
+export function applicationChoiceKey(application: ApplicationInfo): string {
+  return `${application.processId}-${application.creationTime100ns ?? "unknown"}`;
+}
+
+/**
+ * Groups application-capture choices. Process loopback records what an
+ * application plays, so a process without a current audio session is still a
+ * valid source. Processes with audio sessions are listed individually; others
+ * fold same-path helpers (Electron/Chromium trees) into their earliest instance.
+ */
+export function applicationCaptureChoices(applications: readonly ApplicationInfo[]): { withAudio: ApplicationInfo[]; other: ApplicationInfo[] } {
+  const eligible = applications.filter((application) => application.executable && application.processId > 0);
+  const byLabel = (left: ApplicationInfo, right: ApplicationInfo) => left.executable.localeCompare(right.executable, undefined, { sensitivity: "base" }) || left.processId - right.processId;
+  const pathKey = (application: ApplicationInfo) => (application.executablePath ?? application.executable).toLowerCase();
+  const audioPaths = new Set(eligible.filter((application) => application.audioSessionCount > 0).map(pathKey));
+  // Capture includes the selected process tree, so one entry per executable
+  // path is enough: the earliest-created instance is normally the tree root.
+  const earliest = new Map<string, ApplicationInfo>();
+  for (const application of eligible) {
+    const key = pathKey(application);
+    const current = earliest.get(key);
+    const created = application.creationTime100ns === null ? null : BigInt(application.creationTime100ns);
+    const currentCreated = current?.creationTime100ns == null ? null : BigInt(current.creationTime100ns);
+    if (!current || (created !== null && (currentCreated === null || created < currentCreated))) earliest.set(key, application);
+  }
+  const roots = [...earliest.values()].sort(byLabel);
+  return { withAudio: roots.filter((application) => audioPaths.has(pathKey(application))), other: roots.filter((application) => !audioPaths.has(pathKey(application))) };
+}
+
+/**
+ * The single application-capture source of a route whose only enabled source
+ * is that application, or null. Such a route runs on the application worker
+ * (process loopback to one output) instead of the physical endpoint pair.
+ */
+const ROUTE_SOURCE_KINDS = new Set(["physicalInput", "applicationCapture", "endpointLoopback", "virtualRenderSource", "testSignal", "audioFile"]);
+
+/** Processor kinds the engine accepts in a linear chain before a Mixer input (mirrors `is_chain_processor`). */
+const CHAIN_PROCESSOR_KINDS = new Set<NodeKind>(["gain", "volume", "bassTreble", "dehum", "declick", "denoise", "speechDenoise", "firFilter", "timeShift", "mute", "meter", "parametricEq", "compressor", "gate", "limiter", "delay", "graphicEq", "pitch", "plugin"]);
+
+/** Drop disabled nodes that nothing live feeds, with their edges (mirrors `prune_inactive_upstream`). */
+export function pruneInactiveUpstream(session: Session): Session {
+  const removed = new Set<string>();
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const node of session.nodes) {
+      if (node.enabled || removed.has(node.id)) continue;
+      const fed = session.edges.some((edge) => edge.enabled && edge.destinationNode === node.id && !removed.has(edge.sourceNode));
+      if (!fed) { removed.add(node.id); changed = true; }
+    }
+  }
+  if (removed.size === 0 || removed.size === session.nodes.length) return session;
+  return { ...session, nodes: session.nodes.filter((node) => !removed.has(node.id)), edges: session.edges.filter((edge) => !removed.has(edge.sourceNode) && !removed.has(edge.destinationNode)) };
+}
+
+/**
+ * The real sources of a single-Mixer route, in the engine's input order
+ * (enabled Mixer connections in session order, each walked upstream through
+ * processor chains), after disabled sources are pruned. Null when the route
+ * has no single enabled Mixer or an input is fed ambiguously.
+ */
+export function mixerRouteSources(session: Session): Session["nodes"] | null {
+  const pruned = pruneInactiveUpstream(session);
+  const mixers = pruned.nodes.filter((node) => (node.kind === "mixer" || node.kind === "inputSwitch") && node.enabled && !node.bypass);
+  if (mixers.length !== 1) return null;
+  const byId = new Map(pruned.nodes.map((node) => [node.id, node]));
+  const sources: Session["nodes"] = [];
+  for (const edge of pruned.edges.filter((candidate) => candidate.enabled && candidate.destinationNode === mixers[0].id)) {
+    let current = byId.get(edge.sourceNode);
+    for (let depth = 0; current && CHAIN_PROCESSOR_KINDS.has(current.kind); depth += 1) {
+      const node: Session["nodes"][number] = current;
+      const feeds = pruned.edges.filter((candidate) => candidate.enabled && candidate.destinationNode === node.id);
+      if (feeds.length === 0) break;
+      if (feeds.length > 1 || depth >= 16) return null;
+      current = byId.get(feeds[0].sourceNode);
+    }
+    if (!current) return null;
+    sources.push(current);
+  }
+  return sources;
+}
+
+/** Enabled sources other than the given application node that keep an application route from running on Play. */
+export function mixedApplicationRouteOtherSources(session: Session, applicationNodeId: string): Session["nodes"] {
+  return session.nodes.filter((node) => node.enabled && node.id !== applicationNodeId && ROUTE_SOURCE_KINDS.has(node.kind));
+}
+
+export function applicationOnlyRouteSource(session: Session): Session["nodes"][number] | null {
+  const sources = session.nodes.filter((node) => node.enabled && ROUTE_SOURCE_KINDS.has(node.kind));
+  const [source] = sources;
+  if (sources.length !== 1 || source.kind !== "applicationCapture") return null;
+  if (source.parameters.processPolicy !== "selectedInstance" || typeof source.parameters.processId !== "number" || typeof source.parameters.creationTime100ns !== "string" || typeof source.parameters.executable !== "string") return null;
+  return source;
+}
+
+/** Rebinds an application-capture node to another running process, keeping the node and its connections. */
+export function rebindApplicationCaptureNode(session: Session, nodeId: EntityId, application: ApplicationInfo): Session {
+  const nodeIndex = session.nodes.findIndex((node) => node.id === nodeId);
+  if (nodeIndex < 0) throw new Error(`Unknown node: ${nodeId}`);
+  const node = session.nodes[nodeIndex];
+  if (node.kind !== "applicationCapture") throw new Error("Only an application capture node can select an application");
+  const identity = applicationIdentityParameters(application);
+  const rest = Object.fromEntries(Object.entries(node.parameters).filter(([name]) => !["executable", "executablePath", "processPolicy", "processId", "creationTime100ns"].includes(name)));
+  const previousExecutable = typeof node.parameters.executable === "string" ? node.parameters.executable : null;
+  const generatedName = previousExecutable !== null && node.name.startsWith(`${previousExecutable} capture `) && /^\d+$/.test(node.name.slice(previousExecutable.length + " capture ".length));
+  const name = generatedName ? `${application.executable}${node.name.slice(previousExecutable!.length)}` : node.name;
+  const nodes = [...session.nodes];
+  nodes[nodeIndex] = { ...node, name, parameters: { ...rest, ...identity } };
+  return { ...session, nodes };
+}
+
+/** Adds a verified application identity as a process-capture source. */
+export function appendApplicationCaptureNode(session: Session, application: ApplicationInfo): Session {
+  const parameters = applicationIdentityParameters(application);
+  let suffix = 1;
+  let id = `application-capture-${suffix}`;
+  while (session.nodes.some((node) => node.id === id)) {
+    suffix += 1;
+    id = `application-capture-${suffix}`;
+  }
   return {
     ...session,
     nodes: [...session.nodes, {
@@ -206,7 +435,7 @@ export function appendApplicationCaptureNode(session: Session, application: Appl
       kind: "applicationCapture",
       typeVersion: 1,
       name: `${application.executable} capture ${suffix}`,
-      enabled: false,
+      enabled: true,
       bypass: false,
       parameters,
       ports: [{ name: "out", direction: "output", channels: 2 }],
@@ -268,7 +497,12 @@ export function appendVirtualBusNode(session: Session, busId: string, direction:
   };
 }
 
-/** Adds a verified scan result as an explicit, stopped plugin placeholder. */
+/**
+ * Adds a verified scan result as a plugin node. It stores the path exactly as
+ * scanned (the backend matches remembered scans by it and re-verifies the
+ * binary hash), is named after the plugin file, and is enabled: plugin code
+ * still runs only in an isolated worker once the route plays.
+ */
 export function appendPluginPlaceholderNode(session: Session, entry: PluginScanEntry): Session {
   const identity = entry.identity;
   if (!identity || !["supportedVst2X64Gated", "supportedVst3X64"].includes(identity.compatibility)) {
@@ -280,17 +514,18 @@ export function appendPluginPlaceholderNode(session: Session, entry: PluginScanE
     suffix += 1;
     id = `plugin-${suffix}`;
   }
+  const fileName = (entry.path.split(/[\\/]/).pop() ?? "").replace(/\.(vst3|dll)$/i, "");
   return {
     ...session,
     nodes: [...session.nodes, {
       id,
       kind: "plugin",
       typeVersion: 1,
-      name: `${identity.vendor ?? "Plugin"} ${suffix}`,
-      enabled: false,
+      name: fileName ? `${fileName} ${suffix}` : `${identity.vendor ?? "Plugin"} ${suffix}`,
+      enabled: true,
       bypass: false,
       parameters: {
-        path: identity.binaryPath,
+        path: entry.path,
         format: identity.format,
         fingerprint: identity.sha256,
         classId: identity.classIds[0] ?? "default",
@@ -648,6 +883,12 @@ export function setNodeDraftParameter(
   const nodeIndex = session.nodes.findIndex((node) => node.id === nodeId);
   if (nodeIndex < 0) throw new Error(`Unknown node: ${nodeId}`);
   const node = session.nodes[nodeIndex];
+  if (node.kind === "volume" && parameter === "percent" && (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 200)) {
+    throw new Error("Volume must be between 0 and 200 %");
+  }
+  if (node.kind === "mixer" && parameter.startsWith(MIXER_INPUT_VOLUME_PREFIX) && (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 100)) {
+    throw new Error("Mixer input volume must be between 0 and 100 %");
+  }
   if (node.kind === "gain" && parameter === "gainDb" && (typeof value !== "number" || !Number.isFinite(value) || value < GAIN_MIN_DB || value > GAIN_MAX_DB)) {
     throw new Error(`Gain must be between ${GAIN_MIN_DB} and ${GAIN_MAX_DB} dB`);
   }
@@ -702,4 +943,36 @@ export async function applyGraphDraft(
     throw new Error(`Plan requires acknowledgment: ${plan.warnings.join(", ")}`);
   }
   return backend.commitGraph(plan.planId, plan.baseRevision, idempotencyKey, acknowledgments);
+}
+
+/** Windows' conventional VST3 and VST2 install folders, scanned by "Scan standard folders". */
+export const STANDARD_PLUGIN_FOLDERS = [
+  "C:\\Program Files\\Common Files\\VST3",
+  "C:\\Program Files\\Common Files\\VST2",
+  "C:\\Program Files\\VSTPlugins",
+  "C:\\Program Files\\Steinberg\\VSTPlugins",
+];
+
+/** A plugin that can be added to the graph, from any remembered scan. */
+export type PluginCatalogEntry = { entry: PluginScanEntry; name: string; format: "VST3" | "VST2"; folder: string };
+
+/**
+ * Supported x64 plugins from all remembered scans, one per binary (the same
+ * plugin found through two folders is listed once), sorted by name.
+ */
+export function pluginCatalog(inventories: ReadonlyArray<{ directory: string; entries: PluginScanEntry[] }>): PluginCatalogEntry[] {
+  const seen = new Set<string>();
+  const catalog: PluginCatalogEntry[] = [];
+  for (const inventory of inventories) {
+    for (const entry of inventory.entries) {
+      const identity = entry.identity;
+      if (!identity || !["supportedVst2X64Gated", "supportedVst3X64"].includes(identity.compatibility)) continue;
+      const key = `${identity.sha256}:${identity.binaryPath.toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const file = identity.path.split(/[\\/]/).pop() ?? identity.path;
+      catalog.push({ entry, name: file.replace(/\.(vst3|dll)$/i, ""), format: identity.format === "vst3" ? "VST3" : "VST2", folder: inventory.directory });
+    }
+  }
+  return catalog.sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
 }

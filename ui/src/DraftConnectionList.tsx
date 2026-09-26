@@ -13,7 +13,15 @@ export const PROCESSOR_ACTIONS: Array<{ kind: InsertableProcessorKind; label: st
   { kind: "compressor", label: "Compressor" },
   { kind: "gate", label: "Gate" },
   { kind: "limiter", label: "Limiter" },
-  { kind: "delay", label: "Delay" },
+  { kind: "volume", label: "Volume" },
+  { kind: "bassTreble", label: "Bass & Treble" },
+  { kind: "dehum", label: "Dehum" },
+  { kind: "declick", label: "Declick" },
+  { kind: "denoise", label: "Denoise" },
+  { kind: "speechDenoise", label: "Speech Denoise" },
+  { kind: "firFilter", label: "FIR Filter" },
+  { kind: "timeShift", label: "Time Shift" },
+  { kind: "delay", label: "Sync (delay)" },
   { kind: "pitch", label: "Pitch" },
 ];
 

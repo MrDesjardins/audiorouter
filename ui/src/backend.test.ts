@@ -929,3 +929,12 @@ describe("plan-only drafts", () => {
     expect(calls).toEqual([["warn-plan", demoSession.revision, "warning-operation", ["audible change"]]]);
   });
 });
+
+describe("permission errors", () => {
+  it("explain which permission is missing and read as an error", async () => {
+    const { actionMessageTone } = await import("./actionMessage");
+    const message = formatUiError(new Error("permission denied: PluginScan [permissionDenied] request the required permission scope for the target operation"), "fallback");
+    expect(message).toBe("Permission denied: this app is not granted the PluginScan permission needed for this action, so the backend refused it. Nothing was changed.");
+    expect(actionMessageTone(message)).toBe("error");
+  });
+});
