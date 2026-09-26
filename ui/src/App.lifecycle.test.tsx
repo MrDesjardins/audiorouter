@@ -53,6 +53,45 @@ describe("session refresh and playback regressions", () => {
     expect(backend.rebindNativeEndpoint.mock.invocationCallOrder[0]).toBeLessThan(backend.startSession.mock.invocationCallOrder[0]);
   });
 
+  const pathNode = (id: string, kind: "physicalInput" | "physicalOutput" | "gain", endpointId?: string): typeof demoSession.nodes[number] => ({
+    id, kind, typeVersion: 1, name: id, enabled: true, bypass: false, parameters: endpointId ? { endpointId } : kind === "gain" ? { gainDb: 0 } : {},
+    ports: kind === "physicalInput" ? [{ name: "out", direction: "output", channels: 2 }] : kind === "physicalOutput" ? [{ name: "in", direction: "input", channels: 2 }] : [{ name: "in", direction: "input", channels: 2 }, { name: "out", direction: "output", channels: 2 }],
+  });
+  const pathEdge = (id: string, sourceNode: string, destinationNode: string) => ({ id, sourceNode, sourcePort: "out", destinationNode, destinationPort: "in", matrix: [1, 0, 0, 1], enabled: true });
+  const voiceAndGame = (scarlett?: string): typeof demoSession => ({
+    ...demoSession,
+    name: "Patrick Main Session",
+    nodes: [pathNode("mic", "physicalInput", "pd200x"), pathNode("voice", "gain"), pathNode("cable-a", "physicalOutput", "cable-a-input"), pathNode("cable-b", "physicalInput", "cable-b-output"), pathNode("game-eq", "gain"), pathNode("scarlett", "physicalOutput", scarlett)],
+    edges: [pathEdge("e1", "mic", "voice"), pathEdge("e2", "voice", "cable-a"), pathEdge("e3", "cable-b", "game-eq"), pathEdge("e4", "game-eq", "scarlett")],
+  });
+
+  it("plays a saved session with independent paths through one multi-path preparation", async () => {
+    const { backend } = await fixture(voiceAndGame("focusrite"));
+    const prepareNativePaths = vi.fn(async (sessionId: string) => ({ sessionId, generation: 1, state: "configured-stopped" as const, pathCount: 2, sourceNodeIds: ["mic", "cable-b"], branchNodeIds: ["cable-a", "scarlett"], renderEndpointIds: ["cable-a-input", "focusrite"] }));
+    const prepareNativeEndpoint = vi.fn();
+    render(<App backend={{ ...backend, prepareNativePaths, prepareNativeEndpoint }} />);
+    await waitFor(() => expect(backend.listSessions).toHaveBeenCalled());
+    await screen.findByRole("heading", { name: "Patrick Main Session" });
+    start();
+    await waitFor(() => expect(backend.startSession).toHaveBeenCalledWith(demoSession.id, expect.any(String)));
+    expect(prepareNativePaths).toHaveBeenCalledWith(demoSession.id);
+    expect(prepareNativePaths.mock.invocationCallOrder[0]).toBeLessThan(backend.startSession.mock.invocationCallOrder[0]);
+    expect(prepareNativeEndpoint).not.toHaveBeenCalled();
+    expect(backend.rebindNativeEndpoint).not.toHaveBeenCalled();
+  });
+
+  it("names the device node that still needs a device before a multi-path Play", async () => {
+    const { backend } = await fixture(voiceAndGame());
+    const prepareNativePaths = vi.fn();
+    render(<App backend={{ ...backend, prepareNativePaths }} />);
+    await waitFor(() => expect(backend.listSessions).toHaveBeenCalled());
+    await screen.findByRole("heading", { name: "Patrick Main Session" });
+    start();
+    await messageBar().findByText(/Choose the device for scarlett in Properties/);
+    expect(prepareNativePaths).not.toHaveBeenCalled();
+    expect(backend.startSession).not.toHaveBeenCalled();
+  });
+
   it("hydrates a real saved session even when its revision is below the preview revision", async () => {
     const { backend } = await fixture({ ...demoSession, revision: 0, name: "Real saved session" });
     render(<App backend={backend} />);

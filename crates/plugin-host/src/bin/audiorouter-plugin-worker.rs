@@ -682,7 +682,7 @@ fn process_vst2_frame(
 ) -> Result<(), String> {
     let channels = usize::from(frame.channels);
     let frames = frame.samples.len() / channels;
-    if plugin.output_channels() != channels {
+    if !channel_layouts_are_mappable(channels, plugin.output_channels()) {
         return Err(format!(
             "VST2 output channels {} do not match graph channels {channels}",
             plugin.output_channels()
@@ -690,9 +690,7 @@ fn process_vst2_frame(
     }
     let mut input_channels = vec![vec![0.0_f32; frames]; plugin.input_channels()];
     let mut output_channels = vec![vec![0.0_f32; frames]; plugin.output_channels()];
-    for (index, sample) in frame.samples.iter().copied().enumerate() {
-        input_channels[index % channels][index / channels] = sample;
-    }
+    spread_graph_to_plugin_inputs(&frame.samples, channels, &mut input_channels);
     plugin
         .set_processing_format(
             sample_rate_hz as f32,
@@ -757,8 +755,79 @@ fn process_vst2_frame(
     {
         return Err("plugin produced a non-finite sample".into());
     }
-    for (index, destination) in frame.samples.iter_mut().enumerate() {
-        *destination = output_channels[index % channels][index / channels];
-    }
+    fold_plugin_outputs_to_graph(&output_channels, channels, &mut frame.samples);
     Ok(())
+}
+
+/// Whether a graph of `graph_channels` can use a plugin with
+/// `plugin_outputs` outputs: the same count, or mono and stereo either way.
+fn channel_layouts_are_mappable(graph_channels: usize, plugin_outputs: usize) -> bool {
+    plugin_outputs == graph_channels || matches!((graph_channels, plugin_outputs), (1, 2) | (2, 1))
+}
+
+/// Copy interleaved graph audio into planar plugin inputs. Equal counts map
+/// one to one; a mono graph feeds every plugin input; a stereo graph feeds a
+/// mono plugin with (L+R)/2. Extra plugin inputs stay silent.
+fn spread_graph_to_plugin_inputs(samples: &[f32], graph_channels: usize, inputs: &mut [Vec<f32>]) {
+    let frames = samples.len() / graph_channels.max(1);
+    for frame in 0..frames {
+        let row = &samples[frame * graph_channels..(frame + 1) * graph_channels];
+        match (graph_channels, inputs.len()) {
+            (1, _) => inputs.iter_mut().for_each(|input| input[frame] = row[0]),
+            (2, 1) => inputs[0][frame] = (row[0] + row[1]) * 0.5,
+            _ => {
+                for (channel, sample) in row.iter().enumerate() {
+                    if let Some(input) = inputs.get_mut(channel) {
+                        input[frame] = *sample;
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Copy planar plugin outputs back to interleaved graph audio. Equal counts
+/// map one to one; a mono graph takes the average of a stereo plugin; a
+/// stereo graph duplicates a mono plugin.
+fn fold_plugin_outputs_to_graph(outputs: &[Vec<f32>], graph_channels: usize, samples: &mut [f32]) {
+    let frames = samples.len() / graph_channels.max(1);
+    for frame in 0..frames {
+        for channel in 0..graph_channels {
+            samples[frame * graph_channels + channel] = match (graph_channels, outputs.len()) {
+                (1, 2) => (outputs[0][frame] + outputs[1][frame]) * 0.5,
+                (2, 1) => outputs[0][frame],
+                _ => outputs[channel][frame],
+            };
+        }
+    }
+}
+
+#[cfg(test)]
+mod channel_mapping_tests {
+    use super::*;
+
+    #[test]
+    fn a_mono_route_uses_a_stereo_plugin() {
+        assert!(channel_layouts_are_mappable(1, 2) && channel_layouts_are_mappable(2, 1));
+        assert!(!channel_layouts_are_mappable(2, 4));
+        let mut inputs = vec![vec![0.0; 3]; 2];
+        spread_graph_to_plugin_inputs(&[0.1, 0.2, 0.3], 1, &mut inputs);
+        assert_eq!(inputs, vec![vec![0.1, 0.2, 0.3]; 2]);
+        let mut mono = vec![0.0; 3];
+        fold_plugin_outputs_to_graph(&[vec![0.2, 0.4, 0.6], vec![0.4, 0.4, 0.2]], 1, &mut mono);
+        assert!(mono.iter().zip([0.3, 0.4, 0.4]).all(|(a, b)| (a - b).abs() < 1e-6));
+    }
+
+    #[test]
+    fn a_stereo_route_uses_a_mono_plugin_and_equal_layouts_pass_through() {
+        let mut inputs = vec![vec![0.0; 2]];
+        spread_graph_to_plugin_inputs(&[0.2, 0.4, 1.0, 0.0], 2, &mut inputs);
+        assert!(inputs[0].iter().zip([0.3, 0.5]).all(|(a, b)| (a - b).abs() < 1e-6));
+        let mut stereo = vec![0.0; 4];
+        fold_plugin_outputs_to_graph(&[vec![0.7, 0.9]], 2, &mut stereo);
+        assert_eq!(stereo, vec![0.7, 0.7, 0.9, 0.9]);
+        let mut same = vec![0.0; 4];
+        fold_plugin_outputs_to_graph(&[vec![1.0, 2.0], vec![3.0, 4.0]], 2, &mut same);
+        assert_eq!(same, vec![1.0, 3.0, 2.0, 4.0]);
+    }
 }

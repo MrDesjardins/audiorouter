@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ApplicationInfo, Session } from "@audiorouter/contracts";
-import { addSourceToOccupiedOutput, appendApplicationCaptureNode, applicationCaptureChoices, applicationOnlyRouteSource, isParameterOnlyChange, pluginCatalog, STANDARD_PLUGIN_FOLDERS, mixerInputs, mixerRouteSources, pruneInactiveUpstream, mixerInputVolumeKey, mixedApplicationRouteOtherSources, rebindApplicationCaptureNode, appendDraftConnection, appendEndpointLoopbackNode, appendLibraryNode, appendPluginPlaceholderNode, appendVirtualBusNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, removeDraftNode, resetNodeDraftParameters, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
+import { addSourceToOccupiedOutput, appendApplicationCaptureNode, applicationCaptureChoices, applicationOnlyRouteSource, independentPaths, needsNativePaths, unboundDeviceNodes, isParameterOnlyChange, pluginCatalog, STANDARD_PLUGIN_FOLDERS, mixerInputs, mixerRouteSources, pruneInactiveUpstream, mixerInputVolumeKey, mixedApplicationRouteOtherSources, rebindApplicationCaptureNode, appendDraftConnection, appendEndpointLoopbackNode, appendLibraryNode, appendPluginPlaceholderNode, appendVirtualBusNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, removeDraftNode, resetNodeDraftParameters, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
 import { demoSession } from "./fixtures";
 
 describe("appendLibraryNode", () => {
@@ -441,5 +441,36 @@ describe("pluginCatalog", () => {
     ]);
     expect(catalog.map((item) => [item.name, item.format, item.folder])).toEqual([["Compressor", "VST3", "C:\\B"], ["ReaEQ", "VST2", "C:\\A"]]);
     expect(STANDARD_PLUGIN_FOLDERS).toContain("C:\\Program Files\\Common Files\\VST3");
+  });
+});
+
+describe("independent paths", () => {
+  const node = (id: string, kind: Session["nodes"][number]["kind"], extra: Partial<Session["nodes"][number]> = {}): Session["nodes"][number] => ({
+    id, kind, typeVersion: 1, name: id, enabled: true, bypass: false, parameters: {}, ports: [{ name: "in", direction: "input", channels: 2 }, { name: "out", direction: "output", channels: 2 }], ...extra,
+  });
+  const edge = (id: string, sourceNode: string, destinationNode: string): Session["edges"][number] => ({
+    id, sourceNode, sourcePort: "out", destinationNode, destinationPort: "in", matrix: [1, 0, 0, 1], enabled: true,
+  });
+  const twoPaths: Session = {
+    ...demoSession,
+    nodes: [node("mic", "physicalInput"), node("voice", "gain"), node("cable-a", "physicalOutput"), node("cable-b", "physicalInput"), node("eq", "parametricEq"), node("scarlett", "physicalOutput"), node("spare", "gain")],
+    edges: [edge("e1", "mic", "voice"), edge("e2", "voice", "cable-a"), edge("e3", "cable-b", "eq"), edge("e4", "eq", "scarlett")],
+  };
+
+  it("groups connected nodes into paths and leaves unconnected nodes out", () => {
+    expect(independentPaths(twoPaths).map((path) => path.map((item) => item.id))).toEqual([["mic", "voice", "cable-a"], ["cable-b", "eq", "scarlett"]]);
+    expect(needsNativePaths(twoPaths)).toBe(true);
+  });
+
+  it("uses the multi-path worker for one path with two outputs but not for a plain chain", () => {
+    const single: Session = { ...twoPaths, nodes: twoPaths.nodes.slice(0, 3), edges: twoPaths.edges.slice(0, 2) };
+    expect(needsNativePaths(single)).toBe(false);
+    const monitored: Session = { ...single, nodes: [...single.nodes, node("monitor", "physicalOutput")], edges: [...single.edges, edge("e5", "voice", "monitor")] };
+    expect(needsNativePaths(monitored)).toBe(true);
+  });
+
+  it("lists device nodes that still need a saved endpoint", () => {
+    const bound: Session = { ...twoPaths, nodes: twoPaths.nodes.map((item) => item.id === "scarlett" ? item : { ...item, parameters: item.kind.startsWith("physical") ? { endpointId: `${item.id}-endpoint` } : item.parameters }) };
+    expect(unboundDeviceNodes(bound).map((item) => item.id)).toEqual(["scarlett"]);
   });
 });

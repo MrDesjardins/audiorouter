@@ -390,6 +390,58 @@ export function mixerRouteSources(session: Session): Session["nodes"] | null {
   return sources;
 }
 
+/**
+ * The independent paths of a route (GRAPH-15): groups of nodes joined by
+ * enabled connections, after disabled sources are pruned, in the order their
+ * first node appears. Unconnected nodes belong to no path.
+ */
+export function independentPaths(session: Session): Session["nodes"][] {
+  const pruned = pruneInactiveUpstream(session);
+  const group = new Map<string, number>();
+  const groups: Set<string>[] = [];
+  for (const edge of pruned.edges.filter((candidate) => candidate.enabled)) {
+    const a = group.get(edge.sourceNode);
+    const b = group.get(edge.destinationNode);
+    if (a === undefined && b === undefined) {
+      groups.push(new Set([edge.sourceNode, edge.destinationNode]));
+      group.set(edge.sourceNode, groups.length - 1);
+      group.set(edge.destinationNode, groups.length - 1);
+    } else if (a === undefined || b === undefined || a === b) {
+      const index = (a ?? b) as number;
+      groups[index].add(edge.sourceNode).add(edge.destinationNode);
+      group.set(edge.sourceNode, index);
+      group.set(edge.destinationNode, index);
+    } else {
+      for (const id of groups[b]) { groups[a].add(id); group.set(id, a); }
+      groups[b].clear();
+    }
+  }
+  return groups
+    .filter((members) => members.size > 0)
+    .map((members) => pruned.nodes.filter((node) => members.has(node.id)))
+    .sort((left, right) => pruned.nodes.indexOf(left[0]) - pruned.nodes.indexOf(right[0]));
+}
+
+/**
+ * Whether Play runs this route on the multi-path worker: it has several
+ * independent paths, or one path reads or writes several devices. The backend
+ * resolves every device from the node's own saved endpoint.
+ */
+export function needsNativePaths(session: Session): boolean {
+  const paths = independentPaths(session);
+  if (paths.length > 1) return true;
+  return paths.some((nodes) =>
+    nodes.filter((node) => node.enabled && node.kind === "physicalOutput").length > 1
+    || nodes.filter((node) => node.enabled && node.kind === "physicalInput").length > 1);
+}
+
+/** Enabled device nodes of a route that have no saved endpoint yet. */
+export function unboundDeviceNodes(session: Session): Session["nodes"] {
+  return independentPaths(session)
+    .flat()
+    .filter((node) => node.enabled && (node.kind === "physicalInput" || node.kind === "physicalOutput") && typeof node.parameters.endpointId !== "string");
+}
+
 /** Enabled sources other than the given application node that keep an application route from running on Play. */
 export function mixedApplicationRouteOtherSources(session: Session, applicationNodeId: string): Session["nodes"] {
   return session.nodes.filter((node) => node.enabled && node.id !== applicationNodeId && ROUTE_SOURCE_KINDS.has(node.kind));

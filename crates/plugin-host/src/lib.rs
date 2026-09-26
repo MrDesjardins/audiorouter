@@ -3691,6 +3691,8 @@ pub struct PluginRuntimeBridge {
     parameters: Arc<Mutex<Vec<ParameterEvent>>>,
     requests: Arc<Mutex<std::collections::VecDeque<BridgeRequest>>>,
     worker: Option<JoinHandle<()>>,
+    /// Frames per pipeline quantum, for reporting pipeline delay.
+    quantum_frames: usize,
 }
 
 /// Control request served by the plugin runtime thread between audio frames
@@ -3905,6 +3907,7 @@ impl PluginRuntimeBridge {
             parameters,
             requests,
             worker: Some(worker_thread),
+            quantum_frames: frames,
         }))
     }
 
@@ -3987,6 +3990,13 @@ impl PluginRuntimeBridge {
 }
 
 impl audiorouter_engine::RealtimePluginProcessor for PluginRuntimeBridge {
+    /// Quanta handed to the worker and not yet returned: the audio leaving
+    /// this stage is that many quanta older than the audio entering it.
+    fn latency_samples(&self) -> u32 {
+        let in_flight = self.free.capacity().saturating_sub(self.free.len());
+        u32::try_from(in_flight * self.quantum_frames).unwrap_or(u32::MAX)
+    }
+
     fn process(&self, block: &mut audiorouter_engine::AudioBlock) {
         if self.failed.load(Ordering::Acquire) {
             block.clear();
@@ -4376,6 +4386,16 @@ impl WorkerProcess {
         // environment configuration. The executable is absolute and the
         // worker protocol passes all required configuration explicitly.
         command.env_clear();
+        // The worker talks only over its piped stdio. Without a console of its
+        // own it would otherwise get a new console window when started from
+        // the windowless release shell, which the default terminal host can
+        // fail to launch (0x800700E8).
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            command.creation_flags(CREATE_NO_WINDOW);
+        }
         command.args([
             "--plugin-sha256",
             plugin_sha256,

@@ -941,7 +941,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
       sessionId,
       generation,
       state: "configured-stopped" as const,
-      sources: sources.map((source) => source.kind === "physical" ? { kind: "physical" as const, endpointId: source.endpointId } : { kind: "application" as const, processId: source.processId, executable: source.executable }),
+      sources: sources.map((source) => source.kind === "physical" ? { kind: "physical" as const, endpointId: source.endpointId } : source.kind === "generated" ? { kind: "generated" as const } : { kind: "application" as const, processId: source.processId, executable: source.executable }),
       sourceNodeIds: sources.map((_, index) => `source-${index}`),
       branchNodeIds: ["output"],
     }));
@@ -978,7 +978,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
       sessionId,
       generation,
       state: "configured-stopped" as const,
-      sources: sources.map((source) => source.kind === "physical" ? { kind: "physical" as const, endpointId: source.endpointId } : { kind: "application" as const, processId: source.processId, executable: source.executable }),
+      sources: sources.map((source) => source.kind === "physical" ? { kind: "physical" as const, endpointId: source.endpointId } : source.kind === "generated" ? { kind: "generated" as const } : { kind: "application" as const, processId: source.processId, executable: source.executable }),
       sourceNodeIds: sources.map((_, index) => `source-${index}`),
       branchNodeIds: ["output"],
     }));

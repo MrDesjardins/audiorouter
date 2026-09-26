@@ -2143,6 +2143,9 @@ fn method_description(name: &str) -> &'static str {
         "nativeMultiInputs.prepare" => {
             "Prepare multiple exact physical and/or application-capture clients for a validated mixer/fan-out graph, including pre-bound plugin stages, without starting audio."
         }
+        "nativePaths.prepare" => {
+            "Prepare every independent path of a saved session from the exact devices and applications stored on its nodes, without starting audio."
+        }
         "nativeBridges.prepare" => {
             "Prepare one exact project-driver render-source and capture-sink lease pair without starting audio."
         }
@@ -2413,10 +2416,18 @@ fn method_input_schema(name: &str) -> Value {
                 "generation": { "type": "integer", "minimum": 1 },
                 "sources": { "type": "array", "minItems": 2, "maxItems": audiorouter_engine::MAX_MIXER_INPUTS, "items": { "type": "object", "oneOf": [
                     { "properties": { "kind": { "const": "physical" }, "endpointId": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES } }, "required": ["kind", "endpointId"], "additionalProperties": false },
+                    { "properties": { "kind": { "const": "generated" } }, "required": ["kind"], "additionalProperties": false },
                     { "properties": { "kind": { "const": "application" }, "processId": { "type": "integer", "minimum": 1 }, "executable": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES }, "executablePath": { "type": ["string", "null"] }, "creationTime100ns": { "type": "string", "minLength": 1, "maxLength": 20 }, "mode": { "enum": ["include", "exclude"] } }, "required": ["kind", "processId", "executable", "creationTime100ns", "mode"], "additionalProperties": false }
                 ] } }
             }),
             &["sessionId", "sources"],
+        ),
+        "nativePaths.prepare" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "generation": { "type": "integer", "minimum": 1 }
+            }),
+            &["sessionId"],
         ),
         "nativeBridges.prepare" => object_schema(
             json!({
@@ -3442,11 +3453,25 @@ fn method_output_schema(name: &str) -> Value {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "generation": { "type": "integer", "minimum": 1 },
                 "state": { "const": "configured-stopped" },
-                "sources": { "type": "array", "minItems": 2, "maxItems": audiorouter_engine::MAX_MIXER_INPUTS, "items": { "type": "object", "properties": { "kind": { "enum": ["physical", "application"] }, "endpointId": { "type": "string" }, "processId": { "type": "integer" }, "executable": { "type": "string" } }, "required": ["kind"], "additionalProperties": false } },
+                "sources": { "type": "array", "minItems": 2, "maxItems": audiorouter_engine::MAX_MIXER_INPUTS, "items": { "type": "object", "properties": { "kind": { "enum": ["physical", "application", "generated"] }, "endpointId": { "type": "string" }, "processId": { "type": "integer" }, "executable": { "type": "string" } }, "required": ["kind"], "additionalProperties": false } },
                 "sourceNodeIds": { "type": "array", "minItems": 2, "maxItems": audiorouter_engine::MAX_MIXER_INPUTS, "items": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } },
                 "branchNodeIds": { "type": "array", "minItems": 2, "maxItems": audiorouter_engine::MAX_AUDIO_TAPS, "items": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } }
             },
             "required": ["sessionId", "generation", "state", "sources", "sourceNodeIds", "branchNodeIds"],
+            "additionalProperties": false
+        }),
+        "nativePaths.prepare" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "generation": { "type": "integer", "minimum": 1 },
+                "state": { "const": "configured-stopped" },
+                "pathCount": { "type": "integer", "minimum": 1, "maximum": audiorouter_engine::MAX_AUDIO_TAPS },
+                "sourceNodeIds": { "type": "array", "minItems": 1, "maxItems": audiorouter_engine::MAX_AUDIO_TAPS, "items": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } },
+                "branchNodeIds": { "type": "array", "minItems": 1, "maxItems": audiorouter_engine::MAX_AUDIO_TAPS, "items": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } },
+                "renderEndpointIds": { "type": "array", "maxItems": audiorouter_engine::MAX_AUDIO_TAPS, "items": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES } }
+            },
+            "required": ["sessionId", "generation", "state", "pathCount", "sourceNodeIds", "branchNodeIds", "renderEndpointIds"],
             "additionalProperties": false
         }),
         "nativeBridges.prepare" => json!({
@@ -4307,7 +4332,17 @@ fn diagnostics_output_schema() -> Value {
                             "required": ["state", "failureCount"],
                             "additionalProperties": false
                         },
-                        "noiseProfile": { "type": "string", "pattern": "^[0-9a-fA-F]{128}$" }
+                        "noiseProfile": { "type": "string", "pattern": "^[0-9a-fA-F]{128}$" },
+                        "timing": {
+                            "type": "object",
+                            "properties": {
+                                "delayMs": { "type": "number", "minimum": 0 },
+                                "processingUsAvg": { "type": "number", "minimum": 0 },
+                                "processingUsMax": { "type": "number", "minimum": 0 }
+                            },
+                            "required": ["delayMs"],
+                            "additionalProperties": false
+                        }
                     },
                     "required": ["nodeId", "kind", "meter", "processor", "plugin"],
                     "additionalProperties": false
@@ -4836,6 +4871,7 @@ pub struct NativeApplicationWorkerConfig<'a> {
 /// application source re-supplies its full observed identity explicitly,
 /// matching `dispatch_native_applications_prepare`'s revalidation contract,
 /// rather than silently trusting the node's persisted parameters.
+#[derive(Clone, Copy)]
 pub enum NativeMultiInputSourceBinding<'a> {
     Physical(&'a audiorouter_windows_audio::EndpointInfo),
     Application {
@@ -4845,6 +4881,17 @@ pub enum NativeMultiInputSourceBinding<'a> {
         expected_creation_time_100ns: u64,
         mode: audiorouter_windows_audio::ProcessLoopbackMode,
     },
+    /// A Test Signal or Audio File: the Mixer input chain generates the
+    /// audio, and the native input only supplies silent pacing packets.
+    Generated,
+}
+
+/// How `prepare_native_path_worker` receives source bindings: in the
+/// compiled input order, or keyed by source node.
+#[cfg(windows)]
+enum MultiInputBindings<'s, 'a> {
+    Ordered(&'s [NativeMultiInputSourceBinding<'a>]),
+    ByNode(&'s HashMap<EntityId, NativeMultiInputSourceBinding<'a>>),
 }
 
 pub struct ControlPlane {
@@ -4913,6 +4960,10 @@ pub struct ControlPlane {
     native_multi_input_worker_generation: Option<u64>,
     #[cfg(windows)]
     multi_input_application_sources: Vec<MultiInputApplicationSource>,
+    /// Stereo device nodes the prepared multi-input worker reads from a
+    /// mono endpoint (see `native_paths_session`).
+    #[cfg(windows)]
+    native_multi_input_mono_nodes: Vec<EntityId>,
     native_endpoint_taps: Option<AudioTapSet>,
     native_endpoint_taps_secondary: Option<AudioTapSet>,
     native_endpoint_rejections: u64,
@@ -5250,6 +5301,8 @@ impl ControlPlane {
             native_multi_input_worker_generation: None,
             #[cfg(windows)]
             multi_input_application_sources: Vec::new(),
+            #[cfg(windows)]
+            native_multi_input_mono_nodes: Vec::new(),
             native_endpoint_taps: None,
             native_endpoint_taps_secondary: None,
             native_endpoint_rejections: 0,
@@ -5476,49 +5529,117 @@ impl ControlPlane {
                     .into(),
             ));
         }
+        self.native_multi_input_mono_nodes.clear();
+        self.prepare_native_path_worker(
+            session_id,
+            generation,
+            MultiInputBindings::Ordered(bindings),
+            buffer_duration_100ns,
+            max_attempts,
+            retry_delay_ms,
+        )
+    }
+
+    /// The session copy the multi-input worker compiles: disabled sources
+    /// that feed nothing are dropped (only bound sources are opened), and a
+    /// stereo device node bound to a mono endpoint reads that endpoint
+    /// through `[1,1]` duplication folded into its outgoing matrices. The
+    /// saved session is never changed.
+    #[cfg(windows)]
+    fn native_paths_session(&self, session_id: &EntityId) -> Result<Session, ControlError> {
+        let mut session =
+            audiorouter_engine::prune_inactive_upstream(self.get_session(session_id)?).into_owned();
+        for node_id in &self.native_multi_input_mono_nodes {
+            let Some(node) = session.nodes.iter_mut().find(|node| node.id == *node_id) else {
+                continue;
+            };
+            let Some(port) = node
+                .ports
+                .iter_mut()
+                .find(|port| port.direction == PortDirection::Output && port.channels == 2)
+            else {
+                continue;
+            };
+            port.channels = 1;
+            let port_name = port.name.clone();
+            for edge in session
+                .edges
+                .iter_mut()
+                .filter(|edge| edge.source_node == *node_id && edge.source_port == port_name)
+            {
+                edge.matrix = edge.matrix.chunks(2).map(|row| row.iter().sum()).collect();
+            }
+        }
+        Ok(session)
+    }
+
+    #[cfg(windows)]
+    /// Prepare the stopped multi-input worker for every independent path of
+    /// the session (GRAPH-15): one Mixer path through `nativeMultiInputs`, or
+    /// any number of paths through `nativePaths`. All paths share one
+    /// generation and lifecycle.
+    fn prepare_native_path_worker(
+        &mut self,
+        session_id: EntityId,
+        generation: u64,
+        bindings: MultiInputBindings<'_, '_>,
+        buffer_duration_100ns: i64,
+        max_attempts: u32,
+        retry_delay_ms: u64,
+    ) -> Result<Value, ControlError> {
+        if generation == 0 {
+            return Err(ControlError::InvalidRequest(
+                "multi-input preparation requires a nonzero generation".into(),
+            ));
+        }
         self.get_session(&session_id)?;
         if self.any_native_worker_attached() {
             return Err(ControlError::InvalidRequest(
                 "native worker is already attached".into(),
             ));
         }
-        // Disabled sources left wired into the Mixer are not captured by this
-        // worker (only bound sources are opened), so they are dropped rather
-        // than rejecting the route.
-        let session = audiorouter_engine::prune_inactive_upstream(self.get_session(&session_id)?).into_owned();
+        let session = self.native_paths_session(&session_id)?;
         let plugin_stages =
             self.prepare_plugin_stages(&session, audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ)?;
         let media = self.session_audio_media(&session, audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ)?;
-        let compiled = audiorouter_engine::compile_mixer_fanout_session_with_plugins_and_audio(
+        let compiled = audiorouter_engine::compile_native_paths_with_plugins_and_audio(
             &session,
             RuntimeGeneration::new(generation),
             &plugin_stages,
             &media,
         )
-        .map_err(|error| {
-            ControlError::InvalidRequest(format!("multi-input graph rejected: {error:?}"))
+        .map_err(|error| match error {
+            audiorouter_engine::GraphCompileError::UnsupportedPath(path) => ControlError::InvalidRequest(format!(
+                "{path} is not supported: a path needs one source or one Mixer, then a single chain, then its outputs"
+            )),
+            error => ControlError::InvalidRequest(format!("multi-input graph rejected: {error:?}")),
         })?;
         let source_node_ids = compiled.input_node_ids().to_vec();
-        if source_node_ids.len() != bindings.len() {
-            return Err(ControlError::InvalidRequest(
-                "source binding count does not match the prepared graph source count".into(),
-            ));
-        }
-        let mixer_channels = session
-            .nodes
-            .iter()
-            .find(|node| matches!(node.kind, NodeKind::Mixer | NodeKind::InputSwitch) && node.enabled && !node.bypass)
-            .and_then(|node| {
-                node.ports
-                    .iter()
-                    .find(|port| port.direction == PortDirection::Input)
-            })
-            .map(|port| usize::from(port.channels))
-            .ok_or_else(|| {
-                ControlError::InvalidRequest("prepared mixer input is missing".into())
-            })?;
+        let bindings = match bindings {
+            MultiInputBindings::Ordered(list) => {
+                if source_node_ids.len() != list.len() {
+                    return Err(ControlError::InvalidRequest(
+                        "source binding count does not match the prepared graph source count".into(),
+                    ));
+                }
+                list.iter().collect::<Vec<_>>()
+            }
+            MultiInputBindings::ByNode(map) => source_node_ids
+                .iter()
+                .map(|node_id| {
+                    map.get(node_id).ok_or_else(|| {
+                        let name = session
+                            .nodes
+                            .iter()
+                            .find(|node| node.id == *node_id)
+                            .map_or(node_id.as_str(), |node| node.name.as_str());
+                        ControlError::InvalidRequest(format!("no device or application is chosen for {name}"))
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        };
         let mut source_channels = Vec::with_capacity(source_node_ids.len());
-        for (node_id, binding) in source_node_ids.iter().zip(bindings) {
+        for (node_id, binding) in source_node_ids.iter().zip(bindings.iter().copied()) {
             let node = session
                 .nodes
                 .iter()
@@ -5540,6 +5661,7 @@ impl ControlPlane {
                     ControlError::InvalidRequest("source node output port is missing".into())
                 })?;
             match (node.kind, binding) {
+                (NodeKind::TestSignal | NodeKind::AudioFile, NativeMultiInputSourceBinding::Generated) => {}
                 (NodeKind::PhysicalInput, NativeMultiInputSourceBinding::Physical(endpoint)) => {
                     if endpoint.direction != audiorouter_windows_audio::EndpointDirection::Capture
                         || !endpoint.is_ieee_float32()
@@ -5589,11 +5711,10 @@ impl ControlPlane {
             }
             source_channels.push(channels);
         }
-        let mixer = audiorouter_engine::RealtimeMixerFanout::new(
+        let mixer = audiorouter_engine::RealtimeMixerFanout::from_paths(
             compiled,
             4,
             &source_channels,
-            mixer_channels,
             audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
         )
         .map_err(|error| {
@@ -5608,8 +5729,13 @@ impl ControlPlane {
         }
         let mut capture_clients = Vec::with_capacity(bindings.len());
         let mut application_sources = Vec::new();
-        for binding in bindings {
+        for binding in bindings.iter().copied() {
             match binding {
+                NativeMultiInputSourceBinding::Generated => capture_clients.push(
+                    audiorouter_windows_audio::MultiInputCaptureSource::Silence(
+                        audiorouter_windows_audio::SilentCapture::new(audiorouter_engine::PROCESSING_QUANTUM_FRAMES),
+                    ),
+                ),
                 NativeMultiInputSourceBinding::Physical(endpoint) => {
                     let monitor = self
                         .endpoint_monitor
@@ -5720,6 +5846,7 @@ impl ControlPlane {
                 })?;
         self.attach_native_multi_input_worker(session_id.clone(), generation, worker)?;
         self.multi_input_application_sources = application_sources;
+        self.register_multi_input_generators(&session_id);
         self.pending_endpoint_changes.clear();
         Ok(json!({
             "sessionId": session_id,
@@ -5727,6 +5854,7 @@ impl ControlPlane {
             "state": "configured-stopped",
             "sources": bindings.iter().map(|binding| match binding {
                 NativeMultiInputSourceBinding::Physical(endpoint) => json!({ "kind": "physical", "endpointId": endpoint.id }),
+                NativeMultiInputSourceBinding::Generated => json!({ "kind": "generated" }),
                 NativeMultiInputSourceBinding::Application { process_id, expected_executable, .. } => json!({ "kind": "application", "processId": process_id, "executable": expected_executable }),
             }).collect::<Vec<_>>(),
             "sourceNodeIds": source_node_ids,
@@ -6725,6 +6853,20 @@ impl ControlPlane {
         generation: u64,
         render_endpoint_ids: &[String],
     ) -> Result<Value, ControlError> {
+        self.prepare_native_output_fanout_with(session_id, generation, render_endpoint_ids, false)
+    }
+
+    #[cfg(windows)]
+    /// As [`Self::prepare_native_output_fanout`]. With `allow_shared_endpoints`,
+    /// one render endpoint may serve several independent paths, each through
+    /// its own shared-mode client (Windows mixes them).
+    fn prepare_native_output_fanout_with(
+        &mut self,
+        session_id: EntityId,
+        generation: u64,
+        render_endpoint_ids: &[String],
+        allow_shared_endpoints: bool,
+    ) -> Result<Value, ControlError> {
         let multi_owner = self.native_multi_input_worker_session.as_ref() == Some(&session_id)
             && self.native_multi_input_worker.is_some();
         if (!multi_owner && render_endpoint_ids.is_empty())
@@ -6794,9 +6936,10 @@ impl ControlPlane {
             audiorouter_windows_audio::enumerate_active_endpoints().map_err(audio_control_error)?;
         let mut outputs = Vec::with_capacity(render_endpoint_ids.len());
         for (index, endpoint_id) in render_endpoint_ids.iter().enumerate() {
-            if render_endpoint_ids[..index]
-                .iter()
-                .any(|existing| existing == endpoint_id)
+            if !allow_shared_endpoints
+                && render_endpoint_ids[..index]
+                    .iter()
+                    .any(|existing| existing == endpoint_id)
             {
                 return Err(ControlError::InvalidRequest(
                     "output fan-out endpoint IDs must be unique".into(),
@@ -8736,10 +8879,44 @@ impl ControlPlane {
         let Some(session) = self.store.session(session_id) else {
             return json!([]);
         };
+        let input_waits = worker.input_wait_ms();
+        let output_queues = worker.output_queue_ms();
+        let registry = audiorouter_domain::node_registry();
+        let rate_ms = f64::from(audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ) / 1_000.0;
+        // Where the signal spends time (UI signal timing): a source's audio
+        // waits before pickup, a tool adds its own delay (fixed, a Delay's
+        // setting, or a plugin's worker pipeline) and processing time, and an
+        // output queues audio ahead of the device.
+        let timing_for = |node: &audiorouter_domain::Node| -> Option<Value> {
+            if let Some(index) = worker.input_node_ids().iter().position(|id| *id == node.id) {
+                return input_waits.get(index).copied().flatten().map(|wait| json!({ "delayMs": wait }));
+            }
+            if let Some(index) = worker.output_node_ids().iter().position(|id| *id == node.id) {
+                return output_queues.get(index).copied().flatten().map(|queue| json!({ "delayMs": queue }));
+            }
+            let timing = worker.stage_timing_for_node(&node.id)?;
+            let fixed = registry
+                .iter()
+                .find(|spec| spec.kind == node.kind)
+                .map_or(0.0, |spec| f64::from(spec.latency_samples) / rate_ms);
+            let setting = if node.kind == NodeKind::Delay {
+                node.parameters.get("delayMs").and_then(Value::as_f64).unwrap_or(0.0)
+            } else {
+                0.0
+            };
+            let plugin = f64::from(timing.plugin_latency_samples.unwrap_or(0)) / rate_ms;
+            let quanta = timing.processed_quanta.max(1) as f64;
+            Some(json!({
+                "delayMs": fixed + setting + plugin,
+                "processingUsAvg": timing.processing_ns_total as f64 / quanta / 1_000.0,
+                "processingUsMax": timing.processing_ns_max as f64 / 1_000.0,
+            }))
+        };
         session
             .nodes
             .iter()
             .filter_map(|node| {
+                let timing = timing_for(node);
                 let processor_telemetry =
                     worker
                         .processor_telemetry_for_node(&node.id)
@@ -8762,7 +8939,11 @@ impl ControlPlane {
                     })
                 });
                 let noise_profile = worker.noise_profile_for_node(&node.id);
-                if processor_telemetry.is_none() && plugin_health.is_none() && noise_profile.is_none() {
+                if processor_telemetry.is_none()
+                    && plugin_health.is_none()
+                    && noise_profile.is_none()
+                    && timing.is_none()
+                {
                     return None;
                 }
                 let mut item = json!({
@@ -8774,6 +8955,9 @@ impl ControlPlane {
                 });
                 if let Some(profile) = noise_profile {
                     item["noiseProfile"] = json!(profile);
+                }
+                if let Some(timing) = timing {
+                    item["timing"] = timing;
                 }
                 Some(item)
             })
@@ -9003,6 +9187,8 @@ impl ControlPlane {
             native_multi_input_worker_generation: None,
             #[cfg(windows)]
             multi_input_application_sources: Vec::new(),
+            #[cfg(windows)]
+            native_multi_input_mono_nodes: Vec::new(),
             native_endpoint_taps: None,
             native_endpoint_taps_secondary: None,
             native_endpoint_rejections: 0,
@@ -11365,13 +11551,12 @@ impl ControlPlane {
         if self.native_multi_input_worker_session.as_ref() == Some(session_id)
             && self.native_multi_input_worker.is_some()
         {
-            let session =
-                audiorouter_engine::prune_inactive_upstream(self.get_session(session_id)?).into_owned();
+            let session = self.native_paths_session(session_id)?;
             let plugin_stages =
                 self.prepare_plugin_stages(&session, audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ)?;
             let worker_generation = self.native_multi_input_worker_generation.unwrap_or(generation);
             let media = self.session_audio_media(&session, audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ)?;
-            let compiled = audiorouter_engine::compile_mixer_fanout_session_with_plugins_and_audio(
+            let compiled = audiorouter_engine::compile_native_paths_with_plugins_and_audio(
                 &session,
                 RuntimeGeneration::new(worker_generation),
                 &plugin_stages,
@@ -11381,15 +11566,45 @@ impl ControlPlane {
             self.native_multi_input_worker
                 .as_mut()
                 .expect("attached above")
-                .replace_mixer_graph(compiled)
+                .replace_path_set(compiled)
                 .map_err(|_| {
                     ControlError::InvalidRequest(
-                        "the Mixer's sources or outputs changed; stop and press Play to apply".into(),
+                        "the route's sources or outputs changed; stop and press Play to apply".into(),
                     )
                 })?;
+            self.register_multi_input_generators(session_id);
             return Ok(Some("multi-input"));
         }
         Ok(None)
+    }
+
+    /// Expose Play/Stop for Test Signal and Audio File nodes that feed the
+    /// multi-input Mixer, exactly as the single-route compiler does.
+    #[cfg(windows)]
+    fn register_multi_input_generators(&mut self, session_id: &EntityId) {
+        let Some(session) = self.store.session(session_id).cloned() else { return };
+        let Some(worker) = self.native_multi_input_worker.as_ref() else { return };
+        let mut test_signals = Vec::new();
+        let mut audio_files = Vec::new();
+        for node in &session.nodes {
+            if node.kind == NodeKind::TestSignal {
+                if let Some(source) = worker.test_signal_source_for_node(&node.id) {
+                    test_signals.push((node.id.clone(), source));
+                }
+            } else if node.kind == NodeKind::AudioFile {
+                if let Some(source) = worker.audio_file_source_for_node(&node.id) {
+                    audio_files.push((node.id.clone(), source));
+                }
+            }
+        }
+        self.test_signal_sources.retain(|(owner, _), _| owner != session_id);
+        self.audio_file_sources.retain(|(owner, _), _| owner != session_id);
+        for (node_id, source) in test_signals {
+            self.test_signal_sources.insert((session_id.clone(), node_id), source);
+        }
+        for (node_id, source) in audio_files {
+            self.audio_file_sources.insert((session_id.clone(), node_id), source);
+        }
     }
 
     /// The generation a native preparation targets: the explicit
@@ -12138,7 +12353,10 @@ impl ControlPlane {
                 && self.native_multi_input_worker.is_some();
             let native_duplex_attached = self.native_duplex_worker_session.as_ref() == Some(id)
                 && self.native_duplex_worker.is_some();
-            native_graph_attached = native_graph_attached || native_duplex_attached;
+            // The multi-input worker binds its plugin stages while it is
+            // prepared (`prepare_native_path_worker`), so it can run them.
+            native_graph_attached =
+                native_graph_attached || native_duplex_attached || native_multi_input_attached;
             native_graph_attached = native_graph_attached
                 || (self.native_render_source_worker_session.as_ref() == Some(id)
                     && self.native_render_source_worker.is_some());
@@ -12733,6 +12951,7 @@ impl ControlPlane {
                     "nativeMultiInputs.prepare" => {
                         self.dispatch_native_multi_inputs_prepare(request.params)
                     }
+                    "nativePaths.prepare" => self.dispatch_native_paths_prepare(request.params),
                     "nativeBridges.prepare" => self.dispatch_native_bridges_prepare(request.params),
                     "nativeBridges.detach" => self.dispatch_native_bridges_detach(request.params),
                     "nativeBridges.heartbeat" => {
@@ -15513,6 +15732,7 @@ impl ControlPlane {
         params: Option<Value>,
     ) -> Result<Value, ControlError> {
         enum DecodedMultiInputSource {
+            Generated,
             Physical(String),
             Application {
                 process_id: u32,
@@ -15544,6 +15764,7 @@ impl ControlPlane {
         let decoded = source_values
             .iter()
             .map(|value| match value.get("kind").and_then(Value::as_str) {
+                Some("generated") => Ok(DecodedMultiInputSource::Generated),
                 Some("physical") => value
                     .get("endpointId")
                     .and_then(Value::as_str)
@@ -15615,7 +15836,7 @@ impl ControlPlane {
                     })
                 }
                 _ => Err(ControlError::InvalidRequest(
-                    "each source requires kind physical or application".into(),
+                    "each source requires kind physical, application, or generated".into(),
                 )),
             })
             .collect::<Result<Vec<_>, ControlError>>()?;
@@ -15638,13 +15859,14 @@ impl ControlPlane {
                             "capture endpoint is not an active exact inventory match".into(),
                         )
                     }),
-                DecodedMultiInputSource::Application { .. } => Ok(None),
+                DecodedMultiInputSource::Application { .. } | DecodedMultiInputSource::Generated => Ok(None),
             })
             .collect::<Result<Vec<_>, ControlError>>()?;
         let bindings = decoded
             .iter()
             .zip(resolved_endpoints.iter())
             .map(|(source, endpoint)| match source {
+                DecodedMultiInputSource::Generated => NativeMultiInputSourceBinding::Generated,
                 DecodedMultiInputSource::Physical(_) => NativeMultiInputSourceBinding::Physical(
                     endpoint.as_ref().expect("physical source resolved above"),
                 ),
@@ -15673,6 +15895,181 @@ impl ControlPlane {
     ) -> Result<Value, ControlError> {
         Err(ControlError::InvalidRequest(
             "native multi-input preparation requires Windows".into(),
+        ))
+    }
+
+    #[cfg(windows)]
+    /// Prepare every independent path of a saved session (GRAPH-15) from the
+    /// exact devices and applications stored on its nodes (CAP-02). Nothing
+    /// is chosen by name, default role or fallback: a node without a chosen,
+    /// connected device stops preparation with its name. Outputs are opened
+    /// after the sources; if they fail, the prepared worker is released.
+    fn dispatch_native_paths_prepare(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params =
+            params.ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+        let session_id = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(EntityId::new)
+            .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+        let generation = self.requested_or_next_generation(&params, &session_id)?;
+        let session =
+            audiorouter_engine::prune_inactive_upstream(self.get_session(&session_id)?).into_owned();
+        let endpoints =
+            audiorouter_windows_audio::enumerate_active_endpoints().map_err(audio_control_error)?;
+        let endpoint_for = |node: &audiorouter_domain::Node, direction| {
+            let endpoint_id = node
+                .parameters
+                .get("endpointId")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest(format!(
+                        "choose the device for {} in its Properties",
+                        node.name
+                    ))
+                })?;
+            endpoints
+                .iter()
+                .find(|endpoint| endpoint.id == endpoint_id && endpoint.direction == direction)
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest(format!(
+                        "the device chosen for {} is not connected; choose it again in its Properties",
+                        node.name
+                    ))
+                })
+        };
+        let mut bindings = HashMap::new();
+        let mut mono_nodes = Vec::new();
+        for node in session.nodes.iter().filter(|node| {
+            node.enabled
+                && session
+                    .edges
+                    .iter()
+                    .any(|edge| edge.enabled && edge.source_node == node.id)
+        }) {
+            let binding = match node.kind {
+                NodeKind::PhysicalInput => {
+                    let endpoint =
+                        endpoint_for(node, audiorouter_windows_audio::EndpointDirection::Capture)?;
+                    let node_channels = node
+                        .ports
+                        .iter()
+                        .find(|port| port.direction == PortDirection::Output)
+                        .map(|port| port.channels);
+                    if endpoint.channels == 1 && node_channels == Some(2) {
+                        mono_nodes.push(node.id.clone());
+                    }
+                    NativeMultiInputSourceBinding::Physical(endpoint)
+                }
+                NodeKind::TestSignal | NodeKind::AudioFile => NativeMultiInputSourceBinding::Generated,
+                NodeKind::ApplicationCapture => {
+                    let process_id = node
+                        .parameters
+                        .get("processId")
+                        .and_then(Value::as_u64)
+                        .and_then(|id| u32::try_from(id).ok());
+                    let executable = node.parameters.get("executable").and_then(Value::as_str);
+                    let creation_time = node
+                        .parameters
+                        .get("creationTime100ns")
+                        .and_then(Value::as_str)
+                        .and_then(|value| value.parse::<u64>().ok());
+                    let (Some(process_id), Some(executable), Some(creation_time)) =
+                        (process_id, executable, creation_time)
+                    else {
+                        return Err(ControlError::InvalidRequest(format!(
+                            "select a running application for {} in its Properties",
+                            node.name
+                        )));
+                    };
+                    NativeMultiInputSourceBinding::Application {
+                        process_id,
+                        expected_executable: executable,
+                        expected_executable_path: node
+                            .parameters
+                            .get("executablePath")
+                            .and_then(Value::as_str),
+                        expected_creation_time_100ns: creation_time,
+                        mode: audiorouter_windows_audio::ProcessLoopbackMode::IncludeTargetTree,
+                    }
+                }
+                NodeKind::EndpointLoopback | NodeKind::VirtualRenderSource => {
+                    return Err(ControlError::InvalidRequest(format!(
+                        "{} cannot feed a multi-path session yet",
+                        node.name
+                    )));
+                }
+                _ => continue,
+            };
+            bindings.insert(node.id.clone(), binding);
+        }
+        self.native_multi_input_mono_nodes = mono_nodes;
+        let prepared = self.prepare_native_path_worker(
+            session_id.clone(),
+            generation,
+            MultiInputBindings::ByNode(&bindings),
+            0,
+            3,
+            100,
+        )?;
+        let (branch_node_ids, path_count) = {
+            let worker = self
+                .native_multi_input_worker
+                .as_ref()
+                .expect("worker attached above");
+            (worker.output_node_ids().to_vec(), worker.path_count())
+        };
+        let render_endpoint_ids = branch_node_ids
+            .iter()
+            .filter_map(|node_id| {
+                session
+                    .nodes
+                    .iter()
+                    .find(|node| node.id == *node_id && node.kind == NodeKind::PhysicalOutput)
+            })
+            .map(|node| {
+                endpoint_for(node, audiorouter_windows_audio::EndpointDirection::Render)
+                    .map(|endpoint| endpoint.id.clone())
+            })
+            .collect::<Result<Vec<String>, ControlError>>();
+        let outputs = render_endpoint_ids.and_then(|render_endpoint_ids| {
+            self.prepare_native_output_fanout_with(
+                session_id.clone(),
+                generation,
+                &render_endpoint_ids,
+                true,
+            )
+            .map(|_| render_endpoint_ids)
+        });
+        let render_endpoint_ids = match outputs {
+            Ok(ids) => ids,
+            Err(error) => {
+                let _ = self.detach_native_multi_input_worker();
+                return Err(error);
+            }
+        };
+        Ok(json!({
+            "sessionId": session_id,
+            "generation": generation,
+            "state": "configured-stopped",
+            "pathCount": path_count,
+            "sourceNodeIds": prepared["sourceNodeIds"],
+            "branchNodeIds": branch_node_ids,
+            "renderEndpointIds": render_endpoint_ids,
+        }))
+    }
+
+    #[cfg(not(windows))]
+    fn dispatch_native_paths_prepare(
+        &mut self,
+        _params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        Err(ControlError::InvalidRequest(
+            "native path preparation requires Windows".into(),
         ))
     }
 
@@ -17554,6 +17951,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         }
         "nativeOutputs.prepare" => &["sessionId", "generation", "renderEndpointIds"],
         "nativeMultiInputs.prepare" => &["sessionId", "generation", "sources"],
+        "nativePaths.prepare" => &["sessionId", "generation"],
         "nativeBridges.prepare" => &[
             "busId",
             "generation",
@@ -19654,6 +20052,146 @@ mod tests {
             error,
             ControlError::InvalidRequest(message) if message.contains("unknown parameter")
         ));
+    }
+
+    #[test]
+    fn native_paths_prepare_takes_only_the_session_and_needs_device_administration() {
+        let request = json!({ "sessionId": "patrick-main", "generation": 2 });
+        assert!(validate_method_params("nativePaths.prepare", Some(&request)).is_ok());
+        let with_sources = json!({ "sessionId": "patrick-main", "sources": [] });
+        assert!(validate_method_params("nativePaths.prepare", Some(&with_sources)).is_err());
+        let spec = API_METHODS
+            .iter()
+            .find(|spec| spec.name == "nativePaths.prepare")
+            .expect("nativePaths.prepare is discoverable");
+        assert_eq!(spec.permission, PermissionScope::DeviceAdministration);
+        let response = ControlPlane::default().dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: "nativePaths.prepare".into(),
+                params: Some(request),
+            },
+            &ClientGrant::for_desktop_shell(),
+        );
+        assert_eq!(response.error.map(|error| error.code), Some(-32001));
+    }
+
+    /// Live check of a saved multi-path session on this machine's devices:
+    /// prepare, start (with plugins), pump, read signal timing, stop. Privacy
+    /// mute is set first so nothing is audible. Point
+    /// `AUDIOROUTER_LIVE_PATHS_DATABASE` at a COPY of a database holding the
+    /// session (`AUDIOROUTER_LIVE_PATHS_SESSION`, default
+    /// `patrick-main-session`) and `AUDIOROUTER_PLUGIN_WORKER_PATH` at a built
+    /// plugin worker.
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "live Windows audio devices and plugins"]
+    fn live_native_paths_start_pump_and_report_signal_timing() {
+        let Some(database) = std::env::var_os("AUDIOROUTER_LIVE_PATHS_DATABASE") else {
+            return;
+        };
+        let session_id = std::env::var("AUDIOROUTER_LIVE_PATHS_SESSION")
+            .unwrap_or_else(|_| "patrick-main-session".into());
+        let storage = audiorouter_storage::Storage::open(std::path::Path::new(&database)).unwrap();
+        let mut plane = ControlPlane::with_storage("live-paths", storage);
+        let mut call = |method: &str, params: Value| {
+            let response = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: method.into(),
+                params: (!params.is_null()).then_some(params),
+            });
+            assert!(response.error.is_none(), "{method}: {:?}", response.error);
+            response.result.unwrap()
+        };
+        call("safety.setPrivacyMute", json!({ "muted": true, "idempotencyKey": "live-paths-mute" }));
+        let prepared = call("nativePaths.prepare", json!({ "sessionId": session_id }));
+        eprintln!("prepared: {prepared}");
+        let started = call(
+            "session.start",
+            json!({ "sessionId": session_id, "idempotencyKey": "live-paths-start" }),
+        );
+        eprintln!("started: {started}");
+        assert_eq!(started["runtime"], "native");
+        let generation = started["generation"].as_u64().unwrap();
+        let until = Instant::now() + Duration::from_secs(4);
+        let mut delivered = 0_u64;
+        while Instant::now() < until {
+            let pump = call(
+                "nativeMultiInputs.pump",
+                json!({ "sessionId": session_id, "generation": generation, "maxPackets": 64 }),
+            );
+            delivered += pump["deliveredQuanta"].as_u64().unwrap_or(0);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let diagnostics = call("system.diagnostics", Value::Null);
+        for item in diagnostics["nodeTelemetry"].as_array().unwrap() {
+            eprintln!("{} timing={} plugin={}", item["nodeId"], item["timing"], item["plugin"]);
+        }
+        eprintln!("delivered branch blocks: {delivered}");
+        call("session.stop", json!({ "sessionId": session_id, "idempotencyKey": "live-paths-stop" }));
+        let timed = diagnostics["nodeTelemetry"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|item| item["timing"]["delayMs"].is_number())
+            .count();
+        assert!(timed > 0, "signal timing is reported while the session runs");
+        let failed_plugins = diagnostics["nodeTelemetry"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|item| item["plugin"]["state"] == "failed" || item["plugin"]["state"] == "quarantined")
+            .map(|item| item["nodeId"].clone())
+            .collect::<Vec<_>>();
+        assert!(failed_plugins.is_empty(), "plugins failed while running: {failed_plugins:?}");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_paths_read_a_mono_endpoint_through_a_stereo_device_node() {
+        let stereo = |name: &str, direction| Port { name: name.into(), direction, channels: 2 };
+        let node = |id: &str, kind, ports: Vec<Port>| Node {
+            id: EntityId::new(id),
+            kind,
+            type_version: 1,
+            name: id.into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports,
+        };
+        let session_id = EntityId::new("mono-mic");
+        let mut plane = ControlPlane::default();
+        plane
+            .insert_session(Session {
+                id: session_id.clone(),
+                name: "mono mic".into(),
+                schema_version: 1,
+                revision: 0,
+                nodes: vec![
+                    node("mic", NodeKind::PhysicalInput, vec![stereo("out", PortDirection::Output)]),
+                    node("cable-a", NodeKind::PhysicalOutput, vec![stereo("in", PortDirection::Input)]),
+                ],
+                edges: vec![Edge {
+                    id: EntityId::new("mic-cable-a"),
+                    source_node: EntityId::new("mic"),
+                    source_port: "out".into(),
+                    destination_node: EntityId::new("cable-a"),
+                    destination_port: "in".into(),
+                    matrix: vec![1.0, 0.0, 0.0, 1.0],
+                    enabled: true,
+                }],
+            })
+            .unwrap();
+        plane.native_multi_input_mono_nodes = vec![EntityId::new("mic")];
+        let adapted = plane.native_paths_session(&session_id).unwrap();
+        assert_eq!(adapted.nodes[0].ports[0].channels, 1);
+        assert_eq!(adapted.edges[0].matrix, vec![1.0, 1.0]);
+        assert!(audiorouter_domain::validate_session(&adapted).is_ok());
+        // The saved session keeps its stereo device node.
+        assert_eq!(plane.get_session(&session_id).unwrap().nodes[0].ports[0].channels, 2);
     }
 
     #[cfg(windows)]

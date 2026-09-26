@@ -843,3 +843,41 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .panel-message.is-error { display: block; margin: .4rem 0; padding: .5rem .7rem; border: 1px solid rgb(255 107 107 / 55%); border-left: 4px solid var(--danger, #ff6b6b); border-radius: 8px; color: #ffe3e3; background: rgb(180 35 45 / 28%); font-weight: 600; }
 .theme-light .panel-message.is-error { color: #7a0d16; background: #ffe1e1; border-color: #e05a63; }
 .theme-high-contrast .panel-message.is-error { color: #fff; background: #5c0000; border-color: #ff4d4d; }
+
+/* Signal timing: one card per output, steps in travel order, bar = share of the total delay. */
+.signal-timing { display: grid; gap: .75rem; }
+.signal-timing > .muted { margin: 0; font-size: .78rem; line-height: 1.45; }
+.timing-route { display: grid; gap: .45rem; padding: .7rem .75rem; border: 1px solid var(--ambient-edge); border-radius: 9px; background: var(--ambient-surface-hi); }
+.timing-route header { display: flex; justify-content: space-between; gap: .5rem; align-items: baseline; color: var(--text-strong); }
+.timing-route header strong { min-width: 0; overflow-wrap: anywhere; font-size: .84rem; }
+.timing-total { flex: none; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--signal); }
+.timing-route ol { display: grid; gap: .4rem; margin: 0; padding: 0; list-style: none; }
+.timing-step { display: grid; gap: .2rem; }
+.timing-step-label { display: flex; justify-content: space-between; gap: .5rem; font-size: .8rem; color: var(--text-soft); }
+.timing-step-label span:last-child { flex: none; font-variant-numeric: tabular-nums; }
+.timing-step small { font-size: .72rem; }
+.timing-step.is-slowest .timing-step-label { color: var(--text-strong); font-weight: 700; }
+.timing-step-label em { font-style: normal; color: var(--signal-hot); }
+.timing-bar { height: 6px; border-radius: 3px; background: var(--ambient-surface); border: 1px solid var(--ambient-edge); overflow: hidden; }
+.timing-bar span { display: block; height: 100%; background: var(--cyan); }
+.timing-step.is-slowest .timing-bar span { background: var(--signal); }
+.theme-light .timing-total, .theme-light .timing-step-label em { color: #9a5200; }
+
+/* Message tones: blue information, green success, orange warning, red error. */
+.global-action-message.is-info { background: rgb(37 150 223 / 16%); box-shadow: inset 4px 0 0 #3a9ce8; }
+.global-action-message.is-success { background: rgb(60 190 120 / 18%); box-shadow: inset 4px 0 0 var(--good, #72e3a2); }
+.global-action-message.is-warning { background: rgb(246 169 40 / 20%); box-shadow: inset 4px 0 0 var(--signal, #f6a928); font-weight: 600; }
+.global-action-message.is-info .global-action-message-icon { background: #3a9ce8; }
+.global-action-message.is-success .global-action-message-icon { background: #2e9e62; }
+.global-action-message.is-warning .global-action-message-icon { color: #1b1300; background: var(--signal, #f6a928); }
+.panel-message.is-info, .panel-message.is-success, .panel-message.is-warning { display: block; margin: .4rem 0; padding: .45rem .7rem; border: 1px solid var(--ambient-edge); border-radius: 8px; color: var(--text-strong); font-size: .82rem; }
+.panel-message.is-info { border-left: 4px solid #3a9ce8; background: rgb(37 150 223 / 12%); }
+.panel-message.is-success { border-left: 4px solid var(--good, #72e3a2); background: rgb(60 190 120 / 14%); }
+.panel-message.is-warning { border-left: 4px solid var(--signal, #f6a928); background: rgb(246 169 40 / 16%); font-weight: 600; }
+.theme-light .global-action-message.is-info, .theme-light .panel-message.is-info { color: #0b3a66; background: #e3f1fd; }
+.theme-light .global-action-message.is-success, .theme-light .panel-message.is-success { color: #0d4d2a; background: #e2f7ea; }
+.theme-light .global-action-message.is-warning, .theme-light .panel-message.is-warning { color: #6b3a00; background: #fff1d6; }
+.theme-high-contrast .global-action-message.is-info, .theme-high-contrast .panel-message.is-info { color: #fff; background: #002b55; }
+.theme-high-contrast .global-action-message.is-success, .theme-high-contrast .panel-message.is-success { color: #fff; background: #003d1c; }
+.theme-high-contrast .global-action-message.is-warning, .theme-high-contrast .panel-message.is-warning { color: #fff; background: #4d2e00; }
+.panel-message.is-error { font-size: .82rem; }

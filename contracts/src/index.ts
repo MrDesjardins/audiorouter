@@ -283,6 +283,7 @@ export interface NativeOutputFanoutPrepareResult {
 
 export type NativeMultiInputSourceBinding =
   | { kind: "physical"; endpointId: string }
+  | { kind: "generated" }
   | {
       kind: "application";
       processId: number;
@@ -293,7 +294,7 @@ export type NativeMultiInputSourceBinding =
     };
 
 export interface NativeMultiInputPreparedSource {
-  kind: "physical" | "application";
+  kind: "physical" | "application" | "generated";
   endpointId?: string;
   processId?: number;
   executable?: string;
@@ -306,6 +307,20 @@ export interface NativeMultiInputPrepareResult {
   sources: NativeMultiInputPreparedSource[];
   sourceNodeIds: EntityId[];
   branchNodeIds: EntityId[];
+}
+
+/** Every independent path of a session, prepared from the devices stored on its nodes. */
+export interface NativePathsPrepareResult {
+  sessionId: EntityId;
+  generation: number;
+  state: "configured-stopped";
+  pathCount: number;
+  /** Source nodes in native input order, path by path. */
+  sourceNodeIds: EntityId[];
+  /** Output nodes in native output order, physical outputs first. */
+  branchNodeIds: EntityId[];
+  /** Exact render endpoints of the physical outputs, in branch order. */
+  renderEndpointIds: string[];
 }
 
 export interface NativeBridgePrepareResult {
@@ -667,6 +682,14 @@ export interface DiagnosticsSnapshot {
     } | null;
     /** Present while a Denoise node is learning: its current noise profile. */
     noiseProfile?: string;
+    /**
+     * Where the signal spends time at this node while a multi-input route
+     * runs. `delayMs` is how long a source's audio waits before pickup, the
+     * delay a tool adds (fixed, a Delay setting, or a plugin's worker
+     * pipeline), or the audio queued ahead of an output device. Tools also
+     * report their average and longest processing time per 128-frame block.
+     */
+    timing?: { delayMs: number; processingUsAvg?: number; processingUsMax?: number };
   }>;
   applicationCaptureStates: Array<{
     sessionId: EntityId;
@@ -1029,6 +1052,7 @@ export type ImplementedMethod =
   | "nativeEndpoints.prepare"
   | "nativeOutputs.prepare"
   | "nativeMultiInputs.prepare"
+  | "nativePaths.prepare"
   | "nativeBridges.prepare"
   | "nativeBridges.detach"
   | "nativeBridges.heartbeat"
@@ -1148,6 +1172,7 @@ export type MethodParams = {
   "nativeEndpoints.prepare": { sessionId: EntityId; captureEndpointId: string; renderEndpointId: string };
   "nativeOutputs.prepare": { sessionId: EntityId; generation?: number; renderEndpointIds: string[] };
   "nativeMultiInputs.prepare": { sessionId: EntityId; generation?: number; sources: NativeMultiInputSourceBinding[] };
+  "nativePaths.prepare": { sessionId: EntityId; generation?: number };
   "nativeBridges.prepare": { busId: EntityId; generation: number; devicePath: string; renderMappingPath: string; captureMappingPath: string; leaseMs?: number };
   "nativeBridges.detach": { busId: EntityId };
   "nativeBridges.heartbeat": undefined;
@@ -1279,6 +1304,7 @@ export type MethodResult = {
   "nativeEndpoints.prepare": NativeEndpointPrepareResult;
   "nativeOutputs.prepare": NativeOutputFanoutPrepareResult;
   "nativeMultiInputs.prepare": NativeMultiInputPrepareResult;
+  "nativePaths.prepare": NativePathsPrepareResult;
   "nativeBridges.prepare": NativeBridgePrepareResult;
   "nativeBridges.detach": NativeBridgeDetachResult;
   "nativeBridges.heartbeat": NativeBridgeHeartbeatResult;

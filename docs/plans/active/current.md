@@ -10,7 +10,163 @@ AudioRouter-owned kernel driver, PortCls activation, production signing, and
 clean-machine driver qualification are deferred; they remain documented
 requirements but are not active completion gates for this plan.
 
-## Current implementation task — per-source volume, Mixer reconnect, advanced tools (2026-09-25)
+## Current implementation task — one session with independent paths (2026-09-26)
+
+- **Objective:** Run the user's whole setup as ONE saved session, "Patrick
+  Main Session" (user decision 2026-09-26: "it has to be ONE session",
+  latency accepted). Voice path: PD200X mic → ReaFIR → ReaEQ → ReaComp →
+  ReaGate → CABLE-A Input + Scarlett (monitor). Game path: CABLE-B Output →
+  Advanced EQ → Scarlett. Then (second task, same request): show per-tool
+  timing along the signal path so the user can see which tool slows the
+  sound.
+- **Requirements:** GRAPH-15 (independent source paths), GRAPH-14
+  (protected voice path), CAP-02 (per-node exact endpoint binding), CAP-13
+  (concurrent path ownership), API-04/08, UI-04/05.
+- **Prerequisites:** The native multi-input worker already owns N exact
+  captures → one compiled graph → M output rings with one start/stop and
+  privacy latch. Only the graph shape was limited to one Mixer.
+- **Decisions:**
+  - **P1 — Paths are weakly connected components** of the enabled graph.
+    Each path is a direct source or exactly one Mixer/Input Switch of
+    sources, then a linear chain, then 1..8 outputs. Anything else is
+    rejected with the path named. A lone edgeless node is ignored.
+  - **P2 — One worker, per-path clocks.** The multi-input worker runs every
+    path. `RealtimeMixerFanout` holds several paths. Each path processes
+    when its own inputs are ready, so one device's clock never paces
+    another path. Start, stop, generation, privacy mute and failure stay
+    session-wide.
+  - **P3 — Exact device per node.** PhysicalInput/PhysicalOutput nodes
+    persist `endpointId`. The UI's per-session hint remains the fallback
+    for single-route sessions.
+  - **P4 — Backend-derived bindings.** New `nativePaths.prepare
+    {sessionId, generation?}` (DeviceAdministration) resolves each source
+    and output from its node, prepares the worker, and attaches outputs.
+    Start, pump, stop and detach reuse the multi-input methods.
+  - **P5 — Mono capture into stereo nodes** is adapted in the compiled copy
+    (column-summed edge matrices = `[1,1]` duplication), without changing
+    the saved graph or the realtime path.
+  - **P6 — The same render endpoint may appear on several paths** (voice
+    monitor and game both to the Scarlett) as separate shared-mode clients.
+- **Ordered tasks:** (1) engine path partition + direct-source path compile
+  + multi-path realtime adapter; (2) domain `endpointId`; (3) control
+  `nativePaths.prepare`, republish, contracts, API docs; (4) UI per-node
+  device selectors and Play via `nativePaths.prepare`; (5) build the
+  session in the user's running shell and qualify it attended; (6) per-tool
+  timing.
+- **Validation matrix:** engine tests (partition, direct path, two paths
+  with independent readiness, no crossfeed, the existing Mixer unchanged);
+  domain parameter test; control dispatch/schema tests; contract drift; UI
+  tests; Windows attended run with PD200X, CABLE-A/B and Scarlett.
+- **Risks:** Path clocks drift independently (bounded rings drop like the
+  existing Mixer). Recorder tap timeline is per worker, not per path.
+- **Rollback:** Revert the engine/control/UI changes. Saved `endpointId`
+  parameters would then fail validation; remove them from the session
+  before downgrading.
+
+**Outcome (2026-09-26), tasks 1–4 and 6 implemented; task 5 partly done.**
+- Engine: `independent_path_sessions` and
+  `compile_native_paths_with_plugins_and_audio` build a `CompiledPathSet`. The
+  Mixer compiler is split into `compile_mixer_entry` / `compile_direct_entry`
+  plus a shared chain/output walk. A direct path whose single connection enters
+  a processor uses that connection as its input matrix (mono mic → mono
+  plugins works without adaptation). `RealtimeMixerFanout` now holds
+  `RealtimePath`s with per-path input ranges and output positions. Each path
+  processes when its own inputs are ready. The caller-block methods remain
+  single-path only. New `GraphCompileError::UnsupportedPath` names the path.
+- Domain: `endpointId` is valid on PhysicalInput/PhysicalOutput (CAP-02).
+  `API_METHODS` has 98 entries.
+- Control: `nativePaths.prepare` (DeviceAdministration) reads node bindings,
+  prepares the worker through `prepare_native_path_worker`, then outputs with
+  shared endpoints allowed. It detaches the worker if an output fails.
+  `native_paths_session` applies mono adaptation (P5). Live republish uses
+  `replace_path_set`.
+- UI: device pickers save `endpointId` on the node (plus the old per-session
+  hint). Play uses `nativePaths.prepare` when `needsNativePaths` (≥2 paths,
+  or ≥2 device inputs/outputs on one path). It names unbound device nodes.
+- Signal timing (task 6): per-stage processing counters in `RuntimeGraph`
+  (timed start-to-start, so `continue` stages count). `StageTiming` exposes
+  them. `RealtimePluginProcessor::latency_samples` reports the plugin bridge's
+  in-flight quanta × 128 frames. The multi-input feeder smooths capture
+  packet age from WASAPI QPC timestamps (`Win32_System_Performance` feature
+  of the existing `windows` crate; no new crate, `Cargo.lock` unchanged).
+  The output fan-out smooths queued frames (ring + partial block +
+  `GetCurrentPadding`). Control adds an optional `timing` object to
+  multi-input `nodeTelemetry`. The new **Timing** tab (`SignalTiming.tsx`)
+  lists each output's steps in travel order and marks the slowest. Limits:
+  timing is only for the multi-input worker (Mixer or multi-path routes),
+  not single endpoint routes. A plugin's own reported latency (VST
+  initialDelay) is not yet included; only its pipeline queue is.
+- Also fixed: a stage insertion in `compile_capture_test_signal_mixer`
+  after preparation left the timing counters one short. They are now
+  resized there, and reads are bounds-checked.
+- Checks (Windows 11): engine 137, domain 69, control 190 (4 ignored),
+  windows-audio 93, plugin-host 71 + 13, UI 343 (26 files), UI typecheck,
+  contract drift (98 methods), `cargo check --workspace --tests`, and shell
+  `cargo check`. `audiorouter-cli` 38/39: its
+  `list_commands_use_discovery_and_do_not_fake_devices` expects 7 processors,
+  but the catalog has 16 since the earlier advanced-tools commit. It fails
+  without changes in `crates/cli`, so it is not fixed here.
+- Visual: `evidence/signal-timing-themes.png` (Edge, dark/light/high
+  contrast, sample data). The light-theme accents were darkened after review.
+- Session (task 5): the user's normal database was backed up to
+  `%LOCALAPPDATA%\AudioRouter\state-backup-20260926-before-patrick-main.sqlite`.
+  ReaPlugs were scanned into it (`C:\Program Files\VSTPlugins`, 9 entries
+  remembered). `Patrick Main Session` (`patrick-main-session`) was imported
+  with 10 nodes and 8 connections, all devices bound by exact ID and the EQ
+  flat. A CLI dry run of `nativePaths.prepare` against it returned 2 paths:
+  sources `mic` and `siege-in`, outputs CABLE-A, Scarlett and Scarlett, with
+  all four ReaPlugs loaded. No audio was started.
+- Build: the release shell and plugin worker were built to
+  `target/patrick-main-release/release/` (UI dist 11:46:04 < shell 11:46:26).
+  The default `src-tauri/target/release` shell is locked by running PID 60776
+  (agent-launched on the test DB). Stopping it was refused by the agent's
+  permission classifier, so the user must close it.
+- **Attended defect 1 (2026-09-26, user-launched PID 59604):** Play prepared
+  all paths (four plugin workers alive) but `session.start` refused with
+  "enabled plugin nodes require an attached native endpoint session". Cause:
+  the start guard counted endpoint, duplex and render-source workers as able
+  to run plugins, but not the multi-input worker, which binds its plugin
+  stages at preparation. Fix: `native_graph_attached` includes the
+  multi-input worker.
+- **Attended defect 2 (found by the new live test):** after starting, all four
+  ReaPlugs were `failed` with "VST2 output channels 2 do not match graph
+  channels 1". UI-created plugin nodes are mono and ReaPlugs are stereo. A
+  failed plugin outputs silence, so the voice path would have been silent.
+  Fix: the plugin worker maps mono↔stereo. A mono graph feeds every plugin
+  input and averages a stereo output. A stereo graph feeds a mono plugin
+  (L+R)/2 and duplicates its output (`channel_layouts_are_mappable`,
+  `spread_graph_to_plugin_inputs`, `fold_plugin_outputs_to_graph`, 2 unit
+  tests).
+- **Attended defect 3 (UI):** the refusal showed as neutral text because tone
+  was guessed from wording. `formatUiError` now marks caught-error text as an
+  error (`markErrorMessage`). Messages have four tones: blue info, green
+  success, orange warning, red error, in both the global bar and panel
+  messages, for all three themes. Evidence:
+  `evidence/message-tones-themes.png`.
+- **Live verification (agent, Windows, user's devices, privacy mute on):** new
+  ignored test `live_native_paths_start_pump_and_report_signal_timing` on a
+  copy of the user's database, with the fixed worker from
+  `target/release`. Both paths prepared and started (`runtime: native`),
+  delivering 4135 branch blocks in 4 s. All four plugins were `running`
+  with 0 failures. Measured timing: mic wait 15.2 ms; ReaFIR 13.3, ReaEQ
+  18.7, ReaComp 13.3, ReaGate 10.7 ms (plugin worker queues); CABLE-A queue
+  26.7, monitor 26.4; CABLE-B wait 15.7, Advanced EQ 0, Scarlett 27.4 ms.
+  So voice ≈ 97 ms and game ≈ 43 ms. The audible result is not yet
+  confirmed by the user.
+- Checks after the fixes: control 190 (+1 live ignored), plugin-host
+  71 + 2 + 13, engine 137, windows-audio 93, UI 344.
+- Build: `target/patrick-main-release-2/release/` (UI dist 12:00:24 < shell
+  12:00:46; worker rebuilt). `patrick-main-release` is locked by the user's
+  running PID 59604 and its workers.
+- **Next action:** after the user closes PID 59604, launch
+  `target/patrick-main-release-2/release/audiorouter-shell.exe` with
+  `AUDIOROUTER_DATABASE=%LOCALAPPDATA%\AudioRouter\state.sqlite` and
+  `AUDIOROUTER_ALLOW_DEVICE_ADMIN=1`. Select Patrick Main Session, press Play,
+  and verify both paths are heard at once with no game audio in CABLE-A. Load
+  the ReaPlugs presets, save the plugin states, and read the Timing tab.
+  Record the result here.
+
+## Previous implementation task — per-source volume, Mixer reconnect, advanced tools (2026-09-25)
 
 - **Objective:** (1) Let a Mixer route that includes application sources run
   from Play and reconnect a restarted application without stopping the other
@@ -4014,3 +4170,85 @@ opt-in. Scans read metadata only; plugin code runs only in isolated workers.
 The AGENTS.md lesson on shell grants was updated. Verification: control 187
 passed; the shell was rebuilt and relaunched with the standard recipe
 (PID 56608). Attended check pending: Scan standard folders from the Tools tab.
+
+Defect on 2026-09-26 (first attended plugin save): after the PluginScan grant,
+saving a route with a scanned plugin failed with "plugin placeholder requires
+a current explicit scan result", and `plugins.parameters` also failed.
+Cause: `appendPluginPlaceholderNode` stored `identity.binaryPath`, which is
+canonical with a verbatim prefix (`\?\C:\...`), while the save validation,
+plugin preparation and parameter lookup matched remembered scans by the
+scanned `entry.path` (`C:\...`). No plugin could ever match. This path was
+never exercised in the shell because scanning was denied until 2026-09-25.
+Fix: the UI stores the scanned `entry.path`. Control matches with
+`scan_entry_matches_path`, which accepts the scanned or canonical binary path,
+ignores the verbatim prefix and case, and still checks the fingerprint, so
+existing nodes carrying the canonical path also work. Revalidation now
+inspects the entry's own scanned path under its root. New plugin nodes are
+also named after the plugin file (was the vendor, for example "Cockos 1") and
+added enabled (they were disabled, which silently bypassed the plugin).
+Verification: control 188 (new
+`scan_entries_match_the_scanned_or_canonical_binary_path`) and UI 335 with
+updated expectations; shell rebuilt and relaunched.
+
+Pipe collision on 2026-09-26: while relaunching the debug shell after the
+plugin-path fix, a user-started release shell was found running (PID 76704,
+`src-tauri/target/release/audiorouter-shell.exe`, built 2026-09-25 23:04,
+started 23:21). The new debug instance (PID 85268) could not create the
+default control pipe ("Access is denied. (0x80070005)"). Its backend retried,
+entered durable safe mode in the test database and exited, and its UI would
+have forwarded to the release backend. The debug instance was stopped
+immediately. The release instance was not touched: a first Stop-Process
+attempt against it failed without effect before its identity was known. The
+test database safe mode was cleared with `audiorouter-cli recovery
+clear-safe-mode` (`safeMode: false`). A read-only check of the user's real
+database found `recoverySafeMode = false`. AGENTS.md gained a lesson: check
+for another shell before launching, and ask rather than stopping a
+user-started instance.
+
+Release build for attended testing on 2026-09-26: after the user closed their
+release instance (no other `audiorouter-shell` running, checked first),
+`cargo tauri build --no-bundle` rebuilt `src-tauri/target/release/audiorouter-shell.exe`
+with the embedded production UI, and the release `audiorouter-plugin-worker.exe`
+was rebuilt beside it. The build was launched against the disposable test
+database with `AUDIOROUTER_ALLOW_DEVICE_ADMIN=1` (PID 60068); its stderr shows
+only the device-admin grant (no pipe errors). This is a local build for
+testing, not an M08 release: no installer, checksums or release notes.
+
+Attended feedback on 2026-09-26 (release build):
+1. **Test Signal with Discord and mic in one Mixer was refused by Play.** The
+   multi-input Mixer now supports generator sources. A Test Signal or Audio
+   File becomes the first stage of its input chain (`compile_processor_chain`
+   skips the synthetic source for a chain that starts with a generator), and
+   its native input is a new `generated` binding (`NativeMultiInputSourceBinding::Generated`
+   → `MultiInputCaptureSource::Silence` pacing, zero entry matrix). Control
+   registers Test Signal and Audio File transport handles for the multi-input
+   worker (`register_multi_input_generators`, after prepare and live
+   republish). The prepare request/result schemas and contracts accept
+   `generated`. UI Play sends generated bindings; only endpoint-loopback and
+   virtual sources remain unsupported alongside applications. Engine test:
+   `mixer_generates_a_test_signal_input_alongside_a_live_source`.
+2. **The ReaComp editor could not be opened.** This was a consequence of (1)
+   (Play never started, and the editor needs a playing route) and of (3)
+   (parameter loading failed).
+3. **Console windows showing `0x800700E8` on each plugin worker launch.** The
+   windowless release shell started the console-subsystem worker, Windows
+   allocated a new console hosted by the default terminal, and the launch
+   failed. Workers now start with `CREATE_NO_WINDOW`
+   (`crates/plugin-host/src/lib.rs`) and communicate only over piped stdio.
+   Debug builds never showed it because they own a console the worker
+   inherited.
+Verification: engine 133, control 188, windows-audio 93, plugin-host 71 + 13,
+UI 335, drift passed. The release app and worker were rebuilt and relaunched
+(only the agent's own instance was running and was stopped first). A live
+worker launch from the windowless shell is not yet confirmed.
+
+Stale release UI on 2026-09-26: the user still saw the old "combine
+applications and one input device only" message. `ui/dist` was dated
+2026-09-25 23:03 and contained the old text: neither `cargo tauri build
+--no-bundle` run today refreshed it, although both reported success. The
+tauri output never showed Vite output, and the cause inside the tauri run was
+not isolated. Running the identical `beforeBuildCommand` directly succeeded.
+The UI was rebuilt, then the release (dist 10:45:48 contains the new text and
+not the old; binary 10:46:21), and relaunched as PID 60776
+(stderr: grant line only). AGENTS.md gained a lesson: verify the embedded UI
+after each release build.

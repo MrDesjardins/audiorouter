@@ -60,6 +60,35 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-09-26 — Qualify plugin routes past Start, with the node shapes the UI creates.**
+  Evidence: [active plan, attended defects 1–2](docs/plans/active/current.md).
+  Scope: native routes containing VST plugins. Consequence: a clean CLI
+  preparation (all plugins loaded) hid two failures. Start refused plugins on
+  the multi-input worker, and every ReaPlug then failed on its first block
+  because UI plugin nodes are mono and ReaPlugs are stereo. A failed plugin is
+  silent by design, so a "running" route can still carry no voice. Run a
+  muted start + pump (`live_native_paths_start_pump_and_report_signal_timing`)
+  and require every plugin's telemetry state to be `running`.
+
+- **2026-09-26 — Verify the embedded UI after every release build.**
+  Evidence: [active plan, stale release UI entry](docs/plans/active/current.md).
+  Scope: `cargo tauri build` of `src-tauri`. Consequence: two release builds
+  reported success while `ui/dist` stayed at the previous day's bundle, so the
+  user tested new backend code behind an old UI. The build embeds whatever
+  `ui/dist` holds. After building, confirm `ui/dist/index.html` is newer than
+  the last UI change and grep `ui/dist/assets/*.js` for a string from that
+  change (or run `npm.cmd run build` in `ui` first); the release binary must
+  be newer than `ui/dist`.
+- **2026-09-26 — Only one desktop shell may run at a time; check before launching.**
+  Evidence: [active plan, pipe collision entry](docs/plans/active/current.md).
+  Scope: attended launches of `src-tauri/target/*/audiorouter-shell.exe`.
+  Consequence: every shell's embedded backend serves the same default control
+  pipe. A second instance is refused ("Access is denied. (0x80070005)"),
+  retries, enters durable safe mode in its database, and its UI then talks to
+  the other instance's backend and database. Before launching, list
+  `audiorouter-shell` processes; if one you did not start is running (for
+  example the user's release build), ask the user instead of stopping it or
+  launching beside it.
 - **2026-09-25 — Keep one app style for form controls (user preference).**
   Evidence: [active plan, right-sidebar controls and VST picker follow-ups](docs/plans/active/current.md).
   Scope: every UI input, select, textarea, and file picker. Consequence: the

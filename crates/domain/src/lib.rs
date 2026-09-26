@@ -718,7 +718,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 97] = [
+pub const API_METHODS: [ApiMethodSpec; 98] = [
     ApiMethodSpec {
         name: "system.describe",
         permission: PermissionScope::Read,
@@ -936,6 +936,11 @@ pub const API_METHODS: [ApiMethodSpec; 97] = [
     },
     ApiMethodSpec {
         name: "nativeMultiInputs.prepare",
+        permission: PermissionScope::DeviceAdministration,
+        side_effect: SideEffectClass::ExternalOperation,
+    },
+    ApiMethodSpec {
+        name: "nativePaths.prepare",
         permission: PermissionScope::DeviceAdministration,
         side_effect: SideEffectClass::ExternalOperation,
     },
@@ -1773,6 +1778,10 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::ApplicationCapture, "processId") => valid_process_id(value),
                 (NodeKind::ApplicationCapture, "creationTime100ns") => valid_creation_time(value),
                 (NodeKind::EndpointLoopback, "endpointId") => {
+                    valid_bounded_string(value, MAX_ENTITY_ID_BYTES)
+                }
+                // CAP-02: the exact Windows endpoint a device node binds to.
+                (NodeKind::PhysicalInput | NodeKind::PhysicalOutput, "endpointId") => {
                     valid_bounded_string(value, MAX_ENTITY_ID_BYTES)
                 }
                 (NodeKind::EndpointLoopback, "defaultRole") => value.as_str().is_some_and(|role| {
@@ -3236,6 +3245,27 @@ mod tests {
             .parameters
             .insert("processId".into(), serde_json::json!(42));
         assert!(validate_session(&session(vec![all_instances], vec![])).is_err());
+    }
+
+    #[test]
+    fn device_nodes_may_persist_an_exact_endpoint_binding() {
+        let mut input = node("in", NodeKind::PhysicalInput, PortDirection::Output);
+        let mut output = node("out", NodeKind::PhysicalOutput, PortDirection::Input);
+        input.parameters.insert(
+            "endpointId".into(),
+            serde_json::json!("{0.0.1.00000000}.{2c388352-6baa-4a19-beb0-330bd18d0672}"),
+        );
+        output.parameters.insert(
+            "endpointId".into(),
+            serde_json::json!("{0.0.0.00000000}.{829bab15-21b8-47d1-964a-f843aa3b37d6}"),
+        );
+        assert!(validate_session(&session(vec![input.clone(), output.clone()], vec![])).is_ok());
+        input.parameters.insert("endpointId".into(), serde_json::json!(""));
+        assert!(validate_session(&session(vec![input.clone()], vec![])).is_err());
+        input
+            .parameters
+            .insert("endpointId".into(), serde_json::json!("x".repeat(MAX_ENTITY_ID_BYTES + 1)));
+        assert!(validate_session(&session(vec![input], vec![])).is_err());
     }
 
     #[test]

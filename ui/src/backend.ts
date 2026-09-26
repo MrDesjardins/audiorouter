@@ -58,6 +58,7 @@ import type {
 } from "@audiorouter/contracts";
 import type { MethodParams, MethodResult } from "@audiorouter/contracts";
 import { demoSession, demoSessions } from "./fixtures";
+import { markErrorMessage } from "./actionMessage";
 
 export type ApplicationRow = ApplicationInfo;
 export type ProcessorResponseParams = NonNullable<MethodParams["processors.response"]>;
@@ -70,7 +71,12 @@ export type GraphHistoryPage = MethodResult["graph.history"];
 export type GraphUndoPlanResult = MethodResult["graph.undoPlan"];
 
 /** Formats structured backend failures without losing actionable audio guidance. */
+/** Readable text for a caught error; the message is shown with the error tone. */
 export function formatUiError(error: unknown, fallback: string): string {
+  return markErrorMessage(formatUiErrorText(error, fallback));
+}
+
+function formatUiErrorText(error: unknown, fallback: string): string {
   if (!(error instanceof Error)) return fallback;
   if (/0x88890004/i.test(error.message) || (error instanceof AudioRouterRpcError && (error.data?.code === "deviceInvalidated" || (typeof error.data?.hresult === "number" && (error.data.hresult >>> 0) === 0x88890004)))) {
     return "The selected audio device changed or disconnected. Stop audio, refresh the device list, then select the exact input and output again. Play will reopen those devices. If one is missing, reconnect it before retrying.";
@@ -132,6 +138,8 @@ export interface UiBackend {
   prepareNativeEndpoint?(sessionId: string, captureEndpointId: string, renderEndpointId: string): Promise<import("@audiorouter/contracts").NativeEndpointPrepareResult>;
   prepareNativeOutputs?(sessionId: string, generation: number | undefined, renderEndpointIds: string[]): Promise<NativeOutputFanoutPrepareResult>;
   prepareNativeMultiInputs?(sessionId: string, generation: number | undefined, sources: import("@audiorouter/contracts").NativeMultiInputSourceBinding[]): Promise<NativeMultiInputPrepareResult>;
+  /** Prepare every independent path of the saved session from the devices stored on its nodes. */
+  prepareNativePaths?(sessionId: string): Promise<import("@audiorouter/contracts").NativePathsPrepareResult>;
   rebindNativeEndpoint?(sessionId: string, captureEndpointId: string, renderEndpointId: string): Promise<import("@audiorouter/contracts").NativeEndpointRebindResult>;
   detachNativeEndpoint?(sessionId: string): Promise<import("@audiorouter/contracts").NativeEndpointDetachResult>;
   detachNativeDuplex?(sessionId: string): Promise<import("@audiorouter/contracts").NativeDuplexDetachResult>;
@@ -622,6 +630,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
         generation,
         sources,
       });
+    },
+    async prepareNativePaths(currentSessionId) {
+      return client.request("nativePaths.prepare", { sessionId: currentSessionId });
     },
     async rebindNativeEndpoint(currentSessionId, captureEndpointId, renderEndpointId) {
       return client.request("nativeEndpoints.rebind", {

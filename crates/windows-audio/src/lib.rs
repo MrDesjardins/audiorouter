@@ -5013,12 +5013,64 @@ impl Drop for SharedRender {
 /// realtime rules.
 trait RenderSink {
     fn submit_bytes(&self, source: &[u8], bytes_per_frame: usize) -> Result<u32, AudioError>;
+
+    /// Frames already queued in the device buffer, waiting to be played.
+    fn queued_frames(&self) -> Option<u32> {
+        None
+    }
 }
 
 impl RenderSink for SharedRender {
     fn submit_bytes(&self, source: &[u8], bytes_per_frame: usize) -> Result<u32, AudioError> {
         SharedRender::submit_bytes(self, source, bytes_per_frame)
     }
+
+    fn queued_frames(&self) -> Option<u32> {
+        // SAFETY: the audio client is owned by this render sink and remains
+        // initialized for its lifetime; GetCurrentPadding only reads state.
+        unsafe { self.client.GetCurrentPadding() }.ok()
+    }
+}
+
+/// A smoothed delay observed on the control/pump thread (never the audio
+/// processing path): the first observation, then an exponential average.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DelayEstimate {
+    average: f64,
+    observations: u64,
+}
+
+impl DelayEstimate {
+    fn observe(&mut self, value: f64) {
+        self.observations = self.observations.saturating_add(1);
+        if self.observations == 1 {
+            self.average = value;
+        } else {
+            self.average += (value - self.average) / 32.0;
+        }
+    }
+
+    /// The smoothed value, or `None` before the first observation.
+    pub fn average(&self) -> Option<f64> {
+        (self.observations > 0).then_some(self.average)
+    }
+}
+
+/// The performance counter in the 100 ns units WASAPI uses for capture
+/// packet timestamps.
+fn qpc_now_100ns() -> Option<u64> {
+    let mut counter = 0_i64;
+    let mut frequency = 0_i64;
+    // SAFETY: both pointers refer to live stack integers; the calls only
+    // write one i64 each and have no other preconditions.
+    unsafe {
+        windows::Win32::System::Performance::QueryPerformanceCounter(&mut counter).ok()?;
+        windows::Win32::System::Performance::QueryPerformanceFrequency(&mut frequency).ok()?;
+    }
+    if counter < 0 || frequency <= 0 {
+        return None;
+    }
+    u64::try_from(u128::from(counter as u64) * 10_000_000 / u128::from(frequency as u64)).ok()
 }
 
 /// Control/worker-thread pump that drains one prebuilt engine output ring
@@ -5068,6 +5120,14 @@ impl<S: RenderSink> RingOutputPump<S> {
 
     fn is_drained(&self) -> bool {
         self.pending_bytes == 0
+    }
+
+    /// Frames waiting between this pump and the speaker: queued blocks,
+    /// the partly submitted block, and the device buffer.
+    fn queued_frames(&self) -> u64 {
+        let ring = self.ring.ready().saturating_mul(self.ring.frames()) as u64;
+        let pending = (self.pending_bytes / self.bytes_per_frame.max(1)) as u64;
+        ring + pending + u64::from(self.sink.queued_frames().unwrap_or(0))
     }
 
     fn drain_pending(&mut self, result: &mut WasapiSchedulerPump) -> Result<(), AudioError> {
@@ -5169,6 +5229,8 @@ pub struct WasapiOutputFanout {
     output_rings: Vec<Arc<audiorouter_engine::AudioBlockRing>>,
     branch_tap_sets: Vec<audiorouter_engine::AudioTapSet>,
     taps: audiorouter_engine::AudioTapSet,
+    /// Frames queued ahead of each physical output when it was last fed.
+    output_delays: Vec<DelayEstimate>,
     generation: u64,
     quantum_frames: usize,
     timeline_frame: u64,
@@ -5196,6 +5258,7 @@ impl WasapiOutputFanout {
             output_rings: Vec::new(),
             branch_tap_sets: Vec::new(),
             taps: audiorouter_engine::AudioTapSet::new(),
+            output_delays: Vec::new(),
             generation,
             quantum_frames,
             timeline_frame: 0,
@@ -5237,6 +5300,7 @@ impl WasapiOutputFanout {
         Ok(Self {
             workers,
             output_rings,
+            output_delays: vec![DelayEstimate::default(); branch_tap_sets.len()],
             branch_tap_sets,
             taps,
             generation,
@@ -5374,6 +5438,7 @@ impl WasapiOutputFanout {
         for ring in &self.output_rings {
             ring.recycle_all();
         }
+        self.output_delays.fill(DelayEstimate::default());
         self.timeline_frame = 0;
         first_error.map_or(Ok(()), Err)
     }
@@ -5440,14 +5505,22 @@ impl WasapiOutputFanout {
                 .saturating_add(self.quantum_frames as u64);
         }
         let mut pump = WasapiSchedulerPump::default();
-        for worker in &mut self.workers {
-            pump.accumulate(
-                worker
-                    .pump_available(1)
-                    .map_err(WasapiOutputFanoutError::Audio)?,
-            );
+        for (worker, delay) in self.workers.iter_mut().zip(&mut self.output_delays) {
+            let drained = worker
+                .pump_available(1)
+                .map_err(WasapiOutputFanoutError::Audio)?;
+            if drained.packets != 0 || drained.rendered_frames != 0 {
+                delay.observe(worker.queued_frames() as f64);
+            }
+            pump.accumulate(drained);
         }
         Ok((delivered, pump))
+    }
+
+    /// Smoothed frames queued ahead of each physical output (render ring,
+    /// partial block and device buffer), in physical output order.
+    pub fn output_queue_frames(&self) -> Vec<Option<f64>> {
+        self.output_delays.iter().map(DelayEstimate::average).collect()
     }
 }
 
@@ -5477,6 +5550,8 @@ pub struct WasapiMultiInputFanout {
     capture_bytes: Vec<Vec<u8>>,
     pending_packet_bytes: Vec<usize>,
     pending_packet_offsets: Vec<usize>,
+    /// Age of captured audio when it is picked up, per source (100 ns).
+    input_waits: Vec<DelayEstimate>,
     source_blocks: Vec<audiorouter_engine::AudioBlock>,
     channels: Vec<usize>,
     quantum_frames: usize,
@@ -5527,6 +5602,7 @@ impl WasapiMultiInputFanout {
             accumulators,
             capture_bytes,
             pending_packet_bytes,
+            input_waits: vec![DelayEstimate::default(); source_channels.len()],
             pending_packet_offsets,
             source_blocks,
             channels,
@@ -5536,6 +5612,14 @@ impl WasapiMultiInputFanout {
 
     pub fn mixer(&self) -> &audiorouter_engine::RealtimeMixerFanout {
         &self.mixer
+    }
+
+    /// Smoothed age of each source's audio when it is picked up, in ms.
+    pub fn input_wait_ms(&self) -> Vec<Option<f64>> {
+        self.input_waits
+            .iter()
+            .map(|wait| wait.average().map(|value| value / 10_000.0))
+            .collect()
     }
 
     pub fn input_count(&self) -> usize {
@@ -5552,6 +5636,7 @@ impl WasapiMultiInputFanout {
         }
         self.pending_packet_bytes.fill(0);
         self.pending_packet_offsets.fill(0);
+        self.input_waits.fill(DelayEstimate::default());
         self.mixer.reset_inputs()
     }
 
@@ -5605,6 +5690,11 @@ impl WasapiMultiInputFanout {
                     return Err(WasapiMultiInputFanoutError::Audio(
                         AudioError::InvalidFrameSize,
                     ));
+                }
+                if packet.qpc_position != 0 {
+                    if let Some(now) = qpc_now_100ns() {
+                        self.input_waits[index].observe(now.saturating_sub(packet.qpc_position) as f64);
+                    }
                 }
                 self.pending_packet_bytes[index] = packet_bytes;
                 self.pending_packet_offsets[index] = 0;
@@ -5991,6 +6081,41 @@ impl NativeMultiInputWorker {
         self.feeder.mixer().output_node_ids()
     }
 
+    /// Source nodes in native input order.
+    pub fn input_node_ids(&self) -> &[audiorouter_domain::EntityId] {
+        self.feeder.mixer().input_node_ids()
+    }
+
+    /// Number of independent paths this worker runs.
+    pub fn path_count(&self) -> usize {
+        self.feeder.mixer().path_count()
+    }
+
+    /// Smoothed age of each source's audio when picked up (ms), in input order.
+    pub fn input_wait_ms(&self) -> Vec<Option<f64>> {
+        self.feeder.input_wait_ms()
+    }
+
+    /// Smoothed audio queued ahead of each physical output (ms), in output order.
+    pub fn output_queue_ms(&self) -> Vec<Option<f64>> {
+        let rate = f64::from(audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ);
+        self.outputs.as_ref().map_or_else(Vec::new, |outputs| {
+            outputs
+                .output_queue_frames()
+                .into_iter()
+                .map(|frames| frames.map(|frames| frames * 1_000.0 / rate))
+                .collect()
+        })
+    }
+
+    /// Measured timing of a tool node in any path.
+    pub fn stage_timing_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<audiorouter_engine::StageTiming> {
+        self.feeder.mixer().stage_timing_for_node(node_id)
+    }
+
     /// Read processor telemetry by authored node identity from the prepared
     /// mixer/fan-out graph's shared post-mixer chain. Best-effort
     /// diagnostics read; never waits for the realtime callback.
@@ -6098,6 +6223,31 @@ impl NativeMultiInputWorker {
         graph: audiorouter_engine::CompiledMixerFanoutGraph,
     ) -> Result<(), audiorouter_engine::MixerFanoutError> {
         self.feeder.mixer_mut().replace_graph(graph)
+    }
+
+    /// Swap in a recompiled set of independent paths of the same shape
+    /// while running (live parameter change). Control thread only.
+    pub fn replace_path_set(
+        &mut self,
+        set: audiorouter_engine::CompiledPathSet,
+    ) -> Result<(), audiorouter_engine::MixerFanoutError> {
+        self.feeder.mixer_mut().replace_paths(set)
+    }
+
+    /// Transport handle for a Test Signal feeding a Mixer input.
+    pub fn test_signal_source_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<std::sync::Arc<audiorouter_engine::TestSignalSource>> {
+        self.feeder.mixer().test_signal_source_for_node(node_id)
+    }
+
+    /// Transport handle for an Audio File feeding a Mixer input.
+    pub fn audio_file_source_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<std::sync::Arc<audiorouter_engine::AudioFileSource>> {
+        self.feeder.mixer().audio_file_source_for_node(node_id)
     }
 
     /// Whether an input currently carries the silent stand-in.

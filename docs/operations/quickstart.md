@@ -107,6 +107,25 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run-vb-cable-desktop
 
 Each ID must match exactly one active endpoint of its requested direction.
 
+### One session with several independent paths
+
+A session can hold several separate paths that run together, for example a
+microphone through voice plugins to a virtual cable, and a game cable through
+an EQ to the headphones. A path is one source (or one Mixer of sources), then
+a single chain of tools, then one or more outputs. Paths never mix unless you
+add a Mixer. Choose each Input device and Output device node's device in its
+**Properties**; the choice is saved on that node. The same output device may be
+used by several paths. **Save** the session, then press **Play**: every path
+starts and stops together. Up to 8 sources and 8 outputs are supported in one
+session. A mono microphone connected to a stereo Input device node is copied to
+both channels.
+
+While it plays, the **Timing** tab shows, for each output, how long the sound
+spends at each step in travel order: how long a source's audio waits before it
+is picked up, the delay each tool adds (a plugin's worker queue included), and
+how much audio is queued ahead of the output device. The longest bar marks the
+slowest step. Timing is measured for Mixer and multi-path routes.
+
 ### When Play says audio is not prepared
 
 **Backend ready** confirms the control connection. To play a route:

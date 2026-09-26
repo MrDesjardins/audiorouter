@@ -15,11 +15,11 @@ function ApplicationSourceAction({ onClick, disabled }: { onClick: () => void; d
   </button>;
 }
 
-export type WorkbenchTab = "tools" | "properties" | "session" | "setup" | "devices" | "recording" | "advanced" | "mcp" | "diagnostics";
+export type WorkbenchTab = "tools" | "properties" | "timing" | "session" | "setup" | "devices" | "recording" | "advanced" | "mcp" | "diagnostics";
 export type McpActivity = { timeUnixMs: number; clientId: string; tool: string; argumentFields: string[]; outcome: string; errorKind?: string | null };
 export type McpSetupInfo = { cliPath: string; cliAvailableBesideShell: boolean; databasePath: string; pipeName: string; transport: string };
 
-export function Workbench({ tab, onTab, tools, connected, onAdd, onApplicationPicker, librarySearch, onLibrarySearch, onNewSession, onDuplicate, onDelete, onUndo, onRedo, onDiscard, actionMessage, onReplaceInputConnection, sessions, selectedSessionId, onSelectSession, sessionName, onNameChange, diagnostics, backendActivity, mcpActivity, mcpSetupInfo, clientsPanel, setupContent, devicesContent, recordingContent, advancedContent, pluginsContent }: {
+export function Workbench({ tab, onTab, tools, connected, onAdd, onApplicationPicker, librarySearch, onLibrarySearch, onNewSession, onDuplicate, onDelete, onUndo, onRedo, onDiscard, actionMessage, onReplaceInputConnection, sessions, selectedSessionId, onSelectSession, sessionName, onNameChange, diagnostics, backendActivity, mcpActivity, mcpSetupInfo, clientsPanel, setupContent, timingContent, devicesContent, recordingContent, advancedContent, pluginsContent }: {
   tab: WorkbenchTab; onTab: (tab: WorkbenchTab) => void; tools: LibraryEntry[]; connected: boolean;
   onAdd: (kind: NonNullable<LibraryEntry["kind"]>) => void; onNewSession: () => void; onDuplicate: () => void;
   onApplicationPicker: () => void; librarySearch: string; onLibrarySearch: (value: string) => void;
@@ -30,7 +30,7 @@ export function Workbench({ tab, onTab, tools, connected, onAdd, onApplicationPi
   sessionName: string; onNameChange: (name: string) => void;
   revision?: number; warnings?: string[]; acknowledgedWarnings?: string[]; onAcknowledgeWarning?: (warning: string, checked: boolean) => void;
   diagnostics: string[]; backendActivity: Record<string, unknown>[]; mcpActivity: McpActivity[]; mcpSetupInfo: McpSetupInfo | null; clientsPanel: ReactNode;
-  setupContent: ReactNode; devicesContent: ReactNode; recordingContent: ReactNode; advancedContent: ReactNode; pluginsContent?: ReactNode;
+  setupContent: ReactNode; devicesContent: ReactNode; timingContent?: ReactNode; recordingContent: ReactNode; advancedContent: ReactNode; pluginsContent?: ReactNode;
 }) {
   const [mcpClientId, setMcpClientId] = useState("audiorouter-local");
   const [copyMessage, setCopyMessage] = useState("");
@@ -43,7 +43,7 @@ export function Workbench({ tab, onTab, tools, connected, onAdd, onApplicationPi
   const codexConfig = `[mcp_servers.audiorouter]\ncommand = ${quoted(cli)}\nargs = ["mcp", "serve", "--client-id", ${quoted(mcpClientId)}, "--database", ${quoted(db)}, "--pipe", ${quoted(pipe)}]`;
   const claudeCommand = `claude mcp add --scope user audiorouter -- ${psQuoted(cli)} mcp serve --client-id ${psQuoted(mcpClientId)} --database ${psQuoted(db)} --pipe ${psQuoted(pipe)}`;
   const copy = (value: string) => { if (!navigator.clipboard) { setCopyMessage("Clipboard unavailable. Select the text and copy it."); return; } void navigator.clipboard.writeText(value).then(() => setCopyMessage("Copied to clipboard.")).catch(() => setCopyMessage("Clipboard unavailable. Select the text and copy it.")); };
-  const tabs: [WorkbenchTab, string][] = [["tools", "Tools"], ["properties", "Properties"], ["session", "Session"], ["setup", "Setup"], ["devices", "Devices"], ["recording", "Recording"], ["advanced", "Advanced"], ["mcp", "MCP"], ["diagnostics", "Logs"]];
+  const tabs: [WorkbenchTab, string][] = [["tools", "Tools"], ["properties", "Properties"], ["timing", "Timing"], ["session", "Session"], ["setup", "Setup"], ["devices", "Devices"], ["recording", "Recording"], ["advanced", "Advanced"], ["mcp", "MCP"], ["diagnostics", "Logs"]];
   return <aside className="right-workbench" aria-label="Tools and settings">
     <div className="workbench-tabs" role="tablist" aria-label="Right sidebar">{tabs.map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? "active" : ""} onClick={() => onTab(id)}>{label}</button>)}</div>
     {tab === "tools" && <div className="workbench-tool-search"><label>Find a tool<input type="search" aria-label="Find a tool" value={librarySearch} onChange={(event) => onLibrarySearch(event.target.value)} placeholder="Input, gain, recorder…" /></label></div>}
@@ -64,6 +64,7 @@ export function Workbench({ tab, onTab, tools, connected, onAdd, onApplicationPi
         {flow === "tool" && pluginsContent}
       </section>)}
     </section>}
+    {tab === "timing" && <section className="workbench-page" role="tabpanel" aria-label="Timing"><p className="eyebrow">Where the sound spends time</p><h2>Signal timing</h2>{timingContent}</section>}
     {tab === "properties" && <section className="workbench-page" role="tabpanel"><h2>Node properties</h2><p className="muted">Select a node on the canvas to edit it here.</p></section>}
     {tab === "setup" && <section className="workbench-page" role="tabpanel"><h2>First route</h2><p className="muted">Follow these steps to hear a route.</p><ol><li>Add a Test Signal, audio file, or microphone input.</li><li>Add Gain or another processing tool if needed.</li><li>Add a Physical Output and choose your speaker or headphone device in its Properties.</li><li>Connect the nodes and press Play. If an extra device selection is needed, the message will tell you where to make it.</li><li>Press Save at the top when you want to keep this setup.</li></ol>{setupContent}</section>}
     {tab === "devices" && <section className="workbench-page" role="tabpanel"><h2>Audio devices</h2><p className="muted">Choose the speaker or headphone device in the Physical Output node’s Properties. Choose a microphone in Physical Input Properties if the route uses one. Play prepares these exact devices when permission allows. This tab shows device details and recovery controls.</p>{devicesContent}</section>}
