@@ -118,7 +118,7 @@ by hand in the morning.
    ```powershell
    $env:AUDIOROUTER_DATABASE = "$env:LOCALAPPDATA\AudioRouter\state.sqlite"
    $env:AUDIOROUTER_ALLOW_DEVICE_ADMIN = "1"
-   & "C:\code\audiorouter\target\patrick-main-release-3\release\audiorouter-shell.exe"
+   & "C:\code\audiorouter\target\patrick-main-release-4\release\audiorouter-shell.exe"
    ```
    Select Patrick Main Session and press Play. Also try a Test Signal
    route. Listen to the voice and
