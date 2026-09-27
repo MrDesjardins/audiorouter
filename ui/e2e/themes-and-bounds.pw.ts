@@ -8,7 +8,11 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await page.goto("/backend-harness.html");
     await expect(page.getByRole("heading", { name: "Offline qualification", exact: true })).toBeVisible();
     await page.getByLabel("Color theme").selectOption(theme);
-    await expect(page.getByTestId("rf__node-voice").locator(".node-fader-readout strong")).toHaveCSS("color", "rgb(237, 244, 255)");
+    // Node cards follow the theme: strong card text is light on the dark
+    // themes and dark on the light theme.
+    const strongText = { dark: "rgb(246, 248, 251)", light: "rgb(20, 32, 51)", "high-contrast": "rgb(255, 255, 255)" }[theme]!;
+    await expect(page.getByTestId("rf__node-voice").locator(".node-fader-readout strong")).toHaveCSS("color", strongText);
+    await expect(page.getByTestId("rf__node-voice").locator(".flow-node-title strong")).toHaveCSS("color", strongText);
     const directory = path.resolve("../target/feature-confidence-visual");
     await mkdir(directory, { recursive: true });
     for (const [name, kind, control] of [["Dehum", "dehum", "harmonics precise value"], ["Input Switch", "inputSwitch", "selected"], ["Network Send", "networkSend", "Receiving computer's IP address"], ["Network Receive", "networkReceive", "Sending computer's IP address"]]) {
