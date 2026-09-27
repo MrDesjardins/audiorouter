@@ -206,11 +206,22 @@ mod live {
         };
         let mut nodes = vec![source_node];
         for (index, kind) in chain.iter().enumerate() {
+            let mut parameters = serde_json::Map::new();
+            // `AUDIOROUTER_CONTINUITY_GAIN_DB` sets every Gain node's level,
+            // making a Bypass toggle measurable at the output.
+            if *kind == NodeKind::Gain {
+                if let Some(gain) = std::env::var("AUDIOROUTER_CONTINUITY_GAIN_DB")
+                    .ok()
+                    .and_then(|value| value.parse::<f64>().ok())
+                {
+                    parameters.insert("gainDb".into(), json!(gain));
+                }
+            }
             nodes.push(node(
                 format!("tool-{index}"),
                 *kind,
                 vec![port("in", PortDirection::Input), port("out", PortDirection::Output)],
-                serde_json::Map::new(),
+                parameters,
             ));
         }
         for mut node in extra {
@@ -580,7 +591,7 @@ mod live {
             json!({ "sessionId": session_id, "idempotencyKey": format!("continuity-start-{}", std::process::id()) }),
         );
         eprintln!("started: {started}");
-        let generation = started["generation"].as_u64().unwrap();
+        let mut generation = started["generation"].as_u64().unwrap();
         if test_signal_source() {
             rpc(
                 &pipe,
@@ -616,6 +627,31 @@ mod live {
                 last_service = pump["audioService"].clone();
                 last_underruns = pump["outputUnderruns"].clone();
             }
+            // `AUDIOROUTER_CONTINUITY_TOGGLE=<nodeId>` flips that node's Bypass
+            // every 3 s while playing, exactly as the UI saves it.
+            if let Some(toggle) = std::env::var("AUDIOROUTER_CONTINUITY_TOGGLE").ok().filter(|id| !id.is_empty()) {
+                if tick > 0 && tick % 60 == 0 {
+                    let mut current = rpc(&pipe, "sessions.get", json!({ "sessionId": session_id }));
+                    let node = current["nodes"]
+                        .as_array_mut()
+                        .unwrap()
+                        .iter_mut()
+                        .find(|node| node["id"] == toggle.as_str())
+                        .expect("toggle node exists");
+                    let bypass = !node["bypass"].as_bool().unwrap_or(false);
+                    node["bypass"] = json!(bypass);
+                    let timer = Instant::now();
+                    let plan = rpc(&pipe, "graph.plan", json!({ "sessionId": session_id, "baseRevision": current["revision"], "candidate": current }));
+                    let planned_ms = timer.elapsed().as_secs_f64() * 1_000.0;
+                    let committed = rpc(&pipe, "graph.commit", json!({ "planId": plan["planId"], "baseRevision": plan["baseRevision"], "idempotencyKey": format!("toggle-{}-{tick}", std::process::id()) }));
+                    eprintln!("plan {planned_ms:.1} ms, commit {:.1} ms", timer.elapsed().as_secs_f64() * 1_000.0 - planned_ms);
+                    eprintln!("t={:.1}s {toggle} bypass={bypass}: {}", tick as f64 * 0.05, committed["activation"]["native"]);
+                    // Adopt the committed runtime generation, as the UI does.
+                    if let Some(next) = committed["activation"]["generation"].as_u64() {
+                        generation = next;
+                    }
+                }
+            }
             tick += 1;
             std::thread::sleep(Duration::from_millis(50));
         }
@@ -645,6 +681,17 @@ mod live {
         eprintln!("chain: {chain:?}; audio service: {last_service}; output underruns: {last_underruns}");
         for item in diagnostics["nodeTelemetry"].as_array().into_iter().flatten() {
             eprintln!("  {} timing={} plugin={} network={}", item["nodeId"], item["timing"], item["plugin"], item["network"]);
+        }
+        if std::env::var_os("AUDIOROUTER_CONTINUITY_TOGGLE").is_some() {
+            let levels: Vec<String> = result
+                .left
+                .chunks(48_000)
+                .map(|second| {
+                    let rms = (second.iter().map(|sample| sample * sample).sum::<f32>() / second.len() as f32).sqrt();
+                    format!("{:.1}", 20.0 * rms.max(1e-9).log10())
+                })
+                .collect();
+            eprintln!("result RMS dBFS per second: {}", levels.join(" "));
         }
         let reference_glitches = report("reference (CABLE Output)", &reference);
         let result_glitches = report("routed result (CABLE-B Output)", &result);
@@ -779,5 +826,94 @@ mod live {
             };
             eprintln!("{id}: slope {slope:+.3} ms/min (≈{:+.1} ppm); queue ms: {trace}", slope / 60.0 * 1000.0);
         }
+    }
+
+    /// Toggle Bypass on every effect of a saved session while it plays, the
+    /// way the UI does (graph.plan + graph.commit), and report whether each
+    /// change was applied to the running audio. Uses a COPY of a user
+    /// database (`AUDIOROUTER_TOGGLE_DATABASE`) with privacy mute latched.
+    #[test]
+    #[ignore = "live Windows audio devices of a saved session (privacy-muted)"]
+    fn live_saved_session_bypass_toggles_apply_while_playing() {
+        let Some(database) = std::env::var_os("AUDIOROUTER_TOGGLE_DATABASE") else {
+            return;
+        };
+        let session_id = std::env::var("AUDIOROUTER_TOGGLE_SESSION")
+            .unwrap_or_else(|_| "patrick-main-session".into());
+        let pipe = format!(r"\\.\pipe\audiorouter-toggle-{}", std::process::id());
+        let server_pipe = pipe.clone();
+        std::thread::spawn(move || {
+            let plane = audiorouter_control::ControlPlane::with_storage(
+                "toggle",
+                audiorouter_storage::Storage::open(std::path::Path::new(&database)).unwrap(),
+            );
+            let grant = audiorouter_control::ClientGrant::with_scopes([
+                audiorouter_domain::PermissionScope::Read,
+                audiorouter_domain::PermissionScope::GraphWrite,
+                audiorouter_domain::PermissionScope::SessionControl,
+                audiorouter_domain::PermissionScope::Capture,
+                audiorouter_domain::PermissionScope::DeviceAdministration,
+            ]);
+            let _ = audiorouter_transport::serve_control_connections_forever_with_grant(
+                &server_pipe,
+                plane,
+                grant,
+            );
+        });
+        std::thread::sleep(Duration::from_millis(300));
+        let run = std::process::id();
+        rpc(&pipe, "safety.setPrivacyMute", json!({ "muted": true, "idempotencyKey": format!("toggle-mute-{run}") }));
+        let prepared = rpc(&pipe, "nativePaths.prepare", json!({ "sessionId": session_id }));
+        let prepared_generation = prepared["generation"].as_u64().unwrap();
+        rpc(&pipe, "session.start", json!({ "sessionId": session_id, "idempotencyKey": format!("toggle-start-{run}") }));
+        std::thread::sleep(Duration::from_secs(1));
+        let effects: Vec<String> = rpc(&pipe, "sessions.get", json!({ "sessionId": session_id }))["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|node| {
+                !matches!(
+                    node["kind"].as_str().unwrap_or(""),
+                    "physicalInput" | "physicalOutput" | "applicationCapture" | "mixer"
+                )
+            })
+            .map(|node| node["id"].as_str().unwrap().to_owned())
+            .collect();
+        let mut failures = Vec::new();
+        for (step, node_id) in effects.iter().flat_map(|id| [id, id]).enumerate() {
+            let mut session = rpc(&pipe, "sessions.get", json!({ "sessionId": session_id }));
+            let node = session["nodes"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|node| node["id"] == node_id.as_str())
+                .unwrap();
+            let bypass = !node["bypass"].as_bool().unwrap_or(false);
+            node["bypass"] = json!(bypass);
+            let plan = rpc(
+                &pipe,
+                "graph.plan",
+                json!({ "sessionId": session_id, "baseRevision": session["revision"], "candidate": session }),
+            );
+            let committed = rpc(
+                &pipe,
+                "graph.commit",
+                json!({ "planId": plan["planId"], "baseRevision": plan["baseRevision"], "idempotencyKey": format!("toggle-{run}-{step}") }),
+            );
+            let native = &committed["activation"]["native"];
+            eprintln!("{node_id} bypass={bypass}: {native}");
+            if native["state"] != "applied" {
+                failures.push(format!("{node_id} bypass={bypass}: {native}"));
+            }
+            // The worker keeps serving after a live change, whether the caller
+            // knows the prepared or the newly committed generation.
+            for generation in [prepared_generation, committed["activation"]["generation"].as_u64().unwrap()] {
+                let pump = rpc(&pipe, "nativeMultiInputs.pump", json!({ "sessionId": session_id, "generation": generation, "maxPackets": 64 }));
+                assert!(pump["audioService"]["active"] == true, "{pump}");
+            }
+            std::thread::sleep(Duration::from_millis(300));
+        }
+        rpc(&pipe, "session.stop", json!({ "sessionId": session_id, "idempotencyKey": format!("toggle-stop-{run}") }));
+        assert!(failures.is_empty(), "bypass changes not applied while playing: {failures:?}");
     }
 }

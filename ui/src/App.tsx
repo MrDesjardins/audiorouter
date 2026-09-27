@@ -1738,6 +1738,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setDraft((current) => current.id === saved.id ? { ...current, revision } : current);
       setDraftHistory({ past: [], future: [] });
       const native = activation && activation.state === "running" ? activation.native : null;
+      // A change applied to the playing audio starts a new runtime generation;
+      // keep servicing the route with it (the old one is rejected as stale).
+      if (native?.state === "applied" && activation?.state === "running") {
+        const nextGeneration = activation.generation;
+        setNativeGenerations((current) => current[saved.id] ? { ...current, [saved.id]: { ...current[saved.id], generation: nextGeneration } } : current);
+      }
       setActionMessage(native?.state === "applied" ? `Saved (revision ${revision}) and applied to the playing audio.` : native?.state === "restartRequired" ? `Saved (revision ${revision}), but the playing audio could not take this change: ${native.reason}` : `Route saved (revision ${revision}). Prepare devices before playing.`);
     }
     recordUiDiagnostic(`Graph commit succeeded: revision ${revision}; ${submitted.nodes.length} nodes, ${submitted.edges.length} connections`);

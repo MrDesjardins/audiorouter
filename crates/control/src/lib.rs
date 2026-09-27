@@ -5190,6 +5190,11 @@ pub struct ControlPlane {
     native_multi_input_worker_session: Option<EntityId>,
     #[cfg(windows)]
     native_multi_input_worker_generation: Option<u64>,
+    /// Runtime generation a live graph update (flag/parameter commit while
+    /// playing) was applied to. The running worker keeps its prepared
+    /// generation, so it serves both until it is replaced or detached.
+    #[cfg(windows)]
+    native_multi_input_applied_generation: Option<u64>,
     #[cfg(windows)]
     multi_input_application_sources: Vec<MultiInputApplicationSource>,
     /// Stereo device nodes the prepared multi-input worker reads from a
@@ -5744,6 +5749,7 @@ impl ControlPlane {
             native_multi_input_worker_session: None,
             #[cfg(windows)]
             native_multi_input_worker_generation: None,
+            native_multi_input_applied_generation: None,
             #[cfg(windows)]
             multi_input_application_sources: Vec::new(),
             #[cfg(windows)]
@@ -5944,6 +5950,7 @@ impl ControlPlane {
         self.native_multi_input_worker = Some(worker);
         self.native_multi_input_worker_session = Some(session_id);
         self.native_multi_input_worker_generation = Some(generation);
+        self.native_multi_input_applied_generation = None;
         Ok(())
     }
 
@@ -6048,9 +6055,23 @@ impl ControlPlane {
                 "native worker is already attached".into(),
             ));
         }
-        let session = self.native_paths_session(&session_id)?;
+        let mut session = self.native_paths_session(&session_id)?;
         let plugin_stages =
             self.prepare_plugin_stages(&session, audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ)?;
+        // A bypassed plugin still runs in the graph, with its bridge set to
+        // pass audio dry. Leaving it out made a later live un-bypass insert a
+        // stage whose worker pipeline was empty: a quantum of silence and a
+        // latency step. Live flag changes then only flip the bridge flag.
+        for node in session
+            .nodes
+            .iter_mut()
+            .filter(|node| node.kind == NodeKind::Plugin && node.enabled && node.bypass)
+        {
+            if let Ok(bridge) = self.plugin_bridge(&session_id, &node.id) {
+                bridge.set_processing_active(false);
+                node.bypass = false;
+            }
+        }
         let media = self.session_audio_media(&session, audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ)?;
         let compiled = audiorouter_engine::compile_native_paths_with_plugins_and_audio(
             &session,
@@ -6405,9 +6426,7 @@ impl ControlPlane {
             let budget = audiorouter_windows_audio::MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE;
             if let Some((session, generation)) =
                 running(self, &self.native_multi_input_worker_session)
-                    .filter(|(_, generation)| {
-                        self.native_multi_input_worker_generation == Some(*generation)
-                    })
+                    .filter(|(_, generation)| self.multi_input_worker_serves(*generation))
             {
                 let _ = self.pump_native_multi_input_worker(&session, generation, budget);
                 serviced += 1;
@@ -6462,6 +6481,15 @@ impl ControlPlane {
         self.audio_service.active = true;
     }
 
+    /// Whether the attached multi-input worker plays `generation`: the one it
+    /// was prepared for, or the runtime generation a live update was applied
+    /// to while it kept playing.
+    #[cfg(windows)]
+    fn multi_input_worker_serves(&self, generation: u64) -> bool {
+        self.native_multi_input_worker_generation == Some(generation)
+            || self.native_multi_input_applied_generation == Some(generation)
+    }
+
     #[cfg(windows)]
     pub fn pump_native_multi_input_worker(
         &mut self,
@@ -6475,7 +6503,7 @@ impl ControlPlane {
         // fail-closed instead of writing through an expired owner.
         self.heartbeat_native_capture_sink_bindings()?;
         if self.native_multi_input_worker_session.as_ref() != Some(session_id)
-            || self.native_multi_input_worker_generation != Some(generation)
+            || !self.multi_input_worker_serves(generation)
         {
             return Err(ControlError::InvalidRequest(
                 "native multi-input worker binding is stale for the session".into(),
@@ -6487,11 +6515,14 @@ impl ControlPlane {
             .filter(|runtime| runtime.state() == RuntimeState::Running)
             .map(FakeRuntime::generation)
             .ok_or_else(|| ControlError::InvalidRequest("session runtime is not running".into()))?;
-        if runtime_generation != generation {
+        if !self.multi_input_worker_serves(runtime_generation) {
             return Err(ControlError::InvalidRequest(
                 "native multi-input worker generation is stale".into(),
             ));
         }
+        // Callers may know either the prepared or the live-applied
+        // generation; the worker itself runs its prepared one.
+        let generation = self.native_multi_input_worker_generation.unwrap_or(generation);
         if self.poll_native_endpoint_lifecycle()? {
             return Err(ControlError::InvalidRequest(
                 "native multi-input worker binding was invalidated; rebind before pumping".into(),
@@ -8580,6 +8611,7 @@ impl ControlPlane {
         }
         self.native_multi_input_worker_session = None;
         self.native_multi_input_worker_generation = None;
+        self.native_multi_input_applied_generation = None;
         #[cfg(windows)]
         self.multi_input_application_sources.clear();
         Ok(())
@@ -9842,6 +9874,7 @@ impl ControlPlane {
             native_multi_input_worker_session: None,
             #[cfg(windows)]
             native_multi_input_worker_generation: None,
+            native_multi_input_applied_generation: None,
             #[cfg(windows)]
             multi_input_application_sources: Vec::new(),
             #[cfg(windows)]
@@ -11269,6 +11302,7 @@ impl ControlPlane {
             self.native_multi_input_worker.take();
             self.native_multi_input_worker_session = None;
             self.native_multi_input_worker_generation = None;
+            self.native_multi_input_applied_generation = None;
             #[cfg(windows)]
             self.multi_input_application_sources.clear();
         }
@@ -11776,6 +11810,7 @@ impl ControlPlane {
             self.native_multi_input_worker = None;
             self.native_multi_input_worker_session = None;
             self.native_multi_input_worker_generation = None;
+            self.native_multi_input_applied_generation = None;
             #[cfg(windows)]
             self.multi_input_application_sources.clear();
         }
@@ -12308,6 +12343,9 @@ impl ControlPlane {
             for (bridge, active) in bridge_flags {
                 bridge.set_processing_active(active);
             }
+            // The commit started a new runtime generation; the worker keeps
+            // playing its prepared one and now serves both.
+            self.native_multi_input_applied_generation = Some(generation);
             self.register_multi_input_generators(session_id);
             return Ok(Some("multi-input"));
         }
@@ -13023,6 +13061,10 @@ impl ControlPlane {
                 .delete_graph_plan(plan_id.as_str())
                 .map_err(storage_error)?;
         }
+        // Committing runs on the audio service thread; let running audio
+        // advance between the durable write and the graph rebuild so a save
+        // while playing cannot starve the outputs (heard as a click).
+        self.service_running_native_audio(std::time::Instant::now());
         if !result.idempotent_replay {
             self.events.append(
                 result.revision,
@@ -13084,6 +13126,7 @@ impl ControlPlane {
                     serde_json::to_value(&normalized).ok() == serde_json::to_value(previous).ok()
                 })
                 .unwrap_or(false);
+            self.service_running_native_audio(std::time::Instant::now());
             let native = match self.republish_running_native_graph(
                 &result.session_id,
                 generation,
