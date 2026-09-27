@@ -579,6 +579,8 @@ impl RecorderWorker for WavRecorderWorker {
     }
 
     fn pause(&mut self, frame: u64) -> Result<(), String> {
+        let queue = Arc::clone(&self.queue);
+        drain_before_recorder_pause(self, &queue)?;
         self.recorder
             .as_mut()
             .ok_or_else(|| "WAV recorder is already finalized".to_owned())?
@@ -591,7 +593,9 @@ impl RecorderWorker for WavRecorderWorker {
             .as_mut()
             .ok_or_else(|| "WAV recorder is already finalized".to_owned())?
             .resume(frame)
-            .map_err(|error| format!("WAV recorder resume failed: {error:?}"))
+            .map_err(|error| format!("WAV recorder resume failed: {error:?}"))?;
+        self.queue.open_tap_admission();
+        Ok(())
     }
 
     fn finalize(&mut self, frame: u64) -> Result<RecorderFinalizationOutcome, String> {
@@ -1087,6 +1091,8 @@ impl RecorderWorker for SegmentedWavRecorderWorker {
     }
 
     fn pause(&mut self, frame: u64) -> Result<(), String> {
+        let queue = Arc::clone(&self.queue);
+        drain_before_recorder_pause(self, &queue)?;
         self.recorder
             .as_mut()
             .ok_or_else(|| "segmented WAV recorder is already finalized".to_owned())?
@@ -1099,7 +1105,9 @@ impl RecorderWorker for SegmentedWavRecorderWorker {
             .as_mut()
             .ok_or_else(|| "segmented WAV recorder is already finalized".to_owned())?
             .resume(frame)
-            .map_err(|error| format!("segmented WAV recorder resume failed: {error:?}"))
+            .map_err(|error| format!("segmented WAV recorder resume failed: {error:?}"))?;
+        self.queue.open_tap_admission();
+        Ok(())
     }
 
     fn split(&mut self, frame: u64) -> Result<(), String> {
@@ -1389,6 +1397,8 @@ impl RecorderWorker for BufferedFlacRecorderWorker {
     }
 
     fn pause(&mut self, frame: u64) -> Result<(), String> {
+        let queue = Arc::clone(&self.queue);
+        drain_before_recorder_pause(self, &queue)?;
         self.recorder
             .as_mut()
             .ok_or_else(|| "FLAC recorder is already finalized".to_owned())?
@@ -1401,7 +1411,9 @@ impl RecorderWorker for BufferedFlacRecorderWorker {
             .as_mut()
             .ok_or_else(|| "FLAC recorder is already finalized".to_owned())?
             .resume(frame)
-            .map_err(|error| format!("FLAC recorder resume failed: {error:?}"))
+            .map_err(|error| format!("FLAC recorder resume failed: {error:?}"))?;
+        self.queue.open_tap_admission();
+        Ok(())
     }
 
     fn finalize(&mut self, frame: u64) -> Result<RecorderFinalizationOutcome, String> {
@@ -1615,6 +1627,8 @@ impl RecorderWorker for StreamingFlacRecorderWorker {
     }
 
     fn pause(&mut self, frame: u64) -> Result<(), String> {
+        let queue = Arc::clone(&self.queue);
+        drain_before_recorder_pause(self, &queue)?;
         self.recorder
             .as_mut()
             .ok_or_else(|| "streaming FLAC recorder is already finalized".to_owned())?
@@ -1627,7 +1641,9 @@ impl RecorderWorker for StreamingFlacRecorderWorker {
             .as_mut()
             .ok_or_else(|| "streaming FLAC recorder is already finalized".to_owned())?
             .resume(frame)
-            .map_err(|error| format!("streaming FLAC recorder resume failed: {error:?}"))
+            .map_err(|error| format!("streaming FLAC recorder resume failed: {error:?}"))?;
+        self.queue.open_tap_admission();
+        Ok(())
     }
 
     fn finalize(&mut self, frame: u64) -> Result<RecorderFinalizationOutcome, String> {
@@ -1802,6 +1818,8 @@ impl RecorderWorker for Mp3RecorderWorker {
         Ok(())
     }
     fn pause(&mut self, frame: u64) -> Result<(), String> {
+        let queue = Arc::clone(&self.queue);
+        drain_before_recorder_pause(self, &queue)?;
         self.recorder
             .as_mut()
             .ok_or_else(|| "MP3 recorder is already finalized".to_owned())?
@@ -1813,7 +1831,9 @@ impl RecorderWorker for Mp3RecorderWorker {
             .as_mut()
             .ok_or_else(|| "MP3 recorder is already finalized".to_owned())?
             .resume(frame)
-            .map_err(|error| format!("MP3 recorder resume failed: {error:?}"))
+            .map_err(|error| format!("MP3 recorder resume failed: {error:?}"))?;
+        self.queue.open_tap_admission();
+        Ok(())
     }
     fn split(&mut self, _frame: u64) -> Result<(), String> {
         Err("MP3 recorder splitting is not supported".into())
@@ -1893,6 +1913,9 @@ impl RecorderAudioTap {
 
 impl AudioTap for RecorderAudioTap {
     fn on_processed_block(&self, start_frame: u64, block: &AudioBlock) {
+        let Some(_permit) = self.queue.try_begin_tap() else {
+            return;
+        };
         let Some(mut chunk) = self.queue.try_acquire() else {
             return;
         };
@@ -1918,6 +1941,27 @@ impl AudioTap for RecorderAudioTap {
             self.queue.recycle(chunk);
         }
     }
+}
+
+/// Pause is a control-thread boundary: retire admitted callbacks and write
+/// pre-pause quanta before the writer's timeline advances to Resume.
+fn drain_before_recorder_pause(
+    worker: &mut dyn RecorderWorker,
+    queue: &RecordingQueue,
+) -> Result<(), String> {
+    queue.close_tap_admission();
+    let deadline = Instant::now() + Duration::from_millis(100);
+    while queue.taps_in_flight() {
+        if Instant::now() >= deadline {
+            return Err("recorder callback retirement timed out".into());
+        }
+        std::thread::yield_now();
+    }
+    let pending = queue.len();
+    if pending > 0 && worker.drain_pending(pending)? != pending {
+        return Err("recorder pre-pause queue did not drain".into());
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -4327,7 +4371,9 @@ fn diagnostics_output_schema() -> Value {
                             "type": ["object", "null"],
                             "properties": {
                                 "state": { "enum": ["unknown", "stopped", "running", "failed", "quarantined"] },
-                                "failureCount": { "type": "integer", "minimum": 0 }
+                                "failureCount": { "type": "integer", "minimum": 0 },
+                                "outputMisses": { "type": "integer", "minimum": 0 },
+                                "inputDrops": { "type": "integer", "minimum": 0 }
                             },
                             "required": ["state", "failureCount"],
                             "additionalProperties": false
@@ -5076,10 +5122,222 @@ fn editor_authorization_issuer() -> &'static audiorouter_plugin_host::EditorPare
     })
 }
 
+/// Group only exclusive identity edges; absorbing a branch or matrix would
+/// change which signal an intermediate graph node receives.
+fn plugin_chain_groups(
+    session: &Session,
+    eligible: &HashMap<EntityId, usize>,
+) -> Vec<Vec<EntityId>> {
+    let mut next = HashMap::new();
+    for edge in session.edges.iter().filter(|edge| edge.enabled) {
+        let Some(&channels) = eligible.get(&edge.source_node) else {
+            continue;
+        };
+        if eligible.get(&edge.destination_node) != Some(&channels) {
+            continue;
+        }
+        let identity = edge.matrix.len() == channels * channels
+            && edge.matrix.iter().enumerate().all(|(index, gain)| {
+                *gain
+                    == if index / channels == index % channels {
+                        1.0
+                    } else {
+                        0.0
+                    }
+            });
+        let ports_match = session
+            .nodes
+            .iter()
+            .filter(|node| node.id == edge.source_node || node.id == edge.destination_node)
+            .all(|node| {
+                node.ports
+                    .iter()
+                    .all(|port| usize::from(port.channels) == channels)
+            });
+        if identity
+            && ports_match
+            && session
+                .edges
+                .iter()
+                .filter(|other| other.enabled && other.source_node == edge.source_node)
+                .count()
+                == 1
+            && session
+                .edges
+                .iter()
+                .filter(|other| other.enabled && other.destination_node == edge.destination_node)
+                .count()
+                == 1
+        {
+            next.insert(edge.source_node.clone(), edge.destination_node.clone());
+        }
+    }
+    let plugins = session
+        .nodes
+        .iter()
+        .filter(|node| node.enabled && node.kind == NodeKind::Plugin)
+        .collect::<Vec<_>>();
+    let mut visited = std::collections::HashSet::new();
+    let mut groups = Vec::new();
+    // Start at heads, independent of saved node order. The second pass covers
+    // isolated nodes and defensively bounds invalid cycles before compilation.
+    for head in plugins
+        .iter()
+        .filter(|node| !next.values().any(|id| id == &node.id))
+        .chain(plugins.iter())
+    {
+        if visited.contains(&head.id) {
+            continue;
+        }
+        let mut id = head.id.clone();
+        let mut group = Vec::new();
+        loop {
+            if !visited.insert(id.clone()) {
+                break;
+            }
+            group.push(id.clone());
+            if group.len() == audiorouter_plugin_host::MAX_PLUGIN_CHAIN_MEMBERS {
+                groups.push(std::mem::take(&mut group));
+            }
+            let Some(successor) = next.get(&id) else {
+                break;
+            };
+            id = successor.clone();
+        }
+        if !group.is_empty() {
+            groups.push(group);
+        }
+    }
+    groups
+}
+
+#[cfg(test)]
+mod plugin_chain_group_tests {
+    use super::*;
+    use audiorouter_domain::{Edge, Node, Port};
+    fn graph() -> Session {
+        let nodes = ["c", "a", "b", "d"]
+            .into_iter()
+            .map(|id| Node {
+                id: EntityId::new(id),
+                name: id.into(),
+                kind: NodeKind::Plugin,
+                type_version: 1,
+                enabled: true,
+                bypass: false,
+                parameters: Default::default(),
+                ports: vec![
+                    Port {
+                        name: "in".into(),
+                        direction: PortDirection::Input,
+                        channels: 1,
+                    },
+                    Port {
+                        name: "out".into(),
+                        direction: PortDirection::Output,
+                        channels: 1,
+                    },
+                ],
+            })
+            .collect();
+        let edges = [("a", "b"), ("b", "c"), ("c", "d")]
+            .into_iter()
+            .map(|(source, destination)| Edge {
+                id: EntityId::new(format!("{source}-{destination}")),
+                source_node: EntityId::new(source),
+                source_port: "out".into(),
+                destination_node: EntityId::new(destination),
+                destination_port: "in".into(),
+                matrix: vec![1.0],
+                enabled: true,
+            })
+            .collect();
+        Session {
+            id: EntityId::new("chain"),
+            name: "chain".into(),
+            schema_version: 1,
+            revision: 0,
+            nodes,
+            edges,
+        }
+    }
+    fn groups(session: &Session) -> Vec<Vec<String>> {
+        let eligible = session
+            .nodes
+            .iter()
+            .filter(|node| node.enabled && !node.bypass && node.kind == NodeKind::Plugin)
+            .map(|node| (node.id.clone(), usize::from(node.ports[0].channels)))
+            .collect();
+        plugin_chain_groups(session, &eligible)
+            .into_iter()
+            .map(|group| group.into_iter().map(|id| id.as_str().to_owned()).collect())
+            .collect()
+    }
+    #[test]
+    fn shared_plugin_groups_follow_signal_order_and_keep_boundaries() {
+        let mut session = graph();
+        assert_eq!(groups(&session), vec![vec!["a", "b", "c", "d"]]);
+        session.edges[1].matrix[0] = 0.5;
+        let result = groups(&session);
+        assert!(result.contains(&vec!["a".into(), "b".into()]));
+        assert!(result.contains(&vec!["c".into(), "d".into()]));
+        session.edges[1].matrix[0] = 1.0;
+        session.nodes[0].bypass = true;
+        assert!(groups(&session).contains(&vec!["a".into(), "b".into()]));
+        session.nodes[0].bypass = false;
+        session.nodes[0].kind = NodeKind::Gain;
+        assert!(groups(&session).contains(&vec!["a".into(), "b".into()]));
+    }
+    #[test]
+    fn shared_plugin_groups_do_not_absorb_fanout_or_channel_conversion() {
+        let mut session = graph();
+        let mut branch = session.edges[0].clone();
+        branch.id = EntityId::new("branch");
+        branch.destination_node = EntityId::new("d");
+        session.edges.push(branch);
+        assert!(groups(&session).contains(&vec!["a".into()]));
+        assert!(groups(&session).contains(&vec!["b".into(), "c".into()]));
+        session.edges.pop();
+        session.nodes[0]
+            .ports
+            .iter_mut()
+            .for_each(|port| port.channels = 2);
+        assert!(groups(&session).contains(&vec!["a".into(), "b".into()]));
+        assert!(groups(&session).contains(&vec!["c".into()]));
+    }
+    #[test]
+    fn shared_plugin_groups_bound_members_even_for_large_or_cyclic_graphs() {
+        let mut session = graph();
+        session.nodes.clear();
+        session.edges.clear();
+        for index in 0..19 {
+            let mut node = graph().nodes[0].clone();
+            node.id = EntityId::new(format!("p{index}"));
+            session.nodes.push(node);
+            if index > 0 {
+                let mut edge = graph().edges[0].clone();
+                edge.id = EntityId::new(format!("e{index}"));
+                edge.source_node = EntityId::new(format!("p{}", index - 1));
+                edge.destination_node = EntityId::new(format!("p{index}"));
+                session.edges.push(edge);
+            }
+        }
+        assert_eq!(
+            groups(&session).iter().map(Vec::len).collect::<Vec<_>>(),
+            vec![8, 8, 3]
+        );
+        let mut edge = graph().edges[0].clone();
+        edge.source_node = EntityId::new("p18");
+        edge.destination_node = EntityId::new("p0");
+        session.edges.push(edge);
+        assert_eq!(groups(&session).iter().map(Vec::len).sum::<usize>(), 19);
+    }
+}
+
 /// Whether a remembered scan entry is the plugin at `path`. A node may carry
 /// either the scanned path or the canonical binary path (`\\?\C:\...`), so
-/// both are accepted, compared without the verbatim prefix and without case
-/// (Windows paths). The binary fingerprint is still checked by the caller.
+/// both are accepted without the verbatim prefix and without case. The binary
+/// fingerprint is still checked by the caller.
 fn scan_entry_matches_path(entry: &Value, path: &str) -> bool {
     fn normalized(path: &str) -> String {
         path.strip_prefix(r"\\?\").unwrap_or(path).to_ascii_lowercase()
@@ -5547,8 +5805,13 @@ impl ControlPlane {
     /// saved session is never changed.
     #[cfg(windows)]
     fn native_paths_session(&self, session_id: &EntityId) -> Result<Session, ControlError> {
-        let mut session =
-            audiorouter_engine::prune_inactive_upstream(self.get_session(session_id)?).into_owned();
+        self.adapt_native_paths_session(
+            audiorouter_engine::prune_inactive_upstream(self.get_session(session_id)?).into_owned(),
+        )
+    }
+
+    #[cfg(windows)]
+    fn adapt_native_paths_session(&self, mut session: Session) -> Result<Session, ControlError> {
         for node_id in &self.native_multi_input_mono_nodes {
             let Some(node) = session.nodes.iter_mut().find(|node| node.id == *node_id) else {
                 continue;
@@ -8386,6 +8649,23 @@ impl ControlPlane {
         sample_rate_hz: u32,
         candidate: Option<&Session>,
     ) -> Result<(), ControlError> {
+        self.activate_native_graph_candidate_with_flags(
+            session_id,
+            generation,
+            sample_rate_hz,
+            candidate,
+            false,
+        )
+    }
+
+    fn activate_native_graph_candidate_with_flags(
+        &mut self,
+        session_id: &EntityId,
+        generation: u64,
+        sample_rate_hz: u32,
+        candidate: Option<&Session>,
+        flags_only: bool,
+    ) -> Result<(), ControlError> {
         if !self.native_endpoint_session_is_attached(session_id) {
             return Err(ControlError::InvalidRequest(
                 "native endpoint worker is not attached".into(),
@@ -8402,7 +8682,7 @@ impl ControlPlane {
                 "native endpoint worker generation is stale".into(),
             ));
         }
-        let session = candidate
+        let mut session = candidate
             .cloned()
             .unwrap_or_else(|| self.get_session(session_id).expect("loaded above").clone());
         let recorder_node_ids = session
@@ -8422,7 +8702,24 @@ impl ControlPlane {
                     ControlError::InvalidRequest("recorder graph tap binding is invalid".into())
                 })?
         };
-        let plugin_stages = self.prepare_plugin_stages(&session, sample_rate_hz)?;
+        let mut bridge_flags = Vec::new();
+        let plugin_stages = if flags_only {
+            let mut stages: HashMap<EntityId, Arc<dyn RealtimePluginProcessor>> = HashMap::new();
+            for node in session
+                .nodes
+                .iter_mut()
+                .filter(|node| node.kind == NodeKind::Plugin)
+            {
+                let bridge = self.plugin_bridge(session_id, &node.id)?;
+                bridge_flags.push((Arc::clone(&bridge), node.enabled && !node.bypass));
+                stages.insert(node.id.clone(), bridge);
+                node.enabled = true;
+                node.bypass = false;
+            }
+            stages
+        } else {
+            self.prepare_plugin_stages(&session, sample_rate_hz)?
+        };
         let graph = self.compile_session_graph_with_audio(
             &session,
             RuntimeGeneration::new(generation),
@@ -8466,6 +8763,9 @@ impl ControlPlane {
                 ControlError::InvalidRequest("native endpoint worker is not attached".into())
             })?;
         *taps = Some(recorder_taps);
+        for (bridge, active) in bridge_flags {
+            bridge.set_processing_active(active);
+        }
         Ok(())
     }
 
@@ -8842,6 +9142,8 @@ impl ControlPlane {
                             audiorouter_engine::PluginWorkerState::Quarantined => "quarantined",
                         },
                         "failureCount": health.failure_count,
+                        "outputMisses": self.plugin_bridge(session_id, &node.id).ok().map(|bridge| bridge.continuity_counts().0).unwrap_or(0),
+                        "inputDrops": self.plugin_bridge(session_id, &node.id).ok().map(|bridge| bridge.continuity_counts().1).unwrap_or(0),
                     })
                 });
                 let noise_profile = processor.noise_profile_for_node(&node.id);
@@ -8866,9 +9168,7 @@ impl ControlPlane {
 
     /// Same best-effort per-node telemetry as `native_node_telemetry`, but
     /// for the separate multi-input mixer/fan-out worker, which only has
-    /// processor/plugin telemetry on the shared post-mixer chain — the mixer
-    /// input sources, the mixer itself, and its output branches have no
-    /// meter instrumentation today.
+    /// processor/plugin telemetry and actual prepared input/tool/output levels.
     fn native_multi_input_node_telemetry(&self) -> Value {
         let (Some(worker), Some(session_id)) = (
             self.native_multi_input_worker.as_ref(),
@@ -8917,6 +9217,16 @@ impl ControlPlane {
             .iter()
             .filter_map(|node| {
                 let timing = timing_for(node);
+                let meter = worker.meter_snapshot_for_node(&node.id).map(|snapshot| {
+                    json!({
+                        "peakDb": snapshot.peak_db,
+                        "rmsDb": snapshot.rms_db,
+                        "clippedSamples": snapshot.clipped_samples,
+                        "channelPeakDb": snapshot.channel_peak_db,
+                        "channelRmsDb": snapshot.channel_rms_db,
+                        "channelClippedSamples": snapshot.channel_clipped_samples,
+                    })
+                });
                 let processor_telemetry =
                     worker
                         .processor_telemetry_for_node(&node.id)
@@ -8936,6 +9246,8 @@ impl ControlPlane {
                             audiorouter_engine::PluginWorkerState::Quarantined => "quarantined",
                         },
                         "failureCount": health.failure_count,
+                        "outputMisses": self.plugin_bridge(session_id, &node.id).ok().map(|bridge| bridge.continuity_counts().0).unwrap_or(0),
+                        "inputDrops": self.plugin_bridge(session_id, &node.id).ok().map(|bridge| bridge.continuity_counts().1).unwrap_or(0),
                     })
                 });
                 let noise_profile = worker.noise_profile_for_node(&node.id);
@@ -8943,13 +9255,14 @@ impl ControlPlane {
                     && plugin_health.is_none()
                     && noise_profile.is_none()
                     && timing.is_none()
+                    && meter.is_none()
                 {
                     return None;
                 }
                 let mut item = json!({
                     "nodeId": node.id,
                     "kind": node.kind.type_name(),
-                    "meter": Value::Null,
+                    "meter": meter,
                     "processor": processor_telemetry,
                     "plugin": plugin_health,
                 });
@@ -11537,6 +11850,7 @@ impl ControlPlane {
         &mut self,
         session_id: &EntityId,
         generation: u64,
+        flags_only: bool,
     ) -> Result<Option<&'static str>, ControlError> {
         if self.native_endpoint_session_is_attached(session_id) {
             let sample_rate_hz = self
@@ -11544,18 +11858,93 @@ impl ControlPlane {
                 .expect("attached above")
                 .bridge()
                 .sample_rate_hz();
-            self.activate_native_graph(session_id, generation, sample_rate_hz)?;
+            self.activate_native_graph_candidate_with_flags(
+                session_id,
+                generation,
+                sample_rate_hz,
+                None,
+                flags_only,
+            )?;
             return Ok(Some(self.native_adapter_kind().unwrap_or("endpoint")));
         }
         #[cfg(windows)]
         if self.native_multi_input_worker_session.as_ref() == Some(session_id)
             && self.native_multi_input_worker.is_some()
         {
-            let session = self.native_paths_session(session_id)?;
-            let plugin_stages =
-                self.prepare_plugin_stages(&session, audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ)?;
-            let worker_generation = self.native_multi_input_worker_generation.unwrap_or(generation);
-            let media = self.session_audio_media(&session, audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ)?;
+            let mut session = if flags_only {
+                self.adapt_native_paths_session(self.get_session(session_id)?.clone())?
+            } else {
+                self.native_paths_session(session_id)?
+            };
+            let mut bridge_flags = Vec::new();
+            let plugin_stages = if flags_only {
+                let mut stages: HashMap<EntityId, Arc<dyn RealtimePluginProcessor>> =
+                    HashMap::new();
+                // Keep physical streams and shared chain shape stable. Off
+                // sources/sinks contribute silence while their streams drain.
+                for node in &mut session.nodes {
+                    match node.kind {
+                        NodeKind::PhysicalInput
+                        | NodeKind::ApplicationCapture
+                        | NodeKind::PhysicalOutput
+                        | NodeKind::Mixer
+                        | NodeKind::InputSwitch => {
+                            let worker = self
+                                .native_multi_input_worker
+                                .as_ref()
+                                .expect("attached above");
+                            let unprepared = match node.kind {
+                                NodeKind::PhysicalInput | NodeKind::ApplicationCapture => {
+                                    !worker.input_node_ids().contains(&node.id)
+                                }
+                                NodeKind::PhysicalOutput => {
+                                    !worker.output_node_ids().contains(&node.id)
+                                }
+                                _ => false,
+                            };
+                            if unprepared && !node.enabled {
+                                continue;
+                            }
+                            if !node.enabled {
+                                for edge in &mut session.edges {
+                                    if edge.source_node == node.id
+                                        || (node.kind == NodeKind::PhysicalOutput
+                                            && edge.destination_node == node.id)
+                                    {
+                                        edge.matrix.fill(0.0);
+                                    }
+                                }
+                            }
+                            node.enabled = true;
+                        }
+                        _ => {}
+                    }
+                }
+                session = audiorouter_engine::prune_inactive_upstream(&session).into_owned();
+                for node in session
+                    .nodes
+                    .iter_mut()
+                    .filter(|node| node.kind == NodeKind::Plugin)
+                {
+                    let bridge = match self.plugin_bridge(session_id, &node.id) {
+                        Ok(bridge) => bridge,
+                        Err(_) if !node.enabled => continue,
+                        Err(error) => return Err(error),
+                    };
+                    bridge_flags.push((Arc::clone(&bridge), node.enabled && !node.bypass));
+                    stages.insert(node.id.clone(), bridge);
+                    node.enabled = true;
+                    node.bypass = false;
+                }
+                stages
+            } else {
+                self.prepare_plugin_stages(&session, audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ)?
+            };
+            let worker_generation = self
+                .native_multi_input_worker_generation
+                .unwrap_or(generation);
+            let media =
+                self.session_audio_media(&session, audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ)?;
             let compiled = audiorouter_engine::compile_native_paths_with_plugins_and_audio(
                 &session,
                 RuntimeGeneration::new(worker_generation),
@@ -11572,6 +11961,9 @@ impl ControlPlane {
                         "the route's sources or outputs changed; stop and press Play to apply".into(),
                     )
                 })?;
+            for (bridge, active) in bridge_flags {
+                bridge.set_processing_active(active);
+            }
             self.register_multi_input_generators(session_id);
             return Ok(Some("multi-input"));
         }
@@ -11926,6 +12318,7 @@ impl ControlPlane {
         sample_rate_hz: u32,
     ) -> Result<HashMap<EntityId, Arc<dyn RealtimePluginProcessor>>, ControlError> {
         let mut stages = HashMap::new();
+        let mut prepared_bridges = Vec::new();
         if !session
             .nodes
             .iter()
@@ -11950,6 +12343,7 @@ impl ControlPlane {
             .ok_or_else(|| {
                 ControlError::InvalidRequest("plugin worker executable is unavailable".into())
             })?;
+        let mut prepared = HashMap::new();
         for node in session
             .nodes
             .iter()
@@ -12009,14 +12403,60 @@ impl ControlPlane {
                 .find(|port| port.direction == audiorouter_domain::PortDirection::Input)
                 .map(|port| usize::from(port.channels))
                 .unwrap_or(1);
-            let worker = if verified.format == audiorouter_plugin_host::PluginFormat::Vst3 {
+            let state = node
+                .parameters
+                .get("stateId")
+                .and_then(Value::as_str)
+                .map(|id| self.load_plugin_state_asset(id, fingerprint))
+                .transpose()?;
+            let mut parameters = node
+                .parameters
+                .iter()
+                .filter_map(|(name, value)| {
+                    Some(audiorouter_plugin_host::ParameterEvent {
+                        parameter_id: name.strip_prefix("pluginParameter:")?.parse().ok()?,
+                        normalized_value: value.as_f64()? as f32,
+                        sample_offset: 0,
+                    })
+                })
+                .collect::<Vec<_>>();
+            parameters.sort_by_key(|event| event.parameter_id);
+            prepared.insert(
+                node.id.clone(),
+                (verified, configured_root, channels, state, parameters),
+            );
+        }
+        let eligible = prepared
+            .iter()
+            .filter(|(id, (identity, _, _, _, _))| {
+                identity.format == audiorouter_plugin_host::PluginFormat::Vst2
+                    && session
+                        .nodes
+                        .iter()
+                        .any(|node| &node.id == *id && !node.bypass)
+            })
+            .map(|(id, (_, _, channels, _, _))| (id.clone(), *channels))
+            .collect();
+        for group in plugin_chain_groups(session, &eligible) {
+            let members = group
+                .iter()
+                .map(|id| prepared.get(id).expect("prepared plugin group"))
+                .collect::<Vec<_>>();
+            let (verified, configured_root, channels, _, _) = members[0];
+            let mut worker = if members.len() > 1 {
+                let plugins = members.iter().map(|(identity, root, _, _, _)| audiorouter_plugin_host::WorkerChainPlugin {
+                    path: identity.path.clone(), sha256: identity.sha256.clone(), configured_roots: vec![root.clone()],
+                }).collect::<Vec<_>>();
+                audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_chain(
+                    &worker_executable, &plugins, *channels as u16, sample_rate_hz, Instant::now())
+            } else if verified.format == audiorouter_plugin_host::PluginFormat::Vst3 {
                 #[cfg(windows)]
                 {
                     audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
                         &worker_executable,
-                        &verified,
-                        std::slice::from_ref(&configured_root),
-                        channels as u16,
+                        verified,
+                        std::slice::from_ref(configured_root),
+                        *channels as u16,
                         sample_rate_hz,
                         Instant::now(),
                     )
@@ -12030,58 +12470,71 @@ impl ControlPlane {
             } else {
                 audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_with_sample_rate(
                     &worker_executable,
-                    &verified,
-                    std::slice::from_ref(&configured_root),
-                    channels as u16,
+                    verified,
+                    std::slice::from_ref(configured_root),
+                    *channels as u16,
                     sample_rate_hz,
                     Instant::now(),
                 )
             }
             .map_err(|error| ControlError::InvalidRequest(format!("plugin worker launch failed: {error:?}")))?;
-            let mut worker = worker;
-            if let Some(state_id) = node.parameters.get("stateId").and_then(Value::as_str) {
-                // A stored state that is missing or fails verification is
-                // reported instead of silently starting from defaults.
-                let asset = self.load_plugin_state_asset(state_id, fingerprint)?;
-                worker.restore_state(asset, Instant::now()).map_err(|error| {
-                    ControlError::InvalidRequest(format!("plugin state restore failed: {error:?}"))
-                })?;
+            for (index, (_, _, _, state, _)) in members.iter().enumerate() {
+                if let Some(asset) = state {
+                    if members.len() > 1 {
+                        worker
+                            .select_instance(index, Instant::now())
+                            .map_err(|error| {
+                                ControlError::InvalidRequest(format!(
+                                    "plugin state instance selection failed: {error:?}"
+                                ))
+                            })?;
+                    }
+                    worker
+                        .restore_state(asset.clone(), Instant::now())
+                        .map_err(|error| {
+                            ControlError::InvalidRequest(format!(
+                                "plugin state restore failed: {error:?}"
+                            ))
+                        })?;
+                }
             }
-            let bridge = audiorouter_plugin_host::PluginRuntimeBridge::start(
-                worker,
-                channels,
-                audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
-                8,
-            )
+            let bridges = if members.len() > 1 {
+                audiorouter_plugin_host::PluginRuntimeBridge::start_chain(
+                    worker,
+                    *channels,
+                    audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+                    8,
+                    members.len(),
+                )
+            } else {
+                audiorouter_plugin_host::PluginRuntimeBridge::start(
+                    worker,
+                    *channels,
+                    audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+                    8,
+                )
+                .map(|bridge| vec![bridge])
+            }
             .map_err(|error| {
                 ControlError::InvalidRequest(format!("plugin runtime bridge failed: {error:?}"))
             })?;
-            let mut parameters = node
-                .parameters
-                .iter()
-                .filter_map(|(name, value)| {
-                    let parameter_id = name
-                        .strip_prefix("pluginParameter:")
-                        .and_then(|id| id.parse::<u32>().ok())?;
-                    let normalized_value = value.as_f64()? as f32;
-                    Some(audiorouter_plugin_host::ParameterEvent {
-                        parameter_id,
-                        normalized_value,
-                        sample_offset: 0,
-                    })
-                })
-                .collect::<Vec<_>>();
-            parameters.sort_by_key(|event| event.parameter_id);
-            bridge.set_parameters(parameters).map_err(|error| {
-                ControlError::InvalidRequest(format!(
-                    "plugin parameter template rejected: {error:?}"
-                ))
-            })?;
-            if let Ok(mut bridges) = self.plugin_bridges.lock() {
-                bridges.retain(|_, bridge| bridge.strong_count() > 0);
-                bridges.insert((session.id.clone(), node.id.clone()), Arc::downgrade(&bridge));
+            for ((id, member), bridge) in group.iter().zip(members).zip(bridges) {
+                bridge.set_parameters(member.4.clone()).map_err(|error| {
+                    ControlError::InvalidRequest(format!(
+                        "plugin parameter template rejected: {error:?}"
+                    ))
+                })?;
+                prepared_bridges.push((id.clone(), Arc::downgrade(&bridge)));
+                stages.insert(id.clone(), bridge as Arc<dyn RealtimePluginProcessor>);
             }
-            stages.insert(node.id.clone(), bridge as Arc<dyn RealtimePluginProcessor>);
+        }
+        // Keep controls for the existing graph intact if any new group fails
+        // preparation. Publish per-node handles only once all groups exist.
+        if let Ok(mut bridges) = self.plugin_bridges.lock() {
+            bridges.retain(|_, bridge| bridge.strong_count() > 0);
+            for (id, bridge) in prepared_bridges {
+                bridges.insert((session.id.clone(), id), bridge);
+            }
         }
         Ok(stages)
     }
@@ -12273,7 +12726,25 @@ impl ControlPlane {
             // a parameter edit such as a Volume or Mixer input slider takes
             // effect without Stop/Play. A topology change that the running
             // adapter cannot absorb reports `restartRequired` instead.
-            let native = match self.republish_running_native_graph(&result.session_id, generation) {
+            let flags_only = checkpoint
+                .session(&result.session_id)
+                .map(|previous| {
+                    let mut normalized = session.clone();
+                    normalized.revision = previous.revision;
+                    for node in &mut normalized.nodes {
+                        if let Some(old) = previous.nodes.iter().find(|old| old.id == node.id) {
+                            node.enabled = old.enabled;
+                            node.bypass = old.bypass;
+                        }
+                    }
+                    serde_json::to_value(&normalized).ok() == serde_json::to_value(previous).ok()
+                })
+                .unwrap_or(false);
+            let native = match self.republish_running_native_graph(
+                &result.session_id,
+                generation,
+                flags_only,
+            ) {
                 Ok(Some(adapter)) => json!({ "state": "applied", "adapter": adapter }),
                 Ok(None) => Value::Null,
                 Err(error) => json!({ "state": "restartRequired", "reason": control_error_message(&error) }),
@@ -14098,6 +14569,7 @@ impl ControlPlane {
                     let frame = frame
                         .ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))?;
                     let outcome = worker.finalize(frame).map_err(|error| {
+                        self.recorders.entry(session_id.clone()).or_default().fail();
                         ControlError::InvalidRequest(format!(
                             "recorder finalization failed: {error}"
                         ))
@@ -14106,6 +14578,7 @@ impl ControlPlane {
                         || !outcome.file_finalized
                         || outcome.recoverable
                     {
+                        self.recorders.entry(session_id.clone()).or_default().fail();
                         return Err(ControlError::InvalidRequest(
                             "recorder finalization did not produce a completed file".into(),
                         ));
@@ -14117,6 +14590,7 @@ impl ControlPlane {
                 _ => Err("method not found".into()),
             };
             worker_result.map_err(|error| {
+                self.recorders.entry(session_id.clone()).or_default().fail();
                 ControlError::InvalidRequest(format!("recorder worker transition failed: {error}"))
             })?;
         }
@@ -20095,6 +20569,17 @@ mod tests {
             .unwrap_or_else(|_| "patrick-main-session".into());
         let storage = audiorouter_storage::Storage::open(std::path::Path::new(&database)).unwrap();
         let mut plane = ControlPlane::with_storage("live-paths", storage);
+        // Idempotency survives database copies and backend restart. Each
+        // qualification is a new operation, rather than replaying a previous
+        // test's successful start response on a currently stopped backend.
+        let run_id = format!(
+            "live-paths-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
         let mut call = |method: &str, params: Value| {
             let response = plane.dispatch(JsonRpcRequest {
                 jsonrpc: "2.0".into(),
@@ -20105,12 +20590,15 @@ mod tests {
             assert!(response.error.is_none(), "{method}: {:?}", response.error);
             response.result.unwrap()
         };
-        call("safety.setPrivacyMute", json!({ "muted": true, "idempotencyKey": "live-paths-mute" }));
+        call(
+            "safety.setPrivacyMute",
+            json!({ "muted": true, "idempotencyKey": format!("{run_id}-mute") }),
+        );
         let prepared = call("nativePaths.prepare", json!({ "sessionId": session_id }));
         eprintln!("prepared: {prepared}");
         let started = call(
             "session.start",
-            json!({ "sessionId": session_id, "idempotencyKey": "live-paths-start" }),
+            json!({ "sessionId": session_id, "idempotencyKey": format!("{run_id}-start") }),
         );
         eprintln!("started: {started}");
         assert_eq!(started["runtime"], "native");
@@ -20130,7 +20618,10 @@ mod tests {
             eprintln!("{} timing={} plugin={}", item["nodeId"], item["timing"], item["plugin"]);
         }
         eprintln!("delivered branch blocks: {delivered}");
-        call("session.stop", json!({ "sessionId": session_id, "idempotencyKey": "live-paths-stop" }));
+        call(
+            "session.stop",
+            json!({ "sessionId": session_id, "idempotencyKey": format!("{run_id}-stop") }),
+        );
         let timed = diagnostics["nodeTelemetry"]
             .as_array()
             .unwrap()
@@ -20142,10 +20633,28 @@ mod tests {
             .as_array()
             .unwrap()
             .iter()
-            .filter(|item| item["plugin"]["state"] == "failed" || item["plugin"]["state"] == "quarantined")
+            .filter(|item| item["plugin"].is_object() && item["plugin"]["state"] != "running")
             .map(|item| item["nodeId"].clone())
             .collect::<Vec<_>>();
-        assert!(failed_plugins.is_empty(), "plugins failed while running: {failed_plugins:?}");
+        assert!(
+            failed_plugins.is_empty(),
+            "plugins failed while running: {failed_plugins:?}"
+        );
+        assert!(delivered > 0, "both paths must deliver audio blocks");
+        if session_id == "patrick-main-session" {
+            let members = ["reafir", "reaeq", "reacomp", "reagate"].map(|id| {
+                plane
+                    .plugin_bridge(&EntityId::new(&session_id), &EntityId::new(id))
+                    .unwrap()
+            });
+            assert!(
+                members
+                    .iter()
+                    .all(|member| member.shares_worker_with(&members[0])),
+                "Patrick's four ReaPlugs must share one worker"
+            );
+            eprintln!("verified shared plugin worker: reafir -> reaeq -> reacomp -> reagate");
+        }
     }
 
     #[cfg(windows)]
@@ -24080,6 +24589,46 @@ mod tests {
     }
 
     #[test]
+    fn recorder_api_reports_failed_finalization_without_stopping_audio() {
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        plane.session_start(&original.id).unwrap();
+        let queue = Arc::new(RecordingQueue::new(4).unwrap());
+        plane
+            .attach_recorder_worker(
+                original.id.clone(),
+                Box::new(FailingTapRecorderWorker {
+                    tap: Arc::new(RecorderAudioTap::new(queue)),
+                }),
+            )
+            .unwrap();
+        for (index, method) in ["recorders.arm", "recorders.start", "recorders.stop"]
+            .iter()
+            .enumerate()
+        {
+            let mut params = json!({"sessionId": original.id,
+                "idempotencyKey": format!("failed-finalization-{index}")});
+            if *method != "recorders.arm" {
+                params["frame"] = json!(0);
+            }
+            let response = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(index)),
+                method: (*method).into(),
+                params: Some(params),
+            });
+            assert_eq!(
+                response.error.is_some(),
+                *method == "recorders.stop",
+                "{response:?}"
+            );
+        }
+        assert_eq!(plane.recorders[&original.id].state(), RecorderState::Failed);
+        assert_eq!(plane.runtimes[&original.id].state(), RuntimeState::Running);
+    }
+
+    #[test]
     fn system_quit_keeps_session_running_when_recorder_finalization_fails() {
         let mut plane = ControlPlane::default();
         let original = session();
@@ -24479,6 +25028,87 @@ mod tests {
             .all(|row| row.format == "wav" && row.frames == 2));
         assert_eq!(rows[0].path, path.to_str().unwrap());
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn all_file_formats_drain_queued_audio_before_pause_and_drop_paused_taps() {
+        let root = std::env::temp_dir().join(format!(
+            "audiorouter-e2e-recorders-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let policy = RecordingPathPolicy::new(&root).unwrap();
+        for (index, format) in [
+            FileRecorderFormat::Wav(WavFormat::Pcm16),
+            FileRecorderFormat::Wav(WavFormat::Pcm24),
+            FileRecorderFormat::Wav(WavFormat::Float32),
+            FileRecorderFormat::Flac {
+                bits_per_sample: 16,
+            },
+            FileRecorderFormat::Flac {
+                bits_per_sample: 24,
+            },
+            FileRecorderFormat::Mp3,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let config = FileRecorderConfig {
+                version: FILE_RECORDER_CONFIG_VERSION,
+                session_id: "synthetic",
+                recorder_id: "take",
+                sequence: index as u64,
+                format,
+                channels: 2,
+                sample_rate: 48_000,
+                dither: false,
+                queue_capacity: 4,
+                maximum_chunks_per_pass: 1,
+            };
+            let (path, mut worker) = create_file_recorder_with_config(&policy, &config).unwrap();
+            worker.arm().unwrap();
+            worker.start(0).unwrap();
+            let tap = worker.shared_audio_tap().unwrap();
+            let mut block = AudioBlock::new(2, 128).unwrap();
+            block.channel_mut(0).unwrap().fill(0.1);
+            block.channel_mut(1).unwrap().fill(-0.1);
+            tap.on_processed_block(0, &block);
+            // No writer pump between queued input and the lifecycle commands.
+            worker.pause(128).unwrap();
+            for frame in 128..1152 {
+                tap.on_processed_block(frame, &block);
+            }
+            worker.resume(256).unwrap();
+            tap.on_processed_block(256, &block);
+            let outcome = worker.finalize(384).unwrap();
+            assert_eq!(outcome.state, "completed", "{format:?}");
+            assert!(outcome.file_finalized && !outcome.recoverable, "{format:?}");
+            let recordings = worker.finalized_recordings();
+            assert_eq!(
+                recordings
+                    .iter()
+                    .map(|recording| recording.frames)
+                    .sum::<u64>(),
+                256,
+                "{format:?}"
+            );
+            assert!(std::fs::metadata(&path).unwrap().len() > 0);
+            drop(tap);
+            drop(worker);
+        }
+        assert!(
+            root.is_absolute()
+                && root
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .starts_with("audiorouter-e2e-recorders-")
+        );
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

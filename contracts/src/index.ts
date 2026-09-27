@@ -554,6 +554,7 @@ export interface DiscoveryDocument {
       name: string;
       type: string;
       unit?: string;
+      step?: number;
       minimum?: number;
       maximum?: number;
       enum?: string[];
@@ -570,6 +571,7 @@ export interface DiscoveryDocument {
       name: string;
       type: string;
       unit?: string;
+      step?: number;
       minimum?: number;
       maximum?: number;
       enum?: string[];
@@ -679,6 +681,10 @@ export interface DiagnosticsSnapshot {
     plugin: {
       state: "unknown" | "stopped" | "running" | "failed" | "quarantined";
       failureCount: number;
+      /** Missing completed quanta, including startup warm-up; shared per chain. */
+      outputMisses?: number;
+      /** Input quanta discarded because the in-flight queue had no storage. */
+      inputDrops?: number;
     } | null;
     /** Present while a Denoise node is learning: its current noise profile. */
     noiseProfile?: string;

@@ -14,6 +14,8 @@ let running = false;
 let prepared = false;
 const sourceStates = new Map<string, "playing" | "paused" | "stopped">();
 let sequence = 0;
+const lifecycleCalls: string[] = [];
+Object.assign(window, { __routeFixtureCalls: () => [...lifecycleCalls] });
 const fixtureBackend = createDisconnectedBackend(demoSession);
 const initial = await fixtureBackend.snapshot();
 const diagnostics = () => ({
@@ -95,6 +97,7 @@ const previewBackend: UiBackend = {
     return { sessionId, captureEndpointId, renderEndpointId, state: "configured-stopped" };
   },
   async startSession(sessionId, _idempotencyKey, candidate) {
+    lifecycleCalls.push("start");
     if (!prepared || sessionId !== committed.id) throw new Error("Fixture audio is not prepared");
     if (candidate) {
       const validationError = graphValidationError(candidate);
@@ -106,6 +109,7 @@ const previewBackend: UiBackend = {
     return { sessionId, state: "running", generation: 1, runtime: "native" };
   },
   async stopSession(sessionId) {
+    lifecycleCalls.push("stop");
     running = false; previewCandidate = null; sourceStates.clear(); sequence += 1;
     return { sessionId, state: "stopped", runtime: "native", recorders: [] };
   },
@@ -148,10 +152,18 @@ const previewBackend: UiBackend = {
     return { planId: "e2e-graph-plan", baseRevision: candidate.revision, expiresInMs: 60_000, diff: [], affectedDestinations: [], warnings: [], requiredScopes: [] };
   },
   async commitGraph(_planId, baseRevision) {
+    lifecycleCalls.push("commit");
+    const flagMode = new URLSearchParams(window.location.search).get("flags");
+    if (running && flagMode === "reject") throw new Error("Fixture commit rejected");
+    if (running && flagMode === "slow") await new Promise(resolve => setTimeout(resolve, 250));
     if (!planned || planned.revision !== baseRevision || committed.revision !== baseRevision) throw new Error("Preview planner: no matching graph plan.");
     committed = { ...structuredClone(planned), revision: baseRevision + 1 };
     planned = null; sequence += 1;
-    return { sessionId: committed.id, revision: committed.revision };
+    return { sessionId: committed.id, revision: committed.revision, activation: running
+      ? { state: "running", runtime: "native", generation: 1, native: flagMode === "restart"
+        ? { state: "restartRequired", reason: "Fixture endpoint was not prepared" }
+        : { state: "applied", adapter: "endpoint" } }
+      : { state: "pending", runtime: "fake" } };
   },
 };
 

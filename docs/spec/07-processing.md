@@ -22,6 +22,10 @@ crossfade completes; initial configuration and reset remain immediate and
 silent-safe. This bounded transition is a click-reduction measure, not a claim
 that a large alignment change is perceptually seamless.
 - **DSP-06 — Pitch.** M06 supplies a time-preserving pitch-shift node, -12 to +12 semitones plus -100 to +100 cents, with explicit algorithmic latency. A VST3-only workaround does not meet the built-in node requirement. Formant control is optional/future. At ±12 semitones, duration remains within 0.1% in a 60-second offline test; pitch error for steady tones is within 10 cents after warmup. Test speech for intelligibility and artifacts separately.
+
+  Phase estimation must remain finite for zero FFT bins. Sustained silence,
+  sustained tones and silence-to-tone transitions must not poison retained
+  phase/overlap state or permanently silence later input.
 - **DSP-07 — Metering.** Expose per-channel sample peak, RMS, clipping count, gate state, and gain reduction where relevant. RMS window defaults to 300 ms; peak hold defaults to 1 second. Silence is represented by a documented floor or null dB value, never JSON `-Infinity`. Telemetry rate is bounded by [14](14-quality.md).
 
 Prepared graph meter snapshots expose both the compatibility linear values and
@@ -47,6 +51,41 @@ hold defaults remain the responsibility of the windowed signal-meter layer.
 - **PLUG-05 — Failure.** Detect crash, hang, invalid samples, bus-layout changes, or unsupported latency changes. Quarantine a repeatedly failing plugin, show its identity, and require deliberate retry after three failures within ten minutes. Do not restart-loop forever or automatically send dry microphone audio to a protected sink.
 - **PLUG-06 — Compatibility and licenses.** Pin the actual VST3 SDK license/version and retain required notices. Record a tested plugin list with exact binaries/versions and parameter/state/editor results. User-installed plugins are not redistributed by default. VST3 licensing does not confer VST2 rights; review any proposed legacy hosting separately.
 - **PLUG-07 — Legacy VST2 extension.** The approved M06 extension may host user-installed native x64 VST2 audio-effect DLLs after a separate ABI adapter, rights review, and the same worker containment, failure, state, editor, latency, and compatibility evidence required for VST3. Established `VSTPluginMain` and legacy `main` exports are recognized; ReaPlugs remain local qualification fixtures, not redistributed dependencies. This extension does not include x86 bridging, instruments/MIDI, Audio Units, arbitrary scripting, redistribution, auto-download, or weakening the protected-voice failure policy. It is not release-qualified until the acceptance matrix is complete.
+
+## Adjacent VST2 shared workers (2026-09-26)
+
+The user-approved PLUG-03 optimization groups up to eight enabled,
+non-bypassed x64 VST2 effects connected by exclusive identity channel maps
+into one isolated worker. Native stages, fan-out, convergence and channel
+conversion end a group. Processing follows graph order within one exchange;
+the realtime graph pays one bounded queue delay, assigned to the first
+member's timing entry. Later members report zero additional queue delay.
+VST3 and isolated VST2 nodes retain their existing worker paths.
+
+Every member is revalidated against its own scanned fingerprint and allowed
+roots before loading. Parameters, state save/restore and native editors
+select an explicit instance; saved graph nodes and state assets stay
+individual and require no migration. The worker keeps the existing process
+resource limits and credential isolation. A crash, hang, invalid sample or
+protocol error latches silence and failed health for all members of that
+group; unrelated workers remain independent. There is no automatic partial
+restart or dry fallback. Deliberate route preparation recreates the complete
+chain. This shared failure boundary requires the state/parameter/fault
+acceptance in `tests/acceptance/m06-vst2-chain.ps1`; broader compatibility,
+attended editor and endurance gates remain distinct.
+
+When the pipeline is full of completed frames, each completed block is reused
+for the incoming quantum before checking the free pool. A ready output must
+not cause input loss solely because its storage has not yet been recycled.
+An actual late result or saturated in-flight queue still produces silence;
+the realtime callback never waits for worker completion.
+
+Live Enabled/Bypass edits reuse prepared bridges and group membership. A
+bounded optional processing mask on `ProcessChain` selects each member;
+an omitted/empty mask means all members process, otherwise its length must
+match the parameter-member count. The worker skips inactive members at frame
+boundaries. A single-member bridge returns its queued dry frame when inactive.
+Failure still latches silence for the entire group, including bypassed members.
 
 ## Current multi-bus execution boundary
 

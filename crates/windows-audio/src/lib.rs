@@ -6108,6 +6108,14 @@ impl NativeMultiInputWorker {
         })
     }
 
+    /// Lock-free actual level at a prepared source, tool or output boundary.
+    pub fn meter_snapshot_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<audiorouter_engine::BlockMeterSnapshot> {
+        self.feeder.mixer().meter_snapshot_for_node(node_id)
+    }
+
     /// Measured timing of a tool node in any path.
     pub fn stage_timing_for_node(
         &self,

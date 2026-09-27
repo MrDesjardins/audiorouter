@@ -41,11 +41,17 @@ const messageBar = () => within(document.querySelector<HTMLElement>(".global-act
 function addGain() { fireEvent.click(screen.getByRole("tab", { name: "Tools" })); fireEvent.click(sessionPanel().getByRole("button", { name: /^Gain / })); }
 function start() { fireEvent.click(within(screen.getByRole("region", { name: "Session lifecycle" })).getByRole("button", { name: "Start session" })); }
 
+async function renderReady(element: Parameters<typeof render>[0]) {
+  let view!: ReturnType<typeof render>;
+  await act(async () => { view = render(element); });
+  return view;
+}
+
 describe("session refresh and playback regressions", () => {
   it("rebinds a stopped native worker to the selected endpoints before Play", async () => {
     const { backend } = await fixture();
     window.localStorage.setItem(`audiorouter.ui.endpoint-binding.${demoSession.id}`, JSON.stringify({ captureEndpointId: "voicemeeter-b1", renderEndpointId: "focusrite" }));
-    render(<App backend={backend} />);
+    await renderReady(<App backend={backend} />);
     await waitFor(() => expect(backend.listSessions).toHaveBeenCalled());
     start();
     await waitFor(() => expect(backend.startSession).toHaveBeenCalled());
@@ -69,7 +75,7 @@ describe("session refresh and playback regressions", () => {
     const { backend } = await fixture(voiceAndGame("focusrite"));
     const prepareNativePaths = vi.fn(async (sessionId: string) => ({ sessionId, generation: 1, state: "configured-stopped" as const, pathCount: 2, sourceNodeIds: ["mic", "cable-b"], branchNodeIds: ["cable-a", "scarlett"], renderEndpointIds: ["cable-a-input", "focusrite"] }));
     const prepareNativeEndpoint = vi.fn();
-    render(<App backend={{ ...backend, prepareNativePaths, prepareNativeEndpoint }} />);
+    await renderReady(<App backend={{ ...backend, prepareNativePaths, prepareNativeEndpoint }} />);
     await waitFor(() => expect(backend.listSessions).toHaveBeenCalled());
     await screen.findByRole("heading", { name: "Patrick Main Session" });
     start();
@@ -83,7 +89,7 @@ describe("session refresh and playback regressions", () => {
   it("names the device node that still needs a device before a multi-path Play", async () => {
     const { backend } = await fixture(voiceAndGame());
     const prepareNativePaths = vi.fn();
-    render(<App backend={{ ...backend, prepareNativePaths }} />);
+    await renderReady(<App backend={{ ...backend, prepareNativePaths }} />);
     await waitFor(() => expect(backend.listSessions).toHaveBeenCalled());
     await screen.findByRole("heading", { name: "Patrick Main Session" });
     start();
@@ -94,7 +100,7 @@ describe("session refresh and playback regressions", () => {
 
   it("hydrates a real saved session even when its revision is below the preview revision", async () => {
     const { backend } = await fixture({ ...demoSession, revision: 0, name: "Real saved session" });
-    render(<App backend={backend} />);
+    await renderReady(<App backend={backend} />);
     fireEvent.click(screen.getByRole("tab", { name: "Session" }));
     await waitFor(() => expect((sessionPanel().getByLabelText("Choose session") as HTMLSelectElement).selectedOptions[0].text).toBe("Real saved session"));
     expect(screen.getByRole("heading", { name: "Real saved session" })).toBeTruthy();
@@ -102,7 +108,7 @@ describe("session refresh and playback regressions", () => {
 
   it("preserves local edits and shows a conflict when an external commit arrives", async () => {
     const { backend, changeSaved, refresh } = await fixture();
-    render(<App backend={backend} />);
+    await renderReady(<App backend={backend} />);
     await waitFor(() => expect(backend.subscribe).toHaveBeenCalled());
     fireEvent.click(screen.getByRole("tab", { name: "Session" }));
     fireEvent.click(sessionPanel().getByRole("button", { name: "Rename" }));
@@ -117,7 +123,7 @@ describe("session refresh and playback regressions", () => {
 
   it("previews an unsaved graph without saving it and preserves it across snapshots", async () => {
     const { backend, refresh } = await fixture();
-    const view = render(<App backend={backend} />);
+    const view = await renderReady(<App backend={backend} />);
     await waitFor(() => expect(backend.listSessions).toHaveBeenCalled());
     addGain();
     const count = view.container.querySelectorAll(".react-flow__node").length;
@@ -133,7 +139,7 @@ describe("session refresh and playback regressions", () => {
 
   it("commits a changed graph, immediately reconciles its revision, and starts without losing nodes", async () => {
     const { backend, refresh } = await fixture();
-    const view = render(<App backend={backend} />);
+    const view = await renderReady(<App backend={backend} />);
     await waitFor(() => expect(backend.listSessions).toHaveBeenCalled());
     addGain();
     const count = view.container.querySelectorAll(".react-flow__node").length;
@@ -151,7 +157,7 @@ describe("session refresh and playback regressions", () => {
   it("guides users to Devices without starting a simulated session when audio is unprepared", async () => {
     const { backend } = await fixture();
     backend.refreshDiagnostics = vi.fn(createDisconnectedBackend().refreshDiagnostics);
-    render(<App backend={backend} />);
+    await renderReady(<App backend={backend} />);
     await waitFor(() => expect(backend.listSessions).toHaveBeenCalled());
     start();
     await messageBar().findByText(/No audio started. Select the speaker or headphone device/);
@@ -163,7 +169,7 @@ describe("session refresh and playback regressions", () => {
 
   it("stops an unexpected simulated runtime and never calls it audio success", async () => {
     const { backend } = await fixture();
-    render(<App backend={{ ...backend, startSession: async () => ({ sessionId: demoSession.id, state: "running", generation: 1, runtime: "fake" }) }} />);
+    await renderReady(<App backend={{ ...backend, startSession: async () => ({ sessionId: demoSession.id, state: "running", generation: 1, runtime: "fake" }) }} />);
     await waitFor(() => expect(backend.listSessions).toHaveBeenCalled());
     start();
     await messageBar().findByText(/No audio played/);

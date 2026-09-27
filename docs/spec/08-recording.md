@@ -23,6 +23,12 @@ Milestone ownership: M04 core recorder/library API; M05 UI; M07 recovery; M08 en
 
 Split requests return the old and new recording-part IDs and exact boundary frame. Paused recorders split by closing the old part and preparing the next; the next receives samples only on resume. Stopping a session finalizes all active recorders with individual results. A failed recorder does not stop other recorders or outputs.
 
+Pause closes tap admission and retires admitted callbacks on the control thread
+before draining queued pre-pause audio and changing encoder state. Callback
+admission is bounded and never waits. Resume reopens admission only after the
+encoder accepts the new frame position. Encoder transition/finalization errors
+publish `failed`; snapshots must not continue reporting `recording`.
+
 ## Crash durability target
 
 Checkpoint at most every second of encoded data, without adding realtime work. Following an ordinary process crash, a WAV recovery test shall lose at most the final two seconds and identify exact recoverable duration. Sudden power loss/storage hardware failure cannot have the same guarantee unless measured with the selected filesystem/durability policy; document that limit. Support both graceful shutdown and forced-termination test evidence.

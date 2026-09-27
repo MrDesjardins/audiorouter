@@ -55,4 +55,12 @@ describe("processor catalog presentation", () => {
     expect(processorParameterError(null, "testSignal", "frequencyHz", 440, [nodeType])).toBeNull();
     expect(processorParameterError(null, "testSignal", "frequencyHz", 1, [nodeType])).toContain("at least 20");
   });
+
+  it("enforces advertised integer steps without rejecting floating-point roundoff", () => {
+    const descriptor = { ...pitch, parameters: [{ name: "harmonics", type: "number", minimum: 1, maximum: 8, step: 1 }] };
+    expect(processorParameterError([descriptor], "pitch", "harmonics", 4)).toBeNull();
+    expect(processorParameterError([descriptor], "pitch", "harmonics", 4.1)).toContain("steps of 1");
+    const fractional = { ...pitch, parameters: [{ name: "mix", type: "number", minimum: 0, maximum: 1, step: 0.1 }] };
+    expect(processorParameterError([fractional], "pitch", "mix", 0.1 + 0.2)).toBeNull();
+  });
 });

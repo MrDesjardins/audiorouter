@@ -3,14 +3,14 @@ import { expect, test } from "@playwright/test";
 test.beforeEach(async ({ page }) => { await page.goto("/harness.html"); await expect(page.getByLabel("Signal-flow graph")).toBeVisible(); });
 
 test("every supported source, processor, and destination can be added to the live graph UI", async ({ page }) => {
-  const labels = ["Test Signal", "Audio file", "Input device", "Output device", "Gain", "Mixer", "Recorder", "Mute", "Meter", "Advanced EQ", "Compressor", "Gate", "Limiter", "Delay", "Graphic EQ", "Pitch shift"];
-  for (const label of labels) await page.locator(".canvas-library button").filter({ hasText: new RegExp(label, "i") }).first().click();
-  for (const label of labels.map((item) => item === "Input device" ? "Physical input" : item === "Output device" ? "Physical output" : item)) await expect(page.locator(".react-flow__node").filter({ hasText: label }).first(), `node ${label}`).toBeVisible();
+  const labels = ["Test Signal", "Audio file", "Input device", "Output device", "Gain", "Mixer", "Recorder", "Mute", "Meter", "Advanced EQ", "Compressor", "Gate", "Limiter", "Sync (delay)", "Graphic EQ", "Pitch shift"];
+  for (const label of labels) await page.locator(".canvas-library").getByRole("button", { name: label, exact: true }).click();
+  for (const label of labels.map((item) => item === "Input device" ? "Physical input" : item === "Output device" ? "Physical output" : item === "Sync (delay)" ? "Sync" : item)) await expect(page.locator(".react-flow__node").filter({ hasText: label }).first(), `node ${label}`).toBeVisible();
 });
 
 test("a complex multi-source processing set preserves node types and supports modifier edits", async ({ page }) => {
   for (const label of ["Input device", "Input device", "Mixer", "Gain", "Advanced EQ", "Compressor", "Limiter", "Meter", "Mute", "Output device", "Recorder"]) {
-    await page.locator(".canvas-library button").filter({ hasText: new RegExp(label, "i") }).first().click();
+    await page.locator(".canvas-library").getByRole("button", { name: label, exact: true }).click();
   }
   await page.addStyleTag({ content: ".canvas-library { display: none !important; }" });
   await expect(page.locator(".react-flow__node")).toHaveCount(14);
@@ -27,7 +27,7 @@ test("a complex multi-source processing set preserves node types and supports mo
 });
 
 test("a source can be connected to a destination by dragging output to input", async ({ page }) => {
-  for (const label of ["Test Signal", "Output device"]) await page.locator(".canvas-library button").filter({ hasText: new RegExp(label, "i") }).first().click();
+  for (const label of ["Test Signal", "Output device"]) await page.locator(".canvas-library").getByRole("button", { name: label, exact: true }).click();
   await page.addStyleTag({ content: ".canvas-library { display: none !important; }" });
   const sourceNode = page.locator(".react-flow__node").filter({ hasText: "Test Signal" }).last();
   const targetNode = page.locator(".react-flow__node").filter({ hasText: "Physical output" }).last();
@@ -46,10 +46,10 @@ test("a source can be connected to a destination by dragging output to input", a
   await moveNode(page.locator(".react-flow__node").filter({ hasText: "Headphones" }).first(), canvas.x + canvas.width - 140, canvas.y + 130);
   await moveNode(sourceNode, canvas.x + 200, canvas.y + canvas.height * .72);
   await moveNode(targetNode, canvas.x + canvas.width - 200, canvas.y + canvas.height * .72);
-  await expect(page.locator(".react-flow__edge")).toHaveCount(2);
-  const before = await page.locator(".react-flow__edge").count();
+  await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(2);
+  const before = await page.locator(".react-flow__edges .react-flow__edge").count();
   await sourceNode.locator('.react-flow__handle.source[data-debug-side="right"]').dragTo(targetNode.locator('.react-flow__handle.target[data-debug-side="left"]'));
-  await expect(page.locator(".react-flow__edge")).toHaveCount(before + 1, { timeout: 3000 });
+  await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(before + 1, { timeout: 3000 });
 });
 
 test("a second source to a physical output gets an undoable visible mixer", async ({ page }) => {
@@ -64,12 +64,12 @@ test("a second source to a physical output gets an undoable visible mixer", asyn
   await editor.getByRole("button", { name: "Add connection" }).click();
   await editor.getByRole("combobox", { name: "Source output port" }).selectOption({ label: "Test Signal 1 · out · 2ch" });
   await editor.getByRole("button", { name: "Add connection" }).click();
-  await expect(page.locator(".workbench-action-message")).toContainText("Added a Mixer so Physical input 1 and Test Signal 1 can share Headphones");
+  await expect(page.locator(".global-action-message")).toContainText("Added a Mixer so Physical input 1 and Test Signal 1 can share Headphones");
   await expect(page.locator(".react-flow__node").filter({ hasText: "Mixer" })).toBeVisible();
-  await expect(page.locator(".react-flow__edge")).toHaveCount(3);
+  await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(3);
   await page.getByRole("tab", { name: "Session" }).click();
   await page.getByRole("button", { name: "Undo" }).click();
-  await expect(page.locator(".workbench-action-message")).toContainText("Undid the last draft change");
+  await expect(page.locator(".global-action-message")).toContainText("Undid the last draft change");
   await expect(page.locator(".react-flow__node").filter({ hasText: "Mixer" })).toHaveCount(0);
 });
 
@@ -91,7 +91,7 @@ test("Properties keeps selected node controls in a full-height sidebar", async (
 
 test("a complex multi-source set can be added and its mute control responds", async ({ page }) => {
   const kinds = ["Input device", "Input device", "Mixer", "Gain", "Advanced EQ", "Compressor", "Limiter", "Meter", "Mute", "Output device", "Recorder"];
-  for (const label of kinds) await page.locator(".canvas-library button").filter({ hasText: new RegExp(label, "i") }).first().click();
+  for (const label of kinds) await page.locator(".canvas-library").getByRole("button", { name: label, exact: true }).click();
   await page.addStyleTag({ content: ".canvas-library { display: none !important; }" });
   const node = (label: string, index = -1) => {
     const matches = page.locator(".react-flow__node").filter({ hasText: label });
@@ -101,9 +101,9 @@ test("a complex multi-source set can be added and its mute control responds", as
     const outputs = source.locator('.react-flow__handle.source[data-debug-side="right"]');
     const inputs = target.locator('.react-flow__handle.target[data-debug-side="left"]');
     const count = await inputs.count();
-    const before = await page.locator(".react-flow__edge").count();
+    const before = await page.locator(".react-flow__edges .react-flow__edge").count();
     await outputs.last().dragTo(inputs.nth(Math.min(inputIndex, count - 1)));
-    await expect(page.locator(".react-flow__edge"), `${await source.innerText()} → ${await target.innerText()}`).toHaveCount(before + 1, { timeout: 1500 });
+    await expect(page.locator(".react-flow__edges .react-flow__edge"), `${await source.innerText()} → ${await target.innerText()}`).toHaveCount(before + 1, { timeout: 1500 });
   };
   const moveNode = async (target: ReturnType<typeof node>, x: number, y: number) => {
     const box = await target.boundingBox();
@@ -113,7 +113,7 @@ test("a complex multi-source set can be added and its mute control responds", as
     await page.mouse.move(x, y, { steps: 12 });
     await page.mouse.up();
   };
-  const initialEdges = await page.locator(".react-flow__edge").count();
+  const initialEdges = await page.locator(".react-flow__edges .react-flow__edge").count();
   const source = node("Physical input 1");
   const sourceTwo = node("Physical input 2");
   const mixer = node("Mixer 1");
@@ -130,7 +130,7 @@ test("a complex multi-source set can be added and its mute control responds", as
 
 test("every built-in modifier exposes working enable and bypass draft controls", async ({ page }) => {
   await page.goto("/route-harness.html");
-  const modifiers: [string, string][] = [["Gain", "gain"], ["Mute", "mute"], ["Meter", "meter"], ["Advanced EQ", "parametricEq"], ["Compressor", "compressor"], ["Gate", "gate"], ["Limiter", "limiter"], ["Delay", "delay"], ["Graphic EQ", "graphicEq"], ["Pitch shift", "pitch"]];
+  const modifiers: [string, string][] = [["Gain", "gain"], ["Mute", "mute"], ["Meter", "meter"], ["Advanced EQ", "parametricEq"], ["Compressor", "compressor"], ["Gate", "gate"], ["Limiter", "limiter"], ["Sync (delay)", "delay"], ["Graphic EQ", "graphicEq"], ["Pitch shift", "pitch"]];
   for (const [label] of modifiers) {
     await page.getByRole("tab", { name: "Tools" }).click();
     await page.locator(".tool-card").filter({ hasText: label }).first().click();
@@ -195,7 +195,7 @@ test("Audio File imports WAV media through the upload contract and exposes loop 
   await setup.getByRole("button", { name: "Add connection", exact: true }).click();
   await page.getByRole("tab", { name: "Session" }).click();
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.locator(".workbench-action-message")).toContainText(/Route saved \(revision 8\)/);
+  await expect(page.locator(".global-action-message")).toContainText(/Route saved \(revision 8\)/);
   // A filename-only update used to erase mediaId, leaving this disabled forever.
   await expect(node.getByRole("button", { name: /Play audio file/i })).toBeEnabled();
 });
@@ -233,7 +233,7 @@ test("the workspace plans and commits a connected multi-input processing route",
   await expect(page.locator(".audio-run-state")).toContainText("Audio stopped");
   const addTool = async (name: string) => {
     await page.getByRole("tab", { name: "Tools" }).click();
-    await page.locator(".tool-card").filter({ has: page.locator("strong", { hasText: new RegExp(`^${name}$`) }) }).click();
+    await page.locator(".tool-card").filter({ has: page.getByText(name, { exact: true }) }).click();
   };
   for (const name of ["Test Signal", "Input device", "Audio file", "Mixer", "Gain", "Advanced EQ", "Compressor", "Limiter", "Mute", "Meter", "Recorder", "Output device"]) {
     await addTool(name);
@@ -248,7 +248,7 @@ test("the workspace plans and commits a connected multi-input processing route",
   await expect(page.getByTestId("rf__node-endpoint-loopback-1")).toBeVisible();
   await page.getByRole("tab", { name: "Session" }).click();
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.locator(".workbench-action-message")).toContainText(/Preview planner: connect an input to an output/);
+  await expect(page.locator(".global-action-message")).toContainText(/Preview planner: connect an input to an output/);
 
   await page.getByRole("tab", { name: "Setup" }).click();
   const connect = async (sourcePort: string, destinationPort: string) => {
@@ -256,7 +256,7 @@ test("the workspace plans and commits a connected multi-input processing route",
     await editor.getByLabel("Source output port").selectOption({ label: sourcePort });
     await editor.getByLabel("Destination input port").selectOption({ label: destinationPort });
     await editor.getByRole("button", { name: "Add connection", exact: true }).click();
-    await expect(page.locator(".workbench-action-message")).toContainText(/Connection added to the draft/);
+    await expect(page.locator(".global-action-message")).toContainText(/Connection added to the draft/);
   };
   await connect("Test Signal 1 · out · 2ch", "Mixer 1 · in · 2ch");
   await connect("Physical input 1 · out · 2ch", "Mixer 1 · in · 2ch");
@@ -271,18 +271,18 @@ test("the workspace plans and commits a connected multi-input processing route",
   await connect("Mute 1 · out · 2ch", "Meter 1 · in · 2ch");
   await connect("Mute 1 · out · 2ch", "Recorder 1 · in · 2ch");
   await connect("Mute 1 · out · 2ch", "Physical output 1 · in · 2ch");
-  await expect(page.locator(".react-flow__edge")).toHaveCount(13);
+  await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(13);
   await page.screenshot({ path: `${process.env.TEMP}/audiorouter-designer-review/workspace-complex-route.png`, fullPage: false });
   await page.getByRole("tab", { name: "Session" }).click();
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.locator(".workbench-action-message")).toContainText(/Route saved \(revision 8\)/);
+  await expect(page.locator(".global-action-message")).toContainText(/Route saved \(revision 8\)/);
 });
 
 test("a simple Test Signal to Physical Output route can be planned and committed", async ({ page }) => {
   await page.goto("/route-harness.html");
   const addTool = async (name: string) => {
     await page.getByRole("tab", { name: "Tools" }).click();
-    await page.locator(".tool-card").filter({ hasText: name }).first().click();
+    await page.locator(".tool-card").filter({ has: page.getByText(name, { exact: true }) }).click();
   };
   await addTool("Test Signal");
   await addTool("Output device");
@@ -291,17 +291,17 @@ test("a simple Test Signal to Physical Output route can be planned and committed
   await setup.getByLabel("Source output port").selectOption({ label: "Test Signal 1 · out · 2ch" });
   await setup.getByLabel("Destination input port").selectOption({ label: "Physical output 1 · in · 2ch" });
   await setup.getByRole("button", { name: "Add connection", exact: true }).click();
-  await expect(page.locator(".react-flow__edge")).toHaveCount(1);
+  await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(1);
   await page.getByRole("tab", { name: "Session" }).click();
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.locator(".workbench-action-message")).toContainText(/Route saved \(revision 8\)/);
+  await expect(page.locator(".global-action-message")).toContainText(/Route saved \(revision 8\)/);
 });
 
 test("an unsaved Test Signal route can be auditioned without changing the saved revision", async ({ page }) => {
   await page.goto("/route-harness.html");
   for (const name of ["Test Signal", "Output device"]) {
     await page.getByRole("tab", { name: "Tools" }).click();
-    await page.locator(".tool-card").filter({ hasText: name }).first().click();
+    await page.locator(".tool-card").filter({ has: page.getByText(name, { exact: true }) }).click();
   }
   await page.getByRole("tab", { name: "Setup" }).click();
   const sidebar = page.locator(".right-workbench");
@@ -309,16 +309,16 @@ test("an unsaved Test Signal route can be auditioned without changing the saved 
   await sidebar.getByLabel("Destination input port").selectOption({ label: "Physical output 1 · in · 2ch" });
   await sidebar.getByRole("button", { name: "Add connection", exact: true }).click();
   await page.getByRole("button", { name: "Play Test Signal", exact: true }).click();
-  await expect(page.locator(".workbench-action-message")).toContainText(/Select the speaker or headphone device/);
+  await expect(page.locator(".global-action-message")).toContainText(/Select the speaker or headphone device/);
   await page.getByRole("tab", { name: "Devices" }).click();
   await sidebar.getByLabel("Native capture endpoint").selectOption("capture-preview");
   await sidebar.getByLabel("Native render endpoint").selectOption("render-preview");
   await page.getByRole("button", { name: "Play Test Signal", exact: true }).click();
-  await expect(page.locator(".workbench-action-message")).toContainText(/Test Signal 1 playing/);
+  await expect(page.locator(".global-action-message")).toContainText(/Test Signal 1 playing/);
   await page.getByRole("tab", { name: "Session" }).click();
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Stop Test Signal", exact: true }).click();
-  await expect(page.locator(".workbench-action-message")).toContainText("Test Signal 1 stopped.");
+  await expect(page.locator(".global-action-message")).toContainText("Test Signal 1 stopped.");
   await expect(page.locator(".audio-run-state")).toContainText("Audio running");
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
 });
@@ -327,7 +327,7 @@ test("Test Signal lifecycle refreshes preserve the committed route and explain m
   await page.goto("/route-harness.html");
   for (const name of ["Test Signal", "Output device"]) {
     await page.getByRole("tab", { name: "Tools" }).click();
-    await page.locator(".tool-card").filter({ hasText: name }).first().click();
+    await page.locator(".tool-card").filter({ has: page.getByText(name, { exact: true }) }).click();
   }
   await page.getByRole("tab", { name: "Setup" }).click();
   const sidebar = page.locator(".right-workbench");
@@ -336,37 +336,37 @@ test("Test Signal lifecycle refreshes preserve the committed route and explain m
   await sidebar.getByRole("button", { name: "Add connection", exact: true }).click();
   await page.getByRole("tab", { name: "Session" }).click();
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.locator(".workbench-action-message")).toContainText(/Route saved \(revision 8\)/);
+  await expect(page.locator(".global-action-message")).toContainText(/Route saved \(revision 8\)/);
   const ids = await page.locator(".react-flow__node").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-id")));
   expect(ids).toHaveLength(5);
   await page.getByRole("button", { name: "Play Test Signal", exact: true }).click();
-  await expect(page.locator(".workbench-action-message")).toContainText(/Select the speaker or headphone device/);
+  await expect(page.locator(".global-action-message")).toContainText(/Select the speaker or headphone device/);
   await expect(page.getByRole("tab", { name: "Session" })).toHaveAttribute("aria-selected", "true");
   await page.getByRole("tab", { name: "Devices" }).click();
   await page.screenshot({ path: `${process.env.TEMP}/audiorouter-designer-review/playback-setup-guidance.png`, fullPage: false });
   await sidebar.getByLabel("Native capture endpoint").selectOption("capture-preview");
   await sidebar.getByLabel("Native render endpoint").selectOption("render-preview");
   await page.getByRole("button", { name: "Play Test Signal", exact: true }).click();
-  await expect(page.locator(".workbench-action-message")).toContainText(/Test Signal 1 playing/);
+  await expect(page.locator(".global-action-message")).toContainText(/Test Signal 1 playing/);
   await expect(page.getByRole("button", { name: "Stop Test Signal", exact: true })).toBeEnabled();
-  const dashes = page.locator(".flow-edge-active .signal-flow-edge-dashes");
+  const dashes = page.locator(".react-flow__edges .flow-edge-active .signal-flow-edge-dashes");
   await expect(dashes).toHaveCount(1);
   const initialOffset = await dashes.evaluate((edge) => getComputedStyle(edge).strokeDashoffset);
   await expect.poll(() => dashes.evaluate((edge) => getComputedStyle(edge).strokeDashoffset)).not.toBe(initialOffset);
-  const flowStroke = page.locator(".flow-edge-active .react-flow__edge-path").first();
+  const flowStroke = page.locator(".react-flow__edges .flow-edge-active .react-flow__edge-path").first();
   const initialWidth = await flowStroke.evaluate((edge) => getComputedStyle(edge).strokeWidth);
   await expect.poll(() => flowStroke.evaluate((edge) => getComputedStyle(edge).strokeWidth)).not.toBe(initialWidth);
   await page.screenshot({ path: `${process.env.TEMP}/audiorouter-designer-review/playback-lifecycle-fixture.png`, fullPage: false });
   // Cross multiple event polls. The fixture returns new JSON objects on each refresh.
   await page.waitForTimeout(2200);
   expect(await page.locator(".react-flow__node").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-id")))).toEqual(ids);
-  await expect(page.locator(".react-flow__edge")).toHaveCount(1);
+  await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(1);
   for (const id of ids) await expect(page.getByTestId(`rf__node-${id}`)).toBeVisible();
-  await expect(page.locator(".workbench-action-message")).toContainText(/Test Signal 1 playing/);
+  await expect(page.locator(".global-action-message")).toContainText(/Test Signal 1 playing/);
   await page.getByRole("button", { name: "Stop Test Signal", exact: true }).click();
-  await expect(page.locator(".workbench-action-message")).toContainText("Test Signal 1 stopped.");
+  await expect(page.locator(".global-action-message")).toContainText("Test Signal 1 stopped.");
   await expect(page.getByRole("button", { name: "Play Test Signal", exact: true })).toBeEnabled();
-  await expect(page.locator(".flow-edge-active")).toHaveCount(0);
+  await expect(page.locator(".react-flow__edges .flow-edge-active")).toHaveCount(0);
   await expect(page.locator(".audio-run-state")).toContainText("Audio running");
 });
 
@@ -374,7 +374,7 @@ test("top Play runs the canvas route without starting the Test Signal tone", asy
   await page.goto("/route-harness.html");
   for (const name of ["Test Signal", "Output device"]) {
     await page.getByRole("tab", { name: "Tools" }).click();
-    await page.locator(".tool-card").filter({ hasText: name }).first().click();
+    await page.locator(".tool-card").filter({ has: page.getByText(name, { exact: true }) }).click();
   }
   await page.getByRole("tab", { name: "Setup" }).click();
   const sidebar = page.locator(".right-workbench");
@@ -386,10 +386,10 @@ test("top Play runs the canvas route without starting the Test Signal tone", asy
   await sidebar.getByLabel("Native render endpoint").selectOption("render-preview");
   await page.locator(".topbar").getByRole("button", { name: "Play", exact: true }).click();
   await expect(page.locator(".audio-run-state")).toContainText("Audio running");
-  await expect(page.locator(".flow-edge-active")).toHaveCount(0);
+  await expect(page.locator(".react-flow__edges .flow-edge-active")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Play Test Signal", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Play Test Signal", exact: true }).click();
-  await expect.poll(() => page.locator(".flow-edge-active").count()).toBeGreaterThan(0);
+  await expect.poll(() => page.locator(".react-flow__edges .flow-edge-active").count()).toBeGreaterThan(0);
   await page.getByRole("button", { name: "Stop Test Signal", exact: true }).click();
   await expect(page.locator(".audio-run-state")).toContainText("Audio running");
 });
@@ -400,7 +400,7 @@ test("device tools accept installed virtual endpoints while managed-driver tools
   const tools = page.locator(".right-workbench");
   const add = async (label: string) => {
     await page.getByRole("tab", { name: "Tools" }).click();
-    await tools.locator(".tool-card").filter({ hasText: new RegExp(label, "i") }).first().click();
+    await tools.locator(".tool-card").filter({ has: page.getByText(label, { exact: true }) }).click();
   };
   await add("Input device");
   await expect(page.getByTestId("rf__node-physicalInput-1")).toBeVisible();
@@ -421,10 +421,10 @@ test("device tools accept installed virtual endpoints while managed-driver tools
   };
   await setup("Physical input 1 · out · 2ch", "Gain 1 · in · 2ch");
   await setup("Gain 1 · out · 2ch", "Physical output 1 · in · 2ch");
-  await expect(page.locator(".react-flow__edge")).toHaveCount(2);
+  await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(2);
   await page.getByRole("tab", { name: "Session" }).click();
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.locator(".workbench-action-message")).toContainText(/Route saved \(revision 8\)/);
+  await expect(page.locator(".global-action-message")).toContainText(/Route saved \(revision 8\)/);
 });
 
 test("the canvas remains usable at 1280 by 720", async ({ page }) => {

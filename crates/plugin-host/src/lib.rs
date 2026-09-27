@@ -2002,12 +2002,38 @@ impl ParameterDescriptor {
     }
 }
 
-/// Control messages for the future disposable native worker. Audio payloads
-/// are bounded here for testability; the production transport may replace the
-/// samples with shared-memory handles without changing lifecycle semantics.
+/// An individually verified member of a bounded, isolated VST2 chain.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WorkerChainPlugin {
+    pub path: PathBuf,
+    pub sha256: String,
+    pub configured_roots: Vec<PathBuf>,
+}
+
+pub const MAX_PLUGIN_CHAIN_MEMBERS: usize = 8;
+
+/// Bounded control/audio messages shared by isolated worker transports.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload")]
 pub enum WorkerMessage {
+    ConfigureChain {
+        plugins: Vec<WorkerChainPlugin>,
+    },
+    ChainReady {
+        fingerprints: Vec<String>,
+    },
+    SelectInstance {
+        index: usize,
+    },
+    InstanceSelected {
+        index: usize,
+    },
+    ProcessChain {
+        frame: WorkerFrame,
+        parameters: Vec<Vec<ParameterEvent>>,
+        #[serde(default)]
+        active: Vec<bool>,
+    },
     Hello {
         protocol_version: u16,
         plugin_sha256: String,
@@ -2207,7 +2233,10 @@ impl WorkerSession {
                 self.state = WorkerSessionState::Active;
                 Ok(None)
             }
-            (WorkerSessionState::Active, WorkerMessage::Process { frame, .. }) => {
+            (
+                WorkerSessionState::Active,
+                WorkerMessage::Process { frame, .. } | WorkerMessage::ProcessChain { frame, .. },
+            ) => {
                 if frame.channels != self.channels {
                     return Err(WorkerSessionError::Frame(WorkerFrameError::InvalidChannels));
                 }
@@ -2252,7 +2281,10 @@ impl WorkerSession {
             ) => Ok(None),
             (
                 WorkerSessionState::Active,
-                WorkerMessage::DescribeParameters | WorkerMessage::DescribeEditor,
+                WorkerMessage::DescribeParameters
+                | WorkerMessage::DescribeEditor
+                | WorkerMessage::ConfigureChain { .. }
+                | WorkerMessage::SelectInstance { .. },
             ) => Ok(None),
             (
                 WorkerSessionState::Active,
@@ -2696,6 +2728,7 @@ pub struct WorkerProcess {
     shared: Option<SharedAudioTransport>,
     bus_layout: Option<WorkerAudioBusLayout>,
     diagnostic: Arc<Mutex<String>>,
+    chain_members: usize,
 }
 
 /// A worker process coupled to the bounded lifecycle policy. Successful
@@ -2785,6 +2818,129 @@ impl SupervisedWorkerProcess {
             .verify_current(configured_roots)
             .map_err(WorkerProcessError::PluginIdentity)?;
         Self::spawn_with_sample_rate(executable, identity, channels, sample_rate_hz, now)
+    }
+
+    /// Verify every member before loading a shared VST2 worker. The worker
+    /// repeats inspection before loading DLLs; no member is authorized by the
+    /// first member's identity alone. A chain has no automatic replacement.
+    pub fn spawn_verified_chain(
+        executable: impl AsRef<Path>,
+        plugins: &[WorkerChainPlugin],
+        channels: u16,
+        sample_rate_hz: u32,
+        now: Instant,
+    ) -> Result<Self, WorkerProcessError> {
+        validate_chain_plugins(plugins).map_err(WorkerProcessError::Message)?;
+        let mut identities = Vec::new();
+        for plugin in plugins {
+            let identity =
+                inspect_binary(&plugin.path, &plugin.configured_roots).map_err(|error| {
+                    WorkerProcessError::PluginIdentity(IdentityVerificationError::Inspection(error))
+                })?;
+            if identity.sha256 != plugin.sha256 || identity.format != PluginFormat::Vst2 {
+                return Err(WorkerProcessError::Protocol(
+                    "chain member identity mismatch".into(),
+                ));
+            }
+            identities.push(identity);
+        }
+        let executable =
+            validate_worker_executable(executable.as_ref()).map_err(WorkerProcessError::Spawn)?;
+        let mut supervisor = WorkerSupervisor::new();
+        supervisor.start(&identities[0], now).map_err(|error| {
+            WorkerProcessError::Protocol(format!("chain start rejected: {error:?}"))
+        })?;
+        let mut process = WorkerProcess::spawn_with_sample_rate(
+            &executable,
+            &identities[0].sha256,
+            channels,
+            sample_rate_hz,
+        )?;
+        process
+            .write(&WorkerMessage::ConfigureChain {
+                plugins: plugins.to_vec(),
+            })
+            .map_err(WorkerProcessError::Message)?;
+        match process.read().map_err(WorkerProcessError::Message)? {
+            WorkerMessage::ChainReady { fingerprints }
+                if fingerprints
+                    == plugins
+                        .iter()
+                        .map(|plugin| plugin.sha256.clone())
+                        .collect::<Vec<_>>() => {}
+            _ => {
+                return Err(WorkerProcessError::Protocol(
+                    "chain identity acknowledgement mismatch".into(),
+                ))
+            }
+        }
+        process.chain_members = plugins.len();
+        Ok(Self {
+            process,
+            supervisor,
+            executable,
+            identity: identities.remove(0),
+            channels,
+            sample_rate_hz,
+            shared_transport: false,
+            bus_layout: None,
+            plugin_path: None,
+            #[cfg(feature = "test-fixtures")]
+            fixture_mode: None,
+        })
+    }
+
+    pub fn select_instance(
+        &mut self,
+        index: usize,
+        now: Instant,
+    ) -> Result<(), WorkerProcessError> {
+        self.ensure_running()?;
+        let result = (|| {
+            self.process
+                .write(&WorkerMessage::SelectInstance { index })
+                .map_err(WorkerProcessError::Message)?;
+            match self.process.read().map_err(WorkerProcessError::Message)? {
+                WorkerMessage::InstanceSelected { index: selected } if selected == index => Ok(()),
+                _ => Err(WorkerProcessError::Protocol(
+                    "chain instance selection rejected".into(),
+                )),
+            }
+        })();
+        if result.is_err() {
+            self.record_failure(now);
+        }
+        result
+    }
+
+    pub fn process_chain(
+        &mut self,
+        frame: WorkerFrame,
+        parameters: Vec<Vec<ParameterEvent>>,
+        now: Instant,
+    ) -> Result<WorkerFrame, WorkerProcessError> {
+        self.process_chain_with_active(frame, parameters, Vec::new(), now)
+    }
+
+    fn process_chain_with_active(
+        &mut self,
+        frame: WorkerFrame,
+        parameters: Vec<Vec<ParameterEvent>>,
+        active: Vec<bool>,
+        now: Instant,
+    ) -> Result<WorkerFrame, WorkerProcessError> {
+        self.ensure_running()?;
+        let result = self.process.exchange_chain_frame(frame, parameters, active);
+        match result {
+            Ok(frame) => {
+                self.supervisor.heartbeat(now);
+                Ok(frame)
+            }
+            Err(error) => {
+                self.record_failure(now);
+                Err(error)
+            }
+        }
     }
 
     /// Spawn the native single-stream VST3 worker after revalidating the
@@ -3553,6 +3709,14 @@ impl SupervisedWorkerProcess {
     /// replacement. The current process is dropped before the replacement is
     /// attempted, so this operation never leaves two workers for one slot.
     pub fn restart(self, now: Instant) -> Result<Self, (WorkerProcessError, WorkerSupervisor)> {
+        if self.process.chain_members > 0 {
+            return Err((
+                WorkerProcessError::Protocol(
+                    "a chain requires deliberate full-chain preparation".into(),
+                ),
+                self.into_supervisor(),
+            ));
+        }
         let Self {
             mut process,
             supervisor,
@@ -3688,11 +3852,17 @@ pub struct PluginRuntimeBridge {
     failed: Arc<AtomicBool>,
     health_state: Arc<AtomicU8>,
     health_failure_count: Arc<AtomicU32>,
-    parameters: Arc<Mutex<Vec<ParameterEvent>>>,
-    requests: Arc<Mutex<std::collections::VecDeque<BridgeRequest>>>,
+    parameters: Arc<Mutex<Vec<Vec<ParameterEvent>>>>,
+    active: Arc<Vec<AtomicBool>>,
+    output_misses: Arc<AtomicU32>,
+    input_drops: Arc<AtomicU32>,
+    requests: Arc<Mutex<std::collections::VecDeque<(usize, BridgeRequest)>>>,
     worker: Option<JoinHandle<()>>,
     /// Frames per pipeline quantum, for reporting pipeline delay.
     quantum_frames: usize,
+    instance_index: usize,
+    /// Member handles keep the queue owner alive; only the owner joins it.
+    owner: Option<Arc<PluginRuntimeBridge>>,
 }
 
 /// Control request served by the plugin runtime thread between audio frames
@@ -3751,10 +3921,60 @@ impl PluginRuntimeBridge {
     /// Start a worker-owned bridge with a bounded number of preallocated
     /// quanta. The worker is already verified and prepared by the caller.
     pub fn start(
+        worker: SupervisedWorkerProcess,
+        channels: usize,
+        frames: usize,
+        depth: usize,
+    ) -> Result<Arc<Self>, PluginRuntimeBridgeError> {
+        if worker.process.chain_members > 0 {
+            return Err(PluginRuntimeBridgeError::InvalidDepth);
+        }
+        Self::start_internal(worker, channels, frames, depth, 1)
+    }
+
+    pub fn start_chain(
+        worker: SupervisedWorkerProcess,
+        channels: usize,
+        frames: usize,
+        depth: usize,
+        members: usize,
+    ) -> Result<Vec<Arc<Self>>, PluginRuntimeBridgeError> {
+        if !(2..=MAX_PLUGIN_CHAIN_MEMBERS).contains(&members)
+            || worker.process.chain_members != members
+        {
+            return Err(PluginRuntimeBridgeError::InvalidDepth);
+        }
+        let head = Self::start_internal(worker, channels, frames, depth, members)?;
+        let mut bridges = vec![Arc::clone(&head)];
+        for instance_index in 1..members {
+            bridges.push(Arc::new(Self {
+                free: Arc::clone(&head.free),
+                input: Arc::clone(&head.input),
+                output: Arc::clone(&head.output),
+                running: Arc::clone(&head.running),
+                failed: Arc::clone(&head.failed),
+                health_state: Arc::clone(&head.health_state),
+                health_failure_count: Arc::clone(&head.health_failure_count),
+                parameters: Arc::clone(&head.parameters),
+                active: Arc::clone(&head.active),
+                output_misses: Arc::clone(&head.output_misses),
+                input_drops: Arc::clone(&head.input_drops),
+                requests: Arc::clone(&head.requests),
+                worker: None,
+                quantum_frames: frames,
+                instance_index,
+                owner: Some(Arc::clone(&head)),
+            }));
+        }
+        Ok(bridges)
+    }
+
+    fn start_internal(
         mut worker: SupervisedWorkerProcess,
         channels: usize,
         frames: usize,
         depth: usize,
+        members: usize,
     ) -> Result<Arc<Self>, PluginRuntimeBridgeError> {
         if !matches!(channels, 1 | 2) {
             return Err(PluginRuntimeBridgeError::InvalidChannels);
@@ -3779,8 +3999,17 @@ impl PluginRuntimeBridge {
         let failed = Arc::new(AtomicBool::new(false));
         let health_state = Arc::new(AtomicU8::new(encode_worker_state(worker.state())));
         let health_failure_count = Arc::new(AtomicU32::new(0));
-        let parameters = Arc::new(Mutex::new(Vec::new()));
-        let requests = Arc::new(Mutex::new(std::collections::VecDeque::<BridgeRequest>::new()));
+        let parameters = Arc::new(Mutex::new(vec![Vec::new(); members]));
+        let active = Arc::new(
+            (0..members)
+                .map(|_| AtomicBool::new(true))
+                .collect::<Vec<_>>(),
+        );
+        let thread_active = Arc::clone(&active);
+        let requests = Arc::new(Mutex::new(std::collections::VecDeque::<(
+            usize,
+            BridgeRequest,
+        )>::new()));
         let thread_requests = Arc::clone(&requests);
         let thread_running = Arc::clone(&running);
         let thread_failed = Arc::clone(&failed);
@@ -3803,8 +4032,30 @@ impl PluginRuntimeBridge {
                         .try_lock()
                         .ok()
                         .and_then(|mut queue| queue.pop_front());
-                    if let Some(request) = pending {
+                    if let Some((index, request)) = pending {
                         let now = Instant::now();
+                        if members > 1 {
+                            if let Err(error) = worker.select_instance(index, now) {
+                                let error = format!("{error:?}");
+                                match request {
+                                    BridgeRequest::SaveState(reply) => {
+                                        let _ = reply.send(Err(error));
+                                    }
+                                    BridgeRequest::OpenEditor(_, reply)
+                                    | BridgeRequest::CloseEditor(reply) => {
+                                        let _ = reply.send(Err(error));
+                                    }
+                                }
+                                thread_failed.store(true, Ordering::Release);
+                                thread_health_state
+                                    .store(encode_worker_state(worker.state()), Ordering::Release);
+                                thread_health_failure_count.store(
+                                    worker.failure_diagnostic().map_or(1, |d| d.failure_count),
+                                    Ordering::Release,
+                                );
+                                break;
+                            }
+                        }
                         match request {
                             BridgeRequest::SaveState(reply) => {
                                 let _ = reply.send(worker.save_state(now).map_err(|error| format!("{error:?}")));
@@ -3816,10 +4067,22 @@ impl PluginRuntimeBridge {
                                 let _ = reply.send(worker.close_editor(now).map_err(|error| format!("{error:?}")));
                             }
                         }
+                        thread_health_state
+                            .store(encode_worker_state(worker.state()), Ordering::Release);
+                        thread_health_failure_count.store(
+                            worker.failure_diagnostic().map_or(0, |d| d.failure_count),
+                            Ordering::Release,
+                        );
+                        if worker.state() != WorkerState::Running {
+                            thread_failed.store(true, Ordering::Release);
+                            break;
+                        }
                         continue;
                     }
                     let Some(mut quantum) = thread_input.pop() else {
-                        std::thread::yield_now();
+                        // This is the background owner, not the callback.
+                        // Avoid burning a CPU core while no graph is feeding it.
+                        std::thread::park_timeout(Duration::from_micros(100));
                         continue;
                     };
                     if quantum.block.copy_to_interleaved(&mut samples).is_err() {
@@ -3855,7 +4118,22 @@ impl PluginRuntimeBridge {
                         .map(|value| value.clone())
                         .unwrap_or_default();
                     let mut should_stop = false;
-                    match worker.process(frame, parameters, Instant::now()) {
+                    let result = if members > 1 {
+                        let active = thread_active
+                            .iter()
+                            .map(|flag| flag.load(Ordering::Acquire))
+                            .collect();
+                        worker.process_chain_with_active(frame, parameters, active, Instant::now())
+                    } else if !thread_active[0].load(Ordering::Acquire) {
+                        Ok(frame)
+                    } else {
+                        worker.process(
+                            frame,
+                            parameters.into_iter().next().unwrap_or_default(),
+                            Instant::now(),
+                        )
+                    };
+                    match result {
                         Ok(result)
                             if result.channels == channels as u16
                                 && result.frame_count() == frames
@@ -3905,9 +4183,14 @@ impl PluginRuntimeBridge {
             health_state,
             health_failure_count,
             parameters,
+            active,
+            output_misses: Arc::new(AtomicU32::new(0)),
+            input_drops: Arc::new(AtomicU32::new(0)),
             requests,
             worker: Some(worker_thread),
             quantum_frames: frames,
+            instance_index: 0,
+            owner: None,
         }))
     }
 
@@ -3915,15 +4198,38 @@ impl PluginRuntimeBridge {
         self.failed.load(Ordering::Acquire)
     }
 
+    /// Control-plane change; the queue owner reads it between complete frames.
+    pub fn set_processing_active(&self, active: bool) {
+        self.active[self.instance_index].store(active, Ordering::Release);
+    }
+
+    /// Bounded callback counters; output misses include startup warm-up.
+    pub fn continuity_counts(&self) -> (u32, u32) {
+        (
+            self.output_misses.load(Ordering::Relaxed),
+            self.input_drops.load(Ordering::Relaxed),
+        )
+    }
+
+    /// Control-plane identity of the shared queue/process, without IPC.
+    pub fn shares_worker_with(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.running, &other.running)
+    }
+
     fn request<T>(
         &self,
         make: impl FnOnce(std::sync::mpsc::Sender<Result<T, String>>) -> BridgeRequest,
     ) -> Result<T, String> {
         let (reply, receiver) = std::sync::mpsc::channel();
-        self.requests
+        let mut requests = self
+            .requests
             .lock()
-            .map_err(|_| "plugin runtime is unavailable".to_string())?
-            .push_back(make(reply));
+            .map_err(|_| "plugin runtime is unavailable".to_string())?;
+        if requests.len() >= 32 || self.failed() {
+            return Err("plugin runtime is unavailable or busy".into());
+        }
+        requests.push_back((self.instance_index, make(reply)));
+        drop(requests);
         receiver
             .recv_timeout(BRIDGE_REQUEST_TIMEOUT)
             .map_err(|_| "plugin runtime did not respond".to_string())?
@@ -3976,15 +4282,15 @@ impl PluginRuntimeBridge {
             || parameters.iter().any(|event| {
                 !event.normalized_value.is_finite()
                     || !(0.0..=1.0).contains(&event.normalized_value)
-                    || event.sample_offset >= MAX_WORKER_FRAMES
+                    || event.sample_offset >= self.quantum_frames
             })
         {
             return Err(PluginRuntimeBridgeError::InvalidParameters);
         }
-        *self
-            .parameters
+        self.parameters
             .lock()
-            .map_err(|_| PluginRuntimeBridgeError::InvalidParameters)? = parameters;
+            .map_err(|_| PluginRuntimeBridgeError::InvalidParameters)?[self.instance_index] =
+            parameters;
         Ok(())
     }
 }
@@ -3993,6 +4299,9 @@ impl audiorouter_engine::RealtimePluginProcessor for PluginRuntimeBridge {
     /// Quanta handed to the worker and not yet returned: the audio leaving
     /// this stage is that many quanta older than the audio entering it.
     fn latency_samples(&self) -> u32 {
+        if self.instance_index != 0 {
+            return 0;
+        }
         let in_flight = self.free.capacity().saturating_sub(self.free.len());
         u32::try_from(in_flight * self.quantum_frames).unwrap_or(u32::MAX)
     }
@@ -4002,7 +4311,33 @@ impl audiorouter_engine::RealtimePluginProcessor for PluginRuntimeBridge {
             block.clear();
             return;
         }
-        if let Some(mut quantum) = self.free.pop() {
+        // The first graph stage performs the whole chain's handoff. Later
+        // members retain their node health/control identity with no new queue.
+        if self.instance_index != 0 {
+            return;
+        }
+        // A completed block is also reusable storage for the next input.
+        // Reuse it before consulting the free pool: a full pipeline may hold
+        // every slot in output, which must not discard the current input.
+        if let Some(mut quantum) = self.output.pop() {
+            if quantum.block.channels() != block.channels()
+                || quantum.block.frames() != block.frames()
+            {
+                let _ = self.free.push(quantum);
+                block.clear();
+                return;
+            }
+            std::mem::swap(&mut quantum.block, block);
+            if let Err(quantum) = self.input.push(quantum) {
+                let _ = self.free.push(quantum);
+                block.clear();
+            }
+        } else if let Some(mut quantum) = self.free.pop() {
+            let _ = self
+                .output_misses
+                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+                    Some(n.saturating_add(1))
+                });
             if quantum.block.copy_from(block).is_ok() {
                 if let Err(quantum) = self.input.push(quantum) {
                     let _ = self.free.push(quantum);
@@ -4012,15 +4347,22 @@ impl audiorouter_engine::RealtimePluginProcessor for PluginRuntimeBridge {
                 let _ = self.free.push(quantum);
                 block.clear();
             }
+            // No completed result was available for this quantum.
+            block.clear();
         } else {
+            let _ = self
+                .output_misses
+                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+                    Some(n.saturating_add(1))
+                });
+            let _ = self
+                .input_drops
+                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+                    Some(n.saturating_add(1))
+                });
             block.clear();
         }
-        if let Some(quantum) = self.output.pop() {
-            if block.copy_from(&quantum.block).is_err() {
-                block.clear();
-            }
-            let _ = self.free.push(quantum);
-        } else {
+        if self.failed.load(Ordering::Acquire) {
             block.clear();
         }
     }
@@ -4045,6 +4387,9 @@ impl audiorouter_engine::RealtimePluginProcessor for PluginRuntimeBridge {
 
 impl Drop for PluginRuntimeBridge {
     fn drop(&mut self) {
+        if self.owner.is_some() {
+            return;
+        }
         self.running.store(false, Ordering::Release);
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
@@ -4053,6 +4398,36 @@ impl Drop for PluginRuntimeBridge {
 }
 
 impl WorkerProcess {
+    fn exchange_chain_frame(
+        &mut self,
+        frame: WorkerFrame,
+        parameters: Vec<Vec<ParameterEvent>>,
+        active: Vec<bool>,
+    ) -> Result<WorkerFrame, WorkerProcessError> {
+        if frame.channels != self.channels {
+            return Err(WorkerProcessError::Protocol(
+                "chain channel mismatch".into(),
+            ));
+        }
+        self.write(&WorkerMessage::ProcessChain {
+            frame: frame.clone(),
+            parameters,
+            active,
+        })
+        .map_err(WorkerProcessError::Message)?;
+        match self.read().map_err(WorkerProcessError::Message)? {
+            WorkerMessage::Processed { frame: processed }
+                if processed_frame_matches(&frame, &processed) =>
+            {
+                Ok(processed)
+            }
+            WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
+            _ => Err(WorkerProcessError::Protocol(
+                "unexpected chain response".into(),
+            )),
+        }
+    }
+
     pub fn spawn(
         executable: impl AsRef<Path>,
         plugin_sha256: &str,
@@ -4502,6 +4877,7 @@ impl WorkerProcess {
             shared: shared.take(),
             bus_layout: bus_layout.cloned(),
             diagnostic,
+            chain_members: 0,
         };
         let hello = process.read().map_err(WorkerProcessError::Message)?;
         match (process.bus_layout.as_ref(), hello) {
@@ -5014,6 +5390,43 @@ impl Drop for WorkerProcess {
 
 fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageError> {
     match message {
+        WorkerMessage::ConfigureChain { plugins } => {
+            validate_chain_plugins(plugins)?;
+        }
+        WorkerMessage::ChainReady { fingerprints } => {
+            if !(2..=MAX_PLUGIN_CHAIN_MEMBERS).contains(&fingerprints.len())
+                || fingerprints.iter().any(|hash| !is_sha256(hash))
+            {
+                return Err(WorkerMessageError::InvalidPluginHash);
+            }
+        }
+        WorkerMessage::SelectInstance { index } | WorkerMessage::InstanceSelected { index } => {
+            if *index >= MAX_PLUGIN_CHAIN_MEMBERS {
+                return Err(WorkerMessageError::InvalidState);
+            }
+        }
+        WorkerMessage::ProcessChain {
+            frame,
+            parameters,
+            active,
+        } => {
+            WorkerFrame::new(
+                frame.sequence,
+                frame.deadline_tick,
+                frame.channels,
+                frame.samples.clone(),
+            )
+            .map_err(WorkerMessageError::InvalidFrame)?;
+            if !(2..=MAX_PLUGIN_CHAIN_MEMBERS).contains(&parameters.len()) {
+                return Err(WorkerMessageError::InvalidState);
+            }
+            if !active.is_empty() && active.len() != parameters.len() {
+                return Err(WorkerMessageError::InvalidState);
+            }
+            for events in parameters {
+                validate_parameter_events_for_frame(events, frame.frame_count())?;
+            }
+        }
         WorkerMessage::Hello {
             protocol_version,
             plugin_sha256,
@@ -5145,6 +5558,25 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
             return Err(WorkerMessageError::InvalidEditor);
         }
         _ => {}
+    }
+    Ok(())
+}
+
+fn validate_chain_plugins(plugins: &[WorkerChainPlugin]) -> Result<(), WorkerMessageError> {
+    if !(2..=MAX_PLUGIN_CHAIN_MEMBERS).contains(&plugins.len())
+        || plugins.iter().any(|plugin| {
+            !is_sha256(&plugin.sha256)
+                || !plugin.path.is_absolute()
+                || plugin.path.as_os_str().len() > 4096
+                || plugin.configured_roots.is_empty()
+                || plugin.configured_roots.len() > 16
+                || plugin
+                    .configured_roots
+                    .iter()
+                    .any(|root| !root.is_absolute() || root.as_os_str().len() > 4096)
+        })
+    {
+        return Err(WorkerMessageError::InvalidState);
     }
     Ok(())
 }
@@ -6071,6 +6503,108 @@ impl Default for WorkerFrameGuard {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn chain_protocol_bounds_members_parameters_and_instance_selection() {
+        let frame = WorkerFrame::new(1, 100, 1, vec![0.2; 128]).unwrap();
+        let message = WorkerMessage::ProcessChain {
+            frame: frame.clone(),
+            parameters: vec![vec![], vec![]],
+            active: vec![],
+        };
+        assert_eq!(
+            decode_worker_message(&encode_worker_message(&message).unwrap()).unwrap(),
+            message
+        );
+        for count in [0, 1, MAX_PLUGIN_CHAIN_MEMBERS + 1] {
+            assert!(encode_worker_message(&WorkerMessage::ProcessChain {
+                frame: frame.clone(),
+                parameters: vec![vec![]; count],
+                active: vec![],
+            })
+            .is_err());
+        }
+        let invalid = ParameterEvent {
+            parameter_id: 0,
+            normalized_value: 0.5,
+            sample_offset: 128,
+        };
+        assert!(encode_worker_message(&WorkerMessage::ProcessChain {
+            frame,
+            parameters: vec![vec![], vec![invalid]],
+            active: vec![],
+        })
+        .is_err());
+        assert!(encode_worker_message(&WorkerMessage::SelectInstance {
+            index: MAX_PLUGIN_CHAIN_MEMBERS
+        })
+        .is_err());
+        let plugin = WorkerChainPlugin {
+            path: std::env::current_dir().unwrap().join("effect.dll"),
+            sha256: "a".repeat(64),
+            configured_roots: vec![std::env::current_dir().unwrap()],
+        };
+        assert!(encode_worker_message(&WorkerMessage::ConfigureChain {
+            plugins: vec![plugin.clone(); 2]
+        })
+        .is_ok());
+        let mut relative = plugin.clone();
+        relative.path = PathBuf::from("effect.dll");
+        assert!(encode_worker_message(&WorkerMessage::ConfigureChain {
+            plugins: vec![plugin, relative]
+        })
+        .is_err());
+    }
+
+    #[test]
+    fn chain_active_masks_roundtrip_and_reject_mismatched_members() {
+        let unchecked_frame = |value: serde_json::Value| {
+            let payload = serde_json::to_vec(&value).unwrap();
+            let mut bytes = (payload.len() as u32).to_le_bytes().to_vec();
+            bytes.extend(payload);
+            bytes
+        };
+        let frame = WorkerFrame::new(1, 100, 2, vec![0.2; 256]).unwrap();
+        for active in [
+            vec![],
+            vec![true, true],
+            vec![false, true],
+            vec![false, false],
+        ] {
+            let message = WorkerMessage::ProcessChain {
+                frame: frame.clone(),
+                parameters: vec![vec![], vec![]],
+                active,
+            };
+            assert_eq!(
+                decode_worker_message(&encode_worker_message(&message).unwrap()).unwrap(),
+                message
+            );
+        }
+        for active in [vec![true], vec![true; MAX_PLUGIN_CHAIN_MEMBERS + 1]] {
+            let message = WorkerMessage::ProcessChain {
+                frame: frame.clone(),
+                parameters: vec![vec![], vec![]],
+                active,
+            };
+            assert!(encode_worker_message(&message).is_err());
+            assert!(matches!(
+                decode_worker_message(&unchecked_frame(serde_json::to_value(&message).unwrap())),
+                Err(WorkerMessageError::InvalidState)
+            ));
+        }
+        let message = WorkerMessage::ProcessChain {
+            frame,
+            parameters: vec![vec![], vec![]],
+            active: vec![],
+        };
+        let mut old_message = serde_json::to_value(&message).unwrap();
+        old_message.as_object_mut().unwrap().remove("active");
+        assert_eq!(
+            decode_worker_message(&unchecked_frame(old_message)).unwrap(),
+            message
+        );
+    }
     use std::io::{Cursor, Read};
     use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
     use std::time::{SystemTime, UNIX_EPOCH};

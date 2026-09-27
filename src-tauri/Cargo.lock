@@ -153,7 +153,9 @@ dependencies = [
 name = "audiorouter-dsp"
 version = "0.1.0"
 dependencies = [
- "pitch_shift",
+ "bytemuck",
+ "microfft",
+ "num-complex",
 ]
 
 [[package]]
@@ -2203,12 +2205,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "micromath"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3c8dda44ff03a2f238717214da50f65d5a53b45cd213a7370424ffdb6fae815"
-
-[[package]]
 name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2719,18 +2715,6 @@ name = "pin-project-lite"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
-
-[[package]]
-name = "pitch_shift"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0768e7cebce3deed6b8249e3c636f65cdb791e235258694b6d12f71f036ce9d3"
-dependencies = [
- "bytemuck",
- "microfft",
- "micromath",
- "num-complex",
-]
 
 [[package]]
 name = "pkg-config"

@@ -85,17 +85,24 @@ fn run() -> Result<(), String> {
     }
     let _fixture_mode = fixture_mode;
     #[cfg(windows)]
-    let mut vst2_plugin = plugin_path
+    let mut vst2_plugins: Vec<Vst2Library> = plugin_path
         .clone()
         .map(|path| Vst2Library::load(&path))
         .transpose()
-        .map_err(|error| format!("VST2 load failed: {error:?}"))?;
+        .map_err(|error| format!("VST2 load failed: {error:?}"))?
+        .into_iter()
+        .collect();
     #[cfg(windows)]
-    let vst2_editor = plugin_path
+    let mut vst2_editors: Vec<Vst2EditorThread> = plugin_path
         .as_deref()
         .map(Vst2EditorThread::spawn)
         .transpose()
-        .map_err(|error| format!("VST2 editor thread failed: {error:?}"))?;
+        .map_err(|error| format!("VST2 editor thread failed: {error:?}"))?
+        .into_iter()
+        .collect();
+    let mut selected_instance = 0;
+    let mut chain_configured = false;
+    let initial_plugin_sha256 = plugin_sha256.clone();
     #[cfg(not(windows))]
     if plugin_path.is_some() {
         return Err("VST2 loading requires Windows".into());
@@ -165,6 +172,101 @@ fn run() -> Result<(), String> {
             return Err(format!("worker session rejected message: {error:?}"));
         }
         match message {
+            WorkerMessage::ConfigureChain { plugins } => {
+                if chain_configured
+                    || plugin_path.is_some()
+                    || shared.is_some()
+                    || plugins[0].sha256 != initial_plugin_sha256
+                {
+                    return Err("chain configuration is allowed only once on a fresh worker".into());
+                }
+                #[cfg(windows)]
+                {
+                    // All identities are verified before any DLL is loaded.
+                    for member in &plugins {
+                        let identity = audiorouter_plugin_host::inspect_binary(
+                            &member.path,
+                            &member.configured_roots,
+                        )
+                        .map_err(|error| format!("chain identity inspection failed: {error:?}"))?;
+                        if identity.sha256 != member.sha256
+                            || identity.format != audiorouter_plugin_host::PluginFormat::Vst2
+                        {
+                            return Err("chain identity changed or is not VST2".into());
+                        }
+                    }
+                    for member in &plugins {
+                        vst2_plugins.push(
+                            Vst2Library::load(&member.path)
+                                .map_err(|error| format!("chain member load failed: {error:?}"))?,
+                        );
+                        vst2_editors.push(
+                            Vst2EditorThread::spawn(&member.path).map_err(|error| {
+                                format!("chain editor thread failed: {error:?}")
+                            })?,
+                        );
+                    }
+                }
+                #[cfg(not(windows))]
+                return Err("VST2 chain loading requires Windows".into());
+                chain_configured = true;
+                write_worker_message(
+                    &mut writer,
+                    &WorkerMessage::ChainReady {
+                        fingerprints: plugins.iter().map(|member| member.sha256.clone()).collect(),
+                    },
+                )
+                .map_err(|error| format!("chain acknowledgement failed: {error:?}"))?;
+            }
+            WorkerMessage::SelectInstance { index } => {
+                #[cfg(windows)]
+                if !chain_configured || index >= vst2_plugins.len() {
+                    return Err("invalid chain instance".into());
+                }
+                #[cfg(not(windows))]
+                return Err("chain instance unavailable".into());
+                selected_instance = index;
+                write_worker_message(&mut writer, &WorkerMessage::InstanceSelected { index })
+                    .map_err(|error| format!("chain selection write failed: {error:?}"))?;
+            }
+            WorkerMessage::ProcessChain {
+                mut frame,
+                parameters,
+                active,
+            } => {
+                #[cfg(windows)]
+                {
+                    if !chain_configured
+                        || frame.channels != channels
+                        || parameters.len() != vst2_plugins.len()
+                    {
+                        return Err("chain shape mismatch".into());
+                    }
+                    for (index, (plugin, events)) in
+                        vst2_plugins.iter_mut().zip(&parameters).enumerate()
+                    {
+                        if active.get(index) == Some(&false) {
+                            continue;
+                        }
+                        if let Err(error) =
+                            process_vst2_frame(plugin, &mut frame, events, sample_rate_hz)
+                        {
+                            write_worker_message(
+                                &mut writer,
+                                &WorkerMessage::Failure {
+                                    code: format!("chainMember{index}:{error}"),
+                                },
+                            )
+                            .map_err(|error| format!("chain failure write failed: {error:?}"))?;
+                            return Err(format!("chain member {index} failed"));
+                        }
+                    }
+                }
+                #[cfg(not(windows))]
+                return Err("chain processing requires Windows".into());
+                write_worker_message(&mut writer, &WorkerMessage::Processed { frame })
+                    .map_err(|error| format!("chain output write failed: {error:?}"))?;
+            }
             WorkerMessage::ProcessShared {
                 sequence,
                 deadline_tick,
@@ -203,6 +305,9 @@ fn run() -> Result<(), String> {
                 mut frame,
                 parameters,
             } => {
+                if chain_configured {
+                    return Err("configured chains require ProcessChain".into());
+                }
                 if frame.channels != channels {
                     write_worker_message(
                         &mut writer,
@@ -214,7 +319,7 @@ fn run() -> Result<(), String> {
                     return Err("process frame channel count does not match Hello".into());
                 }
                 #[cfg(windows)]
-                if let Some(plugin) = vst2_plugin.as_mut() {
+                if let Some(plugin) = vst2_plugins.get_mut(selected_instance) {
                     if let Err(error) =
                         process_vst2_frame(plugin, &mut frame, &parameters, sample_rate_hz)
                     {
@@ -244,7 +349,7 @@ fn run() -> Result<(), String> {
             }
             WorkerMessage::Latency(latency) => {
                 #[cfg(windows)]
-                let latency = if let Some(plugin) = vst2_plugin.as_ref() {
+                let latency = if let Some(plugin) = vst2_plugins.get(selected_instance) {
                     plugin
                         .latency(latency.sample_rate_hz)
                         .map_err(|error| format!("VST2 latency query failed: {error:?}"))?
@@ -287,7 +392,7 @@ fn run() -> Result<(), String> {
                     }
                 };
                 #[cfg(windows)]
-                let descriptors = if let Some(plugin) = vst2_plugin.as_mut() {
+                let descriptors = if let Some(plugin) = vst2_plugins.get_mut(selected_instance) {
                     plugin
                         .parameter_descriptors()
                         .map_err(|error| format!("VST2 parameter description failed: {error:?}"))?
@@ -301,7 +406,7 @@ fn run() -> Result<(), String> {
             }
             WorkerMessage::DescribeEditor => {
                 #[cfg(windows)]
-                let descriptor = if let Some(plugin) = vst2_plugin.as_mut() {
+                let descriptor = if let Some(plugin) = vst2_plugins.get_mut(selected_instance) {
                     plugin
                         .editor_descriptor()
                         .map_err(|error| format!("VST2 editor description failed: {error:?}"))?
@@ -321,14 +426,14 @@ fn run() -> Result<(), String> {
                 authorization_token,
             } => {
                 #[cfg(windows)]
-                let result = match vst2_editor.as_ref() {
+                let result = match vst2_editors.get(selected_instance) {
                     Some(editor) => usize::try_from(parent_window)
                         .map_err(|_| "invalid parent window".to_string())
                         .and_then(|parent| {
                             // The editor is a separate instance: start it from
                             // the processing instance's current settings.
-                            let current = vst2_plugin
-                                .as_mut()
+                            let current = vst2_plugins
+                                .get_mut(selected_instance)
                                 .and_then(|plugin| plugin.save_state().ok());
                             editor.open(parent, parent_process_id, &authorization_token, current)
                         }),
@@ -352,15 +457,23 @@ fn run() -> Result<(), String> {
             }
             WorkerMessage::EditorClose => {
                 #[cfg(windows)]
-                let result = vst2_editor
-                    .as_ref()
-                    .map_or_else(|| Err("editorUnavailable".to_string()), Vst2EditorThread::close)
-                    .map(|state| {
+                let result = vst2_editors
+                    .get(selected_instance)
+                    .map_or_else(
+                        || Err("editorUnavailable".to_string()),
+                        Vst2EditorThread::close,
+                    )
+                    .and_then(|state| {
                         // Apply the edits made in the editor to the instance
                         // that processes audio.
-                        if let (Some(state), Some(plugin)) = (state, vst2_plugin.as_mut()) {
-                            let _ = plugin.restore_state(&state);
+                        if let (Some(state), Some(plugin)) =
+                            (state, vst2_plugins.get_mut(selected_instance))
+                        {
+                            plugin.restore_state(&state).map_err(|error| {
+                                format!("editor state restore failed: {error:?}")
+                            })?;
                         }
+                        Ok(())
                     });
                 #[cfg(not(windows))]
                 let result: Result<(), String> = Err("editorUnavailable".into());
@@ -377,7 +490,7 @@ fn run() -> Result<(), String> {
             }
             WorkerMessage::StateRestore { asset } => {
                 #[cfg(windows)]
-                if let Some(plugin) = vst2_plugin.as_mut() {
+                if let Some(plugin) = vst2_plugins.get_mut(selected_instance) {
                     if let Err(error) = plugin.restore_state(&asset.bytes) {
                         write_worker_message(
                             &mut writer,
@@ -397,7 +510,7 @@ fn run() -> Result<(), String> {
             }
             WorkerMessage::StateSave => {
                 #[cfg(windows)]
-                let plugin_asset = if let Some(plugin) = vst2_plugin.as_mut() {
+                let plugin_asset = if let Some(plugin) = vst2_plugins.get_mut(selected_instance) {
                     match plugin.save_state() {
                         Ok(bytes) => Some(
                             PluginStateAsset::new(1, bytes)

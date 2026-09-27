@@ -4,3 +4,4 @@
 /target/
 **/target/
 /third_party/
+/ui/dist-review-*/

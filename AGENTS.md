@@ -60,6 +60,20 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-09-26 — Plain Cargo desktop release builds require custom-protocol.**
+  Evidence: [feature confidence qualification](docs/plans/active/evidence/2026-09-26-feature-confidence.md).
+  Scope: release shell builds performed without the Tauri CLI. Consequence:
+  use `cargo build --manifest-path src-tauri/Cargo.toml --release --features
+  custom-protocol`; release optimization alone still selects the development
+  URL. Confirm the current asset bundle is embedded before handing off the exe.
+
+- **2026-09-26 — Plain Cargo desktop release builds require custom-protocol.**
+  Evidence: [feature confidence qualification](docs/plans/active/evidence/2026-09-26-feature-confidence.md).
+  Scope: release shell builds performed without the Tauri CLI. Consequence:
+  use `cargo build --manifest-path src-tauri/Cargo.toml --release --features
+  custom-protocol`; release optimization alone still selects the development
+  URL. Confirm the current asset bundle is embedded before handing off the exe.
+
 - **2026-09-26 — Qualify plugin routes past Start, with the node shapes the UI creates.**
   Evidence: [active plan, attended defects 1–2](docs/plans/active/current.md).
   Scope: native routes containing VST plugins. Consequence: a clean CLI

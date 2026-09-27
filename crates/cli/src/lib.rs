@@ -2998,7 +2998,38 @@ mod tests {
         );
         let processors: Value =
             serde_json::from_str(&run(["processors", "list", "--json"]).unwrap()).unwrap();
-        assert_eq!(processors.as_array().unwrap().len(), 7);
+        let mut processor_ids = processors
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|processor| processor["id"].as_str().unwrap())
+            .collect::<Vec<_>>();
+        processor_ids.sort_unstable();
+        assert_eq!(
+            processor_ids,
+            [
+                "bassTreble",
+                "compressor",
+                "declick",
+                "dehum",
+                "denoise",
+                "firFilter",
+                "gate",
+                "graphicEq",
+                "inputSwitch",
+                "limiter",
+                "parametricEq",
+                "pitch",
+                "speechDenoise",
+                "timeShift",
+                "volume",
+                "delay"
+            ]
+            .into_iter()
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>()
+        );
         assert!(processors
             .as_array()
             .unwrap()

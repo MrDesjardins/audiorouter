@@ -2953,6 +2953,8 @@ pub struct CompiledMixerFanoutGraph {
     input_node_ids: Vec<audiorouter_domain::EntityId>,
     output_matrices: Vec<Vec<f32>>,
     output_node_ids: Vec<audiorouter_domain::EntityId>,
+    input_meters: Vec<BlockMeter>,
+    output_meters: Vec<BlockMeter>,
 }
 
 /// A prepared bounded fan-out graph. One enabled source feeds up to eight
@@ -3174,6 +3176,7 @@ impl CompiledMixerFanoutGraph {
             _ => (1.0, 1.0),
         };
         for (index, (source, chain)) in sources.iter().zip(&self.input_chains).enumerate() {
+            self.input_meters[index].observe(source);
             let (start_gain, end_gain) = gains(index);
             match chain {
                 None => self.mixer.mix_input_ramped(mixer_scratch, index, source, start_gain, end_gain)?,
@@ -3224,6 +3227,23 @@ impl CompiledMixerFanoutGraph {
     /// consumers without guessing from endpoint enumeration order.
     pub fn output_node_ids(&self) -> &[audiorouter_domain::EntityId] {
         &self.output_node_ids
+    }
+
+    /// Actual prepared source, tool and mapped destination levels.
+    pub fn meter_snapshot_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<BlockMeterSnapshot> {
+        if let Some(index) = self.input_node_ids.iter().position(|id| id == node_id) {
+            return Some(self.input_meters[index].snapshot());
+        }
+        if let Some(index) = self.output_node_ids.iter().position(|id| id == node_id) {
+            return Some(self.output_meters[index].snapshot());
+        }
+        self.processing_graph
+            .iter()
+            .chain(self.input_chains.iter().flatten().map(|chain| &chain.graph))
+            .find_map(|graph| graph.meter_snapshot_for_node(node_id))
     }
 
     /// Read processor telemetry for a node in the shared post-mixer chain
@@ -3315,11 +3335,16 @@ impl CompiledMixerFanoutGraph {
             processing_graph.process(mixer_scratch);
         }
         self.privacy_mute.apply(mixer_scratch);
-        for (destination, matrix) in destinations.iter_mut().zip(&self.output_matrices) {
+        for (index, (destination, matrix)) in destinations
+            .iter_mut()
+            .zip(&self.output_matrices)
+            .enumerate()
+        {
             destination
                 .map_from(mixer_scratch, matrix)
                 .map_err(MixerFanoutError::Block)?;
             destination.sanitize_non_finite();
+            self.output_meters[index].observe(destination);
         }
         Ok(())
     }
@@ -3360,7 +3385,9 @@ impl CompiledMixerFanoutGraph {
         }
         self.privacy_mute.apply(mixer_scratch);
         let mut delivered = 0;
-        for (destination, matrix) in destinations.iter().zip(&self.output_matrices) {
+        for (index, (destination, matrix)) in
+            destinations.iter().zip(&self.output_matrices).enumerate()
+        {
             let Some(mut block) = destination.try_acquire() else {
                 continue;
             };
@@ -3370,6 +3397,7 @@ impl CompiledMixerFanoutGraph {
             }
             block.sanitize_non_finite();
             block.generation = self.generation.value();
+            self.output_meters[index].observe(&block);
             if destination.try_submit(block).is_ok() {
                 delivered += 1;
             }
@@ -3414,8 +3442,11 @@ impl CompiledMixerFanoutGraph {
         }
         self.privacy_mute.apply(mixer_scratch);
         let mut delivered = 0;
-        for ((destination, matrix), tap_set) in
-            destinations.iter().zip(&self.output_matrices).zip(tap_sets)
+        for (index, ((destination, matrix), tap_set)) in destinations
+            .iter()
+            .zip(&self.output_matrices)
+            .zip(tap_sets)
+            .enumerate()
         {
             let Some(mut block) = destination.try_acquire() else {
                 continue;
@@ -3426,6 +3457,7 @@ impl CompiledMixerFanoutGraph {
             }
             block.sanitize_non_finite();
             block.generation = self.generation.value();
+            self.output_meters[index].observe(&block);
             tap_set.notify(start_frame, &block);
             if destination.try_submit(block).is_ok() {
                 delivered += 1;
@@ -3631,6 +3663,15 @@ impl RealtimeMixerFanout {
 
     pub fn output_node_ids(&self) -> &[audiorouter_domain::EntityId] {
         &self.output_node_ids
+    }
+
+    pub fn meter_snapshot_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<BlockMeterSnapshot> {
+        self.paths
+            .iter()
+            .find_map(|path| path.graph.meter_snapshot_for_node(node_id))
     }
 
     /// Read processor telemetry by authored node identity from any path.
@@ -4304,7 +4345,7 @@ pub fn prune_inactive_upstream(
     loop {
         let before = removed.len();
         for node in &session.nodes {
-            if node.enabled || removed.contains(&node.id) {
+            if removed.contains(&node.id) {
                 continue;
             }
             let fed = session.edges.iter().any(|edge| {
@@ -4312,7 +4353,14 @@ pub fn prune_inactive_upstream(
                     && edge.destination_node == node.id
                     && !removed.contains(&edge.source_node)
             });
-            if !fed {
+            let lost_feed = session.edges.iter().any(|edge| {
+                edge.enabled
+                    && edge.destination_node == node.id
+                    && removed.contains(&edge.source_node)
+            });
+            // A whole independent path whose source was deliberately
+            // disabled is silent, even when its downstream tools stay enabled.
+            if !fed && (!node.enabled || lost_feed) {
                 removed.insert(node.id.clone());
             }
         }
@@ -4499,7 +4547,12 @@ fn compile_capture_test_signal_mixer(
         },
     );
     graph.stage_node_ids.insert(meter_index, signal.id.clone());
-    graph.stage_timings = (0..graph.stages.len()).map(|_| StageTimingCounters::default()).collect();
+    graph.stage_timings = (0..graph.stages.len())
+        .map(|_| StageTimingCounters::default())
+        .collect();
+    graph.stage_meters = (0..graph.stages.len())
+        .map(|_| BlockMeter::default())
+        .collect();
     Some(Ok(graph))
 }
 
@@ -5789,9 +5842,7 @@ fn compile_path_graph(
         ) {
             break;
         }
-        if !destination.enabled
-            || destination.bypass
-            || edge.source_port != branch_source_port
+        if edge.source_port != branch_source_port
             || edge.matrix.len() != usize::from(branch_source_channels).pow(2)
         {
             return Err(GraphCompileError::UnsupportedTopology);
@@ -5836,6 +5887,9 @@ fn compile_path_graph(
             .iter()
             .find(|node| node.id == edge.destination_node)
             .ok_or(GraphCompileError::UnsupportedTopology)?;
+        if !destination.enabled {
+            continue;
+        }
         let destination_port = destination
             .ports
             .iter()
@@ -5886,6 +5940,12 @@ fn compile_path_graph(
         input_switch,
         processing_graph,
         privacy_mute: PrivacyMute::default(),
+        input_meters: (0..input_node_ids.len())
+            .map(|_| BlockMeter::default())
+            .collect(),
+        output_meters: (0..output_node_ids.len())
+            .map(|_| BlockMeter::default())
+            .collect(),
         input_node_ids,
         output_matrices,
         output_node_ids,
@@ -6624,6 +6684,7 @@ pub struct RuntimeGraph {
     generation: RuntimeGeneration,
     sample_rate_hz: u32,
     meters: Vec<BlockMeter>,
+    stage_meters: Vec<BlockMeter>,
     has_virtual_capture_sink: bool,
     /// Processing-time counters, one per stage, written by the callback with
     /// relaxed atomics and read only by diagnostics.
@@ -7358,6 +7419,7 @@ impl RuntimeGraph {
             generation,
             sample_rate_hz,
             meters: (0..meter_count).map(|_| BlockMeter::default()).collect(),
+            stage_meters: (0..stage_count).map(|_| BlockMeter::default()).collect(),
             has_virtual_capture_sink: false,
             stage_timings: (0..stage_count).map(|_| StageTimingCounters::default()).collect(),
         }
@@ -7494,8 +7556,7 @@ impl RuntimeGraph {
             })
     }
 
-    /// Read the authored meter node by identity, preserving the same
-    /// lock-free snapshot semantics as the stage-indexed accessor.
+    /// Read a prepared node's output level without taking a processing lock.
     pub fn meter_snapshot_for_node(
         &self,
         node_id: &audiorouter_domain::EntityId,
@@ -7512,6 +7573,12 @@ impl RuntimeGraph {
                     }
                     _ => None,
                 })?
+            })
+            .or_else(|| {
+                self.stage_node_ids
+                    .iter()
+                    .rposition(|id| id == node_id)
+                    .map(|index| self.stage_meters[index].snapshot())
             })
     }
 
@@ -7537,6 +7604,9 @@ impl RuntimeGraph {
     /// lock-free and does not change the immutable processing schedule.
     pub fn reset_meters(&self) {
         for meter in &self.meters {
+            meter.reset();
+        }
+        for meter in &self.stage_meters {
             meter.reset();
         }
         for stage in &self.stages {
@@ -7685,6 +7755,7 @@ impl RuntimeGraph {
         for (stage_index, stage) in self.stages.iter().enumerate() {
             let now = std::time::Instant::now();
             if let Some((index, started)) = timed.replace((stage_index, now)) {
+                self.stage_meters[index].observe(block);
                 if let Some(counters) = self.stage_timings.get(index) {
                     counters.record(now.saturating_duration_since(started));
                 }
@@ -8028,6 +8099,7 @@ impl RuntimeGraph {
             }
         }
         if let Some((index, started)) = timed {
+            self.stage_meters[index].observe(block);
             if let Some(counters) = self.stage_timings.get(index) {
                 counters.record(started.elapsed());
             }

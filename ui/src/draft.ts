@@ -354,9 +354,10 @@ export function pruneInactiveUpstream(session: Session): Session {
   for (let changed = true; changed;) {
     changed = false;
     for (const node of session.nodes) {
-      if (node.enabled || removed.has(node.id)) continue;
+      if (removed.has(node.id)) continue;
       const fed = session.edges.some((edge) => edge.enabled && edge.destinationNode === node.id && !removed.has(edge.sourceNode));
-      if (!fed) { removed.add(node.id); changed = true; }
+      const lostFeed = session.edges.some((edge) => edge.enabled && edge.destinationNode === node.id && removed.has(edge.sourceNode));
+      if (!fed && (!node.enabled || lostFeed)) { removed.add(node.id); changed = true; }
     }
   }
   if (removed.size === 0 || removed.size === session.nodes.length) return session;
@@ -428,6 +429,10 @@ export function independentPaths(session: Session): Session["nodes"][] {
  * resolves every device from the node's own saved endpoint.
  */
 export function needsNativePaths(session: Session): boolean {
+  // Preserve per-node endpoint ownership when a source or branch is off.
+  const connectedDevices = session.nodes.filter((node) => session.edges.some((edge) => edge.enabled && (edge.sourceNode === node.id || edge.destinationNode === node.id)));
+  if (connectedDevices.filter((node) => node.kind === "physicalInput").length > 1
+    || connectedDevices.filter((node) => node.kind === "physicalOutput").length > 1) return true;
   const paths = independentPaths(session);
   if (paths.length > 1) return true;
   return paths.some((nodes) =>

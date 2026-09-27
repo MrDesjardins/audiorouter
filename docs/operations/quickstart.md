@@ -461,3 +461,20 @@ third-party virtual cable as if it were an AudioRouter-managed endpoint.
 For release, backup, restore, and uninstall expectations, see [release
 qualification](release-qualification.md). For the exact implemented versus
 blocked evidence, see the [active plan](../plans/active/current.md).
+
+## Browser feature regression
+
+With UI dependencies and Microsoft Edge installed, run from the repository root:
+
+```powershell
+npm.cmd --prefix ui run e2e
+npm.cmd --prefix ui run e2e -- --repeat-each=2
+```
+
+The suite builds a test-only Rust backend, uses isolated temporary databases
+and generated audio, and owns a Vite server on port 4186. Keep that port free.
+It does not open the desktop shell, native capture or physical monitoring.
+Failures retain Playwright evidence under `ui/test-results`; theme screenshots
+are under `target/feature-confidence-visual`. See the
+[coverage and limits](../plans/active/evidence/2026-09-26-feature-confidence.md)
+before interpreting a green browser result as audio qualification.

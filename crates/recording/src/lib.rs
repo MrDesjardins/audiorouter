@@ -174,6 +174,16 @@ pub struct RecordingQueue {
     pooled_sample_capacity: Option<usize>,
     overruns: AtomicU64,
     oversized: AtomicU64,
+    // bit 0 = admission; bits 1..31 = admitted callbacks; high bits = epoch.
+    // A single CAS reserves a callback, so closing admission cannot miss it.
+    tap_admission: AtomicU64,
+}
+
+pub struct RecordingTapPermit<'a>(&'a RecordingQueue);
+impl Drop for RecordingTapPermit<'_> {
+    fn drop(&mut self) {
+        self.0.tap_admission.fetch_sub(2, Ordering::Release);
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -520,6 +530,7 @@ impl RecordingQueue {
             pooled_sample_capacity: None,
             overruns: AtomicU64::new(0),
             oversized: AtomicU64::new(0),
+            tap_admission: AtomicU64::new(1),
         })
     }
 
@@ -555,6 +566,36 @@ impl RecordingQueue {
 
     pub fn capacity(&self) -> usize {
         self.chunks.capacity()
+    }
+
+    /// Callback-only reservation: one attempt, no allocation or waiting.
+    pub fn try_begin_tap(&self) -> Option<RecordingTapPermit<'_>> {
+        let observed = self.tap_admission.load(Ordering::Acquire);
+        if observed & 1 == 0 || observed & 0xffff_fffe == 0xffff_fffe {
+            return None;
+        }
+        self.tap_admission
+            .compare_exchange(observed, observed + 2, Ordering::AcqRel, Ordering::Relaxed)
+            .ok()
+            .map(|_| RecordingTapPermit(self))
+    }
+
+    /// Control-only. The epoch prevents a delayed callback's old CAS from
+    /// becoming valid again after a rapid close/open transition.
+    pub fn close_tap_admission(&self) {
+        let _ = self
+            .tap_admission
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |state| {
+                Some((state & !1).wrapping_add(1 << 32))
+            });
+    }
+
+    pub fn taps_in_flight(&self) -> bool {
+        self.tap_admission.load(Ordering::Acquire) & 0xffff_fffe != 0
+    }
+
+    pub fn open_tap_admission(&self) {
+        self.tap_admission.fetch_or(1, Ordering::Release);
     }
 
     pub fn len(&self) -> usize {
@@ -3134,6 +3175,24 @@ fn write_header<W: Write>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tap_admission_retires_existing_callbacks_and_reopens_without_stale_leases() {
+        let queue = RecordingQueue::new_pooled(2, 2, 128).unwrap();
+        for _ in 0..1000 {
+            let permit = queue.try_begin_tap().unwrap();
+            assert!(queue.taps_in_flight());
+            queue.close_tap_admission();
+            assert!(queue.try_begin_tap().is_none());
+            assert!(queue.taps_in_flight());
+            drop(permit);
+            assert!(!queue.taps_in_flight());
+            queue.open_tap_admission();
+            drop(queue.try_begin_tap().unwrap());
+            assert!(!queue.taps_in_flight());
+        }
+        assert_eq!(queue.overruns(), 0);
+    }
     use std::io::{Cursor, Seek, SeekFrom};
 
     struct FlushFails {

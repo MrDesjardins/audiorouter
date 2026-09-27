@@ -50,3 +50,10 @@ Node: desired enable/bypass/mute fields are separate from observed `ready`, `una
 ## Acceptance examples
 
 A mic split into three branches opens one capture stream. A cycle introduced by a virtual bus is rejected even if edges belong to different sessions. Disabling an EQ passes dry; disabling a mixer silences it. A transaction removing an EQ and adding a compatible replacement appears as one new revision, never an intermediate broken graph. Concurrent changes from base revision N result in one commit and one conflict. Imported missing plugins remain visible and silence protected outputs until resolved or deliberately bypassed.
+
+For independently prepared native paths, a deliberately disabled source and
+downstream nodes fed only by that source are excluded from active preparation.
+An explicit Mixer with another live input keeps that contribution. Disabled
+output branches suppress playback; compatible disabled/bypassed effects remain
+dry stages. UI endpoint preparation retains per-node bindings when paths or
+branches are turned off, rather than selecting a previously used global pair.

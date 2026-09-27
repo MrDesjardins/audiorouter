@@ -2,6 +2,368 @@
 
 Status: active, rebaselined 2026-09-17.
 
+## Comprehensive feature confidence — 2026-09-26, user-authorized tests
+
+- Objective: user requests stronger end-to-end coverage for every implemented
+  feature/tool, including UI/UX gaps, and fixes for failures found while away.
+  User will perform the audible crackling check tonight; do not replace it
+  with simulated evidence. Earlier no-test restriction is superseded by this
+  explicit request. No release gate is waived and no external settings changed.
+- Scope: M04/M05/M06/M07 implemented behavior; GRAPH-05/06/08/14/15,
+  DSP-01–18, UI-01–15, PLUG-01–07, REC-01–12, API-01–12,
+  STATE-01–12, AUTO-01–12, applicable QUAL/NFR acceptance.
+- Prerequisites: Windows/Edge, installed toolchain and deterministic fixtures
+  available. Real microphone quality, third-party applications, calibrated
+  latency, restart/suspend and hardware soak require separately recorded native
+  evidence. Use disposable databases, synthetic audio and contained fixtures;
+  no unattended private recording or unmuted physical monitoring.
+- Ordered work: inventory registry/features versus assertions; baseline UI,
+  backend and DSP checks; strengthen browser harness lifecycle and failure
+  observability; add data-driven tool/control/persistence workflows; regress
+  live flags, navigation, restore, stale revisions and error recovery; exercise
+  actual backend/engine/plugin layers with deterministic integration scenarios;
+  repair owning layers; repeat targeted/full checks; review three themes and
+  update coverage/evidence/known gaps before final artifact rebuild.
+- Validation matrix: browser fixture E2E proves UI transitions/contract calls;
+  real backend integration proves validation/persistence/runtime publication;
+  synthetic DSP vectors prove signal behavior; contained native plugin fixtures
+  prove worker boundaries. None proves human listening or hardware endurance.
+- Rollback: revert each new test/harness/fix independently; preserve unrelated
+  worktree changes and user databases. Tests must fail for missing behavior,
+  not relax assertions or hide failures behind retries/skips.
+- First finding: current browser route harness commits without activation
+  results and fakes file imports regardless of content. Existing tool-add tests
+  cover 16 legacy labels, leaving newer tools and important lifecycle/error
+  scenarios uncovered. RTK attempt failed (not installed); use direct commands.
+- Results: [coverage, fixes, commands and limits](evidence/2026-09-26-feature-confidence.md).
+  All 25 creatable tools have real-backend browser persistence cases; total
+  browser suite 65 passed, repeated twice 130 passed without retries. UI units
+  345 passed; workspace Rust 865 passed, 19 existing hardware/native tests
+  ignored; doc-tests passed. Logs under `target/e2e-*`. Three-theme six-image
+  visual review passed. No audible or hardware acceptance inferred.
+- Fixed owning layers: mixed capture/Test Signal stage meters, sustained pitch
+  state poisoning from zero-bin phase math, numeric step/enum accessibility,
+  startup snapshot editing guard, shared inspector field style/light card text,
+  queued recorder pause/resume and truthful failed encoder status. Specs and
+  contracts updated with these behaviors. Test-only JSONL example dispatch is
+  not production transport/authorization evidence; generated recording samples
+  enter the real tap but do not prove native capture.
+- Final checks: workspace all-targets check passed; contracts typecheck/drift
+  passed (98 methods/30 kinds/16 processors/21 events); documentation acceptance
+  passed (62 files/303 links); diff whitespace check passed. Existing unrelated
+  workspace format/clippy and M08 traceability issues remain documented below.
+- Build: UI `index-DuzfCEY2.js`, index 15:15:13; worker 15:15:38; shell 15:20:15
+  local time. Final custom-protocol build passed in 19.08 s. Initial locked shell build refused
+  the changed pitch dependencies; updated only its lockfile offline, then
+  repeated locked build successfully. Final literal probing found that plain
+  Cargo builds omit the embedded assets unless `--features custom-protocol` is
+  supplied. Rebuilt with that feature; `index-DuzfCEY2.js` is confirmed in the
+  binary, and the artifact is newer than the production UI.
+  SHA256 shell `36A5E9256966F6013AB0EACE72CF6B5C06E6E745A4F9B8B2A8A098A4A3A350E0`;
+  worker `FCA0D611E3DF456B309AD3ED6570CFCDADF2D68F53AD88772828950206485D3E`.
+  No shell/worker processes running; leave artifact closed for attended use.
+- Exact next task: user launches
+  `C:\code\audiorouter\target\patrick-main-release-2\release\audiorouter-shell.exe`
+  tonight, verifies microphone quality with effects bypassed, then individual
+  prepared-node Off/Bypass while Play remains active; compare continuity counters
+  after startup. Crackling remains unresolved. Native deadline/clock/soak and
+  M08 gates remain open; do not archive this ongoing plan as a completed milestone.
+- Recording finding: synthetic browser create/arm/start/pause/resume/stop
+  fails finalization when a pre-pause quantum remains queued. The worker
+  resets its expected frame on Resume before consuming that quantum.
+  REC-02/03/04/06 fix: close callback admission, wait boundedly on the control
+  thread for already admitted taps, drain the bounded pre-pause queue before
+  changing writer state, then reopen admission only after successful Resume.
+  Apply to all file formats; add queued-pause and admission regressions. The
+  callback never waits. Roll back admission and lifecycle changes together.
+
+## Live node controls and crackling correction — 2026-09-26
+
+- User rejects stop-on-flag behavior and reports continued heavy crackling in
+  release-2. This supersedes the stop/save decision below. Requirements:
+  GRAPH-05/06/08/14, UI-04/05, PLUG-03, NFR-02.
+- Implement live flag commits using retained native source/output identities,
+  silence inactive endpoint contributions, and reuse existing plugin bridges.
+  Shared workers receive bounded per-member processing flags; bypass does not
+  destroy the group or its queued audio. Unprepared topology still reports an
+  unapplied change, rather than silently stopping or claiming activation.
+- Check compilation/build and inspect three UI themes; no tests requested.
+  Investigate continuity separately; neither compilation nor a running worker
+  establishes audible quality. Preserve user-owned running shell until Quit.
+- Rollback: revert this live-update path and worker flag extension together;
+  saved sessions and endpoint selections remain compatible.
+- Implemented: live UI flag commits retain Play, display the changed state
+  after native acknowledgement, and serialize rapid toggles. Existing endpoint
+  and multi-path plugin bridges are reused; per-member masks retain chain
+  queues. Multi-path Off sources/outputs/mixers use zero contribution matrices
+  while preserving prepared stream identities. Initially unprepared nodes may
+  still need deliberate preparation and report `restartRequired`.
+- Crackling remains unresolved. Added saturating lock-free bridge counters
+  `outputMisses` (includes startup) and `inputDrops`, exposed as optional plugin
+  diagnostics fields and in Properties. Shared members report the same counters.
+  No private audio is recorded. A read-only live diagnostics pipe connection
+  timed out; subsequent inventory confirmed no shell/worker running.
+- Checks: Windows `cargo check -p audiorouter-control -p audiorouter-plugin-host
+  --all-targets --locked` passed; UI typecheck/production build passed (sandbox
+  dist unlink denial resolved by approved retry); contract drift passed (98
+  methods); documentation validation passed (61 files, 298 links); diff check
+  passed. No test runners invoked. Edge visual inspection reran successfully
+  in dark/light/high contrast at 1440x1000, screenshots under
+  `target/session-properties-visual/`; these are disconnected UI evidence.
+- Next: finish release-2 build, verify embedded bundle/artifact ordering, then
+  user launches once and checks live microphone Off/On and individual plugin
+  bypass. Compare audible crackling with all effects bypassed and observe
+  continuity counter growth after startup. Attended confirmation remains open.
+- Artifact ready: release worker build passed; final release shell build passed
+  in 50.73 s. UI index 14:03:10, worker 14:03:41 and shell 14:06:51 local time;
+  bundle `index-DtsBK9Bq.js` contains live flag guidance and continuity text,
+  and the rejected stop/save message is absent from source. No user processes
+  running, and the agent's Vite server was stopped. Final diff check passed.
+  Unprepared disabled branches remain excluded during live normalization;
+  live changes to other prepared paths do not activate them. Exact next task:
+  attended release-2 live-toggle and crackling diagnosis using the above
+  counters/dry comparison. No audible success or milestone completion claimed.
+
+## Off controls and continued crackling — 2026-09-26
+
+- User still hears scratches and confirms voice remains audible after turning
+  the microphone off. Source review: flag controls update only the draft, and
+  running autosave accepts parameter changes only. Thus displayed desired Off
+  does not guarantee the active route changed. VST-off observation therefore
+  does not yet prove the scratchiness survives an actual dry route.
+- Requirements: GRAPH-05/06/08/14, UI-04/05, CAP-13, PLUG-03, NFR-02.
+  GRAPH-05 defines disabled processors as dry bypass, disabled sources as
+  silent, disabled sinks as suppressing output. Preserve this contract.
+- Work: running flag changes must stop audio before displaying the new state,
+  then save through the existing planner; failures remain visible. Resume
+  requires deliberate Play. Hide timing for disabled/bypassed nodes and make
+  the distinction explicit. Reduce frontend native servicing interval from
+  20 ms to 5 ms (one in-flight pump retained); this addresses a plausible
+  service-gap cause, with attended continuity still unverified. No new tests
+  requested. Keep last-session/Properties work in this same handoff.
+- Rollback: revert flag handler, timing and pump cadence independently. No
+  presets, endpoints or external application settings are changed.
+- Further corrections: native chain walk accepts disabled/bypassed compatible
+  processors; disabled outputs are excluded. Inactive-source pruning propagates
+  through downstream nodes with no remaining feed (backend and UI helper agree).
+  The UI retains per-node preparation for formerly multi-device sessions even
+  with sources/outputs off, preventing stale global-pair capture selection.
+  Windows all-target cargo check passed; no new tests run. User confirmed Quit.
+- Final artifact: UI build and release plugin worker passed; release shell
+  rebuilt successfully in 58.26 s after source timestamp refresh to embed the
+  current dist. UI index 13:46:55 and worker 13:46:54 precede shell 13:48:16
+  local time. Bundle contains last-session key and node-state save message.
+  Documentation validation passed (61 files, 298 links), contract drift passed,
+  diff check passed. No shell running after build. Own Vite review server is
+  stopped after inspection. Changes remain uncommitted.
+- Exact next task: user launches only release-2 with device-admin opt-in,
+  selects Patrick once, checks session restore/Properties behavior, and listens
+  for crackling at the faster pump cadence. For a real dry comparison, disable
+  effects, save any remaining stopped-state drafts, then press Play. Microphone
+  Off must immediately stop the session; Play afterward must omit its inactive
+  path while preserving the game's exact binding. Continued scratchiness remains
+  an open defect requiring live counters/continuity evidence; no audible success
+  is claimed from builds or browser mock screenshots.
+
+## Off controls and continued crackling — 2026-09-26
+
+- User still hears scratches and confirms voice remains audible after turning
+  the microphone off. Source review: flag controls update only the draft, and
+  running autosave accepts parameter changes only. Thus displayed desired Off
+  does not guarantee the active route changed. VST-off observation therefore
+  does not yet prove the scratchiness survives an actual dry route.
+- Requirements: GRAPH-05/06/08/14, UI-04/05, CAP-13, PLUG-03, NFR-02.
+  GRAPH-05 defines disabled processors as dry bypass, disabled sources as
+  silent, disabled sinks as suppressing output. Preserve this contract.
+- Work: running flag changes must stop audio before displaying the new state,
+  then save through the existing planner; failures remain visible. Resume
+  requires deliberate Play. Hide timing for disabled/bypassed nodes and make
+  the distinction explicit. Reduce frontend native servicing interval from
+  20 ms to 5 ms (one in-flight pump retained); this addresses a plausible
+  service-gap cause, with attended continuity still unverified. No new tests
+  requested. Keep last-session/Properties work in this same handoff.
+- Rollback: revert flag handler, timing and pump cadence independently. No
+  presets, endpoints or external application settings are changed.
+
+## Session selection and Properties navigation — 2026-09-26
+
+- User requests remembering the last chosen session across app launches and
+  opening Properties immediately on a node click, while remaining in Tools
+  when adding individual tools. Scope: UI-02/05/11, M05.
+- Decisions: selected session is an optional local UI preference, validated
+  against returned session inventory. A deleted selection falls back to an
+  available session; backend failure must not overwrite the remembered ID.
+  Restore selection only, never start audio. Explicit canvas/list selection
+  opens Properties; programmatic selection during add does not switch tabs.
+- Tasks: bounded preference read/write; initialize/reconcile/persist session
+  choice; wire explicit node selection; update interface contract; UI build;
+  inspect dark/light/high-contrast views; rebuild desktop after app closure.
+- Verification: build and visual inspection (no new tests requested). Native
+  restart confirmation remains attended. Rollback: revert these UI preference
+  and click handlers; remove preference key if desired. Saved audio graphs
+  remain unchanged. One user shell currently runs; do not stop or replace it.
+- Outcome: bounded optional session preference restores an available ID and
+  falls back on a deleted one; explicit canvas/list selection opens Properties.
+  Windows Edge headless visual inspection at 1440x1000 passed in dark, light
+  and high contrast: Tools stayed selected after adding Gain; Properties became
+  selected after node click; actual second demo session survived reload; a
+  deleted ID fell back to demo-session. Screenshots reviewed at
+  `target/session-properties-visual/{dark,light,high-contrast}.png`; reproducible
+  helper `target/session-properties-visual.cjs` uses only mock/disconnected audio.
+  Initial screenshot selector incorrectly expected inspector inside Workbench;
+  corrected to the actual CSS-overlaid sibling and reran successfully.
+
+## Session selection and Properties navigation — 2026-09-26
+
+- User requests remembering the last chosen session across app launches and
+  opening Properties immediately on a node click, while remaining in Tools
+  when adding individual tools. Scope: UI-02/05/11, M05.
+- Decisions: selected session is an optional local UI preference, validated
+  against returned session inventory. A deleted selection falls back to an
+  available session; backend failure must not overwrite the remembered ID.
+  Restore selection only, never start audio. Explicit canvas/list selection
+  opens Properties; programmatic selection during add does not switch tabs.
+- Tasks: bounded preference read/write; initialize/reconcile/persist session
+  choice; wire explicit node selection; update interface contract; UI build;
+  inspect dark/light/high-contrast views; rebuild desktop after app closure.
+- Verification: build and visual inspection (no new tests requested). Native
+  restart confirmation remains attended. Rollback: revert these UI preference
+  and click handlers; remove preference key if desired. Saved audio graphs
+  remain unchanged. One user shell currently runs; do not stop or replace it.
+
+## Attended scratchiness and inactive connections — 2026-09-26
+
+- Reproduction: user hears scratchy monitored voice in rebuilt release-2 and
+  no yellow audio activity on connections. One shell and one plugin worker
+  observed; this is distinct from the previous two-shell collision.
+- Requirements: PLUG-03, GRAPH-14/15, NFR-02, UI-04/05/15. The multi-input
+  diagnostics currently hardcode null meters, preventing honest activity.
+  The bridge queues input before retrieving output; when all slots are held
+  by completed output, it unnecessarily drops the incoming block.
+- Ordered work: recycle completed blocks directly through the input handoff;
+  add preallocated lock-free stage/source/output meters; publish them through
+  existing diagnostics fields; compile UI/backend and inspect diff; prepare
+  updated shell after user closes the running app; attended listening/activity.
+- Verification: compile/build only unless user requests tests. No audio
+  recording or endpoint changes. Windows listening is pending; no claim that
+  this explains all distortion (plugin presets/levels remain possible causes).
+- Rollback: revert this queue ordering and meter instrumentation together;
+  preserve shared hosting and saved settings. No realtime waits/allocations.
+- Implemented: `PluginRuntimeBridge` swaps a completed quantum directly with
+  incoming audio and resubmits that same slot; output-unavailable startup and
+  actual overload still silence. `RuntimeGraph` observes preallocated output
+  meters for every stage (including early-continue stages); native paths
+  observe exact inputs and mapped destinations. The Windows worker forwards
+  these snapshots and control publishes the existing meter schema. Shared
+  plugin graph boundaries represent group output, not internal member taps.
+- Checks: `cargo check -p audiorouter-control -p audiorouter-plugin-host
+  --all-targets --features audiorouter-plugin-host/test-fixtures --locked`
+  passed on Windows; documentation validation passed (61 files, 297 links).
+  Diff whitespace check passed. Tests and attended audio/activity validation
+  have not run for this fix. Requested user quit the shell before replacement.
+- Next action: when the running app is closed, rebuild release-2 shell and
+  plugin worker, then have the user confirm clear voice and yellow connections.
+- User confirmed closure; process inventory showed no shell or worker. The
+  release plugin worker rebuilt successfully. User also asked about mono:
+  mono endpoints and mono graph paths are supported, including automatic
+  adaptation for a stereo device node bound to a mono endpoint and the VST2
+  mono/stereo adapter. There is no dedicated force-mono toggle for a stereo
+  endpoint in the current inspector; no session settings were changed.
+- Final rebuild: release shell passed in 61 seconds; shell and worker in
+  `target/patrick-main-release-2/release` are refreshed, with current embedded
+  UI. App remains stopped. Next: user launches only this shell with the
+  documented device-admin opt-in, presses Play and confirms voice clarity and
+  yellow connections. Treat any continued scratchiness as an open defect;
+  compilation alone does not establish audio continuity.
+- User confirmed closure; process inventory showed no shell or worker. The
+  release plugin worker rebuilt successfully. User also asked about mono:
+  mono endpoints and mono graph paths are supported, including automatic
+  adaptation for a stereo device node bound to a mono endpoint and the VST2
+  mono/stereo adapter. There is no dedicated force-mono toggle for a stereo
+  endpoint in the current inspector; no session settings were changed.
+
+## Attended scratchiness and inactive connections — 2026-09-26
+
+- Reproduction: user hears scratchy monitored voice in rebuilt release-2 and
+  no yellow audio activity on connections. One shell and one plugin worker
+  observed; this is distinct from the previous two-shell collision.
+- Requirements: PLUG-03, GRAPH-14/15, NFR-02, UI-04/05/15. The multi-input
+  diagnostics currently hardcode null meters, preventing honest activity.
+  The bridge queues input before retrieving output; when all slots are held
+  by completed output, it unnecessarily drops the incoming block.
+- Ordered work: recycle completed blocks directly through the input handoff;
+  add preallocated lock-free stage/source/output meters; publish them through
+  existing diagnostics fields; compile UI/backend and inspect diff; prepare
+  updated shell after user closes the running app; attended listening/activity.
+- Verification: compile/build only unless user requests tests. No audio
+  recording or endpoint changes. Windows listening is pending; no claim that
+  this explains all distortion (plugin presets/levels remain possible causes).
+- Rollback: revert this queue ordering and meter instrumentation together;
+  preserve shared hosting and saved settings. No realtime waits/allocations.
+
+## Status wording follow-up — 2026-09-26
+
+- Subsequent user report: Play returns “enabled plugin nodes require an
+  attached native endpoint session”. Observed two shells: old release PID
+  82844 (started 13:10:51) and release-2 PID 47144 (13:11:41). Both shell logs
+  show successful `nativePaths.prepare` followed immediately by failed
+  `session.start` (-32602). The old backend lacks the multi-input plugin Start
+  fix; default-pipe collision can route the new window to it. This is the
+  leading diagnosis, pending a single-shell retry, not proof of a new defect.
+  Requested that the user quit both through the app; neither was stopped by
+  the agent. Next: rebuild the clearer UI into release-2 and retry that shell
+  alone, using the documented device-admin launch environment.
+- User confirmed both shells closed. Process inventory confirmed none running.
+  Rebuilt release-2 successfully with the new UI. Initial Cargo build reused
+  the shell despite changed dist; refreshed main.rs timestamp (no content
+  change) and rebuilt, observing actual shell compilation. UI bundle contains
+  the clearer stopped-state wording; shell timestamp is newer than UI dist.
+  Plugin worker hash remains the qualified release worker. Diff check passes.
+  Next: user launches only release-2 with device-admin opt-in and retries Play;
+  the original attended failure is not yet confirmed resolved.
+
+- User reports the stopped-session hint “Connect a source to an output, then
+  press Play” is unclear. It is unconditional, so it also incorrectly suggests
+  that an already-connected session needs new connections.
+- Scope: UI-04/05, M05 status explanation. Replace the hint with an explicit
+  stopped state and Play instruction, followed by concrete setup guidance for
+  new routes. No graph validation or layout changes.
+- Verification: inspect the default-message branch and build the UI; no new
+  tests requested. Visual theme acceptance remains unrun for this text change.
+- Rollback: revert this one message. Two user shell processes were observed
+  (release and release-2); do not stop them or overwrite their running binaries.
+- Outcome: changed `ui/src/App.tsx`; TypeScript and production UI build passed
+  (`npm.cmd run build`, elevated retry after sandbox EPERM). `git diff --check`
+  passed. No tests or theme screenshots run. Initial alternate-output build
+  also hit sandbox EPERM; the standard elevated build succeeded.
+- Next action: user launches the rebuilt release-2 shell alone and retries
+  Play. The new stopped-state wording is now embedded in that executable.
+
+## Status wording follow-up — 2026-09-26
+
+- User reports the stopped-session hint “Connect a source to an output, then
+  press Play” is unclear. It is unconditional, so it also incorrectly suggests
+  that an already-connected session needs new connections.
+- Scope: UI-04/05, M05 status explanation. Replace the hint with an explicit
+  stopped state and Play instruction, followed by concrete setup guidance for
+  new routes. No graph validation or layout changes.
+- Verification: inspect the default-message branch and build the UI; no new
+  tests requested. Visual theme acceptance remains unrun for this text change.
+- Rollback: revert this one message. Two user shell processes were observed
+  (release and release-2); do not stop them or overwrite their running binaries.
+- Next action: change the source text and prepare the UI for the next shell
+  rebuild after the user closes the running shells.
+
+**Latest handoff, 2026-09-26:** the user-authorized shared VST2 optimization is
+implemented and verified in the working tree (not committed). All four
+Patrick ReaPlugs share one isolated worker; muted release-worker live
+qualification passed with zero plugin faults and approximately 60 ms voice
+route timing versus the historical 97 ms snapshot. The shell and worker were
+rebuilt in `target/patrick-main-release-2/release`; the app remains stopped.
+Next task: user launches that shell and confirms routing/listening and Timing.
+See [qualification evidence](evidence/2026-09-26-shared-vst2-chain.md).
+The older committed handoff below describes the pre-optimization baseline.
+
 ## Objective
 
 Complete the non-driver AudioRouter scope using existing VB-Cable,
@@ -9,6 +371,150 @@ Voicemeeter, physical WASAPI, and other installed virtual endpoints. The
 AudioRouter-owned kernel driver, PortCls activation, production signing, and
 clean-machine driver qualification are deferred; they remain documented
 requirements but are not active completion gates for this plan.
+
+## HANDOFF — read this first (2026-09-26, after commit 2b0295a1)
+
+**Goal (user, 2026-09-26):** run the user's whole audio setup as ONE saved
+AudioRouter session, "Patrick Main Session" (`patrick-main-session`).
+Latency is accepted. The user wants to see which step slows the sound.
+
+**State:** implemented, committed and pushed to `origin/main` (2b0295a1).
+Verified by an agent-run muted live test on the user's real devices: both
+paths run and all four ReaPlugs are `running`. **Not yet confirmed by ear.**
+Details are in the task section below ("Outcome" and "Attended defect 1–3").
+
+**The session (in the user's normal DB `%LOCALAPPDATA%\AudioRouter\state.sqlite`;
+backup `state-backup-20260926-before-patrick-main.sqlite` beside it):**
+- Voice path: `mic` (PD200X, mono) → `reafir` → `reaeq` → `reacomp` →
+  `reagate` (ReaPlugs VST2 from `C:\Program Files\VSTPlugins\ReaPlugs`,
+  mono nodes) → `voice-to-cable-a` (CABLE-A Input) and `voice-monitor`
+  (Scarlett).
+- Game path: `siege-in` (CABLE-B Output) → `siege-eq` (Advanced EQ, flat) →
+  `siege-out` (Scarlett).
+- Every device node stores its exact `endpointId`.
+
+**How it runs:** UI Play → `nativePaths.prepare` → `session.start` → UI pumps
+`nativeMultiInputs.pump`. Engine: `compile_native_paths_with_plugins_and_audio`
+→ `CompiledPathSet` → `RealtimeMixerFanout::from_paths`. Control:
+`dispatch_native_paths_prepare`, `prepare_native_path_worker`,
+`native_paths_session`.
+
+**Launch for attended tests (do not run two shells at once; see AGENTS.md):**
+```powershell
+$env:AUDIOROUTER_DATABASE = "$env:LOCALAPPDATA\AudioRouter\state.sqlite"
+$env:AUDIOROUTER_ALLOW_DEVICE_ADMIN = "1"
+& "C:\code\audiorouter\target\patrick-main-release-2\release\audiorouter-shell.exe"
+```
+The user may still be running PID 59604 from `target\patrick-main-release\`
+(an OLD build without the fixes). Ask them to close it; don't stop it
+yourself. Rebuild per the AGENTS.md "verify embedded UI" lesson. If a
+release folder is locked by a running shell or its plugin workers, build to
+a new `CARGO_TARGET_DIR` rather than stopping processes.
+
+**Agent-side live check (muted, safe while the user's shell is stopped or
+running):** copy the DB, then
+```bash
+AUDIOROUTER_LIVE_PATHS_DATABASE=<copy.sqlite> \
+AUDIOROUTER_PLUGIN_WORKER_PATH=C:/code/audiorouter/target/release/audiorouter-plugin-worker.exe \
+cargo test -p audiorouter-control --locked live_native_paths_start_pump_and_report_signal_timing -- --ignored --nocapture
+```
+It prints per-node timing and fails if any plugin is `failed`/`quarantined`.
+
+**External configuration given to the user (keep consistent):**
+- Quit Voicemeeter Banana and disable SteelSeries Sonar.
+- Windows default playback and communication playback: Speakers (Focusrite
+  USB Audio). Default recording and communication recording: CABLE-A Output.
+  Communications tab: "Do nothing".
+- Siege game output → CABLE-B Input (Windows Volume mixer). Siege and Discord
+  mic → CABLE-A Output. Discord output → Scarlett; Discord's noise
+  suppression, echo cancellation and AGC off.
+- Outplayed: system sound = Speakers (Focusrite USB Audio); microphone =
+  CABLE-A Output. Caveat: the monitored voice is also in the system sound
+  (it may sound doubled; if so, turn off Outplayed's mic).
+
+**Measured latency (live, 2026-09-26):**
+- Voice ≈ 97 ms: mic wait 15; ReaFIR 13, ReaEQ 19, ReaComp 13, ReaGate 11
+  (plugin worker queues); CABLE-A queue 27.
+- Game ≈ 43 ms: CABLE-B wait 16; EQ 0; Scarlett queue 27.
+- Plugin CPU is ~6 µs/block. The delay is the cross-process queue per plugin.
+
+**Priority correction (user, 2026-09-26):** implement adjacent-plugin shared
+workers before attended confirmation. The user reports the shell is stopped
+and will launch it when the optimized build is ready. Do not launch it during
+engineering work.
+
+### Active optimization — one worker for adjacent ReaPlugs
+
+- Objective: run a maximal compatible adjacent VST2 chain in one isolated
+  process with one realtime queue, preserving each node's settings/editor.
+  VST3 retains its existing native worker until a compatible shared native
+  hosting path is qualified; the requested four ReaPlugs are VST2.
+- Requirements: PLUG-03/04/05/07, GRAPH-14/15, SEC-07, UI-04/05, API-08.
+- Decision: shared worker stays outside the backend. Group only enabled,
+  non-bypassed, equally channelled plugins linked by exclusive identity
+  connections; branches, channel matrices and native stages end a group.
+  Bound groups to eight members. One fault silences the entire group, reports
+  failure on all its nodes, and never returns dry protected voice. Other paths
+  keep separate workers. Preserve individual fingerprint and state validation.
+- Ordered tasks: bounded chain protocol and worker instance selection;
+  sequential VST2 processing; one bridge with per-node handles; graph grouping
+  and per-member state/parameter/editor routing; regression/fault evidence;
+  muted exact-device timing comparison; build a fresh release with current UI.
+- Validation: protocol bounds and identity checks; graph grouping boundaries;
+  processing order, distinct parameters/state, member fault/hang silence and
+  unaffected independent worker; existing plugin/control suites; Windows
+  ReaPlugs chain and muted Patrick Main Session start/pump. Attended listening
+  remains the next user task. No driver or external credentials are needed.
+- Risks: members share crash containment; timing assigns the shared queue to
+  the first member rather than counting it four times. Editor control remains
+  between frames on the background thread. No automatic failure restart.
+- Rollback: revert only chain hosting changes; unchanged saved graph and opaque
+  state assets can run with the existing per-instance workers.
+- Outcome: protocol, worker selection, shared bridge, graph grouping and
+  per-instance controls implemented; package and Windows fault/editor/live
+  checks passed. Final release live run verified one worker for all four,
+  4099 branch blocks, zero faults, voice-to-CABLE-A estimate 59.65 ms.
+  Evidence and limitations: [shared-chain qualification](evidence/2026-09-26-shared-vst2-chain.md).
+  Documentation links and diff checks pass. Existing strict lint/format drift
+  and missing CAP-13/GRAPH-15 delivery traceability entries remain documented;
+  this optimization does not mark a release milestone complete.
+- Next action: attended user launch of the rebuilt release-2 shell, then
+  confirm processed voice/game routing and Timing. No agent launch planned.
+
+**Next tasks, in order (attended work follows the optimization above):**
+1. **Attended confirmation (user).** Play Patrick Main Session and confirm:
+   voice heard processed in the Scarlett; Siege heard through the EQ; Discord
+   and Siege receive the voice on CABLE-A; no Siege audio in CABLE-A; the
+   Timing tab shows values. Record the result under "Outcome" below. Then
+   the user loads ReaPlugs presets (editor → load preset → close →
+   **Save plugin settings**) and shapes the EQ.
+2. **Further optional latency work** (session replacement not authorized):
+   (a) replace ReaEQ/ReaComp/ReaGate with native Advanced EQ, Compressor
+   and Gate, saving ≈ 43 ms (voice ≈ 54 ms). This is a session change the
+   user must approve. ReaFIR stays, or Denoise/Speech Denoise (≈ 21 ms STFT
+   latency). The shared plugin worker engineering option was subsequently
+   authorized and completed above; it is no longer pending.
+3. **Known gaps to consider (not requested yet):**
+   - Bypass on a node in a multi-path/Mixer route makes Play refuse the route
+     (`compile_path_graph` walk rejects `bypass`). Users must disconnect
+     instead. Supporting bypass = compile it as a dry stage.
+   - Signal timing covers only the multi-input worker (Mixer/multi-path),
+     not single endpoint routes. A plugin's own reported VST latency is not
+     added (only its queue).
+   - UI plugin nodes default to mono ports (`appendPluginPlaceholderNode`).
+     The worker now maps mono↔stereo, so this is fine, but stereo may be a
+     better default.
+   - Plugin failure reasons are not surfaced in the UI (only
+     `failed` state). Consider exposing the worker's error text.
+   - Pre-existing failing test: `audiorouter-cli`
+     `list_commands_use_discovery_and_do_not_fake_devices` expects 7
+     processors; the catalog has 16. Update the expectation.
+   - Untracked `ui/dist-review-20260924-*` folders are old build outputs,
+     deliberately not committed. The user may delete them.
+4. Keep AGENTS.md rules: update this plan after each change; verify UI in
+   three themes; message tones are blue info / green success / orange
+   warning / red error (`ui/src/actionMessage.ts`; caught errors go
+   through `formatUiError` and are always red).
 
 ## Current implementation task — one session with independent paths (2026-09-26)
 
@@ -165,6 +671,31 @@ requirements but are not active completion gates for this plan.
   and verify both paths are heard at once with no game audio in CABLE-A. Load
   the ReaPlugs presets, save the plugin states, and read the Timing tab.
   Record the result here.
+
+### 2026-09-26 resumed top-priority attended confirmation
+
+User requested the first remaining handoff task. Read the handoff and M02
+acceptance contract; preserve the existing uncommitted handoff and old review
+output directories. Read-only Windows checks found no running
+`audiorouter-shell`. The corrected release shell is dated 12:00:46, newer
+than `ui/dist/index.html` (12:00:24); the dist JavaScript contains
+`nativePaths.prepare`, and the matching plugin worker is present beside the
+shell (11:59:49). RTK was unavailable in PowerShell, so direct commands were
+used.
+
+Launched `target/patrick-main-release-2/release/audiorouter-shell.exe` as
+PID 20708 at 12:36:06 local time with the normal LocalAppData database and
+`AUDIOROUTER_ALLOW_DEVICE_ADMIN=1`. No session start or preset edit was issued
+by the agent. The available automation surface does not support native app
+controls; audible confirmation requires the user's listening report.
+
+Requirements remain GRAPH-14/15, CAP-02/13, API-04/08, UI-04/05. Next action:
+select Patrick Main Session, press Play, confirm voice and game in Scarlett,
+voice reception in Discord/Siege on CABLE-A with no game crossfeed, and live
+Timing values. Record each outcome here, then load the user's chosen presets
+and Save plugin settings. This task remains pending; launch is not audible
+acceptance evidence. Rollback for this attended attempt is Stop followed by
+Quit and stop audio; the existing database backup remains the recovery point.
 
 ## Previous implementation task — per-source volume, Mixer reconnect, advanced tools (2026-09-25)
 

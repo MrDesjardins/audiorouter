@@ -10,6 +10,29 @@ The MCP tab explains local assistant setup using the installed CLI path, databas
 
 The canvas renders backend nodes, ports, edges, and statuses. It does not infer connections from proximity. Dragging from an output port to an input produces a proposed connection; the backend decides whether it is valid. A keyboard connection dialog offers the same action. Template layout is automatic; layout changes never rewire audio. Application-capture nodes show whether the process is connected, closed, reconnecting, ambiguous, unsupported, or not prepared. Process presence does not imply signal; only fresh audio meters animate the route.
 
+Remember the last selected session as a local workspace preference and restore
+it when it remains available; restoring selection never starts audio. Clicking
+a canvas node or selecting one in the graph list opens Properties immediately.
+Adding a tool may select the new node while keeping Tools open for repeated
+additions.
+
+Enabled and Bypass controls state their effective semantics: off inputs/sinks
+are silent, off effects use their dry bypass, and Mute silences a connected
+route. Changing these flags during playback saves and applies the planned
+graph while retaining prepared streams and workers. Off native devices
+contribute silence while remaining open until Stop, allowing live re-enable.
+Display the changed state only after native activation is acknowledged;
+otherwise explain that the playing route still uses its previous settings.
+Timing does not show active
+processing values for off/bypassed nodes or a stopped session.
+
+Independent native paths publish actual source, prepared tool and mapped
+destination meters in `system.diagnostics.nodeTelemetry`, using the same
+meter fields as a single route. Shared plugin members expose the processed
+group output at their graph boundaries; these meters do not claim separate
+internal plugin measurements. A running worker or timing entry alone must
+never animate a connection as though it carries sound.
+
 ## Requirements
 
 Current VB-Cable-first onboarding selects and verifies existing VB-Cable,
@@ -110,6 +133,11 @@ across meter refreshes. Capture privacy mute must not hide measured signal flow
 from Test Signal or Audio File sources; capture-only paths remain marked muted.
 Native preparation guidance distinguishes control connection readiness from
 audio readiness and explains the exact endpoint and authorization steps.
+
+While a connected backend's initial snapshot is pending, show loading status
+and withhold the editable graph. Failure offers reconnect rather than editable
+demonstration data. Numeric properties honor the backend's advertised step and
+reject values between valid steps. Every enum field has an accessible caption.
 
 ## Session refresh and audio readiness
 

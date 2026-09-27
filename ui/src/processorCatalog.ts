@@ -19,6 +19,10 @@ export function processorParameterError(
     if (typeof value !== "number" || !Number.isFinite(value)) return `${name} must be finite`;
     if (parameter.minimum !== undefined && value < parameter.minimum) return `${name} must be at least ${parameter.minimum}`;
     if (parameter.maximum !== undefined && value > parameter.maximum) return `${name} must be at most ${parameter.maximum}`;
+    if (parameter.step !== undefined && parameter.step > 0 && Number.isFinite(parameter.step)) {
+      const steps = (value - (parameter.minimum ?? 0)) / parameter.step;
+      if (Math.abs(steps - Math.round(steps)) > 1e-7) return `${name} must use steps of ${parameter.step}`;
+    }
   } else if (parameter.type === "boolean" && typeof value !== "boolean") {
     return `${name} must be boolean`;
   } else if (parameter.type === "string" && (!parameter.enum || typeof value !== "string" || !parameter.enum.includes(value))) {

@@ -1,5 +1,6 @@
 //! Allocation-free built-in DSP primitives for M04.
 
+mod pitch_shift;
 pub mod restoration;
 pub mod spectral;
 pub mod timeshift;
@@ -37,6 +38,17 @@ pub struct PitchShifter {
 /// Prepared block-streaming pitch shifter. The state is allocated at
 /// construction and each call accepts exactly one 128-frame interleaved block,
 /// making the processing boundary suitable for a future realtime graph stage.
+///
+/// ```
+/// use audiorouter_dsp::{PitchShiftParams, StreamingPitchShifter};
+/// let mut shifter = StreamingPitchShifter::new(PitchShiftParams {
+///     semitones: 7.0, cents: 0.0, sample_rate: 48_000.0,
+///     channels: 1, bypass: false,
+/// }).unwrap();
+/// let mut output = [0.0; 128];
+/// shifter.process_block(&[0.0; 128], &mut output).unwrap();
+/// assert!(output.iter().all(|sample| sample.is_finite()));
+/// ```
 pub struct StreamingPitchShifter {
     params: PitchShiftParams,
     shifters: Vec<pitch_shift::Shifter<Box<[f32; pitch_shift::TOTAL_F32]>>>,
@@ -2685,6 +2697,52 @@ mod tests {
         let mut fresh_output = vec![0.0; input.len()];
         fresh.process_block(&input, &mut fresh_output).unwrap();
         assert_eq!(reset_output, fresh_output);
+    }
+
+    #[test]
+    fn streaming_pitch_survives_silence_and_sustained_tones_at_every_shift_extreme() {
+        for semitones in [-12.0, 0.0, 7.0, 12.0] {
+            let mut shifter = StreamingPitchShifter::new(PitchShiftParams {
+                semitones,
+                cents: 0.0,
+                sample_rate: 48_000.0,
+                channels: 2,
+                bypass: false,
+            })
+            .unwrap();
+            let mut input = [0.0; StreamingPitchShifter::BLOCK_FRAMES * 2];
+            let mut output = [0.0; StreamingPitchShifter::BLOCK_FRAMES * 2];
+            for quantum in 0..512 {
+                let silent = quantum < 16 || (160..192).contains(&quantum);
+                for frame in 0..StreamingPitchShifter::BLOCK_FRAMES {
+                    input[frame * 2] = if silent {
+                        0.0
+                    } else {
+                        0.1 * (2.0 * PI * 440.0 * (quantum * 128 + frame) as f32 / 48_000.0).sin()
+                    };
+                    input[frame * 2 + 1] = 0.0;
+                }
+                shifter.process_block(&input, &mut output).unwrap();
+                assert!(
+                    output.iter().all(|sample| sample.is_finite()),
+                    "shift {semitones}, quantum {quantum}"
+                );
+                assert!(
+                    output
+                        .iter()
+                        .skip(1)
+                        .step_by(2)
+                        .all(|sample| *sample == 0.0),
+                    "silent channel isolation"
+                );
+                if (32..160).contains(&quantum) || quantum >= 208 {
+                    assert!(
+                        output.iter().step_by(2).any(|sample| sample.abs() > 0.001),
+                        "shift {semitones}: audio lost at quantum {quantum}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

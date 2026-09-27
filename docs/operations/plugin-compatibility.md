@@ -1,5 +1,15 @@
 # Plugin compatibility snapshot
 
+On 2026-09-26, the installed ReaFIR, ReaEQ, ReaComp and ReaGate VST2 plugins
+passed a privacy-muted Patrick Main Session Start/pump in one isolated shared
+worker. All four were running with zero faults. Shared-chain fixtures passed
+distinct state/parameter routing and crash, hang and nonfinite silence; ReaEQ
+and ReaComp passed individual editor controls in a shared worker. Route timing
+was approximately 60 ms for voice to CABLE-A, compared with the earlier 97 ms
+snapshot. This is telemetry, not audible latency qualification. VST3 hosting
+is unchanged. See [shared-chain evidence](../plans/active/evidence/2026-09-26-shared-vst2-chain.md)
+for commands, grouping limits and remaining acceptance work.
+
 The supplied x64 TDR Nova and COMPER VST3 modules were requalified on
 2026-09-16 with `m06-vst3-worker.ps1 -AllowStateUnsupported -SingleStreamOnly`.
 Both passed isolated single-stream processing, bounded worker

@@ -120,6 +120,256 @@ fn disposable_worker_process_round_trips_control_and_audio_frames() {
     );
 }
 
+#[cfg(all(windows, feature = "test-fixtures"))]
+fn chain_fixture(name: &str) -> audiorouter_plugin_host::WorkerChainPlugin {
+    let root = PathBuf::from(
+        std::env::var_os("AUDIOROUTER_VST2_CHAIN_FIXTURES").expect("chain fixture directory"),
+    );
+    let path = root.join(name);
+    let identity = inspect_binary(&path, std::slice::from_ref(&root)).unwrap();
+    audiorouter_plugin_host::WorkerChainPlugin {
+        path,
+        sha256: identity.sha256,
+        configured_roots: vec![root],
+    }
+}
+
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[test]
+#[ignore = "requires repository VST2 state, legacy, crash, hang and nonfinite DLL fixtures"]
+fn shared_vst2_chain_routes_parameters_and_individual_state() {
+    let plugins = vec![
+        chain_fixture("audiorouter-vst2-state-fixture.dll"),
+        chain_fixture("audiorouter-vst2-legacy-main-fixture.dll"),
+    ];
+    let mut worker = SupervisedWorkerProcess::spawn_verified_chain(
+        fixture_worker_path(),
+        &plugins,
+        1,
+        48_000,
+        Instant::now(),
+    )
+    .unwrap();
+    // Each DLL's state is independent. Processing both in one frame incurs
+    // no intermediate pipeline and applies member-specific parameter events.
+    let frame = WorkerFrame::new(1, worker_clock_tick() + 10_000, 1, vec![0.8; 128]).unwrap();
+    let result = worker
+        .process_chain(
+            frame,
+            vec![
+                vec![ParameterEvent {
+                    parameter_id: 0,
+                    normalized_value: 0.25,
+                    sample_offset: 0,
+                }],
+                vec![ParameterEvent {
+                    parameter_id: 0,
+                    normalized_value: 0.75,
+                    sample_offset: 0,
+                }],
+            ],
+            Instant::now(),
+        )
+        .unwrap();
+    assert!(result
+        .samples
+        .iter()
+        .all(|value| (*value - 0.15).abs() < 1e-6));
+    worker.select_instance(0, Instant::now()).unwrap();
+    let first = worker.save_state(Instant::now()).unwrap();
+    worker.select_instance(1, Instant::now()).unwrap();
+    let second = worker.save_state(Instant::now()).unwrap();
+    assert_ne!(first.bytes, second.bytes);
+    worker.restore_state(first.clone(), Instant::now()).unwrap();
+    assert_eq!(worker.save_state(Instant::now()).unwrap(), first);
+    worker.select_instance(0, Instant::now()).unwrap();
+    assert_eq!(worker.save_state(Instant::now()).unwrap(), first);
+    worker.select_instance(1, Instant::now()).unwrap();
+    worker.restore_state(second, Instant::now()).unwrap();
+    let result = worker
+        .process_chain(
+            WorkerFrame::new(2, worker_clock_tick() + 10_000, 1, vec![0.8; 128]).unwrap(),
+            vec![vec![], vec![]],
+            Instant::now(),
+        )
+        .unwrap();
+    assert!(result
+        .samples
+        .iter()
+        .all(|value| (*value - 0.15).abs() < 1e-6));
+    worker.shutdown().unwrap();
+
+    // Published graph handles share one bounded queue; later stages cannot
+    // double-process or count its delay again, and retain the owner lifetime.
+    let worker = SupervisedWorkerProcess::spawn_verified_chain(
+        fixture_worker_path(),
+        &plugins,
+        1,
+        48_000,
+        Instant::now(),
+    )
+    .unwrap();
+    let mut bridges =
+        audiorouter_plugin_host::PluginRuntimeBridge::start_chain(worker, 1, 128, 8, 2).unwrap();
+    use audiorouter_engine::RealtimePluginProcessor;
+    bridges[0]
+        .set_parameters(vec![ParameterEvent {
+            parameter_id: 0,
+            normalized_value: 0.25,
+            sample_offset: 0,
+        }])
+        .unwrap();
+    bridges[1]
+        .set_parameters(vec![ParameterEvent {
+            parameter_id: 0,
+            normalized_value: 0.75,
+            sample_offset: 0,
+        }])
+        .unwrap();
+    let mut block = audiorouter_engine::AudioBlock::new(1, 128).unwrap();
+    let until = Instant::now() + Duration::from_secs(2);
+    let mut heard = false;
+    while Instant::now() < until {
+        block.copy_from_interleaved(&vec![0.8; 128]).unwrap();
+        bridges[0].process(&mut block);
+        bridges[1].process(&mut block);
+        let mut output = vec![0.0; 128];
+        block.copy_to_interleaved(&mut output).unwrap();
+        if output.iter().all(|sample| (*sample - 0.15).abs() < 1e-6) {
+            heard = true;
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(3));
+    }
+    assert!(heard, "shared bridge delivered the sequential result");
+    assert!(bridges[0].shares_worker_with(&bridges[1]));
+    for (active, expected) in [
+        ([false, true], 0.6),
+        ([true, false], 0.2),
+        ([false, false], 0.8),
+        ([true, true], 0.15),
+    ] {
+        for (bridge, enabled) in bridges.iter().zip(active) {
+            bridge.set_processing_active(enabled);
+        }
+        let until = Instant::now() + Duration::from_secs(2);
+        let mut consecutive = 0;
+        while Instant::now() < until && consecutive < 4 {
+            block.channel_mut(0).unwrap().fill(0.8);
+            bridges[0].process(&mut block);
+            bridges[1].process(&mut block);
+            if block
+                .channel(0)
+                .unwrap()
+                .iter()
+                .all(|sample| (*sample - expected).abs() < 1e-6)
+            {
+                consecutive += 1;
+            } else {
+                consecutive = 0;
+            }
+            std::thread::sleep(Duration::from_millis(3));
+        }
+        assert_eq!(
+            consecutive, 4,
+            "active mask {active:?} must deliver {expected}"
+        );
+        assert!(bridges[0].shares_worker_with(&bridges[1]));
+        assert!(bridges.iter().all(|bridge| !bridge.failed()));
+    }
+    assert_eq!(bridges[1].latency_samples(), 0);
+    assert!(bridges[0].latency_samples() <= 8 * 128);
+    let first = bridges[0].save_state().unwrap();
+    let second = bridges[1].save_state().unwrap();
+    assert_ne!(first.bytes, second.bytes);
+    bridges.remove(0);
+    assert!(!bridges[0].failed());
+}
+
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[test]
+#[ignore = "requires repository VST2 crash/hang/nonfinite DLL fixtures"]
+fn shared_vst2_chain_fault_silences_all_members_and_preserves_other_workers() {
+    use audiorouter_engine::{PluginWorkerState, RealtimePluginProcessor};
+    let good = chain_fixture("audiorouter-vst2-state-fixture.dll");
+    for name in [
+        "audiorouter-vst2-crash-fixture.dll",
+        "audiorouter-vst2-hang-fixture.dll",
+        "audiorouter-vst2-nonfinite-fixture.dll",
+    ] {
+        let identity = inspect_binary(&good.path, &good.configured_roots).unwrap();
+        let mut independent = SupervisedWorkerProcess::spawn_verified(
+            fixture_worker_path(),
+            &identity,
+            &good.configured_roots,
+            1,
+            Instant::now(),
+        )
+        .unwrap();
+        let bad = chain_fixture(name);
+        let worker = SupervisedWorkerProcess::spawn_verified_chain(
+            fixture_worker_path(),
+            &[good.clone(), bad],
+            1,
+            48_000,
+            Instant::now(),
+        )
+        .unwrap();
+        let bridges =
+            audiorouter_plugin_host::PluginRuntimeBridge::start_chain(worker, 1, 128, 8, 2)
+                .unwrap();
+        let mut block = audiorouter_engine::AudioBlock::new(1, 128).unwrap();
+        block.copy_from_interleaved(&vec![0.5; 128]).unwrap();
+        let before = Instant::now();
+        bridges[0].process(&mut block);
+        bridges[1].process(&mut block);
+        assert!(
+            before.elapsed() < Duration::from_millis(100),
+            "callback must not await hung member"
+        );
+        let until = Instant::now() + Duration::from_secs(7);
+        while !bridges[0].failed() && Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        for bridge in &bridges {
+            assert!(
+                bridge.failed(),
+                "{name}: all members latch the shared fault"
+            );
+            assert_eq!(bridge.health().state, PluginWorkerState::Failed);
+            block.copy_from_interleaved(&vec![0.5; 128]).unwrap();
+            bridge.process(&mut block);
+            let mut output = vec![1.0; 128];
+            block.copy_to_interleaved(&mut output).unwrap();
+            assert!(output.iter().all(|value| *value == 0.0));
+            assert!(!bridge.reset());
+        }
+        let result = independent
+            .process(
+                WorkerFrame::new(1, worker_clock_tick() + 10_000, 1, vec![0.8; 128]).unwrap(),
+                vec![],
+                Instant::now(),
+            )
+            .unwrap();
+        assert!(result
+            .samples
+            .iter()
+            .all(|value| (*value - 0.4).abs() < 1e-6));
+        independent.shutdown().unwrap();
+    }
+    // Every fingerprint is checked, not just the chain head.
+    let mut changed = chain_fixture("audiorouter-vst2-legacy-main-fixture.dll");
+    changed.sha256 = "0".repeat(64);
+    assert!(SupervisedWorkerProcess::spawn_verified_chain(
+        fixture_worker_path(),
+        &[good, changed],
+        1,
+        48_000,
+        Instant::now()
+    )
+    .is_err());
+}
+
 #[cfg(feature = "test-fixtures")]
 #[test]
 fn multi_bus_fixture_worker_negotiates_and_echoes_a_complete_bus_set() {
@@ -2541,21 +2791,56 @@ fn runtime_bridge_saves_state_and_opens_the_editor_in_a_pumping_parent() {
         std::env::var("AUDIOROUTER_VST2_FIXTURE").expect("set AUDIOROUTER_VST2_FIXTURE"),
     );
     let root = plugin_path.parent().expect("fixture parent").to_path_buf();
-    let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root)).expect("inspect fixture");
-    let worker = SupervisedWorkerProcess::spawn_verified_with_sample_rate(
-        fixture_worker_path(),
-        &identity,
-        std::slice::from_ref(&root),
-        2,
-        48_000,
-        Instant::now(),
-    )
-    .expect("spawn VST2 worker");
-    let bridge = audiorouter_plugin_host::PluginRuntimeBridge::start(worker, 2, 128, 8).expect("bridge");
+    let identity =
+        inspect_binary(&plugin_path, std::slice::from_ref(&root)).expect("inspect fixture");
+    let bridges = if let Some(other) = std::env::var_os("AUDIOROUTER_VST2_EDITOR_CHAIN_MEMBER") {
+        let other = PathBuf::from(other);
+        let other_root = other.parent().unwrap().to_path_buf();
+        let other_identity = inspect_binary(&other, std::slice::from_ref(&other_root)).unwrap();
+        let plugins = vec![
+            audiorouter_plugin_host::WorkerChainPlugin {
+                path: identity.path.clone(),
+                sha256: identity.sha256.clone(),
+                configured_roots: vec![root.clone()],
+            },
+            audiorouter_plugin_host::WorkerChainPlugin {
+                path: other_identity.path,
+                sha256: other_identity.sha256,
+                configured_roots: vec![other_root],
+            },
+        ];
+        let worker = SupervisedWorkerProcess::spawn_verified_chain(
+            fixture_worker_path(),
+            &plugins,
+            2,
+            48_000,
+            Instant::now(),
+        )
+        .unwrap();
+        audiorouter_plugin_host::PluginRuntimeBridge::start_chain(worker, 2, 128, 8, 2).unwrap()
+    } else {
+        let worker = SupervisedWorkerProcess::spawn_verified_with_sample_rate(
+            fixture_worker_path(),
+            &identity,
+            std::slice::from_ref(&root),
+            2,
+            48_000,
+            Instant::now(),
+        )
+        .expect("spawn VST2 worker");
+        vec![
+            audiorouter_plugin_host::PluginRuntimeBridge::start(worker, 2, 128, 8).expect("bridge"),
+        ]
+    };
 
-    match bridge.save_state() {
-        Ok(state) => assert!(!state.bytes.is_empty() && state.bytes.len() <= 512 * 1024),
-        Err(error) => assert!(error.contains("StateUnsupported"), "unexpected state result: {error}"),
+    for bridge in &bridges {
+        match bridge.save_state() {
+            Ok(state) => assert!(!state.bytes.is_empty() && state.bytes.len() <= 512 * 1024),
+            Err(error) => assert!(
+                error.contains("StateUnsupported"),
+                "unexpected state result: {error}"
+            ),
+        }
     }
 
     let stop = Arc::new(AtomicBool::new(false));
@@ -2588,10 +2873,20 @@ fn runtime_bridge_saves_state_and_opens_the_editor_in_a_pumping_parent() {
     let authorization = audiorouter_plugin_host::EditorParentAuthorizationIssuer::from_key([5; 32])
         .issue(parent as u64, std::process::id())
         .expect("authorization");
-    let opened = bridge.open_editor(authorization);
-    let closed = opened.as_ref().ok().map(|()| bridge.close_editor());
+    let outcomes = bridges
+        .iter()
+        .map(|bridge| {
+            let opened = bridge.open_editor(authorization.clone());
+            let closed = opened.as_ref().ok().map(|()| bridge.close_editor());
+            (opened, closed)
+        })
+        .collect::<Vec<_>>();
     stop.store(true, Ordering::Release);
     pump.join().expect("pump thread");
-    opened.expect("the editor opens when its parent thread pumps messages");
-    closed.expect("close attempted").expect("the editor closes and hands back its state");
+    for (opened, closed) in outcomes {
+        opened.expect("the editor opens when its parent thread pumps messages");
+        closed
+            .expect("close attempted")
+            .expect("the editor closes and hands back its state");
+    }
 }
