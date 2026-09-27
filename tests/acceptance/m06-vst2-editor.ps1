@@ -65,8 +65,8 @@ try {
         $env:AUDIOROUTER_VST2_FIXTURE = $fixture.FullName
         Write-Output "Running bounded VST2 editor acceptance: $($fixture.Name)"
         foreach ($testName in @(
-                'dedicated_vst2_editor_thread_bounds_a_nonreturning_native_editor',
-                'supervised_vst2_editor_timeout_kills_the_worker_and_records_failure')) {
+                'vst2_editor_shows_the_processing_instance_without_blocking_its_caller',
+                'supervised_vst2_worker_keeps_processing_while_an_editor_hangs')) {
             & cargo test -p audiorouter-plugin-host --test worker_process `
                 --features test-fixtures --locked -- `
                 --ignored --exact $testName --nocapture

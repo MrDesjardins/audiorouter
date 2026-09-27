@@ -2262,7 +2262,7 @@ fn method_description(name: &str) -> &'static str {
         "plugins.inspect" => "Inspect one explicitly selected plugin binary without loading plugin code.",
         "plugins.saveState" => "Capture the opaque state of a plugin node in a playing route and store it; set the returned stateId on the node to restore it on the next start.",
         "plugins.openEditor" => "Open the native editor of a plugin node in a playing route inside a parent window owned by the calling desktop shell.",
-        "plugins.closeEditor" => "Close a plugin node editor and apply its edits to the instance that processes audio.",
+        "plugins.closeEditor" => "Close a plugin node editor. The editor shows the instance that processes audio, so edits already apply live.",
         "plugins.parameters" => "Load one currently scanned plugin in its isolated worker and return bounded parameter descriptors.",
         "virtualDevices.list" => "List managed virtual bus desired state without activating endpoints.",
         "virtualDevices.plan" => "Validate a managed virtual bus lifecycle change without applying it.",

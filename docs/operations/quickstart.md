@@ -360,7 +360,9 @@ to the exact rescanned path and SHA-256. VST2 binaries such as ReaPlugs do not
 publish VST3 class IDs, so a neutral authoring placeholder is used.
 
 While the route plays, **Open plugin editor** (VST2, desktop app) shows the
-vendor's own window; closing it applies the edits to the audio. **Save plugin
+vendor's own window for the very instance that processes the audio, so
+meters and analysers (for example ReaFIR's noise profile) see the live
+signal and every edit is heard immediately. **Save plugin
 settings** stores the plugin's full state with the route (`plugins.saveState`),
 and it is restored every time the route starts. VST3 editor windows are not
 supported yet; VST3 plugins are configured through their parameters.

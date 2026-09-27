@@ -226,3 +226,26 @@ sections above.
 - Artifact: `target/patrick-main-release-3/release/audiorouter-shell.exe`,
   built 11:05, bundle `index-Cbk6z3dN.js` embedded. It is a new folder
   because the user's `release-2` shell was running.
+
+### 2026-09-27 — VST2 editor showed a copy that received no audio (PLUG-03/05)
+
+- Report (user): ReaFIR's editor did not pick up audio. After closing it,
+  the node reported 18 missing output blocks and 10 dropped input blocks.
+- Cause: the worker opened the editor on a *second* plugin instance loaded
+  on its UI thread, and copied its state to the processing instance on
+  close. The editor therefore never saw audio (ReaFIR's noise profile and
+  analyser need it), and edits were not heard until close. Open and close
+  also waited for the plugin's window on the worker's audio loop, so blocks
+  were missed and dropped meanwhile.
+- Fix: `Vst2EditorAccess` gives the UI thread the editor opcodes of the
+  processing instance (the VST2 threading model: GUI thread plus audio
+  thread). Open and close are requested without waiting for the window, and
+  the editor thread closes the editor and is joined (bounded to 2 s) before
+  the plugin can unload. The editor acceptance tests were rewritten: the
+  editor opens the processing instance without blocking its caller, and the
+  worker keeps processing while an editor hangs.
+- Verification: `m06-vst2-editor.ps1` passes for all 6 ReaPlugs fixtures;
+  the shared-chain acceptance, the pumping-parent editor/state test, and
+  workspace Rust tests (0 failures) all pass.
+- Artifact: `target/patrick-main-release-4/release/audiorouter-shell.exe`,
+  built 12:08. It is a new folder because `release-3` is running.

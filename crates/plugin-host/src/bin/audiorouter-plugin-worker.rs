@@ -93,9 +93,11 @@ fn run() -> Result<(), String> {
         .into_iter()
         .collect();
     #[cfg(windows)]
-    let mut vst2_editors: Vec<Vst2EditorThread> = plugin_path
-        .as_deref()
-        .map(Vst2EditorThread::spawn)
+    // Each editor thread shows its processing instance. Declared after the
+    // plugins so it is dropped (editor closed, thread joined) first.
+    let mut vst2_editors: Vec<Vst2EditorThread> = vst2_plugins
+        .first()
+        .map(|plugin| Vst2EditorThread::spawn(plugin.editor_access()))
         .transpose()
         .map_err(|error| format!("VST2 editor thread failed: {error:?}"))?
         .into_iter()
@@ -199,12 +201,12 @@ fn run() -> Result<(), String> {
                         }
                     }
                     for member in &plugins {
-                        vst2_plugins.push(
-                            Vst2Library::load(&member.path)
-                                .map_err(|error| format!("chain member load failed: {error:?}"))?,
-                        );
+                        let plugin = Vst2Library::load(&member.path)
+                            .map_err(|error| format!("chain member load failed: {error:?}"))?;
+                        let access = plugin.editor_access();
+                        vst2_plugins.push(plugin);
                         vst2_editors.push(
-                            Vst2EditorThread::spawn(&member.path).map_err(|error| {
+                            Vst2EditorThread::spawn(access).map_err(|error| {
                                 format!("chain editor thread failed: {error:?}")
                             })?,
                         );
@@ -433,12 +435,8 @@ fn run() -> Result<(), String> {
                     Some(editor) => usize::try_from(parent_window)
                         .map_err(|_| "invalid parent window".to_string())
                         .and_then(|parent| {
-                            // The editor is a separate instance: start it from
-                            // the processing instance's current settings.
-                            let current = vst2_plugins
-                                .get_mut(selected_instance)
-                                .and_then(|plugin| plugin.save_state().ok());
-                            editor.open(parent, parent_process_id, &authorization_token, current)
+                            // The editor shows the processing instance itself.
+                            editor.open(parent, parent_process_id, &authorization_token)
                         }),
                     None => Err("editorUnavailable".to_string()),
                 };
@@ -465,19 +463,7 @@ fn run() -> Result<(), String> {
                     .map_or_else(
                         || Err("editorUnavailable".to_string()),
                         Vst2EditorThread::close,
-                    )
-                    .and_then(|state| {
-                        // Apply the edits made in the editor to the instance
-                        // that processes audio.
-                        if let (Some(state), Some(plugin)) =
-                            (state, vst2_plugins.get_mut(selected_instance))
-                        {
-                            plugin.restore_state(&state).map_err(|error| {
-                                format!("editor state restore failed: {error:?}")
-                            })?;
-                        }
-                        Ok(())
-                    });
+                    );
                 #[cfg(not(windows))]
                 let result: Result<(), String> = Err("editorUnavailable".into());
                 match result {

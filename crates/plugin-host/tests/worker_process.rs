@@ -1,7 +1,7 @@
 #[cfg(feature = "test-fixtures")]
 use audiorouter_plugin_host::stage_engine_worker_result;
 #[cfg(all(windows, feature = "test-fixtures"))]
-use audiorouter_plugin_host::vst2::Vst2EditorThread;
+use audiorouter_plugin_host::vst2::{Vst2EditorThread, Vst2Library};
 #[cfg(feature = "test-fixtures")]
 use audiorouter_plugin_host::ParameterEvent;
 #[cfg(feature = "test-fixtures")]
@@ -1864,7 +1864,7 @@ fn verified_worker_applies_restored_vst2_chunk_state() {
 #[cfg(all(windows, feature = "test-fixtures"))]
 #[test]
 #[ignore = "requires an editor-capable local VST2 DLL and a Windows desktop"]
-fn dedicated_vst2_editor_thread_bounds_a_nonreturning_native_editor() {
+fn vst2_editor_shows_the_processing_instance_without_blocking_its_caller() {
     let plugin_path = PathBuf::from(
         std::env::var("AUDIOROUTER_VST2_FIXTURE")
             .expect("set AUDIOROUTER_VST2_FIXTURE for the VST2 editor acceptance"),
@@ -1890,12 +1890,30 @@ fn dedicated_vst2_editor_thread_bounds_a_nonreturning_native_editor() {
         )
     };
     assert!(!parent.is_null(), "hidden editor parent creation failed");
-    let editor = Vst2EditorThread::spawn(&plugin_path).expect("spawn VST2 editor thread");
+    // This test thread owns the parent, so it pumps messages while the
+    // editor thread builds the plugin window (as the desktop shell does).
+    let pump = |duration: Duration| {
+        let until = Instant::now() + duration;
+        let mut message = [0_usize; 6];
+        while Instant::now() < until {
+            // SAFETY: the message buffer outlives each synchronous call.
+            unsafe {
+                while PeekMessageW(&mut message, std::ptr::null_mut(), 0, 0, 1) != 0 {
+                    TranslateMessage(&message);
+                    DispatchMessageW(&message);
+                }
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    };
+    // The editor attaches to the instance that processes audio.
+    let library = Vst2Library::load(&plugin_path).expect("load VST2 fixture");
+    let editor =
+        Vst2EditorThread::spawn(library.editor_access()).expect("spawn VST2 editor thread");
     let wrong_owner = editor.open(
         parent as usize,
         std::process::id().saturating_add(1),
         "acceptance-token",
-        None,
     );
     assert!(
         wrong_owner
@@ -1903,24 +1921,33 @@ fn dedicated_vst2_editor_thread_bounds_a_nonreturning_native_editor() {
             .is_err_and(|error| error.contains("not valid")),
         "an HWND bound to another owner process must be rejected: {wrong_owner:?}"
     );
-    let result = editor
-        .open(parent as usize, std::process::id(), "acceptance-token", None)
-        .and_then(|_| editor.close().map(|_| ()));
+    let started = Instant::now();
+    editor
+        .open(parent as usize, std::process::id(), "acceptance-token")
+        .expect("open request");
+    assert!(
+        started.elapsed() < Duration::from_millis(200),
+        "opening must not wait for the plugin to build its window"
+    );
+    pump(Duration::from_millis(600));
+    editor.close().expect("close request");
+    pump(Duration::from_millis(300));
+    let dropped = Instant::now();
     drop(editor);
+    assert!(
+        dropped.elapsed() < Duration::from_secs(3),
+        "editor thread shutdown is bounded"
+    );
+    drop(library);
     // SAFETY: The handle was returned by CreateWindowExW and is no longer
     // needed after the editor has closed.
     unsafe { assert_ne!(DestroyWindow(parent), 0) };
-    let error = result.expect_err("the ReaPlugs editor must remain bounded");
-    assert!(
-        error.contains("timed out"),
-        "unexpected editor result: {error}"
-    );
 }
 
 #[cfg(all(windows, feature = "test-fixtures"))]
 #[test]
 #[ignore = "requires an editor-capable local VST2 DLL and a Windows desktop"]
-fn supervised_vst2_editor_timeout_kills_the_worker_and_records_failure() {
+fn supervised_vst2_worker_keeps_processing_while_an_editor_hangs() {
     let plugin_path = PathBuf::from(
         std::env::var("AUDIOROUTER_VST2_FIXTURE")
             .expect("set AUDIOROUTER_VST2_FIXTURE for the VST2 editor acceptance"),
@@ -1965,13 +1992,29 @@ fn supervised_vst2_editor_timeout_kills_the_worker_and_records_failure() {
     let authorization = audiorouter_plugin_host::EditorParentAuthorizationIssuer::from_key([7; 32])
         .issue(parent as u64, std::process::id())
         .expect("editor authorization");
-    let result = worker.open_editor(&authorization, Instant::now());
-    // SAFETY: The handle was returned by CreateWindowExW and the worker has
-    // been terminated before the parent is destroyed.
+    // This parent's thread never pumps messages, so the plugin cannot finish
+    // building its window. Opening returns at once and audio keeps flowing,
+    // instead of stalling the worker (which dropped audio blocks).
+    let started = Instant::now();
+    worker
+        .open_editor(&authorization, Instant::now())
+        .expect("open request is accepted without waiting for the window");
+    assert!(started.elapsed() < Duration::from_secs(1));
+    let frame = WorkerFrame::new(
+        1,
+        worker_clock_tick().saturating_add(10_000),
+        2,
+        vec![0.25; 256],
+    )
+    .unwrap();
+    worker
+        .process(frame, Vec::new(), Instant::now())
+        .expect("audio keeps processing while the editor hangs");
+    assert_eq!(worker.state(), audiorouter_plugin_host::WorkerState::Running);
+    drop(worker);
+    // SAFETY: The handle was returned by CreateWindowExW and the worker is
+    // gone before the parent is destroyed.
     unsafe { assert_ne!(DestroyWindow(parent), 0) };
-    assert!(result.is_err(), "a nonreturning editor must fail closed");
-    assert_eq!(worker.state(), audiorouter_plugin_host::WorkerState::Failed);
-    assert_eq!(worker.into_supervisor().failure_count(), 1);
 }
 
 #[cfg(feature = "test-fixtures")]

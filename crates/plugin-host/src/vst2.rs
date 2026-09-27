@@ -1123,138 +1123,175 @@ fn window_owner_process_id(window: usize) -> Option<u32> {
 
 #[cfg(windows)]
 enum EditorThreadCommand {
-    /// Open the editor; the optional state is the processing instance's
-    /// current state, loaded first so the editor shows the live settings.
-    Open(usize, u32, String, Option<Vec<u8>>, Sender<Result<(), String>>),
-    /// Close the editor and return its state so the worker can apply the
-    /// edits to the processing instance.
-    Close(Sender<Result<Option<Vec<u8>>, String>>),
+    Open(usize, u32),
+    Close,
     Shutdown,
 }
 
-/// Disposable native-editor owner. The editor instance is loaded and used
-/// exclusively by its Windows UI thread, separate from the worker's audio
-/// processing instance. Dropping this handle requests shutdown and detaches
-/// the thread; the enclosing disposable worker remains the hard containment
-/// boundary if a third-party editor does not return.
+/// A handle to the editor entry points of the processing instance, for its
+/// UI thread. VST2 hosts run the editor (open/idle/close) on a UI thread
+/// while the audio thread processes the same instance; this is the plugin
+/// ABI's normal threading model. Showing the processing instance is what
+/// lets an editor meter or analyse live audio (for example ReaFIR building
+/// a noise profile) and makes every edit audible immediately.
+///
+/// Invariant: the `Vst2Library` this came from outlives it. The worker owns
+/// both, and `Vst2EditorThread` joins its thread on drop, closing the editor
+/// first, before the library can be unloaded.
+#[cfg(windows)]
+pub struct Vst2EditorAccess {
+    effect: *mut Vst2Effect,
+    has_editor: bool,
+}
+
+// SAFETY: the pointer is only dereferenced on the editor thread for the
+// editor opcodes, which the VST2 ABI allows concurrently with processing on
+// the audio thread. The owning library outlives the access (see above).
+#[cfg(windows)]
+unsafe impl Send for Vst2EditorAccess {}
+
+#[cfg(windows)]
+impl Vst2Library {
+    /// Editor entry points of this instance for its UI thread.
+    pub fn editor_access(&self) -> Vst2EditorAccess {
+        Vst2EditorAccess {
+            effect: self.effect,
+            has_editor: self.has_editor(),
+        }
+    }
+}
+
+#[cfg(windows)]
+impl Vst2EditorAccess {
+    fn dispatch(&self, opcode: i32, pointer: *mut c_void) -> isize {
+        // SAFETY: the effect is live for the access lifetime (invariant
+        // above) and this runs on the editor thread only.
+        unsafe {
+            (*self.effect).dispatcher.expect("validated dispatcher")(
+                self.effect,
+                opcode,
+                0,
+                0,
+                pointer,
+                0.0,
+            )
+        }
+    }
+}
+
+/// Native-editor owner: one Windows UI thread that opens, idles and closes
+/// the editor of the processing instance. Dropping it closes an open editor
+/// and joins the thread, so the instance is never used after unload. The
+/// disposable worker process remains the containment boundary if a
+/// third-party editor never returns.
 #[cfg(windows)]
 pub struct Vst2EditorThread {
     commands: Sender<EditorThreadCommand>,
-    _thread: JoinHandle<()>,
+    thread: Option<JoinHandle<()>>,
+    exited: Receiver<()>,
 }
 
 #[cfg(windows)]
 impl Vst2EditorThread {
-    pub fn spawn(path: &Path) -> Result<Self, Vst2LibraryError> {
-        if !path.is_absolute() || !path.is_file() {
-            return Err(Vst2LibraryError::InvalidPath);
-        }
-        let path = path.to_path_buf();
+    pub fn spawn(access: Vst2EditorAccess) -> Result<Self, Vst2LibraryError> {
         let (commands, receiver) = mpsc::channel();
+        let (exit_signal, exited) = mpsc::channel();
         let thread = thread::Builder::new()
             .name("audiorouter-vst2-editor".into())
-            .spawn(move || editor_thread_main(path, receiver))
-            .map_err(|_| Vst2LibraryError::InvalidPath)?;
+            .spawn(move || {
+                editor_thread_main(access, receiver);
+                let _ = exit_signal.send(());
+            })
+            .map_err(|_| Vst2LibraryError::InvalidEditor)?;
         Ok(Self {
             commands,
-            _thread: thread,
+            thread: Some(thread),
+            exited,
         })
     }
 
+    /// Validate the request and ask the UI thread to open the editor. It
+    /// does not wait for the plugin to build its window: the worker keeps
+    /// processing audio meanwhile (waiting here dropped audio blocks).
     pub fn open(
         &self,
         parent_window: usize,
         owner_process_id: u32,
         authorization_token: &str,
-        initial_state: Option<Vec<u8>>,
     ) -> Result<(), String> {
-        let (response, receiver) = mpsc::channel();
+        if authorization_token.is_empty() {
+            return Err("editor authorization token is missing".into());
+        }
+        if !is_window_handle(parent_window)
+            || window_owner_process_id(parent_window) != Some(owner_process_id)
+        {
+            return Err("parent window is not valid".into());
+        }
         self.commands
-            .send(EditorThreadCommand::Open(
-                parent_window,
-                owner_process_id,
-                authorization_token.to_owned(),
-                initial_state,
-                response,
-            ))
-            .map_err(|_| "editor UI thread stopped".to_string())?;
-        receiver
-            .recv_timeout(crate::WORKER_RESPONSE_TIMEOUT)
-            .map_err(|_| "editor UI thread timed out".to_string())?
+            .send(EditorThreadCommand::Open(parent_window, owner_process_id))
+            .map_err(|_| "editor UI thread stopped".to_string())
     }
 
-    /// Close the editor, returning the editor instance's state (when the
-    /// plugin exposes one) so edits can be applied to the processing instance.
-    pub fn close(&self) -> Result<Option<Vec<u8>>, String> {
-        let (response, receiver) = mpsc::channel();
+    /// Ask the UI thread to close the editor. Edits already live in the
+    /// processing instance, so nothing is copied back.
+    pub fn close(&self) -> Result<(), String> {
         self.commands
-            .send(EditorThreadCommand::Close(response))
-            .map_err(|_| "editor UI thread stopped".to_string())?;
-        receiver
-            .recv_timeout(crate::WORKER_RESPONSE_TIMEOUT)
-            .map_err(|_| "editor UI thread timed out".to_string())?
+            .send(EditorThreadCommand::Close)
+            .map_err(|_| "editor UI thread stopped".to_string())
     }
 }
+
+/// How long dropping an editor thread waits for the editor to close.
+#[cfg(windows)]
+pub const EDITOR_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[cfg(windows)]
 impl Drop for Vst2EditorThread {
     fn drop(&mut self) {
         let _ = self.commands.send(EditorThreadCommand::Shutdown);
+        // Join once the editor has closed. An editor stuck inside the plugin
+        // (for example a parent window whose thread never pumps messages) is
+        // left behind after a bounded wait: this only happens as the
+        // disposable worker exits, and the process ends with it.
+        if self.exited.recv_timeout(EDITOR_SHUTDOWN_TIMEOUT).is_ok() {
+            if let Some(thread) = self.thread.take() {
+                let _ = thread.join();
+            }
+        }
     }
 }
 
 #[cfg(windows)]
-fn editor_thread_main(path: std::path::PathBuf, receiver: Receiver<EditorThreadCommand>) {
-    let mut plugin: Option<Vst2Library> = None;
+fn editor_thread_main(access: Vst2EditorAccess, receiver: Receiver<EditorThreadCommand>) {
+    let mut open = false;
     loop {
         pump_editor_messages();
         match receiver.recv_timeout(Duration::from_millis(10)) {
-            Ok(EditorThreadCommand::Open(parent, owner_pid, token, initial_state, response)) => {
-                let result = if token.is_empty() {
-                    Err("editor authorization token is missing".to_string())
-                } else if !is_window_handle(parent)
-                    || window_owner_process_id(parent) != Some(owner_pid)
+            Ok(EditorThreadCommand::Open(parent, owner_pid)) => {
+                if access.has_editor
+                    && !open
+                    && is_window_handle(parent)
+                    && window_owner_process_id(parent) == Some(owner_pid)
                 {
-                    Err("parent window is not valid".to_string())
-                } else {
-                    let plugin = match plugin.as_mut() {
-                        Some(plugin) => Ok(plugin),
-                        None => Vst2Library::load(&path)
-                            .map(|loaded| plugin.insert(loaded))
-                            .map_err(|error| format!("VST2 editor load failed: {error:?}")),
-                    };
-                    plugin.and_then(|plugin| {
-                        // Best effort: a plugin without chunk support still
-                        // opens with its own defaults.
-                        if let Some(state) = initial_state.as_deref() {
-                            let _ = plugin.restore_state(state);
-                        }
-                        plugin
-                            .open_editor(parent, owner_pid)
-                            .map_err(|error| format!("VST2 editor open failed: {error:?}"))
-                    })
-                };
-                let _ = response.send(result);
+                    open = access.dispatch(EFF_EDIT_OPEN, parent as *mut c_void) >= 0;
+                }
             }
-            Ok(EditorThreadCommand::Close(response)) => {
-                let result = plugin
-                    .as_mut()
-                    .ok_or_else(|| "editor is not open".to_string())
-                    .and_then(|plugin| {
-                        let state = plugin.save_state().ok();
-                        plugin
-                            .close_editor()
-                            .map(|()| state)
-                            .map_err(|error| format!("VST2 editor close failed: {error:?}"))
-                    });
-                let _ = response.send(result);
+            Ok(EditorThreadCommand::Close) => {
+                if open {
+                    access.dispatch(EFF_EDIT_CLOSE, ptr::null_mut());
+                    open = false;
+                }
             }
-            Ok(EditorThreadCommand::Shutdown) => break,
+            Ok(EditorThreadCommand::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => {
+                if open {
+                    access.dispatch(EFF_EDIT_CLOSE, ptr::null_mut());
+                }
+                break;
+            }
             Err(mpsc::RecvTimeoutError::Timeout) => {}
-            Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
-        if let Some(plugin) = plugin.as_mut() {
-            let _ = plugin.idle_editor();
+        if open {
+            access.dispatch(EFF_EDIT_IDLE, ptr::null_mut());
         }
     }
 }
