@@ -10,8 +10,11 @@ export type DraftChange = {
 export const GAIN_MIN_DB = -60;
 export const GAIN_MAX_DB = 24;
 
-export type LibraryNodeKind = Extract<NodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "audioFile" | "mixer" | "gain" | "volume" | "bassTreble" | "dehum" | "declick" | "inputSwitch" | "denoise" | "speechDenoise" | "firFilter" | "timeShift" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch" | "recorder">;
-export type InsertableProcessorKind = Exclude<LibraryNodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "mixer" | "inputSwitch" | "meter">;
+export type LibraryNodeKind = Extract<NodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "audioFile" | "mixer" | "gain" | "volume" | "bassTreble" | "dehum" | "declick" | "inputSwitch" | "denoise" | "speechDenoise" | "firFilter" | "timeShift" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch" | "recorder" | "networkSend" | "networkReceive">;
+export type InsertableProcessorKind = Exclude<LibraryNodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "mixer" | "inputSwitch" | "meter" | "networkSend" | "networkReceive">;
+
+/** Default UDP port of the Network Send/Receive tools (mirrors the domain). */
+export const DEFAULT_NETWORK_AUDIO_PORT = 47800;
 export type EqPresetId = "voiceNeutral" | "hum50Hz" | "hum60Hz";
 export type VoiceChainPresetId = "voiceNeutral" | "voiceGateAndCompression";
 
@@ -51,6 +54,18 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
   audioFile: {
     name: "Audio file",
     parameters: { mediaId: "", loop: false },
+    ports: [{ name: "out", direction: "output", channels: 2 }],
+  },
+  // The address is added when the user enters it: an empty address is not
+  // a valid IP literal, and the backend asks for it on Play.
+  networkSend: {
+    name: "Network Send",
+    parameters: { port: DEFAULT_NETWORK_AUDIO_PORT },
+    ports: [{ name: "in", direction: "input", channels: 2 }],
+  },
+  networkReceive: {
+    name: "Network Receive",
+    parameters: { port: DEFAULT_NETWORK_AUDIO_PORT, bufferMs: 40 },
     ports: [{ name: "out", direction: "output", channels: 2 }],
   },
   mixer: {
@@ -343,7 +358,7 @@ export function applicationCaptureChoices(applications: readonly ApplicationInfo
  * is that application, or null. Such a route runs on the application worker
  * (process loopback to one output) instead of the physical endpoint pair.
  */
-const ROUTE_SOURCE_KINDS = new Set(["physicalInput", "applicationCapture", "endpointLoopback", "virtualRenderSource", "testSignal", "audioFile"]);
+const ROUTE_SOURCE_KINDS = new Set(["physicalInput", "applicationCapture", "endpointLoopback", "virtualRenderSource", "testSignal", "audioFile", "networkReceive"]);
 
 /** Processor kinds the engine accepts in a linear chain before a Mixer input (mirrors `is_chain_processor`). */
 const CHAIN_PROCESSOR_KINDS = new Set<NodeKind>(["gain", "volume", "bassTreble", "dehum", "declick", "denoise", "speechDenoise", "firFilter", "timeShift", "mute", "meter", "parametricEq", "compressor", "gate", "limiter", "delay", "graphicEq", "pitch", "plugin"]);
@@ -429,6 +444,8 @@ export function independentPaths(session: Session): Session["nodes"][] {
  * resolves every device from the node's own saved endpoint.
  */
 export function needsNativePaths(session: Session): boolean {
+  // Network Send/Receive run only on the multi-path worker.
+  if (session.nodes.some((node) => node.enabled && (node.kind === "networkSend" || node.kind === "networkReceive"))) return true;
   // Preserve per-node endpoint ownership when a source or branch is off.
   const connectedDevices = session.nodes.filter((node) => session.edges.some((edge) => edge.enabled && (edge.sourceNode === node.id || edge.destinationNode === node.id)));
   if (connectedDevices.filter((node) => node.kind === "physicalInput").length > 1

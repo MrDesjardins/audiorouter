@@ -220,12 +220,57 @@ temporary probe artifacts. This verifies the existing-device path only; it
 does not prove AudioRouter graph activation, UI meters, or an attended
 microphone route.
 
-For the intended UI workflow, the next M05 slice is a graph-native Test Signal
-node with destination meters. Until that node is implemented, use the raw
-smoke above or play a known tone from an already-running application through a
-deliberately selected existing endpoint. VoiceMeeter may remain open; stop or
-close it only if it owns the exact endpoint AudioRouter must prepare, and treat
-`deviceInUse` as an ownership diagnostic rather than changing defaults.
+In the UI, add a **Test Signal** source (Tools → Inputs), connect it to an
+output, save, and press Play; destination meters and connection activity show
+the signal. VoiceMeeter may remain open; stop or close it only if it owns the
+exact endpoint AudioRouter must prepare, and treat `deviceInUse` as an
+ownership diagnostic rather than changing defaults.
+
+### Stream audio to another computer (Network Send / Network Receive)
+
+Use this to send audio from one PC to another on the same local network, for
+example game audio from a gaming PC to a streaming PC. AudioRouter must run on
+both computers.
+
+1. On each PC, find its IP address: run `ipconfig` and read the **IPv4
+   Address** (for example `192.168.1.20`).
+2. On the **sending** PC, add **Network Send** (Tools → Outputs → Network) and
+   connect your source to it (for example the game's capture or a Mixer). In
+   its Properties, enter the *receiving* PC's IP address. Keep the default port
+   47800 unless another program uses it. Save and press Play.
+3. On the **receiving** PC, add **Network Receive** (Tools → Inputs → Network)
+   and connect it to an output: speakers, or a virtual cable that OBS
+   captures. In its Properties, enter the *sending* PC's IP address and the
+   same port. Save and press Play. The first time, Windows Firewall may ask
+   whether AudioRouter may use the network; allow **private networks**.
+4. The receive node's Properties show `Receiving · … packets · … ms buffered`.
+   "Waiting for audio" means nothing is arriving. Check both IP addresses, the
+   port, that both sessions are playing, and the firewall. Packets from any
+   other address are ignored and counted.
+
+The stream is uncompressed 48 kHz float audio (about 3 Mbit/s for stereo). It
+is not encrypted, so use it only on a network you trust. On Wi-Fi, raise
+**Buffer (ms)** on the receiver (for example to 80) if you hear gaps; the
+buffer is the added delay.
+
+### Check audio quality (crackling)
+
+Audio continuity is measured, not judged from builds. With VB-Cable installed,
+the following plays a quiet tone into `CABLE Input`, routes `CABLE Output`
+through AudioRouter to `CABLE-B Input`, records `CABLE-B Output`, and counts
+every discontinuity sample by sample. Nothing reaches speakers unless
+"Listen to this device" is enabled on a cable.
+
+```powershell
+:AUDIOROUTER_LIVE_CONTINUITY = "1"
+cargo test -p audiorouter-transport --test live_audio_continuity -- --ignored --nocapture
+```
+
+Options such as processor chains, the single-endpoint worker, real plugin
+nodes from a database copy, Test Signal and network routes are listed in the
+[continuity evidence](../plans/active/evidence/2026-09-26-audio-continuity.md#method).
+A passing run reports `0 glitches` for both the reference and the routed
+result.
 
 ## 2. Run the safe acceptance checks
 

@@ -22,7 +22,8 @@ import type { DiagnosticsSnapshot, Node, NodeKind, Session } from "@audiorouter/
 import { clearLayout, readLayout, writeLayout, type LayoutPositions } from "./layout";
 import { nodePortLabels } from "./graphView";
 import { libraryEntries, type LibraryEntry, type LibraryFlowGroup } from "./library";
-import { GAIN_MAX_DB, GAIN_MIN_DB, mixerInputs, mixerInputVolumeKey, type LibraryNodeKind } from "./draft";
+import { DEFAULT_NETWORK_AUDIO_PORT, GAIN_MAX_DB, GAIN_MIN_DB, mixerInputs, mixerInputVolumeKey, type LibraryNodeKind } from "./draft";
+import { networkTelemetryText } from "./NetworkNodeEditor";
 import { PROCESSOR_ACTIONS } from "./DraftConnectionList";
 import { TestSignalPlaybackControls } from "./TestSignalPlaybackControls";
 import type { RecorderStatus } from "./backend";
@@ -102,8 +103,10 @@ const NODE_FLOW_GROUPS: Record<NodeKind, LibraryFlowGroup> = {
   applicationCapture: "input",
   endpointLoopback: "input",
   virtualRenderSource: "input",
+  networkReceive: "input",
   physicalOutput: "output",
   virtualCaptureSink: "output",
+  networkSend: "output",
   mixer: "tool",
   gain: "tool",
   volume: "tool",
@@ -169,6 +172,8 @@ const NODE_KIND_LABELS: Partial<Record<NodeKind, string>> = {
   speechDenoise: "Speech Denoise",
   firFilter: "FIR Filter",
   timeShift: "Time Shift",
+  networkSend: "Network Send",
+  networkReceive: "Network Receive",
 };
 
 /** A readable node-kind label for the canvas card. A plugin's label names
@@ -719,6 +724,13 @@ export function AudioFileNodeControls({ node, state = "stopped", onTransport }: 
 
 function NodeVisual({ node, telemetry, applicationCaptureState, onSetNodeParameter, recorderStatus, mixerInputCount, mixerInputList, routed, sessionRunning, sessionActionBusy, testSignalPlaybackReady, testSignalEndpointPrepared, onStartTestSignal, onStopTestSignal, onAudioSourceTransport, audioSourceStates, onTimeShiftTransport, timeShiftStatuses }: { node: Node; telemetry: ReturnType<typeof nodeTelemetryFor>; applicationCaptureState: DiagnosticsSnapshot["applicationCaptureStates"][number] | null; onSetNodeParameter?: SessionFlowCanvasProps["onSetNodeParameter"]; recorderStatus?: RecorderStatus | null; mixerInputCount?: number; mixerInputList?: ReturnType<typeof mixerInputs>; routed: boolean; sessionRunning: boolean; sessionActionBusy: boolean; testSignalPlaybackReady: boolean; testSignalEndpointPrepared: boolean; onStartTestSignal?: () => void; onStopTestSignal?: () => void; onAudioSourceTransport?: SessionFlowCanvasProps["onAudioSourceTransport"]; audioSourceStates?: SessionFlowCanvasProps["audioSourceStates"]; onTimeShiftTransport?: SessionFlowCanvasProps["onTimeShiftTransport"]; timeShiftStatuses?: SessionFlowCanvasProps["timeShiftStatuses"] }) {
   if (node.kind === "parametricEq" || node.kind === "graphicEq") return <MiniEq node={node} onSetNodeParameter={onSetNodeParameter} />;
+  if (node.kind === "networkSend" || node.kind === "networkReceive") {
+    const sending = node.kind === "networkSend";
+    const address = sending ? node.parameters.host : node.parameters.sender;
+    const target = typeof address === "string" ? `${sending ? "To" : "From"} ${address}:${String(node.parameters.port ?? DEFAULT_NETWORK_AUDIO_PORT)}` : "Set the IP address in Properties";
+    const status = networkTelemetryText(telemetry?.network);
+    return <div className="node-fader-stack"><span className="node-denoise-status" title={target}>{target}</span>{status && <span className="node-network-status" role="status">{status}</span>}</div>;
+  }
   if (node.kind === "gain") return <MiniFader label="Gain" value={Number(node.parameters.gainDb ?? 0)} min={GAIN_MIN_DB} max={GAIN_MAX_DB} step={1} formatValue={(value) => `${value.toFixed(1)} dB`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "gainDb", Number(value.toFixed(1))) : undefined} ariaLabel={`${node.name} gain`} />;
   if (node.kind === "pitch") return <MiniFader label="Pitch" value={Number(node.parameters.semitones ?? 0)} min={-24} max={24} step={0.5} formatValue={(value) => `${value > 0 ? "+" : ""}${value.toFixed(1)} st`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "semitones", Number(value.toFixed(1))) : undefined} ariaLabel={`${node.name} pitch shift`} />;
   if (node.kind === "volume") return <MiniFader label="Volume" value={Number(node.parameters.percent ?? 100)} min={0} max={200} step={1} formatValue={(value) => `${Math.round(value)} %`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "percent", Math.round(value)) : undefined} ariaLabel={`${node.name} volume percent`} />;

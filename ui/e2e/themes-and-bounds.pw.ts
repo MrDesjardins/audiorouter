@@ -11,7 +11,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(page.getByTestId("rf__node-voice").locator(".node-fader-readout strong")).toHaveCSS("color", "rgb(237, 244, 255)");
     const directory = path.resolve("../target/feature-confidence-visual");
     await mkdir(directory, { recursive: true });
-    for (const [name, kind, control] of [["Dehum", "dehum", "harmonics precise value"], ["Input Switch", "inputSwitch", "selected"]]) {
+    for (const [name, kind, control] of [["Dehum", "dehum", "harmonics precise value"], ["Input Switch", "inputSwitch", "selected"], ["Network Send", "networkSend", "Receiving computer's IP address"], ["Network Receive", "networkReceive", "Sending computer's IP address"]]) {
       await page.getByRole("tab", { name: "Tools", exact: true }).click();
       await page.locator(".tool-card").filter({ has: page.getByText(name, { exact: true }) }).click();
       await page.getByTestId(`rf__node-${kind}-1`).locator(".flow-node-title").click();
@@ -26,6 +26,10 @@ for (const theme of ["dark", "light", "high-contrast"]) {
         return { radius: style.borderRadius, shadow: style.boxShadow, background: style.backgroundImage };
       });
       expect(style).toEqual({ radius: "9px", shadow: "none", background: "none" });
+      if (kind === "networkSend" || kind === "networkReceive") {
+        await field.fill("192.168.1.20");
+        await expect(page.getByTestId(`rf__node-${kind}-1`)).toContainText(`${kind === "networkSend" ? "To" : "From"} 192.168.1.20:47800`);
+      }
       await page.screenshot({ path: path.join(directory, `${theme}-${kind}.png`) });
     }
   });

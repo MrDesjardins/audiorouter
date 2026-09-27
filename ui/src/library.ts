@@ -10,7 +10,7 @@ export type LibraryEntry = {
   label: string;
   category: string;
   flow: LibraryFlowGroup;
-  kind?: Extract<NodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "audioFile" | "mixer" | "gain" | "volume" | "bassTreble" | "dehum" | "declick" | "inputSwitch" | "denoise" | "speechDenoise" | "firFilter" | "timeShift" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch" | "recorder">;
+  kind?: Extract<NodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "audioFile" | "mixer" | "gain" | "volume" | "bassTreble" | "dehum" | "declick" | "inputSwitch" | "denoise" | "speechDenoise" | "firFilter" | "timeShift" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch" | "recorder" | "networkSend" | "networkReceive">;
   /** Helper text shown as a tooltip and matched by search, even for an
    * available entry. Used to point at the free existing-endpoint path
    * (VoiceMeeter, VB-Cable) instead of the deferred signed-driver one. */
@@ -36,6 +36,8 @@ export const libraryEntries: LibraryEntry[] = [
   { id: "endpoint-loopback", label: "Endpoint loopback", category: "Source", flow: "input", unavailableReason: "Select an exact active render endpoint in Endpoint binding" },
   { id: "virtual-render-source", label: "Virtual render source", category: "Virtual bus", flow: "input", unavailableReason: "Requires the deferred AudioRouter-managed signed driver. For an installed Voicemeeter or VB-Cable capture endpoint today, use Input device instead.", virtualKind: "virtualRenderSource" },
   { id: "physical-output", label: "Output device", category: "Destination", flow: "output", kind: "physicalOutput", note: OUTPUT_DEVICE_NOTE },
+  { id: "network-receive", label: "Network Receive", category: "Network", flow: "input", kind: "networkReceive", note: "Play audio streamed by AudioRouter on another computer on your network, for example game audio from a gaming PC. Enter that computer's IP address." },
+  { id: "network-send", label: "Network Send", category: "Network", flow: "output", kind: "networkSend", note: "Stream audio to AudioRouter on another computer on your network, for example from a gaming PC to a streaming PC. Enter the receiving computer's IP address." },
   { id: "virtual-capture-sink", label: "Virtual capture sink", category: "Virtual bus", flow: "output", unavailableReason: "Requires the deferred AudioRouter-managed signed driver. For an installed Voicemeeter or VB-Cable playback endpoint today, use Output device instead.", virtualKind: "virtualCaptureSink" },
   { id: "volume", label: "Volume", category: "Effect", flow: "tool", kind: "volume", note: "Set one source's level in percent (0–200 %) before it reaches a Mixer." },
   { id: "gain", label: "Gain", category: "Effect", flow: "tool", kind: "gain" },

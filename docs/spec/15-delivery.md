@@ -46,9 +46,12 @@ The ranges below include every normative ID; each milestone must attach evidence
 | GRAPH-01–09, GRAPH-12–13 | M01/M02 | UC-02/05/07, compiler/property tests |
 | GRAPH-10, GRAPH-14 | M04/M06 | UC-02/06, compensation/failure tests |
 | GRAPH-11 | M02/M03 | UC-01/04/05, global cycle checks |
+| GRAPH-15 | M02/M05 | Multi-path session: engine path tests, saved-session drift survey, audio continuity harness |
+| GRAPH-16 | M02 (network extension, 2026-09-26) | Network unit/loopback tests, live UDP continuity route |
 | CAP-01–08 | M00/M02 | UC-03, Windows device/app matrix |
 | CAP-09–10 | M03/M05 | UC-01, duplicate-playback validation |
 | CAP-11–12 | M02/M07 | UC-03/06, OS transitions |
+| CAP-13 | M02 | Concurrent exact-endpoint ownership in multi-path sessions |
 | VDEV-01–08, VDEV-10–12 | M03/M07 | UC-01/05/09/10, driver lifecycle |
 | VDEV-09 | M00 strategy; M08 shipping | Secure Boot/HVCI installation |
 | DSP-01–05, DSP-07–09 | M04 | UC-02, transfer-function vectors |
@@ -70,6 +73,7 @@ The ranges below include every normative ID; each milestone must attach evidence
 | SEC-08 | M03/M08 | Driver boundary/signing review |
 | SEC-09 | M04/M07 | Path and bundle attacks |
 | SEC-11 | M08 | Signed update/rollback |
+| SEC-13 | M02 (network extension, 2026-09-26) | Sender-address filter, malformed-datagram and bounds tests |
 | NFR-01–16 | Gates in [14](14-quality.md) | M08 measured reports |
 | QUAL-01–06 | M02–M06 as relevant | M08 signal/recording regression |
 | ENG-01–05 | Every milestone | M08 contract/docs/build evidence |

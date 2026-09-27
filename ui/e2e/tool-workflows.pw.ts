@@ -57,6 +57,20 @@ for (const entry of libraryEntries.filter(entry => entry.kind)) {
       await expect(inspector).toContainText("qualification.wav");
       await expect(inspector.getByRole("button", { name: "Play", exact: true })).toBeEnabled();
     }
+    if (entry.kind === "networkSend" || entry.kind === "networkReceive") {
+      const sending = entry.kind === "networkSend";
+      const address = inspector.getByLabel(sending ? "Receiving computer's IP address" : "Sending computer's IP address", { exact: true });
+      await address.fill("streaming-pc");
+      await expect(inspector.getByRole("alert")).toContainText("numeric IP address");
+      await address.fill("192.168.1.20");
+      await inspector.getByLabel("Port", { exact: true }).fill("47810");
+      changedParameters[sending ? "host" : "sender"] = "192.168.1.20";
+      changedParameters.port = 47810;
+      if (!sending) {
+        await inspector.getByLabel("Buffer (ms)", { exact: true }).fill("60");
+        changedParameters.bufferMs = 60;
+      }
+    }
     await inspector.getByLabel("Node name", { exact: true }).fill(`Qualified ${entry.kind}`);
     await inspector.getByLabel("Enabled", { exact: true }).uncheck();
     await inspector.getByLabel("Bypass", { exact: true }).check();

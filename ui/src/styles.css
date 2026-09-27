@@ -808,6 +808,11 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .node-input-switch button.is-selected { color: #10151c; background: var(--signal-hot, #ffd166); border-color: transparent; }
 .node-denoise-status { font-size: .72rem; color: var(--text-soft, #9eacbb); }
 .node-denoise-status.is-learning { color: var(--signal-hot, #ffd166); font-weight: 700; }
+/* Node cards are dark in every theme: card status text uses fixed light colors. */
+.flow-node-content .node-denoise-status { color: #b3c0cd; }
+.flow-node-content .node-denoise-status.is-learning { color: #ffd166; }
+.node-network-status { font-size: .72rem; color: #edf4ff; }
+.network-node-editor .network-node-status { margin: 0; font-weight: 600; color: var(--text-strong, #edf4ff); }
 .node-binding-editor .file-picker { display: grid; gap: .3rem; cursor: pointer; }
 .node-time-shift { display: grid; gap: .3rem; }
 .node-time-shift-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: .25rem; }

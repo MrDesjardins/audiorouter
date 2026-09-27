@@ -34,7 +34,9 @@ export type NodeKind =
   | "denoise"
   | "speechDenoise"
   | "firFilter"
-  | "timeShift";
+  | "timeShift"
+  | "networkSend"
+  | "networkReceive";
 
 export type PortDirection = "input" | "output";
 
@@ -361,6 +363,27 @@ export interface NativeApplicationPrepareResult {
   creationTime100ns: string;
   mode: "include" | "exclude";
   renderEndpointId: string;
+}
+
+/** Counters of a Network Send or Network Receive node (UDP LAN streaming). */
+export interface NetworkNodeTelemetry {
+  direction: "send" | "receive";
+  sentPackets?: number;
+  /** Quanta not sent because the send queue was full. */
+  droppedPackets?: number;
+  sendErrors?: number;
+  receivedPackets?: number;
+  /** Missing packets replaced with silence. */
+  lostPackets?: number;
+  /** Duplicate or reordered packets that arrived too late. */
+  latePackets?: number;
+  /** Datagrams from another address or not AudioRouter audio. */
+  rejectedDatagrams?: number;
+  /** Times the receive buffer ran empty (audible gaps). */
+  underruns?: number;
+  overflowPackets?: number;
+  /** Audio buffered ahead of playout. */
+  bufferedMs?: number;
 }
 
 /** Continuity of the backend-owned native audio service (absent from older backends). */
@@ -704,6 +727,8 @@ export interface DiagnosticsSnapshot {
     } | null;
     /** Present while a Denoise node is learning: its current noise profile. */
     noiseProfile?: string;
+    /** Present on a running Network Send or Network Receive node. */
+    network?: NetworkNodeTelemetry;
     /**
      * Where the signal spends time at this node while a multi-input route
      * runs. `delayMs` is how long a source's audio waits before pickup, the
