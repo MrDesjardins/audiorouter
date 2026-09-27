@@ -118,7 +118,7 @@ by hand in the morning.
    ```powershell
    $env:AUDIOROUTER_DATABASE = "$env:LOCALAPPDATA\AudioRouter\state.sqlite"
    $env:AUDIOROUTER_ALLOW_DEVICE_ADMIN = "1"
-   & "C:\code\audiorouter\target\patrick-main-release-2\release\audiorouter-shell.exe"
+   & "C:\code\audiorouter\target\patrick-main-release-3\release\audiorouter-shell.exe"
    ```
    Select Patrick Main Session and press Play. Also try a Test Signal
    route. Listen to the voice and
@@ -200,3 +200,29 @@ sections above.
 - Rollback: remove the two node kinds and `network_audio`. Saved sessions
   without network nodes are unaffected.
 - Next: the attended two-PC test (see Next actions).
+
+### 2026-09-27 — Live Bypass toggles stalled a playing route (GRAPH-05/08, UI-04)
+
+- Report (user): toggling Bypass while playing did nothing; Stop then Play
+  was needed.
+- Reproduced live on a privacy-muted copy of the saved session, and with the
+  continuity harness (`AUDIOROUTER_CONTINUITY_TOGGLE`). The commit was
+  applied, but it started a new runtime generation. The multi-path worker
+  kept its prepared generation, so the backend audio service and the pump
+  rejected it as stale and stopped pumping.
+- Fix: the worker serves both the prepared and the live-applied generation,
+  and the UI adopts the committed generation. Bypassed plugins are prepared
+  in the graph with the bridge passing audio dry. `graph.commit` lets audio
+  advance between the durable save and the graph rebuild, so the maximum
+  service gap during toggles is 6–8 ms (it was 18.8 ms).
+- Verification: all five effects toggled both ways while playing, all
+  applied, with pumping continuing on both generations
+  (`live_saved_session_bypass_toggles_apply_while_playing`). A Gain at
+  −12 dB follows every toggle with zero time jump on both workers. A
+  ReaEQ toggle adds no plugin misses. Workspace Rust tests (0 failures),
+  UI tests 353, E2E 67/67, and drift checks pass.
+- Known: a bypass switch is instantaneous, not crossfaded, so it can click
+  slightly on loud material.
+- Artifact: `target/patrick-main-release-3/release/audiorouter-shell.exe`,
+  built 11:05, bundle `index-Cbk6z3dN.js` embedded. It is a new folder
+  because the user's `release-2` shell was running.
