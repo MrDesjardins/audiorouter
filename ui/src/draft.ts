@@ -446,6 +446,9 @@ export function independentPaths(session: Session): Session["nodes"][] {
 export function needsNativePaths(session: Session): boolean {
   // Network Send/Receive run only on the multi-path worker.
   if (session.nodes.some((node) => node.enabled && (node.kind === "networkSend" || node.kind === "networkReceive"))) return true;
+  // A Recorder is a fan-out branch; the single-endpoint worker compiles only
+  // a linear chain and rejects it, while the multi-path worker records it.
+  if (session.nodes.some((node) => node.enabled && node.kind === "recorder" && session.edges.some((edge) => edge.enabled && edge.destinationNode === node.id))) return true;
   // Preserve per-node endpoint ownership when a source or branch is off.
   const connectedDevices = session.nodes.filter((node) => session.edges.some((edge) => edge.enabled && (edge.sourceNode === node.id || edge.destinationNode === node.id)));
   if (connectedDevices.filter((node) => node.kind === "physicalInput").length > 1

@@ -469,6 +469,14 @@ describe("independent paths", () => {
     expect(needsNativePaths(monitored)).toBe(true);
   });
 
+  it("uses the multi-path worker for a route with a connected Recorder branch", () => {
+    const single: Session = { ...twoPaths, nodes: twoPaths.nodes.slice(0, 3), edges: twoPaths.edges.slice(0, 2) };
+    const recorded: Session = { ...single, nodes: [...single.nodes, node("take", "recorder")], edges: [...single.edges, edge("e6", "voice", "take")] };
+    expect(needsNativePaths(recorded)).toBe(true);
+    const unconnected: Session = { ...single, nodes: [...single.nodes, node("take", "recorder")] };
+    expect(needsNativePaths(unconnected)).toBe(false);
+  });
+
   it("lists device nodes that still need a saved endpoint", () => {
     const bound: Session = { ...twoPaths, nodes: twoPaths.nodes.map((item) => item.id === "scarlett" ? item : { ...item, parameters: item.kind.startsWith("physical") ? { endpointId: `${item.id}-endpoint` } : item.parameters }) };
     expect(unboundDeviceNodes(bound).map((item) => item.id)).toEqual(["scarlett"]);
