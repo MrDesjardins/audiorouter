@@ -21,6 +21,7 @@ import { setupChecklist } from "./setup";
 import { uiIdempotencyKey } from "./idempotency";
 import { processorAvailabilityText, processorLatencyText, processorParameterError, processorParametersText, type ProcessorDescriptor } from "./processorCatalog";
 import { NetworkNodeEditor } from "./NetworkNodeEditor";
+import { NumberField } from "./NumberField";
 import { mergeSessionInventory, reconcileSessionDraft, sameSessionDraft } from "./sessionInventory";
 import type { Connection } from "@xyflow/react";
 import { decodeTopologyAction } from "./DraftConnectionList";
@@ -361,7 +362,7 @@ function ProcessorParameterEditor({ node, processors, nodeTypes = null, pluginPa
     if (pluginParameterError) return <p className="muted" role="status">Plugin parameters unavailable: {pluginParameterError}</p>;
     if (!pluginParameters) return <p className="muted" role="status">Loading bounded parameters from the exact scanned plugin...</p>;
     if (pluginParameters.parameters.length === 0) return <p className="muted" role="status">This plugin exposes no automatable parameters.</p>;
-    return <>{pluginParameters.parameters.map((parameter) => { const name = `pluginParameter:${parameter.parameterId}`; const value = typeof node.parameters[name] === "number" && Number.isFinite(node.parameters[name] as number) ? node.parameters[name] as number : parameter.defaultValue; return <label key={name}><span>{parameter.title}</span><input type="range" aria-label={`${parameter.title} slider`} value={value} min={parameter.minimum} max={parameter.maximum} step={0.001} disabled={!connected} onChange={(event) => onChange(name, Number(event.target.value))} /><input type="number" aria-label={`${parameter.title} precise value`} value={value} min={parameter.minimum} max={parameter.maximum} step={0.001} disabled={!connected} onChange={(event) => onChange(name, Number(event.target.value))} /><small>normalized parameter {parameter.parameterId}</small></label>; })}</>;
+    return <>{pluginParameters.parameters.map((parameter) => { const name = `pluginParameter:${parameter.parameterId}`; const value = typeof node.parameters[name] === "number" && Number.isFinite(node.parameters[name] as number) ? node.parameters[name] as number : parameter.defaultValue; return <label key={name}><span>{parameter.title}</span><input type="range" aria-label={`${parameter.title} slider`} value={value} min={parameter.minimum} max={parameter.maximum} step={0.001} disabled={!connected} onChange={(event) => onChange(name, Number(event.target.value))} /><NumberField aria-label={`${parameter.title} precise value`} value={value} min={parameter.minimum} max={parameter.maximum} step={0.001} disabled={!connected} onValue={(next) => onChange(name, next)} /><small>normalized parameter {parameter.parameterId}</small></label>; })}</>;
   }
   const wireKind = node.kind.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
   const descriptor = processors?.find((processor) => processor.id === node.kind);
@@ -384,7 +385,7 @@ function ProcessorParameterEditor({ node, processors, nodeTypes = null, pluginPa
     const step = typeof parameter.step === "number" && Number.isFinite(parameter.step) && parameter.step > 0 ? parameter.step : parameter.unit === "Hz" ? 1 : 0.1;
     const hasRange = Number.isFinite(parameter.minimum) && Number.isFinite(parameter.maximum) && parameter.minimum! < parameter.maximum!;
     const sliderValue = hasRange ? Math.min(parameter.maximum!, Math.max(parameter.minimum!, numericValue)) : numericValue;
-    return <label key={parameter.name}><span>{parameter.name}{parameter.unit ? ` (${parameter.unit})` : ""}</span>{hasRange && <input type="range" aria-label={`${parameter.name} slider`} value={sliderValue} min={parameter.minimum} max={parameter.maximum} step={step} disabled={!connected} onChange={(event) => onChange(parameter.name, Number(event.target.value))} />}<input type="number" aria-label={`${parameter.name} precise value`} value={numericValue} min={parameter.minimum} max={parameter.maximum} step={step} disabled={!connected} onChange={(event) => onChange(parameter.name, Number(event.target.value))} /></label>;
+    return <label key={parameter.name}><span>{parameter.name}{parameter.unit ? ` (${parameter.unit})` : ""}</span>{hasRange && <input type="range" aria-label={`${parameter.name} slider`} value={sliderValue} min={parameter.minimum} max={parameter.maximum} step={step} disabled={!connected} onChange={(event) => onChange(parameter.name, Number(event.target.value))} />}<NumberField aria-label={`${parameter.name} precise value`} value={numericValue} min={parameter.minimum} max={parameter.maximum} step={step} disabled={!connected} onValue={(next) => onChange(parameter.name, next)} /></label>;
   })}</>;
 }
 

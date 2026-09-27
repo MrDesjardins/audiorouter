@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import type { Node } from "@audiorouter/contracts";
 import type { UiBackend, ProcessorResponse } from "./backend";
+import { NumberField } from "./NumberField";
 
 const BAND_COUNT = 16;
 const WIDTH = 380;
@@ -125,9 +126,9 @@ export function AdvancedEqEditor({ node, backend, connected, onChange }: {
     {selected && <div className="advanced-eq-controls">
       <div className="advanced-eq-selected"><strong>Point {selected.index + 1}</strong><button type="button" className="secondary" onClick={() => onChange(`band${selected.index}Enabled`, false)} disabled={!connected || !selected.enabled}>Remove point</button></div>
       <label>Filter<select aria-label="EQ filter type" value={selected.type} disabled={!connected || !selected.enabled} onChange={(event) => onChange(`band${selected.index}Type`, event.target.value)}>{FILTERS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
-      <label>Frequency <span>Hz</span><input aria-label="EQ frequency Hz" type="number" min={20} max={20000} value={selected.frequencyHz} disabled={!connected || !selected.enabled} onChange={(event) => { const value = Number(event.target.value); if (Number.isFinite(value) && value >= 20 && value <= 20000) onChange(`band${selected.index}FrequencyHz`, value); }} /></label>
-      {(selected.type === "peaking" || selected.type === "lowShelf" || selected.type === "highShelf") && <label>Gain <span>dB</span><input aria-label="EQ gain dB" type="number" min={-24} max={24} step={0.1} value={selected.gainDb} disabled={!connected || !selected.enabled} onChange={(event) => { const value = Number(event.target.value); if (Number.isFinite(value) && value >= -24 && value <= 24) onChange(`band${selected.index}GainDb`, value); }} /></label>}
-      <label>Q / width<input aria-label="EQ Q width" type="number" min={0.1} max={20} step={0.1} value={selected.q} disabled={!connected || !selected.enabled} onChange={(event) => { const value = Number(event.target.value); if (Number.isFinite(value) && value >= 0.1 && value <= 20) onChange(`band${selected.index}Q`, value); }} /></label>
+      <label>Frequency <span>Hz</span><NumberField aria-label="EQ frequency Hz" min={20} max={20000} step={1} value={selected.frequencyHz} disabled={!connected || !selected.enabled} onValue={(value) => onChange(`band${selected.index}FrequencyHz`, value)} /></label>
+      {(selected.type === "peaking" || selected.type === "lowShelf" || selected.type === "highShelf") && <label>Gain <span>dB</span><NumberField aria-label="EQ gain dB" min={-24} max={24} step={0.1} value={selected.gainDb} disabled={!connected || !selected.enabled} onValue={(value) => onChange(`band${selected.index}GainDb`, value)} /></label>}
+      <label>Q / width<NumberField aria-label="EQ Q width" min={0.1} max={20} step={0.1} value={selected.q} disabled={!connected || !selected.enabled} onValue={(value) => onChange(`band${selected.index}Q`, value)} /></label>
       <small>{selected.type === "notch" || selected.type === "lowPass" || selected.type === "highPass" ? "Gain does not apply to this filter. Q controls the shape." : "Q controls how broad or narrow the change is."}</small>
     </div>}
   </section>;
