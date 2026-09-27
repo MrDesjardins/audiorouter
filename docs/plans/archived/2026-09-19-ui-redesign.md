@@ -256,7 +256,7 @@ EQ preview, active-edge animation, four-sided connection handles, and the
 defects above) is complete and archived here. The remaining M05 gates —
 attended Windows Narrator, display-scaling, and live drag-and-drop
 verification — were never unique to this plan; they are tracked in
-[the active plan's explicit non-driver audit boundary](../active/current.md)
+[the explicit non-driver audit boundary in the archived execution log](2026-09-26-vb-cable-first-execution-log.md)
 and must be closed there, not by reopening this file. Rollback: revert the
 UI-only commits covering this plan's scope; the backend graph, persisted
 layout formats, and API contracts are unchanged by any of this work.

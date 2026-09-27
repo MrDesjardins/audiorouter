@@ -60,12 +60,30 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
-- **2026-09-26 — Plain Cargo desktop release builds require custom-protocol.**
-  Evidence: [feature confidence qualification](docs/plans/active/evidence/2026-09-26-feature-confidence.md).
-  Scope: release shell builds performed without the Tauri CLI. Consequence:
-  use `cargo build --manifest-path src-tauri/Cargo.toml --release --features
-  custom-protocol`; release optimization alone still selects the development
-  URL. Confirm the current asset bundle is embedded before handing off the exe.
+- **2026-09-26 — Judge audio quality with the sine-continuity harness, not by builds, counters or ear alone.**
+  Evidence: [audio continuity qualification](docs/plans/active/evidence/2026-09-26-audio-continuity.md).
+  Scope: any change to capture, graph, plugin bridge, output or pumping code.
+  Consequence: several "crackling fixes" were shipped on compile-only
+  evidence while every output quantum was enqueued twice (~275 clicks/s).
+  Run `live_backend_service_keeps_a_routed_tone_continuous` (VB-Cable →
+  route → CABLE-B, reference capture included) for each worker kind you
+  touch, and require zero glitches on a clean reference. If the tone is
+  997 Hz, block-sized jumps alias; confirm with 47 Hz.
+
+- **2026-09-26 — Native audio must be pumped by the backend, never by a UI timer.**
+  Evidence: [audio continuity qualification](docs/plans/active/evidence/2026-09-26-audio-continuity.md).
+  Scope: every native worker kind (endpoint, multi-input, duplex, render
+  source). Consequence: prepared workers are passive; the production serve
+  loop services them every 1 ms between requests. A WebView timer is
+  throttled when the window is hidden. Keep any new request handler short,
+  because it delays the next audio pass (watch `audioService.lateGaps`).
+
+- **2026-09-26 — A ring must have exactly one producer path per quantum.**
+  Evidence: [audio continuity qualification](docs/plans/active/evidence/2026-09-26-audio-continuity.md).
+  Scope: `AudioBlockRing` outputs fed by `process_to_rings*` and by
+  `AudioBlockRingTap`s. Consequence: writing a ring directly and also
+  registering a ring tap on it in the same branch tap set duplicates every
+  block. Rings written directly must not appear in that branch's taps.
 
 - **2026-09-26 — Plain Cargo desktop release builds require custom-protocol.**
   Evidence: [feature confidence qualification](docs/plans/active/evidence/2026-09-26-feature-confidence.md).
@@ -75,7 +93,7 @@ Report the result, affected requirement IDs/files, checks performed and limitati
   URL. Confirm the current asset bundle is embedded before handing off the exe.
 
 - **2026-09-26 — Qualify plugin routes past Start, with the node shapes the UI creates.**
-  Evidence: [active plan, attended defects 1–2](docs/plans/active/current.md).
+  Evidence: [active plan, attended defects 1–2](docs/plans/archived/2026-09-26-vb-cable-first-execution-log.md).
   Scope: native routes containing VST plugins. Consequence: a clean CLI
   preparation (all plugins loaded) hid two failures. Start refused plugins on
   the multi-input worker, and every ReaPlug then failed on its first block
@@ -85,7 +103,7 @@ Report the result, affected requirement IDs/files, checks performed and limitati
   and require every plugin's telemetry state to be `running`.
 
 - **2026-09-26 — Verify the embedded UI after every release build.**
-  Evidence: [active plan, stale release UI entry](docs/plans/active/current.md).
+  Evidence: [active plan, stale release UI entry](docs/plans/archived/2026-09-26-vb-cable-first-execution-log.md).
   Scope: `cargo tauri build` of `src-tauri`. Consequence: two release builds
   reported success while `ui/dist` stayed at the previous day's bundle, so the
   user tested new backend code behind an old UI. The build embeds whatever
@@ -94,7 +112,7 @@ Report the result, affected requirement IDs/files, checks performed and limitati
   change (or run `npm.cmd run build` in `ui` first); the release binary must
   be newer than `ui/dist`.
 - **2026-09-26 — Only one desktop shell may run at a time; check before launching.**
-  Evidence: [active plan, pipe collision entry](docs/plans/active/current.md).
+  Evidence: [active plan, pipe collision entry](docs/plans/archived/2026-09-26-vb-cable-first-execution-log.md).
   Scope: attended launches of `src-tauri/target/*/audiorouter-shell.exe`.
   Consequence: every shell's embedded backend serves the same default control
   pipe. A second instance is refused ("Access is denied. (0x80070005)"),
@@ -104,7 +122,7 @@ Report the result, affected requirement IDs/files, checks performed and limitati
   example the user's release build), ask the user instead of stopping it or
   launching beside it.
 - **2026-09-25 — Keep one app style for form controls (user preference).**
-  Evidence: [active plan, right-sidebar controls and VST picker follow-ups](docs/plans/active/current.md).
+  Evidence: [active plan, right-sidebar controls and VST picker follow-ups](docs/plans/archived/2026-09-26-vb-cable-first-execution-log.md).
   Scope: every UI input, select, textarea, and file picker. Consequence: the
   user repeatedly found browser-default fields (bevelled boxes, white dropdown
   lists, native file buttons) in the Advanced/MCP tabs and the VST picker
@@ -112,7 +130,7 @@ Report the result, affected requirement IDs/files, checks performed and limitati
   the global field rule; follow "UI conventions" above instead of styling one
   panel at a time.
 - **2026-09-25 — Write backslash-bearing text with the Edit/Write tools, not shell heredocs.**
-  Evidence: [active plan, VST workflow](docs/plans/active/current.md).
+  Evidence: [active plan, VST workflow](docs/plans/archived/2026-09-26-vb-cable-first-execution-log.md).
   Scope: agent edits containing Windows paths or regex escapes. Consequence:
   heredocs and `node -e` strings through the Bash tool collapsed `\\` to `\`,
   silently turning `"C:\\Program Files\\Common Files\\VST3"` into an invalid
@@ -147,20 +165,20 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 - 2026-09-09 - `E_INVALIDARG` is not evidence of an audio-device ownership conflict. Evidence: [M00 WASAPI probe](docs/plans/active/evidence/M00-wasapi-probe.md). Scope: shared WASAPI capture initialization and retry policy. Consequence: retain the exact `E_INVALIDARG` event-to-polling fallback, but preserve `AUDCLNT_E_DEVICE_IN_USE`, access-denied, and other HRESULTs as distinct diagnostics rather than masking them as mode incompatibility.
 
-- 2026-09-14 - The current VB-Cable pair requires explicit shared-mode PCM conversion permission. Evidence: [active plan](docs/plans/active/current.md), M02 control-owned route acceptance. Scope: Rust shared capture/render initialization against the existing VB-Cable format. Consequence: retain `AUTOCONVERTPCM|NOPERSIST` with the negotiated `GetMixFormat()` request; do not classify this endpoint's `E_INVALIDARG` as ownership contention without a distinct contention HRESULT.
+- 2026-09-14 - The current VB-Cable pair requires explicit shared-mode PCM conversion permission. Evidence: [active plan](docs/plans/archived/2026-09-26-vb-cable-first-execution-log.md), M02 control-owned route acceptance. Scope: Rust shared capture/render initialization against the existing VB-Cable format. Consequence: retain `AUTOCONVERTPCM|NOPERSIST` with the negotiated `GetMixFormat()` request; do not classify this endpoint's `E_INVALIDARG` as ownership contention without a distinct contention HRESULT.
 
-- 2026-09-08 - Plugin directory names are not format evidence. Evidence: [active M06 plan](docs/plans/active/current.md). Scope: Windows plugin inspection and execution gates. Consequence: classify binaries from verified PE architecture and format exports/metadata; an x64 VST2 DLL in a VST3-named directory may be tested only through the VST2 gate, while its x86 sibling must remain rejected.
+- 2026-09-08 - Plugin directory names are not format evidence. Evidence: [active M06 plan](docs/plans/archived/2026-09-26-vb-cable-first-execution-log.md). Scope: Windows plugin inspection and execution gates. Consequence: classify binaries from verified PE architecture and format exports/metadata; an x64 VST2 DLL in a VST3-named directory may be tested only through the VST2 gate, while its x86 sibling must remain rejected.
 
 - 2026-09-07 - Bound decoded control values before dispatch. Evidence: [M07 automation and recovery evidence](docs/plans/active/evidence/M07-automation-recovery.md). Scope: JSON-RPC control adapters. Consequence: framed byte limits must be complemented by shared nesting and string/key budgets before method-specific handlers run.
 
 - 2026-09-07 — Bound constructor capacity before allocation. Evidence: [M06 plugin evidence](docs/plans/active/evidence/M06-vst3-sdk.md). Scope: worker-side queues. Consequence: public bounded-queue constructors must clamp caller capacity before reserving storage, including hostile or accidental `usize::MAX` requests.
 
 - **2026-09-07 — WebView2 origin must be wired at startup.** Evidence: [M05 visual editor](docs/plans/active/evidence/M05-visual-editor.md). Scope: UI/native response transport. Consequence: an exact-origin allowlist is useful only when the normal page startup path supplies `window.location.origin`; mismatched and originless responses must remain ignored, while native shell packaging still needs manual acceptance.
-- **2026-09-07 — Synthetic `Instant` tests must avoid lower-bound subtraction.** Evidence: [active plan](docs/plans/active/current.md). Scope: portable time-retention tests on Windows. Consequence: construct an older test timestamp first and move the current timestamp forward, rather than subtracting a retention interval from `Instant::now()`, which can underflow on a short monotonic-clock origin.
+- **2026-09-07 — Synthetic `Instant` tests must avoid lower-bound subtraction.** Evidence: [active plan](docs/plans/archived/2026-09-26-vb-cable-first-execution-log.md). Scope: portable time-retention tests on Windows. Consequence: construct an older test timestamp first and move the current timestamp forward, rather than subtracting a retention interval from `Instant::now()`, which can underflow on a short monotonic-clock origin.
 - **2026-09-07 — Validate worker messages before serialization.** Evidence: [M06 plugin evidence](docs/plans/active/evidence/M06-vst3-sdk.md). Scope: local and cross-process worker protocol. Consequence: sender-side encoders must apply the same bounded frame, parameter, latency, and identity checks as decoders so invalid locally constructed values never enter the wire path.
 - **2026-09-07 — Guarded live audio needs before/after state proof.** Evidence: [M02 audio evidence](docs/plans/active/evidence/M02-audio-engine.md). Scope: authorized Windows endpoint qualification. Consequence: live wrappers must use explicit endpoint identities, capture media identity/state before and after, and clean exact temporary outputs; successful stream lifecycle alone is insufficient.
 - **2026-09-21 — For attended shell testing, launch the shell plainly with `AUDIOROUTER_DATABASE` plus `AUDIOROUTER_ALLOW_DEVICE_ADMIN=1` (no other overrides); never point it at a separately-launched `audiorouter-cli.exe backend serve` process for anything beyond the specific bounded-connection check that recipe is documented for.** Evidence: [M07 methodology-defect entry](docs/plans/active/evidence/M07-automation-recovery.md#attended-testing-methodology-defect-found-and-corrected-2026-09-21). Scope: any attended/manual testing of `src-tauri/target/*/audiorouter-shell.exe`. Consequence: `backend serve` (via `run_control_server` in `crates/cli/src/lib.rs`) calls `serve_control_connections_for_current_user`, which `crates/transport/src/lib.rs` itself documents as "the bounded acceptance helper" — it exits normally (code 0, no output) after serving a bounded request count, confirmed to survive 10+ seconds completely alone but die within ~300 ms of a real client connecting. The shell's own normal launch path never uses this command at all — `src-tauri/src/main.rs` spawns `serve_control_connections_forever_with_grant` on a background thread within the shell process itself, "the production backend path" per its own doc comment. Launching the shell plainly (no `AUDIOROUTER_CONTROL_PIPE` override) with `AUDIOROUTER_DATABASE` set to a disposable path and `AUDIOROUTER_ALLOW_DEVICE_ADMIN=1` gives a realistic, stable, persistent embedded backend. Using the bounded CLI process instead produced several apparent defects (missing side-panel parameter editors, an apparently-hung quit action) that were purely artifacts of the backend dying mid-session, not real product bugs — each cost significant investigation time before this was traced to the harness rather than the product.
-  **2026-09-25 addendum (user preference):** always include `AUDIOROUTER_ALLOW_DEVICE_ADMIN=1` for attended shell launches. Without it the shell withholds `DeviceAdministration`, and Play fails with `permissionDenied` on `nativeEndpoints.prepare` ([active plan](docs/plans/active/current.md), 2026-09-25 attended follow-up). The opt-in still requires a non-revoked operator enrollment in the target database, and the product default grant is unchanged.
+  **2026-09-25 addendum (user preference):** always include `AUDIOROUTER_ALLOW_DEVICE_ADMIN=1` for attended shell launches. Without it the shell withholds `DeviceAdministration`, and Play fails with `permissionDenied` on `nativeEndpoints.prepare` ([active plan](docs/plans/archived/2026-09-26-vb-cable-first-execution-log.md), 2026-09-25 attended follow-up). The opt-in still requires a non-revoked operator enrollment in the target database, and the product default grant is unchanged.
 
 - **2026-09-21 — A calibrated cross-stream WASAPI latency measurement needs per-stream native timestamps, a minimal negotiated buffer, event-driven service, and an anchor taken after any startup warm-up — not process-launch ticks, a shared poll loop, or an anchor averaged with a just-after-Start() sample.** Evidence: [M00 WASAPI probe, calibrated wired loopback entries](docs/plans/active/evidence/M00-wasapi-probe.md). Scope: any native WASAPI round-trip/physical-latency measurement tool (`tools/m00-native-wasapi-probe`), not just NFR-01. Consequence: (1) `IAudioClock::GetFrequency` can report a driver's native byte rate rather than the format's frame rate — always convert frame indices with `* nBlockAlign` before dividing by that frequency, and sanity-check by printing both; (2) request a `0` (minimal engine-period) `hnsBufferDuration` in shared mode for a latency measurement, never the large fixed buffer used by this file's other diagnostic-only probes, since that buffer's own size otherwise adds directly to the measured result (symptom: a suspiciously exact, zero-jitter constant across every sample); (3) service render and capture on separate event-driven threads (`AUDCLNT_STREAMFLAGS_EVENTCALLBACK` + per-stream `WaitForSingleObject`) rather than one thread cooperatively polling both, which drops frames on a small buffer and silently corrupts timing; (4) treat a text-parsing acceptance wrapper's green exit code as necessary, not sufficient — cross-check the underlying raw numbers, since a stream-formatting bug in one run produced a false pass a regex alone did not catch; (5) `IAudioClock::GetPosition` can stay at exactly 0 for a real ~40+ ms engine warm-up after `Start()` before advancing at the rate `GetFrequency()` predicts (confirmed by directly sampling position every ~10 ms for the first ~400 ms) — anchoring a latency calculation to a sample taken right after `Start()`, or averaging it with a later sample, bakes in a spurious tens-of-ms bias; use only an anchor extrapolated from confirmed steady-state samples. (6) A fixed 10 ms `IAudioClient3` shared-mode engine period (`GetSharedModeEnginePeriod` reporting `default == fundamental == min == max`) is a real per-device floor, not a bug — buffer/period tuning cannot close a large latency gap on such a device.
 

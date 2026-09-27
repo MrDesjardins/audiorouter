@@ -4,11 +4,13 @@ AudioRouter is a Windows 11 application under active development for visual audi
 
 Portable behavior and guarded Windows user-mode routing through existing
 VB-Cable, Voicemeeter, and physical WASAPI endpoints are covered by tests and
-live evidence, but this is not yet a release: attended UI acceptance, physical
-latency/endurance, managed virtual-device driver lifecycle, production signing,
-packaged installation, and clean-machine qualification remain open. Ordinary
-tests deliberately do not change machine audio configuration. See the [active
-evidence](docs/plans/active/current.md) and [M08 release evidence](docs/plans/active/evidence/M08-release.md) for exact boundaries.
+live evidence, but this is not yet a release: attended UI acceptance,
+endurance, clock-drift correction, packaged installation, and clean-machine
+qualification remain open. An AudioRouter-owned virtual-device driver is
+permanently out of scope; routes use existing virtual devices. Ordinary tests
+deliberately do not change machine audio configuration. The [active
+plan](docs/plans/active/current.md#where-things-stand) has a table of what is
+completed and what is not; the [M08 release evidence](docs/plans/active/evidence/M08-release.md) records the exact release boundaries.
 
 Start with the [documentation index](docs/README.md), then the [product scope](docs/spec/01-product.md), [reference workflows](docs/spec/02-workflows.md), and [active plan](docs/plans/active/current.md). Release work follows the [milestones](docs/spec/15-delivery.md); unresolved native and signing gates are recorded rather than presented as completed.
 

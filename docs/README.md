@@ -1,11 +1,14 @@
 # Documentation map
 
-Status: VB-Cable-first implementation baseline with guarded Windows user-mode
-evidence, updated 2026-09-17. Requirements describe intended behavior unless
-the active plan/evidence explicitly records implementation and verification.
-Numeric budgets remain acceptance targets until measured. Managed driver,
-signing, packaging, attended UI, physical-latency, and hardware gates are not
-implied by portable tests.
+Status: VB-Cable-first implementation with guarded Windows user-mode evidence,
+updated 2026-09-27. The [active plan](plans/active/current.md#where-things-stand)
+has a per-milestone table of what is implemented, what is qualified on
+Windows, and what is still open. Requirements describe intended behavior
+unless the active plan or evidence explicitly records implementation and
+verification. Numeric budgets remain acceptance targets until measured.
+Portable tests do not imply packaging, signing, attended UI,
+physical-latency or hardware gates. The AudioRouter-owned driver is
+permanently out of scope (2026-09-19).
 
 ## How to read the specification
 

@@ -5933,17 +5933,49 @@ pub enum MultiInputCaptureSource {
     Silence(SilentCapture),
 }
 
-/// Silent capture used while an application source is unavailable.
-#[derive(Clone, Copy, Debug)]
+/// Real-time-paced silent capture. It paces generated sources (Test Signal,
+/// Audio File) and stands in for an application that has closed. Packets
+/// become available only as wall-clock time passes at the internal rate,
+/// like a capture device. Without pacing, a generator path ran ahead of the
+/// output device: most quanta were discarded at the full output ring (the
+/// signal was chopped) and each service pass did up to 64 quanta of wasted
+/// work.
+#[derive(Debug)]
 pub struct SilentCapture {
     frames_per_packet: usize,
+    started: std::sync::OnceLock<std::time::Instant>,
+    delivered_frames: std::sync::atomic::AtomicU64,
 }
+
+/// After a stall, pacing catches up by at most this much audio (100 ms), then
+/// resumes from the present instead of bursting the whole backlog.
+const SILENT_CAPTURE_MAX_CATCH_UP_FRAMES: u64 = 4_800;
 
 impl SilentCapture {
     pub fn new(frames_per_packet: usize) -> Self {
         Self {
             frames_per_packet: frames_per_packet.clamp(1, 4_096),
+            started: std::sync::OnceLock::new(),
+            delivered_frames: std::sync::atomic::AtomicU64::new(0),
         }
+    }
+
+    /// Frames due since the first packet was requested. One packet is due
+    /// at once so a path can start without waiting a whole packet period.
+    fn due_frames(&self) -> u64 {
+        let started = *self.started.get_or_init(std::time::Instant::now);
+        let elapsed = started.elapsed().as_nanos();
+        let rate = u128::from(audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ);
+        u64::try_from(elapsed * rate / 1_000_000_000)
+            .unwrap_or(u64::MAX)
+            .saturating_add(self.frames_per_packet as u64)
+    }
+}
+
+impl Clone for SilentCapture {
+    /// A clone restarts pacing, like reopening a capture stream.
+    fn clone(&self) -> Self {
+        Self::new(self.frames_per_packet)
     }
 }
 
@@ -5962,6 +5994,20 @@ impl AudioCaptureSource for SilentCapture {
         if frames == 0 {
             return Ok(None);
         }
+        let due = self.due_frames();
+        let mut delivered = self
+            .delivered_frames
+            .load(std::sync::atomic::Ordering::Relaxed);
+        if due.saturating_sub(delivered) > SILENT_CAPTURE_MAX_CATCH_UP_FRAMES {
+            delivered = due - SILENT_CAPTURE_MAX_CATCH_UP_FRAMES;
+        }
+        if due < delivered.saturating_add(frames as u64) {
+            return Ok(None);
+        }
+        self.delivered_frames.store(
+            delivered + frames as u64,
+            std::sync::atomic::Ordering::Relaxed,
+        );
         let bytes = frames * bytes_per_frame;
         destination[..bytes].fill(0);
         Ok(Some((
@@ -9557,7 +9603,13 @@ mod tests {
         assert_eq!(bytes, 128 * 8);
         assert!(destination[..bytes].iter().all(|byte| *byte == 0));
         assert!(destination[bytes..].iter().all(|byte| *byte == 0xAA));
+        // Paced like a device: the next packet is due only after its
+        // 128 frames of real time (2.7 ms at 48 kHz) have elapsed.
+        assert!(silence.next_packet_into(&mut destination, 8).unwrap().is_none());
+        std::thread::sleep(std::time::Duration::from_millis(6));
+        assert!(silence.next_packet_into(&mut destination, 8).unwrap().is_some());
         // A smaller caller buffer bounds the packet instead of overflowing.
+        let silence = SilentCapture::new(128);
         let mut small = vec![1_u8; 8 * 10];
         let (packet, bytes) = silence.next_packet_into(&mut small, 8).unwrap().unwrap();
         assert_eq!((packet.frames, bytes), (10, 80));

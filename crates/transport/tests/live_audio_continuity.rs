@@ -120,6 +120,10 @@ mod live {
             .id
     }
 
+    fn test_signal_source() -> bool {
+        std::env::var("AUDIOROUTER_CONTINUITY_SOURCE").as_deref() == Ok("testSignal")
+    }
+
     fn processor(kind: &str) -> NodeKind {
         serde_json::from_value(json!(kind)).unwrap_or_else(|_| panic!("unknown node kind {kind}"))
     }
@@ -155,12 +159,29 @@ mod live {
             parameters.insert("endpointId".into(), json!(id));
             parameters
         };
-        let mut nodes = vec![node(
-            "source".into(),
-            NodeKind::PhysicalInput,
-            vec![port("out", PortDirection::Output)],
-            endpoint_parameters(source),
-        )];
+        // `AUDIOROUTER_CONTINUITY_SOURCE=testSignal` replaces the captured
+        // tone with AudioRouter's own Test Signal generator at the same
+        // frequency and level (paced only by the output device).
+        let source_node = if test_signal_source() {
+            let mut parameters = serde_json::Map::new();
+            parameters.insert("frequencyHz".into(), json!(live_tone_hz()));
+            parameters.insert("levelDb".into(), json!(20.0 * f64::from(AMPLITUDE).log10()));
+            parameters.insert("durationMs".into(), json!(600_000.0));
+            node(
+                "source".into(),
+                NodeKind::TestSignal,
+                vec![port("out", PortDirection::Output)],
+                parameters,
+            )
+        } else {
+            node(
+                "source".into(),
+                NodeKind::PhysicalInput,
+                vec![port("out", PortDirection::Output)],
+                endpoint_parameters(source),
+            )
+        };
+        let mut nodes = vec![source_node];
         for (index, kind) in chain.iter().enumerate() {
             nodes.push(node(
                 format!("tool-{index}"),
@@ -468,6 +489,13 @@ mod live {
         );
         eprintln!("started: {started}");
         let generation = started["generation"].as_u64().unwrap();
+        if test_signal_source() {
+            rpc(
+                &pipe,
+                "audioSources.transport",
+                json!({ "sessionId": session_id, "nodeId": "source", "action": "play" }),
+            );
+        }
         std::thread::sleep(Duration::from_secs(1));
         measuring.store(true, Ordering::Release);
         // UI-like control load: 20 Hz diagnostics and a 10 Hz counter pump.
@@ -509,10 +537,127 @@ mod live {
         let reference_glitches = report("reference (CABLE Output)", &reference);
         let result_glitches = report("routed result (CABLE-B Output)", &result);
         assert_eq!(last_service["active"], true, "backend must own audio service");
-        assert_eq!(
-            reference_glitches, 0,
+        assert!(
+            test_signal_source() || reference_glitches == 0,
             "the harness tone itself was discontinuous; the result is inconclusive"
         );
         assert_eq!(result_glitches, 0, "the routed tone has audible discontinuities");
+    }
+
+    /// Clock-drift survey of a saved multi-device session. Point
+    /// `AUDIOROUTER_DRIFT_DATABASE` at a COPY of a user database; the session
+    /// (`AUDIOROUTER_DRIFT_SESSION`, default `patrick-main-session`) runs with
+    /// privacy mute latched, so every output renders silence and no audio is
+    /// kept. Each output's queue depth is sampled every 2 s; a steady slope
+    /// is the rate mismatch between that output's clock and its source's.
+    #[test]
+    #[ignore = "live Windows audio devices of a saved session (privacy-muted)"]
+    fn live_saved_session_output_queue_drift() {
+        let Some(database) = std::env::var_os("AUDIOROUTER_DRIFT_DATABASE") else {
+            return;
+        };
+        let session_id = std::env::var("AUDIOROUTER_DRIFT_SESSION")
+            .unwrap_or_else(|_| "patrick-main-session".into());
+        let seconds: u64 = std::env::var("AUDIOROUTER_DRIFT_SECONDS")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(180);
+        let pipe = format!(r"\\.\pipe\audiorouter-drift-{}", std::process::id());
+        let server_pipe = pipe.clone();
+        std::thread::spawn(move || {
+            let plane = audiorouter_control::ControlPlane::with_storage(
+                "drift",
+                audiorouter_storage::Storage::open(std::path::Path::new(&database)).unwrap(),
+            );
+            let grant = audiorouter_control::ClientGrant::with_scopes([
+                audiorouter_domain::PermissionScope::Read,
+                audiorouter_domain::PermissionScope::SessionControl,
+                audiorouter_domain::PermissionScope::Capture,
+                audiorouter_domain::PermissionScope::DeviceAdministration,
+            ]);
+            let _ = audiorouter_transport::serve_control_connections_forever_with_grant(
+                &server_pipe,
+                plane,
+                grant,
+            );
+        });
+        std::thread::sleep(Duration::from_millis(300));
+        let run = std::process::id();
+        rpc(
+            &pipe,
+            "safety.setPrivacyMute",
+            json!({ "muted": true, "idempotencyKey": format!("drift-mute-{run}") }),
+        );
+        let prepared = rpc(&pipe, "nativePaths.prepare", json!({ "sessionId": session_id }));
+        eprintln!("prepared: {prepared}");
+        let started = rpc(
+            &pipe,
+            "session.start",
+            json!({ "sessionId": session_id, "idempotencyKey": format!("drift-start-{run}") }),
+        );
+        let generation = started["generation"].as_u64().unwrap();
+        let outputs: Vec<String> = prepared["branchNodeIds"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|id| id.as_str().unwrap().to_owned())
+            .collect();
+        let begin = Instant::now();
+        let mut samples: Vec<(f64, Vec<Option<f64>>)> = Vec::new();
+        let mut underruns = Value::Null;
+        while begin.elapsed() < Duration::from_secs(seconds) {
+            std::thread::sleep(Duration::from_secs(2));
+            let pump = rpc(
+                &pipe,
+                "nativeMultiInputs.pump",
+                json!({ "sessionId": session_id, "generation": generation, "maxPackets": 64 }),
+            );
+            underruns = pump["outputUnderruns"].clone();
+            let diagnostics = rpc(&pipe, "system.diagnostics", Value::Null);
+            let delays = outputs
+                .iter()
+                .map(|id| {
+                    diagnostics["nodeTelemetry"]
+                        .as_array()
+                        .and_then(|nodes| nodes.iter().find(|node| node["nodeId"] == id.as_str()))
+                        .and_then(|node| node["timing"]["delayMs"].as_f64())
+                })
+                .collect();
+            samples.push((begin.elapsed().as_secs_f64(), delays));
+        }
+        rpc(
+            &pipe,
+            "session.stop",
+            json!({ "sessionId": session_id, "idempotencyKey": format!("drift-stop-{run}") }),
+        );
+        rpc(
+            &pipe,
+            "safety.setPrivacyMute",
+            json!({ "muted": false, "idempotencyKey": format!("drift-unmute-{run}") }),
+        );
+        eprintln!("output underruns: {underruns}");
+        for (index, id) in outputs.iter().enumerate() {
+            let points: Vec<(f64, f64)> = samples
+                .iter()
+                .filter_map(|(time, delays)| delays[index].map(|delay| (*time, delay)))
+                .collect();
+            let trace = points
+                .iter()
+                .map(|(_, delay)| format!("{delay:.1}"))
+                .collect::<Vec<_>>()
+                .join(" ");
+            // Least-squares slope in ms of queue per minute.
+            let count = points.len() as f64;
+            let slope = if points.len() > 2 {
+                let mean_t = points.iter().map(|p| p.0).sum::<f64>() / count;
+                let mean_d = points.iter().map(|p| p.1).sum::<f64>() / count;
+                let covariance: f64 = points.iter().map(|p| (p.0 - mean_t) * (p.1 - mean_d)).sum();
+                let variance: f64 = points.iter().map(|p| (p.0 - mean_t).powi(2)).sum();
+                covariance / variance * 60.0
+            } else {
+                f64::NAN
+            };
+            eprintln!("{id}: slope {slope:+.3} ms/min (≈{:+.1} ppm); queue ms: {trace}", slope / 60.0 * 1000.0);
+        }
     }
 }
