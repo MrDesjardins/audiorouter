@@ -1437,7 +1437,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     expect((precise as HTMLInputElement).value).toBe("0");
     fireEvent.change(slider, { target: { value: "-6" } });
     expect((precise as HTMLInputElement).value).toBe("-6");
-    expect(screen.getByText("Unsaved changes: gainDb: 0 → -6. Press Play to try them, or Save to keep them.")).toBeTruthy();
+    expect(screen.getByText("Unsaved: gainDb: 0 → -6. Save to keep it.")).toBeTruthy();
   });
 
   it("renders the backend-derived EQ response for a draft EQ node", async () => {

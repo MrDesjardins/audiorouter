@@ -121,13 +121,12 @@ export function AdvancedEqEditor({ node, backend, connected, onChange }: {
         </g>;
       })}
     </svg>
-    {responseError && <p role="status" className="muted">Response unavailable: {responseError}</p>}
-    {!response && !responseError && <p role="status" className="muted">Calculating response…</p>}
+    <p role="status" className="muted advanced-eq-status">{responseError ? `Response unavailable: ${responseError}` : !response ? "Calculating response…" : " "}</p>
     {selected && <div className="advanced-eq-controls">
       <div className="advanced-eq-selected"><strong>Point {selected.index + 1}</strong><button type="button" className="secondary" onClick={() => onChange(`band${selected.index}Enabled`, false)} disabled={!connected || !selected.enabled}>Remove point</button></div>
       <label>Filter<select aria-label="EQ filter type" value={selected.type} disabled={!connected || !selected.enabled} onChange={(event) => onChange(`band${selected.index}Type`, event.target.value)}>{FILTERS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
       <label>Frequency <span>Hz</span><NumberField aria-label="EQ frequency Hz" min={20} max={20000} step={1} value={selected.frequencyHz} disabled={!connected || !selected.enabled} onValue={(value) => onChange(`band${selected.index}FrequencyHz`, value)} /></label>
-      {(selected.type === "peaking" || selected.type === "lowShelf" || selected.type === "highShelf") && <label>Gain <span>dB</span><NumberField aria-label="EQ gain dB" min={-24} max={24} step={0.1} value={selected.gainDb} disabled={!connected || !selected.enabled} onValue={(value) => onChange(`band${selected.index}GainDb`, value)} /></label>}
+      <label>Gain <span>dB</span><NumberField aria-label="EQ gain dB" min={-24} max={24} step={0.1} value={selected.gainDb} disabled={!connected || !selected.enabled || !(selected.type === "peaking" || selected.type === "lowShelf" || selected.type === "highShelf")} onValue={(value) => onChange(`band${selected.index}GainDb`, value)} /></label>
       <label>Q / width<NumberField aria-label="EQ Q width" min={0.1} max={20} step={0.1} value={selected.q} disabled={!connected || !selected.enabled} onValue={(value) => onChange(`band${selected.index}Q`, value)} /></label>
       <small>{selected.type === "notch" || selected.type === "lowPass" || selected.type === "highPass" ? "Gain does not apply to this filter. Q controls the shape." : "Q controls how broad or narrow the change is."}</small>
     </div>}
