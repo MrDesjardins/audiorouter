@@ -55,3 +55,24 @@ export function readShortcuts(storage: Pick<Storage, "getItem"> | null, fallback
 export function writeShortcuts(storage: Pick<Storage, "setItem"> | null, binding: ShortcutBinding): void {
   try { storage?.setItem(SHORTCUT_KEY, JSON.stringify(binding)); } catch { /* Optional presentation preference. */ }
 }
+
+const SIDEBAR_WIDTH_KEY = "audiorouter.ui.sidebar-width";
+export const MIN_SIDEBAR_WIDTH = 320;
+export const MAX_SIDEBAR_WIDTH = 960;
+export const DEFAULT_SIDEBAR_WIDTH = 400;
+
+export function clampSidebarWidth(width: number): number {
+  if (!Number.isFinite(width)) return DEFAULT_SIDEBAR_WIDTH;
+  return Math.round(Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width)));
+}
+
+export function readSidebarWidth(storage: Pick<Storage, "getItem"> | null): number {
+  try {
+    const value = storage?.getItem(SIDEBAR_WIDTH_KEY);
+    return value ? clampSidebarWidth(Number(value)) : DEFAULT_SIDEBAR_WIDTH;
+  } catch { return DEFAULT_SIDEBAR_WIDTH; }
+}
+
+export function writeSidebarWidth(storage: Pick<Storage, "setItem"> | null, width: number): void {
+  try { storage?.setItem(SIDEBAR_WIDTH_KEY, String(clampSidebarWidth(width))); } catch { /* Optional layout preference. */ }
+}

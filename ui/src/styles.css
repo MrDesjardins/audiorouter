@@ -940,3 +940,17 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 /* Messages never change the page height: two lines, full text on hover. */
 .global-action-message { box-sizing: border-box; height: 3.1rem; max-height: 3.1rem; overflow: hidden; }
 .global-action-message-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
+
+/* Resizable right panel (drag the handle on its left edge). */
+@media (min-width: 901px) {
+  .main-content { position: relative; grid-template-columns: minmax(0, 1fr) var(--sidebar-width, 400px); }
+}
+.sidebar-resizer { grid-column: 2; grid-row: 2 / -1; justify-self: start; align-self: stretch; z-index: 6; width: 12px; margin-left: -12px; cursor: col-resize; touch-action: none; border-radius: 6px; }
+.sidebar-resizer::after { content: ""; display: block; width: 4px; height: 44px; margin: 40vh auto 0; border-radius: 4px; background: var(--ambient-edge); opacity: .7; transition: background .15s, opacity .15s; }
+.sidebar-resizer:hover::after, .sidebar-resizer:focus-visible::after { background: var(--cyan, #25b8df); opacity: 1; }
+.sidebar-resizer:focus-visible { outline: 2px solid var(--cyan, #25b8df); outline-offset: 1px; }
+@media (max-width: 900px) { .sidebar-resizer { display: none; } }
+.main-content > .sidebar-resizer { display: block; grid-row: 2 / -1; }
+.app-shell.compact-status .main-content > .sidebar-resizer { display: block; grid-row: 1 / -1; }
+@media (max-width: 900px) { .main-content > .sidebar-resizer, .app-shell.compact-status .main-content > .sidebar-resizer { display: none; } }
+.inspector-help { margin: .3rem 0 .5rem; font-size: .82rem; } .inspector-help summary { cursor: pointer; color: var(--text-soft); } .inspector-help p { margin: .35rem 0 0; }
