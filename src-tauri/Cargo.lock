@@ -238,6 +238,7 @@ version = "0.1.0"
 dependencies = [
  "audiorouter-control",
  "audiorouter-protocol",
+ "audiorouter-windows-audio",
  "serde_json",
  "windows 0.62.2",
 ]

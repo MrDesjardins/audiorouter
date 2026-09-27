@@ -146,6 +146,9 @@ fn run() -> Result<(), String> {
         .accept(&ready, 0)
         .map_err(|error| format!("ready rejected: {error:?}"))?;
 
+    // The message loop below is the plugin audio path of this process.
+    let _scheduling = audiorouter_plugin_host::ProAudioThread::enter();
+
     #[cfg(feature = "test-fixtures")]
     if _fixture_mode.as_deref() == Some("crash") {
         return Err("controlled fixture crash".into());

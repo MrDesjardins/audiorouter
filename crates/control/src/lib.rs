@@ -2274,6 +2274,22 @@ fn method_description(name: &str) -> &'static str {
     }
 }
 
+/// Optional continuity statistics of the backend audio service, attached to
+/// native pump results (see `AudioServiceStats`).
+fn audio_service_output_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "active": { "type": "boolean" },
+            "passes": { "type": "integer", "minimum": 0 },
+            "lateGaps": { "type": "integer", "minimum": 0 },
+            "maxGapMicros": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["active", "passes", "lateGaps", "maxGapMicros"],
+        "additionalProperties": false
+    })
+}
+
 fn object_schema(properties: Value, required: &[&str]) -> Value {
     let required = required
         .iter()
@@ -3596,6 +3612,7 @@ fn method_output_schema(name: &str) -> Value {
             "properties": {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "generation": { "type": "integer", "minimum": 1 },
+                "audioService": audio_service_output_schema(),
                 "packets": { "type": "integer", "minimum": 0 },
                 "capturedFrames": { "type": "integer", "minimum": 0 },
                 "processedQuanta": { "type": "integer", "minimum": 0 },
@@ -3612,6 +3629,7 @@ fn method_output_schema(name: &str) -> Value {
             "properties": {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "generation": { "type": "integer", "minimum": 1 },
+                "audioService": audio_service_output_schema(),
                 "input": {
                     "type": "object",
                     "properties": {
@@ -3647,6 +3665,7 @@ fn method_output_schema(name: &str) -> Value {
             "properties": {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "generation": { "type": "integer", "minimum": 1 },
+                "audioService": audio_service_output_schema(),
                 "packets": { "type": "integer", "minimum": 0 },
                 "processedQuanta": { "type": "integer", "minimum": 0 },
                 "renderedFrames": { "type": "integer", "minimum": 0 },
@@ -3660,13 +3679,15 @@ fn method_output_schema(name: &str) -> Value {
             "properties": {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "generation": { "type": "integer", "minimum": 1 },
+                "audioService": audio_service_output_schema(),
                 "inputs": { "type": "integer", "minimum": 0 },
                 "capturedFrames": { "type": "integer", "minimum": 0 },
                 "submittedQuanta": { "type": "integer", "minimum": 0 },
                 "outputCount": { "type": "integer", "minimum": 0 },
                 "deliveredQuanta": { "type": "integer", "minimum": 0 },
                 "renderedFrames": { "type": "integer", "minimum": 0 },
-                "renderBackpressureEvents": { "type": "integer", "minimum": 0 }
+                "renderBackpressureEvents": { "type": "integer", "minimum": 0 },
+                "outputUnderruns": { "type": "integer", "minimum": 0 }
             },
             "required": ["sessionId", "generation", "inputs", "capturedFrames", "submittedQuanta", "outputCount", "deliveredQuanta", "renderedFrames", "renderBackpressureEvents"],
             "additionalProperties": false
@@ -4940,6 +4961,56 @@ enum MultiInputBindings<'s, 'a> {
     ByNode(&'s HashMap<EntityId, NativeMultiInputSourceBinding<'a>>),
 }
 
+/// Device buffer requested for multi-input physical outputs (100 ns units).
+pub const MULTI_INPUT_RENDER_HEADROOM_100NS: i64 = 500_000;
+
+/// Service gaps longer than this can empty a minimal shared-mode render
+/// buffer (one 10 ms engine period plus margin) and are counted as late.
+pub const AUDIO_SERVICE_LATE_GAP: std::time::Duration = std::time::Duration::from_millis(8);
+
+/// Continuity of the backend-owned native audio service while at least one
+/// native worker is running. A gap is the time between consecutive service
+/// passes; long gaps mean something (for example a slow control request
+/// holding the backend) delayed audio pumping.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AudioServiceStats {
+    /// A backend service thread owns pumping (UI pumps are then optional).
+    pub active: bool,
+    pub passes: u64,
+    pub late_gaps: u64,
+    pub max_gap_micros: u64,
+    last_pass: Option<std::time::Instant>,
+}
+
+impl AudioServiceStats {
+    fn record(&mut self, now: std::time::Instant, serviced: bool) {
+        if !serviced {
+            // Nothing is running: the next running pass starts a new series.
+            self.last_pass = None;
+            return;
+        }
+        if let Some(previous) = self.last_pass {
+            let gap = now.saturating_duration_since(previous);
+            let micros = u64::try_from(gap.as_micros()).unwrap_or(u64::MAX);
+            self.max_gap_micros = self.max_gap_micros.max(micros);
+            if gap > AUDIO_SERVICE_LATE_GAP {
+                self.late_gaps = self.late_gaps.saturating_add(1);
+            }
+        }
+        self.passes = self.passes.saturating_add(1);
+        self.last_pass = Some(now);
+    }
+
+    fn to_json(self) -> Value {
+        json!({
+            "active": self.active,
+            "passes": self.passes,
+            "lateGaps": self.late_gaps,
+            "maxGapMicros": self.max_gap_micros,
+        })
+    }
+}
+
 pub struct ControlPlane {
     store: GraphStore,
     build: String,
@@ -4994,6 +5065,8 @@ pub struct ControlPlane {
     /// `devices.list` call from consuming the invalidation signal before the
     /// audio pump can fail closed.
     pending_endpoint_changes: Vec<audiorouter_windows_audio::EndpointChange>,
+    /// Continuity statistics for the backend-owned native audio service.
+    audio_service: AudioServiceStats,
     native_endpoint_worker: Option<audiorouter_windows_audio::NativeAudioWorker>,
     native_endpoint_session: Option<EntityId>,
     native_endpoint_worker_secondary: Option<audiorouter_windows_audio::NativeAudioWorker>,
@@ -5547,6 +5620,7 @@ impl ControlPlane {
             active_idempotency_scope: None,
             endpoint_monitor: None,
             pending_endpoint_changes: Vec::new(),
+            audio_service: AudioServiceStats::default(),
             native_endpoint_worker: None,
             native_endpoint_session: None,
             native_endpoint_worker_secondary: None,
@@ -6183,6 +6257,85 @@ impl ControlPlane {
             })
     }
 
+    /// Pump every running prepared native worker once, from the backend-owned
+    /// audio service thread. The calls are the same bounded, non-waiting
+    /// pumps the `native*.pump` methods expose, so endpoint invalidation,
+    /// lease heartbeats and application maintenance keep their semantics.
+    /// Errors are left for the UI/diagnostic pump paths to report; the
+    /// service only skips a worker whose session generation is not running.
+    /// Returns the number of workers serviced.
+    pub fn service_running_native_audio(&mut self, now: std::time::Instant) -> usize {
+        let running = |plane: &Self, session: &Option<EntityId>| -> Option<(EntityId, u64)> {
+            let session = session.as_ref()?;
+            plane
+                .runtimes
+                .get(session)
+                .filter(|runtime| runtime.state() == RuntimeState::Running)
+                .map(|runtime| (session.clone(), runtime.generation()))
+        };
+        let mut serviced = 0_usize;
+        #[cfg(windows)]
+        {
+            let budget = audiorouter_windows_audio::MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE;
+            if let Some((session, generation)) =
+                running(self, &self.native_multi_input_worker_session)
+                    .filter(|(_, generation)| {
+                        self.native_multi_input_worker_generation == Some(*generation)
+                    })
+            {
+                let _ = self.pump_native_multi_input_worker(&session, generation, budget);
+                serviced += 1;
+            }
+            for slot in [
+                self.native_endpoint_session.clone(),
+                self.native_endpoint_session_secondary.clone(),
+            ] {
+                if let Some((session, generation)) = running(self, &slot) {
+                    let _ =
+                        self.pump_native_endpoint_worker_with_bound_taps(&session, generation, budget);
+                    serviced += 1;
+                }
+            }
+            if let Some((session, generation)) = running(self, &self.native_duplex_worker_session)
+                .filter(|(_, generation)| self.native_duplex_worker_generation == Some(*generation))
+            {
+                let _ = self.pump_native_duplex_worker(&session, generation, budget, budget);
+                serviced += 1;
+            }
+            if let Some((session, generation)) =
+                running(self, &self.native_render_source_worker_session).filter(
+                    |(_, generation)| {
+                        self.native_render_source_worker_generation == Some(*generation)
+                    },
+                )
+            {
+                let _ = self.pump_native_render_source_worker(&session, generation, budget);
+                serviced += 1;
+            }
+        }
+        #[cfg(not(windows))]
+        let _ = running;
+        self.audio_service.record(now, serviced != 0);
+        serviced
+    }
+
+    /// Continuity statistics of the backend audio service, for diagnostics.
+    pub fn audio_service_stats(&self) -> AudioServiceStats {
+        self.audio_service
+    }
+
+    fn with_audio_service_stats(&self, mut value: Value) -> Value {
+        if let Some(object) = value.as_object_mut() {
+            object.insert("audioService".into(), self.audio_service.to_json());
+        }
+        value
+    }
+
+    /// Record that a backend audio service thread now owns pumping.
+    pub fn mark_audio_service_started(&mut self) {
+        self.audio_service.active = true;
+    }
+
     #[cfg(windows)]
     pub fn pump_native_multi_input_worker(
         &mut self,
@@ -6290,6 +6443,7 @@ impl ControlPlane {
             "deliveredQuanta": delivered_quanta,
             "renderedFrames": render_pump.rendered_frames,
             "renderBackpressureEvents": render_pump.render_backpressure_events,
+            "outputUnderruns": worker.output_underruns(),
         }))
     }
 
@@ -7228,11 +7382,17 @@ impl ControlPlane {
                     "output fan-out endpoints must be stereo 48 kHz IEEE float32".into(),
                 ));
             }
-            let render = audiorouter_windows_audio::SharedRender::open(endpoint_id, 0)
-                .map_err(audio_control_error)?;
+            // 50 ms device headroom and an 8-quantum ring absorb capture
+            // bursts and late plugin blocks. Neither adds delay: the pump
+            // queues only processed audio plus its bounded jitter cushion.
+            let render = audiorouter_windows_audio::SharedRender::open_with_headroom(
+                endpoint_id,
+                MULTI_INPUT_RENDER_HEADROOM_100NS,
+            )
+            .map_err(audio_control_error)?;
             let ring = Arc::new(
                 audiorouter_engine::AudioBlockRing::new(
-                    4,
+                    8,
                     2,
                     audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
                 )
@@ -8309,6 +8469,7 @@ impl ControlPlane {
             .transpose()?
             .unwrap_or(audiorouter_windows_audio::MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE);
         self.pump_native_multi_input_worker(&session_id, generation, max_packets)
+            .map(|value| self.with_audio_service_stats(value))
     }
 
     #[cfg(windows)]
@@ -9488,6 +9649,7 @@ impl ControlPlane {
             active_idempotency_scope: None,
             endpoint_monitor: None,
             pending_endpoint_changes: Vec::new(),
+            audio_service: AudioServiceStats::default(),
             native_endpoint_worker: None,
             native_endpoint_session: None,
             native_endpoint_worker_secondary: None,
@@ -16885,6 +17047,7 @@ impl ControlPlane {
             .transpose()?
             .unwrap_or(audiorouter_windows_audio::MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE);
         self.pump_native_endpoint_worker_with_bound_taps(&session_id, generation, max_packets)
+            .map(|value| self.with_audio_service_stats(value))
     }
 
     #[cfg(windows)]
@@ -16932,6 +17095,7 @@ impl ControlPlane {
             max_input_quanta,
             max_output_packets,
         )
+        .map(|value| self.with_audio_service_stats(value))
     }
 
     #[cfg(not(windows))]
@@ -16973,6 +17137,7 @@ impl ControlPlane {
             .transpose()?
             .unwrap_or(audiorouter_windows_audio::MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE);
         self.pump_native_render_source_worker(&session_id, generation, max_quanta)
+            .map(|value| self.with_audio_service_stats(value))
     }
 
     #[cfg(not(windows))]

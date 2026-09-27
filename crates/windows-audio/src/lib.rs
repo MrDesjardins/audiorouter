@@ -11,6 +11,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use windows_core::Interface;
 
+mod service_thread;
+pub use service_thread::{AudioServiceThreadCapabilities, AudioServiceThreadGuard};
 #[cfg(windows)]
 mod software_device;
 #[cfg(windows)]
@@ -4855,6 +4857,22 @@ impl SharedRender {
     /// The duration argument is retained for API compatibility; event-driven
     /// shared-mode WASAPI requires `Initialize` to receive zero here.
     pub fn open(endpoint_id: &str, _buffer_duration_100ns: i64) -> Result<Self, AudioError> {
+        Self::open_internal(endpoint_id, 0)
+    }
+
+    /// Open with a device buffer of at least `buffer_duration_100ns`. In
+    /// shared mode the buffer is capacity, not latency: latency is how much
+    /// the caller keeps queued. A pump that writes only processed audio (plus
+    /// its bounded jitter cushion) gains headroom for capture bursts and late
+    /// blocks without adding delay. `open` keeps the minimal buffer.
+    pub fn open_with_headroom(
+        endpoint_id: &str,
+        buffer_duration_100ns: i64,
+    ) -> Result<Self, AudioError> {
+        Self::open_internal(endpoint_id, buffer_duration_100ns.clamp(0, 2_000_000))
+    }
+
+    fn open_internal(endpoint_id: &str, buffer_duration_100ns: i64) -> Result<Self, AudioError> {
         use windows::Win32::Media::Audio::{
             eRender, IAudioClient, IAudioRenderClient, IMMDeviceEnumerator, MMDeviceEnumerator,
             AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
@@ -4900,7 +4918,7 @@ impl SharedRender {
                 AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
                     | AUDCLNT_STREAMFLAGS_EVENTCALLBACK
                     | AUDCLNT_STREAMFLAGS_NOPERSIST,
-                0,
+                buffer_duration_100ns,
                 0,
                 format,
                 None,
@@ -4923,6 +4941,11 @@ impl SharedRender {
             event,
             _com: com,
         })
+    }
+
+    /// Device buffer capacity in frames, as granted by `Initialize`.
+    pub fn buffer_frames(&self) -> u32 {
+        self.buffer_size
     }
 
     pub fn start(&mut self) -> Result<(), AudioError> {
@@ -5077,14 +5100,28 @@ fn qpc_now_100ns() -> Option<u64> {
 /// into one render sink. The ring and all byte storage are created before the
 /// pump is started; draining never waits or allocates. A partially accepted
 /// render block remains in the bounded carry buffer for the next wake.
+/// Silence queued ahead of the next block whenever the device buffer is
+/// found empty (startup or an underrun). Shared-mode capture delivers 10 ms
+/// packets with scheduling jitter, and plugin workers return blocks late
+/// now and then; without a margin each such event empties the device
+/// buffer and is heard as a click. The margin persists, adding at most this
+/// much latency, and re-arms only after another underrun.
+pub const RENDER_JITTER_CUSHION_FRAMES: usize = 480;
+
 struct RingOutputPump<S: RenderSink> {
     sink: S,
     ring: Arc<audiorouter_engine::AudioBlockRing>,
     generation: u64,
     channels: usize,
     bytes_per_frame: usize,
+    /// Cushion silence (when armed) followed by one encoded block.
     pending: Vec<u8>,
     pending_bytes: usize,
+    cushion_bytes: usize,
+    /// A block has reached the device at least once since start.
+    started: bool,
+    /// Device buffer found empty after startup (each one a heard gap).
+    underruns: u64,
 }
 
 impl<S: RenderSink> RingOutputPump<S> {
@@ -5104,8 +5141,12 @@ impl<S: RenderSink> RingOutputPump<S> {
         let bytes_per_frame = channels
             .checked_mul(std::mem::size_of::<f32>())
             .ok_or(AudioError::InvalidFrameSize)?;
+        let cushion_bytes = RENDER_JITTER_CUSHION_FRAMES
+            .checked_mul(bytes_per_frame)
+            .ok_or(AudioError::InvalidFrameSize)?;
         let pending_bytes = quantum_frames
             .checked_mul(bytes_per_frame)
+            .and_then(|bytes| bytes.checked_add(cushion_bytes))
             .ok_or(AudioError::InvalidFrameSize)?;
         Ok(Self {
             sink,
@@ -5115,6 +5156,9 @@ impl<S: RenderSink> RingOutputPump<S> {
             bytes_per_frame,
             pending: vec![0; pending_bytes],
             pending_bytes: 0,
+            cushion_bytes,
+            started: false,
+            underruns: 0,
         })
     }
 
@@ -5173,15 +5217,29 @@ impl<S: RenderSink> RingOutputPump<S> {
             .frames()
             .checked_mul(self.bytes_per_frame)
             .ok_or(AudioError::InvalidFrameSize)?;
-        if bytes > self.pending.len() {
+        // An empty device buffer means startup or a gap that was just heard.
+        // Queue the cushion ahead of this block so ordinary jitter does not
+        // empty the device again. Sinks without padding never arm it.
+        let cushion = if self.sink.queued_frames() == Some(0) {
+            if self.started {
+                self.underruns = self.underruns.saturating_add(1);
+            }
+            self.cushion_bytes
+        } else {
+            0
+        };
+        self.started = true;
+        if cushion + bytes > self.pending.len() {
             let _ = self.ring.try_recycle(block);
             return Err(AudioError::BufferTooSmall {
-                required: bytes,
+                required: cushion + bytes,
                 available: self.pending.len(),
             });
         }
-        let encode_result = encode_interleaved_float32(&block, &mut self.pending[..bytes]);
-        self.pending_bytes = bytes;
+        self.pending[..cushion].fill(0);
+        let encode_result =
+            encode_interleaved_float32(&block, &mut self.pending[cushion..cushion + bytes]);
+        self.pending_bytes = cushion + bytes;
         self.ring
             .try_recycle(block)
             .map_err(|_| AudioError::InvalidFrameSize)?;
@@ -5287,14 +5345,15 @@ impl WasapiOutputFanout {
             let worker = RingOutputPump::new(render, ring, generation, channels, quantum_frames)
                 .map_err(WasapiOutputFanoutError::Audio)?;
             output_rings.push(tap_ring.clone());
-            let shared_tap_ring = Arc::clone(&tap_ring);
+            // `taps` feeds the ring when an endpoint scheduler graph drives
+            // this fan-out. The branch tap sets serve `process_fanout_once`,
+            // which already writes each quantum into this ring directly; a
+            // ring tap there enqueued every quantum twice (repeated and then
+            // skipped blocks: audible crackling). Branch sets hold only
+            // observers attached later.
             taps.add(audiorouter_engine::AudioBlockRingTap::new(tap_ring))
                 .map_err(|_| WasapiOutputFanoutError::Capacity)?;
-            let mut branch_taps = audiorouter_engine::AudioTapSet::new();
-            branch_taps
-                .add(audiorouter_engine::AudioBlockRingTap::new(shared_tap_ring))
-                .map_err(|_| WasapiOutputFanoutError::Capacity)?;
-            branch_tap_sets.push(branch_taps);
+            branch_tap_sets.push(audiorouter_engine::AudioTapSet::new());
             workers.push(worker);
         }
         Ok(Self {
@@ -5388,12 +5447,10 @@ impl WasapiOutputFanout {
             audiorouter_engine::AudioBlockRing::new(2, channels, quantum_frames)
                 .map_err(|_| WasapiOutputFanoutError::Capacity)?,
         );
+        // `process_fanout_once` writes this branch's ring directly and then
+        // recycles it; the ring only carries the processed shape to the
+        // branch observers. No ring tap: that would enqueue twice.
         let mut branch_taps = audiorouter_engine::AudioTapSet::new();
-        branch_taps
-            .add(audiorouter_engine::AudioBlockRingTap::new(Arc::clone(
-                &ring,
-            )))
-            .map_err(|_| WasapiOutputFanoutError::Capacity)?;
         branch_taps
             .append(&tap_set)
             .map_err(|_| WasapiOutputFanoutError::Capacity)?;
@@ -5433,6 +5490,7 @@ impl WasapiOutputFanout {
                 first_error.get_or_insert(error);
             }
             worker.pending_bytes = 0;
+            worker.started = false;
             worker.ring.recycle_all();
         }
         for ring in &self.output_rings {
@@ -5504,6 +5562,12 @@ impl WasapiOutputFanout {
                 .timeline_frame
                 .saturating_add(self.quantum_frames as u64);
         }
+        // Tap-only branches have no render worker. Their observers were
+        // notified during processing; free the ring so the next quantum can
+        // be mapped instead of skipping the branch and its observers.
+        for ring in &self.output_rings[self.workers.len()..] {
+            ring.recycle_all();
+        }
         let mut pump = WasapiSchedulerPump::default();
         for (worker, delay) in self.workers.iter_mut().zip(&mut self.output_delays) {
             let drained = worker
@@ -5515,6 +5579,12 @@ impl WasapiOutputFanout {
             pump.accumulate(drained);
         }
         Ok((delivered, pump))
+    }
+
+    /// Device-buffer underruns per physical output since start (each one an
+    /// audible gap), in physical output order.
+    pub fn output_underruns(&self) -> Vec<u64> {
+        self.workers.iter().map(|worker| worker.underruns).collect()
     }
 
     /// Smoothed frames queued ahead of each physical output (render ring,
@@ -6094,6 +6164,13 @@ impl NativeMultiInputWorker {
     /// Smoothed age of each source's audio when picked up (ms), in input order.
     pub fn input_wait_ms(&self) -> Vec<Option<f64>> {
         self.feeder.input_wait_ms()
+    }
+
+    /// Device-buffer underruns since start, summed over physical outputs.
+    pub fn output_underruns(&self) -> u64 {
+        self.outputs
+            .as_ref()
+            .map_or(0, |outputs| outputs.output_underruns().iter().sum())
     }
 
     /// Smoothed audio queued ahead of each physical output (ms), in output order.

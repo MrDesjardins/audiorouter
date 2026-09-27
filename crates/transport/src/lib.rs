@@ -898,33 +898,104 @@ pub fn serve_control_connections_forever_for_current_user(
     serve_control_connections_forever_with_grant(name, plane, grant)
 }
 
+/// Interval between backend audio service passes. Well below the common
+/// 10 ms WASAPI shared-mode engine period, so a pass is never the reason a
+/// render buffer empties; each pass only drains what is already available.
+pub const AUDIO_SERVICE_INTERVAL: std::time::Duration = std::time::Duration::from_millis(1);
+
+#[cfg(windows)]
+/// One received control frame handed from the pipe I/O thread to the thread
+/// that owns the control plane.
+struct ControlFrame {
+    client_pid: u32,
+    frame: Vec<u8>,
+    reply: std::sync::mpsc::SyncSender<Result<Option<Vec<u8>>, TransportError>>,
+}
+
 #[cfg(windows)]
 /// Serve the current-user pipe with an explicitly selected process grant.
 /// The grant is not persisted; callers must perform any durable enrollment
 /// checks before entering this lifetime-serving loop.
+///
+/// The production backend loop. The control plane stays on the calling
+/// thread (it owns thread-affine COM objects), while a separate I/O thread
+/// accepts pipe clients and forwards each frame here.
+///
+/// Between requests this thread pumps every running native worker at
+/// [`AUDIO_SERVICE_INTERVAL`]. Prepared native workers only advance when
+/// pumped; before this loop owned pumping, the UI pumped them with RPCs, so a
+/// throttled WebView timer (minimized or occluded window) or a slow request
+/// starved the render buffers and produced audible crackling. UI pump
+/// requests remain valid and report diagnostics, but continuity no longer
+/// depends on them.
 pub fn serve_control_connections_forever_with_grant(
     name: &str,
     mut plane: audiorouter_control::ControlPlane,
     grant: audiorouter_control::ClientGrant,
 ) -> Result<(), TransportError> {
     let _singleton = acquire_server_singleton(name)?;
-    loop {
-        serve_once_with_client_optional(name, |client_pid, frame| {
-            let client_id = client_user_sid(client_pid)?;
-            let responses = plane
-                .dispatch_frame_authorized_for_client(frame, &client_id, &grant)
-                .map_err(|error| TransportError::Protocol(error.to_string()))?;
-            if responses.is_empty() {
-                Ok(None)
-            } else {
-                let total = responses.iter().map(Vec::len).sum();
-                let mut combined = Vec::with_capacity(total);
-                for response in responses {
-                    combined.extend_from_slice(&response);
-                }
-                Ok(Some(combined))
+    let (frames, received) = std::sync::mpsc::sync_channel::<ControlFrame>(0);
+    let io_name = name.to_owned();
+    let io = std::thread::Builder::new()
+        .name("audiorouter-control-io".into())
+        .spawn(move || -> Result<(), TransportError> {
+            loop {
+                serve_once_with_client_optional(&io_name, |client_pid, frame| {
+                    let (reply, response) = std::sync::mpsc::sync_channel(1);
+                    frames
+                        .send(ControlFrame {
+                            client_pid,
+                            frame: frame.to_vec(),
+                            reply,
+                        })
+                        .map_err(|_| TransportError::Protocol("control plane stopped".into()))?;
+                    response
+                        .recv()
+                        .map_err(|_| TransportError::Protocol("control plane stopped".into()))?
+                })?;
             }
-        })?;
+        })
+        .map_err(|error| TransportError::Windows(format!("control I/O thread: {error}")))?;
+    let (_scheduling, _capabilities) = audiorouter_windows_audio::AudioServiceThreadGuard::enter();
+    plane.mark_audio_service_started();
+    loop {
+        match received.recv_timeout(AUDIO_SERVICE_INTERVAL) {
+            Ok(request) => {
+                let result = dispatch_control_frame(&mut plane, &grant, request.client_pid, &request.frame);
+                let _ = request.reply.send(result);
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                return match io.join() {
+                    Ok(result) => result,
+                    Err(_) => Err(TransportError::Protocol("control I/O thread panicked".into())),
+                };
+            }
+        }
+        plane.service_running_native_audio(std::time::Instant::now());
+    }
+}
+
+#[cfg(windows)]
+fn dispatch_control_frame(
+    plane: &mut audiorouter_control::ControlPlane,
+    grant: &audiorouter_control::ClientGrant,
+    client_pid: u32,
+    frame: &[u8],
+) -> Result<Option<Vec<u8>>, TransportError> {
+    let client_id = client_user_sid(client_pid)?;
+    let responses = plane
+        .dispatch_frame_authorized_for_client(frame, &client_id, grant)
+        .map_err(|error| TransportError::Protocol(error.to_string()))?;
+    if responses.is_empty() {
+        Ok(None)
+    } else {
+        let total = responses.iter().map(Vec::len).sum();
+        let mut combined = Vec::with_capacity(total);
+        for response in responses {
+            combined.extend_from_slice(&response);
+        }
+        Ok(Some(combined))
     }
 }
 

@@ -4684,6 +4684,7 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                         | NodeKind::Delay
                         | NodeKind::GraphicEq
                         | NodeKind::Pitch
+                        | NodeKind::Plugin
                 ))
                 || (destination.bypass
                     && !matches!(
@@ -4706,6 +4707,7 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                             | NodeKind::Delay
                             | NodeKind::GraphicEq
                             | NodeKind::Pitch
+                            | NodeKind::Plugin
                     ))
             {
                 return Err(GraphCompileError::UnsupportedTopology);
@@ -6194,9 +6196,9 @@ fn compile_direct_entry<'s>(
                 .iter()
                 .find(|port| port.direction == PortDirection::Output)
                 .ok_or(GraphCompileError::UnsupportedTopology)?;
-            if !first.enabled
-                || first.bypass
-                || edge.source_port != source_port.name
+            // A disabled or bypassed first processor still starts the chain:
+            // the processor chain compiles it as its dry bypass (GRAPH-05).
+            if edge.source_port != source_port.name
                 || edge.destination_port != input.name
                 || edge.matrix.len() != usize::from(input.channels) * source_channels
                 || (first.kind == NodeKind::Plugin && !plugins.contains_key(&first.id))
@@ -8817,6 +8819,98 @@ mod tests {
         assert_eq!(fanout.process_once(&destinations).unwrap(), 2);
         let muted = rings[0].try_receive().unwrap();
         assert!(muted.channel(0).unwrap().iter().all(|sample| *sample == 0.0));
+    }
+
+    #[test]
+    fn native_paths_pass_a_bypassed_plugin_dry_anywhere_in_the_chain() {
+        use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+        #[derive(Debug)]
+        struct Doubler;
+        impl RealtimePluginProcessor for Doubler {
+            fn process(&self, block: &mut AudioBlock) {
+                for channel in 0..block.channels() {
+                    for sample in block.channel_mut(channel).unwrap() {
+                        *sample *= 2.0;
+                    }
+                }
+            }
+        }
+        let port = |name: &str, direction| Port { name: name.into(), direction, channels: 2 };
+        let node = |id: &str, kind, bypass| Node {
+            id: EntityId::new(id),
+            kind,
+            type_version: 1,
+            name: id.into(),
+            enabled: true,
+            bypass,
+            parameters: Default::default(),
+            ports: match kind {
+                NodeKind::PhysicalInput => vec![port("out", PortDirection::Output)],
+                NodeKind::PhysicalOutput => vec![port("in", PortDirection::Input)],
+                _ => vec![port("in", PortDirection::Input), port("out", PortDirection::Output)],
+            },
+        };
+        let ids = ["mic", "first", "second", "third", "out"];
+        for bypassed in ["first", "second", "third"] {
+            let session = Session {
+                id: EntityId::new("chain"),
+                name: "chain".into(),
+                schema_version: 1,
+                revision: 0,
+                nodes: ids
+                    .iter()
+                    .map(|id| match *id {
+                        "mic" => node(id, NodeKind::PhysicalInput, false),
+                        "out" => node(id, NodeKind::PhysicalOutput, false),
+                        _ => node(id, NodeKind::Plugin, *id == bypassed),
+                    })
+                    .collect(),
+                edges: ids
+                    .windows(2)
+                    .map(|pair| Edge {
+                        id: EntityId::new(format!("{}-{}", pair[0], pair[1])),
+                        source_node: EntityId::new(pair[0]),
+                        source_port: "out".into(),
+                        destination_node: EntityId::new(pair[1]),
+                        destination_port: "in".into(),
+                        matrix: vec![1.0, 0.0, 0.0, 1.0],
+                        enabled: true,
+                    })
+                    .collect(),
+            };
+            let plugins = ["first", "second", "third"]
+                .into_iter()
+                .map(|id| {
+                    (
+                        EntityId::new(id),
+                        std::sync::Arc::new(Doubler) as std::sync::Arc<dyn RealtimePluginProcessor>,
+                    )
+                })
+                .collect();
+            let set = compile_native_paths_with_plugins_and_audio(
+                &session,
+                RuntimeGeneration::new(1),
+                &plugins,
+                &std::collections::HashMap::new(),
+            )
+            .unwrap_or_else(|error| panic!("bypassed {bypassed} rejected: {error:?}"));
+            let frames = PROCESSING_QUANTUM_FRAMES;
+            let mut fanout = RealtimeMixerFanout::from_paths(set, 4, &[2], frames).unwrap();
+            let ring = AudioBlockRing::new(4, 2, frames).unwrap();
+            let mut input = AudioBlock::new(2, frames).unwrap();
+            input.channel_mut(0).unwrap().fill(0.1);
+            input.channel_mut(1).unwrap().fill(0.1);
+            let generation = fanout.generation();
+            assert!(fanout.try_submit_input(0, generation, &input).unwrap());
+            assert_eq!(fanout.process_once(&[&ring]).unwrap(), 1);
+            let output = ring.try_receive().unwrap();
+            // Two active doublers; the bypassed one passes audio unchanged.
+            assert!(
+                output.channel(0).unwrap().iter().all(|sample| (sample - 0.4).abs() < 1e-6),
+                "bypassed {bypassed}: {:?}",
+                &output.channel(0).unwrap()[..4]
+            );
+        }
     }
 
     #[test]

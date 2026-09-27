@@ -278,6 +278,16 @@ describe("VB-Cable endpoint selection", () => {
     expect(formatNativePumpSummary(stats, false)).toBeNull();
   });
 
+  it("reports output underruns and late backend audio service gaps, and stays quiet when continuous", async () => {
+    const stats = { sessionId: demoSession.id, generation: 1, inputs: 1, capturedFrames: 480, submittedQuanta: 3, outputCount: 1, deliveredQuanta: 3, renderedFrames: 384, renderBackpressureEvents: 0 };
+    const continuous = { ...stats, outputUnderruns: 0, audioService: { active: true, passes: 900, lateGaps: 0, maxGapMicros: 2_400 } };
+    expect(formatNativePumpSummary(continuous, true)).toBe("native multi-input 480 in / 384 out / 3 quanta / 3 branches");
+    expect(formatNativePumpSummary({ ...continuous, outputUnderruns: 2 }, true)).toBe("native multi-input 480 in / 384 out / 3 quanta / 3 branches / 2 output underruns");
+    expect(formatNativePumpSummary({ ...continuous, audioService: { active: true, passes: 900, lateGaps: 1, maxGapMicros: 12_345 } }, true))
+      .toBe("native multi-input 480 in / 384 out / 3 quanta / 3 branches / 1 late audio service gap (max 12.3 ms)");
+    expect(formatNativePumpSummary(stats, true)).toBe("native multi-input 480 in / 384 out / 3 quanta / 3 branches");
+  });
+
   it("formats standalone render-source telemetry only for a running native route", async () => {
     const stats = { sessionId: demoSession.id, generation: 4, packets: 3, processedQuanta: 3, renderedFrames: 384, droppedRenderFrames: 1 };
     expect(formatNativePumpSummary(stats, true)).toBe("native render-source 384 out / 3 quanta / 1 dropped");

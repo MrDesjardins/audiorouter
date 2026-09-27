@@ -53,6 +53,70 @@ pub const MIN_WORKER_SAMPLE_RATE_HZ: u32 = 8_000;
 pub const MAX_WORKER_SAMPLE_RATE_HZ: u32 = 192_000;
 pub const DEFAULT_WORKER_SAMPLE_RATE_HZ: u32 = 48_000;
 
+/// Registers the calling thread with the MMCSS "Pro Audio" task while alive.
+///
+/// Plugin audio crosses two ordinary threads: the host bridge thread and the
+/// worker process loop. At normal priority either can be descheduled for
+/// several milliseconds under desktop load, and a block that returns late is
+/// played as silence (an audible click). Registration is best effort: without
+/// it processing continues at normal priority. Must be dropped on the
+/// registering thread, which `!Send` enforces.
+pub struct ProAudioThread {
+    #[cfg(windows)]
+    handle: isize,
+    _not_send: std::marker::PhantomData<*const ()>,
+}
+
+#[cfg(windows)]
+#[link(name = "avrt")]
+unsafe extern "system" {
+    fn AvSetMmThreadCharacteristicsW(task_name: *const u16, task_index: *mut u32) -> isize;
+    fn AvRevertMmThreadCharacteristics(handle: isize) -> i32;
+}
+
+impl ProAudioThread {
+    pub fn enter() -> Self {
+        #[cfg(windows)]
+        {
+            let task: Vec<u16> = "Pro Audio\0".encode_utf16().collect();
+            let mut index = 0_u32;
+            // SAFETY: `task` is a NUL-terminated UTF-16 string that outlives
+            // the call and `index` is a valid out pointer. The API affects
+            // only the calling thread; a zero handle means registration
+            // failed and nothing needs to be released.
+            let handle = unsafe { AvSetMmThreadCharacteristicsW(task.as_ptr(), &mut index) };
+            Self {
+                handle,
+                _not_send: std::marker::PhantomData,
+            }
+        }
+        #[cfg(not(windows))]
+        Self {
+            _not_send: std::marker::PhantomData,
+        }
+    }
+
+    pub fn registered(&self) -> bool {
+        #[cfg(windows)]
+        return self.handle != 0;
+        #[cfg(not(windows))]
+        false
+    }
+}
+
+impl Drop for ProAudioThread {
+    fn drop(&mut self) {
+        #[cfg(windows)]
+        if self.handle != 0 {
+            // SAFETY: the handle came from a successful registration on this
+            // same thread (the guard is `!Send`) and is released once.
+            unsafe {
+                AvRevertMmThreadCharacteristics(self.handle);
+            }
+        }
+    }
+}
+
 /// Milliseconds since the Unix epoch used for cross-process frame deadlines.
 pub fn worker_clock_tick() -> u64 {
     SystemTime::now()
@@ -4022,6 +4086,7 @@ impl PluginRuntimeBridge {
         let worker_thread = std::thread::Builder::new()
             .name("audiorouter-plugin-runtime".into())
             .spawn(move || {
+                let _scheduling = ProAudioThread::enter();
                 let mut sequence = 1_u64;
                 let mut samples = vec![0.0_f32; channels * frames];
                 while thread_running.load(Ordering::Acquire) {

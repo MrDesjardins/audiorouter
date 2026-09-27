@@ -56,13 +56,23 @@ export const WORKSPACE_EVENT_CATEGORIES = [
 
 /** Default diagnostics/meter refresh: 20 Hz, below the API's 30 Hz ceiling. */
 export const DIAGNOSTICS_REFRESH_INTERVAL_MS = 50;
+/** UI pump cadence once the backend owns native audio service (counters only). */
+export const BACKEND_SERVICED_PUMP_INTERVAL_MS = 100;
 
 type NativePumpStats = NativeEndpointPumpResult | NativeDuplexPumpResult | NativeMultiInputPumpResult | NativeRenderSourcePumpResult;
 
 export function formatNativePumpSummary(stats: NativePumpStats | null, running: boolean): string | null {
+  const summary = formatNativePumpCounters(stats, running);
+  const service = stats?.audioService;
+  if (summary === null || !service || service.lateGaps === 0) return summary;
+  // Late backend service passes are the audible-continuity risk: report them.
+  return `${summary} / ${service.lateGaps} late audio service gap${service.lateGaps === 1 ? "" : "s"} (max ${(service.maxGapMicros / 1000).toFixed(1)} ms)`;
+}
+
+function formatNativePumpCounters(stats: NativePumpStats | null, running: boolean): string | null {
   if (!stats || !running) return null;
   if ("submittedQuanta" in stats) {
-    return `native multi-input ${stats.capturedFrames} in / ${stats.renderedFrames} out / ${stats.submittedQuanta} quanta${stats.outputCount > 0 ? ` / ${stats.deliveredQuanta} branches` : ""}${stats.renderBackpressureEvents > 0 ? ` / ${stats.renderBackpressureEvents} backpressure` : ""}`;
+    return `native multi-input ${stats.capturedFrames} in / ${stats.renderedFrames} out / ${stats.submittedQuanta} quanta${stats.outputCount > 0 ? ` / ${stats.deliveredQuanta} branches` : ""}${stats.renderBackpressureEvents > 0 ? ` / ${stats.renderBackpressureEvents} backpressure` : ""}${(stats.outputUnderruns ?? 0) > 0 ? ` / ${stats.outputUnderruns} output underrun${stats.outputUnderruns === 1 ? "" : "s"}` : ""}`;
   }
   if (!("capturedFrames" in stats) && !("input" in stats)) {
     return `native render-source ${stats.renderedFrames} out / ${stats.processedQuanta} quanta${stats.droppedRenderFrames > 0 ? ` / ${stats.droppedRenderFrames} dropped` : ""}`;
@@ -1631,8 +1641,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     let active = true;
     let pumping = false;
     let lastReportedAt = 0;
+    // A backend that reports an active audio service pumps native audio
+    // itself; this loop then only refreshes counters and needs no 5 ms cadence.
+    let backendServiced = false;
+    let lastPumpedAt = 0;
     const pump = async () => {
       if (!active || pumping) return;
+      if (backendServiced && Date.now() - lastPumpedAt < BACKEND_SERVICED_PUMP_INTERVAL_MS) return;
+      lastPumpedAt = Date.now();
       pumping = true;
       try {
         for (const [sessionId, route] of activeRoutes) {
@@ -1649,6 +1665,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               : pumpKind === "renderSource"
                 ? await pumpNativeRenderSource!(sessionId, route.generation, 64)
                 : await pumpNativeEndpoint!(sessionId, route.generation, 64);
+          backendServiced = result.audioService?.active === true;
           if (sessionId === session.id) {
             const now = Date.now();
             if (now - lastReportedAt >= 1000) { lastReportedAt = now; setNativePumpStats(result); }
@@ -1659,8 +1676,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       finally { pumping = false; }
     };
     void pump();
-    // Service below the common 10 ms WASAPI engine period. The in-flight
-    // guard bounds requests; 20 ms service can exhaust a small render buffer.
+    // Older backends need service below the common 10 ms WASAPI engine
+    // period; 20 ms service can exhaust a small render buffer. The in-flight
+    // guard bounds requests.
     const timer = window.setInterval(() => void pump(), 5);
     return () => { active = false; window.clearInterval(timer); };
   }, [backend, nativeGenerations, session.id, snapshot?.status.activeSessionIds]);

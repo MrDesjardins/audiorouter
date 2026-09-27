@@ -363,7 +363,18 @@ export interface NativeApplicationPrepareResult {
   renderEndpointId: string;
 }
 
+/** Continuity of the backend-owned native audio service (absent from older backends). */
+export interface AudioServiceStats {
+  /** The backend pumps running native audio itself; UI pumps only report. */
+  active: boolean;
+  passes: number;
+  /** Service passes more than 8 ms apart while audio was running. */
+  lateGaps: number;
+  maxGapMicros: number;
+}
+
 export interface NativeEndpointPumpResult {
+  audioService?: AudioServiceStats;
   sessionId: EntityId;
   generation: number;
   packets: number;
@@ -376,6 +387,7 @@ export interface NativeEndpointPumpResult {
 }
 
 export interface NativeDuplexPumpResult {
+  audioService?: AudioServiceStats;
   sessionId: EntityId;
   generation: number;
   input: Omit<NativeEndpointPumpResult, "sessionId" | "generation" | "recorderChunksDrained">;
@@ -383,6 +395,7 @@ export interface NativeDuplexPumpResult {
 }
 
 export interface NativeRenderSourcePumpResult {
+  audioService?: AudioServiceStats;
   sessionId: EntityId;
   generation: number;
   packets: number;
@@ -392,6 +405,7 @@ export interface NativeRenderSourcePumpResult {
 }
 
 export interface NativeMultiInputPumpResult {
+  audioService?: AudioServiceStats;
   sessionId: EntityId;
   generation: number;
   inputs: number;
@@ -401,6 +415,8 @@ export interface NativeMultiInputPumpResult {
   deliveredQuanta: number;
   renderedFrames: number;
   renderBackpressureEvents: number;
+  /** Output device buffers found empty since start (each an audible gap; absent from older backends). */
+  outputUnderruns?: number;
 }
 
 export interface NativeMultiInputBranchBindingResult {
