@@ -177,6 +177,9 @@ pub struct RecordingQueue {
     // bit 0 = admission; bits 1..31 = admitted callbacks; high bits = epoch.
     // A single CAS reserves a callback, so closing admission cannot miss it.
     tap_admission: AtomicU64,
+    /// One past the last frame a tap committed (0 before any audio). Lets a
+    /// client stop or split at "now" without knowing the audio timeline.
+    latest_end_frame: AtomicU64,
 }
 
 pub struct RecordingTapPermit<'a>(&'a RecordingQueue);
@@ -531,7 +534,22 @@ impl RecordingQueue {
             overruns: AtomicU64::new(0),
             oversized: AtomicU64::new(0),
             tap_admission: AtomicU64::new(1),
+            latest_end_frame: AtomicU64::new(0),
         })
+    }
+
+    /// Record that audio up to `end_frame` (exclusive) was committed.
+    pub fn note_committed_end_frame(&self, end_frame: u64) {
+        self.latest_end_frame.fetch_max(end_frame, Ordering::Relaxed);
+    }
+
+    /// The frame just past the newest committed audio (the frame at which a
+    /// stop or split keeps everything received), or `None` before any audio.
+    pub fn committed_end_frame(&self) -> Option<u64> {
+        match self.latest_end_frame.load(Ordering::Relaxed) {
+            0 => None,
+            end => Some(end),
+        }
     }
 
     /// Create a queue with a caller-owned pool of fixed-size chunks. A
@@ -831,6 +849,11 @@ pub struct Mp3Recorder<W: Write> {
     controller: RecorderController,
     channels: u16,
     next_frame: Option<u64>,
+    /// Frame requested by the last start/resume. Queued chunks that begin
+    /// before it are skipped; the next chunk then sets the timeline. Clients
+    /// cannot know the live timeline frame exactly, so a start or resume
+    /// must not demand that the next chunk begins at exactly that frame.
+    align_from: Option<u64>,
 }
 
 impl<W: Write> Mp3Recorder<W> {
@@ -840,6 +863,7 @@ impl<W: Write> Mp3Recorder<W> {
             controller: RecorderController::new(),
             channels,
             next_frame: None,
+            align_from: None,
         })
     }
 
@@ -851,7 +875,10 @@ impl<W: Write> Mp3Recorder<W> {
     }
     pub fn start(&mut self, frame: u64) -> Result<(), RecorderError> {
         self.controller.start(frame)?;
-        self.next_frame = Some(frame);
+        // Align to the stream: skip audio queued before `frame`, then
+        // adopt the next chunk's timeline position (see `align_from`).
+        self.next_frame = None;
+        self.align_from = Some(frame);
         Ok(())
     }
     pub fn pause(&mut self, frame: u64) -> Result<(), RecorderError> {
@@ -859,7 +886,10 @@ impl<W: Write> Mp3Recorder<W> {
     }
     pub fn resume(&mut self, frame: u64) -> Result<(), RecorderError> {
         self.controller.resume(frame)?;
-        self.next_frame = Some(frame);
+        // Align to the stream: skip audio queued before `frame`, then
+        // adopt the next chunk's timeline position (see `align_from`).
+        self.next_frame = None;
+        self.align_from = Some(frame);
         Ok(())
     }
     pub fn split(&mut self, _frame: u64) -> Result<(), RecorderError> {
@@ -882,6 +912,13 @@ impl<W: Write> Mp3Recorder<W> {
         let mut drained = 0;
         while drained < maximum_chunks {
             let Some(chunk) = queue.try_pop() else { break };
+            if let Some(from) = self.align_from {
+                if chunk.start_frame < from {
+                    queue.recycle(chunk);
+                    continue;
+                }
+                self.align_from = None;
+            }
             let expected = self.next_frame.unwrap_or(chunk.start_frame);
             if chunk.start_frame != expected
                 || chunk.samples.len() % usize::from(self.channels) != 0
@@ -2310,6 +2347,11 @@ pub struct WavRecorder<W> {
     writer: WavWriter<W>,
     controller: RecorderController,
     next_frame: Option<u64>,
+    /// Frame requested by the last start/resume. Queued chunks that begin
+    /// before it are skipped; the next chunk then sets the timeline. Clients
+    /// cannot know the live timeline frame exactly, so a start or resume
+    /// must not demand that the next chunk begins at exactly that frame.
+    align_from: Option<u64>,
 }
 
 /// Queue-backed WAV recorder that rotates caller-owned destinations at an
@@ -2326,6 +2368,11 @@ where
     outputs: Vec<W>,
     controller: RecorderController,
     next_frame: Option<u64>,
+    /// Frame requested by the last start/resume. Queued chunks that begin
+    /// before it are skipped; the next chunk then sets the timeline. Clients
+    /// cannot know the live timeline frame exactly, so a start or resume
+    /// must not demand that the next chunk begins at exactly that frame.
+    align_from: Option<u64>,
     segment_frames: u64,
     max_segment_frames: u64,
     format: WavFormat,
@@ -2410,6 +2457,7 @@ impl<W: Write + Seek, F: FnMut(u32) -> Result<W, RecordingError>> SegmentedWavRe
             outputs: Vec::new(),
             controller: RecorderController::new(),
             next_frame: None,
+            align_from: None,
             segment_frames: 0,
             max_segment_frames,
             format,
@@ -2436,7 +2484,10 @@ impl<W: Write + Seek, F: FnMut(u32) -> Result<W, RecordingError>> SegmentedWavRe
 
     pub fn start(&mut self, frame: u64) -> Result<(), RecorderError> {
         self.controller.start(frame)?;
-        self.next_frame = Some(frame);
+        // Align to the stream: skip audio queued before `frame`, then
+        // adopt the next chunk's timeline position (see `align_from`).
+        self.next_frame = None;
+        self.align_from = Some(frame);
         Ok(())
     }
 
@@ -2446,7 +2497,10 @@ impl<W: Write + Seek, F: FnMut(u32) -> Result<W, RecordingError>> SegmentedWavRe
 
     pub fn resume(&mut self, frame: u64) -> Result<(), RecorderError> {
         self.controller.resume(frame)?;
-        self.next_frame = Some(frame);
+        // Align to the stream: skip audio queued before `frame`, then
+        // adopt the next chunk's timeline position (see `align_from`).
+        self.next_frame = None;
+        self.align_from = Some(frame);
         Ok(())
     }
 
@@ -2490,6 +2544,13 @@ impl<W: Write + Seek, F: FnMut(u32) -> Result<W, RecordingError>> SegmentedWavRe
         while drained < maximum_chunks {
             let Some(chunk) = queue.try_pop() else { break };
             let channels = usize::from(self.channels);
+            if let Some(from) = self.align_from {
+                if chunk.start_frame < from {
+                    queue.recycle(chunk);
+                    continue;
+                }
+                self.align_from = None;
+            }
             let expected = self.next_frame.unwrap_or(chunk.start_frame);
             if chunk.start_frame != expected || chunk.samples.len() % channels != 0 {
                 self.controller.fail();
@@ -2625,6 +2686,11 @@ pub struct BufferedFlacRecorder {
     encoder: FlacBufferEncoder,
     controller: RecorderController,
     next_frame: Option<u64>,
+    /// Frame requested by the last start/resume. Queued chunks that begin
+    /// before it are skipped; the next chunk then sets the timeline. Clients
+    /// cannot know the live timeline frame exactly, so a start or resume
+    /// must not demand that the next chunk begins at exactly that frame.
+    align_from: Option<u64>,
 }
 
 /// Queue-backed recorder that writes FLAC frames as chunks are drained.
@@ -2634,6 +2700,11 @@ pub struct StreamingFlacRecorder<W> {
     writer: StreamingFlacWriter<W>,
     controller: RecorderController,
     next_frame: Option<u64>,
+    /// Frame requested by the last start/resume. Queued chunks that begin
+    /// before it are skipped; the next chunk then sets the timeline. Clients
+    /// cannot know the live timeline frame exactly, so a start or resume
+    /// must not demand that the next chunk begins at exactly that frame.
+    align_from: Option<u64>,
 }
 
 impl<W: Write + Seek> StreamingFlacRecorder<W> {
@@ -2642,6 +2713,7 @@ impl<W: Write + Seek> StreamingFlacRecorder<W> {
             writer,
             controller: RecorderController::new(),
             next_frame: None,
+            align_from: None,
         }
     }
 
@@ -2659,7 +2731,10 @@ impl<W: Write + Seek> StreamingFlacRecorder<W> {
 
     pub fn start(&mut self, frame: u64) -> Result<(), RecorderError> {
         self.controller.start(frame)?;
-        self.next_frame = Some(frame);
+        // Align to the stream: skip audio queued before `frame`, then
+        // adopt the next chunk's timeline position (see `align_from`).
+        self.next_frame = None;
+        self.align_from = Some(frame);
         Ok(())
     }
 
@@ -2669,7 +2744,10 @@ impl<W: Write + Seek> StreamingFlacRecorder<W> {
 
     pub fn resume(&mut self, frame: u64) -> Result<(), RecorderError> {
         self.controller.resume(frame)?;
-        self.next_frame = Some(frame);
+        // Align to the stream: skip audio queued before `frame`, then
+        // adopt the next chunk's timeline position (see `align_from`).
+        self.next_frame = None;
+        self.align_from = Some(frame);
         Ok(())
     }
 
@@ -2732,6 +2810,13 @@ impl<W: Write + Seek> StreamingFlacRecorder<W> {
             let Some(chunk) = queue.try_pop() else {
                 break;
             };
+            if let Some(from) = self.align_from {
+                if chunk.start_frame < from {
+                    queue.recycle(chunk);
+                    continue;
+                }
+                self.align_from = None;
+            }
             let expected = self.next_frame.unwrap_or(chunk.start_frame);
             if chunk.start_frame != expected {
                 self.controller.fail();
@@ -2808,6 +2893,7 @@ impl BufferedFlacRecorder {
             )?,
             controller: RecorderController::new(),
             next_frame: None,
+            align_from: None,
         })
     }
 
@@ -2827,7 +2913,10 @@ impl BufferedFlacRecorder {
 
     pub fn start(&mut self, frame: u64) -> Result<(), RecorderError> {
         self.controller.start(frame)?;
-        self.next_frame = Some(frame);
+        // Align to the stream: skip audio queued before `frame`, then
+        // adopt the next chunk's timeline position (see `align_from`).
+        self.next_frame = None;
+        self.align_from = Some(frame);
         Ok(())
     }
 
@@ -2837,7 +2926,10 @@ impl BufferedFlacRecorder {
 
     pub fn resume(&mut self, frame: u64) -> Result<(), RecorderError> {
         self.controller.resume(frame)?;
-        self.next_frame = Some(frame);
+        // Align to the stream: skip audio queued before `frame`, then
+        // adopt the next chunk's timeline position (see `align_from`).
+        self.next_frame = None;
+        self.align_from = Some(frame);
         Ok(())
     }
 
@@ -2903,6 +2995,13 @@ impl BufferedFlacRecorder {
             let Some(chunk) = queue.try_pop() else {
                 break;
             };
+            if let Some(from) = self.align_from {
+                if chunk.start_frame < from {
+                    queue.recycle(chunk);
+                    continue;
+                }
+                self.align_from = None;
+            }
             let expected = self.next_frame.unwrap_or(chunk.start_frame);
             if chunk.start_frame != expected {
                 self.controller.fail();
@@ -2961,6 +3060,7 @@ impl<W: Write + Seek> WavRecorder<W> {
             writer,
             controller: RecorderController::new(),
             next_frame: None,
+            align_from: None,
         }
     }
 
@@ -2985,7 +3085,10 @@ impl<W: Write + Seek> WavRecorder<W> {
 
     pub fn start(&mut self, frame: u64) -> Result<(), RecorderError> {
         self.controller.start(frame)?;
-        self.next_frame = Some(frame);
+        // Align to the stream: skip audio queued before `frame`, then
+        // adopt the next chunk's timeline position (see `align_from`).
+        self.next_frame = None;
+        self.align_from = Some(frame);
         Ok(())
     }
 
@@ -2995,7 +3098,10 @@ impl<W: Write + Seek> WavRecorder<W> {
 
     pub fn resume(&mut self, frame: u64) -> Result<(), RecorderError> {
         self.controller.resume(frame)?;
-        self.next_frame = Some(frame);
+        // Align to the stream: skip audio queued before `frame`, then
+        // adopt the next chunk's timeline position (see `align_from`).
+        self.next_frame = None;
+        self.align_from = Some(frame);
         Ok(())
     }
 
@@ -3068,6 +3174,13 @@ impl<W: Write + Seek> WavRecorder<W> {
             let Some(chunk) = queue.try_pop() else {
                 break;
             };
+            if let Some(from) = self.align_from {
+                if chunk.start_frame < from {
+                    queue.recycle(chunk);
+                    continue;
+                }
+                self.align_from = None;
+            }
             let expected = self.next_frame.unwrap_or(chunk.start_frame);
             if chunk.start_frame != expected {
                 self.controller.fail();
@@ -3919,23 +4032,59 @@ mod tests {
         let writer =
             WavWriter::new(Cursor::new(Vec::new()), WavFormat::Pcm16, 1, 48_000, false).unwrap();
         let mut recorder = WavRecorder::new(writer);
-        let queue = RecordingQueue::new(1).unwrap();
-        queue
-            .try_push(RecordingChunk {
-                start_frame: 99,
-                samples: vec![0.0],
-            })
-            .unwrap();
+        let queue = RecordingQueue::new(2).unwrap();
+        // A gap inside the stream (frame 101 is missing) is a real failure.
+        for start_frame in [100, 102] {
+            queue
+                .try_push(RecordingChunk {
+                    start_frame,
+                    samples: vec![0.0],
+                })
+                .unwrap();
+        }
         recorder.arm().unwrap();
         recorder.start(100).unwrap();
         assert!(matches!(
-            recorder.drain_queue(&queue, 1),
+            recorder.drain_queue(&queue, 2),
             Err(RecordingError::FrameDiscontinuity { .. })
         ));
         assert_eq!(recorder.state(), RecorderState::Failed);
         assert!(matches!(
             recorder.finish(),
             Err(RecordingError::NotRecording)
+        ));
+    }
+
+    #[test]
+    fn start_and_resume_align_to_the_live_stream_instead_of_demanding_an_exact_frame() {
+        let writer =
+            WavWriter::new(Cursor::new(Vec::new()), WavFormat::Float32, 1, 48_000, false).unwrap();
+        let mut recorder = WavRecorder::new(writer);
+        let queue = RecordingQueue::new(8).unwrap();
+        let push = |start_frame: u64, value: f32| {
+            queue
+                .try_push(RecordingChunk { start_frame, samples: vec![value; 4] })
+                .unwrap();
+        };
+        // Audio queued before the requested frame is skipped; a client that
+        // cannot know the timeline may start at 0 and the stream is adopted.
+        push(40, 0.1);
+        push(44, 0.2);
+        recorder.arm().unwrap();
+        recorder.start(44).unwrap();
+        assert_eq!(recorder.drain_queue(&queue, 8).unwrap(), 1);
+        recorder.pause(48).unwrap();
+        // Resume later on the live timeline: no discontinuity failure.
+        recorder.resume(48).unwrap();
+        push(96, 0.3);
+        push(100, 0.4);
+        assert_eq!(recorder.drain_queue(&queue, 8).unwrap(), 2);
+        assert_eq!(recorder.state(), RecorderState::Recording);
+        // Contiguity is still enforced once aligned.
+        push(108, 0.5);
+        assert!(matches!(
+            recorder.drain_queue(&queue, 8),
+            Err(RecordingError::FrameDiscontinuity { expected: 104, actual: 108 })
         ));
     }
 

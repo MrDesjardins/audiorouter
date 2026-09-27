@@ -374,6 +374,12 @@ pub trait RecorderWorker: Send {
         None
     }
 
+    /// The frame just past the newest audio its tap committed; stopping or
+    /// splitting there keeps everything received so far.
+    fn committed_end_frame(&self) -> Option<u64> {
+        None
+    }
+
     /// Supplies explicit file ownership metadata before lifecycle start.
     /// Workers that do not own a single file reject this configuration rather
     /// than allowing the control plane to guess a library path.
@@ -542,6 +548,10 @@ impl WavRecorderWorker {
 }
 
 impl RecorderWorker for WavRecorderWorker {
+    fn committed_end_frame(&self) -> Option<u64> {
+        self.queue.committed_end_frame()
+    }
+
     fn shared_audio_tap(&self) -> Option<Arc<dyn AudioTap>> {
         Some(Arc::new(self.audio_tap()))
     }
@@ -1059,6 +1069,10 @@ impl SegmentedWavRecorderWorker {
 }
 
 impl RecorderWorker for SegmentedWavRecorderWorker {
+    fn committed_end_frame(&self) -> Option<u64> {
+        self.queue.committed_end_frame()
+    }
+
     fn shared_audio_tap(&self) -> Option<Arc<dyn AudioTap>> {
         Some(Arc::new(self.audio_tap()))
     }
@@ -1343,6 +1357,10 @@ impl BufferedFlacRecorderWorker {
 }
 
 impl RecorderWorker for BufferedFlacRecorderWorker {
+    fn committed_end_frame(&self) -> Option<u64> {
+        self.queue.committed_end_frame()
+    }
+
     fn shared_audio_tap(&self) -> Option<Arc<dyn AudioTap>> {
         Some(Arc::new(self.audio_tap()))
     }
@@ -1573,6 +1591,10 @@ impl StreamingFlacRecorderWorker {
 }
 
 impl RecorderWorker for StreamingFlacRecorderWorker {
+    fn committed_end_frame(&self) -> Option<u64> {
+        self.queue.committed_end_frame()
+    }
+
     fn shared_audio_tap(&self) -> Option<Arc<dyn AudioTap>> {
         Some(Arc::new(self.audio_tap()))
     }
@@ -1777,6 +1799,10 @@ impl Mp3RecorderWorker {
 }
 
 impl RecorderWorker for Mp3RecorderWorker {
+    fn committed_end_frame(&self) -> Option<u64> {
+        self.queue.committed_end_frame()
+    }
+
     fn shared_audio_tap(&self) -> Option<Arc<dyn AudioTap>> {
         Some(Arc::new(self.audio_tap()))
     }
@@ -1937,8 +1963,11 @@ impl AudioTap for RecorderAudioTap {
                 chunk.samples[frame * block.channels() + channel] = sample;
             }
         }
-        if let Err(chunk) = self.queue.try_commit(chunk) {
-            self.queue.recycle(chunk);
+        match self.queue.try_commit(chunk) {
+            Ok(()) => self
+                .queue
+                .note_committed_end_frame(start_frame.saturating_add(block.frames() as u64)),
+            Err(chunk) => self.queue.recycle(chunk),
         }
     }
 }
@@ -3687,7 +3716,8 @@ fn method_output_schema(name: &str) -> Value {
                 "deliveredQuanta": { "type": "integer", "minimum": 0 },
                 "renderedFrames": { "type": "integer", "minimum": 0 },
                 "renderBackpressureEvents": { "type": "integer", "minimum": 0 },
-                "outputUnderruns": { "type": "integer", "minimum": 0 }
+                "outputUnderruns": { "type": "integer", "minimum": 0 },
+                "recorderChunksDrained": { "type": "integer", "minimum": 0 }
             },
             "required": ["sessionId", "generation", "inputs", "capturedFrames", "submittedQuanta", "outputCount", "deliveredQuanta", "renderedFrames", "renderBackpressureEvents"],
             "additionalProperties": false
@@ -6468,7 +6498,15 @@ impl ControlPlane {
             ));
         }
         self.maintain_multi_input_applications(session_id, false);
-        match self.pump_native_multi_input_worker_once(session_id, generation, max_packets) {
+        let pumped = self.pump_native_multi_input_worker_once(session_id, generation, max_packets);
+        // Recorder branches of a multi-path session queue audio from their
+        // graph taps; write it out here as the endpoint pump does, or the
+        // bounded queue fills within milliseconds and the rest is dropped.
+        let recorder_chunks_drained = self.drain_attached_recorders()?;
+        match pumped.map(|mut value| {
+            value["recorderChunksDrained"] = json!(recorder_chunks_drained);
+            value
+        }) {
             Err(error)
                 if self
                     .multi_input_application_sources
@@ -15435,11 +15473,21 @@ impl ControlPlane {
                 .filter_map(|(node_id, recorder)| {
                     let session_id = self.recorder_node_sessions.get(node_id)?;
                     let checkpoint = recorder.checkpoint();
+                    // The newest audio the tap received: clients stop or
+                    // split "now" at this frame without knowing the timeline.
+                    let received = self
+                        .recorder_node_workers
+                        .get(node_id)
+                        .and_then(|worker| worker.committed_end_frame());
+                    let last_frame = match (checkpoint.last_frame, received) {
+                        (Some(transition), Some(received)) => Some(transition.max(received)),
+                        (transition, received) => transition.or(received),
+                    };
                     Some(json!({
                         "sessionId": session_id,
                         "nodeId": node_id,
                         "state": recorder_state_name(recorder.state()),
-                        "lastFrame": checkpoint.last_frame
+                        "lastFrame": last_frame
                     }))
                 }),
         );

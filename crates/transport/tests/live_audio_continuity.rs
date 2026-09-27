@@ -120,6 +120,29 @@ mod live {
             .id
     }
 
+    fn record_mode() -> bool {
+        std::env::var("AUDIOROUTER_CONTINUITY_RECORD").as_deref() == Ok("1")
+    }
+
+    /// Left channel of a float32 stereo WAV written by the recorder.
+    fn wav_float32_left(path: &str) -> Vec<f32> {
+        let bytes = std::fs::read(path).unwrap_or_else(|error| panic!("{path}: {error}"));
+        let mut offset = 12;
+        while offset + 8 <= bytes.len() {
+            let id = &bytes[offset..offset + 4];
+            let size = u32::from_le_bytes(bytes[offset + 4..offset + 8].try_into().unwrap()) as usize;
+            if id == b"data" {
+                let end = (offset + 8 + size).min(bytes.len());
+                return bytes[offset + 8..end]
+                    .chunks_exact(8)
+                    .map(|frame| f32::from_le_bytes(frame[..4].try_into().unwrap()))
+                    .collect();
+            }
+            offset += 8 + size + (size & 1);
+        }
+        panic!("{path}: no data chunk");
+    }
+
     fn test_signal_source() -> bool {
         std::env::var("AUDIOROUTER_CONTINUITY_SOURCE").as_deref() == Ok("testSignal")
     }
@@ -235,7 +258,32 @@ mod live {
                 matrix: vec![1.0, 0.0, 0.0, 1.0],
                 enabled: true,
             })
-            .collect();
+            .collect::<Vec<_>>();
+        // `AUDIOROUTER_CONTINUITY_RECORD=1` adds a Recorder branch fed by the
+        // same node that feeds the destination.
+        let mut edges = edges;
+        if record_mode() {
+            let feeder = edges
+                .iter()
+                .find(|edge| edge.destination_node.as_str() == "destination")
+                .map(|edge| (edge.source_node.clone(), edge.source_port.clone()))
+                .expect("destination is fed");
+            nodes.push(node(
+                "recorder".into(),
+                NodeKind::Recorder,
+                vec![port("in", PortDirection::Input)],
+                serde_json::Map::new(),
+            ));
+            edges.push(Edge {
+                id: EntityId::new("to-recorder"),
+                source_node: feeder.0,
+                source_port: feeder.1,
+                destination_node: EntityId::new("recorder"),
+                destination_port: "in".into(),
+                matrix: vec![1.0, 0.0, 0.0, 1.0],
+                enabled: true,
+            });
+        }
         Session {
             id: EntityId::new("continuity"),
             name: "Continuity qualification".into(),
@@ -469,10 +517,16 @@ mod live {
             plane
                 .insert_session(route(&route_capture_id, &route_render_id, &server_chain, extra))
                 .unwrap();
+            if record_mode() {
+                let root = std::env::temp_dir().join("audiorouter-continuity-recordings");
+                std::fs::create_dir_all(&root).unwrap();
+                plane.configure_recording_root(&root).unwrap();
+            }
             let grant = audiorouter_control::ClientGrant::with_scopes([
                 audiorouter_domain::PermissionScope::Read,
                 audiorouter_domain::PermissionScope::GraphWrite,
                 audiorouter_domain::PermissionScope::SessionControl,
+                audiorouter_domain::PermissionScope::Record,
                 audiorouter_domain::PermissionScope::DeviceAdministration,
             ]);
             let _ = audiorouter_transport::serve_control_connections_forever_with_grant(
@@ -504,6 +558,22 @@ mod live {
             rpc(&pipe, "nativePaths.prepare", json!({ "sessionId": session_id }))
         };
         eprintln!("prepared: {prepared}");
+        // A Recorder node's worker must exist before the session starts.
+        let recording_path = record_mode().then(|| {
+            let run = std::process::id();
+            let created = rpc(
+                &pipe,
+                "recorders.create",
+                json!({
+                    "sessionId": session_id, "nodeId": "recorder", "recorderId": format!("continuity-{run}"),
+                    "format": "wavFloat32", "sequence": 1, "channels": 2, "sampleRate": 48_000,
+                    "dither": false, "queueCapacity": 8, "maximumChunksPerPass": 1,
+                    "idempotencyKey": format!("continuity-rec-create-{run}")
+                }),
+            );
+            rpc(&pipe, "recorders.arm", json!({ "sessionId": session_id, "nodeId": "recorder", "idempotencyKey": format!("continuity-rec-arm-{run}") }));
+            created["path"].as_str().unwrap().to_owned()
+        });
         let started = rpc(
             &pipe,
             "session.start",
@@ -520,6 +590,16 @@ mod live {
         }
         std::thread::sleep(Duration::from_secs(1));
         measuring.store(true, Ordering::Release);
+        let recording_path = recording_path.map(|path: String| {
+            let run = std::process::id();
+            let frame = rpc(&pipe, "recorders.list", Value::Null)
+                .as_array()
+                .and_then(|rows| rows.iter().find(|row| row["nodeId"] == "recorder"))
+                .and_then(|row| row["lastFrame"].as_u64())
+                .unwrap_or(0);
+            rpc(&pipe, "recorders.start", json!({ "sessionId": session_id, "nodeId": "recorder", "frame": frame, "idempotencyKey": format!("continuity-rec-start-{run}") }));
+            path
+        });
         // UI-like control load: 20 Hz diagnostics and a 10 Hz counter pump.
         let until = Instant::now() + Duration::from_secs(seconds);
         let mut last_service = Value::Null;
@@ -540,6 +620,16 @@ mod live {
             std::thread::sleep(Duration::from_millis(50));
         }
         measuring.store(false, Ordering::Release);
+        if record_mode() {
+            eprintln!("recorders before stop: {}", rpc(&pipe, "recorders.list", Value::Null));
+            let frame = rpc(&pipe, "recorders.list", Value::Null)
+                .as_array()
+                .and_then(|rows| rows.iter().find(|row| row["nodeId"] == "recorder"))
+                .and_then(|row| row["lastFrame"].as_u64())
+                .unwrap_or(0);
+            let stopped = rpc(&pipe, "recorders.stop", json!({ "sessionId": session_id, "nodeId": "recorder", "frame": frame, "idempotencyKey": format!("continuity-rec-stop-{}", std::process::id()) }));
+            eprintln!("recorder stopped: {stopped}");
+        }
         let diagnostics = rpc(&pipe, "system.diagnostics", Value::Null);
         rpc(
             &pipe,
@@ -558,12 +648,20 @@ mod live {
         }
         let reference_glitches = report("reference (CABLE Output)", &reference);
         let result_glitches = report("routed result (CABLE-B Output)", &result);
+        let recording_glitches = recording_path.as_deref().map(|path| {
+            eprintln!("recording: {path}");
+            report(
+                "recording (Recorder branch)",
+                &Recording { left: wav_float32_left(path), discontinuity_flags: 0 },
+            )
+        });
         assert_eq!(last_service["active"], true, "backend must own audio service");
         assert!(
             test_signal_source() || reference_glitches == 0,
             "the harness tone itself was discontinuous; the result is inconclusive"
         );
         assert_eq!(result_glitches, 0, "the routed tone has audible discontinuities");
+        assert_eq!(recording_glitches.unwrap_or(0), 0, "the recording has discontinuities");
     }
 
     /// Clock-drift survey of a saved multi-device session. Point

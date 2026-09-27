@@ -440,6 +440,8 @@ export interface NativeMultiInputPumpResult {
   renderBackpressureEvents: number;
   /** Output device buffers found empty since start (each an audible gap; absent from older backends). */
   outputUnderruns?: number;
+  /** Recorder-branch chunks written to disk by this pump (absent from older backends). */
+  recorderChunksDrained?: number;
 }
 
 export interface NativeMultiInputBranchBindingResult {
