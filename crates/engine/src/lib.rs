@@ -4826,6 +4826,8 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                     | NodeKind::PhysicalOutput
                     | NodeKind::VirtualRenderSource
                     | NodeKind::VirtualCaptureSink
+                    | NodeKind::NetworkSend
+                    | NodeKind::NetworkReceive
                     | NodeKind::TestSignal
                     | NodeKind::AudioFile
                     | NodeKind::Mixer
@@ -5518,7 +5520,7 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                         .ok_or(GraphCompileError::UnsupportedTopology)?,
                 }
             ),
-            NodeKind::PhysicalOutput | NodeKind::VirtualCaptureSink => {
+            NodeKind::PhysicalOutput | NodeKind::VirtualCaptureSink | NodeKind::NetworkSend => {
                 let index = stages
                     .iter()
                     .filter_map(|stage| match stage {
@@ -5533,6 +5535,7 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
             | NodeKind::ApplicationCapture
             | NodeKind::EndpointLoopback
             | NodeKind::VirtualRenderSource
+            | NodeKind::NetworkReceive
             | NodeKind::Mixer
             | NodeKind::Recorder => {}
             NodeKind::Meter => {
@@ -5900,7 +5903,7 @@ fn compile_path_graph(
             .ok_or(GraphCompileError::UnsupportedTopology)?;
         if !matches!(
             destination.kind,
-            NodeKind::PhysicalOutput | NodeKind::VirtualCaptureSink | NodeKind::Recorder
+            NodeKind::PhysicalOutput | NodeKind::VirtualCaptureSink | NodeKind::Recorder | NodeKind::NetworkSend
         ) || !destination.enabled
             || destination.bypass
             || edge.source_node != current_node_id

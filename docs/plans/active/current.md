@@ -54,6 +54,9 @@ by hand in the morning.
   RPC pumps, and the render device had no jitter margin. Measured after
   the fixes: 0 glitches over 30–60 s for a direct route, a five-processor
   chain, the single-endpoint worker, and the user's saved ReaPlugs chain.
+- **Test Signal and Audio File were chopped** (~100 discontinuities/s)
+  because generated sources were not paced in real time. They now are:
+  30 s clean.
 - **Bypassed plugins no longer block Play.** The user's saved session has
   ReaEQ bypassed, which made `nativePaths.prepare` fail. Regression test
   added.
@@ -72,12 +75,10 @@ by hand in the morning.
 
 ## Open defects and known gaps
 
-1. **Clock drift is uncorrected.** Independent device clocks (USB mic,
-   Scarlett, virtual cables) are not rate-matched; `DriftController` exists
-   but no live path uses it. Expected symptom: an isolated click every few
-   minutes on cross-device routes, and latency that creeps toward the 50 ms
-   headroom bound. Measurement on the user's session: see the log entry
-   below.
+1. Clock drift is not corrected in code (`DriftController` is unused). On
+   the user's devices it measured under 1 ppm (flat 17 ms queues over
+   3 minutes, [drift survey](evidence/2026-09-26-audio-continuity.md#clock-drift-survey-of-the-users-saved-session)),
+   so it is low priority here. Other hardware can drift more.
 2. Latency does not shrink by itself after a stall. The output queue can
    stay up to about 70 ms until Stop/Play.
 3. Signal timing covers multi-input routes only. A plugin's own reported
@@ -102,15 +103,14 @@ by hand in the morning.
    $env:AUDIOROUTER_ALLOW_DEVICE_ADMIN = "1"
    & "C:\code\audiorouter\target\patrick-main-release-2\release\audiorouter-shell.exe"
    ```
-   Select Patrick Main Session and press Play. Listen to the voice and
+   Select Patrick Main Session and press Play. Also try a Test Signal
+   route. Listen to the voice and
    game with the window minimized and restored. The status line should
    show no "output underrun" or "late audio service gap". If clicks
    remain, note roughly how often they occur (drift gives rare, regular
    clicks).
-2. Engineering: live clock-drift correction for cross-device paths
-   (adaptive resampling at the output, driven by queue depth), qualified
-   with the continuity harness and the drift survey.
-3. Network send/receive tools (user-requested, 2026-09-26) — see the log.
+2. Network send/receive tools (user-requested, 2026-09-26). See the log.
+3. Low priority: live clock-drift correction for cross-device paths.
 4. M05 attended accessibility/scaling review; M08 clean-checkout release
    preparation.
 

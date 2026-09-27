@@ -11,6 +11,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use windows_core::Interface;
 
+mod network_audio;
+pub use network_audio::*;
 mod service_thread;
 pub use service_thread::{AudioServiceThreadCapabilities, AudioServiceThreadGuard};
 #[cfg(windows)]
@@ -3593,6 +3595,9 @@ pub enum AudioError {
     EndpointBinding {
         resolution: Box<EndpointBindingResolution>,
     },
+    /// A Network Send/Receive socket could not be opened (for example the
+    /// port is already in use).
+    Network(String),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -3679,7 +3684,7 @@ impl AudioError {
             | Self::ApplicationRestartAmbiguous { .. }
             | Self::BufferTooSmall { .. }
             | Self::EndpointBinding { .. } => 0x80070057,
-            Self::ProcessingStateUnavailable => 0x80004005,
+            Self::ProcessingStateUnavailable | Self::Network(_) => 0x80004005,
             Self::ApplicationIdentityUnavailable { .. }
             | Self::ApplicationRestartIdentityUnavailable { .. } => 0x80070005,
         }
@@ -3727,6 +3732,7 @@ impl fmt::Display for AudioError {
                 error.code().0 as u32
             ),
             Self::InvalidUtf16 => formatter.write_str("endpoint ID was not valid UTF-16"),
+            Self::Network(error) => write!(formatter, "network audio socket failed: {error}"),
             Self::BufferTooSmall {
                 required,
                 available,
@@ -5284,6 +5290,9 @@ pub enum WasapiOutputFanoutError {
 /// realtime graph callback.
 pub struct WasapiOutputFanout {
     workers: Vec<RingOutputPump<SharedRender>>,
+    /// Network Send branches' senders; dropped (socket closed, thread
+    /// joined) with the fan-out.
+    network_senders: Vec<(usize, crate::NetworkSender)>,
     output_rings: Vec<Arc<audiorouter_engine::AudioBlockRing>>,
     branch_tap_sets: Vec<audiorouter_engine::AudioTapSet>,
     taps: audiorouter_engine::AudioTapSet,
@@ -5313,6 +5322,7 @@ impl WasapiOutputFanout {
         }
         Ok(Self {
             workers: Vec::new(),
+            network_senders: Vec::new(),
             output_rings: Vec::new(),
             branch_tap_sets: Vec::new(),
             taps: audiorouter_engine::AudioTapSet::new(),
@@ -5358,6 +5368,7 @@ impl WasapiOutputFanout {
         }
         Ok(Self {
             workers,
+            network_senders: Vec::new(),
             output_rings,
             output_delays: vec![DelayEstimate::default(); branch_tap_sets.len()],
             branch_tap_sets,
@@ -5579,6 +5590,20 @@ impl WasapiOutputFanout {
             pump.accumulate(drained);
         }
         Ok((delivered, pump))
+    }
+
+    /// Keep the sender of the branch appended next alive for this fan-out's
+    /// lifetime. Call immediately before `append_tap_branch`.
+    pub fn keep_network_sender(&mut self, sender: crate::NetworkSender) {
+        self.network_senders.push((self.output_rings.len(), sender));
+    }
+
+    /// Counters of the Network Send feeding output branch `branch`.
+    pub fn network_send_stats(&self, branch: usize) -> Option<crate::NetworkSendStats> {
+        self.network_senders
+            .iter()
+            .find(|(index, _)| *index == branch)
+            .map(|(_, sender)| sender.stats())
     }
 
     /// Device-buffer underruns per physical output since start (each one an
@@ -5928,9 +5953,10 @@ pub enum MultiInputCaptureSource {
     Physical(SharedCapture),
     ApplicationLoopback(ProcessLoopbackCapture),
     /// Stand-in for an application that has closed: it offers silent
-    /// packets so the Mixer keeps producing the other inputs. The feeder's
-    /// bounded input ring paces it to the live inputs.
+    /// packets so the Mixer keeps producing the other inputs.
     Silence(SilentCapture),
+    /// Audio streamed from another computer by a Network Send node.
+    Network(crate::NetworkReceiver),
 }
 
 /// Real-time-paced silent capture. It paces generated sources (Test Signal,
@@ -6029,7 +6055,7 @@ impl MultiInputCaptureSource {
     pub fn physical_endpoint_id(&self) -> Option<&str> {
         match self {
             Self::Physical(capture) => Some(capture.endpoint_id()),
-            Self::ApplicationLoopback(_) | Self::Silence(_) => None,
+            Self::ApplicationLoopback(_) | Self::Silence(_) | Self::Network(_) => None,
         }
     }
 }
@@ -6040,6 +6066,10 @@ impl EndpointLifecycle for MultiInputCaptureSource {
             Self::Physical(capture) => capture.start(),
             Self::ApplicationLoopback(capture) => capture.start(),
             Self::Silence(_) => Ok(()),
+            Self::Network(receiver) => {
+                receiver.reset_playout();
+                Ok(())
+            }
         }
     }
 
@@ -6048,6 +6078,7 @@ impl EndpointLifecycle for MultiInputCaptureSource {
             Self::Physical(capture) => capture.stop(),
             Self::ApplicationLoopback(capture) => capture.stop(),
             Self::Silence(_) => Ok(()),
+            Self::Network(_) => Ok(()),
         }
     }
 }
@@ -6064,6 +6095,7 @@ impl AudioCaptureSource for MultiInputCaptureSource {
                 capture.next_packet_into(destination, bytes_per_frame)
             }
             Self::Silence(capture) => capture.next_packet_into(destination, bytes_per_frame),
+            Self::Network(receiver) => receiver.next_packet_into(destination, bytes_per_frame),
         }
     }
 }
@@ -6210,6 +6242,19 @@ impl NativeMultiInputWorker {
     /// Smoothed age of each source's audio when picked up (ms), in input order.
     pub fn input_wait_ms(&self) -> Vec<Option<f64>> {
         self.feeder.input_wait_ms()
+    }
+
+    /// Counters of a Network Receive source, by input index.
+    pub fn network_receive_stats(&self, input: usize) -> Option<crate::NetworkReceiveStats> {
+        match self.captures.get(input)? {
+            MultiInputCaptureSource::Network(receiver) => Some(receiver.stats()),
+            _ => None,
+        }
+    }
+
+    /// Counters of a Network Send branch, by output index.
+    pub fn network_send_stats(&self, output: usize) -> Option<crate::NetworkSendStats> {
+        self.outputs.as_ref()?.network_send_stats(output)
     }
 
     /// Device-buffer underruns since start, summed over physical outputs.

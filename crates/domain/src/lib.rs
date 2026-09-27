@@ -116,10 +116,14 @@ pub enum NodeKind {
     SpeechDenoise,
     FirFilter,
     TimeShift,
+    /// Streams its input to another computer over UDP (LAN).
+    NetworkSend,
+    /// Plays audio streamed by a Network Send node on another computer.
+    NetworkReceive,
 }
 
 impl NodeKind {
-    pub const ALL: [Self; 30] = [
+    pub const ALL: [Self; 32] = [
         Self::PhysicalInput,
         Self::ApplicationCapture,
         Self::EndpointLoopback,
@@ -150,6 +154,8 @@ impl NodeKind {
         Self::SpeechDenoise,
         Self::FirFilter,
         Self::TimeShift,
+        Self::NetworkSend,
+        Self::NetworkReceive,
     ];
 
     pub fn type_name(self) -> &'static str {
@@ -184,6 +190,8 @@ impl NodeKind {
             Self::SpeechDenoise => "speech-denoise",
             Self::FirFilter => "fir-filter",
             Self::TimeShift => "time-shift",
+            Self::NetworkSend => "network-send",
+            Self::NetworkReceive => "network-receive",
         }
     }
 }
@@ -238,6 +246,20 @@ fn valid_parametric_band_parameter(name: &str, value: &serde_json::Value) -> boo
     }
 }
 
+/// Default UDP port of the Network Send/Receive tools.
+pub const DEFAULT_NETWORK_AUDIO_PORT: u16 = 47_800;
+/// Jitter-buffer bounds of a Network Receive node, in milliseconds.
+pub const MIN_NETWORK_BUFFER_MS: f64 = 10.0;
+pub const MAX_NETWORK_BUFFER_MS: f64 = 500.0;
+pub const DEFAULT_NETWORK_BUFFER_MS: f64 = 40.0;
+
+/// A network node address is an IPv4 or IPv6 literal. Names are not
+/// resolved, so a route never depends on DNS and a typo cannot silently
+/// reach an unexpected host.
+pub fn valid_network_address(text: &str) -> bool {
+    text.len() <= 64 && text.trim() == text && text.parse::<std::net::IpAddr>().is_ok()
+}
+
 fn valid_bounded_string(value: &serde_json::Value, maximum: usize) -> bool {
     value
         .as_str()
@@ -259,7 +281,7 @@ fn valid_creation_time(value: &serde_json::Value) -> bool {
     })
 }
 
-pub fn node_registry() -> [NodeTypeSpec; 30] {
+pub fn node_registry() -> [NodeTypeSpec; 32] {
     NodeKind::ALL.map(|kind| NodeTypeSpec {
         kind,
         version: 1,
@@ -287,6 +309,7 @@ pub fn node_registry() -> [NodeTypeSpec; 30] {
             }
             NodeKind::GraphicEq => CapabilityAvailability::Available,
             NodeKind::Pitch => CapabilityAvailability::Available,
+            NodeKind::NetworkSend | NodeKind::NetworkReceive => CapabilityAvailability::Available,
             NodeKind::Recorder => CapabilityAvailability::Available,
             NodeKind::AudioFile => CapabilityAvailability::Available,
             // M02 user-mode Windows adapters are implemented in the current
@@ -1733,6 +1756,15 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::Pitch, "cents") => value
                     .as_f64()
                     .is_some_and(|cents| cents.is_finite() && (-100.0..=100.0).contains(&cents)),
+                (NodeKind::NetworkSend, "host") | (NodeKind::NetworkReceive, "sender") => {
+                    value.as_str().is_some_and(valid_network_address)
+                }
+                (NodeKind::NetworkSend | NodeKind::NetworkReceive, "port") => value
+                    .as_u64()
+                    .is_some_and(|port| (1..=u64::from(u16::MAX)).contains(&port)),
+                (NodeKind::NetworkReceive, "bufferMs") => value.as_f64().is_some_and(|buffer| {
+                    buffer.is_finite() && (MIN_NETWORK_BUFFER_MS..=MAX_NETWORK_BUFFER_MS).contains(&buffer)
+                }),
                 (NodeKind::TestSignal, "frequencyHz") => value.as_f64().is_some_and(|frequency| {
                     frequency.is_finite() && (20.0..=20_000.0).contains(&frequency)
                 }),
@@ -3721,6 +3753,36 @@ mod tests {
     }
 
     #[test]
+    fn network_node_parameters_accept_only_ip_literals_ports_and_bounded_buffers() {
+        let valid = |kind, name: &str, value: serde_json::Value| {
+            let direction = if kind == NodeKind::NetworkSend {
+                PortDirection::Input
+            } else {
+                PortDirection::Output
+            };
+            let mut network = node("net", kind, direction);
+            network.parameters.insert(name.into(), value);
+            validate_session(&session(vec![network], vec![])).is_ok()
+        };
+        assert!(valid(NodeKind::NetworkSend, "host", serde_json::json!("192.168.1.20")));
+        assert!(valid(NodeKind::NetworkSend, "host", serde_json::json!("fe80::1")));
+        // Names are never resolved; whitespace and garbage are rejected.
+        assert!(!valid(NodeKind::NetworkSend, "host", serde_json::json!("streaming-pc")));
+        assert!(!valid(NodeKind::NetworkSend, "host", serde_json::json!(" 192.168.1.20")));
+        assert!(!valid(NodeKind::NetworkSend, "host", serde_json::json!("")));
+        assert!(valid(NodeKind::NetworkSend, "port", serde_json::json!(47_800)));
+        assert!(!valid(NodeKind::NetworkSend, "port", serde_json::json!(0)));
+        assert!(!valid(NodeKind::NetworkSend, "port", serde_json::json!(70_000)));
+        assert!(valid(NodeKind::NetworkReceive, "sender", serde_json::json!("10.0.0.5")));
+        assert!(!valid(NodeKind::NetworkReceive, "sender", serde_json::json!("any")));
+        assert!(valid(NodeKind::NetworkReceive, "bufferMs", serde_json::json!(40.0)));
+        assert!(!valid(NodeKind::NetworkReceive, "bufferMs", serde_json::json!(5.0)));
+        assert!(!valid(NodeKind::NetworkReceive, "bufferMs", serde_json::json!(900.0)));
+        // A receive-only parameter is not accepted on a send node.
+        assert!(!valid(NodeKind::NetworkSend, "sender", serde_json::json!("10.0.0.5")));
+    }
+
+    #[test]
     fn test_signal_parameters_are_bounded_and_typed() {
         let mut signal = node("signal", NodeKind::TestSignal, PortDirection::Output);
         signal
@@ -3743,7 +3805,7 @@ mod tests {
     #[test]
     fn registry_reports_audio_and_processor_capabilities_explicitly() {
         let registry = node_registry();
-        assert_eq!(registry.len(), 30);
+        assert_eq!(registry.len(), 32);
         let physical = registry
             .iter()
             .find(|spec| spec.kind == NodeKind::PhysicalInput)

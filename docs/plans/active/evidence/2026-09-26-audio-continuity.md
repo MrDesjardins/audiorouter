@@ -94,6 +94,41 @@ block-sized jumps unambiguous), `AUDIOROUTER_CONTINUITY_DUMP_DIR` (raw f32 dumps
    the worker process loop now join MMCSS "Pro Audio" (`ProAudioThread`).
    The bridge's first misses are its intended startup fill.
 
+6. **Generated sources ran ahead of the output device.** Test Signal and
+   Audio File are paced by a `SilentCapture`, which offered a packet on
+   every call. Each 1 ms service pass generated up to 64 quanta, and the
+   full output ring discarded almost all of them. The generator's timeline
+   advanced anyway.
+   - Before (`AUDIOROUTER_CONTINUITY_SOURCE=testSignal`): 20 s → 1,965
+     discontinuities. Output queue pinned at 67 ms, and 1,784 of 1,785
+     service passes were late (max 20 ms). That would also starve every
+     other path in the same session.
+   - A trial fix (engine backpressure: skip a path whose destination is
+     full) cured the generator, but it produced a ~10 ms gap in 4 of 5
+     live-capture runs, against 0 of 6 with drop-on-full. It was reverted.
+   - Fix: `SilentCapture` yields packets at the 48 kHz wall-clock rate, one
+     packet primed, catch-up bounded to 100 ms after a stall.
+   - After: Test Signal, 30 s → 0 glitches, 11 ms output queue, 0 late
+     passes.
+
+## Clock-drift survey of the user's saved session
+
+`live_saved_session_output_queue_drift`, 180 s, run on a copy of the
+user's database with privacy mute latched (every output rendered silence;
+nothing recorded). The session's two paths: PD200X mic → ReaPlugs →
+CABLE-A Input and Scarlett, plus CABLE-B Output → EQ → Scarlett. Each
+output's queue depth was sampled every 2 s:
+
+| Output | Queue (ms) | Slope |
+| --- | --- | --- |
+| voice-to-cable-a (CABLE-A Input) | 17.4–17.5 | −0.006 ms/min (≈ −0.1 ppm) |
+| voice-monitor (Scarlett) | 16.7–16.8 | +0.024 ms/min (≈ +0.4 ppm) |
+| siege-out (Scarlett) | 16.7–16.8 | +0.053 ms/min (≈ +0.9 ppm) |
+
+On this machine, drift is far too small to matter within a session: the
+10 ms cushion would take hours to drain. Other hardware can drift more,
+so drift correction stays a low-priority gap rather than a closed one.
+
 ## Results after all fixes (commands run from the repository root)
 
 | Route (CABLE Output → … → CABLE-B Input) | Worker | Duration | Result glitches | Reference |
@@ -102,6 +137,7 @@ block-sized jumps unambiguous), `AUDIOROUTER_CONTINUITY_DUMP_DIR` (raw f32 dumps
 | Gain, PEQ, Compressor, Gate, Limiter | multi-input | 30 s | 0 | 0 |
 | Gain, PEQ, Compressor | single endpoint | 30 s | 0 | 0 |
 | ReaFIR → ReaEQ (bypassed) → ReaComp → ReaGate (user's saved nodes and state) | multi-input + plugin workers | 60 s | 0 | 0 |
+| Test Signal (997 Hz, paced) | multi-input | 30 s | 0 | n/a |
 
 Example (plugins): `AUDIOROUTER_CONTINUITY_PLUGIN_DB=<copy.sqlite>
 AUDIOROUTER_PLUGIN_WORKER_PATH=C:\code\audiorouter\target\release\audiorouter-plugin-worker.exe
@@ -116,12 +152,10 @@ AudioRouter-only events appeared in that run and none in the next 60 s run.
 
 ## Limits (not claimed)
 
-- Physical devices were not qualified by this harness. A USB microphone and
-  the Scarlett run on independent clocks, and **clock drift is still
-  uncorrected**: `DriftController` exists but no live path uses it. Expect
-  an occasional isolated click every few minutes on cross-device routes,
-  plus a latency that creeps up to the headroom bound. This is the next
-  audio-quality task.
+- The glitch harness uses virtual cables only. Physical devices were covered
+  only by the drift survey (queue depth, not waveform). Clock drift is
+  still uncorrected in code (`DriftController` is unused); it measured
+  under 1 ppm here but can be larger on other hardware.
 - Latency does not shrink by itself after a stall. The queue can stay up
   to about 70 ms (50 ms device headroom plus 21 ms ring) until Stop/Play.
 - The user's by-ear confirmation on the real microphone → Scarlett /

@@ -196,6 +196,25 @@ mod live {
             }
             nodes.push(node);
         }
+        // `AUDIOROUTER_CONTINUITY_NETWORK=<port>` splits the route over a UDP
+        // hop on this machine: ... -> Network Send (127.0.0.1) and, as a
+        // second path, Network Receive -> destination.
+        let network_port = std::env::var("AUDIOROUTER_CONTINUITY_NETWORK")
+            .ok()
+            .and_then(|port| port.parse::<u16>().ok());
+        let mut break_after = None;
+        if let Some(port_number) = network_port {
+            let mut send = serde_json::Map::new();
+            send.insert("host".into(), json!("127.0.0.1"));
+            send.insert("port".into(), json!(port_number));
+            nodes.push(node("net-send".into(), NodeKind::NetworkSend, vec![port("in", PortDirection::Input)], send));
+            break_after = Some(nodes.len() - 1);
+            let mut receive = serde_json::Map::new();
+            receive.insert("sender".into(), json!("127.0.0.1"));
+            receive.insert("port".into(), json!(port_number));
+            receive.insert("bufferMs".into(), json!(40.0));
+            nodes.push(node("net-receive".into(), NodeKind::NetworkReceive, vec![port("out", PortDirection::Output)], receive));
+        }
         nodes.push(node(
             "destination".into(),
             NodeKind::PhysicalOutput,
@@ -204,6 +223,9 @@ mod live {
         ));
         let edges = nodes
             .windows(2)
+            .enumerate()
+            .filter(|(index, _)| Some(*index) != break_after)
+            .map(|(_, pair)| pair)
             .map(|pair| Edge {
                 id: EntityId::new(format!("{}-{}", pair[0].id.as_str(), pair[1].id.as_str())),
                 source_node: pair[0].id.clone(),
@@ -532,7 +554,7 @@ mod live {
 
         eprintln!("chain: {chain:?}; audio service: {last_service}; output underruns: {last_underruns}");
         for item in diagnostics["nodeTelemetry"].as_array().into_iter().flatten() {
-            eprintln!("  {} timing={} plugin={}", item["nodeId"], item["timing"], item["plugin"]);
+            eprintln!("  {} timing={} plugin={} network={}", item["nodeId"], item["timing"], item["plugin"], item["network"]);
         }
         let reference_glitches = report("reference (CABLE Output)", &reference);
         let result_glitches = report("routed result (CABLE-B Output)", &result);

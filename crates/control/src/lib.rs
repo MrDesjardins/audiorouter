@@ -4400,6 +4400,24 @@ fn diagnostics_output_schema() -> Value {
                             "additionalProperties": false
                         },
                         "noiseProfile": { "type": "string", "pattern": "^[0-9a-fA-F]{128}$" },
+                        "network": {
+                            "type": "object",
+                            "properties": {
+                                "direction": { "enum": ["send", "receive"] },
+                                "sentPackets": { "type": "integer", "minimum": 0 },
+                                "droppedPackets": { "type": "integer", "minimum": 0 },
+                                "sendErrors": { "type": "integer", "minimum": 0 },
+                                "receivedPackets": { "type": "integer", "minimum": 0 },
+                                "lostPackets": { "type": "integer", "minimum": 0 },
+                                "latePackets": { "type": "integer", "minimum": 0 },
+                                "rejectedDatagrams": { "type": "integer", "minimum": 0 },
+                                "underruns": { "type": "integer", "minimum": 0 },
+                                "overflowPackets": { "type": "integer", "minimum": 0 },
+                                "bufferedMs": { "type": "number", "minimum": 0 }
+                            },
+                            "required": ["direction"],
+                            "additionalProperties": false
+                        },
                         "timing": {
                             "type": "object",
                             "properties": {
@@ -4951,6 +4969,8 @@ pub enum NativeMultiInputSourceBinding<'a> {
     /// A Test Signal or Audio File: the Mixer input chain generates the
     /// audio, and the native input only supplies silent pacing packets.
     Generated,
+    /// A Network Receive node: its validated sender/port/buffer parameters.
+    Network(&'a audiorouter_domain::Node),
 }
 
 /// How `prepare_native_path_worker` receives source bindings: in the
@@ -4959,6 +4979,69 @@ pub enum NativeMultiInputSourceBinding<'a> {
 enum MultiInputBindings<'s, 'a> {
     Ordered(&'s [NativeMultiInputSourceBinding<'a>]),
     ByNode(&'s HashMap<EntityId, NativeMultiInputSourceBinding<'a>>),
+}
+
+/// Open the UDP sender of a Network Send node from its validated
+/// parameters. Only an IP literal and port are accepted (no name lookup).
+#[cfg(windows)]
+fn start_network_sender(
+    node: &audiorouter_domain::Node,
+) -> Result<audiorouter_windows_audio::NetworkSender, ControlError> {
+    let host = node.parameters.get("host").and_then(Value::as_str).unwrap_or("");
+    let port = node
+        .parameters
+        .get("port")
+        .and_then(Value::as_u64)
+        .and_then(|port| u16::try_from(port).ok())
+        .unwrap_or(audiorouter_domain::DEFAULT_NETWORK_AUDIO_PORT);
+    let destination = audiorouter_windows_audio::network_socket_address(host, port).ok_or_else(|| {
+        ControlError::InvalidRequest(format!(
+            "enter the IP address of the receiving computer for {} in its Properties",
+            node.name
+        ))
+    })?;
+    audiorouter_windows_audio::NetworkSender::start(destination).map_err(|error| {
+        ControlError::InvalidRequest(format!("{} could not open its network socket: {error}", node.name))
+    })
+}
+
+/// Open the UDP receiver of a Network Receive node from its validated
+/// parameters: the sending computer's IP literal, the port and the jitter
+/// buffer.
+#[cfg(windows)]
+fn start_network_receiver(
+    node: &audiorouter_domain::Node,
+) -> Result<audiorouter_windows_audio::NetworkReceiver, ControlError> {
+    let sender = node
+        .parameters
+        .get("sender")
+        .and_then(Value::as_str)
+        .filter(|address| audiorouter_domain::valid_network_address(address))
+        .and_then(|address| address.parse::<std::net::IpAddr>().ok())
+        .ok_or_else(|| {
+            ControlError::InvalidRequest(format!(
+                "enter the IP address of the sending computer for {} in its Properties",
+                node.name
+            ))
+        })?;
+    let port = node
+        .parameters
+        .get("port")
+        .and_then(Value::as_u64)
+        .and_then(|port| u16::try_from(port).ok())
+        .filter(|port| *port != 0)
+        .unwrap_or(audiorouter_domain::DEFAULT_NETWORK_AUDIO_PORT);
+    let buffer_ms = node
+        .parameters
+        .get("bufferMs")
+        .and_then(Value::as_f64)
+        .unwrap_or(audiorouter_domain::DEFAULT_NETWORK_BUFFER_MS);
+    audiorouter_windows_audio::NetworkReceiver::start(sender, port, buffer_ms).map_err(|error| {
+        ControlError::InvalidRequest(format!(
+            "{} could not listen on UDP port {port} (is another program using it?): {error}",
+            node.name
+        ))
+    })
 }
 
 /// Device buffer requested for multi-input physical outputs (100 ns units).
@@ -5999,6 +6082,13 @@ impl ControlPlane {
                 })?;
             match (node.kind, binding) {
                 (NodeKind::TestSignal | NodeKind::AudioFile, NativeMultiInputSourceBinding::Generated) => {}
+                (NodeKind::NetworkReceive, NativeMultiInputSourceBinding::Network(_)) => {
+                    if !(1..=audiorouter_windows_audio::MAX_NETWORK_CHANNELS).contains(&channels) {
+                        return Err(ControlError::InvalidRequest(
+                            "a Network Receive node plays mono or stereo audio".into(),
+                        ));
+                    }
+                }
                 (NodeKind::PhysicalInput, NativeMultiInputSourceBinding::Physical(endpoint)) => {
                     if endpoint.direction != audiorouter_windows_audio::EndpointDirection::Capture
                         || !endpoint.is_ieee_float32()
@@ -6068,6 +6158,11 @@ impl ControlPlane {
         let mut application_sources = Vec::new();
         for binding in bindings.iter().copied() {
             match binding {
+                NativeMultiInputSourceBinding::Network(node) => capture_clients.push(
+                    audiorouter_windows_audio::MultiInputCaptureSource::Network(
+                        start_network_receiver(node)?,
+                    ),
+                ),
                 NativeMultiInputSourceBinding::Generated => capture_clients.push(
                     audiorouter_windows_audio::MultiInputCaptureSource::Silence(
                         audiorouter_windows_audio::SilentCapture::new(audiorouter_engine::PROCESSING_QUANTUM_FRAMES),
@@ -6192,6 +6287,7 @@ impl ControlPlane {
             "sources": bindings.iter().map(|binding| match binding {
                 NativeMultiInputSourceBinding::Physical(endpoint) => json!({ "kind": "physical", "endpointId": endpoint.id }),
                 NativeMultiInputSourceBinding::Generated => json!({ "kind": "generated" }),
+                NativeMultiInputSourceBinding::Network(node) => json!({ "kind": "network", "nodeId": node.id }),
                 NativeMultiInputSourceBinding::Application { process_id, expected_executable, .. } => json!({ "kind": "application", "processId": process_id, "executable": expected_executable }),
             }).collect::<Vec<_>>(),
             "sourceNodeIds": source_node_ids,
@@ -6518,7 +6614,8 @@ impl ControlPlane {
                     ControlError::InvalidRequest("branch node is not in the session".into())
                 })?;
             let taps = match node.kind {
-                NodeKind::PhysicalOutput => AudioTapSet::new(),
+                // A Network Send branch already carries its sender tap.
+                NodeKind::PhysicalOutput | NodeKind::NetworkSend => AudioTapSet::new(),
                 NodeKind::VirtualCaptureSink => {
                     let bus_id = node
                         .parameters
@@ -6540,7 +6637,7 @@ impl ControlPlane {
                 NodeKind::Recorder => self.recorder_tap_set_for_node(session_id, node_id)?,
                 _ => {
                     return Err(ControlError::InvalidRequest(
-                        "multi-input output branches must be physical outputs, virtual capture sinks, or recorders"
+                        "multi-input output branches must be physical outputs, virtual capture sinks, recorders, or network sends"
                             .into(),
                     ));
                 }
@@ -7446,9 +7543,23 @@ impl ControlPlane {
                         "multi-input tap-only output branches must be stereo".into(),
                     ));
                 }
+                // A Network Send branch streams its quantum from the graph tap;
+                // the sender (socket and I/O thread) lives with the fan-out.
+                let mut branch_taps = AudioTapSet::new();
+                if let Some(node) = session
+                    .nodes
+                    .iter()
+                    .find(|node| node.id == *node_id && node.kind == NodeKind::NetworkSend)
+                {
+                    let sender = start_network_sender(node)?;
+                    branch_taps.add(sender.tap()).map_err(|_| {
+                        ControlError::InvalidRequest("network send tap capacity exceeded".into())
+                    })?;
+                    fanout.keep_network_sender(sender);
+                }
                 fanout
                     .append_tap_branch(
-                        AudioTapSet::new(),
+                        branch_taps,
                         channels,
                         audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
                     )
@@ -9411,12 +9522,42 @@ impl ControlPlane {
                         "inputDrops": self.plugin_bridge(session_id, &node.id).ok().map(|bridge| bridge.continuity_counts().1).unwrap_or(0),
                     })
                 });
+                let network = worker
+                    .input_node_ids()
+                    .iter()
+                    .position(|id| *id == node.id)
+                    .and_then(|index| worker.network_receive_stats(index))
+                    .map(|stats| {
+                        json!({
+                            "direction": "receive",
+                            "receivedPackets": stats.received_packets,
+                            "lostPackets": stats.lost_packets,
+                            "latePackets": stats.late_packets,
+                            "rejectedDatagrams": stats.rejected_datagrams,
+                            "underruns": stats.underruns,
+                            "overflowPackets": stats.overflow_packets,
+                            "bufferedMs": stats.buffered_frames as f64 * 1_000.0
+                                / f64::from(audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ),
+                        })
+                    })
+                    .or_else(|| {
+                        let index = worker.output_node_ids().iter().position(|id| *id == node.id)?;
+                        worker.network_send_stats(index).map(|stats| {
+                            json!({
+                                "direction": "send",
+                                "sentPackets": stats.sent_packets,
+                                "droppedPackets": stats.dropped_packets,
+                                "sendErrors": stats.send_errors,
+                            })
+                        })
+                    });
                 let noise_profile = worker.noise_profile_for_node(&node.id);
                 if processor_telemetry.is_none()
                     && plugin_health.is_none()
                     && noise_profile.is_none()
                     && timing.is_none()
                     && meter.is_none()
+                    && network.is_none()
                 {
                     return None;
                 }
@@ -9427,6 +9568,9 @@ impl ControlPlane {
                     "processor": processor_telemetry,
                     "plugin": plugin_health,
                 });
+                if let Some(network) = network {
+                    item["network"] = network;
+                }
                 if let Some(profile) = noise_profile {
                     item["noiseProfile"] = json!(profile);
                 }
@@ -16602,6 +16746,7 @@ impl ControlPlane {
                     NativeMultiInputSourceBinding::Physical(endpoint)
                 }
                 NodeKind::TestSignal | NodeKind::AudioFile => NativeMultiInputSourceBinding::Generated,
+                NodeKind::NetworkReceive => NativeMultiInputSourceBinding::Network(node),
                 NodeKind::ApplicationCapture => {
                     let process_id = node
                         .parameters
