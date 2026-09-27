@@ -118,7 +118,7 @@ by hand in the morning.
    ```powershell
    $env:AUDIOROUTER_DATABASE = "$env:LOCALAPPDATA\AudioRouter\state.sqlite"
    $env:AUDIOROUTER_ALLOW_DEVICE_ADMIN = "1"
-   & "C:\code\audiorouter\target\patrick-main-release-4\release\audiorouter-shell.exe"
+   & "C:\code\audiorouter\target\patrick-main-release-5\release\audiorouter-shell.exe"
    ```
    Select Patrick Main Session and press Play. Also try a Test Signal
    route. Listen to the voice and
@@ -309,3 +309,6 @@ sections above.
   rounding difference; the test tolerates two differing bytes. About 15 runs
   left exactly 4 state files. Storage 96, control 196, plugin host, CLI,
   transport and UI 358 tests pass.
+- Artifact: `target/patrick-main-release-5/release/` (shell, plugin worker,
+  CLI), built 16:28 with `custom-protocol`, embedding UI bundle
+  `index-CYp4WBYo.js`. A new folder because `release-4` was running.
