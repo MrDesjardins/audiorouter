@@ -19,7 +19,7 @@ export type LibraryEntry = {
   virtualKind?: "virtualRenderSource" | "virtualCaptureSink";
 };
 
-const INPUT_DEVICE_NOTE = "Choose a Windows capture endpoint: a microphone, line input, or an installed virtual capture bus such as Voicemeeter Out B1 or CABLE Output. Voicemeeter Input is a playback endpoint; its B1 route needs the Voicemeeter mixer running. For a virtual cable without that app, send Windows sound to CABLE Input and capture CABLE Output here.";
+const INPUT_DEVICE_NOTE = "Sound from a microphone, line input, or virtual cable (for example CABLE Output). Choose the device in Properties.";
 // Windows has no way to send audio directly to a specific running
 // application by picking it from a list (unlike capture, which can target
 // a process); an application must choose its own input device. Routing
@@ -27,18 +27,18 @@ const INPUT_DEVICE_NOTE = "Choose a Windows capture endpoint: a microphone, line
 // microphone/input inside the target application (Discord, Zoom, OBS,
 // etc.), is the actual mechanism — this note exists specifically to answer
 // "how do I send audio to another app" without a misleading picker.
-const OUTPUT_DEVICE_NOTE = "Choose a Windows playback endpoint: speakers, headphones, or an installed virtual playback device such as Voicemeeter Input or CABLE Input. To send audio to another application, select the matching virtual capture device in that application's input settings.";
+const OUTPUT_DEVICE_NOTE = "Send sound to speakers, headphones, or a virtual cable (for example CABLE Input) that another app uses as its input. Choose the device in Properties.";
 
 export const libraryEntries: LibraryEntry[] = [
   { id: "physical-input", label: "Input device", category: "Source", flow: "input", kind: "physicalInput", note: INPUT_DEVICE_NOTE },
   { id: "test-signal", label: "Test Signal", category: "Source", flow: "input", kind: "testSignal" },
   { id: "audio-file", label: "Audio file", category: "Source", flow: "input", kind: "audioFile", note: "Play a WAV or MP3 through the graph. Select media in the node properties." },
   { id: "endpoint-loopback", label: "Endpoint loopback", category: "Source", flow: "input", unavailableReason: "Select an exact active render endpoint in Endpoint binding" },
-  { id: "virtual-render-source", label: "Virtual render source", category: "Virtual bus", flow: "input", unavailableReason: "Requires the deferred AudioRouter-managed signed driver. For an installed Voicemeeter or VB-Cable capture endpoint today, use Input device instead.", virtualKind: "virtualRenderSource" },
+  { id: "virtual-render-source", label: "Virtual render source", category: "Virtual bus", flow: "input", unavailableReason: "Not available: AudioRouter does not install its own virtual devices. Use Input device with a virtual cable such as CABLE Output.", virtualKind: "virtualRenderSource" },
   { id: "physical-output", label: "Output device", category: "Destination", flow: "output", kind: "physicalOutput", note: OUTPUT_DEVICE_NOTE },
   { id: "network-receive", label: "Network Receive", category: "Network", flow: "input", kind: "networkReceive", note: "Play audio streamed by AudioRouter on another computer on your network, for example game audio from a gaming PC. Enter that computer's IP address." },
   { id: "network-send", label: "Network Send", category: "Network", flow: "output", kind: "networkSend", note: "Stream audio to AudioRouter on another computer on your network, for example from a gaming PC to a streaming PC. Enter the receiving computer's IP address." },
-  { id: "virtual-capture-sink", label: "Virtual capture sink", category: "Virtual bus", flow: "output", unavailableReason: "Requires the deferred AudioRouter-managed signed driver. For an installed Voicemeeter or VB-Cable playback endpoint today, use Output device instead.", virtualKind: "virtualCaptureSink" },
+  { id: "virtual-capture-sink", label: "Virtual capture sink", category: "Virtual bus", flow: "output", unavailableReason: "Not available: AudioRouter does not install its own virtual devices. Use Output device with a virtual cable such as CABLE Input.", virtualKind: "virtualCaptureSink" },
   { id: "volume", label: "Volume", category: "Effect", flow: "tool", kind: "volume", note: "Set one source's level in percent (0–200 %) before it reaches a Mixer." },
   { id: "gain", label: "Gain", category: "Effect", flow: "tool", kind: "gain" },
   { id: "bass-treble", label: "Bass & Treble", category: "Effect", flow: "tool", kind: "bassTreble", note: "Two sliders: boost or cut bass (below ~120 Hz) and treble (above ~6 kHz) by up to 12 dB." },

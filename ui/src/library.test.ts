@@ -30,25 +30,23 @@ describe("node library search", () => {
     expect(renderSource?.virtualKind).toBe("virtualRenderSource");
     expect(captureSink?.virtualKind).toBe("virtualCaptureSink");
     expect(renderSource?.kind).toBeUndefined();
-    expect(captureSink?.unavailableReason).toContain("Requires the deferred AudioRouter-managed signed driver");
+    expect(captureSink?.unavailableReason).toContain("does not install its own virtual devices");
     expect(captureSink?.unavailableReason).toContain("Output device");
   });
 
-  it("points the deferred managed-driver path at the free existing-endpoint alternative", () => {
+  it("points unavailable virtual devices at the existing virtual-cable alternative in short notes", () => {
     const renderSource = libraryEntries.find((entry) => entry.id === "virtual-render-source");
     expect(renderSource?.unavailableReason).toContain("Input device");
     const existingInput = libraryEntries.find((entry) => entry.id === "physical-input");
     const existingOutput = libraryEntries.find((entry) => entry.id === "physical-output");
     expect(existingInput?.kind).toBe("physicalInput");
-    expect(existingInput?.note).toMatch(/voicemeeter out b1/i);
-    expect(existingInput?.note).toMatch(/voicemeeter input is a playback endpoint/i);
-    expect(existingOutput?.note).toMatch(/virtual playback/i);
-    expect(filterLibraryEntries(libraryEntries, "voicemeeter").map((entry) => entry.id).sort()).toEqual([
-      "physical-input",
-      "physical-output",
-      "virtual-capture-sink",
-      "virtual-render-source",
-    ]);
+    expect(existingInput?.note).toMatch(/virtual cable/i);
+    expect(existingOutput?.note).toMatch(/virtual cable/i);
+    // Tool notes stay short and product-neutral (user preference, 2026-09-27).
+    for (const entry of libraryEntries) {
+      expect(`${entry.note ?? ""} ${entry.unavailableReason ?? ""}`).not.toMatch(/voicemeeter/i);
+      expect((entry.note ?? "").length, entry.id).toBeLessThanOrEqual(180);
+    }
   });
 
   it("returns all entries for blank queries", () => {

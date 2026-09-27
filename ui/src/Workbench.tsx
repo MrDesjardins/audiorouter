@@ -2,7 +2,7 @@ import type { LibraryEntry } from "./library";
 import type { Session } from "@audiorouter/contracts";
 import { useState, type ReactNode } from "react";
 
-const TOOL_ICONS: Record<string, string> = { volume: "◖", "bass-treble": "♮", dehum: "≁", declick: "⌇", denoise: "░", "speech-denoise": "☊", "fir-filter": "⧉", "input-switch": "⇄", "time-shift": "↺", "physical-input": "◉", "test-signal": "∿", "audio-file": "♫", "endpoint-loopback": "↶", "virtual-render-source": "⊞", "physical-output": "◎", "virtual-capture-sink": "⊟", gain: "◢", mixer: "⋈", recorder: "●", mute: "⊘", meter: "▥", "parametric-eq": "⌁", compressor: "⤓", gate: "⊐", limiter: "⊤", delay: "◷", "graphic-eq": "▤", pitch: "↟" };
+const TOOL_ICONS: Record<string, string> = { volume: "◖", "bass-treble": "♮", dehum: "≁", declick: "⌇", denoise: "░", "speech-denoise": "☊", "fir-filter": "⧉", "input-switch": "⇄", "time-shift": "↺", "physical-input": "◉", "test-signal": "∿", "audio-file": "♫", "endpoint-loopback": "↶", "virtual-render-source": "⊞", "physical-output": "◎", "virtual-capture-sink": "⊟", gain: "◢", mixer: "⋈", recorder: "●", mute: "⊘", meter: "▥", "parametric-eq": "⌁", compressor: "⤓", gate: "⊐", limiter: "⊤", delay: "◷", "graphic-eq": "▤", pitch: "↟", "network-send": "⇡", "network-receive": "⇣" };
 const TOOL_HELP: Record<string, string> = { "physical-input": "Bring sound from a microphone, line input, or installed virtual capture bus into the route.", "test-signal": "Generate a steady test tone to check the route.", "physical-output": "Send the route to speakers, headphones, or an installed virtual playback device.", gain: "Raise or lower the level of sound passing through.", mixer: "Combine several sound sources into one route.", recorder: "Record sound passing through this point.", mute: "Silence this part of the route without removing it.", meter: "See the level of sound at this point.", "parametric-eq": "Shape chosen frequency ranges.", compressor: "Reduce the difference between loud and quiet sound.", gate: "Reduce sound below a chosen level.", limiter: "Keep peaks below a chosen level.", delay: "Shift sound later in time.", "graphic-eq": "Adjust fixed frequency bands.", pitch: "Change the pitch of sound." };
 
 function ApplicationSourceAction({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
@@ -54,7 +54,7 @@ export function Workbench({ tab, onTab, tools, connected, onAdd, onApplicationPi
       {(["input", "tool", "output"] as const).map((flow) => <section className="tool-group" key={flow}>
         <h3>{flow === "input" ? "Inputs" : flow === "tool" ? "Processing" : "Outputs"}</h3>
         {flow === "input" && <ApplicationSourceAction onClick={onApplicationPicker} disabled={!connected} />}
-        {tools.filter((entry) => entry.flow === flow).map((entry) => {
+        {tools.filter((entry) => entry.flow === flow).sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base" })).map((entry) => {
           const help = entry.unavailableReason ?? entry.note ?? TOOL_HELP[entry.id] ?? entry.category;
           return <button className="tool-card" key={entry.id} type="button" onClick={() => entry.kind && onAdd(entry.kind)} disabled={!connected || !entry.kind} title={help} aria-description={help}>
             <span className="tool-card-icon" aria-hidden="true">{TOOL_ICONS[entry.id]}</span>
