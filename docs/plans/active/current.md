@@ -285,3 +285,27 @@ sections above.
 - Not yet verified live: a generated-only route through the multi-path worker
   on the release shell (covered by the continuity harness `testSignal` mode
   on that worker, but not re-run for this UI change).
+
+### 2026-09-27 — Plugin settings were lost on Stop/Play (PLUG-04)
+
+- Report (user): ReaFIR settings made in its editor survived reopening the
+  editor but were gone after Stop and Play; after relaunching, every
+  plugin's settings were at defaults.
+- Cause: editor edits lived only in the running plugin. They were stored
+  only by an explicit Save plugin settings plus Save, which the user never
+  had reason to do (no `plugin-states` folder existed). ReaComp and ReaGate
+  could not be saved at all: they lack VST2 chunk support
+  (`vst2StateSave:StateUnsupported`).
+- Fix: the backend records each plugin node's latest captured state
+  (`plugin_node_states` table). It captures on editor close, Save plugin
+  settings, and before Stop (including tray Quit). Play restores that
+  capture first, then the node's `stateId`. Automatic captures
+  (`plugin-autostate-*`) replace the node's previous one, so they do not
+  accumulate. Duplicated sessions and session files keep them. VST2 plugins
+  without chunks save/restore a parameter bank.
+- Verification: new live test `live_plugin_settings_survive_stop_and_play`
+  (copy of the user database, privacy-muted) passes for ReaFIR, ReaEQ,
+  ReaComp and ReaGate. ReaEQ reloads one stored frequency with a last-bit
+  rounding difference; the test tolerates two differing bytes. About 15 runs
+  left exactly 4 state files. Storage 96, control 196, plugin host, CLI,
+  transport and UI 358 tests pass.

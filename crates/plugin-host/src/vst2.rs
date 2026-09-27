@@ -264,6 +264,10 @@ const EFF_GET_CHUNK: i32 = 23;
 const EFF_SET_CHUNK: i32 = 24;
 #[cfg(windows)]
 const MAX_VST2_STATE_BYTES: usize = 512 * 1024;
+/// Marks a parameter-bank state (see `save_parameter_bank`); a plugin chunk
+/// never starts with it in practice.
+#[cfg(windows)]
+const PARAMETER_BANK_MAGIC: &[u8] = b"AudioRouter VST2 parameters v1\0";
 #[cfg(windows)]
 const AUDIO_MASTER_VERSION: i32 = 1;
 #[cfg(windows)]
@@ -764,9 +768,50 @@ impl Vst2Library {
         Ok(descriptors)
     }
 
+    /// A plugin without chunk support (for example ReaComp, ReaGate) is
+    /// described completely by its parameters, so its state is a parameter
+    /// bank: `PARAMETER_BANK_MAGIC`, a little-endian `u32` count, then that
+    /// many little-endian `f32` normalized values.
+    fn save_parameter_bank(&mut self) -> Vec<u8> {
+        let count = self.parameter_count();
+        let mut bytes = Vec::with_capacity(PARAMETER_BANK_MAGIC.len() + 4 + count * 4);
+        bytes.extend_from_slice(PARAMETER_BANK_MAGIC);
+        bytes.extend_from_slice(&(count as u32).to_le_bytes());
+        for parameter_id in 0..count {
+            // SAFETY: The getter was validated at load and receives a bounded
+            // parameter index from the plugin's own count.
+            let value = unsafe {
+                ((*self.effect).get_parameter.expect("validated parameter getter"))(self.effect, parameter_id as i32)
+            };
+            let value = if value.is_finite() { value.clamp(0.0, 1.0) } else { 0.0 };
+            bytes.extend_from_slice(&value.to_le_bytes());
+        }
+        bytes
+    }
+
+    fn restore_parameter_bank(&mut self, bytes: &[u8]) -> Result<(), Vst2LibraryError> {
+        let body = &bytes[PARAMETER_BANK_MAGIC.len()..];
+        let count = body
+            .get(..4)
+            .map(|raw| u32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]) as usize)
+            .ok_or(Vst2LibraryError::InvalidState)?;
+        let values = &body[4..];
+        if values.len() != count.checked_mul(4).ok_or(Vst2LibraryError::InvalidState)? {
+            return Err(Vst2LibraryError::InvalidState);
+        }
+        // A plugin update may add or remove parameters; restore the overlap.
+        for (parameter_id, raw) in values.chunks_exact(4).take(self.parameter_count()).enumerate() {
+            let value = f32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]);
+            if value.is_finite() {
+                self.set_parameter(parameter_id as u32, value.clamp(0.0, 1.0))?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn save_state(&mut self) -> Result<Vec<u8>, Vst2LibraryError> {
         if !self.supports_state() {
-            return Err(Vst2LibraryError::StateUnsupported);
+            return Ok(self.save_parameter_bank());
         }
         let mut data: *mut c_void = ptr::null_mut();
         // SAFETY: The dispatcher was validated at load. VST2 writes a pointer
@@ -798,11 +843,14 @@ impl Vst2Library {
     }
 
     pub fn restore_state(&mut self, bytes: &[u8]) -> Result<(), Vst2LibraryError> {
-        if !self.supports_state() {
-            return Err(Vst2LibraryError::StateUnsupported);
-        }
         if bytes.len() > MAX_VST2_STATE_BYTES {
             return Err(Vst2LibraryError::StateTooLarge);
+        }
+        if bytes.starts_with(PARAMETER_BANK_MAGIC) {
+            return self.restore_parameter_bank(bytes);
+        }
+        if !self.supports_state() {
+            return Err(Vst2LibraryError::StateUnsupported);
         }
         // SAFETY: The dispatcher was validated at load. The byte slice remains
         // alive for the synchronous call and VST2 consumes it during the call.

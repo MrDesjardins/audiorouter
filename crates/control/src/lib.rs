@@ -43,6 +43,9 @@ const MUTATION_BURST: f64 = 40.0;
 const MAX_MUTATION_BUCKETS: usize = 256;
 const MUTATION_BUCKET_RETENTION: Duration = Duration::from_secs(10 * 60);
 const MAX_CONTROL_VALUE_DEPTH: usize = 32;
+/// State IDs of plugin states captured automatically (editor close, Stop);
+/// only these are replaced by the next capture of the same node.
+const AUTOMATIC_PLUGIN_STATE_PREFIX: &str = "plugin-autostate-";
 pub const MAX_CONTROL_STRING_BYTES: usize = 4096;
 const MAX_CONTROL_VALUE_COUNT: usize = 8192;
 const MAX_EVENT_SUBSCRIPTION_ITEMS: usize = 500;
@@ -11234,7 +11237,18 @@ impl ControlPlane {
             revision: 0,
             ..source
         };
-        self.create_session(duplicate)
+        let duplicate_id = duplicate.id.clone();
+        let result = self.create_session(duplicate)?;
+        // The copy keeps the plugins' latest settings. Shared captures are
+        // never deleted while any node still restores them.
+        if let Some(storage) = &self.storage {
+            for (node_id, state_id) in storage.plugin_node_states(source_id.as_str()).map_err(storage_error)? {
+                storage
+                    .set_plugin_node_state(duplicate_id.as_str(), &node_id, &state_id)
+                    .map_err(storage_error)?;
+            }
+        }
+        Ok(result)
     }
 
     pub fn delete_session(&mut self, id: &EntityId) -> Result<Value, ControlError> {
@@ -12823,12 +12837,23 @@ impl ControlPlane {
                 .find(|port| port.direction == audiorouter_domain::PortDirection::Input)
                 .map(|port| usize::from(port.channels))
                 .unwrap_or(1);
-            let state = node
-                .parameters
-                .get("stateId")
-                .and_then(Value::as_str)
-                .map(|id| self.load_plugin_state_asset(id, fingerprint))
-                .transpose()?;
+            // The node's latest capture (editor close, Save state, Stop) wins;
+            // a capture from a different plugin binary is ignored. Otherwise
+            // the state saved with the route (or imported with it) applies.
+            let latest = self
+                .storage
+                .as_ref()
+                .and_then(|storage| storage.plugin_node_state(session.id.as_str(), node.id.as_str()).ok().flatten())
+                .and_then(|id| self.load_plugin_state_asset(&id, fingerprint).ok());
+            let state = match latest {
+                Some(state) => Some(state),
+                None => node
+                    .parameters
+                    .get("stateId")
+                    .and_then(Value::as_str)
+                    .map(|id| self.load_plugin_state_asset(id, fingerprint))
+                    .transpose()?,
+            };
             let mut parameters = node
                 .parameters
                 .iter()
@@ -13495,6 +13520,8 @@ impl ControlPlane {
 
     pub fn session_stop(&mut self, id: &EntityId) -> Result<Value, ControlError> {
         self.ensure_session_loaded(id)?;
+        // Plugins lose their settings when their workers stop; keep them.
+        self.capture_playing_plugin_states(id);
         let has_node_worker = self
             .get_session(id)?
             .nodes
@@ -17859,6 +17886,44 @@ impl ControlPlane {
     /// the returned `stateId` on the node so the next start restores it.
     fn dispatch_plugins_save_state(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let (session_id, node_id) = Self::plugin_node_request(&params)?;
+        let (state_id, size_bytes) = self.capture_plugin_state(&session_id, &node_id, false)?;
+        Ok(json!({ "sessionId": session_id, "nodeId": node_id, "stateId": state_id, "sizeBytes": size_bytes }))
+    }
+
+    /// Capture every playing plugin of a session (before Stop) so the next
+    /// Play restores what the user set in the plugins' editors. Best effort:
+    /// a plugin that cannot report its state keeps its previous capture.
+    fn capture_playing_plugin_states(&mut self, session_id: &EntityId) {
+        let nodes = self
+            .plugin_bridges
+            .lock()
+            .map(|bridges| {
+                bridges
+                    .iter()
+                    .filter(|((session, _), bridge)| session == session_id && bridge.strong_count() > 0)
+                    .map(|((_, node), _)| node.clone())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        for node_id in nodes {
+            if let Err(error) = self.capture_plugin_state(session_id, &node_id, true) {
+                eprintln!("AudioRouter plugin state capture skipped for {}: {error:?}", node_id.as_str());
+            }
+        }
+    }
+
+    /// Store a playing plugin's current state (PLUG-04: versioned,
+    /// size-limited, hashed) and record it as the node's latest state, which
+    /// the next Play restores. An `automatic` capture replaces the node's
+    /// previous automatic capture so they never accumulate; states from an
+    /// explicit Save state are kept.
+    fn capture_plugin_state(
+        &mut self,
+        session_id: &EntityId,
+        node_id: &EntityId,
+        automatic: bool,
+    ) -> Result<(String, usize), ControlError> {
+        let (session_id, node_id) = (session_id.clone(), node_id.clone());
         let fingerprint = self
             .get_session(&session_id)?
             .nodes
@@ -17880,7 +17945,8 @@ impl ControlPlane {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |elapsed| elapsed.as_nanos());
-        let state_id = format!("plugin-state-{}-{nanos}", &asset.sha256[..16]);
+        let prefix = if automatic { AUTOMATIC_PLUGIN_STATE_PREFIX } else { "plugin-state-" };
+        let state_id = format!("{prefix}{}-{nanos}", &asset.sha256[..16]);
         let path = audiorouter_plugin_host::write_state_asset(&root, &state_id, &asset)
             .map_err(|error| ControlError::InvalidRequest(format!("plugin state write failed: {error:?}")))?;
         storage
@@ -17894,7 +17960,18 @@ impl ControlPlane {
                 size_bytes: asset.bytes.len() as u64,
             })
             .map_err(storage_error)?;
-        Ok(json!({ "sessionId": session_id, "nodeId": node_id, "stateId": state_id, "sizeBytes": asset.bytes.len() }))
+        let replaced = storage
+            .set_plugin_node_state(session_id.as_str(), node_id.as_str(), &state_id)
+            .map_err(storage_error)?;
+        // Drop the automatic capture this one replaces, unless another node
+        // (for example a duplicated session) still restores it.
+        if let Some(previous) = replaced.filter(|previous| previous.starts_with(AUTOMATIC_PLUGIN_STATE_PREFIX)) {
+            if !storage.plugin_node_state_in_use(&previous).map_err(storage_error)? {
+                let _ = storage.remove_plugin_state(&previous);
+                let _ = std::fs::remove_file(root.join(format!("{previous}.bin")));
+            }
+        }
+        Ok((state_id, asset.bytes.len()))
     }
 
     /// Open or close a playing plugin's native editor. The parent window must
@@ -17929,6 +18006,11 @@ impl ControlPlane {
             bridge
                 .close_editor()
                 .map_err(|error| ControlError::InvalidRequest(format!("plugin editor failed to close: {error}")))?;
+            drop(bridge);
+            // Keep what the user set in the editor for the next Play.
+            if let Err(error) = self.capture_plugin_state(&session_id, &node_id, true) {
+                eprintln!("AudioRouter plugin state capture after editor close failed: {error:?}");
+            }
         }
         Ok(json!({ "sessionId": session_id, "nodeId": node_id, "state": if open { "open" } else { "closed" } }))
     }
@@ -21252,6 +21334,93 @@ mod tests {
             );
             eprintln!("verified shared plugin worker: reafir -> reaeq -> reacomp -> reagate");
         }
+    }
+
+    /// A plugin setting changed while playing (as in its editor) must come
+    /// back after Stop and Play. Same environment as the test above; the
+    /// session must contain a plugin node `AUDIOROUTER_LIVE_PLUGIN_NODE`
+    /// (default `reaeq`). Privacy mute keeps it silent.
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "live Windows audio devices and plugins"]
+    fn live_plugin_settings_survive_stop_and_play() {
+        let Some(database) = std::env::var_os("AUDIOROUTER_LIVE_PATHS_DATABASE") else {
+            return;
+        };
+        let session_id = std::env::var("AUDIOROUTER_LIVE_PATHS_SESSION")
+            .unwrap_or_else(|_| "patrick-main-session".into());
+        let node_id = EntityId::new(std::env::var("AUDIOROUTER_LIVE_PLUGIN_NODE").unwrap_or_else(|_| "reaeq".into()));
+        let storage = audiorouter_storage::Storage::open(std::path::Path::new(&database)).unwrap();
+        let mut plane = ControlPlane::with_storage("live-plugin-state", storage);
+        let run_id = format!(
+            "live-plugin-state-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        );
+        let call = |plane: &mut ControlPlane, method: &str, params: Value| {
+            let response = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: method.into(),
+                params: (!params.is_null()).then_some(params),
+            });
+            assert!(response.error.is_none(), "{method}: {:?}", response.error);
+            response.result.unwrap()
+        };
+        let play = |plane: &mut ControlPlane, run: &str| {
+            call(plane, "nativePaths.prepare", json!({ "sessionId": session_id }));
+            let started = call(plane, "session.start", json!({ "sessionId": session_id, "idempotencyKey": format!("{run_id}-{run}-start") }));
+            let generation = started["generation"].as_u64().unwrap();
+            let until = Instant::now() + Duration::from_millis(800);
+            while Instant::now() < until {
+                call(plane, "nativeMultiInputs.pump", json!({ "sessionId": session_id, "generation": generation, "maxPackets": 64 }));
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            generation
+        };
+        call(&mut plane, "safety.setPrivacyMute", json!({ "muted": true, "idempotencyKey": format!("{run_id}-mute") }));
+        let generation = play(&mut plane, "first");
+        let session = EntityId::new(&session_id);
+        let bridge = plane.plugin_bridge(&session, &node_id).unwrap();
+        let before = bridge.save_state().unwrap();
+        // Change settings the way an editor does: on the running instance only.
+        // The values differ on every run, so a restored earlier run's values
+        // never turn the change into a no-op.
+        let seed = 0.1 + std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().subsec_millis() as f32 / 1000.0 * 0.6;
+        bridge
+            .set_parameters((0..4).map(|parameter_id| audiorouter_plugin_host::ParameterEvent {
+                parameter_id,
+                normalized_value: (seed + parameter_id as f32 * 0.05).min(0.95),
+                sample_offset: 0,
+            }).collect())
+            .unwrap();
+        let until = Instant::now() + Duration::from_millis(500);
+        while Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(10));
+            call(&mut plane, "nativeMultiInputs.pump", json!({ "sessionId": session_id, "generation": generation, "maxPackets": 64 }));
+        }
+        let changed = bridge.save_state().unwrap();
+        assert_ne!(changed.bytes, before.bytes, "the test must actually change the plugin's state");
+        drop(bridge);
+        call(&mut plane, "session.stop", json!({ "sessionId": session_id, "idempotencyKey": format!("{run_id}-first-stop") }));
+        call(&mut plane, "nativeEndpoints.detach", json!({ "sessionId": session_id }));
+        play(&mut plane, "second");
+        let restored = plane.plugin_bridge(&session, &node_id).unwrap().save_state().unwrap();
+        call(&mut plane, "session.stop", json!({ "sessionId": session_id, "idempotencyKey": format!("{run_id}-second-stop") }));
+        // Some plugins re-round a stored double when reloading (ReaEQ moves
+        // one frequency by its last bit), so allow a byte or two of drift but
+        // require the restore to match the change, not the original state.
+        let differing = |left: &[u8], right: &[u8]| {
+            left.iter().zip(right).filter(|(a, b)| a != b).count() + left.len().abs_diff(right.len())
+        };
+        assert!(
+            differing(&restored.bytes, &changed.bytes) <= 2
+                && differing(&restored.bytes, &before.bytes) > differing(&restored.bytes, &changed.bytes),
+            "Stop then Play must restore the plugin's settings: restored {:?}, changed {:?}",
+            restored.bytes,
+            changed.bytes
+        );
+        eprintln!("verified {} settings survive Stop and Play ({} state bytes)", node_id.as_str(), restored.bytes.len());
     }
 
     #[cfg(windows)]

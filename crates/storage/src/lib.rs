@@ -1019,6 +1019,16 @@ impl Storage {
              CREATE INDEX IF NOT EXISTS plugin_states_plugin_id ON plugin_states(plugin_id);
              INSERT OR IGNORE INTO schema_migrations(version) VALUES (1);",
         )?;
+        // Latest captured state per plugin node (editor close, Save state,
+        // Stop), restored on the next Play without a graph revision.
+        self.connection.execute_batch(
+            "CREATE TABLE IF NOT EXISTS plugin_node_states (
+                 session_id TEXT NOT NULL,
+                 node_id TEXT NOT NULL,
+                 state_id TEXT NOT NULL,
+                 PRIMARY KEY (session_id, node_id)
+             );",
+        )?;
         let has_request_hash = self
             .connection
             .prepare("PRAGMA table_info(operation_journal)")?
@@ -2241,6 +2251,64 @@ impl Storage {
         Ok(records)
     }
 
+    /// Record the latest captured state of a plugin node, returning the state
+    /// it replaces. Play restores this state before the node's own `stateId`.
+    pub fn set_plugin_node_state(
+        &self,
+        session_id: &str,
+        node_id: &str,
+        state_id: &str,
+    ) -> Result<Option<String>, StorageError> {
+        for value in [session_id, node_id, state_id] {
+            if value.is_empty() || value.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES {
+                return Err(StorageError::InvalidPluginState("invalid plugin node state key".into()));
+            }
+        }
+        let previous = self.plugin_node_state(session_id, node_id)?;
+        self.connection.execute(
+            "INSERT INTO plugin_node_states (session_id, node_id, state_id) VALUES (?1, ?2, ?3)
+             ON CONFLICT(session_id, node_id) DO UPDATE SET state_id = excluded.state_id",
+            params![session_id, node_id, state_id],
+        )?;
+        Ok(previous.filter(|previous| previous != state_id))
+    }
+
+    /// The latest captured state of a plugin node, if any.
+    pub fn plugin_node_state(&self, session_id: &str, node_id: &str) -> Result<Option<String>, StorageError> {
+        Ok(self
+            .connection
+            .query_row(
+                "SELECT state_id FROM plugin_node_states WHERE session_id = ?1 AND node_id = ?2",
+                params![session_id, node_id],
+                |row| row.get(0),
+            )
+            .optional()?)
+    }
+
+    /// Latest captured plugin states of every node in a session.
+    pub fn plugin_node_states(&self, session_id: &str) -> Result<Vec<(String, String)>, StorageError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT node_id, state_id FROM plugin_node_states WHERE session_id = ?1 ORDER BY node_id LIMIT 1000")?;
+        let rows = statement
+            .query_map(params![session_id], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Whether any plugin node still records this state as its latest.
+    pub fn plugin_node_state_in_use(&self, state_id: &str) -> Result<bool, StorageError> {
+        Ok(self
+            .connection
+            .query_row(
+                "SELECT 1 FROM plugin_node_states WHERE state_id = ?1 LIMIT 1",
+                params![state_id],
+                |_| Ok(()),
+            )
+            .optional()?
+            .is_some())
+    }
+
     /// Removes only state metadata; the asset file remains untouched.
     pub fn remove_plugin_state(&self, id: &str) -> Result<bool, StorageError> {
         if id.is_empty() || id.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES {
@@ -2440,7 +2508,21 @@ impl Storage {
         let document = self
             .export_session(id)?
             .ok_or_else(|| StorageError::InvalidBundle("session not found".into()))?;
-        let exported_session: Session = serde_json::from_str(&document)?;
+        let mut exported_session: Session = serde_json::from_str(&document)?;
+        // A plugin's latest captured state (editor close, Save state, Stop)
+        // is what the user last heard, so the file carries that one.
+        let mut latest_applied = false;
+        for (node_id, state_id) in self.plugin_node_states(id.as_str())? {
+            if let Some(node) = exported_session
+                .nodes
+                .iter_mut()
+                .find(|node| node.id.as_str() == node_id && node.kind == audiorouter_domain::NodeKind::Plugin)
+            {
+                node.parameters.insert("stateId".into(), serde_json::Value::String(state_id));
+                latest_applied = true;
+            }
+        }
+        let document = if latest_applied { serde_json::to_string(&exported_session)? } else { document };
         // Carry what the nodes reference so the file restores the session on
         // another computer: imported audio (Audio File, FIR Filter) and saved
         // plugin states. A missing asset is left out; the import reports it.
@@ -5333,6 +5415,47 @@ mod tests {
         let (_, again) = target.read_session_bundle(&bundle, root.join("staging")).unwrap();
         assert_eq!(again, BundleImportReport::default());
         drop((source, target));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn plugin_node_states_record_the_latest_capture_and_travel_in_session_files() {
+        let root = std::env::temp_dir().join(format!("audiorouter-node-states-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let storage = Storage::open(root.join("db.sqlite")).unwrap();
+        assert_eq!(storage.plugin_node_state("s", "fx").unwrap(), None);
+        assert_eq!(storage.set_plugin_node_state("s", "fx", "auto-1").unwrap(), None);
+        assert_eq!(storage.set_plugin_node_state("s", "fx", "auto-1").unwrap(), None, "same state is not a replacement");
+        assert_eq!(storage.set_plugin_node_state("s", "fx", "auto-2").unwrap(), Some("auto-1".into()));
+        assert_eq!(storage.plugin_node_state("s", "fx").unwrap(), Some("auto-2".into()));
+        assert!(!storage.plugin_node_state_in_use("auto-1").unwrap());
+        storage.set_plugin_node_state("copy", "fx", "auto-2").unwrap();
+        assert!(storage.plugin_node_state_in_use("auto-2").unwrap());
+        assert_eq!(storage.plugin_node_states("s").unwrap(), vec![("fx".to_string(), "auto-2".to_string())]);
+
+        // A session file carries the latest capture as the node's stateId.
+        let mut original = session();
+        original.nodes.push(Node {
+            id: EntityId::new("fx"),
+            kind: NodeKind::Plugin,
+            type_version: 1,
+            name: "ReaComp".into(),
+            enabled: true,
+            bypass: false,
+            parameters: [("format".to_string(), Value::String("vst2".into()))].into_iter().collect(),
+            ports: vec![],
+        });
+        storage.save_session(&original).unwrap();
+        storage.set_plugin_node_state(original.id.as_str(), "fx", "auto-3").unwrap();
+        let bundle = root.join("setup.audiorouter");
+        storage.export_bundle(&original.id, &bundle).unwrap();
+        let target = Storage::open(root.join("other.sqlite")).unwrap();
+        let (imported, _) = target.read_session_bundle(&bundle, root.join("staging")).unwrap();
+        let fx = imported.nodes.iter().find(|node| node.id.as_str() == "fx").unwrap();
+        assert_eq!(fx.parameters.get("stateId"), Some(&Value::String("auto-3".into())));
+        assert!(storage.load_session(&original.id).unwrap().unwrap().nodes.iter().all(|node| !node.parameters.contains_key("stateId")), "the saved session is unchanged");
+        drop((storage, target));
         let _ = std::fs::remove_dir_all(root);
     }
 

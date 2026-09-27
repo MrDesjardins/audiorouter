@@ -1192,7 +1192,7 @@ function PluginEditorControls({ node, backend, sessionId, running, onStateSaved 
     setBusy(true);
     try {
       const response = await invoke("open_plugin_editor", { sessionId, nodeId: node.id, title: node.name }) as { error?: { message?: string } | null };
-      setMessage(response?.error ? `Editor unavailable: ${response.error.message ?? "the backend refused"}` : "Editor opened in its own window. Close that window to apply your changes, then Save plugin settings to keep them.");
+      setMessage(response?.error ? `Editor unavailable: ${response.error.message ?? "the backend refused"}` : "Editor opened in its own window. Changes apply as you make them and are kept automatically when you close the window or press Stop.");
     } catch (error) { setMessage(formatUiError(error, "The plugin editor could not be opened.")); }
     finally { setBusy(false); }
   };
@@ -1206,12 +1206,12 @@ function PluginEditorControls({ node, backend, sessionId, running, onStateSaved 
     } catch (error) { setMessage(formatUiError(error, "Plugin settings could not be saved.")); }
     finally { setBusy(false); }
   };
-  return <div className="node-binding-editor" aria-label="Plugin editor and settings"><div><p className="eyebrow">Plugin editor</p><strong>{typeof node.parameters.stateId === "string" ? "Saved settings are restored when the route plays" : "Using the plugin's default settings"}</strong></div>
+  return <div className="node-binding-editor" aria-label="Plugin editor and settings"><div><p className="eyebrow">Plugin editor</p><strong>Your changes are kept automatically</strong></div>
     <div className="actions">
       <button type="button" className="secondary" disabled={busy || !running || !inShell || !isVst2} title={!isVst2 ? "VST3 editors are not supported yet; use the parameters below." : !inShell ? "Editors open only in the desktop app." : !running ? "Start the route first." : "Open the plugin's own window"} onClick={() => void openEditor()}>Open plugin editor</button>
-      <button type="button" className="secondary" disabled={busy || !running || !backend.savePluginState} title={!running ? "Start the route first." : "Store the plugin's full current state with this route"} onClick={() => void saveState()}>Save plugin settings</button>
+      <button type="button" className="secondary" disabled={busy || !running || !backend.savePluginState} title={!running ? "Start the route first." : "Keep the current settings now, without stopping. Changes are also kept automatically when you close the editor or press Stop."} onClick={() => void saveState()}>Save plugin settings</button>
     </div>
-    {message ? <PanelMessage message={message} small /> : <small className="muted">{!running ? "Start the route to open the editor or save the plugin's settings." : !isVst2 ? "This VST3 plugin's own editor cannot be opened yet; adjust it with the parameters below. Save plugin settings still keeps them." : "Open the editor, make changes, close its window, then Save plugin settings."}</small>}
+    {message ? <PanelMessage message={message} small /> : <small className="muted">{!running ? "Start the route to open the editor. Settings you change are kept automatically when you close the editor or press Stop." : !isVst2 ? "This VST3 plugin's own editor cannot be opened yet; adjust it with the parameters below. Changes are kept when you press Stop." : "Open the editor and make changes. They are kept when you close its window or press Stop."}</small>}
   </div>;
 }
 
