@@ -30,7 +30,7 @@ evidence is missing. Nothing here is a release claim: M08 is not done.
 | --- | --- | --- | --- |
 | [M00](../../milestones/M00-feasibility.md) feasibility | WASAPI probes, calibrated loopback tooling | [WASAPI probe](evidence/M00-wasapi-probe.md); NFR-01 p95 ≈155–186 ms (target revised to ≤250 ms, DEC-14) | Owned-driver feasibility (permanently out of scope) |
 | [M01](../../milestones/M01-contracts.md) contracts | Domain, storage, authorization, CLI/MCP parity | [M01 evidence](evidence/M01-contracts.md) | Final release acceptance only |
-| [M02](../../milestones/M02-audio-engine.md) audio engine | Realtime graph, capture/render adapters, multi-input/many-output paths, backend audio service | Guarded routes ([M02](evidence/M02-audio-engine.md)); **continuity 0 glitches for 30–60 s on four route shapes** ([audio continuity](evidence/2026-09-26-audio-continuity.md)); NFR-02 p95 ≈97–115 ms (≤160 ms, DEC-15) | Clock-drift correction between independent devices; endurance/soak |
+| [M02](../../milestones/M02-audio-engine.md) audio engine | Realtime graph, capture/render adapters, multi-input/many-output paths, backend audio service, Network Send/Receive (GRAPH-16) | Guarded routes ([M02](evidence/M02-audio-engine.md)); **continuity 0 glitches for 30–60 s on four route shapes** ([audio continuity](evidence/2026-09-26-audio-continuity.md)); NFR-02 p95 ≈97–115 ms (≤160 ms, DEC-15) | Clock-drift correction between independent devices; endurance/soak |
 | [M03](../../milestones/M03-virtual-routing.md) virtual routing | Exact endpoint identity, VB-Cable/Voicemeeter routes, rebind | [M03](evidence/M03-virtual-routing.md) | Owned virtual devices (out of scope) |
 | [M04](../../milestones/M04-effects-recording.md) effects/recording | 17 built-in processors incl. pitch; recorder (WAV/FLAC/MP3), library | Synthetic DSP vectors; [feature confidence](evidence/2026-09-26-feature-confidence.md) | Attended/long-duration recording on real devices |
 | [M05](../../milestones/M05-visual-editor.md) visual editor | Canvas, Properties/Tools, live flags, timing, three themes | 65 browser E2E + 345+ UI unit tests; Edge visual review | Attended Narrator, 200 % scaling, first-run, live drag/drop; UI-15 attended edge activity |
@@ -57,6 +57,10 @@ by hand in the morning.
 - **Test Signal and Audio File were chopped** (~100 discontinuities/s)
   because generated sources were not paced in real time. They now are:
   30 s clean.
+- **Network Send / Network Receive tools added** (user request, see the log
+  and [quickstart how-to](../../operations/quickstart.md#stream-audio-to-another-computer-network-send-network-receive)).
+  Verified on one machine over UDP 127.0.0.1: 2 × 30 s, 0 packets lost,
+  0 glitches.
 - **Bypassed plugins no longer block Play.** The user's saved session has
   ReaEQ bypassed, which made `nativePaths.prepare` fail. Regression test
   added.
@@ -90,8 +94,10 @@ by hand in the morning.
    workspace run passed tonight, so recheck before editing.
 6. Workspace-wide `cargo fmt`/clippy drift, and missing CAP-13/GRAPH-15 rows
    in delivery traceability (M08 blockers).
-7. Attended gates (see the table): the user's by-ear confirmation of the
-   real microphone and game routes, accessibility, scaling, first-run,
+. Network tools: never run across two physical computers or over Wi-Fi.
+   The stream is unencrypted and authenticated only by source address
+   (SEC-13, LAN only). The receiving PC's firewall prompt has not been
+   observed. The receiver's drift correction is not measured on real clocks.
    OS transitions.
 
 ## Next actions, in order
@@ -109,7 +115,9 @@ by hand in the morning.
    show no "output underrun" or "late audio service gap". If clicks
    remain, note roughly how often they occur (drift gives rare, regular
    clicks).
-2. Network send/receive tools (user-requested, 2026-09-26). See the log.
+2. **User (attended), when a second PC is available:** Network Send on the
+   gaming PC to Network Receive on the streaming PC, per the quickstart.
+   Report the receive status line (packets, lost, gaps).
 3. Low priority: live clock-drift correction for cross-device paths.
 4. M05 attended accessibility/scaling review; M08 clean-checkout release
    preparation.
@@ -135,6 +143,10 @@ by hand in the morning.
   silences the whole group (2026-09-26).
 - Live flag changes apply without stopping Play when topology is prepared
   (2026-09-26).
+- Network audio (user request, 2026-09-26): UDP on the LAN, uncompressed
+  48 kHz float32, one quantum per datagram. Addresses are IP literals only;
+  the receiver accepts one sender address. No encryption. Streaming exists
+  only while a session with a network node is prepared (GRAPH-16, SEC-13).
 - The desktop shell grant includes Record (2026-09-22) and PluginScan
   (2026-09-25). DeviceAdministration requires the explicit
   `AUDIOROUTER_ALLOW_DEVICE_ADMIN=1` opt-in.
@@ -154,3 +166,26 @@ by hand in the morning.
 New dated entries go here (objective, requirement IDs, work, verification,
 result, next action). Keep them short, and move settled facts into the
 sections above.
+
+### 2026-09-26 — Network Send / Network Receive (GRAPH-16, SEC-13)
+
+- Objective (user): a gaming PC sends audio to a streaming PC over IP. One
+  send tool whose property is the destination IP. One receive tool (a
+  source) whose property is the sender's address.
+- Implemented: domain kinds and validation; `network_audio` (wire format,
+  pooled sender tap plus I/O thread, receiver thread with sender filter,
+  concealment, and a paced jitter buffer with ±1-frame drift correction);
+  native-path source and branch wiring; node telemetry; UI library, editor,
+  canvas card, and docs (spec, quickstart, privacy, API reference).
+- Verification: 4 network unit tests, including loopback tone continuity
+  (0 discontinuities in 3 runs), sender filtering, and gap concealment.
+  Live CABLE → Network Send → UDP 127.0.0.1 → Network Receive → CABLE-B:
+  2 × 30 s, 0 glitches, 11,640 of 11,640 packets. UI: 6 unit tests,
+  2 E2E real-backend cases, three-theme bounds and screenshots.
+  Workspace Rust, UI unit, E2E (67) and contract drift all pass.
+- Also fixed on the way: generated sources (Test Signal, Audio File) were
+  not paced (chopped audio). Card status text was unreadable in the light
+  theme.
+- Rollback: remove the two node kinds and `network_audio`. Saved sessions
+  without network nodes are unaffected.
+- Next: the attended two-PC test (see Next actions).

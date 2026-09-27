@@ -5102,18 +5102,23 @@ fn qpc_now_100ns() -> Option<u64> {
     u64::try_from(u128::from(counter as u64) * 10_000_000 / u128::from(frequency as u64)).ok()
 }
 
+/// Silence queued ahead of the next block whenever the device buffer is
+/// found empty (startup or an underrun). Shared-mode capture delivers 10 ms
+/// packets with scheduling jitter, and plugin workers occasionally return
+/// blocks late. Without a margin, each such event empties the device buffer
+/// and is heard as a click. The margin persists, so it is steady latency.
+pub const RENDER_JITTER_CUSHION_FRAMES: usize = 480;
+/// Each underrun after startup deepens the cushion by this much (5 ms), up
+/// to [`MAX_RENDER_JITTER_CUSHION_FRAMES`]. A quiet system keeps the small
+/// default; a jittery one settles after one or two gaps instead of clicking
+/// again at the same depth.
+pub const RENDER_JITTER_CUSHION_STEP_FRAMES: usize = 240;
+pub const MAX_RENDER_JITTER_CUSHION_FRAMES: usize = 1_920;
+
 /// Control/worker-thread pump that drains one prebuilt engine output ring
 /// into one render sink. The ring and all byte storage are created before the
 /// pump is started; draining never waits or allocates. A partially accepted
 /// render block remains in the bounded carry buffer for the next wake.
-/// Silence queued ahead of the next block whenever the device buffer is
-/// found empty (startup or an underrun). Shared-mode capture delivers 10 ms
-/// packets with scheduling jitter, and plugin workers return blocks late
-/// now and then; without a margin each such event empties the device
-/// buffer and is heard as a click. The margin persists, adding at most this
-/// much latency, and re-arms only after another underrun.
-pub const RENDER_JITTER_CUSHION_FRAMES: usize = 480;
-
 struct RingOutputPump<S: RenderSink> {
     sink: S,
     ring: Arc<audiorouter_engine::AudioBlockRing>,
@@ -5150,9 +5155,12 @@ impl<S: RenderSink> RingOutputPump<S> {
         let cushion_bytes = RENDER_JITTER_CUSHION_FRAMES
             .checked_mul(bytes_per_frame)
             .ok_or(AudioError::InvalidFrameSize)?;
+        let max_cushion_bytes = MAX_RENDER_JITTER_CUSHION_FRAMES
+            .checked_mul(bytes_per_frame)
+            .ok_or(AudioError::InvalidFrameSize)?;
         let pending_bytes = quantum_frames
             .checked_mul(bytes_per_frame)
-            .and_then(|bytes| bytes.checked_add(cushion_bytes))
+            .and_then(|bytes| bytes.checked_add(max_cushion_bytes))
             .ok_or(AudioError::InvalidFrameSize)?;
         Ok(Self {
             sink,
@@ -5229,6 +5237,9 @@ impl<S: RenderSink> RingOutputPump<S> {
         let cushion = if self.sink.queued_frames() == Some(0) {
             if self.started {
                 self.underruns = self.underruns.saturating_add(1);
+                self.cushion_bytes = (self.cushion_bytes
+                    + RENDER_JITTER_CUSHION_STEP_FRAMES * self.bytes_per_frame)
+                    .min(MAX_RENDER_JITTER_CUSHION_FRAMES * self.bytes_per_frame);
             }
             self.cushion_bytes
         } else {
@@ -5502,6 +5513,7 @@ impl WasapiOutputFanout {
             }
             worker.pending_bytes = 0;
             worker.started = false;
+            worker.cushion_bytes = RENDER_JITTER_CUSHION_FRAMES * worker.bytes_per_frame;
             worker.ring.recycle_all();
         }
         for ring in &self.output_rings {
@@ -8774,6 +8786,64 @@ mod tests {
             RingOutputPump::new(Sink(std::sync::Mutex::new(Vec::new())), stale_ring, 4, 2, 2)
                 .unwrap();
         assert_eq!(stale_pump.pump_available(1).unwrap().packets, 0);
+    }
+
+    #[test]
+    fn ring_output_pump_cushions_startup_and_deepens_the_cushion_after_each_underrun() {
+        // A device whose buffer is reported empty whenever `empty` is set.
+        struct Device {
+            empty: std::sync::atomic::AtomicBool,
+            submitted_frames: std::sync::Mutex<Vec<u32>>,
+        }
+        impl RenderSink for Device {
+            fn submit_bytes(&self, source: &[u8], bytes_per_frame: usize) -> Result<u32, AudioError> {
+                let frames = (source.len() / bytes_per_frame) as u32;
+                self.submitted_frames.lock().unwrap().push(frames);
+                Ok(frames)
+            }
+            fn queued_frames(&self) -> Option<u32> {
+                Some(if self.empty.load(Ordering::Relaxed) { 0 } else { 960 })
+            }
+        }
+        let quantum = 128;
+        let ring = Arc::new(audiorouter_engine::AudioBlockRing::new(8, 2, quantum).unwrap());
+        let device = Device {
+            empty: std::sync::atomic::AtomicBool::new(true),
+            submitted_frames: std::sync::Mutex::new(Vec::new()),
+        };
+        let mut pump = RingOutputPump::new(device, Arc::clone(&ring), 5, 2, quantum).unwrap();
+        // Blocks reach the ring stamped with generation 5, as in the engine.
+        let scheduler = audiorouter_engine::RealtimeScheduler::new(2, 2, quantum).unwrap();
+        let generation = audiorouter_engine::RuntimeGeneration::new(5);
+        scheduler.publish(audiorouter_engine::RuntimeGraph::prepare(generation, Vec::new()));
+        let tap = audiorouter_engine::AudioBlockRingTap::new(Arc::clone(&ring));
+        let feed = |_ring: &audiorouter_engine::AudioBlockRing| {
+            scheduler.submit_input(scheduler.acquire_input().unwrap()).unwrap();
+            assert_eq!(scheduler.process_once_with_tap(0, &tap).unwrap(), Some(generation));
+            let output = scheduler.receive_output().unwrap();
+            let _ = scheduler.output().try_recycle(output);
+        };
+        let mut next = |pump: &mut RingOutputPump<Device>, empty: bool| {
+            pump.sink.empty.store(empty, Ordering::Relaxed);
+            feed(&ring);
+            pump.pump_available(1).unwrap();
+            pump.sink.submitted_frames.lock().unwrap().pop().unwrap()
+        };
+        // Startup: default cushion ahead of the first block, not an underrun.
+        assert_eq!(next(&mut pump, true), (RENDER_JITTER_CUSHION_FRAMES + quantum) as u32);
+        assert_eq!(pump.underruns, 0);
+        // Device still holds audio: blocks pass without extra silence.
+        assert_eq!(next(&mut pump, false), quantum as u32);
+        // Each underrun is counted and re-primes 5 ms deeper.
+        let step = RENDER_JITTER_CUSHION_STEP_FRAMES;
+        assert_eq!(next(&mut pump, true), (RENDER_JITTER_CUSHION_FRAMES + step + quantum) as u32);
+        assert_eq!(next(&mut pump, true), (RENDER_JITTER_CUSHION_FRAMES + 2 * step + quantum) as u32);
+        assert_eq!(pump.underruns, 2);
+        // ...up to the bound.
+        for _ in 0..16 {
+            next(&mut pump, true);
+        }
+        assert_eq!(next(&mut pump, true), (MAX_RENDER_JITTER_CUSHION_FRAMES + quantum) as u32);
     }
 
     #[test]

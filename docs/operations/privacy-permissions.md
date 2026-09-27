@@ -61,6 +61,16 @@ user-mode native routes must report their exact endpoint/process binding and
 fail closed when preparation or identity validation fails; managed driver
 endpoints remain unavailable and must not be represented as healthy zeros.
 
+AudioRouter sends audio over the network only through a **Network Send** node
+that the user added and addressed, and only while its session is prepared.
+The stream is unencrypted and goes to exactly the IP address entered. It is
+meant for a trusted local network, such as a gaming PC feeding a streaming PC.
+Privacy mute silences it like any other output. A **Network Receive** node
+listens on its UDP port only while its session is prepared, and plays audio
+only from the sender address entered. Other datagrams are counted and
+ignored, and received data is never treated as anything but audio samples
+(SEC-13).
+
 Do not grant capture or recording scope to an automation client unless its
 requested action and approved file roots are understood. Review the concrete
 method, session, destination, and path before approving a mutating operation.

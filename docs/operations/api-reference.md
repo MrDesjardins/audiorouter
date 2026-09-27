@@ -225,20 +225,34 @@ The current node catalog is available through `nodes.describe` and contains:
 | `application-capture@1` | available | Requires an observed process identity and exact render binding at runtime |
 | `endpoint-loopback@1` | available | Requires an exact active render endpoint at runtime |
 | `physical-output@1` | available | Requires an exact active render endpoint at runtime |
-| `virtual-render-source@1` | unavailable | Requires M03 managed virtual driver |
-| `virtual-capture-sink@1` | unavailable | Requires M03 managed virtual driver |
-| `recorder@1` | available | Bounded recording sink boundary; the runtime tap is attached by the control plane |
-| `mixer@1` | available | Bounded graph mixer |
+| `virtual-render-source@1` | unavailable | AudioRouter-owned virtual devices are out of scope; use an installed virtual cable through `physical-input` |
+| `virtual-capture-sink@1` | unavailable | AudioRouter-owned virtual devices are out of scope; use an installed virtual cable through `physical-output` |
+| `test-signal@1` | available | `frequencyHz` 20–20,000, `levelDb` -60–0, `durationMs` 1–600,000; paced in real time |
+| `audio-file@1` | available | Imported WAV/MP3 media (`mediaId`), optional `loop`; paced in real time |
+| `network-send@1` | available | Streams its input over UDP to `host` (IPv4/IPv6 literal) and `port` (default 47800); see GRAPH-16/SEC-13 |
+| `network-receive@1` | available | Plays the stream from `sender` (IP literal) on `port`, with a `bufferMs` jitter buffer of 10–500 ms (default 40) |
+| `recorder@1` | available | Recording sink branch; the runtime tap is attached by the control plane |
+| `mixer@1` | available | Bounded graph mixer with per-input volume |
+| `input-switch@1` | available | Passes input A or B with a crossfade |
 | `gain@1` | available | `gainDb`, from -60 to +24 dB |
+| `volume@1` | available | `percent`, 0–200 % |
 | `mute@1` | available | `muted`, boolean |
 | `meter@1` | available | Bounded per-node telemetry boundary |
-| `parametric-eq@1` | available | Eight independently enabled bands; peaking, shelf, pass, and notch filters |
-| `compressor@1` | available | Stereo-capable dynamics stage; 48 kHz graph baseline |
-| `gate@1` | available | Downward gate/expander stage; 48 kHz graph baseline |
-| `limiter@1` | available | Sample-peak ceiling stage; -12 to 0 dBFS; bounded 0–10 ms lookahead and 10–1,000 ms release |
-| `delay@1` | available | Preallocated delay stage; 0 to 1,000 ms |
+| `parametric-eq@1` | available | Sixteen independently enabled bands; peaking, shelf, pass, and notch filters |
 | `graphic-eq@1` | available | Fixed ten-band EQ; `band0Db`–`band9Db`, -18 to +18 dB |
-| `pitch@1` | available | Fixed 128-frame streaming pitch stage; 1,024 estimated latency samples; semitones -12 to +12 and cents -100 to +100 |
+| `bass-treble@1` | available | Bass and treble shelves, ±12 dB |
+| `compressor@1` | available | Stereo-capable dynamics stage |
+| `gate@1` | available | Downward gate/expander stage |
+| `limiter@1` | available | Sample-peak ceiling -12 to 0 dBFS; 240-sample default lookahead |
+| `delay@1` | available | Preallocated delay, 0–1,000 ms |
+| `pitch@1` | available | Streaming pitch stage; semitones -12 to +12, cents -100 to +100; 1,024-sample latency |
+| `dehum@1` | available | Mains hum and harmonics at 50/60 Hz |
+| `declick@1` | available | Click/crackle repair; 64-sample latency |
+| `denoise@1` | available | Learned noise-profile reduction; 1,024-sample latency |
+| `speech-denoise@1` | available | Automatic spectral noise reduction around speech; 1,024-sample latency |
+| `fir-filter@1` | available | Impulse-response convolution (up to 2 s); 512-sample latency |
+| `time-shift@1` | available | Live DVR: pause, jump ±10 s, return to live; up to 120 s |
+| `plugin@1` | available when bound | VST2/VST3 effect in an isolated worker; unavailable until a scanned plugin is bound |
 
 The separately reported `processors` catalog in `system.describe` documents the
 implemented DSP primitives and their typed parameter ranges. `parametricEq` is
