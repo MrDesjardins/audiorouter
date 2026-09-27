@@ -132,6 +132,8 @@ const extraProcessors = libraryKinds.filter(
     "physicalOutput",
     "testSignal",
     "audioFile",
+    "networkSend",
+    "networkReceive",
     "recorder",
     "mixer",
     "gain",
