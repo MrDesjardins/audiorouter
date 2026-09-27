@@ -15,7 +15,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(page.getByTestId("rf__node-voice").locator(".flow-node-title strong")).toHaveCSS("color", strongText);
     const directory = path.resolve("../target/feature-confidence-visual");
     await mkdir(directory, { recursive: true });
-    for (const [name, kind, control] of [["Dehum", "dehum", "harmonics precise value"], ["Input Switch", "inputSwitch", "selected"], ["Network Send", "networkSend", "Receiving computer's IP address"], ["Network Receive", "networkReceive", "Sending computer's IP address"]]) {
+    for (const [name, kind, control] of [["Dehum", "dehum", "Harmonics precise value"], ["Input Switch", "inputSwitch", "Active input"], ["Network Send", "networkSend", "Receiving computer's IP address"], ["Network Receive", "networkReceive", "Sending computer's IP address"]]) {
       await page.getByRole("tab", { name: "Tools", exact: true }).click();
       await page.locator(".tool-card").filter({ has: page.getByText(name, { exact: true }) }).click();
       await page.getByTestId(`rf__node-${kind}-1`).locator(".flow-node-title").click();
@@ -44,7 +44,7 @@ test("integer processor bounds reject invalid edits and arrow keys use the adver
   await page.getByRole("tab", { name: "Tools", exact: true }).click();
   await page.locator(".tool-card").filter({ has: page.getByText("Dehum", { exact: true }) }).click();
   await page.getByTestId("rf__node-dehum-1").locator(".flow-node-title").click();
-  const field = page.locator(".main-content > .inspector").getByLabel("harmonics precise value", { exact: true });
+  const field = page.locator(".main-content > .inspector").getByLabel("Harmonics precise value", { exact: true });
   await expect(field).toHaveAttribute("step", "1");
   await field.fill("4.1");
   await expect(page.locator(".global-action-message")).toContainText(/step|increment/i);

@@ -958,6 +958,8 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .theme-light .node-telemetry-tile.is-bad dd { color: #a83232; }
 .theme-light .node-telemetry-status.is-live { color: #1d6b43; }
 .inspector-change-summary { min-height: 1.4em; margin: .35rem 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.inspector .tool-description { margin: .2rem 0 .5rem; font-size: .82rem; line-height: 1.45; }
+.inspector .parameter-help { display: block; margin: .1rem 0 .3rem; font-size: .76rem; line-height: 1.4; font-weight: 400; }
 .advanced-eq-status { min-height: 1.3em; margin: .2rem 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 /* Messages never change the page height: two lines, full text on hover. */
 .global-action-message { box-sizing: border-box; height: 3.1rem; max-height: 3.1rem; overflow: hidden; }

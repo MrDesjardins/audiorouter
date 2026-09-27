@@ -46,7 +46,7 @@ export const libraryEntries: LibraryEntry[] = [
   { id: "declick", label: "Declick", category: "Restoration", flow: "tool", kind: "declick", note: "Repair clicks, pops, and crackle. A lower threshold repairs more but may alter sharp sounds. Adds about 1.3 ms of delay." },
   { id: "denoise", label: "Denoise", category: "Restoration", flow: "tool", kind: "denoise", note: "Learn a steady noise (fan, hiss, hum) while nothing else plays, then remove it. Adds about 21 ms of delay." },
   { id: "speech-denoise", label: "Speech Denoise", category: "Restoration", flow: "tool", kind: "speechDenoise", note: "Automatically reduce background noise around speech. Runs locally with a spectral method, not a machine-learning model. Adds about 21 ms of delay." },
-  { id: "fir-filter", label: "FIR Filter", category: "Effect", flow: "tool", kind: "firFilter", note: "Convolve audio with an impulse response (WAV or MP3, up to 2 s) to emulate a room, speaker, or device. Adds about 11 ms of delay." },
+  { id: "fir-filter", label: "FIR Filter", category: "Effect", flow: "tool", kind: "firFilter", note: "Give your sound the character of a room, speaker or mic from its impulse response (WAV or MP3, up to 2 s). Wet mix blends it with the original. Adds about 11 ms of delay." },
   { id: "time-shift", label: "Time Shift", category: "Effect", flow: "tool", kind: "timeShift", note: "A DVR for live audio: pause, jump back or forward 10 s, and return to live. Keeps up to 120 s." },
   { id: "mixer", label: "Mixer", category: "Routing", flow: "tool", kind: "mixer" },
   { id: "input-switch", label: "Input Switch", category: "Routing", flow: "tool", kind: "inputSwitch", note: "Pass either input A or input B. Switching crossfades over 0.5 s (Shift-click for 2 s)." },
@@ -72,4 +72,29 @@ export function libraryEntryAccessibleLabel(entry: LibraryEntry): string {
   if (entry.unavailableReason) return `${entry.label}, ${entry.category}, unavailable: ${entry.unavailableReason}`;
   if (entry.note) return `${entry.label}, ${entry.category}, ${entry.note}`;
   return `${entry.label}, ${entry.category}`;
+}
+
+/** Short explanation of each tool, shown in Tools and at the top of Properties. */
+export const TOOL_HELP: Record<string, string> = {
+  "physical-input": "Sound from a microphone, line input, or virtual cable. Choose the device in Properties.",
+  "test-signal": "A steady tone for checking a route without speaking. Press Play on the node to start the tone.",
+  "physical-output": "Send the route to speakers, headphones, or a virtual cable. Choose the device in Properties.",
+  gain: "Make the sound louder or quieter, in decibels.",
+  mixer: "Combine several sources into one, with a volume for each input.",
+  recorder: "Record the sound passing through this point to a file on this PC.",
+  mute: "Silence this part of the route without disconnecting anything.",
+  meter: "Show the level of the sound at this point, to check it is neither too quiet nor clipping.",
+  "parametric-eq": "Shape the tone precisely: boost or cut chosen frequencies with up to 16 points.",
+  compressor: "Even out loud and quiet moments so a voice sits at a steady level.",
+  gate: "Silence quiet background noise between words; opens when you speak.",
+  limiter: "Hold peaks under a ceiling so sudden loud sounds never clip or distort.",
+  delay: "Hold the sound back by a set time, for example to line audio up with video.",
+  "graphic-eq": "Boost or cut ten fixed frequency bands, from deep bass (31.5 Hz) to air (16 kHz).",
+  pitch: "Shift the pitch up or down without changing the speed.",
+};
+
+/** The explanation of the tool a node was made from. */
+export function toolDescription(kind: string): string | undefined {
+  const entry = libraryEntries.find((item) => item.kind === kind);
+  return entry ? entry.note ?? TOOL_HELP[entry.id] : undefined;
 }

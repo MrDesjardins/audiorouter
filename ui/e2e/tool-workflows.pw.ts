@@ -1,5 +1,6 @@
 import { test, expect } from "./real-backend";
 import { libraryEntries } from "../src/library";
+import { parameterText } from "../src/parameterText";
 import type { DiscoveryDocument, Session } from "../../contracts/src/index";
 import { syntheticWav } from "./audio-fixtures";
 
@@ -26,7 +27,7 @@ for (const entry of libraryEntries.filter(entry => entry.kind)) {
       for (const parameter of descriptor?.parameters ?? []) {
         if (parameter.name.endsWith(":")) continue;
         if (parameter.type === "number") {
-          const control = inspector.getByLabel(`${parameter.name} precise value`, { exact: true });
+          const control = inspector.getByLabel(`${parameterText(entry.kind, parameter.name).label} precise value`, { exact: true });
           await expect(control, `${entry.kind}.${parameter.name} editable`).toBeVisible();
           const step = parameter.step ?? (parameter.unit === "Hz" ? 1 : 0.1);
           const current = Number(await control.inputValue());
@@ -37,13 +38,13 @@ for (const entry of libraryEntries.filter(entry => entry.kind)) {
           await expect(control).toHaveValue(String(value));
           changedParameters[parameter.name] = value;
         } else if (parameter.type === "boolean") {
-          const control = inspector.getByLabel(parameter.name, { exact: true });
+          const control = inspector.getByLabel(parameterText(entry.kind, parameter.name).label, { exact: true });
           await expect(control).toBeVisible();
           const value = !(await control.isChecked());
           await control.setChecked(value);
           changedParameters[parameter.name] = value;
         } else if (parameter.type === "string" && parameter.enum && parameter.enum.length > 1) {
-          const control = inspector.getByLabel(parameter.name, { exact: true });
+          const control = inspector.getByLabel(parameterText(entry.kind, parameter.name).label, { exact: true });
           await expect(control).toBeVisible();
           const current = await control.inputValue();
           const value = parameter.enum.find(value => value !== current)!;

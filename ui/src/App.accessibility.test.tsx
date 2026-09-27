@@ -1430,8 +1430,8 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     await renderReady(<App backend={backend} />);
     fireEvent.click(await screen.findByLabelText("Voice gain, gain"));
 
-    const slider = await screen.findByRole("slider", { name: "gainDb slider" });
-    const precise = screen.getByRole("spinbutton", { name: "gainDb precise value" });
+    const slider = await screen.findByRole("slider", { name: "Gain slider" });
+    const precise = screen.getByRole("spinbutton", { name: "Gain precise value" });
     expect(slider.getAttribute("min")).toBe("-60");
     expect(slider.getAttribute("max")).toBe("24");
     expect((precise as HTMLInputElement).value).toBe("0");
@@ -1490,7 +1490,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     fireEvent.dragStart(dropSource, { dataTransfer });
     fireEvent.drop(canvas, { dataTransfer });
     fireEvent.click(await screen.findByLabelText("Gate 1, gate"));
-    fireEvent.change(await screen.findByRole("spinbutton", { name: "thresholdDb precise value" }), { target: { value: "-30" } });
+    fireEvent.change(await screen.findByRole("spinbutton", { name: "Threshold precise value" }), { target: { value: "-30" } });
     fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
 
     await waitFor(() => expect(commitGraph).toHaveBeenCalledWith("gate-plan", demoSession.revision, expect.any(String)));
@@ -1538,7 +1538,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     fireEvent.dragStart(dropSource, { dataTransfer });
     fireEvent.drop(canvas, { dataTransfer });
     fireEvent.click(await screen.findByLabelText("Pitch shift 1, pitch"));
-    fireEvent.change(await screen.findByRole("spinbutton", { name: "semitones precise value" }), { target: { value: "5" } });
+    fireEvent.change(await screen.findByRole("spinbutton", { name: "Semitones precise value" }), { target: { value: "5" } });
     fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
 
     await waitFor(() => expect(commitGraph).toHaveBeenCalledWith("pitch-plan", demoSession.revision, expect.any(String)));
@@ -1585,7 +1585,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     fireEvent.dragStart(dropSource, { dataTransfer });
     fireEvent.drop(canvas, { dataTransfer });
     fireEvent.click(await screen.findByLabelText("Compressor 1, compressor"));
-    fireEvent.change(await screen.findByRole("spinbutton", { name: "ratio precise value" }), { target: { value: "6" } });
+    fireEvent.change(await screen.findByRole("spinbutton", { name: "Ratio precise value" }), { target: { value: "6" } });
     fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
 
     await waitFor(() => expect(commitGraph).toHaveBeenCalledWith("compressor-plan", demoSession.revision, expect.any(String)));
@@ -1632,7 +1632,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     fireEvent.dragStart(dropSource, { dataTransfer });
     fireEvent.drop(canvas, { dataTransfer });
     fireEvent.click(await screen.findByLabelText("Limiter 1, limiter"));
-    fireEvent.change(await screen.findByRole("spinbutton", { name: "ceilingDb precise value" }), { target: { value: "-3" } });
+    fireEvent.change(await screen.findByRole("spinbutton", { name: "Ceiling precise value" }), { target: { value: "-3" } });
     fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
 
     await waitFor(() => expect(commitGraph).toHaveBeenCalledWith("limiter-plan", demoSession.revision, expect.any(String)));
