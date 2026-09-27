@@ -111,6 +111,44 @@ block-sized jumps unambiguous), `AUDIOROUTER_CONTINUITY_DUMP_DIR` (raw f32 dumps
    - After: Test Signal, 30 s → 0 glitches, 11 ms output queue, 0 late
      passes.
 
+7. **Recording on multi-path sessions was broken.** Nothing drained a
+   Recorder branch's queue on the multi-input worker, so the UI's 8-chunk
+   queue (~21 ms) filled and the tap dropped the rest of the take. Also,
+   `recorders.list` never reported the live frame, and `start`/`resume`
+   demanded that the next chunk begin at exactly the client's frame.
+   Stopping therefore failed with `FrameWentBackwards` or `NotRecording`.
+   - Fix: the multi-input pump drains recorder workers. `recorders.list`
+     reports the end of the newest committed audio. Start/resume skip audio
+     queued before the requested frame, then adopt the stream's timeline;
+     contiguity is still enforced afterwards (regression tests in
+     `audiorouter-recording`). The UI also sends routes with a connected
+     Recorder to the multi-path worker, because the single-endpoint worker
+     rejected that fan-out with `UnsupportedTopology`.
+   - After (`AUDIOROUTER_CONTINUITY_RECORD=1`): a 15 s float32 WAV on the
+     multi-path worker with 0 glitches.
+8. **Render cushion made adaptive.** The 10 ms default grows 5 ms per real
+   underrun, up to 40 ms, and resets on Stop (unit-tested).
+
+## Environment observation (23:00 onwards)
+
+From about 23:00 the machine produced occasional ~10 ms output gaps on the
+virtual-cable harness: typically one per 10–20 s run, clustered 2–4 s after
+the streams open. They also appeared, at the same rate, with a build of the
+earlier commit `47410f12` that had measured clean at 22:40. The reference
+recording sometimes gapped too. The backend service never ran late
+(max gap under 8 ms). The conclusion is system or virtual-cable scheduling
+noise, not a code regression; the adaptive cushion is the mitigation. The
+single-processor sweep below ran under these conditions, so a one-gap
+result for a processor is not attributed to that processor. Processors
+with a clean 10 s run: Bass & Treble, Dehum, Declick, Denoise, FIR Filter,
+Meter, Advanced EQ, Delay. One environment-pattern gap: Volume (the
+reference gapped too), Speech Denoise (the reference gapped too), Time
+Shift, Graphic EQ, Gate. Two to six gaps: Compressor, Limiter, Pitch
+(13 glitches in its first 10 s run). A Pitch recheck of two 20 s runs
+found 1 gap and then 0, with the plain direct route gapping in between,
+so Pitch is not systematically discontinuous.
+None showed the systematic per-block pattern of finding 1.
+
 ## Clock-drift survey of the user's saved session
 
 `live_saved_session_output_queue_drift`, 180 s, run on a copy of the

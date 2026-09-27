@@ -67,15 +67,26 @@ by hand in the morning.
 - Plugin bridge and worker threads now use MMCSS "Pro Audio".
 - Status line now shows output underruns and late backend audio-service
   gaps.
-- Checks: workspace `cargo test --workspace --locked` passed (847 tests,
-  0 failed). UI vitest 346 passed. UI typecheck and production build
-  passed.
-- Artifact for the attended test (built 22:50 local, UI bundle
-  `index-CT3skZtC.js` confirmed embedded, shell newer than `ui/dist`):
+- **Recording on multi-path sessions fixed.** Before, stop failed and only
+  about 21 ms was kept. Routes with a Recorder branch now use the
+  multi-path worker. Live: a 15 s WAV with 0 glitches
+  ([evidence](evidence/2026-09-26-audio-continuity.md), finding 7).
+- The render jitter cushion is adaptive: 10 ms, growing 5 ms per real
+  underrun, up to 40 ms.
+- Checks (final, 2026-09-27): `cargo test --workspace` 0 failures; UI vitest
+  353 passed; browser E2E 67/67; contract drift, documentation and M08
+  traceability (175 IDs) all pass.
+- Artifact for the attended test (built 03:10 local on 2026-09-27; UI
+  bundle `index-DAgNSICR.js` confirmed embedded; shell newer than
+  `ui/dist`):
   `C:\code\audiorouter\target\patrick-main-release-2\release\audiorouter-shell.exe`
-  SHA256 `E47017C3C87785424FDFD60A505C986DEE6CC5CBB34314D41D3A104E8B283C10`.
+  SHA256 `67D6E97696984209360CF7599895267AA051773BF9CE6DCAC75517727CFA9FEF`.
   Worker beside it: SHA256
-  `6CBB240B07041F05481316BEF9CA51416C80D0DCAD14A068141EA8FAFD276CF0`.
+  `275190960CDF8E6ADEF5BEEFF596A474B084CE72494D6FF7399D9DE683DDBCA8`.
+- Since about 23:00 the machine has shown occasional ~10 ms gaps on the
+  virtual-cable harness. An earlier commit that measured clean at 22:40
+  shows the same rate, so this is environmental; see the
+  [evidence](evidence/2026-09-26-audio-continuity.md#environment-observation-2300-onwards).
 
 ## Open defects and known gaps
 
