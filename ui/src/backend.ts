@@ -84,7 +84,7 @@ function formatUiErrorText(error: unknown, fallback: string): string {
     return "The selected audio device changed or disconnected. Stop audio, refresh the device list, then select the exact input and output again. Play will reopen those devices. If one is missing, reconnect it before retrying.";
   }
   if (/0x8889000a/i.test(error.message) || (error instanceof AudioRouterRpcError && typeof error.data?.hresult === "number" && (error.data.hresult >>> 0) === 0x8889000A)) {
-    return "The selected audio device is in use by another application. Choose a different output in Devices, or release this exact device in the application using it, then prepare it again.";
+    return "The selected audio device is in use by another application. Choose a different device in the Output Device node's Properties, or release this exact device in the application using it, then prepare it again.";
   }
   if (/native graph rejected: UnsupportedTopology/.test(error.message)) {
     return "This route includes an audio combination the current engine cannot play. Try a separate Test Signal → Physical Output route, or remove one source and connect the remaining source directly to the output. Your saved route was not changed.";

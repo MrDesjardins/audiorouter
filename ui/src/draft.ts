@@ -460,6 +460,21 @@ export function needsNativePaths(session: Session): boolean {
     || nodes.filter((node) => node.enabled && node.kind === "physicalInput").length > 1);
 }
 
+/**
+ * A single route whose only sources are generated sound (Test Signal, Audio
+ * File) ending in an Output Device. It needs no input device: the multi-path
+ * worker plays its saved version without opening any microphone.
+ */
+export function generatedOnlyRoute(session: Session): boolean {
+  const paths = independentPaths(session);
+  return paths.length === 1 && (() => {
+    const sources = paths[0].filter((node) => node.enabled && ROUTE_SOURCE_KINDS.has(node.kind));
+    return sources.length > 0
+      && sources.every((node) => node.kind === "testSignal" || node.kind === "audioFile")
+      && paths[0].some((node) => node.enabled && node.kind === "physicalOutput");
+  })();
+}
+
 /** Enabled device nodes of a route that have no saved endpoint yet. */
 export function unboundDeviceNodes(session: Session): Session["nodes"] {
   return independentPaths(session)

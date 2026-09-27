@@ -49,7 +49,7 @@ describe("UI error formatting", () => {
       },
     });
     expect(formatUiError(error, "fallback")).toBe(
-      "The selected audio device is in use by another application. Choose a different output in Devices, or release this exact device in the application using it, then prepare it again.",
+      "The selected audio device is in use by another application. Choose a different device in the Output Device node's Properties, or release this exact device in the application using it, then prepare it again.",
     );
   });
 

@@ -1,4 +1,5 @@
 import { test, expect } from "./real-backend";
+import { openConnectionForm, openDeviceTroubleshooting } from "./workbench";
 import { syntheticWav } from "./audio-fixtures";
 import type { Session } from "../../contracts/src/index";
 
@@ -32,7 +33,7 @@ test("occupied output inserts a real Mixer, undo restores edges, and saved routi
   await page.getByRole("tab", { name: "Tools", exact: true }).click();
   await page.locator(".tool-card").filter({ has: page.getByText("Test Signal", { exact: true }) }).click();
   const connect = async () => {
-    await page.getByRole("tab", { name: "Setup", exact: true }).click();
+    await openConnectionForm(page);
     const editor = page.locator(".workbench-connection-editor");
     await editor.getByLabel("Source output port").selectOption({ label: "Test Signal 1 · out · 2ch" });
     await editor.getByLabel("Destination input port").selectOption({ label: "Headphones · in · 2ch" });

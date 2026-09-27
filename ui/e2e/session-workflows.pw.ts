@@ -125,7 +125,7 @@ test("session export and validated import roundtrip through the UI without start
   await page.goto("/backend-harness.html");
   await expect(page.getByRole("heading", { name: "Offline qualification", exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Advanced", exact: true }).click();
-  await page.locator(".right-workbench summary").filter({ hasText: "Session import and export" }).click();
+  await page.locator(".right-workbench summary").filter({ hasText: "JSON graph transfer (for scripts)" }).click();
   const panel = page.locator(".right-workbench .session-transfer-panel");
   const downloadReady = page.waitForEvent("download");
   await panel.getByRole("button", { name: "Export session", exact: true }).click();

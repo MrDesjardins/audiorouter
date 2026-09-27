@@ -12,9 +12,9 @@ describe("guided setup checklist", () => {
     expect(storage).toMatchObject({ state: "ready", detail: "In-memory storage; persistence is not durable" });
   });
 
-  it("marks the VB-Cable gate for deliberate setup when no exact pair is present", () => {
+  it("marks the optional virtual cable as missing when no VB-Cable pair is present", () => {
     const vbCable = setupChecklist({ connected: true, audio: "available", storage: "sqlite", deviceCount: 4, applicationCount: 1, vbCablePairAvailable: false }).find((step) => step.id === "vb-cable");
-    expect(vbCable).toMatchObject({ state: "needs-attention", detail: "Select the exact pair only for a deliberate loopback test" });
+    expect(vbCable).toMatchObject({ state: "needs-attention", detail: "No VB-Cable found. Install one only if other apps should hear AudioRouter's sound" });
   });
 
   it("does not claim readiness while disconnected", () => {

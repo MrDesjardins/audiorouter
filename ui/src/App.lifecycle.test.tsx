@@ -86,6 +86,19 @@ describe("session refresh and playback regressions", () => {
     expect(backend.rebindNativeEndpoint).not.toHaveBeenCalled();
   });
 
+  it("plays a saved Test Signal route to its chosen output without any input device", async () => {
+    const tone = { ...pathNode("tone", "physicalInput"), kind: "testSignal" as const, name: "Tone", parameters: { frequencyHz: 440 } };
+    const { backend } = await fixture({ ...demoSession, name: "Tone check", nodes: [tone, pathNode("speakers", "physicalOutput", "focusrite")], edges: [pathEdge("e1", "tone", "speakers")] });
+    const prepareNativePaths = vi.fn(async (sessionId: string) => ({ sessionId, generation: 1, state: "configured-stopped" as const, pathCount: 1, sourceNodeIds: ["tone"], branchNodeIds: ["speakers"], renderEndpointIds: ["focusrite"] }));
+    const prepareNativeEndpoint = vi.fn();
+    await renderReady(<App backend={{ ...backend, prepareNativePaths, prepareNativeEndpoint }} />);
+    await screen.findByRole("heading", { name: "Tone check" });
+    start();
+    await waitFor(() => expect(backend.startSession).toHaveBeenCalledWith(demoSession.id, expect.any(String)));
+    expect(prepareNativePaths).toHaveBeenCalledWith(demoSession.id);
+    expect(prepareNativeEndpoint).not.toHaveBeenCalled();
+  });
+
   it("names the device node that still needs a device before a multi-path Play", async () => {
     const { backend } = await fixture(voiceAndGame());
     const prepareNativePaths = vi.fn();
@@ -154,7 +167,7 @@ describe("session refresh and playback regressions", () => {
     expect(messageBar().getByText(/Audio session is running/)).toBeTruthy();
   });
 
-  it("guides users to Devices without starting a simulated session when audio is unprepared", async () => {
+  it("points users to the device in Properties without starting a simulated session when audio is unprepared", async () => {
     const { backend } = await fixture();
     backend.refreshDiagnostics = vi.fn(createDisconnectedBackend().refreshDiagnostics);
     await renderReady(<App backend={backend} />);
@@ -162,8 +175,7 @@ describe("session refresh and playback regressions", () => {
     start();
     await messageBar().findByText(/No audio started. Select the speaker or headphone device/);
     expect(screen.getByRole("tab", { name: "Tools" }).getAttribute("aria-selected")).toBe("true");
-    fireEvent.click(screen.getByRole("tab", { name: "Devices" }));
-    expect(screen.getByRole("tab", { name: "Devices" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.queryByRole("tab", { name: "Devices" })).toBeNull();
     expect(backend.startSession).not.toHaveBeenCalled();
   });
 

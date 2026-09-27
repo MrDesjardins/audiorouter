@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openConnectionForm, openDeviceTroubleshooting } from "./workbench";
 
 test.beforeEach(async ({ page }) => { await page.goto("/harness.html"); await expect(page.getByLabel("Signal-flow graph")).toBeVisible(); });
 
@@ -58,7 +59,7 @@ test("a second source to a physical output gets an undoable visible mixer", asyn
   await page.locator(".tool-card").filter({ hasText: "Input device" }).first().click();
   await page.locator(".tool-card").filter({ hasText: "Test Signal" }).first().click();
   const editor = page.locator(".workbench-connection-editor");
-  await page.getByRole("tab", { name: "Setup" }).click();
+  await openConnectionForm(page);
   await editor.getByRole("combobox", { name: "Source output port" }).selectOption({ label: "Physical input 1 · out · 2ch" });
   await editor.getByRole("combobox", { name: "Destination input port" }).selectOption({ label: "Headphones · in · 2ch" });
   await editor.getByRole("button", { name: "Add connection" }).click();
@@ -188,7 +189,7 @@ test("Audio File imports WAV media through the upload contract and exposes loop 
   await expect(inspector.getByLabel("Loop")).toBeChecked();
   await page.getByRole("tab", { name: "Tools" }).click();
   await page.locator(".tool-card").filter({ hasText: "Output device" }).first().click();
-  await page.getByRole("tab", { name: "Setup" }).click();
+  await openConnectionForm(page);
   const setup = page.locator(".right-workbench");
   await setup.getByLabel("Source output port").selectOption({ label: "Audio file 1 · out · 2ch" });
   await setup.getByLabel("Destination input port").selectOption({ label: "Physical output 1 · in · 2ch" });
@@ -242,7 +243,7 @@ test("the workspace plans and commits a connected multi-input processing route",
   await page.getByRole("button", { name: "Choose an application source" }).click();
   await page.getByRole("button", { name: "Add capture source" }).click();
   await expect(page.getByTestId("rf__node-application-capture-1")).toBeVisible();
-  await page.getByRole("tab", { name: "Devices" }).click();
+  await openDeviceTroubleshooting(page);
   await page.locator(".right-workbench").getByLabel("Native render endpoint").selectOption("render-preview");
   await page.locator(".right-workbench").getByRole("button", { name: "Add loopback source to graph" }).click();
   await expect(page.getByTestId("rf__node-endpoint-loopback-1")).toBeVisible();
@@ -250,7 +251,7 @@ test("the workspace plans and commits a connected multi-input processing route",
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.locator(".global-action-message")).toContainText(/Preview planner: connect an input to an output/);
 
-  await page.getByRole("tab", { name: "Setup" }).click();
+  await openConnectionForm(page);
   const connect = async (sourcePort: string, destinationPort: string) => {
     const editor = page.locator(".workbench-connection-editor");
     await editor.getByLabel("Source output port").selectOption({ label: sourcePort });
@@ -286,7 +287,7 @@ test("a simple Test Signal to Physical Output route can be planned and committed
   };
   await addTool("Test Signal");
   await addTool("Output device");
-  await page.getByRole("tab", { name: "Setup" }).click();
+  await openConnectionForm(page);
   const setup = page.locator(".right-workbench");
   await setup.getByLabel("Source output port").selectOption({ label: "Test Signal 1 · out · 2ch" });
   await setup.getByLabel("Destination input port").selectOption({ label: "Physical output 1 · in · 2ch" });
@@ -303,14 +304,14 @@ test("an unsaved Test Signal route can be auditioned without changing the saved 
     await page.getByRole("tab", { name: "Tools" }).click();
     await page.locator(".tool-card").filter({ has: page.getByText(name, { exact: true }) }).click();
   }
-  await page.getByRole("tab", { name: "Setup" }).click();
+  await openConnectionForm(page);
   const sidebar = page.locator(".right-workbench");
   await sidebar.getByLabel("Source output port").selectOption({ label: "Test Signal 1 · out · 2ch" });
   await sidebar.getByLabel("Destination input port").selectOption({ label: "Physical output 1 · in · 2ch" });
   await sidebar.getByRole("button", { name: "Add connection", exact: true }).click();
   await page.getByRole("button", { name: "Play Test Signal", exact: true }).click();
   await expect(page.locator(".global-action-message")).toContainText(/Select the speaker or headphone device/);
-  await page.getByRole("tab", { name: "Devices" }).click();
+  await openDeviceTroubleshooting(page);
   await sidebar.getByLabel("Native capture endpoint").selectOption("capture-preview");
   await sidebar.getByLabel("Native render endpoint").selectOption("render-preview");
   await page.getByRole("button", { name: "Play Test Signal", exact: true }).click();
@@ -329,7 +330,7 @@ test("Test Signal lifecycle refreshes preserve the committed route and explain m
     await page.getByRole("tab", { name: "Tools" }).click();
     await page.locator(".tool-card").filter({ has: page.getByText(name, { exact: true }) }).click();
   }
-  await page.getByRole("tab", { name: "Setup" }).click();
+  await openConnectionForm(page);
   const sidebar = page.locator(".right-workbench");
   await sidebar.getByLabel("Source output port").selectOption({ label: "Test Signal 1 · out · 2ch" });
   await sidebar.getByLabel("Destination input port").selectOption({ label: "Physical output 1 · in · 2ch" });
@@ -342,7 +343,7 @@ test("Test Signal lifecycle refreshes preserve the committed route and explain m
   await page.getByRole("button", { name: "Play Test Signal", exact: true }).click();
   await expect(page.locator(".global-action-message")).toContainText(/Select the speaker or headphone device/);
   await expect(page.getByRole("tab", { name: "Session" })).toHaveAttribute("aria-selected", "true");
-  await page.getByRole("tab", { name: "Devices" }).click();
+  await openDeviceTroubleshooting(page);
   await page.screenshot({ path: `${process.env.TEMP}/audiorouter-designer-review/playback-setup-guidance.png`, fullPage: false });
   await sidebar.getByLabel("Native capture endpoint").selectOption("capture-preview");
   await sidebar.getByLabel("Native render endpoint").selectOption("render-preview");
@@ -376,12 +377,12 @@ test("top Play runs the canvas route without starting the Test Signal tone", asy
     await page.getByRole("tab", { name: "Tools" }).click();
     await page.locator(".tool-card").filter({ has: page.getByText(name, { exact: true }) }).click();
   }
-  await page.getByRole("tab", { name: "Setup" }).click();
+  await openConnectionForm(page);
   const sidebar = page.locator(".right-workbench");
   await sidebar.getByLabel("Source output port").selectOption({ label: "Test Signal 1 · out · 2ch" });
   await sidebar.getByLabel("Destination input port").selectOption({ label: "Physical output 1 · in · 2ch" });
   await sidebar.getByRole("button", { name: "Add connection", exact: true }).click();
-  await page.getByRole("tab", { name: "Devices" }).click();
+  await openDeviceTroubleshooting(page);
   await sidebar.getByLabel("Native capture endpoint").selectOption("capture-preview");
   await sidebar.getByLabel("Native render endpoint").selectOption("render-preview");
   await page.locator(".topbar").getByRole("button", { name: "Play", exact: true }).click();
@@ -413,7 +414,7 @@ test("device tools accept installed virtual endpoints while managed-driver tools
   await expect(tools.getByRole("button", { name: /Virtual capture sink/ })).toBeDisabled();
   await expect(tools.getByRole("button", { name: /Virtual render source/ })).toHaveAttribute("title", /Input device/);
   const setup = async (source: string, destination: string) => {
-    await page.getByRole("tab", { name: "Setup" }).click();
+    await openConnectionForm(page);
     const editor = page.locator(".workbench-connection-editor");
     await editor.getByLabel("Source output port").selectOption({ label: source });
     await editor.getByLabel("Destination input port").selectOption({ label: destination });
@@ -551,7 +552,7 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
   await expect(page.locator(".main-content > .inspector")).toBeVisible();
   await page.screenshot({ path: `${shotBase}/workspace-properties.png`, fullPage: false });
   await page.getByRole("tab", { name: "Session" }).click();
-  for (const [tab, heading] of [["Setup", "First route"], ["Devices", "Audio devices"], ["Recording", "Recording"], ["Advanced", "Advanced controls"]]) {
+  for (const [tab, heading] of [["Setup", "Set up this PC"], ["Recording", "Recording"], ["Advanced", "Advanced controls"]]) {
     await page.getByRole("tab", { name: tab }).click();
     await expect(page.getByRole("heading", { name: heading }).first()).toBeVisible();
     if (tab === "Advanced") {
@@ -559,7 +560,7 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
       await expect(page.locator(".right-workbench").getByLabel("Start or stop session shortcut")).toBeVisible();
       await page.locator(".right-workbench").getByText("Built-in processors and presets", { exact: true }).click();
       await expect(page.getByRole("heading", { name: "Built-in processors" })).toBeVisible();
-      await page.locator(".right-workbench").getByText("Session import and export", { exact: true }).click();
+      await page.locator(".right-workbench").getByText("JSON graph transfer (for scripts)", { exact: true }).click();
       await expect(page.getByRole("heading", { name: "Session transfer" })).toBeVisible();
     }
     await page.screenshot({ path: `${shotBase}/workspace-${tab.toLowerCase()}.png`, fullPage: false });

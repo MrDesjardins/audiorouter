@@ -130,14 +130,19 @@ slowest step. Timing is measured for Mixer and multi-path routes.
 
 **Backend ready** confirms the control connection. To play a route:
 
-1. In **Devices → Endpoint binding**, select exact active capture and render
-   endpoints. The current native adapter requires both even for Test Signal;
-   it never chooses a microphone automatically. Existing physical/VB-Cable
-   endpoints do not need the AudioRouter virtual driver.
+1. Select each Input Device and Output Device node and choose its device in
+   **Properties**. AudioRouter never chooses a microphone automatically.
+   Existing physical/VB-Cable endpoints do not need the AudioRouter virtual
+   driver. A Test Signal or Audio File route needs no input device: once it is
+   saved with its output chosen, Play runs it without opening any microphone.
+   (**Advanced → Troubleshooting: manual device binding** remains for device
+   diagnostics, loopback tests, and as a fallback for a route whose nodes have
+   no device.)
 2. Press **Play** in the header to activate the visible canvas route. Unsaved
-   changes are previewed without saving. Test Signal and Audio File stay
-   stopped until played on their nodes. **Save** when you want to keep the
-   route.
+   changes to a route with an input device are previewed without saving; a
+   route with several paths, or generated sound only, plays its saved version.
+   Test Signal and Audio File stay stopped until played on their nodes.
+   **Save** when you want to keep the route.
 3. Press **Play** on a Test Signal or Audio File node to start that source.
    Its **Stop** button stops only that source; header **Stop** stops the route.
    If an endpoint is unavailable or occupied, resolve that named endpoint's
@@ -464,13 +469,27 @@ to create a filter. Drag a point to set frequency and applicable gain, then
 choose Peaking, Low/High shelf, Low/High pass, or Notch and set Q precisely.
 Remove point disables that band. The backend bounds the node to sixteen bands;
 older saved `parametricEq@1` nodes use the same editor and retain their sound.
-The Session transfer panel exports the selected stopped configuration as a
-local `.audiorouter.json` file. Import first validates the file through the
+To back up a session or move it to another PC, use **Session → Session file**.
+**Save to file…** writes the saved session (every node and its settings, plus
+the imported audio and saved plugin settings it uses) to one `.audiorouter`
+file; save pending edits first. **Open file…** adds a file as a new stopped
+session and never replaces one: a session ID already present gets an
+"(imported)" copy. Plugins themselves must be installed on the other PC, and
+each Input/Output node's device should be checked there. The desktop app uses
+the Windows Save/Open dialogs.
+
+The **Setup** tab ("Set up this PC") holds app-wide items only: service and
+device status, the audio devices Windows offers, guidance for other apps, and
+start at sign-in. Connecting nodes without dragging (keyboard use) is under
+**Advanced → Connect nodes without dragging**.
+
+The **Advanced → JSON graph transfer** panel exports the selected stopped
+configuration as a local `.audiorouter.json` file for scripts. Import first validates the file through the
 backend, then requires the separate Commit stopped import action; imported
 sessions remain stopped and require endpoint rebinding/review. The transfer
 does not include credentials, grants, recordings, plugin binaries, or machine
-authorization. The UI JSON transfer is separate from the versioned
-`.audiorouter` ZIP bundle exposed by the headless `export-bundle` and
+authorization. The same versioned `.audiorouter` ZIP bundle used by Session
+file is also available headlessly through the `export-bundle` and
 `import-bundle` commands.
 If another client changes the session before commit, the UI reports the typed
 revision conflict and structured remediation, refreshes the authoritative

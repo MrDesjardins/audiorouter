@@ -249,3 +249,39 @@ sections above.
   workspace Rust tests (0 failures) all pass.
 - Artifact: `target/patrick-main-release-4/release/audiorouter-shell.exe`,
   built 12:08. It is a new folder because `release-3` is running.
+
+### 2026-09-27 — UI polish list from attended review (UI-01/04, persistence)
+
+- Report (user): node colors ignored the theme; long Input Device note;
+  network tools lacked icons; tools unsorted; "Observed runtime" unclear and
+  unpolished; Setup and Devices tabs confusing; no session file to back up or
+  move a setup; Advanced EQ status line moved the sidebar; sidebar too narrow;
+  number fields could not be retyped or take negative values.
+- Done (committed earlier today): themed node cards, shorter notes, unique
+  network icons, alphabetical tools, "Live readings" card, fixed-height
+  inspector status lines, resizable sidebar, `NumberField` for all precise
+  values. E2E: `inspector-stability.pw.ts`, `sidebar-resize.pw.ts`.
+- Session files: `sessions.exportFile` / `sessions.importFile` write/read the
+  versioned `.audiorouter` bundle, now carrying the imported audio and plugin
+  states the session references. Import never replaces a session (used IDs
+  become `-imported-N`, name "(imported)"). An existing file is replaced only
+  with `replace: true` after the Windows Save dialog confirmed it, staged
+  beside it first. The shell adds native Save/Open dialogs
+  (`src-tauri/src/session_file_dialog.rs`). Tests: storage
+  `session_file_carries_imported_audio_and_plugin_state_to_another_database`,
+  control `session_file_export_imports_on_another_database_without_replacing_sessions`,
+  E2E `session-file.pw.ts`.
+- Setup/Devices decision: Setup is "Set up this PC" (app-wide status, device
+  list, other-app guidance, start at sign-in). The Devices tab is removed;
+  its controls live in Advanced → Troubleshooting. The connection form stays
+  (keyboard access) in Advanced → Connect nodes without dragging. Play reads
+  a single route's devices from its nodes first. A generated-only route
+  (Test Signal/Audio File → Output) with no chosen input, or saved with its
+  output chosen, runs on the multi-path worker, so no input device is needed.
+- Verification: vitest 358/358 in `src` (the Playwright file
+  `e2e/audio-tools.spec.ts` that vitest also collects fails as before);
+  Playwright 88+ pass; control/storage/domain/CLI Rust tests pass; contract
+  drift and docs validation pass; three-theme screenshots reviewed.
+- Not yet verified live: a generated-only route through the multi-path worker
+  on the release shell (covered by the continuity harness `testSignal` mode
+  on that worker, but not re-run for this UI change).

@@ -718,7 +718,7 @@ describe("VB-Cable endpoint selection", () => {
     fireEvent.click(screen.getByRole("button", { name: "Prepare native endpoints" }));
     await waitFor(() => expect(prepareNativeEndpoint).toHaveBeenCalledWith("demo-session", "capture-vb", "render-focusrite"));
     expect(await screen.findByText(/selected audio device is in use by another application/i)).toBeTruthy();
-    expect(screen.getByText(/choose a different output in Devices, or release this exact device/i)).toBeTruthy();
+    expect(screen.getByText(/choose a different device in the Output Device node's Properties, or release this exact device/i)).toBeTruthy();
   });
 
   it("detaches a stopped native worker before deliberate endpoint replacement", async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ApplicationInfo, Session } from "@audiorouter/contracts";
-import { addSourceToOccupiedOutput, appendApplicationCaptureNode, applicationCaptureChoices, applicationOnlyRouteSource, independentPaths, needsNativePaths, unboundDeviceNodes, isParameterOnlyChange, pluginCatalog, STANDARD_PLUGIN_FOLDERS, mixerInputs, mixerRouteSources, pruneInactiveUpstream, mixerInputVolumeKey, mixedApplicationRouteOtherSources, rebindApplicationCaptureNode, appendDraftConnection, appendEndpointLoopbackNode, appendLibraryNode, appendPluginPlaceholderNode, appendVirtualBusNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, removeDraftNode, resetNodeDraftParameters, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
+import { addSourceToOccupiedOutput, appendApplicationCaptureNode, applicationCaptureChoices, applicationOnlyRouteSource, independentPaths, generatedOnlyRoute, needsNativePaths, unboundDeviceNodes, isParameterOnlyChange, pluginCatalog, STANDARD_PLUGIN_FOLDERS, mixerInputs, mixerRouteSources, pruneInactiveUpstream, mixerInputVolumeKey, mixedApplicationRouteOtherSources, rebindApplicationCaptureNode, appendDraftConnection, appendEndpointLoopbackNode, appendLibraryNode, appendPluginPlaceholderNode, appendVirtualBusNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, removeDraftNode, resetNodeDraftParameters, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
 import { demoSession } from "./fixtures";
 
 describe("appendLibraryNode", () => {
@@ -467,6 +467,17 @@ describe("independent paths", () => {
     expect(needsNativePaths(single)).toBe(false);
     const monitored: Session = { ...single, nodes: [...single.nodes, node("monitor", "physicalOutput")], edges: [...single.edges, edge("e5", "voice", "monitor")] };
     expect(needsNativePaths(monitored)).toBe(true);
+  });
+
+  it("recognizes generated-only routes that need no input device", () => {
+    const tone: Session = { ...twoPaths, nodes: [node("tone", "testSignal"), node("voice", "gain"), node("cable-a", "physicalOutput")], edges: [edge("e1", "tone", "voice"), edge("e2", "voice", "cable-a")] };
+    expect(generatedOnlyRoute(tone)).toBe(true);
+    const file: Session = { ...tone, nodes: [node("tone", "audioFile"), ...tone.nodes.slice(1)] };
+    expect(generatedOnlyRoute(file)).toBe(true);
+    const withMic: Session = { ...tone, nodes: [...tone.nodes, node("mic", "physicalInput"), node("mix", "mixer")], edges: [edge("e1", "tone", "mix"), edge("e3", "mic", "mix"), edge("e4", "mix", "voice"), edge("e2", "voice", "cable-a")] };
+    expect(generatedOnlyRoute(withMic)).toBe(false);
+    const noOutput: Session = { ...tone, nodes: tone.nodes.slice(0, 2), edges: tone.edges.slice(0, 1) };
+    expect(generatedOnlyRoute(noOutput)).toBe(false);
   });
 
   it("uses the multi-path worker for a route with a connected Recorder branch", () => {
