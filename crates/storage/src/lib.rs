@@ -7,7 +7,7 @@ use audiorouter_domain::{
 };
 use audiorouter_recording::RecorderCheckpoint;
 use rusqlite::{params, Connection, OptionalExtension, Transaction, TransactionBehavior};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
@@ -299,6 +299,50 @@ struct BundleManifest {
     assets: Vec<BundleAsset>,
     #[serde(rename = "requiredNodeTypes", default)]
     required_node_types: Vec<RequiredNodeType>,
+    #[serde(default)]
+    media: Vec<BundleMedia>,
+    #[serde(rename = "pluginStates", default)]
+    plugin_states: Vec<BundlePluginState>,
+}
+
+/// Imported audio carried in a session file, restored on import.
+#[derive(Debug, Serialize, Deserialize)]
+struct BundleMedia {
+    id: String,
+    #[serde(rename = "fileName")]
+    file_name: String,
+    format: String,
+    path: String,
+}
+
+/// Saved plugin state carried in a session file, restored on import.
+#[derive(Debug, Serialize, Deserialize)]
+struct BundlePluginState {
+    id: String,
+    #[serde(rename = "pluginId")]
+    plugin_id: String,
+    #[serde(rename = "pluginSha256")]
+    plugin_sha256: String,
+    version: u32,
+    #[serde(rename = "stateSha256")]
+    state_sha256: String,
+    path: String,
+}
+
+#[derive(Debug, Serialize)]
+struct ExportBundleAsset {
+    path: String,
+    sha256: String,
+    size: u64,
+}
+
+/// What a session-file import restored besides the session itself.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct BundleImportReport {
+    pub media_restored: usize,
+    pub plugin_states_restored: usize,
+    /// Assets referenced by the session that the file did not contain.
+    pub missing_assets: usize,
 }
 
 #[derive(Clone, Debug, Deserialize, serde::Serialize)]
@@ -317,9 +361,12 @@ struct ExportBundleManifest<'a> {
     created_with: &'a str,
     #[serde(rename = "graphPath")]
     graph_path: &'a str,
-    assets: Vec<String>,
+    assets: Vec<ExportBundleAsset>,
     #[serde(rename = "requiredNodeTypes")]
     required_node_types: Vec<RequiredNodeType>,
+    media: Vec<BundleMedia>,
+    #[serde(rename = "pluginStates")]
+    plugin_states: Vec<BundlePluginState>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -2394,6 +2441,56 @@ impl Storage {
             .export_session(id)?
             .ok_or_else(|| StorageError::InvalidBundle("session not found".into()))?;
         let exported_session: Session = serde_json::from_str(&document)?;
+        // Carry what the nodes reference so the file restores the session on
+        // another computer: imported audio (Audio File, FIR Filter) and saved
+        // plugin states. A missing asset is left out; the import reports it.
+        let mut files: Vec<(String, Vec<u8>)> = Vec::new();
+        let mut media = Vec::new();
+        let mut plugin_states = Vec::new();
+        let safe_id = |id: &str| {
+            !id.is_empty()
+                && id.len() <= audiorouter_domain::MAX_ENTITY_ID_BYTES
+                && id.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+                && !id.starts_with('.')
+        };
+        let state_records = self.list_plugin_states(None)?;
+        for node in &exported_session.nodes {
+            if let Some(id) = node.parameters.get("mediaId").and_then(|value| value.as_str()) {
+                if safe_id(id) && !media.iter().any(|entry: &BundleMedia| entry.id == id) {
+                    if let Some((file_name, format, bytes)) = self.load_audio_media(id)? {
+                        let path = format!("media/{id}");
+                        files.push((path.clone(), bytes));
+                        media.push(BundleMedia { id: id.into(), file_name, format, path });
+                    }
+                }
+            }
+            if let Some(id) = node.parameters.get("stateId").and_then(|value| value.as_str()) {
+                if safe_id(id) && !plugin_states.iter().any(|entry: &BundlePluginState| entry.id == id) {
+                    if let Some(record) = state_records.iter().find(|record| record.id == id) {
+                        if let Ok(bytes) = std::fs::read(&record.path) {
+                            let path = format!("plugin-states/{id}.bin");
+                            files.push((path.clone(), bytes));
+                            plugin_states.push(BundlePluginState {
+                                id: id.into(),
+                                plugin_id: record.plugin_id.clone(),
+                                plugin_sha256: record.plugin_sha256.clone(),
+                                version: record.version,
+                                state_sha256: record.state_sha256.clone(),
+                                path,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        let assets = files
+            .iter()
+            .map(|(path, bytes)| ExportBundleAsset {
+                path: path.clone(),
+                sha256: format!("{:x}", Sha256::digest(bytes)),
+                size: bytes.len() as u64,
+            })
+            .collect();
         let file = std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -2404,7 +2501,9 @@ impl Storage {
             schema_version: 1,
             created_with: "0.1.0",
             graph_path: "session.json",
-            assets: Vec::new(),
+            assets,
+            media,
+            plugin_states,
             required_node_types: node_registry()
                 .iter()
                 .filter(|spec| {
@@ -2428,6 +2527,12 @@ impl Storage {
                 .start_file("session.json", zip::write::SimpleFileOptions::default())
                 .map_err(|error| StorageError::InvalidBundle(error.to_string()))?;
             archive.write_all(document.as_bytes())?;
+            for (path, bytes) in &files {
+                archive
+                    .start_file(path.as_str(), zip::write::SimpleFileOptions::default())
+                    .map_err(|error| StorageError::InvalidBundle(error.to_string()))?;
+                archive.write_all(bytes)?;
+            }
             archive
                 .finish()
                 .map_err(|error| StorageError::InvalidBundle(error.to_string()))?;
@@ -2520,6 +2625,145 @@ impl Storage {
         result
     }
 
+    /// Read a session file (`.audiorouter` bundle) for import: stage and
+    /// verify it like `import_bundle`, restore the imported audio and plugin
+    /// states it carries (existing ones with the same ID are kept), and return
+    /// the validated session *without saving it*. The caller chooses a free
+    /// session ID and persists it. The staging copy is removed afterwards.
+    pub fn read_session_bundle(
+        &self,
+        bundle: impl AsRef<std::path::Path>,
+        staging_root: impl AsRef<std::path::Path>,
+    ) -> Result<(Session, BundleImportReport), StorageError> {
+        let bundle = bundle.as_ref();
+        let staging_root = staging_root.as_ref();
+        if !bundle.is_absolute() || !staging_root.is_absolute() {
+            return Err(StorageError::InvalidBundle(
+                "bundle and staging paths must be absolute".into(),
+            ));
+        }
+        if !bundle.is_file()
+            || is_reparse_point(&std::fs::symlink_metadata(bundle)?)
+            || path_has_reparse_ancestor(bundle)
+        {
+            return Err(StorageError::InvalidBundle(
+                "bundle must be a regular non-symlink file".into(),
+            ));
+        }
+        std::fs::create_dir_all(staging_root)?;
+        if is_reparse_point(&std::fs::symlink_metadata(staging_root)?)
+            || path_has_reparse_ancestor(staging_root)
+        {
+            return Err(StorageError::InvalidBundle(
+                "staging root must be a non-symlink directory".into(),
+            ));
+        }
+        let compressed = std::fs::metadata(bundle)?.len();
+        if compressed > MAX_BUNDLE_COMPRESSED_BYTES {
+            return Err(StorageError::DocumentTooLarge {
+                bytes: compressed as usize,
+                maximum: MAX_BUNDLE_COMPRESSED_BYTES as usize,
+            });
+        }
+        let mut archive = ZipArchive::new(File::open(bundle)?)
+            .map_err(|error| StorageError::InvalidBundle(format!("invalid ZIP: {error}")))?;
+        if archive.len() > MAX_BUNDLE_ENTRIES {
+            return Err(StorageError::InvalidBundle("too many bundle entries".into()));
+        }
+        let staging = staging_root.join(format!(
+            "audiorouter-import-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|error| StorageError::InvalidBundle(error.to_string()))?
+                .as_nanos()
+        ));
+        std::fs::create_dir(&staging)?;
+        let result = (|| -> Result<(Session, BundleImportReport), StorageError> {
+            let manifest = Self::stage_bundle(&mut archive, &staging)?;
+            let graph = std::fs::read_to_string(staging.join(&manifest.graph_path))?;
+            if graph.len() > MAX_SESSION_DOCUMENT_BYTES {
+                return Err(StorageError::DocumentTooLarge {
+                    bytes: graph.len(),
+                    maximum: MAX_SESSION_DOCUMENT_BYTES,
+                });
+            }
+            let session: Session = serde_json::from_str(&graph)?;
+            validate_session(&session)
+                .map_err(|errors| StorageError::InvalidSession(format_validation_errors(&errors)))?;
+            let listed = |path: &str| manifest.assets.iter().any(|asset| asset.path() == path);
+            let mut report = BundleImportReport::default();
+            for media in &manifest.media {
+                if !listed(&media.path) {
+                    return Err(StorageError::InvalidBundle(format!("unlisted media: {}", media.path)));
+                }
+                if self.load_audio_media(&media.id)?.is_none() {
+                    let bytes = std::fs::read(staging.join(&media.path))?;
+                    self.store_audio_media(&media.id, &media.file_name, &media.format, &bytes, None)?;
+                    report.media_restored += 1;
+                }
+            }
+            let existing_states = self.list_plugin_states(None)?;
+            for state in &manifest.plugin_states {
+                if !listed(&state.path) {
+                    return Err(StorageError::InvalidBundle(format!("unlisted plugin state: {}", state.path)));
+                }
+                if existing_states.iter().any(|record| record.id == state.id) {
+                    continue;
+                }
+                let Some(directory) = self.plugin_state_directory() else {
+                    report.missing_assets += 1;
+                    continue;
+                };
+                let bytes = std::fs::read(staging.join(&state.path))?;
+                let safe_name = !state.id.starts_with('.')
+                    && state
+                        .id
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
+                let destination = directory.join(format!("{}.bin", state.id));
+                if !safe_name || !destination.starts_with(&directory) {
+                    return Err(StorageError::InvalidBundle("plugin state escapes its directory".into()));
+                }
+                {
+                    use std::io::Write;
+                    let mut file = std::fs::OpenOptions::new()
+                        .write(true)
+                        .create_new(true)
+                        .open(&destination)?;
+                    file.write_all(&bytes)?;
+                }
+                self.save_plugin_state(&PluginStateRecord {
+                    id: state.id.clone(),
+                    plugin_id: state.plugin_id.clone(),
+                    plugin_sha256: state.plugin_sha256.clone(),
+                    version: state.version,
+                    path: destination.to_string_lossy().into_owned(),
+                    state_sha256: state.state_sha256.clone(),
+                    size_bytes: bytes.len() as u64,
+                })?;
+                report.plugin_states_restored += 1;
+            }
+            let referenced = session
+                .nodes
+                .iter()
+                .filter(|node| {
+                    node.parameters.get("mediaId").and_then(|value| value.as_str()).is_some_and(|id| {
+                        !manifest.media.iter().any(|media| media.id == id)
+                            && self.load_audio_media(id).ok().flatten().is_none()
+                    }) || node.parameters.get("stateId").and_then(|value| value.as_str()).is_some_and(|id| {
+                        !manifest.plugin_states.iter().any(|state| state.id == id)
+                            && !existing_states.iter().any(|record| record.id == id)
+                    })
+                })
+                .count();
+            report.missing_assets += referenced;
+            Ok((session, report))
+        })();
+        let _ = std::fs::remove_dir_all(&staging);
+        result
+    }
+
     fn stage_bundle(
         archive: &mut ZipArchive<File>,
         staging: &std::path::Path,
@@ -2569,6 +2813,8 @@ impl Storage {
             let declared_size = entry.size();
             let entry_limit = if name == "manifest.json" {
                 MAX_SESSION_DOCUMENT_BYTES as u64
+            } else if name.starts_with("media/") {
+                MAX_AUDIO_MEDIA_BYTES as u64
             } else {
                 MAX_BUNDLE_ASSET_BYTES
             };
@@ -5016,6 +5262,78 @@ mod tests {
         assert_eq!(std::fs::read_dir(&staging).unwrap().count(), 0);
         let _ = std::fs::remove_file(bundle);
         let _ = std::fs::remove_dir_all(staging);
+    }
+
+    #[test]
+    fn session_file_carries_imported_audio_and_plugin_state_to_another_database() {
+        let root = std::env::temp_dir().join(format!("audiorouter-session-file-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (source_dir, target_dir) = (root.join("source"), root.join("target"));
+        std::fs::create_dir_all(&source_dir).unwrap();
+        std::fs::create_dir_all(&target_dir).unwrap();
+        let source = Storage::open(source_dir.join("audiorouter.db")).unwrap();
+        let mut original = session();
+        original.nodes[0].kind = NodeKind::AudioFile;
+        original.nodes[0]
+            .parameters
+            .insert("mediaId".into(), Value::String("media-1".into()));
+        original.nodes.push(Node {
+            id: EntityId::new("fx"),
+            kind: NodeKind::Plugin,
+            type_version: 1,
+            name: "ReaFIR".into(),
+            enabled: true,
+            bypass: false,
+            parameters: [
+                ("stateId".to_string(), Value::String("state-1".into())),
+                ("format".to_string(), Value::String("vst2".into())),
+                ("path".to_string(), Value::String("C:\\Plugins\\reafir.dll".into())),
+            ]
+            .into_iter()
+            .collect(),
+            ports: vec![],
+        });
+        source.save_session(&original).unwrap();
+        source
+            .store_audio_media("media-1", "voice.wav", "wav", b"RIFF-voice", None)
+            .unwrap();
+        let state_bytes = b"plugin-chunk".to_vec();
+        let state_path = source.plugin_state_directory().unwrap().join("state-1.bin");
+        std::fs::write(&state_path, &state_bytes).unwrap();
+        source
+            .save_plugin_state(&PluginStateRecord {
+                id: "state-1".into(),
+                plugin_id: "vst2-reafir".into(),
+                plugin_sha256: "a".repeat(64),
+                version: 1,
+                path: state_path.to_string_lossy().into_owned(),
+                state_sha256: format!("{:x}", Sha256::digest(&state_bytes)),
+                size_bytes: state_bytes.len() as u64,
+            })
+            .unwrap();
+        let bundle = root.join("my-setup.audiorouter");
+        source.export_bundle(&original.id, &bundle).unwrap();
+
+        let target = Storage::open(target_dir.join("audiorouter.db")).unwrap();
+        let (imported, report) = target.read_session_bundle(&bundle, root.join("staging")).unwrap();
+        assert_eq!(imported, original);
+        assert_eq!(
+            report,
+            BundleImportReport { media_restored: 1, plugin_states_restored: 1, missing_assets: 0 }
+        );
+        assert_eq!(
+            target.load_audio_media("media-1").unwrap(),
+            Some(("voice.wav".into(), "wav".into(), b"RIFF-voice".to_vec()))
+        );
+        let restored = target.list_plugin_states(None).unwrap();
+        assert_eq!(restored.len(), 1);
+        assert_eq!(std::fs::read(&restored[0].path).unwrap(), state_bytes);
+        assert!(restored[0].path.starts_with(&*target_dir.to_string_lossy()));
+        // A second import keeps what is already there and still returns the session.
+        let (_, again) = target.read_session_bundle(&bundle, root.join("staging")).unwrap();
+        assert_eq!(again, BundleImportReport::default());
+        drop((source, target));
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

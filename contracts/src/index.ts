@@ -802,6 +802,24 @@ export interface SessionCreateResult {
   state: "stopped";
 }
 
+/** A saved session written to a portable `.audiorouter` file. */
+export interface SessionFileExportResult {
+  sessionId: EntityId;
+  path: string;
+  revision: number;
+  bytes: number;
+}
+
+/** A `.audiorouter` file imported as a new stopped session. */
+export interface SessionFileImportResult extends SessionCreateResult {
+  /** The file's session ID was already used here, so it got a new one. */
+  renamed: boolean;
+  mediaRestored: number;
+  pluginStatesRestored: number;
+  /** Imported audio or plugin states the session refers to but the file lacked. */
+  missingAssets: number;
+}
+
 export interface SessionDeleteResult {
   sessionId: EntityId;
   deleted: true;
@@ -1143,6 +1161,8 @@ export type ImplementedMethod =
   | "processors.response"
   | "sessions.get"
   | "sessions.export"
+  | "sessions.exportFile"
+  | "sessions.importFile"
   | "sessions.importPlan"
   | "sessions.importCommit"
   | "sessions.list"
@@ -1279,6 +1299,8 @@ export type MethodParams = {
   };
   "sessions.get": { sessionId: EntityId };
   "sessions.export": { sessionId: EntityId };
+  "sessions.exportFile": { sessionId: EntityId; path: string; replace?: boolean };
+  "sessions.importFile": { path: string };
   "sessions.importPlan": { session: Session };
   "sessions.importCommit": { planId: EntityId; idempotencyKey: string };
   "sessions.list": { cursor?: string; limit?: number } | undefined;
@@ -1395,6 +1417,8 @@ export type MethodResult = {
   "processors.response": { frequenciesHz: number[]; magnitudeDb: number[] };
   "sessions.get": Session;
   "sessions.export": Session;
+  "sessions.exportFile": SessionFileExportResult;
+  "sessions.importFile": SessionFileImportResult;
   "sessions.importPlan": { planId: EntityId; expiresInMs: number; session: Session };
   "sessions.importCommit": { session: Session; state: "stopped"; imported: true };
   "sessions.list": SessionListPage;

@@ -2285,6 +2285,8 @@ fn method_description(name: &str) -> &'static str {
         "processors.response" => "Evaluate a bounded parametric-EQ magnitude response using the DSP coefficient path.",
         "sessions.get" => "Return one session resource by opaque identifier.",
         "sessions.export" => "Export one persisted canonical session document without changing state.",
+        "sessions.exportFile" => "Write the saved session, with its imported audio and plugin states, to a new .audiorouter file.",
+        "sessions.importFile" => "Import a .audiorouter session file as a new stopped session.",
         "sessions.importPlan" => "Validate a stopped session import without persisting it.",
         "sessions.importCommit" => "Commit a previously validated stopped session import.",
         "sessions.list" => "List session resources with stable cursor pagination.",
@@ -2796,6 +2798,18 @@ fn method_input_schema(name: &str) -> Value {
             json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } }),
             &["sessionId"],
         ),
+        "sessions.exportFile" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "path": { "type": "string", "minLength": 1, "maxLength": 1024 },
+                "replace": { "type": "boolean" }
+            }),
+            &["sessionId", "path"],
+        ),
+        "sessions.importFile" => object_schema(
+            json!({ "path": { "type": "string", "minLength": 1, "maxLength": 1024 } }),
+            &["path"],
+        ),
         "sessions.importPlan" => {
             object_schema(json!({ "session": session_item_schema() }), &["session"])
         }
@@ -3230,6 +3244,30 @@ fn method_output_schema(name: &str) -> Value {
             })
         }
         "sessions.get" | "sessions.export" => session_item_schema(),
+        "sessions.exportFile" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string" },
+                "path": { "type": "string" },
+                "revision": { "type": "integer", "minimum": 0 },
+                "bytes": { "type": "integer", "minimum": 0 }
+            },
+            "required": ["sessionId", "path", "revision", "bytes"],
+            "additionalProperties": false
+        }),
+        "sessions.importFile" => json!({
+            "type": "object",
+            "properties": {
+                "session": session_item_schema(),
+                "state": { "const": "stopped" },
+                "renamed": { "type": "boolean" },
+                "mediaRestored": { "type": "integer", "minimum": 0 },
+                "pluginStatesRestored": { "type": "integer", "minimum": 0 },
+                "missingAssets": { "type": "integer", "minimum": 0 }
+            },
+            "required": ["session", "state", "renamed", "mediaRestored", "pluginStatesRestored", "missingAssets"],
+            "additionalProperties": false
+        }),
         "sessions.importPlan" => json!({
             "type": "object",
             "properties": {
@@ -13862,6 +13900,8 @@ impl ControlPlane {
                     "processors.response" => self.dispatch_processors_response(request.params),
                     "sessions.get" => self.dispatch_session_get(request.params),
                     "sessions.export" => self.dispatch_session_export(request.params),
+                    "sessions.exportFile" => self.dispatch_session_export_file(request.params),
+                    "sessions.importFile" => self.dispatch_session_import_file(request.params),
                     "sessions.importPlan" => self.dispatch_session_import_plan(request.params),
                     "sessions.importCommit" => self.dispatch_session_import_commit(request.params),
                     "sessions.list" => self.dispatch_sessions_list(request.params),
@@ -14272,6 +14312,97 @@ impl ControlPlane {
         self.ensure_session_loaded(&id)?;
         serde_json::to_value(self.get_session(&id)?)
             .map_err(|error| ControlError::Json(error.to_string()))
+    }
+
+    /// Write the saved session, with the imported audio and plugin states it
+    /// references, to one `.audiorouter` file (never overwriting).
+    fn dispatch_session_export_file(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let id = session_id_from_params(params.clone())?;
+        let path = session_file_path(params.as_ref())?;
+        self.ensure_session_loaded(&id)?;
+        let revision = self.get_session(&id)?.revision;
+        let replace = params
+            .as_ref()
+            .and_then(|params| params.get("replace"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let existing = std::fs::symlink_metadata(&path).ok();
+        if let Some(metadata) = &existing {
+            if !replace {
+                return Err(ControlError::InvalidRequest(
+                    "a file with that name already exists; choose another name".into(),
+                ));
+            }
+            if !metadata.is_file() {
+                return Err(ControlError::InvalidRequest(
+                    "only an existing regular .audiorouter file can be replaced".into(),
+                ));
+            }
+        }
+        let storage = self
+            .storage
+            .as_ref()
+            .ok_or_else(|| ControlError::InvalidRequest("session storage is unavailable".into()))?;
+        if existing.is_some() {
+            // Write beside the file first so a failed export keeps the old one.
+            let staged = path.with_extension(format!("audiorouter.{}.tmp", std::process::id()));
+            let _ = std::fs::remove_file(&staged);
+            storage.export_bundle(&id, &staged).map_err(storage_error)?;
+            std::fs::rename(&staged, &path).map_err(|error| {
+                let _ = std::fs::remove_file(&staged);
+                ControlError::InvalidRequest(format!("unable to replace the session file: {error}"))
+            })?;
+        } else {
+            storage.export_bundle(&id, &path).map_err(storage_error)?;
+        }
+        let bytes = std::fs::metadata(&path).map(|meta| meta.len()).unwrap_or(0);
+        Ok(json!({ "sessionId": id, "path": path.to_string_lossy(), "revision": revision, "bytes": bytes }))
+    }
+
+    /// Read a `.audiorouter` file into a new stopped session. A session ID
+    /// already used here gets a fresh ID and an "(imported)" name, so an
+    /// import never replaces an existing session.
+    fn dispatch_session_import_file(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let path = session_file_path(params.as_ref())?;
+        if !path.is_file() {
+            return Err(ControlError::InvalidRequest("the session file does not exist".into()));
+        }
+        let staging = std::env::temp_dir().join("audiorouter-session-import");
+        let (mut session, report) = self
+            .storage
+            .as_ref()
+            .ok_or_else(|| ControlError::InvalidRequest("session storage is unavailable".into()))?
+            .read_session_bundle(&path, &staging)
+            .map_err(storage_error)?;
+        let mut renamed = false;
+        let taken = |plane: &mut Self, id: &EntityId| {
+            let _ = plane.ensure_session_loaded(id);
+            plane.store.session(id).is_some()
+        };
+        if taken(self, &session.id) {
+            renamed = true;
+            let base: String = session.id.as_str().chars().take(40).collect();
+            let mut suffix = 1u32;
+            let fresh = loop {
+                let candidate = EntityId::new(format!("{base}-imported-{suffix}"));
+                if !taken(self, &candidate) {
+                    break candidate;
+                }
+                suffix += 1;
+                if suffix > 999 {
+                    return Err(ControlError::InvalidRequest("too many imported copies of this session".into()));
+                }
+            };
+            session.id = fresh;
+            session.name = format!("{} (imported)", session.name);
+        }
+        session.revision = 0;
+        let mut result = self.create_session(session)?;
+        result["renamed"] = json!(renamed);
+        result["mediaRestored"] = json!(report.media_restored);
+        result["pluginStatesRestored"] = json!(report.plugin_states_restored);
+        result["missingAssets"] = json!(report.missing_assets);
+        Ok(result)
     }
 
     fn dispatch_session_import_plan(
@@ -18617,6 +18748,26 @@ fn session_id_from_params(params: Option<Value>) -> Result<EntityId, ControlErro
     .map_err(|_| ControlError::InvalidRequest("invalid sessionId".into()))
 }
 
+/// An absolute path to a `.audiorouter` session file.
+fn session_file_path(params: Option<&Value>) -> Result<std::path::PathBuf, ControlError> {
+    let path = params
+        .and_then(|params| params.get("path"))
+        .and_then(Value::as_str)
+        .filter(|path| !path.is_empty() && path.len() <= 1024 && !path.chars().any(char::is_control))
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| ControlError::InvalidRequest("path is required".into()))?;
+    let extension_ok = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("audiorouter"));
+    if !path.is_absolute() || !extension_ok {
+        return Err(ControlError::InvalidRequest(
+            "path must be an absolute path to a .audiorouter file".into(),
+        ));
+    }
+    Ok(path)
+}
+
 fn virtual_bus_operation_from_value(value: &Value) -> Result<VirtualBusOperation, ControlError> {
     let action = value
         .get("action")
@@ -18745,6 +18896,8 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
     };
     let allowed: &[&str] = match method {
         "sessions.get" | "sessions.export" => &["sessionId"],
+        "sessions.exportFile" => &["sessionId", "path", "replace"],
+        "sessions.importFile" => &["path"],
         "sessions.importPlan" => &["session"],
         "sessions.importCommit" => &["planId", "idempotencyKey"],
         "sessions.delete" => &["sessionId", "idempotencyKey"],
@@ -19715,6 +19868,49 @@ mod tests {
         });
         assert!(overflow.error.is_some());
         assert!(overflow.error.unwrap().message.contains("LimitReached"));
+    }
+
+    #[test]
+    fn session_file_export_imports_on_another_database_without_replacing_sessions() {
+        let root = std::env::temp_dir().join(format!("audiorouter-session-rpc-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("a")).unwrap();
+        std::fs::create_dir_all(root.join("b")).unwrap();
+        let call = |plane: &mut ControlPlane, method: &str, params: Value| {
+            plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: method.into(),
+                params: Some(params),
+            })
+        };
+        let file = root.join("setup.audiorouter");
+        let mut source = ControlPlane::with_storage("export", Storage::open(root.join("a/db.sqlite")).unwrap());
+        source.create_session(session()).unwrap();
+        let exported = call(&mut source, "sessions.exportFile", json!({ "sessionId": "session", "path": file }));
+        assert_eq!(exported.result.unwrap()["sessionId"], "session");
+        let refused = call(&mut source, "sessions.exportFile", json!({ "sessionId": "session", "path": file }));
+        assert!(refused.error.unwrap().message.contains("already exists"), "never overwrites unasked");
+        let before = std::fs::metadata(&file).unwrap().len();
+        let replaced = call(&mut source, "sessions.exportFile", json!({ "sessionId": "session", "path": file, "replace": true }));
+        assert!(replaced.error.is_none(), "{:?}", replaced.error);
+        assert_eq!(std::fs::metadata(&file).unwrap().len(), before);
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 3, "no staged file left behind");
+        assert!(call(&mut source, "sessions.exportFile", json!({ "sessionId": "session", "path": root.join("a"), "replace": true })).error.is_some());
+        assert!(call(&mut source, "sessions.exportFile", json!({ "sessionId": "session", "path": root.join("x.txt") })).error.is_some());
+        assert!(call(&mut source, "sessions.exportFile", json!({ "sessionId": "session", "path": "relative.audiorouter" })).error.is_some());
+
+        let mut target = ControlPlane::with_storage("import", Storage::open(root.join("b/db.sqlite")).unwrap());
+        let first = call(&mut target, "sessions.importFile", json!({ "path": file })).result.unwrap();
+        assert_eq!(first["session"]["id"], "session");
+        assert_eq!(first["renamed"], false);
+        let second = call(&mut target, "sessions.importFile", json!({ "path": file })).result.unwrap();
+        assert_eq!(second["session"]["id"], "session-imported-1");
+        assert_eq!(second["session"]["name"], "test (imported)");
+        assert_eq!(second["renamed"], true);
+        assert_eq!(second["session"]["nodes"], first["session"]["nodes"]);
+        drop((source, target));
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

@@ -741,7 +741,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 98] = [
+pub const API_METHODS: [ApiMethodSpec; 100] = [
     ApiMethodSpec {
         name: "system.describe",
         permission: PermissionScope::Read,
@@ -1171,6 +1171,16 @@ pub const API_METHODS: [ApiMethodSpec; 98] = [
         name: "sessions.export",
         permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "sessions.exportFile",
+        permission: PermissionScope::GraphWrite,
+        side_effect: SideEffectClass::ExternalOperation,
+    },
+    ApiMethodSpec {
+        name: "sessions.importFile",
+        permission: PermissionScope::GraphWrite,
+        side_effect: SideEffectClass::Mutating,
     },
     ApiMethodSpec {
         name: "sessions.importPlan",

@@ -231,6 +231,12 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
 .diagnostic-list li { overflow-wrap: anywhere; }
 .session-action-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; margin: .75rem 0; }
 .session-action-grid button { min-height: 2.45rem; }
+.session-file { display: grid; gap: .5rem; margin-top: 1rem; padding-top: .9rem; border-top: 1px solid var(--ambient-edge); min-width: 0; }
+.session-file h3 { margin: 0; }
+.session-file p { margin: 0; overflow-wrap: anywhere; }
+.session-file label { display: grid; gap: .3rem; }
+.session-file-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; }
+.session-file-actions button { min-height: 2.45rem; }
 .session-name input, .node-binding-editor input:not([type="checkbox"]), .node-binding-editor select, .inspector input:not([type="checkbox"]), .inspector select, .connection-editor select { min-height: 2.45rem; border: 1px solid var(--ambient-edge); border-radius: 9px; box-shadow: none; background: var(--ambient-surface-hi); color: var(--text-strong); padding: .5rem .7rem; }
 .native-endpoint-panel { display: grid; gap: .7rem; min-width: 0; }
 .native-endpoint-panel .native-audio-steps { display: none; }

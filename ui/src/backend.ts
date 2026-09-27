@@ -43,6 +43,8 @@ import type {
   SessionStopResult,
   SessionImportPlanResult,
   SessionImportCommitResult,
+  SessionFileExportResult,
+  SessionFileImportResult,
   StartupStatus,
   StartupPlanResult,
   StartupApplyResult,
@@ -192,6 +194,8 @@ export interface UiBackend {
   startSession(sessionId: string, idempotencyKey?: string, candidate?: Session): Promise<SessionStartResult>;
   stopSession(sessionId: string, idempotencyKey?: string): Promise<SessionStopResult>;
   exportSession(sessionId: string): Promise<Session>;
+  exportSessionFile(sessionId: string, path: string, replace?: boolean): Promise<SessionFileExportResult>;
+  importSessionFile(path: string): Promise<SessionFileImportResult>;
   planSessionImport(session: Session): Promise<SessionImportPlanResult>;
   commitSessionImport(planId: string, idempotencyKey: string): Promise<SessionImportCommitResult>;
   getStartup(): Promise<StartupStatus>;
@@ -456,6 +460,12 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     },
     async exportSession() {
       throw new Error("The backend is disconnected; session export is unavailable.");
+    },
+    async exportSessionFile() {
+      throw new Error("The backend is disconnected; saving a session file is unavailable.");
+    },
+    async importSessionFile() {
+      throw new Error("The backend is disconnected; opening a session file is unavailable.");
     },
     async planSessionImport() {
       throw new Error("The backend is disconnected; session import is unavailable.");
@@ -806,6 +816,12 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
     },
     async exportSession(exportSessionId) {
       return client.request("sessions.export", { sessionId: exportSessionId });
+    },
+    async exportSessionFile(exportSessionId, path, replace) {
+      return client.request("sessions.exportFile", { sessionId: exportSessionId, path, ...(replace ? { replace: true } : {}) });
+    },
+    async importSessionFile(path) {
+      return client.request("sessions.importFile", { path });
     },
     async planSessionImport(session) {
       return client.request("sessions.importPlan", { session });

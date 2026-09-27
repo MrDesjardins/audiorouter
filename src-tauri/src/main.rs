@@ -18,6 +18,8 @@ mod backend_supervisor;
 mod os_transition_windows;
 #[cfg(windows)]
 mod plugin_editor_windows;
+#[cfg(windows)]
+mod session_file_dialog;
 mod startup;
 
 use backend_supervisor::{BackendRestartDecision, BackendSupervisor};
@@ -294,6 +296,35 @@ fn open_plugin_editor(
     {
         let _ = (session_id, node_id, title, state);
         Err("plugin editors are only available on Windows".into())
+    }
+}
+
+/// Show the native Save (`mode == "save"`) or Open dialog for a
+/// `.audiorouter` session file and return the chosen path, or `None` when
+/// cancelled. The backend reads and writes the file itself.
+#[tauri::command]
+async fn choose_session_file(
+    window: tauri::WebviewWindow,
+    mode: String,
+    suggested_name: Option<String>,
+) -> Result<Option<String>, String> {
+    #[cfg(windows)]
+    {
+        let owner = window.hwnd().map(|hwnd| hwnd.0 as isize).unwrap_or(0);
+        let suggested: String = suggested_name
+            .unwrap_or_default()
+            .chars()
+            .filter(|c| !matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') && !c.is_control())
+            .take(120)
+            .collect();
+        let suggested = if suggested.trim().is_empty() { "AudioRouter session".to_owned() } else { suggested };
+        session_file_dialog::choose(mode == "save", &format!("{suggested}.audiorouter"), owner)
+            .map(|path| path.map(|path| path.to_string_lossy().into_owned()))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (window, mode, suggested_name);
+        Err("session file dialogs are only available on Windows".into())
     }
 }
 
@@ -973,6 +1004,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             rpc_request,
             open_plugin_editor,
+            choose_session_file,
             session_id,
             mcp_activity_list,
             backend_diagnostics_list,
