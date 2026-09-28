@@ -4,13 +4,13 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { createDisconnectedBackend, type UiBackend } from "./backend";
 import { demoSession } from "./fixtures";
-import type { Session } from "@audiorouter/contracts";
+import type { Session, DiscoveryDocument } from "@audiorouter/contracts";
 import "./styles.css";
 
 let planned: Session | null = null;
 // Test hooks: a Playwright init script may inject a session, the backend
 // telemetry recorded from a real run, and start the fixture already playing.
-const injected = globalThis as { __routeFixtureSession?: Session; __routeFixtureTelemetry?: unknown[]; __routeFixtureRunning?: boolean };
+const injected = globalThis as { __routeFixtureSession?: Session; __routeFixtureTelemetry?: unknown[]; __routeFixtureRunning?: boolean; __routeFixtureProcessors?: DiscoveryDocument["processors"] };
 let committed = structuredClone(injected.__routeFixtureSession ?? demoSession);
 let previewCandidate: Session | null = null;
 let running = injected.__routeFixtureRunning === true;
@@ -73,6 +73,7 @@ function graphValidationError(session: Session): string | null {
 const previewBackend: UiBackend = {
   ...fixtureBackend,
   connected: true,
+  async listProcessors() { return injected.__routeFixtureProcessors ?? fixtureBackend.listProcessors(); },
   async snapshot() {
     return structuredClone({ ...initial, session: committed, diagnostics: diagnostics(), status: { ...initial.status, activeSessionIds: running ? [committed.id] : [], reason: "Browser fixture: simulated audio; no devices are opened." } });
   },

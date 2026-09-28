@@ -7,6 +7,7 @@ import { createDisconnectedBackend, formatUiError, isRevisionConflict, SnapshotC
 import type { DeviceListItem } from "@audiorouter/contracts";
 import { addSourceToOccupiedOutput, appendApplicationCaptureNode, applicationCaptureChoices, applicationChoiceKey, applicationOnlyRouteSource, generatedOnlyRoute, needsNativePaths, unboundDeviceNodes, isParameterOnlyChange, pluginCatalog, STANDARD_PLUGIN_FOLDERS, mixedApplicationRouteOtherSources, mixerInputs, mixerRouteSources, mixerInputVolumeKey, rebindApplicationCaptureNode, appendDraftConnection, appendEndpointLoopbackNode, appendEqPresetNode, appendLibraryNode, appendPluginPlaceholderNode, appendVirtualBusNode, appendVoiceChainPreset, applyGraphDraft, duplicateDraftNode, insertDraftMixer, insertDraftPluginProcessor, insertDraftProcessor, removeDraftConnection, removeDraftNode, removeSinglePathDraftMixer, resetNodeDraftParameters, setDraftConnectionEnabled, setNodeDraftFlag, setNodeDraftName, setNodeDraftParameter, setSessionDraftName, type EqPresetId, type InsertableProcessorKind, type LibraryNodeKind, type VoiceChainPresetId } from "./draft";
 import { actionMessageTone } from "./actionMessage";
+import { unfedRouteNodes } from "./draft";
 import { audioUploadProblem, uploadAudioMedia } from "./audioUpload";
 import { demoSession, demoSessions } from "./fixtures";
 import { recordDraft, redoDraft as redoDraftHistory, undoDraft as undoDraftHistory, type DraftHistory } from "./history";
@@ -504,7 +505,7 @@ function EqResponsePreview({ node, backend }: { node: Node; backend: UiBackend }
       const legacy = index === 0;
       return {
         enabled: typeof node.parameters[`${prefix}Enabled`] === "boolean" ? node.parameters[`${prefix}Enabled`] as boolean : legacy && node.parameters.frequencyHz !== undefined,
-        type: (node.parameters[`${prefix}Type`] ?? "peaking") as "peaking" | "lowShelf" | "highShelf" | "lowPass" | "highPass" | "notch",
+        type: (node.parameters[`${prefix}Type`] ?? "peaking") as "peaking" | "lowShelf" | "highShelf" | "lowPass" | "highPass" | "bandPass" | "allPass" | "notch",
         frequencyHz: Number(node.parameters[`${prefix}FrequencyHz`] ?? (legacy ? node.parameters.frequencyHz : 1000)),
         q: Number(node.parameters[`${prefix}Q`] ?? (legacy ? node.parameters.q : 1)),
         gainDb: Number(node.parameters[`${prefix}GainDb`] ?? (legacy ? node.parameters.gainDb : 0)),
@@ -1559,11 +1560,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     authoritativeSession.current = session;
     setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null); setPendingGraphPlan(null);
     if (transition === "conflict") {
+      setDraftHistory({ past: [], future: [] });
       recordUiDiagnostic(`Graph refresh conflict: kept draft revision ${draftRef.current.revision}; backend revision ${session.revision}`);
       setActionMessage("This session changed elsewhere. Your draft is preserved. In Session, discard the draft to load the saved graph, or copy your edits before resolving the revision conflict.");
       return;
     }
-    setDraft(session); setDraftHistory({ past: [], future: [] });
+    setDraft(session); setDraftHistory({ past: [], future: [] }); editGroup.current = null;
     setSelectedNodeId((current) => session.nodes.some((node) => node.id === current) ? current : session.nodes[0]?.id ?? "");
     setSelectedNodeIdsState((current) => {
       const retained = current.filter((id) => session.nodes.some((node) => node.id === id));
@@ -1755,9 +1757,47 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const schedulerTelemetry = snapshot?.diagnostics.schedulerTelemetry;
   const schedulerSummary = schedulerTelemetry ? ` - ${schedulerTelemetry.processedQuanta} quanta / ${schedulerTelemetry.xruns} xruns` : "";
   const statusSummary = `${snapshot ? `${snapshot.status.audio} audio (${snapshot.status.reason}) - ${snapshot.status.storage} storage - ${snapshot.status.sessionCount} session${snapshot.status.sessionCount === 1 ? "" : "s"}` : "Waiting for backend snapshot"}${schedulerSummary}${nativePumpSummary ? ` - ${nativePumpSummary}` : ""}${sessionCrudBusyState ? " - Updating session..." : ""}`;
-  const recordDraftChange = (next: import("@audiorouter/contracts").Session) => { const previous = draftRef.current; draftRef.current = next; setDraftHistory((history) => recordDraft(history, previous, next)); setDraft(next); setConnectionReplacement(null); setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null); setPendingGraphPlan(null); };
-  const undoDraft = () => { const transition = undoDraftHistory(draftHistory, draft); if (transition.current === draft) return; setDraftHistory(transition.history); draftRef.current = transition.current; setDraft(transition.current); setConnectionReplacement(null); setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null); setPendingGraphPlan(null); setActionMessage("Undid the last draft change."); };
-  const redoDraft = () => { const transition = redoDraftHistory(draftHistory, draft); if (transition.current === draft) return; setDraftHistory(transition.history); draftRef.current = transition.current; setDraft(transition.current); setConnectionReplacement(null); setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null); setPendingGraphPlan(null); setActionMessage("Redid the draft change."); };
+  const editGroup = useRef<{ key: string; time: number } | null>(null);
+  const recordDraftChange = (next: import("@audiorouter/contracts").Session, group?: string) => {
+    const previous = draftRef.current;
+    if (sameSessionDraft(previous, next)) return;
+    const now = Date.now();
+    const coalesce = group && editGroup.current?.key === group && now - editGroup.current.time < 750;
+    editGroup.current = group ? { key: group, time: now } : null;
+    draftRef.current = next;
+    setDraftHistory((history) => coalesce && history.past.length > 0 ? { ...history, future: [] } : recordDraft(history, previous, next));
+    setDraft(next); setConnectionReplacement(null); setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null); setPendingGraphPlan(null);
+  };
+  const restoreDraftHistory = (direction: "undo" | "redo") => {
+    if (!backend.connected || graphBusy || sessionActionBusy) return;
+    editGroup.current = null;
+    const current = draftRef.current;
+    const transition = direction === "undo" ? undoDraftHistory(draftHistory, current) : redoDraftHistory(draftHistory, current);
+    if (transition.current === current) return;
+    // History restores content; all subsequent commits use today's revision.
+    const restored = { ...transition.current, revision: current.revision };
+    setDraftHistory(transition.history); draftRef.current = restored; setDraft(restored);
+    setConnectionReplacement(null); setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null); setPendingGraphPlan(null);
+    setActionMessage(direction === "undo" ? "Undid the last change." : "Redid the change.");
+  };
+  const undoDraft = () => restoreDraftHistory("undo");
+  const redoDraft = () => restoreDraftHistory("redo");
+  useEffect(() => {
+    const onHistoryKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || !(event.ctrlKey || event.metaKey)) return;
+      const key = event.key.toLowerCase();
+      if (key !== "z" && key !== "y") return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest("[role='dialog']")) return;
+      const numeric = target?.closest("[role='spinbutton'], input[type='range'], input[type='number'], input[type='checkbox'], select");
+      if (!numeric && isEditableShortcutTarget(event.target)) return;
+      event.preventDefault();
+      if (numeric instanceof HTMLElement) numeric.blur();
+      restoreDraftHistory(key === "y" || event.shiftKey ? "redo" : "undo");
+    };
+    window.addEventListener("keydown", onHistoryKey);
+    return () => window.removeEventListener("keydown", onHistoryKey);
+  }, [backend.connected, graphBusy, sessionActionBusy, draftHistory]);
   const changeNodeFlag = async (flag: "enabled" | "bypass", value: boolean) => {
     if (sessionBusy.current || nodeFlagBusy.current || graphBusy || !backend.connected) return;
     const next = setNodeDraftFlag(draftRef.current, selectedNode.id, flag, value);
@@ -1778,7 +1818,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     } finally { nodeFlagBusy.current = false; setGraphBusy(false); }
   };
   const changeNodeName = (name: string) => { try { recordDraftChange(setNodeDraftName(draft, selectedNode.id, name)); setActionMessage("Name changed. Save to keep it."); } catch (error) { setActionMessage(formatUiError(error, "Unable to rename node.")); } };
-  const changeNodeParameterOn = (nodeId: string, name: string, value: boolean | number | string) => { const targetNode = draftRef.current.nodes.find((candidate) => candidate.id === nodeId); if (!targetNode) return; const error = targetNode.kind === "audioFile" ? (!(name === "mediaId" && typeof value === "string" && value.length <= 128) && !(name === "fileName" && typeof value === "string" && value.length <= 255) && !(name === "loop" && typeof value === "boolean") ? "Invalid audio source setting" : null) : targetNode.kind === "plugin" ? (() => { const id = Number(name.slice("pluginParameter:".length)); const descriptor = pluginParameters?.parameters.find((parameter) => parameter.parameterId === id); return !descriptor || typeof value !== "number" || !Number.isFinite(value) || value < descriptor.minimum || value > descriptor.maximum ? "Plugin parameter value is outside the worker-provided range" : null; })() : processorParameterError(processors, targetNode.kind, name, value, snapshot?.discovery?.nodeTypes ?? null); if (error) { setActionMessage(`Draft rejected: ${error}.`); return; } recordDraftChange(setNodeDraftParameter(draftRef.current, nodeId, name, value)); setActionMessage("Draft updated. Review and plan the changes before committing."); };
+  const changeNodeParameterOn = (nodeId: string, name: string, value: boolean | number | string) => { const targetNode = draftRef.current.nodes.find((candidate) => candidate.id === nodeId); if (!targetNode) return; const error = targetNode.kind === "audioFile" ? (!(name === "mediaId" && typeof value === "string" && value.length <= 128) && !(name === "fileName" && typeof value === "string" && value.length <= 255) && !(name === "loop" && typeof value === "boolean") ? "Invalid audio source setting" : null) : targetNode.kind === "plugin" ? (() => { const id = Number(name.slice("pluginParameter:".length)); const descriptor = pluginParameters?.parameters.find((parameter) => parameter.parameterId === id); return !descriptor || typeof value !== "number" || !Number.isFinite(value) || value < descriptor.minimum || value > descriptor.maximum ? "Plugin parameter value is outside the worker-provided range" : null; })() : processorParameterError(processors, targetNode.kind, name, value, snapshot?.discovery?.nodeTypes ?? null); if (error) { setActionMessage(`Draft rejected: ${error}.`); return; } recordDraftChange(setNodeDraftParameter(draftRef.current, nodeId, name, value), nodeId + ":" + name); setActionMessage("Draft updated. Review and plan the changes before committing."); };
   const changeNodeParameter = (name: string, value: boolean | number | string) => changeNodeParameterOn(selectedNode.id, name, value);
   const resetNodeParameters = () => { recordDraftChange(resetNodeDraftParameters(draft, selectedNode.id)); setActionMessage("Processor parameters reset in the draft. Review and plan the changes before committing."); };
   const changeSessionName = (name: string) => { try { recordDraftChange(setSessionDraftName(draft, name)); setActionMessage("Session name changed. Save to keep it."); } catch (error) { setActionMessage(formatUiError(error, "Unable to rename session.")); } };
@@ -1789,7 +1829,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     if (currentSessionIdRef.current === saved.id) {
       authoritativeSession.current = saved;
       setDraft((current) => current.id === saved.id ? { ...current, revision } : current);
-      setDraftHistory({ past: [], future: [] });
+      editGroup.current = null;
       const native = activation && activation.state === "running" ? activation.native : null;
       // A change applied to the playing audio starts a new runtime generation;
       // keep servicing the route with it (the old one is rejected as stale).
@@ -2130,6 +2170,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const stopSession = async (propagateFailure = false) => { if (sessionBusy.current || !backend.connected) return; sessionBusy.current = true; setSessionActionBusy(true); setActionMessage("Stopping session..."); try { await backend.stopSession(session.id, uiIdempotencyKey("session-stop")); setNativeGenerations((current) => { const next = { ...current }; delete next[session.id]; return next; }); setNativePumpStats(null); setAudioSourceStates({}); await refresh(); setActionMessage("Session stopped."); } catch (error) { setNativePumpStats(null); setActionMessage(formatUiError(error, "Unable to stop session.")); if (propagateFailure) throw error; } finally { sessionBusy.current = false; setSessionActionBusy(false); } };
   useEffect(() => {
     const onShortcut = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if (isEditableShortcutTarget(event.target)) return;
       const shortcut = shortcutFromKeyboardEvent(event);
       if (!shortcut || shortcutConflicts(shortcuts).length > 0) return;
@@ -2400,7 +2441,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     <details><summary>Connected clients</summary><ClientsPanel backend={backend} /></details>
   </div>;
   return <PluginParameterContext.Provider value={{ parameters: pluginParameters, error: pluginParameterError }}><div className={`app-shell theme-${theme}${compactStatus ? " compact-status" : ""}`}>{lifecycleActions}<RecorderActions backend={backend} sessionId={session.id} connected={backend.connected} recorderStatuses={recorderStatuses} recorderStatusAvailable={recorderStatusAvailable} recorderNodeIds={draft.nodes.filter((node) => node.kind === "recorder").map((node) => node.id)} selectedNodeId={selectedNode.id} onSelectNode={(nodeId) => { setSelectedNodeId(nodeId); setSelectedNodeIds([nodeId]); }} format={recorderFormat} onFormatChange={setRecorderFormat} /><RecordingActions recordings={recordings} connected={backend.connected} busy={recordingMutationBusyState} onRename={renameRecording} onReveal={revealRecording} onRecycle={recycleRecording} /><VirtualDeviceLifecyclePanel backend={backend} onAddVirtualBusNode={addVirtualBusNode} /><VirtualRoutePanel backend={backend} />
-    <header className="topbar"><div><p className="eyebrow">AudioRouter</p><h1>{draft.name || "Routing workspace"}</h1></div><div className={`status-cluster ${backend.connected ? "connected" : "disconnected"}`} aria-live="polite"><span className={`audio-run-state${sessionRunning ? " is-running" : ""}`} role="status">{sessionActionBusy ? "Starting or stopping audio…" : sessionRunning ? "● Audio running" : "○ Audio stopped"}</span><span className="status-detail" title={statusSummary}>{connectionLabel}</span><button type="button" className={routeChanged ? "primary" : "secondary"} onClick={() => void (pendingGraphPlan ? commitAcknowledgedPlan() : planChanges())} disabled={!backend.connected || graphBusy || (pendingGraphPlan ? acknowledgedWarnings.size !== pendingWarnings.length : !routeChanged)}>{graphBusy ? "Saving…" : pendingGraphPlan ? "Confirm Save" : "Save"}</button><button type="button" className={sessionRunning ? "secondary" : "primary"} onClick={() => void (sessionRunning ? stopSession() : startSession())} disabled={!backend.connected || sessionActionBusy}>{sessionRunning ? "Stop" : "Play"}</button><label className="theme-picker">Theme<select aria-label="Color theme" value={theme} onChange={(event) => setTheme(event.target.value as ThemeMode)}><option value="dark">Dark</option><option value="light">Light</option><option value="high-contrast">High contrast</option></select></label><button type="button" className="secondary" aria-pressed={compactStatus} onClick={() => setCompactStatus((current) => !current)}>{compactStatus ? "Hide status" : "Show status"}</button><button type="button" onClick={refresh}>Reconnect</button></div></header>
+    <header className="topbar"><div><p className="eyebrow">AudioRouter</p><h1>{draft.name || "Routing workspace"}</h1></div><div className={`status-cluster ${backend.connected ? "connected" : "disconnected"}`} aria-live="polite"><span className={`audio-run-state${sessionRunning ? " is-running" : ""}`} role="status">{sessionActionBusy ? "Starting or stopping audio…" : sessionRunning ? "● Audio running" : "○ Audio stopped"}</span><span className="status-detail" title={statusSummary}>{connectionLabel}</span><span className="history-toolbar"><button type="button" className="secondary" aria-label="Undo" title="Undo (Ctrl+Z)" onClick={undoDraft} disabled={!backend.connected || graphBusy || sessionActionBusy || draftHistory.past.length === 0}><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 4 4 9l5 5M4 9h10a6 6 0 0 1 0 12" /></svg>Undo</button><button type="button" className="secondary" aria-label="Redo" title="Redo (Ctrl+Y)" onClick={redoDraft} disabled={!backend.connected || graphBusy || sessionActionBusy || draftHistory.future.length === 0}><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 4 5 5-5 5m5-5H10a6 6 0 0 0 0 12" /></svg>Redo</button></span><button type="button" className={routeChanged ? "primary" : "secondary"} onClick={() => void (pendingGraphPlan ? commitAcknowledgedPlan() : planChanges())} disabled={!backend.connected || graphBusy || (pendingGraphPlan ? acknowledgedWarnings.size !== pendingWarnings.length : !routeChanged)}>{graphBusy ? "Saving…" : pendingGraphPlan ? "Confirm Save" : "Save"}</button><button type="button" className={sessionRunning ? "secondary" : "primary"} onClick={() => void (sessionRunning ? stopSession() : startSession())} disabled={!backend.connected || sessionActionBusy}>{sessionRunning ? "Stop" : "Play"}</button><label className="theme-picker">Theme<select aria-label="Color theme" value={theme} onChange={(event) => setTheme(event.target.value as ThemeMode)}><option value="dark">Dark</option><option value="light">Light</option><option value="high-contrast">High contrast</option></select></label><button type="button" className="secondary" aria-pressed={compactStatus} onClick={() => setCompactStatus((current) => !current)}>{compactStatus ? "Hide status" : "Show status"}</button><button type="button" onClick={refresh}>Reconnect</button></div></header>
+    {unfedRouteNodes(draft).length > 0 && <p className="panel-message is-warning inactive-route-warning" role="status">Warning: no input reaches {unfedRouteNodes(draft).map((node) => node.name).join(", ")}. These nodes are ignored during playback; connected routes can still play.</p>}
     {(() => {
       const text = actionMessage ? actionMessage : !backend.connected ? `Audio unavailable: ${(snapshot?.status.reason ?? "the backend is disconnected").replace(/\.+$/, "")}. Reconnect to edit or play.` : sessionRunning ? "Audio is running through this session." : "Audio is stopped. Press Play to start this session. To set up a new route, add an input (such as your microphone) and an output (such as your headphones), then connect their ports on the canvas.";
       const tone = !backend.connected ? "error" : actionMessage ? actionMessageTone(actionMessage) : "info";

@@ -2934,7 +2934,7 @@ fn method_input_schema(name: &str) -> Value {
                 "bands": { "type": "array", "maxItems": MAX_RESPONSE_BANDS, "items": {
                     "type": "object", "properties": {
                         "enabled": { "type": "boolean" },
-                        "type": { "enum": ["peaking", "lowShelf", "highShelf", "lowPass", "highPass", "notch"] },
+                        "type": { "enum": ["peaking", "lowShelf", "highShelf", "lowPass", "highPass", "bandPass", "allPass", "notch"] },
                         "frequencyHz": { "type": "number", "minimum": 20, "maximum": 20000 },
                         "q": { "type": "number", "minimum": 0.1, "maximum": 20 },
                         "gainDb": { "type": "number", "minimum": -24, "maximum": 24 }
@@ -9072,6 +9072,7 @@ impl ControlPlane {
         let mut session = candidate
             .cloned()
             .unwrap_or_else(|| self.get_session(session_id).expect("loaded above").clone());
+        session = audiorouter_engine::prune_unfed_upstream(&session).into_owned();
         let recorder_node_ids = session
             .nodes
             .iter()
@@ -11525,7 +11526,9 @@ impl ControlPlane {
             }]),
             audiorouter_domain::NodeKind::BassTreble => json!([
                 { "name": "bassDb", "type": "number", "unit": "dB", "minimum": -12.0, "maximum": 12.0, "default": 0.0 },
-                { "name": "trebleDb", "type": "number", "unit": "dB", "minimum": -12.0, "maximum": 12.0, "default": 0.0 }
+                { "name": "trebleDb", "type": "number", "unit": "dB", "minimum": -12.0, "maximum": 12.0, "default": 0.0 },
+                { "name": "bassFrequencyHz", "type": "number", "unit": "Hz", "minimum": 80.0, "maximum": 1000.0, "default": 500.0 },
+                { "name": "trebleFrequencyHz", "type": "number", "unit": "Hz", "minimum": 800.0, "maximum": 12000.0, "default": 1500.0 }
             ]),
             audiorouter_domain::NodeKind::Dehum => json!([
                 { "name": "frequencyHz", "type": "number", "unit": "Hz", "minimum": 45.0, "maximum": 65.0, "default": 60.0 },
@@ -11583,7 +11586,7 @@ impl ControlPlane {
         for index in 0..audiorouter_dsp::PARAMETRIC_EQ_BANDS {
             parameters.extend([
                 json!({ "name": format!("band{index}Enabled"), "type": "boolean", "default": false }),
-                json!({ "name": format!("band{index}Type"), "type": "string", "enum": ["peaking", "lowShelf", "highShelf", "lowPass", "highPass", "notch"], "default": "peaking" }),
+                json!({ "name": format!("band{index}Type"), "type": "string", "enum": ["peaking", "lowShelf", "highShelf", "lowPass", "highPass", "bandPass", "allPass", "notch"], "default": "peaking" }),
                 json!({ "name": format!("band{index}FrequencyHz"), "type": "number", "unit": "Hz", "minimum": 20.0, "maximum": 20000.0, "default": 1000.0 }),
                 json!({ "name": format!("band{index}Q"), "type": "number", "minimum": 0.1, "maximum": 20.0, "default": 1.0 }),
                 json!({ "name": format!("band{index}GainDb"), "type": "number", "unit": "dB", "minimum": -24.0, "maximum": 24.0, "default": 0.0 }),
@@ -12770,6 +12773,8 @@ impl ControlPlane {
         session: &Session,
         sample_rate_hz: u32,
     ) -> Result<HashMap<EntityId, Arc<dyn RealtimePluginProcessor>>, ControlError> {
+        let session = audiorouter_engine::prune_unfed_upstream(session);
+        let session = session.as_ref();
         let mut stages = HashMap::new();
         let mut prepared_bridges = Vec::new();
         if !session
@@ -18789,6 +18794,8 @@ impl ControlPlane {
                 Some("highShelf") => audiorouter_dsp::FilterKind::HighShelf,
                 Some("lowPass") => audiorouter_dsp::FilterKind::LowPass,
                 Some("highPass") => audiorouter_dsp::FilterKind::HighPass,
+                Some("bandPass") => audiorouter_dsp::FilterKind::BandPass,
+                Some("allPass") => audiorouter_dsp::FilterKind::AllPass,
                 Some("notch") => audiorouter_dsp::FilterKind::Notch,
                 _ => {
                     return Err(ControlError::InvalidRequest(format!(
@@ -28380,6 +28387,22 @@ mod tests {
         assert_eq!(result["frequenciesHz"], json!([100.0, 1000.0, 10000.0]));
         assert_eq!(result["magnitudeDb"].as_array().unwrap().len(), 3);
         assert!(result["magnitudeDb"][1].as_f64().unwrap() > 5.0);
+        for kind in ["bandPass", "allPass"] {
+            let response = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(), id: Some(json!(5)), method: "processors.response".into(),
+                params: Some(json!({ "sampleRateHz": 48000.0,
+                    "bands": [{ "enabled": true, "type": kind, "frequencyHz": 1000.0, "q": 1.0, "gainDb": 24.0 }],
+                    "frequenciesHz": [100.0, 1000.0, 10000.0] })),
+            });
+            let result = response.result.unwrap();
+            assert!(result["magnitudeDb"][1].as_f64().unwrap().abs() < 0.02);
+            if kind == "bandPass" {
+                assert!(result["magnitudeDb"][0].as_f64().unwrap() < -10.0);
+                assert!(result["magnitudeDb"][2].as_f64().unwrap() < -10.0);
+            } else {
+                assert!(result["magnitudeDb"].as_array().unwrap().iter().all(|value| value.as_f64().unwrap().abs() < 0.02));
+            }
+        }
         let flat_band = json!({"enabled": false, "type": "peaking", "frequencyHz": 1000.0, "q": 1.0, "gainDb": 0.0});
         let bounded_bands = vec![flat_band.clone(); MAX_RESPONSE_BANDS];
         let maximum = plane.dispatch(JsonRpcRequest {

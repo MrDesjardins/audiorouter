@@ -4357,7 +4357,8 @@ fn scaled_matrix(matrix: &[f32], gain: f32) -> Vec<f32> {
     matrix.iter().map(|coefficient| coefficient * gain).collect()
 }
 
-/// Removes disabled nodes that no enabled connection feeds, together with
+/// Removes input-bearing nodes that no enabled connection feeds, and disabled
+/// sources, together with
 /// their outgoing connections, repeating until stable. Such a node can only
 /// contribute silence, so a turned-off microphone or Test Signal wired into a
 /// Mixer must not count as another Mixer input. Disabled nodes that are fed
@@ -4368,6 +4369,21 @@ fn scaled_matrix(matrix: &[f32], gain: f32) -> Vec<f32> {
 /// disabled physical input otherwise relies on its mute stage for privacy.
 pub fn prune_inactive_upstream(
     session: &audiorouter_domain::Session,
+) -> std::borrow::Cow<'_, audiorouter_domain::Session> {
+    prune_unfed_nodes(session, true)
+}
+
+/// Exclude inputless chains while preserving disabled capture mute stages.
+/// Safe for a worker whose physical capture is already open.
+pub fn prune_unfed_upstream(
+    session: &audiorouter_domain::Session,
+) -> std::borrow::Cow<'_, audiorouter_domain::Session> {
+    prune_unfed_nodes(session, false)
+}
+
+fn prune_unfed_nodes(
+    session: &audiorouter_domain::Session,
+    drop_disabled_sources: bool,
 ) -> std::borrow::Cow<'_, audiorouter_domain::Session> {
     let mut removed = std::collections::HashSet::new();
     loop {
@@ -4388,7 +4404,10 @@ pub fn prune_inactive_upstream(
             });
             // A whole independent path whose source was deliberately
             // disabled is silent, even when its downstream tools stay enabled.
-            if !fed && (!node.enabled || lost_feed) {
+            let needs_input = node.ports.iter().any(|port| {
+                port.direction == audiorouter_domain::PortDirection::Input
+            });
+            if !fed && ((drop_disabled_sources && !node.enabled) || lost_feed || needs_input) {
                 removed.insert(node.id.clone());
             }
         }
@@ -4396,6 +4415,7 @@ pub fn prune_inactive_upstream(
             break;
         }
     }
+    // Preserve the processor-only compile API, whose caller supplies blocks.
     let keeps_nothing = removed.len() == session.nodes.len();
     if removed.is_empty() || keeps_nothing {
         return std::borrow::Cow::Borrowed(session);
@@ -4655,6 +4675,8 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
         return Err(GraphCompileError::InvalidSampleRate);
     }
     validate_session(session).map_err(GraphCompileError::InvalidGraph)?;
+    let session = prune_unfed_upstream(session);
+    let session = session.as_ref();
     let session = harmonize_chain_widths(session);
     let session = session.as_ref();
     if let Some(result) =
@@ -4966,17 +4988,17 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                 let mut bands: [Option<audiorouter_dsp::BiquadParams>; audiorouter_dsp::PARAMETRIC_EQ_BANDS] =
                     [None; audiorouter_dsp::PARAMETRIC_EQ_BANDS];
                 if node.kind == NodeKind::BassTreble {
-                    // Fixed shelves: bass below ~120 Hz, treble above ~6 kHz.
+                    // Adjustable shelves include speech warmth and articulation.
                     bands[0] = Some(audiorouter_dsp::BiquadParams {
                         kind: audiorouter_dsp::FilterKind::LowShelf,
-                        frequency_hz: 120.0,
+                        frequency_hz: number("bassFrequencyHz", 500.0, 80.0..=1_000.0),
                         q: 0.707,
                         gain_db: number("bassDb", 0.0, -12.0..=12.0),
                         sample_rate,
                     });
                     bands[1] = Some(audiorouter_dsp::BiquadParams {
                         kind: audiorouter_dsp::FilterKind::HighShelf,
-                        frequency_hz: 6_000.0,
+                        frequency_hz: number("trebleFrequencyHz", 1_500.0, 800.0..=12_000.0).min(sample_rate_hz as f32 * 0.45),
                         q: 0.707,
                         gain_db: number("trebleDb", 0.0, -12.0..=12.0),
                         sample_rate,
@@ -5255,6 +5277,8 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                         "highShelf" => audiorouter_dsp::FilterKind::HighShelf,
                         "lowPass" => audiorouter_dsp::FilterKind::LowPass,
                         "highPass" => audiorouter_dsp::FilterKind::HighPass,
+                        "bandPass" => audiorouter_dsp::FilterKind::BandPass,
+                        "allPass" => audiorouter_dsp::FilterKind::AllPass,
                         "notch" => audiorouter_dsp::FilterKind::Notch,
                         _ => audiorouter_dsp::FilterKind::Peaking,
                     };
@@ -6549,6 +6573,8 @@ pub fn compile_native_paths_with_plugins_and_audio(
     use audiorouter_domain::{validate_session, NodeKind};
 
     validate_session(session).map_err(GraphCompileError::InvalidGraph)?;
+    let session = prune_inactive_upstream(session);
+    let session = session.as_ref();
     let session = harmonize_chain_widths(session);
     let session = session.as_ref();
     let components = independent_path_sessions(session);
@@ -8974,6 +9000,86 @@ mod tests {
     }
 
     #[test]
+    fn direct_mono_bass_treble_path_shapes_tones_after_live_replacement() {
+        use audiorouter_domain::{EntityId, NodeKind};
+        let mut session = voice_and_game_session();
+        session.edges.retain(|edge| edge.id.as_str() != "voice-cable-a");
+        let tool = session.nodes.iter_mut().find(|node| node.id.as_str() == "voice").unwrap();
+        tool.kind = NodeKind::BassTreble;
+        tool.parameters = serde_json::from_value(serde_json::json!({"bassDb": 0.0, "trebleDb": 0.0})).unwrap();
+        let compile = |session: &audiorouter_domain::Session| compile_native_paths_with_plugins_and_audio(
+            session, RuntimeGeneration::new(3), &Default::default(), &Default::default(),
+        ).unwrap();
+        let frames = PROCESSING_QUANTUM_FRAMES;
+        let mut runtime = RealtimeMixerFanout::from_paths(compile(&session), 4, &[1, 2], frames).unwrap();
+        let rings = (0..2).map(|_| AudioBlockRing::new(4, 2, frames).unwrap()).collect::<Vec<_>>();
+        let measure = |runtime: &mut RealtimeMixerFanout, frequency: f32| {
+            let mut sum = 0.0_f64;
+            let mut count = 0;
+            for quantum in 0..400 {
+                let mut mic = AudioBlock::new(1, frames).unwrap();
+                for (index, sample) in mic.channel_mut(0).unwrap().iter_mut().enumerate() {
+                    *sample = 0.05 * (std::f32::consts::TAU * frequency * (quantum * frames + index) as f32 / INTERNAL_SAMPLE_RATE_HZ as f32).sin();
+                }
+                assert!(runtime.try_submit_input(0, RuntimeGeneration::new(3), &mic).unwrap());
+                assert_eq!(runtime.process_once(&rings.iter().collect::<Vec<_>>()).unwrap(), 1);
+                let output = rings[0].try_receive().unwrap();
+                assert_eq!(output.channel(0).unwrap(), output.channel(1).unwrap());
+                if quantum > 100 {
+                    for sample in output.channel(0).unwrap() { sum += f64::from(*sample).powi(2); count += 1; }
+                }
+                rings[0].try_recycle(output).unwrap();
+                assert!(rings[1].try_receive().is_none());
+            }
+            (sum / count as f64).sqrt()
+        };
+        for (parameter, frequency) in [("bassDb", 60.0), ("trebleDb", 10_000.0)] {
+            let tool = session.nodes.iter_mut().find(|node| node.id == EntityId::new("voice")).unwrap();
+            tool.parameters.insert("bassDb".into(), serde_json::json!(0));
+            tool.parameters.insert("trebleDb".into(), serde_json::json!(0));
+            runtime.replace_paths(compile(&session)).unwrap();
+            let neutral = measure(&mut runtime, frequency);
+            session.nodes.iter_mut().find(|node| node.id.as_str() == "voice").unwrap().parameters.insert(parameter.into(), serde_json::json!(12));
+            runtime.replace_paths(compile(&session)).unwrap();
+            let boosted = measure(&mut runtime, frequency);
+            session.nodes.iter_mut().find(|node| node.id.as_str() == "voice").unwrap().parameters.insert(parameter.into(), serde_json::json!(-12));
+            runtime.replace_paths(compile(&session)).unwrap();
+            let cut = measure(&mut runtime, frequency);
+            eprintln!("{parameter} at {frequency} Hz: boost {:.2} dB, cut {:.2} dB", 20.0 * (boosted / neutral).log10(), 20.0 * (cut / neutral).log10());
+            assert!(boosted > neutral * 2.0 && cut < neutral * 0.5);
+        }
+    }
+
+    #[test]
+    fn detached_filter_chain_is_not_a_native_capture_source() {
+        let mut session = voice_and_game_session();
+        let filter = session.nodes.iter_mut().find(|node| node.id.as_str() == "voice").unwrap();
+        filter.kind = audiorouter_domain::NodeKind::SpectralGate;
+        filter.parameters.clear();
+        // Direct microphone monitoring; the formerly fed tool still connects
+        // to another output, but has no input of its own.
+        session.edges.iter_mut().find(|edge| edge.id.as_str() == "mic-voice")
+            .unwrap().destination_node = audiorouter_domain::EntityId::new("monitor");
+        session.edges.retain(|edge| edge.id.as_str() != "voice-monitor");
+        let before = session.clone();
+        let set = compile_native_paths_with_plugins_and_audio(
+            &session, RuntimeGeneration::new(3), &Default::default(), &Default::default(),
+        ).unwrap();
+        assert_eq!(set.input_node_ids().iter().map(|id| id.as_str()).collect::<Vec<_>>(), ["mic", "cable-b"]);
+        assert_eq!(set.output_node_ids().iter().map(|id| id.as_str()).collect::<Vec<_>>(), ["monitor", "speakers"]);
+        assert_eq!(session, before, "runtime pruning must preserve saved configuration");
+        let mut runtime = RealtimeMixerFanout::from_paths(set, 4, &[1, 2], PROCESSING_QUANTUM_FRAMES).unwrap();
+        let rings = (0..2).map(|_| AudioBlockRing::new(4, 2, PROCESSING_QUANTUM_FRAMES).unwrap()).collect::<Vec<_>>();
+        let mut mic = AudioBlock::new(1, PROCESSING_QUANTUM_FRAMES).unwrap();
+        mic.channel_mut(0).unwrap().fill(0.25);
+        assert!(runtime.try_submit_input(0, RuntimeGeneration::new(3), &mic).unwrap());
+        assert_eq!(runtime.process_once(&rings.iter().collect::<Vec<_>>()).unwrap(), 1);
+        let output = rings[0].try_receive().unwrap();
+        assert!(output.channel(0).unwrap().iter().all(|sample| (*sample - 0.25).abs() < 1e-6));
+        assert!(rings[1].try_receive().is_none());
+    }
+
+    #[test]
     fn independent_paths_run_voice_and_game_in_one_session_without_crossfeed() {
         use audiorouter_domain::EntityId;
         let session = voice_and_game_session();
@@ -9359,6 +9465,8 @@ mod tests {
             ],
         };
         let pruned = prune_inactive_upstream(&session);
+        assert!(prune_unfed_upstream(&session).nodes.iter().any(|node| node.id.as_str() == "mic"),
+            "an already opened disabled microphone needs its mute stage");
         let ids = pruned.nodes.iter().map(|node| node.id.as_str()).collect::<Vec<_>>();
         // The disabled gain is fed by live audio, so it stays as a dry bypass.
         assert_eq!(ids, ["app", "mixer", "muted-gain", "speakers"]);
@@ -10902,8 +11010,12 @@ mod tests {
         assert!((speech / dry - 1.0).abs() < 0.05, "1 kHz passes Dehum: {speech}");
         let bass = rms_after(&single(NodeKind::BassTreble, serde_json::json!({ "bassDb": 12.0, "trebleDb": 0.0 })), 60.0);
         assert!(bass > dry * 3.0, "bass boost RMS {bass}");
+        let voice_bass = rms_after(&single(NodeKind::BassTreble, serde_json::json!({ "bassDb": 12.0 })), 200.0);
+        assert!(voice_bass > dry * 3.0, "bass must include voice warmth: {voice_bass}");
         let treble = rms_after(&single(NodeKind::BassTreble, serde_json::json!({ "bassDb": 0.0, "trebleDb": -12.0 })), 10_000.0);
         assert!(treble < dry * 0.4, "treble cut RMS {treble}");
+        let voice_treble = rms_after(&single(NodeKind::BassTreble, serde_json::json!({ "trebleDb": -12.0 })), 4_000.0);
+        assert!(voice_treble < dry * 0.4, "treble must include voice presence: {voice_treble}");
         let declick = rms_after(&single(NodeKind::Declick, serde_json::json!({ "thresholdPercent": 50.0 })), 440.0);
         assert!((declick / dry - 1.0).abs() < 0.02, "Declick passes clean audio: {declick}");
         assert_eq!(
@@ -11381,8 +11493,8 @@ mod tests {
             "lowPass",
             "highPass",
             "notch",
-            "peaking",
-            "notch",
+            "bandPass",
+            "allPass",
         ];
         for (index, kind) in types.into_iter().enumerate() {
             parameters.insert(format!("band{index}Enabled"), serde_json::json!(true));

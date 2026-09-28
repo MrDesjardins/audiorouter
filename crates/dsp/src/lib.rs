@@ -242,6 +242,8 @@ pub enum FilterKind {
     HighShelf,
     LowPass,
     HighPass,
+    BandPass,
+    AllPass,
     Notch,
 }
 
@@ -1855,6 +1857,8 @@ fn coefficients(params: BiquadParams) -> Coefficients {
             1.0 - alpha / amplitude,
         ),
         FilterKind::Notch => (1.0, -2.0 * cos, 1.0, 1.0 + alpha, -2.0 * cos, 1.0 - alpha),
+        FilterKind::BandPass => (alpha, 0.0, -alpha, 1.0 + alpha, -2.0 * cos, 1.0 - alpha),
+        FilterKind::AllPass => (1.0 - alpha, -2.0 * cos, 1.0 + alpha, 1.0 + alpha, -2.0 * cos, 1.0 - alpha),
         FilterKind::LowPass => (
             (1.0 - cos) / 2.0,
             1.0 - cos,
@@ -2166,6 +2170,41 @@ mod tests {
             "response was {response}"
         );
         assert!(eq.magnitude_db_at(20_000.0).unwrap().is_finite());
+    }
+
+    #[test]
+    fn band_pass_and_all_pass_have_their_declared_signal_responses() {
+        for rate in [8_000.0, 44_100.0, 48_000.0, 192_000.0] {
+            for q in [0.1, 1.0, 20.0] {
+                let band = Biquad::new(BiquadParams { kind: FilterKind::BandPass, sample_rate: rate, q, ..params(FilterKind::BandPass) }, 1).unwrap();
+                assert!(band.magnitude_db_at(1_000.0).unwrap().abs() < 0.02);
+                assert!(band.magnitude_db_at(100.0).unwrap() < -2.0);
+                assert!(band.magnitude_db_at(rate * 0.49).unwrap() < -2.0);
+                let mut all = Biquad::new(BiquadParams { kind: FilterKind::AllPass, sample_rate: rate, q, ..params(FilterKind::AllPass) }, 1).unwrap();
+                for frequency in [20.0, 1000.0, rate * 0.49] {
+                    assert!(all.magnitude_db_at(frequency).unwrap().abs() < 0.02);
+                }
+                let mut impulse = vec![0.0; 8192];
+                impulse[0] = 1.0;
+                all.process_interleaved(&mut impulse);
+                assert!(impulse.iter().all(|value| value.is_finite()));
+                assert!((impulse[0] - 1.0).abs() > 0.001);
+                assert!(impulse[1..].iter().any(|value| value.abs() > 0.001));
+                let energy: f32 = impulse.iter().map(|value| value * value).sum();
+                assert!((energy - 1.0).abs() < 0.01, "rate={rate}, q={q}, energy={energy}");
+                for kind in [FilterKind::BandPass, FilterKind::AllPass] {
+                    for frequency_hz in [20.0, rate * 0.49] {
+                        let mut filter = Biquad::new(BiquadParams { kind, frequency_hz, sample_rate: rate, q, gain_db: 24.0 }, 1).unwrap();
+                        let mut silence = [0.0; 128];
+                        filter.process_interleaved(&mut silence);
+                        assert_eq!(silence, [0.0; 128]);
+                        silence[0] = 1.0;
+                        filter.process_interleaved(&mut silence);
+                        assert!(silence.iter().all(|value| value.is_finite()));
+                    }
+                }
+            }
+        }
     }
 
     #[test]

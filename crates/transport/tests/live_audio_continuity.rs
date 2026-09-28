@@ -207,6 +207,17 @@ mod live {
         let mut nodes = vec![source_node];
         for (index, kind) in chain.iter().enumerate() {
             let mut parameters = serde_json::Map::new();
+            // Qualify the exact EQ type with unity at the test tone.
+            if *kind == NodeKind::ParametricEq {
+                if let Ok(filter) = std::env::var("AUDIOROUTER_CONTINUITY_EQ_TYPE") {
+                    assert!(matches!(filter.as_str(), "bandPass" | "allPass"));
+                    parameters.insert("band0Enabled".into(), json!(true));
+                    parameters.insert("band0Type".into(), json!(filter));
+                    parameters.insert("band0FrequencyHz".into(), json!(live_tone_hz()));
+                    parameters.insert("band0Q".into(), json!(1.0));
+                    parameters.insert("band0GainDb".into(), json!(0.0));
+                }
+            }
             // `AUDIOROUTER_CONTINUITY_GAIN_DB` sets every Gain node's level,
             // making a Bypass toggle measurable at the output.
             if *kind == NodeKind::Gain {
@@ -709,6 +720,176 @@ mod live {
         );
         assert_eq!(result_glitches, 0, "the routed tone has audible discontinuities");
         assert_eq!(recording_glitches.unwrap_or(0), 0, "the recording has discontinuities");
+    }
+
+    /// Attended, opt-in synthetic comparison on one explicitly selected output.
+    /// Opens no microphone and stores no samples or session in the user's DB.
+    #[test]
+    #[ignore = "audible synthetic tones on an explicitly authorized physical output"]
+    fn live_physical_output_bass_treble_comparison() {
+        if std::env::var("AUDIOROUTER_TONE_COMPARISON").as_deref() != Ok("1") { return; }
+        let output = endpoint("AUDIOROUTER_TONE_COMPARISON_OUTPUT", "", EndpointDirection::Render);
+        let mut session = route("unused", &output, &[NodeKind::BassTreble], vec![]);
+        session.id = EntityId::new("tone-comparison");
+        session.nodes[0].kind = NodeKind::TestSignal;
+        session.nodes[0].parameters = serde_json::from_value(json!({
+            "frequencyHz": 60.0, "levelDb": -40.0, "durationMs": 2400.0,
+        })).unwrap();
+        session.nodes[1].parameters = serde_json::from_value(json!({"bassDb": -12.0, "trebleDb": 0.0})).unwrap();
+        let pipe = format!(r"\\.\pipe\audiorouter-tone-comparison-{}", std::process::id());
+        let server_pipe = pipe.clone();
+        std::thread::spawn(move || {
+            let mut plane = audiorouter_control::ControlPlane::default();
+            plane.create_session(session).unwrap();
+            let grant = audiorouter_control::ClientGrant::with_scopes([
+                audiorouter_domain::PermissionScope::Read,
+                audiorouter_domain::PermissionScope::GraphWrite,
+                audiorouter_domain::PermissionScope::SessionControl,
+                audiorouter_domain::PermissionScope::DeviceAdministration,
+            ]);
+            let _ = audiorouter_transport::serve_control_connections_forever_with_grant(&server_pipe, plane, grant);
+        });
+        std::thread::sleep(Duration::from_millis(300));
+        let session_id = "tone-comparison";
+        rpc(&pipe, "nativePaths.prepare", json!({"sessionId": session_id}));
+        rpc(&pipe, "session.start", json!({"sessionId": session_id, "idempotencyKey": "tone-start"}));
+        let mut measured = Vec::new();
+        for (index, (frequency, bass, treble)) in [(60.0, -12.0, 0.0), (60.0, 12.0, 0.0), (8000.0, 0.0, -12.0), (8000.0, 0.0, 12.0)].into_iter().enumerate() {
+            let mut current = rpc(&pipe, "sessions.get", json!({"sessionId": session_id}));
+            current["nodes"][0]["parameters"]["frequencyHz"] = json!(frequency);
+            current["nodes"][1]["parameters"]["bassDb"] = json!(bass);
+            current["nodes"][1]["parameters"]["trebleDb"] = json!(treble);
+            let plan = rpc(&pipe, "graph.plan", json!({"sessionId": session_id, "baseRevision": current["revision"], "candidate": current}));
+            rpc(&pipe, "graph.commit", json!({"planId": plan["planId"], "baseRevision": plan["baseRevision"], "idempotencyKey": format!("tone-phase-{index}")}));
+            eprintln!("phase {}: {frequency} Hz; Bass {bass:+} / Treble {treble:+} dB", index + 1);
+            rpc(&pipe, "audioSources.transport", json!({"sessionId": session_id, "nodeId": "source", "action": "play"}));
+            std::thread::sleep(Duration::from_millis(1800));
+            let diagnostics = rpc(&pipe, "system.diagnostics", Value::Null);
+            let meter = diagnostics["nodeTelemetry"].as_array().unwrap().iter().find(|node| node["nodeId"] == "destination").unwrap()["meter"].clone();
+            eprintln!("output: {meter}");
+            measured.push(meter["rmsDb"].as_f64().unwrap());
+            rpc(&pipe, "audioSources.transport", json!({"sessionId": session_id, "nodeId": "source", "action": "stop"}));
+            std::thread::sleep(Duration::from_millis(300));
+        }
+        rpc(&pipe, "session.stop", json!({"sessionId": session_id, "idempotencyKey": "tone-stop"}));
+        eprintln!("measured output RMS dBFS: {measured:?}");
+        assert!(measured[1] - measured[0] > 18.0, "bass cut/boost must reach the native output branch");
+        assert!(measured[3] - measured[2] > 14.0, "treble cut/boost must reach the native output branch");
+    }
+
+    /// Explicitly consented, bounded local voice comparison. Private WAVs stay
+    /// in the system temp directory, outside the source tree; no raw audio logs.
+    #[test]
+    #[ignore = "requires explicit consent for a five-second microphone sample"]
+    fn live_local_voice_tone_comparison() {
+        if std::env::var("AUDIOROUTER_VOICE_COMPARISON").as_deref() != Ok("1") { return; }
+        let id = std::env::var("AUDIOROUTER_VOICE_COMPARISON_INPUT").expect("exact approved microphone");
+        let metadata = enumerate_active_endpoints().unwrap().into_iter()
+            .find(|endpoint| endpoint.id == id && endpoint.direction == EndpointDirection::Capture).unwrap();
+        assert!(metadata.is_ieee_float32(), "voice comparison requires verified float32 capture");
+        let rate = metadata.sample_rate_hz;
+        let stride = usize::from(metadata.channels) * 4;
+        let frames = rate as usize * 5;
+        let mut bytes = vec![0_u8; rate as usize * stride];
+        let mut voice = Vec::with_capacity(frames);
+        let mut capture = SharedCapture::open(&id, 0).unwrap();
+        eprintln!("Capturing five seconds now; speak normally.");
+        capture.start().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(7);
+        while voice.len() < frames && Instant::now() < deadline {
+            capture.wait_for_data(20).unwrap();
+            while let Some((_, length)) = capture.next_packet_into(&mut bytes, stride).unwrap() {
+                for frame in bytes[..length].chunks_exact(stride) {
+                    if voice.len() == frames { break; }
+                    let sample = f32::from_le_bytes(frame[..4].try_into().unwrap());
+                    voice.push(if sample.is_finite() { sample } else { 0.0 });
+                }
+            }
+        }
+        capture.stop().unwrap();
+        assert_eq!(voice.len(), frames, "bounded capture did not supply five seconds");
+        let process = |gain: f64| {
+            let session = Session {
+                id: EntityId::new("voice-comparison"), name: "Local comparison".into(), schema_version: 1, revision: 0,
+                nodes: vec![Node {
+                    id: EntityId::new("tone"), kind: NodeKind::BassTreble, type_version: 1, name: "Tone".into(), enabled: true, bypass: false,
+                    parameters: serde_json::from_value(json!({"bassDb": gain, "trebleDb": gain})).unwrap(),
+                    ports: vec![Port {name: "in".into(), direction: PortDirection::Input, channels: 1}, Port {name: "out".into(), direction: PortDirection::Output, channels: 1}],
+                }], edges: vec![],
+            };
+            let graph = audiorouter_engine::compile_session_at_sample_rate(&session, audiorouter_engine::RuntimeGeneration::new(1), rate).unwrap();
+            let mut output = Vec::with_capacity(frames);
+            for chunk in voice.chunks(128) {
+                let mut block = audiorouter_engine::AudioBlock::new(1, chunk.len()).unwrap();
+                block.channel_mut(0).unwrap().copy_from_slice(chunk);
+                graph.process(&mut block);
+                output.extend_from_slice(block.channel(0).unwrap());
+            }
+            output
+        };
+        let boost = process(12.0);
+        let cut = process(-12.0);
+        let rms = |samples: &[f32]| (samples.iter().map(|sample| f64::from(*sample).powi(2)).sum::<f64>() / samples.len() as f64).sqrt();
+        let flat_rms = rms(&voice);
+        assert!(flat_rms > 1e-6, "sample is too quiet for comparison");
+        eprintln!("Same voice: boost {:.2} dB; cut {:.2} dB relative to flat", 20.0 * (rms(&boost) / flat_rms).log10(), 20.0 * (rms(&cut) / flat_rms).log10());
+        let peak = voice.iter().chain(&boost).chain(&cut).fold(0.0_f32, |peak, sample| peak.max(sample.abs()));
+        let scale = (0.8 / peak).min(1.0);
+        let folder = std::env::temp_dir().join(format!("audiorouter-voice-comparison-{}", std::process::id()));
+        std::fs::create_dir(&folder).unwrap();
+        for (name, samples) in [("flat", &voice), ("boost", &boost), ("cut", &cut)] {
+            let data_bytes = (samples.len() * 2) as u32;
+            let mut wav = Vec::with_capacity(44 + data_bytes as usize);
+            wav.extend_from_slice(b"RIFF"); wav.extend_from_slice(&(36 + data_bytes).to_le_bytes()); wav.extend_from_slice(b"WAVEfmt ");
+            wav.extend_from_slice(&16_u32.to_le_bytes()); wav.extend_from_slice(&1_u16.to_le_bytes()); wav.extend_from_slice(&1_u16.to_le_bytes());
+            wav.extend_from_slice(&rate.to_le_bytes()); wav.extend_from_slice(&(rate * 2).to_le_bytes()); wav.extend_from_slice(&2_u16.to_le_bytes()); wav.extend_from_slice(&16_u16.to_le_bytes());
+            wav.extend_from_slice(b"data"); wav.extend_from_slice(&data_bytes.to_le_bytes());
+            for sample in samples { wav.extend_from_slice(&((*sample * scale * 32767.0).round() as i16).to_le_bytes()); }
+            let path = folder.join(format!("{name}.wav"));
+            std::fs::write(&path, wav).unwrap();
+            eprintln!("private local comparison: {}", path.display());
+        }
+    }
+
+    /// Playback of the explicitly consented local comparison, capped to a
+    /// quiet peak and identical playback scaling for all three versions.
+    #[test]
+    #[ignore = "attended playback of consented private comparison WAVs"]
+    fn live_local_voice_comparison_playback() {
+        let Some(folder) = std::env::var_os("AUDIOROUTER_VOICE_PLAYBACK_FOLDER") else { return; };
+        let folder = std::path::PathBuf::from(folder).canonicalize().unwrap();
+        assert_eq!(folder.parent().unwrap(), std::env::temp_dir().canonicalize().unwrap());
+        let folder_name = folder.file_name().unwrap().to_string_lossy();
+        let broad = folder_name.starts_with("audiorouter-tool-voice-");
+        assert!(broad || folder_name.starts_with("audiorouter-voice-comparison-"));
+        let output = endpoint("AUDIOROUTER_TONE_COMPARISON_OUTPUT", "", EndpointDirection::Render);
+        let metadata = enumerate_active_endpoints().unwrap().into_iter().find(|endpoint| endpoint.id == output).unwrap();
+        assert!(metadata.is_ieee_float32() && metadata.channels == 2);
+        let names = if broad { ["flat", "warm-radio", "thin-bright"] } else { ["flat", "boost", "cut"] };
+        let versions = names.map(|name| {
+            let bytes = std::fs::read(folder.join(format!("{name}.wav"))).unwrap();
+            assert!(bytes.len() <= 1_000_000 && bytes.len() >= 44);
+            assert_eq!(&bytes[..4], b"RIFF"); assert_eq!(&bytes[36..40], b"data");
+            assert_eq!(u32::from_le_bytes(bytes[24..28].try_into().unwrap()), metadata.sample_rate_hz);
+            bytes[44..].chunks_exact(2).map(|sample| f32::from(i16::from_le_bytes(sample.try_into().unwrap())) / 32768.0).collect::<Vec<_>>()
+        });
+        let peak = versions.iter().flatten().fold(0.0_f32, |peak, sample| peak.max(sample.abs()));
+        let scale = (0.05 / peak.max(1e-6)).min(1.0);
+        for (name, samples) in names.into_iter().zip(versions) {
+            eprintln!("Playing {name}; same quiet playback scaling for each version");
+            let mut render = SharedRender::open_with_headroom(&output, 500_000).unwrap();
+            let mut bytes = Vec::with_capacity(samples.len() * 8);
+            for sample in samples { let sample = (sample * scale).to_le_bytes(); bytes.extend_from_slice(&sample); bytes.extend_from_slice(&sample); }
+            let mut offset = render.submit_bytes(&bytes, 8).unwrap() as usize * 8;
+            render.start().unwrap();
+            while offset < bytes.len() {
+                render.wait_for_data(20).unwrap();
+                offset += render.submit_bytes(&bytes[offset..], 8).unwrap() as usize * 8;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+            render.stop().unwrap();
+            std::thread::sleep(Duration::from_millis(400));
+        }
     }
 
     /// Clock-drift survey of a saved multi-device session. Point

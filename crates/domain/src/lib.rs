@@ -234,7 +234,7 @@ fn valid_parametric_band_parameter(name: &str, value: &serde_json::Value) -> boo
         "Type" => value.as_str().is_some_and(|kind| {
             matches!(
                 kind,
-                "peaking" | "lowShelf" | "highShelf" | "lowPass" | "highPass" | "notch"
+                "peaking" | "lowShelf" | "highShelf" | "lowPass" | "highPass" | "bandPass" | "allPass" | "notch"
             )
         }),
         "FrequencyHz" => value.as_f64().is_some_and(|frequency| {
@@ -1639,6 +1639,8 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::BassTreble, "bassDb" | "trebleDb") => value
                     .as_f64()
                     .is_some_and(|gain| gain.is_finite() && (-12.0..=12.0).contains(&gain)),
+                (NodeKind::BassTreble, "bassFrequencyHz") => value.as_f64().is_some_and(|frequency| frequency.is_finite() && (80.0..=1_000.0).contains(&frequency)),
+                (NodeKind::BassTreble, "trebleFrequencyHz") => value.as_f64().is_some_and(|frequency| frequency.is_finite() && (800.0..=12_000.0).contains(&frequency)),
                 (NodeKind::Dehum, "frequencyHz") => value.as_f64().is_some_and(|frequency| {
                     frequency.is_finite() && (45.0..=65.0).contains(&frequency)
                 }),
@@ -3220,6 +3222,13 @@ mod tests {
             "valid EQ parameters rejected: {:?}",
             validate_session(&session(vec![eq.clone()], vec![]))
         );
+        for kind in ["bandPass", "allPass"] {
+            eq.parameters.insert("band15Type".into(), serde_json::json!(kind));
+            assert!(validate_session(&session(vec![eq.clone()], vec![])).is_ok());
+            let encoded = serde_json::to_string(&eq).unwrap();
+            let decoded: Node = serde_json::from_str(&encoded).unwrap();
+            assert_eq!(decoded.parameters["band15Type"], kind);
+        }
         eq.parameters
             .insert("band15Type".into(), serde_json::json!("unsupported"));
         assert!(validate_session(&session(vec![eq], vec![]))

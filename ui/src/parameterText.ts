@@ -15,8 +15,10 @@ const TEXT: Record<string, Record<string, ParameterText>> = {
     percent: { label: "Volume", help: "100 % leaves the sound unchanged, 0 % silences it, 200 % doubles it." },
   },
   bassTreble: {
-    bassDb: { label: "Bass", help: "Boosts or cuts the low end (below about 120 Hz). 0 dB leaves it unchanged." },
-    trebleDb: { label: "Treble", help: "Boosts or cuts the high end (above about 6 kHz). 0 dB leaves it unchanged." },
+    bassDb: { label: "Bass", help: "Boosts or cuts voice warmth and the low end. 0 dB leaves it unchanged." },
+    trebleDb: { label: "Treble", help: "Boosts or cuts voice brightness and articulation. 0 dB leaves it unchanged." },
+    bassFrequencyHz: { label: "Bass frequency", help: "Raise this frequency to affect more of your voice. Default: 500 Hz. Original tuning: 120 Hz." },
+    trebleFrequencyHz: { label: "Treble frequency", help: "Lower this frequency to affect more of your voice. Default: 1500 Hz. Original tuning: 6000 Hz." },
   },
   testSignal: {
     frequencyHz: { label: "Tone frequency", help: "Pitch of the test tone. 440 Hz is the A above middle C." },

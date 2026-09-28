@@ -15,5 +15,7 @@ serde_json = { workspace = true }
 windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_Threading"] }
 
 [dev-dependencies]
+audiorouter-recording = { path = "../recording" }
+audiorouter-engine = { path = "../engine" }
 audiorouter-domain = { path = "../domain" }
 audiorouter-storage = { path = "../storage" }

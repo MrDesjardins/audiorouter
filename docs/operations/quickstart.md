@@ -1,5 +1,13 @@
 # AudioRouter development quickstart
 
+Bass & Treble now includes the main voice frequencies: bass defaults to
+500 Hz and treble to 1500 Hz, with gain from −12 to +12 dB. In Properties,
+raise **Bass frequency** or lower **Treble frequency** to affect more of
+your voice. A warm/dark starting point is Bass +12, Treble −12; reverse
+them for a thinner, brighter voice. Saved nonzero settings sound stronger
+than earlier builds. Set the frequencies to 120 and 6000 Hz to restore
+the original tuning. Zero gain remains neutral.
+
 This repository contains a tested control plane, UI, and VB-Cable-first
 existing-device routing path, but it is not a releasable Windows installer
 yet. AudioRouter-owned managed virtual devices, the installer, and production
@@ -119,6 +127,11 @@ used by several paths. **Save** the session, then press **Play**: every path
 starts and stops together. Up to 8 sources and 8 outputs are supported in one
 session. A mono microphone connected to a stereo Input device node is copied to
 both channels.
+
+Tools without an enabled input connection, and any downstream nodes fed only
+by those tools, show a warning and are ignored during playback. They stay on
+the canvas and in the saved session; other connected routes can still play.
+Reconnect an input and save to include that chain again.
 
 While it plays, the **Timing** tab shows, for each output, how long the sound
 spends at each step in travel order: how long a source's audio waits before it
@@ -470,7 +483,14 @@ unconnected for explicit user wiring. Draft changes are not committed until an
 authorized plan/apply flow.
 In Advanced EQ properties, use Add point or double-click the logarithmic graph
 to create a filter. Drag a point to set frequency and applicable gain, then
-choose Peaking, Low/High shelf, Low/High pass, or Notch and set Q precisely.
+choose Peaking/Band (bell-shaped boost/cut), Low/High shelf, Low/High pass, Band pass, All pass, or Notch
+and set Q precisely. Band pass keeps a frequency band with unity gain at its
+center; All pass changes phase without changing level (a flat 0 dB curve).
+Both use frequency and Q, with no gain control.
+Use Select point to edit a point without dragging it. Undo/Redo beside Save
+and Play (Ctrl+Z/Ctrl+Y) restore tool edits, including after Save or live
+autosave. Save a restored stopped route to keep it; live parameter changes
+follow the ordinary automatic application path.
 Remove point disables that band. The backend bounds the node to sixteen bands;
 older saved `parametricEq@1` nodes use the same editor and retain their sound.
 

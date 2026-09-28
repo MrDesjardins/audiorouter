@@ -2,6 +2,26 @@ import { describe, expect, it } from "vitest";
 import type { ApplicationInfo, Session } from "@audiorouter/contracts";
 import { addSourceToOccupiedOutput, appendApplicationCaptureNode, applicationCaptureChoices, applicationOnlyRouteSource, independentPaths, generatedOnlyRoute, needsNativePaths, unboundDeviceNodes, isParameterOnlyChange, pluginCatalog, STANDARD_PLUGIN_FOLDERS, mixerInputs, mixerRouteSources, pruneInactiveUpstream, mixerInputVolumeKey, mixedApplicationRouteOtherSources, rebindApplicationCaptureNode, appendDraftConnection, appendEndpointLoopbackNode, appendLibraryNode, appendPluginPlaceholderNode, appendVirtualBusNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, removeDraftNode, resetNodeDraftParameters, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
 import { demoSession } from "./fixtures";
+import { unfedRouteNodes } from "./draft";
+
+describe("source-less playback branches", () => {
+  it("ignores a detached filter chain without deleting it or masking unbound real sources", () => {
+    let session: Session = { ...demoSession, edges: [] };
+    session = appendLibraryNode(session, "spectralGate");
+    session = appendLibraryNode(session, "parametricEq");
+    const gate = session.nodes.find((node) => node.kind === "spectralGate")!;
+    const eq = session.nodes.find((node) => node.kind === "parametricEq")!;
+    session = appendDraftConnection(session, "mic", "out", "headphones", "in");
+    session = appendDraftConnection(session, gate.id, "out", eq.id, "in");
+    const before = JSON.stringify(session);
+    const pruned = pruneInactiveUpstream(session);
+    expect(pruned.nodes.some((node) => node.id === gate.id || node.id === eq.id)).toBe(false);
+    expect(unfedRouteNodes(session).map((node) => node.id)).toContain(gate.id);
+    expect(independentPaths(session)).toHaveLength(1);
+    expect(unboundDeviceNodes(session).map((node) => node.id)).toContain("mic");
+    expect(JSON.stringify(session)).toBe(before);
+  });
+});
 
 describe("appendLibraryNode", () => {
   it("adds a bounded Test Signal source with conservative defaults", () => {
@@ -390,7 +410,7 @@ describe("Mixer route sources", () => {
     const withoutTone = { ...session, nodes: session.nodes.map((node) => node.kind === "testSignal" ? { ...node, enabled: false } : node) };
     expect(mixerRouteSources(withoutTone)?.map((node) => node.kind)).toEqual(["applicationCapture", "physicalInput"]);
     expect(pruneInactiveUpstream(withoutTone).edges.some((edge) => edge.sourceNode.startsWith("testSignal"))).toBe(false);
-    expect(pruneInactiveUpstream(session)).toBe(session);
+    expect(pruneInactiveUpstream(session).nodes.some((node) => node.id === "headphones")).toBe(false);
   });
 
   it("returns null without exactly one enabled Mixer", () => {
@@ -457,7 +477,10 @@ describe("pluginCatalog", () => {
 
 describe("independent paths", () => {
   const node = (id: string, kind: Session["nodes"][number]["kind"], extra: Partial<Session["nodes"][number]> = {}): Session["nodes"][number] => ({
-    id, kind, typeVersion: 1, name: id, enabled: true, bypass: false, parameters: {}, ports: [{ name: "in", direction: "input", channels: 2 }, { name: "out", direction: "output", channels: 2 }], ...extra,
+    id, kind, typeVersion: 1, name: id, enabled: true, bypass: false, parameters: {}, ports: [
+      ...(["physicalInput", "testSignal", "audioFile"].includes(kind) ? [] : [{ name: "in", direction: "input" as const, channels: 2 as const }]),
+      { name: "out", direction: "output", channels: 2 as const },
+    ], ...extra,
   });
   const edge = (id: string, sourceNode: string, destinationNode: string): Session["edges"][number] => ({
     id, sourceNode, sourcePort: "out", destinationNode, destinationPort: "in", matrix: [1, 0, 0, 1], enabled: true,

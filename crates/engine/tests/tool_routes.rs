@@ -1,6 +1,6 @@
 //! Synthetic full graph compilation/processing. No WASAPI or private audio.
 use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
-use audiorouter_engine::{compile_session, AudioBlock, RuntimeGeneration};
+use audiorouter_engine::{AudioBlock, RuntimeGeneration, compile_session};
 use serde_json::json;
 
 const PROCESSORS: &[NodeKind] = &[
@@ -23,6 +23,29 @@ const PROCESSORS: &[NodeKind] = &[
     NodeKind::GraphicEq,
     NodeKind::Pitch,
 ];
+
+#[test]
+fn bass_treble_frequency_parameters_have_backend_bounds() {
+    for (name, min, max) in [
+        ("bassFrequencyHz", 80.0, 1000.0),
+        ("trebleFrequencyHz", 800.0, 12000.0),
+    ] {
+        for value in [min, max] {
+            let mut session = route(NodeKind::BassTreble);
+            session.nodes[1]
+                .parameters
+                .insert(name.into(), json!(value));
+            assert!(compile_session(&session, RuntimeGeneration::new(1)).is_ok());
+        }
+        for value in [min - 1.0, max + 1.0] {
+            let mut session = route(NodeKind::BassTreble);
+            session.nodes[1]
+                .parameters
+                .insert(name.into(), json!(value));
+            assert!(compile_session(&session, RuntimeGeneration::new(1)).is_err());
+        }
+    }
+}
 
 fn route(kind: NodeKind) -> Session {
     let port = |name: &str, direction| Port {

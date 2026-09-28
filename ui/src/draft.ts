@@ -136,7 +136,7 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
   },
   bassTreble: {
     name: "Bass & Treble",
-    parameters: { bassDb: 0, trebleDb: 0 },
+    parameters: { bassDb: 0, trebleDb: 0, bassFrequencyHz: 500, trebleFrequencyHz: 1500 },
     ports: [
       { name: "in", direction: "input", channels: 2 },
       { name: "out", direction: "output", channels: 2 },
@@ -373,7 +373,7 @@ const ROUTE_SOURCE_KINDS = new Set(["physicalInput", "applicationCapture", "endp
 /** Processor kinds the engine accepts in a linear chain before a Mixer input (mirrors `is_chain_processor`). */
 const CHAIN_PROCESSOR_KINDS = new Set<NodeKind>(["gain", "volume", "bassTreble", "dehum", "declick", "denoise", "speechDenoise", "spectralGate", "firFilter", "timeShift", "mute", "meter", "parametricEq", "compressor", "gate", "limiter", "delay", "graphicEq", "pitch", "plugin"]);
 
-/** Drop disabled nodes that nothing live feeds, with their edges (mirrors `prune_inactive_upstream`). */
+/** Exclude silent sources and source-less input chains from runtime only. */
 export function pruneInactiveUpstream(session: Session): Session {
   const removed = new Set<string>();
   for (let changed = true; changed;) {
@@ -382,11 +382,18 @@ export function pruneInactiveUpstream(session: Session): Session {
       if (removed.has(node.id)) continue;
       const fed = session.edges.some((edge) => edge.enabled && edge.destinationNode === node.id && !removed.has(edge.sourceNode));
       const lostFeed = session.edges.some((edge) => edge.enabled && edge.destinationNode === node.id && removed.has(edge.sourceNode));
-      if (!fed && (!node.enabled || lostFeed)) { removed.add(node.id); changed = true; }
+      const needsInput = node.ports.some((port) => port.direction === "input");
+      if (!fed && (!node.enabled || lostFeed || needsInput)) { removed.add(node.id); changed = true; }
     }
   }
   if (removed.size === 0 || removed.size === session.nodes.length) return session;
   return { ...session, nodes: session.nodes.filter((node) => !removed.has(node.id)), edges: session.edges.filter((edge) => !removed.has(edge.sourceNode) && !removed.has(edge.destinationNode)) };
+}
+
+/** Enabled nodes excluded from playback because their chain has no input. */
+export function unfedRouteNodes(session: Session): Session["nodes"] {
+  const active = new Set(pruneInactiveUpstream(session).nodes.map((node) => node.id));
+  return session.nodes.filter((node) => node.enabled && !active.has(node.id));
 }
 
 /**

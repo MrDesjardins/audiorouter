@@ -174,6 +174,359 @@ by hand in the morning.
 
 ## Log
 
+### 2026-09-27 — Voice-sample qualification of all audio tools
+
+- User explicitly rejects level-only qualification: Bass & Treble must
+  meaningfully shape speech like their other tool. Authorizes reuse of the
+  local voice sample, then configuration/behavior checks of every audio tool.
+  Supersedes the earlier conclusion that the Bass/Treble report was complete.
+- Scope/IDs: DSP-01–18, GRAPH-04/14/15, REC/PLUG behavior where applicable.
+  First measure separate bass/treble spectral changes and compare broader
+  shelf candidates on identical, loudness-matched voice. Determine intended
+  reference sound (other-tool name requested), fix controls/contracts together,
+  then qualify every built-in effect, routing/source/sink tool and installed
+  plugin within its supported boundaries.
+- Ordered tasks: build opt-in private voice harness with behavior-specific
+  assertions and private audition files; Bass/Treble comparison and owning
+  layer correction; remaining tools with real speech and controlled added
+  defects (hum/click/noise); resolve defects; focused checks, documentation,
+  final release build. No private audio committed or uploaded; no recapture
+  necessary. Preserve current user session and unrelated working-tree edits.
+- Prerequisites: existing five-second WAV present in temp directory. Offline
+  tests do not prove live continuity, network delivery on another PC or vendor
+  plugin compatibility. Synthetic defects supplement speech when speech alone
+  cannot establish restoration behavior. Native tests need exact devices and
+  existing authorization. Rollback: revert only new behavior changes; retain
+  prior executable, no persistence migration unless explicitly documented.
+- Decision/evidence: the original treble shelf changes upper speech probes
+  only +3.25 dB and total voice RMS +0.03 dB at +12. Broader 300 Hz/3 kHz
+  shelves produce +11.15 dB low / +9.13 dB high changes independently;
+  opposite settings produce over 18 dB spectral tilt. Update DSP-11 and
+  production tuning to these shelves, retaining the two simple controls.
+  Saved nonzero settings become stronger; Advanced EQ recreates old tuning.
+  Loudness-matched files remain private in temp. Clean speech denoising
+  correctly makes little change; test added noise rather than requiring damage.
+- Next: finish behavior-specific voice checks, audition the stronger shelves,
+  verify UI descriptions in all themes, and build a new executable.
+- Attended result: the user heard the loudness-matched 300/3000 Hz comparison
+  but still found it too subtle. Supersede that tuning with adjustable shelves
+  (bass 80–1000 Hz, default 500; treble 800–12000 Hz, default 1500). Existing
+  +12/-12 dB range retained. Original response is available at 120/6000 Hz.
+  Backend validation/catalog, UI defaults/help and DSP-11 updated together.
+  Speech harness also passes hum/click removal and learned/adaptive noise
+  suppression using controlled contamination of the same saved voice.
+- Completed: user confirmed final 500/1500 Hz audition is strong enough.
+  Representative speech configurations passed for all built-in processors,
+  routing and transport tools; nine installed ReaPlugs processed the sample
+  and exposed audio parameters changed it. Audio File, WAV/MP3 recording,
+  and localhost Network Send/Receive passed sample-preservation checks.
+  Unsupported virtual-device/placeholder entries remain unavailable; this
+  is not second-PC network or exhaustive vendor-plugin qualification.
+  [Evidence and limitations](evidence/2026-09-27-voice-tools.md).
+- Checks: domain 70, control 196 (six opt-ins ignored), engine 141 plus five
+  route integrations, private voice/tool/delivery/plugin opt-ins, UI 370,
+  three Edge themes and documentation 66 files/348 links passed. Native
+  47 Hz Bass/Treble route: reference and result 30 s, zero glitches/silence/
+  discontinuity flags; backend late gaps zero. No user session edits.
+- Artifact: `C:\code\audiorouter\target\patrick-main-release-10\release\audiorouter-shell.exe`.
+  Custom-protocol release; current `index-3aXwyTtB.js` verified embedded;
+  bundle newer than changed UI, shell newer than bundle. Matching CLI and
+  plugin worker adjacent. Prior release-9 retained for rollback.
+  Shell SHA-256: `5EEEB8C23BA37E7750B67F3E5BF8C8035537A0035AC4767BA0D869206FEC9520`.
+  CLI SHA-256: `A5459947E9FA3181F15515960E4D4033B19575B7024104508D186FC5D478D6DD`.
+  Worker SHA-256: `338426BFAEA73E7A8DB27DC9686304020CFD3DC78CFD2155B14882D4B64AF634`.
+- Next: hand off the executable for live microphone use; broader milestone
+  gates stay listed above and are not waived by this qualification.
+
+### 2026-09-27 — Source-less processor chains block Play
+
+- Authorized defect fix (GRAPH-12/15, UI-07): detaching Bass & Treble from
+  FIR Filter Hz leaves the latter chain without input. Native preparation
+  mistakes its first processor for a capture source and requests a device.
+- Decision: exclude input-bearing nodes with no enabled upstream feed,
+  transitively, from runtime preparation only. Preserve the saved graph,
+  real sources with missing device bindings, and fed failed processors.
+  Show a non-blocking warning for enabled excluded nodes in the editor.
+- Steps: extend backend pruning/compiler and UI route classification;
+  regress direct tone/output plus detached filter chain; check UI warning
+  in all three themes; build a new embedded-UI executable.
+- Validation: engine/compiler and UI tests on Windows; simulated browser
+  playback is not Scarlett evidence. Do not launch alongside the user's app.
+- Rollback: revert only this pruning/warning change; no schema migration or
+  persisted graph edits. Next: implement and verify the reproduced shape.
+- Implemented: engine runtime pruning excludes inputless chains before
+  single-route/multi-path compilation; control plugin preparation also skips
+  excluded nodes. Single-endpoint paths preserve disabled capture mute stages.
+  UI routing helpers mirror pruning and show a non-blocking warning above the
+  canvas. Saved nodes/connections remain intact. Graph specification and
+  quickstart updated; processor-only block compilation remains compatible.
+- Final Windows checks: `cargo test -p audiorouter-engine -p
+  audiorouter-control --locked --quiet`: engine 140 + 4 integration tests,
+  control 196 passed (6 hardware tests ignored). UI vitest 370 passed;
+  `npm.cmd run build` passed. `npx.cmd playwright test
+  e2e/unfed-processors.pw.ts`: 3 passed; screenshots visually reviewed at
+  `%TEMP%/audiorouter-unfed-{dark,light,high-contrast}.png`. Browser fixture
+  starts/stops a simulated direct route; compiler regression processes actual
+  sample blocks and checks output identity. Scarlett acceptance remains
+  attended; no real microphone captured or app launched by the agent.
+- Experiments corrected: generic UI fixture gave capture sources input ports
+  and was fixed to match real source ports; dropping an entire processor-only
+  graph broke two existing DSP tests, so that existing compile API fallback
+  was retained. Sandbox denied replacing generated UI assets; normal-permission
+  build passed. Browser tests initially passed but stalled during temporary
+  Vite teardown; terminated only that verified test server and reran with
+  normal process permissions (3 passed, clean exit).
+- Documentation check: 65 files / 346 local links; `git diff --check` passed.
+  RTK remains unavailable. Next: user tests the direct Bass & Treble path in
+  the new release build; Bass/Treble audibility remains a separate open report.
+- Artifact: `C:\code\audiorouter\target\patrick-main-release-9\release\audiorouter-shell.exe`,
+  built with `custom-protocol`; embedded bundle `index-DoB_9MLY.js` verified
+  (contains the new warning), binary newer than UI assets. Shell SHA256
+  `BF907177C0B76C01F860952B23329F48775CC6FE016549C2E091324E63DCF12F`.
+  Existing release folders retained for rollback. No installer/signing claim.
+  Matching CLI and plugin worker rebuilt beside the shell with
+  `cargo build --release --locked -p audiorouter-cli -p
+  audiorouter-plugin-host --target-dir target/patrick-main-release-9` (passed).
+
+### 2026-09-27 — Bass & Treble reported inaudible
+
+- Latest attended reproduction: release-9 direct Microphone → Bass & Treble
+  → Scarlett still has no perceived tone change, with downstream tools
+  detached. Read-only revision 106 confirms Bass +11.5 / Treble +12, enabled
+  and not bypassed. Retained stopped telemetry shows processor timing and
+  matching Bass/Scarlett levels; do not present retained RMS as audible proof.
+- Next authorized investigation (DSP-11, GRAPH-15, UI-07): reproduce the
+  mono-source/stereo-tool direct path in the actual multi-path runtime with
+  low/high known tones, including parameter replacement; then investigate
+  native delivery if sample-domain behavior passes. No user route changes,
+  microphone recording or shell launches. Rollback: diagnostic tests only
+  until a owning-layer defect is established. Hardware confirmation remains
+  separate from offline checks; preserve all current working-tree changes.
+- Direct mono-source/stereo-tool runtime regression passed: 60 Hz at Bass
+  +/-12 changes by +/-11.11 dB; 10 kHz Treble +/-12 changes by +/-10.83 dB.
+  Recompiles via `replace_paths` and verifies identical stereo output and no
+  crossfeed. `cargo test -p audiorouter-engine --locked --quiet`: 141 unit +
+  4 integration tests passed. Initial test needed to recycle its ring blocks;
+  that harness ownership error was corrected before interpreting results.
+- User explicitly authorized a quiet synthetic Scarlett comparison. Added
+  opt-in `live_physical_output_bass_treble_comparison` to the transport harness:
+  private control pipe/in-memory session, Test Signal -> Bass & Treble -> exact
+  Scarlett render endpoint, base -40 dBFS, 2.4-second maximum tones. No microphone
+  opened, no samples recorded, no user DB/session edits, no shell launched.
+  Initial mono-generator shape was unsupported and stopped before audio;
+  supported stereo generator rerun passed (8.87 s). Command: set
+  `AUDIOROUTER_TONE_COMPARISON=1`,
+  `AUDIOROUTER_TONE_COMPARISON_OUTPUT={0.0.0.00000000}.{829bab15-21b8-47d1-964a-f843aa3b37d6}`;
+  `cargo test -p audiorouter-transport --test live_audio_continuity --locked
+  live_physical_output_bass_treble_comparison -- --ignored --nocapture`.
+  Branch RMS dBFS: Bass cut -52.43, boost -30.19 (22.23 dB difference);
+  Treble cut -52.16, boost -33.86 (18.30 dB difference); zero clipped samples.
+  These are native branch meters, not external Scarlett loopback measurements.
+  User confirms both audible level changes in Scarlett headphones. This
+  establishes audible native synthetic processing on that device; the separate
+  report about speaking through the microphone remains unresolved. Requested
+  explicit consent for a five-second local microphone sample with flat and
+  processed versions of identical input. Do not capture until consent arrives.
+  Runtime production code unchanged; release-9 remains current.
+- User explicitly consented to a five-second local microphone sample.
+  Added ignored, opt-in `live_local_voice_tone_comparison` (exact endpoint,
+  verified float32 format, 5-second/7-second deadline, first voice channel).
+  Capture passed in 5.20 s. Identical sampled voice processed through the
+  engine's Bass & Treble: both +12 gives +5.38 dB overall RMS, both -12
+  gives -3.52 dB. Three PCM WAVs kept only in
+  `%TEMP%/audiorouter-voice-comparison-6788/` (`flat`, `boost`, `cut`);
+  common scaling prevents clipping and preserves level differences.
+  No voice samples/transcript logged, committed or sent off this computer.
+- Attended playback of those files on the exact Scarlett endpoint passed
+  (16.52 s): flat, boost, cut, common peak cap 0.05, no user-session changes.
+  Playback helper validates temp-directory containment and device format.
+  Awaiting user's listening result. Only qualification tests and their engine
+  dev-dependency/Cargo.lock changed; production DSP behavior is unchanged.
+  `cargo test -p audiorouter-transport --test live_audio_continuity --locked
+  --quiet`: 1 deterministic detector passed, 6 opt-in hardware tests ignored.
+  New private comparison files may be removed only within the requested
+  local-sample lifecycle; no automatic deletion of unrelated user audio.
+- User confirms audible differences between flat, boosted and cut versions
+  of the identical voice sample through Scarlett. Qualification confirms
+  DSP-11 processing, live parameter replacement in the mono path, native
+  synthetic output and voice playback audibility. No production filter defect
+  reproduced. Why changes were not perceived while speaking remains an
+  inference (own unprocessed voice can mask monitoring; shelf bands leave
+  middle speech frequencies mostly intact), not a proved routing defect.
+  Diagnostic slice complete; keep release-9. Next: return to M05 attended
+  testing / M08 release gates unless the user requests a broader tone response.
+- User reports no audible change at about +10 dB Bass (DSP-11, UI-07).
+- Read-only inspection of the current saved session (revision 88):
+  bassTreble-1 enabled, not bypassed, bassDb 10.6, trebleDb 0; connected
+  mic → Bass & Treble → FIR Filter Hz → Advanced EQ → ReaComp → ReaGate.
+  EQ has an enabled 72 Hz high pass. This tool is on the microphone path,
+  not the game path. No session edits, native launches or audio capture made.
+- Verified compiler reads bassDb/trebleDb into fixed 120 Hz / 6 kHz shelves.
+  `cargo test -p audiorouter-engine
+  restoration_and_tone_tools_compile_and_shape_known_signals --locked`
+  passed on Windows: the deterministic vector verifies bass boost and
+  treble cut. This is offline DSP evidence, not confirmation of the user's
+  currently playing graph or an attended audible result.
+- Explanation remains conditional: little sub-120-Hz source energy and
+  downstream filtering/dynamics can mask the boost; it cannot change audio
+  on the separate game route. A saved value alone does not prove live
+  adoption after adding topology. Next: identify which sound the user is
+  monitoring and check live adoption if the microphone also has no change.
+  No implementation defect established; rollback unnecessary.
+
+Follow-up: user confirms speaking into the microphone with no perceived
+change. Two read-only `system.diagnostics` requests to the existing release-8
+backend show `configured-stopped`, multi-input. Retained telemetry includes
+bassTreble-1 processing time (2.09 us average) and RMS -61.36 dB versus mic
+-71.79 dB (about +10.4 dB); this establishes execution and a prior level
+difference, not live speech quality or response to the latest slider edit.
+Did not start/stop the user's route, launch a shell, or change parameters.
+User confirms the sound is their voice in Scarlett headphones. Their Stop
+test removes the voice, establishing that the monitored voice depends on
+AudioRouter. Treble -12/+12 while speaking also produces no perceived
+change. Read-only SQLite inspection now shows revision 97, Bass 1.5 dB,
+Treble 0 dB: parameter edits have been persisted, but this does not prove
+their corresponding audio activation. Next attended check: Treble -12 dB,
+wait for save, Stop/Play, then compare; distinguishes live replacement from
+the freshly prepared chain. No microphone samples captured or route changed
+by the agent. Cause remains unresolved; do not dismiss this as direct
+monitoring or low bass energy. User reports no audible change after the
+Treble -12 dB Stop/Play comparison. Read-only revision 98 confirms Treble
+-12 dB, enabled/unbypassed tool and intact serial microphone connections.
+Next attended comparison temporarily bypasses the four downstream
+processors (FIR Filter Hz, microphone Advanced EQ, ReaComp, ReaGate) and
+compares Treble extremes. User performs edits; the agent does not weaken
+their microphone processing or change the native route automatically.
+
+### 2026-09-27 — EQ point selection and visible Undo/Redo
+
+- User requests Band (distinct from Band pass), selection outside the EQ
+  graph, and toolbar Undo/Redo with Ctrl+Z/Ctrl+Y. UI-02/05/11, DSP-02.
+- Confirm Band terminology with the user while implementing independent
+  controls. Add an active-point selector and a small drag threshold.
+- Undo exists only in Session and is cleared by Save/live autosave. Keep
+  bounded local history through own saves, apply restored drafts against
+  the current backend revision, and clear on session switch/external edits.
+  Coalesce rapid edits of one numeric setting; preserve ordinary text undo.
+- Verify parameter undo/redo before and after Save, shortcut focus handling,
+  point selection without mutation, and three-theme toolbar/inspector layout.
+  Browser tests need Edge/local backend; no audio/driver/credentials needed
+  for this UI slice. Rollback only this slice; preserve prior filter edits.
+
+- Decision (user): label the existing bell filter **Peaking/Band**; retain
+  `peaking` internally. Added an active-point dropdown and 5 px drag threshold.
+- Implemented toolbar SVG icons and Ctrl+Z/Ctrl+Y (also Ctrl+Shift+Z),
+  preservation through own saves, current-revision restore, and 750 ms
+  coalescing of edits to the same parameter. History is still bounded to 20
+  entries and resets on session changes/external replacements/reload.
+- Verification: UI 369 tests pass; typecheck and production UI build pass.
+  Real-backend Edge point/history tests pass in all three themes, including
+  undo after Save, save after Undo, Redo after Save, numeric-field shortcuts,
+  click jitter, and reload reset. Three full screenshots visually reviewed
+  at `%TEMP%/audiorouter-designer-review/undo-eq-<theme>.png`.
+  Simulated playing-route test passes through autosave and a snapshot refresh
+  (`undo-live-parameters.pw.ts`); this is UI evidence, not native audio proof.
+- Failed experiments: point selection retained a focused NumberField's typed
+  text; remount controls by selected point identity. The first playing-route
+  fixture had no processor catalog/controls or connected edges; use a
+  connected EQ fixture. Typecheck caught an unsupported Testing Library
+  `exact` option; removed it. These checks now pass.
+- Package next: rebuild the UI-only change into release-8 with
+  custom-protocol, retain matching companion binaries and prior release-7;
+  verify embedding and checksum before handing it to the user.
+
+Packaging complete on Windows: `npm.cmd run build` in ui and
+`cargo build --manifest-path src-tauri/Cargo.toml --release --features
+custom-protocol --locked --target-dir target/patrick-main-release-8` passed.
+Latest UI bundle `index-CTvu355D.js` is confirmed embedded; shell timestamp
+19:42:11 is newer than UI 19:41:28. Executable:
+`C:\code\audiorouter\target\patrick-main-release-8\release\audiorouter-shell.exe`.
+SHA256 `A5919C8E0ACE2EA3C95AE04BA83A28701DD20F60C8B5B654BE5F2BFDA0FA3609`.
+Unchanged release-7 worker/CLI were copied beside it; backend source is
+unchanged in this slice. Previous build folders remain available. No shell
+was launched, endpoint opened or user database modified by this task.
+Final Edge command: `npx.cmd playwright test --config=playwright.config.ts
+undo-eq-points.pw.ts undo-live-parameters.pw.ts` (4 passed), including
+shortcuts with focus on a filter dropdown. Documentation acceptance and
+`git diff --check` pass. Next: attended release-8 point selection and
+parameter Undo/Redo test; existing Band pass live-continuity gate remains
+open. Local history does not survive app reload or session switches.
+
+### 2026-09-27 — Build Advanced EQ filter update for attended use
+
+- User requests the release executable and full path (DSP-02/08, UI-05).
+- Task: rebuild ui/dist, build shell with custom-protocol in a new
+  target/patrick-main-release-7 folder, build the matching plugin worker and
+  CLI alongside it, verify filter strings in assets and their embedding,
+  record timestamps and SHA256 hashes. Preserve prior build folders.
+- Prerequisites: local Windows toolchains; no credentials, driver changes
+  or live audio needed for packaging. Prior automated filter checks pass;
+  Band pass live continuity remains open as recorded in filter evidence.
+- Rollback: use the previous release-6 artifact; no database is changed by
+  building. Next: hand off the exact new executable for attended testing.
+
+Shell build succeeded (`cargo build --manifest-path src-tauri/Cargo.toml
+--release --features custom-protocol --locked --target-dir
+target/patrick-main-release-7`). `npm.cmd run build` in ui passed; bundle
+`index-B6qG1ZEp.js` contains both filter labels and its filename is confirmed
+inside the shell executable. UI timestamp 19:23:57, shell 19:25:36 local.
+Shell path: `C:\code\audiorouter\target\patrick-main-release-7\release\audiorouter-shell.exe`.
+SHA256: `479E9345575E9991571D6F41159EB8E5850F6D6B4EB397B40216878470003144`.
+This is an unsigned attended-test build; prior live qualification limitations
+remain in force. No shell was launched or database modified.
+
+Companion build passed (`cargo build --release --locked -p audiorouter-cli
+-p audiorouter-plugin-host --target-dir target/patrick-main-release-7`).
+Both binaries are beside the shell. Worker SHA256:
+`4640954E2E4EA8BAC8F61A964E9D0221E172D4FEBBFBDE396DD6CA6F238FA58D`;
+CLI SHA256: `44FF58EC991F420CBFDE54A74826C5F1738E4418255CB7A4DFB840399AC6EBE6`.
+Documentation acceptance and diff whitespace checks passed. Next task:
+attended release-7 filter test; Band pass clean-reference continuity rerun
+remains an open qualification task.
+
+### 2026-09-27 — Advanced EQ missing Band pass and All pass
+
+- Objective: record the user's missing filters; interpret "Band" as Band
+  pass. Requirements: DSP-02/08, UI-05/11; M04 DSP and M05 inspector.
+- Reproduction: AdvancedEqEditor FILTERS and domain validation admit only
+  peaking, shelves, low/high pass and notch; DSP FilterKind has the same
+  six types. This affects the current source and release-6 feature set.
+- Specification decision: add constant-0-dB-peak band pass and second-order
+  all pass, with shared coefficients, frequency/Q controls and no applicable
+  gain/slope. Existing saved values/defaults stay compatible. Implementation
+  is pending under the repository's specification-only task instruction.
+- Ordered next task: extend registry/domain/contracts and DSP together;
+  wire engine parsing and response API; extend the editor choices and help;
+  add signal, round-trip and UI regressions; update operational docs.
+- Validation matrix: offline magnitude/phase and stability vectors need no
+  hardware; contract drift and saved-session tests need local toolchains;
+  three-theme UI checks need a browser; live sine-continuity qualification
+  needs Windows and the exact VB-Cable endpoints, with a clean reference.
+  No credentials or owned driver are required. No implementation checks
+  have been run for these new types.
+- Risks: a flat all-pass magnitude curve can be mistaken for bypass; gain
+  or slope retained from another type must remain inert. Rollback: revert
+  this documentation slice; once implemented, preserve/reject new enum
+  values explicitly rather than silently substituting peaking.
+- Next action: implement the M04/M05 DSP-02 completion when requested.
+
+Implementation authorized by the user on 2026-09-27. Execute the ordered
+task above, retain existing enum values and disabled defaults, and verify
+DSP, domain/engine/control, contracts and editor before handoff. Revert only
+this filter slice for rollback; preserve unrelated working-tree changes.
+
+Implemented: both types in DSP, domain validation, engine parsing, discovery,
+response API and TypeScript contracts; editor choices/help, inert gain and
+frequency-only dragging; quickstart/library description. Existing sessions
+retain their values. Verification and failed experiments are recorded in
+[filter evidence](evidence/2026-09-27-advanced-eq-filters.md): Rust checks,
+368 UI tests, contract drift, review build, 3 real-backend Edge cases and
+six visually reviewed theme screenshots pass. All pass live continuity is
+clean for 30 s. Band pass continuity remains open (3 glitches on a clean
+reference); unchanged Gain also glitched (2), so do not claim the new filter
+is live-qualified. Next task: clean-reference Band pass rerun, then package
+for attended use. No desktop release artifact was rebuilt for this slice.
+
 New dated entries go here (objective, requirement IDs, work, verification,
 result, next action). Keep them short, and move settled facts into the
 sections above.

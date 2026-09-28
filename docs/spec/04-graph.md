@@ -54,6 +54,12 @@ A mic split into three branches opens one capture stream. A cycle introduced by 
 
 For independently prepared native paths, a deliberately disabled source and
 downstream nodes fed only by that source are excluded from active preparation.
+Input-bearing tools and sinks with no enabled upstream input are also
+excluded, transitively, from runtime preparation. They remain saved and visible
+with a non-blocking no-input warning; other connected source paths may play.
+A disconnected processor must never be mistaken for a device capture source.
+An actual source with a missing device binding still requires deliberate
+selection, and a fed failed processor retains its protected-path failure policy.
 An explicit Mixer with another live input keeps that contribution. Disabled
 output branches suppress playback; compatible disabled/bypassed effects remain
 dry stages. UI endpoint preparation retains per-node bindings when paths or

@@ -1293,7 +1293,7 @@ export type MethodParams = {
     sampleRateHz: number;
     bands: Array<{
       enabled?: boolean;
-      type: "peaking" | "lowShelf" | "highShelf" | "lowPass" | "highPass" | "notch";
+      type: "peaking" | "lowShelf" | "highShelf" | "lowPass" | "highPass" | "bandPass" | "allPass" | "notch";
       frequencyHz: number;
       q: number;
       gainDb: number;

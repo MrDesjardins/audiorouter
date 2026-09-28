@@ -10,8 +10,33 @@ calculated at a different rate.
 
 ## Requirements
 
+Advanced EQ filter completion (DSP-02; specified 2026-09-27): include
+**Band pass** (`bandPass`) and **All pass** (`allPass`) in
+addition to the existing filter types. Band pass uses a constant 0 dB peak
+at its center frequency, attenuates frequencies on either side, and uses Q
+to control bandwidth. All pass preserves magnitude while changing phase;
+frequency and Q control its phase transition. Neither type uses gain or the
+low/high-pass slope setting. Retain existing type identifiers, defaults,
+sixteen-band capacity, and saved-session behavior.
+
+Both are second-order biquads. With w = 2*pi*f/sampleRate and
+alpha = sin(w)/(2*Q), the unnormalized coefficient order is
+(b0, b1, b2, a0, a1, a2): band pass is
+(alpha, 0, -alpha, 1+alpha, -2*cos(w), 1-alpha); all pass is
+(1-alpha, -2*cos(w), 1+alpha, 1+alpha, -2*cos(w), 1-alpha).
+Normalize by a0 and apply the existing sample-rate eligibility and stability
+rules (DSP-08). The backend response API uses these same coefficients.
+
+Acceptance: verify band-pass unity at center and attenuation below/above
+center across multiple Q values; verify all-pass unity magnitude and a
+nontrivial phase/impulse response. Exercise supported sample rates, boundary
+frequency/Q values, silence, finite output, bypass, and session round trips.
+An all-pass magnitude curve is flat at 0 dB and must not be presented as
+evidence that the filter does nothing. Qualification evidence belongs in
+the active plan; these requirements alone do not establish release readiness.
+
 - **DSP-01 — Core controls.** Every processor shall expose typed parameters, units, defaults, valid ranges, versioned presets, reset, bypass, mute where appropriate, meters, latency, and failure behavior through the node registry/API. Built-ins are usable without external plugins. Displayed values must match effective backend values.
-- **DSP-02 — EQ.** Supply a ten-band graphic EQ and a bounded sixteen-band parametric EQ. Parametric bands support peaking, low/high shelf, high/low pass, and notch; each band has enable, frequency, Q, and applicable gain/slope. Its Advanced EQ editor allows points to be added, selected, moved on a logarithmic frequency/linear dB graph, and removed without changing node type. Pass and notch filters have no applicable gain. A visual response curve is computed from the same coefficient specification as DSP and does not become a separate source of truth. The per-node parameter limit must admit all sixteen bands and retained legacy values (83 parameters in the current default, within the 96-parameter bound).
+- **DSP-02 — EQ.** Supply a ten-band graphic EQ and a bounded sixteen-band parametric EQ. Parametric bands support peaking, low/high shelf, high/low pass, band pass, all pass, and notch; each band has enable, frequency, Q, and applicable gain/slope. Its Advanced EQ editor allows points to be added, selected, moved on a logarithmic frequency/linear dB graph, and removed without changing node type. Pass and notch filters have no applicable gain. A visual response curve is computed from the same coefficient specification as DSP and does not become a separate source of truth. The per-node parameter limit must admit all sixteen bands and retained legacy values (83 parameters in the current default, within the 96-parameter bound).
 - **DSP-03 — Dynamics.** Supply a compressor with threshold, ratio, attack, release, knee, makeup gain, and linked stereo detection; and a gate/downward expander with threshold, hysteresis, ratio/range, attack, hold, and release. A gate is amplitude-based, not a substitute for frequency filtering. Basic mode groups advanced controls while preserving direct API access.
 - **DSP-04 — Limiting/gain.** Gain supports attenuation, boost, and click-free mute. Limiter supports output ceiling and disclosed lookahead/release. v1 guarantees a tested sample-peak ceiling; do not call it true-peak protection unless oversampling/inter-sample testing is implemented. Gain reduction and clipping have distinct meters.
 - **DSP-05 — Delay.** Delay adds 0–1,000 ms with bounded preallocation and de-clicked parameter transitions. It supports manual audio/video alignment and is separate from automatic mixer path compensation. Do not promise perceptually seamless large delay changes; report a rebuilding/warming state if needed.
@@ -36,7 +61,7 @@ hold defaults remain the responsibility of the windowed signal-meter layer.
 - **DSP-08 — Smooth and stable.** Parameter ramps avoid avoidable discontinuities. Filter coefficients remain stable throughout changes, including near Nyquist; clamp frequency eligibility to the graph sample rate via schema limits before acceptance. Handle denormals, NaN/Inf, silence, maximum supported gain, and overload without callback failure.
 - **DSP-09 — Presets.** Include conservative `Voice neutral`, `Voice gate and compression`, `50 Hz hum notch`, and `60 Hz hum notch` presets with explainable parameters. They are starting points, not automatic calibration or guarantees. Importing a preset never enables microphone monitoring or recording automatically.
 - **DSP-10 — Volume.** A one-input/one-output Volume tool sets level in percent, 0–200 % on a linear scale (100 % is unity), for per-source level before a Mixer. It shares Gain's realtime path and click behavior; percent is validated in the backend. Mixer per-input volume (GRAPH-04) is 0–100 % per input, stored on the Mixer as `inputVolume:<upstreamNodeId>` and applied to that input's mix matrix; an unconnected key is inert. Audio Hijack's "Sync" block corresponds to DSP-05 Delay and is presented as "Sync (delay)".
-- **DSP-11 — Bass & Treble.** A one-in/one-out tone tool with two controls: bass (low shelf at 120 Hz, Q 0.707) and treble (high shelf at 6 kHz, Q 0.707), each −12…+12 dB, built on the stable biquad path (DSP-08).
+- **DSP-11 — Bass & Treble.** A one-in/one-out tone tool with bass and treble gain controls, each −12…+12 dB, built on the stable biquad path (DSP-08), Q 0.707. `bassFrequencyHz` is 80…1000 Hz (default 500); `trebleFrequencyHz` is 800…12000 Hz (default 1500), clamped below Nyquist for the runtime sample rate. Raising bass frequency or lowering treble frequency includes more speech in the adjustment. Missing frequency parameters use the defaults. This supersedes the original fixed 120 Hz/6 kHz tuning after local speech qualification; saved nonzero settings consequently sound stronger. Set the frequencies to 120/6000 Hz to restore the original response.
 - **DSP-12 — Dehum.** Removes mains hum with narrow peaking cuts (Q 20) at a 45–65 Hz fundamental (50 and 60 Hz presets) and up to 8 harmonics below 0.45 × the graph rate. Amount 0–100 % maps to 0 to −36 dB per cut. Program material between harmonics is unaffected within 5 %.
 - **DSP-13 — Declick.** Repairs impulsive clicks and crackle. A sample is flagged when its second-difference residual exceeds k × the running residual level (threshold 0 % → k = 3, 100 % → k = 30); flagged runs of at most 32 samples are replaced by linear interpolation. Output is delayed by a disclosed 64-sample lookahead (`latency_samples`). Clean program material passes bit-exactly apart from the delay.
 - **DSP-14 — Input Switch.** A routing node with inputs A and B and one output passes only the selected input. Changing the selection on running audio crossfades with equal power over 0.5 s (normal) or 2 s (slow, Shift-click in the UI); the fade position carries across a live graph update. With one live input it passes that input only when its side is selected.

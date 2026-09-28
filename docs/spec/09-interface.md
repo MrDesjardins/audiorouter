@@ -65,6 +65,30 @@ point changes its frequency and applicable gain; precise frequency, gain,
 filter type, and Q controls remain keyboard accessible. The response curve
 comes from `processors.response`, not an independent renderer DSP model.
 
+The filter selector also offers Band pass and All pass (DSP-02 completion).
+For these types, frequency and Q remain editable,
+gain and pass slope are inapplicable, and graph dragging changes frequency
+only. Explain that Band pass keeps a frequency band and All pass changes
+phase without changing level. An All pass point sits on the 0 dB line.
+Verify selection, precise entry, drag behavior, and save/reload using the
+shared backend types, plus dark, light, and high-contrast visual checks.
+
+The bell-shaped peaking filter is labelled **Peaking/Band** in the editor, distinct
+from Band pass; its stored identifier stays `peaking` for compatibility.
+An active-point selector offers point number, frequency and filter name
+without changing any parameter. Small pointer motion while selecting a
+graph point must not count as a drag.
+
+Undo and Redo appear beside Save/Play in the top bar with icons, accessible
+names and shortcut hints. Ctrl+Z undoes and Ctrl+Y redoes route edits,
+including tool values. Keep bounded local history across the UI's own Save
+and live autosave; restore content against the current backend revision.
+Clear history on session changes or external graph replacement; a new edit
+clears redo. Ordinary text fields retain native text undo; numeric tool
+fields use route undo and immediately display the restored value. Undo of
+a stopped saved route makes an editable draft to Save; parameter-only undo
+while playing follows the same live-apply path as other parameter changes.
+
 ## Defaults that reduce work
 
 Give nodes descriptive names such as `USB mic`, `Voice EQ`, and `To Discord`. Position sources on the left and sinks on the right. Offer mono-mic to stereo mapping automatically as an explicit edge matrix. Use preconfigured conservative voice presets and show their purpose. Do not make the user select a sample rate or buffer period during routine onboarding; show negotiated values under diagnostics.
