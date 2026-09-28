@@ -4655,6 +4655,8 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
         return Err(GraphCompileError::InvalidSampleRate);
     }
     validate_session(session).map_err(GraphCompileError::InvalidGraph)?;
+    let session = harmonize_chain_widths(session);
+    let session = session.as_ref();
     if let Some(result) =
         compile_capture_test_signal_mixer(session, generation, sample_rate_hz, plugins, audio_media)
     {
@@ -6438,6 +6440,103 @@ pub fn independent_path_sessions(
 /// an optional linear chain, then 1..8 outputs. Paths never exchange audio:
 /// summing needs an explicit Mixer. An unsupported path is rejected with
 /// its position and first node named; no path falls back to a shared mix.
+/// Built-in processors work at any channel count, so a chain's width is set
+/// by what cannot adapt. When a built-in tool in a linear chain declares
+/// another width (for example a stereo tool added to a mono microphone chain
+/// of mono plugins), it is compiled at the chain's width instead of the path
+/// being refused. A chain's width is its plugins' input width (their workers
+/// are sized from their ports), otherwise its first tool's input width. Only
+/// edges whose matrix no longer fits change: mono is copied to every
+/// channel, several channels are averaged into mono, equal widths are
+/// identity. Returns the session unchanged when nothing needs adapting.
+fn harmonize_chain_widths(session: &audiorouter_domain::Session) -> std::borrow::Cow<'_, audiorouter_domain::Session> {
+    use audiorouter_domain::{EntityId, NodeKind, PortDirection};
+
+    let node = |id: &EntityId| session.nodes.iter().find(|node| &node.id == id);
+    let in_chain = |kind: NodeKind| is_chain_processor(kind) || kind == NodeKind::Plugin;
+    let outgoing = |id: &EntityId| session.edges.iter().filter(|edge| edge.enabled && &edge.source_node == id).collect::<Vec<_>>();
+    let incoming = |id: &EntityId| session.edges.iter().filter(|edge| edge.enabled && &edge.destination_node == id).collect::<Vec<_>>();
+    let input_width = |node: &audiorouter_domain::Node| {
+        node.ports.iter().find(|port| port.direction == PortDirection::Input).map(|port| port.channels)
+    };
+    let mut adapt: Vec<(EntityId, u8)> = Vec::new();
+    for start in session.nodes.iter().filter(|node| in_chain(node.kind)) {
+        let into = incoming(&start.id);
+        let continues_a_run = into.len() == 1
+            && node(&into[0].source_node).is_some_and(|upstream| in_chain(upstream.kind) && outgoing(&upstream.id).len() == 1);
+        if continues_a_run {
+            continue;
+        }
+        let mut run = vec![start];
+        loop {
+            let out = outgoing(&run[run.len() - 1].id);
+            let [edge] = out.as_slice() else { break };
+            let Some(next) = node(&edge.destination_node) else { break };
+            if !in_chain(next.kind) || incoming(&next.id).len() != 1 || run.iter().any(|member| member.id == next.id) {
+                break;
+            }
+            run.push(next);
+        }
+        let Some(width) = run
+            .iter()
+            .find(|member| member.kind == NodeKind::Plugin)
+            .or(run.first())
+            .and_then(|member| input_width(member))
+        else {
+            continue;
+        };
+        for member in run.iter().filter(|member| member.kind != NodeKind::Plugin) {
+            if member.ports.iter().any(|port| port.channels != width) {
+                adapt.push((member.id.clone(), width));
+            }
+        }
+    }
+    if adapt.is_empty() {
+        return std::borrow::Cow::Borrowed(session);
+    }
+    let mut owned = session.clone();
+    for (id, width) in adapt {
+        if let Some(node) = owned.nodes.iter_mut().find(|node| node.id == id) {
+            for port in &mut node.ports {
+                port.channels = width;
+            }
+        }
+    }
+    let port_width = |nodes: &[audiorouter_domain::Node], id: &EntityId, name: &str| {
+        nodes
+            .iter()
+            .find(|node| &node.id == id)
+            .and_then(|node| node.ports.iter().find(|port| port.name == name))
+            .map(|port| usize::from(port.channels))
+    };
+    let nodes = owned.nodes.clone();
+    for edge in &mut owned.edges {
+        let (Some(from), Some(to)) = (
+            port_width(&nodes, &edge.source_node, &edge.source_port),
+            port_width(&nodes, &edge.destination_node, &edge.destination_port),
+        ) else {
+            continue;
+        };
+        if edge.matrix.len() != from * to {
+            edge.matrix = (0..to * from)
+                .map(|index| {
+                    let (destination, source) = (index / from, index % from);
+                    if from == 1 {
+                        1.0
+                    } else if to == 1 {
+                        1.0 / from as f32
+                    } else if destination == source {
+                        1.0
+                    } else {
+                        0.0
+                    }
+                })
+                .collect();
+        }
+    }
+    std::borrow::Cow::Owned(owned)
+}
+
 pub fn compile_native_paths_with_plugins_and_audio(
     session: &audiorouter_domain::Session,
     generation: RuntimeGeneration,
@@ -6450,6 +6549,8 @@ pub fn compile_native_paths_with_plugins_and_audio(
     use audiorouter_domain::{validate_session, NodeKind};
 
     validate_session(session).map_err(GraphCompileError::InvalidGraph)?;
+    let session = harmonize_chain_widths(session);
+    let session = session.as_ref();
     let components = independent_path_sessions(session);
     if components.is_empty() {
         return Err(GraphCompileError::UnsupportedTopology);
@@ -11389,6 +11490,100 @@ mod tests {
                 Err(GraphCompileError::InvalidSampleRate)
             ));
         }
+    }
+
+    #[test]
+    fn a_stereo_built_in_tool_in_a_mono_plugin_chain_runs_at_the_chain_width() {
+        use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+        #[derive(Debug)]
+        struct Doubler;
+        impl RealtimePluginProcessor for Doubler {
+            fn process(&self, block: &mut AudioBlock) {
+                block.apply_gain(2.0);
+            }
+        }
+        let node = |id: &str, kind: NodeKind, ports: &[(&str, PortDirection, u8)]| Node {
+            id: EntityId::new(id),
+            kind,
+            type_version: 1,
+            name: id.into(),
+            enabled: true,
+            bypass: false,
+            parameters: if kind == NodeKind::Plugin {
+                [
+                    ("path".into(), serde_json::json!("C:\\Plugins\\reaeq.dll")),
+                    ("format".into(), serde_json::json!("vst2")),
+                    ("fingerprint".into(), serde_json::json!("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")),
+                    ("classId".into(), serde_json::json!("default")),
+                ]
+                .into_iter()
+                .collect()
+            } else {
+                Default::default()
+            },
+            ports: ports.iter().map(|(name, direction, channels)| Port { name: (*name).into(), direction: *direction, channels: *channels }).collect(),
+        };
+        let edge = |id: &str, from: &str, to: &str, matrix: Vec<f32>| Edge {
+            id: EntityId::new(id),
+            source_node: EntityId::new(from),
+            source_port: "out".into(),
+            destination_node: EntityId::new(to),
+            destination_port: "in".into(),
+            matrix,
+            enabled: true,
+        };
+        use PortDirection::{Input, Output};
+        // Patrick's voice path: mono microphone, a stereo FIR Filter Hz added
+        // from the library, mono ReaPlugs, stereo outputs.
+        let session = Session {
+            id: EntityId::new("voice"),
+            name: "Voice".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![
+                node("mic", NodeKind::PhysicalInput, &[("out", Output, 1)]),
+                node("gate-hz", NodeKind::SpectralGate, &[("in", Input, 2), ("out", Output, 2)]),
+                node("reaeq", NodeKind::Plugin, &[("in", Input, 1), ("out", Output, 1)]),
+                node("cable", NodeKind::PhysicalOutput, &[("in", Input, 2)]),
+                node("monitor", NodeKind::PhysicalOutput, &[("in", Input, 2)]),
+            ],
+            edges: vec![
+                edge("e1", "mic", "gate-hz", vec![1.0, 1.0]),
+                edge("e2", "gate-hz", "reaeq", vec![0.5, 0.5]),
+                edge("e3", "reaeq", "cable", vec![1.0, 1.0]),
+                edge("e4", "reaeq", "monitor", vec![1.0, 1.0]),
+            ],
+        };
+        let plugins: std::collections::HashMap<EntityId, Arc<dyn RealtimePluginProcessor>> =
+            [(EntityId::new("reaeq"), Arc::new(Doubler) as Arc<dyn RealtimePluginProcessor>)].into_iter().collect();
+        let compiled = compile_native_paths_with_plugins_and_audio(&session, RuntimeGeneration::new(1), &plugins, &Default::default())
+            .expect("the path compiles at the plugins' mono width");
+        assert_eq!(compiled.input_node_ids(), [EntityId::new("mic")]);
+        assert_eq!(compiled.output_node_ids().len(), 2);
+        // Nothing to adapt: the session is used as is.
+        let mono = Session {
+            nodes: session.nodes.iter().cloned().map(|mut node| {
+                if node.kind == NodeKind::SpectralGate {
+                    node.ports.iter_mut().for_each(|port| port.channels = 1);
+                }
+                node
+            }).collect(),
+            edges: vec![
+                edge("e1", "mic", "gate-hz", vec![1.0]),
+                edge("e2", "gate-hz", "reaeq", vec![1.0]),
+                edge("e3", "reaeq", "cable", vec![1.0, 1.0]),
+                edge("e4", "reaeq", "monitor", vec![1.0, 1.0]),
+            ],
+            ..session.clone()
+        };
+        assert!(matches!(harmonize_chain_widths(&mono), std::borrow::Cow::Borrowed(_)));
+        let adapted = harmonize_chain_widths(&session);
+        let gate = adapted.nodes.iter().find(|node| node.id.as_str() == "gate-hz").unwrap();
+        assert!(gate.ports.iter().all(|port| port.channels == 1));
+        assert_eq!(adapted.edges[0].matrix, vec![1.0]);
+        assert_eq!(adapted.edges[1].matrix, vec![1.0]);
+        assert_eq!(adapted.edges[2].matrix, vec![1.0, 1.0], "outputs keep their mono-to-stereo copy");
+        assert!(audiorouter_domain::validate_session(&adapted).is_ok());
     }
 
     #[test]

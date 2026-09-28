@@ -21360,18 +21360,28 @@ mod tests {
         );
         assert!(delivered > 0, "both paths must deliver audio blocks");
         if session_id == "patrick-main-session" {
-            let members = ["reafir", "reaeq", "reacomp", "reagate"].map(|id| {
-                plane
-                    .plugin_bridge(&EntityId::new(&session_id), &EntityId::new(id))
-                    .unwrap()
-            });
+            // The session's consecutive ReaPlugs share one worker.
+            let session = EntityId::new(&session_id);
+            let plugin_ids = plane
+                .get_session(&session)
+                .unwrap()
+                .nodes
+                .iter()
+                .filter(|node| node.kind == NodeKind::Plugin && node.enabled)
+                .map(|node| node.id.clone())
+                .collect::<Vec<_>>();
+            let members = plugin_ids
+                .iter()
+                .map(|id| plane.plugin_bridge(&session, id).unwrap())
+                .collect::<Vec<_>>();
             assert!(
-                members
-                    .iter()
-                    .all(|member| member.shares_worker_with(&members[0])),
-                "Patrick's four ReaPlugs must share one worker"
+                members.iter().all(|member| member.shares_worker_with(&members[0])),
+                "Patrick's ReaPlugs must share one worker"
             );
-            eprintln!("verified shared plugin worker: reafir -> reaeq -> reacomp -> reagate");
+            eprintln!(
+                "verified shared plugin worker: {}",
+                plugin_ids.iter().map(EntityId::as_str).collect::<Vec<_>>().join(" -> ")
+            );
         }
     }
 

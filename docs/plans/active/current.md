@@ -346,3 +346,27 @@ sections above.
   and then 5. The reference tone stayed clean. This is the recorded
   environment-dependent gap pattern, not a regression of this change; rerun
   on a quiet machine before release.
+
+### 2026-09-27 — Stereo tool in a mono plugin chain refused the path (GRAPH)
+
+- Report (user): Play said `path 1 (starting at "Microphone (PD200X)") is not
+  supported: a path needs one source or one Mixer, then a single chain, then
+  its outputs` after FIR Filter Hz replaced ReaFIR.
+- Cause: the voice path is mono (PD200X and the ReaPlugs nodes are 1 ch) but
+  library tools are created stereo. The path compiler only lets the width
+  change from the source into the first tool, so mic (1) → FIR Filter Hz (2)
+  → ReaEQ (1) was refused. Any built-in tool added to that chain would fail.
+- Fix (`harmonize_chain_widths`, engine): built-in tools are width-agnostic,
+  so in each linear chain they take the chain's width: its plugins' input
+  width, otherwise the first tool's. Only edges whose matrix no longer fits
+  are rebuilt (mono copied to every channel, averaged into mono, else
+  identity). Applied before both compilers; a no-op when nothing differs.
+- Verification: engine regression
+  `a_stereo_built_in_tool_in_a_mono_plugin_chain_runs_at_the_chain_width`
+  reproduces the exact error without the fix. Live: the user's saved session
+  (copy) prepares, starts and delivers audio with FIR Filter Hz running and
+  ReaEQ → ReaComp → ReaGate sharing one worker
+  (`live_native_paths_start_pump_and_report_signal_timing`, now reading the
+  session's plugin nodes instead of a fixed list).
+- Known, unchanged: the single-output (endpoint worker) compiler refuses a
+  mono plugin chain feeding a stereo output even when every node is mono.
