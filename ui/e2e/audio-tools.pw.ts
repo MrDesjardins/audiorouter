@@ -134,7 +134,7 @@ test("every built-in modifier exposes working enable and bypass draft controls",
   const modifiers: [string, string][] = [["Gain", "gain"], ["Mute", "mute"], ["Meter", "meter"], ["Advanced EQ", "parametricEq"], ["Compressor", "compressor"], ["Gate", "gate"], ["Limiter", "limiter"], ["Sync (delay)", "delay"], ["Graphic EQ", "graphicEq"], ["Pitch shift", "pitch"]];
   for (const [label] of modifiers) {
     await page.getByRole("tab", { name: "Tools" }).click();
-    await page.locator(".tool-card").filter({ hasText: label }).first().click();
+    await page.locator(".tool-card").filter({ has: page.getByText(label, { exact: true }) }).click();
   }
   const inspector = page.locator(".main-content > .inspector");
   for (const [, kind] of modifiers) {

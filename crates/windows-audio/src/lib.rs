@@ -6328,6 +6328,14 @@ impl NativeMultiInputWorker {
         self.feeder.mixer().noise_profile_for_node(node_id)
     }
 
+    /// Live band levels of a FIR Filter Hz node in the Mixer graph.
+    pub fn spectrum_levels_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<audiorouter_engine::SpectrumLevels> {
+        self.feeder.mixer().spectrum_levels_for_node(node_id)
+    }
+
     /// Attach branch-local observers to the owned output fan-out before
     /// startup. Reconfiguration while running is rejected so realtime tap
     /// membership never changes on the audio path.

@@ -252,6 +252,7 @@ The current node catalog is available through `nodes.describe` and contains:
 | `declick@1` | available | Click/crackle repair; 64-sample latency |
 | `denoise@1` | available | Learned noise-profile reduction; 1,024-sample latency |
 | `speech-denoise@1` | available | Automatic spectral noise reduction around speech; 1,024-sample latency |
+| `spectral-gate@1` | available | "FIR Filter Hz": learns the noise level of 64 log-spaced bands (peak hold), then turns down bands that stay under it by `thresholdDb`; live spectrum in node telemetry; 1,024-sample latency |
 | `fir-filter@1` | available | Impulse-response convolution (up to 2 s); 512-sample latency |
 | `time-shift@1` | available | Live DVR: pause, jump ±10 s, return to live; up to 120 s |
 | `plugin@1` | available when bound | VST2/VST3 effect in an isolated worker; unavailable until a scanned plugin is bound |

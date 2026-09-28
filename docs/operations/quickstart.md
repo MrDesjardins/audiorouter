@@ -473,6 +473,18 @@ to create a filter. Drag a point to set frequency and applicable gain, then
 choose Peaking, Low/High shelf, Low/High pass, or Notch and set Q precisely.
 Remove point disables that band. The backend bounds the node to sixteen bands;
 older saved `parametricEq@1` nodes use the same editor and retain their sound.
+
+**FIR Filter Hz** removes steady noise per frequency, like ReaFIR's gate mode.
+While the route plays, its Properties show the live spectrum of the incoming
+sound. Press **Learn noise** and let only the unwanted noise play (fan, hiss,
+room tone): the tool remembers the loudest level each of 64 frequency bands
+reaches. **Stop and keep** stores that profile. From then on, a band whose
+level does not rise **Threshold above noise** (default 3 dB) over the learned
+noise is turned down by **Reduction** (default 40 dB). The orange line on the
+graph is that threshold. Audio passes unchanged while learning, and the tool
+adds about 21 ms of delay. Use **Denoise** instead for gentler, subtractive
+noise reduction.
+
 To back up a session or move it to another PC, use **Session → Session file**.
 **Save to file…** writes the saved session (every node and its settings, plus
 the imported audio and saved plugin settings it uses) to one `.audiorouter`

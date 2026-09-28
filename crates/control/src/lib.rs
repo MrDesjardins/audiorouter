@@ -4,6 +4,9 @@
 //! follow-up layers. This façade proves that all adapters can share one domain
 //! authority and that unsupported audio capabilities are discoverable.
 
+// The discovery document's JSON schemas are large `json!` literals.
+#![recursion_limit = "256"]
+
 use audiorouter_domain::{
     format_validation_errors, inspect_routes, node_registry, validate_session, ApiMethodSpec,
     CrashRecoveryTracker, EntityId, EventLog, EventReplayError, FakeRuntime, GraphStore, NodeKind,
@@ -4471,6 +4474,7 @@ fn diagnostics_output_schema() -> Value {
                             "additionalProperties": false
                         },
                         "noiseProfile": { "type": "string", "pattern": "^[0-9a-fA-F]{128}$" },
+                        "spectrum": spectrum_telemetry_schema(),
                         "network": {
                             "type": "object",
                             "properties": {
@@ -9530,7 +9534,8 @@ impl ControlPlane {
                     })
                 });
                 let noise_profile = processor.noise_profile_for_node(&node.id);
-                if meter.is_none() && processor_telemetry.is_none() && plugin_health.is_none() && noise_profile.is_none() {
+                let spectrum = processor.spectrum_levels_for_node(&node.id);
+                if meter.is_none() && processor_telemetry.is_none() && plugin_health.is_none() && noise_profile.is_none() && spectrum.is_none() {
                     return None;
                 }
                 let mut item = json!({
@@ -9542,6 +9547,9 @@ impl ControlPlane {
                 });
                 if let Some(profile) = noise_profile {
                     item["noiseProfile"] = json!(profile);
+                }
+                if let Some(levels) = spectrum {
+                    item["spectrum"] = spectrum_telemetry(&levels);
                 }
                 Some(item)
             })
@@ -9663,9 +9671,11 @@ impl ControlPlane {
                         })
                     });
                 let noise_profile = worker.noise_profile_for_node(&node.id);
+                let spectrum = worker.spectrum_levels_for_node(&node.id);
                 if processor_telemetry.is_none()
                     && plugin_health.is_none()
                     && noise_profile.is_none()
+                    && spectrum.is_none()
                     && timing.is_none()
                     && meter.is_none()
                     && network.is_none()
@@ -9684,6 +9694,9 @@ impl ControlPlane {
                 }
                 if let Some(profile) = noise_profile {
                     item["noiseProfile"] = json!(profile);
+                }
+                if let Some(levels) = spectrum {
+                    item["spectrum"] = spectrum_telemetry(&levels);
                 }
                 if let Some(timing) = timing {
                     item["timing"] = timing;
@@ -11534,6 +11547,11 @@ impl ControlPlane {
             audiorouter_domain::NodeKind::SpeechDenoise => json!([
                 { "name": "strengthPercent", "type": "number", "unit": "%", "minimum": 0.0, "maximum": 100.0, "default": 70.0 }
             ]),
+            audiorouter_domain::NodeKind::SpectralGate => json!([
+                { "name": "thresholdDb", "type": "number", "unit": "dB", "minimum": -20.0, "maximum": 20.0, "default": 3.0 },
+                { "name": "reductionDb", "type": "number", "unit": "dB", "minimum": 0.0, "maximum": 80.0, "default": 40.0 },
+                { "name": "learning", "type": "boolean", "default": false }
+            ]),
             audiorouter_domain::NodeKind::InputSwitch => json!([
                 { "name": "selected", "type": "string", "enum": ["a", "b"], "default": "a" },
                 { "name": "fade", "type": "string", "enum": ["normal", "slow"], "default": "normal" }
@@ -11640,6 +11658,7 @@ impl ControlPlane {
             Self::catalog_entry("declick", audiorouter_domain::NodeKind::Declick, "restoration"),
             Self::catalog_entry("denoise", audiorouter_domain::NodeKind::Denoise, "restoration"),
             Self::catalog_entry("speechDenoise", audiorouter_domain::NodeKind::SpeechDenoise, "restoration"),
+            Self::catalog_entry("spectralGate", audiorouter_domain::NodeKind::SpectralGate, "restoration"),
             Self::catalog_entry("firFilter", audiorouter_domain::NodeKind::FirFilter, "convolution"),
             Self::catalog_entry("timeShift", audiorouter_domain::NodeKind::TimeShift, "time"),
             Self::catalog_entry("inputSwitch", audiorouter_domain::NodeKind::InputSwitch, "routing")
@@ -18830,6 +18849,26 @@ fn session_id_from_params(params: Option<Value>) -> Result<EntityId, ControlErro
     .map_err(|_| ControlError::InvalidRequest("invalid sessionId".into()))
 }
 
+/// Live spectrum of a FIR Filter Hz node for its Properties graph: level per
+/// band (power dB, one decimal) and each band's centre frequency.
+fn spectrum_telemetry(levels: &audiorouter_engine::SpectrumLevels) -> Value {
+    let round = |value: f32| (f64::from(value) * 10.0).round() / 10.0;
+    json!({
+        "levelsDb": levels.iter().map(|level| round(*level)).collect::<Vec<_>>(),
+        "bandFrequenciesHz": audiorouter_engine::spectrum_band_frequencies_hz().iter().map(|hz| round(*hz)).collect::<Vec<_>>(),
+    })
+}
+
+fn spectrum_telemetry_schema() -> Value {
+    let bands = json!({ "type": "array", "items": { "type": "number" }, "minItems": 64, "maxItems": 64 });
+    json!({
+        "type": "object",
+        "properties": { "levelsDb": bands.clone(), "bandFrequenciesHz": bands },
+        "required": ["levelsDb", "bandFrequenciesHz"],
+        "additionalProperties": false
+    })
+}
+
 /// An absolute path to a `.audiorouter` session file.
 fn session_file_path(params: Option<&Value>) -> Result<std::path::PathBuf, ControlError> {
     let path = params
@@ -22487,7 +22526,7 @@ mod tests {
             .iter()
             .any(|node| node["type"] == "virtual-render-source@1"
                 && node["availability"]["status"] == "unavailable"));
-        assert_eq!(description["processors"].as_array().unwrap().len(), 16);
+        assert_eq!(description["processors"].as_array().unwrap().len(), 17);
         assert_eq!(
             description["processors"][0]["availability"]["status"],
             "available"
@@ -22584,7 +22623,7 @@ mod tests {
             params: None,
         });
         let result = processors.result.unwrap();
-        assert_eq!(result.as_array().unwrap().len(), 16);
+        assert_eq!(result.as_array().unwrap().len(), 17);
         assert_eq!(result[0]["availability"]["status"], "available");
     }
 

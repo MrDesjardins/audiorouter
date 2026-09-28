@@ -3020,6 +3020,7 @@ mod tests {
                 "limiter",
                 "parametricEq",
                 "pitch",
+                "spectralGate",
                 "speechDenoise",
                 "timeShift",
                 "volume",

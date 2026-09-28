@@ -19,6 +19,7 @@ export const PROCESSOR_ACTIONS: Array<{ kind: InsertableProcessorKind; label: st
   { kind: "declick", label: "Declick" },
   { kind: "denoise", label: "Denoise" },
   { kind: "speechDenoise", label: "Speech Denoise" },
+  { kind: "spectralGate", label: "FIR Filter Hz" },
   { kind: "firFilter", label: "FIR Filter" },
   { kind: "timeShift", label: "Time Shift" },
   { kind: "delay", label: "Sync (delay)" },

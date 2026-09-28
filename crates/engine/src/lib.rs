@@ -10,6 +10,14 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 
 pub const INTERNAL_SAMPLE_RATE_HZ: u32 = 48_000;
+/// Live band levels of a FIR Filter Hz node: power in dB for each of the 64
+/// log-spaced profile bands (see `audiorouter_dsp::spectral`).
+pub type SpectrumLevels = [f32; audiorouter_dsp::spectral::NOISE_PROFILE_BANDS];
+
+/// Centre frequency of each spectrum band at the internal sample rate.
+pub fn spectrum_band_frequencies_hz() -> SpectrumLevels {
+    audiorouter_dsp::spectral::profile_band_frequencies_hz(INTERNAL_SAMPLE_RATE_HZ as f32)
+}
 pub const MIN_GRAPH_SAMPLE_RATE_HZ: u32 = 8_000;
 pub const MAX_GRAPH_SAMPLE_RATE_HZ: u32 = 192_000;
 pub const PROCESSING_QUANTUM_FRAMES: usize = 128;
@@ -2605,6 +2613,13 @@ pub enum ProcessingStage {
         left: Box<RealtimeDsp<audiorouter_dsp::spectral::SpeechDenoiser>>,
         right: Box<RealtimeDsp<audiorouter_dsp::spectral::SpeechDenoiser>>,
     },
+    /// Per-channel learned per-frequency gate ("FIR Filter Hz"). The left
+    /// channel publishes live band levels to `tap` for display.
+    SpectralGate {
+        left: Box<RealtimeDsp<audiorouter_dsp::spectral::SpectralGate>>,
+        right: Box<RealtimeDsp<audiorouter_dsp::spectral::SpectralGate>>,
+        tap: Arc<audiorouter_dsp::spectral::SpectrumTap>,
+    },
     /// Per-channel click repair with a disclosed lookahead delay.
     Declick {
         left: Box<RealtimeDsp<audiorouter_dsp::restoration::Declicker>>,
@@ -3305,6 +3320,14 @@ impl CompiledMixerFanoutGraph {
             .find_map(|graph| graph.noise_profile_for_node(node_id))
     }
 
+    /// Live band levels of a FIR Filter Hz node in any chain.
+    pub fn spectrum_levels_for_node(&self, node_id: &audiorouter_domain::EntityId) -> Option<SpectrumLevels> {
+        self.processing_graph
+            .iter()
+            .chain(self.input_chains.iter().flatten().map(|chain| &chain.graph))
+            .find_map(|graph| graph.spectrum_levels_for_node(node_id))
+    }
+
     pub fn process(
         &self,
         sources: &[AudioBlock],
@@ -3699,6 +3722,11 @@ impl RealtimeMixerFanout {
     /// Learned noise profile of a learning Denoise node in any path.
     pub fn noise_profile_for_node(&self, node_id: &audiorouter_domain::EntityId) -> Option<String> {
         self.paths.iter().find_map(|path| path.graph.noise_profile_for_node(node_id))
+    }
+
+    /// Live band levels of a FIR Filter Hz node in any path.
+    pub fn spectrum_levels_for_node(&self, node_id: &audiorouter_domain::EntityId) -> Option<SpectrumLevels> {
+        self.paths.iter().find_map(|path| path.graph.spectrum_levels_for_node(node_id))
     }
 
     /// Transport handle for a Test Signal feeding any path.
@@ -4674,6 +4702,7 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                         | NodeKind::Denoise
                         | NodeKind::SpeechDenoise
                         | NodeKind::FirFilter
+                        | NodeKind::SpectralGate
                         | NodeKind::TimeShift
                         | NodeKind::Mute
                         | NodeKind::Meter
@@ -4697,6 +4726,7 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                             | NodeKind::Denoise
                             | NodeKind::SpeechDenoise
                             | NodeKind::FirFilter
+                            | NodeKind::SpectralGate
                             | NodeKind::TimeShift
                             | NodeKind::Mute
                             | NodeKind::Meter
@@ -5081,6 +5111,32 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                         );
                     }
                 }
+            }
+            NodeKind::SpectralGate => {
+                let number = |name: &str, default: f64| {
+                    node.parameters
+                        .get(name)
+                        .and_then(|value| value.as_f64())
+                        .filter(|value| value.is_finite())
+                        .unwrap_or(default) as f32
+                };
+                let (threshold, reduction) = (number("thresholdDb", 3.0), number("reductionDb", 40.0));
+                let learning = node.parameters.get("learning").and_then(|value| value.as_bool()).unwrap_or(false);
+                let profile = node.parameters.get("noiseProfile").and_then(|value| value.as_str());
+                let tap = Arc::new(audiorouter_dsp::spectral::SpectrumTap::default());
+                let make = |tap: Option<Arc<audiorouter_dsp::spectral::SpectrumTap>>| {
+                    Box::new(RealtimeDsp::new(audiorouter_dsp::spectral::SpectralGate::new(
+                        threshold, reduction, profile, learning, tap,
+                    )))
+                };
+                push_stage!(
+                    node_id,
+                    ProcessingStage::SpectralGate {
+                        left: make(Some(tap.clone())),
+                        right: make(None),
+                        tap,
+                    }
+                );
             }
             NodeKind::SpeechDenoise => {
                 let strength = node
@@ -5833,6 +5889,7 @@ fn compile_path_graph(
                 | NodeKind::Denoise
                 | NodeKind::SpeechDenoise
                 | NodeKind::FirFilter
+                | NodeKind::SpectralGate
                 | NodeKind::TimeShift
                 | NodeKind::Mute
                 | NodeKind::Meter
@@ -6585,6 +6642,7 @@ fn is_chain_processor(kind: audiorouter_domain::NodeKind) -> bool {
             | NodeKind::Denoise
             | NodeKind::SpeechDenoise
             | NodeKind::FirFilter
+            | NodeKind::SpectralGate
             | NodeKind::TimeShift
             | NodeKind::Mute
             | NodeKind::Meter
@@ -6897,6 +6955,13 @@ impl RuntimeProcessor {
         self.publication
             .load()
             .and_then(|graph| graph.noise_profile_for_node(node_id))
+    }
+
+    /// Live band levels of a FIR Filter Hz node in the published graph.
+    pub fn spectrum_levels_for_node(&self, node_id: &audiorouter_domain::EntityId) -> Option<SpectrumLevels> {
+        self.publication
+            .load()
+            .and_then(|graph| graph.spectrum_levels_for_node(node_id))
     }
 
     /// Return the negotiated rate of the currently published graph. This is
@@ -7556,6 +7621,24 @@ impl RuntimeGraph {
                     Some(ProcessingStage::Denoise { left, .. }) => left
                         .try_with(|denoiser| denoiser.is_learning().then(|| denoiser.noise_profile()))
                         .flatten(),
+                    Some(ProcessingStage::SpectralGate { tap, .. }) => tap.learned_profile(),
+                    _ => None,
+                })?
+            })
+    }
+
+    /// Live band levels (power dB, 64 log-spaced bands) of a playing FIR
+    /// Filter Hz node, read lock-free from its spectrum tap (control thread).
+    pub fn spectrum_levels_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<SpectrumLevels> {
+        self.stage_node_ids
+            .iter()
+            .enumerate()
+            .find_map(|(stage_index, candidate)| {
+                (candidate == node_id).then(|| match self.stages.get(stage_index) {
+                    Some(ProcessingStage::SpectralGate { tap, .. }) => tap.levels_db(),
                     _ => None,
                 })?
             })
@@ -7730,6 +7813,13 @@ impl RuntimeGraph {
                         }
                     }
                 }
+                ProcessingStage::SpectralGate { left, right, .. } => {
+                    for processor in [left, right] {
+                        if !reset_dsp(processor, |gate| gate.reset()) {
+                            success = false;
+                        }
+                    }
+                }
                 ProcessingStage::AudioFile { source } => source.stop(),
                 ProcessingStage::TestSignal { source } => source.stop(),
                 ProcessingStage::MixTestSignal { source, .. } => source.stop(),
@@ -7824,6 +7914,19 @@ impl RuntimeGraph {
                         let processed = processor.try_with(|denoiser| {
                             if let Some(samples) = block.channel_mut(channel) {
                                 denoiser.process(samples);
+                            }
+                        });
+                        if processed.is_none() {
+                            block.clear();
+                            break;
+                        }
+                    }
+                }
+                ProcessingStage::SpectralGate { left, right, .. } => {
+                    for (channel, processor) in [left, right].into_iter().enumerate().take(block.channels()) {
+                        let processed = processor.try_with(|gate| {
+                            if let Some(samples) = block.channel_mut(channel) {
+                                gate.process(samples);
                             }
                         });
                         if processed.is_none() {

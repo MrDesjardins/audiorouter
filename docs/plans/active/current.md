@@ -312,3 +312,35 @@ sections above.
 - Artifact: `target/patrick-main-release-5/release/` (shell, plugin worker,
   CLI), built 16:28 with `custom-protocol`, embedding UI bundle
   `index-CYp4WBYo.js`. A new folder because `release-4` was running.
+
+### 2026-09-27 — Names with spaces, readable settings, FIR Filter Hz (UI-04, GRAPH, DSP)
+
+- Report (user): node names rejected spaces; FIR Filter showed `wetPercent`
+  with no explanation; asked for a ReaFIR-like learned per-frequency noise
+  gate with a live spectrum, named "FIR Filter Hz".
+- Names: every keystroke was trimmed, so a typed space vanished. New
+  `TextField` keeps the typed text and stores the trimmed name (node name and
+  session rename). Tests: `TextField.test.tsx`.
+- Labels: `parameterText.ts` gives every built-in setting a label, a
+  one-line explanation and readable choices; Properties shows the tool's
+  description and name instead of the raw kind. Accessible names use the
+  labels (`Wet mix precise value`).
+- FIR Filter Hz: new node kind `spectralGate` (`spectral-gate@1`), 33 kinds,
+  17 processors. DSP `SpectralGate` (STFT, 64 log-spaced bands): peak-hold
+  learning, per-band gate with `thresholdDb` (−20…20, default 3) and
+  `reductionDb` (0…80, default 40), open at once and close over ~20 ms.
+  Live levels are published lock-free (`SpectrumTap` atomics), so reading the
+  spectrum can never make the audio thread skip a block. Telemetry adds
+  `spectrum { levelsDb, bandFrequenciesHz }`; the learned profile reuses
+  `noiseProfile`. The control crate's `json!` recursion limit was raised to
+  256 for the larger discovery schema.
+- Verification: DSP tests (learn, gate noise, pass louder tone, band
+  round-trip), engine tool-route test with the new kind, UI editor tests,
+  vitest 364, Playwright suite, contract drift (33 kinds, 17 processors),
+  three-theme screenshots of the editor with a synthetic spectrum.
+- Live continuity (30 s, VB-Cable → CABLE-B): inconclusive this evening.
+  FIR Filter Hz 2 glitches per run (4 runs); plain Gain 3–4 per run on the
+  current build; this morning's commit `65b7c704` built in a worktree gave 0
+  and then 5. The reference tone stayed clean. This is the recorded
+  environment-dependent gap pattern, not a regression of this change; rerun
+  on a quiet machine before release.

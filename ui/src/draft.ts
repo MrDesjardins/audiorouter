@@ -10,7 +10,7 @@ export type DraftChange = {
 export const GAIN_MIN_DB = -60;
 export const GAIN_MAX_DB = 24;
 
-export type LibraryNodeKind = Extract<NodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "audioFile" | "mixer" | "gain" | "volume" | "bassTreble" | "dehum" | "declick" | "inputSwitch" | "denoise" | "speechDenoise" | "firFilter" | "timeShift" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch" | "recorder" | "networkSend" | "networkReceive">;
+export type LibraryNodeKind = Extract<NodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "audioFile" | "mixer" | "gain" | "volume" | "bassTreble" | "dehum" | "declick" | "inputSwitch" | "denoise" | "speechDenoise" | "spectralGate" | "firFilter" | "timeShift" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch" | "recorder" | "networkSend" | "networkReceive">;
 export type InsertableProcessorKind = Exclude<LibraryNodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "mixer" | "inputSwitch" | "meter" | "networkSend" | "networkReceive">;
 
 /** Default UDP port of the Network Send/Receive tools (mirrors the domain). */
@@ -103,6 +103,14 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
   denoise: {
     name: "Denoise",
     parameters: { reductionPercent: 70, floorPercent: 10, learning: false },
+    ports: [
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
+    ],
+  },
+  spectralGate: {
+    name: "FIR Filter Hz",
+    parameters: { thresholdDb: 3, reductionDb: 40, learning: false },
     ports: [
       { name: "in", direction: "input", channels: 2 },
       { name: "out", direction: "output", channels: 2 },
@@ -361,7 +369,7 @@ export function applicationCaptureChoices(applications: readonly ApplicationInfo
 const ROUTE_SOURCE_KINDS = new Set(["physicalInput", "applicationCapture", "endpointLoopback", "virtualRenderSource", "testSignal", "audioFile", "networkReceive"]);
 
 /** Processor kinds the engine accepts in a linear chain before a Mixer input (mirrors `is_chain_processor`). */
-const CHAIN_PROCESSOR_KINDS = new Set<NodeKind>(["gain", "volume", "bassTreble", "dehum", "declick", "denoise", "speechDenoise", "firFilter", "timeShift", "mute", "meter", "parametricEq", "compressor", "gate", "limiter", "delay", "graphicEq", "pitch", "plugin"]);
+const CHAIN_PROCESSOR_KINDS = new Set<NodeKind>(["gain", "volume", "bassTreble", "dehum", "declick", "denoise", "speechDenoise", "spectralGate", "firFilter", "timeShift", "mute", "meter", "parametricEq", "compressor", "gate", "limiter", "delay", "graphicEq", "pitch", "plugin"]);
 
 /** Drop disabled nodes that nothing live feeds, with their edges (mirrors `prune_inactive_upstream`). */
 export function pruneInactiveUpstream(session: Session): Session {

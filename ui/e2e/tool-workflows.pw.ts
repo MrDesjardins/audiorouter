@@ -25,7 +25,8 @@ for (const entry of libraryEntries.filter(entry => entry.kind)) {
     // are exercised through their dedicated import/binding workflows.
     if (entry.kind !== "parametricEq") {
       for (const parameter of descriptor?.parameters ?? []) {
-        if (parameter.name.endsWith(":")) continue;
+        // Learning is driven by the Learn buttons, not a settings field.
+        if (parameter.name.endsWith(":") || parameter.name === "learning") continue;
         if (parameter.type === "number") {
           const control = inspector.getByLabel(`${parameterText(entry.kind, parameter.name).label} precise value`, { exact: true });
           await expect(control, `${entry.kind}.${parameter.name} editable`).toBeVisible();

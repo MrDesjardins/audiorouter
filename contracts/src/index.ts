@@ -34,6 +34,7 @@ export type NodeKind =
   | "denoise"
   | "speechDenoise"
   | "firFilter"
+  | "spectralGate"
   | "timeShift"
   | "networkSend"
   | "networkReceive";
@@ -727,8 +728,10 @@ export interface DiagnosticsSnapshot {
       /** Input quanta discarded because the in-flight queue had no storage. */
       inputDrops?: number;
     } | null;
-    /** Present while a Denoise node is learning: its current noise profile. */
+    /** Present while a Denoise or FIR Filter Hz node is learning: its current noise profile. */
     noiseProfile?: string;
+    /** Present on a playing FIR Filter Hz node: live level per band (power dB) and band centre frequencies. */
+    spectrum?: { levelsDb: number[]; bandFrequenciesHz: number[] };
     /** Present on a running Network Send or Network Receive node. */
     network?: NetworkNodeTelemetry;
     /**

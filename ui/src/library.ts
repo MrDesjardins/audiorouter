@@ -10,7 +10,7 @@ export type LibraryEntry = {
   label: string;
   category: string;
   flow: LibraryFlowGroup;
-  kind?: Extract<NodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "audioFile" | "mixer" | "gain" | "volume" | "bassTreble" | "dehum" | "declick" | "inputSwitch" | "denoise" | "speechDenoise" | "firFilter" | "timeShift" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch" | "recorder" | "networkSend" | "networkReceive">;
+  kind?: Extract<NodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "audioFile" | "mixer" | "gain" | "volume" | "bassTreble" | "dehum" | "declick" | "inputSwitch" | "denoise" | "speechDenoise" | "spectralGate" | "firFilter" | "timeShift" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch" | "recorder" | "networkSend" | "networkReceive">;
   /** Helper text shown as a tooltip and matched by search, even for an
    * available entry. Used to point at the free existing-endpoint path
    * (VoiceMeeter, VB-Cable) instead of the deferred signed-driver one. */
@@ -46,6 +46,7 @@ export const libraryEntries: LibraryEntry[] = [
   { id: "declick", label: "Declick", category: "Restoration", flow: "tool", kind: "declick", note: "Repair clicks, pops, and crackle. A lower threshold repairs more but may alter sharp sounds. Adds about 1.3 ms of delay." },
   { id: "denoise", label: "Denoise", category: "Restoration", flow: "tool", kind: "denoise", note: "Learn a steady noise (fan, hiss, hum) while nothing else plays, then remove it. Adds about 21 ms of delay." },
   { id: "speech-denoise", label: "Speech Denoise", category: "Restoration", flow: "tool", kind: "speechDenoise", note: "Automatically reduce background noise around speech. Runs locally with a spectral method, not a machine-learning model. Adds about 21 ms of delay." },
+  { id: "spectral-gate", label: "FIR Filter Hz", category: "Restoration", flow: "tool", kind: "spectralGate", note: "Learn the noise at every frequency, then block whatever stays below it, like ReaFIR's gate. Shows a live spectrum. Adds about 21 ms of delay." },
   { id: "fir-filter", label: "FIR Filter", category: "Effect", flow: "tool", kind: "firFilter", note: "Give your sound the character of a room, speaker or mic from its impulse response (WAV or MP3, up to 2 s). Wet mix blends it with the original. Adds about 11 ms of delay." },
   { id: "time-shift", label: "Time Shift", category: "Effect", flow: "tool", kind: "timeShift", note: "A DVR for live audio: pause, jump back or forward 10 s, and return to live. Keeps up to 120 s." },
   { id: "mixer", label: "Mixer", category: "Routing", flow: "tool", kind: "mixer" },

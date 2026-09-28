@@ -3,7 +3,7 @@ import { TextField } from "./TextField";
 import type { Session } from "@audiorouter/contracts";
 import { useState, type ReactNode } from "react";
 
-const TOOL_ICONS: Record<string, string> = { volume: "◖", "bass-treble": "♮", dehum: "≁", declick: "⌇", denoise: "░", "speech-denoise": "☊", "fir-filter": "⧉", "input-switch": "⇄", "time-shift": "↺", "physical-input": "◉", "test-signal": "∿", "audio-file": "♫", "endpoint-loopback": "↶", "virtual-render-source": "⊞", "physical-output": "◎", "virtual-capture-sink": "⊟", gain: "◢", mixer: "⋈", recorder: "●", mute: "⊘", meter: "▥", "parametric-eq": "⌁", compressor: "⤓", gate: "⊐", limiter: "⊤", delay: "◷", "graphic-eq": "▤", pitch: "↟", "network-send": "⇡", "network-receive": "⇣" };
+const TOOL_ICONS: Record<string, string> = { volume: "◖", "bass-treble": "♮", dehum: "≁", declick: "⌇", denoise: "░", "speech-denoise": "☊", "spectral-gate": "▥", "fir-filter": "⧉", "input-switch": "⇄", "time-shift": "↺", "physical-input": "◉", "test-signal": "∿", "audio-file": "♫", "endpoint-loopback": "↶", "virtual-render-source": "⊞", "physical-output": "◎", "virtual-capture-sink": "⊟", gain: "◢", mixer: "⋈", recorder: "●", mute: "⊘", meter: "▥", "parametric-eq": "⌁", compressor: "⤓", gate: "⊐", limiter: "⊤", delay: "◷", "graphic-eq": "▤", pitch: "↟", "network-send": "⇡", "network-receive": "⇣" };
 
 function ApplicationSourceAction({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
   return <button type="button" className="secondary application-source-action" onClick={onClick} disabled={disabled}>

@@ -7,6 +7,7 @@
 //! allocated in the constructors; `process` never allocates, locks, or waits.
 
 use std::f32::consts::PI;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 /// Frame length in samples.
 pub const SPECTRAL_FRAME: usize = 1024;
@@ -269,6 +270,181 @@ impl Denoiser {
     }
 }
 
+/// Live band levels of a [`SpectralGate`] for display. The audio thread
+/// stores them after every frame and the control thread reads them at any
+/// time: plain atomics, so a reader never makes the audio thread wait or
+/// skip a block.
+#[derive(Debug)]
+pub struct SpectrumTap {
+    levels: [AtomicU32; NOISE_PROFILE_BANDS],
+    learned: [AtomicU32; NOISE_PROFILE_BANDS],
+    learning: AtomicBool,
+    frames: AtomicU32,
+}
+
+impl Default for SpectrumTap {
+    fn default() -> Self {
+        Self {
+            levels: std::array::from_fn(|_| AtomicU32::new(0)),
+            learned: std::array::from_fn(|_| AtomicU32::new(0)),
+            learning: AtomicBool::new(false),
+            frames: AtomicU32::new(0),
+        }
+    }
+}
+
+impl SpectrumTap {
+    /// Newest band levels as power in dB (10·log10 of the band's mean bin
+    /// power); `None` before the first analysed frame.
+    pub fn levels_db(&self) -> Option<[f32; NOISE_PROFILE_BANDS]> {
+        (self.frames.load(Ordering::Acquire) > 0).then(|| std::array::from_fn(|band| power_db(f32::from_bits(self.levels[band].load(Ordering::Relaxed)))))
+    }
+
+    /// Whether the gate is learning now.
+    pub fn is_learning(&self) -> bool {
+        self.learning.load(Ordering::Acquire)
+    }
+
+    /// The profile learned so far (peak level per band), serialized like a
+    /// Denoise profile; `None` unless learning.
+    pub fn learned_profile(&self) -> Option<String> {
+        self.is_learning().then(|| {
+            encode_band_powers(&std::array::from_fn::<f32, NOISE_PROFILE_BANDS, _>(|band| {
+                f32::from_bits(self.learned[band].load(Ordering::Relaxed))
+            }))
+        })
+    }
+}
+
+fn power_db(power: f32) -> f32 {
+    10.0 * power.max(1.0e-30).log10()
+}
+
+/// Serialize per-band powers in the [`encode_noise_profile`] format.
+fn encode_band_powers(powers: &[f32; NOISE_PROFILE_BANDS]) -> String {
+    let mut encoded = String::with_capacity(NOISE_PROFILE_BANDS * 2);
+    for power in powers {
+        let step = (power_db(*power) + 160.0).round().clamp(0.0, 255.0) as u8;
+        encoded.push_str(&format!("{step:02x}"));
+    }
+    encoded
+}
+
+/// Parse a serialized profile into per-band powers.
+fn decode_band_powers(encoded: &str) -> Option<[f32; NOISE_PROFILE_BANDS]> {
+    if !is_noise_profile(encoded) {
+        return None;
+    }
+    let mut powers = [0.0; NOISE_PROFILE_BANDS];
+    for (band, power) in powers.iter_mut().enumerate() {
+        let step = u8::from_str_radix(&encoded[band * 2..band * 2 + 2], 16).ok()?;
+        *power = 10.0_f32.powf((f32::from(step) - 160.0) / 10.0);
+    }
+    Some(powers)
+}
+
+/// Per-frequency noise gate with a learned threshold (ReaFIR "Gate" mode,
+/// shown as "FIR Filter Hz"). While learning it passes audio unchanged and
+/// remembers the loudest level each of 64 log-spaced bands reaches. After
+/// that, a band whose level does not rise `threshold_db` above what was
+/// learned is turned down by `reduction_db`. Bands open at once and close
+/// over about 20 ms, which avoids the chatter of an instant per-band gate.
+#[derive(Debug)]
+pub struct SpectralGate {
+    stft: Stft,
+    rule: GateRule,
+}
+
+#[derive(Debug)]
+struct GateRule {
+    edges: [usize; NOISE_PROFILE_BANDS + 1],
+    threshold: [f32; NOISE_PROFILE_BANDS],
+    has_threshold: bool,
+    learning: bool,
+    margin: f32,
+    floor: f32,
+    level: [f32; NOISE_PROFILE_BANDS],
+    gain: [f32; NOISE_PROFILE_BANDS],
+    tap: Option<std::sync::Arc<SpectrumTap>>,
+}
+
+impl SpectralGate {
+    /// `threshold_db` (−20…20) is how far above the learned noise a band
+    /// must rise to pass; `reduction_db` (0…80) how much a closed band is
+    /// turned down. Learning starts from an empty profile. `tap` receives
+    /// live levels for display.
+    pub fn new(
+        threshold_db: f32,
+        reduction_db: f32,
+        profile: Option<&str>,
+        learning: bool,
+        tap: Option<std::sync::Arc<SpectrumTap>>,
+    ) -> Self {
+        let bounded = |value: f32, low: f32, high: f32, fallback: f32| if value.is_finite() { value.clamp(low, high) } else { fallback };
+        let learned = if learning { None } else { profile.and_then(decode_band_powers) };
+        if let Some(tap) = &tap {
+            tap.learning.store(learning, Ordering::Release);
+        }
+        Self {
+            stft: Stft::new(),
+            rule: GateRule {
+                edges: band_edges(),
+                threshold: learned.unwrap_or([0.0; NOISE_PROFILE_BANDS]),
+                has_threshold: learned.is_some(),
+                learning,
+                margin: 10.0_f32.powf(bounded(threshold_db, -20.0, 20.0, 3.0) / 10.0),
+                floor: 10.0_f32.powf(-bounded(reduction_db, 0.0, 80.0, 40.0) / 20.0),
+                level: [0.0; NOISE_PROFILE_BANDS],
+                gain: [1.0; NOISE_PROFILE_BANDS],
+                tap,
+            },
+        }
+    }
+
+    pub fn process(&mut self, samples: &mut [f32]) {
+        self.stft.process(samples, &mut self.rule);
+    }
+
+    pub fn reset(&mut self) {
+        self.stft.reset();
+        self.rule.level = [0.0; NOISE_PROFILE_BANDS];
+        self.rule.gain = [1.0; NOISE_PROFILE_BANDS];
+    }
+}
+
+impl SpectralGain for GateRule {
+    fn gains(&mut self, power: &[f32], gains: &mut [f32]) {
+        for band in 0..NOISE_PROFILE_BANDS {
+            let bins = self.edges[band]..self.edges[band + 1];
+            let mean = power[bins.clone()].iter().sum::<f32>() / bins.len().max(1) as f32;
+            let mean = if mean.is_finite() { mean } else { 0.0 };
+            // Rise quickly, fall more slowly: a steadier level to compare.
+            let weight = if mean > self.level[band] { 0.5 } else { 0.2 };
+            self.level[band] += (mean - self.level[band]) * weight;
+            let gain = if self.learning {
+                self.threshold[band] = self.threshold[band].max(self.level[band]);
+                1.0
+            } else if self.has_threshold {
+                let target = if self.level[band] > self.threshold[band] * self.margin { 1.0 } else { self.floor };
+                if target >= self.gain[band] { target } else { (self.gain[band] * 0.6).max(target) }
+            } else {
+                1.0
+            };
+            self.gain[band] = gain;
+            gains[bins].fill(gain);
+            if let Some(tap) = &self.tap {
+                tap.levels[band].store(self.level[band].to_bits(), Ordering::Relaxed);
+                if self.learning {
+                    tap.learned[band].store(self.threshold[band].to_bits(), Ordering::Relaxed);
+                }
+            }
+        }
+        if let Some(tap) = &self.tap {
+            tap.frames.fetch_add(1, Ordering::Release);
+        }
+    }
+}
+
 /// Adaptive speech-focused noise suppression (Audio Hijack "Speech
 /// Denoise" equivalent, without a machine-learning model): minimum-statistics
 /// noise tracking, a decision-directed Wiener gain, and extra attenuation
@@ -493,6 +669,17 @@ impl Convolver {
     }
 }
 
+/// Centre frequency of each profile band (geometric mean of its edges).
+pub fn profile_band_frequencies_hz(sample_rate_hz: f32) -> [f32; NOISE_PROFILE_BANDS] {
+    let edges = band_edges();
+    let bin_hz = sample_rate_hz / SPECTRAL_FRAME as f32;
+    std::array::from_fn(|band| {
+        let low = (edges[band] as f32).max(0.5);
+        let high = (edges[band + 1] as f32 - 1.0).max(low);
+        (low * high).sqrt() * bin_hz
+    })
+}
+
 fn band_edges() -> [usize; NOISE_PROFILE_BANDS + 1] {
     // Log-spaced from bin 1 to Nyquist; band 0 also covers DC.
     let mut edges = [0; NOISE_PROFILE_BANDS + 1];
@@ -573,6 +760,56 @@ mod tests {
         (0..frames)
             .map(|frame| amplitude * (2.0 * PI * frequency * frame as f32 / 48_000.0).sin())
             .collect()
+    }
+
+    #[test]
+    fn spectral_gate_learns_noise_then_blocks_it_and_passes_louder_sound() {
+        let tap = std::sync::Arc::new(SpectrumTap::default());
+        assert!(tap.levels_db().is_none());
+        let mut learner = SpectralGate::new(3.0, 60.0, None, true, Some(tap.clone()));
+        let original = noise(48_000, 7, 0.02);
+        let mut hiss = original.clone();
+        learner.process(&mut hiss);
+        let (input, output) = (rms(&original[..48_000 - SPECTRAL_LATENCY]), rms(&hiss[SPECTRAL_LATENCY..]));
+        assert!((output - input).abs() < input * 0.05, "learning passes audio: {input} vs {output}");
+        assert!(tap.is_learning());
+        assert!(tap.levels_db().is_some());
+        let profile = tap.learned_profile().expect("a profile while learning");
+        assert!(is_noise_profile(&profile));
+
+        let mut gate = SpectralGate::new(3.0, 60.0, Some(&profile), false, None);
+        let mut quiet = noise(48_000, 11, 0.02);
+        let before = rms(&quiet);
+        gate.process(&mut quiet);
+        let gated = rms(&quiet[24_000..]);
+        assert!(gated < before * 0.1, "learned noise is turned down: {before} -> {gated}");
+
+        let mut gate = SpectralGate::new(3.0, 60.0, Some(&profile), false, None);
+        let tone = sine(48_000, 1_000.0, 0.3);
+        let mut mixed: Vec<f32> = tone.iter().zip(noise(48_000, 13, 0.02)).map(|(a, b)| a + b).collect();
+        gate.process(&mut mixed);
+        let passed = rms(&mixed[24_000..]);
+        assert!(passed > rms(&tone) * 0.8, "a sound louder than the noise passes: {passed}");
+    }
+
+    #[test]
+    fn spectral_gate_without_a_profile_passes_audio() {
+        let mut gate = SpectralGate::new(3.0, 60.0, None, false, None);
+        let mut hiss = noise(24_000, 5, 0.1);
+        let before = rms(&hiss[..24_000 - SPECTRAL_LATENCY]);
+        gate.process(&mut hiss);
+        let after = rms(&hiss[SPECTRAL_LATENCY..]);
+        assert!((after - before).abs() < before * 0.05, "{before} vs {after}");
+    }
+
+    #[test]
+    fn band_powers_round_trip_through_the_profile_format() {
+        let powers: [f32; NOISE_PROFILE_BANDS] = std::array::from_fn(|band| 10.0_f32.powf(band as f32 / 10.0 - 3.0));
+        let decoded = decode_band_powers(&encode_band_powers(&powers)).unwrap();
+        for (a, b) in powers.iter().zip(decoded) {
+            assert!((power_db(*a) - power_db(b)).abs() <= 0.5);
+        }
+        assert!(decode_band_powers("zz").is_none());
     }
 
     #[test]

@@ -115,6 +115,8 @@ pub enum NodeKind {
     Denoise,
     SpeechDenoise,
     FirFilter,
+    /// Per-frequency noise gate with a learned threshold ("FIR Filter Hz").
+    SpectralGate,
     TimeShift,
     /// Streams its input to another computer over UDP (LAN).
     NetworkSend,
@@ -123,7 +125,7 @@ pub enum NodeKind {
 }
 
 impl NodeKind {
-    pub const ALL: [Self; 32] = [
+    pub const ALL: [Self; 33] = [
         Self::PhysicalInput,
         Self::ApplicationCapture,
         Self::EndpointLoopback,
@@ -153,6 +155,7 @@ impl NodeKind {
         Self::Denoise,
         Self::SpeechDenoise,
         Self::FirFilter,
+        Self::SpectralGate,
         Self::TimeShift,
         Self::NetworkSend,
         Self::NetworkReceive,
@@ -189,6 +192,7 @@ impl NodeKind {
             Self::Denoise => "denoise",
             Self::SpeechDenoise => "speech-denoise",
             Self::FirFilter => "fir-filter",
+            Self::SpectralGate => "spectral-gate",
             Self::TimeShift => "time-shift",
             Self::NetworkSend => "network-send",
             Self::NetworkReceive => "network-receive",
@@ -281,7 +285,7 @@ fn valid_creation_time(value: &serde_json::Value) -> bool {
     })
 }
 
-pub fn node_registry() -> [NodeTypeSpec; 32] {
+pub fn node_registry() -> [NodeTypeSpec; 33] {
     NodeKind::ALL.map(|kind| NodeTypeSpec {
         kind,
         version: 1,
@@ -304,6 +308,7 @@ pub fn node_registry() -> [NodeTypeSpec; 32] {
             | NodeKind::Denoise
             | NodeKind::SpeechDenoise
             | NodeKind::FirFilter
+            | NodeKind::SpectralGate
             | NodeKind::TimeShift => {
                 CapabilityAvailability::Available
             }
@@ -342,7 +347,11 @@ pub fn node_registry() -> [NodeTypeSpec; 32] {
             NodeKind::Delay => "medium",
             NodeKind::BassTreble | NodeKind::Dehum | NodeKind::Declick | NodeKind::TimeShift => "medium",
             NodeKind::GraphicEq => "medium",
-            NodeKind::Pitch | NodeKind::Denoise | NodeKind::SpeechDenoise | NodeKind::FirFilter => "high",
+            NodeKind::Pitch
+            | NodeKind::Denoise
+            | NodeKind::SpeechDenoise
+            | NodeKind::FirFilter
+            | NodeKind::SpectralGate => "high",
             NodeKind::Plugin => "worker-bound",
             _ => "device-bound",
         },
@@ -350,7 +359,9 @@ pub fn node_registry() -> [NodeTypeSpec; 32] {
             NodeKind::Pitch => 1_024,
             NodeKind::Limiter => 240,
             NodeKind::Declick => DECLICK_LATENCY_SAMPLES,
-            NodeKind::Denoise | NodeKind::SpeechDenoise => SPECTRAL_LATENCY_SAMPLES,
+            NodeKind::Denoise | NodeKind::SpeechDenoise | NodeKind::SpectralGate => {
+                SPECTRAL_LATENCY_SAMPLES
+            }
             NodeKind::FirFilter => FIR_LATENCY_SAMPLES,
             _ => 0,
         },
@@ -1655,8 +1666,15 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::FirFilter, "gainDb") => value
                     .as_f64()
                     .is_some_and(|gain| gain.is_finite() && (-24.0..=12.0).contains(&gain)),
+                (NodeKind::SpectralGate, "thresholdDb") => value
+                    .as_f64()
+                    .is_some_and(|db| db.is_finite() && (-20.0..=20.0).contains(&db)),
+                (NodeKind::SpectralGate, "reductionDb") => value
+                    .as_f64()
+                    .is_some_and(|db| db.is_finite() && (0.0..=80.0).contains(&db)),
+                (NodeKind::SpectralGate, "learning") => value.is_boolean(),
                 // 64 bands, two hex digits each (see the DSP noise profile).
-                (NodeKind::Denoise, "noiseProfile") => value.as_str().is_some_and(|profile| {
+                (NodeKind::Denoise | NodeKind::SpectralGate, "noiseProfile") => value.as_str().is_some_and(|profile| {
                     profile.len() == 128 && profile.bytes().all(|byte| byte.is_ascii_hexdigit())
                 }),
                 (NodeKind::InputSwitch, "selected") => {
@@ -3815,7 +3833,7 @@ mod tests {
     #[test]
     fn registry_reports_audio_and_processor_capabilities_explicitly() {
         let registry = node_registry();
-        assert_eq!(registry.len(), 32);
+        assert_eq!(registry.len(), 33);
         let physical = registry
             .iter()
             .find(|spec| spec.kind == NodeKind::PhysicalInput)
