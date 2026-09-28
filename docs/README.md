@@ -57,6 +57,13 @@ The [release qualification checklist](operations/release-qualification.md)
 records the reproducible unsigned artifact flow, recovery expectations, and
 the native/signing/installer gates that remain open.
 
+The [distribution status](operations/distribution.md) states that no supported
+consumer installer or published release exists yet and records the requested
+manual GitHub draft-release direction. The detailed, future-only
+[Windows distribution plan](plans/future/windows-distribution.md) defines the
+proposed installer, onboarding, release assets, acceptance matrix, and scope
+gate; it is not an implementation authorization.
+
 The [development release notes](operations/release-notes.md) summarize the
 current tested snapshot, supported boundary, known limitations, and safety
 conditions without claiming a releasable installer.

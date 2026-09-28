@@ -1,7 +1,7 @@
-# Active plan — VB-Cable-first completion
+# Active plan — VB-Cable-first completion and delivery planning
 
 Status: active. Rewritten 2026-09-27 as a current-state plan; current task
-updated 2026-09-28. The
+updated 2026-09-28 for requested distribution planning. The
 append-only log it replaces (2026-09-17 → 2026-09-26: every decision,
 defect, experiment and superseded handoff) is archived verbatim as the
 [execution log](../archived/2026-09-26-vb-cable-first-execution-log.md).
@@ -17,38 +17,41 @@ AudioRouter-owned driver, PortCls endpoint or production signing.
 VDEV-01/03/09 and SEC-08 stay normative only for a possible future funded
 track ([future plan](../future/M03-driver-signing.md)).
 
-## Current task — documentation and combined-tool coverage review (2026-09-28)
+## Current task — Windows distribution planning (2026-09-28)
 
-- Objective: reconcile current Markdown with code/evidence, review meaningful
-  automated coverage, and cover representative combinations of audio tools.
-- Requirements: DSP-01–18, GRAPH-01–16, REC-01–12, PLUG-01–07, UI-01–15,
-  QUAL-01–06 and ENG-04, per [traceability](../../spec/15-delivery.md#requirement-traceability).
-- Prerequisites: clean `main` at `3a6d1e76`; pushed to `origin/main` (already
-  up to date). `rtk` is unavailable in this environment. Private voice assets
-  are not needed for deterministic tests; no native device or plugin scans.
-- Decision: test representative supported workflows and meaningful pairwise
-  interactions, not the unbounded Cartesian product of every node, parameter,
-  channel layout and device. Preserve opt-in boundaries for private audio and
-  hardware. Add tests only when an interaction lacks an existing regression.
-- Ordered tasks: (1) reconcile current-state docs and remove contradictory
-  permission/release/coverage claims; (2) map source, processor-chain, branch,
-  recorder, plugin and network combinations to existing tests; (3) add focused
-  deterministic tests only for a demonstrated uncovered supported behavior;
-  (4) run the relevant regression suites and docs acceptance, then record
-  exact results and limits.
-- Validation: docs.ps1 for Markdown links/anchors/fences; targeted engine and
-  transport integration tests; inspect diff and `git diff --check`. No Windows
-  audio, second-PC UDP, or private voice checks are implied by portable results.
-- Risks: broad edits could erase historical evidence. Keep old log entries and
-  artifact records as history; correct only current summaries and current
-  operational instructions. Rollback: revert only the new docs and focused
-  test additions; no production code or persistence changes are planned.
-- Result: the current deterministic engine suite already covers the supported
-  combination classes reviewed; no duplicate tests were added. Open Windows,
-  second-PC and full release scenarios are recorded in
-  [coverage evidence](evidence/2026-09-28-tool-combination-coverage.md).
-- Next action: continue M05 attended accessibility/scaling and the in-scope
-  M08 clean-checkout/security/performance/traceability gates.
+- Objective: document a low-friction Windows install and explicitly manual
+  GitHub release path, grounded in current packaging and scope. Planning only;
+  no installer, workflow, or publication implementation is authorized yet.
+- Requirements: PROD-01/03/04/06/07, SEC-11, ENG-04/05 and M08; see the
+  [distribution plan](../future/windows-distribution.md). DEC-16 continues to
+  exclude the owned driver and production signing. The user's 2026-09-28
+  request reopens app-installer and draft-release planning only; M08 and
+  traceability require an explicit scope revision before implementation.
+- Prerequisites/evidence: current supported boundary uses existing endpoints;
+  current artifact preparation is unsigned and not installable. The release
+  script's shell command lacks the required `custom-protocol` feature. No
+  Windows installer/clean-machine evidence has been created by this task.
+- Decision: target per-user setup and a manually initiated build that uploads
+  a GitHub draft for separate human publication. Preserve user state, avoid
+  OS-default changes and silent audio start, and guide endpoint selection.
+  Do not claim an AudioRouter-owned virtual microphone: that remains outside
+  current scope.
+- Ordered tasks: (1) map current release artifacts/config to the user goal;
+  (2) define package, onboarding, GitHub draft, evidence, rollback, and scope
+  sequence in the future plan; (3) document current status and link the plan;
+  (4) run docs acceptance and inspect the diff; (5) commit and push the docs.
+- Validation: `tests/acceptance/docs.ps1` and `git diff --check`. No build,
+  installer, Windows install, or release-publication claims are implied.
+- Risks: unsigned installers can trigger trust warnings; endpoint and WebView2
+  prerequisites can prevent a clean first run; packaged companion lookup may
+  fail; DEC-16 conflicts with a released installer until M08 scope is revised.
+  Rollback is limited to the planning/status docs; no runtime or user state is
+  changed.
+- Result: see the linked plan and
+  [distribution status](../../operations/distribution.md).
+- Next action: explicitly promote this bounded track into M08 and decide
+  signing expectations, WebView2 offline support, and acceptance of the
+  existing-endpoint prerequisite before implementation.
 
 Requirement families in scope: PROD, ARCH, GRAPH, CAP, DSP, REC, PLUG, UI,
 API, AUTO, STATE, SEC (non-driver), NFR, QUAL, ENG, as mapped in
@@ -143,8 +146,8 @@ by hand in the morning.
 
 ## Next actions, in order
 
-1. Complete this documentation and combined-tool test review, with exact
-   deterministic checks and explicit hardware/private-audio limitations.
+1. Review the proposed Windows distribution plan and explicitly promote or
+   retain it as future-only before implementation.
 2. Continue the M05 attended accessibility/scaling review and close the M08
    clean-checkout, security, performance and traceability gates within scope.
 3. Qualify network send/receive on two physical computers when that setup is
@@ -192,6 +195,20 @@ by hand in the morning.
 - Saved sessions and database formats are unchanged tonight.
 
 ## Log
+
+### 2026-09-28 — Windows distribution and manual release plan
+
+- User requested planning for a simple integrated install and a manual
+  GitHub-release mechanism. Added the future plan and a current-state
+  operations page; no installer or workflow was implemented.
+- The plan targets per-user setup and manual draft creation with separate
+  human publication. It preserves DEC-16's driver/signing boundary and records
+  that M08 must be explicitly revised before implementation.
+- Verification: documentation acceptance passed for 69 Markdown files and
+  363 local links; `git diff --check` passed. No Windows install or release
+  evidence was generated.
+- Next: resolve M08 scope, signing expectations, WebView2 policy, and whether
+  the existing-endpoint prerequisite meets the desired install experience.
 
 ### 2026-09-28 — Markdown and combined-tool coverage review
 
