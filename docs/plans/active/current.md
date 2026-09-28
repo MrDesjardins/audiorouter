@@ -118,7 +118,7 @@ by hand in the morning.
    ```powershell
    $env:AUDIOROUTER_DATABASE = "$env:LOCALAPPDATA\AudioRouter\state.sqlite"
    $env:AUDIOROUTER_ALLOW_DEVICE_ADMIN = "1"
-   & "C:\code\audiorouter\target\patrick-main-release-5\release\audiorouter-shell.exe"
+   & "C:\code\audiorouter\target\patrick-main-release-6\release\audiorouter-shell.exe"
    ```
    Select Patrick Main Session and press Play. Also try a Test Signal
    route. Listen to the voice and
@@ -389,3 +389,6 @@ sections above.
   `SpectralGateEditor.test.tsx`; vitest 366, Playwright suite. Live: the
   user's session copy reports `spectrum.levelsDb` for FIR Filter Hz while
   playing (live test now prints it).
+- Artifact: `target/patrick-main-release-6/release/` (shell, plugin worker,
+  CLI), built 17:30 with `custom-protocol`, embedding UI bundle
+  `index-BUK9DptH.js`. A new folder because `release-5` was running.
