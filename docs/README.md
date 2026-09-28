@@ -57,12 +57,10 @@ The [release qualification checklist](operations/release-qualification.md)
 records the reproducible unsigned artifact flow, recovery expectations, and
 the native/signing/installer gates that remain open.
 
-The [distribution status](operations/distribution.md) states that no supported
-consumer installer or published release exists yet and records the requested
-manual GitHub draft-release direction. The detailed, future-only
-[Windows distribution plan](plans/future/windows-distribution.md) defines the
-proposed installer, onboarding, release assets, acceptance matrix, and scope
-gate; it is not an implementation authorization.
+The [distribution runbook](operations/distribution.md) states current installer
+and release availability. The
+[Windows distribution plan](plans/future/windows-distribution.md) now records
+the DEC-17 M08 scope and remaining install/publication evidence.
 
 The [development release notes](operations/release-notes.md) summarize the
 current tested snapshot, supported boundary, known limitations, and safety

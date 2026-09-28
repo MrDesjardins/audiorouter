@@ -38,7 +38,7 @@ The user's words “compensation tools with gates” are interpreted as dynamics
 | M01–M02 foundation | Headless API, simulated graph, physical audio, app capture, and existing-device virtual routing | AudioRouter-owned virtual microphone workflow deferred |
 | M03–M04 functional alpha | Virtual buses, built-in voice chain, recording, CLI routing | UX, plugin compatibility, recovery unfinished |
 | M05–M06 usable beta | Visual editor and isolated VST3/pitch support | Release hardening unfinished |
-| M07–M08 v1 | MCP parity, recovery, signed installation, acceptance evidence | Future feature list is excluded |
+| M07–M08 v1 | MCP parity, recovery, qualified installation, acceptance evidence | Driver signing is excluded; the first app/installer release may be unsigned under DEC-17 |
 
 ## v1 feature boundary
 

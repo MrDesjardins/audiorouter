@@ -21,6 +21,10 @@ try {
     if ($manifest.version -ne $expectedVersion) {
         throw "release manifest version does not match Tauri package version"
     }
+    $expectedUiVersion = [string](Get-Content -LiteralPath (Join-Path $repoRoot 'ui/package.json') -Raw | ConvertFrom-Json).version
+    if ($manifest.version -ne $expectedUiVersion) {
+        throw "release manifest version does not match UI package version"
+    }
     if ($manifest.signed -ne $false -or $manifest.publicationReady -ne $false) {
         throw "unsigned preparation must not claim signed or publication-ready status"
     }
@@ -28,6 +32,7 @@ try {
         throw "unsigned preparation must retain all release blockers"
     }
     foreach ($required in @(
+        "AudioRouter_$($manifest.version)_x64-setup.exe",
         "audiorouter-cli.exe",
         "audiorouter-plugin-worker.exe",
         "audiorouter-shell.exe",
@@ -36,7 +41,8 @@ try {
         "sbom.cargo.json",
         "sbom.npm.json",
         "sbom.npm.package-lock.json",
-        "THIRD-PARTY-NOTICES.txt"
+        "THIRD-PARTY-NOTICES.txt",
+        "SHA256SUMS.txt"
     )) {
         if (@($manifest.artifacts | Where-Object { $_.file -eq $required }).Count -ne 1) {
             throw "release manifest must include exactly one $required artifact"
@@ -69,7 +75,7 @@ try {
     }
 
     Write-Output "M08 release preparation acceptance passed"
-    Write-Output "Scope: unsigned artifact preparation and verification only; no installer, driver, signing, or audio configuration changes."
+    Write-Output "Scope: unsigned per-user NSIS artifact preparation and verification only; no installer execution, driver, app signing, or audio configuration changes."
 }
 finally {
     Pop-Location

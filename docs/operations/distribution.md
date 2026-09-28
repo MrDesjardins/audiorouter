@@ -1,11 +1,11 @@
 # Distribution status and intended release path
 
-Status as of 2026-09-28: AudioRouter has no supported end-user installer or
-published GitHub release. The current scripts prepare unsigned qualification
-artifacts; they do not install the app or publish a release. Use the
-[development quickstart](quickstart.md) for the current source-based setup.
-The detailed proposed target is in the
-[Windows distribution plan](../plans/future/windows-distribution.md).
+Status as of 2026-09-28: the repository builds an unsigned per-user NSIS
+installer and includes a manually dispatched GitHub workflow that creates a
+draft release. No release has been published or qualified on a clean machine;
+the installer remains an M08 candidate. Use the [development quickstart](quickstart.md)
+for source-based setup and [M08 evidence](../plans/active/evidence/M08-release.md)
+for qualification status.
 
 The requested direction is a per-user Windows 11 x64 setup package that
 installs the desktop app and its CLI/plugin worker companions, initializes
@@ -26,10 +26,16 @@ candidate should include a setup package, release notes, checksums, a
 provenance manifest, SBOMs, and third-party notices. Drafts and source ZIPs
 are not equivalent to an installed application.
 
-The installer and release workflow remain plans rather than operational
-instructions until M08 scope, app/installer signing expectations, WebView2
-policy, and Windows install evidence are approved and implemented. Driver
-signing remains excluded under DEC-16. A manually published release can be
-official while unsigned; its signing state and Windows trust experience must
-be stated accurately. The current unsigned artifact flow is still not a
-supported consumer installer.
+The implementation and runbook are in [Windows distribution planning](../plans/future/windows-distribution.md)
+and `tools/release/`. The checked-in workflow requires a reviewed existing
+`vMAJOR.MINOR.PATCH` tag matching all app version files, validates its ancestry
+against the default branch, runs acceptance checks, and creates a verified
+GitHub **draft**. Maintainers inspect and publish it manually.
+
+The user selected an unsigned first app release. Release notes and the
+manifest must state that the app and installer are unsigned; Windows trust
+prompts are expected. App signing is separate from driver signing. The
+AudioRouter-owned driver and driver signing remain excluded under DEC-16.
+Standard-user install, upgrade/rollback, uninstall/data retention,
+clean-machine and missing-WebView2 qualification remain open M08 gates, so do
+not present the current bundle as a supported consumer release.

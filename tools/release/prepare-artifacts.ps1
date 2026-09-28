@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [string]$OutputDirectory
+    [string]$OutputDirectory,
+    [string]$ReleaseTag
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,6 +31,8 @@ while (-not [string]::IsNullOrWhiteSpace($parentPath)) {
 
 Push-Location $workspace
 $uiBuild = Join-Path ([IO.Path]::GetTempPath()) "audiorouter-ui-release-$PID"
+$bundleRoot = Join-Path $workspace "src-tauri/target/release/bundle/nsis"
+$cleanupNsis = $false
 try {
     $dirty = & git status --porcelain --untracked-files=all
     if ($LASTEXITCODE -ne 0) {
@@ -46,7 +49,7 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "UI build for native shell embedding failed with exit code $LASTEXITCODE"
     }
-    & cargo build --release --locked --manifest-path (Join-Path $workspace "src-tauri/Cargo.toml")
+    & cargo build --release --locked --features custom-protocol --manifest-path (Join-Path $workspace "src-tauri/Cargo.toml")
     if ($LASTEXITCODE -ne 0) {
         throw "native shell release build failed with exit code $LASTEXITCODE"
     }
@@ -67,6 +70,18 @@ try {
     if (-not (Test-Path -LiteralPath (Join-Path $uiBuild "index.html") -PathType Leaf)) {
         throw "UI release build did not produce index.html: $uiBuild"
     }
+    if (Test-Path -LiteralPath $bundleRoot) {
+        throw "NSIS output directory already exists; refusing to overwrite it: $bundleRoot"
+    }
+    $cleanupNsis = $true
+    $tauriCli = Join-Path $workspace "ui/node_modules/.bin/tauri.cmd"
+    if (-not (Test-Path -LiteralPath $tauriCli -PathType Leaf)) {
+        throw "Tauri CLI is missing; install locked UI dependencies with npm ci --prefix ui: $tauriCli"
+    }
+    & $tauriCli build --no-sign --ci --bundles nsis --config src-tauri/tauri.release.conf.json
+    if ($LASTEXITCODE -ne 0) {
+        throw "unsigned per-user NSIS bundle build failed with exit code $LASTEXITCODE"
+    }
     $uiLock = Join-Path $workspace "ui/package-lock.json"
     if (-not (Test-Path -LiteralPath $uiLock -PathType Leaf)) {
         throw "UI lockfile is missing: $uiLock"
@@ -85,6 +100,24 @@ try {
         $appVersion -notmatch '^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$') {
         throw "release application version is missing, invalid, or mismatched between Tauri and Cargo metadata"
     }
+    $uiPackage = Get-Content -LiteralPath (Join-Path $workspace "ui/package.json") -Raw | ConvertFrom-Json
+    if ($uiPackage.version -ne $appVersion) {
+        throw "release application version is mismatched between Tauri and UI package metadata"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($ReleaseTag)) {
+        if ($ReleaseTag -ne "v$appVersion") {
+            throw "release tag must be v$appVersion"
+        }
+        $tagCommitResult = & git rev-parse --verify "$ReleaseTag^{commit}"
+        if ($LASTEXITCODE -ne 0) {
+            throw "release tag does not exist in this checkout: $ReleaseTag"
+        }
+        $tagCommit = ($tagCommitResult | Select-Object -First 1).Trim()
+        $headCommit = (& git rev-parse HEAD).Trim()
+        if ($LASTEXITCODE -ne 0 -or $tagCommit -ne $headCommit) {
+            throw "release tag must already exist and point at the checked-out source commit"
+        }
+    }
 
     New-Item -ItemType Directory -Path $output | Out-Null
 
@@ -101,6 +134,15 @@ try {
         Assert-X64PortableExecutable $source
         Copy-Item -LiteralPath $source -Destination (Join-Path $output $binary.Name)
     }
+    $installerName = "AudioRouter_${appVersion}_x64-setup.exe"
+    $installerSource = Join-Path $workspace "src-tauri/target/release/bundle/nsis/$installerName"
+    if (-not (Test-Path -LiteralPath $installerSource -PathType Leaf)) {
+        throw "Tauri did not produce the per-user NSIS installer: $installerSource"
+    }
+    if ((Get-Item -LiteralPath $installerSource).Length -le 0) {
+        throw "Tauri produced an empty NSIS installer: $installerSource"
+    }
+    Copy-Item -LiteralPath $installerSource -Destination (Join-Path $output $installerName)
     Copy-Item -LiteralPath (Join-Path $workspace "tools/run-vb-cable-desktop.ps1") -Destination (Join-Path $output "run-vb-cable-desktop.ps1")
     Compress-Archive -Path (Join-Path $uiBuild "*") -DestinationPath (Join-Path $output "audiorouter-ui.zip") -CompressionLevel Optimal
     Copy-Item -LiteralPath $uiLock -Destination (Join-Path $output "sbom.npm.package-lock.json")
@@ -130,10 +172,15 @@ try {
     $noticeLines | Set-Content -LiteralPath (Join-Path $output "THIRD-PARTY-NOTICES.txt") -Encoding utf8
 
     $files = Get-ChildItem -LiteralPath $output -File | Sort-Object Name
-    $checksums = foreach ($file in $files) {
+    $checksums = @(foreach ($file in $files) {
         $hash = Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256
         [ordered]@{ file = $file.Name; sha256 = $hash.Hash.ToLowerInvariant(); bytes = $file.Length }
-    }
+    })
+    $checksumLines = @($checksums | ForEach-Object { "$($_.sha256) *$($_.file)" })
+    $checksumPath = Join-Path $output "SHA256SUMS.txt"
+    $checksumLines | Set-Content -LiteralPath $checksumPath -Encoding utf8
+    $checksumHash = Get-FileHash -LiteralPath $checksumPath -Algorithm SHA256
+    $checksums += [ordered]@{ file = "SHA256SUMS.txt"; sha256 = $checksumHash.Hash.ToLowerInvariant(); bytes = (Get-Item -LiteralPath $checksumPath).Length }
     $revision = (& git rev-parse HEAD).Trim()
     if ($LASTEXITCODE -ne 0 -or $revision -notmatch '^[0-9a-f]{40}$') {
         throw "could not determine the source revision for release provenance"
@@ -152,6 +199,7 @@ try {
         format = "audiorouter.release-preparation"
         schemaVersion = 1
         version = $appVersion
+        releaseTag = if ([string]::IsNullOrWhiteSpace($ReleaseTag)) { $null } else { $ReleaseTag }
         architecture = "x64"
         sourceRevision = $revision
         build = [ordered]@{
@@ -164,9 +212,9 @@ try {
         signed = $false
         publicationReady = $false
         blockers = @(
-            "production code signing credentials and certificate are required"
-            "driver package/signing and Windows install qualification are not included"
-            "installer and clean-machine acceptance remain pending"
+            "app and installer are intentionally unsigned for the first release; disclose the publisher trust state"
+            "standard-user install, upgrade, repair, uninstall, and clean-machine acceptance remain pending"
+            "endpoint and hardware acceptance remains specific to supported existing-device environments"
         )
     }
     $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $output "release-manifest.json") -Encoding utf8
@@ -174,6 +222,13 @@ try {
 finally {
     if (Test-Path -LiteralPath $uiBuild) {
         Remove-Item -LiteralPath $uiBuild -Recurse -Force
+    }
+    if ($cleanupNsis -and (Test-Path -LiteralPath $bundleRoot)) {
+        $bundleItem = Get-Item -LiteralPath $bundleRoot -Force
+        if (-not $bundleItem.PSIsContainer -or (($bundleItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
+            throw "generated NSIS bundle path is not a regular directory: $bundleRoot"
+        }
+        Remove-Item -LiteralPath $bundleRoot -Recurse -Force
     }
     Pop-Location
 }

@@ -16,9 +16,10 @@ bus. Completing "everything else" in this delivery map means every
 non-driver requirement across M00–M08: routing, DSP,
 recording, automation, recovery, CLI/MCP parity, and the visual editor. It
 does not include VDEV-01/03/09 or SEC-08. Installer and clean-machine gates
-are also excluded from the approved v1 completion target by DEC-16. Whether
-the app or installer is Authenticode-signed remains a separate, unresolved
-choice for any future distribution scope.
+were excluded by DEC-16, then explicitly reopened for planning and M08
+implementation by the user's 2026-09-28 request, recorded as DEC-17 below.
+Whether the app or installer is Authenticode-signed is separate: the user
+approved an unsigned first app release and left driver signing excluded.
 See [the set-aside driver plan](../plans/future/M03-driver-signing.md).
 
 ## Milestone sequence
@@ -80,6 +81,43 @@ The ranges below include every normative ID; each milestone must attach evidence
 | NFR-01–16 | Gates in [14](14-quality.md) | M08 measured reports |
 | QUAL-01–06 | M02–M06 as relevant | M08 signal/recording regression |
 | ENG-01–05 | Every milestone | M08 contract/docs/build evidence |
+| DIST-01–08 | M08 (distribution extension, DEC-17) | Per-user install/resource discovery, no-endpoint guidance, state retention, manual draft, artifact provenance, and Windows install/recovery evidence |
+
+## Distribution requirements (DEC-17)
+
+- **DIST-01 — Per-user install.** The Windows x64 setup package installs the
+  shell and required CLI/plugin-worker companions for the current user without
+  administrative elevation.
+- **DIST-02 — State preservation.** The installer uses the existing
+  `%LOCALAPPDATA%\AudioRouter` state location. Upgrade/repair preserve user
+  state and recordings; uninstall removes application files but does not
+  delete user data or external audio drivers/endpoints.
+- **DIST-03 — First-run guidance.** The UI discovers available Windows audio
+  endpoints and explains the supported existing-endpoint workflow. Missing
+  endpoints are reported with actionable vendor guidance. No installer or
+  first-run step installs a driver, changes Windows default devices/volumes,
+  or starts audio without deliberate user action.
+- **DIST-04 — Offline operation.** After setup and WebView2 availability,
+  application routing, effects, recording, editing, CLI/MCP, and local
+  discovery remain offline per PROD-06. The initial setup may use the
+  WebView2 bootstrapper when the runtime is absent.
+- **DIST-05 — Manual publication.** Releases start only from an explicit
+  maintainer action (PowerShell script or GitHub `workflow_dispatch`) against
+  an existing reviewed version tag. Automation runs declared checks and may
+  create a GitHub draft only; final publication is a separate human action.
+- **DIST-06 — Provenance and assets.** A release candidate includes the
+  per-user NSIS setup executable, release notes, SHA-256 manifest/checksums,
+  Cargo/npm SBOMs, and third-party notices. Version, tag, source commit, and
+  architecture must agree. The published package is x64 Windows 11.
+- **DIST-07 — Unsigned first app release.** The first app/installer release
+  may be unsigned, must state that it is unsigned, and must not claim a
+  publisher signature. This does not change the exclusion of the
+  AudioRouter-owned driver or its signing (DEC-16).
+- **DIST-08 — Install qualification.** Before M08 completion, standard-user
+  install, upgrade/repair, uninstall/data retention, missing/present WebView2,
+  companion executable resolution, and first-run endpoint states are tested
+  on supported Windows environments. Portable tests and an installer build
+  alone do not satisfy this gate.
 
 ## Initial decision register
 
@@ -103,6 +141,7 @@ These decisions are the proposed baseline for implementation. Evidence may chang
 | DEC-14 | NFR-01 wired physical loopback latency target revised from ≤30 ms to ≤250 ms p95 | User-approved 2026-09-21 after calibrated measurement (see [14-quality.md](14-quality.md) NFR-01 and [M00 WASAPI probe evidence](../plans/active/evidence/M00-wasapi-probe.md)): a real reference device (Focusrite Scarlett Solo) measured p95 ≈ 185.5–185.9 ms in WASAPI shared mode — AudioRouter's production sharing model, not exclusive/ASIO — across three reproducible runs, after an initial calibration bug was found and fixed. Buffer size and Windows 10+ `IAudioClient3` low-latency shared-mode tuning were both tested and ruled out as a fix on this device (its low-latency engine-period floor is a fixed 10 ms). The original ≤30 ms figure was an unvalidated aspirational target. The revised target is only validated on one device; it is not yet known whether other supported interfaces perform better or worse, and closing the gap further (e.g. via exclusive mode) remains unexplored future work, not authorized by this decision |
 | DEC-15 | NFR-02 mic-to-virtual-capture latency target revised from ≤40 ms to ≤160 ms p95 | User-approved 2026-09-21 after calibrated measurement through the real engine route (see [14-quality.md](14-quality.md) NFR-02 and [M00 WASAPI probe evidence](../plans/active/evidence/M00-wasapi-probe.md)): the same reference device measured p95 of 97.5/102.9/115.5/110.9 ms across four runs (physical mic capture → real `PhysicalInput → Gain → Recorder → PhysicalOutput` graph/scheduler → virtual render → virtual capture read), each run's own internal spread under ~13 ms with more run-to-run variance across separate engine-route launches than NFR-01 showed. The revised ≤160 ms target follows the same DEC-14 methodology: roughly 35% headroom over the worst observed run (115.461 ms). Also validated on one device only; not yet known whether this cross-run variance narrows on repeated measurement or with a different mic/driver |
 | DEC-16 | AudioRouter-owned driver, PortCls endpoint, production driver signing, and M08 installer/clean-machine gates excluded from the approved v1 track | User decision 2026-09-19 based on unfunded driver-signing/distribution cost. Existing VB-Cable/Voicemeeter and physical WASAPI endpoints are the supported boundary. VDEV-01/03/09 and SEC-08 remain normative only for a separately authorized future track. This decision does not settle Authenticode signing for the desktop app or installer; unsigned artifact preparation does not imply publication or a releasable installer |
+| DEC-17 | Implement an integrated per-user app installer and manually initiated GitHub draft-release path in M08; permit unsigned first app release | User request and signing preference, 2026-09-28. DEC-17 supersedes DEC-16 only for app installer/release planning and acceptance. Driver, PortCls, and driver signing remain excluded. App/installer Authenticode signing is not required for the first release; unsigned status/trust behavior must be disclosed. GitHub automation creates a draft only; a human publishes it. |
 
 ## Risk and dependency register
 
@@ -148,4 +187,4 @@ MCP's evolving transport/SDK documentation must be pinned and verified during M0
 
 ## Definition of done
 
-A milestone is complete when all scoped requirements have implementation and evidence, applicable Windows tests pass, docs/contracts match behavior, and the active plan contains a reproducible handoff. A release additionally needs M08's applicable install/update/rollback, hardware performance, privacy/security, and usability gates. App/installer Authenticode signing remains a separate unresolved distribution choice; driver signing is excluded by DEC-16. A plan, generated UI, successful compile, or mocked demo alone is not completion evidence.
+A milestone is complete when all scoped requirements have implementation and evidence, applicable Windows tests pass, docs/contracts match behavior, and the active plan contains a reproducible handoff. A release additionally needs M08's applicable DIST-01–08 installer, install/recovery, hardware performance, privacy/security, and usability gates. The first app/installer release may be unsigned under DEC-17, with unsigned status and trust behavior disclosed; driver signing is excluded by DEC-16. A plan, generated UI, successful compile, or mocked demo alone is not completion evidence.

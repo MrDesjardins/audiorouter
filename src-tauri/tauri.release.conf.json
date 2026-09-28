@@ -1,0 +1,19 @@
+{
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "resources": {
+      "../target/release/audiorouter-cli.exe": "audiorouter-cli.exe",
+      "../target/release/audiorouter-plugin-worker.exe": "audiorouter-plugin-worker.exe"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      },
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      }
+    }
+  }
+}

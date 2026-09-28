@@ -1,0 +1,106 @@
+name: AudioRouter manual draft release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing reviewed tag, for example v0.1.0
+        required: true
+        type: string
+      notes:
+        description: Release notes to attach to the draft
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-draft:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: windows-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    steps:
+      - name: Check out workflow revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Install pinned Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.14.0
+          package-manager-cache: false
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # 2026-07-16 action revision
+        with:
+          toolchain: 1.96.0
+          components: rustfmt, clippy
+
+      - name: Validate and check out reviewed tag
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+$') { throw 'Tag must use vMAJOR.MINOR.PATCH.' }
+          $tagRef = "refs/tags/$($env:RELEASE_TAG)"
+          $branchRef = "refs/heads/$($env:DEFAULT_BRANCH)"
+          git fetch --no-tags origin "${tagRef}:${tagRef}"
+          if ($LASTEXITCODE -ne 0) { throw 'The requested tag does not exist on origin.' }
+          git fetch origin "${branchRef}:refs/remotes/origin/$($env:DEFAULT_BRANCH)"
+          if ($LASTEXITCODE -ne 0) { throw 'Could not fetch the default branch for ancestry validation.' }
+          git merge-base --is-ancestor $env:RELEASE_TAG "origin/$env:DEFAULT_BRANCH"
+          if ($LASTEXITCODE -ne 0) { throw 'The release tag is not reachable from the default branch.' }
+          git checkout --detach $env:RELEASE_TAG
+          if ($LASTEXITCODE -ne 0) { throw 'Could not check out the reviewed tag.' }
+          $taggedVersion = $env:RELEASE_TAG.Substring(1)
+          $tauriVersion = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $cargoVersion = [regex]::Match((Get-Content src-tauri/Cargo.toml -Raw), '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
+          $uiVersion = (Get-Content ui/package.json -Raw | ConvertFrom-Json).version
+          if ($tauriVersion -ne $taggedVersion -or $cargoVersion -ne $taggedVersion -or $uiVersion -ne $taggedVersion) {
+            throw 'Tag, Tauri, Cargo, and UI package versions must match.'
+          }
+
+      - name: Check documentation and formatting
+        shell: pwsh
+        run: |
+          ./tests/acceptance/docs.ps1
+          cargo fmt --all -- --check
+
+      - name: Install contract dependencies and check API drift
+        shell: pwsh
+        run: |
+          npm --prefix contracts ci
+          npm --prefix contracts run typecheck
+          npm --prefix contracts run check:drift
+
+      - name: Test Rust workspace
+        shell: pwsh
+        run: cargo test --workspace --locked --exclude audiorouter-windows-audio
+
+      - name: Check Windows audio adapter
+        shell: pwsh
+        run: cargo check -p audiorouter-windows-audio --locked
+
+      - name: Test and build UI
+        shell: pwsh
+        run: |
+          npm --prefix ui ci
+          npm --prefix ui test
+          npm --prefix ui run build
+
+      - name: Create and verify GitHub draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_NOTES: ${{ inputs.notes }}
+        run: |
+          $notesPath = Join-Path $env:RUNNER_TEMP 'audiorouter-release-notes.md'
+          Set-Content -LiteralPath $notesPath -Value $env:RELEASE_NOTES -Encoding utf8
+          $artifactPath = Join-Path $env:RUNNER_TEMP 'audiorouter-release-artifacts'
+          ./tools/release/create-draft-release.ps1 -Tag $env:RELEASE_TAG -NotesPath $notesPath -OutputDirectory $artifactPath

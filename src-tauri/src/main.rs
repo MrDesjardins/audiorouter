@@ -432,13 +432,21 @@ fn backend_diagnostics_list() -> Result<Vec<serde_json::Value>, String> {
 }
 
 #[tauri::command]
-fn mcp_setup_info(state: State<'_, ShellState>) -> Result<serde_json::Value, String> {
+fn mcp_setup_info(app: tauri::AppHandle, state: State<'_, ShellState>) -> Result<serde_json::Value, String> {
     let executable = std::env::current_exe()
         .map_err(|error| format!("shell executable lookup failed: {error}"))?;
-    let cli = executable.with_file_name("audiorouter-cli.exe");
+    let sibling_cli = executable.with_file_name("audiorouter-cli.exe");
+    let resource_cli = app
+        .path()
+        .resource_dir()
+        .ok()
+        .map(|directory| directory.join("audiorouter-cli.exe"));
+    let cli = resource_cli
+        .filter(|path| path.is_file())
+        .unwrap_or(sibling_cli);
     Ok(serde_json::json!({
         "cliPath": cli.to_string_lossy(),
-        "cliAvailableBesideShell": cli.is_file(),
+        "cliAvailable": cli.is_file(),
         "databasePath": state.database_path.to_string_lossy(),
         "pipeName": state.pipe_name,
         "transport": "local named pipe",

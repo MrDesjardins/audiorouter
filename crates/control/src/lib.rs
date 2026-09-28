@@ -63,6 +63,31 @@ const APPLICATION_CAPTURE_RETRY_MIN: Duration = Duration::from_secs(1);
 const APPLICATION_CAPTURE_RETRY_MAX: Duration = Duration::from_secs(5);
 const MAX_VIRTUAL_DEVICE_LIST_ITEMS: usize = 500;
 const MAX_PROCESSOR_CATALOG_ITEMS: usize = 32;
+fn packaged_plugin_worker_path(shell_executable: &std::path::Path) -> Option<std::path::PathBuf> {
+    let directory = shell_executable.parent()?;
+    let worker = if cfg!(windows) {
+        "audiorouter-plugin-worker.exe"
+    } else {
+        "audiorouter-plugin-worker"
+    };
+    [
+        directory.join(worker),
+        directory.join("resources").join(worker),
+    ]
+    .into_iter()
+    .find(|candidate| candidate.is_file())
+}
+
+fn plugin_worker_path() -> Option<std::path::PathBuf> {
+    std::env::var_os("AUDIOROUTER_PLUGIN_WORKER_PATH")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::current_exe()
+                .ok()
+                .and_then(|executable| packaged_plugin_worker_path(&executable))
+        })
+}
+
 /// Maximum simultaneously armed/active recorder controllers across sessions.
 const MAX_ACTIVE_RECORDERS: usize = audiorouter_engine::MAX_AUDIO_TAPS;
 /// Maximum number of bounded queue-drain passes a recorder finalization may
@@ -12784,23 +12809,9 @@ impl ControlPlane {
         {
             return Ok(stages);
         }
-        let worker_executable = std::env::var_os("AUDIOROUTER_PLUGIN_WORKER_PATH")
-            .map(std::path::PathBuf::from)
-            .or_else(|| {
-                std::env::current_exe()
-                    .ok()
-                    .and_then(|path| path.parent().map(std::path::Path::to_path_buf))
-                    .map(|directory| {
-                        directory.join(if cfg!(windows) {
-                            "audiorouter-plugin-worker.exe"
-                        } else {
-                            "audiorouter-plugin-worker"
-                        })
-                    })
-            })
-            .ok_or_else(|| {
-                ControlError::InvalidRequest("plugin worker executable is unavailable".into())
-            })?;
+        let worker_executable = plugin_worker_path().ok_or_else(|| {
+            ControlError::InvalidRequest("plugin worker executable is unavailable".into())
+        })?;
         let mut prepared = HashMap::new();
         for node in session
             .nodes
@@ -18047,23 +18058,9 @@ impl ControlPlane {
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ControlError::InvalidRequest("path is required".into()))?;
         let (identity, root) = self.scanned_plugin_identity(path)?;
-        let executable = std::env::var_os("AUDIOROUTER_PLUGIN_WORKER_PATH")
-            .map(std::path::PathBuf::from)
-            .or_else(|| {
-                std::env::current_exe()
-                    .ok()
-                    .and_then(|path| path.parent().map(std::path::Path::to_path_buf))
-                    .map(|directory| {
-                        directory.join(if cfg!(windows) {
-                            "audiorouter-plugin-worker.exe"
-                        } else {
-                            "audiorouter-plugin-worker"
-                        })
-                    })
-            })
-            .ok_or_else(|| {
-                ControlError::InvalidRequest("plugin worker executable is unavailable".into())
-            })?;
+        let executable = plugin_worker_path().ok_or_else(|| {
+            ControlError::InvalidRequest("plugin worker executable is unavailable".into())
+        })?;
         let worker = if identity.format == audiorouter_plugin_host::PluginFormat::Vst3 {
             #[cfg(windows)]
             {
@@ -19438,6 +19435,37 @@ mod tests {
     use super::*;
     use audiorouter_domain::{Edge, Node, NodeKind, Port, PortDirection};
     use audiorouter_engine::{RuntimeGeneration, RuntimeGraph, RuntimeProcessor};
+
+    #[test]
+    fn plugin_worker_resolves_from_the_packaged_resource_directory() {
+        let root = std::env::temp_dir().join(format!(
+            "audiorouter-worker-resource-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let resources = root.join("resources");
+        std::fs::create_dir_all(&resources).unwrap();
+        let shell = root.join(if cfg!(windows) {
+            "audiorouter-shell.exe"
+        } else {
+            "audiorouter-shell"
+        });
+        let worker_name = if cfg!(windows) {
+            "audiorouter-plugin-worker.exe"
+        } else {
+            "audiorouter-plugin-worker"
+        };
+        let worker = resources.join(worker_name);
+        std::fs::write(&worker, b"test executable placeholder").unwrap();
+        assert_eq!(packaged_plugin_worker_path(&shell), Some(worker.clone()));
+        let adjacent = root.join(worker_name);
+        std::fs::write(&adjacent, b"adjacent executable placeholder").unwrap();
+        assert_eq!(packaged_plugin_worker_path(&shell), Some(adjacent));
+        std::fs::remove_dir_all(&root).unwrap();
+    }
 
     fn encode_test_base64(bytes: &[u8]) -> String {
         const TABLE: &[u8; 64] =

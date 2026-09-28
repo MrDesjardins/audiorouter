@@ -5,12 +5,22 @@ plane, CLI, MCP adapter, DSP, recording, plugin-worker, crash-recovery
 orchestration boundaries, and the shell-owned control backend are implemented
 and tested. The current supported development I/O boundary is an existing
 VB-Cable/Voicemeeter installation plus physical WASAPI endpoints; the
-AudioRouter-owned virtual-device driver is on hold because production signing
-and trusted installation are unavailable. AudioRouter-owned managed-driver routing, production
-signing, and clean-machine qualification remain release gates, not completed
-features.
+AudioRouter-owned virtual-device driver is on hold because it is excluded by
+DEC-16. Managed-driver routing and production driver signing are not M08 gates.
+The first app release is explicitly allowed to be unsigned under DEC-17; app
+Authenticode signing is separate. The integrated installer now builds, while
+clean-machine and install qualification remain open M08 release gates.
 
 ## Current verified artifacts
+
+As of 2026-09-28, the integrated unsigned per-user NSIS package has built
+successfully on Windows x64 (8,217,235 bytes). The M08 smoke verifies the
+bundle and cleans its temporary output; it deliberately does not execute or
+install the package. The release builder and manual draft workflow are
+implemented. Standard-user installation, upgrade/rollback, uninstall,
+clean-machine and missing-WebView2 checks remain open. The app and installer
+are intentionally unsigned for the first release; this is separate from the
+AudioRouter driver signing decision.
 
 The reproducible preparation flow is:
 
@@ -96,12 +106,10 @@ surface is green:
 
 The VST3 SDK is source-distributed and installed only at the ignored local
 path `third_party/vst3sdk`; it is not a system SDK or plugin registration.
-The documented unsigned NSIS smoke also produces and verifies a debug x64
-installer bundle without installing it; the output is removed afterward. These
-checks do not establish AudioRouter-owned managed-driver end-to-end routing, a
-production driver, production signing, or clean-machine qualification.
-Existing-device VB-Cable/Voicemeeter and physical WASAPI routing is covered
-separately by the guarded M02 evidence.
+The unsigned NSIS smoke produces and verifies a per-user x64 installer bundle
+without installing it; the output is removed afterward. These checks do not
+establish clean-machine qualification. Existing-device VB-Cable/Voicemeeter
+and physical WASAPI routing is covered separately by the guarded M02 evidence.
 
 ## Before any installation
 
@@ -112,12 +120,11 @@ separately by the guarded M02 evidence.
 4. Review the install preview and the required elevation scope.
 5. Keep unrelated audio drivers and devices out of the change set.
 
-The current repository has no production installer or production-signed
-virtual-device driver package to install. It does contain an AudioRouter-owned
-x64 prototype and a guarded, build-qualified lifecycle entrypoint for an
-isolated test system; neither is a releasable driver artifact. Do not treat
-VB-Audio, Voicemeeter, Sonar, or another existing virtual device as an
-AudioRouter release artifact.
+The current repository has an unsigned per-user installer candidate, but it
+has not passed install qualification and is not yet a supported release. The
+AudioRouter-owned x64 driver remains a development prototype outside M08.
+Do not treat VB-Audio, Voicemeeter, Sonar, or another existing virtual device
+as an AudioRouter release artifact.
 
 The current qualification workstation reports Secure Boot enabled and VBS/
 Memory Integrity active. WDK `signtool.exe` is available under the installed
@@ -160,12 +167,9 @@ blocker.
 
 ## Known release blockers
 
-- Production-signed virtual-device driver and normal Secure Boot/Memory
-  Integrity qualification.
-- AudioRouter-owned managed-driver routing, latency, drift, restart, and
-  hardware evidence.
-- Signed binaries/packages, installer elevation behavior, upgrade/rollback, and
-  clean-machine testing.
+- Standard-user install, upgrade/rollback, uninstall and data-retention checks.
+- Clean-machine and missing-WebView2 first-run qualification.
+- Installer trust-prompt and unsigned-release disclosure review.
 - Full plugin worker sandbox enforcement and the tested compatibility matrix.
 - Accessibility/usability and first-time-user qualification on the declared
   reference hardware.

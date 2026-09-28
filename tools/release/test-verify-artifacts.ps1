@@ -7,9 +7,10 @@ $verifier = Join-Path $PSScriptRoot "verify-artifacts.ps1"
 try {
     New-Item -ItemType Directory -Path $root | Out-Null
     function New-RequiredArtifactEntries {
-        param([Parameter(Mandatory = $true)][string]$Directory)
+        param([Parameter(Mandatory = $true)][string]$Directory, [object[]]$AdditionalEntries = @())
         $entries = @()
         foreach ($name in @(
+            "AudioRouter_0.1.0_x64-setup.exe",
             "audiorouter-cli.exe",
             "audiorouter-plugin-worker.exe",
             "audiorouter-shell.exe",
@@ -26,6 +27,15 @@ try {
                 bytes = (Get-Item -LiteralPath $path).Length
             }
         }
+        $sumEntries = @($AdditionalEntries) + @($entries)
+        $sumLines = @($sumEntries | ForEach-Object { "$($_.sha256) *$($_.file)" })
+        $sumPath = Join-Path $Directory "SHA256SUMS.txt"
+        $sumLines | Set-Content -LiteralPath $sumPath -Encoding utf8
+        $entries += [ordered]@{
+            file = "SHA256SUMS.txt"
+            sha256 = (Get-FileHash -LiteralPath $sumPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            bytes = (Get-Item -LiteralPath $sumPath).Length
+        }
         return $entries
     }
     $artifactPath = Join-Path $root "sample.bin"
@@ -37,13 +47,18 @@ try {
     $hash = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $noticeHash = (Get-FileHash -LiteralPath $noticePath -Algorithm SHA256).Hash.ToLowerInvariant()
     $sbomHash = (Get-FileHash -LiteralPath $sbomPath -Algorithm SHA256).Hash.ToLowerInvariant()
-    $requiredEntries = New-RequiredArtifactEntries $root
+    $requiredEntries = New-RequiredArtifactEntries $root @(
+        [ordered]@{ file = "sample.bin"; sha256 = $hash; bytes = 5 }
+        [ordered]@{ file = "sbom.cargo.json"; sha256 = $sbomHash; bytes = (Get-Item -LiteralPath $sbomPath).Length }
+        [ordered]@{ file = "THIRD-PARTY-NOTICES.txt"; sha256 = $noticeHash; bytes = (Get-Item -LiteralPath $noticePath).Length }
+    )
     $manifest = [ordered]@{
         format = "audiorouter.release-preparation"
         schemaVersion = 1
         version = "0.1.0"
         architecture = "x64"
         sourceRevision = ("a" * 40)
+        releaseTag = "v0.1.0"
         build = [ordered]@{ profile = "release"; target = "x86_64-pc-windows-msvc"; rustc = "1.96.0"; cargo = "cargo 1.96.0" }
         artifacts = @(
             [ordered]@{ file = "sample.bin"; sha256 = $hash; bytes = 5 }
@@ -107,7 +122,11 @@ try {
     try {
         New-Item -ItemType SymbolicLink -Path $linkPath -Target $noticePath -ErrorAction Stop | Out-Null
         $linkHash = (Get-FileHash -LiteralPath $linkPath -Algorithm SHA256).Hash.ToLowerInvariant()
-        $linkRequiredEntries = New-RequiredArtifactEntries $root
+        $linkRequiredEntries = New-RequiredArtifactEntries $root @(
+            [ordered]@{ file = "linked.bin"; sha256 = $linkHash; bytes = (Get-Item -LiteralPath $linkPath).Length }
+            [ordered]@{ file = "THIRD-PARTY-NOTICES.txt"; sha256 = $noticeHash; bytes = (Get-Item -LiteralPath $noticePath).Length }
+            [ordered]@{ file = "sbom.cargo.json"; sha256 = $sbomHash; bytes = (Get-Item -LiteralPath $sbomPath).Length }
+        )
         $linkManifest = [ordered]@{
             format = "audiorouter.release-preparation"
             schemaVersion = 1

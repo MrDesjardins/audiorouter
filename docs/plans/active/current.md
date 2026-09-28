@@ -1,7 +1,7 @@
 # Active plan — VB-Cable-first completion and delivery planning
 
 Status: active. Rewritten 2026-09-27 as a current-state plan; current task
-updated 2026-09-28 for requested distribution planning. The
+updated 2026-09-28 for the requested installer and manual draft-release path. The
 append-only log it replaces (2026-09-17 → 2026-09-26: every decision,
 defect, experiment and superseded handoff) is archived verbatim as the
 [execution log](../archived/2026-09-26-vb-cable-first-execution-log.md).
@@ -17,42 +17,55 @@ AudioRouter-owned driver, PortCls endpoint or production driver signing.
 VDEV-01/03/09 and SEC-08 stay normative only for a possible future funded
 track ([future plan](../future/M03-driver-signing.md)).
 
-## Current task — Windows distribution planning (2026-09-28)
+## Current task — Windows installer and manual release path (2026-09-28)
 
-- Objective: document a low-friction Windows install and explicitly manual
-  GitHub release path, grounded in current packaging and scope. Planning only;
-  no installer, workflow, or publication implementation is authorized yet.
-- Requirements: PROD-01/03/04/06/07, SEC-11, ENG-04/05 and M08; see the
-  [distribution plan](../future/windows-distribution.md). DEC-16 continues to
-  exclude the owned driver and its production signing. App/installer signing
-  is a separate unresolved choice. The user's 2026-09-28
-  request reopens app-installer and draft-release planning only; M08 and
-  traceability require an explicit scope revision before implementation.
-- Prerequisites/evidence: current supported boundary uses existing endpoints;
-  current artifact preparation is unsigned and not installable. The release
-  script's shell command lacks the required `custom-protocol` feature. No
-  Windows installer/clean-machine evidence has been created by this task.
-- Decision: target per-user setup and a manually initiated build that uploads
-  a GitHub draft for separate human publication. Preserve user state, avoid
-  OS-default changes and silent audio start, and guide endpoint selection.
-  Do not claim an AudioRouter-owned virtual microphone: that remains outside
-  current scope.
-- Ordered tasks: (1) map current release artifacts/config to the user goal;
-  (2) define package, onboarding, GitHub draft, evidence, rollback, and scope
-  sequence in the future plan; (3) document current status and link the plan;
-  (4) run docs acceptance and inspect the diff; (5) commit and push the docs.
-- Validation: `tests/acceptance/docs.ps1` and `git diff --check`. No build,
-  installer, Windows install, or release-publication claims are implied.
-- Risks: unsigned installers can trigger trust warnings; endpoint and WebView2
-  prerequisites can prevent a clean first run; packaged companion lookup may
-  fail; DEC-16 conflicts with a released installer until M08 scope is revised.
-  Rollback is limited to the planning/status docs; no runtime or user state is
-  changed.
-- Result: see the linked plan and
-  [distribution status](../../operations/distribution.md).
-- Next action: explicitly promote this bounded track into M08 and decide
-  signing expectations, WebView2 offline support, and acceptance of the
-  existing-endpoint prerequisite before implementation.
+- Objective: implement a per-user Windows installer and manual GitHub draft
+  release path, then document and qualify within available Windows evidence.
+- Requirements: PROD-01/03/04/06/07, SEC-09/11, ENG-04/05, and new DIST-01–08
+  in [delivery traceability](../../spec/15-delivery.md). User direction on
+  2026-09-28 promotes installer/release work into M08. DEC-16 still excludes
+  the AudioRouter-owned driver and driver signing. User selected an explicitly
+  unsigned first app release; no signing credential purchase is authorized.
+- Prerequisites/evidence: Windows x64 build host and pinned local Tauri 2.11.4
+  CLI; unsigned NSIS build succeeded at 8,217,235 bytes. It was not installed.
+  M08 clean-machine/install gates remain open. Existing endpoints are still
+  needed for real audio routes.
+- Decisions: per-user NSIS, WebView2 downloaded bootstrapper fallback, CLI and
+  plugin worker bundled as resources, state remains in `%LOCALAPPDATA%`, no
+  updater, no OS default changes or startup audio. Release workflow is
+  `workflow_dispatch` only and creates a draft; publishing stays manual.
+- Ordered tasks: (1) promote DIST acceptance and revise M08/DEC-16 boundary;
+  (2) bundle shell/CLI/worker and resolve installed resource paths; (3) add a
+  concise setup guide and no-endpoint state; (4) extend artifact preparation,
+  verification, and focused regression tests; (5) add manual PowerShell and
+  GitHub draft-release path; (6) run portable/docs/release checks and NSIS
+  build/inspection; (7) record install/signing/clean-machine work that needs a
+  disposable second Windows environment before claiming full M08 completion.
+- Validation matrix: portable tests for resource resolution/release metadata;
+  Windows NSIS bundle contents and checksums; docs acceptance; no-endpoint UI
+  setup state. Standard-user install, upgrade, uninstall, missing-WebView2,
+  signature reputation, multiple Windows builds, and hardware routes require
+  an isolated Windows test account/machine and remain release gates.
+- Risks: install layout can strand CLI/worker; a setup EXE can be unsigned but
+  still cause trust prompts; endpoint drivers remain external; the bundle may
+  require internet to bootstrap WebView2. Roll back only release/config/UI
+  changes; preserve `%LOCALAPPDATA%\AudioRouter` and do not touch audio drivers
+  or Windows endpoint defaults.
+- Verification so far: UI suite 372/372, UI typecheck/build, Rust workspace
+  tests (locked, Windows audio adapter excluded), packaged-worker resource-path
+  test, artifact preparation/verifier tests, docs acceptance (69 files/364
+  links), and unsigned x64 NSIS smoke passed. The bundle is build evidence only.
+- Formatting: `cargo fmt --all -- --check` reports pre-existing workspace
+  formatting differences across unrelated crates; this change's added helper
+  and test were aligned with rustfmt. The manual release workflow could not be
+  parsed with a YAML tool because no parser is installed; inspected structurally.
+- Limitations: no standard-user install/upgrade/uninstall, clean-machine,
+  missing-WebView2, reputation prompt, or live endpoint qualification yet.
+- Visual review: Computer Use has no available browser or app surface in this
+  session, so dark/light/high-contrast screenshot review remains open.
+- Next action: inspect the final diff, commit/push the implementation, then
+  continue M08 install testing on an isolated Windows account/machine before
+  publishing any release.
 
 Requirement families in scope: PROD, ARCH, GRAPH, CAP, DSP, REC, PLUG, UI,
 API, AUTO, STATE, SEC (non-driver), NFR, QUAL, ENG, as mapped in
@@ -97,7 +110,7 @@ by hand in the morning.
   30 s clean.
 - **Network Send / Network Receive tools added** (user request, see the log
   and [quickstart how-to](../../operations/quickstart.md#stream-audio-to-another-computer-network-send-network-receive)).
-  Verified on one machine over UDP 127.0.0.1: 2 × 30 s, 0 packets lost,
+  Verified on one machine over UDP 127.0.0.1: 2 Ã— 30 s, 0 packets lost,
   0 glitches.
 - **Bypassed plugins no longer block Play.** The user's saved session has
   ReaEQ bypassed, which made `nativePaths.prepare` fail. Regression test
@@ -601,7 +614,7 @@ sections above.
 - Verification: 4 network unit tests, including loopback tone continuity
   (0 discontinuities in 3 runs), sender filtering, and gap concealment.
   Live CABLE → Network Send → UDP 127.0.0.1 → Network Receive → CABLE-B:
-  2 × 30 s, 0 glitches, 11,640 of 11,640 packets. UI: 6 unit tests,
+  2 Ã— 30 s, 0 glitches, 11,640 of 11,640 packets. UI: 6 unit tests,
   2 E2E real-backend cases, three-theme bounds and screenshots.
   Workspace Rust, UI unit, E2E (67) and contract drift all pass.
 - Also fixed on the way: generated sources (Test Signal, Audio File) were

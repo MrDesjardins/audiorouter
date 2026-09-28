@@ -50,6 +50,9 @@ if ($manifest.version -notmatch '^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$' -or
     $manifest.architecture -ne "x64" -or $manifest.sourceRevision -notmatch '^[0-9a-f]{40}$') {
     throw "release manifest has invalid version, architecture, or source revision"
 }
+if ($null -ne $manifest.releaseTag -and $manifest.releaseTag -ne "v$($manifest.version)") {
+    throw "release manifest tag does not match its version"
+}
 if ($manifest.signed -ne $false -or $manifest.publicationReady -ne $false) {
     throw "unsigned preparation manifest cannot claim signed or publication-ready status"
 }
@@ -106,6 +109,7 @@ if (-not $names.Contains("THIRD-PARTY-NOTICES.txt")) {
     throw "release manifest does not include THIRD-PARTY-NOTICES.txt"
 }
 $requiredArtifacts = @(
+    "AudioRouter_$($manifest.version)_x64-setup.exe",
     "audiorouter-cli.exe",
     "audiorouter-plugin-worker.exe",
     "audiorouter-shell.exe",
@@ -114,12 +118,34 @@ $requiredArtifacts = @(
     "sbom.cargo.json",
     "sbom.npm.json",
     "sbom.npm.package-lock.json",
-    "THIRD-PARTY-NOTICES.txt"
+    "THIRD-PARTY-NOTICES.txt",
+    "SHA256SUMS.txt"
 )
 foreach ($required in $requiredArtifacts) {
     if (-not $names.Contains($required)) {
         throw "release manifest is missing required artifact: $required"
     }
+}
+
+$checksumPath = Join-Path $root "SHA256SUMS.txt"
+$checksumEntries = @{}
+foreach ($line in Get-Content -LiteralPath $checksumPath) {
+    if ($line -notmatch '^(?<sha256>[0-9a-f]{64}) \*(?<file>[^\\/]+)$') {
+        throw "checksum file contains an invalid entry"
+    }
+    $name = $Matches.file
+    if ($name -eq "SHA256SUMS.txt" -or $checksumEntries.ContainsKey($name)) {
+        throw "checksum file contains a duplicate or self-referential entry: $name"
+    }
+    $checksumEntries[$name] = $Matches.sha256
+}
+foreach ($entry in @($manifest.artifacts | Where-Object { $_.file -ne "SHA256SUMS.txt" })) {
+    if (-not $checksumEntries.ContainsKey($entry.file) -or $checksumEntries[$entry.file] -ne $entry.sha256) {
+        throw "checksum file does not match release manifest entry: $($entry.file)"
+    }
+}
+if ($checksumEntries.Count -ne @($manifest.artifacts | Where-Object { $_.file -ne "SHA256SUMS.txt" }).Count) {
+    throw "checksum file contains unlisted or missing artifacts"
 }
 
 $allowed = [Collections.Generic.HashSet[string]]::new($names, [StringComparer]::OrdinalIgnoreCase)

@@ -4,7 +4,7 @@ param()
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $manifestPath = Join-Path $repositoryRoot 'src-tauri/Cargo.toml'
-$bundleRoot = Join-Path $repositoryRoot 'src-tauri/target/debug/bundle/nsis'
+$bundleRoot = Join-Path $repositoryRoot 'src-tauri/target/release/bundle/nsis'
 $installerPath = Join-Path $bundleRoot 'AudioRouter_0.1.0_x64-setup.exe'
 $manifestHash = (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash
 
@@ -15,8 +15,15 @@ try {
 
     Push-Location $repositoryRoot
     try {
-        & npm.cmd exec --yes --package '@tauri-apps/cli@2.11.4' -- tauri build `
-            --debug --no-sign --ci --bundles nsis --config src-tauri/tauri.conf.json
+        & cargo build --release --locked -p audiorouter-cli -p audiorouter-plugin-host
+        if ($LASTEXITCODE -ne 0) {
+            throw "CLI and plugin-worker release build failed with exit code $LASTEXITCODE"
+        }
+        $tauriCli = Join-Path $repositoryRoot 'ui/node_modules/.bin/tauri.cmd'
+        if (-not (Test-Path -LiteralPath $tauriCli -PathType Leaf)) {
+            throw "Tauri CLI is missing; install locked UI dependencies with npm ci --prefix ui: $tauriCli"
+        }
+        & $tauriCli build --no-sign --ci --bundles nsis --config src-tauri/tauri.release.conf.json
         if ($LASTEXITCODE -ne 0) {
             throw "unsigned NSIS bundler failed with exit code $LASTEXITCODE"
         }
