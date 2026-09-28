@@ -370,3 +370,22 @@ sections above.
   session's plugin nodes instead of a fixed list).
 - Known, unchanged: the single-output (endpoint worker) compiler refuses a
   mono plugin chain feeding a stereo output even when every node is mono.
+
+### 2026-09-27 — Save flickered "Saving…" every second while playing (UI-04)
+
+- Report (user): after Play, Save showed "Saving…" about once a second, and
+  FIR Filter Hz showed a blue line after Stop but no live movement.
+- Cause: while playing, a parameter-only difference between the draft and
+  the saved route is applied live after 0.4 s. `isParameterOnlyChange`
+  compared parameters with `JSON.stringify`, which depends on key order.
+  The backend returns parameters with sorted keys, and FIR Filter Hz's
+  defaults are not alphabetical, so each 1 s snapshot looked like a change.
+  Each re-apply started a new runtime generation, rebuilding the tool and
+  resetting its spectrum smoothing. After Stop the editor still drew the
+  last telemetry.
+- Fix: compare with the existing order-insensitive `sameJsonValue`; draw
+  the live line only while the route plays.
+- Verification: regression tests in `draft.test.ts` and
+  `SpectralGateEditor.test.tsx`; vitest 366, Playwright suite. Live: the
+  user's session copy reports `spectrum.levelsDb` for FIR Filter Hz while
+  playing (live test now prints it).

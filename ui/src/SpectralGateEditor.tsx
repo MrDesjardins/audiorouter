@@ -74,7 +74,7 @@ export function SpectralGateEditor({ node, running, levelsDb, liveProfile, disab
       <rect x={LEFT} y={TOP} width={RIGHT - LEFT} height={BOTTOM - TOP} className="advanced-eq-plot" />
       {[-100, -80, -60, -40, -20, 0].map((db) => <g key={db}><line x1={LEFT} x2={RIGHT} y1={yForDb(db)} y2={yForDb(db)} className="advanced-eq-grid" /><text x={LEFT - 5} y={yForDb(db) + 3} textAnchor="end" className="advanced-eq-axis">{db}</text></g>)}
       {TICKS.map((hz) => <g key={hz}><line x1={xForHz(hz)} x2={xForHz(hz)} y1={TOP} y2={BOTTOM} className="advanced-eq-grid" /><text x={xForHz(hz)} y={HEIGHT - 12} textAnchor="middle" className="advanced-eq-axis">{hz >= 1000 ? `${hz / 1000}k` : hz}</text></g>)}
-      {levelsDb && <polyline points={line(levelsDb)} className="spectral-gate-live" />}
+      {running && levelsDb && <polyline points={line(levelsDb)} className="spectral-gate-live" />}
       {learned && <polyline points={line(learned)} className="spectral-gate-learned" />}
       {learned && !learning && <polyline points={line(learned, threshold)} className="spectral-gate-threshold" />}
     </svg>

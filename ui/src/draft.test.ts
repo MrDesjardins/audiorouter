@@ -399,6 +399,17 @@ describe("Mixer route sources", () => {
 });
 
 describe("isParameterOnlyChange", () => {
+  it("ignores parameter key order, so a playing route is not saved again and again", () => {
+    const draft = appendLibraryNode(demoSession, "spectralGate");
+    const gate = draft.nodes.at(-1)!;
+    expect(Object.keys(gate.parameters)).toEqual(["thresholdDb", "reductionDb", "learning"]);
+    // The backend returns the same settings with sorted keys.
+    const sorted = Object.fromEntries(Object.entries(gate.parameters).sort(([a], [b]) => a.localeCompare(b)));
+    const saved = { ...draft, nodes: draft.nodes.map((node) => node.id === gate.id ? { ...node, parameters: sorted } : node) };
+    expect(isParameterOnlyChange(saved, draft)).toBe(false);
+    expect(isParameterOnlyChange(saved, setNodeDraftParameter(draft, gate.id, "thresholdDb", 6))).toBe(true);
+  });
+
   it("accepts slider-style edits and rejects topology, flag, and name changes", () => {
     const withVolume = appendLibraryNode(demoSession, "volume");
     const volumeId = withVolume.nodes.at(-1)!.id;

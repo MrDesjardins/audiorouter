@@ -21334,6 +21334,9 @@ mod tests {
         let diagnostics = call("system.diagnostics", Value::Null);
         for item in diagnostics["nodeTelemetry"].as_array().unwrap() {
             eprintln!("{} timing={} plugin={}", item["nodeId"], item["timing"], item["plugin"]);
+            if let Some(levels) = item["spectrum"]["levelsDb"].as_array() {
+                eprintln!("{} spectrum (first 8 of {} bands, dB): {:?}", item["nodeId"], levels.len(), &levels[..8.min(levels.len())]);
+            }
         }
         eprintln!("delivered branch blocks: {delivered}");
         call(

@@ -1,5 +1,6 @@
 import type { ApplicationInfo, EntityId, NodeKind, PluginScanEntry, Session } from "@audiorouter/contracts";
 import type { UiBackend } from "./backend";
+import { sameJsonValue } from "./sessionInventory";
 
 export type DraftChange = {
   path: `/nodes/${number}/${"enabled" | "bypass"}` | `/nodes/${number}/parameters/${string}`;
@@ -251,13 +252,14 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
  */
 export function isParameterOnlyChange(saved: Session, draft: Session): boolean {
   if (saved.id !== draft.id || saved.name !== draft.name || saved.nodes.length !== draft.nodes.length) return false;
-  if (JSON.stringify(saved.edges) !== JSON.stringify(draft.edges)) return false;
+  if (!sameJsonValue(saved.edges, draft.edges)) return false;
   let parameterChanged = false;
   for (let index = 0; index < saved.nodes.length; index += 1) {
     const before = saved.nodes[index];
     const after = draft.nodes[index];
-    if (before.id !== after.id || before.kind !== after.kind || before.name !== after.name || before.enabled !== after.enabled || before.bypass !== after.bypass || JSON.stringify(before.ports) !== JSON.stringify(after.ports)) return false;
-    if (JSON.stringify(before.parameters) !== JSON.stringify(after.parameters)) parameterChanged = true;
+    if (before.id !== after.id || before.kind !== after.kind || before.name !== after.name || before.enabled !== after.enabled || before.bypass !== after.bypass || !sameJsonValue(before.ports, after.ports)) return false;
+    // Key order is not a change: the backend returns parameters sorted.
+    if (!sameJsonValue(before.parameters, after.parameters)) parameterChanged = true;
   }
   return parameterChanged;
 }

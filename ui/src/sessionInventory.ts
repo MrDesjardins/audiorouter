@@ -20,7 +20,8 @@ export function sameSessionDraft(left: Session, right: Session): boolean {
   return sameJsonValue(left, right);
 }
 
-function sameJsonValue(left: unknown, right: unknown): boolean {
+/** Deep equality of JSON values, ignoring object key order (the backend stores keys sorted). */
+export function sameJsonValue(left: unknown, right: unknown): boolean {
   if (left === right) return true;
   if (!left || !right || typeof left !== "object" || typeof right !== "object") return false;
   if (Array.isArray(left) || Array.isArray(right)) {

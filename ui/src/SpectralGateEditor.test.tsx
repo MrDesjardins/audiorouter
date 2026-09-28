@@ -22,6 +22,15 @@ describe("FIR Filter Hz editor", () => {
     expect(BAND_FREQUENCIES_HZ.at(-1)!).toBeGreaterThan(18_000);
   });
 
+  it("draws the live sound only while the route plays", () => {
+    const levels = Array(64).fill(-20);
+    const { container, rerender } = render(<SpectralGateEditor node={node({})} running levelsDb={levels} liveProfile={null} disabled={false} onChange={() => undefined} />);
+    expect(container.querySelector(".spectral-gate-live")).not.toBeNull();
+    // After Stop the last telemetry may still be present; it is not live sound.
+    rerender(<SpectralGateEditor node={node({})} running={false} levelsDb={levels} liveProfile={null} disabled={false} onChange={() => undefined} />);
+    expect(container.querySelector(".spectral-gate-live")).toBeNull();
+  });
+
   it("starts learning only while playing", () => {
     const onChange = vi.fn();
     const { rerender } = render(<SpectralGateEditor node={node({})} running={false} levelsDb={null} liveProfile={null} disabled={false} onChange={onChange} />);
