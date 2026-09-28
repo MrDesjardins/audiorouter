@@ -22,17 +22,17 @@ See [the set-aside driver plan](../plans/future/M03-driver-signing.md).
 
 | Milestone | Outcome | Prerequisites | Release gate |
 | --- | --- | --- | --- |
-| [M00](../milestones/M00-feasibility.md) | Windows probes, driver strategy, measured technical baseline | Specification | Capture/output proven; credible managed-driver/signing path |
+| [M00](../milestones/M00-feasibility.md) | Windows probes, supported endpoint strategy, measured technical baseline | Specification | Capture/output evidence for the approved VB-Cable-first profile; owned-driver feasibility is excluded by DEC-16 |
 | [M01](../milestones/M01-contracts.md) | Backend contracts, domain/store, CLI, fake engine | M00 decisions | Headless transactions/discovery and invariant tests |
 | [M02](../milestones/M02-audio-engine.md) | Physical and application audio engine | M01 | Actual Windows sound, realtime/clock/feedback evidence |
-| [M03](../milestones/M03-virtual-routing.md) | Managed virtual buses and primary routes | M02 + M00 driver outcome | Discord/OBS isolation and endpoint lifecycle |
+| [M03](../milestones/M03-virtual-routing.md) | Existing-endpoint virtual routing and primary routes | M02 + M00 endpoint evidence | Discord/OBS isolation and existing endpoint lifecycle |
 | [M04](../milestones/M04-effects-recording.md) | Built-in voice processing and recording | M03 | Functional alpha from CLI, DSP/file tests |
 | [M05](../milestones/M05-visual-editor.md) | Accessible React visual application | M04 | Primary workflow entirely from UI, API parity |
 | [M06](../milestones/M06-plugins-pitch.md) | Isolated VST3 and pitch shift | M05 | Worker containment, state/latency/compatibility |
 | [M07](../milestones/M07-automation-recovery.md) | Full MCP, background lifecycle, recovery/security | M06 | Concurrent clients, restart, privacy, migration |
-| [M08](../milestones/M08-release.md) | Signed, installable, documented Windows v1 | M07 | All v1 requirements and release evidence |
+| [M08](../milestones/M08-release.md) | Qualified, documented Windows v1 for the VB-Cable-first profile | M07 | All approved v1 requirements and release evidence; DEC-16 exclusions remain outside this gate |
 
-Default execution is sequential and each milestone can be requested independently. Do not ask one LLM to generate the whole application in one step. Split a milestone into bounded active-plan tasks when necessary, retaining its gate. Earlier functionality must remain usable while later work is added. No calendar estimates are committed before M00 resolves the driver risk.
+Default execution is sequential and each milestone can be requested independently. Do not ask one LLM to generate the whole application in one step. Split a milestone into bounded active-plan tasks when necessary, retaining its gate. Earlier functionality must remain usable while later work is added. The M00 driver decision is resolved for v1 by DEC-16; any future driver work requires a separate explicit scope decision.
 
 ## Requirement traceability
 
@@ -52,11 +52,11 @@ The ranges below include every normative ID; each milestone must attach evidence
 | CAP-09–10 | M03/M05 | UC-01, duplicate-playback validation |
 | CAP-11–12 | M02/M07 | UC-03/06, OS transitions |
 | CAP-13 | M02 | Concurrent exact-endpoint ownership in multi-path sessions |
-| VDEV-01–08, VDEV-10–12 | M03/M07 | UC-01/05/09/10, driver lifecycle |
-| VDEV-09 | M00 strategy; M08 shipping | Secure Boot/HVCI installation |
+| VDEV-01/03/09 | Future track only (DEC-16) | Normative future driver requirements; excluded from v1 |
+| VDEV-02, VDEV-04–08, VDEV-10–12 | M03/M07 where applicable to existing endpoints | UC-01/05/09/10, supported endpoint behavior; driver lifecycle portions excluded by DEC-16 |
 | DSP-01–05, DSP-07–09 | M04 | UC-02, transfer-function vectors |
 | DSP-06, PLUG-01–06 | M06 | UC-02/06, pitch/worker/format evidence |
-| DSP-10–18 | M04/M05 | UC-02, DSP/engine unit tests (per-tool response, latency, bounds), attended manual pass pending |
+| DSP-10–18 | M04/M05 | UC-02, DSP/engine response, latency and bounds tests; local voice-sample qualification in [active evidence](../plans/active/evidence/2026-09-27-voice-tools.md). Combination coverage and release gates remain tracked in the active plan. |
 | REC-01–08, REC-10–12 | M04/M05 | UC-08, frame/file/path tests |
 | PLUG-07 | M06 extension/M08 | Native x64 VST2 adapter, worker containment, rights, compatibility, and failure evidence |
 | REC-09 | M04/M07 | UC-08, crash/disk-failure recovery |
@@ -70,9 +70,9 @@ The ranges below include every normative ID; each milestone must attach evidence
 | STATE-08–11 | M07 | UC-06/09, startup/sign-out/recovery |
 | SEC-01–06, SEC-10, SEC-12 | M01, M07 audit | Scope, pipe, shell, abuse cases |
 | SEC-07 | M06 | Plugin containment evidence |
-| SEC-08 | M03/M08 | Driver boundary/signing review |
+| SEC-08 | Future track only (DEC-16) | Normative future driver boundary/signing review; excluded from v1 |
 | SEC-09 | M04/M07 | Path and bundle attacks |
-| SEC-11 | M08 | Signed update/rollback |
+| SEC-11 | Future distribution track only (DEC-16) | Normative signed-update/rollback requirement; excluded from v1 |
 | SEC-13 | M02 (network extension, 2026-09-26) | Sender-address filter, malformed-datagram and bounds tests |
 | NFR-01–16 | Gates in [14](14-quality.md) | M08 measured reports |
 | QUAL-01–06 | M02–M06 as relevant | M08 signal/recording regression |
@@ -90,7 +90,7 @@ These decisions are the proposed baseline for implementation. Evidence may chang
 | DEC-04 | Shared JSON-RPC application API over restricted named pipe | Baseline; local headless/GUI parity without exposed TCP |
 | DEC-05 | Per-user background engine, sign-in startup | Baseline; separate user capture from privileged driver lifecycle |
 | DEC-06 | 48 kHz float32, initial 128-frame quantum | Retained as the graph baseline; native endpoint formats and process-loopback evidence exist, but physical latency/quantum measurements are still required before making the quantum final |
-| DEC-07 | Managed persistent driver, not user-mode-only virtual microphones | Project-owned SysVAD-derived prototype selected for technical evaluation; production package, adaptation, target-machine validation, and signing remain release blockers |
+| DEC-07 | Managed persistent driver, not user-mode-only virtual microphones | Superseded for v1 by DEC-16; the project-owned prototype is not part of the approved delivery track |
 | DEC-08 | VST3 x64 plus built-ins; gated legacy VST2 x64 extension | Baseline release path remains VST3 plus built-ins; the explicitly approved PLUG-07 extension adds contained x64 VST2 effects only after ABI, rights, worker, editor, compatibility, and release evidence is complete |
 | DEC-09 | Explicit virtual desktop render route; capture-only app sources | Baseline; automatic capture-and-mute not assumed |
 | DEC-10 | Protected voice paths silence on effect failure | Baseline; deliberate user bypass is a separate action |
@@ -99,13 +99,14 @@ These decisions are the proposed baseline for implementation. Evidence may chang
 | DEC-13 | Legacy VST2 is an explicitly approved, gated M06 extension | User approved planning on 2026-09-08; the original V1 baseline remains VST3 plus built-ins, while actual ABI, rights, worker, and compatibility evidence remain required |
 | DEC-14 | NFR-01 wired physical loopback latency target revised from ≤30 ms to ≤250 ms p95 | User-approved 2026-09-21 after calibrated measurement (see [14-quality.md](14-quality.md) NFR-01 and [M00 WASAPI probe evidence](../plans/active/evidence/M00-wasapi-probe.md)): a real reference device (Focusrite Scarlett Solo) measured p95 ≈ 185.5–185.9 ms in WASAPI shared mode — AudioRouter's production sharing model, not exclusive/ASIO — across three reproducible runs, after an initial calibration bug was found and fixed. Buffer size and Windows 10+ `IAudioClient3` low-latency shared-mode tuning were both tested and ruled out as a fix on this device (its low-latency engine-period floor is a fixed 10 ms). The original ≤30 ms figure was an unvalidated aspirational target. The revised target is only validated on one device; it is not yet known whether other supported interfaces perform better or worse, and closing the gap further (e.g. via exclusive mode) remains unexplored future work, not authorized by this decision |
 | DEC-15 | NFR-02 mic-to-virtual-capture latency target revised from ≤40 ms to ≤160 ms p95 | User-approved 2026-09-21 after calibrated measurement through the real engine route (see [14-quality.md](14-quality.md) NFR-02 and [M00 WASAPI probe evidence](../plans/active/evidence/M00-wasapi-probe.md)): the same reference device measured p95 of 97.5/102.9/115.5/110.9 ms across four runs (physical mic capture → real `PhysicalInput → Gain → Recorder → PhysicalOutput` graph/scheduler → virtual render → virtual capture read), each run's own internal spread under ~13 ms with more run-to-run variance across separate engine-route launches than NFR-01 showed. The revised ≤160 ms target follows the same DEC-14 methodology: roughly 35% headroom over the worst observed run (115.461 ms). Also validated on one device only; not yet known whether this cross-run variance narrows on repeated measurement or with a different mic/driver |
+| DEC-16 | AudioRouter-owned driver, PortCls endpoint, production signing, and M08 installer/clean-machine gates excluded from the approved v1 track | User decision 2026-09-19 based on unfunded signing/distribution cost. Existing VB-Cable/Voicemeeter and physical WASAPI endpoints are the supported boundary. VDEV-01/03/09 and SEC-08 remain normative only for a separately authorized future track; unsigned artifact preparation does not imply publication or a releasable installer |
 
 ## Risk and dependency register
 
 | Risk | Consequence | Required mitigation / owner gate |
 | --- | --- | --- |
-| Driver redistribution/signing unavailable | Cannot ship integrated virtual endpoints | M00 select credible path; M08 blocks release until signed package exists |
-| Driver bugs/security weakness | System instability or cross-user audio leak | Dedicated test systems, small interface, verifier/security tests, signed rollback; M03/M08 |
+| AudioRouter-owned driver redistribution/signing unavailable | No project-owned virtual endpoints | Excluded from v1 by DEC-16; reconsider only under a separately authorized future track |
+| Future driver bugs/security weakness | System instability or cross-user audio leak | Dedicated test systems, small interface, verifier/security tests, signed rollback before any separately authorized driver release |
 | Process capture misses protected/complex apps | Capture scope differs from expectation | Capability errors and virtual-output alternative; M00/M02/M08 |
 | Desktop loopback captures own monitor | Feedback or duplicate audio | Explicit desktop bus plus global topology validation; M03 |
 | Existing ReaPlugs may be legacy VST2 with incomplete rights/editor evidence | User's exact plugin chain may not migrate directly or be release-qualified | Built-ins plus gated x64 VST2 worker qualification; explicit rights, editor, compatibility, and release gates; M06/M08 |
@@ -113,10 +114,10 @@ These decisions are the proposed baseline for implementation. Evidence may chang
 | Plugin worker latency/instability | Delayed or interrupted voice | Per-instance containment, measured latency, protected failure policy; M06 |
 | Unavailable Windows hardware here | Cannot verify platform requirements | Record blocked test evidence; never substitute Linux mocks; M00 onward |
 | LLM/client concurrent edits | Lost user change or unintended route | Backend revisions, preview, scopes, idempotency; M01/M07 |
-| Installer/update changes endpoint IDs | Discord/OBS selections break | Identity-preserving migration and explicit reselection flow; M08 |
+| Future installer/update changes endpoint IDs | Discord/OBS selections break | Identity-preserving migration and explicit reselection flow before any separately authorized distribution track |
 | Scope expands to all reference-product features | Delays core application | Future backlog and explicit scope decisions; every milestone |
 
-External prerequisites that agents cannot invent include a Windows test machine, appropriate physical audio equipment, driver source/redistribution rights, signing organization credentials, and installed test plugin/app binaries. Gather concrete findings before requesting any purchase, account action, or scope decision. This specification authorizes none of those external actions by itself.
+External prerequisites that agents cannot invent include a Windows test machine, appropriate physical audio equipment, and installed test plugin/app binaries. Driver source/redistribution rights and signing credentials apply only if a future driver track is explicitly authorized. Gather concrete findings before requesting any purchase, account action, or scope decision. This specification authorizes none of those external actions by itself.
 
 ## Source register
 

@@ -1,6 +1,6 @@
 # M08 — Windows release qualification and delivery
 
-Status: unsigned release-preparation foundation implemented; driver, signing, installer, and clean-machine gates remain open. Prerequisite: M07 and available production driver-signing/distribution prerequisites. Outcome: a verified, signed, installable Windows 11 x64 v1 with clear operating and recovery instructions.
+Status: unsigned release-preparation foundation implemented; clean-checkout and remaining in-scope qualification remain open. The approved v1 excludes an AudioRouter-owned driver, production signing, installer, and clean-machine gates under DEC-16. Prerequisite: M07 and a Windows qualification environment. Outcome: an evidence-backed unsigned Windows 11 x64 artifact set for the VB-Cable-first profile, with clear operating and recovery instructions; this is not a releasable installer and publication is not implied.
 
 ## Read first
 
@@ -8,30 +8,34 @@ All specification files, [delivery traceability](../spec/15-delivery.md), prior 
 
 ## Ordered implementation
 
-1. Reconcile every requirement ID with actual implementation and evidence. Resolve missing requirements, stale docs, misleading capability claims, and deviations. Reverify supported Windows 11 builds and dependency/signing requirements.
-2. Build app/backend/CLI/MCP/worker/driver artifacts from pinned clean inputs. Produce installer with clear per-user versus machine components, WebView2 prerequisite handling, standard-user runtime, signed binaries/packages, dependency notices/SBOM, versions, and checksums.
-3. Test clean install, repair, upgrade from previous development package, incompatible app/driver versions, rollback, and uninstall on Windows with Secure Boot and Memory Integrity enabled. Preserve endpoint identity where promised and guide any required reselection. Never remove unrelated audio drivers/devices.
+1. Reconcile every in-scope requirement ID with actual implementation and evidence. Resolve missing requirements, stale docs, misleading capability claims, and deviations. Reverify supported Windows 11 builds and dependency requirements.
+2. Build app/backend/CLI/MCP/worker artifacts from pinned clean inputs. Document per-user runtime, WebView2 prerequisites, dependency notices/SBOM, versions, and checksums. Do not build or package an AudioRouter-owned driver under this scope.
+3. **Future distribution track only (DEC-16):** installer, repair, upgrade,
+   rollback, uninstall, and clean-machine qualification are not v1 gates.
+   Preserve user configuration and third-party endpoint selections in any
+   separately authorized distribution plan; never install or remove audio
+   drivers as part of this project scope.
 4. Run the complete UC-01–10 suite, hardware/app matrix, DSP/file correctness, accessibility/usability, performance/endurance, and security regressions. Retain raw evidence and failures; fix release blockers.
-5. Write quickstart, Windows/app device-selection walkthroughs, CLI/MCP reference, effects explanation, privacy/permissions guide, plugin compatibility list, troubleshooting, diagnostics export, backup/migration, driver rollback, and uninstall guide. Put operational docs at stable paths when implementation creates them.
+5. Write quickstart, Windows/app device-selection walkthroughs, CLI/MCP reference, effects explanation, privacy/permissions guide, plugin compatibility list, troubleshooting, diagnostics export, backup/migration, third-party endpoint guidance, and uninstall guide. Put operational docs at stable paths when implementation creates them.
 6. Prepare versioned release notes stating supported OS/architecture, measured reference latency, hardware/plugin caveats, omitted future features, fixed issues, known issues, install elevation/restart needs, and recovery options.
 7. Prepare the concrete release artifacts and summary for the authorized publication workflow. If publishing/signing requires unavailable credentials or new authority, finish all unaffected preparation and identify the exact remaining action and dependency.
 
 ## Mandatory release gate
 
-All PROD, ARCH, GRAPH, CAP, VDEV, DSP, PLUG, REC, UI, API, AUTO, STATE, SEC, NFR, QUAL, and ENG requirements assigned to v1 have evidence. VDEV-09 requires a production-signed driver on normal Windows security settings. The primary workflow works without a separately installed virtual mixer/plugin host. UI closure, backend crash, reboot/sign-in, disk failure, plugin failure, and user switching exhibit the specified behavior.
+All approved v1 PROD, ARCH, GRAPH, CAP, DSP, PLUG, REC, UI, API, AUTO, STATE, SEC, NFR, QUAL, and ENG requirements have evidence. VDEV-01/03/09 and SEC-08 are excluded from v1 by DEC-16 and remain normative only for a separately authorized future driver track. The primary workflow works with the documented existing-device boundary. UI closure, backend crash, reboot/sign-in, disk failure, plugin failure, and user switching exhibit the specified behavior.
 
-Performance targets are met on the declared reference hardware, with distributions and workload details published. No universal Bluetooth or arbitrary-plugin latency claim is made. At least four of five first-time users complete the setup within ten minutes and all identify Discord's source set. Keyboard/Narrator and 200% scaling checks pass. External AI control is optional, local, discoverable, and permission-constrained.
+Performance targets are met on the declared reference hardware, with distributions and workload details published. No universal Bluetooth or arbitrary-plugin latency claim is made. The primary workflow documents the separately installed, supported external endpoints it requires. At least four of five first-time users complete the setup within ten minutes and all identify Discord's source set. Keyboard/Narrator and 200% scaling checks pass. External AI control is optional, local, discoverable, and permission-constrained.
 
-## Installer and uninstall acceptance
+## Future installer and uninstall acceptance — excluded from v1
 
-Install with only necessary elevation; decline elevation and return an actionable partial-install state without claiming virtual routing is ready. Update while sessions are stopped or after a user-approved stop plan; preserve configuration/recordings and validate app/driver compatibility before restart. Rollback restores a compatible package/configuration pair. Uninstall previews affected endpoints and offers configuration retention; recordings remain unless individually targeted through a separate explicit action. Verify no orphaned owned endpoint, stale startup task, privileged broker, or exposed control pipe remains.
+If a distribution track is separately authorized, run as a standard user and verify the package does not require driver-administration elevation. Update while sessions are stopped or after a user-approved stop plan; preserve configuration/recordings and validate app compatibility before restart. Rollback restores a compatible package/configuration pair. Uninstall preserves existing third-party audio drivers/endpoints and offers configuration retention; recordings remain unless individually targeted through a separate explicit action. Verify no stale startup task, privileged broker, or exposed control pipe remains.
 
 ## Evidence and handoff
 
-Archive the release execution plan, full requirement/evidence matrix, signed artifact hashes, test-machine manifests, measured reports, security findings/resolutions, and known issues. Keep private signing material and audio out of the repository. Update README from “specification only” only when it reflects actual implemented/tested state. Start a new active maintenance plan for defects and future requests; move deferred ideas only after scope authorization.
+Archive the release execution plan, full requirement/evidence matrix, artifact hashes and unsigned status, test-machine manifests, measured reports, security findings/resolutions, and known issues. Keep private audio out of the repository. Update README from “specification only” only when it reflects actual implemented/tested state. Start a new active maintenance plan for defects and future requests; move deferred ideas only after scope authorization.
 
 ## Stop conditions
 
-Do not label the release complete with an unsigned/test-mode driver, missing real Windows tests, unresolved private-audio leakage, reproducible backend/driver crashes, corrupted recordings, or unfulfilled core API parity. If credentials/hardware are missing, report blocked release evidence and retain the prepared artifacts. A documented blocker is more useful than an invented pass.
+Do not label the release complete with missing real Windows tests, unresolved private-audio leakage, reproducible backend crashes, corrupted recordings, or unfulfilled core API parity. If hardware or environment access is missing, report blocked release evidence and retain prepared artifacts. A documented blocker is more useful than an invented pass.
 
-Suggested request: “Execute M08 release qualification, prepare the signed Windows artifacts and complete evidence/docs, and report any exact publication/signing action still requiring unavailable authority.”
+Suggested request: “Execute M08 release qualification for the approved non-driver scope, prepare the unsigned Windows artifacts and complete evidence/docs, and report any exact publication action still requiring unavailable authority.”

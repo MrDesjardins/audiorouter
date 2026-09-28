@@ -26,11 +26,13 @@ not required for current non-driver completion.
 
 ## Ordered implementation
 
-1. **Deferred driver track:** implement/integrate the selected driver package
-   and scoped installer/broker only after an authorized signing and Windows
-   qualification environment is available. Specify/version the bounded data
-   bridge and ownership lease, with a tested uninstall/restore path.
-2. Implement bus inventory/create/rename/enable/disable/delete plans and operations. Expose real endpoint IDs, capabilities, privilege requirements, client impacts, and restart requirements through API/CLI.
+1. **Future track only (DEC-16):** managed driver/package/broker work is not
+   part of this milestone's approved v1 execution. Do not treat the prototype
+   or this milestone text as authorization to install or ship a driver.
+2. **Future track only (DEC-16):** managed bus inventory and lifecycle
+   operations are excluded from the approved v1 scope. The current API may
+   describe these normative requirements, but this task does not authorize
+   implementation.
 3. Implement and qualify existing-device render/capture source and sink
    adapters, initialized silence, ownership reset, multiple consumers, and
    explicit pass-through templates without creating a kernel device.
@@ -39,10 +41,10 @@ not required for current non-driver completion.
    including desktop, voice-chat, game-recording, explicit mixers, and
    headphones. Document Windows/Discord/OBS device-selection steps and
    duplicate-audio checks.
-6. Test endpoint identity, backend crash, user-mode cleanup, route disable/
-   delete while referenced, and simultaneous clients. Add redacted diagnostics
-   for endpoint/bridge mismatch. Reboot identity and cross-user managed-bridge
-   tests remain future signed-driver prerequisites.
+6. Test existing endpoint identity, backend crash, user-mode cleanup, route
+   disable/delete while referenced, and simultaneous clients. Add redacted
+   diagnostics for endpoint mismatch. Reboot identity and cross-user
+   managed-bridge tests remain future signed-driver prerequisites.
 
 ## Acceptance gate
 
@@ -54,12 +56,17 @@ third-party endpoint is valid external I/O and must not be described as an
 AudioRouter-managed bus. The managed VDEV and signing language below belongs
 to the deferred future driver track.
 
-VDEV-01–08/10–12 functionality; GRAPH-11 global validation; CAP-09/10 route policy; SEC-08 initial bridge review; NFR-02/10/16 and QUAL-01 have evidence. UC-01 passes routing isolation before effects are added. Discord receives mic only; Game Recording receives desktop only by default; headphones get one desktop copy.
+Current-track evidence covers applicable existing-endpoint identity/lifecycle,
+GRAPH-11 route validation, CAP-09/10 policy, NFR-02/10/16 and QUAL-01. The
+UC-01 guarded route passes its recorded isolation checks: Discord receives mic
+only, Game Recording receives desktop only by default, and headphones receive
+one desktop copy. VDEV-01/03/09 and SEC-08 remain future-track requirements
+under DEC-16; other VDEV requirements apply only where they describe supported
+existing-endpoint behavior.
 
-The future managed-driver profile must manage at least three buses and
-demonstrate the declared eight-bus capacity. A test-signed build may pass
-that development gate only on an identified test system; VDEV-09 production
-signing remains an explicitly open M08 gate. This condition does not apply to
+Any separately authorized future managed-driver profile must manage at least
+three buses and demonstrate the declared eight-bus capacity, with its own
+development and production security gates. This condition does not apply to
 the current VB-Cable-first profile, where installed third-party endpoints are
 supported external I/O and no managed lifecycle is claimed.
 
@@ -79,9 +86,10 @@ limitations. Keep driver version protocol and signed-release dependencies in
 the future driver track. M04 adds effects/recorders to the proven primary
 route.
 
-The historical managed-driver request below is superseded for the current
-delivery track. Current work verifies existing VB-Cable/Voicemeeter and
-physical endpoint routing without AudioRouter-owned driver installation;
-managed virtual buses remain deferred until signed-driver prerequisites exist.
+The current delivery track verifies existing VB-Cable/Voicemeeter and
+physical endpoint routing without AudioRouter-owned driver installation.
+Managed virtual buses require a separate, explicit scope decision.
 
-Suggested request: “Implement M03's managed virtual buses and verify the separate Discord/desktop/headphone routing on Windows, with explicit development-versus-production driver status.”
+Suggested request: “Complete the remaining M03 existing-endpoint route and
+lifecycle evidence for the VB-Cable-first profile, and report any hardware
+checks that remain blocked.”

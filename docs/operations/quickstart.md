@@ -390,8 +390,8 @@ saved as a bank of their parameter values. VST3 editor windows are not
 supported yet; VST3 plugins are configured through their parameters.
 
 Scanning and plugin actions require the `pluginScan` permission. The desktop
-shell grant does not include it yet (see the active plan's pending decision),
-so in the app these actions currently report "permission denied".
+shell includes this scope; other clients need an explicitly granted scope.
+Backend authorization remains authoritative for every client.
 
 To exercise one non-default ReaEQ setting in the guarded live route, use its
 worker-reported `1-Gain` parameter (ID 1) at normalized value 0.75:

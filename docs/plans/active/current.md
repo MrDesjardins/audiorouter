@@ -1,6 +1,7 @@
 # Active plan — VB-Cable-first completion
 
-Status: active. Rewritten 2026-09-27 as a current-state plan. The
+Status: active. Rewritten 2026-09-27 as a current-state plan; current task
+updated 2026-09-28. The
 append-only log it replaces (2026-09-17 → 2026-09-26: every decision,
 defect, experiment and superseded handoff) is archived verbatim as the
 [execution log](../archived/2026-09-26-vb-cable-first-execution-log.md).
@@ -15,6 +16,39 @@ versioned API. **Permanent scope decision (user, 2026-09-19):** no
 AudioRouter-owned driver, PortCls endpoint or production signing.
 VDEV-01/03/09 and SEC-08 stay normative only for a possible future funded
 track ([future plan](../future/M03-driver-signing.md)).
+
+## Current task — documentation and combined-tool coverage review (2026-09-28)
+
+- Objective: reconcile current Markdown with code/evidence, review meaningful
+  automated coverage, and cover representative combinations of audio tools.
+- Requirements: DSP-01–18, GRAPH-01–16, REC-01–12, PLUG-01–07, UI-01–15,
+  QUAL-01–06 and ENG-04, per [traceability](../../spec/15-delivery.md#requirement-traceability).
+- Prerequisites: clean `main` at `3a6d1e76`; pushed to `origin/main` (already
+  up to date). `rtk` is unavailable in this environment. Private voice assets
+  are not needed for deterministic tests; no native device or plugin scans.
+- Decision: test representative supported workflows and meaningful pairwise
+  interactions, not the unbounded Cartesian product of every node, parameter,
+  channel layout and device. Preserve opt-in boundaries for private audio and
+  hardware. Add tests only when an interaction lacks an existing regression.
+- Ordered tasks: (1) reconcile current-state docs and remove contradictory
+  permission/release/coverage claims; (2) map source, processor-chain, branch,
+  recorder, plugin and network combinations to existing tests; (3) add focused
+  deterministic tests only for a demonstrated uncovered supported behavior;
+  (4) run the relevant regression suites and docs acceptance, then record
+  exact results and limits.
+- Validation: docs.ps1 for Markdown links/anchors/fences; targeted engine and
+  transport integration tests; inspect diff and `git diff --check`. No Windows
+  audio, second-PC UDP, or private voice checks are implied by portable results.
+- Risks: broad edits could erase historical evidence. Keep old log entries and
+  artifact records as history; correct only current summaries and current
+  operational instructions. Rollback: revert only the new docs and focused
+  test additions; no production code or persistence changes are planned.
+- Result: the current deterministic engine suite already covers the supported
+  combination classes reviewed; no duplicate tests were added. Open Windows,
+  second-PC and full release scenarios are recorded in
+  [coverage evidence](evidence/2026-09-28-tool-combination-coverage.md).
+- Next action: continue M05 attended accessibility/scaling and the in-scope
+  M08 clean-checkout/security/performance/traceability gates.
 
 Requirement families in scope: PROD, ARCH, GRAPH, CAP, DSP, REC, PLUG, UI,
 API, AUTO, STATE, SEC (non-driver), NFR, QUAL, ENG, as mapped in
@@ -32,11 +66,11 @@ evidence is missing. Nothing here is a release claim: M08 is not done.
 | [M01](../../milestones/M01-contracts.md) contracts | Domain, storage, authorization, CLI/MCP parity | [M01 evidence](evidence/M01-contracts.md) | Final release acceptance only |
 | [M02](../../milestones/M02-audio-engine.md) audio engine | Realtime graph, capture/render adapters, multi-input/many-output paths, backend audio service, Network Send/Receive (GRAPH-16) | Guarded routes ([M02](evidence/M02-audio-engine.md)); **continuity 0 glitches for 30–60 s on four route shapes** ([audio continuity](evidence/2026-09-26-audio-continuity.md)); NFR-02 p95 ≈97–115 ms (≤160 ms, DEC-15) | Clock-drift correction between independent devices; endurance/soak |
 | [M03](../../milestones/M03-virtual-routing.md) virtual routing | Exact endpoint identity, VB-Cable/Voicemeeter routes, rebind | [M03](evidence/M03-virtual-routing.md) | Owned virtual devices (out of scope) |
-| [M04](../../milestones/M04-effects-recording.md) effects/recording | 17 built-in processors incl. pitch; recorder (WAV/FLAC/MP3), library | Synthetic DSP vectors; [feature confidence](evidence/2026-09-26-feature-confidence.md) | Attended/long-duration recording on real devices |
-| [M05](../../milestones/M05-visual-editor.md) visual editor | Canvas, Properties/Tools, live flags, timing, three themes | 65 browser E2E + 345+ UI unit tests; Edge visual review | Attended Narrator, 200 % scaling, first-run, live drag/drop; UI-15 attended edge activity |
+| [M04](../../milestones/M04-effects-recording.md) effects/recording | 17 built-in processors incl. pitch; recorder (WAV/FLAC/MP3), library | Synthetic DSP vectors; [feature confidence](evidence/2026-09-26-feature-confidence.md); [voice/tool behavior](evidence/2026-09-27-voice-tools.md) | Attended/long-duration recording on real devices |
+| [M05](../../milestones/M05-visual-editor.md) visual editor | Canvas, Properties/Tools, live flags, timing, three themes | 92 browser E2E + 370 UI unit tests; Edge visual review | Attended Narrator, 200 % scaling, first-run, live drag/drop; UI-15 attended edge activity |
 | [M06](../../milestones/M06-plugins-pitch.md) plugins/pitch | VST3 worker, x64 VST2 worker, shared adjacent-VST2 chain, editors, saved state | ReaPlugs chain live ([shared chain](evidence/2026-09-26-shared-vst2-chain.md)); 60 s glitch-free with the user's saved ReaPlugs nodes | Rights/sandbox review, multi-vendor matrix |
 | [M07](../../milestones/M07-automation-recovery.md) automation/recovery | MCP, persistence, crash journal, safe mode, sign-in helper | [M07](evidence/M07-automation-recovery.md), [OS transitions](evidence/M07-os-transitions.md) | OS power/session delivery and native reopen (attended) |
-| [M08](../../milestones/M08-release.md) release | Unsigned artifact preparation | [M08](evidence/M08-release.md) | Clean-checkout release run, installer, signing, clean machine, traceability gaps (CAP-13, GRAPH-15) |
+| [M08](../../milestones/M08-release.md) release | Unsigned artifact preparation | [M08](evidence/M08-release.md) | Clean-checkout release run and CAP-13/GRAPH-15 evidence; installer, production signing, and clean-machine gates are excluded from v1 by DEC-16 |
 
 ## 2026-09-26/27 overnight session — outcome
 
@@ -100,38 +134,23 @@ by hand in the morning.
    VST latency is not added to its queue time.
 4. Plugin failure reasons are not shown in the UI (only the `failed`
    state).
-5. `list_commands_use_discovery_and_do_not_fake_devices` in `audiorouter-cli`
-   is recorded as expecting 7 processors while the catalog has 16. The
-   workspace run passed tonight, so recheck before editing.
-6. Workspace-wide `cargo fmt`/clippy drift, and missing CAP-13/GRAPH-15 rows
-   in delivery traceability (M08 blockers).
-. Network tools: never run across two physical computers or over Wi-Fi.
-   The stream is unencrypted and authenticated only by source address
-   (SEC-13, LAN only). The receiving PC's firewall prompt has not been
-   observed. The receiver's drift correction is not measured on real clocks.
-   OS transitions.
+5. Workspace-wide `cargo fmt`/clippy drift; CAP-13 and GRAPH-15 still need
+   their required evidence before the M08 gate.
+6. Network audio is unencrypted and filters by sender address (SEC-13).
+   Only localhost is qualified; two-PC delivery, firewall behavior, and
+   receiver clock drift remain unmeasured. Do not expose it beyond a trusted
+   local network.
 
 ## Next actions, in order
 
-1. **User (attended):** close any running AudioRouter, then launch only the
-   artifact above:
-   ```powershell
-   $env:AUDIOROUTER_DATABASE = "$env:LOCALAPPDATA\AudioRouter\state.sqlite"
-   $env:AUDIOROUTER_ALLOW_DEVICE_ADMIN = "1"
-   & "C:\code\audiorouter\target\patrick-main-release-6\release\audiorouter-shell.exe"
-   ```
-   Select Patrick Main Session and press Play. Also try a Test Signal
-   route. Listen to the voice and
-   game with the window minimized and restored. The status line should
-   show no "output underrun" or "late audio service gap". If clicks
-   remain, note roughly how often they occur (drift gives rare, regular
-   clicks).
-2. **User (attended), when a second PC is available:** Network Send on the
-   gaming PC to Network Receive on the streaming PC, per the quickstart.
-   Report the receive status line (packets, lost, gaps).
-3. Low priority: live clock-drift correction for cross-device paths.
-4. M05 attended accessibility/scaling review; M08 clean-checkout release
-   preparation.
+1. Complete this documentation and combined-tool test review, with exact
+   deterministic checks and explicit hardware/private-audio limitations.
+2. Continue the M05 attended accessibility/scaling review and close the M08
+   clean-checkout, security, performance and traceability gates within scope.
+3. Qualify network send/receive on two physical computers when that setup is
+   available; localhost tests do not establish cross-device behavior.
+4. Consider live clock-drift correction for cross-device paths after
+   measurement shows a need.
 
 ## Validation commands
 
@@ -173,6 +192,26 @@ by hand in the morning.
 - Saved sessions and database formats are unchanged tonight.
 
 ## Log
+
+### 2026-09-28 — Markdown and combined-tool coverage review
+
+- Reconciled the plugin-scan permission text, processor qualification
+  traceability, current M04/M05 test counts, release handoff, and M00/M03/M08
+  wording with the VB-Cable-first scope decision (DEC-16). Historical dated
+  logs and artifacts remain historical.
+- Mapped processor, mixer, branch, plugin, recorder, independent-path and
+  localhost-network combinations to existing regression tests. No test was
+  added because the reviewed combinations already have meaningful coverage;
+  remaining scenarios require separate Windows, hardware, second-PC or release
+  gates. See [coverage evidence](evidence/2026-09-28-tool-combination-coverage.md).
+- Verification: engine 141 + 5 integration tests, transport 22 + 1 detector,
+  and the control/domain/DSP/plugin-host suites passed. Private-audio and
+  live-device opt-ins remained ignored. Documentation acceptance passed for
+  67 Markdown files / 358 links; `git diff --check` passed. No code behavior
+  changed.
+- Next: M05 attended accessibility/scaling; in-scope M08 qualification. The
+  unsigned artifact, installation and clean-machine gates remain excluded by
+  DEC-16 and are not release claims.
 
 ### 2026-09-27 — Voice-sample qualification of all audio tools
 

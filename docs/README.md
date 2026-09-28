@@ -1,7 +1,7 @@
 # Documentation map
 
 Status: VB-Cable-first implementation with guarded Windows user-mode evidence,
-updated 2026-09-27. The [active plan](plans/active/current.md#where-things-stand)
+updated 2026-09-28. The [active plan](plans/active/current.md#where-things-stand)
 has a per-milestone table of what is implemented, what is qualified on
 Windows, and what is still open. Requirements describe intended behavior
 unless the active plan or evidence explicitly records implementation and
