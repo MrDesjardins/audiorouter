@@ -21332,6 +21332,9 @@ mod tests {
             std::thread::sleep(Duration::from_millis(10));
         }
         let diagnostics = call("system.diagnostics", Value::Null);
+        if let Some(path) = std::env::var_os("AUDIOROUTER_LIVE_DIAGNOSTICS_DUMP") {
+            std::fs::write(path, serde_json::to_vec_pretty(&diagnostics).unwrap()).unwrap();
+        }
         for item in diagnostics["nodeTelemetry"].as_array().unwrap() {
             eprintln!("{} timing={} plugin={}", item["nodeId"], item["timing"], item["plugin"]);
             if let Some(levels) = item["spectrum"]["levelsDb"].as_array() {

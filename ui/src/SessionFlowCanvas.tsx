@@ -27,6 +27,7 @@ import { networkTelemetryText } from "./NetworkNodeEditor";
 import { PROCESSOR_ACTIONS } from "./DraftConnectionList";
 import { TestSignalPlaybackControls } from "./TestSignalPlaybackControls";
 import type { RecorderStatus } from "./backend";
+import { hasLearnedNoise } from "./SpectralGateEditor";
 
 export const LIBRARY_DROP_SOURCE = "__audiorouter_library_drop__";
 export const LIBRARY_DROP_MIME = "application/x-audiorouter-library-kind";
@@ -741,7 +742,7 @@ function NodeVisual({ node, telemetry, applicationCaptureState, onSetNodeParamet
     return <div className="node-fader-stack nodrag nopan"><span className={`node-denoise-status${node.parameters.learning === true ? " is-learning" : ""}`} role="status">{status}</span><MiniFader label="Reduction" value={Number(node.parameters.reductionPercent ?? 70)} min={0} max={100} step={1} formatValue={(value) => `${Math.round(value)} %`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "reductionPercent", Math.round(value)) : undefined} ariaLabel={`${node.name} noise reduction`} /></div>;
   }
   if (node.kind === "spectralGate") {
-    const status = node.parameters.learning === true ? "Learning noise…" : typeof node.parameters.noiseProfile === "string" ? "Blocking learned noise" : "Learn the noise in Properties";
+    const status = node.parameters.learning === true ? "Learning noise…" : hasLearnedNoise(node.parameters.noiseProfile) ? "Blocking learned noise" : "Learn the noise in Properties";
     return <div className="node-fader-stack nodrag nopan"><span className={`node-denoise-status${node.parameters.learning === true ? " is-learning" : ""}`} role="status">{status}</span><MiniFader label="Threshold" value={Number(node.parameters.thresholdDb ?? 3)} min={-20} max={20} step={0.5} formatValue={(value) => `${value > 0 ? "+" : ""}${value.toFixed(1)} dB`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "thresholdDb", Math.round(value * 2) / 2) : undefined} ariaLabel={`${node.name} threshold above noise`} /></div>;
   }
   if (node.kind === "timeShift") {

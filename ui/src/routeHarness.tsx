@@ -8,10 +8,13 @@ import type { Session } from "@audiorouter/contracts";
 import "./styles.css";
 
 let planned: Session | null = null;
-let committed = structuredClone(demoSession);
+// Test hooks: a Playwright init script may inject a session, the backend
+// telemetry recorded from a real run, and start the fixture already playing.
+const injected = globalThis as { __routeFixtureSession?: Session; __routeFixtureTelemetry?: unknown[]; __routeFixtureRunning?: boolean };
+let committed = structuredClone(injected.__routeFixtureSession ?? demoSession);
 let previewCandidate: Session | null = null;
-let running = false;
-let prepared = false;
+let running = injected.__routeFixtureRunning === true;
+let prepared = running;
 const sourceStates = new Map<string, "playing" | "paused" | "stopped">();
 let sequence = 0;
 const lifecycleCalls: string[] = [];
@@ -21,7 +24,7 @@ const initial = await fixtureBackend.snapshot();
 const diagnostics = () => ({
   ...initial.diagnostics,
   audio: { state: running ? "available" as const : "unavailable" as const, reason: "Browser fixture: simulated audio; no devices are opened." },
-  nodeTelemetry: running && (!(previewCandidate ?? committed).nodes.some((node) => node.kind === "testSignal") || (previewCandidate ?? committed).nodes.some((node) => node.kind === "testSignal" && sourceStates.get(node.id) === "playing")) ? (previewCandidate ?? committed).nodes.filter((node) => node.kind === "physicalOutput").map((node) => {
+  nodeTelemetry: running && injected.__routeFixtureTelemetry ? structuredClone(injected.__routeFixtureTelemetry) as typeof initial.diagnostics.nodeTelemetry : running && (!(previewCandidate ?? committed).nodes.some((node) => node.kind === "testSignal") || (previewCandidate ?? committed).nodes.some((node) => node.kind === "testSignal" && sourceStates.get(node.id) === "playing")) ? (previewCandidate ?? committed).nodes.filter((node) => node.kind === "physicalOutput").map((node) => {
     const rmsDb = -28 + Math.sin(Date.now() / 300) * 10;
     return { nodeId: node.id, kind: node.kind, meter: { peakDb: rmsDb + 3, rmsDb, clippedSamples: 0, channelPeakDb: [rmsDb + 3], channelRmsDb: [rmsDb], channelClippedSamples: [0] }, processor: null, plugin: null };
   }) : [],

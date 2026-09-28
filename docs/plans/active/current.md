@@ -392,3 +392,25 @@ sections above.
 - Artifact: `target/patrick-main-release-6/release/` (shell, plugin worker,
   CLI), built 17:30 with `custom-protocol`, embedding UI bundle
   `index-BUK9DptH.js`. A new folder because `release-5` was running.
+
+### 2026-09-27 — Canvas lines reported gone; empty FIR Filter Hz profile (UI, DSP)
+
+- Report (user): lines Microphone → FIR Filter Hz → ReaEQ and Siege game →
+  Siege Advanced EQ were gone and could not be dragged back.
+- Findings: the saved session (revision 74) still has all 8 connections.
+  With the user's exact session, saved canvas layout and live telemetry
+  recorded from their route (`AUDIOROUTER_LIVE_DIAGNOSTICS_DUMP`), every line
+  renders stopped and playing, and a removed line drags back, in the current
+  build. The client log shows ~230 `UI error (unknown)` entries at 5:24 PM on
+  the previous build, while the live-save loop rebuilt the route every
+  second; the 5:35 PM run of the fixed build logged none. Not reproduced on
+  the fixed build; awaiting the user's confirmation.
+- Found meanwhile: the stored FIR Filter Hz profile was all zeros. The
+  spectrum tap offered a "learned profile" before any frame was analysed,
+  so an early Stop and keep stored silence. Fix: no profile until a frame is
+  analysed; an all-floor profile counts as none (gate passes; UI offers
+  Learn noise).
+- Tests: route harness accepts an injected session, telemetry and running
+  state (test hooks); `e2e/playing-canvas-lines.pw.ts` (lines drawn while
+  playing, removed line dragged back); DSP and editor regressions. vitest
+  366, Playwright 92, DSP 51, engine 139, control 196.

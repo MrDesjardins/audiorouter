@@ -17,6 +17,8 @@ describe("FIR Filter Hz editor", () => {
   it("decodes stored profiles and spans the audible range", () => {
     expect(decodeProfileDb(profile)).toEqual(Array(64).fill(-60));
     expect(decodeProfileDb("xyz")).toBeNull();
+    // A profile that learned nothing is treated as no profile.
+    expect(decodeProfileDb("00".repeat(64))).toBeNull();
     expect(BAND_FREQUENCIES_HZ).toHaveLength(64);
     expect(BAND_FREQUENCIES_HZ.every((hz, index) => index === 0 || hz > BAND_FREQUENCIES_HZ[index - 1])).toBe(true);
     expect(BAND_FREQUENCIES_HZ.at(-1)!).toBeGreaterThan(18_000);

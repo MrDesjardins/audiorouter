@@ -306,9 +306,10 @@ impl SpectrumTap {
     }
 
     /// The profile learned so far (peak level per band), serialized like a
-    /// Denoise profile; `None` unless learning.
+    /// Denoise profile; `None` unless learning and at least one frame has
+    /// been analysed (an empty profile would store silence as the noise).
     pub fn learned_profile(&self) -> Option<String> {
-        self.is_learning().then(|| {
+        (self.is_learning() && self.frames.load(Ordering::Acquire) > 0).then(|| {
             encode_band_powers(&std::array::from_fn::<f32, NOISE_PROFILE_BANDS, _>(|band| {
                 f32::from_bits(self.learned[band].load(Ordering::Relaxed))
             }))
@@ -381,7 +382,10 @@ impl SpectralGate {
         tap: Option<std::sync::Arc<SpectrumTap>>,
     ) -> Self {
         let bounded = |value: f32, low: f32, high: f32, fallback: f32| if value.is_finite() { value.clamp(low, high) } else { fallback };
-        let learned = if learning { None } else { profile.and_then(decode_band_powers) };
+        // A profile that learned nothing (every band at the −160 dB floor)
+        // is treated as no profile, so the gate passes audio.
+        let learned = if learning { None } else { profile.and_then(decode_band_powers) }
+            .filter(|powers| powers.iter().any(|power| power_db(*power) > -150.0));
         if let Some(tap) = &tap {
             tap.learning.store(learning, Ordering::Release);
         }
@@ -790,6 +794,20 @@ mod tests {
         gate.process(&mut mixed);
         let passed = rms(&mixed[24_000..]);
         assert!(passed > rms(&tone) * 0.8, "a sound louder than the noise passes: {passed}");
+    }
+
+    #[test]
+    fn spectral_gate_never_offers_an_empty_learned_profile() {
+        let tap = std::sync::Arc::new(SpectrumTap::default());
+        let _gate = SpectralGate::new(3.0, 60.0, None, true, Some(tap.clone()));
+        assert!(tap.is_learning());
+        assert_eq!(tap.learned_profile(), None, "nothing analysed yet");
+        // An all-floor profile stored by an older build passes audio.
+        let mut gate = SpectralGate::new(3.0, 60.0, Some(&"00".repeat(NOISE_PROFILE_BANDS)), false, None);
+        let mut hiss = noise(24_000, 5, 0.1);
+        let before = rms(&hiss[..24_000 - SPECTRAL_LATENCY]);
+        gate.process(&mut hiss);
+        assert!((rms(&hiss[SPECTRAL_LATENCY..]) - before).abs() < before * 0.05);
     }
 
     #[test]

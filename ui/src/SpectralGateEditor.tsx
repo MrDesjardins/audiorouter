@@ -29,10 +29,17 @@ export const BAND_FREQUENCIES_HZ: number[] = (() => {
   });
 })();
 
-/** Decode a stored 64-band profile (two hex digits per band, 1 dB steps from −160 dB). */
+/** Decode a stored 64-band profile (two hex digits per band, 1 dB steps from −160 dB).
+ * A profile that learned nothing (every band at the floor) counts as none. */
 export function decodeProfileDb(profile: unknown): number[] | null {
   if (typeof profile !== "string" || !/^[0-9a-fA-F]{128}$/.test(profile)) return null;
-  return Array.from({ length: BANDS }, (_, band) => Number.parseInt(profile.slice(band * 2, band * 2 + 2), 16) - 160);
+  const levels = Array.from({ length: BANDS }, (_, band) => Number.parseInt(profile.slice(band * 2, band * 2 + 2), 16) - 160);
+  return levels.some((db) => db > -150) ? levels : null;
+}
+
+/** Whether a node parameter holds a usable learned noise profile. */
+export function hasLearnedNoise(profile: unknown): boolean {
+  return decodeProfileDb(profile) !== null;
 }
 
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
