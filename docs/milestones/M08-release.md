@@ -1,6 +1,6 @@
 # M08 — Windows release qualification and delivery
 
-Status: unsigned release-preparation foundation implemented; clean-checkout and remaining in-scope qualification remain open. The approved v1 excludes an AudioRouter-owned driver, production signing, installer, and clean-machine gates under DEC-16. Prerequisite: M07 and a Windows qualification environment. Outcome: an evidence-backed unsigned Windows 11 x64 artifact set for the VB-Cable-first profile, with clear operating and recovery instructions; this is not a releasable installer and publication is not implied.
+Status: unsigned release-preparation foundation implemented; clean-checkout and remaining in-scope qualification remain open. The approved v1 excludes an AudioRouter-owned driver and its production signing, plus installer and clean-machine gates under DEC-16. DEC-16 does not decide whether the desktop app/installer receives Authenticode signing. Prerequisite: M07 and a Windows qualification environment. Outcome: an evidence-backed unsigned Windows 11 x64 artifact set for the VB-Cable-first profile, with clear operating and recovery instructions; this is not a releasable installer and publication is not implied.
 
 ## Read first
 

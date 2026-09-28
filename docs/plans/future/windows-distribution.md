@@ -4,8 +4,10 @@ Status: planning requested 2026-09-28; implementation is not authorized by
 this plan. The user asked for an easy integrated install and a manual official
 release process. This plan defines a reviewable route from the current
 unsigned artifact preparation to a per-user Windows installer and GitHub
-draft releases. It does not authorize a project-owned audio driver, production
-signing purchase/account setup, or automatic publication.
+draft releases. The driver and its production signing remain on ice under
+DEC-16. Authenticode signing of the desktop app/installer is a separate,
+unresolved choice; this plan does not authorize a signing purchase/account
+setup or automatic publication.
 
 ## Outcome and boundaries
 
@@ -35,8 +37,9 @@ missing or incompatible plugins and lets the user install them separately.
 
 ## Proposed package and first-run experience
 
-Deliver a signed setup EXE when signing has an approved path, with an unsigned
-developer/qualification package only where clearly labeled. The package
+Deliver a setup EXE. Decide separately whether the shell and installer receive
+Authenticode signatures; if unsigned, label the package clearly and measure
+the Windows trust/reputation experience. The package
 contains the desktop shell, the adjacent CLI and plugin-worker executables
 needed by integrations and plugin hosting, required app resources, and
 versioned notices. The CLI/worker lookup path must be verified after install;
@@ -101,15 +104,17 @@ the signing or driver gates by inference.
 
 Relevant existing requirements include PROD-01, PROD-03, PROD-04, PROD-06,
 PROD-07; SEC-11 (currently future-only); ENG-04/05; and the M08 release
-contract. Existing v1 excludes production signing, installer, and clean
-machine gates by DEC-16. The 2026-09-28 user request reopens **planning** for
+contract. Existing v1 excludes production driver signing, installer, and
+clean-machine gates by DEC-16. The 2026-09-28 user request reopens **planning** for
 app installation and GitHub draft-release mechanics. Before implementation,
 revise the M08 contract and traceability with an explicit user-confirmed
-decision about which installer, signing, and clean-machine requirements
-return to v1. DEC-16 remains in force for the owned driver and production
-signing until that decision changes them. App packaging can be explored
-without driver work, but an unsigned installer must not be called an official
-release.
+decision about which installer and clean-machine requirements return to v1.
+DEC-16 remains in force for the owned driver and its production signing.
+App/installer Authenticode signing is undecided and must be evaluated as its
+own cost/trust choice. App packaging can be explored without driver work.
+Whether a release is official is determined by the approved release process
+and manual publication; signing affects publisher identity and the trust
+experience, not whether a human-published GitHub release is official.
 
 No new requirement IDs are assigned in this planning document. If promoted,
 add durable acceptance IDs for installer install/upgrade/repair/uninstall,
@@ -119,9 +124,10 @@ map each to PROD/SEC/ENG and M08 in `docs/spec/15-delivery.md`.
 ## Implementation sequence after scope approval
 
 1. Reconcile DEC-16, M08, PROD release wording, security requirements, and
-   requirement traceability. Define whether code signing is a v1 blocker and
-   who owns signing credentials; this plan does not authorize purchase or
-   account changes.
+   requirement traceability. Decide whether app/installer Authenticode signing
+   is required for v1, how unsigned trust prompts are handled if it is not,
+   and who owns signing credentials; this plan does not authorize purchase or
+   account changes. Driver signing remains excluded.
 2. Choose Tauri NSIS or WiX packaging after confirming per-user install,
    upgrade, uninstall, shortcuts, WebView2 bootstrap, and resource lookup
    behavior. Favor per-user NSIS unless Windows qualification demonstrates a
@@ -172,8 +178,9 @@ a restorable copy of user state before changing its schema.
 
 Next task after this planning handoff: explicitly promote a bounded
 Windows-app installer and manual GitHub draft-release track into M08, or keep
-it future-only. At that gate decide signing expectations, WebView2 offline
-support, and whether the existing external endpoint prerequisite is acceptable.
+it future-only. At that gate decide app signing, WebView2 offline support,
+and whether the existing external endpoint prerequisite is acceptable. Driver
+signing is not part of this decision.
 
 ## External references
 

@@ -27,6 +27,9 @@ provenance manifest, SBOMs, and third-party notices. Drafts and source ZIPs
 are not equivalent to an installed application.
 
 The installer and release workflow remain plans rather than operational
-instructions until M08 scope, signing expectations, WebView2 policy, and
-Windows install evidence are approved and implemented. The existing unsigned
-artifact flow must not be described as a supported consumer release.
+instructions until M08 scope, app/installer signing expectations, WebView2
+policy, and Windows install evidence are approved and implemented. Driver
+signing remains excluded under DEC-16. A manually published release can be
+official while unsigned; its signing state and Windows trust experience must
+be stated accurately. The current unsigned artifact flow is still not a
+supported consumer installer.

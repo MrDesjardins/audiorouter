@@ -5,17 +5,20 @@ Milestone ownership: all milestones. This is the stable release map; execution s
 ## Active scope decision (2026-09-19, supersedes 2026-09-17)
 
 The delivery track is VB-Cable/Voicemeeter-first, permanently: the
-project-owned kernel driver, PortCls integration, and production signing are
-set aside by explicit user cost decision (a signing credential is not
-funded), not deferred pending a future budget. Existing VB-Cable/Voicemeeter
+project-owned kernel driver, PortCls integration, and production driver
+signing are set aside by explicit user cost decision (a driver-signing
+credential is not funded), not deferred pending a future budget. This does
+not decide whether the desktop app or installer receives Authenticode
+signing; that is a separate distribution decision. Existing VB-Cable/Voicemeeter
 and physical WASAPI endpoints are the project's complete, supported
 virtual-routing strategy for v1 — not an interim substitute for a managed
 bus. Completing "everything else" in this delivery map means every
-non-driver, non-signed-release requirement across M00–M08: routing, DSP,
+non-driver requirement across M00–M08: routing, DSP,
 recording, automation, recovery, CLI/MCP parity, and the visual editor. It
-does not include VDEV-01/03/09, SEC-08, or M08's signed-installer/
-clean-machine gates, which remain normative only for a future funded signed
-track and are explicitly excluded from this project's v1 completion target.
+does not include VDEV-01/03/09 or SEC-08. Installer and clean-machine gates
+are also excluded from the approved v1 completion target by DEC-16. Whether
+the app or installer is Authenticode-signed remains a separate, unresolved
+choice for any future distribution scope.
 See [the set-aside driver plan](../plans/future/M03-driver-signing.md).
 
 ## Milestone sequence
@@ -99,7 +102,7 @@ These decisions are the proposed baseline for implementation. Evidence may chang
 | DEC-13 | Legacy VST2 is an explicitly approved, gated M06 extension | User approved planning on 2026-09-08; the original V1 baseline remains VST3 plus built-ins, while actual ABI, rights, worker, and compatibility evidence remain required |
 | DEC-14 | NFR-01 wired physical loopback latency target revised from ≤30 ms to ≤250 ms p95 | User-approved 2026-09-21 after calibrated measurement (see [14-quality.md](14-quality.md) NFR-01 and [M00 WASAPI probe evidence](../plans/active/evidence/M00-wasapi-probe.md)): a real reference device (Focusrite Scarlett Solo) measured p95 ≈ 185.5–185.9 ms in WASAPI shared mode — AudioRouter's production sharing model, not exclusive/ASIO — across three reproducible runs, after an initial calibration bug was found and fixed. Buffer size and Windows 10+ `IAudioClient3` low-latency shared-mode tuning were both tested and ruled out as a fix on this device (its low-latency engine-period floor is a fixed 10 ms). The original ≤30 ms figure was an unvalidated aspirational target. The revised target is only validated on one device; it is not yet known whether other supported interfaces perform better or worse, and closing the gap further (e.g. via exclusive mode) remains unexplored future work, not authorized by this decision |
 | DEC-15 | NFR-02 mic-to-virtual-capture latency target revised from ≤40 ms to ≤160 ms p95 | User-approved 2026-09-21 after calibrated measurement through the real engine route (see [14-quality.md](14-quality.md) NFR-02 and [M00 WASAPI probe evidence](../plans/active/evidence/M00-wasapi-probe.md)): the same reference device measured p95 of 97.5/102.9/115.5/110.9 ms across four runs (physical mic capture → real `PhysicalInput → Gain → Recorder → PhysicalOutput` graph/scheduler → virtual render → virtual capture read), each run's own internal spread under ~13 ms with more run-to-run variance across separate engine-route launches than NFR-01 showed. The revised ≤160 ms target follows the same DEC-14 methodology: roughly 35% headroom over the worst observed run (115.461 ms). Also validated on one device only; not yet known whether this cross-run variance narrows on repeated measurement or with a different mic/driver |
-| DEC-16 | AudioRouter-owned driver, PortCls endpoint, production signing, and M08 installer/clean-machine gates excluded from the approved v1 track | User decision 2026-09-19 based on unfunded signing/distribution cost. Existing VB-Cable/Voicemeeter and physical WASAPI endpoints are the supported boundary. VDEV-01/03/09 and SEC-08 remain normative only for a separately authorized future track; unsigned artifact preparation does not imply publication or a releasable installer |
+| DEC-16 | AudioRouter-owned driver, PortCls endpoint, production driver signing, and M08 installer/clean-machine gates excluded from the approved v1 track | User decision 2026-09-19 based on unfunded driver-signing/distribution cost. Existing VB-Cable/Voicemeeter and physical WASAPI endpoints are the supported boundary. VDEV-01/03/09 and SEC-08 remain normative only for a separately authorized future track. This decision does not settle Authenticode signing for the desktop app or installer; unsigned artifact preparation does not imply publication or a releasable installer |
 
 ## Risk and dependency register
 
@@ -145,4 +148,4 @@ MCP's evolving transport/SDK documentation must be pinned and verified during M0
 
 ## Definition of done
 
-A milestone is complete when all scoped requirements have implementation and evidence, applicable Windows tests pass, docs/contracts match behavior, and the active plan contains a reproducible handoff. A release additionally needs M08 signing/install/update/rollback, hardware performance, privacy/security, and usability gates. A plan, generated UI, successful compile, or mocked demo alone is not completion evidence.
+A milestone is complete when all scoped requirements have implementation and evidence, applicable Windows tests pass, docs/contracts match behavior, and the active plan contains a reproducible handoff. A release additionally needs M08's applicable install/update/rollback, hardware performance, privacy/security, and usability gates. App/installer Authenticode signing remains a separate unresolved distribution choice; driver signing is excluded by DEC-16. A plan, generated UI, successful compile, or mocked demo alone is not completion evidence.

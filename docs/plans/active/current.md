@@ -13,7 +13,7 @@ Finish AudioRouter's non-driver scope. Audio routes use existing endpoints
 (VB-Cable, Voicemeeter, physical WASAPI devices) and are driven by one
 backend-owned graph. The desktop UI, CLI and MCP are adapters over the same
 versioned API. **Permanent scope decision (user, 2026-09-19):** no
-AudioRouter-owned driver, PortCls endpoint or production signing.
+AudioRouter-owned driver, PortCls endpoint or production driver signing.
 VDEV-01/03/09 and SEC-08 stay normative only for a possible future funded
 track ([future plan](../future/M03-driver-signing.md)).
 
@@ -24,7 +24,8 @@ track ([future plan](../future/M03-driver-signing.md)).
   no installer, workflow, or publication implementation is authorized yet.
 - Requirements: PROD-01/03/04/06/07, SEC-11, ENG-04/05 and M08; see the
   [distribution plan](../future/windows-distribution.md). DEC-16 continues to
-  exclude the owned driver and production signing. The user's 2026-09-28
+  exclude the owned driver and its production signing. App/installer signing
+  is a separate unresolved choice. The user's 2026-09-28
   request reopens app-installer and draft-release planning only; M08 and
   traceability require an explicit scope revision before implementation.
 - Prerequisites/evidence: current supported boundary uses existing endpoints;
@@ -73,7 +74,7 @@ evidence is missing. Nothing here is a release claim: M08 is not done.
 | [M05](../../milestones/M05-visual-editor.md) visual editor | Canvas, Properties/Tools, live flags, timing, three themes | 92 browser E2E + 370 UI unit tests; Edge visual review | Attended Narrator, 200 % scaling, first-run, live drag/drop; UI-15 attended edge activity |
 | [M06](../../milestones/M06-plugins-pitch.md) plugins/pitch | VST3 worker, x64 VST2 worker, shared adjacent-VST2 chain, editors, saved state | ReaPlugs chain live ([shared chain](evidence/2026-09-26-shared-vst2-chain.md)); 60 s glitch-free with the user's saved ReaPlugs nodes | Rights/sandbox review, multi-vendor matrix |
 | [M07](../../milestones/M07-automation-recovery.md) automation/recovery | MCP, persistence, crash journal, safe mode, sign-in helper | [M07](evidence/M07-automation-recovery.md), [OS transitions](evidence/M07-os-transitions.md) | OS power/session delivery and native reopen (attended) |
-| [M08](../../milestones/M08-release.md) release | Unsigned artifact preparation | [M08](evidence/M08-release.md) | Clean-checkout release run and CAP-13/GRAPH-15 evidence; installer, production signing, and clean-machine gates are excluded from v1 by DEC-16 |
+| [M08](../../milestones/M08-release.md) release | Unsigned artifact preparation | [M08](evidence/M08-release.md) | Clean-checkout release run and CAP-13/GRAPH-15 evidence; installer and clean-machine gates are excluded from v1 by DEC-16; driver signing is excluded, app/installer signing is undecided |
 
 ## 2026-09-26/27 overnight session — outcome
 
