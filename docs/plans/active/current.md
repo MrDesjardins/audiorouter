@@ -391,7 +391,8 @@ sections above.
   playing (live test now prints it).
 - Artifact: `target/patrick-main-release-6/release/` (shell, plugin worker,
   CLI), built 17:30 with `custom-protocol`, embedding UI bundle
-  `index-BUK9DptH.js`. A new folder because `release-5` was running.
+  `index-BUK9DptH.js`. A new folder because `release-5` was running. Rebuilt
+  17:53 with the empty-profile fix (bundle `index-DTGlFEFV.js`).
 
 ### 2026-09-27 — Canvas lines reported gone; empty FIR Filter Hz profile (UI, DSP)
 
