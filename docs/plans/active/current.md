@@ -311,7 +311,9 @@ sections above.
   transport and UI 358 tests pass.
 - Artifact: `target/patrick-main-release-5/release/` (shell, plugin worker,
   CLI), built 16:28 with `custom-protocol`, embedding UI bundle
-  `index-CYp4WBYo.js`. A new folder because `release-4` was running.
+  `index-CYp4WBYo.js`. A new folder because `release-4` was running. Rebuilt
+  17:09 with FIR Filter Hz, readable labels and name fields (bundle
+  `index-Zg_vPOaz.js`).
 
 ### 2026-09-27 — Names with spaces, readable settings, FIR Filter Hz (UI-04, GRAPH, DSP)
 
