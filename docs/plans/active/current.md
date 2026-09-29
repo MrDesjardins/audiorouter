@@ -54,9 +54,9 @@ track ([future plan](../future/M03-driver-signing.md)).
   inputs still take one source, and sum paths stay explicit through Mixer.
   Exact source node/port matching also lets the existing occupied-output
   recovery route any such source through a Mixer without duplicating its direct
-  branch. An exhaustive type-checked node-kind matrix verifies multi-output
-  fan-out, Mixer routing and occupied-output reuse. `draft.test.ts` passed
-  (47/47), TypeScript typecheck passed, docs acceptance passed (69 Markdown
+  branch. An exhaustive type-checked library-node matrix plus a scanned-plugin
+  case verify multi-output fan-out, Mixer routing and occupied-output reuse.
+  `draft.test.ts` passed (48/48), TypeScript typecheck passed, docs acceptance passed (69 Markdown
   files, 373 links), and `git diff --check` passed. A generic Gain UI regression
   was added alongside the EQ scenario. Its Playwright run was stopped before a
   verdict; the new UI scenario remains unverified. Requirements:

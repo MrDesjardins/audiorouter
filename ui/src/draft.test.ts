@@ -44,6 +44,36 @@ describe("output fan-out across library tools", () => {
       expect(session.edges.some((edge) => edge.sourceNode === mixer.id && edge.destinationNode === outputOne.id)).toBe(true);
     }
   });
+
+  it("allows a scanned plugin output to feed multiple destinations", () => {
+    let session = appendPluginPlaceholderNode({ ...demoSession, edges: [] }, {
+      path: "C:\\Plugins\\effect.dll",
+      identity: {
+        path: "C:\\Plugins\\effect.dll",
+        binaryPath: "C:\\Plugins\\effect.dll",
+        format: "vst2",
+        architecture: "x64",
+        fileBytes: 10,
+        sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        vendor: "Test vendor",
+        version: "1.0",
+        classIds: ["test-class"],
+        compatibility: "supportedVst2X64Gated",
+      },
+      error: null,
+      errorCode: null,
+    });
+    const plugin = session.nodes.at(-1)!;
+    session = appendLibraryNode(session, "physicalOutput");
+    const firstOutput = session.nodes.at(-1)!;
+    session = appendLibraryNode(session, "physicalOutput");
+    const secondOutput = session.nodes.at(-1)!;
+
+    session = appendDraftConnection(session, plugin.id, "out", firstOutput.id, "in");
+    session = appendDraftConnection(session, plugin.id, "out", secondOutput.id, "in");
+
+    expect(session.edges.filter((edge) => edge.sourceNode === plugin.id && edge.sourcePort === "out")).toHaveLength(2);
+  });
 });
 
 describe("source-less playback branches", () => {
