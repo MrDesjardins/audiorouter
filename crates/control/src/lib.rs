@@ -65,6 +65,12 @@ const MAX_VIRTUAL_DEVICE_LIST_ITEMS: usize = 500;
 const MAX_PROCESSOR_CATALOG_ITEMS: usize = 32;
 fn packaged_plugin_worker_path(shell_executable: &std::path::Path) -> Option<std::path::PathBuf> {
     let directory = shell_executable.parent()?;
+    packaged_plugin_worker_candidates(directory)
+        .into_iter()
+        .find(|candidate| candidate.is_file())
+}
+
+fn packaged_plugin_worker_candidates(directory: &std::path::Path) -> [std::path::PathBuf; 2] {
     let worker = if cfg!(windows) {
         "audiorouter-plugin-worker.exe"
     } else {
@@ -74,8 +80,27 @@ fn packaged_plugin_worker_path(shell_executable: &std::path::Path) -> Option<std
         directory.join(worker),
         directory.join("resources").join(worker),
     ]
-    .into_iter()
-    .find(|candidate| candidate.is_file())
+}
+
+fn plugin_worker_unavailable_message(shell_executable: Option<&std::path::Path>) -> String {
+    let worker_name = if cfg!(windows) {
+        "audiorouter-plugin-worker.exe"
+    } else {
+        "audiorouter-plugin-worker"
+    };
+    let locations = shell_executable
+        .and_then(std::path::Path::parent)
+        .map(|directory| {
+            packaged_plugin_worker_candidates(directory)
+                .into_iter()
+                .map(|path| format!("`{}`", path.display()))
+                .collect::<Vec<_>>()
+                .join(" or ")
+        })
+        .unwrap_or_else(|| "the shell's install directory or its `resources` folder".into());
+    format!(
+        "Plugin worker executable `{worker_name}` was not found. Checked {locations}. Install or rebuild the complete AudioRouter package so the worker is beside the shell or in `resources`, or set `AUDIOROUTER_PLUGIN_WORKER_PATH` to the worker's full path."
+    )
 }
 
 fn plugin_worker_path() -> Option<std::path::PathBuf> {
@@ -12810,7 +12835,9 @@ impl ControlPlane {
             return Ok(stages);
         }
         let worker_executable = plugin_worker_path().ok_or_else(|| {
-            ControlError::InvalidRequest("plugin worker executable is unavailable".into())
+            ControlError::InvalidRequest(plugin_worker_unavailable_message(
+                std::env::current_exe().ok().as_deref(),
+            ))
         })?;
         let mut prepared = HashMap::new();
         for node in session
@@ -18059,7 +18086,9 @@ impl ControlPlane {
             .ok_or_else(|| ControlError::InvalidRequest("path is required".into()))?;
         let (identity, root) = self.scanned_plugin_identity(path)?;
         let executable = plugin_worker_path().ok_or_else(|| {
-            ControlError::InvalidRequest("plugin worker executable is unavailable".into())
+            ControlError::InvalidRequest(plugin_worker_unavailable_message(
+                std::env::current_exe().ok().as_deref(),
+            ))
         })?;
         let worker = if identity.format == audiorouter_plugin_host::PluginFormat::Vst3 {
             #[cfg(windows)]
@@ -19465,6 +19494,28 @@ mod tests {
         std::fs::write(&adjacent, b"adjacent executable placeholder").unwrap();
         assert_eq!(packaged_plugin_worker_path(&shell), Some(adjacent));
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn missing_plugin_worker_error_names_search_paths_and_repair_action() {
+        let root = std::env::temp_dir().join("audiorouter-worker-error");
+        let shell = root.join(if cfg!(windows) {
+            "audiorouter-shell.exe"
+        } else {
+            "audiorouter-shell"
+        });
+        let message = plugin_worker_unavailable_message(Some(&shell));
+        let worker = if cfg!(windows) {
+            "audiorouter-plugin-worker.exe"
+        } else {
+            "audiorouter-plugin-worker"
+        };
+        assert!(message.contains(&root.join(worker).display().to_string()));
+        assert!(message.contains(
+            &root.join("resources").join(worker).display().to_string()
+        ));
+        assert!(message.contains("rebuild the complete AudioRouter package"));
+        assert!(message.contains("AUDIOROUTER_PLUGIN_WORKER_PATH"));
     }
 
     fn encode_test_base64(bytes: &[u8]) -> String {

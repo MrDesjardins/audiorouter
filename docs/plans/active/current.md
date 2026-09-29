@@ -27,6 +27,14 @@ track ([future plan](../future/M03-driver-signing.md)).
   keyboard connection form, and reset handle visibility when the gesture ends.
   Requirement: UI-03 / M05. Rollback is limited to canvas handle state/styles
   and their focused UI tests.
+- Current follow-up (user, 2026-09-28): diagnose the `plugin worker executable
+  is unavailable` error from the manual test build. The shell was built in a
+  fresh target directory without its adjacent worker. Requirements: PLUG-03/05,
+  M06/M08. Immediate recovery is to build the matching worker beside that
+  shell. Add a focused test for an actionable missing-worker error, then build
+  a fresh complete shell/worker pair in a separate target directory. Do not
+  stop the user's running shell; rollback is reverting the error wording/spec
+  change and using the prior build.
 - Requirements: PROD-01/03/04/06/07, SEC-09/11, ENG-04/05, and new DIST-01–08
   in [delivery traceability](../../spec/15-delivery.md). User direction on
   2026-09-28 promotes installer/release work into M08. DEC-16 still excludes
@@ -77,6 +85,21 @@ track ([future plan](../future/M03-driver-signing.md)).
   content-hashed `index-C4G0bSnz.js` bundle name. Shell SHA-256:
   `FCFDF1FE04B2A660DE39EE86A1F4408EA60F9A8852A1CD73EEE61BCDCFA3D5EA`.
   No app launch or live endpoint test was performed.
+- Plugin-worker recovery (2026-09-28): confirmed the new test shell directory
+  initially lacked `audiorouter-plugin-worker.exe`, while the resolver checks
+  beside-shell and `resources` locations. Built the matching worker beside
+  that running shell; it now exists at the resolver's first candidate. Added
+  actionable missing-path/remediation text to both plugin preparation paths
+  and PLUG-05. Focused control tests pass (2/2); docs acceptance passes (69
+  Markdown files, 364 links). Complete rebuilt pair:
+  `src-tauri/target/release/audiorouter-shell.exe` and adjacent
+  `audiorouter-plugin-worker.exe`; shell SHA-256
+  `E76CA033A10298A6FFC01F17D1FE9F3F0AED35B21CAAC0E70390684EEFE1C533`,
+  worker SHA-256
+  `1AF8FC540D2D7F9211F9F6A3AF760A692659736DB3268D4F427BD6EB8A058CC1`.
+  Neither build has been manually exercised with a plugin. The currently
+  running shell is still the earlier connector test build; it can use the
+  newly placed adjacent worker, but it will retain the old generic message.
 - Formatting: `cargo fmt --all -- --check` reports pre-existing workspace
   formatting differences across unrelated crates; this change's added helper
   and test were aligned with rustfmt. The manual release workflow could not be
@@ -85,9 +108,11 @@ track ([future plan](../future/M03-driver-signing.md)).
   missing-WebView2, reputation prompt, or live endpoint qualification yet.
 - Visual review: the canvas harness screenshots were reviewed in dark, light
   and high-contrast modes. Attended packaged-shell acceptance remains open.
-- Next action: user manually checks the connector UX in the new local shell;
-  retry the standard `ui/dist` build after its asset lock is released, then
-  continue M08 install testing on an isolated Windows account/machine.
+- Next action: user retries plugin preparation in the running test shell; if
+  needed, relaunch the complete shell/worker pair above to see the improved
+  diagnostic. Retry the standard `ui/dist` build after its asset lock is
+  released, then continue M08 install testing on an isolated Windows account/
+  machine.
 
 Requirement families in scope: PROD, ARCH, GRAPH, CAP, DSP, REC, PLUG, UI,
 API, AUTO, STATE, SEC (non-driver), NFR, QUAL, ENG, as mapped in

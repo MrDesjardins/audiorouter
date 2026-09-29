@@ -35,10 +35,15 @@ or packaging it, run from the repository root:
 
 ```powershell
 npm.cmd run build --prefix ui
-cargo build --manifest-path src-tauri/Cargo.toml
+cargo build --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target
+cargo build --manifest-path Cargo.toml -p audiorouter-plugin-host --bin audiorouter-plugin-worker --target-dir src-tauri/target
 ```
 
-The shell executable is written to `src-tauri\target\debug\audiorouter-shell.exe`.
+The shell and matching plugin worker are written beside each other in
+`src-tauri\target\debug\` as `audiorouter-shell.exe` and
+`audiorouter-plugin-worker.exe`. Keep both executables together; building the
+shell alone leaves plugin nodes unable to start. The shell also explains the
+expected worker locations and repair steps if it is missing.
 This is compile-only evidence; it does not install a driver, register startup,
 open an audio stream, or alter machine audio configuration. The release flow
 rebuilds the UI automatically before its optimized shell build.
