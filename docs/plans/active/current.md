@@ -70,7 +70,13 @@ track ([future plan](../future/M03-driver-signing.md)).
   372 tests); Playwright passed the connector direction/theme scenario and the
   multi-source workflow. A follow-up `npm.cmd run build` was blocked while
   Vite tried to remove the existing `ui/dist/assets/index-C4G0bSnz.js`
-  (`EPERM`, Windows file lock); no packaged-shell build was performed.
+  (`EPERM`, Windows file lock). Built the same UI sources successfully into
+  `%TEMP%\audiorouter-ui-connector-ux-20260928`; its Vite asset hashes match
+  `ui/dist`. The optimized custom-protocol shell then built with the current
+  `ui/dist` into `target/connector-ux-20260928`; its binary includes the
+  content-hashed `index-C4G0bSnz.js` bundle name. Shell SHA-256:
+  `FCFDF1FE04B2A660DE39EE86A1F4408EA60F9A8852A1CD73EEE61BCDCFA3D5EA`.
+  No app launch or live endpoint test was performed.
 - Formatting: `cargo fmt --all -- --check` reports pre-existing workspace
   formatting differences across unrelated crates; this change's added helper
   and test were aligned with rustfmt. The manual release workflow could not be
@@ -79,9 +85,9 @@ track ([future plan](../future/M03-driver-signing.md)).
   missing-WebView2, reputation prompt, or live endpoint qualification yet.
 - Visual review: the canvas harness screenshots were reviewed in dark, light
   and high-contrast modes. Attended packaged-shell acceptance remains open.
-- Next action: commit/push this UI-03 change, then retry the UI build after the
-  dist asset lock is released; continue M08 install testing on an isolated
-  Windows account/machine.
+- Next action: user manually checks the connector UX in the new local shell;
+  retry the standard `ui/dist` build after its asset lock is released, then
+  continue M08 install testing on an isolated Windows account/machine.
 
 Requirement families in scope: PROD, ARCH, GRAPH, CAP, DSP, REC, PLUG, UI,
 API, AUTO, STATE, SEC (non-driver), NFR, QUAL, ENG, as mapped in
