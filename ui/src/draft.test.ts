@@ -1,8 +1,50 @@
 import { describe, expect, it } from "vitest";
 import type { ApplicationInfo, Session } from "@audiorouter/contracts";
-import { addSourceToOccupiedOutput, appendApplicationCaptureNode, applicationCaptureChoices, applicationOnlyRouteSource, independentPaths, generatedOnlyRoute, needsNativePaths, unboundDeviceNodes, isParameterOnlyChange, pluginCatalog, STANDARD_PLUGIN_FOLDERS, mixerInputs, mixerRouteSources, pruneInactiveUpstream, mixerInputVolumeKey, mixedApplicationRouteOtherSources, rebindApplicationCaptureNode, appendDraftConnection, appendEndpointLoopbackNode, appendLibraryNode, appendPluginPlaceholderNode, appendVirtualBusNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, removeDraftNode, resetNodeDraftParameters, routeFedMixerToOccupiedOutput, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
+import { addSourceToOccupiedOutput, appendApplicationCaptureNode, applicationCaptureChoices, applicationOnlyRouteSource, independentPaths, generatedOnlyRoute, needsNativePaths, unboundDeviceNodes, isParameterOnlyChange, pluginCatalog, STANDARD_PLUGIN_FOLDERS, mixerInputs, mixerRouteSources, pruneInactiveUpstream, mixerInputVolumeKey, mixedApplicationRouteOtherSources, rebindApplicationCaptureNode, appendDraftConnection, appendEndpointLoopbackNode, appendLibraryNode, appendPluginPlaceholderNode, appendVirtualBusNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, type LibraryNodeKind, removeDraftNode, resetNodeDraftParameters, routeFedMixerToOccupiedOutput, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
 import { demoSession } from "./fixtures";
 import { unfedRouteNodes } from "./draft";
+
+describe("output fan-out across library tools", () => {
+  const nodeKinds: Record<LibraryNodeKind, true> = {
+    physicalInput: true, physicalOutput: true, testSignal: true, audioFile: true,
+    mixer: true, gain: true, volume: true, bassTreble: true, dehum: true,
+    declick: true, inputSwitch: true, denoise: true, speechDenoise: true,
+    spectralGate: true, firFilter: true, timeShift: true, mute: true, meter: true,
+    parametricEq: true, compressor: true, gate: true, limiter: true, delay: true,
+    graphicEq: true, pitch: true, recorder: true, networkSend: true,
+    networkReceive: true,
+  };
+
+  it("allows every output-capable library node to feed multiple outputs and a Mixer", () => {
+    for (const kind of Object.keys(nodeKinds) as LibraryNodeKind[]) {
+      let session: Session = { ...demoSession, edges: [] };
+      session = appendLibraryNode(session, kind);
+      const source = session.nodes.at(-1)!;
+      const outputPort = source.ports.find((port) => port.direction === "output");
+      if (!outputPort) continue;
+
+      session = appendLibraryNode(session, "mixer");
+      const mixer = session.nodes.at(-1)!;
+      session = appendLibraryNode(session, "physicalOutput");
+      const outputOne = session.nodes.at(-1)!;
+      session = appendLibraryNode(session, "physicalOutput");
+      const outputTwo = session.nodes.at(-1)!;
+      session = appendLibraryNode(session, "physicalOutput");
+      const mixedOutput = session.nodes.at(-1)!;
+
+      session = appendDraftConnection(session, source.id, outputPort.name, outputOne.id, "in");
+      session = appendDraftConnection(session, source.id, outputPort.name, outputTwo.id, "in");
+      session = appendDraftConnection(session, source.id, outputPort.name, mixer.id, "in");
+      session = appendDraftConnection(session, mixer.id, "out", mixedOutput.id, "in");
+      const directOutputEdge = session.edges.find((edge) => edge.sourceNode === source.id && edge.destinationNode === outputOne.id)!;
+      session = routeFedMixerToOccupiedOutput(session, directOutputEdge.id, mixer.id, "out")!;
+
+      expect(session.edges.filter((edge) => edge.sourceNode === source.id && edge.sourcePort === outputPort.name)).toHaveLength(2);
+      expect(session.edges.some((edge) => edge.sourceNode === mixer.id && edge.destinationNode === mixedOutput.id)).toBe(true);
+      expect(session.edges.some((edge) => edge.sourceNode === mixer.id && edge.destinationNode === outputOne.id)).toBe(true);
+    }
+  });
+});
 
 describe("source-less playback branches", () => {
   it("ignores a detached filter chain without deleting it or masking unbound real sources", () => {

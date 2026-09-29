@@ -48,6 +48,21 @@ track ([future plan](../future/M03-driver-signing.md)).
   to the header, mixer-reuse draft logic, endpoint labels, focused tests, and
   interface wording.
 
+- Completed follow-up (user, 2026-09-28): fan-out is a generic port behavior,
+  not an EQ-specific feature. `appendDraftConnection` has no tool-kind gate:
+  any output-capable library node can feed multiple destinations; ordinary
+  inputs still take one source, and sum paths stay explicit through Mixer.
+  Exact source node/port matching also lets the existing occupied-output
+  recovery route any such source through a Mixer without duplicating its direct
+  branch. An exhaustive type-checked node-kind matrix verifies multi-output
+  fan-out, Mixer routing and occupied-output reuse. `draft.test.ts` passed
+  (47/47), TypeScript typecheck passed, docs acceptance passed (69 Markdown
+  files, 373 links), and `git diff --check` passed. A generic Gain UI regression
+  was added alongside the EQ scenario. Its Playwright run was stopped before a
+  verdict; the new UI scenario remains unverified. Requirements:
+  GRAPH-02/03 and UI-03. No per-tool routing code was needed. Rollback: revert
+  the focused regression and specification clarification.
+
 - Objective: implement a per-user Windows installer and manual GitHub draft
   release path, then document and qualify within available Windows evidence.
 - Current subtask (user, 2026-09-28): simplify canvas wire creation. Idle

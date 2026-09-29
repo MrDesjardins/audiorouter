@@ -215,6 +215,54 @@ test("EQ can fan out through Mixer and that Mixer can take over the same physica
   await expect(mixer.getByLabel("Mixer sums 2 connected inputs")).toBeVisible();
 });
 
+test("a processing output can feed more than one destination", async ({ page }) => {
+  await page.goto("/route-harness.html");
+  await page.getByRole("tab", { name: "Tools" }).click();
+  for (const label of ["Input device", "Gain", "Output device", "Output device"]) {
+    await page.locator(".tool-card").filter({ hasText: label }).first().click();
+  }
+  await page.addStyleTag({ content: ".canvas-library { display: none !important; }" });
+  const node = (name: string) => page.locator(".react-flow__node").filter({ hasText: name }).last();
+  const canvas = page.locator(".session-flow-canvas");
+  const canvasBox = await canvas.boundingBox();
+  if (!canvasBox) throw new Error("Signal-flow canvas is not visible");
+  const moveNode = async (target: ReturnType<typeof node>, x: number, y: number) => {
+    const title = await target.locator(".flow-node-title").boundingBox();
+    if (!title) throw new Error("Graph node title is not positioned");
+    await page.mouse.move(title.x + title.width / 2, title.y + title.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x, canvasBox.y + canvasBox.height * y, { steps: 10 });
+    await page.mouse.up();
+  };
+  const connect = async (source: ReturnType<typeof node>, target: ReturnType<typeof node>) => {
+    const output = source.locator('.react-flow__handle.source[data-debug-side="right"]');
+    const input = target.locator('.react-flow__handle.target[data-debug-side="left"]');
+    const before = await page.locator(".react-flow__edges .react-flow__edge").count();
+    const inputBox = await input.boundingBox();
+    const outputBox = await output.boundingBox();
+    if (!inputBox || !outputBox) throw new Error("Connection handles are not positioned");
+    const start = { x: inputBox.x + inputBox.width / 2, y: inputBox.y + inputBox.height / 2 };
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(start.x - 12, start.y, { steps: 2 });
+    await page.mouse.move(outputBox.x + outputBox.width / 2, outputBox.y + outputBox.height / 2, { steps: 12 });
+    await page.mouse.up();
+    await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(before + 1, { timeout: 2000 });
+  };
+  const input = node("Physical input 1");
+  const gain = node("Gain 1");
+  const firstOutput = node("Physical output 1");
+  const secondOutput = node("Physical output 2");
+  await moveNode(input, canvasBox.x + 80, .5);
+  await moveNode(gain, canvasBox.x + 340, .5);
+  await moveNode(firstOutput, canvasBox.x + 650, .25);
+  await moveNode(secondOutput, canvasBox.x + 650, .75);
+  await connect(input, gain);
+  await connect(gain, firstOutput);
+  await connect(gain, secondOutput);
+  await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(3);
+});
+
 test("Properties keeps selected node controls in a full-height sidebar", async ({ page }) => {
   await page.goto("/route-harness.html");
   const canvasBefore = await page.locator("#signal-flow-panel").boundingBox();
