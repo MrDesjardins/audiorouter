@@ -2,7 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { App, DIAGNOSTICS_REFRESH_INTERVAL_MS, findVbCableCaptureEndpointId, findVbCableEndpointPair, formatNativePumpSummary, formatRecordingDuration, recorderHasCaptureSource, WORKSPACE_EVENT_CATEGORIES } from "./App";
+import { App, DIAGNOSTICS_REFRESH_INTERVAL_MS, deviceChoiceLabel, findVbCableCaptureEndpointId, findVbCableEndpointPair, formatNativePumpSummary, formatRecordingDuration, recorderHasCaptureSource, WORKSPACE_EVENT_CATEGORIES } from "./App";
 import { createDisconnectedBackend } from "./backend";
 import { DraftConnectionList, insertMixerActionId, removeMixerActionId } from "./DraftConnectionList";
 import { appendDraftConnection, insertDraftMixer } from "./draft";
@@ -66,6 +66,16 @@ describe("persistent client diagnostics", () => {
     await renderReady(<App backend={connectedPreviewBackend()} />);
     fireEvent.click(screen.getByRole("tab", { name: "Logs" }));
     expect(await screen.findByText(/UI error \(TypeError\) at bundle\.js:42:7/)).toBeTruthy();
+  });
+});
+
+describe("audio endpoint choices", () => {
+  it("makes stereo and 16-channel cable endpoints visibly distinct", () => {
+    const common = { state: "active" as const, direction: "render" as const, defaultRoles: [] as [], periods: { default100ns: 100000, minimum100ns: 30000 } };
+    const stereo = { ...common, id: "cable-b-stereo", name: "Cable-B Input", format: { sampleRateHz: 48000, channels: 2, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 8 } };
+    const surround = { ...common, id: "cable-b-16", name: "Cable B In 16ch", format: { sampleRateHz: 48000, channels: 16, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 64 } };
+    expect(deviceChoiceLabel(stereo)).toBe("Stereo · 2 channels · 48 kHz — Cable-B Input");
+    expect(deviceChoiceLabel(surround)).toBe("16-channel multichannel · 48 kHz — Cable B In 16ch");
   });
 });
 
@@ -392,19 +402,16 @@ describe("VB-Cable endpoint selection", () => {
     expect(screen.getByRole("button", { name: "Clear safe mode" }).hasAttribute("disabled")).toBe(true);
   });
 
-  it("offers a persisted compact route status without a duplicate Play control", async () => {
-    await renderReady(<App backend={connectedPreviewBackend()} />);
-    const toggle = await screen.findByRole("button", { name: "Show status" });
-    expect(toggle.getAttribute("aria-pressed")).toBe("false");
-    fireEvent.click(toggle);
-    expect(screen.getByRole("region", { name: "Compact route status" })).toBeTruthy();
-    expect(within(screen.getByRole("region", { name: "Compact route status" })).queryByRole("button", { name: "Start" })).toBeNull();
-    expect(within(screen.getByRole("region", { name: "Compact route status" })).getByRole("button", { name: /Mic muted|Mute mic/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Hide status" }).getAttribute("aria-pressed")).toBe("true");
-    expect(window.localStorage.getItem("audiorouter.ui.compact-status")).toBe("true");
-    fireEvent.click(screen.getByRole("button", { name: "Hide status" }));
+  it("keeps privacy mute in the top bar without rendering Route status", async () => {
+    const setPrivacyMute = vi.fn(async (muted: boolean) => ({ muted, persistence: "memory" as const, audioEffect: "process-local" as const }));
+    await renderReady(<App backend={{ ...connectedPreviewBackend(), setPrivacyMute }} />);
     expect(screen.queryByRole("region", { name: "Compact route status" })).toBeNull();
-    expect(window.localStorage.getItem("audiorouter.ui.compact-status")).toBe("false");
+    expect(screen.queryByRole("button", { name: "Show status" })).toBeNull();
+    const mute = await screen.findByRole("button", { name: "Microphone muted" });
+    expect(mute.closest("header")).toBeTruthy();
+    fireEvent.click(mute);
+    await waitFor(() => expect(setPrivacyMute).toHaveBeenCalledWith(false, expect.any(String)));
+    expect(await screen.findByRole("button", { name: "Mute microphone" })).toBeTruthy();
   });
 
   it("prevents duplicate session starts while the first start is pending", async () => {
@@ -702,7 +709,7 @@ describe("VB-Cable endpoint selection", () => {
     fireEvent.click(button);
     await waitFor(() => expect((screen.getByRole("combobox", { name: "Native capture endpoint" }) as HTMLSelectElement).value).toBe("capture-vb"));
     expect((screen.getByRole("combobox", { name: "Native render endpoint" }) as HTMLSelectElement).value).toBe("render-vb");
-    expect(screen.getByRole("option", { name: /CABLE Input.*48000 Hz.*2 ch/ })).toBeTruthy();
+    expect(screen.getAllByRole("option", { name: /Stereo · 2 channels.*48 kHz.*CABLE Input/ })).toHaveLength(2);
     expect(JSON.parse(window.localStorage.getItem("audiorouter.ui.endpoint-binding.demo-session") ?? "null")).toEqual({ captureEndpointId: "capture-vb", renderEndpointId: "render-vb" });
     expect(screen.getByText("VB-Cable pair selected. Review the graph, then prepare and start the session.")).toBeTruthy();
   });

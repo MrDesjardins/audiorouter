@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readCompactStatus, readTheme, writeCompactStatus, writeTheme } from "./preferences";
+import { readTheme, writeTheme } from "./preferences";
 
 function storage() {
   const values = new Map<string, string>();
@@ -18,16 +18,5 @@ describe("theme preferences", () => {
     expect(readTheme(state)).toBe("dark");
     state.setItem("audiorouter.ui.theme", "neon");
     expect(readTheme(state)).toBe("dark");
-  });
-});
-
-describe("compact status preference", () => {
-  it("round-trips enabled state and fails closed for missing or invalid values", () => {
-    const state = storage();
-    expect(readCompactStatus(state)).toBe(false);
-    writeCompactStatus(state, true);
-    expect(readCompactStatus(state)).toBe(true);
-    state.setItem("audiorouter.ui.compact-status", "yes");
-    expect(readCompactStatus(state)).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ApplicationInfo, Session } from "@audiorouter/contracts";
-import { addSourceToOccupiedOutput, appendApplicationCaptureNode, applicationCaptureChoices, applicationOnlyRouteSource, independentPaths, generatedOnlyRoute, needsNativePaths, unboundDeviceNodes, isParameterOnlyChange, pluginCatalog, STANDARD_PLUGIN_FOLDERS, mixerInputs, mixerRouteSources, pruneInactiveUpstream, mixerInputVolumeKey, mixedApplicationRouteOtherSources, rebindApplicationCaptureNode, appendDraftConnection, appendEndpointLoopbackNode, appendLibraryNode, appendPluginPlaceholderNode, appendVirtualBusNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, removeDraftNode, resetNodeDraftParameters, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
+import { addSourceToOccupiedOutput, appendApplicationCaptureNode, applicationCaptureChoices, applicationOnlyRouteSource, independentPaths, generatedOnlyRoute, needsNativePaths, unboundDeviceNodes, isParameterOnlyChange, pluginCatalog, STANDARD_PLUGIN_FOLDERS, mixerInputs, mixerRouteSources, pruneInactiveUpstream, mixerInputVolumeKey, mixedApplicationRouteOtherSources, rebindApplicationCaptureNode, appendDraftConnection, appendEndpointLoopbackNode, appendLibraryNode, appendPluginPlaceholderNode, appendVirtualBusNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, removeDraftNode, resetNodeDraftParameters, routeFedMixerToOccupiedOutput, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
 import { demoSession } from "./fixtures";
 import { unfedRouteNodes } from "./draft";
 
@@ -501,6 +501,32 @@ describe("independent paths", () => {
     expect(needsNativePaths(single)).toBe(false);
     const monitored: Session = { ...single, nodes: [...single.nodes, node("monitor", "physicalOutput")], edges: [...single.edges, edge("e5", "voice", "monitor")] };
     expect(needsNativePaths(monitored)).toBe(true);
+  });
+
+  it("reuses a fed Mixer when routing its source branch to an already occupied output", () => {
+    const session: Session = {
+      ...demoSession,
+      nodes: [node("siege", "physicalInput"), node("eq", "parametricEq"), node("mixer", "mixer"), node("output", "physicalOutput")],
+      edges: [edge("siege-eq", "siege", "eq"), edge("eq-output", "eq", "output"), edge("eq-mixer", "eq", "mixer")],
+    };
+    const rerouted = routeFedMixerToOccupiedOutput(session, "eq-output", "mixer", "out");
+    expect(rerouted?.edges.map(({ sourceNode, destinationNode }) => [sourceNode, destinationNode])).toEqual([
+      ["siege", "eq"],
+      ["eq", "mixer"],
+      ["mixer", "output"],
+    ]);
+    expect(rerouted?.nodes).toHaveLength(session.nodes.length);
+  });
+
+  it("does not reuse a Mixer fed by a different output port of the occupied source", () => {
+    const session: Session = {
+      ...demoSession,
+      nodes: [node("siege", "physicalInput"), node("eq", "parametricEq"), node("mixer", "mixer"), node("output", "physicalOutput")].map((item) => item.id === "eq"
+        ? { ...item, ports: [...item.ports, { name: "out-2", direction: "output" as const, channels: 2 as const }] }
+        : item),
+      edges: [edge("siege-eq", "siege", "eq"), edge("eq-output", "eq", "output"), { ...edge("eq-mixer", "eq", "mixer"), sourcePort: "out-2" }],
+    };
+    expect(routeFedMixerToOccupiedOutput(session, "eq-output", "mixer", "out")).toBeNull();
   });
 
   it("recognizes generated-only routes that need no input device", () => {

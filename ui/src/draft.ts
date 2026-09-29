@@ -798,6 +798,25 @@ export function addSourceToOccupiedOutput(
   return appendDraftConnection(mixerSession, sourceNodeId, sourcePortName, mixer.id, "in");
 }
 
+/** Reuse an existing Mixer when its input already contains the direct source
+ * currently feeding the occupied output. This turns source → output into
+ * source → Mixer → output instead of adding the same signal twice through a
+ * second nested Mixer. */
+export function routeFedMixerToOccupiedOutput(
+  session: Session,
+  occupiedEdgeId: EntityId,
+  mixerNodeId: EntityId,
+  mixerOutputPort: string,
+): Session | null {
+  const occupied = session.edges.find((edge) => edge.id === occupiedEdgeId);
+  const mixer = session.nodes.find((node) => node.id === mixerNodeId);
+  if (!occupied || mixer?.kind !== "mixer") return null;
+  const existingInput = session.edges.some((edge) => edge.destinationNode === mixerNodeId && edge.sourceNode === occupied.sourceNode && edge.sourcePort === occupied.sourcePort);
+  if (!existingInput) return null;
+  const withoutDirectBranch = removeDraftConnection(session, occupiedEdgeId);
+  return appendDraftConnection(withoutDirectBranch, mixerNodeId, mixerOutputPort, occupied.destinationNode, occupied.destinationPort);
+}
+
 /** Inserts a built-in processor directly into one draft connection. */
 export function insertDraftProcessor(
   session: Session,

@@ -19,6 +19,35 @@ track ([future plan](../future/M03-driver-signing.md)).
 
 ## Current task — Windows installer and manual release path (2026-09-28)
 
+- Completed UI follow-up (user, 2026-09-28): recurring Route status height
+  changes are resolved by removing that panel and its viewport CSS; the live
+  run status remains in the header and the immediate microphone privacy-mute
+  action is now beside Play/Stop. The desktop viewport regression opens Tools →
+  Logs and confirms there is no summary panel and the graph stays visible. If a
+  Physical Output is directly fed by a source that also feeds the requested
+  Mixer, connecting Mixer → output now removes the redundant direct edge and
+  reuses that Mixer, avoiding a duplicate signal and an unnecessary nested
+  Mixer. Endpoint choices lead with channel layout, keeping separate stereo and
+  multichannel endpoint IDs visible and understandable. Requirements:
+  UI-02/03/04 and GRAPH-01/02/03/15. Verification: typecheck and production UI
+  build passed; Vitest 377/377; focused Playwright mixer drag/reroute and
+  top-bar/Logs behavior; visual screenshots in dark, light and high-contrast
+  reviewed at [dark](evidence/2026-09-28-topbar-mute-dark.png),
+  [light](evidence/2026-09-28-topbar-mute-light.png), and
+  [high contrast](evidence/2026-09-28-topbar-mute-high-contrast.png). Docs
+  acceptance passed (69 Markdown files, 373 local links); `git diff --check`
+  passed. An isolated release build produced shell and matching plugin worker
+  under `target/mixer-topbar-20260928/release/`, with the 2026-09-28 UI bundle
+  (`index-BXkPP73A.js`, `index-DoTQAPW0.css`). SHA-256 shell
+  `E7CA6B4057DC11D021FFC807F488423F08E5D68B06DDC1530EE46FA760357652`, worker
+  `81EC4892834ADAC0ED25EB359A3FA731FCFED203F3D8714287469368E77D8F8C`.
+  The standard E2E wrapper could not acquire Cargo's standard target lock;
+  direct Playwright passed on its real-backend harness. The endpoint label
+  fixture verifies stereo vs 16-channel wording; exact local endpoint
+  identities and live audio remain attended Windows checks. Rollback is limited
+  to the header, mixer-reuse draft logic, endpoint labels, focused tests, and
+  interface wording.
+
 - Objective: implement a per-user Windows installer and manual GitHub draft
   release path, then document and qualify within available Windows evidence.
 - Current subtask (user, 2026-09-28): simplify canvas wire creation. Idle
@@ -171,10 +200,11 @@ track ([future plan](../future/M03-driver-signing.md)).
   shell `0B8F8DBBD0DA647D5100BC0B26848EE66B55AEE8569714BCB41AD32FB732BE84`;
   worker `10F669A8C20C551B32334ED3103A8C2781889BD0B09768EC38721355DE7081C9`.
   No attended shell launch or live audio validation was done.
-- Next action: after the currently running shell is closed, manually exercise
-  `target/advanced-eq-callout-20260928/release/audiorouter-shell.exe` with its
-  adjacent plugin worker; then continue M08 install testing on an isolated
-  Windows account/machine.
+- Next action: produce a matching shell/worker pair embedding the current UI in
+  a separate target directory; then manually exercise the reported EQ → Mixer
+  → Physical Output route and inspect the host's exact Cable-B endpoint IDs and
+  channel layouts. Continue M08 install testing on an isolated Windows
+  account/machine after that attended graph check.
 
 Requirement families in scope: PROD, ARCH, GRAPH, CAP, DSP, REC, PLUG, UI,
 API, AUTO, STATE, SEC (non-driver), NFR, QUAL, ENG, as mapped in

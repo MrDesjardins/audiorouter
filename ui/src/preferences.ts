@@ -3,7 +3,6 @@ import type { ShortcutBinding } from "./shortcuts";
 
 const THEME_KEY = "audiorouter.ui.theme";
 const SHORTCUT_KEY = "audiorouter.ui.shortcuts";
-const COMPACT_STATUS_KEY = "audiorouter.ui.compact-status";
 const LAST_SESSION_KEY = "audiorouter.ui.last-session";
 
 export function readLastSession(storage: Pick<Storage, "getItem"> | null): string | null {
@@ -16,14 +15,6 @@ export function readLastSession(storage: Pick<Storage, "getItem"> | null): strin
 export function writeLastSession(storage: Pick<Storage, "setItem"> | null, sessionId: string): void {
   if (!sessionId || sessionId.length > 256 || sessionId.trim() !== sessionId) return;
   try { storage?.setItem(LAST_SESSION_KEY, sessionId); } catch { /* Optional workspace preference. */ }
-}
-
-export function readCompactStatus(storage: Pick<Storage, "getItem"> | null): boolean {
-  try { return storage?.getItem(COMPACT_STATUS_KEY) === "true"; } catch { return false; }
-}
-
-export function writeCompactStatus(storage: Pick<Storage, "setItem"> | null, enabled: boolean): void {
-  try { storage?.setItem(COMPACT_STATUS_KEY, String(enabled)); } catch { /* Optional presentation preference. */ }
 }
 
 export function readTheme(storage: Pick<Storage, "getItem"> | null): ThemeMode {

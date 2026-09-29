@@ -1,6 +1,28 @@
 import { expect, test } from "@playwright/test";
 import { openConnectionForm, openDeviceTroubleshooting } from "./workbench";
 
+test("top-bar privacy mute stays visible without Route status in all themes", async ({ page }, testInfo) => {
+  await page.goto("/route-harness.html");
+  await page.setViewportSize({ width: 1280, height: 720 });
+  const mute = page.getByRole("button", { name: "Microphone muted" });
+  await expect(mute).toBeVisible();
+  await expect(mute.locator("xpath=ancestor::header")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Compact route status" })).toHaveCount(0);
+  const topBarHeight = (await page.locator(".topbar").boundingBox())?.height;
+  await page.getByRole("tab", { name: "Tools" }).click();
+  await page.getByRole("tab", { name: "Logs" }).click();
+  await expect(page.getByRole("heading", { name: "Client diagnostics" })).toBeVisible();
+  await expect(page.locator(".compact-status-panel")).toHaveCount(0);
+  expect(Math.abs((await page.locator(".topbar").boundingBox())!.height - topBarHeight!)).toBeLessThan(1);
+  await expect(page.locator(".session-flow-canvas")).toBeInViewport();
+  for (const theme of ["dark", "light", "high-contrast"]) {
+    await page.getByRole("combobox", { name: "Color theme" }).selectOption(theme);
+    await expect(page.getByRole("button", { name: "Microphone muted" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Compact route status" })).toHaveCount(0);
+    await page.locator(".topbar").screenshot({ path: testInfo.outputPath(`topbar-mute-${theme}.png`) });
+  }
+});
+
 test.beforeEach(async ({ page }) => { await page.goto("/harness.html"); await expect(page.getByLabel("Signal-flow graph")).toBeVisible(); });
 
 test("every supported source, processor, and destination can be added to the live graph UI", async ({ page }) => {
@@ -134,6 +156,63 @@ test("a second source to a physical output gets an undoable visible mixer", asyn
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.locator(".global-action-message")).toContainText("Undid the last draft change");
   await expect(page.locator(".react-flow__node").filter({ hasText: "Mixer" })).toHaveCount(0);
+});
+
+test("EQ can fan out through Mixer and that Mixer can take over the same physical output", async ({ page }) => {
+  await page.goto("/route-harness.html");
+  await page.getByRole("tab", { name: "Tools" }).click();
+  for (const label of ["Input device", "Input device", "Advanced EQ", "Mixer", "Output device"]) {
+    await page.locator(".tool-card").filter({ hasText: label }).first().click();
+  }
+  await page.addStyleTag({ content: ".canvas-library { display: none !important; }" });
+  const node = (name: string) => page.locator(".react-flow__node").filter({ hasText: name }).last();
+  const canvas = page.locator(".session-flow-canvas");
+  const canvasBox = await canvas.boundingBox();
+  if (!canvasBox) throw new Error("Signal-flow canvas is not visible");
+  const moveNode = async (target: ReturnType<typeof node>, x: number, y = .4) => {
+    const title = await target.locator(".flow-node-title").boundingBox();
+    if (!title) throw new Error("Graph node title is not positioned");
+    await page.mouse.move(title.x + title.width / 2, title.y + title.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x, canvasBox.y + canvasBox.height * y, { steps: 10 });
+    await page.mouse.up();
+  };
+  const connect = async (source: ReturnType<typeof node>, target: ReturnType<typeof node>, edgeDelta = 1) => {
+    const output = source.locator('.react-flow__handle.source[data-debug-side="right"]');
+    const input = target.locator('.react-flow__handle.target[data-debug-side="left"]');
+    const before = await page.locator(".react-flow__edges .react-flow__edge").count();
+    const inputBox = await input.boundingBox();
+    const outputBox = await output.boundingBox();
+    if (!inputBox || !outputBox) throw new Error("Connection handles are not positioned");
+    const start = { x: inputBox.x + inputBox.width / 2, y: inputBox.y + inputBox.height / 2 };
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(start.x - 12, start.y, { steps: 2 });
+    await expect(canvas).toHaveAttribute("data-connection-mode", "from-input");
+    await page.mouse.move(outputBox.x + outputBox.width / 2, outputBox.y + outputBox.height / 2, { steps: 12 });
+    await page.mouse.up();
+    await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(before + edgeDelta, { timeout: 2000 });
+  };
+  const source = node("Physical input 1");
+  const secondSource = node("Physical input 2");
+  const eq = node("Advanced EQ 1");
+  const mixer = node("Mixer 1");
+  const output = node("Physical output 1");
+  await moveNode(source, canvasBox.x + 80, .2);
+  await moveNode(secondSource, canvasBox.x + 80, .75);
+  await moveNode(eq, canvasBox.x + 330, .75);
+  await moveNode(mixer, canvasBox.x + 580, .35);
+  await moveNode(output, canvasBox.x + 750, .75);
+  await connect(source, mixer);
+  await connect(secondSource, eq);
+  await connect(eq, output);
+  await connect(eq, mixer);
+  await connect(mixer, output, 0);
+
+  await expect(page.locator(".global-action-message")).toContainText("removed the direct Advanced EQ 1 branch so the same signal is not heard twice");
+  await expect(page.locator(".react-flow__node").filter({ hasText: "Mixer 2" })).toHaveCount(0);
+  await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(4);
+  await expect(mixer.getByLabel("Mixer sums 2 connected inputs")).toBeVisible();
 });
 
 test("Properties keeps selected node controls in a full-height sidebar", async ({ page }) => {
@@ -541,68 +620,6 @@ test("workspace and recording tab fit desktop viewports without page scrolling",
   await page.screenshot({ path: `${process.env.TEMP}/audiorouter-designer-review/recording-tab-current.png` });
 });
 
-test("compact status keeps the route guide and primary actions readable on a short desktop window", async ({ page }) => {
-  await page.goto("/");
-  await page.setViewportSize({ width: 1280, height: 720 });
-  await page.getByRole("button", { name: "Show status" }).click();
-  await page.waitForTimeout(300);
-  const status = page.getByLabel("Compact route status");
-  await expect(status).toBeVisible();
-  await expect(status.getByText("What happens next")).toBeVisible();
-  await expect(page.locator(".compact-status-guide")).not.toHaveAttribute("open", "");
-  await expect(status.getByRole("button", { name: "Start" })).toHaveCount(0);
-  const geometry = await page.evaluate(() => ({
-    viewport: [innerWidth, innerHeight],
-    document: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
-    status: document.querySelector(".compact-status-panel")?.getBoundingClientRect().toJSON(),
-    guide: document.querySelector(".compact-status-guide")?.getBoundingClientRect().toJSON(),
-    actions: document.querySelector(".compact-status-actions")?.getBoundingClientRect().toJSON(),
-    canvasPanel: document.querySelector("#signal-flow-panel")?.getBoundingClientRect().toJSON(),
-    canvas: document.querySelector(".session-flow-canvas")?.getBoundingClientRect().toJSON(),
-    workbench: document.querySelector(".right-workbench")?.getBoundingClientRect().toJSON(),
-  }));
-  console.log("COMPACT_STATUS_GEOMETRY", JSON.stringify(geometry));
-  const initialStatusHeight = geometry.status!.height;
-  const containment = await page.evaluate(() => {
-    const panel = document.querySelector("#signal-flow-panel")!.getBoundingClientRect();
-    const canvas = document.querySelector(".session-flow-canvas")!.getBoundingClientRect();
-    return { top: canvas.top >= panel.top, bottom: canvas.bottom <= panel.bottom + 1 };
-  });
-  expect(containment, "graph viewport should stay inside its panel").toEqual({ top: true, bottom: true });
-  const nodesInsideViewport = await page.evaluate(() => {
-    const viewport = document.querySelector(".session-flow-canvas")!.getBoundingClientRect();
-    const nodes = [...document.querySelectorAll<HTMLElement>(".react-flow__node")];
-    return nodes.length > 0 && nodes.every((node) => {
-      const bounds = node.getBoundingClientRect();
-      return bounds.left >= viewport.left && bounds.right <= viewport.right && bounds.top >= viewport.top && bounds.bottom <= viewport.bottom;
-    });
-  });
-  expect(nodesInsideViewport, "all graph nodes should be visible after compact status resizes the canvas").toBe(true);
-  await page.screenshot({ path: `${process.env.TEMP}/audiorouter-designer-review/workspace-status-1280x720.png`, fullPage: false });
-  await page.getByRole("tab", { name: "Properties" }).click();
-  await expect(page.locator(".main-content > .inspector")).toBeVisible();
-  const propertiesGeometry = await page.evaluate(() => ({
-    canvasPanel: document.querySelector("#signal-flow-panel")!.getBoundingClientRect().toJSON(),
-    workbench: document.querySelector(".right-workbench")!.getBoundingClientRect().toJSON(),
-  }));
-  expect(Math.abs(propertiesGeometry.canvasPanel.height - geometry.canvasPanel!.height)).toBeLessThan(3);
-  expect(Math.abs(propertiesGeometry.workbench.height - geometry.workbench!.height)).toBeLessThan(3);
-  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(720);
-  await page.screenshot({ path: `${process.env.TEMP}/audiorouter-designer-review/workspace-status-properties-1280x720.png`, fullPage: false });
-  await page.getByRole("tab", { name: "Tools" }).click();
-  await page.getByRole("tab", { name: "Logs" }).click();
-  await expect(page.getByRole("heading", { name: "Client diagnostics" })).toBeVisible();
-  await expect(page.locator(".compact-status-guide")).not.toHaveAttribute("open", "");
-  const statusHeightAfterLogs = await page.locator(".compact-status-panel").evaluate((element) => element.getBoundingClientRect().height);
-  expect(Math.abs(statusHeightAfterLogs - initialStatusHeight), "opening Logs must not resize collapsed route status").toBeLessThan(3);
-  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(720);
-  for (const theme of ["dark", "light", "high-contrast"]) {
-    await page.getByLabel("Color theme").selectOption(theme);
-    await expect(page.locator(".compact-status-panel")).toBeVisible();
-    await page.screenshot({ path: `${process.env.TEMP}/audiorouter-designer-review/route-status-${theme}-1280x720.png`, fullPage: false });
-  }
-});
-
 test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reachable", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator(".topbar h1")).toBeVisible();
@@ -620,19 +637,13 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
   const shotBase = `${process.env.TEMP}/audiorouter-designer-review`;
   await page.screenshot({ path: `${shotBase}/workspace-session.png`, fullPage: false });
-  await page.getByRole("button", { name: "Show status" }).click();
-  await expect(page.getByLabel("Compact route status")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Microphone muted" })).toBeVisible();
+  await expect(page.locator(".compact-status-panel")).toHaveCount(0);
   await expect(page.getByRole("tab", { name: "Session" })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByText("What happens next")).toBeVisible();
-  const statusActions = await page.locator(".compact-status-actions").boundingBox();
-  const statusGuide = await page.locator(".compact-status-guide").boundingBox();
-  expect(statusActions && statusGuide && statusActions.x + statusActions.width).toBeLessThanOrEqual(statusGuide!.x + 1);
   const legacyFullWorkspacePanels = page.locator(".main-content > .panel:not(.inspector):not(.canvas-panel)");
   const allLegacyPanelsHidden = await legacyFullWorkspacePanels.evaluateAll((panels) => panels.every((panel) => getComputedStyle(panel).display === "none"));
   expect(allLegacyPanelsHidden).toBe(true);
   await expect(page.locator(".right-workbench")).toBeVisible();
-  await page.screenshot({ path: `${shotBase}/workspace-status.png`, fullPage: true });
-  await page.getByRole("button", { name: "Hide status" }).click();
   await page.getByRole("tab", { name: "Tools" }).click();
   await page.locator(".react-flow__node").nth(1).click();
   await page.getByRole("tab", { name: "Properties" }).click();
