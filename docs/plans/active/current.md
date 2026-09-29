@@ -57,6 +57,25 @@ track ([future plan](../future/M03-driver-signing.md)).
   regression to prove draft preservation and latest revision refresh.
   Requirement: STATE-03 / UI-03. Rollback: revert conflict presentation/refresh
   changes and their focused coverage.
+- Current UI slice (user, 2026-09-28): make the Advanced EQ chart's useful
+  range easier to read. Complete: chart axis/drag span is ±12 dB, precise
+  controls retain ±24 dB; numbered circles move to non-overlapping gutters and
+  point to exact band positions with leader lines and small dots. Coverage:
+  clustered 16-band layout and axis/markers (AdvancedEqEditor tests), plus
+  real-backend UI checks and screenshots for dark, light and high contrast.
+  Evidence: all 375 UI tests pass; AdvancedEqEditor tests 7/7; typecheck passes;
+  the Advanced EQ drag-range browser regression and filter/callout checks pass
+  in dark, light and high contrast. Screenshots:
+  [dark](evidence/2026-09-28-advanced-eq-dark.png),
+  [light](evidence/2026-09-28-advanced-eq-light.png),
+  [high contrast](evidence/2026-09-28-advanced-eq-high-contrast.png). Release
+  shell build at `target/advanced-eq-callout-20260928/release/` embeds
+  `index-ClMVy-ZD.js` / `index-Ce_DktWe.css`; matching worker is adjacent.
+  SHA-256 shell `455E0098A2FB31EDAD826E2C5569FDACC2B8EBBFD6297552FF295832888E873E`,
+  worker `A8ED473893705ABD3C9AD2F6C31C03898181931750EF46F95180F193E4F9143B`.
+  Requirements: DSP-02 / UI-05; M04/M05. No DSP, API, saved-value or audio-path
+  change. Rollback: revert the Advanced EQ chart scale/callouts and focused
+  tests/spec note.
 - Requirements: PROD-01/03/04/06/07, SEC-09/11, ENG-04/05, and new DIST-01–08
   in [delivery traceability](../../spec/15-delivery.md). User direction on
   2026-09-28 promotes installer/release work into M08. DEC-16 still excludes
@@ -152,8 +171,10 @@ track ([future plan](../future/M03-driver-signing.md)).
   shell `0B8F8DBBD0DA647D5100BC0B26848EE66B55AEE8569714BCB41AD32FB732BE84`;
   worker `10F669A8C20C551B32334ED3103A8C2781889BD0B09768EC38721355DE7081C9`.
   No attended shell launch or live audio validation was done.
-- Next action: manually exercise the fresh shell/worker pair, then continue M08
-  install testing on an isolated Windows account/machine.
+- Next action: after the currently running shell is closed, manually exercise
+  `target/advanced-eq-callout-20260928/release/audiorouter-shell.exe` with its
+  adjacent plugin worker; then continue M08 install testing on an isolated
+  Windows account/machine.
 
 Requirement families in scope: PROD, ARCH, GRAPH, CAP, DSP, REC, PLUG, UI,
 API, AUTO, STATE, SEC (non-driver), NFR, QUAL, ENG, as mapped in
@@ -172,7 +193,7 @@ evidence is missing. Nothing here is a release claim: M08 is not done.
 | [M02](../../milestones/M02-audio-engine.md) audio engine | Realtime graph, capture/render adapters, multi-input/many-output paths, backend audio service, Network Send/Receive (GRAPH-16) | Guarded routes ([M02](evidence/M02-audio-engine.md)); **continuity 0 glitches for 30–60 s on four route shapes** ([audio continuity](evidence/2026-09-26-audio-continuity.md)); NFR-02 p95 ≈97–115 ms (≤160 ms, DEC-15) | Clock-drift correction between independent devices; endurance/soak |
 | [M03](../../milestones/M03-virtual-routing.md) virtual routing | Exact endpoint identity, VB-Cable/Voicemeeter routes, rebind | [M03](evidence/M03-virtual-routing.md) | Owned virtual devices (out of scope) |
 | [M04](../../milestones/M04-effects-recording.md) effects/recording | 17 built-in processors incl. pitch; recorder (WAV/FLAC/MP3), library | Synthetic DSP vectors; [feature confidence](evidence/2026-09-26-feature-confidence.md); [voice/tool behavior](evidence/2026-09-27-voice-tools.md) | Attended/long-duration recording on real devices |
-| [M05](../../milestones/M05-visual-editor.md) visual editor | Canvas, Properties/Tools, live flags, timing, three themes | 92 browser E2E + 370 UI unit tests; Edge visual review | Attended Narrator, 200 % scaling, first-run, live drag/drop; UI-15 attended edge activity |
+| [M05](../../milestones/M05-visual-editor.md) visual editor | Canvas, Properties/Tools, live flags, timing, three themes | 92 browser E2E + 375 UI unit tests; Edge visual review | Attended Narrator, 200 % scaling, first-run, live drag/drop; UI-15 attended edge activity |
 | [M06](../../milestones/M06-plugins-pitch.md) plugins/pitch | VST3 worker, x64 VST2 worker, shared adjacent-VST2 chain, editors, saved state | ReaPlugs chain live ([shared chain](evidence/2026-09-26-shared-vst2-chain.md)); 60 s glitch-free with the user's saved ReaPlugs nodes | Rights/sandbox review, multi-vendor matrix |
 | [M07](../../milestones/M07-automation-recovery.md) automation/recovery | MCP, persistence, crash journal, safe mode, sign-in helper | [M07](evidence/M07-automation-recovery.md), [OS transitions](evidence/M07-os-transitions.md) | OS power/session delivery and native reopen (attended) |
 | [M08](../../milestones/M08-release.md) release | Unsigned artifact preparation | [M08](evidence/M08-release.md) | Clean-checkout release run and CAP-13/GRAPH-15 evidence; installer and clean-machine gates are excluded from v1 by DEC-16; driver signing is excluded, app/installer signing is undecided |

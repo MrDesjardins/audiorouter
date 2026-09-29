@@ -287,6 +287,18 @@ test("Advanced EQ edits filter points in properties", async ({ page }) => {
   await page.mouse.move(centerX + 36, centerY, { steps: 5 });
   await page.mouse.up();
   await expect(editor.getByLabel("EQ frequency Hz")).not.toHaveValue("120");
+  await editor.getByLabel("EQ filter type").selectOption("peaking");
+  const graph = await editor.locator(".advanced-eq-graph").boundingBox();
+  if (!graph) throw new Error("EQ graph is not visible for vertical drag qualification");
+  const movedAnchor = await point.boundingBox();
+  if (!movedAnchor) throw new Error("EQ point anchor is not visible after dragging");
+  const anchorX = movedAnchor.x + movedAnchor.width / 2;
+  const anchorY = movedAnchor.y + movedAnchor.height / 2;
+  await page.mouse.move(anchorX, anchorY);
+  await page.mouse.down();
+  await page.mouse.move(anchorX, graph.y + graph.height * (190 / 248), { steps: 8 });
+  await page.mouse.up();
+  await expect(editor.getByLabel("EQ gain dB")).toHaveValue("-12");
   await editor.getByRole("button", { name: "Remove point" }).click();
   await expect(editor.getByText("0 of 16 points active")).toBeVisible();
 });

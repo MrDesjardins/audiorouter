@@ -5,11 +5,16 @@ import { NumberField } from "./NumberField";
 
 const BAND_COUNT = 16;
 const WIDTH = 380;
-const HEIGHT = 220;
+const HEIGHT = 248;
 const LEFT = 34;
 const RIGHT = 366;
 const TOP = 16;
 const BOTTOM = 190;
+const DB_MIN = -12;
+const DB_MAX = 12;
+const CALLOUT_LANES = [8, 27, 198, 217] as const;
+const CALLOUT_RADIUS = 9;
+const CALLOUT_GAP = CALLOUT_RADIUS * 2;
 const COLORS = ["#52c7f7", "#a878f9", "#72a0ff", "#ff79b1", "#ff9c6b", "#ffd166", "#66dfc4", "#b3e676"];
 const TICKS = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
 const RESPONSE_FREQUENCIES = Array.from({ length: 96 }, (_, index) => 20 * Math.pow(1000, index / 95));
@@ -24,8 +29,36 @@ type Band = { index: number; enabled: boolean; type: FilterType; frequencyHz: nu
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
 const xForHz = (frequency: number) => LEFT + (Math.log10(clamp(frequency, 20, 20000) / 20) / 3) * (RIGHT - LEFT);
 const hzForX = (x: number) => Math.round(20 * Math.pow(1000, clamp((x - LEFT) / (RIGHT - LEFT), 0, 1)));
-const yForDb = (gain: number) => TOP + ((24 - clamp(gain, -24, 24)) / 48) * (BOTTOM - TOP);
-const dbForY = (y: number) => Math.round((24 - clamp((y - TOP) / (BOTTOM - TOP), 0, 1) * 48) * 10) / 10;
+const yForDb = (gain: number) => TOP + ((DB_MAX - clamp(gain, DB_MIN, DB_MAX)) / (DB_MAX - DB_MIN)) * (BOTTOM - TOP);
+const dbForY = (y: number) => Math.round((DB_MAX - clamp((y - TOP) / (BOTTOM - TOP), 0, 1) * (DB_MAX - DB_MIN)) * 10) / 10;
+
+type LabelPoint = { index: number; x: number; y: number };
+type PointCallout = LabelPoint & { labelX: number; labelY: number };
+
+/** Place numbered labels in the chart gutters while keeping leaders short and labels apart. */
+export function layoutPointCallouts(points: LabelPoint[]): PointCallout[] {
+  const placed: PointCallout[] = [];
+  const loads = CALLOUT_LANES.map(() => 0);
+  const offsets = [0, ...Array.from({ length: 18 }, (_, index) => (index % 2 === 0 ? 1 : -1) * (Math.floor(index / 2) + 1) * CALLOUT_GAP)];
+  for (const point of [...points].sort((a, b) => a.x - b.x || a.index - b.index)) {
+    const pointAboveCenter = point.y < (TOP + BOTTOM) / 2;
+    let best: { labelX: number; labelY: number; score: number; lane: number } | undefined;
+    CALLOUT_LANES.forEach((labelY, lane) => {
+      for (const offset of offsets) {
+        const labelX = clamp(point.x + offset, LEFT + CALLOUT_RADIUS, RIGHT - CALLOUT_RADIUS);
+        if (placed.some((other) => Math.hypot(other.labelX - labelX, other.labelY - labelY) < CALLOUT_GAP)) continue;
+        const oppositeSide = pointAboveCenter ? lane >= 2 : lane < 2;
+        const score = Math.hypot(point.x - labelX, point.y - labelY) + loads[lane] * 2 + (oppositeSide ? 24 : 0);
+        if (!best || score < best.score) best = { labelX, labelY, score, lane };
+      }
+    });
+    if (best) {
+      placed.push({ ...point, labelX: best.labelX, labelY: best.labelY });
+      loads[best.lane] += 1;
+    }
+  }
+  return placed;
+}
 
 function readBands(node: Node): Band[] {
   return Array.from({ length: BAND_COUNT }, (_, index) => {
@@ -105,21 +138,29 @@ export function AdvancedEqEditor({ node, backend, connected, onChange }: {
     setDrag(null);
   };
   const curve = response?.frequenciesHz.map((frequency, index) => `${xForHz(frequency).toFixed(1)},${yForDb(response.magnitudeDb[index] ?? 0).toFixed(1)}`).join(" ");
+  const visiblePoints = bands.filter((band) => band.enabled).map((band) => {
+    const moved = drag?.index === band.index ? drag : band;
+    return { band, x: xForHz(moved.frequencyHz), y: yForDb(band.type === "peaking" || band.type === "lowShelf" || band.type === "highShelf" ? moved.gainDb : 0) };
+  });
+  const callouts = new Map(layoutPointCallouts(visiblePoints.map(({ band, x, y }) => ({ index: band.index, x, y }))).map((point) => [point.index, point]));
 
   return <section className="advanced-eq" aria-label="Advanced EQ editor">
     <div className="advanced-eq-heading"><div><strong>Frequency response</strong><small>{enabledCount} of {BAND_COUNT} points active</small></div><button type="button" className="secondary" onClick={() => addPoint()} disabled={!connected || enabledCount === BAND_COUNT}>Add point</button></div>
-    <p className="muted">Choose a point below to edit it without moving it. Drag to change frequency and applicable gain. Double-click the graph to add a Peaking/Band point.</p>
+    <p className="muted">Choose a point below to edit it without moving it. Drag to change frequency and applicable gain. The chart shows ±12 dB; precise gain controls retain the full ±24 dB range. Double-click the graph to add a Peaking/Band point.</p>
     <svg ref={svgRef} className="advanced-eq-graph" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label="EQ frequency response and movable filter points" onPointerMove={movePoint} onPointerUp={finishDrag} onPointerCancel={finishDrag} onDoubleClick={(event) => { if (!connected || (event.target as Element).closest(".advanced-eq-point")) return; const { x, y } = pointerCoordinates(event); addPoint(hzForX(x), dbForY(y)); }}>
       <rect x={LEFT} y={TOP} width={RIGHT - LEFT} height={BOTTOM - TOP} className="advanced-eq-plot" />
-      {[-24, -12, 0, 12, 24].map((db) => <g key={db}><line x1={LEFT} x2={RIGHT} y1={yForDb(db)} y2={yForDb(db)} className={db === 0 ? "advanced-eq-zero" : "advanced-eq-grid"} /><text x={LEFT - 5} y={yForDb(db) + 3} textAnchor="end" className="advanced-eq-axis">{db > 0 ? `+${db}` : db}</text></g>)}
+      {[-12, -6, 0, 6, 12].map((db) => <g key={db}><line x1={LEFT} x2={RIGHT} y1={yForDb(db)} y2={yForDb(db)} className={db === 0 ? "advanced-eq-zero" : "advanced-eq-grid"} /><text x={LEFT - 5} y={yForDb(db) + 3} textAnchor="end" className="advanced-eq-axis">{db > 0 ? `+${db}` : db}</text></g>)}
       {TICKS.map((frequency) => <g key={frequency}><line x1={xForHz(frequency)} x2={xForHz(frequency)} y1={TOP} y2={BOTTOM} className="advanced-eq-grid" /><text x={xForHz(frequency)} y={HEIGHT - 12} textAnchor="middle" className="advanced-eq-axis">{frequency >= 1000 ? `${frequency / 1000}k` : frequency}</text></g>)}
       {curve && <polyline points={curve} className="advanced-eq-curve" />}
-      {bands.filter((band) => band.enabled).map((band) => {
-        const moved = drag?.index === band.index ? drag : band;
-        const y = yForDb(band.type === "peaking" || band.type === "lowShelf" || band.type === "highShelf" ? moved.gainDb : 0);
-        return <g key={band.index} className="advanced-eq-point" onPointerDown={(event) => { if (!connected) return; event.stopPropagation(); setSelectedIndex(band.index); setDrag({ index: band.index, frequencyHz: band.frequencyHz, gainDb: band.gainDb, moved: false, startX: event.clientX, startY: event.clientY }); svgRef.current?.setPointerCapture(event.pointerId); }}>
-          <circle cx={xForHz(moved.frequencyHz)} cy={y} r={selectedIndex === band.index ? 10 : 8} fill={COLORS[band.index % COLORS.length]} stroke={selectedIndex === band.index ? "#fff" : "#17222e"} strokeWidth={selectedIndex === band.index ? 2.5 : 2} />
-          <text x={xForHz(moved.frequencyHz)} y={y + 3} textAnchor="middle" className="advanced-eq-point-label">{band.index + 1}</text>
+      {visiblePoints.map(({ band, x, y }) => {
+        const callout = callouts.get(band.index);
+        if (!callout) return null;
+        return <g key={band.index} className="advanced-eq-point" aria-label={`Point ${band.index + 1}`} onPointerDown={(event) => { if (!connected) return; event.stopPropagation(); setSelectedIndex(band.index); setDrag({ index: band.index, frequencyHz: band.frequencyHz, gainDb: band.gainDb, moved: false, startX: event.clientX, startY: event.clientY }); svgRef.current?.setPointerCapture(event.pointerId); }}>
+          <line x1={x} y1={y} x2={callout.labelX} y2={callout.labelY} className="advanced-eq-leader" />
+          <circle cx={x} cy={y} r={10} className="advanced-eq-point-hit-target" />
+          <circle cx={x} cy={y} r={3} fill={COLORS[band.index % COLORS.length]} className="advanced-eq-anchor" />
+          <circle cx={callout.labelX} cy={callout.labelY} r={selectedIndex === band.index ? 9 : 8} fill={COLORS[band.index % COLORS.length]} stroke={selectedIndex === band.index ? "#fff" : "#17222e"} strokeWidth={selectedIndex === band.index ? 2.5 : 2} className="advanced-eq-label-circle" />
+          <text x={callout.labelX} y={callout.labelY + 3} textAnchor="middle" className="advanced-eq-point-label">{band.index + 1}</text>
         </g>;
       })}
     </svg>
