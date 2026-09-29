@@ -537,6 +537,11 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
    target rather than a dead one). Still clearly subtler than the
    hover/active states above. */
 .session-flow-canvas .react-flow__handle:not(.connectionindicator) { opacity: .42; box-shadow: none; }
+/* Keep connection choices directional: input handles are the idle affordance;
+   the opposite endpoint type appears only after a drag begins. */
+.session-flow-canvas[data-connection-mode="idle"] .react-flow__handle[data-debug-direction="source"] { opacity: 0; pointer-events: none; }
+.session-flow-canvas[data-connection-mode="from-input"] .react-flow__handle[data-debug-direction="target"] { opacity: 0; pointer-events: none; }
+.session-flow-canvas[data-connection-mode="from-output"] .react-flow__handle[data-debug-direction="source"] { opacity: 0; pointer-events: none; }
 .node-meter { display: grid; grid-template-columns: 24px 1fr; align-items: end; gap: .55rem; min-height: 48px; padding: .4rem .5rem; border: 1px solid var(--node-well-border); border-radius: 7px; background: var(--node-well); }
 .node-meter-track { position: relative; height: 42px; overflow: hidden; border-radius: 4px; background: linear-gradient(to top, #2d9e78 0 66%, #e9bf52 67% 84%, #d65d58 85%); }
 .node-meter-track::after { position: absolute; inset: 0; content: ""; background: repeating-linear-gradient(to top, transparent 0 7px, rgb(12 18 20 / 50%) 8px); }

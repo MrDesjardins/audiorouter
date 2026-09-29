@@ -27,15 +27,16 @@ test("a complex multi-source processing set preserves node types and supports mo
   await expect(addedMute.getByRole("button", { name: /muted, click to unmute/i })).toHaveAttribute("aria-pressed", "true");
 });
 
-test("a source can be connected to a destination by dragging output to input", async ({ page }) => {
+test("idle shows inputs, then input-start dragging shows outputs and creates the canonical edge", async ({ page }, testInfo) => {
   for (const label of ["Test Signal", "Output device"]) await page.locator(".canvas-library").getByRole("button", { name: label, exact: true }).click();
   await page.addStyleTag({ content: ".canvas-library { display: none !important; }" });
   const sourceNode = page.locator(".react-flow__node").filter({ hasText: "Test Signal" }).last();
   const targetNode = page.locator(".react-flow__node").filter({ hasText: "Physical output" }).last();
-  const canvas = await page.locator(".session-flow-canvas").boundingBox();
+  const canvasElement = page.locator(".session-flow-canvas");
+  const canvas = await canvasElement.boundingBox();
   if (!canvas) throw new Error("Signal-flow canvas is not visible");
-  const moveNode = async (target: typeof sourceNode, x: number, y: number) => {
-    const box = await target.locator(".flow-node-title").boundingBox();
+  const moveNode = async (node: typeof sourceNode, x: number, y: number) => {
+    const box = await node.locator(".flow-node-title").boundingBox();
     if (!box) throw new Error("Graph node is not visible");
     await page.mouse.move(box.x + Math.min(box.width / 2, 80), box.y + box.height / 2);
     await page.mouse.down();
@@ -47,10 +48,51 @@ test("a source can be connected to a destination by dragging output to input", a
   await moveNode(page.locator(".react-flow__node").filter({ hasText: "Headphones" }).first(), canvas.x + canvas.width - 140, canvas.y + 130);
   await moveNode(sourceNode, canvas.x + 200, canvas.y + canvas.height * .72);
   await moveNode(targetNode, canvas.x + canvas.width - 200, canvas.y + canvas.height * .72);
-  await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(2);
+
+  const input = targetNode.locator('.react-flow__handle.target[data-debug-direction="target"][data-debug-side="left"]');
+  const output = sourceNode.locator('.react-flow__handle.source[data-debug-direction="source"][data-debug-side="right"]');
+  const allInputs = page.locator('.session-flow-canvas .react-flow__handle[data-debug-direction="target"]');
+  const allOutputs = page.locator('.session-flow-canvas .react-flow__handle[data-debug-direction="source"]');
+  const inputBox = await input.boundingBox();
+  const outputBox = await output.boundingBox();
+  const sourceNodeId = await sourceNode.getAttribute("data-id");
+  const targetNodeId = await targetNode.getAttribute("data-id");
+  if (!inputBox || !outputBox) throw new Error("Input/output handles are not positioned");
+  if (!sourceNodeId || !targetNodeId) throw new Error("Graph node identities are missing");
+  await expect(canvasElement).toHaveAttribute("data-connection-mode", "idle");
+  await expect(output).toHaveCSS("opacity", "0");
+  await expect(input).not.toHaveCSS("opacity", "0");
+  for (const theme of ["dark", "light", "high-contrast"]) {
+    await page.evaluate((value) => { document.body.className = value === "dark" ? "" : `theme-${value}`; }, theme);
+    for (let index = 0; index < await allOutputs.count(); index += 1) await expect(allOutputs.nth(index)).toHaveCSS("opacity", "0");
+    for (let index = 0; index < await allInputs.count(); index += 1) await expect(allInputs.nth(index)).not.toHaveCSS("opacity", "0");
+    await page.screenshot({ path: testInfo.outputPath(`connectors-${theme}-idle.png`) });
+  }
+  await page.evaluate(() => { document.body.className = ""; });
+
   const before = await page.locator(".react-flow__edges .react-flow__edge").count();
-  await sourceNode.locator('.react-flow__handle.source[data-debug-side="right"]').dragTo(targetNode.locator('.react-flow__handle.target[data-debug-side="left"]'));
+  await page.mouse.move(inputBox.x + inputBox.width / 2, inputBox.y + inputBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(inputBox.x + inputBox.width / 2 - 12, inputBox.y + inputBox.height / 2, { steps: 2 });
+  await expect(canvasElement).toHaveAttribute("data-connection-mode", "from-input");
+  for (const theme of ["dark", "light", "high-contrast"]) {
+    await page.evaluate((value) => { document.body.className = value === "dark" ? "" : `theme-${value}`; }, theme);
+    for (let index = 0; index < await allInputs.count(); index += 1) await expect(allInputs.nth(index)).toHaveCSS("opacity", "0");
+    for (let index = 0; index < await allOutputs.count(); index += 1) await expect(allOutputs.nth(index)).not.toHaveCSS("opacity", "0");
+    await page.screenshot({ path: testInfo.outputPath(`connectors-${theme}-from-input.png`) });
+  }
+  await page.evaluate(() => { document.body.className = ""; });
+  const onConnectLog = page.waitForEvent("console", { predicate: (message) => message.text().includes("[Harness] onConnect") });
+  await page.mouse.move(outputBox.x + outputBox.width / 2, outputBox.y + outputBox.height / 2, { steps: 12 });
+  await page.mouse.up();
+
   await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(before + 1, { timeout: 3000 });
+  const connectionLog = await onConnectLog;
+  const connection = await connectionLog.args()[1]?.jsonValue() as { source?: string; target?: string } | undefined;
+  expect(connection).toMatchObject({ source: sourceNodeId, target: targetNodeId });
+  await expect(canvasElement).toHaveAttribute("data-connection-mode", "idle");
+  await expect(output).toHaveCSS("opacity", "0");
+  await expect(input).not.toHaveCSS("opacity", "0");
 });
 
 test("a second source to a physical output gets an undoable visible mixer", async ({ page }) => {
@@ -103,7 +145,7 @@ test("a complex multi-source set can be added and its mute control responds", as
     const inputs = target.locator('.react-flow__handle.target[data-debug-side="left"]');
     const count = await inputs.count();
     const before = await page.locator(".react-flow__edges .react-flow__edge").count();
-    await outputs.last().dragTo(inputs.nth(Math.min(inputIndex, count - 1)));
+    await inputs.nth(Math.min(inputIndex, count - 1)).dragTo(outputs.last());
     await expect(page.locator(".react-flow__edges .react-flow__edge"), `${await source.innerText()} → ${await target.innerText()}`).toHaveCount(before + 1, { timeout: 1500 });
   };
   const moveNode = async (target: ReturnType<typeof node>, x: number, y: number) => {

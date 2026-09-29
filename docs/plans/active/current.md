@@ -21,6 +21,12 @@ track ([future plan](../future/M03-driver-signing.md)).
 
 - Objective: implement a per-user Windows installer and manual GitHub draft
   release path, then document and qualify within available Windows evidence.
+- Current subtask (user, 2026-09-28): simplify canvas wire creation. Idle
+  canvas shows input handles only; once a drag starts at an input, show output
+  handles only. Preserve canonical output-to-input graph edges, keep the
+  keyboard connection form, and reset handle visibility when the gesture ends.
+  Requirement: UI-03 / M05. Rollback is limited to canvas handle state/styles
+  and their focused UI tests.
 - Requirements: PROD-01/03/04/06/07, SEC-09/11, ENG-04/05, and new DIST-01–08
   in [delivery traceability](../../spec/15-delivery.md). User direction on
   2026-09-28 promotes installer/release work into M08. DEC-16 still excludes
@@ -55,17 +61,27 @@ track ([future plan](../future/M03-driver-signing.md)).
   tests (locked, Windows audio adapter excluded), packaged-worker resource-path
   test, artifact preparation/verifier tests, docs acceptance (69 files/364
   links), and unsigned x64 NSIS smoke passed. The bundle is build evidence only.
+- UI-03 handle interaction: the canvas defaults to inputs only, reveals outputs
+  while an input-start drag is active, accepts that reverse gesture, normalizes
+  the saved connection to output-to-input, and restores idle state after
+  completion. Playwright checks every handle in dark, light and high-contrast
+  modes and captures six screenshots for review.
+- UI verification: `npm.cmd run typecheck` passed; Vitest passed (31 files,
+  372 tests); Playwright passed the connector direction/theme scenario and the
+  multi-source workflow. A follow-up `npm.cmd run build` was blocked while
+  Vite tried to remove the existing `ui/dist/assets/index-C4G0bSnz.js`
+  (`EPERM`, Windows file lock); no packaged-shell build was performed.
 - Formatting: `cargo fmt --all -- --check` reports pre-existing workspace
   formatting differences across unrelated crates; this change's added helper
   and test were aligned with rustfmt. The manual release workflow could not be
   parsed with a YAML tool because no parser is installed; inspected structurally.
 - Limitations: no standard-user install/upgrade/uninstall, clean-machine,
   missing-WebView2, reputation prompt, or live endpoint qualification yet.
-- Visual review: Computer Use has no available browser or app surface in this
-  session, so dark/light/high-contrast screenshot review remains open.
-- Next action: inspect the final diff, commit/push the implementation, then
-  continue M08 install testing on an isolated Windows account/machine before
-  publishing any release.
+- Visual review: the canvas harness screenshots were reviewed in dark, light
+  and high-contrast modes. Attended packaged-shell acceptance remains open.
+- Next action: commit/push this UI-03 change, then retry the UI build after the
+  dist asset lock is released; continue M08 install testing on an isolated
+  Windows account/machine.
 
 Requirement families in scope: PROD, ARCH, GRAPH, CAP, DSP, REC, PLUG, UI,
 API, AUTO, STATE, SEC (non-driver), NFR, QUAL, ENG, as mapped in
