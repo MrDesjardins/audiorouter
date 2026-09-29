@@ -69,6 +69,27 @@ describe("persistent client diagnostics", () => {
   });
 });
 
+describe("graph revision conflicts", () => {
+  it("keeps the unsaved draft and explains that the user must review and plan again", async () => {
+    const conflict = new AudioRouterRpcError({
+      code: -32010,
+      message: "Store(RevisionConflict { expected: 112, actual: 113 })",
+      data: { code: "revisionConflict", fieldPath: null, resourceIds: [demoSession.id], retryable: true, remediation: "read the latest session revision and create a new plan" },
+    });
+    const backend = { ...connectedPreviewBackend(), planGraph: vi.fn(async () => { throw conflict; }) };
+    await renderReady(<App backend={backend} />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Session name" }), { target: { value: "My preserved draft" } });
+    fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("Another save changed this route, so your save was not applied.");
+    expect((screen.getByRole("textbox", { name: "Session name" }) as HTMLInputElement).value).toBe("My preserved draft");
+    expect(alert.textContent).not.toContain("Retry may succeed");
+    expect(alert.textContent).not.toContain("Store(RevisionConflict");
+  });
+});
+
 describe("VB-Cable endpoint selection", () => {
   it("offers temporary take recording only for Recorder branches fed by a physical or application capture source", async () => {
     const recorder = { id: "take-recorder", kind: "recorder" as const, typeVersion: 1 as const, name: "Voice take", enabled: true, bypass: false, parameters: {}, ports: [{ name: "in", direction: "input" as const, channels: 1 as const }, { name: "out", direction: "output" as const, channels: 1 as const }] };

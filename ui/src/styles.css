@@ -276,6 +276,7 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
 .app-shell .canvas-library { display: none !important; }
 .main-content > .lower-grid { display: none !important; }
 .app-shell.compact-status { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); height: 100vh; min-height: 0; overflow: hidden; }
+.app-shell.compact-status > .compact-status-panel { box-sizing: border-box; justify-self: center; width: min(calc(100% - 2rem), 1250px); height: 3.25rem; min-height: 3.25rem; max-height: 3.25rem; margin: .35rem auto 0; overflow: hidden; }
 .app-shell.compact-status .workspace-grid { height: auto; min-height: 0; }
 .app-shell.compact-status .main-content { height: 100%; min-height: 0; overflow: hidden; display: grid; grid-template-rows: minmax(0, 1fr) minmax(0, .65fr); }
 .app-shell.compact-status .main-content > * { display: none; }
@@ -376,7 +377,7 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
 .compact-status-guide > .eyebrow { margin-bottom: .35rem; }
 .compact-status-guide ol { display: grid; gap: .2rem; margin: .25rem 0 .4rem; padding-left: 1.25rem; color: var(--text-strong); font-size: .82rem; }
 .compact-status-guide .muted { margin: 0; font-size: .78rem; }
-@media (max-width: 760px) { .compact-status-actions { flex-direction: column; } .compact-status-actions button { flex: 1 1 auto; width: 100%; } }
+@media (max-width: 760px) { .app-shell.compact-status > .compact-status-panel { width: calc(100% - 2rem); height: auto; min-height: 0; max-height: none; overflow: visible; margin: 1rem; } .compact-status-actions { flex-direction: column; } .compact-status-actions button { flex: 1 1 auto; width: 100%; } }
 
 /* Audio board redesign: one shared light direction, tactile surfaces, and
    strong signal vocabulary inspired by hardware mixers and Audio Hijack. */
@@ -540,6 +541,11 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 /* Keep connection choices directional: input handles are the idle affordance;
    the opposite endpoint type appears only after a drag begins. */
 .session-flow-canvas[data-connection-mode="idle"] .react-flow__handle[data-debug-direction="source"] { opacity: 0; pointer-events: none; }
+/* Input devices are graph sources, so their real output port is the blue
+   idle affordance users expect on a microphone. */
+.session-flow-canvas[data-connection-mode="idle"] .react-flow__node.flow-node-input .react-flow__handle[data-debug-direction="source"][data-debug-side="right"] { opacity: .9; pointer-events: auto; background: var(--handle-input); box-shadow: 0 0 0 2px rgb(58 134 255 / 28%); }
+.session-flow-canvas[data-connection-mode="idle"] .react-flow__node.flow-node-input .react-flow__handle[data-debug-direction="source"][data-debug-side="right"]:hover,
+.session-flow-canvas[data-connection-mode="idle"] .react-flow__node.flow-node-input .react-flow__handle[data-debug-direction="source"][data-debug-side="right"]:focus-visible { box-shadow: 0 0 0 4px rgb(58 134 255 / 40%), 0 0 14px rgb(58 134 255 / 65%); }
 .session-flow-canvas[data-connection-mode="from-input"] .react-flow__handle[data-debug-direction="target"] { opacity: 0; pointer-events: none; }
 .session-flow-canvas[data-connection-mode="from-output"] .react-flow__handle[data-debug-direction="source"] { opacity: 0; pointer-events: none; }
 .node-meter { display: grid; grid-template-columns: 24px 1fr; align-items: end; gap: .55rem; min-height: 48px; padding: .4rem .5rem; border: 1px solid var(--node-well-border); border-radius: 7px; background: var(--node-well); }

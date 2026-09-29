@@ -1868,8 +1868,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     } catch (error) {
       if (isRevisionConflict(error)) {
         setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null); setPendingGraphPlan(null);
-        void snapshotCache.refresh(backend, session.id).then(setSnapshotState);
-        setActionMessage(`${formatUiError(error, "Graph changed elsewhere.")} The authoritative session was refreshed; review the draft again.`);
+        void snapshotCache.refresh(backend, session.id).then((nextState) => {
+          setSnapshotState(nextState);
+          void refreshSessions();
+        });
+        setActionMessage(formatUiError(error, "Graph changed elsewhere."));
       } else setActionMessage(formatUiError(error, "Unable to apply graph changes."));
     } finally { setGraphBusy(false); }
   };
@@ -1896,8 +1899,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     } catch (error) {
       if (isRevisionConflict(error)) {
         setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null); setPendingGraphPlan(null);
-        void snapshotCache.refresh(backend, session.id).then(setSnapshotState);
-        setActionMessage(`${formatUiError(error, "Graph changed elsewhere.")} The authoritative session was refreshed; review the draft again.`);
+        void snapshotCache.refresh(backend, session.id).then((nextState) => {
+          setSnapshotState(nextState);
+          void refreshSessions();
+        });
+        setActionMessage(formatUiError(error, "Graph changed elsewhere."));
       } else setActionMessage(formatUiError(error, "Unable to commit acknowledged changes."));
     } finally { setGraphBusy(false); }
   };

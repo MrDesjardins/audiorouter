@@ -27,10 +27,10 @@ test("a complex multi-source processing set preserves node types and supports mo
   await expect(addedMute.getByRole("button", { name: /muted, click to unmute/i })).toHaveAttribute("aria-pressed", "true");
 });
 
-test("idle shows inputs, then input-start dragging shows outputs and creates the canonical edge", async ({ page }, testInfo) => {
-  for (const label of ["Test Signal", "Output device"]) await page.locator(".canvas-library").getByRole("button", { name: label, exact: true }).click();
+test("microphone shows a blue idle start handle and either drag direction creates a canonical edge", async ({ page }, testInfo) => {
+  await page.locator(".canvas-library").getByRole("button", { name: "Output device", exact: true }).click();
   await page.addStyleTag({ content: ".canvas-library { display: none !important; }" });
-  const sourceNode = page.locator(".react-flow__node").filter({ hasText: "Test Signal" }).last();
+  const sourceNode = page.locator(".react-flow__node.flow-node-input").filter({ hasText: "Microphone" }).first();
   const targetNode = page.locator(".react-flow__node").filter({ hasText: "Physical output" }).last();
   const canvasElement = page.locator(".session-flow-canvas");
   const canvas = await canvasElement.boundingBox();
@@ -60,11 +60,16 @@ test("idle shows inputs, then input-start dragging shows outputs and creates the
   if (!inputBox || !outputBox) throw new Error("Input/output handles are not positioned");
   if (!sourceNodeId || !targetNodeId) throw new Error("Graph node identities are missing");
   await expect(canvasElement).toHaveAttribute("data-connection-mode", "idle");
-  await expect(output).toHaveCSS("opacity", "0");
+  await expect(output).not.toHaveCSS("opacity", "0");
   await expect(input).not.toHaveCSS("opacity", "0");
   for (const theme of ["dark", "light", "high-contrast"]) {
     await page.evaluate((value) => { document.body.className = value === "dark" ? "" : `theme-${value}`; }, theme);
-    for (let index = 0; index < await allOutputs.count(); index += 1) await expect(allOutputs.nth(index)).toHaveCSS("opacity", "0");
+    for (let index = 0; index < await allOutputs.count(); index += 1) {
+      const handle = allOutputs.nth(index);
+      const sourceStart = await handle.evaluate((element) => element.closest(".react-flow__node")?.classList.contains("flow-node-input") && (element as HTMLElement).dataset.debugSide === "right");
+      if (sourceStart) await expect(handle).toHaveCSS("background-color", await input.evaluate((element) => getComputedStyle(element).backgroundColor));
+      else await expect(handle).toHaveCSS("opacity", "0");
+    }
     for (let index = 0; index < await allInputs.count(); index += 1) await expect(allInputs.nth(index)).not.toHaveCSS("opacity", "0");
     await page.screenshot({ path: testInfo.outputPath(`connectors-${theme}-idle.png`) });
   }
@@ -91,8 +96,23 @@ test("idle shows inputs, then input-start dragging shows outputs and creates the
   const connection = await connectionLog.args()[1]?.jsonValue() as { source?: string; target?: string } | undefined;
   expect(connection).toMatchObject({ source: sourceNodeId, target: targetNodeId });
   await expect(canvasElement).toHaveAttribute("data-connection-mode", "idle");
+  await expect(output).not.toHaveCSS("opacity", "0");
+  await expect(input).not.toHaveCSS("opacity", "0");
+
+  const beforeSourceStart = await page.locator(".react-flow__edges .react-flow__edge").count();
+  const onSourceStartConnect = page.waitForEvent("console", { predicate: (message) => message.text().includes("[Harness] onConnect") });
+  await page.mouse.move(outputBox.x + outputBox.width / 2, outputBox.y + outputBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(outputBox.x + outputBox.width / 2 + 12, outputBox.y + outputBox.height / 2, { steps: 2 });
+  await expect(canvasElement).toHaveAttribute("data-connection-mode", "from-output");
   await expect(output).toHaveCSS("opacity", "0");
   await expect(input).not.toHaveCSS("opacity", "0");
+  await page.mouse.move(inputBox.x + inputBox.width / 2, inputBox.y + inputBox.height / 2, { steps: 12 });
+  await page.mouse.up();
+  await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(beforeSourceStart + 1, { timeout: 3000 });
+  const sourceStartConnectionLog = await onSourceStartConnect;
+  const sourceStartConnection = await sourceStartConnectionLog.args()[1]?.jsonValue() as { source?: string; target?: string } | undefined;
+  expect(sourceStartConnection).toMatchObject({ source: sourceNodeId, target: targetNodeId });
 });
 
 test("a second source to a physical output gets an undoable visible mixer", async ({ page }) => {
@@ -517,6 +537,7 @@ test("compact status keeps the route guide and primary actions readable on a sho
   const status = page.getByLabel("Compact route status");
   await expect(status).toBeVisible();
   await expect(status.getByText("What happens next")).toBeVisible();
+  await expect(page.locator(".compact-status-guide")).not.toHaveAttribute("open", "");
   await expect(status.getByRole("button", { name: "Start" })).toHaveCount(0);
   const geometry = await page.evaluate(() => ({
     viewport: [innerWidth, innerHeight],
@@ -529,6 +550,7 @@ test("compact status keeps the route guide and primary actions readable on a sho
     workbench: document.querySelector(".right-workbench")?.getBoundingClientRect().toJSON(),
   }));
   console.log("COMPACT_STATUS_GEOMETRY", JSON.stringify(geometry));
+  const initialStatusHeight = geometry.status!.height;
   const containment = await page.evaluate(() => {
     const panel = document.querySelector("#signal-flow-panel")!.getBoundingClientRect();
     const canvas = document.querySelector(".session-flow-canvas")!.getBoundingClientRect();
@@ -555,6 +577,18 @@ test("compact status keeps the route guide and primary actions readable on a sho
   expect(Math.abs(propertiesGeometry.workbench.height - geometry.workbench!.height)).toBeLessThan(3);
   expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(720);
   await page.screenshot({ path: `${process.env.TEMP}/audiorouter-designer-review/workspace-status-properties-1280x720.png`, fullPage: false });
+  await page.getByRole("tab", { name: "Tools" }).click();
+  await page.getByRole("tab", { name: "Logs" }).click();
+  await expect(page.getByRole("heading", { name: "Client diagnostics" })).toBeVisible();
+  await expect(page.locator(".compact-status-guide")).not.toHaveAttribute("open", "");
+  const statusHeightAfterLogs = await page.locator(".compact-status-panel").evaluate((element) => element.getBoundingClientRect().height);
+  expect(Math.abs(statusHeightAfterLogs - initialStatusHeight), "opening Logs must not resize collapsed route status").toBeLessThan(3);
+  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(720);
+  for (const theme of ["dark", "light", "high-contrast"]) {
+    await page.getByLabel("Color theme").selectOption(theme);
+    await expect(page.locator(".compact-status-panel")).toBeVisible();
+    await page.screenshot({ path: `${process.env.TEMP}/audiorouter-designer-review/route-status-${theme}-1280x720.png`, fullPage: false });
+  }
 });
 
 test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reachable", async ({ page }) => {

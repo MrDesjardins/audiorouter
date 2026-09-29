@@ -80,6 +80,9 @@ export function formatUiError(error: unknown, fallback: string): string {
 
 function formatUiErrorText(error: unknown, fallback: string): string {
   if (!(error instanceof Error)) return fallback;
+  if (isRevisionConflict(error)) {
+    return "Another save changed this route, so your save was not applied. Your draft is preserved. Review it against the latest saved route, then plan and save again.";
+  }
   if (/0x88890004/i.test(error.message) || (error instanceof AudioRouterRpcError && (error.data?.code === "deviceInvalidated" || (typeof error.data?.hresult === "number" && (error.data.hresult >>> 0) === 0x88890004)))) {
     return "The selected audio device changed or disconnected. Stop audio, refresh the device list, then select the exact input and output again. Play will reopen those devices. If one is missing, reconnect it before retrying.";
   }

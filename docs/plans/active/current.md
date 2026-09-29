@@ -35,6 +35,28 @@ track ([future plan](../future/M03-driver-signing.md)).
   a fresh complete shell/worker pair in a separate target directory. Do not
   stop the user's running shell; rollback is reverting the error wording/spec
   change and using the prior build.
+- Current UI follow-up (user, 2026-09-28): idle hides every connector on
+  source/input nodes such as Physical Input, because those graph ports are
+  outputs. Keep a blue, visible start handle on source nodes while idle and
+  reveal compatible destination handles during the drag; preserve hidden
+  orange outputs on tools/destinations and canonical edge direction. Complete:
+  source-start and destination-start gestures pass the focused browser test;
+  screenshots were reviewed in dark, light and high-contrast themes. Typecheck
+  and all 372 UI unit tests pass. Requirement: UI-03 / M05.
+- Current UI follow-up (user, 2026-09-28): compact Route status became too tall
+  after opening Logs from Tools. Reproduce Tools → Logs with collapsed “What
+  happens next”, measure status panel geometry at the user's desktop viewport,
+  then add a focused regression and correct the responsible layout constraint.
+  Requirement: UI-03 / M05. Rollback: revert only the compact-status layout
+  correction and its regression.
+- Current UI follow-up (user, 2026-09-28): make graph revision conflicts
+  actionable. A stale save returned raw Store debug details and suggested a
+  retry that could not work against the stale revision. Now the UI explains
+  that the save was rejected, the draft remains, and the user must review and
+  plan again; conflict refresh also reloads session inventory. Add an App-level
+  regression to prove draft preservation and latest revision refresh.
+  Requirement: STATE-03 / UI-03. Rollback: revert conflict presentation/refresh
+  changes and their focused coverage.
 - Requirements: PROD-01/03/04/06/07, SEC-09/11, ENG-04/05, and new DIST-01–08
   in [delivery traceability](../../spec/15-delivery.md). User direction on
   2026-09-28 promotes installer/release work into M08. DEC-16 still excludes
@@ -69,7 +91,8 @@ track ([future plan](../future/M03-driver-signing.md)).
   tests (locked, Windows audio adapter excluded), packaged-worker resource-path
   test, artifact preparation/verifier tests, docs acceptance (69 files/364
   links), and unsigned x64 NSIS smoke passed. The bundle is build evidence only.
-- UI-03 handle interaction: the canvas defaults to inputs only, reveals outputs
+- UI-03 handle interaction: the canvas defaults to inputs and source start
+  affordances, reveals outputs
   while an input-start drag is active, accepts that reverse gesture, normalizes
   the saved connection to output-to-input, and restores idle state after
   completion. Playwright checks every handle in dark, light and high-contrast
@@ -108,11 +131,29 @@ track ([future plan](../future/M03-driver-signing.md)).
   missing-WebView2, reputation prompt, or live endpoint qualification yet.
 - Visual review: the canvas harness screenshots were reviewed in dark, light
   and high-contrast modes. Attended packaged-shell acceptance remains open.
-- Next action: user retries plugin preparation in the running test shell; if
-  needed, relaunch the complete shell/worker pair above to see the improved
-  diagnostic. Retry the standard `ui/dist` build after its asset lock is
-  released, then continue M08 install testing on an isolated Windows account/
-  machine.
+- UI defect follow-up (2026-09-28): reproducing Tools → Logs with compact Route
+  status enabled showed the status panel at 16 px before Logs and an 81 px
+  increase after Logs, despite the guide being closed. Set a stable 52 px
+  desktop row and full-width bounded panel; allow natural wrapping on narrow
+  screens. Added Playwright geometry regression. At 1280×720 the corrected
+  panel measured 52 px. App-level conflict regression preserves an edited
+  session name and checks the actionable error; backend formatter regression
+  rejects raw Store debug text and stale-plan retry advice. Typecheck passed;
+  all 373 UI unit tests passed, including the new conflict regression. The
+  compact-status Playwright test passed at 1280×720 and checked Tools → Logs
+  with the guide collapsed; its status row stayed 52 px. Theme screenshots
+  were reviewed and saved: [dark](evidence/2026-09-28-route-status-dark.png),
+  [light](evidence/2026-09-28-route-status-light.png), and
+  [high contrast](evidence/2026-09-28-route-status-high-contrast.png). The
+  Playwright test reported success, but its Vite child remained alive until
+  the test process was interrupted. A release shell and adjacent worker were
+  built under `target/status-conflict-20260928/release`; the shell contains
+  the expected `index-B3Cq7s68.js` and `index-Dihsqrkt.css` assets. SHA-256:
+  shell `0B8F8DBBD0DA647D5100BC0B26848EE66B55AEE8569714BCB41AD32FB732BE84`;
+  worker `10F669A8C20C551B32334ED3103A8C2781889BD0B09768EC38721355DE7081C9`.
+  No attended shell launch or live audio validation was done.
+- Next action: manually exercise the fresh shell/worker pair, then continue M08
+  install testing on an isolated Windows account/machine.
 
 Requirement families in scope: PROD, ARCH, GRAPH, CAP, DSP, REC, PLUG, UI,
 API, AUTO, STATE, SEC (non-driver), NFR, QUAL, ENG, as mapped in
