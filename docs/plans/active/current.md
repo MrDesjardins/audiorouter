@@ -56,10 +56,14 @@ track ([future plan](../future/M03-driver-signing.md)).
   recovery route any such source through a Mixer without duplicating its direct
   branch. An exhaustive type-checked library-node matrix plus a scanned-plugin
   case verify multi-output fan-out, Mixer routing and occupied-output reuse.
-  `draft.test.ts` passed (48/48), TypeScript typecheck passed, docs acceptance passed (69 Markdown
-  files, 373 links), and `git diff --check` passed. A generic Gain UI regression
-  was added alongside the EQ scenario. Its Playwright run was stopped before a
-  verdict; the new UI scenario remains unverified. Requirements:
+  `draft.test.ts` passed (48/48), TypeScript typecheck passed, docs acceptance
+  passed (69 Markdown files, 373 links), and `git diff --check` passed. The
+  generic Gain browser regression and the EQ/Mixer reroute regression both
+  passed in Edge (2/2). The normal Playwright-managed Vite server stalled after
+  browser close; running Vite separately and using a temporary config with
+  `reuseExistingServer` produced the final results. The temporary config and
+  server were removed/stopped after the run. This is browser UI harness evidence,
+  not live endpoint/audio qualification. Requirements:
   GRAPH-02/03 and UI-03. No per-tool routing code was needed. Rollback: revert
   the focused regression and specification clarification.
 
