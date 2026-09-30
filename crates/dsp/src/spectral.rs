@@ -530,6 +530,8 @@ impl SpeechDenoiser {
     pub fn reset(&mut self) {
         self.stft.reset();
         self.rule.frames = 0;
+        self.rule.smoothed.fill(0.0);
+        self.rule.noise.fill(0.0);
         self.rule.previous_clean.fill(0.0);
     }
 }

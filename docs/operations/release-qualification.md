@@ -13,6 +13,12 @@ clean-machine and install qualification remain open M08 release gates.
 
 ## Current verified artifacts
 
+The [deterministic audio runner](deterministic-audio-tests.md) exercises
+built-in transformations and native gain fixtures against known signal laws.
+DSP-12 remains an open release gate: eight full-strength hum cuts attenuate a
+1003 Hz wanted tone by about 7.7%, exceeding the 5% preservation limit. The
+runner deliberately fails that gate; green ordinary tests are insufficient.
+
 As of 2026-09-28, the integrated unsigned per-user NSIS package has built
 successfully on Windows x64 (8,217,235 bytes). The M08 smoke verifies the
 bundle and cleans its temporary output; it deliberately does not execute or

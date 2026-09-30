@@ -5,6 +5,7 @@ pub mod restoration;
 pub mod spectral;
 pub mod timeshift;
 
+#[cfg(test)]
 use std::f32::consts::PI;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -359,11 +360,13 @@ pub enum BiquadError {
 
 #[derive(Clone, Copy, Debug)]
 struct Coefficients {
-    b0: f32,
-    b1: f32,
-    b2: f32,
-    a1: f32,
-    a2: f32,
+    // Deep narrow cuts near DC suffer cancellation in single precision.
+    // Keep coefficients and recursive state double precision; audio stays f32.
+    b0: f64,
+    b1: f64,
+    b2: f64,
+    a1: f64,
+    a2: f64,
 }
 
 impl Coefficients {
@@ -406,10 +409,10 @@ impl std::ops::Add for Coefficients {
     }
 }
 
-impl std::ops::Div<f32> for Coefficients {
+impl std::ops::Div<f64> for Coefficients {
     type Output = Self;
 
-    fn div(self, rhs: f32) -> Self::Output {
+    fn div(self, rhs: f64) -> Self::Output {
         Self {
             b0: self.b0 / rhs,
             b1: self.b1 / rhs,
@@ -428,8 +431,8 @@ pub struct Biquad {
     ramp_step: Coefficients,
     ramp_remaining: usize,
     channels: usize,
-    z1: [f32; 2],
-    z2: [f32; 2],
+    z1: [f64; 2],
+    z2: [f64; 2],
 }
 
 pub const PARAMETRIC_EQ_BANDS: usize = 16;
@@ -674,7 +677,7 @@ impl Biquad {
             self.ramp_step = Coefficients::zero();
             self.ramp_remaining = 0;
         } else {
-            self.ramp_step = (self.target_coefficients - self.coefficients) / frames as f32;
+            self.ramp_step = (self.target_coefficients - self.coefficients) / frames as f64;
             self.ramp_remaining = frames;
         }
         Ok(())
@@ -695,7 +698,8 @@ impl Biquad {
         if !(0.0..=self.params.sample_rate * 0.5).contains(&frequency_hz) {
             return Err(BiquadError::InvalidFrequency);
         }
-        let omega = 2.0 * PI * frequency_hz / self.params.sample_rate;
+        let omega = 2.0 * std::f64::consts::PI * f64::from(frequency_hz)
+            / f64::from(self.params.sample_rate);
         let cos = omega.cos();
         let sin = omega.sin();
         let cos2 = (2.0 * omega).cos();
@@ -707,10 +711,10 @@ impl Biquad {
         let denominator_imag = -self.coefficients.a1 * sin - self.coefficients.a2 * sin2;
         let numerator = numerator_real.hypot(numerator_imag);
         let denominator = denominator_real.hypot(denominator_imag);
-        if denominator <= f32::EPSILON {
+        if denominator <= f64::EPSILON {
             return Err(BiquadError::InvalidFrequency);
         }
-        Ok(20.0 * (numerator / denominator).max(f32::MIN_POSITIVE).log10())
+        Ok((20.0 * (numerator / denominator).max(f64::MIN_POSITIVE).log10()) as f32)
     }
 
     /// Processes interleaved mono/stereo samples in place without allocation.
@@ -719,12 +723,21 @@ impl Biquad {
         for (index, sample) in samples.iter_mut().enumerate() {
             self.advance_ramp();
             let channel = index % self.channels;
-            let input = if sample.is_finite() { *sample } else { 0.0 };
+            let input = if sample.is_finite() {
+                f64::from(*sample)
+            } else {
+                0.0
+            };
             let output = self.coefficients.b0 * input + self.z1[channel];
             self.z1[channel] =
                 self.coefficients.b1 * input - self.coefficients.a1 * output + self.z2[channel];
             self.z2[channel] = self.coefficients.b2 * input - self.coefficients.a2 * output;
-            *sample = if output.is_finite() { output } else { 0.0 };
+            let output_sample = output as f32;
+            *sample = if output_sample.is_finite() {
+                output_sample
+            } else {
+                0.0
+            };
         }
     }
 
@@ -830,20 +843,20 @@ impl Gate {
             let level_db = 20.0 * peak.max(1.0e-6).log10();
             if self.open {
                 if level_db < self.params.threshold_db - self.params.hysteresis_db {
-                    if self.hold_frames == 0 {
-                        self.hold_frames = hold;
-                    }
                     if self.hold_frames > 0 {
                         self.hold_frames -= 1;
                     } else {
                         self.open = false;
                     }
                 } else {
-                    self.hold_frames = 0;
+                    // Reload only while the signal holds the gate open.
+                    // Reloading an expired countdown below threshold would
+                    // restart it forever and prevent a nonzero hold closing.
+                    self.hold_frames = hold;
                 }
             } else if level_db >= self.params.threshold_db {
                 self.open = true;
-                self.hold_frames = 0;
+                self.hold_frames = hold;
             }
             let target_db = gate_target_gain_db(level_db, self.params, self.open);
             let coefficient = if target_db > self.gain_db {
@@ -886,20 +899,17 @@ impl Gate {
             let level_db = 20.0 * peak.max(1.0e-6).log10();
             if self.open {
                 if level_db < self.params.threshold_db - self.params.hysteresis_db {
-                    if self.hold_frames == 0 {
-                        self.hold_frames = hold;
-                    }
                     if self.hold_frames > 0 {
                         self.hold_frames -= 1;
                     } else {
                         self.open = false;
                     }
                 } else {
-                    self.hold_frames = 0;
+                    self.hold_frames = hold;
                 }
             } else if level_db >= self.params.threshold_db {
                 self.open = true;
-                self.hold_frames = 0;
+                self.hold_frames = hold;
             }
             let target_db = gate_target_gain_db(level_db, self.params, self.open);
             let coefficient = if target_db > self.gain_db {
@@ -1234,7 +1244,9 @@ impl PeakLimiter {
             release_coefficient,
             sample_rate,
             channels,
-            delay: vec![vec![0.0; lookahead_frames + 1]; channels],
+            // Read-before-write advances once per sample: N slots produce
+            // exactly N frames of delay. Zero lookahead bypasses this ring.
+            delay: vec![vec![0.0; lookahead_frames.max(1)]; channels],
             cursor: vec![0; channels],
             gain: 1.0,
         })
@@ -1842,11 +1854,12 @@ fn validate(params: BiquadParams, channels: usize) -> Result<(), BiquadError> {
 }
 
 fn coefficients(params: BiquadParams) -> Coefficients {
-    let omega = 2.0 * PI * params.frequency_hz / params.sample_rate;
+    let omega = 2.0 * std::f64::consts::PI * f64::from(params.frequency_hz)
+        / f64::from(params.sample_rate);
     let sin = omega.sin();
     let cos = omega.cos();
-    let alpha = sin / (2.0 * params.q);
-    let amplitude = 10.0_f32.powf(params.gain_db / 40.0);
+    let alpha = sin / (2.0 * f64::from(params.q));
+    let amplitude = 10.0_f64.powf(f64::from(params.gain_db) / 40.0);
     let (b0, b1, b2, a0, a1, a2) = match params.kind {
         FilterKind::Peaking => (
             1.0 + alpha * amplitude,

@@ -12,6 +12,9 @@ permanently out of scope (2026-09-19).
 
 ## How to read the specification
 
+For generated input/output signal checks and their known failing Dehum gate,
+see [deterministic audio qualification](operations/deterministic-audio-tests.md).
+
 Read 01–04 first, then the feature areas needed for a milestone. `MUST`/`shall` denotes a required release condition at the assigned milestone. `SHOULD` denotes a documented preference that can be varied with evidence. `Future` is excluded from v1. A requirement ID identifies the entire numbered item, including its subordinate conditions. Examples are illustrative unless explicitly identified as acceptance fixtures.
 
 | File | Responsibility | Delivery owner |

@@ -9,6 +9,84 @@ Add new entries under "Log" below, and keep the sections above it current.
 
 ## Objective and scope
 
+## Current task (2026-09-30): deterministic audio transformation qualification
+
+User authorizes planning and immediate unattended execution for every tool that
+changes audio, using generated/reused input, configurations, output capture and
+input/output comparison. Requirements: DSP-01–18, QUAL-01–05, GRAPH-02/04/10/14,
+PLUG-03/04/07 where installed fixtures permit. No personal audio is needed.
+Prerequisites: Windows Rust toolchain and existing pinned dependencies available;
+hardware, physical latency, subjective speech intelligibility and third-party
+plugin compatibility remain separate evidence. Preserve the running desktop,
+user database, microphone and endpoint configuration.
+
+Ordered tasks:
+1. Inventory every modifying tool and existing meaningful signal checks.
+2. Add shared deterministic fixtures (fixed-seed noise, DC, impulses, tones,
+   stereo markers) and optional float-WAV/JSON artifacts to graph-level tests.
+3. Sweep one tool at a time through neutral, representative, boundary and
+   bypass configurations. Compare with independent gain/transfer/delay/
+   convolution/pitch/noise expectations, not merely “output changed”.
+4. Cover multi-input Mixer/Input Switch, timing transport, channel isolation,
+   learned profiles and real available plugin fixtures; label any gaps honestly.
+5. Run relevant DSP/engine tests, inspect failures, fix proven defects in the
+   owning layer, rerun affected checks, document exact commands and results.
+6. Commit/push the qualified work and preserve a resumable backlog if needed.
+
+Validation matrix: exact sample comparisons for gain/mute/routing/delay;
+frequency projection and ±0.5 dB for filters/dynamics; ≥30 dB notch rejection;
+≤0.1 dB limiter ceiling; latency-aligned FIR direct convolution; settled noise
+attenuation plus retained wanted tone; pitch within 10 cents after warmup;
+repeatability/reset checks. Artifact output belongs in ignored
+`target/deterministic-audio-evidence`, never source-controlled audio. Windows
+offline execution is signal/graph evidence, not WASAPI/hardware qualification.
+Rollback: revert only the new harness and separately documented proven fixes;
+no storage migration or device changes. Execution and remaining gates are recorded
+in [dated evidence](evidence/2026-09-30-deterministic-audio.md) and the
+[repeatable qualification guide](../../operations/deterministic-audio-tests.md).
+
+Final sweeps: 21 normal graph signal tests pass (881 unique retained cases),
+197 DSP/engine unit tests pass, and actual native VST2/VST3 gain fixtures pass
+three-rate transfer/automation/bypass checks. Four proven fixes: exact limiter
+lookahead, complete Speech Denoise reset, double-precision biquad coefficients
+and recursive state to avoid near-DC cancellation, and Gate hold countdown
+which previously restarted forever below threshold. Both mono and linked
+stereo Gate paths are corrected. Gate timing and compressor attack/release
+now have independent envelope oracles.
+
+The unattended qualification runner executes the known Dehum gate explicitly
+and returns failure while that gate is open; native plugin runs are opt-in.
+No endpoint, microphone, user session or desktop changes were made. Generated
+audio is ignored. Compatibility: saved gate settings now actually close after
+hold; limiter delay is one frame shorter and matches telemetry; biquad numeric
+output improves precision; reset no longer preserves Speech Denoise estimates.
+Risk: callback CPU/continuity and subjective speech quality are not qualified
+by these offline runs. No runtime allocation was added by the fixes.
+
+Exact next task: resolve DSP-12 wanted-band preservation versus the normative
+Q20/cut cascade without relaxing acceptance; then extend Input Switch slow/live
+fade, remaining parameter endpoints/profile floors and hardware/performance
+qualification. Representative configuration coverage does not mean every
+possible signal, configuration or combination of tools is qualified.
+
+Second execution found a second real defect: Speech Denoise reset cleared the
+STFT and frame counter but retained smoothed/noise estimates. Clear both so a
+reset reproduces a fresh processor. The independent Dehum response passes its
+Q20 cascade law, but eight 60 Hz harmonics at 100% attenuate a 1003 Hz wanted tone
+by about 0.69 dB (~7.7%), violating DSP-12's 5% preservation requirement. Keep
+this as an explicitly ignored known-failure acceptance test, run it separately
+and report the failing result. Do not weaken the 5% gate or change the normative
+Q20/−36 dB transfer law without a specification decision. Other signal tests
+(pitch, learned profiles, FIR, click repair) passed the second run.
+
+First execution: 7/9 graph-level signal tests passed. Limiter impulse output
+appears one sample after its declared lookahead because its ring has N+1 slots
+and reads before writing. Fix the ring to N slots (one inert slot for zero
+lookahead); retain exact impulse timing/ceiling checks across three rates.
+Dehum's first oracle incorrectly assumed each harmonic cut was isolated; replace
+it with an independent f64 cascade response and retain wanted-band preservation.
+Evidence: `target/deterministic-audio-first-run.log` and per-case WAV/metrics.
+
 Current task (2026-09-29): clear cable-feedback warnings while allowing device
 selection/save; visual named canvas groups; document then implement optional
 localhost HTTP and bundled Swagger. User confirmed localhost-only. Requirements:
