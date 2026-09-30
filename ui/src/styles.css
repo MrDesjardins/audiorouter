@@ -471,16 +471,16 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
    pairing was visually too close in hue to reliably tell apart at handle
    size. See the --handle-input/--handle-output definitions above for why
    this pairing was chosen instead. */
-.session-flow-canvas .react-flow__handle[data-debug-direction="target"] { background: var(--handle-input); box-shadow: 0 0 0 2px rgb(58 134 255 / 20%); }
-.session-flow-canvas .react-flow__handle[data-debug-direction="source"] { background: var(--handle-output); box-shadow: 0 0 0 2px rgb(246 169 40 / 20%); }
+.session-flow-canvas .react-flow__handle[data-debug-direction="source"] { background: var(--handle-input); box-shadow: 0 0 0 2px rgb(58 134 255 / 20%); }
+.session-flow-canvas .react-flow__handle[data-debug-direction="target"] { background: var(--handle-output); box-shadow: 0 0 0 2px rgb(246 169 40 / 20%); }
 /* No transform here deliberately: @xyflow/react positions/centers each
    handle using its own transform internally, and adding a scale() in this
    stylesheet fought with that and made hovered handles visibly jump/shift
    instead of growing in place. Hover/active feedback is opacity and
    box-shadow only. */
 .session-flow-canvas .react-flow__handle:hover, .session-flow-canvas .react-flow__handle:focus-visible { opacity: 1; box-shadow: 0 0 0 4px rgb(0 0 0 / 0%); }
-.session-flow-canvas .react-flow__handle[data-debug-direction="target"]:hover, .session-flow-canvas .react-flow__handle[data-debug-direction="target"]:focus-visible { box-shadow: 0 0 0 4px rgb(58 134 255 / 35%), 0 0 14px rgb(58 134 255 / 65%); }
-.session-flow-canvas .react-flow__handle[data-debug-direction="source"]:hover, .session-flow-canvas .react-flow__handle[data-debug-direction="source"]:focus-visible { box-shadow: 0 0 0 4px rgb(246 169 40 / 35%), 0 0 14px rgb(246 169 40 / 65%); }
+.session-flow-canvas .react-flow__handle[data-debug-direction="source"]:hover, .session-flow-canvas .react-flow__handle[data-debug-direction="source"]:focus-visible { box-shadow: 0 0 0 4px rgb(58 134 255 / 35%), 0 0 14px rgb(58 134 255 / 65%); }
+.session-flow-canvas .react-flow__handle[data-debug-direction="target"]:hover, .session-flow-canvas .react-flow__handle[data-debug-direction="target"]:focus-visible { box-shadow: 0 0 0 4px rgb(246 169 40 / 35%), 0 0 14px rgb(246 169 40 / 65%); }
 .session-flow-canvas .react-flow__handle.connectingto { opacity: 1; box-shadow: 0 0 0 5px rgb(114 227 162 / 45%), 0 0 16px rgb(114 227 162 / 80%); }
 /* Raised from an earlier 0.12 resting opacity: the four side handles per
    port were reported as hard to locate/grab precisely (one user-reported
@@ -488,14 +488,11 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
    target rather than a dead one). Still clearly subtler than the
    hover/active states above. */
 .session-flow-canvas .react-flow__handle:not(.connectionindicator) { opacity: .42; box-shadow: none; }
-/* Keep connection choices directional: input handles are the idle affordance;
-   the opposite endpoint type appears only after a drag begins. */
-.session-flow-canvas[data-connection-mode="idle"] .react-flow__handle[data-debug-direction="source"] { opacity: 0; pointer-events: none; }
-/* Input devices are graph sources, so their real output port is the blue
-   idle affordance users expect on a microphone. */
-.session-flow-canvas[data-connection-mode="idle"] .react-flow__node.flow-node-input .react-flow__handle[data-debug-direction="source"][data-debug-side="right"] { opacity: .9; pointer-events: auto; background: var(--handle-input); box-shadow: 0 0 0 2px rgb(58 134 255 / 28%); }
-.session-flow-canvas[data-connection-mode="idle"] .react-flow__node.flow-node-input .react-flow__handle[data-debug-direction="source"][data-debug-side="right"]:hover,
-.session-flow-canvas[data-connection-mode="idle"] .react-flow__node.flow-node-input .react-flow__handle[data-debug-direction="source"][data-debug-side="right"]:focus-visible { box-shadow: 0 0 0 4px rgb(58 134 255 / 40%), 0 0 14px rgb(58 134 255 / 65%); }
+/* Always start at the sender: blue outputs on every source/tool, then orange
+   receiving inputs while dragging. Never reinterpret an EQ's input as send. */
+.session-flow-canvas[data-connection-mode="idle"] .react-flow__handle[data-debug-direction="target"] { opacity: 0; pointer-events: none; }
+.session-flow-canvas[data-connection-mode="idle"] .react-flow__handle[data-debug-direction="source"],
+.session-flow-canvas[data-connection-mode="from-output"] .react-flow__handle[data-debug-direction="target"] { opacity: .9; }
 .session-flow-canvas[data-connection-mode="from-input"] .react-flow__handle[data-debug-direction="target"] { opacity: 0; pointer-events: none; }
 .session-flow-canvas[data-connection-mode="from-output"] .react-flow__handle[data-debug-direction="source"] { opacity: 0; pointer-events: none; }
 .node-meter { display: grid; grid-template-columns: 24px 1fr; align-items: end; gap: .55rem; min-height: 48px; padding: .4rem .5rem; border: 1px solid var(--node-well-border); border-radius: 7px; background: var(--node-well); }

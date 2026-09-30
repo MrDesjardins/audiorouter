@@ -121,7 +121,11 @@ mod live {
     }
 
     fn record_mode() -> bool {
-        std::env::var("AUDIOROUTER_CONTINUITY_RECORD").as_deref() == Ok("1")
+        std::env::var("AUDIOROUTER_CONTINUITY_RECORD").as_deref() == Ok("1") || pre_mixer_mode()
+    }
+
+    fn pre_mixer_mode() -> bool {
+        std::env::var("AUDIOROUTER_CONTINUITY_PRE_MIXER").as_deref() == Ok("1")
     }
 
     /// Left channel of a float32 stereo WAV written by the recorder.
@@ -284,12 +288,26 @@ mod live {
         // `AUDIOROUTER_CONTINUITY_RECORD=1` adds a Recorder branch fed by the
         // same node that feeds the destination.
         let mut edges = edges;
+        let pre_mixer_feeder = if pre_mixer_mode() {
+            let output_edge = edges.iter_mut().find(|edge| edge.destination_node.as_str() == "destination").expect("destination is fed");
+            let feeder = (output_edge.source_node.clone(), output_edge.source_port.clone());
+            output_edge.source_node = EntityId::new("mix");
+            output_edge.source_port = "out".into();
+            nodes.push(node("mix".into(), NodeKind::Mixer, vec![port("in", PortDirection::Input), port("out", PortDirection::Output)], serde_json::Map::new()));
+            // A stopped generated input contributes silence without opening
+            // a second capture device or using the user's microphone.
+            nodes.push(node("silent-source".into(), NodeKind::TestSignal, vec![port("out", PortDirection::Output)], serde_json::Map::new()));
+            for (id, source, source_port) in [("processed-to-mix", feeder.0.clone(), feeder.1.clone()), ("silent-to-mix", EntityId::new("silent-source"), "out".into())] {
+                edges.push(Edge { id: EntityId::new(id), source_node: source, source_port, destination_node: EntityId::new("mix"), destination_port: "in".into(), matrix: vec![1.0, 0.0, 0.0, 1.0], enabled: true });
+            }
+            Some(feeder)
+        } else { None };
         if record_mode() {
-            let feeder = edges
+            let feeder = pre_mixer_feeder.unwrap_or_else(|| edges
                 .iter()
                 .find(|edge| edge.destination_node.as_str() == "destination")
                 .map(|edge| (edge.source_node.clone(), edge.source_port.clone()))
-                .expect("destination is fed");
+                .expect("destination is fed"));
             nodes.push(node(
                 "recorder".into(),
                 NodeKind::Recorder,

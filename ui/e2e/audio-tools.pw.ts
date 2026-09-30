@@ -49,7 +49,7 @@ test("a complex multi-source processing set preserves node types and supports mo
   await expect(addedMute.getByRole("button", { name: /muted, click to unmute/i })).toHaveAttribute("aria-pressed", "true");
 });
 
-test("microphone shows a blue idle start handle and either drag direction creates a canonical edge", async ({ page }, testInfo) => {
+test("every sender has blue start handles and only orange receivers appear during a drag", async ({ page }, testInfo) => {
   await page.locator(".canvas-library").getByRole("button", { name: "Output device", exact: true }).click();
   await page.addStyleTag({ content: ".canvas-library { display: none !important; }" });
   const sourceNode = page.locator(".react-flow__node.flow-node-input").filter({ hasText: "Microphone" }).first();
@@ -83,43 +83,17 @@ test("microphone shows a blue idle start handle and either drag direction create
   if (!sourceNodeId || !targetNodeId) throw new Error("Graph node identities are missing");
   await expect(canvasElement).toHaveAttribute("data-connection-mode", "idle");
   await expect(output).not.toHaveCSS("opacity", "0");
-  await expect(input).not.toHaveCSS("opacity", "0");
+  await expect(input).toHaveCSS("opacity", "0");
   for (const theme of ["dark", "light", "high-contrast"]) {
     await page.evaluate((value) => { document.body.className = value === "dark" ? "" : `theme-${value}`; }, theme);
     for (let index = 0; index < await allOutputs.count(); index += 1) {
       const handle = allOutputs.nth(index);
-      const sourceStart = await handle.evaluate((element) => element.closest(".react-flow__node")?.classList.contains("flow-node-input") && (element as HTMLElement).dataset.debugSide === "right");
-      if (sourceStart) await expect(handle).toHaveCSS("background-color", await input.evaluate((element) => getComputedStyle(element).backgroundColor));
-      else await expect(handle).toHaveCSS("opacity", "0");
+      await expect(handle).not.toHaveCSS("opacity", "0");
     }
-    for (let index = 0; index < await allInputs.count(); index += 1) await expect(allInputs.nth(index)).not.toHaveCSS("opacity", "0");
+    for (let index = 0; index < await allInputs.count(); index += 1) await expect(allInputs.nth(index)).toHaveCSS("opacity", "0");
     await page.screenshot({ path: testInfo.outputPath(`connectors-${theme}-idle.png`) });
   }
   await page.evaluate(() => { document.body.className = ""; });
-
-  const before = await page.locator(".react-flow__edges .react-flow__edge").count();
-  await page.mouse.move(inputBox.x + inputBox.width / 2, inputBox.y + inputBox.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(inputBox.x + inputBox.width / 2 - 12, inputBox.y + inputBox.height / 2, { steps: 2 });
-  await expect(canvasElement).toHaveAttribute("data-connection-mode", "from-input");
-  for (const theme of ["dark", "light", "high-contrast"]) {
-    await page.evaluate((value) => { document.body.className = value === "dark" ? "" : `theme-${value}`; }, theme);
-    for (let index = 0; index < await allInputs.count(); index += 1) await expect(allInputs.nth(index)).toHaveCSS("opacity", "0");
-    for (let index = 0; index < await allOutputs.count(); index += 1) await expect(allOutputs.nth(index)).not.toHaveCSS("opacity", "0");
-    await page.screenshot({ path: testInfo.outputPath(`connectors-${theme}-from-input.png`) });
-  }
-  await page.evaluate(() => { document.body.className = ""; });
-  const onConnectLog = page.waitForEvent("console", { predicate: (message) => message.text().includes("[Harness] onConnect") });
-  await page.mouse.move(outputBox.x + outputBox.width / 2, outputBox.y + outputBox.height / 2, { steps: 12 });
-  await page.mouse.up();
-
-  await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(before + 1, { timeout: 3000 });
-  const connectionLog = await onConnectLog;
-  const connection = await connectionLog.args()[1]?.jsonValue() as { source?: string; target?: string } | undefined;
-  expect(connection).toMatchObject({ source: sourceNodeId, target: targetNodeId });
-  await expect(canvasElement).toHaveAttribute("data-connection-mode", "idle");
-  await expect(output).not.toHaveCSS("opacity", "0");
-  await expect(input).not.toHaveCSS("opacity", "0");
 
   const beforeSourceStart = await page.locator(".react-flow__edges .react-flow__edge").count();
   const onSourceStartConnect = page.waitForEvent("console", { predicate: (message) => message.text().includes("[Harness] onConnect") });
@@ -129,12 +103,21 @@ test("microphone shows a blue idle start handle and either drag direction create
   await expect(canvasElement).toHaveAttribute("data-connection-mode", "from-output");
   await expect(output).toHaveCSS("opacity", "0");
   await expect(input).not.toHaveCSS("opacity", "0");
+  for (const theme of ["dark", "light", "high-contrast"]) {
+    await page.evaluate((value) => { document.body.className = value === "dark" ? "" : `theme-${value}`; }, theme);
+    for (let index = 0; index < await allOutputs.count(); index += 1) await expect(allOutputs.nth(index)).toHaveCSS("opacity", "0");
+    for (let index = 0; index < await allInputs.count(); index += 1) await expect(allInputs.nth(index)).not.toHaveCSS("opacity", "0");
+    await page.screenshot({ path: testInfo.outputPath(`connectors-${theme}-sending.png`) });
+  }
   await page.mouse.move(inputBox.x + inputBox.width / 2, inputBox.y + inputBox.height / 2, { steps: 12 });
   await page.mouse.up();
   await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(beforeSourceStart + 1, { timeout: 3000 });
   const sourceStartConnectionLog = await onSourceStartConnect;
   const sourceStartConnection = await sourceStartConnectionLog.args()[1]?.jsonValue() as { source?: string; target?: string } | undefined;
   expect(sourceStartConnection).toMatchObject({ source: sourceNodeId, target: targetNodeId });
+  await expect(canvasElement).toHaveAttribute("data-connection-mode", "idle");
+  await expect(output).not.toHaveCSS("opacity", "0");
+  await expect(input).toHaveCSS("opacity", "0");
 });
 
 test("a second source to a physical output gets an undoable visible mixer", async ({ page }) => {
@@ -153,8 +136,8 @@ test("a second source to a physical output gets an undoable visible mixer", asyn
   await expect(page.locator(".react-flow__node").filter({ hasText: "Mixer" })).toBeVisible();
   await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(3);
   await page.getByRole("tab", { name: "Session" }).click();
-  await page.getByRole("button", { name: "Undo" }).click();
-  await expect(page.locator(".global-action-message")).toContainText("Undid the last draft change");
+  await page.locator(".topbar").getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(page.locator(".global-action-message")).toContainText("Undid the last change");
   await expect(page.locator(".react-flow__node").filter({ hasText: "Mixer" })).toHaveCount(0);
 });
 
@@ -184,12 +167,12 @@ test("EQ can fan out through Mixer and that Mixer can take over the same physica
     const inputBox = await input.boundingBox();
     const outputBox = await output.boundingBox();
     if (!inputBox || !outputBox) throw new Error("Connection handles are not positioned");
-    const start = { x: inputBox.x + inputBox.width / 2, y: inputBox.y + inputBox.height / 2 };
+    const start = { x: outputBox.x + outputBox.width / 2, y: outputBox.y + outputBox.height / 2 };
     await page.mouse.move(start.x, start.y);
     await page.mouse.down();
-    await page.mouse.move(start.x - 12, start.y, { steps: 2 });
-    await expect(canvas).toHaveAttribute("data-connection-mode", "from-input");
-    await page.mouse.move(outputBox.x + outputBox.width / 2, outputBox.y + outputBox.height / 2, { steps: 12 });
+    await page.mouse.move(start.x + 12, start.y, { steps: 2 });
+    await expect(canvas).toHaveAttribute("data-connection-mode", "from-output");
+    await page.mouse.move(inputBox.x + inputBox.width / 2, inputBox.y + inputBox.height / 2, { steps: 12 });
     await page.mouse.up();
     await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(before + edgeDelta, { timeout: 2000 });
   };
@@ -241,11 +224,11 @@ test("a processing output can feed more than one destination", async ({ page }) 
     const inputBox = await input.boundingBox();
     const outputBox = await output.boundingBox();
     if (!inputBox || !outputBox) throw new Error("Connection handles are not positioned");
-    const start = { x: inputBox.x + inputBox.width / 2, y: inputBox.y + inputBox.height / 2 };
+    const start = { x: outputBox.x + outputBox.width / 2, y: outputBox.y + outputBox.height / 2 };
     await page.mouse.move(start.x, start.y);
     await page.mouse.down();
-    await page.mouse.move(start.x - 12, start.y, { steps: 2 });
-    await page.mouse.move(outputBox.x + outputBox.width / 2, outputBox.y + outputBox.height / 2, { steps: 12 });
+    await page.mouse.move(start.x + 12, start.y, { steps: 2 });
+    await page.mouse.move(inputBox.x + inputBox.width / 2, inputBox.y + inputBox.height / 2, { steps: 12 });
     await page.mouse.up();
     await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(before + 1, { timeout: 2000 });
   };
@@ -292,7 +275,7 @@ test("a complex multi-source set can be added and its mute control responds", as
     const inputs = target.locator('.react-flow__handle.target[data-debug-side="left"]');
     const count = await inputs.count();
     const before = await page.locator(".react-flow__edges .react-flow__edge").count();
-    await inputs.nth(Math.min(inputIndex, count - 1)).dragTo(outputs.last());
+    await outputs.last().dragTo(inputs.nth(Math.min(inputIndex, count - 1)));
     await expect(page.locator(".react-flow__edges .react-flow__edge"), `${await source.innerText()} → ${await target.innerText()}`).toHaveCount(before + 1, { timeout: 1500 });
   };
   const moveNode = async (target: ReturnType<typeof node>, x: number, y: number) => {

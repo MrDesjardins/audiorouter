@@ -2968,8 +2968,19 @@ pub struct CompiledMixerFanoutGraph {
     input_node_ids: Vec<audiorouter_domain::EntityId>,
     output_matrices: Vec<Vec<f32>>,
     output_node_ids: Vec<audiorouter_domain::EntityId>,
+    /// Direct destinations of a final pre-Mixer tool reuse that input's
+    /// processed quantum, before Mixer gain or other sources are added.
+    input_output_branches: Vec<InputOutputBranch>,
     input_meters: Vec<BlockMeter>,
     output_meters: Vec<BlockMeter>,
+}
+
+struct InputOutputBranch {
+    input_index: usize,
+    output_index: usize,
+    channels: usize,
+    block: RealtimeDsp<AudioBlock>,
+    ready: AtomicBool,
 }
 
 /// A prepared bounded fan-out graph. One enabled source feeds up to eight
@@ -3170,6 +3181,35 @@ struct MixerInputChain {
 }
 
 impl CompiledMixerFanoutGraph {
+    fn capture_input_branches(&self, input_index: usize, source: &AudioBlock) {
+        for branch in &self.input_output_branches {
+            if branch.input_index == input_index {
+                let copied = branch.block.try_with(|block| block.copy_from(source));
+                branch.ready.store(matches!(copied, Some(Ok(()))), Ordering::Release);
+            }
+        }
+    }
+
+    fn output_source_channels(&self, index: usize, mixed_channels: usize) -> usize {
+        self.input_output_branches.iter().find(|branch| branch.output_index == index)
+            .map_or(mixed_channels, |branch| branch.channels)
+    }
+
+    fn map_output(&self, index: usize, destination: &mut AudioBlock, mixed: &AudioBlock) -> Result<(), BlockError> {
+        if let Some(branch) = self.input_output_branches.iter().find(|branch| branch.output_index == index) {
+            destination.clear();
+            if branch.ready.load(Ordering::Acquire) {
+                if let Some(result) = branch.block.try_with(|source| destination.map_from(source, &self.output_matrices[index])) {
+                    result?;
+                }
+            }
+            self.privacy_mute.apply(destination);
+            Ok(())
+        } else {
+            destination.map_from(mixed, &self.output_matrices[index])
+        }
+    }
+
     /// Mix all inputs into a cleared scratch block, running any per-input
     /// chain first. A chain whose block is momentarily unavailable leaves
     /// that input silent for the quantum instead of waiting.
@@ -3182,6 +3222,9 @@ impl CompiledMixerFanoutGraph {
             return Err(MixerError::InputCount);
         }
         mixer_scratch.clear();
+        for branch in &self.input_output_branches {
+            branch.ready.store(false, Ordering::Release);
+        }
         let fade = self.input_switch.as_ref().map(|switch| switch.advance(mixer_scratch.frames()));
         let gains = |index: usize| match (&self.input_switch, fade) {
             (Some(switch), Some((start, end))) => {
@@ -3194,13 +3237,17 @@ impl CompiledMixerFanoutGraph {
             self.input_meters[index].observe(source);
             let (start_gain, end_gain) = gains(index);
             match chain {
-                None => self.mixer.mix_input_ramped(mixer_scratch, index, source, start_gain, end_gain)?,
+                None => {
+                    self.capture_input_branches(index, source);
+                    self.mixer.mix_input_ramped(mixer_scratch, index, source, start_gain, end_gain)?;
+                }
                 Some(chain) => {
                     let mixed = chain.block.try_with(|block| {
                         block
                             .map_from(source, &chain.entry_matrix)
                             .map_err(MixerError::Block)?;
                         chain.graph.process(block);
+                        self.capture_input_branches(index, block);
                         self.mixer.mix_input_ramped(mixer_scratch, index, block, start_gain, end_gain)
                     });
                     if let Some(result) = mixed {
@@ -3345,8 +3392,9 @@ impl CompiledMixerFanoutGraph {
         if destinations
             .iter()
             .zip(&self.output_matrices)
-            .any(|(destination, matrix)| {
-                matrix.len() != destination.channels() * mixer_scratch.channels()
+            .enumerate()
+            .any(|(index, (destination, matrix))| {
+                matrix.len() != destination.channels() * self.output_source_channels(index, mixer_scratch.channels())
                     || destination.frames() != mixer_scratch.frames()
             })
         {
@@ -3358,13 +3406,9 @@ impl CompiledMixerFanoutGraph {
             processing_graph.process(mixer_scratch);
         }
         self.privacy_mute.apply(mixer_scratch);
-        for (index, (destination, matrix)) in destinations
-            .iter_mut()
-            .zip(&self.output_matrices)
-            .enumerate()
+        for (index, destination) in destinations.iter_mut().enumerate()
         {
-            destination
-                .map_from(mixer_scratch, matrix)
+            self.map_output(index, destination, mixer_scratch)
                 .map_err(MixerFanoutError::Block)?;
             destination.sanitize_non_finite();
             self.output_meters[index].observe(destination);
@@ -3394,8 +3438,9 @@ impl CompiledMixerFanoutGraph {
         if destinations
             .iter()
             .zip(&self.output_matrices)
-            .any(|(destination, matrix)| {
-                matrix.len() != destination.channels() * mixer_scratch.channels()
+            .enumerate()
+            .any(|(index, (destination, matrix))| {
+                matrix.len() != destination.channels() * self.output_source_channels(index, mixer_scratch.channels())
                     || destination.frames() != mixer_scratch.frames()
             })
         {
@@ -3408,13 +3453,12 @@ impl CompiledMixerFanoutGraph {
         }
         self.privacy_mute.apply(mixer_scratch);
         let mut delivered = 0;
-        for (index, (destination, matrix)) in
-            destinations.iter().zip(&self.output_matrices).enumerate()
+        for (index, destination) in destinations.iter().enumerate()
         {
             let Some(mut block) = destination.try_acquire() else {
                 continue;
             };
-            if block.map_from(mixer_scratch, matrix).is_err() {
+            if self.map_output(index, &mut block, mixer_scratch).is_err() {
                 let _ = destination.try_recycle(block);
                 return Err(MixerFanoutError::Block(BlockError::ShapeMismatch));
             }
@@ -3451,8 +3495,9 @@ impl CompiledMixerFanoutGraph {
         if destinations
             .iter()
             .zip(&self.output_matrices)
-            .any(|(destination, matrix)| {
-                matrix.len() != destination.channels() * mixer_scratch.channels()
+            .enumerate()
+            .any(|(index, (destination, matrix))| {
+                matrix.len() != destination.channels() * self.output_source_channels(index, mixer_scratch.channels())
                     || destination.frames() != mixer_scratch.frames()
             })
         {
@@ -3465,16 +3510,15 @@ impl CompiledMixerFanoutGraph {
         }
         self.privacy_mute.apply(mixer_scratch);
         let mut delivered = 0;
-        for (index, ((destination, matrix), tap_set)) in destinations
+        for (index, (destination, tap_set)) in destinations
             .iter()
-            .zip(&self.output_matrices)
             .zip(tap_sets)
             .enumerate()
         {
             let Some(mut block) = destination.try_acquire() else {
                 continue;
             };
-            if block.map_from(mixer_scratch, matrix).is_err() {
+            if self.map_output(index, &mut block, mixer_scratch).is_err() {
                 let _ = destination.try_recycle(block);
                 return Err(MixerFanoutError::Block(BlockError::ShapeMismatch));
             }
@@ -5867,6 +5911,10 @@ fn compile_path_graph(
 
     let mut participants = HashSet::new();
     let mut processing_nodes = Vec::new();
+    let mixer_id = match &convergence {
+        PathConvergence::Mixer(node) => Some(node.id.clone()),
+        PathConvergence::Direct(_) => None,
+    };
     let PathEntry {
         mixer,
         input_chains,
@@ -6001,11 +6049,44 @@ fn compile_path_graph(
         output_node_ids.push(destination.id.clone());
         output_matrices.push(edge.matrix.clone());
     }
-    if session
-        .nodes
-        .iter()
-        .any(|node| node.enabled && !participants.contains(&node.id))
-    {
+    let mut input_output_branches = Vec::new();
+    if let Some(mixer_id) = mixer_id {
+        for (input_index, feed) in session.edges.iter()
+            .filter(|edge| edge.enabled && edge.destination_node == mixer_id).enumerate()
+        {
+            let source = session.nodes.iter().find(|node| node.id == feed.source_node)
+                .ok_or(GraphCompileError::UnsupportedTopology)?;
+            let channels = source.ports.iter().find(|port| port.name == feed.source_port && port.direction == PortDirection::Output)
+                .ok_or(GraphCompileError::UnsupportedTopology)?.channels;
+            for edge in session.edges.iter().filter(|edge| edge.enabled && edge.source_node == feed.source_node && edge.destination_node != mixer_id) {
+                let sink = session.nodes.iter().find(|node| node.id == edge.destination_node)
+                    .ok_or(GraphCompileError::UnsupportedTopology)?;
+                if !sink.enabled {
+                    continue;
+                }
+                let input = sink.ports.iter().find(|port| port.name == edge.destination_port && port.direction == PortDirection::Input)
+                    .ok_or(GraphCompileError::UnsupportedTopology)?;
+                if !matches!(sink.kind, NodeKind::PhysicalOutput | NodeKind::VirtualCaptureSink | NodeKind::Recorder | NodeKind::NetworkSend)
+                    || sink.bypass || edge.source_port != feed.source_port
+                    || edge.matrix.len() != usize::from(channels) * usize::from(input.channels)
+                    || !destinations.insert(sink.id.clone())
+                    || output_matrices.len() >= MAX_FANOUT_BRANCHES
+                {
+                    return Err(GraphCompileError::UnsupportedTopology);
+                }
+                let block = AudioBlock::new(usize::from(channels), PROCESSING_QUANTUM_FRAMES)
+                    .map_err(|_| GraphCompileError::UnsupportedTopology)?;
+                input_output_branches.push(InputOutputBranch {
+                    input_index, output_index: output_matrices.len(), channels: usize::from(channels),
+                    block: RealtimeDsp::new(block), ready: AtomicBool::new(false),
+                });
+                output_matrices.push(edge.matrix.clone());
+                output_node_ids.push(sink.id.clone());
+                participants.insert(sink.id.clone());
+            }
+        }
+    }
+    if output_matrices.len() > MAX_FANOUT_BRANCHES || session.nodes.iter().any(|node| node.enabled && !participants.contains(&node.id)) {
         return Err(GraphCompileError::UnsupportedTopology);
     }
     let processing_graph = if processing_nodes.is_empty() {
@@ -6037,6 +6118,7 @@ fn compile_path_graph(
         input_node_ids,
         output_matrices,
         output_node_ids,
+        input_output_branches,
     })
 }
 
@@ -8997,6 +9079,150 @@ mod tests {
                 edge("game-out", "game-eq", "speakers", stereo()),
             ],
         }
+    }
+
+    fn pre_mixer_branch_session() -> audiorouter_domain::Session {
+        use audiorouter_domain::{Edge, EntityId, NodeKind};
+        let mut session = voice_and_game_session();
+        session.nodes.retain(|node| node.id.as_str() != "cable-a");
+        session.edges.retain(|edge| edge.id.as_str() != "voice-cable-a");
+        let mut mixer = session.nodes.iter().find(|node| node.id.as_str() == "voice").unwrap().clone();
+        mixer.id = EntityId::new("mix");
+        mixer.name = "Discord + Siege".into();
+        mixer.kind = NodeKind::Mixer;
+        mixer.parameters = serde_json::from_value(serde_json::json!({ "inputVolume:game-eq": 50.0 })).unwrap();
+        session.nodes.push(mixer);
+        session.edges.iter_mut().find(|edge| edge.id.as_str() == "voice-monitor").unwrap().destination_node = EntityId::new("mix");
+        for (id, source, destination) in [("game-mix", "game-eq", "mix"), ("mix-monitor", "mix", "monitor")] {
+            session.edges.push(Edge {
+                id: EntityId::new(id), source_node: EntityId::new(source), source_port: "out".into(),
+                destination_node: EntityId::new(destination), destination_port: "in".into(),
+                matrix: vec![1.0, 0.0, 0.0, 1.0], enabled: true,
+            });
+        }
+        session
+    }
+
+    #[test]
+    fn pre_mixer_branch_keeps_processed_game_separate_from_discord_and_mixer_gain() {
+        let generation = RuntimeGeneration::new(3);
+        let frames = PROCESSING_QUANTUM_FRAMES;
+        for mono in [false, true] {
+            let mut session = pre_mixer_branch_session();
+            if mono {
+                session.nodes.iter_mut().find(|node| node.id.as_str() == "speakers").unwrap().ports[0].channels = 1;
+                session.edges.iter_mut().find(|edge| edge.id.as_str() == "game-out").unwrap().matrix = vec![0.5, 0.5];
+            }
+            let set = compile_native_paths_with_plugins_and_audio(&session, generation, &Default::default(), &Default::default()).unwrap();
+            assert_eq!(set.output_node_ids().iter().map(|id| id.as_str()).collect::<Vec<_>>(), ["monitor", "speakers"]);
+            let mut runtime = RealtimeMixerFanout::from_paths(set, 4, &[1, 2], frames).unwrap();
+            let mixed = AudioBlockRing::new(4, 2, frames).unwrap();
+            let direct = AudioBlockRing::new(4, if mono { 1 } else { 2 }, frames).unwrap();
+            let mut discord = AudioBlock::new(1, frames).unwrap();
+            discord.channel_mut(0).unwrap().fill(0.1);
+            let mut game = AudioBlock::new(2, frames).unwrap();
+            game.channel_mut(0).unwrap().fill(0.8);
+            game.channel_mut(1).unwrap().fill(0.4);
+            for muted in [false, true] {
+                runtime.set_privacy_muted(muted);
+                assert!(runtime.try_submit_input(0, generation, &discord).unwrap());
+                assert!(runtime.try_submit_input(1, generation, &game).unwrap());
+                assert_eq!(runtime.process_once(&[&mixed, &direct]).unwrap(), 2);
+                let mixed_block = mixed.try_receive().unwrap();
+                let direct_block = direct.try_receive().unwrap();
+                let expected_mixed = if muted { [0.0, 0.0] } else { [0.3, 0.2] };
+                for (channel, expected) in expected_mixed.iter().enumerate() {
+                    assert!(mixed_block.channel(channel).unwrap().iter().all(|value| (value - expected).abs() < 1e-5));
+                }
+                let direct_left = if muted { 0.0 } else if mono { 0.3 } else { 0.4 };
+                assert!(direct_block.channel(0).unwrap().iter().all(|value| (value - direct_left).abs() < 1e-5));
+                mixed.try_recycle(mixed_block).unwrap();
+                direct.try_recycle(direct_block).unwrap();
+                assert!(mixed.try_receive().is_none() && direct.try_receive().is_none(), "one block per branch");
+            }
+        }
+    }
+
+    #[test]
+    fn pre_mixer_eq_response_reaches_both_outputs_without_block_discontinuities() {
+        let mut session = pre_mixer_branch_session();
+        let eq = session.nodes.iter_mut().find(|node| node.id.as_str() == "game-eq").unwrap();
+        eq.kind = audiorouter_domain::NodeKind::ParametricEq;
+        eq.parameters = serde_json::from_value(serde_json::json!({
+            "band0Enabled": true, "band0Type": "peaking", "band0FrequencyHz": 997.0,
+            "band0GainDb": 6.0, "band0Q": 1.0,
+        })).unwrap();
+        let set = compile_native_paths_with_plugins_and_audio(&session, RuntimeGeneration::new(3), &Default::default(), &Default::default()).unwrap();
+        let graph = &set.paths[0];
+        let frames = PROCESSING_QUANTUM_FRAMES;
+        let mut sources = [AudioBlock::new(1, frames).unwrap(), AudioBlock::new(2, frames).unwrap()];
+        let mut scratch = AudioBlock::new(2, frames).unwrap();
+        let mut mixed = AudioBlock::new(2, frames).unwrap();
+        let mut direct = AudioBlock::new(2, frames).unwrap();
+        let mut energy = 0.0_f64;
+        let mut samples = 0;
+        for quantum in 0..200 {
+            for frame in 0..frames {
+                let tone = 0.05 * (std::f32::consts::TAU * 997.0 * (quantum * frames + frame) as f32 / INTERNAL_SAMPLE_RATE_HZ as f32).sin();
+                sources[0].channel_mut(0).unwrap()[frame] = 0.1;
+                sources[1].channel_mut(0).unwrap()[frame] = tone;
+                sources[1].channel_mut(1).unwrap()[frame] = tone;
+            }
+            graph.process(&sources, &mut scratch, &mut [&mut mixed, &mut direct]).unwrap();
+            for frame in 0..frames {
+                let signal = direct.channel(0).unwrap()[frame];
+                assert!((mixed.channel(0).unwrap()[frame] - (0.1 + signal * 0.5)).abs() < 1e-6);
+                if quantum > 50 {
+                    let ideal = 0.05 * 10.0_f32.powf(6.0 / 20.0) * (std::f32::consts::TAU * 997.0 * (quantum * frames + frame) as f32 / INTERNAL_SAMPLE_RATE_HZ as f32).sin();
+                    assert!((signal - ideal).abs() < 1e-3, "EQ output must remain sample-continuous across quanta");
+                    energy += f64::from(signal).powi(2);
+                    samples += 1;
+                }
+            }
+        }
+        let rms = (energy / f64::from(samples)).sqrt();
+        assert!((rms - 0.05 * 10.0_f64.powf(6.0 / 20.0) / 2.0_f64.sqrt()).abs() < 1e-4);
+    }
+
+    #[test]
+    fn pre_mixer_branch_reuses_one_stateful_tool_execution_and_never_replays_a_busy_buffer() {
+        #[derive(Debug)]
+        struct CountAndDouble(AtomicU64);
+        impl RealtimePluginProcessor for CountAndDouble {
+            fn process(&self, block: &mut AudioBlock) {
+                self.0.fetch_add(1, Ordering::Relaxed);
+                for channel in 0..block.channels() {
+                    for value in block.channel_mut(channel).unwrap() { *value *= 2.0; }
+                }
+            }
+        }
+        let mut session = pre_mixer_branch_session();
+        let tool = session.nodes.iter_mut().find(|node| node.id.as_str() == "game-eq").unwrap();
+        tool.kind = audiorouter_domain::NodeKind::Plugin;
+        tool.parameters = serde_json::from_value(serde_json::json!({ "path": "fixture.dll", "format": "vst2", "classId": "default", "fingerprint": "0".repeat(64) })).unwrap();
+        let processor = Arc::new(CountAndDouble(AtomicU64::new(0)));
+        let plugins = [(tool.id.clone(), processor.clone() as Arc<dyn RealtimePluginProcessor>)].into_iter().collect();
+        let set = compile_native_paths_with_plugins_and_audio(&session, RuntimeGeneration::new(3), &plugins, &Default::default()).unwrap();
+        let graph = &set.paths[0];
+        let frames = PROCESSING_QUANTUM_FRAMES;
+        let mut sources = [AudioBlock::new(1, frames).unwrap(), AudioBlock::new(2, frames).unwrap()];
+        sources[0].channel_mut(0).unwrap().fill(0.1);
+        sources[1].channel_mut(0).unwrap().fill(0.2);
+        sources[1].channel_mut(1).unwrap().fill(0.2);
+        let mut scratch = AudioBlock::new(2, frames).unwrap();
+        let mut mixed = AudioBlock::new(2, frames).unwrap();
+        let mut direct = AudioBlock::new(2, frames).unwrap();
+        graph.process(&sources, &mut scratch, &mut [&mut mixed, &mut direct]).unwrap();
+        assert_eq!(processor.0.load(Ordering::Relaxed), 1);
+        assert!((direct.channel(0).unwrap()[0] - 0.4).abs() < 1e-6);
+        assert!((mixed.channel(0).unwrap()[0] - 0.3).abs() < 1e-6);
+        // A branch scratch already borrowed by another invocation must be
+        // silent rather than replaying the preceding quantum.
+        graph.input_output_branches[0].block.try_with(|_| {
+            graph.process(&sources, &mut scratch, &mut [&mut mixed, &mut direct]).unwrap();
+            assert!(direct.channel(0).unwrap().iter().all(|sample| *sample == 0.0));
+        }).unwrap();
+        assert_eq!(processor.0.load(Ordering::Relaxed), 2);
     }
 
     #[test]

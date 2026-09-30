@@ -9,7 +9,41 @@ Add new entries under "Log" below, and keep the sections above it current.
 
 ## Objective and scope
 
-Current attended defect (2026-09-29, UI-03/08/12): release
+Current follow-up (2026-09-29, UI-03, GRAPH-01/02/03): user confirms starting
+EQ → Mixer at the EQ's blue dot. Receiver-first idle handles make that gesture
+wire backwards. Decision: make blue a universal sending/start affordance on
+every node output (including tools), and reveal orange receiving/input handles
+only during that drag. Preserve port roles and canonical edges, generic fan-out,
+explicit Mixer and occupied-output reuse. Tasks: update handle styling/guidance,
+regress the exact sender-first EQ → Mixer → Output chain and generic tools,
+verify three themes and checks, rebuild a complete pair without touching the
+running shell/database. Rollback: prior banner-timing build; no audio changes.
+
+Expanded verification found native compiler rejection: the output branching
+from the final pre-Mixer tool is not counted as a participating output. User's
+clarified audio goal authorizes this correction (GRAPH-02/03, UI-03). Plan:
+reuse each already-processed Mixer input for direct output branches before
+Mixer input/master gain, with preallocated scratch and nonblocking access;
+never process stateful tools twice. Keep Discord out of Scarlett, apply privacy
+mute to branches, preserve ring/tap single-write semantics. Add deterministic
+signal/gain/isolation and single-execution regressions, run engine and native
+continuity checks, rebuild the complete pair. Do not open the running user's
+endpoints or alter their session. Rollback now also includes input-branch
+compilation/runtime; native hardware evidence must remain explicitly bounded.
+
+Result: sender-first blue → orange gestures work for EQ, Mixer and generic
+tools. Exact Siege/Discord fixture retains the EQ → Scarlett branch while
+adding EQ → Mixer → Physical Output, including recovery of an existing direct
+output edge. Native input branches reuse processed audio before mixing without
+re-executing DSP. UI 379 passed; browser 31 passed; engine 144, control 198,
+transport 22 and Windows adapter 99 passed (six opt-in control tests ignored).
+15 s native virtual-cable continuity: clean reference, zero glitches in mixed
+output and direct Recorder branch. [Detailed evidence](evidence/2026-09-29-sender-routing.md).
+Next: hand off the rebuilt `target/sender-routing-20260929/release` pair for
+the user's attended Scarlett/Discord test. No saved session, device defaults
+or existing binaries changed. This supersedes receiver-first guidance below.
+
+Completed prior banner defect (2026-09-29, UI-03/08/12): release
 `mixer-topbar-20260928` shows an occupied-EQ-input message when the user tries
 EQ → Mixer, and simultaneous warning/info banners overlap the canvas, blocking
 Replace and Dismiss hit targets (user screenshot in Downloads). Steps: replace

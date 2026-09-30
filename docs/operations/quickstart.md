@@ -125,7 +125,9 @@ Each ID must match exactly one active endpoint of its requested direction.
 A session can hold several separate paths that run together, for example a
 microphone through voice plugins to a virtual cable, and a game cable through
 an EQ to the headphones. A path is one source (or one Mixer of sources), then
-a single chain of tools, then one or more outputs. Paths never mix unless you
+a single chain of tools, then one or more outputs. A source's final tool before
+a Mixer may also feed direct outputs: its processed signal is reused before
+Mixer input gain, without the other mixed sources. Paths never mix unless you
 add a Mixer. Choose each Input device and Output device node's device in its
 **Properties**; the choice is saved on that node. The same output device may be
 used by several paths. **Save** the session, then press **Play**: every path
@@ -138,13 +140,15 @@ by those tools, show a warning and are ignored during playback. They stay on
 the canvas and in the saved session; other connected routes can still play.
 Reconnect an input and save to include that chain again.
 
-To connect a tool such as Advanced EQ to a Mixer, start dragging at the
-**Mixer's blue input**, then drop on the **EQ's orange output**. Orange
-outputs appear during the drag. Starting at the EQ's blue input instead
-changes what feeds the EQ. If that input is occupied, the notice offers
-**Replace input connection**; use **Undo** to restore its previous source,
-or dismiss the notice with **×** to keep the existing connection. An output
-can feed several destinations without replacing its existing branches.
+To connect Advanced EQ to a Mixer, start dragging at the **EQ's blue sending
+dot**, then drop on the **Mixer's orange receiving dot**, which appears during
+the drag. Every source and tool follows that same direction. Then drag from
+the **Mixer's blue dot** to the **Physical Output's orange dot**. An EQ output
+can feed Scarlett directly and also feed a Mixer that combines it with Discord
+for another output. Adding the Mixer branch preserves the Scarlett connection.
+If an ordinary receiving input is occupied, the notice offers **Replace input
+connection**; **Undo** restores its previous source, and **×** keeps its existing
+connection. Mixers accept multiple sources explicitly.
 
 While it plays, the **Timing** tab shows, for each output, how long the sound
 spends at each step in travel order: how long a source's audio waits before it
