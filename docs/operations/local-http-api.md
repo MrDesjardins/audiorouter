@@ -14,13 +14,19 @@ and device-administration permissions.
 
 ## Calls and graph changes
 
-Read resources: `GET /api/v1/status`, `/api/v1/sessions`, `/api/v1/capabilities`.
+Read resources: `GET /api/v1/status`, `/api/v1/sessions`,
+`/api/v1/sessions/active`, `/api/v1/capabilities`. Select the editing session
+with `PUT /api/v1/sessions/active`, providing `sessionId` and a new
+`idempotencyKey`. This changes the session shown by the open UI; it does not
+start audio. Audio lifecycle remains
+`POST /api/v1/sessions/start` and `/stop`.
 Every backend method also has an action resource: replace the dot with a slash,
 for example `graph.plan` → `POST /api/v1/graph/plan`. Send its discovery-defined
 parameters as a plain JSON object and receive the plain result, without a
 JSON-RPC envelope. Use `Content-Type: application/json` and
 `Authorization: Bearer <token>` for API calls. The generated `/openapi.json`
-contains exact schemas for all 100 methods and three read aliases.
+contains exact schemas for all 102 methods, four GET aliases, and the active
+session PUT alias.
 
 PowerShell example (enter the token interactively, never put it in arguments):
 
@@ -30,6 +36,11 @@ $apiSecret = Read-Host 'API token'
 $apiHeaders = @{ Authorization = "Bearer $apiSecret" }
 Invoke-RestMethod "$apiUrl/api/v1/status" -Headers $apiHeaders
 $sessions = Invoke-RestMethod "$apiUrl/api/v1/sessions" -Headers $apiHeaders
+# Read or select the session shown in the editor; this does not start audio.
+$active = Invoke-RestMethod "$apiUrl/api/v1/sessions/active" -Headers $apiHeaders
+Invoke-RestMethod "$apiUrl/api/v1/sessions/active" -Method Put `
+  -Headers $apiHeaders -ContentType 'application/json' `
+  -Body (@{ sessionId=$sessions.items[0].id; idempotencyKey=[guid]::NewGuid().ToString() } | ConvertTo-Json)
 $candidate = $sessions.items[0]
 $baseRevision = $candidate.revision
 # Example: rename this session; gain/other parameters follow the same graph flow.

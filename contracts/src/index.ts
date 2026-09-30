@@ -979,6 +979,7 @@ export type RecordingRecycleResult =
 export type StateEventCategory =
   | "session.created"
   | "session.deleted"
+  | "session.selectionChanged"
   | "graph.committed"
   | "runtime.crashed"
   | "runtime.started"
@@ -1172,6 +1173,8 @@ export type ImplementedMethod =
   | "sessions.create"
   | "sessions.duplicate"
   | "sessions.delete"
+  | "sessions.active.get"
+  | "sessions.active.set"
   | "graph.plan"
   | "graph.commit"
   | "session.start"
@@ -1315,6 +1318,8 @@ export type MethodParams = {
     idempotencyKey?: string;
   };
   "sessions.delete": { sessionId: EntityId; idempotencyKey?: string };
+  "sessions.active.get": undefined;
+  "sessions.active.set": { sessionId: EntityId; idempotencyKey: string };
   "graph.plan": { sessionId: EntityId; baseRevision: number; candidate: Session };
   "graph.commit": {
     planId: EntityId;
@@ -1428,6 +1433,8 @@ export type MethodResult = {
   "sessions.create": SessionCreateResult;
   "sessions.duplicate": SessionCreateResult;
   "sessions.delete": SessionDeleteResult;
+  "sessions.active.get": { sessionId: EntityId | null };
+  "sessions.active.set": { sessionId: EntityId };
   "graph.plan": GraphPlanResult;
   "graph.commit": GraphCommitResult;
   "session.start": SessionStartResult;

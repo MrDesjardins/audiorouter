@@ -33,7 +33,7 @@ use audiorouter_storage::{
 use serde::Serialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -132,9 +132,10 @@ const MAX_PLAN_REQUIRED_SCOPES: usize = 1;
 const MAX_PLAN_WARNINGS: usize = 1;
 const AUDIO_UPLOAD_CHUNK_BYTES: usize = 192 * 1024;
 const AUDIO_UPLOAD_TTL: Duration = Duration::from_secs(30 * 60);
-const STATE_CATEGORIES: [&str; 21] = [
+const STATE_CATEGORIES: [&str; 22] = [
     "session.created",
     "session.deleted",
+    "session.selectionChanged",
     "graph.committed",
     "runtime.crashed",
     "runtime.started",
@@ -2346,6 +2347,8 @@ fn method_description(name: &str) -> &'static str {
         "sessions.importPlan" => "Validate a stopped session import without persisting it.",
         "sessions.importCommit" => "Commit a previously validated stopped session import.",
         "sessions.list" => "List session resources with stable cursor pagination.",
+        "sessions.active.get" => "Return the currently selected editing session, without starting audio.",
+        "sessions.active.set" => "Select an existing editing session and notify connected desktop clients; this does not start audio.",
         "sessions.create" => "Create a validated stopped session resource.",
         "sessions.duplicate" => "Clone a session into a new stopped resource.",
         "sessions.delete" => "Delete a stopped session resource and its history.",
@@ -2905,6 +2908,14 @@ fn method_input_schema(name: &str) -> Value {
             }),
             &[],
         ),
+        "sessions.active.get" => object_schema(json!({}), &[]),
+        "sessions.active.set" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
+            }),
+            &["sessionId", "idempotencyKey"],
+        ),
         "sessions.create" => object_schema(
             json!({
                 "session": session_item_schema(),
@@ -3287,6 +3298,16 @@ fn method_output_schema(name: &str) -> Value {
                 "additionalProperties": false
             })
         }
+        "sessions.active.get" => json!({
+            "type": "object",
+            "properties": { "sessionId": { "type": ["string", "null"], "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } },
+            "required": ["sessionId"],
+            "additionalProperties": false
+        }),
+        "sessions.active.set" => object_schema(
+            json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } }),
+            &["sessionId"],
+        ),
         "graph.history" => {
             let item = session_item_schema();
             json!({
@@ -5221,6 +5242,7 @@ impl AudioServiceStats {
 
 pub struct ControlPlane {
     store: GraphStore,
+    active_session_id: Option<EntityId>,
     build: String,
     runtimes: HashMap<EntityId, FakeRuntime>,
     recorders: HashMap<EntityId, RecorderController>,
@@ -5871,6 +5893,7 @@ impl ControlPlane {
     pub fn new(build: impl Into<String>) -> Self {
         Self {
             store: GraphStore::default(),
+            active_session_id: None,
             build: build.into(),
             runtimes: HashMap::new(),
             recorders: HashMap::new(),
@@ -10005,8 +10028,10 @@ impl ControlPlane {
         // read and validated successfully; failed startup must not mutate the
         // durable database while reporting an initialization error.
         let backend_epoch = storage.claim_backend_epoch()?;
+        let active_session_id = store.sessions_after(None, 1).first().map(|session| session.id.clone());
         let mut plane = Self {
             store,
+            active_session_id,
             build: build.into(),
             runtimes: HashMap::new(),
             recorders: HashMap::new(),
@@ -11350,6 +11375,9 @@ impl ControlPlane {
                 self.store = checkpoint;
                 return Err(storage_error(error));
             }
+        }
+        if self.active_session_id.is_none() {
+            self.active_session_id = Some(session.id.clone());
         }
         self.events.append(
             session.revision,
@@ -12761,19 +12789,25 @@ impl ControlPlane {
                 "limit must be between 1 and 500".into(),
             ));
         }
-        let sessions = if let Some(storage) = &self.storage {
-            storage
+        // The UI can hold a session in the live graph inventory while the
+        // durable index is being repaired or has not yet been refreshed.
+        // Merge both views so API inventory matches the sessions this backend
+        // can actually open; live graph values win for duplicate IDs.
+        let mut by_id = BTreeMap::<String, Session>::new();
+        if let Some(storage) = &self.storage {
+            for session in storage
                 .list_sessions_after(cursor, limit)
                 .map_err(storage_error)?
-        } else {
-            self.store.sessions_after(cursor, limit)
-        };
+            {
+                by_id.insert(session.id.as_str().to_owned(), session);
+            }
+        }
+        for session in self.store.sessions_after(cursor, limit) {
+            by_id.insert(session.id.as_str().to_owned(), session);
+        }
+        let sessions = by_id.into_values().take(limit).collect::<Vec<_>>();
         let next_cursor = (sessions.len() == limit)
-            .then(|| {
-                sessions
-                    .last()
-                    .map(|session| session.id.as_str().to_owned())
-            })
+            .then(|| sessions.last().map(|session| session.id.as_str().to_owned()))
             .flatten();
         Ok(json!({ "items": sessions, "nextCursor": next_cursor }))
     }
@@ -14044,6 +14078,8 @@ impl ControlPlane {
                     "sessions.importPlan" => self.dispatch_session_import_plan(request.params),
                     "sessions.importCommit" => self.dispatch_session_import_commit(request.params),
                     "sessions.list" => self.dispatch_sessions_list(request.params),
+                    "sessions.active.get" => Ok(self.dispatch_active_session_get()),
+                    "sessions.active.set" => self.dispatch_active_session_set(request.params),
                     "sessions.create" => self.dispatch_session_create(request.params),
                     "sessions.duplicate" => self.dispatch_session_duplicate(request.params),
                     "sessions.delete" => self.dispatch_session_delete(request.params),
@@ -14795,6 +14831,43 @@ impl ControlPlane {
             .and_then(Value::as_u64)
             .unwrap_or(100);
         self.sessions_list_page(cursor, limit as usize)
+    }
+
+    fn dispatch_active_session_get(&self) -> Value {
+        let session_id = self
+            .active_session_id
+            .as_ref()
+            .filter(|id| self.store.session(id).is_some())
+            .map(|id| id.as_str());
+        json!({ "sessionId": session_id })
+    }
+
+    fn dispatch_active_session_set(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+        let key = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        let session_id: EntityId = serde_json::from_value(params.get("sessionId").cloned().unwrap_or(Value::Null))
+            .map_err(|_| ControlError::InvalidRequest("invalid sessionId".into()))?;
+        let request = json!({ "sessionId": session_id });
+        let key = self.scoped_idempotency_key("sessions.active.set", key);
+        let hash = Self::request_hash(&request);
+        if let Some(previous) = self.lookup_idempotent_result(&key, &hash)? {
+            return Ok(previous);
+        }
+        let session = self
+            .store
+            .session(&session_id)
+            .ok_or_else(|| ControlError::from(audiorouter_domain::StoreError::SessionNotFound))?;
+        if self.active_session_id.as_ref() != Some(&session_id) {
+            self.active_session_id = Some(session_id.clone());
+            self.events.append(session.revision, None, "session.selectionChanged", None);
+        }
+        let result = json!({ "sessionId": session_id.as_str() });
+        self.journal_idempotent_result(&key, "sessions.active.set", &hash, &result)?;
+        Ok(result)
     }
 
     fn dispatch_system_quit(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -19121,6 +19194,8 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "sessions.importPlan" => &["session"],
         "sessions.importCommit" => &["planId", "idempotencyKey"],
         "sessions.delete" => &["sessionId", "idempotencyKey"],
+        "sessions.active.get" => &[],
+        "sessions.active.set" => &["sessionId", "idempotencyKey"],
         "session.start" | "sessions.start" => {
             &["sessionId", "idempotencyKey", "candidate"]
         }

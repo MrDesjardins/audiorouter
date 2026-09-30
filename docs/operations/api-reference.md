@@ -16,7 +16,7 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
-The current catalog contains 100 methods, including backend-owned quit/finalize,
+The current catalog contains 102 methods, including backend-owned quit/finalize,
 session portability, bounded WAV/MP3 media import, source transport, recorder
 lifecycle, plugin inventory/retry, and startup plan/apply methods.
 
@@ -137,6 +137,8 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `sessions.importPlan` | `graphWrite` | plan-only |
 | `sessions.importCommit` | `graphWrite` | mutating; requires an idempotency key |
 | `sessions.list` | `read` | read-only |
+| `sessions.active.get` | `read` | read-only; returns the UI's selected editing session or `null` |
+| `sessions.active.set` | `sessionControl` | mutating; requires an idempotency key; selects an existing editing session without starting audio |
 | `sessions.create` | `graphWrite` | mutating; requires an idempotency key |
 | `sessions.duplicate` | `graphWrite` | mutating; requires an idempotency key |
 | `sessions.delete` | `graphWrite` | mutating; requires an idempotency key |

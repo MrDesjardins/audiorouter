@@ -156,6 +156,13 @@ pub fn openapi(describe: &Value, port: u16) -> Value {
             .unwrap_or(json!({}));
         paths.insert(format!("/api/v1/{path}"), json!({"get": {"operationId": format!("http.{path}"), "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Backend result", "content": {"application/json": {"schema": schema}}}}}}));
     }
+    let active_get = describe["methods"].as_array().into_iter().flatten()
+        .find(|method| method["name"] == "sessions.active.get").map(|method| method["outputSchema"].clone()).unwrap_or(json!({}));
+    let active_set = describe["methods"].as_array().into_iter().flatten()
+        .find(|method| method["name"] == "sessions.active.set");
+    let active_path = paths.entry("/api/v1/sessions/active").or_insert_with(|| json!({}));
+    active_path["get"] = json!({ "operationId": "http.sessions.active", "responses": { "200": { "description": "Currently selected editing session; audio is not started", "content": { "application/json": { "schema": active_get } } } }, "security": [{"bearerAuth": []}] });
+    active_path["put"] = json!({ "operationId": "http.sessions.activate", "summary": "Select the editing session without starting audio", "requestBody": { "required": true, "content": { "application/json": { "schema": active_set.map(|method| method["inputSchema"].clone()).unwrap_or(json!({})) } } }, "responses": { "200": { "description": "Selected session", "content": { "application/json": { "schema": active_set.map(|method| method["outputSchema"].clone()).unwrap_or(json!({})) } } }, "400": { "description": "Unknown session"}, "403": { "description": "Permission denied"} }, "security": [{"bearerAuth": []}] });
     json!({"openapi": "3.1.0", "info": {"title": "AudioRouter local API", "version": "1.0.0"}, "servers": [{"url": format!("http://127.0.0.1:{port}")}], "paths": paths, "components": {"securitySchemes": {"bearerAuth": {"type": "http", "scheme": "bearer"}}}})
 }
 
@@ -297,6 +304,8 @@ fn handle(
     let method = match (verb, path) {
         ("GET", "/api/v1/capabilities") => "system.describe".into(),
         ("GET", "/api/v1/sessions") => "sessions.list".into(),
+        ("GET", "/api/v1/sessions/active") => "sessions.active.get".into(),
+        ("PUT", "/api/v1/sessions/active") => "sessions.active.set".into(),
         ("GET", "/api/v1/status") => "status.get".into(),
         ("POST", path) => {
             let Some(method) = path
@@ -325,7 +334,7 @@ fn handle(
     if length > MAX_BODY {
         return fail(stream, 413, "JSON body exceeds 4 MiB");
     }
-    let params = if verb == "POST" {
+    let params = if verb == "POST" || verb == "PUT" {
         if !fields
             .get("content-type")
             .is_some_and(|value| value.split(';').next() == Some("application/json"))

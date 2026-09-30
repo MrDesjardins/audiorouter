@@ -46,6 +46,7 @@ const PluginParameterContext = createContext<{ parameters: PluginParametersResul
 /** State categories that can invalidate the workspace snapshot. Meter events
  * are intentionally excluded; diagnostics use the bounded snapshot path. */
 export const WORKSPACE_EVENT_CATEGORIES = [
+  "session.selectionChanged",
   "graph.committed",
   "runtime.crashed",
   "runtime.started",
@@ -1465,7 +1466,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   const refreshSessions = () => {
     const generation = ++sessionRefreshGeneration.current;
-    return backend.listSessions().then((items) => { if (generation !== sessionRefreshGeneration.current) return; setListedSessions(items); setSessionInventoryError(null); }).catch((error) => { if (generation !== sessionRefreshGeneration.current) return; setSessionInventoryError(formatUiError(error, "Session inventory unavailable")); });
+    return backend.listSessions().then((items) => { if (generation !== sessionRefreshGeneration.current) return; setListedSessions(items); setSessionInventoryError(null); setSelectedSessionId((current) => items.some((item) => item.id === current) ? current : items[0]?.id ?? current); }).catch((error) => { if (generation !== sessionRefreshGeneration.current) return; setSessionInventoryError(formatUiError(error, "Session inventory unavailable")); });
   };
   const refreshRecordings = (sessionId: string) => {
     const generation = ++recordingRefreshGeneration.current;
@@ -1524,6 +1525,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   useEffect(() => { if (snapshot) setPrivacyMuted(snapshot.status.privacyMute.muted); }, [snapshot]);
   const availableSessions = mergeSessionInventory(listedSessions, snapshot?.session ?? null, createdSessions);
   const session = availableSessions.find((item) => item.id === selectedSessionId) ?? availableSessions[0] ?? demoSession;
+  const sessionIsAvailable = availableSessions.some((item) => item.id === session.id);
+  useEffect(() => {
+    if (!backend.connected || !backend.setActiveSession || !sessionIsAvailable) return;
+    void backend.setActiveSession(session.id).catch((error) => setSessionInventoryError(formatUiError(error, "Active session selection unavailable")));
+  }, [backend, session.id, sessionIsAvailable]);
   useEffect(() => {
     if (availableSessions.some((item) => item.id === selectedSessionId)) {
       writeLastSession(browserDiagnosticStorage(), selectedSessionId);
@@ -1644,6 +1650,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         const result = await backend.subscribe(eventCursor.current.sequence, session.id, eventCursor.current.backendEpoch, [...WORKSPACE_EVENT_CATEGORIES]);
         if (!active) return;
         const bindingInvalidatedEvent = result.events.find((event) => event.category === "devices.bindingInvalidated");
+        const selectionChangedEvent = result.events.find((event) => event.category === "session.selectionChanged");
+        const activeSession = selectionChangedEvent && backend.getActiveSession
+          ? await backend.getActiveSession()
+          : null;
+        if (activeSession?.sessionId) setSelectedSessionId(activeSession.sessionId);
         const bridgeEvent = result.events.find((event) => event.category === "virtualBridge.failed" || event.category === "virtualBridge.expired");
         if (bindingInvalidatedEvent) {
           setActionMessage("Native endpoint binding changed; audio is stopped. Review the exact endpoints and rebind before restarting.");
@@ -1654,7 +1665,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             : `Virtual bridge failure detected for ${bus}; the route is silenced until it is deliberately recovered.`);
         }
         if (result.resyncRequired || result.events.length > 0) {
-          const nextState = await snapshotCache.refresh(backend, session.id);
+          const nextState = await snapshotCache.refresh(backend, activeSession?.sessionId ?? session.id);
           if (active) {
             setSnapshotState(nextState);
             refreshApplications();

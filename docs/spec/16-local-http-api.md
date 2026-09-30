@@ -25,6 +25,14 @@ localhost only. No remote control, second backend or new audio permissions.
   baseRevision/idempotencyKey. Errors preserve backend code/message/data and
   use HTTP 400/403/409/429/503. Durable-save activation failures remain explicit
   in successful commit results.
+- **HTTP-07 — Session inventory and selection.** `GET /api/v1/sessions` and
+  `GET /api/v1/sessions/active` expose every session and the UI's selected
+  editing session. `PUT /api/v1/sessions/active` with `sessionId` and an
+  `idempotencyKey`
+  selects an existing session and updates the open UI through the backend event
+  stream. Selection does not start audio; `POST /api/v1/sessions/start` remains
+  a separate operation. Selection survives restart through the UI workspace
+  preference and is not persisted as audio-session data.
 - **HTTP-05 — Swagger.** `/docs` serves bundled Swagger UI, no CDN, analytics,
   remote validator or internet requirement. `/openapi.json` generates OpenAPI
   3.1 from backend discovery schemas for every method, including permissions,
@@ -37,7 +45,8 @@ localhost only. No remote control, second backend or new audio permissions.
 
 ## Acceptance and rollback
 
-Test method/OpenAPI parity, malformed/oversized input, token/origin/Host
+Test session listing parity with the UI inventory, active-session GET/PUT/UI
+refresh, and method/OpenAPI parity, malformed/oversized input, token/origin/Host
 rejection, port collision, stop/revocation and denied permissions. Run HTTP
 plan/commit against the frontend's backend and observe its revision/parameter
 in the UI. Review all three themes. These are adapter checks, not audio evidence.

@@ -1,4 +1,5 @@
 import { AudioRouterRpcError, createAudioRouterClient } from "@audiorouter/contracts";
+import { uiIdempotencyKey } from "./idempotency";
 import type {
   AudioRouterClient,
   ApplicationInfo,
@@ -138,6 +139,8 @@ export interface UiBackend {
   listRecordings(sessionId?: string): Promise<RecordingRow[]>;
   listRecorders(): Promise<RecorderStatus[]>;
   listSessions(): Promise<Session[]>;
+  getActiveSession?(): Promise<MethodResult["sessions.active.get"]>;
+  setActiveSession?(sessionId: string): Promise<MethodResult["sessions.active.set"]>;
   listApplications(): Promise<ApplicationRow[]>;
   listDevices(): Promise<DeviceListItem[]>;
   prepareNativeEndpoint?(sessionId: string, captureEndpointId: string, renderEndpointId: string): Promise<import("@audiorouter/contracts").NativeEndpointPrepareResult>;
@@ -614,6 +617,12 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
       return collectPagedRows((cursor) => client.request("sessions.list", cursor === null
         ? { limit: 500 }
         : { limit: 500, cursor }));
+    },
+    async getActiveSession() {
+      return client.request("sessions.active.get", undefined);
+    },
+    async setActiveSession(sessionId) {
+      return client.request("sessions.active.set", { sessionId, idempotencyKey: uiIdempotencyKey("session-select") });
     },
     async listApplications() {
       return client.request("applications.list", undefined);

@@ -27,7 +27,7 @@ stale frontend draft. Rollback each focused slice; disable HTTP immediately if
 needed. Preserve user database, running shell and unrelated changes.
 Result: documented contracts implemented; feedback requires explicit warning
 acknowledgment to save and remains blocked at playback; groups persist locally;
-HTTP forwards all 100 methods to the existing backend with offline Swagger.
+HTTP forwards all 102 methods to the existing backend with offline Swagger.
 Windows Rust/UI regressions and seven headed Edge tests passed, including
 Swagger authorization/Try it out and clean/dirty frontend refresh. Three themes
 reviewed. Native 15 s, 47 Hz pre-Mixer continuity with four live bypass changes:
@@ -74,6 +74,32 @@ worker SHA-256 `1C3147C9941FCFFF122E1D08FBB38F2800DE40D87DFB0E3047095F1729986D1A
 Saved groups missing font size receive 18 px; existing opacity is rounded and
 clamped to the new 1–100 slider range. No tests or UI interaction were run.
 Next: manual verification of migration, slider endpoints and caption sizing.
+
+## Current task (2026-09-29, HTTP-07)
+
+User reports the API session list is empty while the UI shows three sessions,
+and requests GET/SET for the active editing session. Reconciled durable and
+in-memory backend inventories. Added `GET /api/v1/sessions/active` and
+`PUT /api/v1/sessions/active` through backend methods; selection emits a global
+state event, the UI follows it and preserves its preference, and audio start
+remains separate. PUT uses the standard idempotency key. Added schemas,
+permissions, OpenAPI, reference docs and PowerShell examples. Existing session
+IDs are validated; deleted/stale IDs return a not-found error.
+
+Verification: `npm.cmd exec tsc --noEmit` passed;
+`cargo check --manifest-path src-tauri/Cargo.toml --release --features
+custom-protocol --locked --target-dir target/groups-http-20260929` passed;
+isolated Vite production bundle and release shell build passed. The executable
+is `target/groups-http-20260929/release/audiorouter-shell.exe`, SHA-256
+`E0116C9B080D1B00564DB50767FDF816F0034901ADDCEDAF577A82069F07C30C`; it
+embeds the updated frontend. No automated or manual API behavior checks were
+run. The default Vite output is locked by the user's running app, so the shell
+was built from an isolated bundle directory; the running shell was not touched.
+`cargo fmt --all -- --check` reports pre-existing formatting differences across
+the workspace. Next: once the existing shell is closed, manually verify that
+the three sessions appear in GET `/api/v1/sessions`, GET returns the current
+editor ID, PUT switches the open editor, invalid IDs fail clearly, and this does
+not start audio.
 
 Completed prior follow-up (2026-09-29, GRAPH-05/06/08/11/15, CAP-06/10,
 UI-04): bypass must work during playback without an explicit Save or Stop.
