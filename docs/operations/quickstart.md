@@ -138,11 +138,22 @@ by those tools, show a warning and are ignored during playback. They stay on
 the canvas and in the saved session; other connected routes can still play.
 Reconnect an input and save to include that chain again.
 
+To connect a tool such as Advanced EQ to a Mixer, start dragging at the
+**Mixer's blue input**, then drop on the **EQ's orange output**. Orange
+outputs appear during the drag. Starting at the EQ's blue input instead
+changes what feeds the EQ. If that input is occupied, the notice offers
+**Replace input connection**; use **Undo** to restore its previous source,
+or dismiss the notice with **×** to keep the existing connection. An output
+can feed several destinations without replacing its existing branches.
+
 While it plays, the **Timing** tab shows, for each output, how long the sound
 spends at each step in travel order: how long a source's audio waits before it
 is picked up, the delay each tool adds (a plugin's worker queue included), and
 how much audio is queued ahead of the output device. The longest bar marks the
 slowest step. Timing is measured for Mixer and multi-path routes.
+Long timing lists scroll inside the sidebar; opening Timing keeps the canvas
+in place. Warning and action notices stay above the workspace with their
+buttons accessible even when both are present.
 
 ### When Play says audio is not prepared
 

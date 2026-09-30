@@ -130,7 +130,9 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
 .main-content > .recording-encoding-panel,
 .main-content > .recovery-panel { display: none; }
 .main-content { max-width: none; padding: 1rem 1.25rem 2rem; }
-.app-shell { display: grid; grid-template-rows: auto auto minmax(0, 1fr); height: 100vh; overflow: hidden; }
+.app-shell { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+.app-shell > * { flex-shrink: 0; }
+.app-shell > .workspace-grid { flex: 1 1 0; min-height: 0; }
 .workspace-grid { height: auto; min-height: 0; }
 .main-content { height: 100%; min-height: 0; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: auto auto auto minmax(0, 1fr); gap: .7rem 1rem; align-content: stretch; }
 .main-content > .workspace-title,
@@ -176,13 +178,13 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
 /* Focused workbench: reclaim the former session rail and keep the graph clear. */
 .workspace-grid { grid-template-columns: minmax(0, 1fr); }
 .workspace-grid > .sidebar { display: none !important; }
-.main-content { grid-template-columns: minmax(0, 1fr) minmax(290px, 350px); grid-template-rows: auto minmax(220px, 1fr) minmax(220px, .72fr); gap: .65rem; }
+.main-content { grid-template-columns: minmax(0, 1fr) minmax(290px, 350px); grid-template-rows: max-content minmax(0, 1fr) minmax(0, .72fr); gap: .65rem; }
 .main-content > * { display: none; }
 .main-content > .workspace-title { display: flex; grid-column: 1 / -1; grid-row: 1; margin: 0; }
 .workspace-title .session-name, .workspace-title .muted, .workspace-title > .actions { display: none !important; }
 .main-content > #signal-flow-panel { display: flex; grid-column: 1; grid-row: 2 / 4; }
 .main-content > .inspector { display: none; grid-column: 2; grid-row: 3; min-height: 0; overflow: auto; }
-.main-content > .right-workbench { display: block; grid-column: 2; grid-row: 2 / 4; max-height: 100%; overflow: auto; z-index: 3; border: 1px solid var(--ambient-edge); border-radius: 12px; background: var(--ambient-surface); box-shadow: 0 12px 34px var(--ambient-shadow); }
+.main-content > .right-workbench { display: block; grid-column: 2; grid-row: 2 / 4; min-height: 0; max-height: 100%; overflow: auto; z-index: 3; border: 1px solid var(--ambient-edge); border-radius: 12px; background: var(--ambient-surface); box-shadow: 0 12px 34px var(--ambient-shadow); }
 .main-content > .dialog-backdrop { display: grid !important; position: fixed; inset: 0; z-index: 30; }
 .workbench-action-message { margin: .45rem .8rem; padding: .55rem .7rem; border: 1px solid color-mix(in srgb, var(--cyan) 45%, var(--ambient-edge)); border-radius: 9px; background: color-mix(in srgb, var(--cyan) 9%, var(--ambient-surface)); color: var(--text-strong); font-size: .78rem; line-height: 1.4; overflow-wrap: anywhere; }
 .main-content:has(.workbench-tabs button[aria-selected="true"]:nth-child(2)) > .inspector { display: block; }
@@ -945,7 +947,7 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .inspector .tool-description { margin: .2rem 0 .5rem; font-size: .82rem; line-height: 1.45; }
 .inspector .parameter-help { display: block; margin: .1rem 0 .3rem; font-size: .76rem; line-height: 1.4; font-weight: 400; }
 .advanced-eq-status { min-height: 1.3em; margin: .2rem 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-/* Messages never change the page height: two lines, full text on hover. */
+/* Bound notice height; the workspace uses the remaining viewport space. */
 .global-action-message { box-sizing: border-box; height: 3.1rem; max-height: 3.1rem; overflow: hidden; }
 .global-action-message-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
 

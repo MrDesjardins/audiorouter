@@ -9,6 +9,28 @@ Add new entries under "Log" below, and keep the sections above it current.
 
 ## Objective and scope
 
+Current attended defect (2026-09-29, UI-03/08/12): release
+`mixer-topbar-20260928` shows an occupied-EQ-input message when the user tries
+EQ → Mixer, and simultaneous warning/info banners overlap the canvas, blocking
+Replace and Dismiss hit targets (user screenshot in Downloads). Steps: replace
+the fixed three-row shell assumption with content-sized notices and a remaining
+height workspace; clarify input-start drag direction; reproduce a mistaken
+Mixer → occupied EQ gesture, click/dismiss its notice, then connect EQ → Mixer.
+Verify browser geometry and actual button clicks in dark/light/high contrast,
+run UI checks, and build a new shell/worker pair. Browser fixtures open no audio
+devices; native playback remains attended. Preserve the user's running shell
+and database. Rollback: only shell layout, connection guidance, and regressions.
+
+Result: fixed shell notice sizing and sidebar intrinsic-height expansion;
+clarified receiving-input drag guidance and cleared pending replacement on
+dismissal. 379 UI tests, typecheck, seven targeted Edge tests and final four
+regressions passed. Dark/light/high-contrast screenshots inspected. New shell
+and matching worker built in `target/banner-timing-20260929/release`; final
+embedded asset names verified. See [reproduction, validation and hashes](evidence/2026-09-29-banner-timing.md).
+Next action: user closes the running old build and manually checks banner
+actions, EQ → Mixer and Timing in the new build. Native playback not rerun;
+no audio implementation changed. Existing database and shell left untouched.
+
 Finish AudioRouter's non-driver scope. Audio routes use existing endpoints
 (VB-Cable, Voicemeeter, physical WASAPI devices) and are driven by one
 backend-owned graph. The desktop UI, CLI and MCP are adapters over the same

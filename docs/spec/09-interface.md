@@ -61,6 +61,13 @@ as a failed current-profile setup.
 - **UI-14 — Recorder UI.** Expose record/arm/pause/split/stop, destination, disk error, duration, and file library actions. Clearly separate deleting a node, removing a library entry, and recycling a recording file. Do not bury recording activity when the session sidebar changes.
 - **UI-15 — Signal flow visualization.** On active connected routes, show sound traveling in the edge direction between nodes, including from application-capture and microphone inputs through processing to destinations. Represent recent signal level with a clearly visible, smoothly varying stroke width (bounded by a design-system minimum and maximum), with a restrained moving highlight or pulse; do not use a single 1 px line as the only activity cue. Animate only when fresh backend meter/telemetry reports signal on that route, and keep configured-but-silent, stopped, muted, bypassed, stale, disconnected, and faulted states visually distinct. Base width on bounded peak/RMS meter values using smoothing and hold/decay so ordinary audio is legible without flicker; clamp values and never imply activity from a connection alone. Flow direction follows graph topology. The effect remains legible at supported zoom levels and high contrast, has a reduced-motion/static equivalent, and exposes equivalent text/meter values to assistive technology. It is presentation only: no browser audio processing, inferred routing, or per-frame backend polling; consume the existing bounded meter/event path and respect NFR-08 freshness/rate limits.
 
+Workspace layout must reserve separate space for simultaneous warning/action
+notices; neither the canvas nor sidebar may cover their action or dismiss
+buttons. Long sidebar content (including Timing) scrolls within the workspace
+without pushing the canvas down. Connection guidance explains the receiving
+blue input to sending orange output gesture; an occupied-input notice must
+distinguish replacing that input from sending the tool's output elsewhere.
+
 The Advanced EQ property editor presents the backend `parametricEq@1` node as a
 logarithmic frequency graph with up to sixteen selectable points. Dragging a
 point changes its frequency and applicable gain; precise frequency, gain,
