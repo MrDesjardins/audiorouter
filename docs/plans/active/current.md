@@ -14,7 +14,7 @@ selection/save; visual named canvas groups; document then implement optional
 localhost HTTP and bundled Swagger. User confirmed localhost-only. Requirements:
 GRAPH-11, UI-03/16, API-01–12, SEC-01–04/10/12, HTTP-01–06.
 Decisions: known closed-loop playback remains blocked; selection/save carry a
-warning. Groups are local presentation state, 25% default opacity, no ports.
+warning. Groups are local presentation state, 5% default opacity, no ports.
 HTTP is disabled at launch, activation-scoped token and existing desktop grant.
 Prerequisites: Windows/browser toolchains available; no driver or credentials.
 Ordered work: update contracts; expose feedback warning; add groups and focused
@@ -40,6 +40,21 @@ See [task evidence](evidence/2026-09-29-groups-http.md) for commands, limitation
 experiments and artifact hashes. Next: attended testing of the new executable,
 API Start/Stop and the user's corrected cable routing. M08 gates remain open;
 this is a local test build, not an official release.
+
+## Current task (2026-09-29, UI-16)
+
+User asks to drag a group by its background as well as its caption and sets the
+new-group opacity default to 5%. Updated the spec and implementation: the group
+surface accepts pointer input and participates in React Flow dragging, while
+remaining behind nodes and audio edges; removed the caption-only drag constraint.
+Updated the existing component/browser opacity expectations to 5%. Build:
+`npm.cmd run build` passed, embedding `index-B0NmQyWc.js`; release shell and
+matching worker compiled in `target/groups-http-drag-20260929/release`. Shell
+SHA-256 `1F31BC92A7AD3E90F10AE95CD5166EC92376C0119A8FAB30E1BC96C5E47F713E`;
+worker SHA-256 `1C3147C9941FCFFF122E1D08FBB38F2800DE40D87DFB0E3047095F1729986D1A`.
+No UI tests or headed interaction were run for this follow-up. Next: confirm
+background dragging over blank canvas, wires and nodes in three themes, ensure
+those interactions remain available, and verify no audio nodes/connections move.
 
 Completed prior follow-up (2026-09-29, GRAPH-05/06/08/11/15, CAP-06/10,
 UI-04): bypass must work during playback without an explicit Save or Stop.

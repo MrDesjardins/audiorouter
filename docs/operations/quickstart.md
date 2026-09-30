@@ -1,8 +1,8 @@
 # AudioRouter development quickstart
 
 Use Tools → **Group** to add a named, rounded visual background. Properties
-edits its color and opacity (25% by default); drag its caption and resize its
-border. Groups stay beneath audio nodes/wires and save automatically in this
+edits its color and opacity (5% by default); drag its caption or background to
+move it and resize its border. Groups stay beneath audio nodes/wires and save automatically in this
 PC's per-session canvas layout. They do not change audio or require Save/Stop;
 session-file exports currently carry the audio graph, not these annotations.
 

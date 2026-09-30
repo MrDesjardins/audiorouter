@@ -6,9 +6,9 @@ Milestone ownership: M05 visual editor; M07 concurrent/API-driven changes; M08 u
 
 **UI-16 — Visual groups.** Tools offers a rounded rectangular Group annotation
 behind nodes and wires. Properties edits its name, background color and opacity
-(default 25%). Move/resize using its caption and border; its interior must not
-block nodes or wires. Groups have no audio ports or routing effect and do not
-require Save/Stop. Persist per-session beside local canvas layout; they are not
+(default 5%). Drag the caption or background to move it; resize using its border.
+Its interior must not block nodes or wires. Groups have no audio ports or
+routing effect and do not require Save/Stop. Persist per-session beside local canvas layout; they are not
 included in exported audio session files in this initial version.
 
 The API tab displays the optional localhost HTTP listener URL/port, start/stop,

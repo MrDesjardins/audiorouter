@@ -12,7 +12,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     const nodes = await page.locator(".react-flow__node-flowNode").count();
     const edges = await page.locator(".react-flow__edge").count();
     await page.getByRole("button", { name: "Group A named visual background; no audio routing" }).click();
-    await expect(page.getByLabel("Group opacity")).toHaveValue("25");
+    await expect(page.getByLabel("Group opacity")).toHaveValue("5");
     await page.getByLabel("Group name").fill("Game");
     await page.getByLabel("Group background color").fill("#ee8822");
     await page.getByLabel("Group opacity").fill("35");

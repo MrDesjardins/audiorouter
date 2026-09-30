@@ -1019,7 +1019,7 @@ export function SessionFlowCanvas({ groups = [], selectedGroupId = "", onSelectG
           })}
         </div>
       <ReactFlow
-        nodes={[...groups.map((group) => ({ id: group.id, type: "visualGroup", position: { x: group.x, y: group.y }, width: group.width, height: group.height, measured: measured[group.id], style: { width: group.width, height: group.height }, selected: group.id === selectedGroupId, data: { group }, zIndex: -1, dragHandle: ".canvas-group-caption", className: "visual-group-node", connectable: false })), ...nodes]}
+        nodes={[...groups.map((group) => ({ id: group.id, type: "visualGroup", position: { x: group.x, y: group.y }, width: group.width, height: group.height, measured: measured[group.id], style: { width: group.width, height: group.height }, selected: group.id === selectedGroupId, data: { group }, zIndex: -1, className: "visual-group-node", connectable: false })), ...nodes]}
         edges={edges}
         onNodesChange={(changes) => {
           setMeasured((current) => {

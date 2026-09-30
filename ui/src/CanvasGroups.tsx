@@ -34,7 +34,7 @@ export function useCanvasGroups(sessionId: string) {
   // Persist committed React state, never speculative/replayed state updaters.
   const update = (transform: (current: CanvasGroup[]) => CanvasGroup[]) => setState((current) => ({ key, groups: transform(current.key === key ? current.groups : readGroups(key)).filter(validGroup).slice(0, 64) }));
   return { groups, selectedGroupId, selectGroup,
-    addGroup: () => { const id = `group-${crypto.randomUUID()}`; update((current) => [...current, { id, name: "Group", color: "#5599dd", opacity: 25, x: -40 + current.length * 24, y: -80 + current.length * 24, width: 540, height: 340 }]); selectGroup(id); },
+    addGroup: () => { const id = `group-${crypto.randomUUID()}`; update((current) => [...current, { id, name: "Group", color: "#5599dd", opacity: 5, x: -40 + current.length * 24, y: -80 + current.length * 24, width: 540, height: 340 }]); selectGroup(id); },
     changeGroup: (id: string, patch: Partial<CanvasGroup>) => update((current) => current.map((g) => { const next = g.id === id ? { ...g, ...patch, id } : g; return validGroup(next) ? next : g; })),
     removeGroup: (id: string) => { update((current) => current.filter((g) => g.id !== id)); selectGroup(""); },
   };
@@ -48,7 +48,7 @@ export function CanvasGroupRenderer({ data, selected }: NodeProps) {
 }
 export function CanvasGroupInspector({ group, onChange, onRemove }: { group: CanvasGroup; onChange: (patch: Partial<CanvasGroup>) => void; onRemove: () => void }) {
   return <section className="panel inspector" aria-labelledby="inspector-heading"><p className="eyebrow">Visual group</p><h2 id="inspector-heading">{group.name || "Group"}</h2>
-    <p className="muted">Move the caption and resize the border. This group only organizes the canvas; audio connections stay unchanged.</p>
+    <p className="muted">Drag the caption or background to move the group; resize its border. This group only organizes the canvas; audio connections stay unchanged.</p>
     <div className="group-properties"><label>Name<TextField aria-label="Group name" value={group.name} maxLength={120} onValue={(name) => onChange({ name })} /></label>
     <label>Background color<input type="color" aria-label="Group background color" value={group.color} onChange={(event) => onChange({ color: event.target.value })} /></label>
     <label>Opacity (%)<NumberField aria-label="Group opacity" value={group.opacity} min={0} max={100} onValue={(opacity) => onChange({ opacity })} /></label></div>

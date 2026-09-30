@@ -962,7 +962,7 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .inspector-help { margin: .3rem 0 .5rem; font-size: .82rem; } .inspector-help summary { cursor: pointer; color: var(--text-soft); } .inspector-help p { margin: .35rem 0 0; }
 
 .session-flow-canvas .react-flow__node.visual-group-node { padding: 0; border: 0; background: transparent; pointer-events: none; }
-.canvas-group { width: 100%; height: 100%; border: 1px solid var(--line); border-radius: 18px; }
+.canvas-group { width: 100%; height: 100%; border: 1px solid var(--line); border-radius: 18px; pointer-events: auto; cursor: move; }
 .canvas-group-caption { pointer-events: auto; cursor: grab; width: fit-content; max-width: calc(100% - 24px); margin: 10px 12px; padding: 4px 10px; border-radius: 9px; background: var(--panel); color: var(--text); overflow-wrap: anywhere; }
 .visual-group-node .react-flow__resize-control { pointer-events: auto; }
 .canvas-group-caption:active { cursor: grabbing; }
