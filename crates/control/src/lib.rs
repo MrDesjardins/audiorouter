@@ -2972,7 +2972,7 @@ fn method_input_schema(name: &str) -> Value {
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES },
                 "acknowledgments": {
                     "type": ["array", "null"],
-                    "items": { "type": "string", "minLength": 1, "maxLength": 128 },
+                    "items": { "type": "string", "minLength": 1, "maxLength": 2048 },
                     "maxItems": 100
                 }
             }),
@@ -5707,7 +5707,7 @@ fn reject_endpoint_feedback(session: &Session, returns: &[(String, String)]) -> 
                             || returns.iter().any(|(r, c)| r == render && c == capture)
                         {
                             return Err(ControlError::InvalidRequest(format!(
-                                "Audio feedback loop: \"{}\" feeds \"{}\", whose output returns to that input. Choose a different output cable for the mixed/recording feed, or remove this return connection. Do not use the Siege input cable as the Mixer output.", source.name, node.name
+                                "Audio feedback loop: \"{}\" feeds \"{}\", whose output returns to that input. You may keep this selection, but playback is blocked until you choose a different output cable or remove the return connection. Use separate cables for source audio and the mixed/recording feed.", source.name, node.name
                             )));
                         }
                     }
@@ -5725,6 +5725,14 @@ fn reject_endpoint_feedback(session: &Session, returns: &[(String, String)]) -> 
 }
 
 impl ControlPlane {
+    fn endpoint_feedback_warnings(&self, session: &Session) -> Result<Vec<String>, ControlError> {
+        match self.validate_endpoint_feedback(session) {
+            Ok(()) => Ok(Vec::new()),
+            Err(ControlError::InvalidRequest(message)) if message.starts_with("Audio feedback loop:") => Ok(vec![message]),
+            Err(error) => Err(error),
+        }
+    }
+
     fn validate_endpoint_feedback(&self, session: &Session) -> Result<(), ControlError> {
         validate_session(session).map_err(|errors| ControlError::InvalidRequest(format_validation_errors(&errors)))?;
         #[cfg(windows)]
@@ -12776,7 +12784,6 @@ impl ControlPlane {
         base_revision: u64,
         candidate: Session,
     ) -> Result<EntityId, ControlError> {
-        self.validate_endpoint_feedback(&candidate)?;
         self.validate_plugin_placeholders(&candidate)?;
         let checkpoint = self.store.clone();
         let plan_id = self
@@ -14319,6 +14326,7 @@ impl ControlPlane {
             .filter(|node| node.kind == audiorouter_domain::NodeKind::PhysicalOutput)
             .map(|node| node.name.clone())
             .collect::<Vec<_>>();
+        let warnings = self.endpoint_feedback_warnings(&candidate)?;
         let plan_id = self.plan_graph(&session_id, base_revision, candidate)?;
         Ok(json!({
             "planId": plan_id,
@@ -14326,7 +14334,7 @@ impl ControlPlane {
             "expiresInMs": 300000,
             "diff": diff,
             "affectedDestinations": affected_destinations,
-            "warnings": [],
+            "warnings": warnings,
             "requiredScopes": ["graph.write"]
         }))
     }
@@ -14363,19 +14371,34 @@ impl ControlPlane {
         let params = params.ok_or_else(|| {
             ControlError::InvalidRequest("graph.commit params are required".into())
         })?;
-        if let Some(acknowledgments) = params.get("acknowledgments") {
+        let warning_plan_id: EntityId = serde_json::from_value(params.get("planId").cloned().unwrap_or(Value::Null))
+            .map_err(|_| ControlError::InvalidRequest("invalid planId".into()))?;
+        let candidate = match self.store.plan_candidate(&warning_plan_id) {
+            Some(candidate) => Some(candidate.clone()),
+            None => match self.storage.as_ref() {
+                Some(storage) => storage.load_graph_plan(warning_plan_id.as_str()).map_err(storage_error)?.map(|plan| plan.candidate),
+                None => None,
+            },
+        };
+        let expected_warnings = candidate.as_ref().map(|candidate| self.endpoint_feedback_warnings(candidate)).transpose()?.unwrap_or_default();
+        let supplied = params.get("acknowledgments").and_then(Value::as_array);
+        if expected_warnings.iter().any(|warning| !supplied.is_some_and(|items| items.iter().any(|item| item.as_str() == Some(warning)))) {
+            return Err(ControlError::InvalidRequest("Review and acknowledge this plan's audio feedback warning before saving. Playback will remain blocked.".into()));
+        }
+        if let Some(acknowledgments) = params.get("acknowledgments").filter(|value| !value.is_null()) {
             let acknowledgments = acknowledgments.as_array().ok_or_else(|| {
                 ControlError::InvalidRequest("acknowledgments must be an array or null".into())
             })?;
-            if acknowledgments.iter().any(|value| match value.as_str() {
-                Some(value) => value.is_empty() || value.len() > 128,
+            if acknowledgments.len() > 100 || acknowledgments.iter().any(|value| match value.as_str() {
+                Some(value) => value.is_empty() || value.len() > 2048,
                 None => true,
             }) {
                 return Err(ControlError::InvalidRequest(
                     "acknowledgments must contain non-empty warning IDs".into(),
                 ));
             }
-            if !acknowledgments.is_empty() {
+            if acknowledgments.iter().any(|value| !expected_warnings.iter().any(|warning| value.as_str() == Some(warning))
+                && !(candidate.is_none() && value.as_str().is_some_and(|warning| warning.starts_with("Audio feedback loop:")))) {
                 return Err(ControlError::InvalidRequest(
                     "no warnings on this plan require acknowledgment".into(),
                 ));
@@ -19542,6 +19565,29 @@ mod tests {
         session.nodes[3].parameters.insert("endpointId".into(), json!("cable-b-input"));
         session.edges[1].enabled = false;
         reject_endpoint_feedback(&session, &returns).unwrap();
+    }
+
+    #[test]
+    fn feedback_selection_can_be_saved_only_after_review_but_not_prepared() {
+        let mut candidate = feedback_fixture();
+        candidate.nodes[0].kind = NodeKind::EndpointLoopback;
+        candidate.nodes[0].parameters.insert("endpointId".into(), json!("same-render-endpoint"));
+        candidate.nodes[3].parameters.insert("endpointId".into(), json!("same-render-endpoint"));
+        let mut original = candidate.clone();
+        original.edges[2].enabled = false;
+        let mut plane = ControlPlane::new("feedback-review");
+        plane.insert_session(original).unwrap();
+        let request = |method: &str, params| JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(json!(1)), method: method.into(), params: Some(params) };
+        let result = plane.dispatch(request("graph.plan", json!({"sessionId":"feedback","baseRevision":0,"candidate":candidate}))).result.unwrap();
+        let warning = result["warnings"][0].as_str().unwrap();
+        assert!(warning.contains("game") && warning.contains("recording") && warning.contains("playback is blocked"));
+        let mut commit = json!({"planId":result["planId"],"baseRevision":0,"idempotencyKey":"review-feedback"});
+        assert!(plane.dispatch(request("graph.commit", commit.clone())).error.unwrap().message.contains("acknowledge"));
+        commit["acknowledgments"] = result["warnings"].clone();
+        let saved = plane.dispatch(request("graph.commit", commit));
+        assert!(saved.error.is_none(), "{saved:?}");
+        assert_eq!(plane.get_session(&EntityId::new("feedback")).unwrap().revision, 1);
+        assert!(plane.validate_endpoint_feedback(plane.get_session(&EntityId::new("feedback")).unwrap()).is_err());
     }
 
     #[test]

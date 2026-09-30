@@ -26,6 +26,11 @@ OS-visible virtual capture devices are available according to Windows/app microp
 
 ## Authorization UX
 
+The optional [localhost HTTP adapter](16-local-http-api.md) uses an in-memory
+bearer token and the existing desktop grant. It does not expose LAN control or
+grant additional scopes. Exact origin/Host checks and bounded requests are
+required alongside authentication.
+
 The explicitly local desktop shell may hold `recording.write` so the user can
 start an intentional recording in an approved root. This does not imply
 `audio.capture` or `devices.admin`; endpoint capture/preparation remains a

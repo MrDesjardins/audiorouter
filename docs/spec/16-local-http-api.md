@@ -1,0 +1,45 @@
+# 16 — Local HTTP API
+
+Ownership: M07 adapter/security; M05 API tab; M08 packaging.
+Decision (2026-09-29, user): HTTP alongside named-pipe JSON-RPC 2.0 and MCP,
+localhost only. No remote control, second backend or new audio permissions.
+
+## Contract
+
+- **HTTP-01 — Shared authority.** Forward each HTTP operation to the existing
+  backend. Its validation, grants, revisions, persistence and runtime activation
+  remain authoritative. Normal frontend refresh reflects external mutations
+  while preserving unsaved drafts.
+- **HTTP-02 — Lifecycle.** API tab starts/stops the listener and displays its
+  actual URL/port. Default 17891, explicitly bound to IPv4 127.0.0.1. Disabled
+  at launch. Port collision is actionable; never bind all interfaces or attach
+  to another service.
+- **HTTP-03 — Token.** Generate an unpredictable bearer token each activation,
+  held only in process memory and revealed/copied explicitly. Never log it or
+  put it in URLs, browser storage or process arguments. Stop/restart revokes it.
+  The adapter uses the desktop backend grant; denied scopes stay denied.
+- **HTTP-04 — Resources.** Every discovered method has an HTTP action resource:
+  `POST /api/v1/{namespace}/{operation}`, plain JSON parameters/results, without
+  a JSON-RPC envelope. Read aliases: `GET /api/v1/capabilities`,
+  `GET /api/v1/sessions`, `GET /api/v1/status`. Graph plan/commit retain
+  baseRevision/idempotencyKey. Errors preserve backend code/message/data and
+  use HTTP 400/403/409/429/503. Durable-save activation failures remain explicit
+  in successful commit results.
+- **HTTP-05 — Swagger.** `/docs` serves bundled Swagger UI, no CDN, analytics,
+  remote validator or internet requirement. `/openapi.json` generates OpenAPI
+  3.1 from backend discovery schemas for every method, including permissions,
+  side effects and bearer security. Swagger authorization is memory-only.
+- **HTTP-06 — Bounds.** Exact loopback Host and same-origin browser requests;
+  no wildcard CORS, cookies or token URLs. Bound headers, JSON size/depth,
+  deadlines, concurrency and request rate. HTTP runs off audio threads.
+  Documentation has restrictive CSP and only fixed assets. No bodies/tokens
+  in diagnostics.
+
+## Acceptance and rollback
+
+Test method/OpenAPI parity, malformed/oversized input, token/origin/Host
+rejection, port collision, stop/revocation and denied permissions. Run HTTP
+plan/commit against the frontend's backend and observe its revision/parameter
+in the UI. Review all three themes. These are adapter checks, not audio evidence.
+Rollback: stop the listener or revert its adapter/UI; existing pipe/MCP and
+session formats remain compatible.

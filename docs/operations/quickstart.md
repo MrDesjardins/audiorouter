@@ -1,5 +1,14 @@
 # AudioRouter development quickstart
 
+Use Tools → **Group** to add a named, rounded visual background. Properties
+edits its color and opacity (25% by default); drag its caption and resize its
+border. Groups stay beneath audio nodes/wires and save automatically in this
+PC's per-session canvas layout. They do not change audio or require Save/Stop;
+session-file exports currently carry the audio graph, not these annotations.
+
+The new **API** tab starts optional localhost HTTP control and opens its bundled
+Swagger page. See [HTTP setup and examples](local-http-api.md).
+
 Bass & Treble now includes the main voice frequencies: bass defaults to
 500 Hz and treble to 1500 Hz, with gain from −12 to +12 dB. In Properties,
 raise **Bass frequency** or lower **Treble frequency** to affect more of
@@ -97,7 +106,9 @@ For separate voice, game and recording feeds, keep these routes distinct:
 Do not send Mixer output back to CABLE-B Input when CABLE-B Output already
 feeds Siege EQ. That makes an endless return through EQ and Mixer, even if the
 output node is named “Outplayed”. AudioRouter checks known VB-Cable returns and
-names the offending source/output before starting. Keep the recording mix out
+names the offending source/output in a Save warning and before starting.
+You can acknowledge the warning to keep the selected configuration; playback
+remains blocked while that known return is connected. Keep the recording mix out
 of CABLE-A too, so callers receive only processed microphone audio.
 
 Discord's Mic Test plays your selected microphone through Discord's output.

@@ -4,6 +4,17 @@ Milestone ownership: M05 visual editor; M07 concurrent/API-driven changes; M08 u
 
 ## Layout and interaction model
 
+**UI-16 — Visual groups.** Tools offers a rounded rectangular Group annotation
+behind nodes and wires. Properties edits its name, background color and opacity
+(default 25%). Move/resize using its caption and border; its interior must not
+block nodes or wires. Groups have no audio ports or routing effect and do not
+require Save/Stop. Persist per-session beside local canvas layout; they are not
+included in exported audio session files in this initial version.
+
+The API tab displays the optional localhost HTTP listener URL/port, start/stop,
+explicit token reveal/copy and a link to its local Swagger documentation.
+See [HTTP acceptance](16-local-http-api.md).
+
 The primary window gives the left-to-right canvas the available space and puts a clearly selected, tabbed workbench on the right. Its tabs provide addable input/processing/output tools, selected-node properties, session actions, MCP setup/activity, and diagnostics. Session selection and revision actions live in the Session tab; do not reserve a permanent session rail or duplicate the same actions in a tall header. Tool cards use an icon, title, and short description; unavailable capabilities say why. Keep start/stop and the microphone privacy-mute action in the top bar, alongside the live run state. Do not add a separate Route status panel: the fixed top bar already shows run state and a second summary has repeatedly destabilized workspace height. At narrow widths, panels may stack without covering the graph. Detailed controls remain grouped under the selected workbench tab; advanced groups use progressive disclosure instead of one unbounded panel wall.
 
 The MCP tab explains local assistant setup using the installed CLI path, database, named pipe, and an explicitly authorized client ID. It guides least-privilege access and shows a bounded stream of incoming tool-call names, safe argument summaries, and outcomes. Never record audio/media payloads, credentials, or hidden model reasoning. A Diagnostics view exposes recent UI failures and graph node/edge/revision checkpoints; the native backend log records RPC method, outcome, and a privacy-safe state summary in a bounded local file. No diagnostic writer runs in the realtime audio callback.

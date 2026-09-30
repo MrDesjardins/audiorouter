@@ -2947,6 +2947,11 @@ impl GraphStore {
         Ok(())
     }
 
+    /// Inspect the exact validated candidate for warning review before commit.
+    pub fn plan_candidate(&self, id: &EntityId) -> Option<&Session> {
+        self.plans.get(id).map(|plan| &plan.candidate)
+    }
+
     pub fn commit_graph(
         &mut self,
         plan_id: &EntityId,

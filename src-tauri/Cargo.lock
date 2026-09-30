@@ -212,6 +212,7 @@ dependencies = [
  "audiorouter-storage",
  "audiorouter-transport",
  "audiorouter-windows-audio",
+ "getrandom 0.3.4",
  "serde",
  "serde_json",
  "tauri",

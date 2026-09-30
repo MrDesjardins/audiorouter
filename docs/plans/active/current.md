@@ -9,7 +9,39 @@ Add new entries under "Log" below, and keep the sections above it current.
 
 ## Objective and scope
 
-Current follow-up (2026-09-29, GRAPH-05/06/08/11/15, CAP-06/10,
+Current task (2026-09-29): clear cable-feedback warnings while allowing device
+selection/save; visual named canvas groups; document then implement optional
+localhost HTTP and bundled Swagger. User confirmed localhost-only. Requirements:
+GRAPH-11, UI-03/16, API-01–12, SEC-01–04/10/12, HTTP-01–06.
+Decisions: known closed-loop playback remains blocked; selection/save carry a
+warning. Groups are local presentation state, 25% default opacity, no ports.
+HTTP is disabled at launch, activation-scoped token and existing desktop grant.
+Prerequisites: Windows/browser toolchains available; no driver or credentials.
+Ordered work: update contracts; expose feedback warning; add groups and focused
+interaction/persistence tests; implement shared-backend HTTP/OpenAPI/Swagger and
+API tab; verify negative cases and frontend refresh, three themes; build a fresh
+shell/worker pair. Validation: focused Rust/UI tests, real loopback HTTP, headed
+Edge, docs/diff checks. Audio code is unchanged; native continuity required only
+if that scope changes. Risks: annotation hit testing, HTTP token/origin/bounds,
+stale frontend draft. Rollback each focused slice; disable HTTP immediately if
+needed. Preserve user database, running shell and unrelated changes.
+Result: documented contracts implemented; feedback requires explicit warning
+acknowledgment to save and remains blocked at playback; groups persist locally;
+HTTP forwards all 100 methods to the existing backend with offline Swagger.
+Windows Rust/UI regressions and seven headed Edge tests passed, including
+Swagger authorization/Try it out and clean/dirty frontend refresh. Three themes
+reviewed. Native 15 s, 47 Hz pre-Mixer continuity with four live bypass changes:
+zero reference, mixed-output and Recorder glitches. Complete shell/worker pair:
+`target/groups-http-20260929/release`; embedded assets and checksums verified.
+Final control/domain rerun passed; contract drift, 75-file/408-link documentation
+acceptance and authored-source diff checks passed. Four upstream trailing spaces
+in the bundled Swagger license comments are retained verbatim (see evidence).
+See [task evidence](evidence/2026-09-29-groups-http.md) for commands, limitations,
+experiments and artifact hashes. Next: attended testing of the new executable,
+API Start/Stop and the user's corrected cable routing. M08 gates remain open;
+this is a local test build, not an official release.
+
+Completed prior follow-up (2026-09-29, GRAPH-05/06/08/11/15, CAP-06/10,
 UI-04): bypass must work during playback without an explicit Save or Stop.
 Investigate revision 123's native path rejection and Discord mic-test repeats.
 Read-only revision 124 shows Discord capture → Mixer with Siege EQ → Outplayed,

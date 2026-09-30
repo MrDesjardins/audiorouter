@@ -39,3 +39,9 @@ AudioRouter-owned driver and driver signing remain excluded under DEC-16.
 Standard-user install, upgrade/rollback, uninstall/data retention,
 clean-machine and missing-WebView2 qualification remain open M08 gates, so do
 not present the current bundle as a supported consumer release.
+
+The localhost API embeds Swagger UI 5.33.0 assets from its official npm
+distribution. License, NOTICE and bundled dependency notices are retained in
+`src-tauri/http-assets/` and available offline from the documentation page's
+license link (`/licenses/swagger-ui.txt`). Include this vendored dependency in
+the release rights/SBOM review; the UI npm dependency tree alone does not cover it.

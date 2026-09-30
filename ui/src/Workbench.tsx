@@ -1,3 +1,4 @@
+import { ApiPanel } from "./ApiPanel";
 import { TOOL_HELP, type LibraryEntry } from "./library";
 import { TextField } from "./TextField";
 import type { Session } from "@audiorouter/contracts";
@@ -15,12 +16,12 @@ function ApplicationSourceAction({ onClick, disabled }: { onClick: () => void; d
   </button>;
 }
 
-export type WorkbenchTab = "tools" | "properties" | "timing" | "session" | "setup" | "recording" | "advanced" | "mcp" | "diagnostics";
+export type WorkbenchTab = "tools" | "properties" | "timing" | "session" | "setup" | "recording" | "advanced" | "mcp" | "api" | "diagnostics";
 export type McpActivity = { timeUnixMs: number; clientId: string; tool: string; argumentFields: string[]; outcome: string; errorKind?: string | null };
 export type McpSetupInfo = { cliPath: string; cliAvailable: boolean; databasePath: string; pipeName: string; transport: string };
 
-export function Workbench({ tab, onTab, tools, connected, onAdd, onApplicationPicker, librarySearch, onLibrarySearch, onNewSession, onDuplicate, onDelete, onUndo, onRedo, onDiscard, actionMessage, onReplaceInputConnection, sessions, selectedSessionId, onSelectSession, sessionName, onNameChange, diagnostics, backendActivity, mcpActivity, mcpSetupInfo, clientsPanel, setupContent, timingContent, recordingContent, advancedContent, pluginsContent, sessionFileContent }: {
-  tab: WorkbenchTab; onTab: (tab: WorkbenchTab) => void; tools: LibraryEntry[]; connected: boolean;
+export function Workbench({ onAddGroup, tab, onTab, tools, connected, onAdd, onApplicationPicker, librarySearch, onLibrarySearch, onNewSession, onDuplicate, onDelete, onUndo, onRedo, onDiscard, actionMessage, onReplaceInputConnection, sessions, selectedSessionId, onSelectSession, sessionName, onNameChange, diagnostics, backendActivity, mcpActivity, mcpSetupInfo, clientsPanel, setupContent, timingContent, recordingContent, advancedContent, pluginsContent, sessionFileContent }: {
+  onAddGroup?: () => void; tab: WorkbenchTab; onTab: (tab: WorkbenchTab) => void; tools: LibraryEntry[]; connected: boolean;
   onAdd: (kind: NonNullable<LibraryEntry["kind"]>) => void; onNewSession: () => void; onDuplicate: () => void;
   onApplicationPicker: () => void; librarySearch: string; onLibrarySearch: (value: string) => void;
   onDelete: () => void; onUndo: () => void; onRedo: () => void; onDiscard: () => void;
@@ -43,13 +44,13 @@ export function Workbench({ tab, onTab, tools, connected, onAdd, onApplicationPi
   const codexConfig = `[mcp_servers.audiorouter]\ncommand = ${quoted(cli)}\nargs = ["mcp", "serve", "--client-id", ${quoted(mcpClientId)}, "--database", ${quoted(db)}, "--pipe", ${quoted(pipe)}]`;
   const claudeCommand = `claude mcp add --scope user audiorouter -- ${psQuoted(cli)} mcp serve --client-id ${psQuoted(mcpClientId)} --database ${psQuoted(db)} --pipe ${psQuoted(pipe)}`;
   const copy = (value: string) => { if (!navigator.clipboard) { setCopyMessage("Clipboard unavailable. Select the text and copy it."); return; } void navigator.clipboard.writeText(value).then(() => setCopyMessage("Copied to clipboard.")).catch(() => setCopyMessage("Clipboard unavailable. Select the text and copy it.")); };
-  const tabs: [WorkbenchTab, string][] = [["tools", "Tools"], ["properties", "Properties"], ["timing", "Timing"], ["session", "Session"], ["setup", "Setup"], ["recording", "Recording"], ["advanced", "Advanced"], ["mcp", "MCP"], ["diagnostics", "Logs"]];
+  const tabs: [WorkbenchTab, string][] = [["tools", "Tools"], ["properties", "Properties"], ["timing", "Timing"], ["session", "Session"], ["setup", "Setup"], ["recording", "Recording"], ["advanced", "Advanced"], ["mcp", "MCP"], ["api", "API"], ["diagnostics", "Logs"]];
   return <aside className="right-workbench" aria-label="Tools and settings">
     <div className="workbench-tabs" role="tablist" aria-label="Right sidebar">{tabs.map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? "active" : ""} onClick={() => onTab(id)}>{label}</button>)}</div>
     {tab === "tools" && <div className="workbench-tool-search"><label>Find a tool<input type="search" aria-label="Find a tool" value={librarySearch} onChange={(event) => onLibrarySearch(event.target.value)} placeholder="Input, gain, recorder…" /></label></div>}
     {tab === "tools" && <section className="workbench-page" role="tabpanel" aria-label="Tools">
       <p className="eyebrow">Build a route</p>
-      <h2>Add tools</h2>
+      <h2>Add tools</h2><button type="button" className="tool-card" onClick={onAddGroup}><span className="tool-card-icon" aria-hidden="true">▢</span><span><strong>Group</strong><small>A named visual background; no audio routing</small></span></button>
       <p className="muted">Add and connect tools, press Play to hear the route, then use Save at the top to keep it.</p>
       {(["input", "tool", "output"] as const).map((flow) => <section className="tool-group" key={flow}>
         <h3>{flow === "input" ? "Inputs" : flow === "tool" ? "Processing" : "Outputs"}</h3>
@@ -71,6 +72,7 @@ export function Workbench({ tab, onTab, tools, connected, onAdd, onApplicationPi
         <li>Press Play to hear it, and Save at the top to keep it.</li>
       </ol></details>
     </section>}
+    {tab === "api" && <ApiPanel />}
     {tab === "timing" && <section className="workbench-page" role="tabpanel" aria-label="Timing"><p className="eyebrow">Where the sound spends time</p><h2>Signal timing</h2>{timingContent}</section>}
     {tab === "properties" && <section className="workbench-page" role="tabpanel"><h2>Node properties</h2><p className="muted">Select a node on the canvas to edit it here.</p></section>}
     {tab === "setup" && <section className="workbench-page" role="tabpanel"><p className="eyebrow">For the whole app</p><h2>Set up this PC</h2><p className="muted">These settings apply to AudioRouter on this computer, not to one session. Build routes in Tools and choose each node's device in its Properties.</p>{setupContent}</section>}

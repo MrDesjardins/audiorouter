@@ -12,6 +12,9 @@ share configuration, and approved sessions survive ordinary lifecycle events.
 
 ## Ordered implementation
 
+User-authorized extension (2026-09-29): implement and qualify the optional
+[localhost HTTP adapter](../spec/16-local-http-api.md). Remote HTTP is excluded.
+
 1. Audit API/CLI coverage against every implemented UI action. Close missing method/schema/permission/error gaps. Generate method/node references and execute all published command examples.
 2. Pin the current supported MCP SDK/protocol from official documentation. Implement stdio server, capability/schema resources, focused tools, validated generic dispatch, permission enrollment, cancellation, and operation-status handling.
 3. Harden multi-client conflict/undo/idempotency, event replay/resync/epochs, bounded subscriptions, backpressure, and reconnect UI. Test simultaneous UI/CLI/MCP edits.

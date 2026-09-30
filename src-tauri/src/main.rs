@@ -14,6 +14,7 @@ use tauri::{
 };
 
 mod backend_supervisor;
+mod http_api;
 #[cfg(windows)]
 mod os_transition_windows;
 #[cfg(windows)]
@@ -209,6 +210,44 @@ struct ShellState {
     session_id: String,
     probe_file: Option<std::path::PathBuf>,
     database_path: std::path::PathBuf,
+}
+
+#[derive(Default)]
+struct HttpApiState(std::sync::Mutex<Option<http_api::HttpApi>>);
+
+#[tauri::command]
+fn http_api_control(action: String, port: Option<u16>, state: State<'_, ShellState>, api: State<'_, HttpApiState>) -> Result<serde_json::Value, String> {
+    let mut listener = api.0.lock().map_err(|_| "API state unavailable")?;
+    match action.as_str() {
+        "start" => {
+            if listener.is_none() {
+                let pipe = state.pipe_name.clone();
+                *listener = Some(http_api::HttpApi::start(port.unwrap_or(17891), std::sync::Arc::new(move |request| forward_rpc_request(request, &pipe)))?);
+            }
+        }
+        "stop" => { *listener = None; }
+        "openDocs" => {
+            let listener = listener.as_ref().ok_or("Start the API before opening documentation")?;
+            #[cfg(windows)]
+            {
+                use windows::core::{w, PCWSTR};
+                use windows::Win32::UI::Shell::ShellExecuteW;
+                use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+                let url = format!("http://127.0.0.1:{}/docs", listener.port).encode_utf16().chain(Some(0)).collect::<Vec<_>>();
+                // Only our active loopback URL is opened. Both strings are
+                // NUL-terminated and remain owned/alive throughout ShellExecuteW;
+                // no user-controlled command, path or argument is passed.
+                let result = unsafe { ShellExecuteW(None, w!("open"), PCWSTR(url.as_ptr()), None, None, SW_SHOWNORMAL) };
+                if result.0 as isize <= 32 { return Err("Cannot open the browser. Copy the API URL and append /docs.".into()); }
+            }
+        }
+        "status" | "reveal" => {}
+        _ => return Err("Unknown API action".into()),
+    }
+    Ok(match listener.as_ref() {
+        Some(listener) => serde_json::json!({ "running": true, "port": listener.port, "url": format!("http://127.0.0.1:{}", listener.port), "token": if action == "reveal" { Some(&listener.token) } else { None } }),
+        None => serde_json::json!({ "running": false, "port": port.unwrap_or(17891), "url": null, "token": null }),
+    })
 }
 
 #[tauri::command]
@@ -1010,8 +1049,10 @@ fn main() {
     let tray_pipe_name = state.pipe_name.clone();
     tauri::Builder::default()
         .manage(state)
+        .manage(HttpApiState::default())
         .invoke_handler(tauri::generate_handler![
             rpc_request,
+            http_api_control,
             open_plugin_editor,
             choose_session_file,
             session_id,

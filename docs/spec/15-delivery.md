@@ -65,6 +65,8 @@ The ranges below include every normative ID; each milestone must attach evidence
 | PLUG-07 | M06 extension/M08 | Native x64 VST2 adapter, worker containment, rights, compatibility, and failure evidence |
 | REC-09 | M04/M07 | UC-08, crash/disk-failure recovery |
 | UI-01–15 | M05/M07 | UC-01–10, keyboard/Narrator/usability |
+| UI-16 | M05 extension (2026-09-29) | Named visual groups, persistence, no audio changes, three-theme hit testing |
+| HTTP-01–06 | M07/M05 extension (2026-09-29) | Shared-backend mutation/frontend refresh, token/origin/bounds, local Swagger and schema parity |
 | API-01–07, API-09–12 | M01, each feature extension | UC-07/10, protocol/parity tests |
 | API-08 | M01 baseline; M07 hardening | Reconnect/backpressure/resync |
 | AUTO-01–05 | M01, each feature extension | UC-10, executable PowerShell fixture |

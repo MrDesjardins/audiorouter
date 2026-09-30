@@ -9,13 +9,14 @@ audiorouter schema --json
 audiorouter api methods --json
 ```
 
-All methods use JSON-RPC 2.0 through the local authorized backend. `permission`
+All methods use the same local authorized backend through named-pipe JSON-RPC
+2.0, MCP, or the optional [localhost HTTP adapter](local-http-api.md). `permission`
 is the minimum backend scope; a client name or MCP annotation never grants it.
 `side effect` describes the operation boundary exposed to adapters.
 
 ## Methods
 
-The current catalog contains 92 methods, including backend-owned quit/finalize,
+The current catalog contains 100 methods, including backend-owned quit/finalize,
 session portability, bounded WAV/MP3 media import, source transport, recorder
 lifecycle, plugin inventory/retry, and startup plan/apply methods.
 

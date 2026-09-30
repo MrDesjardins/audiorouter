@@ -31,6 +31,7 @@ Read 01–04 first, then the feature areas needed for a milestone. `MUST`/`shall
 | [13 Security](spec/13-security.md) | Local trust, consent, plugin and driver boundaries | M01/M03/M06/M07 |
 | [14 Quality](spec/14-quality.md) | Measurable budgets, test matrix, release evidence | M00–M08 |
 | [15 Delivery](spec/15-delivery.md) | Sequence, traceability, decisions, risks, sources | M00–M08 |
+| [16 Local HTTP](spec/16-local-http-api.md) | Optional localhost REST, API tab, Swagger, token and bounds | M05/M07/M08 |
 
 ## Operational runbooks
 

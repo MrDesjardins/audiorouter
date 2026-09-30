@@ -28,12 +28,18 @@ import { PROCESSOR_ACTIONS } from "./DraftConnectionList";
 import { TestSignalPlaybackControls } from "./TestSignalPlaybackControls";
 import type { RecorderStatus } from "./backend";
 import { hasLearnedNoise } from "./SpectralGateEditor";
+import { CanvasGroupRenderer, type CanvasGroup } from "./CanvasGroups";
 
 export const LIBRARY_DROP_SOURCE = "__audiorouter_library_drop__";
 export const LIBRARY_DROP_MIME = "application/x-audiorouter-library-kind";
 const LIBRARY_DROP_TEXT_MIME = "text/plain";
 
 type SessionFlowCanvasProps = {
+  groups?: CanvasGroup[];
+  selectedGroupId?: string;
+  onSelectGroup?: (id: string) => void;
+  onChangeGroup?: (id: string, patch: Partial<CanvasGroup>) => void;
+  onRemoveGroup?: (id: string) => void;
   session: Session;
   selectedNodeId: string;
   selectedNodeIds?: string[];
@@ -80,7 +86,7 @@ type SessionFlowCanvasProps = {
 function FlowNodeRenderer({ data }: NodeProps) {
   return <>{(data as { label?: ReactNode }).label}</>;
 }
-const NODE_TYPES = { flowNode: FlowNodeRenderer };
+const NODE_TYPES = { flowNode: FlowNodeRenderer, visualGroup: CanvasGroupRenderer };
 
 type EdgeSide = "left" | "right" | "top" | "bottom";
 const IDLE_CONNECTION_MODE: "idle" = "idle";
@@ -785,7 +791,7 @@ function NodeVisual({ node, telemetry, applicationCaptureState, onSetNodeParamet
   return <div className="node-activity" aria-label={node.enabled && !node.bypass ? "Processor ready" : "Processor inactive"}><span className="activity-dot" />{node.bypass ? "Bypassed" : node.enabled ? "Ready" : "Disabled"}</div>;
 }
 
-export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onToggleConnection, onInsertProcessor, onRemoveNode, onAddLibraryNode, onAddVirtualBusNode, diagnostics, sessionRunning, sessionActionBusy = false, testSignalPlaybackReady = false, testSignalEndpointPrepared = false, onStartTestSignal, onStopTestSignal, onAudioSourceTransport, audioSourceStates, onTimeShiftTransport, timeShiftStatuses, recorderStatuses = [], onSetNodeParameter, onOpenPluginPicker, onOpenApplicationPicker, onConnectionRejected, canEdit = true }: SessionFlowCanvasProps) {
+export function SessionFlowCanvas({ groups = [], selectedGroupId = "", onSelectGroup, onChangeGroup, onRemoveGroup, session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onToggleConnection, onInsertProcessor, onRemoveNode, onAddLibraryNode, onAddVirtualBusNode, diagnostics, sessionRunning, sessionActionBusy = false, testSignalPlaybackReady = false, testSignalEndpointPrepared = false, onStartTestSignal, onStopTestSignal, onAudioSourceTransport, audioSourceStates, onTimeShiftTransport, timeShiftStatuses, recorderStatuses = [], onSetNodeParameter, onOpenPluginPicker, onOpenApplicationPicker, onConnectionRejected, canEdit = true }: SessionFlowCanvasProps) {
   const graphRunning = sessionRunning ?? diagnostics?.schedulerTelemetry?.activeGeneration != null;
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
   const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey));
@@ -941,7 +947,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
     type: "flowNode",
     position: positions[node.id] ?? positionFor(index),
     measured: measured[node.id],
-    selected: selectedNodeIds.includes(node.id),
+    selected: !selectedGroupId && selectedNodeIds.includes(node.id),
     data: {
       label: (
         <div className={`flow-node-content node-kind-${node.kind}`} aria-label={`${node.name}, ${node.kind}`} onMouseDownCapture={captureConnectionHandle} onPointerDownCapture={captureConnectionHandle}>
@@ -960,7 +966,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
     selectable: true,
     deletable: canEdit,
     style: {
-      border: selectedNodeIds.includes(node.id) ? "2px solid var(--accent, #65d1b5)" : "1px solid var(--line, #40536b)",
+      border: !selectedGroupId && selectedNodeIds.includes(node.id) ? "2px solid var(--accent, #65d1b5)" : "1px solid var(--line, #40536b)",
       borderRadius: 10,
       background: "var(--panel, #162132)",
       color: "var(--text, #edf4ff)",
@@ -1013,7 +1019,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
           })}
         </div>
       <ReactFlow
-        nodes={nodes}
+        nodes={[...groups.map((group) => ({ id: group.id, type: "visualGroup", position: { x: group.x, y: group.y }, width: group.width, height: group.height, measured: measured[group.id], style: { width: group.width, height: group.height }, selected: group.id === selectedGroupId, data: { group }, zIndex: -1, dragHandle: ".canvas-group-caption", className: "visual-group-node", connectable: false })), ...nodes]}
         edges={edges}
         onNodesChange={(changes) => {
           setMeasured((current) => {
@@ -1027,14 +1033,15 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
             }
             return next;
           });
-          const moved = changes.filter((change) => change.type === "position" && change.position);
+          for (const change of changes) { if (!("id" in change) || !groups.some((g) => g.id === change.id)) continue; if (change.type === "position" && change.position) onChangeGroup?.(change.id, { x: change.position.x, y: change.position.y }); if (change.type === "dimensions" && change.dimensions && change.resizing) onChangeGroup?.(change.id, { width: change.dimensions.width, height: change.dimensions.height }); }
+          const moved = changes.filter((change) => change.type === "position" && change.position && !groups.some((g) => g.id === change.id));
           if (moved.length) {
             const next = { ...positionsRef.current };
             for (const change of moved) if (change.type === "position" && change.position) next[change.id] = change.position;
             positionsRef.current = next;
             setPositions(next);
           }
-          const selection = changes.filter((change) => change.type === "select");
+          const selection = changes.filter((change) => change.type === "select" && !groups.some((g) => g.id === change.id));
           if (selection.length) {
             const selected = new Set(selectedNodeIds);
             for (const change of selection) if (change.type === "select") {
@@ -1044,12 +1051,13 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
           }
         }}
         nodeTypes={NODE_TYPES}
+        elevateNodesOnSelect={false}
         onInit={(instance) => { flowInstanceRef.current = instance; if (session.nodes.length > 0 && !initialFitDoneRef.current) { initialFitDoneRef.current = true; globalThis.requestAnimationFrame(() => instance.fitView({ padding: 0.2 })); } }}
         nodesConnectable={canEdit}
         deleteKeyCode={["Backspace", "Delete"]}
         nodesDraggable
         selectionOnDrag
-        onNodeClick={(_, node) => onSelect(node.id)}
+        onNodeClick={(_, node) => { if (node.type === "visualGroup") onSelectGroup?.(node.id); else { onSelectGroup?.(""); onSelect(node.id); } }}
         onMouseDownCapture={captureConnectionHandle}
         onPointerDownCapture={captureConnectionHandle}
         onConnectStart={(event, params) => { sourceHandleRef.current = null; targetHandleRef.current = null; pendingConnectionRef.current = null; setConnectionHandleMode(params.handleType === "target" ? "from-input" : "from-output"); captureConnectionHandle(event); logConnectionDebug("react-flow-connect-start", { handleType: params.handleType, nodeId: params.nodeId, handleId: params.handleId, capturedSource: sourceHandleRef.current, capturedTarget: targetHandleRef.current }); }}
@@ -1057,8 +1065,8 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
         onConnect={canEdit ? (connection) => { const rawSourceHandle = connection.sourceHandle ?? (sourceHandleRef.current?.nodeId === connection.source ? sourceHandleRef.current.handleId : null); const rawTargetHandle = connection.targetHandle ?? (targetHandleRef.current?.nodeId === connection.target ? targetHandleRef.current.handleId : null); logConnectionDebug("react-flow-connect", { source: connection.source, sourceHandle: connection.sourceHandle, recoveredSourceHandle: rawSourceHandle, target: connection.target, targetHandle: connection.targetHandle, recoveredTargetHandle: rawTargetHandle }); const source = logicalPortHandle(rawSourceHandle); const target = logicalPortHandle(rawTargetHandle); pendingConnectionRef.current = { connection: { ...connection, sourceHandle: source.port, targetHandle: target.port }, sourceSide: source.side, targetSide: target.side, rawTargetHandle }; } : undefined}
         edgeTypes={edgeTypes}
         onEdgesDelete={canEdit && onRemoveConnection ? (deleted) => { for (const edgeId of deletedConnectionIds(deleted)) onRemoveConnection(edgeId); } : undefined}
-        onNodesDelete={canEdit ? (deleted) => { for (const nodeId of deletedNodeIds(deleted)) { if (onRemoveNode) onRemoveNode(nodeId); else globalThis.dispatchEvent(new CustomEvent("audiorouter:remove-node", { detail: { nodeId } })); } } : undefined}
-        onNodeDragStop={(_, node) => { const next = { ...positionsRef.current, [node.id]: node.position }; positionsRef.current = next; setPositions(next); writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next); }}
+        onNodesDelete={canEdit ? (deleted) => { for (const nodeId of deletedNodeIds(deleted)) { if (groups.some((g) => g.id === nodeId)) { onRemoveGroup?.(nodeId); continue; } if (onRemoveNode) onRemoveNode(nodeId); else globalThis.dispatchEvent(new CustomEvent("audiorouter:remove-node", { detail: { nodeId } })); } } : undefined}
+        onNodeDragStop={(_, node) => { if (node.type === "visualGroup") { onChangeGroup?.(node.id, { x: node.position.x, y: node.position.y }); return; } const next = { ...positionsRef.current, [node.id]: node.position }; positionsRef.current = next; setPositions(next); writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next); }}
         proOptions={{ hideAttribution: true }}
       >
         <Background gap={24} size={1} color="#2e4057" />
