@@ -41,7 +41,7 @@ experiments and artifact hashes. Next: attended testing of the new executable,
 API Start/Stop and the user's corrected cable routing. M08 gates remain open;
 this is a local test build, not an official release.
 
-## Current task (2026-09-29, UI-16)
+## Completed follow-up (2026-09-29, UI-16)
 
 User asks to drag a group by its background as well as its caption and sets the
 new-group opacity default to 5%. Updated the spec and implementation: the group
@@ -55,6 +55,25 @@ worker SHA-256 `1C3147C9941FCFFF122E1D08FBB38F2800DE40D87DFB0E3047095F1729986D1A
 No UI tests or headed interaction were run for this follow-up. Next: confirm
 background dragging over blank canvas, wires and nodes in three themes, ensure
 those interactions remain available, and verify no audio nodes/connections move.
+
+## Current task (2026-09-29, UI-16)
+
+User requests a group caption font larger than audio-node text, adjustable in
+Properties, and a whole-number opacity slider from 1% to 100%. Set the default
+caption to 18 px (audio node title is 16 px), permit 12–48 px, and keep opacity
+default 5%. Preserve existing local annotations by supplying 18 px when older
+stored groups load without a font-size field. No backend/audio graph changes.
+Update UI-16 and quickstart. Build updated UI/shell/worker for manual testing;
+rollback is a local presentation-only revert. Next: confirm slider endpoints,
+font scaling, existing-group migration and readability in three themes.
+
+Result: UI typecheck/production build passed (`index-juGfcH9F.js`); release shell
+rebuilt with that bundle, worker unchanged. Shell SHA-256
+`03B9AAB8789F5A923BEF697B4B446CFA22C0A473FADDD249EB88F6E78BADBD60`;
+worker SHA-256 `1C3147C9941FCFFF122E1D08FBB38F2800DE40D87DFB0E3047095F1729986D1A`.
+Saved groups missing font size receive 18 px; existing opacity is rounded and
+clamped to the new 1–100 slider range. No tests or UI interaction were run.
+Next: manual verification of migration, slider endpoints and caption sizing.
 
 Completed prior follow-up (2026-09-29, GRAPH-05/06/08/11/15, CAP-06/10,
 UI-04): bypass must work during playback without an explicit Save or Stop.

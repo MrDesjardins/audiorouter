@@ -968,4 +968,5 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .canvas-group-caption:active { cursor: grabbing; }
 .group-properties { display: grid; gap: .65rem; margin: .7rem 0; }
 .group-properties > label { display: grid; grid-template-columns: minmax(0, 1fr); gap: .3rem; }
+.group-properties input[type="range"] { width: 100%; }
 input[type="color"] { width: 100%; }
