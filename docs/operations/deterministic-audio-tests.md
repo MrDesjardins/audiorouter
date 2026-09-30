@@ -17,7 +17,7 @@ The runner writes float32 `input.wav`, `output.wav` and `metrics.json` under
 `input-b.wav`. Native plugin cases retain exact interleaved input/output arrays
 in `samples.json`. Logs and `qualification.json` report each command and exit
 code. Generated files are ignored by Git and can be regenerated; allow roughly
-1.3 GB for the present sweeps. Supply `-ArtifactDirectory` and
+2 GB for the present sweeps. Supply `-ArtifactDirectory` and
 `-TargetDirectory` to choose other output/build locations. Environment overrides
 are restored when the script exits. A reused output directory may retain cases
 from earlier versions; the current logs identify executed cases. Choose a fresh
@@ -87,20 +87,20 @@ five gains with bypass on/off, both at three sample rates. AGain's parameter
 IDs come from the pinned SDK: gain 0, read-only meter 1, bypass 2. No native
 editor is opened. Native fixtures are explicit opt-ins and are not redistributed.
 
-## Known failing acceptance gate
+## Dehum preservation regression
 
-DSP-12 is **not fully qualified**. At 48 kHz, 60 Hz fundamental, eight harmonics
-and 100% amount, a 1003 Hz wanted tone retains approximately 92.31% amplitude;
-the requirement allows at most 5% deviation. This follows the specified Q20,
-−36 dB peaking cascade, so correct transfer-law execution does not satisfy the
-separate preservation requirement. Fewer harmonics/lower amount can reduce this
-effect, but do not resolve the general gate.
+The original DSP-12 failure retained only 92.31% of a 1003 Hz wanted tone at
+48 kHz, 60 Hz fundamental, eight harmonics and full Amount. Finite-depth notches
+now retain 99.996% in that unchanged test, within the original 5% limit.
+Harmonic h uses Q=20*h; Amount controls center depth without widening the poles.
+Additional checks cover passband boundaries, inter-harmonic tones, stereo
+program audio mixed with hum, neutral Amount and reset repeatability.
 
-The named preservation test is explicitly ignored in ordinary `cargo test`
-because it records this known defect. The qualification runner **always runs
-it separately**, reports `qualified: false`, and exits unsuccessfully while the
-defect exists. Do not treat the normal suite's green result as a release pass.
-See the [dated evidence](../plans/active/evidence/2026-09-30-deterministic-audio.md).
+The named preservation test runs in ordinary `cargo test`. The qualification
+runner also executes it separately and fails if any check fails. Its
+`qualified` flag covers the requested offline matrix, not all release gates.
+See the [correction evidence](../plans/active/evidence/2026-09-30-dehum-preservation.md)
+and [original evidence](../plans/active/evidence/2026-09-30-deterministic-audio.md).
 
 Offline checks do not prove intelligibility, musical quality, callback deadlines,
 WASAPI continuity, physical latency or every installed plugin's compatibility.

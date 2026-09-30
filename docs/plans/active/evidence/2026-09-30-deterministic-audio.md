@@ -1,5 +1,9 @@
 # 2026-09-30 deterministic audio transformation evidence
 
+Historical results below precede the DSP-12 correction. Its failing preservation
+gate is now resolved in the tested offline matrix; see
+[post-fix evidence](2026-09-30-dehum-preservation.md).
+
 Status: substantial offline signal qualification; **not a complete release
 gate**. DSP-12 wanted-band preservation fails and remains explicitly open.
 

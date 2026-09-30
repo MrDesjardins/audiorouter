@@ -39,9 +39,9 @@ try {
     $env:AUDIOROUTER_SIGNAL_ARTIFACTS = $artifactRoot
     Invoke-SignalCheck 'built-in-signals' @('test', '-p', 'audiorouter-engine', '--test', 'deterministic_audio', '--release', '--locked', '--target-dir', $TargetDirectory, '--', '--nocapture')
     Invoke-SignalCheck 'dsp-engine-regressions' @('test', '-p', 'audiorouter-dsp', '-p', 'audiorouter-engine', '--lib', '--release', '--locked', '--target-dir', $TargetDirectory)
-    # Always execute the known-failure gate: a passing normal suite must not
-    # silently imply that DSP-12's wanted-band preservation is qualified.
-    Invoke-SignalCheck 'dehum-preservation-gate' @('test', '-p', 'audiorouter-engine', '--test', 'deterministic_audio', '--release', '--locked', '--target-dir', $TargetDirectory, 'dehum_eight_harmonics_preserves_wanted_band_within_five_percent', '--', '--ignored', '--nocapture')
+    # Explicitly recheck the former failing gate as well as running it in the
+    # ordinary suite; it is no longer ignored.
+    Invoke-SignalCheck 'dehum-preservation-gate' @('test', '-p', 'audiorouter-engine', '--test', 'deterministic_audio', '--release', '--locked', '--target-dir', $TargetDirectory, 'dehum_eight_harmonics_preserves_wanted_band_within_five_percent', '--', '--nocapture')
     if ($NativeFixtures) {
         foreach ($path in @($Vst2Fixture, $Vst3Fixture, $Vst3Worker)) {
             if ([string]::IsNullOrWhiteSpace($path) -or -not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Native fixture file unavailable: $path" }

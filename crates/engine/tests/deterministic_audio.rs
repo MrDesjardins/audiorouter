@@ -667,10 +667,13 @@ fn bass_treble_shelves_and_dehum_harmonics_follow_controls() {
                             / projection(&input[start..], rate, frequency));
                         let expected = (1..=harmonics)
                             .map(|harmonic| {
+                                // Independently evaluate the equivalent peaking law:
+                                // Q_peak = Q_notch / sqrt(center_gain). This keeps
+                                // denominator bandwidth fixed as depth changes.
                                 peaking_db(
                                     rate,
                                     fundamental * harmonic as f64,
-                                    20.0,
+                                    20.0 * harmonic as f64 / 10f64.powf(-0.36 * amount / 40.0),
                                     -0.36 * amount,
                                     frequency,
                                 )
@@ -697,7 +700,6 @@ fn bass_treble_shelves_and_dehum_harmonics_follow_controls() {
 }
 
 #[test]
-#[ignore = "Known DSP-12 acceptance failure: eight Q20 peaking cuts attenuate 1003 Hz more than 5%; do not waive or weaken the specification"]
 fn dehum_eight_harmonics_preserves_wanted_band_within_five_percent() {
     let rate = 48_000;
     let params = json!({"frequencyHz":60.0,"harmonics":8,"amountPercent":100.0});
@@ -706,18 +708,111 @@ fn dehum_eight_harmonics_preserves_wanted_band_within_five_percent() {
     let ratio =
         projection(&output[96_000..], rate, 1_003.0) / projection(&input[96_000..], rate, 1_003.0);
     evidence(
-        "known-dehum-wanted-band",
+        "dehum-wanted-band",
         rate,
         1,
         &params,
         &input,
         &output,
-        json!({"wantedBandAmplitudeRatio":ratio,"maximumDeviation":0.05,"knownFailure":true}),
+        json!({"wantedBandAmplitudeRatio":ratio,"maximumDeviation":0.05}),
     );
     assert!(
         (ratio - 1.0).abs() <= 0.05,
         "DSP-12 wanted-band amplitude ratio {ratio}"
     );
+}
+
+#[test]
+fn dehum_full_strength_preserves_inter_harmonic_and_passband_boundary_tones() {
+    for rate in [8_000, 48_000, 192_000] {
+        for fundamental in [45.0, 50.0, 60.0, 65.0] {
+            let params = json!({"frequencyHz":fundamental,"harmonics":8,"amountPercent":100.0});
+            let frequencies = [0.875, 1.125, 3.875, 4.125, 7.875, 8.125, 1.5, 4.5, 7.5, 8.5]
+                .into_iter()
+                .map(|multiple| fundamental * multiple)
+                .chain([1003.0]);
+            for frequency in frequencies {
+                let input = tone(rate, frequency, 0.1, 4);
+                let output = render(&graph(NodeKind::Dehum, params.clone(), rate, 1), &input, 1);
+                let start = rate as usize * 3;
+                let ratio = projection(&output[start..], rate, frequency)
+                    / projection(&input[start..], rate, frequency);
+                evidence(
+                    &format!("dehum-passband-{rate}-{fundamental}-{frequency}"),
+                    rate,
+                    1,
+                    &params,
+                    &input,
+                    &output,
+                    json!({"frequencyHz":frequency,"amplitudeRatio":ratio,"maximumDeviation":0.05,"warmupSeconds":3}),
+                );
+                assert!(
+                    (ratio - 1.0).abs() <= 0.05,
+                    "Dehum {rate}/{fundamental}/{frequency}: {ratio}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn dehum_removes_hum_from_stereo_program_audio_without_reducing_wanted_tones() {
+    let rate = 48_000;
+    for fundamental in [50.0, 60.0] {
+        for amount in [0.0, 50.0, 100.0] {
+            let params = json!({"frequencyHz":fundamental,"harmonics":8,"amountPercent":amount});
+            let input: Vec<_> = (0..frames(rate, 4))
+                .flat_map(|frame| {
+                    let phase = TAU * frame as f64 / rate as f64;
+                    let hum = (1..=8)
+                        .map(|h| (phase * fundamental * h as f64).sin() * 0.01)
+                        .sum::<f64>();
+                    [
+                        (0.1 * (phase * 1003.0).sin() + hum) as f32,
+                        (0.1 * (phase * 1231.0).sin() + hum * 0.5) as f32,
+                    ]
+                })
+                .collect();
+            let output = render(&graph(NodeKind::Dehum, params.clone(), rate, 2), &input, 2);
+            let mut worst_deviation = 0.0_f64;
+            let mut worst_hum_error = 0.0_f64;
+            for (channel, wanted) in [(0, 1003.0), (1, 1231.0)] {
+                let source: Vec<_> = input[3 * rate as usize * 2..]
+                    .chunks_exact(2)
+                    .map(|frame| frame[channel])
+                    .collect();
+                let result: Vec<_> = output[3 * rate as usize * 2..]
+                    .chunks_exact(2)
+                    .map(|frame| frame[channel])
+                    .collect();
+                let ratio = projection(&result, rate, wanted) / projection(&source, rate, wanted);
+                worst_deviation = worst_deviation.max((ratio - 1.0).abs());
+                for harmonic in 1..=8 {
+                    let frequency = fundamental * harmonic as f64;
+                    let measured =
+                        db(projection(&result, rate, frequency)
+                            / projection(&source, rate, frequency));
+                    worst_hum_error = worst_hum_error.max((measured + 0.36 * amount).abs());
+                }
+            }
+            evidence(
+                &format!("dehum-stereo-program-{fundamental}-{amount}"),
+                rate,
+                2,
+                &params,
+                &input,
+                &output,
+                json!({"maximumWantedDeviation":worst_deviation,"wantedLimit":0.05,"maximumHumDepthErrorDb":worst_hum_error,"humToleranceDb":0.5}),
+            );
+            assert!(
+                worst_deviation <= 0.05 && worst_hum_error < 0.5,
+                "{params}: wanted {worst_deviation}, hum {worst_hum_error}"
+            );
+            if amount == 0.0 {
+                assert_eq!(max_error(&output, &input), 0.0);
+            }
+        }
+    }
 }
 
 #[test]
@@ -1311,6 +1406,10 @@ fn fresh_preparation_and_reset_reproduce_output_bit_for_bit() {
             json!({"gainDb":6.0,"frequencyHz":1_000.0}),
         ),
         (NodeKind::Compressor, json!({})),
+        (
+            NodeKind::Dehum,
+            json!({"harmonics":8,"amountPercent":100.0}),
+        ),
         (NodeKind::Gate, json!({})),
         (NodeKind::Limiter, json!({})),
         (NodeKind::Delay, json!({"delayMs":5.0})),

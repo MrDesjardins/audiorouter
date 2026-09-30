@@ -11,7 +11,36 @@ Add new entries under "Log" below, and keep the sections above it current.
 
 ## Current task (2026-09-30): deterministic audio transformation qualification
 
-Continuation completed: expanded offline DSP-02/03/05/06/14/17 and
+Current fix, explicitly authorized by user: close failing DSP-12 preservation
+cases, without lowering the 5% criterion. Reproduction: eight 60 Hz/full Amount
+peaking cuts retain only 92.31% of a 1003 Hz tone. Decision: replace the
+gain-dependent-width peaking cascade with finite-depth constant-bandwidth
+notches. Fundamental notch Q is 20, harmonic h uses Q=20*h; Amount retains
+0..−36 dB center depth. Implement in DSP, wire the graph compiler, update the
+transfer-law specification and independent oracle together, unignore the
+regression and remove runner's ignored-only invocation. Sweep hum centers,
+inter-harmonic midpoints and passband boundaries, rates/Amount/harmonics,
+mono/stereo and bypass/reset. No added latency, callback allocation, device,
+desktop or saved-session mutation. Validation: failing test first, focused
+Dehum sweeps, full qualification/native fixtures, unit/docs/diff checks.
+Compatibility: existing Dehum settings remove less wanted audio; no migration.
+Rollback: revert DSP/compiler/contract together and re-open the preservation
+gate; retain regressions. Native continuity/performance remains separate.
+
+Fix result: the unchanged wanted-tone regression retains 0.9999558431 amplitude
+(previously 0.9231109735). Full runner passes 30 signal tests with no ignored
+cases, 197 DSP/engine unit regressions and two actual native plugin tests.
+The added passband sweep covers 132 configurations, plus six mixed stereo
+program/hum cases. Details and reproducible commands:
+[Dehum evidence](evidence/2026-09-30-dehum-preservation.md).
+Review caught and corrected a generic EQ Q-limit conflict during constructor
+cleanup; the final full runner passes again. Docs: 78 files/419 links; test-file
+format and diff checks pass.
+Next task: guarded native Dehum continuity/callback performance and listening
+qualification, preserving the user's running desktop and endpoint routes.
+These are unrun; offline success is not a release/hardware qualification.
+
+Prior continuation (superseded Dehum status below): expanded offline DSP-02/03/05/06/14/17 and
 QUAL-02/03/05 evidence.
 Ordered tasks: exercise public running Input Switch graph replacement for normal
 and slow fades, both directions and reversal; test filter frequency/Q and graph

@@ -5047,30 +5047,6 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                         gain_db: number("trebleDb", 0.0, -12.0..=12.0),
                         sample_rate,
                     });
-                } else {
-                    // Narrow cuts at the hum fundamental and its harmonics;
-                    // 100 % removes up to 36 dB at each.
-                    let fundamental = number("frequencyHz", 60.0, 45.0..=65.0);
-                    let cut_db = -0.36 * number("amountPercent", 50.0, 0.0..=100.0);
-                    let harmonics = node
-                        .parameters
-                        .get("harmonics")
-                        .and_then(|value| value.as_u64())
-                        .unwrap_or(4)
-                        .clamp(1, 8) as usize;
-                    for harmonic in 1..=harmonics {
-                        let frequency_hz = fundamental * harmonic as f32;
-                        if frequency_hz >= sample_rate * 0.45 {
-                            break;
-                        }
-                        bands[harmonic - 1] = Some(audiorouter_dsp::BiquadParams {
-                            kind: audiorouter_dsp::FilterKind::Peaking,
-                            frequency_hz,
-                            q: 20.0,
-                            gain_db: cut_db,
-                            sample_rate,
-                        });
-                    }
                 }
                 let input_channels = node
                     .ports
@@ -5078,11 +5054,28 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                     .find(|port| port.direction == audiorouter_domain::PortDirection::Input)
                     .map(|port| usize::from(port.channels))
                     .unwrap_or(1);
-                let left = audiorouter_dsp::ParametricEq::new(bands, 1)
+                let prepare = || {
+                    if node.kind == NodeKind::Dehum {
+                        audiorouter_dsp::ParametricEq::new_dehum(
+                            sample_rate,
+                            number("frequencyHz", 60.0, 45.0..=65.0),
+                            number("amountPercent", 50.0, 0.0..=100.0),
+                            node.parameters
+                                .get("harmonics")
+                                .and_then(|value| value.as_u64())
+                                .unwrap_or(4)
+                                .clamp(1, 8) as usize,
+                            1,
+                        )
+                    } else {
+                        audiorouter_dsp::ParametricEq::new(bands, 1)
+                    }
+                };
+                let left = prepare()
                     .map_err(|_| GraphCompileError::UnsupportedTopology)?;
                 let right = if input_channels == 2 {
                     Some(
-                        audiorouter_dsp::ParametricEq::new(bands, 1)
+                        prepare()
                             .map_err(|_| GraphCompileError::UnsupportedTopology)?,
                     )
                 } else {

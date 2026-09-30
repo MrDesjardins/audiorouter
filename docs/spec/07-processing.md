@@ -70,7 +70,24 @@ hold defaults remain the responsibility of the windowed signal-meter layer.
 - **DSP-09 — Presets.** Include conservative `Voice neutral`, `Voice gate and compression`, `50 Hz hum notch`, and `60 Hz hum notch` presets with explainable parameters. They are starting points, not automatic calibration or guarantees. Importing a preset never enables microphone monitoring or recording automatically.
 - **DSP-10 — Volume.** A one-input/one-output Volume tool sets level in percent, 0–200 % on a linear scale (100 % is unity), for per-source level before a Mixer. It shares Gain's realtime path and click behavior; percent is validated in the backend. Mixer per-input volume (GRAPH-04) is 0–100 % per input, stored on the Mixer as `inputVolume:<upstreamNodeId>` and applied to that input's mix matrix; an unconnected key is inert. Audio Hijack's "Sync" block corresponds to DSP-05 Delay and is presented as "Sync (delay)".
 - **DSP-11 — Bass & Treble.** A one-in/one-out tone tool with bass and treble gain controls, each −12…+12 dB, built on the stable biquad path (DSP-08), Q 0.707. `bassFrequencyHz` is 80…1000 Hz (default 500); `trebleFrequencyHz` is 800…12000 Hz (default 1500), clamped below Nyquist for the runtime sample rate. Raising bass frequency or lowering treble frequency includes more speech in the adjustment. Missing frequency parameters use the defaults. This supersedes the original fixed 120 Hz/6 kHz tuning after local speech qualification; saved nonzero settings consequently sound stronger. Set the frequencies to 120/6000 Hz to restore the original response.
-- **DSP-12 — Dehum.** Removes mains hum with narrow peaking cuts (Q 20) at a 45–65 Hz fundamental (50 and 60 Hz presets) and up to 8 harmonics below 0.45 × the graph rate. Amount 0–100 % maps to 0 to −36 dB per cut. Program material between harmonics is unaffected within 5 %.
+- **DSP-12 — Dehum.** Removes mains hum at a 45–65 Hz fundamental (50 and
+  60 Hz presets) and up to eight harmonics below 0.45 × the graph rate using
+  finite-depth, constant-bandwidth notches. Fundamental Q is 20; harmonic h
+  uses Q=20*h, keeping approximately the same absolute bandwidth. Amount
+  0–100% maps to 0..−36 dB center attenuation per notch. Amount zero is exact
+  unity. Wanted amplitude outside each selected hum neighborhood
+  (center ± fundamental/8), including inter-harmonic midpoints, remains within
+  5%. The neighborhoods delimit the intended cuts and their transition bands;
+  they are not program-preservation measurement points.
+
+  For center w=2*pi*f/sampleRate, alpha=sin(w)/(40*h) and
+  g=10^((-0.36*Amount)/20), the unnormalized coefficients are
+  (1+g*alpha, -2*cos(w), 1-g*alpha, 1+alpha, -2*cos(w), 1-alpha),
+  normalized by a0. This is g*unity + (1-g)*notch in a single biquad with
+  fixed poles. No added latency or callback allocation. This replaces the
+  original Q20 peaking cascade under the user's 2026-09-30 defect-fix request:
+  its bandwidth broadened with depth and violated the unchanged 5% limit.
+  Existing saved parameters remain valid; wanted material is attenuated less.
 - **DSP-13 — Declick.** Repairs impulsive clicks and crackle. A sample is flagged when its second-difference residual exceeds k × the running residual level (threshold 0 % → k = 3, 100 % → k = 30); flagged runs of at most 32 samples are replaced by linear interpolation. Output is delayed by a disclosed 64-sample lookahead (`latency_samples`). Clean program material passes bit-exactly apart from the delay.
 - **DSP-14 — Input Switch.** A routing node with inputs A and B and one output passes only the selected input. Changing the selection on running audio crossfades with equal power over 0.5 s (normal) or 2 s (slow, Shift-click in the UI); the fade position carries across a live graph update. With one live input it passes that input only when its side is selected.
 - **DSP-15 — Denoise.** Learned-profile spectral noise reduction (1024-sample frames, 75 % overlap, square-root Hann WOLA; disclosed 1024-sample latency). "Learn noise" measures the noise power spectrum while audio passes unchanged; stopping stores it as a 64-band, 1 dB-step profile (`noiseProfile`, 128 hex characters) read back from the running graph through node telemetry. Reduction 0–100 % scales over-subtraction (0–3×); the remaining floor 0–100 % is the minimum per-bin gain. Gain decreases are smoothed to limit musical noise.

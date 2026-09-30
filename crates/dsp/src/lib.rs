@@ -567,6 +567,69 @@ impl GraphicEq {
 }
 
 impl ParametricEq {
+    /// Finite-depth hum notches with fixed absolute bandwidth: Q=20*h.
+    /// Amount controls center attenuation, not pole bandwidth. Prepared here
+    /// off the callback; the existing fixed-capacity biquad path processes it.
+    pub fn new_dehum(
+        sample_rate: f32,
+        fundamental_hz: f32,
+        amount_percent: f32,
+        harmonics: usize,
+        channels: usize,
+    ) -> Result<Self, BiquadError> {
+        if !fundamental_hz.is_finite() || !(45.0..=65.0).contains(&fundamental_hz) {
+            return Err(BiquadError::InvalidFrequency);
+        }
+        if !amount_percent.is_finite() || !(0.0..=100.0).contains(&amount_percent) {
+            return Err(BiquadError::NonFiniteParameter);
+        }
+        if !(1..=8).contains(&harmonics) {
+            return Err(BiquadError::InvalidBand);
+        }
+        let mut result = Self::new([None; PARAMETRIC_EQ_BANDS], channels)?;
+        // Validate rate/channels even for a zero-amount neutral preparation.
+        let base = BiquadParams {
+            kind: FilterKind::Notch,
+            frequency_hz: fundamental_hz,
+            q: 20.0,
+            gain_db: 0.0,
+            sample_rate,
+        };
+        validate(base, channels)?;
+        if amount_percent == 0.0 {
+            return Ok(result);
+        }
+        let center_gain = 10.0_f64.powf(-0.36 * f64::from(amount_percent) / 20.0);
+        for harmonic in 1..=harmonics {
+            let frequency_hz = fundamental_hz * harmonic as f32;
+            if frequency_hz >= sample_rate * 0.45 {
+                break;
+            }
+            // Initialize validated state with the public EQ's Q20 limit.
+            // Dedicated coefficients below implement harmonic Q=20*h;
+            // these private bands are not exposed as editable EQ parameters.
+            let mut band = Biquad::new(
+                BiquadParams { frequency_hz, ..base },
+                channels,
+            )?;
+            let omega = std::f64::consts::TAU * f64::from(frequency_hz) / f64::from(sample_rate);
+            let alpha = omega.sin() / (40.0 * harmonic as f64);
+            let a0 = 1.0 + alpha;
+            // g*unity + (1-g)*notch, evaluated in one recursive filter.
+            // Poles stay fixed as g changes, unlike deep peaking EQ cuts.
+            band.coefficients = Coefficients {
+                b0: (1.0 + center_gain * alpha) / a0,
+                b1: -2.0 * omega.cos() / a0,
+                b2: (1.0 - center_gain * alpha) / a0,
+                a1: -2.0 * omega.cos() / a0,
+                a2: (1.0 - alpha) / a0,
+            };
+            band.target_coefficients = band.coefficients;
+            result.bands[harmonic - 1] = Some(band);
+        }
+        Ok(result)
+    }
+
     pub fn new(
         band_params: [Option<BiquadParams>; PARAMETRIC_EQ_BANDS],
         channels: usize,
