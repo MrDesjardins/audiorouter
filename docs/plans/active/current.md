@@ -9,6 +9,55 @@ Add new entries under "Log" below, and keep the sections above it current.
 
 ## Objective and scope
 
+Current follow-up (2026-09-29, GRAPH-05/06/08/11/15, CAP-06/10,
+UI-04): bypass must work during playback without an explicit Save or Stop.
+Investigate revision 123's native path rejection and Discord mic-test repeats.
+Read-only revision 124 shows Discord capture → Mixer with Siege EQ → Outplayed,
+and a separate microphone processor chain → CABLE-A plus Scarlett monitor.
+No Discord edge reaches CABLE-A. Process capture includes mic-test playback;
+the output endpoint and external return route require identification before
+claiming a complete feedback cause. Preserve the user's graph and app settings.
+Tasks: reproduce flag changes with pre-Mixer fan-out and disabled inputs;
+fix compilation/resource identity in the owning layer; allow an immediate
+flag-only save while preserving unrelated draft edits; add focused native/UI
+regressions, document application-playback scope and safe mic-test routing;
+run relevant suites/virtual-cable continuity and build a fresh complete pair.
+Prerequisites: Windows toolchains and virtual endpoints available; real Discord
+Mic Test/Scarlett confirmation remains attended. No microphone recording or
+driver work. Rollback: previous sender-routing executable, revert only this
+slice; no database migration. Next: reproduce before changing runtime logic.
+
+Diagnosis: Windows endpoint metadata identifies Outplayed as CABLE-B Input
+(driver description/INF section), paired with Siege's CABLE-B Output. This
+closes a native external loop through Siege EQ → Mixer → Outplayed; disabling
+Discord removes its injected mic-test playback but does not repair the return.
+Implement a preflight refusal for driver-classified VB-Cable returns and same
+endpoint loopback; use exact endpoint IDs and driver descriptions, never node
+names or editable endpoint labels. Unknown drivers/external app routes remain
+outside this proof. Do not automatically rebind the user's output.
+Additional live-state fixes: a Mixer keeps its one remaining input after a
+disabled source is pruned; source/sink/Mixer bypass on a prepared native path
+means silence while retaining stream identities. Compatible effect bypass is
+still dry. The UI submits only the selected saved node's flag, preserving other
+unsaved draft edits. A source excluded at preparation still needs preparation
+before enabling; no extra microphone is opened to make toggles convenient.
+
+Result: immediate flag-only UI commits preserve unsaved draft edits. Singleton
+Mixer preparation/live EQ toggles and silent prepared source bypass pass native
+regressions. Installed Cable B metadata preflight rejects the saved return
+before audio opens. Backend/shell commit logs retain native activation state
+without private reason text. UI 380; engine 145; control 200; transport 23;
+Windows adapter 100 passed. Seven opt-in control checks ignored; installed-cable
+read-only check passed separately. Three headed Edge theme tests plus live Undo
+passed, screenshots reviewed. Native 15 s test with a disabled Mixer input:
+four live toggles applied, zero reference/mixed/direct-recording glitches.
+One earlier mixed-output gap and corrected sandbox/test experiments remain
+documented in [evidence](evidence/2026-09-29-live-bypass-feedback.md).
+Complete pair: `target/live-bypass-20260929/release`, current UI embedded and
+hashes recorded. Docs acceptance/diff checks passed. Next: attended corrected
+Outplayed-cable selection, Discord mic-test and live bypass; no saved binding
+was changed. This supersedes the sender-routing build handoff below.
+
 Current follow-up (2026-09-29, UI-03, GRAPH-01/02/03): user confirms starting
 EQ → Mixer at the EQ's blue dot. Receiver-first idle handles make that gesture
 wire backwards. Decision: make blue a universal sending/start affordance on

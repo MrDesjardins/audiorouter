@@ -82,6 +82,32 @@ single-endpoint engine supports one stereo Physical Input and one stereo Test
 Signal feeding the same Mixer and one Physical Output. Other source mixes may
 still return an unsupported-route message before audio starts.
 
+While the session plays, **Enabled** and **Bypass** on an already prepared
+tool apply immediately. No separate Save or Stop is needed. Other unsaved
+names, settings or connections stay in your draft. A new source that was not
+prepared still requires saving and preparing the route before it can play.
+
+For separate voice, game and recording feeds, keep these routes distinct:
+
+- Microphone → voice effects → CABLE-A Input; Discord microphone = CABLE-A Output.
+- Siege playback → CABLE-B Input; CABLE-B Output → Siege EQ → Scarlett.
+- Discord capture + Siege EQ → Mixer → a **different** recording cable's Input;
+  select that cable's Output in your recording application.
+
+Do not send Mixer output back to CABLE-B Input when CABLE-B Output already
+feeds Siege EQ. That makes an endless return through EQ and Mixer, even if the
+output node is named “Outplayed”. AudioRouter checks known VB-Cable returns and
+names the offending source/output before starting. Keep the recording mix out
+of CABLE-A too, so callers receive only processed microphone audio.
+
+Discord's Mic Test plays your selected microphone through Discord's output.
+Application capture includes that test playback along with other Discord
+sounds; it cannot separate other people's speech. If Scarlett is Discord's
+speaker output, capture keeps that original playback. Send the capture to the
+separate recording feed rather than Scarlett again to avoid duplicate playback.
+See [Discord Mic Testing](https://support.discord.com/hc/en-us/articles/360020641332-Mic-Testing)
+and [Microsoft process-loopback capture](https://learn.microsoft.com/en-us/samples/microsoft/windows-classic-samples/applicationloopbackaudio-sample/).
+
 The **Input device** tool accepts a Windows capture endpoint, whether it is a
 microphone or an installed virtual capture bus. The **Output device** tool
 accepts a Windows playback endpoint. Existing virtual devices are chosen in

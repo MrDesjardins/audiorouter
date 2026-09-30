@@ -6151,7 +6151,7 @@ fn compile_mixer_entry<'s>(
         .iter()
         .filter(|edge| edge.enabled && edge.source_node == mixer.id)
         .collect::<Vec<_>>();
-    if incoming.len() < 2
+    if incoming.is_empty()
         || incoming.len() > MAX_MIXER_INPUTS
         || (is_switch && incoming.len() != 2)
     {
@@ -9101,6 +9101,28 @@ mod tests {
             });
         }
         session
+    }
+
+    #[test]
+    fn pre_mixer_branch_survives_a_disabled_input_and_effect_bypass() {
+        let mut session = pre_mixer_branch_session();
+        session.nodes.iter_mut().find(|node| node.id.as_str() == "mic").unwrap().enabled = false;
+        for bypass in [true, false, true] {
+            session.nodes.iter_mut().find(|node| node.id.as_str() == "game-eq").unwrap().bypass = bypass;
+            let set = compile_native_paths_with_plugins_and_audio(&session, RuntimeGeneration::new(3), &Default::default(), &Default::default()).unwrap();
+            assert_eq!(set.input_node_ids(), &[audiorouter_domain::EntityId::new("cable-b")]);
+            let graph = &set.paths[0];
+            let frames = PROCESSING_QUANTUM_FRAMES;
+            let mut game = AudioBlock::new(2, frames).unwrap();
+            game.channel_mut(0).unwrap().fill(0.8);
+            game.channel_mut(1).unwrap().fill(0.4);
+            let mut scratch = AudioBlock::new(2, frames).unwrap();
+            let mut outputs = [AudioBlock::new(2, frames).unwrap(), AudioBlock::new(2, frames).unwrap()];
+            graph.process(&[game], &mut scratch, &mut outputs.iter_mut().collect::<Vec<_>>()).unwrap();
+            let expected = if bypass { 0.8 } else { 0.4 };
+            assert!((outputs[1].channel(0).unwrap()[0] - expected).abs() < 1e-5);
+            assert!((outputs[0].channel(0).unwrap()[0] - expected * 0.5).abs() < 1e-5);
+        }
     }
 
     #[test]

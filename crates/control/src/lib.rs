@@ -5665,7 +5665,86 @@ fn session_virtual_capture_bus_ids(session: &Session) -> Vec<EntityId> {
         .collect()
 }
 
+/// Preserve prepared transport identities during live flag changes. Silent
+/// sources/sinks keep draining; matrices silence every outgoing branch.
+fn normalize_live_path_flags(session: &mut Session, inputs: &[EntityId], outputs: &[EntityId]) {
+    for node in &mut session.nodes {
+        if !matches!(node.kind, NodeKind::PhysicalInput | NodeKind::ApplicationCapture | NodeKind::PhysicalOutput | NodeKind::Mixer | NodeKind::InputSwitch) {
+            continue;
+        }
+        let unprepared = match node.kind {
+            NodeKind::PhysicalInput | NodeKind::ApplicationCapture => !inputs.contains(&node.id),
+            NodeKind::PhysicalOutput => !outputs.contains(&node.id),
+            _ => false,
+        };
+        if unprepared && !node.enabled { continue; }
+        if !node.enabled || node.bypass {
+            for edge in &mut session.edges {
+                if edge.source_node == node.id || (node.kind == NodeKind::PhysicalOutput && edge.destination_node == node.id) {
+                    edge.matrix.fill(0.0);
+                }
+            }
+        }
+        node.enabled = true;
+        node.bypass = false;
+    }
+}
+
+/// Reject a return path through an established endpoint transport. Exact IDs
+/// establish the pairing; node names only explain the error.
+fn reject_endpoint_feedback(session: &Session, returns: &[(String, String)]) -> Result<(), ControlError> {
+    for source in session.nodes.iter().filter(|node| node.enabled && matches!(node.kind, NodeKind::PhysicalInput | NodeKind::EndpointLoopback)) {
+        let Some(capture) = source.parameters.get("endpointId").and_then(Value::as_str) else { continue };
+        let mut pending = vec![source.id.clone()];
+        let mut visited = std::collections::HashSet::new();
+        while let Some(id) = pending.pop() {
+            if !visited.insert(id.clone()) { continue; }
+            for edge in session.edges.iter().filter(|edge| edge.enabled && edge.source_node == id) {
+                let Some(node) = session.nodes.iter().find(|node| node.id == edge.destination_node) else { continue };
+                if node.kind == NodeKind::PhysicalOutput && node.enabled && !node.bypass {
+                    if let Some(render) = node.parameters.get("endpointId").and_then(Value::as_str) {
+                        if (source.kind == NodeKind::EndpointLoopback && render == capture)
+                            || returns.iter().any(|(r, c)| r == render && c == capture)
+                        {
+                            return Err(ControlError::InvalidRequest(format!(
+                                "Audio feedback loop: \"{}\" feeds \"{}\", whose output returns to that input. Choose a different output cable for the mixed/recording feed, or remove this return connection. Do not use the Siege input cable as the Mixer output.", source.name, node.name
+                            )));
+                        }
+                    }
+                }
+                if node.enabled || node.ports.iter().any(|port| port.direction == PortDirection::Input)
+                    && node.ports.iter().any(|port| port.direction == PortDirection::Output)
+                    && !matches!(node.kind, NodeKind::Mixer | NodeKind::InputSwitch)
+                {
+                    pending.push(node.id.clone());
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 impl ControlPlane {
+    fn validate_endpoint_feedback(&self, session: &Session) -> Result<(), ControlError> {
+        validate_session(session).map_err(|errors| ControlError::InvalidRequest(format_validation_errors(&errors)))?;
+        #[cfg(windows)]
+        {
+            let endpoints = audiorouter_windows_audio::enumerate_active_endpoint_display_info()
+                .map_err(|error| ControlError::InvalidRequest(format!("Cannot check output feedback: {error:?}. Refresh devices and retry.")))?;
+            let mut returns = Vec::new();
+            for render in endpoints.iter().filter(|endpoint| endpoint.direction == audiorouter_windows_audio::EndpointDirection::Render) {
+                let Some(key) = audiorouter_windows_audio::known_virtual_cable_key(&render.device_description, &render.driver_inf_section) else { continue };
+                for capture in endpoints.iter().filter(|endpoint| endpoint.direction == audiorouter_windows_audio::EndpointDirection::Capture) {
+                    if audiorouter_windows_audio::known_virtual_cable_key(&capture.device_description, &capture.driver_inf_section).as_ref() == Some(&key) {
+                        returns.push((render.id.clone(), capture.id.clone()));
+                    }
+                }
+            }
+            reject_endpoint_feedback(session, &returns)
+        }
+        #[cfg(not(windows))]
+        reject_endpoint_feedback(session, &[])
+    }
     /// Decode, at the graph rate, the stored media referenced by enabled
     /// Audio File sources and FIR Filter impulse responses. Runs on the
     /// control thread before compilation, never in the callback.
@@ -6094,6 +6173,7 @@ impl ControlPlane {
     /// saved session is never changed.
     #[cfg(windows)]
     fn native_paths_session(&self, session_id: &EntityId) -> Result<Session, ControlError> {
+        self.validate_endpoint_feedback(self.get_session(session_id)?)?;
         self.adapt_native_paths_session(
             audiorouter_engine::prune_inactive_upstream(self.get_session(session_id)?).into_owned(),
         )
@@ -12383,46 +12463,8 @@ impl ControlPlane {
             let plugin_stages = if flags_only {
                 let mut stages: HashMap<EntityId, Arc<dyn RealtimePluginProcessor>> =
                     HashMap::new();
-                // Keep physical streams and shared chain shape stable. Off
-                // sources/sinks contribute silence while their streams drain.
-                for node in &mut session.nodes {
-                    match node.kind {
-                        NodeKind::PhysicalInput
-                        | NodeKind::ApplicationCapture
-                        | NodeKind::PhysicalOutput
-                        | NodeKind::Mixer
-                        | NodeKind::InputSwitch => {
-                            let worker = self
-                                .native_multi_input_worker
-                                .as_ref()
-                                .expect("attached above");
-                            let unprepared = match node.kind {
-                                NodeKind::PhysicalInput | NodeKind::ApplicationCapture => {
-                                    !worker.input_node_ids().contains(&node.id)
-                                }
-                                NodeKind::PhysicalOutput => {
-                                    !worker.output_node_ids().contains(&node.id)
-                                }
-                                _ => false,
-                            };
-                            if unprepared && !node.enabled {
-                                continue;
-                            }
-                            if !node.enabled {
-                                for edge in &mut session.edges {
-                                    if edge.source_node == node.id
-                                        || (node.kind == NodeKind::PhysicalOutput
-                                            && edge.destination_node == node.id)
-                                    {
-                                        edge.matrix.fill(0.0);
-                                    }
-                                }
-                            }
-                            node.enabled = true;
-                        }
-                        _ => {}
-                    }
-                }
+                let worker = self.native_multi_input_worker.as_ref().expect("attached above");
+                normalize_live_path_flags(&mut session, worker.input_node_ids(), worker.output_node_ids());
                 session = audiorouter_engine::prune_inactive_upstream(&session).into_owned();
                 for node in session
                     .nodes
@@ -12734,6 +12776,7 @@ impl ControlPlane {
         base_revision: u64,
         candidate: Session,
     ) -> Result<EntityId, ControlError> {
+        self.validate_endpoint_feedback(&candidate)?;
         self.validate_plugin_placeholders(&candidate)?;
         let checkpoint = self.store.clone();
         let plan_id = self
@@ -19464,6 +19507,92 @@ mod tests {
     use super::*;
     use audiorouter_domain::{Edge, Node, NodeKind, Port, PortDirection};
     use audiorouter_engine::{RuntimeGeneration, RuntimeGraph, RuntimeProcessor};
+
+    fn feedback_fixture() -> Session {
+        let port = |name: &str, direction| Port { name: name.into(), direction, channels: 2 };
+        let node = |id: &str, kind, endpoint: &str| Node {
+            id: EntityId::new(id), kind, type_version: 1, name: id.into(), enabled: true, bypass: false,
+            parameters: if matches!(kind, NodeKind::PhysicalInput | NodeKind::PhysicalOutput) { serde_json::from_value(json!({"endpointId": endpoint})).unwrap() } else { Default::default() },
+            ports: match kind {
+                NodeKind::PhysicalInput => vec![port("out", PortDirection::Output)],
+                NodeKind::PhysicalOutput => vec![port("in", PortDirection::Input)],
+                _ => vec![port("in", PortDirection::Input), port("out", PortDirection::Output)],
+            },
+        };
+        Session { id: EntityId::new("feedback"), name: "feedback".into(), schema_version: 1, revision: 0,
+            nodes: vec![node("game", NodeKind::PhysicalInput, "cable-b-output"), node("eq", NodeKind::Gain, ""), node("mix", NodeKind::Mixer, ""), node("recording", NodeKind::PhysicalOutput, "cable-b-input")],
+            edges: [("game", "eq"), ("eq", "mix"), ("mix", "recording")].into_iter().enumerate().map(|(index, (source, destination))| Edge {
+                id: EntityId::new(format!("e{index}")), source_node: EntityId::new(source), source_port: "out".into(), destination_node: EntityId::new(destination), destination_port: "in".into(), matrix: vec![1.0, 0.0, 0.0, 1.0], enabled: true,
+            }).collect(),
+        }
+    }
+
+    #[test]
+    fn endpoint_feedback_names_the_return_and_accepts_a_separate_recording_cable() {
+        let mut session = feedback_fixture();
+        let returns = vec![("cable-b-input".into(), "cable-b-output".into())];
+        for bypass in [false, true] {
+            session.nodes[1].bypass = bypass;
+            let error = reject_endpoint_feedback(&session, &returns).unwrap_err();
+            let message = control_error_message(&error);
+            assert!(message.contains("game") && message.contains("recording") && message.contains("different output cable"));
+        }
+        session.nodes[3].parameters.insert("endpointId".into(), json!("cable-c-input"));
+        reject_endpoint_feedback(&session, &returns).unwrap();
+        session.nodes[3].parameters.insert("endpointId".into(), json!("cable-b-input"));
+        session.edges[1].enabled = false;
+        reject_endpoint_feedback(&session, &returns).unwrap();
+    }
+
+    #[test]
+    #[cfg(windows)]
+    #[ignore = "requires installed VB-Cable B; reads endpoint metadata only"]
+    fn installed_cable_feedback_is_rejected_before_opening_audio() {
+        let endpoints = audiorouter_windows_audio::enumerate_active_endpoint_display_info().unwrap();
+        let cable = |direction| endpoints.iter().find(|endpoint| endpoint.direction == direction
+            && audiorouter_windows_audio::known_virtual_cable_key(&endpoint.device_description, &endpoint.driver_inf_section).as_deref() == Some("b")).expect("VB-Cable B endpoint");
+        let mut candidate = feedback_fixture();
+        candidate.nodes[0].parameters.insert("endpointId".into(), json!(cable(audiorouter_windows_audio::EndpointDirection::Capture).id));
+        candidate.nodes[3].parameters.insert("endpointId".into(), json!(cable(audiorouter_windows_audio::EndpointDirection::Render).id));
+        let plane = ControlPlane::default();
+        assert!(control_error_message(&plane.validate_endpoint_feedback(&candidate).unwrap_err()).contains("Audio feedback loop"));
+    }
+
+    #[test]
+    fn live_source_bypass_retains_shape_and_silences_every_output() {
+        let mut session = feedback_fixture();
+        session.nodes[3].parameters.insert("endpointId".into(), json!("other-output"));
+        let mut direct = session.nodes[3].clone();
+        direct.id = EntityId::new("direct");
+        session.nodes.push(direct);
+        let mut edge = session.edges[1].clone();
+        edge.id = EntityId::new("direct-branch");
+        edge.destination_node = EntityId::new("direct");
+        session.edges.push(edge);
+        let inputs = vec![session.nodes[0].id.clone()];
+        let outputs = vec![session.nodes[3].id.clone(), EntityId::new("direct")];
+        for bypass in [true, false, true, false] {
+            let mut candidate = session.clone();
+            candidate.nodes[0].bypass = bypass;
+            normalize_live_path_flags(&mut candidate, &inputs, &outputs);
+            let set = audiorouter_engine::compile_native_paths_with_plugins_and_audio(&candidate, RuntimeGeneration::new(1), &Default::default(), &Default::default()).unwrap();
+            assert_eq!(set.input_node_ids(), inputs);
+            assert_eq!(set.output_node_ids(), outputs);
+            assert!(candidate.nodes[0].enabled && !candidate.nodes[0].bypass);
+            assert_eq!(candidate.edges[0].matrix, if bypass { vec![0.0; 4] } else { vec![1.0, 0.0, 0.0, 1.0] });
+            let frames = audiorouter_engine::PROCESSING_QUANTUM_FRAMES;
+            let mut runtime = audiorouter_engine::RealtimeMixerFanout::from_paths(set, 4, &[2], frames).unwrap();
+            let mut block = audiorouter_engine::AudioBlock::new(2, frames).unwrap();
+            for channel in 0..2 { block.channel_mut(channel).unwrap().fill(0.5); }
+            let rings = (0..2).map(|_| audiorouter_engine::AudioBlockRing::new(4, 2, frames).unwrap()).collect::<Vec<_>>();
+            runtime.try_submit_input(0, RuntimeGeneration::new(1), &block).unwrap();
+            assert_eq!(runtime.process_once(&rings.iter().collect::<Vec<_>>()).unwrap(), 2);
+            for ring in &rings {
+                let output = ring.try_receive().unwrap();
+                assert!(output.channel(0).unwrap().iter().all(|sample| *sample == if bypass { 0.0 } else { 0.5 }));
+            }
+        }
+    }
 
     #[test]
     fn plugin_worker_resolves_from_the_packaged_resource_directory() {

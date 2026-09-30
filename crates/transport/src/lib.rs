@@ -122,6 +122,30 @@ fn log_backend_rpc(frame: &[u8], responses: &[Vec<u8>]) {
     }
 }
 
+/// Privacy-safe commit outcome shared by backend and shell diagnostics. Never
+/// include runtime reason strings, which may contain node names or file paths.
+pub fn graph_activation_log_summary(result: &serde_json::Value) -> serde_json::Value {
+    let state = result.pointer("/activation/state").and_then(serde_json::Value::as_str)
+        .filter(|state| matches!(*state, "running" | "pending"));
+    let native = result.pointer("/activation/native/state").and_then(serde_json::Value::as_str)
+        .filter(|state| matches!(*state, "applied" | "restartRequired"));
+    serde_json::json!({
+        "revision": result.get("revision").and_then(serde_json::Value::as_u64),
+        "state": state,
+        "generation": result.pointer("/activation/generation").and_then(serde_json::Value::as_u64),
+        "nativeState": native,
+    })
+}
+
+#[test]
+fn commit_log_distinguishes_saved_from_live_applied_without_exposing_reason() {
+    let result = serde_json::json!({"revision":123,"activation":{"state":"running","generation":7,"native":{"state":"restartRequired","reason":"private node and plugin path"}}});
+    let summary = graph_activation_log_summary(&result);
+    assert_eq!(summary, serde_json::json!({"revision":123,"state":"running","generation":7,"nativeState":"restartRequired"}));
+    assert!(!summary.to_string().contains("private"));
+    assert_eq!(graph_activation_log_summary(&serde_json::json!({"activation":{"native":{"state":"private"}}}))["nativeState"], serde_json::Value::Null);
+}
+
 fn backend_rpc_log_records(
     frame: &[u8],
     responses: &[Vec<u8>],
@@ -151,13 +175,13 @@ fn backend_rpc_log_records(
             .and_then(serde_json::Value::as_str)
             .filter(|kind| matches!(*kind, "permissionDenied" | "revisionConflict" | "rateLimited" | "invalidParams" | "notFound" | "unavailable" | "unsupported" | "internalError"))
             .map(str::to_owned);
-        let state = response.and_then(|value| value.get("result")).map(|result| serde_json::json!({
+        let state = response.and_then(|value| value.get("result")).map(|result| if request.method == "graph.commit" { graph_activation_log_summary(result) } else { serde_json::json!({
             "revision": result.get("revision"),
             "nodes": result.get("nodes").and_then(serde_json::Value::as_array).map(Vec::len),
             "edges": result.get("edges").and_then(serde_json::Value::as_array).map(Vec::len),
             "state": result.get("state"),
             "generation": result.get("generation"),
-        }));
+        }) });
         let method = request.method.chars().take(96).collect::<String>();
         serde_json::json!({ "timeUnixMs": now_ms, "method": method, "outcome": if error_code.is_some() { "error" } else { "ok" }, "errorCode": error_code, "errorKind": error_kind, "summary": state })
     }).collect()

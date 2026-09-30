@@ -26,6 +26,20 @@ Capturing samples does not establish that ordinary application playback can be s
 
 ## Acceptance and evidence
 
+Application capture includes every playback stream from the chosen process
+tree, including a voice application's microphone-test playback. It does not
+classify remote speech separately from test audio. A microphone test can thus
+inject your own voice into a captured call-return path.
+
+Before graph planning and native multi-path preparation, classify supported
+VB-Cable returns from driver-provided descriptions plus the VB-Cable INF
+section, then compare exact bound capture/render IDs along reachable paths.
+Reject a Mixer/processor path rendering into its own captured cable with an
+error naming the source and destination and recommending a different recording
+cable. Editable friendly names and node labels are not pairing evidence.
+Unknown drivers, other sessions and external application/acoustic returns need
+separate qualification; this check does not establish universal feedback safety.
+
 M00 records OS build, device driver, selected API, format, buffer period, HRESULTs, include/exclude results, and app restart behavior. Use controlled test apps as well as a browser and Discord; keep external app versions in evidence. M02 tests a 44.1 kHz device feeding the 48 kHz graph and a 48 kHz sink without progressive buffer growth. M03 proves the desktop bus avoids duplicate headphone playback. M08 reruns protected-content and unsupported-app cases for clear failure reporting; protected content capture is not a requirement.
 
 v1 must not inject DLLs into games, hook protected processes, evade DRM, or alter anti-cheat settings. If an application cannot be captured, propose its ordinary output selection into a virtual render endpoint when supported.

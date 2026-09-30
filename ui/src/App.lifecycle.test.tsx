@@ -111,6 +111,40 @@ describe("session refresh and playback regressions", () => {
     expect(backend.startSession).not.toHaveBeenCalled();
   });
 
+  it("applies live bypass without Save or Stop and preserves an unsaved name", async () => {
+    const saved = voiceAndGame("focusrite");
+    const { backend } = await fixture(saved);
+    let running = false;
+    const snapshot = backend.snapshot;
+    backend.snapshot = vi.fn(async () => { const value = await snapshot(); return { ...value, status: { ...value.status, activeSessionIds: running ? [saved.id] : [] } }; });
+    const startSession = backend.startSession;
+    backend.startSession = vi.fn(async () => { running = true; return startSession(); });
+    const commit = backend.commitGraph;
+    backend.commitGraph = vi.fn(async () => ({ ...(await commit()), activation: { state: "running" as const, generation: 2, runtime: "native" as const, native: { state: "applied" as const, adapter: "multi-input" } } }));
+    const prepareNativePaths = vi.fn(async (sessionId: string) => ({ sessionId, generation: 1, state: "configured-stopped" as const, pathCount: 2, sourceNodeIds: ["mic", "cable-b"], branchNodeIds: ["cable-a", "scarlett"], renderEndpointIds: ["cable-a-input", "focusrite"] }));
+    const view = await renderReady(<App backend={{ ...backend, prepareNativePaths }} />);
+    await screen.findByRole("heading", { name: "Patrick Main Session" });
+    start();
+    await messageBar().findByText(/Audio session is running/);
+    fireEvent.click(screen.getByRole("tab", { name: "Properties" }));
+    fireEvent.click(view.container.querySelector('[data-id="game-eq"]')!);
+    const name = await screen.findByLabelText("Node name");
+    fireEvent.change(name, { target: { value: "Unsaved name" } });
+    fireEvent.blur(name);
+    fireEvent.click(screen.getByLabelText("Bypass"));
+    await waitFor(() => expect(backend.commitGraph, document.querySelector(".global-action-message")?.textContent).toHaveBeenCalledTimes(1));
+    const submitted = backend.planGraph.mock.calls[0][0];
+    expect(submitted.nodes.find((node) => node.id === "game-eq")).toMatchObject({ name: "game-eq", bypass: true });
+    await messageBar().findByText(/applied to the playing audio/);
+    expect((screen.getByLabelText("Node name") as HTMLInputElement).value).toBe("Unsaved name");
+    expect((screen.getByLabelText("Bypass") as HTMLInputElement).checked).toBe(true);
+    expect(backend.stopSession).not.toHaveBeenCalled();
+    expect(backend.startSession).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByLabelText("Bypass"));
+    await waitFor(() => expect(backend.commitGraph).toHaveBeenCalledTimes(2));
+    expect(backend.planGraph.mock.calls[1][0].nodes.find((node) => node.id === "game-eq")?.bypass).toBe(false);
+  });
+
   it("hydrates a real saved session even when its revision is below the preview revision", async () => {
     const { backend } = await fixture({ ...demoSession, revision: 0, name: "Real saved session" });
     await renderReady(<App backend={backend} />);

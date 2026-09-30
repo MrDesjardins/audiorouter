@@ -96,6 +96,7 @@ fn write_shell_rpc_log(
             } else {
                 let result = response.result.as_ref();
                 let summary = match request.method.as_str() {
+                    "graph.commit" => result.map(audiorouter_transport::graph_activation_log_summary),
                     "sessions.get" => result.map(|value| serde_json::json!({
                         "revision": value.get("revision"),
                         "nodes": value.get("nodes").and_then(serde_json::Value::as_array).map(Vec::len),

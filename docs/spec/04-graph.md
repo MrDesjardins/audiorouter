@@ -61,6 +61,11 @@ A disconnected processor must never be mistaken for a device capture source.
 An actual source with a missing device binding still requires deliberate
 selection, and a fed failed processor retains its protected-path failure policy.
 An explicit Mixer with another live input keeps that contribution. Disabled
-output branches suppress playback; compatible disabled/bypassed effects remain
+inputs may leave a Mixer with one active input; it must keep that input's gain
+and direct pre-Mixer branches rather than reject the path. On prepared native
+multi-input paths, source, output and Mixer bypass means silence while keeping
+transport identity; a compatible processor bypass remains dry. An input that
+was excluded before preparation is not opened by an unrelated live toggle.
+Disabled output branches suppress playback; compatible disabled/bypassed effects remain
 dry stages. UI endpoint preparation retains per-node bindings when paths or
 branches are turned off, rather than selecting a previously used global pair.

@@ -21,7 +21,9 @@ additions.
 Enabled and Bypass controls state their effective semantics: off inputs/sinks
 are silent, off effects use their dry bypass, and Mute silences a connected
 route. Changing these flags during playback saves and applies the planned
-graph while retaining prepared streams and workers. Off native devices
+flag change immediately without an explicit Save or Stop; unrelated unsaved
+names, parameters and wiring remain in the local draft. Retain prepared
+streams and workers. Off native devices
 contribute silence while remaining open until Stop, allowing live re-enable.
 Display the changed state only after native activation is acknowledged;
 otherwise explain that the playing route still uses its previous settings.

@@ -71,6 +71,36 @@ pub struct EndpointDisplayInfo {
     pub id: String,
     pub direction: EndpointDirection,
     pub name: String,
+    /// Driver-provided description and INF section, used only to recognize
+    /// known virtual cable returns. Friendly names are never binding identity.
+    pub device_description: String,
+    pub driver_inf_section: String,
+}
+
+/// Known VB-Cable transport key, classified from driver properties rather
+/// than a user-editable display name. Unknown drivers remain unclassified.
+pub fn known_virtual_cable_key(description: &str, inf_section: &str) -> Option<String> {
+    if !inf_section.starts_with("VBCableInst.") {
+        return None;
+    }
+    let description = description.to_ascii_uppercase();
+    for (prefix, key) in [("CABLE-A ", "a"), ("CABLE-B ", "b"), ("CABLE-C ", "c"), ("CABLE-D ", "d"), ("CABLE ", "base")] {
+        if let Some(port) = description.strip_prefix(prefix) {
+            if matches!(port, "INPUT" | "OUTPUT" | "IN 16CH" | "OUT 16CH") {
+                return Some(key.into());
+            }
+        }
+    }
+    None
+}
+
+#[test]
+fn cable_classification_requires_driver_evidence_and_distinguishes_buses() {
+    assert_eq!(known_virtual_cable_key("CABLE-B Input", "VBCableInst.NTamd64"), Some("b".into()));
+    assert_eq!(known_virtual_cable_key("CABLE-B Out 16ch", "VBCableInst.NTamd64"), Some("b".into()));
+    assert_eq!(known_virtual_cable_key("CABLE-A Output", "VBCableInst.NTamd64"), Some("a".into()));
+    assert_eq!(known_virtual_cable_key("CABLE-B Input", "PhysicalDriver.NTamd64"), None);
+    assert_eq!(known_virtual_cable_key("Speakers", "VBCableInst.NTamd64"), None);
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -7338,7 +7368,7 @@ unsafe fn enumerate_defaults_after_com_init() -> Result<Vec<DefaultEndpointBindi
 }
 
 unsafe fn enumerate_display_info_after_com_init() -> Result<Vec<EndpointDisplayInfo>, AudioError> {
-    use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
+    use windows::Win32::Devices::FunctionDiscovery::{PKEY_Device_FriendlyName, PKEY_Device_DeviceDesc, PKEY_Device_DriverInfSection};
     use windows::Win32::Media::Audio::{
         eCapture, eRender, IMMDeviceEnumerator, MMDeviceEnumerator, DEVICE_STATEMASK_ALL,
     };
@@ -7373,10 +7403,25 @@ unsafe fn enumerate_display_info_after_com_init() -> Result<Vec<EndpointDisplayI
                 .filter(|name| !name.is_empty())
                 .unwrap_or_else(|| "Unknown audio endpoint".to_owned());
             PropVariantClear(&mut value).ok();
+            // SAFETY: COM is initialized by the inventory wrapper; the store
+            // remains owned here. Each owned variant is cleared after copying
+            // into a bounded buffer; no borrowed Windows pointer escapes.
+            let read_property = |key| -> String {
+                let Ok(mut value) = store.GetValue(key) else { return String::new() };
+                let mut buffer = [0_u16; 512];
+                let text = PropVariantToString(&value, &mut buffer).ok()
+                    .and_then(|_| buffer.iter().position(|c| *c == 0))
+                    .and_then(|len| String::from_utf16(&buffer[..len]).ok())
+                    .unwrap_or_default();
+                PropVariantClear(&mut value).ok();
+                text
+            };
             result.push(EndpointDisplayInfo {
                 id,
                 direction,
                 name,
+                device_description: read_property(&PKEY_Device_DeviceDesc),
+                driver_inf_section: read_property(&PKEY_Device_DriverInfSection),
             });
         }
     }

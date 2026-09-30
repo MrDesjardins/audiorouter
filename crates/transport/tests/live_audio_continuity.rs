@@ -297,6 +297,9 @@ mod live {
             // A stopped generated input contributes silence without opening
             // a second capture device or using the user's microphone.
             nodes.push(node("silent-source".into(), NodeKind::TestSignal, vec![port("out", PortDirection::Output)], serde_json::Map::new()));
+            if std::env::var("AUDIOROUTER_CONTINUITY_DISABLED_MIX_INPUT").as_deref() == Ok("1") {
+                nodes.last_mut().unwrap().enabled = false;
+            }
             for (id, source, source_port) in [("processed-to-mix", feeder.0.clone(), feeder.1.clone()), ("silent-to-mix", EntityId::new("silent-source"), "out".into())] {
                 edges.push(Edge { id: EntityId::new(id), source_node: source, source_port, destination_node: EntityId::new("mix"), destination_port: "in".into(), matrix: vec![1.0, 0.0, 0.0, 1.0], enabled: true });
             }
