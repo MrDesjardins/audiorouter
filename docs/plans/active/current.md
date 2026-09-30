@@ -11,6 +11,29 @@ Add new entries under "Log" below, and keep the sections above it current.
 
 ## Current task (2026-09-30): deterministic audio transformation qualification
 
+Continuation completed: expanded offline DSP-02/03/05/06/14/17 and
+QUAL-02/03/05 evidence.
+Ordered tasks: exercise public running Input Switch graph replacement for normal
+and slow fades, both directions and reversal; test filter frequency/Q and graph
+rate endpoints; verify 60-second pitch duration and silence recovery; compare
+Delay's live 64-frame tap transition with an independent waveform. Preserve
+Dehum's failing gate and normative algorithm. Run focused then full signal/unit
+checks, docs validation and diff checks, record outcomes, commit/push. Artifacts
+remain generated under target; no device/desktop changes. Rollback only these
+test/documentation additions unless a reproduced defect requires a scoped fix.
+
+Result: 27 normal tests pass with 925 unique retained signal cases. New checks
+cover public running Input Switch replacement/reversal, 8/192 kHz EQ endpoints,
+60-second pitch and silence recovery, live Delay crossfades, linked stereo Gate
+attack/hold/release, and imported WAV IR decode/resampling/convolution. No new
+DSP defects were found or implementation changes needed. The full runner again
+passes 197 DSP/engine regressions and both native plugin signal tests; it returns
+failure solely for the explicitly executed Dehum preservation gate. Docs check:
+77 Markdown files, 414 links pass before this documentation update. See updated
+dated evidence for final validation. Exact next task: decide the DSP-12 algorithm
+and preservation frequency domain, then qualify that gate; physical/callback
+performance and real speech listening remain separate unrun work.
+
 User authorizes planning and immediate unattended execution for every tool that
 changes audio, using generated/reused input, configurations, output capture and
 input/output comparison. Requirements: DSP-01–18, QUAL-01–05, GRAPH-02/04/10/14,
@@ -45,7 +68,7 @@ no storage migration or device changes. Execution and remaining gates are record
 in [dated evidence](evidence/2026-09-30-deterministic-audio.md) and the
 [repeatable qualification guide](../../operations/deterministic-audio-tests.md).
 
-Final sweeps: 21 normal graph signal tests pass (881 unique retained cases),
+Final sweeps: 27 normal graph signal tests pass (925 unique retained cases),
 197 DSP/engine unit tests pass, and actual native VST2/VST3 gain fixtures pass
 three-rate transfer/automation/bypass checks. Four proven fixes: exact limiter
 lookahead, complete Speech Denoise reset, double-precision biquad coefficients
@@ -64,9 +87,9 @@ Risk: callback CPU/continuity and subjective speech quality are not qualified
 by these offline runs. No runtime allocation was added by the fixes.
 
 Exact next task: resolve DSP-12 wanted-band preservation versus the normative
-Q20/cut cascade without relaxing acceptance; then extend Input Switch slow/live
-fade, remaining parameter endpoints/profile floors and hardware/performance
-qualification. Representative configuration coverage does not mean every
+Q20/cut cascade without relaxing acceptance; then extend remaining parameter
+endpoints and hardware/performance qualification. Representative configuration
+coverage does not mean every
 possible signal, configuration or combination of tools is qualified.
 
 Second execution found a second real defect: Speech Denoise reset cleared the

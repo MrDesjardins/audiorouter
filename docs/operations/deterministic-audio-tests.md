@@ -26,7 +26,8 @@ artifact directory when you need a standalone run without older artifacts.
 ## What the checks prove
 
 - Gain, Volume and Mute: exact linear scaling/silence, including both channels.
-- Delay: exact requested sample offsets, initial silence and channel isolation.
+- Delay: exact requested sample offsets, initial silence, channel isolation and
+  the 64-frame live read-tap crossfade against a reference waveform.
 - Advanced/Parametric EQ: all eight shapes, Q and gain combinations, independent
   magnitude laws, notch rejection, all-pass phase change, and sixteen-band
   composition with enabled/disabled bands. Graphic EQ exercises every band.
@@ -34,7 +35,8 @@ artifact directory when you need a standalone run without older artifacts.
   response at fundamental/harmonic/wanted frequencies, amount and harmonic counts.
 - Compressor: independent hard/soft-knee transfer, ratio/threshold/makeup, attack
   and release time constants. Gate: expansion/range, hysteresis, finite hold and
-  release. Limiter: ceiling and exact declared lookahead at multiple rates.
+  release, including linked stereo timing/channel-ratio preservation. Limiter:
+  ceiling and exact declared lookahead at multiple rates.
 - Declick: injected impulses repaired against a clean reference; clean samples
   pass exactly after disclosed lookahead.
 - Denoise and Spectral Gate: learning transparency, stored-profile reuse, settled
@@ -42,11 +44,15 @@ artifact directory when you need a standalone run without older artifacts.
   tests noise suppression and an intermittent speech-like tone separately.
 - FIR Filter: independent normalized direct convolution against a sparse stereo
   impulse response crossing the partition boundary, wet/dry and output gain.
+  Generated float-WAV uploads additionally exercise actual decoding and mono/
+  stereo resampling before convolution; uploaded and decoded IRs are retained.
 - Pitch: measured frequency within ten cents for semitone/cent combinations,
-  retained energy and unchanged frame count.
+  retained energy and unchanged frame count, plus sixty-second ±12-semitone
+  runs with initial/midstream silence and subsequent signal recovery.
 - Mixer and Input Switch: weighted sum or exact source selection from distinct
-  deterministic inputs. Existing engine regressions separately verify live
-  equal-power normal crossfade and channel-mapping behavior.
+  deterministic inputs. Public running graph replacement tests verify normal/
+  slow equal-power crossfades in both directions and reversal during a fade,
+  comparing every output sample with a reference transition waveform.
 - Time Shift: exact recorded history through live, pause, resume, back/forward
   ten seconds and live again, excluding only the documented jump fade.
 - Cross-cutting checks: finite output, bypass/null comparison, stereo isolation,
@@ -54,6 +60,8 @@ artifact directory when you need a standalone run without older artifacts.
 
 Selected gain/filter/delay/pitch/limiter sweeps run at 44.1, 48 and 96 kHz;
 spectral, FIR, dynamics timing and transport sweeps run at the internal 48 kHz.
+Additional EQ frequency/Q/gain endpoint cases exercise 8 and 192 kHz; imported
+FIR conversion cases exercise 8, 48 and 96 kHz from a 24 kHz source file.
 These are meaningful representative and boundary configurations, not an
 exhaustive proof over every parameter, signal or graph topology.
 

@@ -103,3 +103,40 @@ Rollback: revert owning-layer corrections and their regressions together if a
 verified incompatibility requires it; retain the harness and record the new
 failure. No device/storage rollback is needed. The active plan remains open
 until remaining required gates have evidence.
+
+## Continuation: transition and boundary qualification
+
+Starting from commit `a626cdf0`, six further test groups passed without DSP
+implementation changes. New signal evidence covers:
+
+- Eight Input Switch transitions: normal/slow, A→B/B→A, uninterrupted/mid-fade
+  reversal. Public `RealtimeMixerFanout.replace_graph` and bounded input/output
+  rings exercise production position carry. A double-precision equal-power
+  endpoint/interpolated reference checks every sample with 1e-5 tolerance.
+- Sixteen peaking-EQ cases: 8/192 kHz, 20 Hz/highest eligible frequency,
+  Q 0.1/20 and gain ±24 dB, ten-second warmup and ±0.5 dB center response.
+- Two sixty-second Pitch cases: ±12 semitones, initial/midstream silence,
+  signal recovery, zero frame-count deviation and ≤10 cents at three windows.
+- Three live stereo Delay tap changes: 0→240, 240→0, 240→480 samples,
+  compared with the 64-frame reference crossfade at ≤1e-6 sample error.
+- Nine linked stereo Gate cases: attack 0.1/5/100 ms, hold 0/50/1000 ms,
+  release 150 ms; independent exponential envelope within 0.1 dB, retained
+  4:1 channel ratio. Complements the mono release sweeps.
+- Six imported FIR cases: generated mono/stereo float WAVs at 24 kHz decoded
+  to 8/48/96 kHz; independent linear-resampling error ≤1e-6, normalized direct
+  convolution error ≤1e-3. Uploaded/decoded IR WAVs accompany route outputs.
+
+Full qualification command is unchanged. Final results: **27 normal signal
+tests pass**, 943 measurements / **925 unique cases**; **197 DSP/engine unit
+tests** and **two native plugin signal tests** pass. The Dehum gate again fails
+with amplitude ratio 0.923110973461047 and `qualified: false`; runner exit 1
+does not hide the other command results. Local log:
+`target/deterministic-audio-continuation-runner.log`, individual logs and JSON
+under `target/deterministic-audio-evidence`. Rustfmt checks on changed test files,
+authored diff checks and documentation/link validation pass.
+
+Next: resolve DSP-12's algorithm/preservation domain, then remaining frequency,
+signal and hardware/callback/load boundaries. Slow fade, live position carry,
+60-second pitch and FIR WAV decode/resampling gaps above are now covered.
+MP3 IR import, every possible rate/setting and subjective listening remain
+unqualified. No executable was launched, rebuilt or replaced for this round.

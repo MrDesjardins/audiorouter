@@ -11,6 +11,282 @@ use std::{f64::consts::TAU, fs, io::Write, path::Path};
 const QUANTUM: usize = 128;
 const RATES: [u32; 3] = [44_100, 48_000, 96_000];
 
+fn switch_session(selected: &str, fade: &str) -> Session {
+    use audiorouter_domain::Edge;
+    let node = |id: &str, kind, ports: &[(&str, PortDirection)]| {
+        let mut node = session(kind, json!({}), 1, false).nodes.remove(0);
+        node.id = EntityId::new(id);
+        node.ports = ports
+            .iter()
+            .map(|(name, direction)| Port {
+                name: (*name).into(),
+                direction: *direction,
+                channels: 1,
+            })
+            .collect();
+        node
+    };
+    let mut fixture = session(
+        NodeKind::InputSwitch,
+        json!({"selected": selected, "fade": fade}),
+        1,
+        false,
+    );
+    fixture.nodes[0].ports[0].name = "a".into();
+    fixture.nodes[0].ports.push(Port {
+        name: "b".into(),
+        direction: PortDirection::Input,
+        channels: 1,
+    });
+    fixture.nodes.extend([
+        node(
+            "a",
+            NodeKind::PhysicalInput,
+            &[("out", PortDirection::Output)],
+        ),
+        node(
+            "b",
+            NodeKind::PhysicalInput,
+            &[("out", PortDirection::Output)],
+        ),
+        node(
+            "sink",
+            NodeKind::PhysicalOutput,
+            &[("in", PortDirection::Input)],
+        ),
+    ]);
+    let edge = |id: &str, source: &str, destination: &str, port: &str| Edge {
+        id: EntityId::new(id),
+        source_node: EntityId::new(source),
+        source_port: "out".into(),
+        destination_node: EntityId::new(destination),
+        destination_port: port.into(),
+        matrix: vec![1.0],
+        enabled: true,
+    };
+    fixture.edges = vec![
+        edge("a-tool", "a", "tool", "a"),
+        edge("b-tool", "b", "tool", "b"),
+        edge("tool-sink", "tool", "sink", "in"),
+    ];
+    fixture
+}
+
+#[test]
+fn live_switch_crossfade_and_mid_fade_reversal_preserve_the_running_position() {
+    use audiorouter_engine::{compile_mixer_fanout_session, AudioBlockRing, RealtimeMixerFanout};
+    let rate = 48_000;
+    let generation = RuntimeGeneration::new(1);
+    for (fade, seconds) in [("normal", 0.5), ("slow", 2.0)] {
+        for initial in ["a", "b"] {
+            for reverse in [false, true] {
+                let selected = if initial == "a" { "b" } else { "a" };
+                let compile = |selected| {
+                    compile_mixer_fanout_session(&switch_session(selected, fade), generation)
+                        .unwrap()
+                };
+                let mut running =
+                    RealtimeMixerFanout::new(compile(initial), 4, &[1, 1], 1, QUANTUM).unwrap();
+                running.replace_graph(compile(selected)).unwrap();
+                let length = frames(rate, 4);
+                let a = tone(rate, 997.0, 0.2, 4);
+                let b = tone(rate, 47.0, 0.1, 4);
+                let mut output = Vec::with_capacity(length);
+                let mut expected = Vec::with_capacity(length);
+                let ring = AudioBlockRing::new(4, 1, QUANTUM).unwrap();
+                let mut position = if initial == "a" { 0.0_f64 } else { 1.0 };
+                let mut target = 1.0 - position;
+                let reversal_block = (seconds * rate as f64 / QUANTUM as f64 / 2.0) as usize;
+                for block in 0..length / QUANTUM {
+                    if reverse && block == reversal_block {
+                        running.replace_graph(compile(initial)).unwrap();
+                        target = 1.0 - target;
+                    }
+                    let start = position;
+                    let delta = QUANTUM as f64 / (seconds * rate as f64);
+                    position = if start < target {
+                        (start + delta).min(target)
+                    } else {
+                        (start - delta).max(target)
+                    };
+                    let gains = |position: f64| {
+                        let angle = position * std::f64::consts::FRAC_PI_2;
+                        (angle.cos(), angle.sin())
+                    };
+                    let (a0, b0) = gains(start);
+                    let (a1, b1) = gains(position);
+                    for (index, samples) in [&a, &b].into_iter().enumerate() {
+                        let mut source = AudioBlock::new(1, QUANTUM).unwrap();
+                        source
+                            .copy_from_interleaved(&samples[block * QUANTUM..(block + 1) * QUANTUM])
+                            .unwrap();
+                        assert!(running
+                            .try_submit_input(index, generation, &source)
+                            .unwrap());
+                    }
+                    assert_eq!(running.process_once(&[&ring]).unwrap(), 1);
+                    let result = ring.try_receive().unwrap();
+                    output.extend_from_slice(result.channel(0).unwrap());
+                    ring.try_recycle(result).unwrap();
+                    for frame in 0..QUANTUM {
+                        let t = frame as f64 / QUANTUM as f64;
+                        let index = block * QUANTUM + frame;
+                        expected.push(
+                            (f64::from(a[index]) * (a0 + (a1 - a0) * t)
+                                + f64::from(b[index]) * (b0 + (b1 - b0) * t))
+                                as f32,
+                        );
+                    }
+                }
+                let error = max_error(&output, &expected);
+                evidence(
+                    &format!("switch-live-{fade}-{initial}-{reverse}"),
+                    rate,
+                    1,
+                    &json!({"fade":fade,"initial":initial,"reverse":reverse}),
+                    &a,
+                    &output,
+                    json!({"maxSampleError":error,"tolerance":1e-5,"oracle":"equal-power endpoints with linear interpolation within each quantum; continuous position on replacement"}),
+                );
+                assert!(error < 1e-5, "{fade}/{initial}/{reverse}: {error}");
+                if let Some(root) = std::env::var_os("AUDIOROUTER_SIGNAL_ARTIFACTS") {
+                    wav(
+                        &Path::new(&root)
+                            .join(format!("switch-live-{fade}-{initial}-{reverse}"))
+                            .join("input-b.wav"),
+                        &b,
+                        rate,
+                        1,
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn eq_extreme_rates_frequency_and_q_match_the_transfer_law() {
+    for rate in [8_000, 192_000] {
+        for frequency in [20.0, (rate as f64 * 0.45).min(20_000.0)] {
+            for q in [0.1, 20.0] {
+                for gain in [-24.0, 24.0] {
+                    let params = json!({"band0Enabled":true,"band0Type":"peaking","band0FrequencyHz":frequency,"band0Q":q,"band0GainDb":gain});
+                    let input = tone(rate, frequency, 0.01, 12);
+                    let output = render(
+                        &graph(NodeKind::ParametricEq, params.clone(), rate, 1),
+                        &input,
+                        1,
+                    );
+                    let start = rate as usize * 10;
+                    let measured = db(projection(&output[start..], rate, frequency)
+                        / projection(&input[start..], rate, frequency));
+                    evidence(
+                        &format!("eq-boundary-{rate}-{frequency}-{q}-{gain}"),
+                        rate,
+                        1,
+                        &params,
+                        &input,
+                        &output,
+                        json!({"expectedDb":gain,"measuredDb":measured,"toleranceDb":0.5,"warmupSeconds":10}),
+                    );
+                    assert!((measured - gain).abs() < 0.5, "{rate}/{params}: {measured}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn pitch_sixty_second_duration_and_silence_recovery_preserve_the_signal() {
+    let rate = 48_000;
+    for semitones in [-12.0, 12.0] {
+        let params = json!({"semitones":semitones,"cents":0.0});
+        let mut input = tone(rate, 440.0, 0.3, 60);
+        input[..rate as usize * 2].fill(0.0);
+        input[rate as usize * 20..rate as usize * 22].fill(0.0);
+        let output = render(&graph(NodeKind::Pitch, params.clone(), rate, 1), &input, 1);
+        assert_eq!(output.len(), input.len());
+        assert!(output[..rate as usize * 2]
+            .iter()
+            .all(|sample| *sample == 0.0));
+        let expected = 440.0 * 2f64.powf(semitones / 12.0);
+        let mut worst_error = 0.0_f64;
+        for start in [4, 24, 58] {
+            let tail = &output[start * rate as usize..(start + 2) * rate as usize];
+            let crossings: Vec<_> = tail
+                .windows(2)
+                .enumerate()
+                .filter(|(_, p)| p[0] <= 0.0 && p[1] > 0.0)
+                .map(|(i, p)| i as f64 + f64::from(-p[0] / (p[1] - p[0])))
+                .collect();
+            assert!(
+                crossings.len() > 10 && rms(tail) > 0.05,
+                "silent pitch after warmup/recovery"
+            );
+            let measured = (crossings.len() - 1) as f64 * rate as f64
+                / (crossings.last().unwrap() - crossings[0]);
+            worst_error = worst_error.max((1200.0 * (measured / expected).log2()).abs());
+        }
+        evidence(
+            &format!("pitch-sixty-seconds-{semitones}"),
+            rate,
+            1,
+            &params,
+            &input,
+            &output,
+            json!({"expectedHz":expected,"worstErrorCents":worst_error,"toleranceCents":10,"durationErrorFrames":0,"silenceIntervalsSeconds":[[0,2],[20,22]]}),
+        );
+        assert!(worst_error <= 10.0);
+    }
+}
+
+#[test]
+fn delay_live_tap_changes_follow_the_64_frame_reference_crossfade() {
+    use audiorouter_dsp::DelayLine;
+    let rate = 48_000;
+    let input = noise(QUANTUM * 2 * 64, 7, 0.1);
+    for (old, new) in [(0, 240), (240, 0), (240, 480)] {
+        let mut delay = DelayLine::new(1000.0, rate as f32, 2).unwrap();
+        delay.set_delay_ms(old as f32 / 48.0).unwrap();
+        let change = QUANTUM * 32;
+        let mut output = input.clone();
+        delay.process_interleaved(&mut output[..change * 2]);
+        delay.set_delay_ms(new as f32 / 48.0).unwrap();
+        delay.process_interleaved(&mut output[change * 2..]);
+        let mut expected = vec![0.0; input.len()];
+        for frame in 0..input.len() / 2 {
+            for channel in 0..2 {
+                let tap = |delay: usize| {
+                    if frame >= delay {
+                        input[(frame - delay) * 2 + channel]
+                    } else {
+                        0.0
+                    }
+                };
+                expected[frame * 2 + channel] = if frame < change {
+                    tap(old)
+                } else if frame < change + 64 {
+                    let mix = (frame - change) as f32 / 64.0;
+                    tap(old) * (1.0 - mix) + tap(new) * mix
+                } else {
+                    tap(new)
+                };
+            }
+        }
+        let error = max_error(&output, &expected);
+        evidence(
+            &format!("delay-live-{old}-{new}"),
+            rate,
+            2,
+            &json!({"fromSamples":old,"toSamples":new,"changeFrame":change}),
+            &input,
+            &output,
+            json!({"maxSampleError":error,"tolerance":1e-6,"crossfadeFrames":64}),
+        );
+        assert!(error < 1e-6, "delay {old} -> {new}: {error}");
+    }
+}
+
 fn session(kind: NodeKind, parameters: Value, channels: usize, bypass: bool) -> Session {
     Session {
         id: EntityId::new("signal-session"),
@@ -918,6 +1194,115 @@ fn fir_graph_matches_independent_direct_convolution_with_wet_gain_and_stereo() {
 }
 
 #[test]
+fn fir_imported_float_wav_is_resampled_then_convolved_as_expected() {
+    use audiorouter_engine::{
+        compile_session_at_sample_rate_with_plugins_and_audio, decode_audio_bytes,
+    };
+    use std::{collections::HashMap, sync::Arc};
+    let source_rate = 24_000;
+    for channels in [1, 2] {
+        let mut source = vec![0.0_f32; 700 * channels];
+        source[0] = 0.5;
+        source[18 * channels] = 0.25;
+        source[600 * channels] = -0.125;
+        if channels == 2 {
+            source[3 * channels + 1] = 0.4;
+            source[513 * channels + 1] = 0.3;
+        }
+        // IEEE float WAV upload bytes, independent of the decoder under test.
+        let mut bytes = Vec::new();
+        let size = (source.len() * 4) as u32;
+        bytes.extend_from_slice(b"RIFF");
+        bytes.extend_from_slice(&(36 + size).to_le_bytes());
+        bytes.extend_from_slice(b"WAVEfmt ");
+        bytes.extend_from_slice(&16u32.to_le_bytes());
+        bytes.extend_from_slice(&3u16.to_le_bytes());
+        bytes.extend_from_slice(&(channels as u16).to_le_bytes());
+        bytes.extend_from_slice(&(source_rate as u32).to_le_bytes());
+        bytes.extend_from_slice(&(source_rate as u32 * channels as u32 * 4).to_le_bytes());
+        bytes.extend_from_slice(&(channels as u16 * 4).to_le_bytes());
+        bytes.extend_from_slice(&32u16.to_le_bytes());
+        bytes.extend_from_slice(b"data");
+        bytes.extend_from_slice(&size.to_le_bytes());
+        for sample in &source {
+            bytes.extend_from_slice(&sample.to_le_bytes());
+        }
+        for rate in [8_000, 48_000, 96_000] {
+            let audio = decode_audio_bytes(bytes.clone(), "wav", rate).unwrap();
+            let count = 700 * rate as usize / source_rate;
+            let expected_ir: Vec<f32> = (0..count)
+                .flat_map(|frame| {
+                    let position = frame as f64 * source_rate as f64 / rate as f64;
+                    let first = (position as usize).min(699);
+                    let next = (first + 1).min(699);
+                    let fraction = position - first as f64;
+                    let source = &source;
+                    (0..channels).map(move |channel| {
+                        ((1.0 - fraction) * f64::from(source[first * channels + channel])
+                            + fraction * f64::from(source[next * channels + channel]))
+                            as f32
+                    })
+                })
+                .collect();
+            assert_eq!(audio.channels, channels);
+            assert_eq!(audio.sample_rate_hz, rate);
+            let decode_error = max_error(&audio.samples, &expected_ir);
+            assert!(decode_error < 1e-6);
+            let media = HashMap::from([("decoded-ir".into(), Arc::new(audio))]);
+            let params = json!({"mediaId":"decoded-ir","wetPercent":100.0,"gainDb":0.0});
+            let compiled = compile_session_at_sample_rate_with_plugins_and_audio(
+                &session(NodeKind::FirFilter, params.clone(), channels, false),
+                RuntimeGeneration::new(1),
+                rate,
+                &HashMap::new(),
+                &media,
+            )
+            .unwrap();
+            let input = noise(QUANTUM * 32 * channels, 7, 0.1);
+            let output = render(&compiled, &input, channels);
+            let mut expected = vec![0.0; input.len()];
+            for channel in 0..channels {
+                let energy = (0..count)
+                    .map(|tap| f64::from(expected_ir[tap * channels + channel]).powi(2))
+                    .sum::<f64>()
+                    .sqrt();
+                let taps: Vec<_> = (0..count)
+                    .filter(|tap| expected_ir[tap * channels + channel] != 0.0)
+                    .collect();
+                for frame in 0..input.len() / channels - 512 {
+                    expected[(frame + 512) * channels + channel] =
+                        taps.iter()
+                            .filter(|tap| **tap <= frame)
+                            .map(|tap| {
+                                f64::from(input[(frame - tap) * channels + channel])
+                                    * f64::from(expected_ir[tap * channels + channel])
+                                    / energy
+                            })
+                            .sum::<f64>() as f32;
+                }
+            }
+            let error = max_error(&output, &expected);
+            let name = format!("fir-import-{rate}-{channels}");
+            evidence(
+                &name,
+                rate,
+                channels,
+                &params,
+                &input,
+                &output,
+                json!({"sourceRate":source_rate,"decodedFrames":count,"maxDecodeError":decode_error,"maxSampleError":error,"tolerance":0.001,"oracle":"independent linear rate conversion followed by normalized direct convolution"}),
+            );
+            assert!(error < 1e-3, "imported FIR {rate}/{channels}: {error}");
+            if let Some(root) = std::env::var_os("AUDIOROUTER_SIGNAL_ARTIFACTS") {
+                let root = Path::new(&root).join(name);
+                fs::write(root.join("uploaded-ir.wav"), &bytes).unwrap();
+                wav(&root.join("decoded-ir.wav"), &expected_ir, rate, channels);
+            }
+        }
+    }
+}
+
+#[test]
 fn fresh_preparation_and_reset_reproduce_output_bit_for_bit() {
     let input = noise(QUANTUM * 64, 7, 0.1);
     for (kind, params) in [
@@ -990,6 +1375,49 @@ fn gate_hold_expires_and_release_follows_the_requested_time_constant() {
                 maximum_error < 0.1,
                 "gate {params}: envelope error {maximum_error} dB"
             );
+        }
+    }
+}
+
+#[test]
+fn linked_stereo_gate_hold_expires_and_keeps_the_channel_ratio() {
+    let rate = 48_000;
+    for hold in [0.0, 50.0, 1_000.0] {
+        for attack in [0.1_f64, 5.0, 100.0] {
+            let params = json!({"thresholdDb":-30.0,"hysteresisDb":6.0,"ratio":20.0,"rangeDb":60.0,"attackMs":attack,"holdMs":hold,"releaseMs":150.0});
+            let input: Vec<_> = (0..frames(rate, 4))
+                .flat_map(|frame| {
+                    let value = if frame < rate as usize { 0.1 } else { 0.001 };
+                    [value, value * 0.25]
+                })
+                .collect();
+            let output = render(&graph(NodeKind::Gate, params.clone(), rate, 2), &input, 2);
+            let hold_frames = (hold * 48.0) as usize;
+            let mut error = 0.0_f64;
+            for frame in (0..input.len() / 2).step_by(128) {
+                let open_tail = -60.0 * (-1000.0 / attack).exp();
+                let expected = if frame < rate as usize {
+                    -60.0 * (-((frame + 1) as f64) / (attack * 48.0)).exp()
+                } else {
+                    let elapsed = (frame - rate as usize + 1).saturating_sub(hold_frames);
+                    -60.0 + (60.0 + open_tail) * (-(elapsed as f64) / (150.0 * 48.0)).exp()
+                };
+                let measured = db(f64::from(output[frame * 2] / input[frame * 2]));
+                error = error.max((measured - expected).abs());
+            }
+            assert!(output
+                .chunks_exact(2)
+                .all(|pair| (pair[0] - pair[1] * 4.0).abs() < 1e-6));
+            evidence(
+                &format!("gate-stereo-hold-{hold}-attack-{attack}"),
+                rate,
+                2,
+                &params,
+                &input,
+                &output,
+                json!({"maximumEnvelopeErrorDb":error,"toleranceDb":0.1,"expectedChannelRatio":4}),
+            );
+            assert!(error < 0.1, "linked gate {params}: {error}");
         }
     }
 }
