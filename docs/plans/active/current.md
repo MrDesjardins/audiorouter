@@ -9,6 +9,26 @@ Add new entries under "Log" below, and keep the sections above it current.
 
 ## Objective and scope
 
+## Current diagnosis: Swagger Start lacks route preparation (2026-09-30)
+
+User's `session.start` returns an enabled-plugin/native-session error. Source
+confirms Desktop Play prepares the native route before Start; HTTP forwards
+Start alone. Requirements: API-09/12, HTTP-01/04/05. Preserve the running app
+and private database; do not start live audio for diagnosis. Document existing
+multi-path `nativePaths.prepare` then Start sequence, improve the backend
+remediation, run focused regression/docs checks. No new permissions or automatic
+device opening in SessionControl. Rollback: revert message/documentation only.
+Next: validate the actionable error and hand off the Swagger sequence; current
+running executable retains the older message until rebuilt.
+
+Result: both Start aliases now provide the preparation HTTP URL, retry and
+permission guidance. Discovery supplies the same prerequisite to Swagger.
+Windows focused regression passes (one test, both aliases); verifies rejection
+leaves the saved session unchanged and runtime stopped. Documentation acceptance
+passes (80 files/423 links). Live preparation/playback was not invoked against
+the user's session. Next: user performs Prepare then Start in Swagger; a rebuild
+is required only to receive the improved descriptions/error message.
+
 ## Current defect: rebuilt canvas missing links and rejecting drag connections
 
 User reports all links absent and no link dragging in the 2026-09-30 rebuilt

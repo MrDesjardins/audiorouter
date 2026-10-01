@@ -20,6 +20,15 @@ with `PUT /api/v1/sessions/active`, providing `sessionId` and a new
 `idempotencyKey`. This changes the session shown by the open UI; it does not
 start audio. Audio lifecycle remains
 `POST /api/v1/sessions/start` and `/stop`.
+For a saved multi-path route, first call `POST /api/v1/nativePaths/prepare`
+with `{"sessionId":"patrick-main-session"}`. This opens stopped audio clients
+and prepares plugins using the exact devices saved on the nodes; it requires
+DeviceAdministration permission. Then call `POST /api/v1/sessions/start` with
+the same `sessionId` and a fresh `idempotencyKey`. Desktop Play performs this
+preparation before Start; calling Start alone does not prepare devices.
+Both `session/start` and `sessions/start` are supported aliases.
+If preparation fails, correct the reported device, application, plugin or
+permission problem before retrying; do not substitute a default microphone.
 Every backend method also has an action resource: replace the dot with a slash,
 for example `graph.plan` → `POST /api/v1/graph/plan`. Send its discovery-defined
 parameters as a plain JSON object and receive the plain result, without a

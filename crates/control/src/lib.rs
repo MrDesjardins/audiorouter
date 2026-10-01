@@ -2355,7 +2355,7 @@ fn method_description(name: &str) -> &'static str {
         "graph.plan" => "Validate and preview a graph candidate without mutation.",
         "graph.commit" => "Commit an unexpired graph plan with idempotent mutation.",
         "session.start" | "sessions.start" => {
-            "Start a committed route, or temporarily preview a validated candidate graph without saving a new session revision. Candidate preview requires both sessionControl and graphWrite grants plus a prepared single-endpoint native route."
+            "Start an already-prepared committed route. For a saved multi-path audio session, call nativePaths.prepare (HTTP POST /api/v1/nativePaths/prepare) with sessionId first; preparation requires deviceAdministration and does not start playback. Desktop Play performs preparation first. Alternatively temporarily preview a validated candidate graph without saving a new session revision; candidate preview requires both sessionControl and graphWrite grants plus a prepared single-endpoint native route."
         }
         "session.stop" | "sessions.stop" => {
             "Stop a session runtime and publish its lifecycle result."
@@ -13435,7 +13435,7 @@ impl ControlPlane {
         }
         if has_enabled_plugin && !native_graph_attached {
             return Err(ControlError::InvalidRequest(
-                "enabled plugin nodes require an attached native endpoint session".into(),
+                "Audio route is not prepared. Before session.start or sessions.start, call nativePaths.prepare with this sessionId (HTTP: POST /api/v1/nativePaths/prepare), then retry Start with a new idempotencyKey. Preparation uses the saved node devices and requires DeviceAdministration permission; desktop Play performs preparation first.".into(),
             ));
         }
         if let Some(runtime) = self.runtimes.get(id) {
@@ -27368,6 +27368,30 @@ mod tests {
             "idempotencyKey": "preview-contract"
         });
         assert!(validate_method_params("session.start", Some(&request)).is_ok());
+    }
+
+    #[test]
+    fn unprepared_plugin_start_explains_http_preparation_for_both_aliases() {
+        for method in ["session.start", "sessions.start"] {
+            let mut plane = ControlPlane::default();
+            let mut saved = session();
+            saved.nodes[0].kind = NodeKind::Plugin;
+            saved.nodes[0].enabled = true;
+            let id = saved.id.clone();
+            plane.insert_session(saved.clone()).unwrap();
+            let response = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: method.into(),
+                params: Some(json!({ "sessionId": id, "idempotencyKey": "unprepared-start" })),
+            });
+            let error = response.error.expect("unprepared plugins must not start");
+            assert_eq!(error.code, -32602);
+            assert!(error.message.contains("POST /api/v1/nativePaths/prepare"));
+            assert!(error.message.contains("DeviceAdministration"));
+            assert_eq!(plane.get_session(&id).unwrap(), &saved);
+            assert!(!plane.runtimes.get(&id).is_some_and(|runtime| runtime.state() == RuntimeState::Running));
+        }
     }
 
     #[test]
