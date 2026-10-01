@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build --configLoader runner",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --configLoader runner --exclude e2e/**",
-    "e2e": "cargo build --manifest-path ../Cargo.toml -p audiorouter-control --example e2e_backend --locked && playwright test --config=playwright.config.ts"
+    "e2e": "cargo build --manifest-path ../Cargo.toml -p audiorouter-control --example e2e_backend --locked && playwright test --config=playwright.config.ts",
+    "e2e:production-canvas": "vite build --config vite.canvas-production.config.ts --configLoader runner && playwright test --config=playwright.production.config.ts"
   },
   "dependencies": {
     "@audiorouter/contracts": "file:../contracts",

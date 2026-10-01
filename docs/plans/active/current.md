@@ -9,6 +9,37 @@ Add new entries under "Log" below, and keep the sections above it current.
 
 ## Objective and scope
 
+## Current defect: rebuilt canvas missing links and rejecting drag connections
+
+User reports all links absent and no link dragging in the 2026-09-30 rebuilt
+shell (`8a2a01e0` source). Requirements: UI-04, GRAPH-01/02/06, QUAL-01,
+ENG-01/04/05. Reproduce in production assets and inspect read-only saved graph
+and diagnostics; distinguish rendering from persistence before editing.
+Preserve active shell, database and audio. Add a production-build regression
+for visible saved edges and actual drag creation; fix the owning renderer/build
+layer, rerun relevant UI/production checks, rebuild to a separate path and record
+evidence. Rollback: prior executable; do not clear sessions or local layouts.
+Next action: compare production and development graph behavior.
+
+Read-only evidence: selected session still has 13 nodes/11 edges at revision
+130, returned successfully by the running shell. User refresh restores links.
+Ordinary optimized and sanitized saved-layout fixtures pass; exact native timing
+is unconfirmed. A missed initial connector-lookup regression fails before repair.
+Bounded per-geometry remeasurement restores saved lines and real drag creation;
+five optimized browser tests and 30 focused unit tests pass. Corrected a stale
+group opacity-clamping assertion and a legend-inclusive edge-count selector.
+See [cold-start evidence](evidence/2026-09-30-canvas-cold-start.md). Rebuild to
+`target/canvas-startup-20260930`; user native first-launch confirmation remains
+required. Rollback is the preceding executable, with no session migration.
+
+Corrected manual shell is ready at
+`C:\code\audiorouter\target\canvas-startup-20260930\release\audiorouter-shell.exe`.
+SHA256 `FEAAF86327D2E13E0803EA03D14E351E4BB66A871631C4860C8A6B7EEB4423FF`.
+Final UI bundle and newer shell verified; matching unchanged worker/CLI copied
+beside it, all x64 PE checks pass. Final optimized five-test run passes and
+theme screenshots are reviewed; docs 80 files/423 links pass. No app launch or
+user data mutation. Next: user native first-launch and dragging confirmation.
+
 ## Current task: manual desktop rebuild (2026-09-30)
 
 User requests a local rebuild for further manual testing of the Dehum fix and

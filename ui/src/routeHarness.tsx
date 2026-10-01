@@ -10,7 +10,7 @@ import "./styles.css";
 let planned: Session | null = null;
 // Test hooks: a Playwright init script may inject a session, the backend
 // telemetry recorded from a real run, and start the fixture already playing.
-const injected = globalThis as { __routeFixtureSession?: Session; __routeFixtureTelemetry?: unknown[]; __routeFixtureRunning?: boolean; __routeFixtureProcessors?: DiscoveryDocument["processors"] };
+const injected = globalThis as { __routeFixtureSession?: Session; __routeFixtureTelemetry?: unknown[]; __routeFixtureRunning?: boolean; __routeFixtureProcessors?: DiscoveryDocument["processors"]; __routeFixtureDelayMs?: number };
 let committed = structuredClone(injected.__routeFixtureSession ?? demoSession);
 let previewCandidate: Session | null = null;
 let running = injected.__routeFixtureRunning === true;
@@ -75,9 +75,10 @@ const previewBackend: UiBackend = {
   connected: true,
   async listProcessors() { return injected.__routeFixtureProcessors ?? fixtureBackend.listProcessors(); },
   async snapshot() {
+    if (injected.__routeFixtureDelayMs) await new Promise(resolve => setTimeout(resolve, injected.__routeFixtureDelayMs));
     return structuredClone({ ...initial, session: committed, diagnostics: diagnostics(), status: { ...initial.status, activeSessionIds: running ? [committed.id] : [], reason: "Browser fixture: simulated audio; no devices are opened." } });
   },
-  async listSessions() { return [structuredClone(committed)]; },
+  async listSessions() { if (injected.__routeFixtureDelayMs) await new Promise(resolve => setTimeout(resolve, injected.__routeFixtureDelayMs)); return [structuredClone(committed)]; },
   async processorResponse({ bands, frequenciesHz }) {
     // Browser-only shape fixture for visual interaction; the desktop backend
     // uses the actual DSP coefficients for this response.

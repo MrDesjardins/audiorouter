@@ -23,8 +23,8 @@ test("groups persist presentation edits independently by session with 5% default
   await act(async () => view.rerender(<Fixture />));
   expect(screen.getByRole("status").textContent).toBe("1");
 });
-test("imported layout annotations reject invalid geometry and duplicate IDs", () => {
+test("imported annotations reject invalid geometry and duplicate IDs, and clamp opacity", () => {
   const group: CanvasGroup = { id: "group-test", name: "Game", color: "#abcdef", opacity: 25, fontSize: 18, x: 0, y: 0, width: 540, height: 340 };
   localStorage.setItem("groups", JSON.stringify([group, group, { ...group, id: "audio-node" }, { ...group, id: "group-bad", width: 1e100 }, { ...group, id: "group-opacity", opacity: 101 }]));
-  expect(readGroups("groups")).toEqual([group]);
+  expect(readGroups("groups")).toEqual([group, { ...group, id: "group-opacity", opacity: 100 }]);
 });

@@ -1,5 +1,14 @@
 # AudioRouter 0.1.0-dev qualification notes
 
+## Canvas startup recovery — 2026-09-30
+
+The canvas now performs bounded recovery when initial connector geometry is
+missing or invalid, allowing saved lines and drag connections to initialize
+without a refresh. Optimized cold-start regressions check existing lines and
+real dragging in all themes. Saved sessions/layouts need no migration. The
+reported native timing still needs first-launch confirmation on the rebuilt
+shell; see [evidence](../plans/active/evidence/2026-09-30-canvas-cold-start.md).
+
 ## Tool naming and connected-pair qualification — 2026-09-30
 
 "FIR Filter Hz" is now displayed as **Spectral Gate** to distinguish learned

@@ -9,6 +9,8 @@ import {
   Position,
   ReactFlow,
   useInternalNode,
+  useReactFlow,
+  useUpdateNodeInternals,
   type Connection,
   type Edge as FlowEdge,
   type EdgeProps,
@@ -87,6 +89,45 @@ function FlowNodeRenderer({ data }: NodeProps) {
   return <>{(data as { label?: ReactNode }).label}</>;
 }
 const NODE_TYPES = { flowNode: FlowNodeRenderer, visualGroup: CanvasGroupRenderer };
+
+// Card dimensions can arrive before connector bounds on a cold WebView load.
+// A later resize is not guaranteed, leaving saved edges and hit testing inert.
+// Repair only missing bounds, with bounded retries rather than a meter timer.
+function CanvasConnectorMeasurements({ geometryKey }: { geometryKey: string }) {
+  const updateNodeInternals = useUpdateNodeInternals();
+  const { getInternalNode } = useReactFlow();
+  useEffect(() => {
+    const expected = JSON.parse(geometryKey) as Array<{ id: string; source: string[]; target: string[] }>;
+    let frame = 0;
+    let attempts = 0;
+    let cancelled = false;
+    const repair = () => {
+      if (cancelled) return;
+      const missing = expected.filter(({ id, source, target }) => {
+        const bounds = getInternalNode(id)?.internals.handleBounds;
+        const valid = (bound: { id?: string | null; x: number; y: number; width: number; height: number }, handle: string) =>
+          bound.id === handle && [bound.x, bound.y, bound.width, bound.height].every(Number.isFinite)
+            && bound.width > 0 && bound.height > 0;
+        return source.some((handle) => !bounds?.source?.some((bound) => valid(bound, handle)))
+          || target.some((handle) => !bounds?.target?.some((bound) => valid(bound, handle)));
+      });
+      if (missing.length && attempts++ < 8) {
+        updateNodeInternals(missing.map(({ id }) => id));
+        frame = requestAnimationFrame(repair);
+      }
+    };
+    frame = requestAnimationFrame(repair);
+    void document.fonts?.ready.then(() => {
+      if (!cancelled) {
+        cancelAnimationFrame(frame);
+        attempts = 0;
+        frame = requestAnimationFrame(repair);
+      }
+    });
+    return () => { cancelled = true; cancelAnimationFrame(frame); };
+  }, [geometryKey, getInternalNode, updateNodeInternals]);
+  return null;
+}
 
 type EdgeSide = "left" | "right" | "top" | "bottom";
 const IDLE_CONNECTION_MODE: "idle" = "idle";
@@ -1069,6 +1110,11 @@ export function SessionFlowCanvas({ groups = [], selectedGroupId = "", onSelectG
         onNodeDragStop={(_, node) => { if (node.type === "visualGroup") { onChangeGroup?.(node.id, { x: node.position.x, y: node.position.y }); return; } const next = { ...positionsRef.current, [node.id]: node.position }; positionsRef.current = next; setPositions(next); writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next); }}
         proOptions={{ hideAttribution: true }}
       >
+        <CanvasConnectorMeasurements geometryKey={JSON.stringify(session.nodes.map((node) => ({
+          id: node.id,
+          source: node.ports.filter((port) => port.direction === "output").flatMap((port) => EDGE_SIDES.map((side) => edgeHandleId(port.name, side))),
+          target: node.ports.filter((port) => port.direction === "input").flatMap((port) => EDGE_SIDES.map((side) => edgeHandleId(port.name, side))),
+        })))} />
         <Background gap={24} size={1} color="#2e4057" />
         <Controls showInteractive={false} />
       </ReactFlow>

@@ -58,6 +58,12 @@ This is compile-only evidence; it does not install a driver, register startup,
 open an audio stream, or alter machine audio configuration. The release flow
 rebuilds the UI automatically before its optimized shell build.
 
+For optimized canvas startup/connection regressions without opening audio
+devices, run `npm.cmd run e2e:production-canvas --prefix ui`. It checks saved
+lines and actual drag creation, including recovery from a missed first
+connector measurement in all three themes. This supplements native first-launch
+manual testing; browser fixtures do not prove the native startup timing.
+
 For a human-testable VB-Cable desktop run, use the disposable launcher after
 building the CLI and shell:
 
