@@ -9,6 +9,30 @@ Add new entries under "Log" below, and keep the sections above it current.
 
 ## Objective and scope
 
+## Current task: live inspector fixes rebuild (2026-09-30)
+
+User requests rebuild of source 5cf120f6 (bounded autosave, stable readings,
+additive Spectral Gate learning). Requirements UI-04/07, DSP-17, ENG-05.
+Build UI and locked custom-protocol release shell, CLI and worker in separate
+target/live-inspector-20260930. Verify current assets, timestamps, x64 PE and
+checksums. Do not launch, stop the user's app or mutate its database. Rollback:
+preceding inspector-status executable. Next: build and hand off full path.
+Development unsigned artifact only; native continuity remains unqualified.
+
+Result: UI typecheck/build and locked release shell/CLI/worker builds pass.
+Verified Add noise in index-DG3-aX4D.js; shell timestamp 2026-10-01 02:36:39 UTC
+is newer than UI index 02:34:57 UTC. All three executables pass x64 PE checks.
+Shell: 22,535,168 bytes, SHA256
+87A68D534A84CD7ECF38DE1595FB95F08FFC140F57B91FC62DC200294E05EC2C.
+CLI: 12,715,520 bytes, SHA256
+6FDBEC51B9E784A35908C57A7077C8C02756EBA3AB5A9B548F5E55998DCDD956.
+Worker: 968,192 bytes, SHA256
+A97155E0ADCCCBD354EBD05DBE42E6B1669E92D91942AB3D330A19EE53BF1D8B.
+Manual shell: C:\code\audiorouter\target\live-inspector-20260930\release\audiorouter-shell.exe.
+Docs acceptance 80 files/423 links passes. No app launch or user data mutation.
+Next: user manual conflict/readings/Add noise checks; guarded continuity still
+required for release qualification. Removed duplicated prior task heading.
+
 ## Current task: live save loop, stable readings, additive learning (2026-09-30)
 
 User reports inspector-status build repeatedly conflicts on Save, reading text
@@ -46,20 +70,6 @@ regression also passes (`cargo test -p audiorouter-engine --test
 deterministic_audio spectral_tools_learn_profiles_reduce_noise_and_retain_wanted_tone`).
 Final optimized 12-test run passes after isolating planner instrumentation from
 existing lifecycle-call assertions. Guarded live continuity remains unrun.
-
-## Current task: live save loop, stable readings, additive learning (2026-09-30)
-
-User reports inspector-status build repeatedly conflicts on Save, reading text
-wrap causes vertical movement, and requests additive Spectral Gate learning.
-Requirements UI-04/07, API-07/09, DSP-17. Logs confirm graph.plan revisionConflict
-every ~430 ms; autosave retries unchanged failed drafts when graphBusy clears.
-Bound autosave to one attempt per draft edit, retaining explicit Save recovery.
-Keep numeric reading/detail rows single-line. Add Add noise alongside replacement
-learning, retaining each band's maximum old/new noise level; pass the combined
-profile through existing backend validation. Test conflict retry bounds and
-profile merge, build and visually check themes. No live app/data mutation.
-Rollback focused UI changes; no new stored parameters or DSP processing law.
-Next: implement and run focused/browser regressions, then record evidence.
 
 ## Current task: inspector clarity rebuild (2026-09-30)
 
