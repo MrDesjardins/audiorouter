@@ -9,6 +9,31 @@ Add new entries under "Log" below, and keep the sections above it current.
 
 ## Objective and scope
 
+## Current task: inspector clarity rebuild (2026-09-30)
+
+Rebuild requested at source c4fe6a47. Requirements UI-04/07, API-09 and
+ENG-05 artifact provenance. Build fresh UI then locked optimized shell with
+custom-protocol in target/inspector-status-20260930; build companion CLI and
+worker there. Verify UI status text, timestamps, x64 executables and hashes.
+Preserve running app and database; do not launch. Rollback: preceding executable.
+Next: build, record evidence and hand off the full shell path. Local unsigned
+development build only; M08 release gates are unchanged.
+
+Result: Windows `npm.cmd run build --prefix ui` and both locked Cargo release
+builds pass (shell with custom-protocol; CLI/plugin-host bins). Bundle
+index-UFH7A4Xz.js includes node status and bypass guidance. Shell timestamp
+2026-10-01 02:17:51 UTC is newer than UI index (02:16:15 UTC). All three
+executables pass x64 PE validation; docs acceptance 80 files/423 links passes.
+Shell: 22,535,168 bytes, SHA256
+A2C8815A8487FE4C57F4DB52C19DDD354E7D5EB2E3E86197205FE6778B5939B7.
+Worker: 968,192 bytes, SHA256
+430856939DDCA488E9D892E66A123FF85C98FFFC153556E3D284D90F12901AD8.
+CLI: 12,715,520 bytes, SHA256
+476D3994F3C858ED655318479402E1CBA3779F1ECD16649DCF49A5ACF2AA5F36.
+Path: C:\code\audiorouter\target\inspector-status-20260930\release\audiorouter-shell.exe.
+No app launched or stopped. Next: user closes prior shell and manually tests
+Properties status, noise-learning guards and API preparation guidance.
+
 ## Current task: clarify inspector state and timing descriptions (2026-09-30)
 
 User requests status beside node name, related clarity fixes, and consistent
