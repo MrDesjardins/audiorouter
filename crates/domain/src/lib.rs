@@ -115,7 +115,7 @@ pub enum NodeKind {
     Denoise,
     SpeechDenoise,
     FirFilter,
-    /// Per-frequency noise gate with a learned threshold ("FIR Filter Hz").
+    /// Per-frequency noise gate with a learned threshold ("Spectral Gate").
     SpectralGate,
     TimeShift,
     /// Streams its input to another computer over UDP (LAN).

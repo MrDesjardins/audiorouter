@@ -110,7 +110,7 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
     ],
   },
   spectralGate: {
-    name: "FIR Filter Hz",
+    name: "Spectral Gate",
     parameters: { thresholdDb: 3, reductionDb: 40, learning: false },
     ports: [
       { name: "in", direction: "input", channels: 2 },

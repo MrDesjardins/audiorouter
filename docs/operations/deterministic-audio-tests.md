@@ -17,7 +17,7 @@ The runner writes float32 `input.wav`, `output.wav` and `metrics.json` under
 `input-b.wav`. Native plugin cases retain exact interleaved input/output arrays
 in `samples.json`. Logs and `qualification.json` report each command and exit
 code. Generated files are ignored by Git and can be regenerated; allow roughly
-2 GB for the present sweeps. Supply `-ArtifactDirectory` and
+3 GB for the present sweeps. Supply `-ArtifactDirectory` and
 `-TargetDirectory` to choose other output/build locations. Environment overrides
 are restored when the script exits. A reused output directory may retain cases
 from earlier versions; the current logs identify executed cases. Choose a fresh
@@ -57,6 +57,16 @@ artifact directory when you need a standalone run without older artifacts.
   ten seconds and live again, excluding only the documented jump fade.
 - Cross-cutting checks: finite output, bypass/null comparison, stereo isolation,
   and fresh/reset repeatability for stateful processors.
+- Connected pairs: every ordered combination of 17 built-ins (including
+  repeated kinds), two parameter sets, mono/stereo and 48/96 kHz. Compare each
+  output sample with fresh A then B execution, without latency realignment;
+  repeat selected neighbors with either/both bypassed. Independent formula
+  checks additionally verify EQ/Dehum product response, additive delay and
+  gain-before/after-compression order. This supplements the single-tool laws;
+  it does not prove every possible setting or arbitrary vendor plugin chains.
+
+The [pair qualification evidence](../plans/active/evidence/2026-09-30-two-tool-composition.md)
+records configurations, counts and verification limits.
 
 Selected gain/filter/delay/pitch/limiter sweeps run at 44.1, 48 and 96 kHz;
 spectral, FIR, dynamics timing and transport sweeps run at the internal 48 kHz.

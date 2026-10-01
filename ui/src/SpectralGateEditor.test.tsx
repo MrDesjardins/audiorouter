@@ -8,12 +8,12 @@ import { BAND_FREQUENCIES_HZ, SpectralGateEditor, decodeProfileDb } from "./Spec
 afterEach(cleanup);
 
 const node = (parameters: Node["parameters"]): Node => ({
-  id: "gate-hz", kind: "spectralGate", typeVersion: 1, name: "FIR Filter Hz", enabled: true, bypass: false, parameters,
+  id: "gate-hz", kind: "spectralGate", typeVersion: 1, name: "Spectral Gate", enabled: true, bypass: false, parameters,
   ports: [{ name: "in", direction: "input", channels: 2 }, { name: "out", direction: "output", channels: 2 }],
 });
 const profile = "64".repeat(64); // 100 − 160 = −60 dB in every band
 
-describe("FIR Filter Hz editor", () => {
+describe("Spectral Gate editor", () => {
   it("decodes stored profiles and spans the audible range", () => {
     expect(decodeProfileDb(profile)).toEqual(Array(64).fill(-60));
     expect(decodeProfileDb("xyz")).toBeNull();

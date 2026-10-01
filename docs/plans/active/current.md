@@ -9,6 +9,42 @@ Add new entries under "Log" below, and keep the sections above it current.
 
 ## Objective and scope
 
+## Current task: clearer tool naming and deterministic two-tool composition
+
+User authorizes renaming "FIR Filter Hz" and adding connected-pair signal tests.
+Decision: display "Spectral Gate" for existing `spectralGate`; retain `firFilter`
+as "FIR Filter", identifiers, parameters and user-defined saved names.
+Requirements: DSP-01/02/03/04/05/06/08/11/12/13/15/16/17, GRAPH-02/10/14,
+QUAL-01/02/03 and UI-04. Prerequisites: existing offline Windows toolchain and
+qualified single-tool harness. Native endpoints and external plugins stay
+separate. Ordered work: update display names/contracts/docs; build ordered
+two-tool graphs; compare with independently executed single-stage composition
+across mono/stereo, rates and bypass; add analytical transfer/order/latency
+checks; run signal and UI checks, inspect label rendering, record evidence.
+No saved-name migration or audio-device mutation. Rollback: revert display
+labels and added tests/docs; preserve stable node identifiers. Next action:
+implement naming and pair fixtures, then diagnose any deterministic mismatch.
+
+Result: completed. "Spectral Gate" labels/default names replace "FIR Filter Hz";
+saved node names and identifiers are retained. 2,749 new deterministic pair
+cases pass: 2,312 active combinations, 408 bypass cases and 29 analytical
+checks. Full suite: 33 signal tests, 197 DSP/engine units, two native plugin
+tests; focused UI: 60 tests; three headless Edge theme checks pass and their
+screenshots were inspected. UI build succeeds in disposable output; no desktop
+exe rebuilt. See [pair evidence](evidence/2026-09-30-two-tool-composition.md).
+Next task: guarded native continuity/performance and listening qualification;
+offline pair success does not replace hardware or arbitrary-plugin evidence.
+
+Result: completed. "Spectral Gate" labels/default names replace "FIR Filter Hz";
+saved node names and identifiers are retained. 2,749 new deterministic pair
+cases pass: 2,312 active combinations, 408 bypass cases and 29 analytical
+checks. Full suite: 33 signal tests, 197 DSP/engine units, two native plugin
+tests; focused UI: 60 tests; three headless Edge theme checks pass and their
+screenshots were inspected. UI build succeeds in disposable output; no desktop
+exe rebuilt. See [pair evidence](evidence/2026-09-30-two-tool-composition.md).
+Next task: guarded native continuity/performance and listening qualification;
+offline pair success does not replace hardware or arbitrary-plugin evidence.
+
 ## Current task (2026-09-30): deterministic audio transformation qualification
 
 Current fix, explicitly authorized by user: close failing DSP-12 preservation

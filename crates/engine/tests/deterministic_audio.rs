@@ -349,6 +349,404 @@ fn render(graph: &RuntimeGraph, input: &[f32], channels: usize) -> Vec<f32> {
 fn frames(rate: u32, seconds: usize) -> usize {
     (rate as usize * seconds / QUANTUM) * QUANTUM
 }
+
+// Each stage already has an independent signal-law test above/below. This
+// oracle isolates graph composition: fresh A then fresh B must equal A -> B,
+// including state warmup, channel layout and cumulative latency. It does not
+// replace the independent DSP-law checks with comparisons to the same DSP.
+fn pair_graph(stages: &[(NodeKind, Value, bool)], rate: u32, channels: usize) -> RuntimeGraph {
+    use audiorouter_domain::Edge;
+    use audiorouter_engine::{compile_session_at_sample_rate_with_plugins_and_audio, DecodedAudio};
+    use std::{collections::HashMap, sync::Arc};
+    let mut fixture = session(stages[0].0, stages[0].1.clone(), channels, stages[0].2);
+    fixture.nodes.clear();
+    for (index, (kind, params, bypass)) in stages.iter().enumerate() {
+        let mut node = session(*kind, params.clone(), channels, *bypass)
+            .nodes
+            .remove(0);
+        node.id = EntityId::new(format!("stage-{index}"));
+        fixture.nodes.push(node);
+        if index > 0 {
+            fixture.edges.push(Edge {
+                id: EntityId::new(format!("edge-{index}")),
+                source_node: EntityId::new(format!("stage-{}", index - 1)),
+                source_port: "out".into(),
+                destination_node: EntityId::new(format!("stage-{index}")),
+                destination_port: "in".into(),
+                matrix: if channels == 1 {
+                    vec![1.0]
+                } else {
+                    vec![1.0, 0.0, 0.0, 1.0]
+                },
+                enabled: true,
+            });
+        }
+    }
+    // Saved array order must not override edge-defined audio order.
+    fixture.nodes.reverse();
+    let mut ir = vec![0.0; 700 * channels];
+    for channel in 0..channels {
+        ir[channel] = 0.5;
+        ir[(17 + channel) * channels + channel] = 0.25;
+        ir[(600 + channel) * channels + channel] = -0.125;
+    }
+    let media = HashMap::from([(
+        "pair-ir".into(),
+        Arc::new(DecodedAudio {
+            channels,
+            sample_rate_hz: rate,
+            samples: ir.into(),
+        }),
+    )]);
+    compile_session_at_sample_rate_with_plugins_and_audio(
+        &fixture,
+        RuntimeGeneration::new(1),
+        rate,
+        &HashMap::new(),
+        &media,
+    )
+    .unwrap()
+}
+
+fn pair_tools(alternate: bool) -> Vec<(NodeKind, Value, bool)> {
+    let gain = if alternate { -6.0 } else { 6.0 };
+    let profile = "78".repeat(64); // -40 dB thresholds actively suppress quiet bins.
+    vec![
+        (NodeKind::Gain, json!({"gainDb":gain}), false),
+        (
+            NodeKind::Volume,
+            json!({"percent":if alternate {50} else {150}}),
+            false,
+        ),
+        (NodeKind::Mute, json!({"muted":alternate}), false),
+        (
+            NodeKind::Delay,
+            json!({"delayMs":if alternate {7} else {3}}),
+            false,
+        ),
+        (
+            NodeKind::ParametricEq,
+            json!({"band0Enabled":true,"band0Type":if alternate {"highPass"} else {"peaking"},"band0FrequencyHz":800,"band0Q":1.5,"band0GainDb":gain}),
+            false,
+        ),
+        (
+            NodeKind::GraphicEq,
+            json!({"band4Db":gain,"band7Db":-gain}),
+            false,
+        ),
+        (
+            NodeKind::BassTreble,
+            json!({"bassDb":gain,"trebleDb":-gain}),
+            false,
+        ),
+        (
+            NodeKind::Dehum,
+            json!({"frequencyHz":if alternate {50} else {60},"amountPercent":100,"harmonics":8}),
+            false,
+        ),
+        (
+            NodeKind::Compressor,
+            json!({"thresholdDb":-18,"ratio":if alternate {8} else {3},"attackMs":1,"releaseMs":30,"kneeDb":0,"makeupDb":3}),
+            false,
+        ),
+        (
+            NodeKind::Gate,
+            json!({"thresholdDb":-28,"rangeDb":40,"attackMs":1,"holdMs":2,"releaseMs":20}),
+            false,
+        ),
+        (
+            NodeKind::Limiter,
+            json!({"ceilingDb":if alternate {-12} else {-6},"lookaheadMs":3,"releaseMs":20}),
+            false,
+        ),
+        (
+            NodeKind::Declick,
+            json!({"thresholdPercent":if alternate {80} else {20}}),
+            false,
+        ),
+        (
+            NodeKind::Denoise,
+            json!({"reductionPercent":if alternate {90} else {40},"floorPercent":10,"noiseProfile":profile,"learning":false}),
+            false,
+        ),
+        (
+            NodeKind::SpeechDenoise,
+            json!({"strengthPercent":if alternate {90} else {40}}),
+            false,
+        ),
+        (
+            NodeKind::SpectralGate,
+            json!({"thresholdDb":3,"reductionDb":if alternate {60} else {20},"noiseProfile":profile,"learning":false}),
+            false,
+        ),
+        (
+            NodeKind::FirFilter,
+            json!({"mediaId":"pair-ir","wetPercent":if alternate {25} else {100},"gainDb":-3}),
+            false,
+        ),
+        (
+            NodeKind::Pitch,
+            json!({"semitones":if alternate {-7} else {5},"cents":25}),
+            false,
+        ),
+    ]
+}
+
+#[test]
+fn every_ordered_builtin_pair_matches_separate_stage_composition() {
+    for rate in [48_000, 96_000] {
+        for channels in [1, 2] {
+            // Silence, level steps, hum, wanted tones, fixed-seed noise, clicks,
+            // and distinct stereo content; finish with silence to expose tails.
+            let length = QUANTUM * 128;
+            let mut input = noise(length * channels, 7, 0.01);
+            for frame in 0..length {
+                for channel in 0..channels {
+                    let index = frame * channels + channel;
+                    if frame < 512 || frame >= length - 4096 {
+                        input[index] = 0.0;
+                    } else {
+                        let level = if frame < length / 2 { 0.3 } else { 0.02 };
+                        input[index] += level
+                            * (TAU * (997.0 + channel as f64 * 234.0) * frame as f64 / rate as f64)
+                                .sin() as f32;
+                        input[index] +=
+                            0.03 * (TAU * 60.0 * frame as f64 / rate as f64).sin() as f32;
+                        if frame == 3000 + channel {
+                            input[index] += 0.8;
+                        }
+                    }
+                }
+            }
+            for alternate in [false, true] {
+                let tools = pair_tools(alternate);
+                for (a, first) in tools.iter().enumerate() {
+                    let intermediate = render(
+                        &pair_graph(std::slice::from_ref(first), rate, channels),
+                        &input,
+                        channels,
+                    );
+                    for (b, second) in tools.iter().enumerate() {
+                        let expected = render(
+                            &pair_graph(std::slice::from_ref(second), rate, channels),
+                            &intermediate,
+                            channels,
+                        );
+                        let output = render(
+                            &pair_graph(&[first.clone(), second.clone()], rate, channels),
+                            &input,
+                            channels,
+                        );
+                        let error = max_error(&output, &expected);
+                        evidence(
+                            &format!("pair-{rate}-{channels}-{alternate}-{a}-{b}"),
+                            rate,
+                            channels,
+                            &json!({"firstKind":format!("{:?}",first.0),"first":first.1,"secondKind":format!("{:?}",second.0),"second":second.1}),
+                            &input,
+                            &output,
+                            json!({"maxSampleError":error,"tolerance":1e-6,"oracle":"separate fresh A then B; no latency realignment"}),
+                        );
+                        assert!(
+                            error <= 1e-6,
+                            "pair {rate}/{channels}/{alternate}/{:?}->{:?}: {error}",
+                            first.0,
+                            second.0
+                        );
+                    }
+                }
+                // Every tool appears on each side of bypass combinations.
+                for (a, first) in tools.iter().enumerate() {
+                    let second = &tools[(a + 1) % tools.len()];
+                    for (bypass_a, bypass_b) in [(true, false), (false, true), (true, true)] {
+                        let mut first = first.clone();
+                        first.2 = bypass_a;
+                        let mut second = second.clone();
+                        second.2 = bypass_b;
+                        let intermediate = render(
+                            &pair_graph(std::slice::from_ref(&first), rate, channels),
+                            &input,
+                            channels,
+                        );
+                        let expected = render(
+                            &pair_graph(std::slice::from_ref(&second), rate, channels),
+                            &intermediate,
+                            channels,
+                        );
+                        let output = render(
+                            &pair_graph(&[first.clone(), second.clone()], rate, channels),
+                            &input,
+                            channels,
+                        );
+                        let error = max_error(&output, &expected);
+                        evidence(&format!("pair-bypass-{rate}-{channels}-{alternate}-{a}-{bypass_a}-{bypass_b}"), rate, channels,
+                            &json!({"firstKind":format!("{:?}",first.0),"secondKind":format!("{:?}",second.0),"bypassFirst":bypass_a,"bypassSecond":bypass_b}),
+                            &input, &output, json!({"maxSampleError":error,"tolerance":1e-6}));
+                        assert!(
+                            error <= 1e-6,
+                            "pair bypass {rate}/{channels}/{:?}->{:?}: {error}",
+                            first.0,
+                            second.0
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn connected_eq_dehum_pairs_follow_the_independent_product_response() {
+    for rate in [48_000, 96_000] {
+        for frequency in [60.0, 997.0, 5_000.0] {
+            for first_dehum in [false, true] {
+                for second_dehum in [false, true] {
+                    let stage = |dehum| {
+                        if dehum {
+                            (
+                                NodeKind::Dehum,
+                                json!({"frequencyHz":60,"amountPercent":50,"harmonics":8}),
+                                false,
+                            )
+                        } else {
+                            (
+                                NodeKind::ParametricEq,
+                                json!({"band0Enabled":true,"band0Type":"peaking","band0FrequencyHz":997,"band0Q":2,"band0GainDb":6}),
+                                false,
+                            )
+                        }
+                    };
+                    let stages = [stage(first_dehum), stage(second_dehum)];
+                    let input = tone(rate, frequency, 0.1, 4);
+                    let output = render(&pair_graph(&stages, rate, 1), &input, 1);
+                    let measured = db(projection(&output[rate as usize * 3..], rate, frequency)
+                        / projection(&input[rate as usize * 3..], rate, frequency));
+                    let response = |dehum| {
+                        if dehum {
+                            (1..=8)
+                                .map(|h| {
+                                    peaking_db(
+                                        rate,
+                                        60.0 * h as f64,
+                                        20.0 * h as f64 / 10f64.powf(-18.0 / 40.0),
+                                        -18.0,
+                                        frequency,
+                                    )
+                                })
+                                .sum::<f64>()
+                        } else {
+                            peaking_db(rate, 997.0, 2.0, 6.0, frequency)
+                        }
+                    };
+                    let expected = response(first_dehum) + response(second_dehum);
+                    evidence(
+                        &format!("pair-response-{rate}-{frequency}-{first_dehum}-{second_dehum}"),
+                        rate,
+                        1,
+                        &json!({"firstDehum":first_dehum,"secondDehum":second_dehum}),
+                        &input,
+                        &output,
+                        json!({"expectedDb":expected,"measuredDb":measured,"toleranceDb":0.5}),
+                    );
+                    assert!(
+                        (measured - expected).abs() <= 0.5,
+                        "pair response {rate}/{frequency}: {measured} != {expected}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn connected_gain_delay_and_compressor_pairs_prove_latency_and_order() {
+    let rate = 48_000;
+    let input = noise(QUANTUM * 2 * 64, 11, 0.1);
+    let delayed = (NodeKind::Delay, json!({"delayMs":3}), false);
+    let gain = (NodeKind::Gain, json!({"gainDb":6}), false);
+    for (name, stages, offset, scale) in [
+        (
+            "delay-delay",
+            [delayed.clone(), delayed.clone()],
+            288,
+            1.0_f32,
+        ),
+        (
+            "gain-delay",
+            [gain.clone(), delayed.clone()],
+            144,
+            10f32.powf(6.0 / 20.0),
+        ),
+        (
+            "delay-gain",
+            [delayed, gain.clone()],
+            144,
+            10f32.powf(6.0 / 20.0),
+        ),
+    ] {
+        let output = render(&pair_graph(&stages, rate, 2), &input, 2);
+        let mut expected = vec![0.0; input.len()];
+        for frame in offset..input.len() / 2 {
+            for channel in 0..2 {
+                expected[frame * 2 + channel] = input[(frame - offset) * 2 + channel] * scale;
+            }
+        }
+        let error = max_error(&output, &expected);
+        evidence(
+            &format!("pair-analytic-{name}"),
+            rate,
+            2,
+            &json!({}),
+            &input,
+            &output,
+            json!({"offsetFrames":offset,"scale":scale,"maxSampleError":error,"tolerance":1e-6}),
+        );
+        assert!(error <= 1e-6, "{name}: {error}");
+    }
+    let compressor = (
+        NodeKind::Compressor,
+        json!({"thresholdDb":-18,"ratio":4,"attackMs":0.1,"releaseMs":10,"kneeDb":0,"makeupDb":0}),
+        false,
+    );
+    let input = vec![10f32.powf(-12.0 / 20.0); frames(rate, 2)];
+    let compress = |level: f64| {
+        if level > -18.0 {
+            -18.0 + (level + 18.0) / 4.0
+        } else {
+            level
+        }
+    };
+    let mut results = Vec::new();
+    for gain_first in [false, true] {
+        let stages = if gain_first {
+            [gain.clone(), compressor.clone()]
+        } else {
+            [compressor.clone(), gain.clone()]
+        };
+        let expected = if gain_first {
+            compress(-12.0 + 6.0)
+        } else {
+            compress(-12.0) + 6.0
+        };
+        let output = render(&pair_graph(&stages, rate, 1), &input, 1);
+        let measured = db(rms(&output[rate as usize..]));
+        evidence(
+            &format!("pair-analytic-compressor-order-{gain_first}"),
+            rate,
+            1,
+            &json!({"gainFirst":gain_first}),
+            &input,
+            &output,
+            json!({"expectedDb":expected,"measuredDb":measured,"toleranceDb":0.5}),
+        );
+        assert!((measured - expected).abs() <= 0.5);
+        results.push(measured);
+    }
+    assert!(
+        (results[0] - results[1]).abs() > 4.0,
+        "nonlinear order was lost"
+    );
+}
 fn tone(rate: u32, frequency: f64, amplitude: f32, seconds: usize) -> Vec<f32> {
     (0..frames(rate, seconds))
         .map(|frame| amplitude * (TAU * frequency * frame as f64 / rate as f64).sin() as f32)

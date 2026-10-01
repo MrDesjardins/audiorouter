@@ -52,7 +52,7 @@ const line = (levels: number[], offset = 0) => levels
   .join(" ");
 
 /**
- * FIR Filter Hz: shows the live spectrum of the sound entering the tool, lets
+ * Spectral Gate: shows the live spectrum of the sound entering the tool, lets
  * the user learn the noise (the loudest level each frequency band reaches
  * while learning), and draws the resulting gate threshold. Frequencies whose
  * level stays under the threshold are turned down.
@@ -71,7 +71,7 @@ export function SpectralGateEditor({ node, running, levelsDb, liveProfile, disab
   const status = !running ? "Start the route to see the live spectrum."
     : learning ? (liveProfile ? "Learning: play only the noise you want removed, then stop learning." : "Waiting for the first measurement…")
       : learned ? "Frequencies under the gate threshold line are turned down." : "Learn the noise to start blocking it.";
-  return <section className="spectral-gate" aria-label="FIR Filter Hz editor">
+  return <section className="spectral-gate" aria-label="Spectral Gate editor">
     <div className="advanced-eq-heading"><div><strong>Noise at every frequency</strong><small>{learning ? "Learning now" : learned ? "Learned noise is stored" : "No noise learned yet"}</small></div>
       {!learning
         ? <button type="button" className="secondary" disabled={disabled || !running} onClick={() => onChange([["learning", true]])}>{learned ? "Learn again" : "Learn noise"}</button>

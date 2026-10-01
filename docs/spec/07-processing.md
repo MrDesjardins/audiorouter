@@ -236,6 +236,19 @@ Changing the gate's `range` to 0 removes attenuation but retains state metering.
 
 ## Verification
 
+Display naming (2026-09-30): the existing `spectralGate` / `spectral-gate@1`
+tool is **Spectral Gate**, formerly "FIR Filter Hz". Its learned per-frequency
+thresholding differs from the impulse-response convolution of **FIR Filter**
+(`firFilter`). Only display/default new-node names change; identifiers,
+parameters and names already saved by users remain compatible.
+
+Two-tool composition qualification compares connected A → B graphs with fresh
+single-tool execution of A followed by B on the same input and quantum boundaries.
+Cover both orders, repeated kinds, mono/stereo, active/bypassed stages and
+cumulative latency without realignment. This topology check supplements
+independent single-tool transfer-law tests; analytical product-response,
+gain/delay and nonlinear order checks provide independent pair references.
+
 Test impulse/frequency response, step response, DC/silence, clipping, automation, bypass latency, and long-run numerical stability. Flat EQ shall null against the input within the numeric tolerance in [14](14-quality.md). Verify notch attenuation at both hum presets and compressor/gate transfer curves across thresholds. Compare dry and processed branches to prove isolation. Exercise plugin scan crash, runtime crash, hang, mismatched channel layouts, editor resizing, state save/reload, and dynamic latency. A plugin that fails is an explicit unsupported fixture, not evidence that all VST3 effects work.
 
 Sources: [Cockos ReaPlugs page](https://www.reaper.fm/reaplugs/) documents the separately distributed effects suite; [Steinberg licensing FAQ](https://steinbergmedia.github.io/vst3_dev_portal/pages/FAQ/Licensing.html) distinguishes VST3 and VST2 terms. These inform the compatibility boundary, not a legal determination about any particular third-party binary.

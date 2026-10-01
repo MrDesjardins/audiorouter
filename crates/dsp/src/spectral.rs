@@ -345,7 +345,7 @@ fn decode_band_powers(encoded: &str) -> Option<[f32; NOISE_PROFILE_BANDS]> {
 }
 
 /// Per-frequency noise gate with a learned threshold (ReaFIR "Gate" mode,
-/// shown as "FIR Filter Hz"). While learning it passes audio unchanged and
+/// shown as "Spectral Gate"). While learning it passes audio unchanged and
 /// remembers the loudest level each of 64 log-spaced bands reaches. After
 /// that, a band whose level does not rise `threshold_db` above what was
 /// learned is turned down by `reduction_db`. Bands open at once and close

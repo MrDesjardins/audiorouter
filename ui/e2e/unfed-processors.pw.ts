@@ -14,7 +14,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await page.addInitScript((session) => Object.assign(window, { __routeFixtureSession: session, __routeFixtureRunning: true }), session);
     await page.goto("/route-harness.html");
     await page.getByLabel("Color theme").selectOption(theme);
-    await expect(page.locator(".inactive-route-warning")).toContainText("FIR Filter Hz");
+    await expect(page.locator(".inactive-route-warning")).toContainText("Spectral Gate");
     await expect(page.locator(".inactive-route-warning")).toContainText("ignored during playback");
     await page.locator(".topbar").getByRole("button", { name: "Stop", exact: true }).click();
     await page.locator(".topbar").getByRole("button", { name: "Play", exact: true }).click();

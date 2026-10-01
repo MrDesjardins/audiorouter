@@ -179,7 +179,7 @@ const NODE_KIND_LABELS: Partial<Record<NodeKind, string>> = {
   bassTreble: "Bass & Treble",
   inputSwitch: "Input Switch",
   speechDenoise: "Speech Denoise",
-  spectralGate: "FIR Filter Hz",
+  spectralGate: "Spectral Gate",
   firFilter: "FIR Filter",
   timeShift: "Time Shift",
   networkSend: "Network Send",

@@ -1,5 +1,14 @@
 # AudioRouter 0.1.0-dev qualification notes
 
+## Tool naming and connected-pair qualification — 2026-09-30
+
+"FIR Filter Hz" is now displayed as **Spectral Gate** to distinguish learned
+frequency gating from **FIR Filter** impulse-response convolution. New nodes
+use the clearer default name; existing saved node names are preserved. API
+identifiers and parameters are unchanged. Deterministic qualification now
+checks ordered pairs of built-in tools and independent combined-response,
+delay and nonlinear processing-order expectations.
+
 ## Dehum correction — 2026-09-30
 
 Dehum now uses finite-depth notches with constant harmonic bandwidth, preserving
