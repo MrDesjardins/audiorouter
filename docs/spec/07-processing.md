@@ -236,6 +236,12 @@ Changing the gate's `range` to 0 removes attenuation but retains state metering.
 
 ## Verification
 
+Spectral Gate learning takes the maximum observed power per band. A supplied
+noise profile seeds learning, so added noise cannot lower the previous curve.
+Properties offers Learn again (replace: clear profile to the floor first) and
+Add noise (extend the stored curve). Learning passes sound unchanged; Stop and
+keep saves the combined profile through the ordinary graph transaction.
+
 Display naming (2026-09-30): the existing `spectralGate` / `spectral-gate@1`
 tool is **Spectral Gate**, formerly "FIR Filter Hz". Its learned per-frequency
 thresholding differs from the impulse-response convolution of **FIR Filter**

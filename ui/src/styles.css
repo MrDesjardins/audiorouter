@@ -931,8 +931,8 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .node-telemetry-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: .45rem; margin: .6rem 0 0; }
 .node-telemetry-tile { min-width: 0; margin: 0; padding: .45rem .55rem; border: 1px solid var(--ambient-edge); border-radius: 9px; background: var(--ambient-surface-hi); }
 .node-telemetry-tile dt { color: var(--text-soft); font-size: .66rem; letter-spacing: .06em; text-transform: uppercase; }
-.node-telemetry-tile dd { margin: .1rem 0 0; font-size: .95rem; font-weight: 650; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.node-telemetry-tile small { display: block; color: var(--text-soft); font-size: .68rem; }
+.node-telemetry-tile dd { margin: .1rem 0 0; font-size: .95rem; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.3em; }
+.node-telemetry-tile small { display: block; color: var(--text-soft); font-size: .68rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.3em; }
 .node-telemetry-tile.is-good dd { color: var(--good, #72e3a2); }
 .node-telemetry-tile.is-warn dd { color: var(--signal-hot, #ffd166); }
 .node-telemetry-tile.is-bad dd { color: var(--danger, #ff8b8b); }

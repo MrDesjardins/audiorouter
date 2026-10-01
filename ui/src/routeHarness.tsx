@@ -18,6 +18,8 @@ let prepared = running;
 const sourceStates = new Map<string, "playing" | "paused" | "stopped">();
 let sequence = 0;
 const lifecycleCalls: string[] = [];
+let planCalls = 0;
+Object.assign(window, { __routeFixturePlanCalls: () => planCalls });
 Object.assign(window, { __routeFixtureCalls: () => [...lifecycleCalls] });
 const fixtureBackend = createDisconnectedBackend(demoSession);
 const initial = await fixtureBackend.snapshot();
@@ -150,6 +152,8 @@ const previewBackend: UiBackend = {
     return { mediaId: "e2e-audio-media", fileName: "calibration.wav", format: "wav", durationMs: 1000, channels: 1, sampleRateHz: 48_000 };
   },
   async planGraph(candidate) {
+    planCalls += 1;
+    if ((globalThis as { __routeFixturePlanConflict?: boolean }).__routeFixturePlanConflict) throw new Error("revisionConflict: Another save changed this route, so your save was not applied");
     if (candidate.id !== committed.id || candidate.revision !== committed.revision) throw new Error(`Preview planner: stale session revision (${candidate.id}@${candidate.revision}; saved ${committed.id}@${committed.revision}).`);
     const validationError = graphValidationError(candidate);
     if (validationError) throw new Error(validationError);

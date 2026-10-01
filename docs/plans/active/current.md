@@ -9,6 +9,58 @@ Add new entries under "Log" below, and keep the sections above it current.
 
 ## Objective and scope
 
+## Current task: live save loop, stable readings, additive learning (2026-09-30)
+
+User reports inspector-status build repeatedly conflicts on Save, reading text
+wrap causes vertical movement, and requests additive Spectral Gate learning.
+Requirements UI-04/07, API-07/09, DSP-17. Logs confirm graph.plan revisionConflict
+every ~430 ms; autosave retries unchanged failed drafts when graphBusy clears.
+Bound autosave to one attempt per draft edit, retaining explicit Save recovery.
+Keep numeric reading/detail rows single-line. Add Add noise alongside replacement
+learning, retaining each band's maximum old/new noise level; pass the combined
+profile through existing backend validation. Test conflict retry bounds and
+profile merge, build and visually check themes. No live app/data mutation.
+Rollback focused UI changes; no new stored parameters or DSP processing law.
+Next: implement and run focused/browser regressions, then record evidence.
+
+Implementation decision: initialize Spectral Gate learning from the supplied
+profile in DSP; replacement UI supplies the all-floor profile, Add noise keeps
+the existing profile. This survives route reconstruction and inspector changes.
+Existing API learning with a supplied profile now extends it; omit/clear profile
+for replacement. No new fields, allocations in processing or latency change.
+DSP changes require guarded native continuity qualification before release;
+user's running endpoints were not disturbed for this check.
+
+Verification: Windows spectral DSP tests 12 pass, including per-band monotonic
+learning, unity learning output and reconstruction through silence. UI 17
+focused tests pass; corrected lifecycle jsdom fixture's missing DOMMatrix stub
+(initial run reported unsupported DOMMatrix, not a product failure). Optimized
+Edge: 12 tests pass, including single failed autosave/no retry over 2.3 seconds,
+explicit Save retry and constant panel height at -99.9/-100.0 dB in all three
+themes; screenshots inspected. Typecheck/production build and docs 80 files/
+423 links pass. Next: desktop rebuild/manual regression and guarded native
+continuity qualification; no current executable has been replaced.
+
+Graph-level deterministic spectral learning/noise-rejection/wanted-tone
+regression also passes (`cargo test -p audiorouter-engine --test
+deterministic_audio spectral_tools_learn_profiles_reduce_noise_and_retain_wanted_tone`).
+Final optimized 12-test run passes after isolating planner instrumentation from
+existing lifecycle-call assertions. Guarded live continuity remains unrun.
+
+## Current task: live save loop, stable readings, additive learning (2026-09-30)
+
+User reports inspector-status build repeatedly conflicts on Save, reading text
+wrap causes vertical movement, and requests additive Spectral Gate learning.
+Requirements UI-04/07, API-07/09, DSP-17. Logs confirm graph.plan revisionConflict
+every ~430 ms; autosave retries unchanged failed drafts when graphBusy clears.
+Bound autosave to one attempt per draft edit, retaining explicit Save recovery.
+Keep numeric reading/detail rows single-line. Add Add noise alongside replacement
+learning, retaining each band's maximum old/new noise level; pass the combined
+profile through existing backend validation. Test conflict retry bounds and
+profile merge, build and visually check themes. No live app/data mutation.
+Rollback focused UI changes; no new stored parameters or DSP processing law.
+Next: implement and run focused/browser regressions, then record evidence.
+
 ## Current task: inspector clarity rebuild (2026-09-30)
 
 Rebuild requested at source c4fe6a47. Requirements UI-04/07, API-09 and

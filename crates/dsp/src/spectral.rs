@@ -372,7 +372,8 @@ struct GateRule {
 impl SpectralGate {
     /// `threshold_db` (−20…20) is how far above the learned noise a band
     /// must rise to pass; `reduction_db` (0…80) how much a closed band is
-    /// turned down. Learning starts from an empty profile. `tap` receives
+    /// turned down. Learning extends the supplied profile, or starts empty
+    /// when none is supplied. `tap` receives
     /// live levels for display.
     pub fn new(
         threshold_db: f32,
@@ -384,7 +385,9 @@ impl SpectralGate {
         let bounded = |value: f32, low: f32, high: f32, fallback: f32| if value.is_finite() { value.clamp(low, high) } else { fallback };
         // A profile that learned nothing (every band at the −160 dB floor)
         // is treated as no profile, so the gate passes audio.
-        let learned = if learning { None } else { profile.and_then(decode_band_powers) }
+        // Learning extends an explicitly supplied profile. Callers requesting
+        // replacement learning supply the floor profile instead.
+        let learned = profile.and_then(decode_band_powers)
             .filter(|powers| powers.iter().any(|power| power_db(*power) > -150.0));
         if let Some(tap) = &tap {
             tap.learning.store(learning, Ordering::Release);
@@ -766,6 +769,28 @@ mod tests {
         (0..frames)
             .map(|frame| amplitude * (2.0 * PI * frequency * frame as f32 / 48_000.0).sin())
             .collect()
+    }
+
+    #[test]
+    fn spectral_gate_additive_learning_retains_old_bands_and_learns_new_noise() {
+        let old = "8010".repeat(32);
+        let tap = std::sync::Arc::new(SpectrumTap::default());
+        let mut learner = SpectralGate::new(3.0, 60.0, Some(&old), true, Some(tap.clone()));
+        let original = noise(48_000, 7, 0.02);
+        let mut input = original.clone();
+        learner.process(&mut input);
+        let combined = tap.learned_profile().unwrap();
+        let bytes = |text: &str| (0..64).map(|i| u8::from_str_radix(&text[i*2..i*2+2], 16).unwrap()).collect::<Vec<_>>();
+        let (before, after) = (bytes(&old), bytes(&combined));
+        assert!(after.iter().zip(&before).all(|(new, old)| new >= old));
+        assert!(after.iter().zip(&before).any(|(new, old)| new > old));
+        let wanted = rms(&original[..48_000 - SPECTRAL_LATENCY]);
+        assert!((rms(&input[SPECTRAL_LATENCY..]) - wanted).abs() < wanted * 0.05);
+        // A new learner seeded with the combined curve keeps it through silence.
+        let resumed_tap = std::sync::Arc::new(SpectrumTap::default());
+        let mut resumed = SpectralGate::new(3.0, 60.0, Some(&combined), true, Some(resumed_tap.clone()));
+        resumed.process(&mut vec![0.0; 4096]);
+        assert_eq!(resumed_tap.learned_profile().as_deref(), Some(combined.as_str()));
     }
 
     #[test]

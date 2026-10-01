@@ -1904,13 +1904,16 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   // While audio plays, slider-style edits (parameter values only) are saved
   // after a short pause so the change is heard without Stop/Play. Topology
   // edits still wait for an explicit Save.
+  const lastAutoSaveDraft = useRef<string | null>(null);
   const planChangesRef = useRef(planChanges);
   planChangesRef.current = planChanges;
   useEffect(() => {
-    if (!sessionRunning || graphBusy || !backend.connected || !isParameterOnlyChange(session, draft)) return;
-    const timer = window.setTimeout(() => void planChangesRef.current(), 400);
+    if (!sessionRunning || graphBusy || !backend.connected || pendingGraphPlan || !isParameterOnlyChange(session, draft)) return;
+    const key = JSON.stringify(draft);
+    if (lastAutoSaveDraft.current === key) return;
+    const timer = window.setTimeout(() => { lastAutoSaveDraft.current = key; void planChangesRef.current(); }, 400);
     return () => window.clearTimeout(timer);
-  }, [draft, session, sessionRunning, graphBusy, backend.connected]);
+  }, [draft, session, sessionRunning, graphBusy, backend.connected, pendingGraphPlan]);
   const commitAcknowledgedPlan = async () => {
     if (graphBusy || !backend.connected || !pendingOperation || !pendingGraphPlan || acknowledgedWarnings.size !== pendingWarnings.length) return;
     setGraphBusy(true);

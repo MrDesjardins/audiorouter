@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { Node } from "@audiorouter/contracts";
-import { BAND_FREQUENCIES_HZ, SpectralGateEditor, decodeProfileDb } from "./SpectralGateEditor";
+import { BAND_FREQUENCIES_HZ, SpectralGateEditor, decodeProfileDb, mergeNoiseProfiles } from "./SpectralGateEditor";
 
 afterEach(cleanup);
 
@@ -14,6 +14,16 @@ const node = (parameters: Node["parameters"]): Node => ({
 const profile = "64".repeat(64); // 100 − 160 = −60 dB in every band
 
 describe("Spectral Gate editor", () => {
+  it("adds noise by retaining each old or new band maximum", () => {
+    expect(mergeNoiseProfiles("8060".repeat(32), "7080".repeat(32))).toBe("8080".repeat(32));
+    const onChange = vi.fn();
+    const view = render(<SpectralGateEditor node={node({ noiseProfile: "8060".repeat(32) })} running levelsDb={Array(64).fill(-20)} liveProfile={null} disabled={false} onChange={onChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add noise" }));
+    expect(onChange).toHaveBeenLastCalledWith([["learning", true]]);
+    view.rerender(<SpectralGateEditor node={node({ noiseProfile: "8060".repeat(32), learning: true })} running levelsDb={Array(64).fill(-20)} liveProfile={"7080".repeat(32)} disabled={false} onChange={onChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Stop and keep" }));
+    expect(onChange).toHaveBeenLastCalledWith([["noiseProfile", "8080".repeat(32)], ["learning", false]]);
+  });
   it("explains bypass and off without stale live sound or learning", () => {
     for (const flags of [{ bypass: true, enabled: true }, { bypass: false, enabled: false }]) {
       const view = render(<SpectralGateEditor node={{ ...node({}), ...flags }} running levelsDb={Array(64).fill(-20)} liveProfile={null} disabled={false} onChange={() => undefined} />);
@@ -48,7 +58,7 @@ describe("Spectral Gate editor", () => {
     expect((screen.getByRole("button", { name: "Learn noise" }) as HTMLButtonElement).disabled).toBe(true);
     rerender(<SpectralGateEditor node={node({})} running levelsDb={Array(64).fill(-20)} liveProfile={null} disabled={false} onChange={onChange} />);
     fireEvent.click(screen.getByRole("button", { name: "Learn noise" }));
-    expect(onChange).toHaveBeenCalledWith([["learning", true]]);
+    expect(onChange).toHaveBeenCalledWith([["noiseProfile", "00".repeat(64)], ["learning", true]]);
   });
 
   it("keeps the learned profile when learning stops and draws the threshold", () => {

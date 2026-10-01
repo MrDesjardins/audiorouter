@@ -1,5 +1,14 @@
 import type { Node } from "@audiorouter/contracts";
 
+export function mergeNoiseProfiles(existing: unknown, additional: string | null): string | null {
+  if (!additional || !/^[0-9a-fA-F]{128}$/.test(additional)) return null;
+  if (typeof existing !== "string" || !/^[0-9a-fA-F]{128}$/.test(existing)) return additional;
+  return Array.from({ length: 64 }, (_, band) => Math.max(
+    parseInt(existing.slice(band * 2, band * 2 + 2), 16),
+    parseInt(additional.slice(band * 2, band * 2 + 2), 16),
+  ).toString(16).padStart(2, "0")).join("");
+}
+
 const BANDS = 64;
 const WIDTH = 380;
 const HEIGHT = 200;
@@ -66,8 +75,9 @@ export function SpectralGateEditor({ node, running, levelsDb, liveProfile, disab
   onChange: (changes: Array<[string, boolean | number | string]>) => void;
 }) {
   const learning = node.parameters.learning === true;
+  const combinedProfile = mergeNoiseProfiles(node.parameters.noiseProfile, liveProfile);
   const threshold = typeof node.parameters.thresholdDb === "number" ? node.parameters.thresholdDb : 3;
-  const learned = decodeProfileDb(learning ? liveProfile : node.parameters.noiseProfile);
+  const learned = decodeProfileDb(learning ? combinedProfile : node.parameters.noiseProfile);
   const active = node.enabled && !node.bypass;
   const status = !node.enabled ? "Off: enable this tool to see its live spectrum." : node.bypass ? "Bypass: turn Bypass off to process sound and see the live spectrum." : !running ? "Start the route to see the live spectrum."
     : !levelsDb ? "Waiting for live spectrum readings. Check the incoming route and signal." : learning ? (liveProfile ? "Learning: play only the noise you want removed, then stop learning." : "Waiting for the first measurement…")
@@ -75,8 +85,8 @@ export function SpectralGateEditor({ node, running, levelsDb, liveProfile, disab
   return <section className="spectral-gate" aria-label="Spectral Gate editor">
     <div className="advanced-eq-heading"><div><strong>Noise at every frequency</strong><small>{learning ? "Learning now" : learned ? "Learned noise is stored" : "No noise learned yet"}</small></div>
       {!learning
-        ? <button type="button" className="secondary" disabled={disabled || !running || !active} onClick={() => onChange([["learning", true]])}>{learned ? "Learn again" : "Learn noise"}</button>
-        : <button type="button" className="primary" disabled={disabled || !running || !active || !liveProfile} onClick={() => liveProfile && onChange([["noiseProfile", liveProfile], ["learning", false]])}>Stop and keep</button>}
+        ? <div className="actions"><button type="button" className="secondary" disabled={disabled || !running || !active} onClick={() => { onChange([["noiseProfile", "00".repeat(64)], ["learning", true]]); }}>{learned ? "Learn again" : "Learn noise"}</button>{learned && <button type="button" className="secondary" disabled={disabled || !running || !active} title="Keep the learned curve and add louder noise at each frequency" onClick={() => { onChange([["learning", true]]); }}>Add noise</button>}</div>
+        : <button type="button" className="primary" disabled={disabled || !running || !active || !combinedProfile} onClick={() => combinedProfile && onChange([["noiseProfile", combinedProfile], ["learning", false]])}>Stop and keep</button>}
     </div>
     <svg className="advanced-eq-graph spectral-gate-graph" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label="Live spectrum with the learned noise and gate threshold">
       <rect x={LEFT} y={TOP} width={RIGHT - LEFT} height={BOTTOM - TOP} className="advanced-eq-plot" />

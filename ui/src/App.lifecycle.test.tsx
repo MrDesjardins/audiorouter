@@ -7,6 +7,7 @@ import { createDisconnectedBackend } from "./backend";
 import { demoSession } from "./fixtures";
 
 beforeAll(() => {
+  Object.defineProperty(window, "DOMMatrixReadOnly", { configurable: true, value: class { m22 = 1; } });
   Object.defineProperty(globalThis, "ResizeObserver", { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } });
 });
 afterEach(() => { cleanup(); window.localStorage.clear(); });

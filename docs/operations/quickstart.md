@@ -646,6 +646,12 @@ are under `target/feature-confidence-visual`. See the
 before interpreting a green browser result as audio qualification.
 ## Properties status and timing
 
+Spectral Gate **Learn again** replaces its previous noise curve. **Add noise**
+keeps that curve and raises bands where additional noise is louder. Play only
+unwanted noise while learning, then **Stop and keep**. The combined profile is
+stored with the node. Live autosave attempts each changed draft once; after a
+conflict, review the refreshed session and deliberately Save or Revert edits.
+
 Properties shows Off, Bypass, Ready, Active, Disconnected or Failed beside the
 node name. Ready means enabled while stopped; Active does not prove incoming
 sound. Unsaved changes are identified separately. Off/bypassed tools explain
