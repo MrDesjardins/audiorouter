@@ -207,6 +207,13 @@ audio readiness and explains the exact endpoint and authorization steps.
 
 ## Verification
 
+Tidy layout uses saved/draft connections rather than insertion order: sources
+on the left, downstream tools/outputs on the right, separate disconnected
+component lanes, measured card spacing and branch-order crossing reduction.
+Disabled edges remain part of layout so audio toggles do not scatter cards.
+Reset layout restores this topology arrangement and clears custom edge sides.
+Both operations fit the arranged graph in view and never change graph/audio.
+
 The Properties header shows the node state beside its name: Off, Bypass,
 Ready (enabled while stopped), Active, Disconnected, or failed plugin state.
 Draft changes remain identified separately; Active is not proof of input signal.

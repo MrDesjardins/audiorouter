@@ -9,6 +9,51 @@ Add new entries under "Log" below, and keep the sections above it current.
 
 ## Objective and scope
 
+## Current task: native Patrick clone and graph-aware layout (2026-09-30)
+
+User authorizes duplicating Patrick Main Session and replacing ReaComp/ReaGate
+with native Compressor/Gate; preserve original, devices, edges and running audio.
+Requirements DSP-03/05, GRAPH-02, UI-04/06, API-07. Read current backend graph and
+plugin settings where exposed; map supported settings and document approximations.
+Duplicate via shared API, plan/commit only clone, do not start/select implicitly.
+Replace row-grid layout with deterministic left-to-right topology layers,
+component lanes, branch ordering, measured spacing and fit-to-view; Reset restores
+the smart default. Test fanout/mixer/disconnected/disabled edges, cycles fallback,
+no graph mutation and three themes. Rollback: original session and UI revert.
+Next: inspect saved plugins, create clone, implement/verify layout.
+
+Result: authenticated pipe sessions.duplicate and warning-free graph plan/commit
+created patrick-main-native / Patrick Main Session (Native), revision 1:
+13 nodes, identical 11 edges, zero plugins. Original remains revision 169.
+ReaComp -> Compressor (-18 dB, 3:1, 10/150 ms, 6 dB knee, 0 makeup);
+ReaGate -> Gate (-45 dB, 60 dB range, 3 dB hysteresis, 4:1, 5/50/150 ms).
+Mono ports, enabled/bypass states, other tools and exact bindings retained.
+Saved plugin nodes contain no override/state reference, so replacements use
+native defaults; identical VST sound is not claimed. Clone not selected/started.
+Local pipe helper received complete successful responses then EPIPE on closure;
+verified persisted inventory and original revision separately. No DB writes.
+
+Layout implementation: deterministic connected components, longest-path layers,
+six barycentric ordering sweeps, measured spacing, inactive edges included,
+bounded cycle fallback and fit-to-view. Tidy/Reset clear custom connector sides;
+Reset uses the smart layout instead of insertion-order grid. Groups retain
+custom placement. Windows: 33 unit regressions and 15 optimized Edge tests pass;
+three theme screenshots inspected. Typecheck/production build and docs
+80 files/423 links pass. Next: build separate manual shell, with unchanged
+verified worker/CLI from live-inspector build; user playback comparison remains
+unrun. Rollback original session or preceding executable.
+
+Manual artifact built with locked custom-protocol shell and verified fresh UI
+index-DqtGdOrA.js. New shell is newer than UI index 2026-10-01 02:54:19 UTC.
+Path: C:\code\audiorouter\target\native-smart-layout-20260930\release\audiorouter-shell.exe.
+Size 22,535,680 bytes; SHA256
+5D0463133C4EF6D77555BBFFA979B051522486D41CB3CB18CAF0EE2A4D53E7DC.
+Unchanged companion CLI/worker copied from verified live-inspector build;
+hashes remain 6FDBEC51B9E784A35908C57A7077C8C02756EBA3AB5A9B548F5E55998DCDD956
+and A97155E0ADCCCBD354EBD05DBE42E6B1669E92D91942AB3D330A19EE53BF1D8B.
+All three pass x64 PE validation. No shell launched/stopped. Next: user switches
+to Native clone and checks voice processing, then tries Tidy/Reset on real graph.
+
 ## Current task: live inspector fixes rebuild (2026-09-30)
 
 User requests rebuild of source 5cf120f6 (bounded autosave, stable readings,

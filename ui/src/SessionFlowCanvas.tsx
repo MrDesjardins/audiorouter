@@ -1,3 +1,4 @@
+import { smartLayout } from "./smartLayout";
 import {
   Background,
   BaseEdge,
@@ -910,10 +911,13 @@ export function SessionFlowCanvas({ groups = [], selectedGroupId = "", onSelectG
     return () => observer.disconnect();
   }, [session.nodes.length]);
   const tidyLayout = () => {
-    const next = Object.fromEntries(session.nodes.map((node, index) => [node.id, positionFor(index)]));
+    const next = smartLayout(session, measured);
     positionsRef.current = next;
     setPositions(next);
     writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
+    setEdgeSides({});
+    if (typeof window !== "undefined") window.localStorage.removeItem(edgeLayoutKey);
+    requestAnimationFrame(() => flowInstanceRef.current?.fitView({ padding: 0.2, duration: 0 }));
   };
   const addLibraryNode = (kind: LibraryNodeKind, position: { x: number; y: number }) => {
     const nodeId = onAddLibraryNode?.(kind, position);
@@ -1037,7 +1041,7 @@ export function SessionFlowCanvas({ groups = [], selectedGroupId = "", onSelectG
 
   return (
     <>
-    <div className="canvas-layout-actions" aria-label="Canvas layout actions"><span className="muted" role="status" aria-live="polite">{selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} selected</span><button type="button" className="secondary" onClick={tidyLayout}>Tidy layout</button><button type="button" className="secondary" onClick={() => { clearLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey); if (typeof window !== "undefined") window.localStorage.removeItem(edgeLayoutKey); positionsRef.current = {}; setEdgeSides({}); setPositions({}); }}>Reset layout</button></div>
+    <div className="canvas-layout-actions" aria-label="Canvas layout actions"><span className="muted" role="status" aria-live="polite">{selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} selected</span><button type="button" className="secondary" onClick={tidyLayout}>Tidy layout</button><button type="button" className="secondary" onClick={() => { clearLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey); if (typeof window !== "undefined") window.localStorage.removeItem(edgeLayoutKey); tidyLayout(); }}>Reset layout</button></div>
     <SignalFlowLegend />
     <div className="session-flow-canvas" aria-label="Signal-flow graph" data-connection-mode={connectionHandleMode} onDragOver={(event) => { if (!canEdit) return; event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }} onDrop={(event) => { const kind = readLibraryDropKind(event.dataTransfer); event.preventDefault(); const bounds = event.currentTarget.getBoundingClientRect(); const position = libraryDropPosition(event.clientX, event.clientY, bounds); if (isLibraryNodeKind(kind)) { if (onAddLibraryNode) addLibraryNode(kind, position); else routeLibraryDrop(kind, position); } else if (isVirtualBusKind(kind)) { if (onAddVirtualBusNode) addVirtualBusNode(kind === "virtualRenderSource" ? "renderSource" : "captureSink", position); else routeLibraryDrop(kind, position); } }}>
         <div className="canvas-library" aria-label="Drag processors to canvas">

@@ -646,6 +646,12 @@ are under `target/feature-confidence-visual`. See the
 before interpreting a green browser result as audio qualification.
 ## Properties status and timing
 
+**Tidy layout** arranges connected paths left to right, separates disconnected
+paths and spaces cards using their measured sizes. **Reset layout** clears
+custom connector routing and restores the same smart arrangement. Audio nodes
+move; visual groups retain their custom positions. Neither changes connections
+or audio. Layout remains local to each session.
+
 Spectral Gate **Learn again** replaces its previous noise curve. **Add noise**
 keeps that curve and raises bands where additional noise is louder. Play only
 unwanted noise while learning, then **Stop and keep**. The combined profile is
