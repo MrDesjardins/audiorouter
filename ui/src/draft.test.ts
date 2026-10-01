@@ -3,6 +3,26 @@ import type { ApplicationInfo, Session } from "@audiorouter/contracts";
 import { addSourceToOccupiedOutput, appendApplicationCaptureNode, applicationCaptureChoices, applicationOnlyRouteSource, independentPaths, generatedOnlyRoute, needsNativePaths, unboundDeviceNodes, isParameterOnlyChange, pluginCatalog, STANDARD_PLUGIN_FOLDERS, mixerInputs, mixerRouteSources, pruneInactiveUpstream, mixerInputVolumeKey, mixedApplicationRouteOtherSources, rebindApplicationCaptureNode, appendDraftConnection, appendEndpointLoopbackNode, appendLibraryNode, appendPluginPlaceholderNode, appendVirtualBusNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, type LibraryNodeKind, removeDraftNode, resetNodeDraftParameters, routeFedMixerToOccupiedOutput, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
 import { demoSession } from "./fixtures";
 import { unfedRouteNodes } from "./draft";
+import { insertDraftProcessor } from "./draft";
+
+describe("Meter insertion", () => {
+  it.each([1, 2] as const)("preserves downstream mixing and source channels (%i)", (channels) => {
+    let session = appendLibraryNode({ ...demoSession, nodes: [], edges: [] }, "gain");
+    session = appendLibraryNode(session, "compressor");
+    const [source, destination] = session.nodes;
+    session = { ...session, nodes: session.nodes.map(node => node.id === source.id
+      ? { ...node, ports: node.ports.map(port => ({ ...port, channels })) } : node) };
+    session = appendDraftConnection(session, source.id, "out", destination.id, "in");
+    const original = { ...session.edges[0], matrix: channels === 1 ? [0.5, 0.75] : [0.5, 0.25, 0.75, 1] };
+    const inserted = insertDraftProcessor({ ...session, edges: [original] }, original.id, "meter");
+    const meter = inserted.nodes.at(-1)!;
+    expect(meter.kind).toBe("meter");
+    expect(meter.ports.map(port => [port.direction, port.channels])).toEqual([["input", channels], ["output", channels]]);
+    expect(inserted.edges).toHaveLength(2);
+    expect(inserted.edges.find(edge => edge.sourceNode === meter.id)?.matrix).toEqual(original.matrix);
+    expect(inserted.edges.find(edge => edge.destinationNode === meter.id)?.sourceNode).toBe(source.id);
+  });
+});
 
 describe("output fan-out across library tools", () => {
   const nodeKinds: Record<LibraryNodeKind, true> = {

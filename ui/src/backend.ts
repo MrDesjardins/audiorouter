@@ -198,6 +198,7 @@ export interface UiBackend {
   duplicateSession(sourceSessionId: string, sessionId: string, name?: string, idempotencyKey?: string): Promise<SessionCreateResult>;
   deleteSession(sessionId: string, idempotencyKey?: string): Promise<SessionDeleteResult>;
   startSession(sessionId: string, idempotencyKey?: string, candidate?: Session): Promise<SessionStartResult>;
+  resetMeter?(sessionId: string, nodeId: string): Promise<{ sessionId: string; nodeId: string; reset: boolean }>;
   stopSession(sessionId: string, idempotencyKey?: string): Promise<SessionStopResult>;
   exportSession(sessionId: string): Promise<Session>;
   exportSessionFile(sessionId: string, path: string, replace?: boolean): Promise<SessionFileExportResult>;
@@ -822,6 +823,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
     },
     async startSession(startSessionId, idempotencyKey, candidate) {
       return client.request("session.start", { sessionId: startSessionId, ...(idempotencyKey === undefined ? {} : { idempotencyKey }), ...(candidate === undefined ? {} : { candidate }) });
+    },
+    async resetMeter(sessionId, nodeId) {
+      return client.request("meters.reset", { sessionId, nodeId });
     },
     async stopSession(stopSessionId, idempotencyKey) {
       return client.request("session.stop", { sessionId: stopSessionId, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });

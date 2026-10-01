@@ -362,7 +362,7 @@ function nodeTelemetryFor(node: Node | undefined, diagnostics: DiagnosticsSnapsh
 }
 
 function MiniMeter({ telemetry }: { telemetry: ReturnType<typeof nodeTelemetryFor> }) {
-  const peak = telemetry?.meter?.peakDb ?? -60;
+  const peak = telemetry?.meter?.currentPeakDb ?? telemetry?.meter?.peakDb ?? -60;
   const rms = telemetry?.meter?.rmsDb ?? -60;
   const active = peak > -60;
   return <div className={`node-meter ${active ? "is-active" : "is-silent"}`} aria-label={`Peak ${formatDb(peak)}, RMS ${formatDb(rms)}`}>

@@ -34,7 +34,7 @@ for example `graph.plan` → `POST /api/v1/graph/plan`. Send its discovery-defin
 parameters as a plain JSON object and receive the plain result, without a
 JSON-RPC envelope. Use `Content-Type: application/json` and
 `Authorization: Bearer <token>` for API calls. The generated `/openapi.json`
-contains exact schemas for all 102 methods, four GET aliases, and the active
+contains exact schemas for all 103 methods, four GET aliases, and the active
 session PUT alias.
 
 PowerShell example (enter the token interactively, never put it in arguments):

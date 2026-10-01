@@ -6,6 +6,7 @@ import type { InsertableProcessorKind } from "./draft";
 const INSERT_MIXER_ACTION = "__audiorouter_insert_mixer__";
 const REMOVE_MIXER_ACTION = "__audiorouter_remove_mixer__";
 export const PROCESSOR_ACTIONS: Array<{ kind: InsertableProcessorKind; label: string }> = [
+  { kind: "meter", label: "Meter" },
   { kind: "gain", label: "Gain" },
   { kind: "mute", label: "Mute" },
   { kind: "parametricEq", label: "Advanced EQ" },

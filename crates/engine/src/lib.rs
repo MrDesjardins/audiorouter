@@ -3291,6 +3291,13 @@ impl CompiledMixerFanoutGraph {
         &self.output_node_ids
     }
 
+    /// Reset every compiled copy of an authored Meter, without changing audio.
+    pub fn reset_meter_for_node(&self, node_id: &audiorouter_domain::EntityId) -> bool {
+        self.processing_graph.iter()
+            .chain(self.input_chains.iter().flatten().map(|chain| &chain.graph))
+            .fold(false, |found, graph| graph.reset_meter_for_node(node_id) | found)
+    }
+
     /// Actual prepared source, tool and mapped destination levels.
     pub fn meter_snapshot_for_node(
         &self,
@@ -3732,6 +3739,10 @@ impl RealtimeMixerFanout {
         &self.output_node_ids
     }
 
+    pub fn reset_meter_for_node(&self, node_id: &audiorouter_domain::EntityId) -> bool {
+        self.paths.iter().fold(false, |found, path| path.graph.reset_meter_for_node(node_id) | found)
+    }
+
     pub fn meter_snapshot_for_node(
         &self,
         node_id: &audiorouter_domain::EntityId,
@@ -4053,6 +4064,9 @@ pub fn histogram_upper_bound_ns<const N: usize>(
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BlockMeterSnapshot {
+    pub current_peak_db: f32,
+    pub channel_current_peak_db: [f32; MAX_CHANNELS],
+    pub observed_frames: u64,
     pub peak_abs: f32,
     pub clipped_samples: u64,
     pub peak_db: f32,
@@ -4077,6 +4091,9 @@ pub struct ProcessorTelemetry {
 /// floor for silence and remain finite for control-plane consumers.
 #[derive(Debug)]
 pub struct BlockMeter {
+    current_peak_bits: std::sync::atomic::AtomicU32,
+    channel_current_peak_bits: [std::sync::atomic::AtomicU32; MAX_CHANNELS],
+    observed_frames: AtomicU64,
     peak_bits: std::sync::atomic::AtomicU32,
     rms_bits: std::sync::atomic::AtomicU32,
     clipped_samples: AtomicU64,
@@ -4088,6 +4105,9 @@ pub struct BlockMeter {
 impl Default for BlockMeter {
     fn default() -> Self {
         Self {
+            current_peak_bits: std::sync::atomic::AtomicU32::new(0),
+            channel_current_peak_bits: std::array::from_fn(|_| std::sync::atomic::AtomicU32::new(0)),
+            observed_frames: AtomicU64::new(0),
             peak_bits: std::sync::atomic::AtomicU32::new(0),
             rms_bits: std::sync::atomic::AtomicU32::new(0),
             clipped_samples: AtomicU64::new(0),
@@ -4101,6 +4121,9 @@ impl Default for BlockMeter {
 impl BlockMeter {
     pub fn observe(&self, block: &AudioBlock) {
         let peak = block.peak_abs();
+        self.current_peak_bits.store(peak.to_bits(), Ordering::Relaxed);
+        self.observed_frames.fetch_add(block.frames() as u64, Ordering::Relaxed);
+        for channel in 0..MAX_CHANNELS { self.channel_current_peak_bits[channel].store(block.channel_peak_abs(channel).unwrap_or(0.0).to_bits(), Ordering::Relaxed); }
         update_atomic_peak(&self.peak_bits, peak);
         self.rms_bits
             .store(block.rms().to_bits(), Ordering::Relaxed);
@@ -4132,6 +4155,9 @@ impl BlockMeter {
         frames: usize,
     ) {
         let denominator = frames.max(1) as f32;
+        self.observed_frames.fetch_add(frames as u64, Ordering::Relaxed);
+        self.current_peak_bits.store(peak[0].max(peak[1]).to_bits(), Ordering::Relaxed);
+        for channel in 0..2 { self.channel_current_peak_bits[channel].store(peak[channel].to_bits(), Ordering::Relaxed); }
         update_atomic_peak(&self.peak_bits, peak[0].max(peak[1]));
         self.rms_bits.store(
             ((square_sum[0] + square_sum[1]) / (2.0 * denominator))
@@ -4161,6 +4187,9 @@ impl BlockMeter {
 
     pub fn snapshot(&self) -> BlockMeterSnapshot {
         BlockMeterSnapshot {
+            current_peak_db: meter_db(f32::from_bits(self.current_peak_bits.load(Ordering::Relaxed))),
+            channel_current_peak_db: std::array::from_fn(|channel| meter_db(f32::from_bits(self.channel_current_peak_bits[channel].load(Ordering::Relaxed)))),
+            observed_frames: self.observed_frames.load(Ordering::Relaxed),
             peak_abs: self.peak_abs(),
             clipped_samples: self.clipped_samples(),
             peak_db: meter_db(self.peak_abs()),
@@ -4188,6 +4217,9 @@ impl BlockMeter {
     }
 
     pub fn reset(&self) {
+        self.current_peak_bits.store(0, Ordering::Relaxed);
+        self.observed_frames.store(0, Ordering::Relaxed);
+        for channel in 0..MAX_CHANNELS { self.channel_current_peak_bits[channel].store(0, Ordering::Relaxed); }
         self.peak_bits.store(0, Ordering::Relaxed);
         self.rms_bits.store(0, Ordering::Relaxed);
         self.clipped_samples.store(0, Ordering::Relaxed);
@@ -7129,6 +7161,11 @@ impl RuntimeProcessor {
             .and_then(|graph| graph.processor_telemetry_for_node(node_id))
     }
 
+    /// Reset the currently published Meter without replacing the graph.
+    pub fn reset_meter_for_node(&self, node_id: &audiorouter_domain::EntityId) -> bool {
+        self.publication.load().is_some_and(|graph| graph.reset_meter_for_node(node_id))
+    }
+
     /// Read a prepared meter node by authored identity from the published
     /// graph. `None` means the graph has no matching meter or is unavailable.
     pub fn meter_snapshot_for_node(
@@ -7844,6 +7881,22 @@ impl RuntimeGraph {
                     _ => None,
                 })?
             })
+    }
+
+    pub fn reset_meter_for_node(&self, node_id: &audiorouter_domain::EntityId) -> bool {
+        let mut found = false;
+        for (i, id) in self.stage_node_ids.iter().enumerate() {
+            if id == node_id {
+                if let Some(ProcessingStage::Meter { index }) = self.stages.get(i) {
+                    if let Some(meter) = self.meters.get(*index) {
+                        meter.reset();
+                        found = true;
+                    }
+                }
+                self.stage_meters[i].reset();
+            }
+        }
+        found
     }
 
     /// Read a prepared node's output level without taking a processing lock.
@@ -10600,6 +10653,27 @@ mod tests {
         window.reset();
         assert_eq!(window.len(), 0);
         assert_eq!(window.rms(), 0.0);
+    }
+
+    #[test]
+    fn block_meter_separates_current_peak_from_hold_and_counts_channel_time() {
+        let meter = BlockMeter::default();
+        let mut loud = AudioBlock::new(2, 128).unwrap();
+        loud.channel_mut(0).unwrap().fill(1.5);
+        loud.channel_mut(1).unwrap().fill(0.5);
+        meter.observe(&loud);
+        let mut quiet = AudioBlock::new(2, 128).unwrap();
+        quiet.channel_mut(0).unwrap().fill(0.1);
+        meter.observe(&quiet);
+        let s = meter.snapshot();
+        assert!((s.current_peak_db + 20.0).abs() < 0.001);
+        assert!(s.peak_db > 3.5);
+        assert_eq!(s.channel_clipped_samples, [128, 0]);
+        assert_eq!(s.observed_frames, 256);
+        assert_eq!(128.0 / 48_000.0, s.channel_clipped_samples[0] as f64 / 48_000.0);
+        meter.reset();
+        assert_eq!(meter.snapshot().observed_frames, 0);
+        assert_eq!(meter.snapshot().current_peak_db, -120.0);
     }
 
     #[test]
@@ -13447,6 +13521,9 @@ mod tests {
         assert_eq!(
             processor.meter_snapshot(0),
             Some(BlockMeterSnapshot {
+                current_peak_db: 0.0,
+                channel_current_peak_db: [0.0, -120.0],
+                observed_frames: 2,
                 peak_abs: 1.0,
                 clipped_samples: 0,
                 peak_db: 0.0,

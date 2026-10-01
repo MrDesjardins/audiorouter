@@ -22,6 +22,8 @@ async function preparedDiagnostics() {
 }
 
 beforeAll(() => {
+  // jsdom has no transform matrix API; real layout is qualified in Edge.
+  Object.defineProperty(window, "DOMMatrixReadOnly", { configurable: true, value: class { m22 = 1; } });
   Object.defineProperty(globalThis, "ResizeObserver", {
     configurable: true,
     value: class {
@@ -1703,10 +1705,11 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     await renderReady(<App backend={connectedPreviewBackend()} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Tidy layout" }));
-    expect(JSON.parse(window.localStorage.getItem("audiorouter.ui.layout.demo-session") ?? "null")).toMatchObject({
-      mic: { x: 0, y: 0 },
-      voice: { x: 280, y: 0 },
-    });
+    const positions = JSON.parse(window.localStorage.getItem("audiorouter.ui.layout.demo-session") ?? "null");
+    expect(Object.keys(positions).sort()).toEqual(demoSession.nodes.map(node => node.id).sort());
+    // Disconnected nodes have separate lanes in the smart layout.
+    expect(new Set(Object.values(positions).map(value => (value as { y: number }).y)).size).toBe(3);
+    expect(demoSession.edges).toEqual([]);
   });
 
   it("exposes previewable mixer topology actions from the draft connection list", async () => {

@@ -9,6 +9,49 @@ Add new entries under "Log" below, and keep the sections above it current.
 
 ## Objective and scope
 
+## Current task: pass-through Meter and detailed metering (2026-09-30)
+
+User requests Meter insertion between tools and a larger Properties meter with
+resettable peak hold, voice levels and clipping duration. Requirements DSP-01,
+GRAPH-02/10, UI-04/07, API-01/12. Existing BlockMeter already holds maxima and
+clip sample counts, but UI Meter has no output and is excluded from insertion.
+Add output/insertion, expose current block peak separately from held peak,
+reset exact node statistics through shared authorized API, display per-channel
+RMS/current/held peak, headroom and sample-derived clipping duration (not LUFS
+or true peak). Preserve legacy input-only meter compatibility with explicit
+upgrade. Test sample-preserving mono/stereo chains and statistics/reset, API
+authorization/schema parity, stable UI and themes. Do not disturb running app.
+Native continuity remains a required separate gate if unavailable safely.
+Rollback focused code/contracts/UI; existing graph formats remain readable.
+Implemented: new meters have matched input/output and are insertable; legacy
+input-only meters offer explicit output upgrade. Separate current sample peak
+from held peak; add frame count/sample rate and shared meters.reset API.
+Properties has 260 px channel bars, hold/current markers, headroom, clipped
+samples/time/share, fixed-width numerical readings and reset without Save.
+See [Meter evidence](evidence/2026-09-30-meter.md) for definitions and limits.
+Windows synthetic checks: engine 146, domain 70, control 203 passed (7 guarded
+native ignored), seven graph route tests including Meter after every built-in,
+391 UI tests passed plus the subsequently added legacy-upgrade test; 18
+optimized Edge tests and final three-theme Meter rerun passed. Reviewed all
+three screenshots. Typecheck/build, contract parity (103 methods) and docs
+(81 Markdown files/427 local links) pass. Initial fixture/type/SVG assertion
+issues and restricted Windows test-server cleanup are recorded in evidence.
+
+Manual build: C:\code\audiorouter\target\meter-20260930\release\audiorouter-shell.exe.
+Locked custom-protocol shell plus freshly built matching CLI/worker; all three
+pass x64 PE validation. Embedded index-Zjmcxgyn.js includes Clipping recorded;
+shell timestamp 2026-10-01 03:27:14 UTC is newer than UI 03:25:05 UTC.
+Shell 22,568,960 bytes, SHA256
+500B611C4C171A24B12485816A3D8AC25F52B3ECEB92E30A14C40640D1ABE66D.
+CLI 12,747,264 bytes, SHA256
+222D57808D629AF075B7831B504474935B4D176742193C22D03AA3D1E8835159.
+Worker 968,192 bytes, SHA256
+848E10A85763D017E1FAA6DC714311B54453B037070FDCFB45F10BB3F4EE458B.
+No user session changed or shell launched/stopped. Unsigned development build;
+actual native playback/reset and clean-reference 47 Hz continuity remain
+unrun, so M08 release qualification is not claimed. Next: user tests insert,
+hold/reset and clipping on a native route; then qualify native continuity.
+
 ## Current task: native Patrick clone and graph-aware layout (2026-09-30)
 
 User authorizes duplicating Patrick Main Session and replacing ReaComp/ReaGate

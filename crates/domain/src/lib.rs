@@ -752,7 +752,8 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 102] = [
+pub const API_METHODS: [ApiMethodSpec; 103] = [
+    ApiMethodSpec { name: "meters.reset", permission: PermissionScope::SessionControl, side_effect: SideEffectClass::Mutating },
     ApiMethodSpec {
         name: "system.describe",
         permission: PermissionScope::Read,

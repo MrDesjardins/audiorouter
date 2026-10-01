@@ -6318,6 +6318,11 @@ impl NativeMultiInputWorker {
         })
     }
 
+    /// Reset all prepared copies of one Meter while leaving audio running.
+    pub fn reset_meter_for_node(&self, node_id: &audiorouter_domain::EntityId) -> bool {
+        self.feeder.mixer().reset_meter_for_node(node_id)
+    }
+
     /// Lock-free actual level at a prepared source, tool or output boundary.
     pub fn meter_snapshot_for_node(
         &self,

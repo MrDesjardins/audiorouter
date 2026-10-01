@@ -2231,6 +2231,7 @@ fn method_description(name: &str) -> &'static str {
         "audioMedia.importTemporaryRecording" => "Convert a completed temporary-take WAV into expiring graph media, then remove its temporary recording file and library entry.",
         "audioMedia.delete" => "Delete imported audio media that is not referenced by any session graph.",
         "timeShift.transport" => "Pause, resume, jump back or forward 10 s, or return to live on one running Time Shift node; status reads its buffer.",
+        "meters.reset" => "Reset held sample peaks and clipping statistics of one prepared Meter without changing audio or the saved graph.",
         "audioSources.transport" => "Play or stop one prepared Test Signal or audio-file source without stopping other graph routes; pause applies to audio files.",
         "recorders.list" => "List live in-memory recorder states and frame boundaries.",
                 "recorders.create" => "Create and attach an unarmed file recorder under the approved root. Omitted dither defaults to TPDF for integer output and is disabled for Float32 and MP3.",
@@ -2505,6 +2506,7 @@ fn method_input_schema(name: &str) -> Value {
             }),
             &["sessionId", "nodeId", "action"],
         ),
+        "meters.reset" => object_schema(json!({"sessionId": {"type":"string", "minLength":1}, "nodeId":{"type":"string", "minLength":1}}), &["sessionId", "nodeId"]),
         "recorders.list" => object_schema(json!({}), &[]),
         "recorders.create" => object_schema(
             json!({
@@ -4198,6 +4200,7 @@ fn method_output_schema(name: &str) -> Value {
                 "capacitySeconds": { "type": "number", "minimum": 0 }
             }, "required": ["sessionId", "nodeId", "state", "delaySeconds", "bufferedSeconds", "capacitySeconds"], "additionalProperties": false
         }),
+        "meters.reset" => json!({"type":"object", "properties":{"sessionId":{"type":"string"},"nodeId":{"type":"string"},"reset":{"type":"boolean"}},"required":["sessionId","nodeId","reset"],"additionalProperties":false}),
         "audioSources.transport" => json!({
             "type": "object", "properties": {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
@@ -4517,6 +4520,10 @@ fn diagnostics_output_schema() -> Value {
                                 "peakDb": { "type": "number" },
                                 "rmsDb": { "type": "number" },
                                 "clippedSamples": { "type": "integer", "minimum": 0 },
+                                "currentPeakDb": {"type":"number"},
+                                "channelCurrentPeakDb": {"type":"array", "maxItems":2, "items":{"type":"number"}},
+                                "observedFrames": {"type":"integer", "minimum":0},
+                                "sampleRateHz": {"type":"integer", "minimum":1},
                                 "channelPeakDb": { "type": "array", "maxItems": 2, "items": { "type": "number" } },
                                 "channelRmsDb": { "type": "array", "maxItems": 2, "items": { "type": "number" } },
                                 "channelClippedSamples": { "type": "array", "maxItems": 2, "items": { "type": "integer", "minimum": 0 } }
@@ -9665,6 +9672,10 @@ impl ControlPlane {
                 let meter = processor.meter_snapshot_for_node(&node.id).map(|snapshot| {
                     json!({
                         "peakDb": snapshot.peak_db,
+                        "currentPeakDb": snapshot.current_peak_db,
+                        "channelCurrentPeakDb": snapshot.channel_current_peak_db,
+                        "observedFrames": snapshot.observed_frames,
+                        "sampleRateHz": audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ,
                         "rmsDb": snapshot.rms_db,
                         "clippedSamples": snapshot.clipped_samples,
                         "channelPeakDb": snapshot.channel_peak_db,
@@ -9773,6 +9784,10 @@ impl ControlPlane {
                 let meter = worker.meter_snapshot_for_node(&node.id).map(|snapshot| {
                     json!({
                         "peakDb": snapshot.peak_db,
+                        "currentPeakDb": snapshot.current_peak_db,
+                        "channelCurrentPeakDb": snapshot.channel_current_peak_db,
+                        "observedFrames": snapshot.observed_frames,
+                        "sampleRateHz": audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ,
                         "rmsDb": snapshot.rms_db,
                         "clippedSamples": snapshot.clipped_samples,
                         "channelPeakDb": snapshot.channel_peak_db,
@@ -13989,6 +14004,7 @@ impl ControlPlane {
                         self.dispatch_audio_source_transport(request.params)
                     }
                     "timeShift.transport" => self.dispatch_time_shift_transport(request.params),
+                    "meters.reset" => self.dispatch_meter_reset(request.params),
                     "recorders.list" => self.dispatch_recorders_list(request.params),
                     "recorders.create" => self.dispatch_recorder_create(request.params),
                     "recorders.arm" | "recorders.start" | "recorders.pause"
@@ -14457,6 +14473,31 @@ impl ControlPlane {
             .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
         let scoped_key = self.scoped_idempotency_key("graph.commit", key);
         self.commit_graph_scoped(&plan_id, base_revision, &scoped_key, key)
+    }
+
+    fn dispatch_meter_reset(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let id = session_id_from_params(params.clone())?;
+        let node_id = params.as_ref()
+            .and_then(|p| p["nodeId"].as_str())
+            .filter(|s| !s.is_empty())
+            .map(EntityId::new)
+            .ok_or_else(|| ControlError::InvalidRequest("nodeId is required".into()))?;
+        self.ensure_session_loaded(&id)?;
+        if !self.get_session(&id)?.nodes.iter().any(|n| n.id == node_id && n.kind == NodeKind::Meter) {
+            return Err(ControlError::InvalidRequest("Choose an existing Meter node in this session".into()));
+        }
+        let mut reset = self.native_endpoint_worker_for_session(&id)
+            .is_some_and(|w| w.bridge().scheduler().processor().reset_meter_for_node(&node_id));
+        #[cfg(windows)]
+        if self.native_multi_input_worker_session.as_ref() == Some(&id) {
+            if let Some(worker) = self.native_multi_input_worker.as_ref() {
+                reset |= worker.reset_meter_for_node(&node_id);
+            }
+        }
+        if !reset {
+            return Err(ControlError::InvalidRequest("Meter is not prepared; press Play before resetting readings".into()));
+        }
+        Ok(json!({"sessionId":id,"nodeId":node_id,"reset":true}))
     }
 
     fn dispatch_session_start(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -19188,6 +19229,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         ));
     };
     let allowed: &[&str] = match method {
+        "meters.reset" => &["sessionId", "nodeId"],
         "sessions.get" | "sessions.export" => &["sessionId"],
         "sessions.exportFile" => &["sessionId", "path", "replace"],
         "sessions.importFile" => &["path"],
@@ -27368,6 +27410,22 @@ mod tests {
             "idempotencyKey": "preview-contract"
         });
         assert!(validate_method_params("session.start", Some(&request)).is_ok());
+    }
+
+    #[test]
+    fn meter_reset_requires_session_control_and_a_prepared_meter() {
+        let mut plane = ControlPlane::default();
+        let mut saved = session();
+        saved.nodes[1].kind = NodeKind::Meter;
+        let node_id = saved.nodes[1].id.clone();
+        let id = saved.id.clone();
+        plane.insert_session(saved.clone()).unwrap();
+        let request = || JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(json!(1)), method: "meters.reset".into(), params: Some(json!({"sessionId":id,"nodeId":node_id})) };
+        let read_only = ClientGrant::read_only();
+        assert_eq!(plane.dispatch_authorized(request(), &read_only).error.unwrap().code, -32001);
+        assert!(plane.dispatch(request()).error.unwrap().message.contains("not prepared"));
+        assert_eq!(plane.get_session(&id).unwrap(), &saved);
+        assert!(validate_method_params("meters.reset", Some(&json!({"sessionId":id,"nodeId":node_id,"unexpected":true}))).is_err());
     }
 
     #[test]

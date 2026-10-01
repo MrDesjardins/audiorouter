@@ -160,6 +160,14 @@ const previewBackend: UiBackend = {
     planned = structuredClone(candidate);
     return { planId: "e2e-graph-plan", baseRevision: candidate.revision, expiresInMs: 60_000, diff: [], affectedDestinations: [], warnings: [], requiredScopes: [] };
   },
+  async resetMeter(sessionId, nodeId) {
+    const telemetry = injected.__routeFixtureTelemetry as Array<{ nodeId: string; meter: Record<string, unknown> }> | undefined;
+    const meter = telemetry?.find(item => item.nodeId === nodeId)?.meter;
+    if (!meter || sessionId !== committed.id) throw new Error("Meter is not prepared");
+    Object.assign(meter, { peakDb: -120, channelPeakDb: [-120, -120], clippedSamples: 0, channelClippedSamples: [0, 0], observedFrames: 0 });
+    lifecycleCalls.push("meter-reset");
+    return { sessionId, nodeId, reset: true };
+  },
   async commitGraph(_planId, baseRevision) {
     lifecycleCalls.push("commit");
     const flagMode = new URLSearchParams(window.location.search).get("flags");

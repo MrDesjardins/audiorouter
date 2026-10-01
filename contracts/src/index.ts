@@ -709,6 +709,10 @@ export interface DiagnosticsSnapshot {
     nodeId: EntityId;
     kind: string;
     meter: {
+      currentPeakDb?: number;
+      channelCurrentPeakDb?: number[];
+      observedFrames?: number;
+      sampleRateHz?: number;
       peakDb: number;
       rmsDb: number;
       clippedSamples: number;
@@ -1163,6 +1167,7 @@ export type ImplementedMethod =
   | "presets.list"
   | "processors.list"
   | "processors.response"
+  | "meters.reset"
   | "sessions.get"
   | "sessions.export"
   | "sessions.exportFile"
@@ -1183,6 +1188,7 @@ export type ImplementedMethod =
   | "sessions.stop";
 
 export type MethodParams = {
+  "meters.reset": { sessionId: EntityId; nodeId: EntityId };
   "system.describe": undefined;
   "system.handshake": { protocolVersion: { major: number; minor: number } };
   "status.get": undefined;
@@ -1334,6 +1340,7 @@ export type MethodParams = {
 };
 
 export type MethodResult = {
+  "meters.reset": { sessionId: EntityId; nodeId: EntityId; reset: boolean };
   "system.describe": DiscoveryDocument;
   "system.handshake": {
     compatible: true;

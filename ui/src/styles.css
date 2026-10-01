@@ -972,3 +972,22 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 input[type="color"] { width: 100%; }
 .inspector-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .inspector-title h2 { overflow-wrap: anywhere; }
+.meter-inspector-display { display: flex; gap: 12px; padding: 12px 0; }
+.meter-inspector-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.meter-clip-status { min-height: 1.5em; font-size: .8rem; font-weight: 650; }
+.meter-scale { position: relative; width: 30px; height: 260px; flex-shrink: 0; }
+.meter-scale span { position: absolute; right: 0; font-size: .7rem; transform: translateY(50%); font-variant-numeric: tabular-nums; }
+.meter-channel { min-width: 0; flex: 1; text-align: center; }
+.meter-channel-track { height: 260px; position: relative; border: 1px solid var(--ambient-edge); border-radius: 9px; overflow: hidden; background: var(--ambient-surface-hi); }
+.meter-channel-fill { position: absolute; bottom: 0; left: 15%; width: 70%; background: linear-gradient(to top, #31b97c 0%, #31b97c 63%, #ffd166 73%, #ffd166 86%, #ef7070 91%, #ef7070 100%) bottom / 100% 260px no-repeat; transition: height 60ms linear; }
+.meter-current-marker, .meter-hold-marker, .meter-zero-line { position: absolute; left: 0; right: 0; height: 2px; background: var(--text-main, white); }
+.meter-hold-marker { background: #ffd166; height: 3px; }
+.meter-zero-line { background: var(--danger, #ff8b8b); height: 1px; }
+.meter-channel-values { margin: 8px 0; font-variant-numeric: tabular-nums; }
+.meter-channel-values dt { font-size: .65rem; color: var(--text-soft); white-space: nowrap; }
+.meter-channel-values dd { margin: 0 0 8px; height: 1.4em; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meter-clipped { color: var(--danger, #ff8b8b); }
+.theme-light .meter-clipped { color: #a83232; }
+.theme-light .meter-current-marker { background: #164375; }
+.meter-inspector-legend { font-size: .75rem; }
+@media (prefers-reduced-motion: reduce) { .meter-channel-fill { transition: none; } }

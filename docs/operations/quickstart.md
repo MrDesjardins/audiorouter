@@ -646,6 +646,17 @@ are under `target/feature-confidence-visual`. See the
 before interpreting a green browser result as audio qualification.
 ## Properties status and timing
 
+Add **Meter** between tools from a connection's insert menu, or connect its
+input and output yourself. It passes samples unchanged. An older input-only
+Meter offers **Add pass-through output** in Properties; save the upgraded draft.
+Properties has larger channel meters: RMS average level, current sample peak,
+held maximum, headroom and per-channel clipped sample time/share. **Reset peak
+& clipping** clears that Meter's backend statistics without Save or Stop.
+Statistics restart on graph preparation/replacement. Sample peaks do not
+measure inter-sample true peak or LUFS; these meters are not loudness compliance
+meters. Clipped time is the sum of over-full-scale samples per channel, rather
+than wall-clock duration of an uninterrupted clipping event.
+
 **Tidy layout** arranges connected paths left to right, separates disconnected
 paths and spaces cards using their measured sizes. **Reset layout** clears
 custom connector routing and restores the same smart arrangement. Audio nodes

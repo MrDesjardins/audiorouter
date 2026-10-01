@@ -12,6 +12,14 @@ M01 shall produce machine-readable method and node schemas, golden request/respo
 
 ## Requirements
 
+`meters.reset` takes sessionId/nodeId and clears one prepared Meter's held
+peaks, clipping counters and observed-frame count through SessionControl.
+It is a runtime statistics mutation without persistence or graph changes;
+it is not a recorder/capture operation. All adapters expose the same method.
+Meter diagnostics retain peakDb as held sample peak for compatibility and add
+currentPeakDb/channelCurrentPeakDb, observedFrames and sampleRateHz. Duration
+is channelClippedSamples / sampleRateHz; channel durations may overlap.
+
 - **API-01 — Discovery.** `system.describe` returns protocol/schema versions, build, supported methods with input/output JSON Schemas, permission scopes, node registry versions, limits, event types, and unsupported capability reasons. Include descriptions, units, ranges, defaults, examples, and side-effect classification. Discovery is usable offline before any session exists.
 - **API-02 — Identity/versioning.** Resources use UUID-like opaque IDs; clients never resolve an ambiguous label silently. A handshake negotiates major/minor API versions. Unknown major versions fail without mutation; additive minor fields are tolerated. Persisted session schema version is independent of transport version.
 - **API-03 — Reads.** Queries provide authoritative snapshots with config revision, active runtime revision, generation, timestamp, and stale/availability indicators. List methods accept cursor pagination with default 100/max 500 records. Route inspection reports actual desired and running paths where activation is pending. Its path result is bounded to 500 entries and includes `complete: false` when additional provenance paths were omitted; consumers must show that result as partial rather than infer completeness.

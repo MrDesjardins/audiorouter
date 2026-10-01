@@ -9,6 +9,8 @@ import { AudioFileNodeControls, SIGNAL_FLOW_LEGEND, nodeHeaderState, deletedConn
 import { SessionFlowCanvas } from "./SessionFlowCanvas";
 
 beforeAll(() => {
+  // jsdom has no transform matrix API; real layout is qualified in Edge.
+  Object.defineProperty(window, "DOMMatrixReadOnly", { configurable: true, value: class { m22 = 1; } });
   Object.defineProperty(globalThis, "ResizeObserver", {
     configurable: true,
     value: class {

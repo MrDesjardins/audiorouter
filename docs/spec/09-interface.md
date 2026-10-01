@@ -207,6 +207,16 @@ audio readiness and explains the exact endpoint and authorization steps.
 
 ## Verification
 
+Meter is an insertable pass-through with matching input/output channels and no
+sample or latency change. Legacy input-only nodes remain readable; Properties
+offers an explicit output upgrade in the draft. Its detailed inspector shows
+large per-channel dBFS RMS bars, current sample peak, held sample peak, headroom,
+clipped sample count/duration and observed clipping share. Statistics come from
+the backend; meters.reset requires SessionControl and affects only the selected
+prepared Meter, not audio, graph revisions or other meters. Values never wrap
+as their digit count changes. Explain sample peak versus true peak/LUFS and
+per-channel clipped sample time versus continuous-event duration.
+
 Tidy layout uses saved/draft connections rather than insertion order: sources
 on the left, downstream tools/outputs on the right, separate disconnected
 component lanes, measured card spacing and branch-order crossing reduction.

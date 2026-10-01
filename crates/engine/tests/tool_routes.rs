@@ -4,6 +4,7 @@ use audiorouter_engine::{AudioBlock, RuntimeGeneration, compile_session};
 use serde_json::json;
 
 const PROCESSORS: &[NodeKind] = &[
+    NodeKind::Meter,
     NodeKind::Gain,
     NodeKind::Volume,
     NodeKind::BassTreble,
@@ -23,6 +24,65 @@ const PROCESSORS: &[NodeKind] = &[
     NodeKind::GraphicEq,
     NodeKind::Pitch,
 ];
+
+#[test]
+fn inserted_meter_preserves_every_sample_and_resets_only_statistics() {
+    for channels in [1, 2] {
+        let mut session = route(NodeKind::Meter);
+        for node in &mut session.nodes { for port in &mut node.ports { port.channels = channels; } }
+        for edge in &mut session.edges { edge.matrix = if channels == 1 { vec![1.0] } else { vec![1.0, 0.0, 0.0, 1.0] }; }
+        let graph = compile_session(&session, RuntimeGeneration::new(1)).unwrap();
+        for quantum in 0..40 {
+            let mut block = AudioBlock::new(channels as usize, 128).unwrap();
+            for channel in 0..channels as usize {
+                for (frame, sample) in block.channel_mut(channel).unwrap().iter_mut().enumerate() { *sample = ((quantum * 128 + frame) as f32 * 0.17 + channel as f32).sin() * 1.2; }
+            }
+            let before = (0..channels as usize).map(|c| block.channel(c).unwrap().to_vec()).collect::<Vec<_>>();
+            graph.process(&mut block);
+            for channel in 0..channels as usize { assert_eq!(block.channel(channel).unwrap(), &before[channel]); }
+        }
+        let id = EntityId::new("tool");
+        let before = graph.meter_snapshot_for_node(&id).unwrap();
+        assert_eq!(before.observed_frames, 40 * 128);
+        assert!(before.clipped_samples > 0);
+        assert!(graph.reset_meter_for_node(&id));
+        let after = graph.meter_snapshot_for_node(&id).unwrap();
+        assert_eq!(after.clipped_samples, 0); assert_eq!(after.peak_db, -120.0); assert_eq!(after.observed_frames, 0);
+        assert!(!graph.reset_meter_for_node(&EntityId::new("missing")));
+    }
+}
+
+#[test]
+fn meter_after_every_builtin_preserves_the_processed_audio() {
+    for &kind in PROCESSORS {
+        let session = route(kind);
+        let reference = compile_session(&session, RuntimeGeneration::new(1)).unwrap();
+        let mut metered = session.clone();
+        let mut meter = metered.nodes[1].clone();
+        meter.id = EntityId::new("inserted-meter");
+        meter.kind = NodeKind::Meter;
+        meter.parameters.clear();
+        metered.nodes.push(meter);
+        metered.edges[1].destination_node = EntityId::new("inserted-meter");
+        let mut output = session.edges[1].clone();
+        output.id = EntityId::new("meter-output");
+        output.source_node = EntityId::new("inserted-meter");
+        metered.edges.push(output);
+        let graph = compile_session(&metered, RuntimeGeneration::new(2)).unwrap();
+        for quantum in 0..96 {
+            let mut expected = AudioBlock::new(2, 128).unwrap();
+            let mut actual = AudioBlock::new(2, 128).unwrap();
+            signal(&mut expected, quantum * 128);
+            signal(&mut actual, quantum * 128);
+            reference.process(&mut expected);
+            graph.process(&mut actual);
+            for channel in 0..2 {
+                assert_eq!(actual.channel(channel), expected.channel(channel), "{kind:?}, quantum {quantum}");
+            }
+        }
+        assert_eq!(graph.meter_snapshot_for_node(&EntityId::new("inserted-meter")).unwrap().observed_frames, 96 * 128);
+    }
+}
 
 #[test]
 fn bass_treble_frequency_parameters_have_backend_bounds() {
