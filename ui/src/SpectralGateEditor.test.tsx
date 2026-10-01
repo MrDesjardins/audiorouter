@@ -14,6 +14,15 @@ const node = (parameters: Node["parameters"]): Node => ({
 const profile = "64".repeat(64); // 100 − 160 = −60 dB in every band
 
 describe("Spectral Gate editor", () => {
+  it("explains bypass and off without stale live sound or learning", () => {
+    for (const flags of [{ bypass: true, enabled: true }, { bypass: false, enabled: false }]) {
+      const view = render(<SpectralGateEditor node={{ ...node({}), ...flags }} running levelsDb={Array(64).fill(-20)} liveProfile={null} disabled={false} onChange={() => undefined} />);
+      expect(view.container.querySelector(".spectral-gate-live")).toBeNull();
+      expect((screen.getByRole("button", { name: "Learn noise" }) as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.getByRole("status").textContent).toContain(flags.bypass ? "Bypass" : "Off");
+      view.unmount();
+    }
+  });
   it("decodes stored profiles and spans the audible range", () => {
     expect(decodeProfileDb(profile)).toEqual(Array(64).fill(-60));
     expect(decodeProfileDb("xyz")).toBeNull();

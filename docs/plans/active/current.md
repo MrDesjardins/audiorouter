@@ -9,6 +9,26 @@ Add new entries under "Log" below, and keep the sections above it current.
 
 ## Objective and scope
 
+## Current task: clarify inspector state and timing descriptions (2026-09-30)
+
+User requests status beside node name, related clarity fixes, and consistent
+delay descriptions. Requirements UI-04/07, API-09. Add Off/Bypass/Ready/Active,
+Disconnected and failed-plugin state; suppress inactive readings and explain
+missing Spectral Gate analysis and learning controls. Remove partial fixed
+latency claims from tool descriptions; direct users to Timing. Verify focused
+state regressions, typecheck/build and three browser themes. Preserve live app
+and saved graphs. Rollback UI/docs only; no DSP or schema changes. Next: finish
+state presentation, test, inspect themes and record evidence.
+
+Result: implemented status header, inactive-reading guidance, Spectral Gate
+and Denoise learning guards, and consistent Timing guidance. Removed five
+approximate latency claims from library descriptions. Windows checks: six
+focused component/state tests and eight optimized Edge tests pass; dark/light/
+high-contrast inspector screenshots inspected under the configured TEMP
+audiorouter-playwright-results directory. Typecheck and production UI build
+pass. No DSP changes or native app launch. Next: rebuild shell for manual
+testing when requested; the running executable does not include this UI yet.
+
 ## Current diagnosis: Swagger Start lacks route preparation (2026-09-30)
 
 User's `session.start` returns an enabled-plugin/native-session error. Source

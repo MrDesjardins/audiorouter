@@ -644,3 +644,11 @@ Failures retain Playwright evidence under `ui/test-results`; theme screenshots
 are under `target/feature-confidence-visual`. See the
 [coverage and limits](../plans/active/evidence/2026-09-26-feature-confidence.md)
 before interpreting a green browser result as audio qualification.
+## Properties status and timing
+
+Properties shows Off, Bypass, Ready, Active, Disconnected or Failed beside the
+node name. Ready means enabled while stopped; Active does not prove incoming
+sound. Unsaved changes are identified separately. Off/bypassed tools explain
+why processing readings are unavailable, and noise learning is disabled until
+the tool is active. Use Timing during playback for delay and processing
+measurements; tool descriptions omit approximate fixed latency claims.

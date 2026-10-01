@@ -970,3 +970,5 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .group-properties > label { display: grid; grid-template-columns: minmax(0, 1fr); gap: .3rem; }
 .group-properties input[type="range"] { width: 100%; }
 input[type="color"] { width: 100%; }
+.inspector-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.inspector-title h2 { overflow-wrap: anywhere; }

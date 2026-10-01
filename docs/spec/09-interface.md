@@ -207,6 +207,13 @@ audio readiness and explains the exact endpoint and authorization steps.
 
 ## Verification
 
+The Properties header shows the node state beside its name: Off, Bypass,
+Ready (enabled while stopped), Active, Disconnected, or failed plugin state.
+Draft changes remain identified separately; Active is not proof of input signal.
+Inactive processors do not present stale analysis as live or offer noise
+learning. Tool descriptions avoid partial approximate latency claims; Properties
+directs users to Timing for playback delay and processing measurements.
+
 The editor presents one Save action in the main header; graph planning and
 commit remain backend steps behind that action. Session management contains
 switch, create, duplicate, rename, delete, undo, and revert controls without

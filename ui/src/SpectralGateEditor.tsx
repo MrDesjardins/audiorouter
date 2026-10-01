@@ -68,20 +68,21 @@ export function SpectralGateEditor({ node, running, levelsDb, liveProfile, disab
   const learning = node.parameters.learning === true;
   const threshold = typeof node.parameters.thresholdDb === "number" ? node.parameters.thresholdDb : 3;
   const learned = decodeProfileDb(learning ? liveProfile : node.parameters.noiseProfile);
-  const status = !running ? "Start the route to see the live spectrum."
-    : learning ? (liveProfile ? "Learning: play only the noise you want removed, then stop learning." : "Waiting for the first measurement…")
+  const active = node.enabled && !node.bypass;
+  const status = !node.enabled ? "Off: enable this tool to see its live spectrum." : node.bypass ? "Bypass: turn Bypass off to process sound and see the live spectrum." : !running ? "Start the route to see the live spectrum."
+    : !levelsDb ? "Waiting for live spectrum readings. Check the incoming route and signal." : learning ? (liveProfile ? "Learning: play only the noise you want removed, then stop learning." : "Waiting for the first measurement…")
       : learned ? "Frequencies under the gate threshold line are turned down." : "Learn the noise to start blocking it.";
   return <section className="spectral-gate" aria-label="Spectral Gate editor">
     <div className="advanced-eq-heading"><div><strong>Noise at every frequency</strong><small>{learning ? "Learning now" : learned ? "Learned noise is stored" : "No noise learned yet"}</small></div>
       {!learning
-        ? <button type="button" className="secondary" disabled={disabled || !running} onClick={() => onChange([["learning", true]])}>{learned ? "Learn again" : "Learn noise"}</button>
-        : <button type="button" className="primary" disabled={disabled || !liveProfile} onClick={() => liveProfile && onChange([["noiseProfile", liveProfile], ["learning", false]])}>Stop and keep</button>}
+        ? <button type="button" className="secondary" disabled={disabled || !running || !active} onClick={() => onChange([["learning", true]])}>{learned ? "Learn again" : "Learn noise"}</button>
+        : <button type="button" className="primary" disabled={disabled || !running || !active || !liveProfile} onClick={() => liveProfile && onChange([["noiseProfile", liveProfile], ["learning", false]])}>Stop and keep</button>}
     </div>
     <svg className="advanced-eq-graph spectral-gate-graph" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label="Live spectrum with the learned noise and gate threshold">
       <rect x={LEFT} y={TOP} width={RIGHT - LEFT} height={BOTTOM - TOP} className="advanced-eq-plot" />
       {[-100, -80, -60, -40, -20, 0].map((db) => <g key={db}><line x1={LEFT} x2={RIGHT} y1={yForDb(db)} y2={yForDb(db)} className="advanced-eq-grid" /><text x={LEFT - 5} y={yForDb(db) + 3} textAnchor="end" className="advanced-eq-axis">{db}</text></g>)}
       {TICKS.map((hz) => <g key={hz}><line x1={xForHz(hz)} x2={xForHz(hz)} y1={TOP} y2={BOTTOM} className="advanced-eq-grid" /><text x={xForHz(hz)} y={HEIGHT - 12} textAnchor="middle" className="advanced-eq-axis">{hz >= 1000 ? `${hz / 1000}k` : hz}</text></g>)}
-      {running && levelsDb && <polyline points={line(levelsDb)} className="spectral-gate-live" />}
+      {running && active && levelsDb && <polyline points={line(levelsDb)} className="spectral-gate-live" />}
       {learned && <polyline points={line(learned)} className="spectral-gate-learned" />}
       {learned && !learning && <polyline points={line(learned, threshold)} className="spectral-gate-threshold" />}
     </svg>
