@@ -14,8 +14,8 @@ delay and nonlinear processing-order expectations.
 Dehum now uses finite-depth notches with constant harmonic bandwidth, preserving
 wanted audio between hum harmonics at high Amount. Existing saved settings stay
 valid; no migration is needed. The original 1003 Hz preservation regression and
-additional stereo/frequency sweeps pass. This source change has not yet been
-rebuilt into a desktop executable. See the
+additional stereo/frequency sweeps pass. The optimized desktop executable was
+rebuilt for manual testing on 2026-09-30. See the
 [qualification evidence](../plans/active/evidence/2026-09-30-dehum-preservation.md).
 
 This document describes the current development snapshot (2026-09-17). It is not a signed

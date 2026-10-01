@@ -9,6 +9,32 @@ Add new entries under "Log" below, and keep the sections above it current.
 
 ## Objective and scope
 
+## Current task: manual desktop rebuild (2026-09-30)
+
+User requests a local rebuild for further manual testing of the Dehum fix and
+Spectral Gate rename. Requirements: DSP-12, UI-04, ENG-05 artifact provenance
+(development build only). Build current UI, then locked optimized shell with
+`custom-protocol` and matching plugin worker; verify embedded UI freshness,
+executable timestamp and checksum. Preserve the running desktop and database;
+do not launch another shell or publish a release. Rollback: run the prior build.
+Next action: build and hand off the full executable path.
+
+Build result: UI production build and locked release shell (`custom-protocol`)
+pass. Shell path:
+`C:\code\audiorouter\target\groups-http-20260929\release\audiorouter-shell.exe`.
+Current UI `index-CsSSg0c2.js` contains "Spectral Gate"; shell timestamp
+2026-10-01 00:16:19 UTC is newer than the rebuilt UI. Shell size 22,533,632 bytes,
+SHA256 `1F4C300842EA3F51BB2C7779A63B4678D2883EFE07A0DB03304FA8243355E11D`.
+Matching default-feature plugin worker beside it: 968,192 bytes, SHA256
+`487E3EA53B6826429EE43CE4F3EBE98E90D4890D2E6A4EA7DF7E9925B07B0E88`.
+Locked companion CLI build also passes: sibling `audiorouter-cli.exe`,
+12,715,008 bytes, SHA256
+`2993256426474FEA31281472F4A1AE2B82B33B9C165B94CDF8C972736188908A`.
+All three pass the repository x64 PE validator. Source baseline: `8a2a01e0`.
+Docs acceptance: 79 files/421 links; diff check passes.
+No shell was running during the initial process check; none was launched here.
+Manual testing is next; these build checks do not qualify native audio or M08.
+
 ## Current task: clearer tool naming and deterministic two-tool composition
 
 User authorizes renaming "FIR Filter Hz" and adding connected-pair signal tests.
@@ -24,16 +50,6 @@ checks; run signal and UI checks, inspect label rendering, record evidence.
 No saved-name migration or audio-device mutation. Rollback: revert display
 labels and added tests/docs; preserve stable node identifiers. Next action:
 implement naming and pair fixtures, then diagnose any deterministic mismatch.
-
-Result: completed. "Spectral Gate" labels/default names replace "FIR Filter Hz";
-saved node names and identifiers are retained. 2,749 new deterministic pair
-cases pass: 2,312 active combinations, 408 bypass cases and 29 analytical
-checks. Full suite: 33 signal tests, 197 DSP/engine units, two native plugin
-tests; focused UI: 60 tests; three headless Edge theme checks pass and their
-screenshots were inspected. UI build succeeds in disposable output; no desktop
-exe rebuilt. See [pair evidence](evidence/2026-09-30-two-tool-composition.md).
-Next task: guarded native continuity/performance and listening qualification;
-offline pair success does not replace hardware or arbitrary-plugin evidence.
 
 Result: completed. "Spectral Gate" labels/default names replace "FIR Filter Hz";
 saved node names and identifiers are retained. 2,749 new deterministic pair
