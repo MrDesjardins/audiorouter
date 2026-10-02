@@ -9,6 +9,19 @@ Add new entries under "Log" below, and keep the sections above it current.
 
 ## Objective and scope
 
+## Next task (2026-10-01): sign the release and publish it
+
+The user asked for a plan to be executed by another agent:
+[release signing and publication](release-signing-and-publication.md). State
+at handoff:
+- 0.0.2 (`3f5da9fb`) is unsigned and works on the user's two PCs, including
+  network streaming;
+- `main` is pushed, and the tags `v0.0.1`/`v0.0.2` are local only;
+- the fresh-install gate (`crates/transport/tests/fresh_install_shell.rs`) is
+  mandatory before any installer handoff.
+
+Start with that plan's "Decisions the user must make first".
+
 ## Current task queue (2026-09-30, user asleep; continue autonomously)
 
 Done this session (uncommitted, tests green unless noted):
