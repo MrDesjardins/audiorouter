@@ -253,6 +253,7 @@ dependencies = [
  "audiorouter-protocol",
  "crossbeam-queue",
  "memmap2",
+ "serde_json",
  "windows 0.62.2",
  "windows-core 0.62.2",
 ]

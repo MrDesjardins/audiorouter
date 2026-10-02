@@ -1,0 +1,14 @@
+{
+  "name": "audiorouter-launch",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx --yes hyperframes@0.8.107 preview",
+    "check": "npx --yes hyperframes@0.8.107 check",
+    "render": "npx --yes hyperframes@0.8.107 render",
+    "publish": "npx --yes hyperframes@0.8.107 publish"
+  },
+  "dependencies": {
+    "gsap": "3.14.2"
+  }
+}

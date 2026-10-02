@@ -82,6 +82,36 @@ method, session, destination, and path before approving a mutating operation.
 
 ## Diagnostics and support
 
+In AudioRouter, choose **Logs → Open logs folder** to open File Explorer.
+Use **Copy folder path** if you need to paste the location into another window.
+The Logs panel lists which files to attach to your support message.
+
+Before reproducing an issue, note the local time and the action you take.
+Afterwards, copy the JSONL files from `%LOCALAPPDATA%\AudioRouter\logs`
+(or `%TEMP%\AudioRouter\logs` when LOCALAPPDATA is unavailable):
+
+- `shell.jsonl` and `shell.previous.jsonl`: desktop requests and outcomes.
+- `backend.jsonl` and `backend.previous.jsonl`: backend requests and outcomes.
+- `discovery.jsonl` and `discovery.previous.jsonl`: failed device reads,
+  including endpoints skipped because they disappeared during enumeration.
+
+Each file rotates at 5 MiB and keeps one previous file. Collect all three
+types when the input/output list is empty. The diagnostics review build adds
+`version`, `buildId`, `processId`, and `timeUnixMs`. Failure `detail` includes
+the stable category, fixed operation name, numeric and hexadecimal HRESULT,
+retryability, and category-based guidance when available. Discovery records
+also include capture/render direction, the temporary enumeration index, and
+whether the endpoint was skipped or enumeration failed. Indices are not
+persistent device identities. Successful device-list records contain counts,
+not device names. Successful event subscription polls are omitted; errors
+remain visible. Missing context appears as null rather than a guessed value.
+
+For example, `0xE000020B` with `inventory.openPropertyStore` and
+`skippedDisappearedEndpoint` identifies a disappeared endpoint's metadata
+read; the matching device-list success counts show whether discovery recovered.
+Provide the files plus reproduction steps, Windows version, and approximate
+failure time. Do not include the session database or audio unless requested.
+
 Diagnostics are metadata-only and redact ordinary sensitive path/identity
 details. Support captures must not include microphone samples, recordings,
 tokens, or private signing material. Preserve the exact error code and

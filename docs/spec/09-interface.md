@@ -114,6 +114,40 @@ while playing follows the same live-apply path as other parameter changes.
 
 ## Defaults that reduce work
 
+Desktop startup detects an existing same-user, same-Windows-session AudioRouter
+instance before opening the database or contacting its backend. Show “There is
+already an instance running. Please close it.” Offer Cancel and an explicit
+force-close-and-continue action that explains audio stops and unsaved work or
+unfinished recordings may be lost. Cancel leaves the old app untouched. Never
+infer another process from an already-prepared audio worker error or terminate
+unverified applications. Windows denial gives manual-close guidance.
+
+Logs provides Open logs folder and Copy folder path. The fixed app-owned folder
+opens in Explorer; support instructions identify current/previous shell, backend
+and discovery JSONL files and ask for reproduction steps/time. Missing clipboard
+or Explorer access provides a useful fallback; browser previews explain that
+local log access requires the installed desktop app (UI-13, SEC-10).
+
+Desktop startup detects an existing same-user, same-Windows-session AudioRouter
+instance before opening the database or contacting its backend. Show “There is
+already an instance running. Please close it.” Offer Cancel and an explicit
+force-close-and-continue action that explains audio stops and unsaved work or
+unfinished recordings may be lost. Cancel leaves the old app untouched. Never
+infer another process from an already-prepared audio worker error or terminate
+unverified applications. Windows denial gives manual-close guidance.
+
+Logs provides Open logs folder and Copy folder path. The fixed app-owned folder
+opens in Explorer; support instructions identify current/previous shell, backend
+and discovery JSONL files and ask for reproduction steps/time. Missing clipboard
+or Explorer access provides a useful fallback; browser previews explain that
+local log access requires the installed desktop app (UI-13, SEC-10).
+
+The primary graph remains a canvas; it has no List view switch. Advanced
+provides expandable Keyboard graph controls with node selection and the same
+connection/topology actions for keyboard and screen-reader users (UI-03/11).
+Network Properties shows a static two-computer audio direction diagram,
+configured IP and matching UDP port; configuration alone never implies signal.
+
 Give nodes descriptive names such as `USB mic`, `Voice EQ`, and `To Discord`. Position sources on the left and sinks on the right. Offer mono-mic to stereo mapping automatically as an explicit edge matrix. Use preconfigured conservative voice presets and show their purpose. Do not make the user select a sample rate or buffer period during routine onboarding; show negotiated values under diagnostics.
 
 Device selection should show both a familiar label and a disambiguator such as USB interface/role. The user can audition input levels before starting a route, but any microphone test is an explicit capture action with visible state. Setup persists incomplete drafts without activating them.
@@ -217,12 +251,12 @@ prepared Meter, not audio, graph revisions or other meters. Values never wrap
 as their digit count changes. Explain sample peak versus true peak/LUFS and
 per-channel clipped sample time versus continuous-event duration.
 
-Tidy layout uses saved/draft connections rather than insertion order: sources
+Arrange uses saved/draft connections rather than insertion order: sources
 on the left, downstream tools/outputs on the right, separate disconnected
 component lanes, measured card spacing and branch-order crossing reduction.
 Disabled edges remain part of layout so audio toggles do not scatter cards.
-Reset layout restores this topology arrangement and clears custom edge sides.
-Both operations fit the arranged graph in view and never change graph/audio.
+Arrange fits the graph in view and never changes graph/audio. Undo arrange
+restores the preceding positions for 15 seconds.
 
 The Properties header shows the node state beside its name: Off, Bypass,
 Ready (enabled while stopped), Active, Disconnected, or failed plugin state.

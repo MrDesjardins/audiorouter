@@ -5165,6 +5165,7 @@ pub enum ControlError {
     InvalidRequest(String),
     Audio {
         code: &'static str,
+        operation: Option<&'static str>,
         hresult: u32,
         retryable: bool,
         remediation: &'static str,
@@ -5181,6 +5182,7 @@ pub enum ControlError {
 fn audio_control_error(error: audiorouter_windows_audio::AudioError) -> ControlError {
     ControlError::Audio {
         code: error.kind().code(),
+        operation: error.operation(),
         hresult: error.hresult(),
         retryable: error.is_retryable(),
         remediation: error.remediation(),
@@ -20316,17 +20318,19 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
             hresult,
             retryable,
             remediation,
+            operation,
             ..
-        } => Some((*hresult, *retryable, *remediation)),
+        } => Some((*hresult, *retryable, *remediation, *operation)),
         _ => None,
     };
     let mut response = JsonRpcResponse::failure(id, -32000, message);
     if let Some(error) = response.error.as_mut() {
         let mut data = application_error_data(code);
-        if let Some((hresult, retryable, remediation)) = audio_details {
+        if let Some((hresult, retryable, remediation, operation)) = audio_details {
             data["hresult"] = json!(hresult);
             data["retryable"] = json!(retryable);
             data["remediation"] = json!(remediation);
+            data["operation"] = json!(operation);
         }
         error.data = Some(data);
     }
@@ -29983,6 +29987,7 @@ mod tests {
             Some(json!(1)),
             ControlError::Audio {
                 code: "deviceInUse",
+                operation: Some("IAudioClient::Initialize(render)"),
                 hresult: 0x8889_000A,
                 retryable: true,
                 remediation:
@@ -29995,6 +30000,7 @@ mod tests {
         let data = error.data.unwrap();
         assert_eq!(data["code"], "deviceInUse");
         assert_eq!(data["hresult"], 0x8889_000A_u32);
+        assert_eq!(data["operation"], "IAudioClient::Initialize(render)");
         assert_eq!(data["retryable"], true);
         assert_eq!(
             data["remediation"],

@@ -531,7 +531,8 @@ describe("VB-Cable endpoint selection", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Select for inspection" }));
     expect(screen.queryByRole("button", { name: "Effect 1 plugin" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Add to draft: C:\\Plugins\\Effect.dll" }));
-    fireEvent.click(screen.getByRole("button", { name: "List view" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Advanced" }));
+    fireEvent.click(screen.getByText("Keyboard graph controls"));
     const pluginNode = await screen.findByRole("button", { name: /Effect 1.*plugin/ });
     expect(pluginNode).toBeTruthy();
     fireEvent.click(pluginNode);
@@ -1755,7 +1756,8 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     fireEvent.change(within(dialog).getByRole("combobox", { name: "Keyboard destination input port" }), { target: { value: "voice::in" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add connection to draft" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "List view" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Advanced" }));
+    fireEvent.click(screen.getByText("Keyboard graph controls"));
     fireEvent.click(screen.getAllByRole("button", { name: /Insert mixer on/ })[0]);
     expect(screen.getByText("Mixer inserted into the draft. Review and plan the changes before committing.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Remove and reconnect Mixer 1" }));
@@ -1770,7 +1772,8 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     fireEvent.change(within(dialog).getByRole("combobox", { name: "Keyboard destination input port" }), { target: { value: "voice::in" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add connection to draft" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "List view" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Advanced" }));
+    fireEvent.click(screen.getByText("Keyboard graph controls"));
     fireEvent.click(screen.getByRole("button", { name: "Insert Gate" }));
     expect(screen.getByText("Gate 1 inserted into the draft. Review and plan the changes before committing.")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Gate 1" })).toBeTruthy();
@@ -1810,7 +1813,8 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     fireEvent.change(within(dialog).getByRole("combobox", { name: "Keyboard destination input port" }), { target: { value: "voice::in" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add connection to draft" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "List view" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Advanced" }));
+    fireEvent.click(screen.getByText("Keyboard graph controls"));
     fireEvent.click(screen.getByRole("button", { name: "Insert VST plugin" }));
 
     const pickerDialog = await screen.findByRole("dialog", { name: "Insert a VST2/VST3 plugin into this connection" });

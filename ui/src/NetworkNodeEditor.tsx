@@ -68,6 +68,12 @@ export function NetworkNodeEditor({ node, disabled, telemetry, onChange }: {
 
   return <div className="node-binding-editor network-node-editor" aria-label={sending ? "Network send settings" : "Network receive settings"}>
     <div><p className="eyebrow">{sending ? "Stream to another computer" : "Play audio from another computer"}</p><strong>{sending ? "Where should this audio go?" : "Which computer sends the audio?"}</strong></div>
+    <figure className="network-route-diagram" aria-label="Network audio direction">
+      <div className="network-route-computer"><svg viewBox="0 0 48 36" aria-hidden="true"><rect x="6" y="2" width="36" height="24" rx="3" /><path d="M18 34h12M24 26v8M12 16h4l3-7 6 13 4-9h7" /></svg><strong>{sending ? "This PC" : "Sending PC"}</strong><span>Audio in</span><b>Network Send</b><code>{sending ? "Your input / mix" : addressValid ? address : "Sender IP"}</code></div>
+      <div className="network-route-link"><span aria-hidden="true">→</span><small>UDP</small><code>{portValid ? portNumber : "Port"}</code></div>
+      <div className="network-route-computer"><svg viewBox="0 0 48 36" aria-hidden="true"><rect x="6" y="2" width="36" height="24" rx="3" /><path d="M18 34h12M24 26v8M12 16h4l3-7 6 13 4-9h7" /></svg><strong>{sending ? "Receiving PC" : "This PC"}</strong><span>Audio out</span><b>Network Receive</b><code>{sending ? addressValid ? address : "Destination IP" : "Your output / OBS"}</code></div>
+      <figcaption>{sending ? "Set Receive's sender to this PC's IP." : "Set Send's destination to this PC's IP."} Use port {portValid ? portNumber : "the same port"} on both PCs.</figcaption>
+    </figure>
     <label>{addressLabel}<input type="text" inputMode="decimal" autoComplete="off" spellCheck={false} placeholder="192.168.1.20" value={address} disabled={disabled} aria-invalid={address.length > 0 && !addressValid}
       onChange={(event) => { const value = event.target.value.trim(); setAddress(value); if (isNetworkAddress(value)) onChange(addressKey, value); }} /></label>
     {address.length > 0 && !addressValid && <small role="alert">Enter a numeric IP address such as 192.168.1.20. Computer names are not used.</small>}

@@ -1,11 +1,111 @@
 # Plan: sign the Windows release and publish it on GitHub
 
-Status: not started (written 2026-10-01). It is authorized by the user to be
+Status: preflight started; signing decisions pending (2026-10-01). It is authorized by the user to be
 executed by another agent. Read this whole file, `AGENTS.md`,
 `docs/plans/active/current.md`, `docs/operations/distribution.md` and
 `docs/spec/15-delivery.md` (M08 gates) before acting.
 
 ## Objective
+
+## Execution preflight (2026-10-01)
+
+### SignPath feasibility follow-up
+
+Interim publication explicitly requested by the user: publish a ZIP containing
+the working USB package. Located `G:/audiorouter0_0_2`; all 12 files matched
+`target/releases/v0.0.2` by SHA-256. Both original and extracted archive pass
+`verify-artifacts.ps1`. Exact shell fresh-install consent regression passes
+1/1 on Windows with no developer device-access variable; no real audio opens.
+Published [unsigned prerelease v0.0.2](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.2)
+via existing annotated tag push and `gh release create --verify-tag --prerelease
+--notes-file`. ZIP and ZIP checksum are attached. Notes preserve incomplete
+M08/signing gates; no claim of a signed or fully qualified release. Archive
+SHA-256: `50ec091b6b6e29c4d3403abbbbe7aca67f84abf63efe84d3d77b3cfff592dc7d`.
+Release files/notes and extraction verification are retained under
+`target/releases/github-v0.0.2`. This supersedes the no-public-release
+observation below; SignPath acceptance and other prerequisites remain pending.
+
+Interim publication explicitly requested by the user: publish a ZIP containing
+the working USB package. Located `G:/audiorouter0_0_2`; all 12 files matched
+`target/releases/v0.0.2` by SHA-256. Both original and extracted archive pass
+`verify-artifacts.ps1`. Exact shell fresh-install consent regression passes
+1/1 on Windows with no developer device-access variable; no real audio opens.
+Published [unsigned prerelease v0.0.2](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.2)
+via existing annotated tag push and `gh release create --verify-tag --prerelease
+--notes-file`. ZIP and ZIP checksum are attached. Notes preserve incomplete
+M08/signing gates; no claim of a signed or fully qualified release. Archive
+SHA-256: `50ec091b6b6e29c4d3403abbbbe7aca67f84abf63efe84d3d77b3cfff592dc7d`.
+Release files/notes and extraction verification are retained under
+`target/releases/github-v0.0.2`. This supersedes the no-public-release
+observation below; SignPath acceptance and other prerequisites remain pending.
+
+The user closed AudioRouter and selected SignPath if feasible and reasonably
+simple. A fresh process check found no shell running. GitHub CLI read-only
+checks confirmed PUBLIC visibility, null `licenseInfo` and no GitHub releases.
+Cargo metadata declares MIT; the user approved adding a root MIT LICENSE with
+Patrick Desjardins as copyright holder. The license is local, not pushed.
+
+[Foundation terms](https://signpath.org/terms.html) require OSS licensing,
+an already released project, a code signing policy, MFA, manual approval and
+verifiable builds. Acceptance includes discretionary reputation review. The
+certificate publisher is SignPath Foundation, not the maintainer's name.
+[GitHub integration](https://docs.signpath.io/trusted-build-systems/github)
+requires uploaded workflow artifacts and GitHub-hosted runners for OSS builds.
+Tasks 1/2/6 therefore need a provider-specific CI design after acceptance;
+local SignTool signing is not the Foundation route.
+
+Prepared application details: AudioRouter; maintainer MrDesjardins; repository
+https://github.com/MrDesjardins/audiorouter; Windows 11 x64 visual routing,
+DSP, local recording, user-installed plugins, CLI/MCP and user-directed LAN
+streaming. Proposed signed files are shell, CLI, plugin worker and NSIS
+installer/uninstaller. Only local unsigned 0.0.1/0.0.2 releases exist. Do not
+claim public release history or completed clean-machine qualification.
+
+Next ordered actions:
+1. Review dependency rights and prepare a truthful code signing policy with
+   maintainer signing roles and privacy statement. Confirm MFA separately.
+2. Resolve the existing-release prerequisite with SignPath and the user.
+   Any unsigned bootstrap publication requires explicit authorization and
+   cannot waive M08 gates. Version/history choices remain pending.
+3. With explicit enrollment authorization, apply at
+   https://signpath.org/apply using the project details above and the user's
+   contact information entered privately. No application has been submitted.
+4. After acceptance, configure provider-approved hosted CI and artifact
+   handling, including executable metadata and NSIS uninstaller signatures.
+   Sign companions before packaging; verify all returned signatures and
+   regenerate checksums from signed bytes. Resume tasks 3–9 and retain all
+   M08 gates. Never store the provider token in source control.
+
+No build or signature validation was run for this provider. Scope remains
+DIST-05/06/07/08 and ENG-04/05. Rollback is local documentation/LICENSE removal
+before publication; preserve the unsigned tooling until signing is qualified.
+
+- Scope: M08, DIST-05/06/07/08 and ENG-04/05; signed artifacts,
+  provenance, fresh-install and standard-user installation evidence.
+- Initial working tree was clean at `2181bf59`; local tags are `v0.0.1`
+  and `v0.0.2`. No remote mutation was performed.
+- Windows SDK x64 SignTool is installed in both 10.0.26100.0 and
+  10.0.28000.0. Provider credentials and identity validation are unconfirmed.
+- A user shell is running (PID 48904, default release executable).
+  Do not rebuild that executable or run the fresh-install test until the
+  user closes it; the process was left untouched.
+- Inspected preparation, verifier and verifier regression scripts. Preparation
+  is unsigned-only; verification rejects signed manifests. Signing integration
+  remains unimplemented until task 1 establishes the selected provider.
+- Requested provider, legal publisher/country, version, visibility, historical
+  tags and local/CI decisions. No defaults have been accepted yet.
+- Current provider references: [Microsoft signing options](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/code-signing-options)
+  lists Artifact Signing at approximately USD 9.99/month and individual
+  availability in the US/Canada; [SignPath terms](https://signpath.org/terms.html)
+  describe eligibility for free open-source signing. Recheck actual enrollment
+  terms before purchase; no purchase or enrollment has been performed.
+- Verification: read-only Git/process/tool inventory only. No build, signature,
+  fresh-install or clean-machine pass is claimed.
+- Next action: resolve the required decisions, then sign and verify a throwaway
+  CLI copy (task 1). Follow tasks 2–9 in order. Existing rollback applies;
+  preflight changed documentation only.
+
+## Release outcome
 
 Publish a **signed** AudioRouter release on GitHub
 (`https://github.com/MrDesjardins/audiorouter`) that a user can download and
