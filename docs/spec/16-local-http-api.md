@@ -14,9 +14,14 @@ localhost only. No remote control, second backend or new audio permissions.
   actual URL/port. Default 17891, explicitly bound to IPv4 127.0.0.1. Disabled
   at launch. Port collision is actionable; never bind all interfaces or attach
   to another service.
-- **HTTP-03 — Token.** Generate an unpredictable bearer token each activation,
-  held only in process memory and revealed/copied explicitly. Never log it or
-  put it in URLs, browser storage or process arguments. Stop/restart revokes it.
+- **HTTP-03 — Token.** Generate an unpredictable bearer token once and retain it
+  using current-user Windows DPAPI in the local app-data directory. Opening the
+  API tab shows the saved token with Copy and optional Hide, even while stopped.
+  Explicit regeneration immediately shows the replacement. Never log it or put plaintext in configuration, URLs, browser
+  storage or process arguments. Stop closes the listener; restart reuses the token.
+  Explicit Generate new token replaces the saved credential and revokes the old
+  one, with confirmation that integrations need updating. Corrupt or inaccessible
+  storage fails closed until explicit regeneration. The API stays stopped at launch.
   The adapter uses the desktop backend grant; denied scopes stay denied.
 - **HTTP-04 — Resources.** Every discovered method has an HTTP action resource:
   `POST /api/v1/{namespace}/{operation}`, plain JSON parameters/results, without
@@ -47,7 +52,7 @@ localhost only. No remote control, second backend or new audio permissions.
 
 Test session listing parity with the UI inventory, active-session GET/PUT/UI
 refresh, and method/OpenAPI parity, malformed/oversized input, token/origin/Host
-rejection, port collision, stop/revocation and denied permissions. Run HTTP
+rejection, port collision, encrypted persistence, restart/explicit rotation and denied permissions. Run HTTP
 plan/commit against the frontend's backend and observe its revision/parameter
 in the UI. Review all three themes. These are adapter checks, not audio evidence.
 Rollback: stop the listener or revert its adapter/UI; existing pipe/MCP and

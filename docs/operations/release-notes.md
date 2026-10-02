@@ -1,5 +1,41 @@
 # AudioRouter release notes
 
+## 0.0.4 — 2026-10-02 (unsigned preview)
+
+- Fixes sustained breakup when a Mixer combines physical game audio and
+  application capture: application capture now uses the graph's 48 kHz rate.
+- Routine application liveness checks avoid a full Windows process inventory
+  on the audio service thread. Restart matching retains verified identity rules.
+- Two 30-second physical-plus-application Mixer checks and a plain physical
+  route check pass with clean reference tones and zero routed glitches. This
+  is bounded workstation evidence; hardware soak and wider compatibility
+  qualification remain open.
+- API credentials persist encrypted for the current Windows user. Stop/start
+  reuses the token; Generate new token explicitly replaces it. The API tab
+  shows the saved token with Copy and Hide even while the listener is stopped.
+  The listener remains stopped when AudioRouter opens.
+- Node Properties and the Session tab show subtle selectable IDs with Copy,
+  making targets easier to find for external applications.
+- The independent Stats.cc Siege example uses the REST API to set Siege's
+  Mixer input to 30% during menu/selection/preparation/results and 100% during
+  playable action. Discord stays 100%; failure/shutdown restores 100/100.
+  Node.js 22 or newer and separately installed Stats.cc are required. See the
+  [example instructions](../../examples/integrations/stats-cc-siege/README.md).
+
+Upgrade: close the integration with `quit`, then close AudioRouter normally
+before running setup. Sessions and recordings are retained; no driver or global
+Windows audio setting changes. The first API use establishes a persisted token;
+integrations using an older temporary token may need its replacement. API tokens
+are local Windows-user credentials and are not transferable with exported sessions.
+Keep v0.0.3 plus a compatible configuration/recording backup for rollback; that
+older app generates temporary tokens again, requiring integration reconfiguration.
+
+The app/installer are unsigned. Clean-machine, WebView2 absent, standard-user
+upgrade/uninstall, accessibility, hardware endurance and full M08 qualification
+remain open. Stats.cc's optional state feed is unauthenticated and binds all
+interfaces in version 1.8.1: run the explicit setup command and keep its port
+blocked for inbound network access. Its application code is not patched.
+
 ## 0.0.3 — 2026-10-02 (Joe's test release, unsigned)
 
 This prerelease targets an empty device list reported with Windows error

@@ -4,6 +4,106 @@ Updated: 2026-10-02. Status: v0.0.3 Joe prerelease published; M08 qualification 
 
 ## Objective and scope
 
+Release 0.0.4 (user requested 2026-10-02): package the current audio continuity
+repairs, persistent/revealable API token, node/session ID copy controls and
+Stats.cc external example (30% non-action/100% action, Discord 100%). M08
+artifact subset; CAP-06/11, HTTP-03, UI-05/11/12, API-09, AUTO-15, SEC-01/10.
+Keep the established unsigned prerelease status and disclose open M08 gates.
+Tasks: inspect scoped diff/secrets; bump app/workspace metadata; run locked
+Rust/shell/UI/contracts/example and production-browser checks; commit/tag clean
+inputs; build matching executables/NSIS/SBOM/manifest/checksums; run fresh-install
+on exact packaged exe after user closes PID 41912; create and publish GitHub
+prerelease, then download/hash verify. Existing user data/settings are retained;
+DPAPI token remains local and is excluded from packages. Include portable
+integration sources with no private local config or node_modules. Rollback:
+retain v0.0.3 plus compatible config/recordings; older builds regenerate API
+tokens, so integrations need updating after rollback. No driver/VST changes.
+
+Stats.cc volume follow-up (2026-10-02): user reports integration working and
+requests 30% outside playable action, 100% during action. AUTO-15, HTTP-04/06,
+GRAPH-08. Update example and ignored local configuration, phase fixtures and
+README; preserve Discord/fail-safe/shutdown 100%. Run the required focused
+example regressions. Rollback restores quietPercent to 50. Restart the script
+to load configuration; do not stop the user's running process. Keep application
+capture at internal 48 kHz; a user rate selector would require conversion and
+separate qualification and is not implemented by this follow-up.
+Implemented: example and user's ignored local configuration use quietPercent
+30, actionPercent/discordPercent/restorePercent 100. README and phase/service
+fixtures updated. `npm.cmd test` on Windows: 11/11 passed. User reports the
+integration was working in Siege; new 30% policy takes effect after normal
+script restart. No app rebuild is required for this configuration change.
+
+Siege crackling repair (2026-10-02): CAP-06/11, NFR-02, GRAPH-14, QUAL-05.
+Direct Siege speaker output is clean; Cable-B routed output crackles even with
+EQ bypass and minimized UI. Live counters confirmed delivery gaps. Two defects
+are repaired: full process inventory stalled the audio service every second;
+application capture fed 44.1 kHz frames into a 48 kHz Mixer without resampling.
+Exact bound-process checks replace routine inventory, preserving verified restart
+matching; process capture now requests graph-rate PCM16 stereo. User closed
+integration, AudioRouter and Siege normally for qualification. No global device
+formats, stored graph, microphone binding or VST implementation changed.
+
+Two 30-second mixed-input native runs pass with clean references and zero routed
+glitches/silent runs/service late gaps. Plain-route repeat also passes (first
+attempt inconclusive because its reference dropped a packet). Reproduction,
+failed experiments, commands and rollback are in the
+[Siege continuity evidence](evidence/2026-10-02-siege-crackling-liveness.md).
+Serial checks passed: Windows adapter 108, control 220 (8 ignored), shell 44
+(1 ignored); documentation validation and diff whitespace checks passed.
+Review: `target/reviews/siege-audio-20261002/audiorouter-shell.exe`, with hash
+and build evidence in the linked report. Next: user confirms the same Siege +
+Discord topology during gameplay. Installer/M08 and
+hardware endurance gates remain open. Rollback retains the previous review exe
+and reverts the liveness probe/fast paths and process-capture format correction.
+
+Token visibility correction (2026-10-02, user approved): HTTP-03, UI-11/12.
+Reproduction: generating a token while stopped saves it, but the token controls
+are nested under the running API URL and cannot reveal it. Show the saved token
+in the API tab independently of listener state, including immediately after
+replacement; provide Copy and optional Hide. Keep persistence and the user's
+new credential unchanged. Verify stopped/running/replacement/copy/fallback,
+three-theme appearance, shell/UI checks, then build a separate review executable.
+Rollback reverts this visibility slice only; it does not replace the saved token.
+Implemented: API tab shows/copies token while stopped and after replacement.
+Checks: 3 component tests, typecheck/build, 44 shell tests (1 ignored), 3 optimized
+Edge theme cases and screenshot review passed. Updated review executable:
+`C:\code\audiorouter\target\reviews\token-visibility-20261002\audiorouter-shell.exe`.
+The previous review build is running; it was not stopped or overwritten.
+Next action: close it normally and review this build, then resume Stats.cc setup.
+
+Node-ID Properties slice (2026-10-02, user approved): UI-05/11/12 and API-09.
+Also show Session ID in the Session tab with identical copy/fallback behavior.
+Add a shared footer to every selected-node inspector with a muted Node ID
+caption, selectable full ID and keyboard-accessible copy icon. Tooltip explains
+API integrations; show brief Copied status and manual-copy guidance on failure.
+Preserve all Stats.cc example changes. Verify copy success/failure, selection
+changes/long IDs, production browser appearance in all three themes at 1280×720,
+type checking and docs. Rollback removes the footer/component/style only; no
+graph or backend contract changes. Implemented; copy/fallback unit checks and
+production Edge checks passed in all three themes. See the
+[identity/token evidence](evidence/2026-10-02-identity-and-persistent-token.md).
+
+Persistent HTTP token slice (2026-10-02, user approved): HTTP-03 and SEC-01/10.
+User requests configuration of the Stats.cc example with the supplied current
+token, retained until explicit regeneration. Store the token encrypted with
+current-user Windows DPAPI outside source control; example reads it privately.
+API remains stopped at app launch. Stop/restart reuses the saved token; explicit
+Generate new token replaces it and invalidates old credentials. Fail closed on
+corrupt/decrypt-failed storage; no silent replacement. Add storage/restart/rotation
+and UI checks, update HTTP/security docs, inspect three themes. Preserve user's
+running app and all example changes. Rollback removes persistence/rotation UI;
+old builds regenerate tokens on start, so integrations must be reconfigured.
+Implemented and qualified by 44 shell tests (1 ignored), 7 focused UI tests,
+3 production Edge theme cases and real read-only HTTP inspection. Review build:
+`C:\code\audiorouter\target\reviews\identity-token-20261002\audiorouter-shell.exe`.
+Close the old app normally before launching it; no fresh-install/installer gate
+is claimed for this unpublished review build.
+
+Current authorized task: [Stats.cc Siege integration](stats-cc-siege-integration.md).
+Investigate its local state data, then implement an independent example service
+under `examples/integrations/` controlling only the intended mixer input levels.
+Release qualification remains open; this task does not reopen VST implementation.
+
 Prepare a reviewable Windows 11 x64 public-release candidate with truthful
 evidence, clear troubleshooting, and a recoverable installer. Requirements:
 M08's approved non-driver scope, DIST-01–08, ENG-01–05, CAP-01/13,
@@ -130,6 +230,9 @@ Dependency lock diffs contain workspace version changes only. A broken release
 notes heading link was repaired before packaging. See the
 [Joe release evidence](evidence/2026-10-02-joe-prerelease-0.0.3.md).
 
-**Exact next task:** Joe tests the v0.0.3 primary-input list; collect logs and
-reproduction time if it fails. Then attended instance recovery/log-folder review
-and remaining M08 qualification. Full M08 is not complete.
+**Exact next task:** attended setup and validation of the
+[Stats.cc integration example](stats-cc-siege-integration.md): prep 30%, action
+100%, Discord always 100%. Implementation and 11 fixture checks are complete;
+Private example configuration and read-only authenticated HTTP inspection passed.
+Stats.cc feed and real gameplay are pending. Joe's enumeration
+and remaining M08 qualification remain separate open tasks.

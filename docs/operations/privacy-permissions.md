@@ -1,8 +1,11 @@
 # Privacy and permissions guide
 
 AudioRouter is designed for local, offline operation. The current repository
-does not upload audio, send recordings to an LLM, expose an HTTP control
-listener, or change Windows privacy settings. Guarded Windows user-mode audio
+does not upload audio, send recordings to an LLM, or change Windows privacy
+settings. Its optional HTTP control listener binds only to 127.0.0.1 and starts
+stopped. Its bearer token is saved encrypted for the current Windows account
+with DPAPI and retained until explicit regeneration in API settings. Stop closes
+the listener without replacing the credential. Guarded Windows user-mode audio
 routing through explicitly selected existing VB-Cable, Voicemeeter, and
 physical WASAPI endpoints is qualified; AudioRouter-managed virtual-device
 provisioning remains unavailable.

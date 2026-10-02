@@ -3,6 +3,57 @@ import { demoSession } from "../src/fixtures";
 import { appendLibraryNode } from "../src/draft";
 
 for (const theme of ["dark", "light", "high-contrast"]) {
+  test(`saved token visibility and copying in ${theme}`, async ({ page }, info) => {
+    await page.addInitScript(({ theme }) => {
+      localStorage.setItem("audiorouter.ui.theme", theme);
+      let token = "a".repeat(64);
+      Object.assign(window, { __TAURI_INTERNALS__: { invoke: async (command: string, args: { action?: string }) => {
+        if (command !== "http_api_control") return null;
+        if (args.action === "regenerate") token = "b".repeat(64);
+        return { running: false, port: 17891, url: null, token: args.action === "reveal" || args.action === "regenerate" ? token : null };
+      } } });
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (value: string) => Object.assign(window, { __copiedToken: value }) } });
+    }, { theme });
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto("/route-harness.html");
+    await page.getByRole("tab", { name: "API", exact: true }).click();
+    const token = page.getByLabel("API bearer token", { exact: true });
+    await expect(token).toHaveValue("a".repeat(64));
+    await page.getByRole("button", { name: "Copy API token", exact: true }).click();
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __copiedToken: string }).__copiedToken)).toBe("a".repeat(64));
+    await page.getByRole("button", { name: "Generate new token", exact: true }).click();
+    await page.getByRole("button", { name: "Replace API token", exact: true }).click();
+    await expect(token).toHaveValue("b".repeat(64));
+    await token.scrollIntoViewIfNeeded();
+    await expect(token).toHaveCSS("border-radius", "9px");
+    const box = (await token.boundingBox())!; expect(box.x + box.width).toBeLessThanOrEqual(1280);
+    await page.screenshot({ path: info.outputPath(`${theme}-saved-token.png`) });
+  });
+  test(`node and session identity controls in ${theme}`, async ({ page }, info) => {
+    await page.addInitScript(({ theme }) => {
+      localStorage.setItem("audiorouter.ui.theme", theme);
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (value: string) => Object.assign(window, { __copiedIdentity: value }) } });
+    }, { theme });
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto("/route-harness.html");
+    await page.getByTestId("rf__node-voice").locator(".flow-node-title").click();
+    const nodeId = page.getByLabel("Node ID", { exact: true });
+    await nodeId.scrollIntoViewIfNeeded(); await expect(nodeId).toHaveText("voice");
+    await page.getByRole("button", { name: "Copy node ID", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __copiedIdentity: string }).__copiedIdentity)).toBe("voice");
+    await expect(page.locator(".node-identity-message")).toHaveText("Copied.");
+    await page.screenshot({ path: info.outputPath(`${theme}-node-id.png`) });
+    await page.getByRole("tab", { name: "Session", exact: true }).click();
+    const sessionId = page.getByLabel("Session ID", { exact: true });
+    await sessionId.scrollIntoViewIfNeeded(); await expect(sessionId).toHaveText("demo-session");
+    await page.getByRole("button", { name: "Copy session ID", exact: true }).click();
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __copiedIdentity: string }).__copiedIdentity)).toBe("demo-session");
+    const box = (await sessionId.boundingBox())!; expect(box.x + box.width).toBeLessThanOrEqual(1280);
+    await page.screenshot({ path: info.outputPath(`${theme}-session-id.png`) });
+    await page.getByRole("tab", { name: "API", exact: true }).click();
+    await page.screenshot({ path: info.outputPath(`${theme}-token-controls.png`) });
+  });
   test(`logs folder controls in ${theme}`, async ({ page }, info) => {
     await page.addInitScript(({ theme }) => {
       localStorage.setItem("audiorouter.ui.theme", theme);

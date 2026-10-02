@@ -1290,6 +1290,13 @@ input[type="color"] { width: 100%; }
 .theme-high-contrast .library-drag-chip { border-color: #ffd400; }
 .theme-high-contrast .library-drag-chip-plus { color: #000; background: #ffd400; }
 /* Network settings explain the paired computers without implying activity. */
+/* Quiet integration identity footer; the full ID stays selectable and wraps. */
+.node-identity { margin-top: 1rem; padding-top: .7rem; border-top: 1px solid var(--border-subtle); color: var(--text-soft); font-size: .75rem; }
+.node-identity-caption { display: block; margin-bottom: .3rem; }
+.node-identity-value { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .5rem; }
+.node-identity-value code { min-width: 0; overflow-wrap: anywhere; user-select: all; font-size: .75rem; line-height: 1.5; }
+.node-identity-copy { display: grid; place-items: center; min-width: 2rem; min-height: 2rem; padding: .35rem; }
+.node-identity-message { min-height: 1.2em; margin: .3rem 0 0; font-size: .75rem; }
 .network-route-diagram { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr) 2.5rem minmax(0, 1fr); gap: .4rem; padding: .75rem; border: 1px solid var(--border-subtle); border-radius: 9px; }
 .network-route-computer { min-width: 0; display: flex; align-items: center; flex-direction: column; gap: .3rem; text-align: center; }
 .network-route-computer svg { width: 3rem; height: 2.25rem; fill: none; stroke: currentColor; stroke-width: 2; }

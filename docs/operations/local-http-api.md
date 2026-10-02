@@ -6,9 +6,15 @@ It accepts calls only from this PC. The API starts stopped each time you launch
 AudioRouter; no extra service, driver or machine configuration is needed.
 
 Choose **Open Swagger documentation** for the locally bundled interactive
-reference at `/docs`. **Reveal API token**, then copy it into Swagger's
-**Authorize** dialog. Authorization remains in memory. **Stop API** revokes it;
-starting again creates a new token. Treat the token like access to the desktop
+reference at `/docs`. The API tab shows the saved token even while stopped.
+Choose **Copy API token** to use it with your own apps or Swagger's
+**Authorize** dialog. Swagger authorization remains in memory. The token is saved
+encrypted for your Windows account in `%LOCALAPPDATA%\AudioRouter\api-token.dpapi`.
+**Stop API** closes the listener; starting again or restarting AudioRouter reuses
+the same token. **Generate new token → Replace API token** explicitly replaces it
+and invalidates the old one. Update integrations after replacement. If the saved
+credential cannot be decrypted, startup fails until you explicitly replace it.
+Treat the token like access to the desktop
 controls. Existing backend scopes still apply, including capture/recording roots
 and device-administration permissions.
 
@@ -43,6 +49,11 @@ AI assistants use the same operations through MCP: `get_recipes`,
 They take names and generate the idempotency key automatically.
 
 ## External app integration: game menu and match states
+
+For an independent executable example, see the
+[Stats.cc Siege service](../../examples/integrations/stats-cc-siege/README.md).
+It keeps preparation at 50%, action at 100%, and Discord at 100%, using the
+Mixer's direct upstream node IDs.
 
 An external app on this PC can control the active session through the existing
 REST API. No VST code or in-process extension is needed. Start the API in the

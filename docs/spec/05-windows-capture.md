@@ -26,6 +26,18 @@ Capturing samples does not establish that ordinary application playback can be s
 
 ## Acceptance and evidence
 
+Routine liveness of an already connected process uses only its exact PID,
+full executable path, creation time and exited state. Do not scan every system
+process on the audio-owning service thread once per second: measured inventory
+can exceed a render buffer. Full inventory remains necessary for user discovery
+and unique restart matching; a failed identity check never accepts PID reuse.
+
+Process-loopback capture requests PCM16 stereo at the internal 48 kHz graph
+rate with Windows shared-mode conversion. Its float32-expanded packets retain
+that rate; byte expansion is not sample-rate conversion. A multi-input Mixer
+must never consume a 44.1 kHz source as 48 kHz frames. Qualify physical capture
+mixed with a silent application source using a continuous reference tone.
+
 Discovery tolerates an individual endpoint disappearing between enumeration
 and metadata/format reads (`ERROR_NO_SUCH_DEVINST`, its HRESULT form, or
 `AUDCLNT_E_DEVICE_INVALIDATED`). Continue listing other endpoints; preserve

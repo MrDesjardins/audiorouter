@@ -1,0 +1,15 @@
+{
+  "name": "audiorouter-example-stats-cc-siege",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node server.mjs",
+    "inspect": "node server.mjs --inspect",
+    "observe": "node server.mjs --observe",
+    "setup:stats": "node setup-stats.mjs",
+    "test": "node --test"
+  },
+  "dependencies": { "ws": "8.21.3" }
+}

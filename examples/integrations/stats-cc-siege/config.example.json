@@ -1,0 +1,13 @@
+{
+  "audioRouterUrl": "http://127.0.0.1:17891",
+  "sessionId": null,
+  "mixer": "Siege + Discord",
+  "gameInput": "Siege Advanced EQ",
+  "discordInput": "Discord.exe capture 1",
+  "statsUrl": "ws://127.0.0.1:17892",
+  "statusPort": 17893,
+  "quietPercent": 30,
+  "actionPercent": 100,
+  "discordPercent": 100,
+  "restorePercent": 100
+}

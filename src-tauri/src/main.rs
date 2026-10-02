@@ -18,6 +18,8 @@ mod backend_supervisor;
 mod instance_windows;
 mod http_api;
 #[cfg(windows)]
+mod api_token;
+#[cfg(windows)]
 mod os_transition_windows;
 #[cfg(windows)]
 mod plugin_editor_windows;
@@ -258,10 +260,21 @@ fn http_api_control(action: String, port: Option<u16>, state: State<'_, ShellSta
         "start" => {
             if listener.is_none() {
                 let pipe = state.pipe_name.clone();
-                *listener = Some(http_api::HttpApi::start(port.unwrap_or(17891), std::sync::Arc::new(move |request| forward_rpc_request(request, &pipe)))?);
+                let token = api_token::load_or_create(&api_token::default_path()?)?;
+                *listener = Some(http_api::HttpApi::start_with_token(port.unwrap_or(17891), token, std::sync::Arc::new(move |request| forward_rpc_request(request, &pipe)))?);
             }
         }
         "stop" => { *listener = None; }
+        "regenerate" => {
+            let token = api_token::generate()?;
+            api_token::save(&api_token::default_path()?, &token)?;
+            if let Some(previous) = listener.take() {
+                let active_port = previous.port;
+                drop(previous);
+                let pipe = state.pipe_name.clone();
+                *listener = Some(http_api::HttpApi::start_with_token(active_port, token, std::sync::Arc::new(move |request| forward_rpc_request(request, &pipe)))?);
+            }
+        }
         "openDocs" => {
             let listener = listener.as_ref().ok_or("Start the API before opening documentation")?;
             #[cfg(windows)]
@@ -280,9 +293,15 @@ fn http_api_control(action: String, port: Option<u16>, state: State<'_, ShellSta
         "status" | "reveal" => {}
         _ => return Err("Unknown API action".into()),
     }
+    let revealed_token = if action == "reveal" || action == "regenerate" {
+        Some(match listener.as_ref() {
+            Some(listener) => listener.token.clone(),
+            None => api_token::load_or_create(&api_token::default_path()?)?,
+        })
+    } else { None };
     Ok(match listener.as_ref() {
-        Some(listener) => serde_json::json!({ "running": true, "port": listener.port, "url": format!("http://127.0.0.1:{}", listener.port), "token": if action == "reveal" { Some(&listener.token) } else { None } }),
-        None => serde_json::json!({ "running": false, "port": port.unwrap_or(17891), "url": null, "token": null }),
+        Some(listener) => serde_json::json!({ "running": true, "port": listener.port, "url": format!("http://127.0.0.1:{}", listener.port), "token": revealed_token }),
+        None => serde_json::json!({ "running": false, "port": port.unwrap_or(17891), "url": null, "token": revealed_token }),
     })
 }
 

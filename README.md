@@ -12,10 +12,10 @@ network. Every route is a picture you can read, and every setting is live.
 
 ## Install on Windows
 
-**[Download AudioRouter 0.0.3 for Windows 11 x64](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.3)**
+**[Download AudioRouter 0.0.4 for Windows 11 x64](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.4)**
 
 1. Download and extract the release ZIP.
-2. Run `AudioRouter_0.0.3_x64-setup.exe` from the extracted folder.
+2. Run `AudioRouter_0.0.4_x64-setup.exe` from the extracted folder.
 3. Open AudioRouter and allow audio device access when you first press Play.
 
 This is an **unsigned preview**: Windows may show a security warning.

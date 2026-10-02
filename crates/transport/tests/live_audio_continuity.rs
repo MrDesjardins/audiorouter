@@ -536,6 +536,16 @@ mod live {
             .map(str::to_owned)
             .collect();
         let session_id = "continuity".to_owned();
+        // Optional silent application source exercises routine capture
+        // liveness on the audio service thread. Only our own bounded helper
+        // is captured; no user application's audio is read or recorded.
+        struct Helper(std::process::Child);
+        impl Drop for Helper { fn drop(&mut self) { let _ = self.0.kill(); let _ = self.0.wait(); } }
+        let helper = (std::env::var("AUDIOROUTER_CONTINUITY_APPLICATION_LIVENESS").as_deref() == Ok("1")).then(|| {
+            use std::os::windows::process::CommandExt;
+            Helper(std::process::Command::new("cmd.exe").args(["/C", &format!("ping -n {} 127.0.0.1 > nul", seconds + 15)]).creation_flags(0x08000000).spawn().unwrap())
+        });
+        let application = helper.as_ref().map(|helper| audiorouter_windows_audio::enumerate_applications().unwrap().into_iter().find(|app| app.process_id == helper.0.id()).expect("own helper identity"));
         let server_pipe = pipe.clone();
         let (route_capture_id, route_render_id) = (route_capture.clone(), route_render.clone());
         let server_chain = chain.clone();
@@ -579,9 +589,26 @@ mod live {
             for node in &extra {
                 eprintln!("plugin node: {}", serde_json::to_string(node).unwrap());
             }
-            plane
-                .insert_session(route(&route_capture_id, &route_render_id, &server_chain, extra))
-                .unwrap();
+            let mut candidate = route(&route_capture_id, &route_render_id, &server_chain, extra);
+            if let Some(application) = application {
+                let output_edge = candidate.edges.iter_mut().find(|edge| edge.destination_node.as_str() == "destination").unwrap();
+                let feeder = output_edge.source_node.clone();
+                output_edge.destination_node = EntityId::new("liveness-mix");
+                candidate.nodes.push(Node {
+                    id: EntityId::new("liveness-app"), name: "Silent owned helper".into(), kind: NodeKind::ApplicationCapture, type_version: 1, enabled: true, bypass: false,
+                    ports: vec![Port { name: "out".into(), direction: PortDirection::Output, channels: 2 }],
+                    parameters: serde_json::from_value(json!({"processId":application.process_id,"executable":application.executable,"executablePath":application.executable_path.unwrap(),"creationTime100ns":application.creation_time_100ns.unwrap().to_string(),"processPolicy":"selectedInstance"})).unwrap(),
+                });
+                candidate.nodes.push(Node {
+                    id: EntityId::new("liveness-mix"), name: "Tone plus silent app".into(), kind: NodeKind::Mixer, type_version: 1, enabled: true, bypass: false,
+                    ports: vec![Port { name: "in".into(), direction: PortDirection::Input, channels: 2 }, Port { name: "out".into(), direction: PortDirection::Output, channels: 2 }],
+                    parameters: serde_json::from_value(json!({format!("inputVolume:{}",feeder.as_str()):100,"inputVolume:liveness-app":0})).unwrap(),
+                });
+                for (id, from, to) in [("helper-to-mix","liveness-app","liveness-mix"),("mix-to-output","liveness-mix","destination")] {
+                    candidate.edges.push(Edge { id: EntityId::new(id), source_node: EntityId::new(from), source_port: "out".into(), destination_node: EntityId::new(to), destination_port: "in".into(), matrix: vec![1.0,0.0,0.0,1.0], enabled: true });
+                }
+            }
+            plane.insert_session(candidate).unwrap();
             if record_mode() {
                 let root = std::env::temp_dir().join("audiorouter-continuity-recordings");
                 std::fs::create_dir_all(&root).unwrap();

@@ -26,8 +26,10 @@ OS-visible virtual capture devices are available according to Windows/app microp
 
 ## Authorization UX
 
-The optional [localhost HTTP adapter](16-local-http-api.md) uses an in-memory
-bearer token and the existing desktop grant. It does not expose LAN control or
+The optional [localhost HTTP adapter](16-local-http-api.md) uses a bearer token
+saved encrypted with current-user Windows DPAPI and the existing desktop grant.
+It is retained until explicit regeneration; the listener stays stopped at launch.
+It does not expose LAN control or
 grant additional scopes. Exact origin/Host checks and bounded requests are
 required alongside authentication.
 

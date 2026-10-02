@@ -241,6 +241,12 @@ audio readiness and explains the exact endpoint and authorization steps.
 
 ## Verification
 
+Node Properties ends with a muted, selectable full Node ID and an accessible
+copy button titled "Copy node ID for API integrations". The Session tab shows
+the selected Session ID with the same controls. Copy announces a brief success
+or manual-copy fallback. Identity display/copy remains available while offline;
+selection changes clear feedback and long IDs wrap within the sidebar.
+
 Meter is an insertable pass-through with matching input/output channels and no
 sample or latency change. Legacy input-only nodes remain readable; Properties
 offers an explicit output upgrade in the draft. Its detailed inspector shows

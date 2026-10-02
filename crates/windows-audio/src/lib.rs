@@ -3997,6 +3997,18 @@ impl windows::Win32::Media::Audio::IActivateAudioInterfaceCompletionHandler_Impl
     }
 }
 
+fn process_loopback_format() -> windows::Win32::Media::Audio::WAVEFORMATEX {
+    windows::Win32::Media::Audio::WAVEFORMATEX {
+        wFormatTag: windows::Win32::Media::Audio::WAVE_FORMAT_PCM as u16,
+        nChannels: 2,
+        nSamplesPerSec: audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ,
+        nAvgBytesPerSec: audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ * 4,
+        nBlockAlign: 4,
+        wBitsPerSample: 16,
+        cbSize: 0,
+    }
+}
+
 impl ProcessLoopbackCapture {
     /// Activate one process tree using the supported asynchronous Windows
     /// process-loopback path. The process ID is only used as the activation
@@ -4010,7 +4022,7 @@ impl ProcessLoopbackCapture {
             AUDIOCLIENT_ACTIVATION_PARAMS_0, AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
             AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS, PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE,
             PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE,
-            VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK, WAVEFORMATEX, WAVE_FORMAT_PCM,
+            VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK,
         };
         use windows::Win32::System::Com::StructuredStorage::{
             PROPVARIANT, PROPVARIANT_0, PROPVARIANT_0_0, PROPVARIANT_0_0_0,
@@ -4165,15 +4177,9 @@ impl ProcessLoopbackCapture {
         // The process-loopback virtual device does not expose a reliable
         // endpoint mix format. Microsoft’s activation sample uses this
         // caller-owned PCM shape and lets shared mode convert it.
-        let format = WAVEFORMATEX {
-            wFormatTag: WAVE_FORMAT_PCM as u16,
-            nChannels: 2,
-            nSamplesPerSec: 44_100,
-            nAvgBytesPerSec: 176_400,
-            nBlockAlign: 4,
-            wBitsPerSample: 16,
-            cbSize: 0,
-        };
+        // The feeder consumes graph-rate frames directly. A 44.1 kHz
+        // request here starves a 48 kHz Mixer even with silent app audio.
+        let format = process_loopback_format();
         let bytes_per_frame = usize::from(format.nBlockAlign);
         let event = EventHandle(unsafe {
             windows::Win32::System::Threading::CreateEventW(None, false, false, None)?
@@ -7100,6 +7106,43 @@ pub fn bind_application(
     )
 }
 
+/// Check only the already bound process, without a system-wide inventory.
+/// Used by routine capture liveness; an unavailable identity never matches.
+#[cfg(windows)]
+pub fn application_identity_is_current(
+    process_id: u32,
+    expected_creation_time_100ns: u64,
+    expected_executable_path: &str,
+) -> Result<bool, AudioError> {
+    use windows::Win32::Foundation::{CloseHandle, FILETIME};
+    use windows::Win32::System::Threading::{GetProcessTimes, OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT, PROCESS_QUERY_LIMITED_INFORMATION};
+    use windows_core::PWSTR;
+    // SAFETY: OpenProcess requests query-only access to this explicit PID.
+    // The owned handle stays live through synchronous queries and is closed
+    // exactly once on both success and error. Path storage is caller-owned,
+    // correctly sized, and read only within the returned length. Creation
+    // time plus full path reject PID reuse; a nonzero exit time rejects exit.
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_id)?;
+        let outcome = (|| {
+            let mut creation = FILETIME::default();
+            let mut exit = FILETIME::default();
+            let mut kernel = FILETIME::default();
+            let mut user = FILETIME::default();
+            GetProcessTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user)?;
+            let created = (u64::from(creation.dwHighDateTime) << 32) | u64::from(creation.dwLowDateTime);
+            if created != expected_creation_time_100ns || exit.dwHighDateTime != 0 || exit.dwLowDateTime != 0 { return Ok(false); }
+            let mut buffer = [0u16; 32_768];
+            let mut length = buffer.len() as u32;
+            QueryFullProcessImageNameW(handle, PROCESS_NAME_FORMAT(0), PWSTR(buffer.as_mut_ptr()), &mut length)?;
+            let path = String::from_utf16(buffer.get(..length as usize).ok_or(AudioError::InvalidUtf16)?).map_err(|_| AudioError::InvalidUtf16)?;
+            Ok(path.eq_ignore_ascii_case(expected_executable_path))
+        })();
+        let _ = CloseHandle(handle);
+        outcome
+    }
+}
+
 /// Resolve an application using the complete observed executable identity.
 /// Restart matching requires a verified full path; basename-only selectors
 /// are insufficient for automatic rebinding.
@@ -9935,6 +9978,19 @@ mod tests {
     }
 
     #[test]
+    fn process_loopback_format_matches_the_mixer_clock() {
+        let format = process_loopback_format();
+        let rate = format.nSamplesPerSec;
+        let bytes_per_second = format.nAvgBytesPerSec;
+        let channels = format.nChannels;
+        let bits = format.wBitsPerSample;
+        let alignment = format.nBlockAlign;
+        assert_eq!(rate, audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ);
+        assert_eq!((channels, bits, alignment), (2, 16, 4));
+        assert_eq!(bytes_per_second, rate * u32::from(alignment));
+    }
+
+    #[test]
     fn process_loopback_packet_period_policy_is_bounded() {
         assert!(validate_process_loopback_packet_frames(1).is_ok());
         assert!(
@@ -10229,6 +10285,16 @@ mod tests {
         )
         .unwrap();
         assert_eq!(bound, application);
+        let identity_start = std::time::Instant::now();
+        for _ in 0..10 {
+            assert!(application_identity_is_current(process_id, application.creation_time_100ns.unwrap(), application.executable_path.as_deref().unwrap()).unwrap());
+        }
+        let identity_elapsed = identity_start.elapsed();
+        let inventory_start = std::time::Instant::now();
+        let _ = enumerate_applications().unwrap();
+        println!("application liveness: 10 direct probes {:?}; one full inventory {:?}", identity_elapsed, inventory_start.elapsed());
+        assert!(!application_identity_is_current(process_id, application.creation_time_100ns.unwrap().wrapping_add(1), application.executable_path.as_deref().unwrap()).unwrap());
+        assert!(!application_identity_is_current(process_id, application.creation_time_100ns.unwrap(), "different-path.exe").unwrap());
         assert!(matches!(
             bind_application(process_id, "different.exe", application.creation_time_100ns),
             Err(AudioError::ApplicationIdentityChanged { .. })
@@ -10276,8 +10342,10 @@ mod tests {
         )
         .expect("fresh process identity should bind");
         assert_eq!(first_bound, first);
+        assert!(application_identity_is_current(first.process_id, first.creation_time_100ns.unwrap(), first.executable_path.as_deref().unwrap()).unwrap());
         first_child.kill().expect("stop first helper");
         first_child.wait().expect("reap first helper");
+        assert!(!application_identity_is_current(first.process_id, first.creation_time_100ns.unwrap(), first.executable_path.as_deref().unwrap()).unwrap_or(false));
 
         let stale = bind_application(
             first.process_id,

@@ -7604,6 +7604,14 @@ impl ControlPlane {
             return Ok(binding.state != "connected");
         }
         binding.next_probe_at = now + APPLICATION_CAPTURE_LIVENESS_POLL;
+        if !force_probe && matches!(binding.state, "connected" | "configured-stopped") && self.application_capture_runtime_is_current(&binding)
+            && binding.current_executable_path.as_deref().is_some_and(|path|
+                audiorouter_windows_audio::application_identity_is_current(binding.process_id, binding.creation_time_100ns, path).unwrap_or(false))
+        {
+            self.set_application_capture_state("connected", "Connected to this application. Audio flow appears when the app produces sound.");
+            if let Some(current) = self.application_capture_runtime.as_mut() { current.next_probe_at = binding.next_probe_at; }
+            return Ok(false);
+        }
         let applications = match audiorouter_windows_audio::enumerate_applications() {
             Ok(applications) => applications,
             Err(_) => {
@@ -12892,8 +12900,9 @@ impl ControlPlane {
 
     /// Keep each application source of a running multi-input Mixer bound to
     /// its application across restarts (CAP-06/CAP-11). Called from the
-    /// control-plane pump, never the audio callback; one process snapshot per
-    /// second bounds the cost. An exited application's input is replaced by
+    /// control-plane pump, never the audio callback; connected inputs use
+    /// direct identity checks, with full inventory reserved for recovery.
+    /// An exited application's input is replaced by
     /// silence so the other sources keep playing, then reattached to the
     /// unique matching restarted instance. Returns whether any input changed.
     #[cfg(windows)]
@@ -12903,6 +12912,23 @@ impl ControlPlane {
             &source.session_id == session_id && (force || source.next_probe_at <= now)
         };
         if !self.multi_input_application_sources.iter().any(due) {
+            return false;
+        }
+        // Routine liveness must not enumerate every process on the thread
+        // that services WASAPI. Scan only when a bound source needs recovery.
+        let all_current = !force && self.multi_input_application_sources.iter().filter(|source| due(source)).all(|source| {
+            matches!(source.state, "connected" | "configured-stopped")
+                && self.native_multi_input_worker.as_ref().is_some_and(|worker| !worker.capture_is_silent(source.input_index))
+                && source.current_executable_path.as_deref().is_some_and(|path|
+                    audiorouter_windows_audio::application_identity_is_current(source.process_id, source.creation_time_100ns, path).unwrap_or(false))
+        });
+        if all_current {
+            for source in self.multi_input_application_sources.iter_mut().filter(|source| due(source)) {
+                source.state = "connected";
+                source.detail = "Connected to this application. Audio flow appears when the app produces sound.";
+                source.next_probe_at = now + APPLICATION_CAPTURE_LIVENESS_POLL;
+                source.retry_delay = APPLICATION_CAPTURE_RETRY_MIN;
+            }
             return false;
         }
         let applications = match audiorouter_windows_audio::enumerate_applications() {

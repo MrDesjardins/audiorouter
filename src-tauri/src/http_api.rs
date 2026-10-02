@@ -28,7 +28,14 @@ impl Drop for HttpApi {
     }
 }
 impl HttpApi {
+    #[cfg(test)]
     pub fn start(port: u16, forward: Arc<Forward>) -> Result<Self, String> {
+        let mut bytes = [0u8; 32];
+        getrandom::fill(&mut bytes).map_err(|_| "Cannot securely generate API token")?;
+        Self::start_with_token(port, bytes.iter().map(|b| format!("{b:02x}")).collect(), forward)
+    }
+    pub fn start_with_token(port: u16, token: String, forward: Arc<Forward>) -> Result<Self, String> {
+        if token.len() != 64 || !token.bytes().all(|b| b.is_ascii_hexdigit()) { return Err("Invalid API token".into()); }
         let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port))
             .map_err(|_| format!("Cannot open localhost port {port}. Choose another port or stop the application using it."))?;
         listener
@@ -38,9 +45,6 @@ impl HttpApi {
             .local_addr()
             .map_err(|_| "Cannot read API port")?
             .port();
-        let mut bytes = [0u8; 32];
-        getrandom::fill(&mut bytes).map_err(|_| "Cannot securely generate API token")?;
-        let token = bytes.iter().map(|b| format!("{b:02x}")).collect::<String>();
         let describe = forward(&rpc("system.describe", None))?
             .result
             .ok_or("Backend discovery unavailable; reconnect before starting API")?;
@@ -674,7 +678,7 @@ mod tests {
         assert!(init.contains("persistAuthorization:false"));
     }
     #[test]
-    fn stopping_revokes_token_and_backend_permissions_are_preserved() {
+    fn restart_preserves_token_rotation_revokes_it_and_permissions_are_preserved() {
         let schema = ControlPlane::new("http-observer").describe();
         let api = HttpApi::start(
             0,
@@ -695,13 +699,19 @@ mod tests {
         let port = api.port;
         let token = api.token.clone();
         drop(api);
-        let restarted = HttpApi::start(
+        let restarted = HttpApi::start_with_token(
             port,
+            token.clone(),
             Arc::new(move |request| Ok(ControlPlane::new("restart").dispatch(request.clone()))),
         )
         .unwrap();
-        assert_ne!(token, restarted.token);
+        assert_eq!(token, restarted.token);
+        assert!(exchange(port, &format!("GET /api/v1/status HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\n\r\n")).starts_with("HTTP/1.1 200"));
+        drop(restarted);
+        let rotated = HttpApi::start_with_token(port, crate::api_token::generate().unwrap(), Arc::new(move |request| Ok(ControlPlane::new("rotation").dispatch(request.clone())))).unwrap();
+        assert_ne!(token, rotated.token);
         assert!(exchange(port, &format!("GET /api/v1/status HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\n\r\n")).starts_with("HTTP/1.1 401"));
+        assert_eq!(call(&rotated, "/api/v1/status", None).0, 200);
     }
     fn plane_dispatch_observer(request: &JsonRpcRequest) -> JsonRpcResponse {
         let mut plane = ControlPlane::new("observer");
