@@ -1,6 +1,6 @@
 # Active plan — public release preparation
 
-Updated: 2026-10-02. Status: review build ready; M08 qualification open.
+Updated: 2026-10-02. Status: v0.0.3 Joe prerelease published; M08 qualification open.
 
 ## Objective and scope
 
@@ -20,18 +20,18 @@ Read [M08](../../milestones/M08-release.md) and the
 
 | Area | Current state | Evidence / next check |
 | --- | --- | --- |
-| Public package | Unsigned v0.0.2 prerelease published; this review snapshot is newer and uncommitted | [Distribution](../../operations/distribution.md); never replace published assets in place |
-| Review build | Current UI, discovery fix, clearer logs, instance recovery and log-folder controls | [Latest UX evidence](evidence/2026-10-02-instance-recovery-and-log-access.md); [prior diagnostics evidence](evidence/2026-10-02-diagnostics-review-build.md) |
+| Public package | Unsigned v0.0.3 prerelease published for Joe; tagged clean source, exact-exe fresh-install and downloaded hashes verified | [Release evidence](evidence/2026-10-02-joe-prerelease-0.0.3.md); v0.0.2 retained for rollback |
+| Current build | Current UI, discovery fix, clearer logs, instance recovery and log-folder controls | [Release evidence](evidence/2026-10-02-joe-prerelease-0.0.3.md); native recovery/Explorer actions need attended review |
 | Usability | Network direction diagram, prominent install instructions, video placeholders; canvas list switch removed, keyboard controls under Advanced | [147 UI tests and 9 production Edge cases](evidence/2026-10-02-usability-followups.md); attended accessibility remains open |
 | Joe's input list | Old log showed nine 0xE000020B failures; inventory now skips only disappeared endpoints and logs the failed stage | Verify on Joe's PC; exact original endpoint/stage was absent from the old log |
 | Routing / recording / LAN | Existing Windows evidence and user-reported two-PC use; multi-path recorder repair validated by user | [Continuity](evidence/2026-09-26-audio-continuity.md), [network](evidence/2026-10-01-network-qualification.md), archive; refresh candidate hardware/soak evidence |
 | External app control | Existing REST supports active-session node names/IDs, flags and parameters | [Examples](../../operations/local-http-api.md); [request-builder proposal](../future/external-app-integrations.md) is future work |
 | Signing | User prefers SignPath if feasible; MIT license approved; enrollment/acceptance/hosted signing uncompleted | [Signing plan](release-signing-and-publication.md); unsigned first release remains allowed under DEC-17 |
 
-Review executable:
-`C:\code\audiorouter\target\instance-ux-20261002\release\audiorouter-shell.exe`.
-Keep the CLI and plugin worker beside it. Version 0.0.2;
-build identity `instance-ux-20261002-review`. No installer is built for this snapshot.
+Latest executable:
+`C:\code\audiorouter\target\releases\v0.0.3\audiorouter-shell.exe`.
+Keep the CLI and plugin worker beside it. Installer in the same folder:
+`AudioRouter_0.0.3_x64-setup.exe`. Version/build identity `v0.0.3`.
 
 ## Decisions in force
 
@@ -94,9 +94,9 @@ remain attended checks; no user-owned process was stopped. See latest UX evidenc
 
 | Gate | Required evidence / current limitation |
 | --- | --- |
-| Exact review exe first run | Fresh DB, default pipe, no developer grants; blocked by user's earlier review shell PID 74480 at last check. Recheck processes; user's app must be closed before test |
+| Exact packaged exe first run | Passed 1/1 on v0.0.3: fresh DB, default pipe, no developer grants, no other shell; no real audio opened |
 | Installer (DIST-01–08) | Standard-user install, WebView2 present/absent, upgrade, uninstall/state retention and rollback; old v0.0.2 fresh-install pass does not qualify this build |
-| Automated candidate checks | Current focused diagnostics checks pass; full candidate suite unrun. 2026-10-01 dev E2E retained eight failures and eight skips after a load-only case passed alone; revisit original evidence before classifying failures |
+| Automated candidate checks | Workspace/shell/UI/contracts/docs and 12 production UX cases passed. Full dev E2E not rerun: 2026-10-01 retained eight failures and eight skips; revisit original evidence before classifying failures |
 | Audio / recording / performance | Supported device/app matrix, long-duration/endurance, parsed recording output, dropout/continuity and resource distributions; Windows hardware required |
 | Accessibility / first-time usability | Narrator, keyboard, 200% scaling and M08 first-time-user scenarios; screenshots/unit tests do not close these |
 | Security / plugins / contracts | CAP-13 and GRAPH-15 evidence reconciliation, plugin rights/containment/multi-vendor matrix, contract drift, retention bounds; no new VST implementation authorized |
@@ -130,5 +130,6 @@ Dependency lock diffs contain workspace version changes only. A broken release
 notes heading link was repaired before packaging. See the
 [Joe release evidence](evidence/2026-10-02-joe-prerelease-0.0.3.md).
 
-**Exact next task:** package clean tagged v0.0.3, run exact-exe fresh-install,
-publish/download-verify the prerelease, then Joe's enumeration check.
+**Exact next task:** Joe tests the v0.0.3 primary-input list; collect logs and
+reproduction time if it fails. Then attended instance recovery/log-folder review
+and remaining M08 qualification. Full M08 is not complete.

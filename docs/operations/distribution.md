@@ -1,10 +1,13 @@
 # Distribution status and intended release path
 
-0.0.3 is prepared as an unsigned test prerelease for Joe's device-discovery
+[0.0.3](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.3) is published
+as an unsigned test prerelease for Joe's device-discovery
 failure, clearer logging, instance recovery and usability fixes. Use its
 [release notes](release-notes.md)
-for changes and open qualification gates. Publication status and exact artifact
-evidence are recorded in the active plan; preparation alone is not publication.
+for changes and open qualification gates. Download `AudioRouter_0.0.3_x64-setup.exe`
+directly or extract the full ZIP. The exact packaged shell passed fresh-install
+consent regression; downloaded installer/ZIP hashes match the tested artifacts.
+See [release evidence](../plans/active/evidence/2026-10-02-joe-prerelease-0.0.3.md).
 
 Update 2026-10-01: [0.0.2 unsigned Windows preview](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.2)
 is published as a ZIP of the maintainer's working USB package, including setup,
