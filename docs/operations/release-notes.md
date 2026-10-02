@@ -1,5 +1,45 @@
 # AudioRouter release notes
 
+## 0.0.3 — 2026-10-02 (Joe's test release, unsigned)
+
+This prerelease targets an empty device list reported with Windows error
+`0xE000020B` (missing device instance). One disappeared endpoint previously
+aborted discovery of the entire list. Discovery now skips only disappeared
+endpoints and preserves permission/service/format errors. The old log does not
+identify the exact endpoint; validation on Joe's PC remains the purpose of this build.
+
+- Clearer diagnostic files include failing operation, category, hexadecimal
+  Windows error, build/version and device counts. **Logs → Open logs folder**
+  and **Copy folder path** make support files easy to find.
+- A second desktop launch explains that another instance is running before
+  opening storage or connecting to its backend. Cancel leaves it untouched;
+  **Force close old instance and continue** explicitly warns about interrupted
+  audio, unsaved changes and unfinished recordings.
+- Network Properties shows audio in/out direction and paired address/port.
+- Canvas List view is removed; keyboard graph controls remain under Advanced.
+  Arrange and precise tool placement pass the production-browser regressions.
+- README installation instructions are prominent and video links have placeholders.
+- REST examples document active-session tool selection, enabled/bypass flags,
+  and dynamic Volume/Mixer/Duck settings. No VST implementation changed.
+
+Windows 11 x64, per-user installer, existing audio devices; no audio driver is
+installed or Windows default device changed. Close AudioRouter normally before
+upgrading and back up configuration/recordings. Data remains in
+`%LOCALAPPDATA%\AudioRouter`; recordings remain in the chosen folder. The
+previous [v0.0.2 prerelease](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.2)
+remains available. Uninstall/data-retention and clean-machine upgrade behavior
+are not fully qualified, so do not delete user data during rollback.
+
+The app and installer are **unsigned**; Windows may show publisher/trust prompts.
+This is a test prerelease, not completed M08 qualification. Native force-close
+UX, Explorer launching, clean-machine/WebView2/upgrade/uninstall, accessibility,
+hardware soak and aggregate audit retention remain open. Earlier virtual-cable
+dropouts and clock-drift limitations still apply. A failing test is not presumed
+to be a harmless locator issue without evidence.
+
+If input discovery still fails, use Logs to send shell/backend/discovery JSONL
+files (and previous files if present), reproduction steps and approximate time.
+
 ## 0.0.2 — 2026-10-01 (test release, unsigned)
 
 Fixes Play on a fresh install. In 0.0.1, pressing Play on a newly installed

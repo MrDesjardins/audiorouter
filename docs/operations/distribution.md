@@ -1,5 +1,21 @@
 # Distribution status and intended release path
 
+0.0.3 is prepared as an unsigned test prerelease for Joe's device-discovery
+failure, clearer logging, instance recovery and usability fixes. Use its
+[release notes](release-notes.md)
+for changes and open qualification gates. Publication status and exact artifact
+evidence are recorded in the active plan; preparation alone is not publication.
+
+Update 2026-10-01: [0.0.2 unsigned Windows preview](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.2)
+is published as a ZIP of the maintainer's working USB package, including setup,
+executables, provenance, checksums, SBOMs and notices. Extract and run
+`AudioRouter_0.0.2_x64-setup.exe`. The maintainer reports successful use on two
+PCs. The exact shell passes fresh-install consent regression; clean-machine,
+upgrade/uninstall and missing-WebView2 gates remain open. Windows may warn
+because it is unsigned. SignPath signing is under investigation.
+
+The following 2026-09-28 status is historical.
+
 Status as of 2026-09-28: the repository builds an unsigned per-user NSIS
 installer and includes a manually dispatched GitHub workflow that creates a
 draft release. No release has been published or qualified on a clean machine;

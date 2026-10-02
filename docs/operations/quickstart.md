@@ -597,6 +597,8 @@ The **Setup** tab ("Set up this PC") holds app-wide items only: service and
 device status, the audio devices Windows offers, guidance for other apps, and
 start at sign-in. Connecting nodes without dragging (keyboard use) is under
 **Advanced → Connect nodes without dragging**.
+For keyboard node selection and topology edits, use **Advanced → Keyboard
+graph controls**. The canvas no longer has a separate List view switch.
 
 The **Advanced → JSON graph transfer** panel exports the selected stopped
 configuration as a local `.audiorouter.json` file for scripts. Import first validates the file through the

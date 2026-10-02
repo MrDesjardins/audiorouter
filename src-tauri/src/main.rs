@@ -14,6 +14,8 @@ use tauri::{
 };
 
 mod backend_supervisor;
+#[cfg(windows)]
+mod instance_windows;
 mod http_api;
 #[cfg(windows)]
 mod os_transition_windows;
@@ -69,6 +71,7 @@ fn write_shell_rpc_log(
     response: &Result<JsonRpcResponse, String>,
 ) {
     use std::io::Write;
+    if request.method == "events.subscribe" && matches!(response, Ok(value) if value.error.is_none()) { return; }
     let path = directory.join("shell.jsonl");
     if std::fs::create_dir_all(directory).is_err() {
         return;
@@ -86,18 +89,17 @@ fn write_shell_rpc_log(
             if let Some(error) = response.error.as_ref() {
                 (
                     "error",
-                    serde_json::json!({
-                        "code": error.code,
-                        "kind": error.data.as_ref().and_then(|data| data.get("code")).and_then(serde_json::Value::as_str).map(|kind| kind.chars().take(64).collect::<String>()),
-                        "hresult": error.data.as_ref().and_then(|data| data.get("hresult")),
-                        "retryable": error.data.as_ref().and_then(|data| data.get("retryable")),
-                        "reason": if request.method == "session.start" && error.message.contains("native graph rejected: UnsupportedTopology") { Some("UnsupportedTopology") } else { None },
-                    }),
+                    {
+                        let mut detail = audiorouter_transport::rpc_failure_log_summary(&serde_json::to_value(error).unwrap_or_default());
+                        detail["reason"] = serde_json::json!(if matches!(request.method.as_str(), "session.start" | "sessions.start" | "sessions.play") && error.message.contains("native graph rejected: UnsupportedTopology") { Some("UnsupportedTopology") } else { None });
+                        detail
+                    },
                 )
             } else {
                 let result = response.result.as_ref();
                 let summary = match request.method.as_str() {
                     "graph.commit" => result.map(audiorouter_transport::graph_activation_log_summary),
+                    "devices.list" => result.map(audiorouter_transport::device_inventory_log_summary),
                     "sessions.get" => result.map(|value| serde_json::json!({
                         "revision": value.get("revision"),
                         "nodes": value.get("nodes").and_then(serde_json::Value::as_array).map(Vec::len),
@@ -134,8 +136,10 @@ fn write_shell_rpc_log(
     let entry = serde_json::json!({
         "timeUnixMs": now_ms,
         "processId": std::process::id(),
+        "version": env!("CARGO_PKG_VERSION"),
+        "buildId": option_env!("AUDIOROUTER_BUILD_ID").unwrap_or("development"),
         "method": request.method.chars().take(96).collect::<String>(),
-        "sessionId": request.params.as_ref().and_then(|params| params.get("sessionId")),
+        "sessionId": request.params.as_ref().and_then(|params| params.get("sessionId")).and_then(serde_json::Value::as_str).filter(|id| id.len() <= 128 && id.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))),
         "outcome": outcome,
         "detail": detail,
     });
@@ -501,6 +505,33 @@ fn backend_diagnostics_list() -> Result<Vec<serde_json::Value>, String> {
         }
     }
     Ok(records.into_iter().rev().take(100).collect())
+}
+
+
+fn log_directory() -> Result<std::path::PathBuf, String> {
+    std::env::var_os("LOCALAPPDATA").or_else(|| std::env::var_os("TEMP"))
+        .map(|root| std::path::PathBuf::from(root).join(DEFAULT_DATABASE_DIRECTORY).join("logs"))
+        .filter(|path| path.is_absolute())
+        .ok_or_else(|| "The logs folder is unavailable on this PC.".into())
+}
+
+#[tauri::command]
+fn log_folder_path() -> Result<String, String> {
+    Ok(log_directory()?.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+fn open_logs_folder() -> Result<(), String> {
+    let directory = log_directory()?;
+    std::fs::create_dir_all(&directory).map_err(|_| "Could not create the logs folder. Check access to your local app data.")?;
+    // Fixed executable and one fixed app-owned directory; no shell expansion or
+    // caller-supplied path. Explorer is deliberately visible at the user's click.
+    let explorer = std::env::var_os("WINDIR").map(std::path::PathBuf::from)
+        .filter(|root| root.is_absolute()).ok_or("Windows Explorer is unavailable.")?
+        .join("explorer.exe");
+    std::process::Command::new(explorer).arg(directory).spawn()
+        .map_err(|_| "Could not open the logs folder. Use Copy folder path and paste it into File Explorer.")?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -1028,7 +1059,23 @@ fn refresh_tray_status<R: Runtime>(
     let _ = recordings.set_text(text);
 }
 
+#[cfg(windows)]
+fn log_instance_check(state: &'static str) {
+    let request = JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(serde_json::json!("instance-check")), method: "shell.instanceCheck".into(), params: None };
+    log_shell_rpc(&request, &Ok(JsonRpcResponse::success(request.id.clone(), serde_json::json!({"state": state}))));
+}
+
 fn main() {
+    // Claim the desktop before opening storage, enrolling, forwarding RPCs or
+    // starting recovery supervision. Test/external-pipe clients own no backend.
+    #[cfg(windows)]
+    let _instance_guard = if std::env::var_os("AUDIOROUTER_CONTROL_PIPE").is_none() {
+        match instance_windows::claim_or_recover() {
+            Ok(Some(guard)) => { log_instance_check("ready"); Some(guard) },
+            Ok(None) => { log_instance_check("cancelled"); return; },
+            Err(message) => { log_instance_check("unavailable"); instance_windows::show_error(&message); return; }
+        }
+    } else { None };
     let pipe_name =
         std::env::var("AUDIOROUTER_CONTROL_PIPE").unwrap_or_else(|_| DEFAULT_PIPE_NAME.to_owned());
     let database_path = std::env::var_os("AUDIOROUTER_DATABASE")
@@ -1060,6 +1107,8 @@ fn main() {
             session_id,
             mcp_activity_list,
             backend_diagnostics_list,
+            log_folder_path,
+            open_logs_folder,
             mcp_setup_info,
             startup_register,
             startup_status
@@ -1711,6 +1760,36 @@ mod tests {
         assert_eq!(entry["detail"]["kind"], "permissionDenied");
         assert!(!log.contains("private-name"));
         assert!(!log.contains("GraphWrite"));
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn shell_logs_audio_operation_build_and_hex_hresult_without_private_payload() {
+        let directory = std::env::temp_dir().join(format!("audiorouter-shell-audio-log-{}", std::process::id()));
+        let request = JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(serde_json::json!(9)), method: "devices.list".into(), params: Some(serde_json::json!({"sessionId":{"secret":"private"}})) };
+        let response = Ok(JsonRpcResponse { jsonrpc: "2.0".into(), id: request.id.clone(), result: None, error: Some(audiorouter_protocol::JsonRpcError { code: -32000, message: "private device name".into(), data: Some(serde_json::json!({"code":"deviceInvalidated","hresult":3758096907_u32,"operation":"inventory.openPropertyStore","retryable":true})) }) });
+        write_shell_rpc_log(&directory, &request, &response);
+        let log = std::fs::read_to_string(directory.join("shell.jsonl")).unwrap();
+        let entry: serde_json::Value = serde_json::from_str(log.trim()).unwrap();
+        assert_eq!(entry["detail"]["operation"], "inventory.openPropertyStore");
+        assert_eq!(entry["detail"]["hresultHex"], "0xE000020B");
+        assert_eq!(entry["version"], env!("CARGO_PKG_VERSION"));
+        assert!(entry["buildId"].is_string());
+        assert!(!log.contains("private"));
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn shell_does_not_log_successful_event_polls_but_keeps_poll_failures() {
+        let directory = std::env::temp_dir().join(format!("audiorouter-shell-poll-log-{}", std::process::id()));
+        let request = JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(serde_json::json!(10)), method: "events.subscribe".into(), params: None };
+        let ok = Ok(JsonRpcResponse { jsonrpc: "2.0".into(), id: request.id.clone(), result: Some(serde_json::json!({})), error: None });
+        write_shell_rpc_log(&directory, &request, &ok);
+        assert!(!directory.join("shell.jsonl").exists());
+        write_shell_rpc_log(&directory, &request, &Err("private transport path".into()));
+        let log = std::fs::read_to_string(directory.join("shell.jsonl")).unwrap();
+        assert!(log.contains("transportError"));
+        assert!(!log.contains("private"));
         std::fs::remove_dir_all(directory).unwrap();
     }
 

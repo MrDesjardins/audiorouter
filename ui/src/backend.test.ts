@@ -26,6 +26,12 @@ describe("disconnected backend", () => {
 });
 
 describe("UI error formatting", () => {
+  it("explains an already-prepared worker without guessing a second process", () => {
+    const message = formatUiError(new Error("native worker is already attached"), "Start failed");
+    expect(message).toContain("Stop playback, then try Play again");
+    expect(message).not.toContain("worker");
+    expect(message).not.toContain("instance");
+  });
   it("explains how to recover an invalidated exact endpoint", () => {
     const error = new AudioRouterRpcError({
       code: -32000,

@@ -3688,6 +3688,14 @@ impl AudioFailureKind {
 }
 
 impl AudioError {
+    /// Fixed operation label supplied by native code, never an endpoint name/path.
+    pub fn operation(&self) -> Option<&'static str> {
+        match self {
+            Self::WindowsOperation { operation, .. } => Some(operation),
+            _ => None,
+        }
+    }
+
     /// Return the structured endpoint-binding decision, when this error was
     /// produced by a bound stream-open operation. Callers can use this to
     /// distinguish disappearance, direction changes, and format renegotiation
@@ -3732,7 +3740,7 @@ impl AudioError {
             0x80070005 => AudioFailureKind::AccessDenied,
             0x8889000A => AudioFailureKind::DeviceInUse,
             0x88890012 => AudioFailureKind::ExclusiveModeOnly,
-            0x88890004 => AudioFailureKind::DeviceInvalidated,
+            0x88890004 | 0xE000020B | 0x800F020B => AudioFailureKind::DeviceInvalidated,
             0x88890008 => AudioFailureKind::UnsupportedFormat,
             0x88890010 => AudioFailureKind::ServiceUnavailable,
             _ => AudioFailureKind::Other,
@@ -7304,6 +7312,106 @@ fn is_process_ancestor(
     false
 }
 
+/// An endpoint can disappear between enumerating its index and reading it.
+/// Skip only disappearance; permission, service and format errors remain visible.
+/// This policy applies to discovery, never to opening a selected microphone.
+fn read_inventory_endpoint<T>(
+    read: impl FnOnce() -> Result<T, AudioError>,
+) -> Result<Option<T>, AudioError> {
+    match read() {
+        Ok(endpoint) => Ok(Some(endpoint)),
+        Err(error) if matches!(error.hresult(), 0xE000020B | 0x800F020B | 0x88890004) => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+/// Discovery runs on a control thread. Record failures even when a vanished
+/// endpoint is skipped successfully; ordinary healthy enumeration emits nothing.
+fn read_inventory_endpoint_logged<T>(
+    direction: EndpointDirection,
+    index: u32,
+    read: impl FnOnce() -> Result<T, AudioError>,
+) -> Result<Option<T>, AudioError> {
+    let result = read();
+    if let Err(error) = &result {
+        write_inventory_failure(direction, index, error);
+    }
+    read_inventory_endpoint(|| result)
+}
+
+fn inventory_operation(operation: &'static str) -> impl FnOnce(windows::core::Error) -> AudioError {
+    move |error| AudioError::WindowsOperation { operation, error }
+}
+
+fn write_inventory_failure(direction: EndpointDirection, index: u32, error: &AudioError) {
+    use std::io::Write;
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let Ok(_guard) = LOCK.lock() else { return };
+    let Some(_process_guard) = acquire_inventory_log_mutex() else { return };
+    let Some(root) = std::env::var_os("LOCALAPPDATA").or_else(|| std::env::var_os("TEMP")) else { return };
+    let directory = std::path::PathBuf::from(root).join("AudioRouter").join("logs");
+    if std::fs::create_dir_all(&directory).is_err() { return; }
+    let path = directory.join("discovery.jsonl");
+    if std::fs::metadata(&path).is_ok_and(|metadata| metadata.len() >= 5 * 1024 * 1024) {
+        let previous = directory.join("discovery.previous.jsonl");
+        let _ = std::fs::remove_file(&previous);
+        let _ = std::fs::rename(&path, previous);
+    }
+    let entry = inventory_failure_summary(direction, index, error);
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = serde_json::to_writer(&mut file, &entry);
+        let _ = file.write_all(b"\n");
+    }
+}
+
+struct InventoryLogMutex(windows::Win32::Foundation::HANDLE);
+
+impl Drop for InventoryLogMutex {
+    fn drop(&mut self) {
+        // SAFETY: construction owns both this valid handle and the mutex. Drop
+        // releases ownership once, then closes the sole owned handle.
+        unsafe {
+            let _ = windows::Win32::System::Threading::ReleaseMutex(self.0);
+            let _ = windows::Win32::Foundation::CloseHandle(self.0);
+        }
+    }
+}
+
+fn acquire_inventory_log_mutex() -> Option<InventoryLogMutex> {
+    use windows::Win32::Foundation::{WAIT_ABANDONED, WAIT_OBJECT_0};
+    use windows::Win32::System::Threading::{CreateMutexW, WaitForSingleObject};
+    // SAFETY: the fixed literal is NUL terminated; default security inherits
+    // the current user's ACL. This function runs only on a control thread.
+    let handle = unsafe { CreateMutexW(None, false, windows::core::w!("Local\\AudioRouter.DiscoveryDiagnostics")) }.ok()?;
+    // SAFETY: handle is valid and owned. A bounded wait prevents logging from
+    // indefinitely delaying discovery; abandoned ownership can be released.
+    let result = unsafe { WaitForSingleObject(handle, 1000) };
+    if result == WAIT_OBJECT_0 || result == WAIT_ABANDONED {
+        Some(InventoryLogMutex(handle))
+    } else {
+        // SAFETY: no ownership was acquired; close the valid owned handle.
+        unsafe { let _ = windows::Win32::Foundation::CloseHandle(handle); }
+        None
+    }
+}
+
+fn inventory_failure_summary(direction: EndpointDirection, index: u32, error: &AudioError) -> serde_json::Value {
+    serde_json::json!({
+        "timeUnixMs": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|time| time.as_millis()).unwrap_or_default(),
+        "processId": std::process::id(),
+        "version": env!("CARGO_PKG_VERSION"),
+        "buildId": option_env!("AUDIOROUTER_BUILD_ID").unwrap_or("development"),
+        "direction": match direction { EndpointDirection::Capture => "capture", EndpointDirection::Render => "render" },
+        "endpointIndex": index,
+        "operation": error.operation(),
+        "kind": error.kind().code(),
+        "hresult": error.hresult(),
+        "hresultHex": format!("0x{:08X}", error.hresult()),
+        "outcome": if matches!(error.hresult(), 0xE000020B | 0x800F020B | 0x88890004) { "skippedDisappearedEndpoint" } else { "error" },
+        "retryable": error.is_retryable(),
+    })
+}
+
 unsafe fn enumerate_after_com_init() -> Result<Vec<EndpointInfo>, AudioError> {
     use windows::Win32::Media::Audio::{
         eCapture, eRender, IAudioClient, IMMDeviceEnumerator, MMDeviceEnumerator,
@@ -7311,49 +7419,55 @@ unsafe fn enumerate_after_com_init() -> Result<Vec<EndpointInfo>, AudioError> {
     };
     use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
-    let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+    let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(inventory_operation("inventory.createEnumerator"))?;
     let mut endpoints = Vec::new();
     for (direction, flow) in [
         (EndpointDirection::Capture, eCapture),
         (EndpointDirection::Render, eRender),
     ] {
-        let devices = enumerator.EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE)?;
-        let count = devices.GetCount()?;
+        let devices = enumerator.EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE).map_err(inventory_operation("inventory.enumerateActiveEndpoints"))?;
+        let count = devices.GetCount().map_err(inventory_operation("inventory.getEndpointCount"))?;
         for index in 0..count {
-            let device = devices.Item(index)?;
-            let id = device
-                .GetId()
-                .map_err(AudioError::Windows)?
-                .to_string()
-                .map_err(|_| AudioError::InvalidUtf16)?;
-            let client: IAudioClient = device.Activate(CLSCTX_ALL, None)?;
-            let mut default_period = 0;
-            let mut minimum_period = 0;
-            client.GetDevicePeriod(Some(&mut default_period), Some(&mut minimum_period))?;
-            let format = client.GetMixFormat()?;
-            let format_value = *format;
-            let (channel_mask, subformat_guid) = if format_value.wFormatTag == 0xfffe
-                && format_value.cbSize >= 22
-            {
-                let extensible = std::ptr::read_unaligned(format.cast::<WAVEFORMATEXTENSIBLE>());
-                let guid = std::ptr::read_unaligned(std::ptr::addr_of!(extensible.SubFormat));
-                (extensible.dwChannelMask, format!("{guid:?}"))
-            } else {
-                (0, String::new())
-            };
-            endpoints.push(EndpointInfo {
-                id,
-                direction,
-                default_period_100ns: default_period,
-                minimum_period_100ns: minimum_period,
-                sample_rate_hz: format_value.nSamplesPerSec,
-                channels: format_value.nChannels,
-                bits_per_sample: format_value.wBitsPerSample,
-                format_tag: format_value.wFormatTag,
-                channel_mask,
-                subformat_guid,
-            });
-            windows::Win32::System::Com::CoTaskMemFree(Some(format.cast()));
+            if let Some(endpoint) = read_inventory_endpoint_logged(direction, index, || {
+                let device = devices.Item(index).map_err(inventory_operation("inventory.getEndpoint"))?;
+                let id = device
+                    .GetId()
+                    .map_err(inventory_operation("inventory.getEndpointId"))?
+                    .to_string()
+                    .map_err(|_| AudioError::InvalidUtf16)?;
+                let client: IAudioClient = device.Activate(CLSCTX_ALL, None).map_err(inventory_operation("inventory.activateAudioClient"))?;
+                let mut default_period = 0;
+                let mut minimum_period = 0;
+                client.GetDevicePeriod(Some(&mut default_period), Some(&mut minimum_period)).map_err(inventory_operation("inventory.getDevicePeriod"))?;
+                let format = client.GetMixFormat().map_err(inventory_operation("inventory.getMixFormat"))?;
+                let format_value = *format;
+                let (channel_mask, subformat_guid) = if format_value.wFormatTag == 0xfffe
+                    && format_value.cbSize >= 22
+                {
+                    let extensible =
+                        std::ptr::read_unaligned(format.cast::<WAVEFORMATEXTENSIBLE>());
+                    let guid = std::ptr::read_unaligned(std::ptr::addr_of!(extensible.SubFormat));
+                    (extensible.dwChannelMask, format!("{guid:?}"))
+                } else {
+                    (0, String::new())
+                };
+                let endpoint = EndpointInfo {
+                    id,
+                    direction,
+                    default_period_100ns: default_period,
+                    minimum_period_100ns: minimum_period,
+                    sample_rate_hz: format_value.nSamplesPerSec,
+                    channels: format_value.nChannels,
+                    bits_per_sample: format_value.wBitsPerSample,
+                    format_tag: format_value.wFormatTag,
+                    channel_mask,
+                    subformat_guid,
+                };
+                windows::Win32::System::Com::CoTaskMemFree(Some(format.cast()));
+                Ok(endpoint)
+            })? {
+                endpoints.push(endpoint);
+            }
         }
     }
     Ok(endpoints)
@@ -7366,7 +7480,7 @@ unsafe fn enumerate_defaults_after_com_init() -> Result<Vec<DefaultEndpointBindi
     };
     use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
-    let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+    let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(inventory_operation("inventory.createEnumerator"))?;
     let mut bindings = Vec::new();
     for (direction, flow) in [
         (EndpointDirection::Capture, eCapture),
@@ -7382,7 +7496,7 @@ unsafe fn enumerate_defaults_after_com_init() -> Result<Vec<DefaultEndpointBindi
             };
             let id = device
                 .GetId()
-                .map_err(AudioError::Windows)?
+                .map_err(inventory_operation("inventory.getEndpointId"))?
                 .to_string()
                 .map_err(|_| AudioError::InvalidUtf16)?;
             bindings.push(DefaultEndpointBinding {
@@ -7396,14 +7510,16 @@ unsafe fn enumerate_defaults_after_com_init() -> Result<Vec<DefaultEndpointBindi
 }
 
 unsafe fn enumerate_display_info_after_com_init() -> Result<Vec<EndpointDisplayInfo>, AudioError> {
-    use windows::Win32::Devices::FunctionDiscovery::{PKEY_Device_FriendlyName, PKEY_Device_DeviceDesc, PKEY_Device_DriverInfSection};
+    use windows::Win32::Devices::FunctionDiscovery::{
+        PKEY_Device_DeviceDesc, PKEY_Device_DriverInfSection, PKEY_Device_FriendlyName,
+    };
     use windows::Win32::Media::Audio::{
         eCapture, eRender, IMMDeviceEnumerator, MMDeviceEnumerator, DEVICE_STATEMASK_ALL,
     };
     use windows::Win32::System::Com::StructuredStorage::{PropVariantClear, PropVariantToString};
     use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL, STGM_READ};
 
-    let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+    let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(inventory_operation("inventory.createEnumerator"))?;
     let mut result = Vec::new();
     for (direction, flow) in [
         (EndpointDirection::Capture, eCapture),
@@ -7412,45 +7528,52 @@ unsafe fn enumerate_display_info_after_com_init() -> Result<Vec<EndpointDisplayI
         let devices = enumerator.EnumAudioEndpoints(
             flow,
             windows::Win32::Media::Audio::DEVICE_STATE(DEVICE_STATEMASK_ALL),
-        )?;
-        for index in 0..devices.GetCount()? {
-            let device = devices.Item(index)?;
-            let id = device
-                .GetId()?
-                .to_string()
-                .map_err(|_| AudioError::InvalidUtf16)?;
-            let store = device.OpenPropertyStore(STGM_READ)?;
-            let mut value = store.GetValue(&PKEY_Device_FriendlyName)?;
-            let mut buffer = [0_u16; 512];
-            let name = PropVariantToString(&value, &mut buffer)
-                .ok()
-                .and_then(|_| {
-                    let length = buffer.iter().position(|character| *character == 0)?;
-                    String::from_utf16(&buffer[..length]).ok()
-                })
-                .filter(|name| !name.is_empty())
-                .unwrap_or_else(|| "Unknown audio endpoint".to_owned());
-            PropVariantClear(&mut value).ok();
-            // SAFETY: COM is initialized by the inventory wrapper; the store
-            // remains owned here. Each owned variant is cleared after copying
-            // into a bounded buffer; no borrowed Windows pointer escapes.
-            let read_property = |key| -> String {
-                let Ok(mut value) = store.GetValue(key) else { return String::new() };
+        ).map_err(inventory_operation("inventory.enumerateAllEndpoints"))?;
+        for index in 0..devices.GetCount().map_err(inventory_operation("inventory.getEndpointCount"))? {
+            if let Some(info) = read_inventory_endpoint_logged(direction, index, || {
+                let device = devices.Item(index).map_err(inventory_operation("inventory.getEndpoint"))?;
+                let id = device
+                    .GetId().map_err(inventory_operation("inventory.getEndpointId"))?
+                    .to_string()
+                    .map_err(|_| AudioError::InvalidUtf16)?;
+                let store = device.OpenPropertyStore(STGM_READ).map_err(inventory_operation("inventory.openPropertyStore"))?;
+                let mut value = store.GetValue(&PKEY_Device_FriendlyName).map_err(inventory_operation("inventory.getFriendlyName"))?;
                 let mut buffer = [0_u16; 512];
-                let text = PropVariantToString(&value, &mut buffer).ok()
-                    .and_then(|_| buffer.iter().position(|c| *c == 0))
-                    .and_then(|len| String::from_utf16(&buffer[..len]).ok())
-                    .unwrap_or_default();
+                let name = PropVariantToString(&value, &mut buffer)
+                    .ok()
+                    .and_then(|_| {
+                        let length = buffer.iter().position(|character| *character == 0)?;
+                        String::from_utf16(&buffer[..length]).ok()
+                    })
+                    .filter(|name| !name.is_empty())
+                    .unwrap_or_else(|| "Unknown audio endpoint".to_owned());
                 PropVariantClear(&mut value).ok();
-                text
-            };
-            result.push(EndpointDisplayInfo {
-                id,
-                direction,
-                name,
-                device_description: read_property(&PKEY_Device_DeviceDesc),
-                driver_inf_section: read_property(&PKEY_Device_DriverInfSection),
-            });
+                // SAFETY: COM is initialized by the inventory wrapper; the store
+                // remains owned here. Each owned variant is cleared after copying
+                // into a bounded buffer; no borrowed Windows pointer escapes.
+                let read_property = |key| -> String {
+                    let Ok(mut value) = store.GetValue(key) else {
+                        return String::new();
+                    };
+                    let mut buffer = [0_u16; 512];
+                    let text = PropVariantToString(&value, &mut buffer)
+                        .ok()
+                        .and_then(|_| buffer.iter().position(|c| *c == 0))
+                        .and_then(|len| String::from_utf16(&buffer[..len]).ok())
+                        .unwrap_or_default();
+                    PropVariantClear(&mut value).ok();
+                    text
+                };
+                Ok(EndpointDisplayInfo {
+                    id,
+                    direction,
+                    name,
+                    device_description: read_property(&PKEY_Device_DeviceDesc),
+                    driver_inf_section: read_property(&PKEY_Device_DriverInfSection),
+                })
+            })? {
+                result.push(info);
+            }
         }
     }
     Ok(result)
@@ -7462,7 +7585,7 @@ unsafe fn enumerate_states_after_com_init() -> Result<Vec<EndpointStateInfo>, Au
     };
     use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
-    let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+    let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(inventory_operation("inventory.createEnumerator"))?;
     let mut result = Vec::new();
     for (direction, flow) in [
         (EndpointDirection::Capture, eCapture),
@@ -7471,20 +7594,24 @@ unsafe fn enumerate_states_after_com_init() -> Result<Vec<EndpointStateInfo>, Au
         let devices = enumerator.EnumAudioEndpoints(
             flow,
             windows::Win32::Media::Audio::DEVICE_STATE(DEVICE_STATEMASK_ALL),
-        )?;
-        for index in 0..devices.GetCount()? {
-            let device = devices.Item(index)?;
-            let id = device
-                .GetId()?
-                .to_string()
-                .map_err(|_| AudioError::InvalidUtf16)?;
-            let raw_state = device.GetState()?.0;
-            let state = endpoint_state_from_raw(raw_state);
-            result.push(EndpointStateInfo {
-                id,
-                direction,
-                state,
-            });
+        ).map_err(inventory_operation("inventory.enumerateAllEndpoints"))?;
+        for index in 0..devices.GetCount().map_err(inventory_operation("inventory.getEndpointCount"))? {
+            if let Some(info) = read_inventory_endpoint_logged(direction, index, || {
+                let device = devices.Item(index).map_err(inventory_operation("inventory.getEndpoint"))?;
+                let id = device
+                    .GetId().map_err(inventory_operation("inventory.getEndpointId"))?
+                    .to_string()
+                    .map_err(|_| AudioError::InvalidUtf16)?;
+                let raw_state = device.GetState().map_err(inventory_operation("inventory.getEndpointState"))?.0;
+                let state = endpoint_state_from_raw(raw_state);
+                Ok(EndpointStateInfo {
+                    id,
+                    direction,
+                    state,
+                })
+            })? {
+                result.push(info);
+            }
         }
     }
     Ok(result)
@@ -9629,6 +9756,60 @@ mod tests {
                 if id == "gone" && *direction == EndpointDirection::Capture
         ));
         assert_eq!(error.kind(), AudioFailureKind::InvalidArgument);
+    }
+
+    #[test]
+    fn discovery_skips_only_disappeared_endpoints_and_preserves_other_errors() {
+        let error = |code| {
+            AudioError::Windows(windows::core::Error::new(
+                windows::core::HRESULT(code as i32),
+                "inventory fixture",
+            ))
+        };
+        let mut found = Vec::new();
+        for result in [
+            Ok("microphone"),
+            Err(error(0xE000020B_u32)),
+            Ok("headphones"),
+        ] {
+            if let Some(endpoint) = read_inventory_endpoint(|| result).unwrap() {
+                found.push(endpoint);
+            }
+        }
+        assert_eq!(found, ["microphone", "headphones"]);
+        for code in [0xE000020B, 0x800F020B, 0x88890004] {
+            assert!(read_inventory_endpoint::<()>(|| Err(error(code)))
+                .unwrap()
+                .is_none());
+            assert_eq!(error(code).kind(), AudioFailureKind::DeviceInvalidated);
+            assert_eq!(error(code).hresult(), code);
+            assert!(error(code).is_retryable());
+        }
+        for code in [0x80070005, 0x88890010, 0x88890008, 0x80004005] {
+            assert_eq!(
+                read_inventory_endpoint::<()>(|| Err(error(code)))
+                    .unwrap_err()
+                    .hresult(),
+                code
+            );
+        }
+    }
+
+    #[test]
+    fn discovery_diagnostics_identify_operation_direction_and_skipped_error_without_message() {
+        let error = AudioError::WindowsOperation {
+            operation: "inventory.openPropertyStore",
+            error: windows::core::Error::new(windows::core::HRESULT(0xE000020B_u32 as i32), "private device name"),
+        };
+        let summary = inventory_failure_summary(EndpointDirection::Render, 7, &error);
+        assert_eq!(summary["operation"], "inventory.openPropertyStore");
+        assert_eq!(summary["direction"], "render");
+        assert_eq!(summary["endpointIndex"], 7);
+        assert_eq!(summary["outcome"], "skippedDisappearedEndpoint");
+        assert_eq!(summary["hresultHex"], "0xE000020B");
+        assert!(!summary.to_string().contains("private"));
+        let failed = AudioError::Windows(windows::core::Error::new(windows::core::HRESULT(0x80070005_u32 as i32), "private permission"));
+        assert_eq!(inventory_failure_summary(EndpointDirection::Capture, 0, &failed)["outcome"], "error");
     }
 
     #[test]

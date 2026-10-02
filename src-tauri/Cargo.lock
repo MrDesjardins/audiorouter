@@ -125,7 +125,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "audiorouter-control"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "audiorouter-domain",
  "audiorouter-dsp",
@@ -143,7 +143,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-domain"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "serde",
  "serde_json",
@@ -151,7 +151,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-dsp"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "bytemuck",
  "microfft",
@@ -160,7 +160,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-engine"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "arc-swap",
  "audiorouter-domain",
@@ -172,7 +172,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-plugin-host"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "audiorouter-engine",
  "crossbeam-queue",
@@ -184,7 +184,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-protocol"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "serde",
  "serde_json",
@@ -192,7 +192,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-recording"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "crossbeam-queue",
  "flac-io",
@@ -203,7 +203,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-shell"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "audiorouter-control",
  "audiorouter-domain",
@@ -222,7 +222,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-storage"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "audiorouter-domain",
  "audiorouter-recording",
@@ -235,7 +235,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-transport"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "audiorouter-control",
  "audiorouter-protocol",
@@ -246,13 +246,14 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-windows-audio"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "audiorouter-domain",
  "audiorouter-engine",
  "audiorouter-protocol",
  "crossbeam-queue",
  "memmap2",
+ "serde_json",
  "windows 0.62.2",
  "windows-core 0.62.2",
 ]

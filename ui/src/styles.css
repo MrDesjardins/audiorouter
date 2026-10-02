@@ -201,6 +201,8 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
 .session-save-button { width: 100%; min-height: 2.5rem; margin-top: .1rem; }
 .workbench-tabs button.active { color: var(--text-strong); background: color-mix(in srgb, var(--cyan) 20%, var(--ambient-surface)); border-color: var(--cyan); box-shadow: inset 0 -2px var(--cyan); }
 .workbench-page { padding: .9rem; }
+.log-files-panel { display: grid; gap: .65rem; min-width: 0; margin: .75rem 0 1rem; padding: .75rem; border: 1px solid var(--ambient-edge); border-radius: 10px; }
+.log-files-panel > label { display: grid; gap: .35rem; min-width: 0; font-size: .82rem; }
 .workbench-page .recorder-actions { display: grid; gap: .7rem; min-width: 0; margin: .55rem 0; padding: .8rem; }
 .workbench-page .recorder-actions > label,
 .workbench-page .recorder-actions fieldset > label { display: grid; grid-template-columns: minmax(0, 1fr); gap: .32rem; min-width: 0; color: var(--text-soft); font-size: .8rem; }
@@ -1287,3 +1289,13 @@ input[type="color"] { width: 100%; }
 .theme-high-contrast .session-flow-canvas .react-flow__node.flow-drop-preview { outline-color: #ffd400; }
 .theme-high-contrast .library-drag-chip { border-color: #ffd400; }
 .theme-high-contrast .library-drag-chip-plus { color: #000; background: #ffd400; }
+/* Network settings explain the paired computers without implying activity. */
+.network-route-diagram { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr) 2.5rem minmax(0, 1fr); gap: .4rem; padding: .75rem; border: 1px solid var(--border-subtle); border-radius: 9px; }
+.network-route-computer { min-width: 0; display: flex; align-items: center; flex-direction: column; gap: .3rem; text-align: center; }
+.network-route-computer svg { width: 3rem; height: 2.25rem; fill: none; stroke: currentColor; stroke-width: 2; }
+.network-route-computer strong, .network-route-computer b { font-size: .8rem; }
+.network-route-computer span, .network-route-computer code, .network-route-link { font-size: .75rem; }
+.network-route-computer code { max-width: 100%; overflow-wrap: anywhere; }
+.network-route-link { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: .25rem; }
+.network-route-link > span { font-size: 1.8rem; }
+.network-route-diagram figcaption { grid-column: 1 / -1; font-size: .75rem; text-align: center; line-height: 1.5; margin-top: .5rem; }

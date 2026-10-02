@@ -119,4 +119,9 @@ If activation cannot finish within two seconds, retain the old graph and return 
 
 ## Application error vocabulary
 
+Windows audio errors include optional `data.operation`, a fixed native operation
+label when available. Clients must tolerate absent labels and unknown future
+labels. Support logs preserve only recognized labels, typed codes/HRESULTs and
+retryability; raw OS messages and request parameters are excluded.
+
 Use JSON-RPC standard numeric errors for parse/invalid request/method/params failures. Application errors use server-error numeric codes plus `data.code`, including `revisionConflict`, `planExpired`, `capabilityChanged`, `permissionDenied`, `deviceUnavailable`, `ambiguousBinding`, `feedbackCycle`, `unsupportedFormat`, `pluginUnavailable`, `resourceConflict`, `budgetExceeded`, `diskFull`, `resyncRequired`, `restartRequired`, `idempotencyConflict`, and `rateLimited`. Windows audio failures additionally use stable `invalidArgument`, `accessDenied`, `deviceInUse`, `exclusiveModeOnly`, `deviceInvalidated`, `unsupportedFormat`, `serviceUnavailable`, `bufferConstraint`, or `other` codes and include the unsigned `hresult` when an OS error is available. M01 freezes numeric mappings in schemas and golden fixtures; clients branch on stable codes rather than English messages.

@@ -26,6 +26,12 @@ Capturing samples does not establish that ordinary application playback can be s
 
 ## Acceptance and evidence
 
+Discovery tolerates an individual endpoint disappearing between enumeration
+and metadata/format reads (`ERROR_NO_SUCH_DEVINST`, its HRESULT form, or
+`AUDCLNT_E_DEVICE_INVALIDATED`). Continue listing other endpoints; preserve
+permission, service and unsupported-format failures. This exception applies
+only to inventory and never substitutes a selected microphone during capture.
+
 Application capture includes every playback stream from the chosen process
 tree, including a voice application's microphone-test playback. It does not
 classify remote speech separately from test audio. A microphone test can thus

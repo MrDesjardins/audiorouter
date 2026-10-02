@@ -81,6 +81,9 @@ export function formatUiError(error: unknown, fallback: string): string {
 
 function formatUiErrorText(error: unknown, fallback: string): string {
   if (!(error instanceof Error)) return fallback;
+  if (/native (?:worker|render-source worker|output fan-out) (?:is )?already (?:attached|connected)/i.test(error.message)) {
+    return "Audio is already prepared in this app. Stop playback, then try Play again. If it still cannot start, close AudioRouter and reopen it.";
+  }
   if (isRevisionConflict(error)) {
     return "Another save changed this route, so your save was not applied. Your draft is preserved. Review it against the latest saved route, then plan and save again.";
   }

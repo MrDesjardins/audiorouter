@@ -42,6 +42,75 @@ AI assistants use the same operations through MCP: `get_recipes`,
 `connect_nodes`, `play`, `toggle_mic_mute`, `start_recording` and others.
 They take names and generate the idempotency key automatically.
 
+## External app integration: game menu and match states
+
+An external app on this PC can control the active session through the existing
+REST API. No VST code or in-process extension is needed. Start the API in the
+window, then use its bearer token. `sessions.summary` lists tools and their
+IDs/names/settings; `nodes.catalog` lists supported parameter names, types,
+ranges and defaults. Duck's `keyNodeId` is currently a special reference
+setting, absent from its numeric catalog entries; select its ID from the
+session's nodes. Omit `sessionId` to follow the active editing session,
+or include it to pin an integration to a particular session.
+
+For the menu/match example, put a Volume tool named **Game volume** on the
+game branch before its Mixer. Keep the Discord branch at 100%. Send these
+bodies to `POST /api/v1/nodes/set` with `Content-Type: application/json` and
+`Authorization: Bearer <token>`:
+
+```json
+{"node":"Game volume","parameters":{"percent":50},"idempotencyKey":"menu-event-001"}
+```
+
+```json
+{"node":"Game volume","parameters":{"percent":100},"idempotencyKey":"match-event-002"}
+```
+
+Use a unique key per event; retries of that event reuse its key. Explicit
+values make duplicate or repeated menu notifications harmless. Prefer
+`nodes.set` to toggles for game-state events. Percent controls sample amplitude;
+50% is approximately -6.02 dB, not a guarantee of half perceived loudness.
+
+A Mixer can instead change both inputs in one validated edit. Its input keys
+use the IDs of the nodes directly feeding it (which may be EQ/Volume nodes,
+not the original capture sources):
+
+```json
+{"node":"Game and Discord","parameters":{"inputVolume:game":50,"inputVolume:discord":100},"idempotencyKey":"menu-mixer-003"}
+```
+
+At match start, set both keys to 100. The IDs above are examples; obtain the
+actual direct-input IDs from the session summary. Changing two separate
+Volume tools takes two calls; it is not an atomic multi-node edit.
+
+Other supported intentions on the selected tool:
+
+| Intention | Fields in a `nodes.set` body (plus node and idempotencyKey) |
+| --- | --- |
+| Enable / disable | `"enabled":true` / `false` |
+| Bypass / process | `"bypass":true` / `false` |
+| Set Duck attenuation | `"parameters":{"amountDb":6.02}` |
+| Tune Duck response | `"parameters":{"thresholdDb":-35,"attackMs":20,"holdMs":300,"releaseMs":500}` |
+| Choose Duck trigger | `"parameters":{"keyNodeId":"mic"}` (actual node ID) |
+
+Duck follows the trigger's audio level; a menu event is not an audio trigger.
+Use Volume/Mixer for a fixed menu level, or configure Duck for voice-triggered
+attenuation. Disabled processors pass dry; disabled sources/sinks suppress
+their contribution. Re-enabling a source excluded from preparation can require
+Stop/Play; a live edit does not implicitly open an unprepared microphone.
+
+These calls validate and persist graph changes, rather than being an ephemeral
+per-frame automation stream. Inspect returned activation state for a playing
+session; some changes require preparation. Limit calls to state transitions,
+serialize updates, handle errors/conflicts, and restore explicitly chosen levels
+on exit. A game must provide an integration/event source itself; AudioRouter
+does not infer menu/match state. Current HTTP access is localhost only.
+
+The next proposed UI task is an integration request builder: active/pinned
+session selector, tool selector, property selector from the backend schema,
+validated value, and copyable request. It is not implemented yet. Existing
+Swagger and name-based `nodes.set` are the current entry points.
+
 ## Calls and graph changes
 
 Read resources: `GET /api/v1/status`, `/api/v1/sessions`,

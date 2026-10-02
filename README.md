@@ -10,10 +10,31 @@ network. Every route is a picture you can read, and every setting is live.
 
 ![A streamer voice chain: microphone through a noise gate, denoise, a four-point EQ, a compressor and a limiter, sent to Discord, the headphones and a recorder at the same time](docs/images/streamer-voice-chain.png)
 
-> **Status: preview, built from source.** AudioRouter runs on real hardware
-> today (see [what is verified](docs/plans/active/current.md#where-things-stand)),
-> but there is no signed installer yet. The [install steps](#install) below take
-> about 15 minutes on a fresh PC.
+## Install on Windows
+
+**[Download AudioRouter 0.0.3 for Windows 11 x64](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.3)**
+
+1. Download and extract the release ZIP.
+2. Run `AudioRouter_0.0.3_x64-setup.exe` from the extracted folder.
+3. Open AudioRouter and allow audio device access when you first press Play.
+
+This is an **unsigned preview**: Windows may show a security warning.
+Clean-machine, upgrade and uninstall qualification remain open; see
+[distribution status](docs/operations/distribution.md). A virtual cable such
+as VB-Cable is needed only when routing into another app.
+
+[Build from source](#install) · [First route](#your-first-route-in-one-minute) ·
+[User guide](docs/operations/quickstart.md)
+
+## Videos
+
+| Video | Watch |
+| --- | --- |
+| AudioRouter overview | Coming soon — video placeholder |
+| Your first route | Coming soon — video placeholder |
+| Streaming audio between two PCs | Coming soon — video placeholder |
+
+<!-- Replace the placeholders above with the user-provided video links. -->
 
 ## Why AudioRouter
 
@@ -83,8 +104,8 @@ peaking and notch filters.
 
 ## Install
 
-AudioRouter is currently installed by building it from source. You do this
-once; afterwards you start it from a shortcut like any other app.
+For a source build, follow the steps below. The ready-to-install preview is
+linked under [Install on Windows](#install-on-windows).
 
 ### 1. Install the prerequisites
 
@@ -132,24 +153,15 @@ $app = "$env:LOCALAPPDATA\Programs\AudioRouter"
 New-Item -ItemType Directory -Force $app | Out-Null
 Copy-Item target\app\release\audiorouter-shell.exe, target\app\release\audiorouter-plugin-worker.exe, target\app\release\audiorouter-cli.exe $app
 
-# Register your Windows account as AudioRouter's operator (once per PC)
-$db = "$env:LOCALAPPDATA\AudioRouter\state.sqlite"
-$sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-$request = "$env:TEMP\audiorouter-enroll.json"
-'{"clientId":"' + $sid + '","role":"operator","idempotencyKey":"install-' + [guid]::NewGuid().ToString('N') + '"}' | Set-Content -Encoding ascii $request
-& "$app\audiorouter-cli.exe" api call clients.authorize $request --database $db --json
-Remove-Item $request
-
-# A launcher that allows the app to open your audio devices
-Set-Content -Encoding ascii "$app\AudioRouter.cmd" -Value "@echo off`r`nset AUDIOROUTER_ALLOW_DEVICE_ADMIN=1`r`nstart `"`" `"%~dp0audiorouter-shell.exe`""
 ```
 
-The registration prints your account with `"role":"operator"`. It is safe to
-run again. Your sessions are stored in `%LOCALAPPDATA%\AudioRouter`.
+On first launch, AudioRouter enrolls your Windows account locally. On first
+Play, it asks permission to use audio devices. Your sessions are stored in
+`%LOCALAPPDATA%\AudioRouter`.
 
 ### 4. Start it
 
-Double-click `AudioRouter.cmd` in `%LOCALAPPDATA%\Programs\AudioRouter`
+Double-click `audiorouter-shell.exe` in `%LOCALAPPDATA%\Programs\AudioRouter`
 (right-click → *Send to* → *Desktop (create shortcut)* to keep it handy).
 Run one copy of AudioRouter at a time.
 
@@ -179,9 +191,8 @@ application capture and networking in depth.
 - [API reference](docs/operations/api-reference.md) for the command line and MCP
 - [Documentation index](docs/README.md), [product scope](docs/spec/01-product.md) and [reference workflows](docs/spec/02-workflows.md)
 
-Known limits of the preview: no signed installer; **Setup → Start at sign-in**
-starts the app without device access, so start it from `AudioRouter.cmd` for
-now; clock drift between two different devices is not corrected yet (rare,
+Known limits of the preview: no signed installer;
+clock drift between two different devices is not corrected yet (rare,
 regular clicks on very long sessions); and clean-machine qualification is
 still open. The
 [M08 release evidence](docs/plans/active/evidence/M08-release.md) records the
