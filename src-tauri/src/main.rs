@@ -204,6 +204,38 @@ fn transition_operation_key(sequence: usize) -> String {
     )
 }
 
+/// The grant the desktop shell's backend serves with, from the current
+/// user's enrollment (after first-launch enrollment) and the developer
+/// opt-in. An operator gets the desktop grant, which can open audio devices
+/// once the user consents in the app (`devices.setAccess`). The
+/// `AUDIOROUTER_ALLOW_DEVICE_ADMIN=1` opt-in grants device administration
+/// up front. `None` means another role: use its enrolled grant.
+fn select_shell_grant(
+    device_admin_opt_in: bool,
+    enrollment: Option<&(String, bool)>,
+) -> Result<Option<ClientGrant>, String> {
+    let operator = enrollment.is_some_and(|(role, revoked)| role == "operator" && !revoked);
+    if device_admin_opt_in {
+        if !operator {
+            return Err("device-administration opt-in requires a non-revoked operator enrollment".into());
+        }
+        return Ok(Some(ClientGrant::with_scopes([
+            PermissionScope::Read,
+            PermissionScope::GraphWrite,
+            PermissionScope::SessionControl,
+            // Explicitly requested recording in approved roots; device
+            // capture stays separate.
+            PermissionScope::Record,
+            // Startup registration, local to this user's control surface.
+            PermissionScope::StartupWrite,
+            // Metadata scans of chosen plugin folders (authorized 2026-09-25).
+            PermissionScope::PluginScan,
+            PermissionScope::DeviceAdministration,
+        ])));
+    }
+    Ok(operator.then(ClientGrant::for_desktop_shell))
+}
+
 #[derive(Clone)]
 struct ShellState {
     pipe_name: String,
@@ -713,7 +745,7 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                     let sid = audiorouter_transport::current_user_sid().map_err(|error| {
                         format!("current user identity lookup failed: {error:?}")
                     })?;
-                    let enrollment = storage
+                    let mut enrollment = storage
                         .load_client_enrollment(&sid)
                         .map_err(|error| format!("backend enrollment lookup failed: {error:?}"))?;
                     if enrollment.as_ref().is_some_and(|(_, revoked)| *revoked) {
@@ -729,6 +761,10 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                             .map_err(|error| {
                                 format!("initial operator enrollment failed: {error:?}")
                         })?;
+                        // The first launch of a fresh install is now an
+                        // operator: it must get the same desktop grant as
+                        // every later launch, not a narrower fallback.
+                        enrollment = Some(("operator".into(), false));
                     }
                     // Rehydrate only the previously persisted, user-approved
                     // startup policy. A disabled policy is intentionally a
@@ -768,51 +804,17 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                             Err(error) => eprintln!("AudioRouter native endpoint worker unavailable: {error}"),
                         }
                     }
-                    let grant = if std::env::var_os("AUDIOROUTER_ALLOW_DEVICE_ADMIN")
-                        .is_some_and(|value| value == "1")
-                    {
-                        if !enrollment
-                            .as_ref()
-                            .is_some_and(|(role, revoked)| role == "operator" && !revoked)
-                        {
-                            return Err(
-                                "device-administration opt-in requires a non-revoked operator enrollment"
-                                    .into(),
-                            );
-                        }
+                    let device_admin_opt_in = std::env::var_os("AUDIOROUTER_ALLOW_DEVICE_ADMIN")
+                        .is_some_and(|value| value == "1");
+                    if device_admin_opt_in {
                         eprintln!("AudioRouter device-administration process grant enabled by explicit opt-in");
-                        ClientGrant::with_scopes([
-                            PermissionScope::Read,
-                            PermissionScope::GraphWrite,
-                            PermissionScope::SessionControl,
-                            // Explicitly requested recording in approved
-                            // roots is allowed; device capture stays separate.
-                            PermissionScope::Record,
-                            // Startup registration is a separate explicit
-                            // capability. The desktop shell exposes it only
-                            // to the current user's local control surface;
-                            // device administration and capture remain opt-in.
-                            PermissionScope::StartupWrite,
-                            // Metadata scans of chosen plugin folders were
-                            // authorized for the local shell on 2026-09-25.
-                            PermissionScope::PluginScan,
-                            PermissionScope::DeviceAdministration,
-                        ])
-                    } else if enrollment
-                        .as_ref()
-                        .is_some_and(|(role, revoked)| role == "operator" && !revoked)
-                    {
-                        // The shell is the enrolled operator's local UI. It
-                        // may request startup registration explicitly and may
-                        // create an explicitly requested recording in an
-                        // approved root, but receives no capture or device-
-                        // administration authority through this path.
-                        ClientGrant::for_desktop_shell()
-                    } else {
-                        plane
+                    }
+                    let grant = match select_shell_grant(device_admin_opt_in, enrollment.as_ref())? {
+                        Some(grant) => grant,
+                        None => plane
                             .grant_for_client(&sid)
                             .map_err(|error| format!("current user enrollment lookup failed: {error:?}"))?
-                            .ok_or_else(|| "current user is not enrolled".to_owned())?
+                            .ok_or_else(|| "current user is not enrolled".to_owned())?,
                     };
                         audiorouter_transport::serve_control_connections_forever_with_grant(
                             &pipe_name, plane, grant,
@@ -1308,6 +1310,25 @@ mod tests {
     use super::*;
     use audiorouter_control::ControlPlane;
     use audiorouter_domain::validate_session;
+
+    /// The grant of the first launch of a fresh install (enrolled just now)
+    /// must equal every later launch's: the desktop grant that can accept
+    /// the user's device consent. 0.0.1 served a narrower operator grant on
+    /// first launch, and the opt-in variable broke the first launch.
+    #[test]
+    fn a_fresh_install_gets_the_full_desktop_grant_on_its_first_launch() {
+        let operator = ("operator".to_owned(), false);
+        let first_launch = select_shell_grant(false, Some(&operator)).unwrap().unwrap();
+        assert_eq!(first_launch, ClientGrant::for_desktop_shell());
+        assert!(first_launch.accepts_device_consent());
+        let opted_in = select_shell_grant(true, Some(&operator)).unwrap().unwrap();
+        assert_ne!(opted_in, first_launch, "the opt-in adds device administration");
+        // Other roles keep their enrolled grant; the opt-in needs an operator.
+        let editor = ("editor".to_owned(), false);
+        assert!(select_shell_grant(false, Some(&editor)).unwrap().is_none());
+        assert!(select_shell_grant(true, Some(&editor)).is_err());
+        assert!(select_shell_grant(true, Some(&("operator".to_owned(), true))).is_err());
+    }
     use serde_json::json;
 
     #[test]

@@ -28,6 +28,7 @@ import { SpectralGateEditor } from "./SpectralGateEditor";
 import { DynamicsEditor } from "./DynamicsEditor";
 import { DuckEditor } from "./DuckEditor";
 import { RecorderControls, RecordingFolderField } from "./RecorderControls";
+import { announceDeviceAccessChanged, DeviceAccessDialog, DeviceAccessSetting, isDeviceAccessDenied } from "./DeviceAccess";
 import { LibraryDragOverlay } from "./libraryDrag";
 import { BassTrebleEditor, DehumEditor, DelayEditor, GraphicEqEditor, InputSwitchEditor, LevelEditor, LiveLevelBar, PitchEditor, StrengthEditor } from "./ToolVisuals";
 import { isDynamicsKind } from "./dynamics";
@@ -1986,6 +1987,20 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const createSession = async () => { if (sessionCrudBusy.current || !backend.connected) return; const name = window.prompt("New session name", "New session")?.trim(); if (!name) return; sessionCrudBusy.current = true; setSessionCrudBusyState(true); const id = `session-${Date.now()}`; try { const result = await backend.createSession({ ...demoSession, id, name, revision: 0, nodes: demoSession.nodes.map((node) => ({ ...node, parameters: { ...node.parameters } })), edges: [...demoSession.edges] }, uiIdempotencyKey("session-create")); setCreatedSessions((current) => [...current, result.session]); setSelectedSessionId(result.session.id); setActionMessage(`Created stopped session ${result.session.name}.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to create session.")); } finally { sessionCrudBusy.current = false; setSessionCrudBusyState(false); } };
   const duplicateSession = async () => { if (sessionCrudBusy.current || !backend.connected) return; sessionCrudBusy.current = true; setSessionCrudBusyState(true); const id = `session-copy-${Date.now()}`; const name = `${session.name} (copy)`; try { const result = await backend.duplicateSession(session.id, id, name, uiIdempotencyKey("session-duplicate")); setCreatedSessions((current) => [...current, result.session]); setSelectedSessionId(result.session.id); setActionMessage(`Duplicated stopped session ${result.session.name}.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to duplicate session.")); } finally { sessionCrudBusy.current = false; setSessionCrudBusyState(false); } };
   const deleteSession = async () => { if (sessionCrudBusy.current || !backend.connected || !window.confirm(`Delete stopped session “${session.name}”?`)) return; sessionCrudBusy.current = true; setSessionCrudBusyState(true); try { await backend.deleteSession(session.id, uiIdempotencyKey("session-delete")); setCreatedSessions((current) => current.filter((item) => item.id !== session.id)); const fallback = availableSessions.find((item) => item.id !== session.id); if (fallback) setSelectedSessionId(fallback.id); setActionMessage(`Deleted session ${session.name}.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to delete session.")); } finally { sessionCrudBusy.current = false; setSessionCrudBusyState(false); } };
+  // First Play on a fresh install: ask once before opening audio devices.
+  const [deviceConsent, setDeviceConsent] = useState<{ busy: boolean; error: string | null } | null>(null);
+  const allowDeviceAccessAndPlay = async () => {
+    if (!backend.setDeviceAccess) return;
+    setDeviceConsent({ busy: true, error: null });
+    try {
+      await backend.setDeviceAccess(true, uiIdempotencyKey("device-access"));
+      announceDeviceAccessChanged();
+      setDeviceConsent(null);
+      void startSessionRef.current();
+    } catch (error) {
+      setDeviceConsent({ busy: false, error: formatUiError(error, "AudioRouter could not save your choice.") });
+    }
+  };
   const startSession = async (): Promise<boolean> => {
     if (sessionBusy.current || !backend.connected) return false;
     if (graphBusy) {
@@ -2205,6 +2220,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       return true;
     } catch (error) {
       setNativePumpStats(null);
+      if (isDeviceAccessDenied(error) && backend.setDeviceAccess) {
+        setDeviceConsent({ busy: false, error: null });
+        setActionMessage("No audio started. Allow AudioRouter to use your audio devices to play.");
+        return false;
+      }
       const message = formatUiError(error, "Unable to start session.");
       setActionMessage(message); recordUiDiagnostic("Session start failed; review the current error and backend activity.");
       return false;
@@ -2240,6 +2260,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setActionMessage(`${draft.nodes.find((node) => node.id === nodeId)?.name ?? "Audio file"} ${result.state}.`);
     } catch (error) { setActionMessage(formatUiError(error, "Audio source transport failed.")); }
   };
+  const startSessionRef = useRef(startSession);
+  startSessionRef.current = startSession;
   const stopSession = async (propagateFailure = false) => { if (sessionBusy.current || !backend.connected) return; sessionBusy.current = true; setSessionActionBusy(true); setActionMessage("Stopping session..."); try { await backend.stopSession(session.id, uiIdempotencyKey("session-stop")); setNativeGenerations((current) => { const next = { ...current }; delete next[session.id]; return next; }); setNativePumpStats(null); setAudioSourceStates({}); await refresh(); setActionMessage("Session stopped."); } catch (error) { setNativePumpStats(null); setActionMessage(formatUiError(error, "Unable to stop session.")); if (propagateFailure) throw error; } finally { sessionBusy.current = false; setSessionActionBusy(false); } };
   useEffect(() => {
     const onShortcut = (event: KeyboardEvent) => {
@@ -2515,7 +2537,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   if (backend.connected && !hasSnapshot) return <div className={`app-shell theme-${theme}`}><main className="panel" aria-label="Loading saved session"><h1>AudioRouter</h1><p role="status">{snapshotState.error ? `Unable to load your saved session: ${snapshotState.error}` : "Loading your saved session…"}</p>{snapshotState.error && <button type="button" onClick={refresh}>Reconnect</button>}</main></div>;
   const lifecycleActions = <section className="panel lifecycle-panel" aria-labelledby="lifecycle-heading"><h2 id="lifecycle-heading">Session lifecycle</h2><p className="muted">Starting a session uses the shared authorized backend lifecycle API.</p><button type="button" className="secondary" onClick={() => void (sessionRunning ? stopSession() : startSession())} disabled={!backend.connected || sessionActionBusy}>{sessionRunning ? "Stop session" : "Start session"}</button></section>;
   const connectionWorkbenchContent = <fieldset className="connection-editor workbench-connection-editor" disabled={!backend.connected}><legend>Add connections to the draft</legend><p className="muted">Choose an output and input for each link. These connections are reviewed when you plan the graph.</p><label>Output<select aria-label="Source output port" value={connectionSource} onChange={(event) => setConnectionSource(event.target.value)}><option value="">Choose source</option>{outputPorts.map((port) => <option key={encodePort(port.nodeId, port.portName)} value={encodePort(port.nodeId, port.portName)}>{port.nodeName} · {port.portName} · {port.channels}ch</option>)}</select></label><label>Input<select aria-label="Destination input port" value={connectionDestination} onChange={(event) => setConnectionDestination(event.target.value)}><option value="">Choose destination</option>{inputPorts.map((port) => <option key={encodePort(port.nodeId, port.portName)} value={encodePort(port.nodeId, port.portName)}>{port.nodeName} · {port.portName} · {port.channels}ch</option>)}</select></label><button type="button" className="primary" onClick={addConnection}>Add connection</button></fieldset>;
-  const setupWorkbenchContent = <>
+  const setupWorkbenchContent = <><DeviceAccessSetting backend={backend} />
     <FirstRunGuide devices={devices} connected={backend.connected} onRefresh={() => refreshDevices()} onOpenTools={() => setWorkbenchTab("tools")} />
     <section className="panel setup-panel" aria-labelledby="setup-status-heading"><h3 id="setup-status-heading">Status</h3><ul className="setup-status-list">{setupSteps.map((step) => <li key={step.id} className={`is-${step.state}`}><span className="setup-status-dot" aria-hidden="true" /><span><strong>{step.label}</strong><small>{step.detail}</small></span></li>)}</ul></section>
     <ThisPcDevices devices={devices} connected={backend.connected} onRefresh={() => refreshDevices()} />
@@ -2567,5 +2589,5 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         <section className="panel recording-encoding-panel" aria-labelledby="recording-encoding-heading"><div className="section-heading"><div><p className="eyebrow">File details</p><h2 id="recording-encoding-heading">Recording encoding</h2></div><span className="badge">{recordings.length}</span></div>{recordings.length === 0 ? <p className="muted">Encoding details appear after a recording is finalized.</p> : <ul aria-label="Recording encoding details">{recordings.map((recording) => <li key={`encoding-${recording.id}`}><strong>{recording.id}</strong><small>{recording.format} - {recording.sampleRate} Hz - {recording.channels} channel{recording.channels === 1 ? "" : "s"} - {recording.dither ? "TPDF dither" : "no dither"} - {recording.conversion}</small></li>)}</ul>}<p className="muted">These values are persisted by the backend at finalization and describe the file that was written.</p></section>
         <Workbench onAddGroup={() => { groupState.addGroup(); setWorkbenchTab("properties"); }} tab={workbenchTab} onTab={(tab) => setWorkbenchTab(tab)} sessionFileContent={<SessionFilePanel backend={backend} session={session} unsaved={routeChanged} onImported={(imported) => { setCreatedSessions((current) => [...current.filter((item) => item.id !== imported.id), imported]); setSelectedSessionId(imported.id); void refresh(); }} />} pluginsContent={<PluginToolsGroup backend={backend} connected={backend.connected} search={librarySearch} refreshKey={pluginPickerOpen} onAdd={addPluginToDraft} onOpenPicker={() => openPluginPicker()} />} tools={visibleLibraryEntries} connected={backend.connected} onAdd={addLibraryNode} onApplicationPicker={openApplicationPicker} librarySearch={librarySearch} onLibrarySearch={(value) => setLibrarySearch(value.slice(0, 80))} onNewSession={() => void createSession()} onDuplicate={() => void duplicateSession()} onDelete={() => void deleteSession()} onUndo={undoDraft} onRedo={redoDraft} onDiscard={() => { setDraft(session); setDraftHistory({ past: [], future: [] }); setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null); setPendingGraphPlan(null); setConnectionReplacement(null); setActionMessage("Draft discarded."); }} onPlan={() => void planChanges()} onCommit={() => void commitAcknowledgedPlan()} canCommit={acknowledgedWarnings.size === pendingWarnings.length && !graphBusy} pendingPlan={Boolean(pendingGraphPlan)} actionMessage={actionMessage} onReplaceInputConnection={connectionReplacement && actionMessage?.includes("Replace input connection") ? replaceInputConnection : undefined} sessions={availableSessions} selectedSessionId={session.id} onSelectSession={(id) => { setConnectionReplacement(null); setSelectedSessionId(id); }} revision={session.revision} sessionName={draft.name} onNameChange={changeSessionName} warnings={pendingWarnings} acknowledgedWarnings={[...acknowledgedWarnings]} onAcknowledgeWarning={(warning, checked) => setAcknowledgedWarnings((current) => { const next = new Set(current); if (checked) next.add(warning); else next.delete(warning); return next; })} diagnostics={uiDiagnostics} backendActivity={backendActivity} mcpActivity={mcpActivity} mcpSetupInfo={mcpSetupInfo} clientsPanel={<ClientsPanel backend={backend} />} setupContent={setupWorkbenchContent} timingContent={<SignalTimingPanel session={session} telemetry={snapshot?.diagnostics.nodeTelemetry ?? []} running={sessionRunning} />} recordingContent={recordingWorkbenchContent} advancedContent={advancedWorkbenchContent} />
       </main></div>
-  <LibraryDragOverlay /></div></PluginParameterContext.Provider>;
+  <LibraryDragOverlay />{deviceConsent && <DeviceAccessDialog busy={deviceConsent.busy} error={deviceConsent.error} onAllow={() => void allowDeviceAccessAndPlay()} onCancel={() => setDeviceConsent(null)} />}</div></PluginParameterContext.Provider>;
 }

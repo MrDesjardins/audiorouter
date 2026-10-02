@@ -1,5 +1,29 @@
 # AudioRouter release notes
 
+## 0.0.2 — 2026-10-01 (test release, unsigned)
+
+Fixes Play on a fresh install. In 0.0.1, pressing Play on a newly installed
+computer showed **Permission denied … device administration**, and only a
+developer environment variable worked around it.
+
+- **The first Play asks once:** "Allow AudioRouter to use your audio
+  devices?". Choose **Allow and play**; it is remembered on that computer.
+  **Setup → Audio device access** withdraws it.
+- **Who can give it:** only the AudioRouter window. The localhost API refuses
+  to grant it (403). CLI and MCP clients never receive it. After you allow
+  it, StreamDeck/REST `sessions.play` works too.
+- **The first launch of a fresh install** now gets the same permissions as
+  every later launch; for example, it can choose a recording folder.
+- **The developer variable:** `AUDIOROUTER_ALLOW_DEVICE_ADMIN=1` is no
+  longer needed. If you set it on your second computer for 0.0.1, you may
+  remove it:
+  `[Environment]::SetEnvironmentVariable("AUDIOROUTER_ALLOW_DEVICE_ADMIN", $null, "User")`.
+
+Verified by launching the built app as a fresh install (new database, no
+developer variables): Play is refused before the question and authorized
+after **Allow**. The same check fails on 0.0.1. The 0.0.1 known issues below
+still apply.
+
 ## 0.0.1 — 2026-10-01 (first test release, unsigned)
 
 A test build for installing on a second computer. It is **not signed**:

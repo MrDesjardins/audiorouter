@@ -64,10 +64,16 @@ for example `graph.plan` → `POST /api/v1/graph/plan`. Send its discovery-defin
 parameters as a plain JSON object and receive the plain result, without a
 JSON-RPC envelope. Use `Content-Type: application/json` and
 `Authorization: Bearer <token>` for API calls. The generated `/openapi.json`
-contains exact schemas for 118 of the 119 backend methods, four GET aliases,
-and the active session PUT alias. `recordings.setRoot` is the exception: it
-approves where recordings are written, so only the AudioRouter window may call
-it and this adapter answers 403. `recordings.getRoot` reads the folder.
+contains exact schemas for 119 of the 121 backend methods, four GET aliases,
+and the active session PUT alias. Two methods are exceptions, because they are
+the user's own decisions; only the AudioRouter window may call them, and this
+adapter answers 403:
+- `recordings.setRoot` approves where recordings are written;
+- `devices.setAccess` allows AudioRouter to open audio devices on Play.
+
+`recordings.getRoot` and `devices.getAccess` read them. Once the user has
+allowed device access in the window, `sessions.play` and `sessions.togglePlay`
+work from this API too.
 
 PowerShell example (enter the token interactively, never put it in arguments):
 

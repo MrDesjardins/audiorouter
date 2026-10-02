@@ -225,11 +225,12 @@ buttons accessible even when both are present.
    If an endpoint is unavailable or occupied, resolve that named endpoint's
    error and retry.
 
-If preparation reports missing `deviceAdministration`, an enrolled operator
-can quit the shell and relaunch the same executable/database from PowerShell
-with `$env:AUDIOROUTER_ALLOW_DEVICE_ADMIN = '1'` in that process environment.
-The disposable launcher above already provides that process-scoped opt-in.
-This does not grant permissions to third-party CLI/MCP clients.
+The first time you press **Play** on a computer, AudioRouter asks **Allow
+AudioRouter to use your audio devices?**. Choose **Allow and play**; it does
+not ask again. **Setup → Audio device access** withdraws or gives it later.
+Only the AudioRouter window can give this permission; CLI and MCP clients
+never receive it. The older developer variable
+`AUDIOROUTER_ALLOW_DEVICE_ADMIN=1` still works but is no longer needed.
 
 New built-in processing nodes use stereo ports to match the Test Signal,
 microphone and physical-output defaults. A mono microphone capture is copied

@@ -10,7 +10,7 @@ import "./styles.css";
 let planned: Session | null = null;
 // Test hooks: a Playwright init script may inject a session, the backend
 // telemetry recorded from a real run, and start the fixture already playing.
-const injected = globalThis as { __routeFixtureSession?: Session; __routeFixtureTelemetry?: unknown[]; __routeFixtureRunning?: boolean; __routeFixtureProcessors?: DiscoveryDocument["processors"]; __routeFixtureDelayMs?: number; __routeFixtureNoRecordingRoot?: boolean; __routeFixtureRecordingLostAudio?: boolean };
+const injected = globalThis as { __routeFixtureSession?: Session; __routeFixtureTelemetry?: unknown[]; __routeFixtureRunning?: boolean; __routeFixtureProcessors?: DiscoveryDocument["processors"]; __routeFixtureDelayMs?: number; __routeFixtureNoRecordingRoot?: boolean; __routeFixtureRecordingLostAudio?: boolean; __routeFixtureFreshInstall?: boolean };
 let committed = structuredClone(injected.__routeFixtureSession ?? demoSession);
 let previewCandidate: Session | null = null;
 let running = injected.__routeFixtureRunning === true;
@@ -18,6 +18,8 @@ let prepared = running;
 const sourceStates = new Map<string, "playing" | "paused" | "stopped">();
 const recording = new Set<string>();
 // A recording folder is approved unless a test asks for a first-run state.
+// Device access is allowed unless a test simulates a fresh install.
+let deviceAccess = injected.__routeFixtureFreshInstall !== true;
 let recordingRoot: string | null = injected.__routeFixtureNoRecordingRoot ? null : "C:\\Recordings";
 let sequence = 0;
 const lifecycleCalls: string[] = [];
@@ -101,7 +103,11 @@ const previewBackend: UiBackend = {
   },
   async refreshDiagnostics() { return structuredClone(diagnostics()); },
   async subscribe(afterSequence = 0) { return { backendEpoch: 1, events: [], nextSequence: sequence, resyncRequired: afterSequence < sequence }; },
+  // A fresh install: opening devices is refused until the user consents.
+  async getDeviceAccess() { return { allowed: deviceAccess }; },
+  async setDeviceAccess(allowed) { lifecycleCalls.push(`device-access:${allowed}`); deviceAccess = allowed; return { allowed }; },
   async prepareNativeEndpoint(sessionId, captureEndpointId, renderEndpointId) {
+    if (!deviceAccess) throw new Error("permission denied: DeviceAdministration");
     if (sessionId !== committed.id || captureEndpointId !== "capture-preview" || renderEndpointId !== "render-preview") throw new Error("Fixture endpoint mismatch");
     prepared = true; sequence += 1;
     return { sessionId, captureEndpointId, renderEndpointId, state: "configured-stopped" };

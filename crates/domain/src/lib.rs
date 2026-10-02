@@ -759,7 +759,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 119] = [
+pub const API_METHODS: [ApiMethodSpec; 121] = [
     ApiMethodSpec { name: "meters.reset", permission: PermissionScope::SessionControl, side_effect: SideEffectClass::Mutating },
     // Task-shaped methods for StreamDeck, scripts and LLM assistants.
     // Play prepares devices, so it needs the same grant as nativePaths.prepare.
@@ -923,6 +923,19 @@ pub const API_METHODS: [ApiMethodSpec; 119] = [
     // The approved folder for every recording (REC-07). Setting it is the
     // user's explicit approval of a new file root; the localhost HTTP
     // adapter and MCP do not offer it.
+    // One-time consent for the desktop app to open audio devices on Play.
+    // Only the desktop window's grant may set it (enforced in dispatch);
+    // the localhost HTTP adapter and MCP do not offer it.
+    ApiMethodSpec {
+        name: "devices.getAccess",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "devices.setAccess",
+        permission: PermissionScope::SessionControl,
+        side_effect: SideEffectClass::Mutating,
+    },
     ApiMethodSpec {
         name: "recordings.getRoot",
         permission: PermissionScope::Record,

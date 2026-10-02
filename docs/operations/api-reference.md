@@ -51,6 +51,8 @@ lifecycle, plugin inventory/retry, and startup plan/apply methods.
 | `recorders.stop` | `record` | mutating; requires an idempotency key |
 | `recorders.startRecording` | `record` | mutating; one-click Record on a Recorder node with its saved format and split settings; works while playing; returns the file path |
 | `recorders.stopRecording` | `record` | mutating; saves the file; a no-op when the node is not recording |
+| `devices.getAccess` | `read` | read-only; whether the user allowed the desktop app to open audio devices on Play |
+| `devices.setAccess` | `session.control` | mutating; gives or withdraws that consent; desktop window grant only (refused for CLI/MCP grants and with 403 by the localhost HTTP adapter) |
 | `recordings.getRoot` | `record` | read-only; the approved recording folder (`null` until chosen) and a suggested folder |
 | `recordings.setRoot` | `record` | mutating; approves a local folder (`create: true` creates it); desktop window only, refused with 403 by the localhost HTTP adapter and not offered over MCP |
 | `recordings.get` | `record` | read-only |

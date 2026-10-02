@@ -129,7 +129,7 @@ fn rpc(method: &str, params: Option<Value>) -> JsonRpcRequest {
 /// Methods only the desktop window may call: approving a recording folder is
 /// the user's own file-root decision (REC-07, SEC authorization UX), so a
 /// token holder on localhost cannot redirect recordings.
-pub const DESKTOP_ONLY_METHODS: &[&str] = &["recordings.setRoot"];
+pub const DESKTOP_ONLY_METHODS: &[&str] = &["recordings.setRoot", "devices.setAccess"];
 
 pub fn operation_path(name: &str) -> String {
     format!("/api/v1/{}", name.replace('.', "/"))
@@ -546,6 +546,11 @@ mod tests {
         assert_eq!(status, 200, "{root}");
         let (status, refused) = call(&api, "/api/v1/recordings/setRoot", Some(json!({"root":"C:\\Temp","create":true,"idempotencyKey":"deck-root"})));
         assert_eq!(status, 403, "{refused}");
+        // A token holder cannot allow itself to open audio devices.
+        let (status, refused) = call(&api, "/api/v1/devices/setAccess", Some(json!({"allowed":true,"idempotencyKey":"deck-devices"})));
+        assert_eq!(status, 403, "{refused}");
+        let (status, access) = call(&api, "/api/v1/devices/getAccess", Some(json!({})));
+        assert_eq!(status, 200, "{access}");
         // Mistakes come back as 400 with a readable reason.
         let (status, error) = call(&api, "/api/v1/nodes/toggle", Some(json!({"node":"Guitar","target":"bypass","idempotencyKey":"deck-2"})));
         assert_eq!(status, 400, "{error}");

@@ -193,6 +193,10 @@ export interface UiBackend {
   stopNodeRecording(sessionId: string, nodeId: string, idempotencyKey: string): Promise<MethodResult["recorders.stopRecording"]>;
   /** The approved recording folder (null until chosen) and a suggestion. */
   getRecordingRoot?(): Promise<MethodResult["recordings.getRoot"]>;
+  /** Whether the user allowed this app to open audio devices on Play. */
+  getDeviceAccess?(): Promise<MethodResult["devices.getAccess"]>;
+  /** Give or withdraw that one-time consent (desktop window only). */
+  setDeviceAccess?(allowed: boolean, idempotencyKey: string): Promise<MethodResult["devices.setAccess"]>;
   /** Approve a local recording folder, creating it when asked. */
   setRecordingRoot?(root: string, create: boolean, idempotencyKey: string): Promise<MethodResult["recordings.setRoot"]>;
   armRecorder(sessionId: string, idempotencyKey?: string, nodeId?: string): Promise<RecorderLifecycleResult>;
@@ -812,6 +816,12 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
     },
     async stopNodeRecording(recorderSessionId, nodeId, idempotencyKey) {
       return client.request("recorders.stopRecording", { sessionId: recorderSessionId, nodeId, idempotencyKey });
+    },
+    async getDeviceAccess() {
+      return client.request("devices.getAccess", {});
+    },
+    async setDeviceAccess(allowed, idempotencyKey) {
+      return client.request("devices.setAccess", { allowed, idempotencyKey });
     },
     async getRecordingRoot() {
       return client.request("recordings.getRoot", {});

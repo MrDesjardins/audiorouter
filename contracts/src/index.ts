@@ -1177,6 +1177,8 @@ export type ImplementedMethod =
   | "meters.levels"
   | "recorders.startRecording"
   | "recorders.stopRecording"
+  | "devices.getAccess"
+  | "devices.setAccess"
   | "recordings.getRoot"
   | "recordings.setRoot"
   | "recordings.get"
@@ -1315,6 +1317,8 @@ export type MethodParams = {
   "connections.remove": { sessionId?: EntityId; from: string; to: string; idempotencyKey: string };
   "meters.levels": { sessionId?: EntityId };
   "recorders.stopRecording": { sessionId?: EntityId; nodeId: EntityId; idempotencyKey: string };
+  "devices.getAccess": Record<string, never> | undefined;
+  "devices.setAccess": { allowed: boolean; idempotencyKey: string };
   "recordings.getRoot": Record<string, never> | undefined;
   "recordings.setRoot": { root: string; create?: boolean; idempotencyKey: string };
   "recordings.get": { recordingId: EntityId };
@@ -1474,6 +1478,8 @@ export type MethodResult = {
   "connections.remove": SimpleEditResult & { removed: number };
   "meters.levels": { sessionId: EntityId; playing: boolean; levels: Array<{ nodeId: EntityId; name: string; peakDb: number | null; rmsDb: number | null; clipped: boolean; reductionDb: number | null; active: boolean | null }> };
   "recorders.stopRecording": NodeRecordingResult;
+  "devices.getAccess": { allowed: boolean };
+  "devices.setAccess": { allowed: boolean };
   "recordings.getRoot": { root: string | null; suggestedRoot: string | null };
   "recordings.setRoot": { root: string; created: boolean };
   "recordings.get": RecordingRow;

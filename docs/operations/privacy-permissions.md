@@ -39,9 +39,14 @@ registration is performed only by the explicit desktop shell command.
 
 The enrolled local desktop shell also has the `recording.write` (`Record`)
 scope for recording actions the user explicitly starts in an approved root.
-This grant does not include `audio.capture` or `deviceAdministration`; opening
-or preparing an input endpoint remains separately authorized. CLI and MCP
-clients do not inherit this local-shell grant.
+This grant does not include `audio.capture`. It includes
+`deviceAdministration` only after you answer **Allow** to "Allow AudioRouter
+to use your audio devices?", which appears the first time you press Play.
+That answer is stored on this computer, and **Setup → Audio device access**
+withdraws it. Only the AudioRouter window can give it: the localhost HTTP API
+refuses `devices.setAccess`, and CLI and MCP clients neither inherit this
+local-shell grant nor gain from your answer. The developer variable
+`AUDIOROUTER_ALLOW_DEVICE_ADMIN=1` is no longer needed.
 
 A generic read grant cannot elevate itself to another scope. Revoked or
 unknown clients are denied before method dispatch. Imported bundles do not

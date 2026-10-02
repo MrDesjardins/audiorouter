@@ -37,6 +37,22 @@ start an intentional recording in an approved root. This does not imply
 separate authorization decision. Remote, CLI, and MCP grants do not inherit
 the desktop-shell scope.
 
+Decision (2026-10-01, user-approved after release 0.0.1 refused Play on a
+fresh install):
+- **The consent:** endpoint preparation for Play (`devices.admin`) is that
+  separate decision, made once by the user in the desktop window. The first
+  Play asks "Allow AudioRouter to use your audio devices?".
+- **Storage and effect:** `devices.setAccess` persists the answer in the local
+  database. While it is true, the desktop shell's grant (only that grant)
+  includes `devices.admin`.
+- **Who can set it:** only the desktop shell's grant may call
+  `devices.setAccess`. The localhost HTTP adapter refuses it. CLI, MCP and
+  remote grants can neither set it nor gain from it.
+- **Withdrawing:** Setup withdraws it.
+- **The localhost API:** it shares the desktop grant, so after consent it can
+  start Play too (StreamDeck).
+- **Unchanged:** driver installation still needs Windows elevation.
+
 Show the concrete action and affected resources: for example, “Allow this client to edit Gaming and record under D:\\Recordings.” Do not ask for a universal “AI access” grant. Existing grants may persist until revoked, with last-used time and scope visible. Driver install uses Windows elevation; granting API device administration alone cannot bypass the OS prompt.
 
 Do not add confirmation to every gain tweak. Require specific authorization where it matters: first client enrollment, newly permitted capture/file roots, driver lifecycle/elevation, and destructive file actions. Read-only inspection works with read scope and does not activate audio.

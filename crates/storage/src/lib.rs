@@ -3465,6 +3465,35 @@ impl Storage {
         Ok(())
     }
 
+    /// The user's one-time consent for the desktop app to open audio devices
+    /// on Play (device administration for the local desktop shell only).
+    pub fn save_device_access_allowed(&self, allowed: bool) -> Result<(), StorageError> {
+        self.connection.execute(
+            "INSERT INTO control_settings(key, value) VALUES ('deviceAccessAllowed', ?1)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            params![if allowed { "true" } else { "false" }],
+        )?;
+        Ok(())
+    }
+
+    pub fn load_device_access_allowed(&self) -> Result<bool, StorageError> {
+        let value = self
+            .connection
+            .query_row(
+                "SELECT value FROM control_settings WHERE key = 'deviceAccessAllowed'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        match value.as_deref() {
+            None | Some("false") => Ok(false),
+            Some("true") => Ok(true),
+            Some(_) => Err(StorageError::CorruptDatabase(
+                "deviceAccessAllowed is not a boolean".into(),
+            )),
+        }
+    }
+
     pub fn load_startup_enabled(&self) -> Result<bool, StorageError> {
         let value = self
             .connection

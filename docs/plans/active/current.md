@@ -251,6 +251,41 @@ recorder finalization failed: segmented WAV finalization failed: NotRecording".
   (17:02; `ui/dist` 17:00; SHA-256
   094671b244aa71b398d3896536931602a814155fe0aab83e6fcc65c0cbcbcc7d).
 
+Defect in release 0.0.1 and release 0.0.2 (2026-10-01).
+- What happened: on the user's second computer (a fresh install), Play
+  showed "Permission denied … device administration".
+- Cause:
+  - the desktop grant never included `DeviceAdministration`; only the
+    developer variable `AUDIOROUTER_ALLOW_DEVICE_ADMIN=1` added it, and
+    every attended test set it;
+  - the first launch also served the plain operator grant: enrollment was
+    read before first-launch enrollment;
+  - with the variable set before the first launch, the backend refused to
+    start.
+- Decision (user-approved, SEC spec updated): the first Play asks once.
+  - `devices.getAccess` / `devices.setAccess` (121 methods) persist
+    `deviceAccessAllowed`.
+  - Only a grant with `accepts_device_consent()` (`for_desktop_shell`) may
+    set it or gain `DeviceAdministration` from it.
+  - The HTTP adapter refuses `devices.setAccess`.
+  - The shell's grant choice moved into `select_shell_grant`, which runs
+    after first-launch enrollment.
+  - UI: `DeviceAccessDialog` (Allow and play retries Play) and Setup →
+    `DeviceAccessSetting`.
+- Tests:
+  - control `desktop_consent_lets_a_fresh_install_open_devices_and_persists`;
+  - shell `a_fresh_install_gets_the_full_desktop_grant_on_its_first_launch`;
+  - HTTP 403 for `devices.setAccess`;
+  - e2e `device-access-consent.pw.ts` (3 themes; screenshots
+    `evidence/2026-10-01-device-access-dialog-*.png`);
+  - **real app** `crates/transport/tests/fresh_install_shell.rs`. It
+    launches the built exe with a new database and no developer variables
+    on the default pipe. It fails on the 0.0.1 exe ("method not found") and
+    passes on the fix.
+- Validated lesson added to AGENTS.md: qualify releases as a fresh install.
+- Version 0.0.2 in all manifests and lockfiles; release notes have a 0.0.2
+  section.
+
 Network qualification and release 0.0.1 (2026-10-01). The user confirmed the
 recording fix works, asked to verify the network tools, then commit and
 release 0.0.1 to install on a second computer.

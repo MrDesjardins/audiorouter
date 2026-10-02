@@ -2311,6 +2311,8 @@ fn method_description(name: &str) -> &'static str {
         "recorders.startRecording" => "Start recording a Recorder node now with its own settings (format, automatic split). Works while the route plays; returns the new file path.",
         "recorders.stopRecording" => "Stop a Recorder node's recording and finalize its file. Does nothing when it is not recording.",
         "recorders.stop" => "Stop a recorder at an explicit engine frame boundary.",
+        "devices.getAccess" => "Whether the user allowed the desktop app to open audio devices when Play is pressed.",
+        "devices.setAccess" => "Allow or withdraw the desktop app's permission to open audio devices on Play. Desktop window only.",
         "recordings.getRoot" => "Read the approved recording folder (null until the user chooses one) and a suggested folder.",
         "recordings.setRoot" => "Approve a local folder for every recording; create it when create is true. Desktop app only.",
         "recordings.get" => {
@@ -2622,6 +2624,14 @@ fn method_input_schema(name: &str) -> Value {
         "recorders.arm" => recorder_input_schema(false),
         "recorders.start" | "recorders.pause" | "recorders.resume" | "recorders.split"
         | "recorders.stop" => recorder_input_schema(true),
+        "devices.getAccess" => object_schema(json!({}), &[]),
+        "devices.setAccess" => object_schema(
+            json!({
+                "allowed": { "type": "boolean" },
+                "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
+            }),
+            &["allowed", "idempotencyKey"],
+        ),
         "recordings.getRoot" => object_schema(json!({}), &[]),
         "recordings.setRoot" => object_schema(
             json!({
@@ -3192,6 +3202,12 @@ fn method_output_schema(name: &str) -> Value {
                 "required": ["sessionId", "state", "lastFrame"],
                 "additionalProperties": false
             }
+        }),
+        "devices.getAccess" | "devices.setAccess" => json!({
+            "type": "object",
+            "properties": { "allowed": { "type": "boolean" } },
+            "required": ["allowed"],
+            "additionalProperties": false
         }),
         "recordings.getRoot" => json!({
             "type": "object",
@@ -5175,6 +5191,10 @@ fn audio_control_error(error: audiorouter_windows_audio::AudioError) -> ControlE
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ClientGrant {
     scopes: std::collections::HashSet<PermissionScope>,
+    /// Only the local desktop shell: the user can consent once (in the app
+    /// window) to let it open audio devices on Play, which adds device
+    /// administration to this grant. CLI, MCP and remote grants never do.
+    device_consent: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -5192,7 +5212,13 @@ impl ClientGrant {
     pub fn with_scopes(scopes: impl IntoIterator<Item = PermissionScope>) -> Self {
         Self {
             scopes: scopes.into_iter().collect(),
+            device_consent: false,
         }
+    }
+
+    /// Whether the user's in-app consent can add device administration.
+    pub fn accepts_device_consent(&self) -> bool {
+        self.device_consent
     }
 
     /// Map an enrolled role to the narrowest built-in grant for that role.
@@ -5220,14 +5246,18 @@ impl ClientGrant {
     /// plugins only ever execute in isolated workers) was authorized for the
     /// local shell by the user on 2026-09-25.
     pub fn for_desktop_shell() -> Self {
-        Self::with_scopes([
+        let mut grant = Self::with_scopes([
             PermissionScope::Read,
             PermissionScope::GraphWrite,
             PermissionScope::SessionControl,
             PermissionScope::Record,
             PermissionScope::StartupWrite,
             PermissionScope::PluginScan,
-        ])
+        ]);
+        // Opening audio devices on Play needs the user's one-time consent
+        // in the app (devices.setAccess), persisted in the database.
+        grant.device_consent = true;
+        grant
     }
 
     fn allows(&self, scope: PermissionScope) -> bool {
@@ -5488,6 +5518,9 @@ pub struct ControlPlane {
     plugin_inventory_order: VecDeque<String>,
     privacy_muted: bool,
     startup_enabled: bool,
+    /// The user's persisted consent for the desktop app to open audio
+    /// devices on Play (see `ClientGrant::accepts_device_consent`).
+    device_access_allowed: bool,
     recovery_tracker: CrashRecoveryTracker,
     os_suspended_sessions: Vec<EntityId>,
     os_suspended_native_sessions: Vec<EntityId>,
@@ -6140,6 +6173,7 @@ impl ControlPlane {
             plugin_inventory_order: VecDeque::new(),
             privacy_muted: false,
             startup_enabled: false,
+            device_access_allowed: false,
             recovery_tracker: CrashRecoveryTracker::default(),
             os_suspended_sessions: Vec::new(),
             os_suspended_native_sessions: Vec::new(),
@@ -10190,6 +10224,7 @@ impl ControlPlane {
         // failure must never silently unmute a capture path.
         let privacy_muted = storage.load_privacy_mute()?;
         let startup_enabled = storage.load_startup_enabled()?;
+        let device_access_allowed = storage.load_device_access_allowed()?;
         let recording_policy = storage
             .load_recording_root()?
             .map(RecordingPathPolicy::new)
@@ -10311,6 +10346,7 @@ impl ControlPlane {
             plugin_inventory_order: VecDeque::new(),
             privacy_muted,
             startup_enabled,
+            device_access_allowed,
             recovery_tracker: CrashRecoveryTracker::default(),
             os_suspended_sessions: Vec::new(),
             os_suspended_native_sessions: Vec::new(),
@@ -10408,6 +10444,38 @@ impl ControlPlane {
         }
         self.recording_policy = Some(policy);
         Ok(())
+    }
+
+    /// Persist the user's consent (or its withdrawal) for the desktop app to
+    /// open audio devices on Play. The grant check in dispatch admits only
+    /// the desktop shell's grant to this method.
+    fn dispatch_device_access_set(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("allowed and idempotencyKey are required".into())
+        })?;
+        let allowed = params
+            .get("allowed")
+            .and_then(Value::as_bool)
+            .ok_or_else(|| ControlError::InvalidRequest("allowed is required".into()))?;
+        let idempotency_key = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        let operation = (
+            self.scoped_idempotency_key("devices.setAccess", idempotency_key),
+            Self::request_hash(&json!({ "allowed": allowed })),
+        );
+        if let Some(previous) = self.lookup_idempotent_result(&operation.0, &operation.1)? {
+            return Ok(previous);
+        }
+        if let Some(storage) = &self.storage {
+            storage.save_device_access_allowed(allowed).map_err(storage_error)?;
+        }
+        self.device_access_allowed = allowed;
+        let result = json!({ "allowed": allowed });
+        self.journal_idempotent_result(&operation.0, "devices.setAccess", &operation.1, &result)?;
+        Ok(result)
     }
 
     /// The approved recording folder and a suggestion for first use.
@@ -14605,6 +14673,8 @@ impl ControlPlane {
                     method if simple::SIMPLE_METHODS.iter().any(|(name, _)| *name == method) => {
                         self.dispatch_simple(method, request.params)
                     }
+                    "devices.getAccess" => Ok(json!({ "allowed": self.device_access_allowed })),
+                    "devices.setAccess" => self.dispatch_device_access_set(request.params),
                     "recordings.getRoot" => self.dispatch_recording_root_get(),
                     "recordings.setRoot" => self.dispatch_recording_root_set(request.params),
                     "recordings.get" => self.dispatch_recordings_get(request.params),
@@ -14753,7 +14823,13 @@ impl ControlPlane {
         let Some(spec) = API_METHODS.iter().find(|spec| spec.name == request.method) else {
             return self.dispatch(request);
         };
-        if !grant.allows(spec.permission) {
+        let consented = spec.permission == PermissionScope::DeviceAdministration
+            && grant.accepts_device_consent()
+            && self.device_access_allowed;
+        // Only the desktop window may give or withdraw that consent.
+        let consent_method_refused =
+            spec.name == "devices.setAccess" && !grant.accepts_device_consent();
+        if (!grant.allows(spec.permission) && !consented) || consent_method_refused {
             let mut response = JsonRpcResponse::failure(
                 id,
                 -32001,
@@ -19931,6 +20007,8 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "recorders.start" | "recorders.pause" | "recorders.resume" | "recorders.split"
         | "recorders.stop" => &["sessionId", "nodeId", "frame", "idempotencyKey"],
         "recorders.startRecording" | "recorders.stopRecording" => &["sessionId", "nodeId", "idempotencyKey"],
+        "devices.getAccess" => &[],
+        "devices.setAccess" => &["allowed", "idempotencyKey"],
         "recordings.getRoot" => &[],
         "recordings.setRoot" => &["root", "create", "idempotencyKey"],
         "recordings.get" | "recordings.reveal" | "recordings.preview" => &["recordingId"],
@@ -21406,6 +21484,58 @@ mod tests {
         assert_eq!(second["session"]["nodes"], first["session"]["nodes"]);
         drop((source, target));
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    /// A fresh install: Play needs device administration, which the desktop
+    /// grant lacks until the user consents once in the app. Consent persists
+    /// across restarts, only the desktop window's grant may give it, and it
+    /// can be withdrawn. The release 0.0.1 shipped without this path.
+    #[test]
+    fn desktop_consent_lets_a_fresh_install_open_devices_and_persists() {
+        let path = std::env::temp_dir().join(format!("audiorouter-device-consent-{}.sqlite", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let shell = ClientGrant::for_desktop_shell();
+        let cli = ClientGrant::for_role(ClientRole::Operator);
+        let call = |plane: &mut ControlPlane, grant: &ClientGrant, method: &str, params: Value| {
+            plane.dispatch_authorized_for_client(
+                JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(json!(1)), method: method.into(), params: Some(params) },
+                "consent-test",
+                grant,
+            )
+        };
+        let denied = |response: &JsonRpcResponse| {
+            response.error.as_ref().is_some_and(|error| error.message.contains("permission denied"))
+        };
+        {
+            let mut plane = ControlPlane::with_storage("consent-first", Storage::open(&path).unwrap());
+            // Before consent: Play's device preparation is refused.
+            assert_eq!(call(&mut plane, &shell, "devices.getAccess", json!({})).result.unwrap()["allowed"], false);
+            let prepare = call(&mut plane, &shell, "nativePaths.prepare", json!({ "sessionId": "missing" }));
+            assert!(denied(&prepare), "{prepare:?}");
+            // A CLI/MCP operator cannot give consent, even for itself.
+            let refused = call(&mut plane, &cli, "devices.setAccess", json!({ "allowed": true, "idempotencyKey": "cli" }));
+            assert!(denied(&refused), "{refused:?}");
+            // The desktop window gives it.
+            let allowed = call(&mut plane, &shell, "devices.setAccess", json!({ "allowed": true, "idempotencyKey": "allow" }));
+            assert_eq!(allowed.result.unwrap()["allowed"], true);
+            let prepare = call(&mut plane, &shell, "nativePaths.prepare", json!({ "sessionId": "missing" }));
+            assert!(!denied(&prepare), "now authorized; fails only on the missing session: {prepare:?}");
+            // Consent never widens other grants.
+            let cli_prepare = call(&mut plane, &cli, "nativePaths.prepare", json!({ "sessionId": "missing" }));
+            assert!(denied(&cli_prepare), "{cli_prepare:?}");
+        }
+        {
+            // After a restart (and a fresh grant object) the consent holds.
+            let mut plane = ControlPlane::with_storage("consent-second", Storage::open(&path).unwrap());
+            assert_eq!(call(&mut plane, &shell, "devices.getAccess", json!({})).result.unwrap()["allowed"], true);
+            let prepare = call(&mut plane, &shell, "nativePaths.prepare", json!({ "sessionId": "missing" }));
+            assert!(!denied(&prepare), "{prepare:?}");
+            // Withdrawing it refuses device preparation again.
+            call(&mut plane, &shell, "devices.setAccess", json!({ "allowed": false, "idempotencyKey": "withdraw" }));
+            let prepare = call(&mut plane, &shell, "nativePaths.prepare", json!({ "sessionId": "missing" }));
+            assert!(denied(&prepare), "{prepare:?}");
+        }
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
