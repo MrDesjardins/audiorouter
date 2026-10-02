@@ -10,12 +10,15 @@ import "./styles.css";
 let planned: Session | null = null;
 // Test hooks: a Playwright init script may inject a session, the backend
 // telemetry recorded from a real run, and start the fixture already playing.
-const injected = globalThis as { __routeFixtureSession?: Session; __routeFixtureTelemetry?: unknown[]; __routeFixtureRunning?: boolean; __routeFixtureProcessors?: DiscoveryDocument["processors"]; __routeFixtureDelayMs?: number };
+const injected = globalThis as { __routeFixtureSession?: Session; __routeFixtureTelemetry?: unknown[]; __routeFixtureRunning?: boolean; __routeFixtureProcessors?: DiscoveryDocument["processors"]; __routeFixtureDelayMs?: number; __routeFixtureNoRecordingRoot?: boolean; __routeFixtureRecordingLostAudio?: boolean };
 let committed = structuredClone(injected.__routeFixtureSession ?? demoSession);
 let previewCandidate: Session | null = null;
 let running = injected.__routeFixtureRunning === true;
 let prepared = running;
 const sourceStates = new Map<string, "playing" | "paused" | "stopped">();
+const recording = new Set<string>();
+// A recording folder is approved unless a test asks for a first-run state.
+let recordingRoot: string | null = injected.__routeFixtureNoRecordingRoot ? null : "C:\\Recordings";
 let sequence = 0;
 const lifecycleCalls: string[] = [];
 let planCalls = 0;
@@ -117,8 +120,38 @@ const previewBackend: UiBackend = {
   },
   async stopSession(sessionId) {
     lifecycleCalls.push("stop");
-    running = false; previewCandidate = null; sourceStates.clear(); sequence += 1;
+    running = false; previewCandidate = null; sourceStates.clear(); recording.clear(); sequence += 1;
     return { sessionId, state: "stopped", runtime: "native", recorders: [] };
+  },
+  // Simulated one-click recorder for UI regressions (mirrors the backend:
+  // stop is a no-op when idle; Stop playback saves the take).
+  async startNodeRecording(sessionId, nodeId) {
+    lifecycleCalls.push(`record:${nodeId}`);
+    if (sessionId !== committed.id) throw new Error("Fixture session mismatch");
+    if (recordingRoot === null) throw new Error("No recording folder is set yet. Choose one under \"Recording folder\" in the Recorder's Properties (or in the Recording tab), then press Record again.");
+    recording.add(nodeId); sequence += 1;
+    return { sessionId, nodeId, state: "recording", format: "wavPcm24", path: `${recordingRoot}\\${nodeId}-take.wav`, splitMinutes: 0 };
+  },
+  async getRecordingRoot() {
+    return { root: recordingRoot, suggestedRoot: "C:\\Users\\you\\Music\\AudioRouter Recordings" };
+  },
+  async setRecordingRoot(root) {
+    lifecycleCalls.push(`recording-root:${root}`);
+    if (!/^[A-Za-z]:\\/.test(root)) throw new Error("Choose a full folder path, for example C:\\Users\\you\\Music\\AudioRouter Recordings.");
+    const created = recordingRoot !== root;
+    recordingRoot = root;
+    return { root, created };
+  },
+  async stopNodeRecording(sessionId, nodeId) {
+    lifecycleCalls.push(`stop-record:${nodeId}`);
+    const was = recording.delete(nodeId); sequence += 1;
+    if (was && injected.__routeFixtureRecordingLostAudio) {
+      return { sessionId, nodeId, state: "failed", reason: "Recording stopped saving after 0:07 because audio was lost (the recorder fell behind or received a block twice). The file keeps everything up to that point.", paths: [`${recordingRoot}\\${nodeId}-take.wav`] };
+    }
+    return { sessionId, nodeId, state: was ? "completed" : "idle" };
+  },
+  async listRecorders() {
+    return [...recording].map((nodeId) => ({ sessionId: committed.id, nodeId, state: "recording" as const, lastFrame: 0 }));
   },
   async transportAudioSource(sessionId, nodeId, action) {
     if (!running || sessionId !== committed.id) throw new Error("Fixture route is stopped");

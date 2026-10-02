@@ -6,7 +6,6 @@ import {
   EdgeLabelRenderer,
   getBezierPath,
   Handle,
-  MarkerType,
   Position,
   ReactFlow,
   useInternalNode,
@@ -22,7 +21,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import type { DiagnosticsSnapshot, Node, NodeKind, Session } from "@audiorouter/contracts";
-import { clearLayout, readLayout, writeLayout, type LayoutPositions } from "./layout";
+import { readLayout, writeLayout, type LayoutPositions } from "./layout";
 import { nodePortLabels } from "./graphView";
 import { libraryEntries, type LibraryEntry, type LibraryFlowGroup } from "./library";
 import { DEFAULT_NETWORK_AUDIO_PORT, GAIN_MAX_DB, GAIN_MIN_DB, mixerInputs, mixerInputVolumeKey, type LibraryNodeKind } from "./draft";
@@ -32,10 +31,20 @@ import { TestSignalPlaybackControls } from "./TestSignalPlaybackControls";
 import type { RecorderStatus } from "./backend";
 import { hasLearnedNoise } from "./SpectralGateEditor";
 import { CanvasGroupRenderer, type CanvasGroup } from "./CanvasGroups";
+import { FlowActiveLayers, FlowArrow } from "./flowLine";
+import { RecordButton } from "./RecorderControls";
+import { appendLibraryNode as appendPreviewNode } from "./draft";
+import { draggedLibraryKind, endLibraryDrag, readLibraryDropKind, setLibraryDragOverCanvas, startLibraryDrag } from "./libraryDrag";
+
+/** Kinds a library drag can carry (library tools and virtual buses). */
+const DRAGGABLE_KINDS = [...libraryEntries.map((entry) => entry.kind ?? entry.virtualKind).filter((kind): kind is NonNullable<typeof kind> => Boolean(kind))];
+const DROP_PREVIEW_ID = "__drop-preview";
+/** Where the pointer holds the preview card (its title area). */
+const DROP_GRAB_OFFSET = { x: 90, y: 28 };
+import { nextPeakHold, type PeakHold } from "./dynamics";
 
 export const LIBRARY_DROP_SOURCE = "__audiorouter_library_drop__";
-export const LIBRARY_DROP_MIME = "application/x-audiorouter-library-kind";
-const LIBRARY_DROP_TEXT_MIME = "text/plain";
+export { LIBRARY_DROP_MIME } from "./libraryDrag";
 
 type SessionFlowCanvasProps = {
   groups?: CanvasGroup[];
@@ -68,6 +77,9 @@ type SessionFlowCanvasProps = {
   timeShiftStatuses?: Record<string, { state: "live" | "delayed" | "paused"; delaySeconds: number; bufferedSeconds: number }>;
   recorderStatuses?: RecorderStatus[];
   onSetNodeParameter?: (nodeId: string, name: string, value: boolean | number | string) => void;
+  /** One-click Record / Stop on a Recorder node. */
+  onToggleRecording?: (nodeId: string, record: boolean) => void;
+  recordingBusyNodeId?: string | null;
   onOpenPluginPicker?: (edgeId?: string) => void;
   onOpenApplicationPicker?: () => void;
   onConnectionRejected?: (message: string) => void;
@@ -164,6 +176,7 @@ const NODE_FLOW_GROUPS: Record<NodeKind, LibraryFlowGroup> = {
   dehum: "tool",
   declick: "tool",
   inputSwitch: "tool",
+  duck: "tool",
   denoise: "tool",
   speechDenoise: "tool",
   spectralGate: "tool",
@@ -220,6 +233,7 @@ const NODE_KIND_LABELS: Partial<Record<NodeKind, string>> = {
   delay: "Sync",
   bassTreble: "Bass & Treble",
   inputSwitch: "Input Switch",
+  duck: "Duck",
   speechDenoise: "Speech Denoise",
   spectralGate: "Spectral Gate",
   firFilter: "FIR Filter",
@@ -286,8 +300,9 @@ function positionFor(index: number) {
   };
 }
 
-function AudioEdgeActions({ id, source, target, sourceX, sourceY, targetX, targetY, data, style, markerEnd }: EdgeProps) {
+function AudioEdgeActions({ id, source, target, sourceX, sourceY, targetX, targetY, data, style, selected }: EdgeProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const sourceNode = useInternalNode(source);
   const targetNode = useInternalNode(target);
   const edgeData = data as { enabled?: boolean; active?: boolean; levelDb?: number | null; signalState?: string; signalLabel?: string; sourceSide?: EdgeSide; targetSide?: EdgeSide; onSetSide?: (edgeId: string, endpoint: "source" | "target", side: EdgeSide) => void; onToggle?: SessionFlowCanvasProps["onToggleConnection"]; onRemove?: SessionFlowCanvasProps["onRemoveConnection"]; onInsert?: SessionFlowCanvasProps["onInsertProcessor"]; onOpenPluginPicker?: SessionFlowCanvasProps["onOpenPluginPicker"]; canEdit?: boolean } | undefined;
@@ -296,12 +311,19 @@ function AudioEdgeActions({ id, source, target, sourceX, sourceY, targetX, targe
   const sourcePoint = edgePoint(sourceNode, sourceSide, sourceX, sourceY);
   const targetPoint = edgePoint(targetNode, targetSide, targetX, targetY);
   const [path, labelX, labelY] = getBezierPath({ sourceX: sourcePoint.x, sourceY: sourcePoint.y, sourcePosition: edgeSidePosition(sourceSide), targetX: targetPoint.x, targetY: targetPoint.y, targetPosition: edgeSidePosition(targetSide) });
+  const stateClass = `flow-edge-${edgeData?.signalState ?? "configured"}${edgeData?.active ? " flow-edge-active" : ""}`;
+  // Track under every connection; active ones add glow, level colour and
+  // travelling comets around the interactive core path.
   return <>
-    <BaseEdge path={path} style={style} markerEnd={markerEnd} className={`flow-edge-${edgeData?.signalState ?? "configured"}${edgeData?.active ? " flow-edge-active" : ""}`} />
-    {edgeData?.active && <BaseEdge path={path} style={{ stroke: "#fff3c4", strokeWidth: 2.2, pointerEvents: "none" }} className="signal-flow-edge-dashes" />}
+    <g className="flow-line" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+      <path d={path} className="flow-track" />
+      {edgeData?.active
+        ? <FlowActiveLayers id={id} path={path} source={sourcePoint} target={targetPoint} targetSide={targetSide} levelDb={edgeData.levelDb ?? null} core={(coreStyle) => <BaseEdge path={path} style={{ ...style, ...coreStyle }} className={stateClass} />} />
+        : <><BaseEdge path={path} style={style} className={stateClass} /><FlowArrow at={targetPoint} side={targetSide} className={`flow-arrow is-${edgeData?.signalState ?? "configured"}`} /></>}
+    </g>
     <EdgeLabelRenderer>
       <span className="sr-only" role="img" aria-label={`Connection ${id}: ${edgeData?.signalLabel ?? "configured"}`} style={{ position: "absolute", transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}>Connection {id}: {edgeData?.signalLabel ?? "configured"}</span>
-      <div className="edge-action-bar nodrag nopan" style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }} onPointerDown={(event) => event.stopPropagation()}>
+      <div className={`edge-action-bar nodrag nopan${selected || hovered || menuOpen ? " is-emphasized" : ""}`} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} style={{ transform: `translate(-50%, calc(-100% - 9px)) translate(${labelX}px, ${labelY}px)` }} onPointerDown={(event) => event.stopPropagation()}>
         <button type="button" className="edge-action-icon" disabled={!edgeData?.canEdit} aria-label={edgeData?.enabled ? `Pause connection ${id}` : `Resume connection ${id}`} title={edgeData?.enabled ? "Pause this connection. The link stays in the route; Undo restores it." : "Resume audio through this connection."} onClick={() => edgeData?.onToggle?.(id, !edgeData.enabled)}>{edgeData?.enabled ? "⏸" : "▶"}</button>
         <button type="button" className="edge-action-icon edge-action-remove" disabled={!edgeData?.canEdit} aria-label={`Remove connection ${id}`} title="Remove this connection from the route. Use Undo in Session to restore it." onClick={() => edgeData?.onRemove?.(id)}>×</button>
         <button type="button" className="edge-action-icon" disabled={!edgeData?.canEdit} aria-label={`Add processor to connection ${id}`} title="Add a tool between these two nodes." onClick={() => setMenuOpen((open) => !open)}>＋</button>
@@ -311,11 +333,35 @@ function AudioEdgeActions({ id, source, target, sourceX, sourceY, targetX, targe
   </>;
 }
 
-const edgeTypes = { audioActions: AudioEdgeActions };
+/** Dashed side-chain link from a Duck's trigger node to the Duck. It carries
+ * no audio, only "this level controls that tool"; it animates while ducking. */
+function DuckTriggerEdge({ id, source, target, sourceX, sourceY, targetX, targetY, data }: EdgeProps) {
+  const sourceNode = useInternalNode(source);
+  const targetNode = useInternalNode(target);
+  // Leave the trigger through the side facing the Duck, so the link never
+  // crosses either card: up into its underside, down into its top, or a dip
+  // below both when they share a row.
+  const sourceTop = edgePoint(sourceNode, "top", sourceX, sourceY), sourceBottom = edgePoint(sourceNode, "bottom", sourceX, sourceY);
+  const targetTop = edgePoint(targetNode, "top", targetX, targetY), targetBottom = edgePoint(targetNode, "bottom", targetX, targetY);
+  // `entry` is the Duck side the link enters, as FlowArrow expects.
+  const [from, to, entry, path, labelY] = targetBottom.y + 24 < sourceTop.y
+    ? [sourceTop, targetBottom, "bottom" as const, `M${sourceTop.x},${sourceTop.y} C${sourceTop.x},${(sourceTop.y + targetBottom.y) / 2} ${targetBottom.x},${(sourceTop.y + targetBottom.y) / 2} ${targetBottom.x},${targetBottom.y}`, (sourceTop.y + targetBottom.y) / 2 - 6]
+    : targetTop.y > sourceBottom.y + 24
+      ? [sourceBottom, targetTop, "top" as const, `M${sourceBottom.x},${sourceBottom.y} C${sourceBottom.x},${(sourceBottom.y + targetTop.y) / 2} ${targetTop.x},${(sourceBottom.y + targetTop.y) / 2} ${targetTop.x},${targetTop.y}`, (sourceBottom.y + targetTop.y) / 2 - 6]
+      : (() => { const dip = Math.max(sourceBottom.y, targetBottom.y) + 56; return [sourceBottom, targetBottom, "bottom" as const, `M${sourceBottom.x},${sourceBottom.y} C${sourceBottom.x},${dip} ${targetBottom.x},${dip} ${targetBottom.x},${targetBottom.y}`, dip - 4] as const; })();
+  const ducking = (data as { ducking?: boolean } | undefined)?.ducking === true;
+  return <g className={`duck-trigger-edge${ducking ? " is-ducking" : ""}`} aria-label={`Trigger for ${id.replace(/^trigger-/, "")}`}>
+    <path d={path} className="duck-trigger-path" />
+    <FlowArrow at={to} side={entry} className="duck-trigger-arrow" />
+    <text x={(from.x + to.x) / 2 + 8} y={labelY} textAnchor="start" className="duck-trigger-label">{ducking ? "ducking" : "trigger"}</text>
+  </g>;
+}
+
+const edgeTypes = { audioActions: AudioEdgeActions, duckTrigger: DuckTriggerEdge };
 
 /** Connection line styles; each state class matches the canvas edge styling. */
 export const SIGNAL_FLOW_LEGEND: ReadonlyArray<{ state: EdgeSignalState["state"] | "configured"; label: string }> = [
-  { state: "active", label: "Moving highlight: audio is flowing; thickness follows level" },
+  { state: "active", label: "Moving lights: audio is flowing. Colour, glow and number of lights follow the level (teal quiet, gold speech, orange loud, red near clipping)" },
   { state: "configured", label: "Solid grey: connected, session stopped or not metered" },
   { state: "silent", label: "Grey dots: running but silent" },
   { state: "disabled", label: "Orange dashes: connection paused, node disabled, or muted" },
@@ -324,7 +370,11 @@ export const SIGNAL_FLOW_LEGEND: ReadonlyArray<{ state: EdgeSignalState["state"]
 ];
 
 function SignalFlowLegend() {
-  return <ul className="signal-flow-legend" aria-label="Connection line legend">{SIGNAL_FLOW_LEGEND.map((item) => <li key={item.state} className={`react-flow__edge flow-edge-${item.state}${item.state === "active" ? " flow-edge-active" : ""}`}><svg width="34" height="10" aria-hidden="true"><path className="react-flow__edge-path" d="M2 5H32" />{item.state === "active" && <path className="react-flow__edge-path signal-flow-edge-dashes" d="M2 5H32" style={{ stroke: "#fff3c4", strokeWidth: 2.2 }} />}</svg>{item.label}</li>)}</ul>;
+  return <ul className="signal-flow-legend" aria-label="Connection line legend">{SIGNAL_FLOW_LEGEND.map((item) => <li key={item.state} className={`react-flow__edge flow-edge-${item.state}${item.state === "active" ? " flow-edge-active" : ""}`}><svg width="40" height="12" viewBox="0 0 40 12" aria-hidden="true">
+    {item.state === "active"
+      ? <><defs><linearGradient id="legend-flow" x1="0" x2="1"><stop offset="0%" stopColor="var(--flow-cold)" /><stop offset="55%" stopColor="var(--flow-warm)" /><stop offset="100%" stopColor="var(--flow-hot)" /></linearGradient></defs><path className="react-flow__edge-path" d="M2 6H30" style={{ stroke: "url(#legend-flow)", strokeWidth: 4 }} /><ellipse cx="18" cy="6" rx="5" ry="1.4" className="legend-comet" /><path className="flow-arrow is-active" style={{ fill: "var(--flow-hot)" }} d="M-9,-5 L0,0 L-9,5 L-6.5,0 Z" transform="translate(39 6)" /></>
+      : <><path className="react-flow__edge-path" d="M2 6H30" /><path className={`flow-arrow is-${item.state}`} d="M-9,-5 L0,0 L-9,5 L-6.5,0 Z" transform="translate(39 6)" /></>}
+  </svg>{item.label}</li>)}</ul>;
 }
 
 export function libraryDropPosition(clientX: number, clientY: number, bounds: Pick<DOMRect, "left" | "top">): { x: number; y: number } {
@@ -341,9 +391,6 @@ function isVirtualBusKind(value: string): value is "virtualRenderSource" | "virt
   return value === "virtualRenderSource" || value === "virtualCaptureSink";
 }
 
-function readLibraryDropKind(dataTransfer: DataTransfer): string {
-  return dataTransfer.getData(LIBRARY_DROP_MIME) || dataTransfer.getData(LIBRARY_DROP_TEXT_MIME);
-}
 
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(maximum, Math.max(minimum, value));
@@ -365,8 +412,11 @@ function MiniMeter({ telemetry }: { telemetry: ReturnType<typeof nodeTelemetryFo
   const peak = telemetry?.meter?.currentPeakDb ?? telemetry?.meter?.peakDb ?? -60;
   const rms = telemetry?.meter?.rmsDb ?? -60;
   const active = peak > -60;
+  // The peak bar holds, then falls, so a spoken peak stays readable.
+  const hold = useRef<PeakHold | null>(null);
+  hold.current = nextPeakHold(hold.current, peak, performance.now());
   return <div className={`node-meter ${active ? "is-active" : "is-silent"}`} aria-label={`Peak ${formatDb(peak)}, RMS ${formatDb(rms)}`}>
-    <div className="node-meter-track"><span className="node-meter-rms" style={{ height: `${dbPercent(rms)}%` }} /><span className="node-meter-peak" style={{ height: `${dbPercent(peak)}%` }} /></div>
+    <div className="node-meter-track"><span className="node-meter-rms" style={{ height: `${dbPercent(rms)}%` }} /><span className="node-meter-peak" style={{ height: `${dbPercent(hold.current.db)}%` }} /></div>
     <div className="node-meter-readout"><span>RMS {formatDb(rms)}</span><span>PK {formatDb(peak)}</span></div>
   </div>;
 }
@@ -440,12 +490,6 @@ export function testSignalHasPhysicalOutputPath(session: Session, nodeId: string
     }
   }
   return false;
-}
-
-export function signalStrokeWidth(levelDb: number | null): number {
-  if (levelDb === null || !Number.isFinite(levelDb) || levelDb <= -60) return 2.5;
-  const normalized = clamp((Math.min(0, levelDb) + 60) / 60, 0, 1);
-  return Number((3.5 + normalized * 9).toFixed(2));
 }
 
 type EdgeSignalState = { active: boolean; levelDb: number | null; state: "active" | "silent" | "unmetered" | "stopped" | "muted" | "disabled" | "stale" | "unavailable" | "faulted"; label: string };
@@ -622,6 +666,27 @@ function GainReductionMeter({ telemetry, detail }: { telemetry: ReturnType<typeo
 
 /** Open/closed indicator for a gate node, driven by the backend's per-channel
  * gateOpen telemetry when available. */
+function DuckVisual({ node, telemetry, triggerName, onSetNodeParameter }: { node: Node; telemetry: ReturnType<typeof nodeTelemetryFor>; triggerName: string | null; onSetNodeParameter?: SessionFlowCanvasProps["onSetNodeParameter"] }) {
+  const amount = Number(node.parameters.amountDb ?? 6);
+  const ducking = telemetry?.processor?.gateOpen.some(Boolean) ?? false;
+  const reduction = Math.max(0, ...(telemetry?.processor?.gainReductionDb ?? [0]));
+  const status = !triggerName ? "Choose a trigger in Properties" : ducking ? `Ducking −${reduction.toFixed(1)} dB` : `Listening to ${triggerName}`;
+  return <div className="node-fader-stack nodrag nopan">
+    <span className={`node-duck-status${ducking ? " is-ducking" : ""}`} role="status" title={triggerName ? `Triggered by ${triggerName}` : undefined}><span className="node-duck-dot" aria-hidden="true" />{status}</span>
+    <div className="node-duck-reduction" aria-hidden="true"><span style={{ width: `${amount > 0 ? clamp(reduction / amount * 100, 0, 100) : 0}%` }} /></div>
+    <MiniFader label="Amount" value={amount} min={0} max={40} step={1} formatValue={(value) => `−${Math.round(value)} dB`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "amountDb", Math.round(value)) : undefined} ariaLabel={`${node.name} duck amount`} />
+  </div>;
+}
+
+/** Names of the nodes feeding an Input Switch's A and B inputs. */
+export function inputSwitchSourceNames(session: Session, switchId: string): { a: string | null; b: string | null } {
+  const name = (port: "a" | "b") => {
+    const edge = session.edges.find((item) => item.enabled && item.destinationNode === switchId && item.destinationPort === port);
+    return edge ? session.nodes.find((node) => node.id === edge.sourceNode)?.name ?? null : null;
+  };
+  return { a: name("a"), b: name("b") };
+}
+
 function GateVisual({ telemetry, thresholdDb }: { telemetry: ReturnType<typeof nodeTelemetryFor>; thresholdDb: number }) {
   const states = telemetry?.processor?.gateOpen ?? null;
   const open = states && states.length > 0 ? states.some(Boolean) : null;
@@ -679,9 +744,10 @@ const RECORDER_STATE_LABEL: Record<RecorderStatus["state"], string> = {
 
 /** A Recorder node's most important fact is whether it is actually recording
  * right now, which a generic pass-through meter never showed. */
-function RecorderVisual({ status, telemetry }: { status: RecorderStatus | null | undefined; telemetry: ReturnType<typeof nodeTelemetryFor> }) {
+function RecorderVisual({ node, status, telemetry, sessionRunning, onToggleRecording, busy }: { node: Node; status: RecorderStatus | null | undefined; telemetry: ReturnType<typeof nodeTelemetryFor>; sessionRunning: boolean; onToggleRecording?: (nodeId: string, record: boolean) => void; busy: boolean }) {
   const state = status?.state ?? null;
   return <div className="node-recorder">
+    {onToggleRecording && <RecordButton node={node} status={status} running={sessionRunning} connected busy={busy} onToggle={onToggleRecording} compact />}
     <div className={`node-recorder-state ${state ? `is-${state}` : "is-unknown"}`} aria-label={state ? `Recorder ${RECORDER_STATE_LABEL[state]}` : "No recorder session for this node yet"}>
       <span className="node-recorder-dot" />
       <strong>{state ? RECORDER_STATE_LABEL[state] : "No session"}</strong>
@@ -774,7 +840,7 @@ export function AudioFileNodeControls({ node, state = "stopped", onTransport }: 
   return <div className="audio-file-node"><span className="audio-file-node-name" title={String(node.parameters.fileName ?? "")}>{String(node.parameters.fileName ?? "Choose audio in properties")}</span><div className="audio-file-node-controls"><button type="button" disabled={!node.enabled || !node.parameters.mediaId || state === "playing"} aria-label={`Play ${node.name}`} onClick={(event) => { event.stopPropagation(); onTransport?.(node.id, "play"); }}>Play</button><button type="button" disabled={!node.enabled || !node.parameters.mediaId || state === "stopped"} aria-label={`Stop ${node.name}`} onClick={(event) => { event.stopPropagation(); onTransport?.(node.id, "stop"); }}>Stop</button></div><span className="audio-file-node-state" role="status">{state}</span></div>;
 }
 
-function NodeVisual({ node, telemetry, applicationCaptureState, onSetNodeParameter, recorderStatus, mixerInputCount, mixerInputList, routed, sessionRunning, sessionActionBusy, testSignalPlaybackReady, testSignalEndpointPrepared, onStartTestSignal, onStopTestSignal, onAudioSourceTransport, audioSourceStates, onTimeShiftTransport, timeShiftStatuses }: { node: Node; telemetry: ReturnType<typeof nodeTelemetryFor>; applicationCaptureState: DiagnosticsSnapshot["applicationCaptureStates"][number] | null; onSetNodeParameter?: SessionFlowCanvasProps["onSetNodeParameter"]; recorderStatus?: RecorderStatus | null; mixerInputCount?: number; mixerInputList?: ReturnType<typeof mixerInputs>; routed: boolean; sessionRunning: boolean; sessionActionBusy: boolean; testSignalPlaybackReady: boolean; testSignalEndpointPrepared: boolean; onStartTestSignal?: () => void; onStopTestSignal?: () => void; onAudioSourceTransport?: SessionFlowCanvasProps["onAudioSourceTransport"]; audioSourceStates?: SessionFlowCanvasProps["audioSourceStates"]; onTimeShiftTransport?: SessionFlowCanvasProps["onTimeShiftTransport"]; timeShiftStatuses?: SessionFlowCanvasProps["timeShiftStatuses"] }) {
+function NodeVisual({ node, telemetry, applicationCaptureState, onSetNodeParameter, onToggleRecording, recordingBusyNodeId, recorderStatus, mixerInputCount, mixerInputList, duckTriggerName, switchSourceNames, routed, sessionRunning, sessionActionBusy, testSignalPlaybackReady, testSignalEndpointPrepared, onStartTestSignal, onStopTestSignal, onAudioSourceTransport, audioSourceStates, onTimeShiftTransport, timeShiftStatuses }: { node: Node; telemetry: ReturnType<typeof nodeTelemetryFor>; applicationCaptureState: DiagnosticsSnapshot["applicationCaptureStates"][number] | null; onSetNodeParameter?: SessionFlowCanvasProps["onSetNodeParameter"]; recorderStatus?: RecorderStatus | null; mixerInputCount?: number; mixerInputList?: ReturnType<typeof mixerInputs>; duckTriggerName?: string | null; onToggleRecording?: (nodeId: string, record: boolean) => void; recordingBusyNodeId?: string | null; switchSourceNames?: { a: string | null; b: string | null }; routed: boolean; sessionRunning: boolean; sessionActionBusy: boolean; testSignalPlaybackReady: boolean; testSignalEndpointPrepared: boolean; onStartTestSignal?: () => void; onStopTestSignal?: () => void; onAudioSourceTransport?: SessionFlowCanvasProps["onAudioSourceTransport"]; audioSourceStates?: SessionFlowCanvasProps["audioSourceStates"]; onTimeShiftTransport?: SessionFlowCanvasProps["onTimeShiftTransport"]; timeShiftStatuses?: SessionFlowCanvasProps["timeShiftStatuses"] }) {
   if (node.kind === "parametricEq" || node.kind === "graphicEq") return <MiniEq node={node} onSetNodeParameter={onSetNodeParameter} />;
   if (node.kind === "networkSend" || node.kind === "networkReceive") {
     const sending = node.kind === "networkSend";
@@ -811,7 +877,7 @@ function NodeVisual({ node, telemetry, applicationCaptureState, onSetNodeParamet
   if (node.kind === "speechDenoise") return <MiniFader label="Strength" value={Number(node.parameters.strengthPercent ?? 70)} min={0} max={100} step={1} formatValue={(value) => `${Math.round(value)} %`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "strengthPercent", Math.round(value)) : undefined} ariaLabel={`${node.name} speech denoise strength`} />;
   if (node.kind === "inputSwitch") {
     const selected = node.parameters.selected === "b" ? "b" : "a";
-    return <div className="node-input-switch nodrag nopan" role="group" aria-label={`${node.name} input selection`}>{(["a", "b"] as const).map((side) => <button key={side} type="button" className={selected === side ? "is-selected" : ""} aria-pressed={selected === side} disabled={!onSetNodeParameter} title={`Pass input ${side.toUpperCase()}. Shift-click for a slow 2 s crossfade.`} onClick={(event) => { if (!onSetNodeParameter || selected === side) return; onSetNodeParameter(node.id, "fade", event.shiftKey ? "slow" : "normal"); onSetNodeParameter(node.id, "selected", side); }}>{side.toUpperCase()}</button>)}</div>;
+    return <div className="node-input-switch nodrag nopan" role="group" aria-label={`${node.name} input selection`}>{(["a", "b"] as const).map((side) => <button key={side} type="button" className={selected === side ? "is-selected" : ""} aria-pressed={selected === side} disabled={!onSetNodeParameter} title={`Pass input ${side.toUpperCase()}. Shift-click for a slow 2 s crossfade.`} onClick={(event) => { if (!onSetNodeParameter || selected === side) return; onSetNodeParameter(node.id, "fade", event.shiftKey ? "slow" : "normal"); onSetNodeParameter(node.id, "selected", side); }}><b>{side.toUpperCase()}</b><small title={switchSourceNames?.[side] ?? undefined}>{switchSourceNames?.[side] ?? "not connected"}</small></button>)}</div>;
   }
   if (node.kind === "bassTreble") return <div className="node-fader-stack nodrag nopan">{(["bassDb", "trebleDb"] as const).map((name) => <MiniFader key={name} label={name === "bassDb" ? "Bass" : "Treble"} value={Number(node.parameters[name] ?? 0)} min={-12} max={12} step={0.5} formatValue={(value) => `${value > 0 ? "+" : ""}${value.toFixed(1)} dB`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, name, Number(value.toFixed(1))) : undefined} ariaLabel={`${node.name} ${name === "bassDb" ? "bass" : "treble"}`} />)}</div>;
   if (node.kind === "dehum") return <MiniFader label={`Hum ${Math.round(Number(node.parameters.frequencyHz ?? 60))} Hz`} value={Number(node.parameters.amountPercent ?? 50)} min={0} max={100} step={1} formatValue={(value) => `${Math.round(value)} %`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "amountPercent", Math.round(value)) : undefined} ariaLabel={`${node.name} dehum amount`} />;
@@ -821,10 +887,11 @@ function NodeVisual({ node, telemetry, applicationCaptureState, onSetNodeParamet
   if (node.kind === "compressor") return <GainReductionMeter telemetry={telemetry} detail={`Threshold ${node.parameters.thresholdDb} dB · Ratio ${node.parameters.ratio}:1`} />;
   if (node.kind === "limiter") return <GainReductionMeter telemetry={telemetry} detail={`Ceiling ${node.parameters.ceilingDb} dB`} />;
   if (node.kind === "gate") return <GateVisual telemetry={telemetry} thresholdDb={Number(node.parameters.thresholdDb ?? 0)} />;
+  if (node.kind === "duck") return <DuckVisual node={node} telemetry={telemetry} triggerName={duckTriggerName ?? null} onSetNodeParameter={onSetNodeParameter} />;
   if (node.kind === "mixer") return <MixerVisual mixer={node} inputs={mixerInputList ?? []} telemetry={telemetry} onSetNodeParameter={onSetNodeParameter} />;
   if (node.kind === "testSignal") return <TestSignalVisual node={node} telemetry={telemetry} routed={routed} sessionRunning={sessionRunning} playing={audioSourceStates?.[node.id] === "playing"} actionBusy={sessionActionBusy} playbackReady={testSignalPlaybackReady} endpointPrepared={testSignalEndpointPrepared} onStart={onAudioSourceTransport ? () => onAudioSourceTransport(node.id, "play") : undefined} onStop={onAudioSourceTransport ? () => onAudioSourceTransport(node.id, "stop") : undefined} />;
   if (node.kind === "audioFile") return <AudioFileNodeControls node={node} state={audioSourceStates?.[node.id]} onTransport={onAudioSourceTransport} />;
-  if (node.kind === "recorder") return <RecorderVisual status={recorderStatus} telemetry={telemetry} />;
+  if (node.kind === "recorder") return <RecorderVisual node={node} status={recorderStatus} telemetry={telemetry} sessionRunning={sessionRunning} onToggleRecording={onToggleRecording} busy={recordingBusyNodeId === node.id} />;
   if (node.kind === "applicationCapture") return <ApplicationCaptureVisual node={node} telemetry={telemetry} state={applicationCaptureState} />;
   if (node.kind === "endpointLoopback") return <EndpointLoopbackVisual node={node} telemetry={telemetry} />;
   if (node.kind === "virtualRenderSource" || node.kind === "virtualCaptureSink") return <VirtualBusVisual node={node} telemetry={telemetry} />;
@@ -833,10 +900,11 @@ function NodeVisual({ node, telemetry, applicationCaptureState, onSetNodeParamet
   return <div className="node-activity" aria-label={node.enabled && !node.bypass ? "Processor ready" : "Processor inactive"}><span className="activity-dot" />{node.bypass ? "Bypassed" : node.enabled ? "Ready" : "Disabled"}</div>;
 }
 
-export function SessionFlowCanvas({ groups = [], selectedGroupId = "", onSelectGroup, onChangeGroup, onRemoveGroup, session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onToggleConnection, onInsertProcessor, onRemoveNode, onAddLibraryNode, onAddVirtualBusNode, diagnostics, sessionRunning, sessionActionBusy = false, testSignalPlaybackReady = false, testSignalEndpointPrepared = false, onStartTestSignal, onStopTestSignal, onAudioSourceTransport, audioSourceStates, onTimeShiftTransport, timeShiftStatuses, recorderStatuses = [], onSetNodeParameter, onOpenPluginPicker, onOpenApplicationPicker, onConnectionRejected, canEdit = true }: SessionFlowCanvasProps) {
+export function SessionFlowCanvas({ onToggleRecording, recordingBusyNodeId = null, groups = [], selectedGroupId = "", onSelectGroup, onChangeGroup, onRemoveGroup, session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onToggleConnection, onInsertProcessor, onRemoveNode, onAddLibraryNode, onAddVirtualBusNode, diagnostics, sessionRunning, sessionActionBusy = false, testSignalPlaybackReady = false, testSignalEndpointPrepared = false, onStartTestSignal, onStopTestSignal, onAudioSourceTransport, audioSourceStates, onTimeShiftTransport, timeShiftStatuses, recorderStatuses = [], onSetNodeParameter, onOpenPluginPicker, onOpenApplicationPicker, onConnectionRejected, canEdit = true }: SessionFlowCanvasProps) {
   const graphRunning = sessionRunning ?? diagnostics?.schedulerTelemetry?.activeGeneration != null;
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
   const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey));
+  const [dropPreview, setDropPreview] = useState<{ kind: string; position: { x: number; y: number } } | null>(null);
   // Controlled React Flow nodes must retain measured dimensions across meter
   // updates. Omitting them on every 20 Hz render resets handle bounds and can
   // leave every node hidden until a new ResizeObserver notification arrives.
@@ -861,6 +929,7 @@ export function SessionFlowCanvas({ groups = [], selectedGroupId = "", onSelectG
   const pendingConnectionRef = useRef<{ connection: Connection; sourceSide?: EdgeSide; targetSide?: EdgeSide; rawTargetHandle?: string | null } | null>(null);
   const flowInstanceRef = useRef<ReactFlowInstance | null>(null);
   const initialFitDoneRef = useRef(false);
+  const skipNextFitRef = useRef(false);
   useEffect(() => {
     initialFitDoneRef.current = false;
     nextLayoutIndexRef.current = session.nodes.length;
@@ -889,7 +958,9 @@ export function SessionFlowCanvas({ groups = [], selectedGroupId = "", onSelectG
   useEffect(() => {
     if (session.nodes.length === 0) return;
     // Fit after additions/removals too; otherwise library-added nodes can land
-    // outside the current viewport and look like the graph lost them.
+    // outside the current viewport and look like the graph lost them. A
+    // drag-and-drop placed the node in view on purpose, so keep the view.
+    if (skipNextFitRef.current) { skipNextFitRef.current = false; return; }
     const frame = globalThis.requestAnimationFrame(() => flowInstanceRef.current?.fitView({ padding: 0.2, duration: 180 }));
     return () => globalThis.cancelAnimationFrame(frame);
   }, [session.nodes.length]);
@@ -910,14 +981,42 @@ export function SessionFlowCanvas({ groups = [], selectedGroupId = "", onSelectG
     observer.observe(canvas);
     return () => observer.disconnect();
   }, [session.nodes.length]);
-  const tidyLayout = () => {
-    const next = smartLayout(session, measured);
+  // One Arrange action: inputs left, outputs right, tools between, and
+  // default connection sides. The previous arrangement can be restored for
+  // a short time with Undo arrange.
+  const [arrangeUndo, setArrangeUndo] = useState<{ positions: LayoutPositions; sides: Record<string, { source: EdgeSide; target: EdgeSide }> } | null>(null);
+  useEffect(() => {
+    if (!arrangeUndo) return;
+    const timer = window.setTimeout(() => setArrangeUndo(null), 15_000);
+    return () => window.clearTimeout(timer);
+  }, [arrangeUndo]);
+  const applyArrangement = (next: LayoutPositions, sides: Record<string, { source: EdgeSide; target: EdgeSide }>) => {
     positionsRef.current = next;
     setPositions(next);
     writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
-    setEdgeSides({});
-    if (typeof window !== "undefined") window.localStorage.removeItem(edgeLayoutKey);
-    requestAnimationFrame(() => flowInstanceRef.current?.fitView({ padding: 0.2, duration: 0 }));
+    setEdgeSides(sides);
+    if (typeof window !== "undefined") {
+      if (Object.keys(sides).length) window.localStorage.setItem(edgeLayoutKey, JSON.stringify(sides));
+      else window.localStorage.removeItem(edgeLayoutKey);
+    }
+    setFitRequest((count) => count + 1);
+  };
+  // Fit after React Flow has the new positions (two frames after render).
+  const [fitRequest, setFitRequest] = useState(0);
+  useEffect(() => {
+    if (!fitRequest) return;
+    let second = 0;
+    const first = requestAnimationFrame(() => { second = requestAnimationFrame(() => flowInstanceRef.current?.fitView({ padding: 0.12, duration: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 220 })); });
+    return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
+  }, [fitRequest]);
+  const tidyLayout = () => {
+    setArrangeUndo({ positions: positionsRef.current, sides: edgeSides });
+    applyArrangement(smartLayout(session, measured), {});
+  };
+  const undoArrange = () => {
+    if (!arrangeUndo) return;
+    applyArrangement(arrangeUndo.positions, arrangeUndo.sides);
+    setArrangeUndo(null);
   };
   const addLibraryNode = (kind: LibraryNodeKind, position: { x: number; y: number }) => {
     const nodeId = onAddLibraryNode?.(kind, position);
@@ -949,7 +1048,7 @@ export function SessionFlowCanvas({ groups = [], selectedGroupId = "", onSelectG
   const libraryButton = (entry: LibraryEntry) => {
     const kind = entry.kind ?? entry.virtualKind!;
     const unavailable = Boolean(entry.unavailableReason);
-    return <button type="button" key={`drag-${entry.id}`} className="canvas-library-item" aria-label={entry.label} draggable={canEdit && !unavailable} disabled={!canEdit || unavailable} title={entry.unavailableReason ?? entry.note} onClick={() => { if (unavailable) return; const position = nextNodePosition(); if (entry.kind) addLibraryNode(entry.kind, position); else if (onAddVirtualBusNode) addVirtualBusNode(entry.virtualKind === "virtualRenderSource" ? "renderSource" : "captureSink", position); else routeLibraryDrop(entry.virtualKind!, position); }} onDragStart={(event) => { if (!canEdit || unavailable) return; event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData(LIBRARY_DROP_MIME, kind); event.dataTransfer.setData(LIBRARY_DROP_TEXT_MIME, kind); }}>
+    return <button type="button" key={`drag-${entry.id}`} className="canvas-library-item" aria-label={entry.label} draggable={canEdit && !unavailable} disabled={!canEdit || unavailable} title={entry.unavailableReason ?? entry.note} onClick={() => { if (unavailable) return; const position = nextNodePosition(); if (entry.kind) addLibraryNode(entry.kind, position); else if (onAddVirtualBusNode) addVirtualBusNode(entry.virtualKind === "virtualRenderSource" ? "renderSource" : "captureSink", position); else routeLibraryDrop(entry.virtualKind!, position); }} onDragStart={(event) => { if (!canEdit || unavailable) return; startLibraryDrag(event, kind, entry.label); }} onDragEnd={() => { endLibraryDrag(); setDropPreview(null); }}>
       <span className="canvas-library-item-icon" aria-hidden="true">{entry.label.charAt(0)}</span>
       <span>{entry.label}</span>
     </button>;
@@ -981,7 +1080,18 @@ export function SessionFlowCanvas({ groups = [], selectedGroupId = "", onSelectG
       button: event.button,
     });
   };
-  const nodes: FlowNode[] = session.nodes.map((node, index) => {
+  // Flow coordinates under the pointer (respects pan and zoom), offset so
+  // the pointer holds the card by its title.
+  const dropFlowPosition = (clientX: number, clientY: number, bounds: DOMRect) => {
+    const flow = flowInstanceRef.current?.screenToFlowPosition?.({ x: clientX, y: clientY });
+    if (!flow || !Number.isFinite(flow.x) || !Number.isFinite(flow.y)) return libraryDropPosition(clientX, clientY, bounds);
+    return { x: Math.round(flow.x - DROP_GRAB_OFFSET.x), y: Math.round(flow.y - DROP_GRAB_OFFSET.y) };
+  };
+  // A live preview of the dragged tool, drawn by the same node renderer.
+  const previewNode = dropPreview && isLibraryNodeKind(dropPreview.kind)
+    ? { ...appendPreviewNode({ ...session, nodes: [], edges: [] }, dropPreview.kind).nodes[0], id: DROP_PREVIEW_ID }
+    : null;
+  const nodes: FlowNode[] = (previewNode ? [...session.nodes, previewNode] : session.nodes).map((node, index) => {
     const telemetry = nodeTelemetryFor(node, diagnostics);
     const applicationCaptureState = diagnostics?.applicationCaptureStates.find((item) => item.nodeId === node.id) ?? null;
     const headerState = nodeHeaderState(node, applicationCaptureState);
@@ -990,7 +1100,7 @@ export function SessionFlowCanvas({ groups = [], selectedGroupId = "", onSelectG
     return ({
     id: node.id,
     type: "flowNode",
-    position: positions[node.id] ?? positionFor(index),
+    position: node.id === DROP_PREVIEW_ID && dropPreview ? dropPreview.position : positions[node.id] ?? positionFor(index),
     measured: measured[node.id],
     selected: !selectedGroupId && selectedNodeIds.includes(node.id),
     data: {
@@ -999,17 +1109,19 @@ export function SessionFlowCanvas({ groups = [], selectedGroupId = "", onSelectG
           {node.ports.filter((port) => port.direction === "input").map((port) => { const offset = portOffset(node, port); return EDGE_SIDES.map((side) => { const handleId = edgeHandleId(port.name, side); return <Handle key={`input-${port.name}-${side}`} type="target" id={handleId} position={edgeSidePosition(side)} style={side === "left" || side === "right" ? { top: offset } : { left: offset }} aria-label={side === "left" ? `${node.name} ${port.name} input` : `${node.name} ${port.name} input ${side} connector`} data-debug-side={side} data-debug-direction="target" data-debug-handle-id={handleId} onMouseDown={(event) => { targetHandleRef.current = { nodeId: node.id, handleId, side }; logConnectionDebug("handle-mousedown", { nodeId: node.id, nodeName: node.name, direction: "target", port: port.name, side, handleId, clientX: event.clientX, clientY: event.clientY, button: event.button }); }} onPointerDown={(event) => logConnectionDebug("handle-pointer-down", { nodeId: node.id, nodeName: node.name, direction: "target", port: port.name, side, handleId, clientX: event.clientX, clientY: event.clientY, button: event.button })} />; }); })}
           <div className="flow-node-kicker"><span className={`node-kind-family node-kind-family-${nodeKindFamily(node.kind)}`}>{NODE_KIND_FAMILY_LABELS[nodeKindFamily(node.kind)]}</span><span className="node-kind">{humanizeNodeKind(node)}</span><span className={`node-state is-${headerState.tone}`} title={applicationCaptureState?.detail}>{headerState.label}</span></div>
           <div className="flow-node-title"><strong>{node.name}</strong>{canEdit && <button type="button" className="flow-node-delete" aria-label={`Delete ${node.name}`} title={`Delete ${node.name}`} onClick={(event) => { event.stopPropagation(); if (onRemoveNode) onRemoveNode(node.id); else globalThis.dispatchEvent(new CustomEvent("audiorouter:remove-node", { detail: { nodeId: node.id } })); }}>×</button>}</div>
-          <NodeVisual node={node} telemetry={telemetry} applicationCaptureState={applicationCaptureState} onSetNodeParameter={onSetNodeParameter} recorderStatus={recorderStatus} mixerInputCount={mixerInputCount} mixerInputList={node.kind === "mixer" ? mixerInputs(session, node.id) : undefined} routed={node.kind === "testSignal" && testSignalHasPhysicalOutputPath(session, node.id)} sessionRunning={Boolean(sessionRunning)} sessionActionBusy={sessionActionBusy} testSignalPlaybackReady={testSignalPlaybackReady} testSignalEndpointPrepared={testSignalEndpointPrepared} onStartTestSignal={canEdit ? onStartTestSignal : undefined} onStopTestSignal={canEdit ? onStopTestSignal : undefined} onAudioSourceTransport={onAudioSourceTransport} audioSourceStates={audioSourceStates} onTimeShiftTransport={onTimeShiftTransport} timeShiftStatuses={timeShiftStatuses} />
+          <NodeVisual node={node} telemetry={telemetry} applicationCaptureState={applicationCaptureState} onSetNodeParameter={onSetNodeParameter} onToggleRecording={canEdit ? onToggleRecording : undefined} recordingBusyNodeId={recordingBusyNodeId} recorderStatus={recorderStatus} mixerInputCount={mixerInputCount} mixerInputList={node.kind === "mixer" ? mixerInputs(session, node.id) : undefined} switchSourceNames={node.kind === "inputSwitch" ? inputSwitchSourceNames(session, node.id) : undefined} duckTriggerName={node.kind === "duck" ? session.nodes.find((candidate) => candidate.id === node.parameters.keyNodeId)?.name ?? null : undefined} routed={node.kind === "testSignal" && testSignalHasPhysicalOutputPath(session, node.id)} sessionRunning={Boolean(sessionRunning)} sessionActionBusy={sessionActionBusy} testSignalPlaybackReady={testSignalPlaybackReady} testSignalEndpointPrepared={testSignalEndpointPrepared} onStartTestSignal={canEdit ? onStartTestSignal : undefined} onStopTestSignal={canEdit ? onStopTestSignal : undefined} onAudioSourceTransport={onAudioSourceTransport} audioSourceStates={audioSourceStates} onTimeShiftTransport={onTimeShiftTransport} timeShiftStatuses={timeShiftStatuses} />
           <small className="node-port-count">{node.ports.length} port{node.ports.length === 1 ? "" : "s"} · {node.enabled ? "enabled" : "disabled"}</small>
           <span className="flow-port-list">{nodePortLabels(node).map((port) => <small key={port}>{port}</small>)}</span>
           {node.ports.filter((port) => port.direction === "output").map((port) => { const offset = portOffset(node, port); return EDGE_SIDES.map((side) => { const handleId = edgeHandleId(port.name, side); return <Handle key={`output-${port.name}-${side}`} type="source" id={handleId} position={edgeSidePosition(side)} style={side === "left" || side === "right" ? { top: offset } : { left: offset }} aria-label={side === "right" ? `${node.name} ${port.name} output` : `${node.name} ${port.name} output ${side} connector`} data-debug-side={side} data-debug-direction="source" data-debug-handle-id={handleId} onMouseDown={(event) => { sourceHandleRef.current = { nodeId: node.id, handleId, side }; logConnectionDebug("handle-mousedown", { nodeId: node.id, nodeName: node.name, direction: "source", port: port.name, side, handleId, clientX: event.clientX, clientY: event.clientY, button: event.button }); }} onPointerDown={(event) => logConnectionDebug("handle-pointer-down", { nodeId: node.id, nodeName: node.name, direction: "source", port: port.name, side, handleId, clientX: event.clientX, clientY: event.clientY, button: event.button })} />; }); })}
         </div>
       ),
     },
-    className: `flow-node-${nodeFlowGroup(node.kind)}${node.kind === "plugin" ? " flow-node-vst" : ""}${node.kind === "testSignal" ? " flow-node-test-signal" : node.kind === "audioFile" ? " flow-node-audio-file" : ""}`,
-    draggable: true,
-    selectable: true,
-    deletable: canEdit,
+    className: `${node.id === DROP_PREVIEW_ID ? "flow-drop-preview " : ""}flow-node-${nodeFlowGroup(node.kind)}${node.kind === "plugin" ? " flow-node-vst" : ""}${node.kind === "testSignal" ? " flow-node-test-signal" : node.kind === "audioFile" ? " flow-node-audio-file" : ""}`,
+    // The drop preview is only a picture: no dragging, selecting or connecting.
+    draggable: node.id !== DROP_PREVIEW_ID,
+    selectable: node.id !== DROP_PREVIEW_ID,
+    deletable: canEdit && node.id !== DROP_PREVIEW_ID,
+    ...(node.id === DROP_PREVIEW_ID ? { connectable: false, zIndex: 1000, ariaHidden: true } : {}),
     style: {
       border: !selectedGroupId && selectedNodeIds.includes(node.id) ? "2px solid var(--accent, #65d1b5)" : "1px solid var(--line, #40536b)",
       borderRadius: 10,
@@ -1033,17 +1145,36 @@ export function SessionFlowCanvas({ groups = [], selectedGroupId = "", onSelectG
     deletable: canEdit && onRemoveConnection !== undefined,
     selectable: true,
     className: `flow-edge-${signal.state}${active ? " flow-edge-active" : ""}`,
-    markerEnd: active ? { type: MarkerType.ArrowClosed, color: "var(--signal-hot, #ffd166)" } : undefined,
-    animated: active,
-    style: { stroke: active ? "var(--signal-hot, #ffd166)" : undefined, strokeWidth: active ? signalStrokeWidth(signal.levelDb) : 2.5, opacity: 0.92, transition: "stroke-width 120ms ease-out, stroke 120ms ease-out" },
+    style: active ? undefined : { strokeWidth: 2.5 },
     });
   });
 
+  // Side-chain links: drawn, but not selectable, deletable or connectable.
+  for (const duck of session.nodes) {
+    const key = duck.kind === "duck" ? duck.parameters.keyNodeId : undefined;
+    if (typeof key !== "string" || !key || key === duck.id || !session.nodes.some((node) => node.id === key)) continue;
+    const ducking = graphRunning && (nodeTelemetryFor(duck, diagnostics)?.processor?.gateOpen.some(Boolean) ?? false);
+    edges.push({ id: `trigger-${duck.id}`, source: key, target: duck.id, type: "duckTrigger", data: { ducking }, selectable: false, deletable: false, focusable: false, reconnectable: false, className: "duck-trigger" });
+  }
+
   return (
     <>
-    <div className="canvas-layout-actions" aria-label="Canvas layout actions"><span className="muted" role="status" aria-live="polite">{selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} selected</span><button type="button" className="secondary" onClick={tidyLayout}>Tidy layout</button><button type="button" className="secondary" onClick={() => { clearLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey); if (typeof window !== "undefined") window.localStorage.removeItem(edgeLayoutKey); tidyLayout(); }}>Reset layout</button></div>
+    <div className="canvas-layout-actions" aria-label="Canvas layout actions"><span className="muted" role="status" aria-live="polite">{selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} selected</span><button type="button" className="secondary" title="Inputs on the left, outputs on the right, tools in between, with room around every connection" onClick={tidyLayout}>Arrange</button>{arrangeUndo && <button type="button" className="secondary" onClick={undoArrange}>Undo arrange</button>}</div>
     <SignalFlowLegend />
-    <div className="session-flow-canvas" aria-label="Signal-flow graph" data-connection-mode={connectionHandleMode} onDragOver={(event) => { if (!canEdit) return; event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }} onDrop={(event) => { const kind = readLibraryDropKind(event.dataTransfer); event.preventDefault(); const bounds = event.currentTarget.getBoundingClientRect(); const position = libraryDropPosition(event.clientX, event.clientY, bounds); if (isLibraryNodeKind(kind)) { if (onAddLibraryNode) addLibraryNode(kind, position); else routeLibraryDrop(kind, position); } else if (isVirtualBusKind(kind)) { if (onAddVirtualBusNode) addVirtualBusNode(kind === "virtualRenderSource" ? "renderSource" : "captureSink", position); else routeLibraryDrop(kind, position); } }}>
+    <div className="session-flow-canvas" aria-label="Signal-flow graph" data-connection-mode={connectionHandleMode} onDragOver={(event) => {
+      if (!canEdit) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+      const kind = draggedLibraryKind(event.dataTransfer, DRAGGABLE_KINDS);
+      if (!kind) return;
+      setLibraryDragOverCanvas(true);
+      const position = dropFlowPosition(event.clientX, event.clientY, event.currentTarget.getBoundingClientRect());
+      setDropPreview((current) => current && current.kind === kind && Math.abs(current.position.x - position.x) < 1 && Math.abs(current.position.y - position.y) < 1 ? current : { kind, position });
+    }} onDragLeave={(event) => {
+      if (event.relatedTarget instanceof globalThis.Node && event.currentTarget.contains(event.relatedTarget)) return;
+      setDropPreview(null);
+      setLibraryDragOverCanvas(false);
+    }} onDrop={(event) => { const kind = readLibraryDropKind(event.dataTransfer); event.preventDefault(); const position = dropFlowPosition(event.clientX, event.clientY, event.currentTarget.getBoundingClientRect()); setDropPreview(null); endLibraryDrag(); skipNextFitRef.current = true; requestAnimationFrame(() => requestAnimationFrame(() => { skipNextFitRef.current = false; })); if (isLibraryNodeKind(kind)) { if (onAddLibraryNode) addLibraryNode(kind, position); else routeLibraryDrop(kind, position); } else if (isVirtualBusKind(kind)) { if (onAddVirtualBusNode) addVirtualBusNode(kind === "virtualRenderSource" ? "renderSource" : "captureSink", position); else routeLibraryDrop(kind, position); } }}>
         <div className="canvas-library" aria-label="Drag processors to canvas">
           <strong>Drag or select to add</strong>
           {FLOW_GROUPS.map((group) => {
@@ -1064,7 +1195,7 @@ export function SessionFlowCanvas({ groups = [], selectedGroupId = "", onSelectG
           })}
         </div>
       <ReactFlow
-        nodes={[...groups.map((group) => ({ id: group.id, type: "visualGroup", position: { x: group.x, y: group.y }, width: group.width, height: group.height, measured: measured[group.id], style: { width: group.width, height: group.height }, selected: group.id === selectedGroupId, data: { group }, zIndex: -1, className: "visual-group-node", connectable: false })), ...nodes]}
+        nodes={[...groups.map((group) => ({ id: group.id, type: "visualGroup", position: { x: group.x, y: group.y }, width: group.width, height: group.height, measured: measured[group.id], style: { width: group.width, height: group.height }, selected: group.id === selectedGroupId, data: { group }, zIndex: -1, className: `visual-group-node${group.locked ? " is-locked" : ""}`, connectable: false, draggable: !group.locked, deletable: !group.locked })), ...nodes]}
         edges={edges}
         onNodesChange={(changes) => {
           setMeasured((current) => {
@@ -1109,6 +1240,7 @@ export function SessionFlowCanvas({ groups = [], selectedGroupId = "", onSelectG
         onConnectEnd={(event, connectionState) => { const clientX = "clientX" in event ? event.clientX : undefined; const clientY = "clientY" in event ? event.clientY : undefined; captureConnectionHandle(event); const pending = pendingConnectionRef.current; if (pending && connectionState.fromNode && connectionState.toNode && connectionState.fromHandle && connectionState.toHandle) { const targetNode = session.nodes.find((node) => node.id === pending.connection.target); let rawTargetHandle = pending.rawTargetHandle ?? (targetHandleRef.current?.nodeId === pending.connection.target ? targetHandleRef.current.handleId : null); if (!rawTargetHandle && targetNode && clientX !== undefined && clientY !== undefined && typeof document !== "undefined") { const nodeElement = Array.from(document.querySelectorAll<HTMLElement>(".react-flow__node")).find((element) => element.dataset.id === targetNode.id); const bounds = nodeElement?.getBoundingClientRect(); if (bounds) { const distances: Record<EdgeSide, number> = { left: Math.abs(clientX - bounds.left), right: Math.abs(clientX - bounds.right), top: Math.abs(clientY - bounds.top), bottom: Math.abs(clientY - bounds.bottom) }; const side = EDGE_SIDES.reduce((closest, candidate) => distances[candidate] < distances[closest] ? candidate : closest, "left" as EdgeSide); const port = targetNode.ports.find((candidate) => candidate.direction === "input")?.name; if (port) { rawTargetHandle = edgeHandleId(port, side); targetHandleRef.current = { nodeId: targetNode.id, handleId: rawTargetHandle, side }; } } } const target = logicalPortHandle(rawTargetHandle); const finalConnection = { ...pending.connection, targetHandle: target.port }; const edgeId = onConnect(finalConnection); logConnectionDebug("draft-connect-result", { edgeId, normalizedSourceHandle: finalConnection.sourceHandle, normalizedTargetHandle: finalConnection.targetHandle, sourceSide: pending.sourceSide, targetSide: target.side }); if (edgeId) { if (pending.sourceSide) setEdgeSide(edgeId, "source", pending.sourceSide); if (target.side) setEdgeSide(edgeId, "target", target.side); } } else if (!pending && connectionState.fromHandle && connectionState.toHandle && connectionState.fromHandle.type === connectionState.toHandle.type) { onConnectionRejected?.(connectionState.fromHandle.type === "target" ? "That drag started and ended on a receiving connector; start from a sending connector (blue) instead." : "That drag started and ended on a sending connector; release on a receiving connector (orange) instead."); } pendingConnectionRef.current = null; sourceHandleRef.current = null; targetHandleRef.current = null; setConnectionHandleMode(IDLE_CONNECTION_MODE); logConnectionDebug("react-flow-connect-end", { inProgress: "inProgress" in connectionState ? connectionState.inProgress : false, fromNode: connectionState.fromNode?.id, fromHandle: connectionState.fromHandle?.id, toNode: connectionState.toNode?.id, toHandle: connectionState.toHandle?.id, toPosition: connectionState.toPosition }); }}
         onConnect={canEdit ? (connection) => { const rawSourceHandle = connection.sourceHandle ?? (sourceHandleRef.current?.nodeId === connection.source ? sourceHandleRef.current.handleId : null); const rawTargetHandle = connection.targetHandle ?? (targetHandleRef.current?.nodeId === connection.target ? targetHandleRef.current.handleId : null); logConnectionDebug("react-flow-connect", { source: connection.source, sourceHandle: connection.sourceHandle, recoveredSourceHandle: rawSourceHandle, target: connection.target, targetHandle: connection.targetHandle, recoveredTargetHandle: rawTargetHandle }); const source = logicalPortHandle(rawSourceHandle); const target = logicalPortHandle(rawTargetHandle); pendingConnectionRef.current = { connection: { ...connection, sourceHandle: source.port, targetHandle: target.port }, sourceSide: source.side, targetSide: target.side, rawTargetHandle }; } : undefined}
         edgeTypes={edgeTypes}
+        minZoom={0.2}
         onEdgesDelete={canEdit && onRemoveConnection ? (deleted) => { for (const edgeId of deletedConnectionIds(deleted)) onRemoveConnection(edgeId); } : undefined}
         onNodesDelete={canEdit ? (deleted) => { for (const nodeId of deletedNodeIds(deleted)) { if (groups.some((g) => g.id === nodeId)) { onRemoveGroup?.(nodeId); continue; } if (onRemoveNode) onRemoveNode(nodeId); else globalThis.dispatchEvent(new CustomEvent("audiorouter:remove-node", { detail: { nodeId } })); } } : undefined}
         onNodeDragStop={(_, node) => { if (node.type === "visualGroup") { onChangeGroup?.(node.id, { x: node.position.x, y: node.position.y }); return; } const next = { ...positionsRef.current, [node.id]: node.position }; positionsRef.current = next; setPositions(next); writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next); }}

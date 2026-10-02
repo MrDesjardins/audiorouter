@@ -122,10 +122,13 @@ pub enum NodeKind {
     NetworkSend,
     /// Plays audio streamed by a Network Send node on another computer.
     NetworkReceive,
+    /// Lowers its `in` audio while the `key` input (for example a voice)
+    /// is above a threshold. Only `in` is heard; `key` is a trigger.
+    Duck,
 }
 
 impl NodeKind {
-    pub const ALL: [Self; 33] = [
+    pub const ALL: [Self; 34] = [
         Self::PhysicalInput,
         Self::ApplicationCapture,
         Self::EndpointLoopback,
@@ -159,6 +162,7 @@ impl NodeKind {
         Self::TimeShift,
         Self::NetworkSend,
         Self::NetworkReceive,
+        Self::Duck,
     ];
 
     pub fn type_name(self) -> &'static str {
@@ -196,6 +200,7 @@ impl NodeKind {
             Self::TimeShift => "time-shift",
             Self::NetworkSend => "network-send",
             Self::NetworkReceive => "network-receive",
+            Self::Duck => "duck",
         }
     }
 }
@@ -285,7 +290,7 @@ fn valid_creation_time(value: &serde_json::Value) -> bool {
     })
 }
 
-pub fn node_registry() -> [NodeTypeSpec; 33] {
+pub fn node_registry() -> [NodeTypeSpec; 34] {
     NodeKind::ALL.map(|kind| NodeTypeSpec {
         kind,
         version: 1,
@@ -305,6 +310,7 @@ pub fn node_registry() -> [NodeTypeSpec; 33] {
             | NodeKind::Dehum
             | NodeKind::Declick
             | NodeKind::InputSwitch
+            | NodeKind::Duck
             | NodeKind::Denoise
             | NodeKind::SpeechDenoise
             | NodeKind::FirFilter
@@ -338,7 +344,8 @@ pub fn node_registry() -> [NodeTypeSpec; 33] {
             | NodeKind::Mute
             | NodeKind::Meter
             | NodeKind::TestSignal
-            | NodeKind::InputSwitch => "low",
+            | NodeKind::InputSwitch
+            | NodeKind::Duck => "low",
             NodeKind::AudioFile => "low",
             NodeKind::ParametricEq => "medium",
             NodeKind::Compressor => "medium",
@@ -752,8 +759,22 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 103] = [
+pub const API_METHODS: [ApiMethodSpec; 119] = [
     ApiMethodSpec { name: "meters.reset", permission: PermissionScope::SessionControl, side_effect: SideEffectClass::Mutating },
+    // Task-shaped methods for StreamDeck, scripts and LLM assistants.
+    // Play prepares devices, so it needs the same grant as nativePaths.prepare.
+    ApiMethodSpec { name: "sessions.play", permission: PermissionScope::DeviceAdministration, side_effect: SideEffectClass::ExternalOperation },
+    ApiMethodSpec { name: "sessions.togglePlay", permission: PermissionScope::DeviceAdministration, side_effect: SideEffectClass::ExternalOperation },
+    ApiMethodSpec { name: "sessions.summary", permission: PermissionScope::Read, side_effect: SideEffectClass::ReadOnly },
+    ApiMethodSpec { name: "safety.togglePrivacyMute", permission: PermissionScope::SessionControl, side_effect: SideEffectClass::Mutating },
+    ApiMethodSpec { name: "nodes.catalog", permission: PermissionScope::Read, side_effect: SideEffectClass::ReadOnly },
+    ApiMethodSpec { name: "nodes.set", permission: PermissionScope::GraphWrite, side_effect: SideEffectClass::Mutating },
+    ApiMethodSpec { name: "nodes.toggle", permission: PermissionScope::GraphWrite, side_effect: SideEffectClass::Mutating },
+    ApiMethodSpec { name: "nodes.add", permission: PermissionScope::GraphWrite, side_effect: SideEffectClass::Mutating },
+    ApiMethodSpec { name: "nodes.remove", permission: PermissionScope::GraphWrite, side_effect: SideEffectClass::Mutating },
+    ApiMethodSpec { name: "connections.add", permission: PermissionScope::GraphWrite, side_effect: SideEffectClass::Mutating },
+    ApiMethodSpec { name: "connections.remove", permission: PermissionScope::GraphWrite, side_effect: SideEffectClass::Mutating },
+    ApiMethodSpec { name: "meters.levels", permission: PermissionScope::Read, side_effect: SideEffectClass::ReadOnly },
     ApiMethodSpec {
         name: "system.describe",
         permission: PermissionScope::Read,
@@ -886,6 +907,29 @@ pub const API_METHODS: [ApiMethodSpec; 103] = [
     },
     ApiMethodSpec {
         name: "recorders.stop",
+        permission: PermissionScope::Record,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "recorders.startRecording",
+        permission: PermissionScope::Record,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "recorders.stopRecording",
+        permission: PermissionScope::Record,
+        side_effect: SideEffectClass::Mutating,
+    },
+    // The approved folder for every recording (REC-07). Setting it is the
+    // user's explicit approval of a new file root; the localhost HTTP
+    // adapter and MCP do not offer it.
+    ApiMethodSpec {
+        name: "recordings.getRoot",
+        permission: PermissionScope::Record,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "recordings.setRoot",
         permission: PermissionScope::Record,
         side_effect: SideEffectClass::Mutating,
     },
@@ -1695,6 +1739,29 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 }
                 (NodeKind::InputSwitch, "fade") => {
                     value.as_str().is_some_and(|fade| matches!(fade, "normal" | "slow"))
+                }
+                // The trigger node; empty means none (the audio passes unchanged).
+                // One-click recording settings of a Recorder node.
+                (NodeKind::Recorder, "format") => value.as_str().is_some_and(|format| {
+                    matches!(format, "wavPcm16" | "wavPcm24" | "wavFloat32" | "flac16" | "flac24" | "mp3")
+                }),
+                (NodeKind::Recorder, "autoRecord") => value.is_boolean(),
+                (NodeKind::Recorder, "splitMinutes") => value
+                    .as_f64()
+                    .is_some_and(|minutes| minutes.is_finite() && (0.0..=240.0).contains(&minutes)),
+                (NodeKind::Duck, "keyNodeId") => value.as_str().is_some_and(|key| {
+                    key.len() <= MAX_ENTITY_ID_BYTES && !key.chars().any(char::is_control)
+                }),
+                (NodeKind::Duck, name) => {
+                    let range = match name {
+                        "thresholdDb" => Some(-80.0..=0.0),
+                        "amountDb" => Some(0.0..=40.0),
+                        "attackMs" => Some(1.0..=500.0),
+                        "holdMs" => Some(0.0..=2_000.0),
+                        "releaseMs" => Some(20.0..=5_000.0),
+                        _ => None,
+                    };
+                    range.is_some_and(|range| value.as_f64().is_some_and(|number| number.is_finite() && range.contains(&number)))
                 }
                 (NodeKind::Declick, "thresholdPercent") => value.as_f64().is_some_and(|threshold| {
                     threshold.is_finite() && (0.0..=100.0).contains(&threshold)
@@ -3858,7 +3925,7 @@ mod tests {
     #[test]
     fn registry_reports_audio_and_processor_capabilities_explicitly() {
         let registry = node_registry();
-        assert_eq!(registry.len(), 33);
+        assert_eq!(registry.len(), 34);
         let physical = registry
             .iter()
             .find(|spec| spec.kind == NodeKind::PhysicalInput)

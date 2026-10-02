@@ -5640,6 +5640,14 @@ impl WasapiOutputFanout {
         self.network_senders.push((self.output_rings.len(), sender));
     }
 
+    /// The Network Send sender of output branch `branch`.
+    pub fn network_sender(&self, branch: usize) -> Option<&crate::NetworkSender> {
+        self.network_senders
+            .iter()
+            .find(|(index, _)| *index == branch)
+            .map(|(_, sender)| sender)
+    }
+
     /// Counters of the Network Send feeding output branch `branch`.
     pub fn network_send_stats(&self, branch: usize) -> Option<crate::NetworkSendStats> {
         self.network_senders
@@ -6297,6 +6305,21 @@ impl NativeMultiInputWorker {
     /// Counters of a Network Send branch, by output index.
     pub fn network_send_stats(&self, output: usize) -> Option<crate::NetworkSendStats> {
         self.outputs.as_ref()?.network_send_stats(output)
+    }
+
+    /// The running receiver of a Network Receive source, by input index
+    /// (for a live address or buffer change).
+    pub fn network_receiver(&self, input: usize) -> Option<&crate::NetworkReceiver> {
+        match self.captures.get(input)? {
+            MultiInputCaptureSource::Network(receiver) => Some(receiver),
+            _ => None,
+        }
+    }
+
+    /// The running sender of a Network Send branch, by output index (for a
+    /// live address or port change).
+    pub fn network_sender(&self, output: usize) -> Option<&crate::NetworkSender> {
+        self.outputs.as_ref()?.network_sender(output)
     }
 
     /// Device-buffer underruns since start, summed over physical outputs.

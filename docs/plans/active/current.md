@@ -9,6 +9,380 @@ Add new entries under "Log" below, and keep the sections above it current.
 
 ## Objective and scope
 
+## Current task queue (2026-09-30, user asleep; continue autonomously)
+
+Done this session (uncommitted, tests green unless noted):
+- Duck tool (node kind `duck`, side-chain by reference `keyNodeId`): domain,
+  engine (`NodeLevel` registry, meters publish, `DuckState`), control
+  catalogs, CLI, contracts (34 kinds/18 processors), UI library, canvas node
+  with a dashed trigger link, `DuckEditor`, tests (engine, unit, tool-workflows
+  e2e). Screenshots `evidence/2026-09-30-duck-*.png`. Input Switch node buttons
+  now show source names.
+- Group Lock: the dashed border was removed at the user's request; the lock
+  icon remains.
+- Recorder (DONE 2026-10-01).
+  - Bug: Play failed with "recorder node worker is not attached" on the
+    user's Meter → {Hear my voice, Recorder} route when no file existed. Fix:
+    a `SwitchableAudioTap` inlet per Recorder node, bound at Play and
+    re-pointed on attach/remove.
+  - Also fixed: `session.stop` refused to stop while a node recorder existed;
+    it now finalizes one-click recordings first.
+  - Added node settings `format`, `autoRecord` and `splitMinutes`.
+  - API `recorders.startRecording`/`stopRecording` (105 methods); MCP
+    `start_recording`/`stop_recording` (60 tools).
+  - Auto-record on Play; auto-split from the service loop (WAV splits in
+    place, others roll over).
+  - Node Record button with timer; `RecorderControls` in Properties.
+  - Tests: control inlet + one-click (real WAV, split, Stop-safe), UI unit,
+    route-harness e2e × 3 themes, real-backend e2e (settings saved, file
+    written).
+  - Screenshots `evidence/2026-10-01-recorder-*.png`. Release checkpoint
+    `src-tauri/target/release/audiorouter-shell.exe` 08:05, SHA-256
+    101f24632527c51153f660af217890731739d6840fca4244bce7444696749d14.
+
+### Simple control API plan (item 2) and MCP plan (item 3), 2026-10-01
+
+Review findings (user perspective: streamer, gamer, podcaster, StreamDeck,
+LLM through MCP):
+- The REST adapter (HTTP-04) mirrors every backend method one to one. That is
+  complete but low-level.
+- **Play needs several calls.** The UI picks native preparation
+  (`nativePaths.prepare`, …) before `sessions.start`; external callers cannot
+  reproduce that.
+- **A live setting change needs three steps:** revision, whole-graph
+  `graph.plan`, then `graph.commit`.
+- **No toggles,** although a StreamDeck key is a toggle.
+- **Nodes are addressed by internal IDs only;** people and LLMs use names.
+- **No compact live levels or session summary** for key displays or for an
+  LLM to read.
+- **An LLM cannot add, remove or connect a tool** without writing a whole
+  graph.
+
+Decision: add task-shaped methods to the backend. REST gets them through
+HTTP-04 automatically; MCP gets a plain-language tool for each. All of them:
+- take `sessionId` optionally (default: the active session);
+- address nodes by ID or by exact name (case-insensitive; an ambiguous name
+  is refused with the candidates);
+- apply edits through the same plan/commit/activation path as the UI.
+
+| Method | Purpose |
+| --- | --- |
+| `sessions.play` / `sessions.togglePlay` | Prepare the saved route's devices and start, as the UI's Play does (actionable error for unbound devices). |
+| `safety.togglePrivacyMute` | One-key mic mute toggle. |
+| `nodes.set` | Set parameters, enabled, bypass or name of one node; live and saved. |
+| `nodes.toggle` | Flip enabled, bypass, a boolean or a two-value choice (Input Switch A/B). |
+| `nodes.add` / `nodes.remove` | Add a tool by kind (optionally between two nodes), or remove one and bridge its neighbours. |
+| `connections.add` / `connections.remove` | Connect or disconnect two nodes by name. |
+| `meters.levels` | Compact live levels per node (with Duck/dynamics reduction). |
+| `sessions.summary` | Plain session description: nodes with readable settings, connections, triggers, run state. |
+
+The backend catalog gains default ports per node kind (single source for
+`nodes.add`). A cross-language drift check of UI library shapes against it
+was planned but is not built yet (see the known gap below).
+
+MCP: each method above becomes a tool, with descriptions written for
+non-experts, plus a `get_recipes` tool with ready recipes (clean voice chain,
+duck game while talking, podcast recording, Discord virtual mic).
+
+Tests: control unit tests for every method (success, name resolution,
+ambiguity, invalid values, idempotency, live activation where available), MCP
+tool tests (catalog, required args, dispatch, permission denial), REST/OpenAPI
+parity via the existing HTTP adapter tests, and docs.
+
+Items 2 and 3 DONE (2026-10-01):
+- `crates/control/src/simple.rs` implements the 12 methods. 117 API methods;
+  spec AUTO-15.
+- MCP: 76 tools, including assistant-first tools with generated keys,
+  `get_recipes`, `list_sessions`, `open_session` and `create_session`.
+- Docs: API reference rows and the HTTP guide section "One call per
+  intention".
+- Tests:
+  - `simple_tests.rs` (9): catalog, summary, set/idempotency/invalid/unknown,
+    ambiguity, add between/after + Duck + remove bridge, toggles, connections,
+    mute/levels/play guidance, permission boundaries;
+  - CLI MCP assistant flow (build a route and a new session by name);
+  - shell REST StreamDeck test;
+  - OpenAPI parity (all methods).
+- Known gap: UI library shapes and backend `node_template` are kept in step
+  by hand; no automated cross-language check yet.
+
+Item 4 DONE (2026-10-01): one **Arrange** button (with **Undo arrange** for
+15 s) replaces Tidy/Reset layout. `ui/src/smartLayout.ts`:
+- inputs pin to the first column and outputs to the last;
+- pass-through slots for long edges;
+- barycentre sweeps, then straightening passes;
+- gaps: 200 px columns, 90 px rows.
+
+Fit uses a double-rAF request and `minZoom` 0.2. Tests: `smartLayout.test.ts`
+(5) and `e2e/smart-layout.pw.ts` (3 themes, dev and production bundle).
+Checked on the user's real session export (copy):
+`evidence/2026-10-01-arrange-user-session-before.png` / `-after.png`.
+
+Item 5 DONE (2026-10-01): dragging a tool card (Tools tab or the canvas
+library) shows the tool's real node card, with default settings, following
+the pointer over the canvas (`ui/src/libraryDrag.tsx`; ghost node
+`__drop-preview` in `SessionFlowCanvas`). Outside the canvas, a small labelled
+chip follows the pointer.
+- Drop placement: the drop uses the drop event's own pointer position and the
+  current viewport.
+- No refit: the automatic fit-after-add is skipped for a drop, so the view
+  does not jump away from the placed node.
+- Found while testing: Playwright's emulated `dragover` reports the previous
+  mouse step. Real browsers repeat `dragover` while the pointer rests, so the
+  test nudges the pointer once before asserting.
+- Tests: `e2e/drag-place.pw.ts`, 3 themes, added to the production config.
+  It checks that the preview is under the pointer, the node lands at the
+  preview's flow position (±1 px), the preview disappears, and the viewport
+  is unchanged after the drop.
+- Screenshots: `evidence/2026-10-01-drag-preview-{dark,light,high-contrast}.png`.
+- Docs: quickstart paragraph after Arrange.
+
+Verification (2026-10-01, Windows 11, this workstation):
+- `npx tsc --noEmit -p .`: clean.
+- `npx vitest run src`: 42 files, 431/431 passed.
+- Dev Playwright suite: 147 passed, 9 failed, 8 skipped.
+  - Eight failures are pre-existing: the Undo strict-mode locator in
+    media-and-routing and session-workflows; the audio-tools "Bypass"
+    locator; the live-controls message; undo-eq-points ×3; and the
+    session-workflows export/import roundtrip.
+  - `inspector-stability` "Input device" failed only under full-suite load;
+    rerun alone, 22/22 passed.
+- Production-bundle suite: 27/27 passed, after rebuilding
+  `target/canvas-production-ui` with `vite build -c
+  vite.canvas-production.config.ts`. The stale bundle from 08:22 failed the
+  new test.
+- Release build `cargo build --manifest-path src-tauri/Cargo.toml --release
+  --features custom-protocol`:
+  - `src-tauri/target/release/audiorouter-shell.exe` 2026-10-01 08:40;
+  - `ui/dist` 08:37, contains `flow-drop-preview`;
+  - SHA-256 d822d50013c49f482400755359adcd624c53d0d2c04fa290d1cfb0c719c5c739.
+- Not verified: no attended hardware run of the new Recorder, simple API, MCP,
+  Arrange or drag features in the desktop shell; no AudioRouter shell was
+  running during this work. Nothing is committed.
+
+Defect (2026-10-01, attended): Record failed with "recording root is not
+configured", and nothing in the app could set a root.
+- Cause: only tests and `e2e_backend` called `configure_recording_root`. No
+  API method or UI existed, and the Recorder hint pointed to a Recording-tab
+  control that did not exist. The route-harness and real-backend e2e both
+  pre-configure a root, which hid this. Affects every build with one-click
+  recording (2026-10-01 08:05 and 08:40 checkpoints).
+- Fix:
+  - `recordings.getRoot` (Record; root or null, plus the suggested
+    `%USERPROFILE%\Music\AudioRouter Recordings`);
+  - `recordings.setRoot` (Record; `create` makes the folder; plain refusals
+    for relative paths, network shares, missing folders, files and links;
+    idempotent);
+  - the localhost HTTP adapter answers 403 for `setRoot` and omits it from
+    OpenAPI (`DESKTOP_ONLY_METHODS`); MCP does not offer it;
+  - Record without a root now says where to choose one;
+  - UI `RecordingFolderField` in Recorder Properties and the Recording tab;
+  - REC-07 spec sentence, quickstart, API reference and HTTP guide;
+  - 119 methods.
+- Tests:
+  - control `recording_folder_is_chosen_in_the_app_and_unlocks_one_click_recording`;
+  - HTTP `streamdeck_style_requests_work_by_name_in_one_call` (getRoot 200,
+    setRoot 403);
+  - OpenAPI parity skips desktop-only methods;
+  - e2e `recorder-one-click.pw.ts` first-run folder flow, 3 themes;
+  - screenshots `evidence/2026-10-01-recording-folder-{missing,set}-*.png`.
+- Also fixed a stale MCP count (58 → 76) in `crates/cli/tests/mcp_stdio.rs`
+  that the earlier MCP work missed.
+- Checks:
+  - `cargo test --no-fail-fast` for domain, control and cli: all passed;
+  - shell `http_api` tests: 6 passed, 1 ignored (attended);
+  - UI: tsc clean, vitest 431/431;
+  - recorder-one-click e2e 6/6, real-backend recording-workflows 2/2;
+  - contract drift check: 119 methods.
+- Build: the user's release shell was running from `src-tauri/target/release`,
+  so this build went to `target/recording-folder-20261001/release/audiorouter-shell.exe`
+  (16:41; `ui/dist` 16:39 contains "Use this folder"; SHA-256
+  35de4edcc907db003692a63ec965c6845edb93631a9ae0e776cf25e0cf2f54a9).
+
+Defect (2026-10-01, attended): two one-click takes on `patrick-main-native`
+could not be played. Stop failed with "recorder worker transition failed:
+recorder finalization failed: segmented WAV finalization failed: NotRecording".
+- Evidence: shell log (two takes, Stop error ~7 s after Start). Both files are
+  3116 bytes, with RIFF and data sizes 0: 512 frames (~10 ms) of 24-bit
+  stereo, header never finalized.
+- Root cause (engine): `RealtimeMixerFanout::process_paths_to_rings` passed
+  one shared output timeline to every independent path's taps. The session
+  has three paths on separate device clocks (mic → … → Meter → {monitor,
+  Recorder}; Siege; app capture → Mixer). When another path processed alone,
+  the mic path's next block skipped a frame number. The recorder saw a
+  discontinuity, failed, and Stop then hit `NotRecording`. Playback was
+  unaffected because rings do not use frame numbers.
+- Contributing defects in the one-click recording code:
+  - the queue held 32 chunks (~85 ms) instead of REC-08's two seconds;
+  - duplex and render-source pumps never drained recorder queues;
+  - a failed recorder never finalized its header (REC-08 requires keeping
+    the written prefix);
+  - one failing recorder aborted the drain for the whole pump pass;
+  - tests only fed one perfect single-path stream and checked "> 44 bytes"
+    instead of parsing the WAV.
+- Fix:
+  - each `RealtimePath` keeps its own `next_frame`, which survives in-place
+    graph replacement;
+  - `ONE_CLICK_RECORDER_QUEUE_CHUNKS` = 2 s;
+  - drain once per service pass for every worker kind;
+  - per-node failure record with no pump abort;
+  - `finish_failed` (WAV segments, streaming FLAC, MP3) keeps a playable
+    prefix;
+  - Stop returns `state: failed` with a plain `reason` and `paths`, and the
+    UI shows that reason instead of "Recording saved.".
+- Tests:
+  - engine `a_path_tap_sees_contiguous_frames_while_another_path_runs_on_its_own_clock`
+    (fails before the fix: frames 0, 128, 384);
+  - control `one_click_recording_survives_dropped_and_repeated_blocks_and_stays_playable`
+    (short stall loses nothing; a gap, a repeat or a long stall stop as
+    failed with a parsed, playable WAV and a reason; reproduced the user's
+    exact error before the fix);
+  - `one_click_flac_and_mp3_keep_a_finished_file_after_lost_audio`;
+  - the split test now parses every part's WAV header;
+  - e2e "a take that lost audio says so at Stop and keeps the file".
+- Checks (Windows 11, this workstation):
+  - `cargo test --no-fail-fast` for recording, engine, control, domain and
+    cli: all passed (control 217 + 8 hardware-ignored; engine 150);
+  - windows-audio lib 100/100; shell `http_api` 6 passed, 1 ignored;
+  - UI: tsc clean, vitest 431/431, recorder-one-click e2e 7/7; drift 119.
+- Not yet verified: a live hardware take on the user's multi-path session.
+  The user's shell (PID 55324) was running, so no device test was started.
+- Build: `target/recording-fix-20261001/release/audiorouter-shell.exe`
+  (17:02; `ui/dist` 17:00; SHA-256
+  094671b244aa71b398d3896536931602a814155fe0aab83e6fcc65c0cbcbcc7d).
+
+Network qualification and release 0.0.1 (2026-10-01). The user confirmed the
+recording fix works, asked to verify the network tools, then commit and
+release 0.0.1 to install on a second computer.
+- Evidence: [network qualification](evidence/2026-10-01-network-qualification.md).
+  It records three defects fixed, the receiver's wrong-address hint, the
+  automated and live (VB-Cable) runs, and the limits.
+- Found during the live runs:
+  - the occasional ~10–25 ms output dropouts on virtual cables also occur on
+    plain routes and on the last commit `1d4a2335`;
+  - so they are a pre-existing output-render issue, not network-related;
+  - listed as a known issue.
+- Release: version 0.0.1 in all Cargo/npm/Tauri manifests and lockfiles; the
+  session export `createdWith` now follows the package version. Release notes
+  have a 0.0.1 section.
+- Delivery decided by the user: a local installer only. Commit on `main`, tag
+  `v0.0.1` locally, build and verify the unsigned installer with
+  `tools/release/prepare-artifacts.ps1` and `verify-artifacts.ps1`. Nothing is
+  pushed and there is no GitHub draft.
+- Next action: the user installs 0.0.1 on the second computer and tests
+  Network Send/Receive between the two PCs (firewall, Wi-Fi). Then fix the
+  pre-existing virtual-cable output dropouts and the known e2e locator
+  failures.
+
+Next action: the user checks, in the release shell (one instance only):
+1. Recorder on the Meter → {Hear my voice, Recorder} route;
+2. Arrange on their session;
+3. drag-to-place.
+
+Then iterate on the connection-line visuals if they are still below 10/10.
+
+## Current task: visual tool inspectors (2026-09-30)
+
+User request: Compressor and Gate show only fields; they need a live visual
+to talk into while tuning. The Meter's peak line moves too fast. Then review
+every tool's inspector one by one for intuitive, visual, expert-accurate UI.
+Requirements UI-04, DSP-01, GRAPH-15.
+
+Decisions:
+- Backend adds `inputLevelDb`/`outputLevelDb` to processor telemetry for
+  Compressor, Gate and Limiter (additive, optional in the contract). A DSP
+  `LevelFollower` rises to each block's sample peak and falls 40 dB/s, so
+  20 Hz reads catch peaks without a reset-on-read. Computed per block in the
+  existing loops, with no allocation, lock or logging.
+- UI peak ballistics: displayed peaks hold 1.2 s, then fall at a fixed rate.
+  This is only a presentation layer; the numbers keep showing exact values.
+- Dynamics editor: a transfer curve drawn from the DSP formulas, with
+  draggable handles and a live operating dot. Also a scrolling level history
+  with the threshold line and gain reduction, a computed attack/hold/release
+  response sketch, and level-based threshold suggestions. Numeric fields
+  remain for exact entry.
+
+Tasks: (1) telemetry + tests, (2) meter ballistics, (3) dynamics editor +
+tests + screenshots in three themes, (4) per-tool review, recording each
+tool's change, (5) rebuild the release artifacts.
+Rollback: revert the UI components; the telemetry fields are optional.
+
+Outcome: all five tasks are done; see
+[visual tool inspectors evidence](evidence/2026-09-30-visual-tool-inspectors.md).
+Decisions:
+- Generic setting rows put the slider beside a 5.75rem exact field, under a
+  stacked caption, and stack again under 380 px.
+- The Graphic EQ and Input Switch editors replace their generic rows. Graphic
+  EQ keeps an unrounded exact field for each band.
+- A dedicated editor is used wherever a picture explains the setting. Time
+  Shift, Denoise, Spectral Gate, FIR Filter and Advanced EQ keep their
+  existing editors.
+Found and fixed a pre-existing defect: processor telemetry was never reported
+on routed chains (first-stage lookup hit the edge matrix). Pre-existing e2e
+failures are listed in the evidence and were not changed.
+Follow-up (same day): two shells were running, so the new UI used the old
+backend. Also fixed: the Mixer had no meter, the Level tile showed the
+cumulative hold, the pill was misleading, and Mute mic could not be undone
+while playing. See the evidence follow-up.
+Then (same day): group Lock and the connection redesign, first iteration (see
+evidence). Next: the user reviews connections in
+`src-tauri/target/release/audiorouter-shell.exe` for a design iteration. Close
+other windows first, then run only that exe. Talk through
+Gate and Compressor and confirm that every tool's live readings move on
+hardware, and that Mute mic toggles while playing.
+
+## Earlier task: Meter native startup regression (2026-09-30)
+
+User reports Meter build 1d4a2335 refuses the PD200X microphone path during
+native preparation. Requirements GRAPH-03/15, DSP-01, UI-04 and ENG-02/05.
+Read the live active session through the read-only API, reproduce the saved
+topology through the production native compiler (not only compile_session),
+add failing regressions, then fix the owning engine layer. Verify channel
+maps and non-destructive metering before/after tools, mixer inputs and outputs.
+Test native preparation/start/pump where endpoint ownership permits safely;
+do not stop the user's shell or change its graph. Run synthetic native-path
+tests plus clean-reference continuity on isolated exact endpoints if available.
+Build all matching artifacts separately, record limits and checksums.
+Rollback: prior native-smart-layout build.
+
+Outcome (2026-09-30, resumed after a stalled agent):
+- Cause: `compile_path_graph` accepted only sinks after the shared chain's
+  fan-out. The saved `patrick-main-native` rev 3 sends Gate both directly to
+  CABLE-A and through `meter-1` to the monitor, so preparation returned
+  `UnsupportedPath("path 1 (starting at \"Microphone (PD200X)\")")`.
+- Fix (`crates/engine`): `OutputBranchCompiler` walks each output tree.
+  Every branch tool is prepared once, in dependency order, and caches its
+  quantum for all of its children. Sources are the mixed signal, a pre-Mixer
+  input, or another branch tool. Privacy mute now applies after every
+  branch. Meter reset/snapshot and the other telemetry walkers include the
+  branch chains.
+- Reproduction: an exported copy of the user database (scratch, not
+  committed) compiled through `compile_native_paths_with_plugins_and_audio`
+  fails with that exact error on HEAD. With the fix it gives 2 paths.
+- `cargo test -p audiorouter-engine --lib`: 147 passed. The new
+  `native_output_branch_meter_preserves_samples_and_reports_resettable_levels`
+  (mono and stereo) fails on HEAD and passes with the fix.
+  `cargo test --workspace`: all passed (ignored live tests excluded).
+- Live, Windows 11 26200: `live_native_meter_saved_route_starts_pumps_and_resets`
+  (control, ignored) on the saved route reduced to the PD200X → Spectral
+  Gate → EQ → Compressor → Gate → {CABLE-A, Meter → monitor} path, all
+  privacy-muted. Discord PID 31556 had exited, so the app-capture path was
+  excluded. Prepare, start, 2992 delivered blocks, Meter frames > 0, reset
+  → 0, stop. Saved graph unchanged. Shell not running; user DB untouched.
+- Continuity: new opt-in `AUDIOROUTER_CONTINUITY_BRANCH_METER=1` puts a
+  Meter on the measured branch beside a Recorder branch. 47 Hz, 20 s,
+  chain `parametricEq,compressor,gate`: reference, CABLE-B result and
+  Recorder branch all 0 glitches, 0 silent runs. 0 late service gaps, max
+  gap 7.3 ms. 1 output underrun, which is the documented startup cushion.
+- Artifact: `npm.cmd run build --prefix ui` then `cargo build --manifest-path
+  src-tauri/Cargo.toml --release --features custom-protocol`.
+  `src-tauri/target/release/audiorouter-shell.exe` 2026-09-30 20:50, SHA-256
+  `862f40516f45bf4e4beaf5e6e3ef8b9be17bd1013957ec3075ebd975caf1a366`.
+  It is newer than `ui/dist` (20:49), and the bundle contains `meters.reset`.
+  Unsigned manual build, not M08 qualification.
+- Not run: attended shell use of the full saved session with Discord live.
+Next: attended test of the rebuilt shell on `patrick-main-native`.
+
 ## Current task: pass-through Meter and detailed metering (2026-09-30)
 
 User requests Meter insertion between tools and a larger Properties meter with

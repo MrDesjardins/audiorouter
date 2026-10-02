@@ -228,6 +228,48 @@ impl PitchShifter {
     }
 }
 
+/// A display peak level for dynamics telemetry: it rises at once to a
+/// block's sample peak and falls at a fixed rate. It is updated once per
+/// processed block, so a reader polling at 20 Hz still sees recent peaks
+/// without resetting state on read.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LevelFollower {
+    db: f32,
+}
+
+impl LevelFollower {
+    pub const FLOOR_DB: f32 = -120.0;
+    pub const FALL_DB_PER_SECOND: f32 = 40.0;
+
+    pub const fn new() -> Self {
+        Self { db: Self::FLOOR_DB }
+    }
+
+    pub fn db(&self) -> f32 {
+        self.db
+    }
+
+    pub fn reset(&mut self) {
+        self.db = Self::FLOOR_DB;
+    }
+
+    pub fn observe(&mut self, peak: f32, frames: usize, sample_rate: f32) {
+        let block_db = if peak.is_finite() && peak > 1.0e-6 {
+            20.0 * peak.log10()
+        } else {
+            Self::FLOOR_DB
+        };
+        let fallen = self.db - Self::FALL_DB_PER_SECOND * frames as f32 / sample_rate.max(1.0);
+        self.db = block_db.max(fallen).max(Self::FLOOR_DB);
+    }
+}
+
+impl Default for LevelFollower {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 fn finite_or_zero(value: f32) -> f32 {
     if value.is_finite() {
         value
@@ -835,6 +877,8 @@ pub struct Compressor {
     channels: usize,
     envelope_db: f32,
     gain_reduction_db: f32,
+    input_level: [LevelFollower; 2],
+    output_level: [LevelFollower; 2],
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -857,6 +901,8 @@ pub struct Gate {
     gain_db: f32,
     open: bool,
     hold_frames: usize,
+    input_level: [LevelFollower; 2],
+    output_level: [LevelFollower; 2],
 }
 
 impl Gate {
@@ -868,6 +914,8 @@ impl Gate {
             gain_db: -params.range_db,
             open: false,
             hold_frames: 0,
+            input_level: [LevelFollower::new(); 2],
+            output_level: [LevelFollower::new(); 2],
         })
     }
 
@@ -888,16 +936,30 @@ impl Gate {
         (-self.gain_db).max(0.0)
     }
 
+    /// Display peak level entering `channel` (dBFS, falling hold).
+    pub fn input_level_db(&self, channel: usize) -> f32 {
+        self.input_level.get(channel).map_or(LevelFollower::FLOOR_DB, LevelFollower::db)
+    }
+
+    /// Display peak level leaving `channel` (dBFS, falling hold).
+    pub fn output_level_db(&self, channel: usize) -> f32 {
+        self.output_level.get(channel).map_or(LevelFollower::FLOOR_DB, LevelFollower::db)
+    }
+
     pub fn reset(&mut self) {
         self.gain_db = -self.params.range_db;
         self.open = false;
         self.hold_frames = 0;
+        self.input_level = [LevelFollower::new(); 2];
+        self.output_level = [LevelFollower::new(); 2];
     }
 
     pub fn process_interleaved(&mut self, samples: &mut [f32]) {
         let attack = (-1.0 / (self.params.attack_ms * 0.001 * self.params.sample_rate)).exp();
         let release = (-1.0 / (self.params.release_ms * 0.001 * self.params.sample_rate)).exp();
         let hold = (self.params.hold_ms * 0.001 * self.params.sample_rate) as usize;
+        let mut input_peaks = [0.0_f32; 2];
+        let mut output_peaks = [0.0_f32; 2];
         for frame in samples.chunks_exact_mut(self.channels) {
             let peak = frame
                 .iter()
@@ -929,12 +991,18 @@ impl Gate {
             };
             self.gain_db = coefficient * self.gain_db + (1.0 - coefficient) * target_db;
             let gain = 10.0_f32.powf(self.gain_db / 20.0);
-            for sample in frame {
+            for (channel, sample) in frame.iter_mut().enumerate() {
                 let input = if sample.is_finite() { *sample } else { 0.0 };
                 let output = input * gain;
                 *sample = if output.is_finite() { output } else { 0.0 };
+                if let (Some(input_peak), Some(output_peak)) = (input_peaks.get_mut(channel), output_peaks.get_mut(channel)) {
+                    *input_peak = input_peak.max(input.abs());
+                    *output_peak = output_peak.max(sample.abs());
+                }
             }
         }
+        let frames = samples.len() / self.channels.max(1);
+        observe_levels(&mut self.input_level, &mut self.output_level, input_peaks, output_peaks, frames, self.params.sample_rate);
     }
 
     /// Process planar stereo with one shared detector and gain envelope.
@@ -947,6 +1015,8 @@ impl Gate {
         let attack = (-1.0 / (self.params.attack_ms * 0.001 * self.params.sample_rate)).exp();
         let release = (-1.0 / (self.params.release_ms * 0.001 * self.params.sample_rate)).exp();
         let hold = (self.params.hold_ms * 0.001 * self.params.sample_rate) as usize;
+        let mut input_peaks = [0.0_f32; 2];
+        let mut output_peaks = [0.0_f32; 2];
         for (left_sample, right_sample) in left.iter_mut().zip(right.iter_mut()) {
             let left_input = if left_sample.is_finite() {
                 *left_sample
@@ -984,7 +1054,26 @@ impl Gate {
             let gain = 10.0_f32.powf(self.gain_db / 20.0);
             *left_sample = finite_or_zero(left_input * gain);
             *right_sample = finite_or_zero(right_input * gain);
+            track_stereo_peaks(&mut input_peaks, &mut output_peaks, left_input, right_input, *left_sample, *right_sample);
         }
+        observe_levels(&mut self.input_level, &mut self.output_level, input_peaks, output_peaks, left.len(), self.params.sample_rate);
+    }
+}
+
+fn track_stereo_peaks(input: &mut [f32; 2], output: &mut [f32; 2], left_in: f32, right_in: f32, left_out: f32, right_out: f32) {
+    input[0] = input[0].max(left_in.abs());
+    input[1] = input[1].max(right_in.abs());
+    output[0] = output[0].max(left_out.abs());
+    output[1] = output[1].max(right_out.abs());
+}
+
+fn observe_levels(input: &mut [LevelFollower; 2], output: &mut [LevelFollower; 2], input_peaks: [f32; 2], output_peaks: [f32; 2], frames: usize, sample_rate: f32) {
+    if frames == 0 {
+        return;
+    }
+    for channel in 0..2 {
+        input[channel].observe(input_peaks[channel], frames, sample_rate);
+        output[channel].observe(output_peaks[channel], frames, sample_rate);
     }
 }
 
@@ -1270,6 +1359,8 @@ pub struct PeakLimiter {
     delay: Vec<Vec<f32>>,
     cursor: Vec<usize>,
     gain: f32,
+    input_level: [LevelFollower; 2],
+    output_level: [LevelFollower; 2],
 }
 
 impl PeakLimiter {
@@ -1312,6 +1403,8 @@ impl PeakLimiter {
             delay: vec![vec![0.0; lookahead_frames.max(1)]; channels],
             cursor: vec![0; channels],
             gain: 1.0,
+            input_level: [LevelFollower::new(); 2],
+            output_level: [LevelFollower::new(); 2],
         })
     }
 
@@ -1338,22 +1431,54 @@ impl PeakLimiter {
         }
         self.cursor.fill(0);
         self.gain = 1.0;
+        self.input_level = [LevelFollower::new(); 2];
+        self.output_level = [LevelFollower::new(); 2];
+    }
+
+    /// Display peak level entering `channel` (dBFS, falling hold).
+    pub fn input_level_db(&self, channel: usize) -> f32 {
+        self.input_level.get(channel).map_or(LevelFollower::FLOOR_DB, LevelFollower::db)
+    }
+
+    /// Display peak level leaving `channel` (dBFS, falling hold).
+    pub fn output_level_db(&self, channel: usize) -> f32 {
+        self.output_level.get(channel).map_or(LevelFollower::FLOOR_DB, LevelFollower::db)
     }
 
     pub fn process_interleaved(&mut self, samples: &mut [f32]) {
         if self.channels == 0 {
             return;
         }
+        let mut input_peaks = [0.0_f32; 2];
+        let mut output_peaks = [0.0_f32; 2];
         for values in samples.chunks_exact_mut(self.channels) {
             for (channel, sample) in values.iter_mut().enumerate() {
-                *sample = self.process_one(channel, *sample);
+                let input = *sample;
+                *sample = self.process_one(channel, input);
+                if let (Some(input_peak), Some(output_peak)) = (input_peaks.get_mut(channel), output_peaks.get_mut(channel)) {
+                    *input_peak = input_peak.max(finite_or_zero(input).abs());
+                    *output_peak = output_peak.max(sample.abs());
+                }
             }
         }
+        let frames = samples.len() / self.channels;
+        observe_levels(&mut self.input_level, &mut self.output_level, input_peaks, output_peaks, frames, self.sample_rate);
     }
 
     pub fn process_channel(&mut self, channel: usize, samples: &mut [f32]) {
-        for sample in samples {
-            *sample = self.process_one(channel, *sample);
+        let mut input_peak = 0.0_f32;
+        let mut output_peak = 0.0_f32;
+        for sample in samples.iter_mut() {
+            let input = *sample;
+            *sample = self.process_one(channel, input);
+            input_peak = input_peak.max(finite_or_zero(input).abs());
+            output_peak = output_peak.max(sample.abs());
+        }
+        if let (Some(input), Some(output)) = (self.input_level.get_mut(channel), self.output_level.get_mut(channel)) {
+            if !samples.is_empty() {
+                input.observe(input_peak, samples.len(), self.sample_rate);
+                output.observe(output_peak, samples.len(), self.sample_rate);
+            }
         }
     }
 
@@ -1759,6 +1884,8 @@ impl Compressor {
             channels,
             envelope_db: -120.0,
             gain_reduction_db: 0.0,
+            input_level: [LevelFollower::new(); 2],
+            output_level: [LevelFollower::new(); 2],
         })
     }
 
@@ -1773,16 +1900,30 @@ impl Compressor {
     pub fn reset(&mut self) {
         self.envelope_db = -120.0;
         self.gain_reduction_db = 0.0;
+        self.input_level = [LevelFollower::new(); 2];
+        self.output_level = [LevelFollower::new(); 2];
     }
 
     pub fn gain_reduction_db(&self) -> f32 {
         self.gain_reduction_db
     }
 
+    /// Display peak level entering `channel` (dBFS, falling hold).
+    pub fn input_level_db(&self, channel: usize) -> f32 {
+        self.input_level.get(channel).map_or(LevelFollower::FLOOR_DB, LevelFollower::db)
+    }
+
+    /// Display peak level leaving `channel` (dBFS, falling hold).
+    pub fn output_level_db(&self, channel: usize) -> f32 {
+        self.output_level.get(channel).map_or(LevelFollower::FLOOR_DB, LevelFollower::db)
+    }
+
     /// Applies linked detection and compression in place without allocation.
     pub fn process_interleaved(&mut self, samples: &mut [f32]) {
         let attack = (-1.0 / (self.params.attack_ms * 0.001 * self.params.sample_rate)).exp();
         let release = (-1.0 / (self.params.release_ms * 0.001 * self.params.sample_rate)).exp();
+        let mut input_peaks = [0.0_f32; 2];
+        let mut output_peaks = [0.0_f32; 2];
         for frame in samples.chunks_exact_mut(self.channels) {
             let peak = frame
                 .iter()
@@ -1803,12 +1944,18 @@ impl Compressor {
             );
             self.gain_reduction_db = reduction_db;
             let gain = 10.0_f32.powf((self.params.makeup_db - reduction_db) / 20.0);
-            for sample in frame {
+            for (channel, sample) in frame.iter_mut().enumerate() {
                 let input = if sample.is_finite() { *sample } else { 0.0 };
                 let output = input * gain;
                 *sample = if output.is_finite() { output } else { 0.0 };
+                if let (Some(input_peak), Some(output_peak)) = (input_peaks.get_mut(channel), output_peaks.get_mut(channel)) {
+                    *input_peak = input_peak.max(input.abs());
+                    *output_peak = output_peak.max(sample.abs());
+                }
             }
         }
+        let frames = samples.len() / self.channels.max(1);
+        observe_levels(&mut self.input_level, &mut self.output_level, input_peaks, output_peaks, frames, self.params.sample_rate);
     }
 
     /// Process planar stereo with one shared detector and gain envelope.
@@ -1819,6 +1966,8 @@ impl Compressor {
         }
         let attack = (-1.0 / (self.params.attack_ms * 0.001 * self.params.sample_rate)).exp();
         let release = (-1.0 / (self.params.release_ms * 0.001 * self.params.sample_rate)).exp();
+        let mut input_peaks = [0.0_f32; 2];
+        let mut output_peaks = [0.0_f32; 2];
         for (left_sample, right_sample) in left.iter_mut().zip(right.iter_mut()) {
             let left_input = if left_sample.is_finite() {
                 *left_sample
@@ -1848,7 +1997,9 @@ impl Compressor {
             let gain = 10.0_f32.powf((self.params.makeup_db - reduction_db) / 20.0);
             *left_sample = finite_or_zero(left_input * gain);
             *right_sample = finite_or_zero(right_input * gain);
+            track_stereo_peaks(&mut input_peaks, &mut output_peaks, left_input, right_input, *left_sample, *right_sample);
         }
+        observe_levels(&mut self.input_level, &mut self.output_level, input_peaks, output_peaks, left.len(), self.params.sample_rate);
     }
 }
 
@@ -2367,6 +2518,43 @@ mod tests {
         assert!(left[127] < 1.0);
         assert!((left[127] / right[127] - 4.0).abs() < 1.0e-4);
         assert!(compressor.gain_reduction_db() > 0.0);
+        // Display levels: input is the raw channel peak, output the processed one.
+        assert!(compressor.input_level_db(0).abs() < 1.0e-4);
+        assert!((compressor.input_level_db(1) - 20.0 * 0.25_f32.log10()).abs() < 1.0e-3);
+        assert!((compressor.output_level_db(0) - 20.0 * left.iter().fold(0.0_f32, |a, b| a.max(b.abs())).log10()).abs() < 1.0e-3);
+    }
+
+    #[test]
+    fn dynamics_display_levels_rise_at_once_and_fall_at_a_fixed_rate() {
+        let mut gate = Gate::new(
+            GateParams { threshold_db: -40.0, hysteresis_db: 3.0, ratio: 10.0, range_db: 60.0, attack_ms: 0.1, hold_ms: 0.0, release_ms: 10.0, sample_rate: 48_000.0 },
+            1,
+        )
+        .unwrap();
+        let mut loud = [0.5_f32; 128];
+        gate.process_interleaved(&mut loud);
+        let start = gate.input_level_db(0);
+        assert!((start - 20.0 * 0.5_f32.log10()).abs() < 1.0e-3);
+        assert!(gate.output_level_db(0) <= start + 1.0e-3);
+        // 0.5 s of silence falls by FALL_DB_PER_SECOND / 2 without resetting.
+        for _ in 0..(24_000 / 128) {
+            let mut silence = [0.0_f32; 128];
+            gate.process_interleaved(&mut silence);
+        }
+        let fallen = start - gate.input_level_db(0);
+        let expected = LevelFollower::FALL_DB_PER_SECOND * (24_000 / 128 * 128) as f32 / 48_000.0;
+        assert!((fallen - expected).abs() < 0.05, "fell {fallen} dB, expected {expected}");
+        gate.reset();
+        assert_eq!(gate.input_level_db(0), LevelFollower::FLOOR_DB);
+
+        let mut limiter = PeakLimiter::new_at_sample_rate(LimiterParams { ceiling_db: -6.0, lookahead_ms: 0.0, release_ms: 50.0 }, 48_000.0, 2).unwrap();
+        let mut left = [1.0_f32; 128];
+        let mut right = [0.1_f32; 128];
+        limiter.process_channel(0, &mut left);
+        limiter.process_channel(1, &mut right);
+        assert!(limiter.input_level_db(0).abs() < 1.0e-4);
+        assert!(limiter.output_level_db(0) <= -6.0 + 1.0e-3);
+        assert!((limiter.input_level_db(1) + 20.0).abs() < 1.0e-3);
     }
 
     #[test]

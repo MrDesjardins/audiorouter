@@ -37,7 +37,8 @@ export type NodeKind =
   | "spectralGate"
   | "timeShift"
   | "networkSend"
-  | "networkReceive";
+  | "networkReceive"
+  | "duck";
 
 export type PortDirection = "input" | "output";
 
@@ -214,6 +215,53 @@ export interface RecordingRow extends RecordingMetadata {
   missing: boolean;
 }
 
+/** Result of a task-shaped edit (nodes.*, connections.*): saved and applied live. */
+export interface SimpleEditResult {
+  sessionId: EntityId;
+  nodeId?: EntityId;
+  name?: string;
+  revision: number | null;
+  activation: unknown;
+  [key: string]: unknown;
+}
+
+export interface NodeCatalogEntry {
+  kind: NodeKind;
+  name: string;
+  description: string;
+  inputs: string[];
+  outputs: string[];
+  parameters: unknown[];
+}
+
+export interface SessionSummary {
+  sessionId: EntityId;
+  name: string;
+  revision: number;
+  playing: boolean;
+  privacyMuted: boolean;
+  nodes: Array<{ id: EntityId; name: string; kind: NodeKind; enabled: boolean; bypass: boolean; settings: Record<string, string> }>;
+  connections: Array<{ id: EntityId; from: string; to: string; toInput: string; enabled: boolean }>;
+}
+
+/** One-click recording on a Recorder node (Record button, StreamDeck, MCP). */
+export interface NodeRecordingResult {
+  sessionId?: EntityId | null;
+  nodeId: EntityId;
+  state: "idle" | "armed" | "recording" | "paused" | "stopping" | "completed" | "failed";
+  format?: "wavPcm16" | "wavPcm24" | "wavFloat32" | "flac16" | "flac24" | "mp3";
+  path?: string | null;
+  splitMinutes?: number;
+  alreadyRecording?: boolean;
+  /** Set when a take stopped early: why, in plain words (the file is kept). */
+  reason?: string;
+  /** Files kept for this take. */
+  paths?: string[];
+  parts?: Array<{ index: number; startFrame: number; endFrame: number | null }>;
+  pauses?: Array<{ startFrame: number; endFrame: number | null }>;
+  lastFrame?: number | null;
+}
+
 export interface RecorderLifecycleResult {
   sessionId: EntityId;
   state: "idle" | "armed" | "recording" | "paused" | "stopping" | "completed" | "failed";
@@ -380,6 +428,8 @@ export interface NetworkNodeTelemetry {
   latePackets?: number;
   /** Datagrams from another address or not AudioRouter audio. */
   rejectedDatagrams?: number;
+  /** Latest address that sent AudioRouter audio but is not the configured sender. */
+  rejectedFrom?: string;
   /** Times the receive buffer ran empty (audible gaps). */
   underruns?: number;
   overflowPackets?: number;
@@ -723,6 +773,9 @@ export interface DiagnosticsSnapshot {
     processor: {
       gainReductionDb: number[];
       gateOpen: boolean[];
+      /** Sample peak entering / leaving a Compressor, Gate or Limiter (dBFS). Rises at once, falls 40 dB/s. */
+      inputLevelDb?: number[];
+      outputLevelDb?: number[];
     } | null;
     plugin: {
       state: "unknown" | "stopped" | "running" | "failed" | "quarantined";
@@ -1110,6 +1163,22 @@ export type ImplementedMethod =
   | "recorders.resume"
   | "recorders.split"
   | "recorders.stop"
+  | "sessions.play"
+  | "sessions.togglePlay"
+  | "sessions.summary"
+  | "safety.togglePrivacyMute"
+  | "nodes.catalog"
+  | "nodes.set"
+  | "nodes.toggle"
+  | "nodes.add"
+  | "nodes.remove"
+  | "connections.add"
+  | "connections.remove"
+  | "meters.levels"
+  | "recorders.startRecording"
+  | "recorders.stopRecording"
+  | "recordings.getRoot"
+  | "recordings.setRoot"
   | "recordings.get"
   | "recordings.recovery"
   | "recordings.reveal"
@@ -1230,6 +1299,24 @@ export type MethodParams = {
   "recorders.resume": { sessionId: EntityId; nodeId?: EntityId; frame: number; idempotencyKey?: string };
   "recorders.split": { sessionId: EntityId; nodeId?: EntityId; frame: number; idempotencyKey?: string };
   "recorders.stop": { sessionId: EntityId; nodeId?: EntityId; frame: number; idempotencyKey?: string };
+  "recorders.startRecording": { sessionId?: EntityId; nodeId: EntityId; idempotencyKey: string };
+  // Task-shaped methods: sessionId defaults to the active session; node, from
+  // and to accept an ID or an exact (case-insensitive) name.
+  "sessions.play": { sessionId?: EntityId; idempotencyKey: string };
+  "sessions.togglePlay": { sessionId?: EntityId; idempotencyKey: string };
+  "sessions.summary": { sessionId?: EntityId };
+  "safety.togglePrivacyMute": { idempotencyKey: string };
+  "nodes.catalog": Record<string, never>;
+  "nodes.set": { sessionId?: EntityId; node: string; parameters?: Record<string, boolean | number | string>; enabled?: boolean; bypass?: boolean; name?: string; idempotencyKey: string };
+  "nodes.toggle": { sessionId?: EntityId; node: string; target: string; idempotencyKey: string };
+  "nodes.add": { sessionId?: EntityId; kind: NodeKind; name?: string; parameters?: Record<string, boolean | number | string>; between?: { from: string; to: string }; after?: string; idempotencyKey: string };
+  "nodes.remove": { sessionId?: EntityId; node: string; bridge?: boolean; idempotencyKey: string };
+  "connections.add": { sessionId?: EntityId; from: string; to: string; idempotencyKey: string };
+  "connections.remove": { sessionId?: EntityId; from: string; to: string; idempotencyKey: string };
+  "meters.levels": { sessionId?: EntityId };
+  "recorders.stopRecording": { sessionId?: EntityId; nodeId: EntityId; idempotencyKey: string };
+  "recordings.getRoot": Record<string, never> | undefined;
+  "recordings.setRoot": { root: string; create?: boolean; idempotencyKey: string };
   "recordings.get": { recordingId: EntityId };
   "recordings.recovery": { recordingId?: EntityId; cursor?: EntityId; limit?: number } | undefined;
   "recordings.reveal": { recordingId: EntityId };
@@ -1373,6 +1460,22 @@ export type MethodResult = {
   "recorders.resume": RecorderLifecycleResult;
   "recorders.split": RecorderLifecycleResult;
   "recorders.stop": RecorderLifecycleResult;
+  "recorders.startRecording": NodeRecordingResult;
+  "sessions.play": { sessionId: EntityId; state: string; alreadyPlaying?: boolean; autoRecording?: unknown[]; [key: string]: unknown };
+  "sessions.togglePlay": { sessionId: EntityId; state: string; [key: string]: unknown };
+  "sessions.summary": SessionSummary;
+  "safety.togglePrivacyMute": { muted: boolean; [key: string]: unknown };
+  "nodes.catalog": NodeCatalogEntry[];
+  "nodes.set": SimpleEditResult;
+  "nodes.toggle": SimpleEditResult & { target: string; value: boolean | number | string };
+  "nodes.add": SimpleEditResult & { kind: string };
+  "nodes.remove": SimpleEditResult & { bridged: boolean };
+  "connections.add": SimpleEditResult & { connectionId: EntityId };
+  "connections.remove": SimpleEditResult & { removed: number };
+  "meters.levels": { sessionId: EntityId; playing: boolean; levels: Array<{ nodeId: EntityId; name: string; peakDb: number | null; rmsDb: number | null; clipped: boolean; reductionDb: number | null; active: boolean | null }> };
+  "recorders.stopRecording": NodeRecordingResult;
+  "recordings.getRoot": { root: string | null; suggestedRoot: string | null };
+  "recordings.setRoot": { root: string; created: boolean };
   "recordings.get": RecordingRow;
   "recordings.recovery": RecordingRecoveryResult;
   "recordings.reveal": RecordingRevealResult;

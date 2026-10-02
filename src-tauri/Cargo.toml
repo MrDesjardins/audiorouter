@@ -1,6 +1,6 @@
 [package]
 name = "audiorouter-shell"
-version = "0.1.0"
+version = "0.0.1"
 description = "AudioRouter native desktop shell"
 authors = ["AudioRouter contributors"]
 edition = "2021"

@@ -126,6 +126,11 @@ fn rpc(method: &str, params: Option<Value>) -> JsonRpcRequest {
         params,
     }
 }
+/// Methods only the desktop window may call: approving a recording folder is
+/// the user's own file-root decision (REC-07, SEC authorization UX), so a
+/// token holder on localhost cannot redirect recordings.
+pub const DESKTOP_ONLY_METHODS: &[&str] = &["recordings.setRoot"];
+
 pub fn operation_path(name: &str) -> String {
     format!("/api/v1/{}", name.replace('.', "/"))
 }
@@ -135,6 +140,9 @@ pub fn openapi(describe: &Value, port: u16) -> Value {
         let Some(name) = method["name"].as_str() else {
             continue;
         };
+        if DESKTOP_ONLY_METHODS.contains(&name) {
+            continue;
+        }
         paths.insert(operation_path(name), json!({"post": {
             "operationId": name, "tags": [name.split('.').next().unwrap_or("API")],
             "summary": method["description"],
@@ -319,6 +327,9 @@ fn handle(
                 .any(|spec| spec.name == method)
             {
                 return fail(stream, 404, "Unknown API operation");
+            }
+            if DESKTOP_ONLY_METHODS.contains(&method.as_str()) {
+                return fail(stream, 403, "Choose the recording folder in the AudioRouter window");
             }
             method
         }
@@ -515,6 +526,32 @@ mod tests {
         assert_eq!(status, 409, "{error}");
     }
     #[test]
+    fn streamdeck_style_requests_work_by_name_in_one_call() {
+        let (api, plane) = fixture();
+        // A key press: toggle a node by its name, no IDs or revisions.
+        let (status, toggled) = call(&api, "/api/v1/nodes/toggle", Some(json!({"node":"neutral GAIN","target":"bypass","idempotencyKey":"deck-1"})));
+        assert_eq!(status, 200, "{toggled}");
+        assert_eq!(toggled["value"], true);
+        let session = plane(&rpc("sessions.get", Some(json!({"sessionId":"desktop-session"})))).unwrap().result.unwrap();
+        assert_eq!(session["nodes"].as_array().unwrap().iter().find(|node| node["name"] == "Neutral gain").unwrap()["bypass"], true);
+        // Displays read a plain summary and compact levels.
+        let (status, summary) = call(&api, "/api/v1/sessions/summary", Some(json!({})));
+        assert_eq!(status, 200, "{summary}");
+        assert_eq!(summary["sessionId"], "desktop-session");
+        let (status, levels) = call(&api, "/api/v1/meters/levels", Some(json!({})));
+        assert_eq!(status, 200, "{levels}");
+        assert_eq!(levels["playing"], false);
+        // The recording folder is read-only here; only the window approves one.
+        let (status, root) = call(&api, "/api/v1/recordings/getRoot", Some(json!({})));
+        assert_eq!(status, 200, "{root}");
+        let (status, refused) = call(&api, "/api/v1/recordings/setRoot", Some(json!({"root":"C:\\Temp","create":true,"idempotencyKey":"deck-root"})));
+        assert_eq!(status, 403, "{refused}");
+        // Mistakes come back as 400 with a readable reason.
+        let (status, error) = call(&api, "/api/v1/nodes/toggle", Some(json!({"node":"Guitar","target":"bypass","idempotencyKey":"deck-2"})));
+        assert_eq!(status, 400, "{error}");
+        assert!(error.to_string().contains("no node named"), "{error}");
+    }
+    #[test]
     fn http_rejects_token_origin_host_and_oversized_or_malformed_input() {
         let (api, _) = fixture();
         for headers in [
@@ -593,6 +630,10 @@ mod tests {
         let (api, plane) = fixture();
         let (_, schema) = call(&api, "/openapi.json", None);
         for spec in audiorouter_domain::API_METHODS {
+            if DESKTOP_ONLY_METHODS.contains(&spec.name) {
+                assert!(schema["paths"][operation_path(spec.name)].is_null());
+                continue;
+            }
             assert_eq!(
                 schema["paths"][operation_path(spec.name)]["post"]["operationId"],
                 spec.name

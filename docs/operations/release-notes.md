@@ -1,4 +1,65 @@
-# AudioRouter 0.1.0-dev qualification notes
+# AudioRouter release notes
+
+## 0.0.1 — 2026-10-01 (first test release, unsigned)
+
+A test build for installing on a second computer. It is **not signed**:
+Windows SmartScreen will warn ("Windows protected your PC"); choose *More
+info → Run anyway* only for an installer you built or received from the
+maintainer. The installer is per-user (no administrator rights) and does not
+install audio drivers. Use existing devices or VB-Cable/Voicemeeter.
+
+Highlights since the development snapshots:
+- **Network Send / Network Receive:**
+  - stream audio between computers on a local network;
+  - a sending PC needs no local output;
+  - address/port/buffer edits apply while playing;
+  - the receiver names the address audio really comes from and offers a
+    one-click fix
+  ([qualification](../plans/active/evidence/2026-10-01-network-qualification.md)).
+- **One-click recording:**
+  - Record/Stop on the Recorder node;
+  - optional start with Play;
+  - optional new file every N minutes;
+  - a recording folder chosen in the app.
+
+  A take that loses audio still leaves a playable file and says why.
+- **Live tool visuals and editors** (Compressor, Gate, Duck, EQs, Meter, …),
+  an animated signal flow, the **Duck** tool and **Input Switch**.
+- **Canvas:**
+  - **Arrange** lays the graph out, inputs to outputs;
+  - drag tools from the panel with a live preview;
+  - visual groups can be locked.
+- **Automation:**
+  - task-shaped REST endpoints for StreamDeck and scripts (`nodes.toggle`,
+    `sessions.togglePlay`, …);
+  - MCP tools for configuring AudioRouter through an AI assistant.
+
+Fixed in this release:
+- One-click recordings on multi-path sessions produced unplayable files.
+- A session whose only outputs are Network Send or Recorder nodes played
+  nothing.
+- Live network edits reported "applied" but kept the old address.
+- Stopping a recorder could fail with `FrameWentBackwards`.
+
+Known issues:
+- **Output dropouts:** occasional ~10–25 ms dropouts on virtual-cable outputs
+  (about one per 30 s on the development PC). The previous build shows the
+  same, so this is not new. It is under investigation.
+- **Two-computer use is untested:** network streaming is qualified on one PC
+  (loopback, LAN address, two backends), not yet between two PCs or over
+  Wi-Fi.
+- **Firewall:** the receiving PC's Windows Firewall must allow AudioRouter on
+  **Private** networks (see the quickstart).
+- **Browser tests:** a few known test failures (Undo/Bypass locator
+  ambiguity, EQ point undo, live-controls message) are open in the UI test
+  suite. They are test-locator issues, not product failures, and remain to be
+  fixed.
+- **Release gates:** clean-machine, upgrade/uninstall and missing-WebView2
+  qualification (M08) have not been run yet.
+
+Data lives in `%LOCALAPPDATA%\AudioRouter` (sessions, settings, logs);
+recordings go to the folder you choose. Uninstall behaviour is not qualified
+yet, so back up that folder if you need it.
 
 ## Canvas startup recovery — 2026-09-30
 

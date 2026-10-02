@@ -28,7 +28,7 @@ describe("output fan-out across library tools", () => {
   const nodeKinds: Record<LibraryNodeKind, true> = {
     physicalInput: true, physicalOutput: true, testSignal: true, audioFile: true,
     mixer: true, gain: true, volume: true, bassTreble: true, dehum: true,
-    declick: true, inputSwitch: true, denoise: true, speechDenoise: true,
+    declick: true, inputSwitch: true, duck: true, denoise: true, speechDenoise: true,
     spectralGate: true, firFilter: true, timeShift: true, mute: true, meter: true,
     parametricEq: true, compressor: true, gate: true, limiter: true, delay: true,
     graphicEq: true, pitch: true, recorder: true, networkSend: true,

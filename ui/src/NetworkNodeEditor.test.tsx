@@ -86,4 +86,16 @@ describe("NetworkNodeEditor", () => {
     expect(onChange).toHaveBeenLastCalledWith("bufferMs", 80);
     expect(screen.getByRole("status").textContent).toBe("Receiving · 12 packets · 40 ms buffered");
   });
+
+  it("names the address audio really comes from and fixes the sender in one click", () => {
+    const base = appendLibraryNode(demoSession, "networkReceive").nodes.at(-1)!;
+    const node = { ...base, parameters: { ...base.parameters, sender: "192.168.1.20" } };
+    const onChange = vi.fn();
+    render(<NetworkNodeEditor node={node} disabled={false} telemetry={{ direction: "receive", receivedPackets: 0, rejectedDatagrams: 40, rejectedFrom: "192.168.1.51" }} onChange={onChange} />);
+    expect(screen.getByRole("status").textContent).toContain("audio from 192.168.1.51 was ignored");
+    expect(screen.getByRole("alert").textContent).toContain("arriving from 192.168.1.51");
+    fireEvent.click(screen.getByRole("button", { name: "Use 192.168.1.51" }));
+    expect(onChange).toHaveBeenLastCalledWith("sender", "192.168.1.51");
+    expect((screen.getByLabelText("Sending computer's IP address") as HTMLInputElement).value).toBe("192.168.1.51");
+  });
 });

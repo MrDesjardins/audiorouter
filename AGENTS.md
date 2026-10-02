@@ -54,6 +54,33 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-01 — Qualify recording on the user's real topology and parse the output file.**
+  Evidence: [active plan, unplayable one-click takes](docs/plans/active/current.md).
+  Scope: recorder, tap and timeline changes. Consequence: one-click recording
+  passed tests that fed one perfect single-path stream and checked
+  "file > 44 bytes", while the user's three-path session failed every take
+  within 10 ms and left header-less WAVs. Feed taps through a multi-path
+  `RealtimeMixerFanout` with paths on different clocks, inject drops,
+  stalls and repeats, parse every WAV header (`assert_playable_wav`), and
+  load the user's session from a database copy to check its path count.
+
+- **2026-10-01 — Test the first-run state of every precondition a feature needs.**
+  Evidence: [active plan, recording-folder defect](docs/plans/active/current.md).
+  Scope: features that depend on backend configuration (recording root,
+  endpoints, enrollment). Consequence: one-click recording shipped green
+  because both the route harness and `e2e_backend` pre-configured a recording
+  root, while the app had no way to set one. The user hit "recording root is
+  not configured" immediately. For each such precondition, test the
+  unconfigured state too, and confirm a user-reachable control sets it.
+
+- **2026-09-30 — A node owns several prepared stages; look up by stage kind, not first position.**
+  Evidence: [visual tool inspectors](docs/plans/active/evidence/2026-09-30-visual-tool-inspectors.md).
+  Scope: `RuntimeGraph` per-node reads (`*_for_node`). Consequence: the
+  incoming edge's `ChannelMatrix` stage carries the destination node's ID, so
+  `position()` silently returned that matrix and dynamics telemetry was never
+  reported on routed chains. Search every stage with the identity
+  (`find_map`) and test on a compiled route, not a hand-built single stage.
+
 - **2026-09-26 — Judge audio quality with the sine-continuity harness, not by builds, counters or ear alone.**
   Evidence: [audio continuity qualification](docs/plans/active/evidence/2026-09-26-audio-continuity.md).
   Scope: any change to capture, graph, plugin bridge, output or pumping code.

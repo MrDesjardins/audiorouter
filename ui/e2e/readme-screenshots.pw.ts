@@ -85,7 +85,7 @@ test("README screenshots", async ({ page, backend }) => {
     await page.getByRole("tab", { name: "Session", exact: true }).click();
     await page.getByRole("combobox", { name: "Choose session" }).selectOption({ label: name });
     await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Tidy layout" }).click();
+    await page.getByRole("button", { name: "Arrange" }).click();
     await page.waitForTimeout(400);
   };
   const shot = (file: string) => page.screenshot({ path: path.join(out, file) });

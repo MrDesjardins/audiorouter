@@ -329,6 +329,20 @@ both computers.
    "Waiting for audio" means nothing is arriving. Check both IP addresses, the
    port, that both sessions are playing, and the firewall. Packets from any
    other address are ignored and counted.
+5. If AudioRouter audio arrives from a different address than the one you
+   entered (for example the sending PC also has Wi-Fi and Ethernet), the
+   receive node names that address and offers **Use 192.168.x.y**. One click
+   switches to it while playing.
+
+The sending PC does not need a speaker or headphone output in its session:
+**Microphone → (tools) → Network Send** alone is a complete route.
+
+Address, port and buffer changes apply while audio plays; there is no need to
+Stop and Play again. If nothing arrives on the receiving PC and the node does
+not name another address, the receiving PC's Windows Firewall is the usual
+cause. Open *Windows Security → Firewall & network protection → Allow an app
+through firewall* and make sure AudioRouter is allowed on **Private**
+networks, and that your network is set to Private, not Public.
 
 The stream is uncompressed 48 kHz float audio (about 3 Mbit/s for stereo). It
 is not encrypted, so use it only on a network you trust. On Wi-Fi, raise
@@ -644,6 +658,36 @@ Failures retain Playwright evidence under `ui/test-results`; theme screenshots
 are under `target/feature-confidence-visual`. See the
 [coverage and limits](../plans/active/evidence/2026-09-26-feature-confidence.md)
 before interpreting a green browser result as audio qualification.
+## Recording with one click
+
+Put a **Recorder** where you want to capture audio, for example after a Meter
+that also feeds your headphones. The route plays whether or not you are
+recording. While it plays, press **Record** on the node (or in Properties) and
+press **Stop** to save. Stopping playback also saves an open recording.
+
+In Properties, choose the **File format** (WAV 24-bit for editing, FLAC for
+smaller lossless files, MP3 to share). Turn on **Record automatically when Play
+starts** for every-session capture. Set **New file every** a number of minutes
+to split long sessions (WAV splits without a gap; FLAC and MP3 start a new file).
+Before your first recording, choose a **Recording folder**. It appears under
+the Recorder's Properties and at the top of the Recording tab, with a suggested
+folder (`Music\AudioRouter Recordings`). Press **Use this folder** and it is
+created for you; **Change folder** picks another one later. Only local folders
+are accepted (no network shares or links), and only the AudioRouter window can
+change the folder; the localhost API and MCP cannot. Until a folder is chosen,
+Record explains where to set it. Scripts, StreamDeck
+buttons and the MCP use `recorders.startRecording` and `recorders.stopRecording`
+with the session and node IDs.
+
+## Ducking other audio while you talk
+
+Add **Duck** on the line you want lowered (for example game audio) and choose
+**Triggered by** in Properties (usually your microphone). While the trigger is
+louder than the trigger level, this audio goes down by the set amount. It comes
+back after Hold and Release. Drag the orange line in its live view, or use the
+suggested level calculated from your voice and room noise. A dashed violet
+line on the canvas shows which node triggers it.
+
 ## Properties status and timing
 
 Add **Meter** between tools from a connection's insert menu, or connect its
@@ -656,12 +700,47 @@ Statistics restart on graph preparation/replacement. Sample peaks do not
 measure inter-sample true peak or LUFS; these meters are not loudness compliance
 meters. Clipped time is the sum of over-full-scale samples per channel, rather
 than wall-clock duration of an uninterrupted clipping event.
+While playing, each connection shows its audio. Moving lights travel toward the receiving node, and the colour follows the level: teal when quiet, gold for speech, orange when loud, red near clipping. Glow and the number of lights grow with intensity. Lock a visual group in Properties (**Lock position and size**) so it cannot be dragged or resized by accident.
+The thin recent-peak line holds for 1.2 s and then falls, so speech peaks stay
+readable; the numbers always show the exact current values.
 
-**Tidy layout** arranges connected paths left to right, separates disconnected
-paths and spaces cards using their measured sizes. **Reset layout** clears
-custom connector routing and restores the same smart arrangement. Audio nodes
-move; visual groups retain their custom positions. Neither changes connections
-or audio. Layout remains local to each session.
+### Tuning a Gate, Compressor or Limiter by voice
+
+Select the tool while the route plays and talk normally. **Live response**
+shows the tool's curve (sound in across, sound out up), with a moving dot where
+your voice is now, In/Out level meters and the gain reduction. The 8-second
+history below draws your level, the result and the threshold line. Drag the
+round handles on the curve or the orange line in the history; exact values
+stay editable in the fields underneath.
+
+- **Gate**: the history marks *room noise* and *voice* from your last 8 seconds.
+  Set the threshold between them (the suggestion button picks a third of the way
+  up). The strip under the history is green while the gate is open and red
+  where it turns the room down. If word endings are cut, lower the threshold or
+  raise Hold.
+- **Compressor**: around 3–6 dB of reduction on loud words sounds natural; the
+  suggestion takes about 6 dB off your voice peaks at the current ratio.
+- **How one word is shaped** sketches attack, hold and release on a sample
+  word, and updates as you change them.
+
+Graphic EQ, Bass & Treble, Dehum, Pitch, Delay, Volume/Gain, Input Switch,
+Declick and Speech Denoise also have a visual editor with quick choices above
+their exact settings. EQ curves come from the same DSP code that processes the
+audio.
+
+**Arrange** puts every input on the left and every output on the right, with
+tools in between in signal order. Long connections get their own room, chains
+line up straight, and there is about one card of space between columns. It
+also resets custom connector sides. **Undo arrange** appears for 15 seconds
+and restores the previous positions. Audio nodes move; visual groups keep
+their own positions. Arranging never changes connections or audio. Layout is
+kept locally for each session.
+
+To place a tool exactly, drag its card from the **Tools** tab (or from the
+canvas's own tool list) onto the canvas. While you drag, the tool's real card
+with its default settings follows the pointer; release to drop it there. The
+view stays where it is so you can connect it straight away. Clicking a card
+still adds the tool at the next free spot.
 
 Spectral Gate **Learn again** replaces its previous noise curve. **Add noise**
 keeps that curve and raises bands where additional noise is louder. Play only

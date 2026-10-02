@@ -25,6 +25,7 @@ export function networkTelemetryText(telemetry: NetworkNodeTelemetry | null | un
   }
   const received = telemetry.receivedPackets ?? 0;
   if (received === 0) {
+    if (telemetry.rejectedFrom) return `Waiting for audio · audio from ${telemetry.rejectedFrom} was ignored because it is not the address entered`;
     return telemetry.rejectedDatagrams
       ? `Waiting for audio · ${telemetry.rejectedDatagrams} packets from another address were ignored`
       : "Waiting for audio from the sending computer";
@@ -75,6 +76,10 @@ export function NetworkNodeEditor({ node, disabled, telemetry, onChange }: {
     {!sending && <label>Buffer (ms)<input type="number" min={10} max={500} step={5} value={buffer} disabled={disabled} aria-invalid={!bufferValid}
       onChange={(event) => { setBuffer(event.target.value); const value = Number(event.target.value); if (Number.isFinite(value) && value >= 10 && value <= 500) onChange("bufferMs", value); }} /></label>}
     {status && <p className="network-node-status" role="status">{status}</p>}
+    {!sending && telemetry?.rejectedFrom && telemetry.rejectedFrom !== address && <div className="network-node-fix" role="alert">
+      <span>AudioRouter audio is arriving from <code>{telemetry.rejectedFrom}</code>. If that is the sending computer, use its address.</span>
+      <button type="button" className="secondary" disabled={disabled} onClick={() => { setAddress(telemetry.rejectedFrom!); onChange("sender", telemetry.rejectedFrom!); }}>Use {telemetry.rejectedFrom}</button>
+    </div>}
     <small>{sending
       ? "On the other computer, add a Network Receive node with this computer's IP address as the sender and the same port. Both computers must be on the same local network. Audio is sent unencrypted, so use it only on a network you trust."
       : "On the other computer, add a Network Send node with this computer's IP address and the same port. Audio from any other address is ignored. The first time, Windows Firewall may ask you to allow AudioRouter on private networks. A larger buffer rides out Wi-Fi hiccups but adds delay."}

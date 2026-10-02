@@ -468,6 +468,16 @@ impl RecorderController {
         Ok(())
     }
 
+    /// Worker stop: like `request_stop`, but a frame already behind the audio
+    /// this recorder has written stops at the end of that audio instead of
+    /// failing. A client asks to stop "now" from a frame it read a moment
+    /// earlier, while playback kept writing (the counterpart of the start
+    /// alignment); written audio can never be taken back.
+    pub fn request_stop_at_or_after(&mut self, frame: u64) -> Result<(), RecorderError> {
+        let frame = self.last_frame.map_or(frame, |last| frame.max(last));
+        self.request_stop(frame)
+    }
+
     /// Marks a requested stop complete after the worker has drained all input.
     pub fn complete(&mut self) -> Result<(), RecorderError> {
         if self.state != RecorderState::Stopping {
@@ -958,7 +968,7 @@ impl<W: Write> Mp3Recorder<W> {
         }
         if self.state() != RecorderState::Stopping {
             self.controller
-                .request_stop(frame)
+                .request_stop_at_or_after(frame)
                 .map_err(RecordingError::Controller)?;
         }
         self.controller
@@ -968,6 +978,18 @@ impl<W: Write> Mp3Recorder<W> {
     }
     pub fn finish(mut self) -> Result<(W, u64), RecordingError> {
         if self.state() != RecorderState::Completed {
+            return Err(RecordingError::NotRecording);
+        }
+        self.writer
+            .take()
+            .ok_or(RecordingError::NotRecording)?
+            .finish()
+    }
+
+    /// REC-08: after a failure, finish the file with the audio written
+    /// before it, so the preserved prefix plays. Only valid once failed.
+    pub fn finish_failed(mut self) -> Result<(W, u64), RecordingError> {
+        if self.state() != RecorderState::Failed {
             return Err(RecordingError::NotRecording);
         }
         self.writer
@@ -2631,7 +2653,7 @@ impl<W: Write + Seek, F: FnMut(u32) -> Result<W, RecordingError>> SegmentedWavRe
         }
         if self.controller.state() != RecorderState::Stopping {
             self.controller
-                .request_stop(frame)
+                .request_stop_at_or_after(frame)
                 .map_err(RecordingError::Controller)?;
         }
         self.controller
@@ -2647,6 +2669,19 @@ impl<W: Write + Seek, F: FnMut(u32) -> Result<W, RecordingError>> SegmentedWavRe
         let writer = self.writer.take().ok_or(RecordingError::NotRecording)?;
         self.outputs
             .push(writer.finish_with_metadata(&self.metadata)?);
+        Ok(self.outputs)
+    }
+
+    /// REC-08: after a failure, finalize every segment's header with the
+    /// frames written before it, so the preserved prefix plays.
+    pub fn finish_failed(mut self) -> Result<Vec<W>, RecordingError> {
+        if self.controller.state() != RecorderState::Failed {
+            return Err(RecordingError::NotRecording);
+        }
+        if let Some(writer) = self.writer.take() {
+            self.outputs
+                .push(writer.finish_with_metadata(&self.metadata)?);
+        }
         Ok(self.outputs)
     }
 
@@ -2765,7 +2800,7 @@ impl<W: Write + Seek> StreamingFlacRecorder<W> {
     ) -> Result<usize, RecordingError> {
         if self.controller.state() != RecorderState::Stopping {
             self.controller
-                .request_stop(frame)
+                .request_stop_at_or_after(frame)
                 .map_err(RecordingError::Controller)?;
         }
         let drained = self.drain_queue(queue, maximum_chunks)?;
@@ -2867,6 +2902,15 @@ impl<W: Write + Seek> StreamingFlacRecorder<W> {
         }
         self.writer.finish()
     }
+
+    /// REC-08: after a failure, patch STREAMINFO for the frames written
+    /// before it, so the preserved prefix plays.
+    pub fn finish_failed(self) -> Result<W, RecordingError> {
+        if self.controller.state() != RecorderState::Failed {
+            return Err(RecordingError::NotRecording);
+        }
+        self.writer.finish()
+    }
 }
 
 impl BufferedFlacRecorder {
@@ -2947,7 +2991,7 @@ impl BufferedFlacRecorder {
     ) -> Result<usize, RecordingError> {
         if self.controller.state() != RecorderState::Stopping {
             self.controller
-                .request_stop(frame)
+                .request_stop_at_or_after(frame)
                 .map_err(RecordingError::Controller)?;
         }
         let drained = self.drain_queue(queue, maximum_chunks)?;
@@ -3123,7 +3167,7 @@ impl<W: Write + Seek> WavRecorder<W> {
     ) -> Result<usize, RecordingError> {
         if self.controller.state() != RecorderState::Stopping {
             self.controller
-                .request_stop(frame)
+                .request_stop_at_or_after(frame)
                 .map_err(RecordingError::Controller)?;
         }
         let drained = self.drain_queue(queue, maximum_chunks)?;
@@ -3695,6 +3739,43 @@ mod tests {
                 .sum::<usize>(),
             3 * 48
         );
+    }
+
+    /// A client reads the latest frame, then asks to stop there; meanwhile
+    /// playback wrote more. Stop keeps everything written and succeeds,
+    /// instead of failing with FrameWentBackwards (found in a live run).
+    #[test]
+    fn a_stop_frame_already_behind_written_audio_stops_at_the_end_of_it() {
+        let mut recorder = SegmentedWavRecorder::new(
+            Cursor::new(Vec::new()),
+            |_index| Ok(Cursor::new(Vec::new())),
+            WavFormat::Pcm16,
+            1,
+            48_000,
+            false,
+            48_000,
+        )
+        .unwrap();
+        recorder.arm().unwrap();
+        recorder.start(0).unwrap();
+        let queue = RecordingQueue::new(4).unwrap();
+        for start_frame in [0_u64, 128, 256] {
+            queue.try_push(RecordingChunk { start_frame, samples: vec![0.25; 128] }).unwrap();
+        }
+        recorder.drain_queue(&queue, 4).unwrap();
+        // The client asks to stop at frame 128, read before the last block.
+        recorder.stop_and_drain(&queue, 128, 4).unwrap();
+        let outputs = recorder.finish().unwrap();
+        let bytes = outputs[0].get_ref();
+        assert_eq!(u32::from_le_bytes(bytes[40..44].try_into().unwrap()), 384 * 2, "all written audio kept");
+        // A stop frame in the future is still honoured as given.
+        let mut controller = RecorderController::new();
+        controller.arm().unwrap();
+        controller.start(0).unwrap();
+        controller.advance(100).unwrap();
+        controller.request_stop_at_or_after(250).unwrap();
+        controller.complete().unwrap();
+        assert_eq!(controller.checkpoint().last_frame, Some(250));
     }
 
     #[test]

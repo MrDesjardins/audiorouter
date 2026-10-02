@@ -2581,7 +2581,7 @@ impl Storage {
         let manifest = ExportBundleManifest {
             format: "audiorouter.session",
             schema_version: 1,
-            created_with: "0.1.0",
+            created_with: env!("CARGO_PKG_VERSION"),
             graph_path: "session.json",
             assets,
             media,

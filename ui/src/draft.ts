@@ -11,7 +11,7 @@ export type DraftChange = {
 export const GAIN_MIN_DB = -60;
 export const GAIN_MAX_DB = 24;
 
-export type LibraryNodeKind = Extract<NodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "audioFile" | "mixer" | "gain" | "volume" | "bassTreble" | "dehum" | "declick" | "inputSwitch" | "denoise" | "speechDenoise" | "spectralGate" | "firFilter" | "timeShift" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch" | "recorder" | "networkSend" | "networkReceive">;
+export type LibraryNodeKind = Extract<NodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "audioFile" | "mixer" | "gain" | "volume" | "bassTreble" | "dehum" | "declick" | "inputSwitch" | "denoise" | "speechDenoise" | "spectralGate" | "firFilter" | "timeShift" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch" | "recorder" | "networkSend" | "networkReceive" | "duck">;
 export type InsertableProcessorKind = Exclude<LibraryNodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "mixer" | "inputSwitch" | "networkSend" | "networkReceive">;
 
 /** Default UDP port of the Network Send/Receive tools (mirrors the domain). */
@@ -125,6 +125,15 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
       { name: "out", direction: "output", channels: 2 },
     ],
   },
+  duck: {
+    name: "Duck",
+    // keyNodeId: the node whose level triggers ducking (chosen in Properties).
+    parameters: { keyNodeId: "", thresholdDb: -35, amountDb: 6, attackMs: 20, holdMs: 300, releaseMs: 500 },
+    ports: [
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
+    ],
+  },
   inputSwitch: {
     name: "Input Switch",
     parameters: { selected: "a", fade: "normal" },
@@ -181,7 +190,7 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
   },
   recorder: {
     name: "Recorder",
-    parameters: {},
+    parameters: { format: "wavPcm24", autoRecord: false, splitMinutes: 0 },
     ports: [
       { name: "in", direction: "input", channels: 2 },
       { name: "out", direction: "output", channels: 2 },

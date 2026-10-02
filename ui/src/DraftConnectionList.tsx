@@ -14,6 +14,7 @@ export const PROCESSOR_ACTIONS: Array<{ kind: InsertableProcessorKind; label: st
   { kind: "compressor", label: "Compressor" },
   { kind: "gate", label: "Gate" },
   { kind: "limiter", label: "Limiter" },
+  { kind: "duck", label: "Duck" },
   { kind: "volume", label: "Volume" },
   { kind: "bassTreble", label: "Bass & Treble" },
   { kind: "dehum", label: "Dehum" },

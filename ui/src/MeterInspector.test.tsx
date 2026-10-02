@@ -28,3 +28,14 @@ it("shows exact per-channel hold, clip duration and reset without saving", async
   fireEvent.click(screen.getByRole("button", { name: "Reset peak & clipping" }));
   await waitFor(() => expect(resetMeter).toHaveBeenCalledWith("session", "meter"));
 });
+it("holds the recent-peak line when the reading drops, while the readout stays exact", async () => {
+  const backend = createDisconnectedBackend(); const initial = await backend.snapshot();
+  const node = { ...demoSession.nodes[0], id: "meter", kind: "meter" as const, bypass: false, enabled: true, ports: [{ name: "in", direction: "input" as const, channels: 1 as const }, { name: "out", direction: "output" as const, channels: 1 as const }] };
+  const snapshot = (peak: number) => ({ ...initial.diagnostics, nodeTelemetry: [{ nodeId: "meter", kind: "meter", processor: null, plugin: null, meter: { peakDb: -3, rmsDb: peak - 10, currentPeakDb: peak, channelCurrentPeakDb: [peak], channelPeakDb: [-3], channelRmsDb: [peak - 10], clippedSamples: 0, channelClippedSamples: [0], observedFrames: 4800, sampleRateHz: 48000 } }] });
+  const view = render(<MeterInspector node={node} sessionId="session" snapshot={snapshot(-6)} running backend={{ ...backend, connected: true }} onUpgrade={() => {}} />);
+  const marker = () => (view.container.querySelector(".meter-current-marker") as HTMLElement).style.bottom;
+  const loud = marker();
+  view.rerender(<MeterInspector node={node} sessionId="session" snapshot={snapshot(-40)} running backend={{ ...backend, connected: true }} onUpgrade={() => {}} />);
+  expect(marker()).toBe(loud);
+  expect(screen.getByText("-40.0 dBFS")).toBeTruthy();
+});

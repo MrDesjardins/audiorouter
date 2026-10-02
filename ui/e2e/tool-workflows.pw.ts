@@ -28,6 +28,8 @@ for (const entry of libraryEntries.filter(entry => entry.kind)) {
         // Learning is driven by the Learn buttons, not a settings field.
         if (parameter.name.endsWith(":") || parameter.name === "learning") continue;
         if (parameter.type === "number") {
+          // Graphic EQ edits one selected band exactly; select it by its fader.
+          if (entry.kind === "graphicEq") await inspector.getByRole("slider", { name: `${parameterText(entry.kind, parameter.name).label} band`, exact: true }).focus();
           const control = inspector.getByLabel(`${parameterText(entry.kind, parameter.name).label} precise value`, { exact: true });
           await expect(control, `${entry.kind}.${parameter.name} editable`).toBeVisible();
           const step = parameter.step ?? (parameter.unit === "Hz" ? 1 : 0.1);
@@ -43,6 +45,11 @@ for (const entry of libraryEntries.filter(entry => entry.kind)) {
           await expect(control).toBeVisible();
           const value = !(await control.isChecked());
           await control.setChecked(value);
+          changedParameters[parameter.name] = value;
+        } else if (entry.kind === "inputSwitch" && parameter.type === "string") {
+          // The Input Switch editor uses source buttons instead of selects.
+          const value = parameter.name === "selected" ? "b" : "slow";
+          await (parameter.name === "selected" ? inspector.getByRole("radio", { name: /^B/ }) : inspector.getByRole("button", { name: "Slow fade (2 s)" })).click();
           changedParameters[parameter.name] = value;
         } else if (parameter.type === "string" && parameter.enum && parameter.enum.length > 1) {
           const control = inspector.getByLabel(parameterText(entry.kind, parameter.name).label, { exact: true });

@@ -534,10 +534,11 @@ test("Test Signal lifecycle refreshes preserve the committed route and explain m
   await page.getByRole("button", { name: "Play Test Signal", exact: true }).click();
   await expect(page.locator(".global-action-message")).toContainText(/Test Signal 1 playing/);
   await expect(page.getByRole("button", { name: "Stop Test Signal", exact: true })).toBeEnabled();
-  const dashes = page.locator(".react-flow__edges .flow-edge-active .signal-flow-edge-dashes");
-  await expect(dashes).toHaveCount(1);
-  const initialOffset = await dashes.evaluate((edge) => getComputedStyle(edge).strokeDashoffset);
-  await expect.poll(() => dashes.evaluate((edge) => getComputedStyle(edge).strokeDashoffset)).not.toBe(initialOffset);
+  // A light "comet" travels along the playing connection.
+  const comet = page.locator(".react-flow__edges .flow-line .flow-comet-body").first();
+  await expect(comet).toHaveCount(1);
+  const initialPosition = await comet.evaluate((element) => { const box = element.getBoundingClientRect(); return `${Math.round(box.x)},${Math.round(box.y)}`; });
+  await expect.poll(() => comet.evaluate((element) => { const box = element.getBoundingClientRect(); return `${Math.round(box.x)},${Math.round(box.y)}`; })).not.toBe(initialPosition);
   const flowStroke = page.locator(".react-flow__edges .flow-edge-active .react-flow__edge-path").first();
   const initialWidth = await flowStroke.evaluate((edge) => getComputedStyle(edge).strokeWidth);
   await expect.poll(() => flowStroke.evaluate((edge) => getComputedStyle(edge).strokeWidth)).not.toBe(initialWidth);

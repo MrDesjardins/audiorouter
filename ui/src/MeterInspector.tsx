@@ -1,9 +1,27 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { nextFallingLevel, nextPeakHold, type PeakHold } from "./dynamics";
 import type { Node, DiagnosticsSnapshot } from "@audiorouter/contracts";
 import type { UiBackend } from "./backend";
 import { formatUiError } from "./backend";
 const percent = (db: number) => Math.max(0, Math.min(100, (db + 60) / 66 * 100));
 const dbText = (db: number) => db <= -120 ? "−∞" : `${db.toFixed(1)} dBFS`;
+
+/**
+ * Display ballistics per channel: the RMS bar falls smoothly and the peak
+ * line holds before falling, so the eye can follow speech. Readouts keep
+ * the exact backend values.
+ */
+function useMeterBallistics(rms: number[], peaks: (number | undefined)[]) {
+  const bars = useRef<({ db: number; at: number } | null)[]>([]);
+  const holds = useRef<(PeakHold | null)[]>([]);
+  const now = performance.now();
+  return rms.map((value, channel) => {
+    bars.current[channel] = value <= -120 ? null : nextFallingLevel(bars.current[channel] ?? null, value, now);
+    const peak = peaks[channel];
+    holds.current[channel] = peak === undefined ? null : nextPeakHold(holds.current[channel] ?? null, peak, now);
+    return { rms: bars.current[channel]?.db ?? -120, peak: holds.current[channel]?.db };
+  });
+}
 export function MeterInspector({ node, sessionId, snapshot, running, backend, onUpgrade }: {
   node: Node; sessionId: string; snapshot: DiagnosticsSnapshot | null; running: boolean; backend: UiBackend; onUpgrade: () => void;
 }) {
@@ -12,6 +30,10 @@ export function MeterInspector({ node, sessionId, snapshot, running, backend, on
   const active = running && node.enabled && !node.bypass && backend.connected;
   const clipped = meter?.channelClippedSamples.slice(0, channels).some(count => count > 0) ?? false;
   const [message, setMessage] = useState("");
+  const display = useMeterBallistics(
+    Array.from({ length: channels }, (_, channel) => active ? meter?.channelRmsDb[channel] ?? -120 : -120),
+    Array.from({ length: channels }, (_, channel) => active ? meter?.channelCurrentPeakDb?.[channel] : undefined),
+  );
   const [busy, setBusy] = useState(false);
   const reset = async () => {
     if (!backend.resetMeter || busy) return;
@@ -34,8 +56,8 @@ export function MeterInspector({ node, sessionId, snapshot, running, backend, on
         const clips = meter?.channelClippedSamples[channel] ?? 0;
         return <div className="meter-channel" key={channel}>
           <div className="meter-channel-track" role="meter" aria-label={`${channels === 1 ? "Mono" : channel === 0 ? "Left" : "Right"} RMS level`} aria-valuemin={-60} aria-valuemax={6} aria-valuenow={Math.max(-60, Math.min(6, rms))} aria-valuetext={dbText(rms)}>
-            <span className="meter-channel-fill" style={{ height: `${percent(rms)}%` }} />
-            {current !== undefined && <span className="meter-current-marker" style={{ bottom: `${percent(current)}%` }} />}
+            <span className="meter-channel-fill" style={{ height: `${percent(display[channel].rms)}%` }} />
+            {display[channel].peak !== undefined && <span className="meter-current-marker" style={{ bottom: `${percent(display[channel].peak!)}%` }} />}
             <span className="meter-hold-marker" style={{ bottom: `${percent(hold)}%` }} />
             <span className="meter-zero-line" style={{ bottom: `${percent(0)}%` }} />
           </div>
@@ -52,7 +74,7 @@ export function MeterInspector({ node, sessionId, snapshot, running, backend, on
         </div>;
       })}
     </div>
-    <p className="meter-inspector-legend">Bar: RMS · thin line: peak · gold line: hold. Above 0 dBFS exceeds full scale.</p>
+    <p className="meter-inspector-legend">Bar: RMS · thin line: recent peak (holds 1.2 s, then falls) · gold line: highest peak since reset. Above 0 dBFS exceeds full scale. Numbers show exact current values.</p>
     {message && <p role="status">{message}</p>}
     <p className="muted">Sample peaks, not true peak or LUFS. Clipped time counts samples above full scale per channel; it is not the length of a continuous clipping event. Statistics restart when the audio graph is prepared or replaced.</p>
   </section>;

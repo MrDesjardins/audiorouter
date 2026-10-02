@@ -49,6 +49,10 @@ lifecycle, plugin inventory/retry, and startup plan/apply methods.
 | `recorders.resume` | `record` | mutating; requires an idempotency key |
 | `recorders.split` | `record` | mutating; requires an idempotency key |
 | `recorders.stop` | `record` | mutating; requires an idempotency key |
+| `recorders.startRecording` | `record` | mutating; one-click Record on a Recorder node with its saved format and split settings; works while playing; returns the file path |
+| `recorders.stopRecording` | `record` | mutating; saves the file; a no-op when the node is not recording |
+| `recordings.getRoot` | `record` | read-only; the approved recording folder (`null` until chosen) and a suggested folder |
+| `recordings.setRoot` | `record` | mutating; approves a local folder (`create: true` creates it); desktop window only, refused with 403 by the localhost HTTP adapter and not offered over MCP |
 | `recordings.get` | `record` | read-only |
 | `recordings.recovery` | `record` | read-only |
 | `recordings.reveal` | `record` | external operation |
@@ -143,6 +147,18 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `sessions.duplicate` | `graphWrite` | mutating; requires an idempotency key |
 | `meters.reset` | `sessionControl` | runtime statistics only; sessionId/nodeId select a prepared Meter; clears held peaks and clipping counters without changing sound or saving |
 | `sessions.delete` | `graphWrite` | mutating; requires an idempotency key |
+| `sessions.play` | `deviceAdministration` | external operation; prepares the devices saved on the nodes and starts, like Play; sessionId defaults to the active session |
+| `sessions.togglePlay` | `deviceAdministration` | external operation; stops if playing, otherwise plays |
+| `sessions.summary` | `read` | read-only; nodes with readable settings, connections by name, playing and mute state |
+| `safety.togglePrivacyMute` | `sessionControl` | mutating; flips privacy mute and returns the new state |
+| `nodes.catalog` | `read` | read-only; addable kinds with plain descriptions, inputs, outputs and settings |
+| `nodes.set` | `graphWrite` | mutating; node by ID or name; parameters, enabled, bypass or name; applied live and saved |
+| `nodes.toggle` | `graphWrite` | mutating; flips enabled, bypass, an on/off or a two-choice setting |
+| `nodes.add` | `graphWrite` | mutating; adds a kind, optionally between two nodes or after one |
+| `nodes.remove` | `graphWrite` | mutating; removes a node and by default reconnects its neighbours |
+| `connections.add` | `graphWrite` | mutating; connects two nodes by name; refuses an occupied single input |
+| `connections.remove` | `graphWrite` | mutating; removes the connection between two nodes |
+| `meters.levels` | `read` | read-only; peak/RMS dBFS, clipping and reduction per playing node |
 | `graph.plan` | `graphWrite` | plan-only |
 | `graph.commit` | `graphWrite` | mutating; requires an idempotency key |
 | `session.start` | `sessionControl` | external operation; requires an idempotency key; optional `candidate` starts a temporary preview without saving the session revision |
@@ -350,7 +366,11 @@ audio callback does not wait for diagnostics or serialize JSON.
 `nodeTelemetry` is a bounded array of observations for the attached session's
 prepared meter, gate, compressor, and limiter nodes. Each item includes the
 authored node ID and kind, with finite meter dB/clip values or processor gain
-reduction/gate state. It is empty without an attached worker or when no
+reduction/gate state. Compressor, Gate and Limiter observations also carry
+optional `inputLevelDb` and `outputLevelDb` arrays: the sample peak entering
+and leaving the tool in dBFS, which rises at once and falls 40 dB/s. The DSP
+updates them once per processed block, so a reader polling every 50 ms still
+sees recent peaks and reading never resets them. It is empty without an attached worker or when no
 matching prepared stage is available; a busy realtime processor is omitted
 rather than waited on. The response is observational and does not alter the
 saved graph.
@@ -359,8 +379,8 @@ The nested telemetry schema is strict: meter and processor fields are required
 when present, channel arrays are capped at two channels, counters are
 nonnegative, and unknown properties are rejected.
 
-The UI requests this diagnostic snapshot at most once per second while a
-session is running. Diagnostics are not replayed or retained as meter events;
+The UI requests this diagnostic snapshot every 50 ms while a session is
+running. Diagnostics are not replayed or retained as meter events;
 the UI keeps the last successful snapshot if a refresh fails.
 
 The MCP stdio adapter exposes focused read/write tools for graph, virtual-route,

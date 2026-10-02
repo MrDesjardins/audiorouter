@@ -85,13 +85,26 @@ const TEXT: Record<string, Record<string, ParameterText>> = {
   timeShift: {
     bufferSeconds: { label: "Rewind buffer", help: "How many seconds of recent audio are kept so you can jump back and replay them." },
   },
+  recorder: {
+    format: { label: "File format", help: "WAV 24-bit keeps full quality for editing; MP3 makes small files to share." },
+    autoRecord: { label: "Record automatically when Play starts", help: "Every Play starts a new recording; Stop saves it." },
+    splitMinutes: { label: "New file every", help: "Start a new file after this many minutes so long sessions stay manageable. 0 keeps one file per take." },
+  },
+  duck: {
+    keyNodeId: { label: "Triggered by", help: "The source or tool whose level turns this audio down, usually your microphone or voice chain." },
+    thresholdDb: { label: "Trigger level", help: "Ducking starts when the trigger is louder than this. Set it between your room noise and your voice." },
+    amountDb: { label: "Amount", help: "How far this audio is turned down while the trigger is active. 6 dB is about half as loud." },
+    attackMs: { label: "Attack", help: "How quickly the audio goes down when you start talking." },
+    holdMs: { label: "Hold", help: "How long the audio stays down after the trigger falls, so short pauses between words do not pump." },
+    releaseMs: { label: "Release", help: "How quickly the audio comes back after the hold time." },
+  },
   inputSwitch: {
     selected: { label: "Active input", help: "Which input you hear: A or B." },
     fade: { label: "Switch speed", help: "Normal changes over half a second; Slow fades over two seconds." },
   },
 };
 
-const OPTION_LABELS: Record<string, string> = { a: "Input A", b: "Input B", normal: "Normal", slow: "Slow" };
+const OPTION_LABELS: Record<string, string> = { wavPcm24: "WAV 24-bit (best for editing)", wavPcm16: "WAV 16-bit", wavFloat32: "WAV 32-bit float", flac24: "FLAC 24-bit (smaller, lossless)", flac16: "FLAC 16-bit", mp3: "MP3 (small, to share)", a: "Input A", b: "Input B", normal: "Normal", slow: "Slow" };
 
 /** Turn a machine name such as `wetPercent` into "Wet percent". */
 export function humanizeParameterName(name: string): string {
@@ -118,4 +131,22 @@ export function parameterText(kind: string, name: string): ParameterText {
 /** Display text for an option of a choice setting. */
 export function optionLabel(option: string): string {
   return OPTION_LABELS[option] ?? humanizeParameterName(option);
+}
+
+/** Readable value with its unit, for the caption readout: "+3.0 dB", "1.5 kHz", "1.2 s". */
+export function formatParameterValue(value: number, unit: string | undefined, step = 0.1): string {
+  if (!Number.isFinite(value)) return "—";
+  const digits = step >= 1 ? 0 : step >= 0.1 ? 1 : 2;
+  const signed = (text: string) => (value > 0 ? `+${text}` : value < 0 ? `−${text.replace("-", "")}` : text);
+  switch (unit) {
+    case "dB": case "dBFS": return `${signed(value.toFixed(1))} ${unit}`;
+    case "semitones": return `${signed(value.toFixed(digits))} st`;
+    case "cents": return `${signed(value.toFixed(0))} ct`;
+    case "Hz": return value >= 1000 ? `${(value / 1000).toFixed(value >= 10000 ? 1 : 2).replace(/\.?0+$/, "")} kHz` : `${value.toFixed(digits)} Hz`;
+    case "ms": return value >= 1000 ? `${(value / 1000).toFixed(2).replace(/\.?0+$/, "")} s` : `${value.toFixed(value < 10 && step < 1 ? 1 : 0)} ms`;
+    case "%": return `${value.toFixed(digits)} %`;
+    case "s": return `${value.toFixed(digits)} s`;
+    case undefined: case "": return value.toFixed(digits);
+    default: return `${value.toFixed(digits)} ${unit}`;
+  }
 }

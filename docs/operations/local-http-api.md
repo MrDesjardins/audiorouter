@@ -12,6 +12,36 @@ starting again creates a new token. Treat the token like access to the desktop
 controls. Existing backend scopes still apply, including capture/recording roots
 and device-administration permissions.
 
+## One call per intention (StreamDeck, scripts, assistants)
+
+These methods need no IDs, revisions or graph documents. `sessionId` defaults
+to the session open in AudioRouter, and nodes can be named exactly as on the
+canvas (case does not matter). Every change is applied live and saved, like an
+edit in the window.
+
+| Want to… | Call |
+| --- | --- |
+| Play or stop (one key) | `POST /api/v1/sessions/togglePlay` `{"idempotencyKey":"…"}` |
+| Mute or unmute the mic (one key) | `POST /api/v1/safety/togglePrivacyMute` |
+| Switch an Input Switch between A and B | `POST /api/v1/nodes/toggle` `{"node":"Input Switch","target":"selected",…}` |
+| Bypass or enable a tool | `POST /api/v1/nodes/toggle` `{"node":"Voice Gate","target":"bypass",…}` |
+| Set the game volume | `POST /api/v1/nodes/set` `{"node":"Game volume","parameters":{"percent":60},…}` |
+| Duck the game more | `POST /api/v1/nodes/set` `{"node":"Duck game","parameters":{"amountDb":12},…}` |
+| Start or stop recording | `POST /api/v1/recorders/startRecording` / `stopRecording` `{"nodeId":"Podcast recorder",…}` |
+| Show levels on a display | `POST /api/v1/meters/levels` `{}` |
+| Describe the setup | `POST /api/v1/sessions/summary` `{}` |
+
+Each mutating call needs a fresh `idempotencyKey` (any unique text). A
+StreamDeck "web request" or "API" action can send these with the bearer token
+header. Mistakes return HTTP 400 with a sentence naming the problem, for
+example the node names that exist. Play needs the device-administration
+permission, like `nativePaths.prepare`.
+
+AI assistants use the same operations through MCP: `get_recipes`,
+`get_session_summary`, `add_tool`, `change_settings`, `toggle_setting`,
+`connect_nodes`, `play`, `toggle_mic_mute`, `start_recording` and others.
+They take names and generate the idempotency key automatically.
+
 ## Calls and graph changes
 
 Read resources: `GET /api/v1/status`, `/api/v1/sessions`,
@@ -34,8 +64,10 @@ for example `graph.plan` → `POST /api/v1/graph/plan`. Send its discovery-defin
 parameters as a plain JSON object and receive the plain result, without a
 JSON-RPC envelope. Use `Content-Type: application/json` and
 `Authorization: Bearer <token>` for API calls. The generated `/openapi.json`
-contains exact schemas for all 103 methods, four GET aliases, and the active
-session PUT alias.
+contains exact schemas for 118 of the 119 backend methods, four GET aliases,
+and the active session PUT alias. `recordings.setRoot` is the exception: it
+approves where recordings are written, so only the AudioRouter window may call
+it and this adapter answers 403. `recordings.getRoot` reads the folder.
 
 PowerShell example (enter the token interactively, never put it in arguments):
 

@@ -2386,6 +2386,22 @@ fn mcp_tool_annotations(name: &str) -> Value {
 
 fn mcp_tools() -> Value {
     let mut tools = json!([
+        { "name": "get_recipes", "description": "Start here when the user asks for a result rather than a specific step (clean up my voice, lower the game while I talk, record a podcast, use AudioRouter as a Discord microphone). Returns step-by-step recipes using the other tools.", "inputSchema": { "type": "object", "properties": {  }, "required": [], "additionalProperties": false } },
+        { "name": "list_sessions", "description": "List every saved session (setup) with its ID, name and revision. AudioRouter works on one open session at a time.", "inputSchema": { "type": "object", "properties": { "limit": { "type": "integer", "minimum": 1, "maximum": 100 } }, "required": [], "additionalProperties": false } },
+        { "name": "open_session", "description": "Open (select) a session by ID so later calls without sessionId use it. Does not start audio.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; generated when omitted." } }, "required": ["sessionId"], "additionalProperties": false } },
+        { "name": "create_session", "description": "Create a new empty session with a name and open it; then add_tool and connect_nodes to build it.", "inputSchema": { "type": "object", "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 120 }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; generated when omitted." } }, "required": ["name"], "additionalProperties": false } },
+        { "name": "get_session_summary", "description": "Read the current audio setup in plain terms: every node with its readable settings, every connection by name, and whether audio is playing or the mic is muted. Call this before changing anything.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." } }, "required": [], "additionalProperties": false } },
+        { "name": "list_tool_kinds", "description": "List the tools and devices you can add (kind, plain description, inputs, outputs, settings with ranges and defaults).", "inputSchema": { "type": "object", "properties": {  }, "required": [], "additionalProperties": false } },
+        { "name": "add_tool", "description": "Add a tool or device by kind, for example compressor, gate, duck, meter or recorder. Use between to insert it into an existing connection, or after to place it after a node. Saved and live.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "kind": { "type": "string", "minLength": 1, "description": "Kind from list_tool_kinds." }, "name": { "type": "string", "minLength": 1, "description": "Optional display name." }, "parameters": { "type": "object", "description": "Optional settings, by name." }, "between": { "type": "object", "properties": { "from": { "type": "string" }, "to": { "type": "string" } }, "required": ["from", "to"], "description": "Insert into the connection from -> to." }, "after": { "type": "string", "minLength": 1, "description": "Place after this node (by name)." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["kind"], "additionalProperties": false } },
+        { "name": "remove_tool", "description": "Remove a node by name; its neighbours are reconnected unless bridge is false. Saved and live.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Node name or ID." }, "bridge": { "type": "boolean" }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["node"], "additionalProperties": false } },
+        { "name": "connect_nodes", "description": "Connect one node's output to another node's input, by name. Saved and live.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "from": { "type": "string", "minLength": 1, "description": "Source node name or ID." }, "to": { "type": "string", "minLength": 1, "description": "Destination node name or ID." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["from", "to"], "additionalProperties": false } },
+        { "name": "disconnect_nodes", "description": "Remove the connection between two nodes, by name. Saved and live.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "from": { "type": "string", "minLength": 1, "description": "Source node name or ID." }, "to": { "type": "string", "minLength": 1, "description": "Destination node name or ID." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["from", "to"], "additionalProperties": false } },
+        { "name": "change_settings", "description": "Change a node by name: settings (parameters, e.g. {\"thresholdDb\": -40}), enabled, bypass or name. Values are validated; applied live and saved.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Node name or ID." }, "parameters": { "type": "object" }, "enabled": { "type": "boolean" }, "bypass": { "type": "boolean" }, "name": { "type": "string", "minLength": 1, "description": "New display name." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["node"], "additionalProperties": false } },
+        { "name": "toggle_setting", "description": "Flip one thing on a node: enabled, bypass, an on/off setting (e.g. muted) or a two-choice setting (e.g. selected on an Input Switch).", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Node name or ID." }, "target": { "type": "string", "minLength": 1, "description": "enabled, bypass or a setting name." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["node", "target"], "additionalProperties": false } },
+        { "name": "play", "description": "Start audio for the session, preparing every device chosen on its nodes (like the Play button).", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": [], "additionalProperties": false } },
+        { "name": "toggle_play", "description": "Stop audio if it is playing, otherwise play it.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": [], "additionalProperties": false } },
+        { "name": "toggle_mic_mute", "description": "Mute the microphone if it is live, unmute it if it is muted (privacy mute).", "inputSchema": { "type": "object", "properties": { "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": [], "additionalProperties": false } },
+        { "name": "get_levels", "description": "Read the live level of every playing node (peak/RMS dBFS, clipping, and how much a Gate, Compressor or Duck is reducing).", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." } }, "required": [], "additionalProperties": false } },
         { "name": "describe_capabilities", "description": "Read AudioRouter capabilities and schemas.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "get_startup", "description": "Read sign-in startup capability without changing startup.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "plan_startup", "description": "Preview a sign-in startup policy without applying OS registration; requires startup-write scope.", "inputSchema": { "type": "object", "properties": { "enabled": { "type": "boolean" } }, "required": ["enabled"], "additionalProperties": false } },
@@ -2430,6 +2446,8 @@ fn mcp_tools() -> Value {
         { "name": "pause_recorder", "description": "Pause a recorder at an explicit frame boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame", "idempotencyKey"], "additionalProperties": false } },
         { "name": "resume_recorder", "description": "Resume a recorder at an explicit frame boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame", "idempotencyKey"], "additionalProperties": false } },
         { "name": "split_recorder", "description": "Split a recorder at an explicit frame boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame", "idempotencyKey"], "additionalProperties": false } },
+        { "name": "start_recording", "description": "Start recording now on a Recorder node of the session (the simplest way to record). Uses the node settings for format and automatic file splitting; works while audio plays. Returns the file path. Requires recording scope.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "nodeId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["nodeId"], "additionalProperties": false } },
+        { "name": "stop_recording", "description": "Stop recording on a Recorder node and save the file. Safe to call when it is not recording. Requires recording scope.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "nodeId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["nodeId"], "additionalProperties": false } },
         { "name": "stop_recorder", "description": "Stop a recorder at an explicit frame boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame", "idempotencyKey"], "additionalProperties": false } },
         { "name": "control_recorder", "description": "Control one recorder through the authorized lifecycle API; arm omits frame and other actions require it, all require an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "action": { "enum": ["arm", "start", "pause", "resume", "split", "stop"] }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "action", "idempotencyKey"], "additionalProperties": false } },
         { "name": "get_recording", "description": "Read one persisted recording metadata resource without reading audio content; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
@@ -2478,6 +2496,15 @@ fn mcp_tool_call(
     let id = message.get("id").cloned();
     let name = message["params"]["name"].as_str().unwrap_or_default();
     let arguments = message["params"]["arguments"].clone();
+    // Assistant-first tools: one intention each; a missing idempotency key is
+    // generated so a forgotten technical argument never fails the request.
+    if let Some((method, mutating)) = mcp_simple_tool(name) {
+        let mut params = if arguments.is_object() { arguments.clone() } else { json!({}) };
+        if mutating && params.get("idempotencyKey").and_then(Value::as_str).is_none_or(str::is_empty) {
+            params["idempotencyKey"] = json!(mcp_generated_key(name));
+        }
+        return mcp_dispatch_tool(plane, client_id, grant, pipe_name, id, method, Some(params));
+    }
     let (method, params) = match name {
         "describe_capabilities" => ("system.describe", None),
         "get_startup" => ("startup.get", None),
@@ -2597,6 +2624,20 @@ fn mcp_tool_call(
                 Some(params),
             );
         }
+        "create_session" => {
+            let name = arguments["name"].as_str().map(str::trim).filter(|name| !name.is_empty()).unwrap_or("New session");
+            let session_id = format!("session-{}", mcp_generated_key("create").trim_start_matches("mcp-create-"));
+            let key = arguments["idempotencyKey"].as_str().filter(|key| !key.is_empty()).map_or_else(|| mcp_generated_key("create_session"), str::to_owned);
+            let params = json!({ "session": { "id": session_id, "name": name, "schemaVersion": 1, "revision": 0, "nodes": [], "edges": [] }, "idempotencyKey": key });
+            let created = mcp_dispatch_tool(plane, client_id, grant, pipe_name, id.clone(), "sessions.create", Some(params));
+            if created["result"]["isError"] == true {
+                return created;
+            }
+            return mcp_dispatch_tool(plane, client_id, grant, pipe_name, id, "sessions.active.set", Some(json!({ "sessionId": session_id, "idempotencyKey": format!("{key}-open") })));
+        }
+        "get_recipes" => {
+            return json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": MCP_RECIPES }], "isError": false } });
+        }
         "call_api" => {
             let method = arguments["method"].as_str().unwrap_or_default();
             let params = arguments.get("params").cloned();
@@ -2711,6 +2752,38 @@ fn mcp_api_value(
     serde_json::to_value(response)
         .map_err(|error| format!("response serialization failed: {error}"))
 }
+
+/// Assistant-first MCP tools and their backend methods (mutating or not).
+fn mcp_simple_tool(name: &str) -> Option<(&'static str, bool)> {
+    Some(match name {
+        "get_session_summary" => ("sessions.summary", false),
+        "list_sessions" => ("sessions.list", false),
+        "open_session" => ("sessions.active.set", true),
+        "list_tool_kinds" => ("nodes.catalog", false),
+        "get_levels" => ("meters.levels", false),
+        "add_tool" => ("nodes.add", true),
+        "remove_tool" => ("nodes.remove", true),
+        "connect_nodes" => ("connections.add", true),
+        "disconnect_nodes" => ("connections.remove", true),
+        "change_settings" => ("nodes.set", true),
+        "toggle_setting" => ("nodes.toggle", true),
+        "play" => ("sessions.play", true),
+        "toggle_play" => ("sessions.togglePlay", true),
+        "toggle_mic_mute" => ("safety.togglePrivacyMute", true),
+        "start_recording" => ("recorders.startRecording", true),
+        "stop_recording" => ("recorders.stopRecording", true),
+        _ => return None,
+    })
+}
+
+/// A unique idempotency key for an assistant call that did not supply one.
+fn mcp_generated_key(tool: &str) -> String {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_nanos());
+    format!("mcp-{tool}-{stamp}-{}", NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+}
+
+const MCP_RECIPES: &str = "AudioRouter recipes (use the names shown by get_session_summary).\n1. Clean up a microphone: add_tool kind=gate after the microphone; add_tool kind=compressor after the gate; add_tool kind=limiter after the compressor. Then play, ask the user to talk, read get_levels: the gate threshold sits between room noise and voice (change_settings thresholdDb), the compressor should reduce 3-6 dB on loud words.\n2. Lower game or music while the user talks: add_tool kind=duck between the game source and its output with parameters {keyNodeId: <microphone node ID>, amountDb: 10}. Raise amountDb for more ducking; thresholdDb sets how loud the voice must be.\n3. Record a podcast or stream: add_tool kind=recorder after the node to record (often a Mixer or the voice chain). change_settings parameters {autoRecord: true} to record on every Play, {splitMinutes: 30} for a new file every 30 minutes. start_recording / stop_recording control it.\n4. Use AudioRouter as a Discord or OBS microphone: connect the processed voice chain to a Physical output whose device is a virtual cable input (e.g. CABLE Input; list_devices shows IDs; change_settings parameters {endpointId: ...}). In Discord choose the matching cable output as the microphone.\n5. Switch between two sources live (host and guest, or two scenes): add_tool kind=inputSwitch, connect_nodes each source to it (first to A, second to B), then toggle_setting target=selected to switch.\n6. Quick safety: toggle_mic_mute mutes all capture immediately; play / toggle_play start and stop audio.\nAlways describe what you changed to the user. Settings are validated: if a call fails, read its message (it names the problem and the allowed choices).";
 
 fn mcp_tool_error(id: Option<Value>, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "result": { "isError": true, "content": [{ "type": "text", "text": message }] } })
@@ -3012,6 +3085,7 @@ mod tests {
                 "compressor",
                 "declick",
                 "dehum",
+                "duck",
                 "denoise",
                 "firFilter",
                 "gate",
@@ -4155,6 +4229,81 @@ mod tests {
     }
 
     #[test]
+    fn assistant_tools_configure_a_route_by_name_without_technical_arguments() {
+        let mut plane = ControlPlane::default();
+        let session: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json")).unwrap();
+        plane.insert_session(session).unwrap();
+        use audiorouter_domain::PermissionScope;
+        let grant = audiorouter_control::ClientGrant::with_scopes([PermissionScope::Read, PermissionScope::GraphWrite, PermissionScope::SessionControl]);
+        let mut next_id = 100;
+        let mut tool = |plane: &mut ControlPlane, name: &str, arguments: Value| {
+            next_id += 1;
+            let response = mcp_tool_call(plane, "assistant", &grant, None, &json!({ "id": next_id, "params": { "name": name, "arguments": arguments } }));
+            let text = response["result"]["content"][0]["text"].as_str().unwrap_or_default().to_owned();
+            (response["result"]["isError"] == true, response["result"]["structuredContent"]["result"].clone(), text)
+        };
+        // Discovery: recipes, plain summary, catalog.
+        let (error, _, recipes) = tool(&mut plane, "get_recipes", json!({}));
+        assert!(!error && recipes.contains("Lower game or music while the user talks"));
+        let (error, summary, _) = tool(&mut plane, "get_session_summary", json!({}));
+        assert!(!error, "{summary}");
+        assert_eq!(summary["sessionId"], "session-fixture");
+        let (_, kinds, _) = tool(&mut plane, "list_tool_kinds", json!({}));
+        assert!(kinds.as_array().unwrap().iter().any(|kind| kind["kind"] == "gate"));
+        // Build: no idempotency keys, names instead of IDs.
+        let (error, added, text) = tool(&mut plane, "add_tool", json!({ "kind": "gate", "between": { "from": "Input", "to": "Output" }, "name": "Noise gate" }));
+        assert!(!error, "{text}");
+        assert_eq!(added["name"], "Noise gate");
+        let (error, _, text) = tool(&mut plane, "change_settings", json!({ "node": "noise gate", "parameters": { "thresholdDb": -40.0 } }));
+        assert!(!error, "{text}");
+        let (error, toggled, _) = tool(&mut plane, "toggle_setting", json!({ "node": "Noise gate", "target": "bypass" }));
+        assert!(!error && toggled["value"] == true);
+        let (error, _, text) = tool(&mut plane, "disconnect_nodes", json!({ "from": "Noise gate", "to": "Output" }));
+        assert!(!error, "{text}");
+        let (error, _, text) = tool(&mut plane, "connect_nodes", json!({ "from": "Noise gate", "to": "Output" }));
+        assert!(!error, "{text}");
+        let (error, levels, _) = tool(&mut plane, "get_levels", json!({}));
+        assert!(!error && levels["playing"] == false);
+        let (error, muted, _) = tool(&mut plane, "toggle_mic_mute", json!({}));
+        assert!(!error && muted["muted"].is_boolean());
+        let gate = plane.get_session(&audiorouter_domain::EntityId::new("session-fixture")).unwrap().nodes.iter().find(|node| node.name == "Noise gate").cloned().unwrap();
+        assert_eq!(gate.parameters["thresholdDb"], json!(-40.0));
+        assert!(gate.bypass);
+        // Problems come back as readable tool errors, not protocol failures.
+        let (error, _, text) = tool(&mut plane, "change_settings", json!({ "node": "Noise gate", "parameters": { "thresholdDb": 50.0 } }));
+        assert!(error, "out-of-range value must be refused: {text}");
+        let (error, _, text) = tool(&mut plane, "change_settings", json!({ "node": "Guitar", "parameters": {} }));
+        assert!(error && text.contains("no node named"), "{text}");
+        // Play opens devices: refused without the device-administration grant.
+        let (error, _, _) = tool(&mut plane, "play", json!({}));
+        assert!(error);
+        // A brand-new setup by name: created, opened, and built by name.
+        let (error, _, text) = tool(&mut plane, "create_session", json!({ "name": "Podcast" }));
+        assert!(!error, "{text}");
+        let (_, summary, _) = tool(&mut plane, "get_session_summary", json!({}));
+        assert_eq!(summary["name"], "Podcast");
+        let podcast = summary["sessionId"].as_str().unwrap().to_owned();
+        for (kind, name) in [("testSignal", "Host"), ("recorder", "Podcast recorder")] {
+            let (error, _, text) = tool(&mut plane, "add_tool", json!({ "kind": kind, "name": name }));
+            assert!(!error, "{text}");
+        }
+        let (error, _, text) = tool(&mut plane, "connect_nodes", json!({ "from": "Host", "to": "Podcast recorder" }));
+        assert!(!error, "{text}");
+        let (_, sessions, _) = tool(&mut plane, "list_sessions", json!({}));
+        assert!(sessions.to_string().contains(&podcast));
+        let (error, _, text) = tool(&mut plane, "open_session", json!({ "sessionId": "session-fixture" }));
+        assert!(!error, "{text}");
+        let (_, summary, _) = tool(&mut plane, "get_session_summary", json!({}));
+        assert_eq!(summary["sessionId"], "session-fixture");
+        // Every assistant tool is listed with a description.
+        let names = mcp_tools().as_array().unwrap().iter().map(|tool| tool["name"].as_str().unwrap().to_owned()).collect::<Vec<_>>();
+        for name in ["get_recipes", "get_session_summary", "list_tool_kinds", "add_tool", "remove_tool", "connect_nodes", "disconnect_nodes", "change_settings", "toggle_setting", "play", "toggle_play", "toggle_mic_mute", "get_levels", "start_recording", "stop_recording"] {
+            assert!(names.iter().any(|candidate| candidate == name), "{name} is listed");
+        }
+    }
+
+    #[test]
     fn mcp_tools_use_the_authorized_control_dispatcher() {
         let mut plane = ControlPlane::default();
         let session: audiorouter_domain::Session =
@@ -4434,7 +4583,7 @@ mod tests {
         let transition_content = transition["result"]["content"][0]["text"].as_str().unwrap();
         let transition_payload: Value = serde_json::from_str(transition_content).unwrap();
         assert_eq!(transition_payload["result"]["transition"], "lock");
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 58);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 76);
         let tools = mcp_tools();
         let multi_input = tools
             .as_array()
@@ -4628,6 +4777,8 @@ mod tests {
                 "stop_recorder",
                 json!(["sessionId", "frame", "idempotencyKey"]),
             ),
+            ("start_recording", json!(["nodeId"])),
+            ("stop_recording", json!(["nodeId"])),
             (
                 "set_recording_metadata",
                 json!(["recordingId", "idempotencyKey"]),

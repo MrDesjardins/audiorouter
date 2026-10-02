@@ -28,3 +28,15 @@ test("imported annotations reject invalid geometry and duplicate IDs, and clamp 
   localStorage.setItem("groups", JSON.stringify([group, group, { ...group, id: "audio-node" }, { ...group, id: "group-bad", width: 1e100 }, { ...group, id: "group-opacity", opacity: 101 }]));
   expect(readGroups("groups")).toEqual([group, { ...group, id: "group-opacity", opacity: 100 }]);
 });
+test("lock persists, rejects non-boolean values and is offered in Properties", () => {
+  render(<Fixture />);
+  fireEvent.click(screen.getByText("Add group"));
+  const lock = screen.getByLabelText("Lock group position and size") as HTMLInputElement;
+  expect(lock.checked).toBe(false);
+  fireEvent.click(lock);
+  expect(readGroups("audiorouter.ui.groups.one")[0].locked).toBe(true);
+  expect(screen.getByText(/Locked: the group cannot be moved, resized or deleted from the canvas/)).toBeTruthy();
+  const group: CanvasGroup = { id: "group-lock", name: "Game", color: "#abcdef", opacity: 25, fontSize: 18, x: 0, y: 0, width: 540, height: 340 };
+  localStorage.setItem("groups", JSON.stringify([{ ...group, locked: "yes" }, { ...group, id: "group-ok", locked: true }]));
+  expect(readGroups("groups")).toEqual([{ ...group, id: "group-ok", locked: true }]);
+});

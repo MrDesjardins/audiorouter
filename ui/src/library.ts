@@ -10,7 +10,7 @@ export type LibraryEntry = {
   label: string;
   category: string;
   flow: LibraryFlowGroup;
-  kind?: Extract<NodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "audioFile" | "mixer" | "gain" | "volume" | "bassTreble" | "dehum" | "declick" | "inputSwitch" | "denoise" | "speechDenoise" | "spectralGate" | "firFilter" | "timeShift" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch" | "recorder" | "networkSend" | "networkReceive">;
+  kind?: Extract<NodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "audioFile" | "mixer" | "gain" | "volume" | "bassTreble" | "dehum" | "declick" | "inputSwitch" | "denoise" | "speechDenoise" | "spectralGate" | "firFilter" | "timeShift" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch" | "recorder" | "networkSend" | "networkReceive" | "duck">;
   /** Helper text shown as a tooltip and matched by search, even for an
    * available entry. Used to point at the free existing-endpoint path
    * (VoiceMeeter, VB-Cable) instead of the deferred signed-driver one. */
@@ -50,6 +50,7 @@ export const libraryEntries: LibraryEntry[] = [
   { id: "fir-filter", label: "FIR Filter", category: "Effect", flow: "tool", kind: "firFilter", note: "Give your sound the character of a room, speaker or mic from its impulse response (WAV or MP3, up to 2 s). Wet mix blends it with the original." },
   { id: "time-shift", label: "Time Shift", category: "Effect", flow: "tool", kind: "timeShift", note: "A DVR for live audio: pause, jump back or forward 10 s, and return to live. Keeps up to 120 s." },
   { id: "mixer", label: "Mixer", category: "Routing", flow: "tool", kind: "mixer" },
+  { id: "duck", label: "Duck", category: "Effect", flow: "tool", kind: "duck", note: "Turn this audio down automatically while another source is loud, for example game sound while you talk. Choose the trigger in Properties." },
   { id: "input-switch", label: "Input Switch", category: "Routing", flow: "tool", kind: "inputSwitch", note: "Pass either input A or input B. Switching crossfades over 0.5 s (Shift-click for 2 s)." },
   { id: "recorder", label: "Recorder", category: "Output", flow: "tool", kind: "recorder" },
   { id: "mute", label: "Mute", category: "Effect", flow: "tool", kind: "mute" },

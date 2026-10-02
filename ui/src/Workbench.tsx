@@ -1,10 +1,11 @@
 import { ApiPanel } from "./ApiPanel";
+import { endLibraryDrag, startLibraryDrag } from "./libraryDrag";
 import { TOOL_HELP, type LibraryEntry } from "./library";
 import { TextField } from "./TextField";
 import type { Session } from "@audiorouter/contracts";
 import { useState, type ReactNode } from "react";
 
-const TOOL_ICONS: Record<string, string> = { volume: "◖", "bass-treble": "♮", dehum: "≁", declick: "⌇", denoise: "░", "speech-denoise": "☊", "spectral-gate": "▥", "fir-filter": "⧉", "input-switch": "⇄", "time-shift": "↺", "physical-input": "◉", "test-signal": "∿", "audio-file": "♫", "endpoint-loopback": "↶", "virtual-render-source": "⊞", "physical-output": "◎", "virtual-capture-sink": "⊟", gain: "◢", mixer: "⋈", recorder: "●", mute: "⊘", meter: "▥", "parametric-eq": "⌁", compressor: "⤓", gate: "⊐", limiter: "⊤", delay: "◷", "graphic-eq": "▤", pitch: "↟", "network-send": "⇡", "network-receive": "⇣" };
+const TOOL_ICONS: Record<string, string> = { volume: "◖", "bass-treble": "♮", dehum: "≁", declick: "⌇", denoise: "░", "speech-denoise": "☊", "spectral-gate": "▥", "fir-filter": "⧉", "input-switch": "⇄", duck: "⤓", "time-shift": "↺", "physical-input": "◉", "test-signal": "∿", "audio-file": "♫", "endpoint-loopback": "↶", "virtual-render-source": "⊞", "physical-output": "◎", "virtual-capture-sink": "⊟", gain: "◢", mixer: "⋈", recorder: "●", mute: "⊘", meter: "▥", "parametric-eq": "⌁", compressor: "⤓", gate: "⊐", limiter: "⊤", delay: "◷", "graphic-eq": "▤", pitch: "↟", "network-send": "⇡", "network-receive": "⇣" };
 
 function ApplicationSourceAction({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
   return <button type="button" className="secondary application-source-action" onClick={onClick} disabled={disabled}>
@@ -57,7 +58,8 @@ export function Workbench({ onAddGroup, tab, onTab, tools, connected, onAdd, onA
         {flow === "input" && <ApplicationSourceAction onClick={onApplicationPicker} disabled={!connected} />}
         {tools.filter((entry) => entry.flow === flow).sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base" })).map((entry) => {
           const help = entry.unavailableReason ?? entry.note ?? TOOL_HELP[entry.id] ?? entry.category;
-          return <button className="tool-card" key={entry.id} type="button" onClick={() => entry.kind && onAdd(entry.kind)} disabled={!connected || !entry.kind} title={help} aria-description={help}>
+          // Click adds the tool; drag places it where it is dropped on the canvas.
+          return <button className="tool-card" key={entry.id} type="button" draggable={connected && Boolean(entry.kind)} onDragStart={(event) => { if (entry.kind) startLibraryDrag(event, entry.kind, entry.label); }} onDragEnd={endLibraryDrag} onClick={() => entry.kind && onAdd(entry.kind)} disabled={!connected || !entry.kind} title={help} aria-description={help}>
             <span className="tool-card-icon" aria-hidden="true">{TOOL_ICONS[entry.id]}</span>
             <span><strong>{entry.label}</strong><small>{help}</small></span>
           </button>;

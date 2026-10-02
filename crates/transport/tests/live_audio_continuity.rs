@@ -121,7 +121,11 @@ mod live {
     }
 
     fn record_mode() -> bool {
-        std::env::var("AUDIOROUTER_CONTINUITY_RECORD").as_deref() == Ok("1") || pre_mixer_mode()
+        std::env::var("AUDIOROUTER_CONTINUITY_RECORD").as_deref() == Ok("1") || pre_mixer_mode() || branch_meter_mode()
+    }
+
+    fn branch_meter_mode() -> bool {
+        std::env::var("AUDIOROUTER_CONTINUITY_BRANCH_METER").as_deref() == Ok("1")
     }
 
     fn pre_mixer_mode() -> bool {
@@ -322,6 +326,24 @@ mod live {
                 source_node: feeder.0,
                 source_port: feeder.1,
                 destination_node: EntityId::new("recorder"),
+                destination_port: "in".into(),
+                matrix: vec![1.0, 0.0, 0.0, 1.0],
+                enabled: true,
+            });
+        }
+        // `AUDIOROUTER_CONTINUITY_BRANCH_METER=1` puts a Meter on the measured
+        // output branch beside the Recorder branch, so the analysed tone
+        // passes through a prepared output-branch processor.
+        if branch_meter_mode() {
+            let output_edge = edges.iter_mut().find(|edge| edge.destination_node.as_str() == "destination").expect("destination is fed");
+            output_edge.destination_node = EntityId::new("branch-meter");
+            output_edge.destination_port = "in".into();
+            nodes.push(node("branch-meter".into(), NodeKind::Meter, vec![port("in", PortDirection::Input), port("out", PortDirection::Output)], serde_json::Map::new()));
+            edges.push(Edge {
+                id: EntityId::new("branch-meter-destination"),
+                source_node: EntityId::new("branch-meter"),
+                source_port: "out".into(),
+                destination_node: EntityId::new("destination"),
                 destination_port: "in".into(),
                 matrix: vec![1.0, 0.0, 0.0, 1.0],
                 enabled: true,
@@ -712,7 +734,7 @@ mod live {
 
         eprintln!("chain: {chain:?}; audio service: {last_service}; output underruns: {last_underruns}");
         for item in diagnostics["nodeTelemetry"].as_array().into_iter().flatten() {
-            eprintln!("  {} timing={} plugin={} network={}", item["nodeId"], item["timing"], item["plugin"], item["network"]);
+            eprintln!("  {} timing={} plugin={} network={} processor={}", item["nodeId"], item["timing"], item["plugin"], item["network"], item["processor"]);
         }
         if std::env::var_os("AUDIOROUTER_CONTINUITY_TOGGLE").is_some() {
             let levels: Vec<String> = result

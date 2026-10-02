@@ -188,6 +188,13 @@ export interface UiBackend {
   removeRecordingEntry(recordingId: string, idempotencyKey?: string): Promise<RecordingRemoveResult>;
   recycleRecording(recordingId: string, confirm: boolean, idempotencyKey?: string): Promise<RecordingRecycleResult>;
   createRecorder(params: MethodParams["recorders.create"]): Promise<RecorderCreateResult>;
+  /** One-click Record / Stop on a Recorder node, using its own settings. */
+  startNodeRecording(sessionId: string, nodeId: string, idempotencyKey: string): Promise<MethodResult["recorders.startRecording"]>;
+  stopNodeRecording(sessionId: string, nodeId: string, idempotencyKey: string): Promise<MethodResult["recorders.stopRecording"]>;
+  /** The approved recording folder (null until chosen) and a suggestion. */
+  getRecordingRoot?(): Promise<MethodResult["recordings.getRoot"]>;
+  /** Approve a local recording folder, creating it when asked. */
+  setRecordingRoot?(root: string, create: boolean, idempotencyKey: string): Promise<MethodResult["recordings.setRoot"]>;
   armRecorder(sessionId: string, idempotencyKey?: string, nodeId?: string): Promise<RecorderLifecycleResult>;
   startRecorder(sessionId: string, frame: number, idempotencyKey?: string, nodeId?: string): Promise<RecorderLifecycleResult>;
   pauseRecorder(sessionId: string, frame: number, idempotencyKey?: string, nodeId?: string): Promise<RecorderLifecycleResult>;
@@ -431,6 +438,12 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     },
     async createRecorder() {
       throw new Error("The backend is disconnected; recorder creation is unavailable.");
+    },
+    async startNodeRecording() {
+      throw new Error("The backend is disconnected; recording is unavailable.");
+    },
+    async stopNodeRecording() {
+      throw new Error("The backend is disconnected; recording is unavailable.");
     },
     async armRecorder() {
       throw new Error("The backend is disconnected; recorder control is unavailable.");
@@ -793,6 +806,18 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
     },
     async createRecorder(params) {
       return client.request("recorders.create", params);
+    },
+    async startNodeRecording(recorderSessionId, nodeId, idempotencyKey) {
+      return client.request("recorders.startRecording", { sessionId: recorderSessionId, nodeId, idempotencyKey });
+    },
+    async stopNodeRecording(recorderSessionId, nodeId, idempotencyKey) {
+      return client.request("recorders.stopRecording", { sessionId: recorderSessionId, nodeId, idempotencyKey });
+    },
+    async getRecordingRoot() {
+      return client.request("recordings.getRoot", {});
+    },
+    async setRecordingRoot(root, create, idempotencyKey) {
+      return client.request("recordings.setRoot", { root, create, idempotencyKey });
     },
     async armRecorder(recorderSessionId, idempotencyKey, nodeId) {
       return client.request("recorders.arm", { sessionId: recorderSessionId, ...(nodeId === undefined ? {} : { nodeId }), ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });

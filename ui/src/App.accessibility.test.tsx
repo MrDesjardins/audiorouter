@@ -416,6 +416,28 @@ describe("VB-Cable endpoint selection", () => {
     expect(await screen.findByRole("button", { name: "Mute microphone" })).toBeTruthy();
   });
 
+  it("toggles privacy mute on and off while playing despite a stale full-snapshot status", async () => {
+    let muted = false;
+    const setPrivacyMute = vi.fn(async (next: boolean) => { muted = next; return { muted, persistence: "memory" as const, audioEffect: "process-local" as const }; });
+    // Diagnostics (refreshed every 50 ms while playing) carry the live state;
+    // the full snapshot's status keeps its initial value.
+    const refreshDiagnostics = async () => ({ ...await preparedDiagnostics(), privacyMute: { muted, persistence: "memory" as const } });
+    const startSession = vi.fn(async () => ({ sessionId: "demo-session", state: "running" as const, runtime: "fake" as const, generation: 1 }));
+    const base = connectedPreviewBackend();
+    const snapshot = async () => { const value = await base.snapshot(); return { ...value, status: { ...value.status, activeSessionIds: [demoSession.id], activeSessionCount: 1, privacyMute: { ...value.status.privacyMute, muted: false } }, diagnostics: { ...value.diagnostics, privacyMute: { ...value.diagnostics.privacyMute, muted: false } } }; };
+    await renderReady(<App backend={{ ...base, snapshot, setPrivacyMute, startSession, refreshDiagnostics }} />);
+    expect(await screen.findByText("● Audio running")).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: "Mute microphone" }));
+    await waitFor(() => expect(setPrivacyMute).toHaveBeenLastCalledWith(true, expect.any(String)));
+    // Several diagnostics refreshes later the button must still show muted.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    fireEvent.click(await screen.findByRole("button", { name: "Microphone muted" }));
+    await waitFor(() => expect(setPrivacyMute).toHaveBeenLastCalledWith(false, expect.any(String)));
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(screen.getByRole("button", { name: "Mute microphone" })).toBeTruthy();
+    expect(muted).toBe(false);
+  });
+
   it("prevents duplicate session starts while the first start is pending", async () => {
     let releaseStart!: (value: { sessionId: string; state: "running"; runtime: "fake"; generation: number }) => void;
     const result = new Promise<{ sessionId: string; state: "running"; runtime: "fake"; generation: number }>((resolve) => { releaseStart = resolve; });
@@ -1701,10 +1723,10 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     expect(screen.getByRole("heading", { name: "Gate 1" })).toBeTruthy();
   });
 
-  it("persists tidy layout positions as presentation state", async () => {
+  it("persists arranged layout positions as presentation state", async () => {
     await renderReady(<App backend={connectedPreviewBackend()} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Tidy layout" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Arrange" }));
     const positions = JSON.parse(window.localStorage.getItem("audiorouter.ui.layout.demo-session") ?? "null");
     expect(Object.keys(positions).sort()).toEqual(demoSession.nodes.map(node => node.id).sort());
     // Disconnected nodes have separate lanes in the smart layout.

@@ -5,7 +5,7 @@ import { createElement } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Session } from "@audiorouter/contracts";
 import { demoSession } from "./fixtures";
-import { AudioFileNodeControls, SIGNAL_FLOW_LEGEND, nodeHeaderState, deletedConnectionIds, deletedNodeIds, edgeSignalForConnection, eqBandCoordinates, libraryDropPosition, signalStrokeWidth, telemetrySignalActive, testSignalHasPhysicalOutputPath } from "./SessionFlowCanvas";
+import { AudioFileNodeControls, SIGNAL_FLOW_LEGEND, nodeHeaderState, deletedConnectionIds, deletedNodeIds, edgeSignalForConnection, eqBandCoordinates, libraryDropPosition, telemetrySignalActive, testSignalHasPhysicalOutputPath } from "./SessionFlowCanvas";
 import { SessionFlowCanvas } from "./SessionFlowCanvas";
 
 beforeAll(() => {
@@ -114,10 +114,6 @@ describe("canvas library drop positions", () => {
     const edge = session.edges[0];
     const active = edgeSignalForConnection(edge, session, diagnostics, true, true);
     expect(active).toMatchObject({ active: true, state: "active", levelDb: -18 });
-    expect(signalStrokeWidth(active.levelDb)).toBeGreaterThan(2.5);
-    expect(signalStrokeWidth(-60)).toBe(2.5);
-    expect(signalStrokeWidth(-100)).toBe(2.5);
-    expect(signalStrokeWidth(20)).toBeLessThanOrEqual(12.5);
     expect(edgeSignalForConnection(edge, session, diagnostics, false, true).state).toBe("stopped");
     expect(edgeSignalForConnection(edge, session, diagnostics, true, false).state).toBe("stale");
     expect(edgeSignalForConnection(edge, session, { ...diagnostics, privacyMute: { muted: true, persistence: "memory" } }, true, true).state).toBe("muted");

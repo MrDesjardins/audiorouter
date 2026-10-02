@@ -38,6 +38,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 pub mod os_transition;
+mod simple;
 
 use os_transition::{plan_os_transition, OsTransition};
 
@@ -120,6 +121,15 @@ const MAX_ACTIVE_RECORDERS: usize = audiorouter_engine::MAX_AUDIO_TAPS;
 /// operation loop forever; the caller receives a recoverable finalization
 /// error and the recorder remains owned by the worker.
 const MAX_RECORDER_FINALIZATION_PASSES: usize = 4096;
+/// Two seconds of 128-frame quanta at 48 kHz (REC-08 default queue depth).
+const ONE_CLICK_RECORDER_QUEUE_CHUNKS: usize = {
+    let chunks = 2 * 48_000 / audiorouter_engine::PROCESSING_QUANTUM_FRAMES;
+    if chunks > audiorouter_recording::MAX_RECORDING_QUEUE_CHUNKS {
+        audiorouter_recording::MAX_RECORDING_QUEUE_CHUNKS
+    } else {
+        chunks
+    }
+};
 /// Maximum number of queued recorder chunks drained per native pump and per
 /// attached worker. This keeps recording I/O bounded per control request.
 const MAX_RECORDER_PUMP_CHUNKS: usize = 4;
@@ -1194,27 +1204,45 @@ impl RecorderWorker for SegmentedWavRecorderWorker {
             .recorder
             .take()
             .ok_or_else(|| "segmented WAV recorder was finalized more than once".to_owned())?;
-        let mut completed = false;
-        for _ in 0..MAX_RECORDER_FINALIZATION_PASSES {
-            match recorder.stop_and_drain(&self.queue, frame, self.maximum_chunks_per_pass) {
-                Ok(_) => {
-                    completed = true;
-                    break;
-                }
-                Err(RecordingError::QueueNotEmpty) => continue,
-                Err(error) => {
-                    self.recorder = Some(recorder);
-                    return Err(format!("segmented WAV finalization failed: {error:?}"));
+        // REC-08: a recorder that failed mid-take keeps a playable prefix.
+        let mut failed = recorder.state() == RecorderState::Failed;
+        let outputs = if failed {
+            recorder
+                .finish_failed()
+                .map_err(|error| format!("segmented WAV prefix finalization failed: {error:?}"))?
+        } else {
+            let mut completed = false;
+            for _ in 0..MAX_RECORDER_FINALIZATION_PASSES {
+                match recorder.stop_and_drain(&self.queue, frame, self.maximum_chunks_per_pass) {
+                    Ok(_) => {
+                        completed = true;
+                        break;
+                    }
+                    Err(RecordingError::QueueNotEmpty) => continue,
+                    // A gap found in the queued audio: keep the prefix.
+                    Err(_) if recorder.state() == RecorderState::Failed => break,
+                    Err(error) => {
+                        self.recorder = Some(recorder);
+                        return Err(format!("segmented WAV finalization failed: {error:?}"));
+                    }
                 }
             }
-        }
-        if !completed {
-            self.recorder = Some(recorder);
-            return Err("segmented WAV finalization exceeded its bounded drain budget".into());
-        }
-        let outputs = recorder
-            .finish()
-            .map_err(|error| format!("segmented WAV file finalization failed: {error:?}"))?;
+            if !completed && recorder.state() != RecorderState::Failed {
+                self.recorder = Some(recorder);
+                return Err("segmented WAV finalization exceeded its bounded drain budget".into());
+            }
+            if recorder.state() == RecorderState::Failed {
+                failed = true;
+                recorder
+                    .finish_failed()
+                    .map_err(|error| format!("segmented WAV prefix finalization failed: {error:?}"))?
+            } else {
+                recorder
+                    .finish()
+                    .map_err(|error| format!("segmented WAV file finalization failed: {error:?}"))?
+            }
+        };
+        let final_state = if failed { "failed" } else { "completed" };
         let paths = self
             .paths
             .lock()
@@ -1274,7 +1302,7 @@ impl RecorderWorker for SegmentedWavRecorderWorker {
                 frames: data_bytes / bytes_per_frame,
                 file_bytes,
                 start_time: start_time.clone(),
-                state: "completed".into(),
+                state: final_state.into(),
                 missing: false,
                 title: None,
                 artist: None,
@@ -1288,7 +1316,7 @@ impl RecorderWorker for SegmentedWavRecorderWorker {
         }
         self.finalized_recordings = finalized;
         Ok(RecorderFinalizationOutcome {
-            state: "completed".into(),
+            state: final_state.into(),
             file_finalized: true,
             recoverable: false,
         })
@@ -1730,29 +1758,47 @@ impl RecorderWorker for StreamingFlacRecorderWorker {
             .recorder
             .take()
             .ok_or_else(|| "streaming FLAC recorder was finalized more than once".to_owned())?;
-        let mut completed = false;
-        for _ in 0..MAX_RECORDER_FINALIZATION_PASSES {
-            match recorder.stop_and_drain(&self.queue, frame, self.maximum_chunks_per_pass) {
-                Ok(_) => {
-                    completed = true;
-                    break;
-                }
-                Err(RecordingError::QueueNotEmpty) => continue,
-                Err(error) => {
-                    self.recorder = Some(recorder);
-                    return Err(format!("streaming FLAC finalization failed: {error:?}"));
+        // REC-08: a recorder that failed mid-take keeps a playable prefix.
+        let mut failed = recorder.state() == RecorderState::Failed;
+        let output = if failed {
+            recorder
+                .finish_failed()
+                .map_err(|error| format!("streaming FLAC prefix finalization failed: {error:?}"))?
+        } else {
+            let mut completed = false;
+            for _ in 0..MAX_RECORDER_FINALIZATION_PASSES {
+                match recorder.stop_and_drain(&self.queue, frame, self.maximum_chunks_per_pass) {
+                    Ok(_) => {
+                        completed = true;
+                        break;
+                    }
+                    Err(RecordingError::QueueNotEmpty) => continue,
+                    // A gap found in the queued audio: keep the prefix.
+                    Err(_) if recorder.state() == RecorderState::Failed => break,
+                    Err(error) => {
+                        self.recorder = Some(recorder);
+                        return Err(format!("streaming FLAC finalization failed: {error:?}"));
+                    }
                 }
             }
-        }
-        if !completed {
-            self.recorder = Some(recorder);
-            return Err(
-                "streaming FLAC recorder finalization exceeded its bounded drain budget".into(),
-            );
-        }
-        let output = recorder
-            .finish()
-            .map_err(|error| format!("streaming FLAC file finalization failed: {error:?}"))?;
+            if !completed && recorder.state() != RecorderState::Failed {
+                self.recorder = Some(recorder);
+                return Err(
+                    "streaming FLAC recorder finalization exceeded its bounded drain budget".into(),
+                );
+            }
+            if recorder.state() == RecorderState::Failed {
+                failed = true;
+                recorder
+                    .finish_failed()
+                    .map_err(|error| format!("streaming FLAC prefix finalization failed: {error:?}"))?
+            } else {
+                recorder
+                    .finish()
+                    .map_err(|error| format!("streaming FLAC file finalization failed: {error:?}"))?
+            }
+        };
+        let final_state = if failed { "failed" } else { "completed" };
         output
             .sync_all()
             .map_err(|error| format!("streaming FLAC file sync failed: {error}"))?;
@@ -1765,7 +1811,7 @@ impl RecorderWorker for StreamingFlacRecorderWorker {
                 .run_id
                 .as_deref()
                 .ok_or_else(|| "streaming FLAC finalized without a run identity".to_owned())?;
-            self.finalized_recordings = vec![finalized_flac_recording(
+            let mut recording = finalized_flac_recording(
                 identity,
                 run_id,
                 start_time,
@@ -1774,10 +1820,12 @@ impl RecorderWorker for StreamingFlacRecorderWorker {
                     "targetSampleRate={};channels={};bitsPerSample={}",
                     self.sample_rate, self.channels, self.bits_per_sample
                 ),
-            )?];
+            )?;
+            recording.state = final_state.into();
+            self.finalized_recordings = vec![recording];
         }
         Ok(RecorderFinalizationOutcome {
-            state: "completed".into(),
+            state: final_state.into(),
             file_finalized: true,
             recoverable: false,
         })
@@ -1926,27 +1974,45 @@ impl RecorderWorker for Mp3RecorderWorker {
             .recorder
             .take()
             .ok_or_else(|| "MP3 recorder was finalized more than once".to_owned())?;
-        let mut completed = false;
-        for _ in 0..MAX_RECORDER_FINALIZATION_PASSES {
-            match recorder.stop_and_drain(&self.queue, frame, self.maximum_chunks_per_pass) {
-                Ok(_) => {
-                    completed = true;
-                    break;
-                }
-                Err(RecordingError::QueueNotEmpty) => continue,
-                Err(error) => {
-                    self.recorder = Some(recorder);
-                    return Err(format!("MP3 recorder finalization failed: {error:?}"));
+        // REC-08: a recorder that failed mid-take keeps a playable prefix.
+        let mut failed = recorder.state() == RecorderState::Failed;
+        let (mut output, frames) = if failed {
+            recorder
+                .finish_failed()
+                .map_err(|error| format!("MP3 prefix finalization failed: {error:?}"))?
+        } else {
+            let mut completed = false;
+            for _ in 0..MAX_RECORDER_FINALIZATION_PASSES {
+                match recorder.stop_and_drain(&self.queue, frame, self.maximum_chunks_per_pass) {
+                    Ok(_) => {
+                        completed = true;
+                        break;
+                    }
+                    Err(RecordingError::QueueNotEmpty) => continue,
+                    // A gap found in the queued audio: keep the prefix.
+                    Err(_) if recorder.state() == RecorderState::Failed => break,
+                    Err(error) => {
+                        self.recorder = Some(recorder);
+                        return Err(format!("MP3 recorder finalization failed: {error:?}"));
+                    }
                 }
             }
-        }
-        if !completed {
-            self.recorder = Some(recorder);
-            return Err("MP3 recorder finalization exceeded its bounded drain budget".into());
-        }
-        let (mut output, frames) = recorder
-            .finish()
-            .map_err(|error| format!("MP3 file finalization failed: {error:?}"))?;
+            if !completed && recorder.state() != RecorderState::Failed {
+                self.recorder = Some(recorder);
+                return Err("MP3 recorder finalization exceeded its bounded drain budget".into());
+            }
+            if recorder.state() == RecorderState::Failed {
+                failed = true;
+                recorder
+                    .finish_failed()
+                    .map_err(|error| format!("MP3 prefix finalization failed: {error:?}"))?
+            } else {
+                recorder
+                    .finish()
+                    .map_err(|error| format!("MP3 file finalization failed: {error:?}"))?
+            }
+        };
+        let final_state = if failed { "failed" } else { "completed" };
         std::io::Write::flush(&mut output)
             .and_then(|()| output.sync_all())
             .map_err(|error| format!("MP3 file sync failed: {error}"))?;
@@ -1959,7 +2025,7 @@ impl RecorderWorker for Mp3RecorderWorker {
                 .run_id
                 .as_deref()
                 .ok_or_else(|| "MP3 finalized without a run identity".to_owned())?;
-            self.finalized_recordings = vec![finalized_mp3_recording(
+            let mut recording = finalized_mp3_recording(
                 identity,
                 run_id,
                 start_time,
@@ -1971,10 +2037,12 @@ impl RecorderWorker for Mp3RecorderWorker {
                     "targetSampleRate={};channels={};format=mp3;bitrateKbps=192",
                     self.sample_rate, self.channels
                 ),
-            )?];
+            )?;
+            recording.state = final_state.into();
+            self.finalized_recordings = vec![recording];
         }
         Ok(RecorderFinalizationOutcome {
-            state: "completed".into(),
+            state: final_state.into(),
             file_finalized: true,
             recoverable: false,
         })
@@ -2240,7 +2308,11 @@ fn method_description(name: &str) -> &'static str {
         "recorders.pause" => "Pause a recorder at an explicit engine frame boundary.",
         "recorders.resume" => "Resume a recorder at an explicit engine frame boundary.",
         "recorders.split" => "Split a recorder at an explicit engine frame boundary.",
+        "recorders.startRecording" => "Start recording a Recorder node now with its own settings (format, automatic split). Works while the route plays; returns the new file path.",
+        "recorders.stopRecording" => "Stop a Recorder node's recording and finalize its file. Does nothing when it is not recording.",
         "recorders.stop" => "Stop a recorder at an explicit engine frame boundary.",
+        "recordings.getRoot" => "Read the approved recording folder (null until the user chooses one) and a suggested folder.",
+        "recordings.setRoot" => "Approve a local folder for every recording; create it when create is true. Desktop app only.",
         "recordings.get" => {
             "Read one persisted recording metadata resource without touching its file."
         }
@@ -2361,6 +2433,18 @@ fn method_description(name: &str) -> &'static str {
         "session.stop" | "sessions.stop" => {
             "Stop a session runtime and publish its lifecycle result."
         }
+        "sessions.play" => "Play a saved session (default: the active session): prepares every device chosen on its nodes and starts, like the Play button. Needs the device administration grant.",
+        "sessions.togglePlay" => "Play the session if it is stopped, stop it if it is playing (one StreamDeck key). Needs the device administration grant.",
+        "sessions.summary" => "Describe a session in plain terms: nodes with readable settings, connections by name, playing and privacy-mute state.",
+        "safety.togglePrivacyMute" => "Mute the microphone if it is live, unmute it if it is muted. Returns the new state.",
+        "nodes.catalog" => "List the tools and devices that can be added by kind, with a plain description, inputs, outputs and settings.",
+        "nodes.set" => "Change one node, found by ID or name: settings (parameters), enabled, bypass or name. Applied live and saved.",
+        "nodes.toggle" => "Flip one node's enabled, bypass, an on/off setting or a two-choice setting (for example an Input Switch between A and B). Applied live and saved.",
+        "nodes.add" => "Add a tool or device by kind (see nodes.catalog), optionally between two connected nodes or after a node. Saved.",
+        "nodes.remove" => "Remove a node by ID or name; by default its upstream and downstream nodes are reconnected. Saved.",
+        "connections.add" => "Connect two nodes by ID or name (first output to the first free input). Saved.",
+        "connections.remove" => "Remove the connection between two nodes. Saved.",
+        "meters.levels" => "Current level of each playing node (peak and RMS dBFS, clipping, and reduction for Gate, Compressor, Limiter and Duck).",
         _ => "Invoke an AudioRouter control-plane method.",
     }
 }
@@ -2538,6 +2622,23 @@ fn method_input_schema(name: &str) -> Value {
         "recorders.arm" => recorder_input_schema(false),
         "recorders.start" | "recorders.pause" | "recorders.resume" | "recorders.split"
         | "recorders.stop" => recorder_input_schema(true),
+        "recordings.getRoot" => object_schema(json!({}), &[]),
+        "recordings.setRoot" => object_schema(
+            json!({
+                "root": { "type": "string", "minLength": 1, "maxLength": 1024 },
+                "create": { "type": "boolean" },
+                "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
+            }),
+            &["root", "idempotencyKey"],
+        ),
+        "recorders.startRecording" | "recorders.stopRecording" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
+            }),
+            &["nodeId", "idempotencyKey"],
+        ),
         "devices.list" => object_schema(
             json!({
                 "cursor": { "type": ["string", "null"], "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
@@ -3007,6 +3108,18 @@ fn method_input_schema(name: &str) -> Value {
             }),
             &["sampleRateHz", "bands", "frequenciesHz"],
         ),
+        "sessions.play" => object_schema(json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }), &["idempotencyKey"]),
+        "sessions.togglePlay" => object_schema(json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }), &["idempotencyKey"]),
+        "sessions.summary" => object_schema(json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." } }), &[]),
+        "meters.levels" => object_schema(json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." } }), &[]),
+        "nodes.catalog" => object_schema(json!({  }), &[]),
+        "safety.togglePrivacyMute" => object_schema(json!({ "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }), &["idempotencyKey"]),
+        "nodes.set" => object_schema(json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "node": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Node ID or exact name." }, "parameters": { "type": "object", "description": "Settings to change, by name (see nodes.catalog)." }, "enabled": { "type": "boolean" }, "bypass": { "type": "boolean" }, "name": { "type": "string", "minLength": 1, "maxLength": 120 }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }), &["node", "idempotencyKey"]),
+        "nodes.toggle" => object_schema(json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "node": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Node ID or exact name." }, "target": { "type": "string", "minLength": 1, "maxLength": 128, "description": "enabled, bypass, or an on/off or two-choice setting name." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }), &["node", "target", "idempotencyKey"]),
+        "nodes.add" => object_schema(json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "kind": { "type": "string", "minLength": 1, "maxLength": 64, "description": "Node kind from nodes.catalog, for example compressor." }, "name": { "type": "string", "minLength": 1, "maxLength": 120 }, "parameters": { "type": "object" }, "between": { "type": "object", "properties": { "from": { "type": "string" }, "to": { "type": "string" } }, "required": ["from", "to"] }, "after": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Node to place the new one after." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }), &["kind", "idempotencyKey"]),
+        "nodes.remove" => object_schema(json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "node": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Node ID or exact name." }, "bridge": { "type": "boolean", "description": "Reconnect its neighbours (default true)." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }), &["node", "idempotencyKey"]),
+        "connections.add" => object_schema(json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "from": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Source node ID or name." }, "to": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Destination node ID or name." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }), &["from", "to", "idempotencyKey"]),
+        "connections.remove" => object_schema(json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "from": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Source node ID or name." }, "to": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Destination node ID or name." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }), &["from", "to", "idempotencyKey"]),
         _ => object_schema(json!({}), &[]),
     }
 }
@@ -3079,6 +3192,43 @@ fn method_output_schema(name: &str) -> Value {
                 "required": ["sessionId", "state", "lastFrame"],
                 "additionalProperties": false
             }
+        }),
+        "recordings.getRoot" => json!({
+            "type": "object",
+            "properties": {
+                "root": { "type": ["string", "null"] },
+                "suggestedRoot": { "type": ["string", "null"] }
+            },
+            "required": ["root", "suggestedRoot"],
+            "additionalProperties": false
+        }),
+        "recordings.setRoot" => json!({
+            "type": "object",
+            "properties": {
+                "root": { "type": "string" },
+                "created": { "type": "boolean" }
+            },
+            "required": ["root", "created"],
+            "additionalProperties": false
+        }),
+        "recorders.startRecording" | "recorders.stopRecording" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": ["string", "null"], "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "state": { "enum": ["idle", "armed", "recording", "paused", "stopping", "completed", "failed"] },
+                "format": { "enum": ["wavPcm16", "wavPcm24", "wavFloat32", "flac16", "flac24", "mp3"] },
+                "path": { "type": ["string", "null"] },
+                "splitMinutes": { "type": "integer", "minimum": 0, "maximum": 240 },
+                "alreadyRecording": { "type": "boolean" },
+                "reason": { "type": "string" },
+                "paths": { "type": "array", "items": { "type": "string" } },
+                "parts": { "type": "array", "maxItems": audiorouter_recording::MAX_CHECKPOINT_PARTS },
+                "pauses": { "type": "array", "maxItems": audiorouter_recording::MAX_CHECKPOINT_PAUSES },
+                "lastFrame": { "type": ["integer", "null"] }
+            },
+            "required": ["nodeId", "state"],
+            "additionalProperties": false
         }),
         "recorders.arm" | "recorders.start" | "recorders.pause" | "recorders.resume"
         | "recorders.split" | "recorders.stop" => json!({
@@ -4535,7 +4685,9 @@ fn diagnostics_output_schema() -> Value {
                             "type": ["object", "null"],
                             "properties": {
                                 "gainReductionDb": { "type": "array", "maxItems": 2, "items": { "type": "number", "minimum": 0 } },
-                                "gateOpen": { "type": "array", "maxItems": 2, "items": { "type": "boolean" } }
+                                "gateOpen": { "type": "array", "maxItems": 2, "items": { "type": "boolean" } },
+                                "inputLevelDb": { "type": "array", "maxItems": 2, "items": { "type": "number" } },
+                                "outputLevelDb": { "type": "array", "maxItems": 2, "items": { "type": "number" } }
                             },
                             "required": ["gainReductionDb", "gateOpen"],
                             "additionalProperties": false
@@ -4566,7 +4718,8 @@ fn diagnostics_output_schema() -> Value {
                                 "rejectedDatagrams": { "type": "integer", "minimum": 0 },
                                 "underruns": { "type": "integer", "minimum": 0 },
                                 "overflowPackets": { "type": "integer", "minimum": 0 },
-                                "bufferedMs": { "type": "number", "minimum": 0 }
+                                "bufferedMs": { "type": "number", "minimum": 0 },
+                                "rejectedFrom": { "type": "string", "maxLength": 64 }
                             },
                             "required": ["direction"],
                             "additionalProperties": false
@@ -5247,6 +5400,47 @@ impl AudioServiceStats {
     }
 }
 
+/// Automatic file splitting for a one-click recording. WAV splits in place
+/// without a gap; other formats roll over to a new file at the boundary.
+#[derive(Clone, Debug)]
+struct RecordingSplit {
+    every_frames: u64,
+    started_at: Option<u64>,
+    in_place: bool,
+}
+
+/// One-click recording settings stored on a Recorder node.
+struct RecorderNodeSettings {
+    format: FileRecorderFormat,
+    format_name: &'static str,
+    auto_record: bool,
+    split_minutes: u64,
+    channels: u16,
+}
+
+fn recorder_node_settings(node: &audiorouter_domain::Node) -> RecorderNodeSettings {
+    let (format, format_name) = match node.parameters.get("format").and_then(Value::as_str).unwrap_or("wavPcm24") {
+        "wavPcm16" => (FileRecorderFormat::Wav(WavFormat::Pcm16), "wavPcm16"),
+        "wavFloat32" => (FileRecorderFormat::Wav(WavFormat::Float32), "wavFloat32"),
+        "flac16" => (FileRecorderFormat::Flac { bits_per_sample: 16 }, "flac16"),
+        "flac24" => (FileRecorderFormat::Flac { bits_per_sample: 24 }, "flac24"),
+        "mp3" => (FileRecorderFormat::Mp3, "mp3"),
+        _ => (FileRecorderFormat::Wav(WavFormat::Pcm24), "wavPcm24"),
+    };
+    let channels = node
+        .ports
+        .iter()
+        .find(|port| port.direction == PortDirection::Input)
+        .map_or(2, |port| u16::from(port.channels).clamp(1, 2));
+    RecorderNodeSettings {
+        format,
+        format_name,
+        auto_record: node.parameters.get("autoRecord").and_then(Value::as_bool).unwrap_or(false),
+        split_minutes: node.parameters.get("splitMinutes").and_then(Value::as_f64).filter(|minutes| minutes.is_finite()).map_or(0, |minutes| minutes.clamp(0.0, 240.0) as u64),
+        channels,
+    }
+}
+
 pub struct ControlPlane {
     store: GraphStore,
     active_session_id: Option<EntityId>,
@@ -5255,8 +5449,20 @@ pub struct ControlPlane {
     recorders: HashMap<EntityId, RecorderController>,
     recorder_workers: HashMap<EntityId, Box<dyn RecorderWorker>>,
     recorder_node_workers: HashMap<EntityId, Box<dyn RecorderWorker>>,
+    /// Stable realtime inlet per Recorder node. Playback binds the inlet, so
+    /// a route with a Recorder always plays; Record attaches a file worker
+    /// behind it at any time. Control thread only (never the audio callback).
+    recorder_inlets: std::sync::Mutex<HashMap<EntityId, Arc<audiorouter_engine::SwitchableAudioTap>>>,
     recorder_node_states: HashMap<EntityId, RecorderController>,
     recorder_node_sessions: HashMap<EntityId, EntityId>,
+    /// One-click recordings: per Recorder node, the automatic split interval
+    /// and the frame the current file began.
+    recording_splits: HashMap<EntityId, RecordingSplit>,
+    recording_sequence: u64,
+    recording_maintained_at: Option<std::time::Instant>,
+    /// Why a one-click recording stopped saving (first failure per node);
+    /// reported once at Stop (REC-08: mark the gap and its cause).
+    recorder_node_failures: HashMap<EntityId, String>,
     recording_policy: Option<RecordingPathPolicy>,
     storage: Option<Storage>,
     audio_upload: Option<AudioMediaUpload>,
@@ -5906,8 +6112,13 @@ impl ControlPlane {
             recorders: HashMap::new(),
             recorder_workers: HashMap::new(),
             recorder_node_workers: HashMap::new(),
+            recorder_inlets: Default::default(),
             recorder_node_states: HashMap::new(),
             recorder_node_sessions: HashMap::new(),
+            recording_splits: HashMap::new(),
+            recording_sequence: 0,
+            recording_maintained_at: None,
+            recorder_node_failures: HashMap::new(),
             recording_policy: None,
             storage: None,
             audio_upload: None,
@@ -6673,6 +6884,11 @@ impl ControlPlane {
         }
         #[cfg(not(windows))]
         let _ = running;
+        // Every worker kind feeds recorder taps, but only some pumps drain
+        // them (duplex and render-source did not). Drain once per pass for
+        // all of them so a queue never fills while audio plays.
+        let _ = self.drain_attached_recorders();
+        self.maintain_node_recordings(now);
         self.audio_service.record(now, serviced != 0);
         serviced
     }
@@ -6791,7 +7007,10 @@ impl ControlPlane {
             ControlError::InvalidRequest("native multi-input worker is not attached".into())
         })?;
         let output_count = worker.output_count();
-        let (pump, delivered_quanta, render_pump) = if output_count > 0 {
+        // Any output owner, not only physical outputs: a session whose only
+        // outputs are Network Send, Recorder or virtual sinks (for example
+        // a microphone streamed to another computer) must still process.
+        let (pump, delivered_quanta, render_pump) = if worker.has_output_owner() {
             let (input, delivered, render) =
                 worker
                     .pump_and_process_outputs(max_packets)
@@ -9173,13 +9392,17 @@ impl ControlPlane {
                 })?;
             drained = drained.saturating_add(count);
         }
-        for worker in self.recorder_node_workers.values_mut() {
-            let count = worker
-                .drain_pending(MAX_RECORDER_PUMP_CHUNKS)
-                .map_err(|error| {
-                    ControlError::InvalidRequest(format!("recorder node drain failed: {error}"))
-                })?;
-            drained = drained.saturating_add(count);
+        // A failed one-click recording must not stop the audio pump or the
+        // other recorders: remember why, keep its written prefix for Stop.
+        for (node_id, worker) in self.recorder_node_workers.iter_mut() {
+            match worker.drain_pending(MAX_RECORDER_PUMP_CHUNKS) {
+                Ok(count) => drained = drained.saturating_add(count),
+                Err(error) => {
+                    self.recorder_node_failures
+                        .entry(node_id.clone())
+                        .or_insert(error);
+                }
+            }
         }
         Ok(drained)
     }
@@ -9689,6 +9912,8 @@ impl ControlPlane {
                         .map(|telemetry| {
                             json!({
                                 "gainReductionDb": telemetry.gain_reduction_db,
+                                "inputLevelDb": telemetry.input_level_db,
+                                "outputLevelDb": telemetry.output_level_db,
                                 "gateOpen": telemetry.gate_open,
                             })
                         });
@@ -9801,6 +10026,8 @@ impl ControlPlane {
                         .map(|telemetry| {
                             json!({
                                 "gainReductionDb": telemetry.gain_reduction_db,
+                                "inputLevelDb": telemetry.input_level_db,
+                                "outputLevelDb": telemetry.output_level_db,
                                 "gateOpen": telemetry.gate_open,
                             })
                         });
@@ -9824,7 +10051,7 @@ impl ControlPlane {
                     .position(|id| *id == node.id)
                     .and_then(|index| worker.network_receive_stats(index))
                     .map(|stats| {
-                        json!({
+                        let mut telemetry = json!({
                             "direction": "receive",
                             "receivedPackets": stats.received_packets,
                             "lostPackets": stats.lost_packets,
@@ -9834,7 +10061,11 @@ impl ControlPlane {
                             "overflowPackets": stats.overflow_packets,
                             "bufferedMs": stats.buffered_frames as f64 * 1_000.0
                                 / f64::from(audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ),
-                        })
+                        });
+                        if let Some(address) = stats.last_rejected_sender {
+                            telemetry["rejectedFrom"] = json!(address.to_string());
+                        }
+                        telemetry
                     })
                     .or_else(|| {
                         let index = worker.output_node_ids().iter().position(|id| *id == node.id)?;
@@ -10052,8 +10283,13 @@ impl ControlPlane {
             recorders: HashMap::new(),
             recorder_workers: HashMap::new(),
             recorder_node_workers: HashMap::new(),
+            recorder_inlets: Default::default(),
             recorder_node_states: HashMap::new(),
             recorder_node_sessions: HashMap::new(),
+            recording_splits: HashMap::new(),
+            recording_sequence: 0,
+            recording_maintained_at: None,
+            recorder_node_failures: HashMap::new(),
             recording_policy,
             storage: Some(storage),
             audio_upload: None,
@@ -10172,6 +10408,88 @@ impl ControlPlane {
         }
         self.recording_policy = Some(policy);
         Ok(())
+    }
+
+    /// The approved recording folder and a suggestion for first use.
+    fn dispatch_recording_root_get(&self) -> Result<Value, ControlError> {
+        Ok(json!({
+            "root": self.recording_policy.as_ref().map(|policy| display_path(policy.root())),
+            "suggestedRoot": suggested_recording_root().map(|root| display_path(&root)),
+        }))
+    }
+
+    /// Approve a local folder for recordings. With `create`, a missing
+    /// folder is created first; the same path policy as every recording
+    /// (absolute, local, no reparse point) is enforced before it is saved.
+    fn dispatch_recording_root_set(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("root and idempotencyKey are required".into())
+        })?;
+        let root = params
+            .get("root")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("root is required".into()))?
+            .to_owned();
+        let create = params.get("create").and_then(Value::as_bool).unwrap_or(false);
+        let idempotency_key = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        let operation = (
+            self.scoped_idempotency_key("recordings.setRoot", idempotency_key),
+            Self::request_hash(&json!({ "root": root, "create": create })),
+        );
+        if let Some(previous) = self.lookup_idempotent_result(&operation.0, &operation.1)? {
+            return Ok(previous);
+        }
+        let path = std::path::PathBuf::from(&root);
+        if !path.is_absolute() {
+            return Err(ControlError::InvalidRequest(
+                "Choose a full folder path, for example C:\\Users\\you\\Music\\AudioRouter Recordings.".into(),
+            ));
+        }
+        if root.starts_with("\\\\") || root.starts_with("//") {
+            return Err(ControlError::InvalidRequest(
+                "Recordings must be saved on this computer, not on a network share.".into(),
+            ));
+        }
+        let mut created = false;
+        if create && !path.exists() {
+            std::fs::create_dir_all(&path).map_err(|error| {
+                ControlError::InvalidRequest(format!("Cannot create the folder: {error}"))
+            })?;
+            created = true;
+        }
+        let policy = RecordingPathPolicy::new(&path).map_err(|error| {
+            ControlError::InvalidRequest(
+                match error {
+                    audiorouter_recording::PathPolicyError::RootUnavailable(_) => {
+                        "The folder does not exist. Create it, or choose an existing folder."
+                    }
+                    audiorouter_recording::PathPolicyError::RootNotDirectory => {
+                        "That path is a file, not a folder."
+                    }
+                    audiorouter_recording::PathPolicyError::RootReparsePoint => {
+                        "That folder is a link to another location; choose the real folder."
+                    }
+                    audiorouter_recording::PathPolicyError::NetworkRoot => {
+                        "Recordings must be saved on this computer, not on a network share."
+                    }
+                    _ => "That folder cannot be used for recordings.",
+                }
+                .into(),
+            )
+        })?;
+        if let Some(storage) = &self.storage {
+            storage.save_recording_root(&path).map_err(storage_error)?;
+        }
+        let result = json!({ "root": display_path(policy.root()), "created": created });
+        self.recording_policy = Some(policy);
+        self.journal_idempotent_result(&operation.0, "recordings.setRoot", &operation.1, &result)?;
+        Ok(result)
     }
 
     fn scoped_idempotency_key(&self, method: &str, key: &str) -> String {
@@ -10968,22 +11286,35 @@ impl ControlPlane {
             .ok_or_else(|| {
                 ControlError::InvalidRequest("enabled recorder node is not in the session".into())
             })?;
-        let tap = if let Some(worker) = self.recorder_node_workers.get(&node.id) {
-            worker.shared_audio_tap()
-        } else if recorder_nodes.len() == 1 {
-            self.recorder_workers
-                .get(session_id)
-                .and_then(|worker| worker.shared_audio_tap())
-        } else {
-            None
-        }
-        .ok_or_else(|| {
-            ControlError::InvalidRequest("recorder node worker is not attached".into())
-        })?;
+        let tap = self.recorder_inlet(session_id, &node.id, recorder_nodes.len() == 1);
         let mut set = AudioTapSet::new();
         set.add_shared(tap)
             .map_err(|_| ControlError::InvalidRequest("recorder tap capacity exceeded".into()))?;
         Ok(set)
+    }
+
+    /// The stable inlet of a Recorder node, pointed at its current worker (or
+    /// at nothing, in which case audio is dropped until Record is pressed).
+    fn recorder_inlet(&self, session_id: &EntityId, node_id: &EntityId, single_recorder: bool) -> Arc<dyn audiorouter_engine::AudioTap> {
+        let inlet = self
+            .recorder_inlets
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .entry(node_id.clone())
+            .or_default()
+            .clone();
+        let target = self.recorder_node_workers.get(node_id).and_then(|worker| worker.shared_audio_tap()).or_else(|| {
+            single_recorder.then(|| self.recorder_workers.get(session_id).and_then(|worker| worker.shared_audio_tap())).flatten()
+        });
+        inlet.set(target);
+        inlet
+    }
+
+    /// Point a bound inlet at the node's current worker after attach/remove.
+    fn sync_recorder_inlet(&self, node_id: &EntityId) {
+        if let Some(inlet) = self.recorder_inlets.lock().unwrap_or_else(std::sync::PoisonError::into_inner).get(node_id) {
+            inlet.set(self.recorder_node_workers.get(node_id).and_then(|worker| worker.shared_audio_tap()));
+        }
     }
 
     /// Build the bounded engine observer set for one attached recorder. The
@@ -11025,18 +11356,7 @@ impl ControlPlane {
         let recorder_node_count = recorder_nodes.len();
         let mut bindings = RecorderTapBindings::new();
         for node_id in recorder_nodes {
-            let tap = if let Some(worker) = self.recorder_node_workers.get(node_id) {
-                worker.shared_audio_tap()
-            } else if recorder_node_count == 1 {
-                self.recorder_workers
-                    .get(session_id)
-                    .and_then(|worker| worker.shared_audio_tap())
-            } else {
-                None
-            }
-            .ok_or_else(|| {
-                ControlError::InvalidRequest("recorder node worker is not attached".into())
-            })?;
+            let tap = self.recorder_inlet(session_id, node_id, recorder_node_count == 1);
             bindings
                 .add_shared(node_id.as_str(), generation, tap)
                 .map_err(|_| {
@@ -11076,6 +11396,7 @@ impl ControlPlane {
             ));
         }
         self.recorder_node_workers.insert(node_id.clone(), worker);
+        self.sync_recorder_inlet(&node_id);
         self.recorder_node_states
             .insert(node_id.clone(), RecorderController::new());
         self.recorder_node_sessions
@@ -11087,6 +11408,157 @@ impl ControlPlane {
     /// checkpoint work stays on this control/lifecycle path, never the audio
     /// callback. The returned shape mirrors the session recorder response but
     /// identifies the independent node.
+    /// Start recording a Recorder node now, using its own settings (format,
+    /// split). Plays and records are independent: the node's inlet is already
+    /// bound, so this works while the route plays. Returns the new file path.
+    pub fn start_node_recording(&mut self, session_id: &EntityId, node_id: &EntityId) -> Result<Value, ControlError> {
+        let node = self
+            .get_session(session_id)?
+            .nodes
+            .iter()
+            .find(|node| node.id == *node_id && node.kind == NodeKind::Recorder && node.enabled)
+            .cloned()
+            .ok_or_else(|| ControlError::InvalidRequest("enabled recorder node is not in the session".into()))?;
+        let settings = recorder_node_settings(&node);
+        let state = self.recorder_node_states.get(node_id).map(RecorderController::state);
+        if matches!(state, Some(RecorderState::Recording | RecorderState::Paused)) {
+            return Ok(json!({ "sessionId": session_id, "nodeId": node_id, "state": "recording", "path": Value::Null, "alreadyRecording": true }));
+        }
+        let mut path = Value::Null;
+        if !matches!(state, Some(RecorderState::Idle | RecorderState::Armed)) {
+            // Completed/Failed leftovers are replaced by a fresh file.
+            self.recorder_node_failures.remove(node_id);
+            self.recorder_node_workers.remove(node_id);
+            self.recorder_node_states.remove(node_id);
+            self.recorder_node_sessions.remove(node_id);
+            self.recording_sequence += 1;
+            let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_millis() as u64);
+            let mut recorder_id = format!("{}-{stamp}", node_id.as_str());
+            recorder_id.truncate(audiorouter_domain::MAX_ENTITY_ID_BYTES);
+            let config = FileRecorderConfig {
+                version: FILE_RECORDER_CONFIG_VERSION,
+                session_id: session_id.as_str(),
+                recorder_id: &recorder_id,
+                sequence: self.recording_sequence,
+                format: settings.format,
+                channels: settings.channels,
+                sample_rate: 48_000,
+                dither: default_dither_for_format(settings.format),
+                // REC-08: two seconds of audio, so a slow service pass
+                // (a busy request, a disk stall) never drops audio.
+                queue_capacity: ONE_CLICK_RECORDER_QUEUE_CHUNKS,
+                maximum_chunks_per_pass: 8,
+            };
+            path = json!(self.create_and_attach_configured_file_recorder_to_node(session_id.clone(), node_id.clone(), &config)?);
+        }
+        if self.recorder_node_states.get(node_id).map(RecorderController::state) == Some(RecorderState::Idle) {
+            self.control_recorder_node(node_id, "recorders.arm", None)?;
+        }
+        // Only blocks that arrive after attaching reach the file, so frame 0
+        // means "from now".
+        self.control_recorder_node(node_id, "recorders.start", Some(0))?;
+        if settings.split_minutes > 0 {
+            self.recording_splits.insert(node_id.clone(), RecordingSplit {
+                every_frames: settings.split_minutes * 60 * 48_000,
+                started_at: None,
+                in_place: matches!(settings.format, FileRecorderFormat::Wav(_)),
+            });
+        } else {
+            self.recording_splits.remove(node_id);
+        }
+        Ok(json!({ "sessionId": session_id, "nodeId": node_id, "state": "recording", "format": settings.format_name, "path": path, "splitMinutes": settings.split_minutes }))
+    }
+
+    /// Recorders set to record automatically start with playback. A failure
+    /// (no recording folder, limit reached) never blocks Play; it is reported
+    /// in the start result's `autoRecording`.
+    pub(crate) fn start_auto_recordings(&mut self, session_id: &EntityId, result: &mut Value) -> Result<(), ControlError> {
+        let automatic = self
+            .get_session(session_id)?
+            .nodes
+            .iter()
+            .filter(|node| node.kind == NodeKind::Recorder && node.enabled && recorder_node_settings(node).auto_record)
+            .map(|node| node.id.clone())
+            .collect::<Vec<_>>();
+        if automatic.is_empty() {
+            return Ok(());
+        }
+        let outcomes = automatic
+            .iter()
+            .map(|node_id| match self.start_node_recording(session_id, node_id) {
+                Ok(started) => json!({ "nodeId": node_id, "state": "recording", "path": started["path"] }),
+                Err(error) => json!({ "nodeId": node_id, "state": "failed", "error": format!("{error:?}") }),
+            })
+            .collect::<Vec<_>>();
+        if let Some(object) = result.as_object_mut() {
+            object.insert("autoRecording".into(), json!(outcomes));
+        }
+        Ok(())
+    }
+
+    /// Stop a Recorder node's recording and finalize its file at the last
+    /// audio it received. Without an active recording this is a no-op.
+    pub fn stop_node_recording(&mut self, node_id: &EntityId) -> Result<Value, ControlError> {
+        self.recording_splits.remove(node_id);
+        let session_id = self.recorder_node_sessions.get(node_id).cloned();
+        let state = self.recorder_node_states.get(node_id).map(RecorderController::state);
+        match state {
+            Some(RecorderState::Recording | RecorderState::Paused) => {
+                let frame = self.recorder_node_workers.get(node_id).and_then(|worker| worker.committed_end_frame()).unwrap_or(0);
+                self.control_recorder_node(node_id, "recorders.stop", Some(frame))
+            }
+            Some(RecorderState::Stopping | RecorderState::Failed) => Err(ControlError::InvalidRequest(
+                "recorder needs recovery in the Recording tab before it can stop".into(),
+            )),
+            _ => {
+                self.recorder_node_workers.remove(node_id);
+                self.sync_recorder_inlet(node_id);
+                self.recorder_node_states.remove(node_id);
+                self.recorder_node_sessions.remove(node_id);
+                Ok(json!({ "sessionId": session_id, "nodeId": node_id, "state": "idle" }))
+            }
+        }
+    }
+
+    /// Automatic file splitting for one-click recordings (control thread,
+    /// throttled; called from the backend audio service loop).
+    fn maintain_node_recordings(&mut self, now: std::time::Instant) {
+        if self.recording_splits.is_empty()
+            || self.recording_maintained_at.is_some_and(|at| now.saturating_duration_since(at) < std::time::Duration::from_millis(250))
+        {
+            return;
+        }
+        self.recording_maintained_at = Some(now);
+        let workers = &self.recorder_node_workers;
+        let due = self
+            .recording_splits
+            .iter_mut()
+            .filter_map(|(node_id, split)| {
+                let end = workers.get(node_id)?.committed_end_frame()?;
+                let started = *split.started_at.get_or_insert(end);
+                (end.saturating_sub(started) >= split.every_frames).then(|| (node_id.clone(), end, split.in_place))
+            })
+            .collect::<Vec<_>>();
+        for (node_id, frame, in_place) in due {
+            let split = if in_place {
+                self.control_recorder_node(&node_id, "recorders.split", Some(frame)).map(|_| ())
+            } else {
+                match self.recorder_node_sessions.get(&node_id).cloned() {
+                    Some(session_id) => self.stop_node_recording(&node_id).and_then(|_| self.start_node_recording(&session_id, &node_id)).map(|_| ()),
+                    None => Ok(()),
+                }
+            };
+            match (split, self.recording_splits.get_mut(&node_id)) {
+                (Ok(()), Some(state)) => state.started_at = Some(frame),
+                (Err(_), _) => {
+                    // Keep recording into the current file rather than lose audio.
+                    self.recording_splits.remove(&node_id);
+                }
+                _ => {}
+            }
+        }
+    }
+
     pub fn control_recorder_node(
         &mut self,
         node_id: &EntityId,
@@ -11146,6 +11618,7 @@ impl ControlPlane {
             ControlError::InvalidRequest(format!("recorder transition failed: {error:?}"))
         })?;
         let mut finalized_recordings = Vec::new();
+        let mut stopped_after_failure = false;
         {
             let worker = self.recorder_node_workers.get_mut(node_id).ok_or_else(|| {
                 ControlError::InvalidRequest("recorder node worker is not attached".into())
@@ -11163,6 +11636,13 @@ impl ControlPlane {
                             && !outcome.recoverable =>
                     {
                         finalized_recordings = worker.finalized_recordings();
+                        Ok(())
+                    }
+                    // Failed mid-take: the written prefix is finalized and
+                    // kept, and the take is reported as failed (REC-08).
+                    Ok(outcome) if outcome.state == "failed" && outcome.file_finalized => {
+                        finalized_recordings = worker.finalized_recordings();
+                        stopped_after_failure = true;
                         Ok(())
                     }
                     Ok(_) => Err("recorder finalization did not produce a completed file".into()),
@@ -11223,18 +11703,40 @@ impl ControlPlane {
             }
         }
         let last_frame = checkpoint.last_frame;
-        let result = json!({
+        let mut result = json!({
             "nodeId": node_id.as_str(),
             "sessionId": session_id,
-            "state": state,
+            "state": if stopped_after_failure { "failed" } else { state },
             "parts": parts,
             "pauses": pauses,
             "lastFrame": last_frame,
         });
+        if stopped_after_failure {
+            let seconds = finalized_recordings
+                .iter()
+                .map(|recording| recording.frames / u64::from(recording.sample_rate.max(1)))
+                .sum::<u64>();
+            let cause = self.recorder_node_failures.remove(node_id).unwrap_or_default();
+            // Without an I/O error the only way to fail mid-take is a gap in
+            // the audio (found while playing or in Stop's final drain).
+            let reason = if cause.contains("Io(") {
+                "the file could not be written"
+            } else {
+                "audio was lost (the recorder fell behind or received a block twice)"
+            };
+            result["reason"] = json!(format!(
+                "Recording stopped saving after {}:{:02} because {reason}. The file keeps everything up to that point.",
+                seconds / 60,
+                seconds % 60
+            ));
+            result["paths"] = json!(finalized_recordings.iter().map(|recording| recording.path.clone()).collect::<Vec<_>>());
+        }
         self.events
             .append(session_revision, None, "recorder.changed", Some(session_id));
         if method == "recorders.stop" {
+            self.recorder_node_failures.remove(node_id);
             self.recorder_node_workers.remove(node_id);
+            self.sync_recorder_inlet(node_id);
             self.recorder_node_states.remove(node_id);
             self.recorder_node_sessions.remove(node_id);
         }
@@ -11331,7 +11833,7 @@ impl ControlPlane {
         }
         let (path, worker) = {
             let policy = self.recording_policy.as_ref().ok_or_else(|| {
-                ControlError::InvalidRequest("recording root is not configured".into())
+                ControlError::InvalidRequest(RECORDING_ROOT_MISSING.into())
             })?;
             create_file_recorder_with_config(policy, config)
                 .map_err(ControlError::InvalidRequest)?
@@ -11368,7 +11870,7 @@ impl ControlPlane {
         }
         let (path, worker) = {
             let policy = self.recording_policy.as_ref().ok_or_else(|| {
-                ControlError::InvalidRequest("recording root is not configured".into())
+                ControlError::InvalidRequest(RECORDING_ROOT_MISSING.into())
             })?;
             create_file_recorder_with_config(policy, config)
                 .map_err(ControlError::InvalidRequest)?
@@ -11560,6 +12062,7 @@ impl ControlPlane {
             .filter(|node| node.kind == NodeKind::Recorder)
         {
             self.recorder_node_workers.remove(&node.id);
+            self.sync_recorder_inlet(&node.id);
         }
         self.events
             .append(session.revision, None, "session.deleted", Some(id.clone()));
@@ -11736,6 +12239,19 @@ impl ControlPlane {
                 { "name": "reductionDb", "type": "number", "unit": "dB", "minimum": 0.0, "maximum": 80.0, "default": 40.0 },
                 { "name": "learning", "type": "boolean", "default": false }
             ]),
+            // `keyNodeId` (the trigger node) is chosen in the Duck editor.
+            audiorouter_domain::NodeKind::Duck => json!([
+                { "name": "thresholdDb", "type": "number", "unit": "dBFS", "minimum": -80.0, "maximum": 0.0, "default": -35.0 },
+                { "name": "amountDb", "type": "number", "unit": "dB", "minimum": 0.0, "maximum": 40.0, "default": 6.0 },
+                { "name": "attackMs", "type": "number", "unit": "ms", "minimum": 1.0, "maximum": 500.0, "default": 20.0 },
+                { "name": "holdMs", "type": "number", "unit": "ms", "minimum": 0.0, "maximum": 2000.0, "default": 300.0 },
+                { "name": "releaseMs", "type": "number", "unit": "ms", "minimum": 20.0, "maximum": 5000.0, "default": 500.0 }
+            ]),
+            audiorouter_domain::NodeKind::Recorder => json!([
+                { "name": "format", "type": "string", "enum": ["wavPcm24", "wavPcm16", "wavFloat32", "flac24", "flac16", "mp3"], "default": "wavPcm24" },
+                { "name": "autoRecord", "type": "boolean", "default": false },
+                { "name": "splitMinutes", "type": "number", "step": 1.0, "unit": "min", "minimum": 0.0, "maximum": 240.0, "default": 0.0 }
+            ]),
             audiorouter_domain::NodeKind::InputSwitch => json!([
                 { "name": "selected", "type": "string", "enum": ["a", "b"], "default": "a" },
                 { "name": "fade", "type": "string", "enum": ["normal", "slow"], "default": "normal" }
@@ -11845,7 +12361,8 @@ impl ControlPlane {
             Self::catalog_entry("spectralGate", audiorouter_domain::NodeKind::SpectralGate, "restoration"),
             Self::catalog_entry("firFilter", audiorouter_domain::NodeKind::FirFilter, "convolution"),
             Self::catalog_entry("timeShift", audiorouter_domain::NodeKind::TimeShift, "time"),
-            Self::catalog_entry("inputSwitch", audiorouter_domain::NodeKind::InputSwitch, "routing")
+            Self::catalog_entry("inputSwitch", audiorouter_domain::NodeKind::InputSwitch, "routing"),
+            Self::catalog_entry("duck", audiorouter_domain::NodeKind::Duck, "dynamics")
         ])
     }
 
@@ -12480,6 +12997,58 @@ impl ControlPlane {
     /// adapter so parameter edits are heard immediately. Returns the adapter
     /// kind that was updated, `None` when no native adapter is attached, or an
     /// error when the change needs a stop and fresh preparation.
+    /// Apply saved Network Send/Receive setting changes to a playing
+    /// multi-path worker. Their sockets live outside the compiled graph, so
+    /// a recompile alone would report success while still using the old
+    /// address. Sender address/port and receiver address/buffer change in
+    /// place; a receiver port or IP family change opens a new receiver.
+    #[cfg(windows)]
+    fn reconfigure_running_network_nodes(
+        &mut self,
+        session_id: &EntityId,
+        previous: &Session,
+    ) -> Result<usize, ControlError> {
+        if self.native_multi_input_worker_session.as_ref() != Some(session_id) {
+            return Ok(0);
+        }
+        let session = self.get_session(session_id)?.clone();
+        let mut changed = 0;
+        for node in session.nodes.iter().filter(|node| matches!(node.kind, NodeKind::NetworkSend | NodeKind::NetworkReceive)) {
+            let Some(old) = previous.nodes.iter().find(|old| old.id == node.id) else { continue };
+            if old.parameters == node.parameters {
+                continue;
+            }
+            let Some(worker) = self.native_multi_input_worker.as_mut() else { break };
+            if node.kind == NodeKind::NetworkSend {
+                let Some(index) = worker.output_node_ids().iter().position(|id| *id == node.id) else { continue };
+                let host = node.parameters.get("host").and_then(Value::as_str).unwrap_or("");
+                let port = node.parameters.get("port").and_then(Value::as_u64).and_then(|port| u16::try_from(port).ok()).unwrap_or(audiorouter_domain::DEFAULT_NETWORK_AUDIO_PORT);
+                let destination = audiorouter_windows_audio::network_socket_address(host, port).ok_or_else(|| {
+                    ControlError::InvalidRequest(format!("enter the IP address of the receiving computer for {} in its Properties", node.name))
+                })?;
+                if let Some(sender) = worker.network_sender(index) {
+                    sender.retarget(destination);
+                    changed += 1;
+                }
+                continue;
+            }
+            let Some(index) = worker.input_node_ids().iter().position(|id| *id == node.id) else { continue };
+            let sender = node.parameters.get("sender").and_then(Value::as_str).and_then(|address| address.parse::<std::net::IpAddr>().ok());
+            let buffer_ms = node.parameters.get("bufferMs").and_then(Value::as_f64).unwrap_or(audiorouter_domain::DEFAULT_NETWORK_BUFFER_MS);
+            let port_changed = old.parameters.get("port") != node.parameters.get("port");
+            let in_place = !port_changed
+                && sender.is_some_and(|sender| worker.network_receiver(index).is_some_and(|receiver| receiver.reconfigure(sender, buffer_ms)));
+            if !in_place {
+                let receiver = start_network_receiver(node)?;
+                worker
+                    .replace_capture(index, audiorouter_windows_audio::MultiInputCaptureSource::Network(receiver))
+                    .map_err(|error| ControlError::InvalidRequest(format!("{} could not switch to its new settings: {error:?}", node.name)))?;
+            }
+            changed += 1;
+        }
+        Ok(changed)
+    }
+
     fn republish_running_native_graph(
         &mut self,
         session_id: &EntityId,
@@ -13351,11 +13920,20 @@ impl ControlPlane {
                 })
                 .unwrap_or(false);
             self.service_running_native_audio(std::time::Instant::now());
-            let native = match self.republish_running_native_graph(
+            // Network sockets are reconfigured first; a failure there must
+            // not be reported as applied.
+            #[cfg(windows)]
+            let network = match checkpoint.session(&result.session_id).cloned() {
+                Some(previous) => self.reconfigure_running_network_nodes(&result.session_id, &previous).map(|_| ()),
+                None => Ok(()),
+            };
+            #[cfg(not(windows))]
+            let network: Result<(), ControlError> = Ok(());
+            let native = match network.and_then(|()| self.republish_running_native_graph(
                 &result.session_id,
                 generation,
                 flags_only,
-            ) {
+            )) {
                 Ok(Some(adapter)) => json!({ "state": "applied", "adapter": adapter }),
                 Ok(None) => Value::Null,
                 Err(error) => json!({ "state": "restartRequired", "reason": control_error_message(&error) }),
@@ -13683,6 +14261,16 @@ impl ControlPlane {
         self.ensure_session_loaded(id)?;
         // Plugins lose their settings when their workers stop; keep them.
         self.capture_playing_plugin_states(id);
+        let recorder_node_ids = self
+            .get_session(id)?
+            .nodes
+            .iter()
+            .filter(|node| node.kind == NodeKind::Recorder && self.recorder_node_workers.contains_key(&node.id))
+            .map(|node| node.id.clone())
+            .collect::<Vec<_>>();
+        for node_id in recorder_node_ids {
+            self.stop_node_recording(&node_id)?;
+        }
         let has_node_worker = self
             .get_session(id)?
             .nodes
@@ -14011,6 +14599,14 @@ impl ControlPlane {
                     | "recorders.resume" | "recorders.split" | "recorders.stop" => {
                         self.dispatch_recorder(request.method.as_str(), request.params)
                     }
+                    "recorders.startRecording" | "recorders.stopRecording" => {
+                        self.dispatch_one_click_recording(request.method.as_str(), request.params)
+                    }
+                    method if simple::SIMPLE_METHODS.iter().any(|(name, _)| *name == method) => {
+                        self.dispatch_simple(method, request.params)
+                    }
+                    "recordings.getRoot" => self.dispatch_recording_root_get(),
+                    "recordings.setRoot" => self.dispatch_recording_root_set(request.params),
                     "recordings.get" => self.dispatch_recordings_get(request.params),
                     "recordings.recovery" => self.dispatch_recording_recovery(request.params),
                     "recordings.reveal" => self.dispatch_recording_reveal(request.params),
@@ -14523,11 +15119,14 @@ impl ControlPlane {
         if let Some(previous) = self.lookup_idempotent_result(&operation.0, &operation.1)? {
             return Ok(previous);
         }
-        let result = if let Some(candidate) = candidate.as_ref() {
+        let mut result = if let Some(candidate) = candidate.as_ref() {
             self.session_preview_start(&id, candidate)?
         } else {
             self.session_start(&id)?
         };
+        if candidate.is_none() {
+            self.start_auto_recordings(&id, &mut result)?;
+        }
         self.journal_idempotent_result(&operation.0, "sessions.start", &operation.1, &result)?;
         Ok(result)
     }
@@ -14961,6 +15560,7 @@ impl ControlPlane {
                 }
                 RecorderState::Idle | RecorderState::Armed | RecorderState::Completed => {
                     self.recorder_node_workers.remove(&node_id);
+                    self.sync_recorder_inlet(&node_id);
                     self.recorder_node_states.remove(&node_id);
                     self.recorder_node_sessions.remove(&node_id);
                 }
@@ -15217,6 +15817,40 @@ impl ControlPlane {
             "armed": false,
         });
         self.journal_idempotent_result(&scoped_key, "recorders.create", &request_hash, &result)?;
+        Ok(result)
+    }
+
+    /// One-click Record / Stop for a Recorder node (UI button, StreamDeck,
+    /// MCP). Idempotent per key; Stop without a recording is a no-op.
+    fn dispatch_one_click_recording(&mut self, method: &str, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| ControlError::InvalidRequest("sessionId, nodeId and idempotencyKey are required".into()))?;
+        let field = |name: &str| {
+            params
+                .get(name)
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned)
+                .ok_or_else(|| ControlError::InvalidRequest(format!("{name} is required")))
+        };
+        // sessionId defaults to the active session; nodeId may be a node name.
+        let session_id = self.simple_session_id(&params)?;
+        let node_id = simple::resolve_node(self.get_session(&session_id)?, &field("nodeId")?)?.id.clone();
+        let idempotency = field("idempotencyKey")?;
+        let request_hash = Self::request_hash(&json!({ "method": method, "sessionId": session_id, "nodeId": node_id }));
+        let scoped_key = self.scoped_idempotency_key(method, &idempotency);
+        if let Some(result) = self.lookup_idempotent_result(&scoped_key, &request_hash)? {
+            return Ok(result);
+        }
+        self.get_session(&session_id)?;
+        let result = if method == "recorders.startRecording" {
+            self.start_node_recording(&session_id, &node_id)?
+        } else {
+            if self.recorder_node_sessions.get(&node_id).is_some_and(|owner| *owner != session_id) {
+                return Err(ControlError::InvalidRequest("recorder node belongs to another session".into()));
+            }
+            self.stop_node_recording(&node_id)?
+        };
+        self.journal_idempotent_result(&scoped_key, method, &request_hash, &result)?;
         Ok(result)
     }
 
@@ -19296,6 +19930,9 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "recorders.arm" => &["sessionId", "nodeId", "idempotencyKey"],
         "recorders.start" | "recorders.pause" | "recorders.resume" | "recorders.split"
         | "recorders.stop" => &["sessionId", "nodeId", "frame", "idempotencyKey"],
+        "recorders.startRecording" | "recorders.stopRecording" => &["sessionId", "nodeId", "idempotencyKey"],
+        "recordings.getRoot" => &[],
+        "recordings.setRoot" => &["root", "create", "idempotencyKey"],
         "recordings.get" | "recordings.reveal" | "recordings.preview" => &["recordingId"],
         "recordings.recovery" => &["recordingId", "cursor", "limit"],
         "recordings.setMetadata" => &[
@@ -19317,6 +19954,18 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "nativeOutputs.prepare" => &["sessionId", "generation", "renderEndpointIds"],
         "nativeMultiInputs.prepare" => &["sessionId", "generation", "sources"],
         "nativePaths.prepare" => &["sessionId", "generation"],
+        "sessions.play" => &["sessionId", "idempotencyKey"],
+        "sessions.togglePlay" => &["sessionId", "idempotencyKey"],
+        "sessions.summary" => &["sessionId"],
+        "meters.levels" => &["sessionId"],
+        "nodes.catalog" => &[],
+        "safety.togglePrivacyMute" => &["idempotencyKey"],
+        "nodes.set" => &["sessionId", "node", "parameters", "enabled", "bypass", "name", "idempotencyKey"],
+        "nodes.toggle" => &["sessionId", "node", "target", "idempotencyKey"],
+        "nodes.add" => &["sessionId", "kind", "name", "parameters", "between", "after", "idempotencyKey"],
+        "nodes.remove" => &["sessionId", "node", "bridge", "idempotencyKey"],
+        "connections.add" => &["sessionId", "from", "to", "idempotencyKey"],
+        "connections.remove" => &["sessionId", "from", "to", "idempotencyKey"],
         "nativeBridges.prepare" => &[
             "busId",
             "generation",
@@ -19453,6 +20102,22 @@ fn rate_limit_method(method: &str) -> bool {
                 | "nativeRenderSources.pump"
                 | "nativeMultiInputs.pump"
         )
+}
+
+/// Shown when a recording starts before any folder was approved.
+const RECORDING_ROOT_MISSING: &str = "No recording folder is set yet. Choose one under \"Recording folder\" in the Recorder's Properties (or in the Recording tab), then press Record again.";
+
+/// A canonical Windows path without its `\\?\` prefix, as people write it.
+fn display_path(path: &std::path::Path) -> String {
+    let text = path.to_string_lossy();
+    text.strip_prefix("\\\\?\\").unwrap_or(&text).to_owned()
+}
+
+/// `Music\AudioRouter Recordings` in the user's profile, offered (never
+/// applied) until the user approves a recording folder.
+fn suggested_recording_root() -> Option<std::path::PathBuf> {
+    let profile = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME"))?;
+    Some(std::path::PathBuf::from(profile).join("Music").join("AudioRouter Recordings"))
 }
 
 fn storage_error(error: StorageError) -> ControlError {
@@ -19850,6 +20515,337 @@ mod tests {
         bytes.extend_from_slice(&2u32.to_le_bytes());
         bytes.extend_from_slice(&4096i16.to_le_bytes());
         bytes
+    }
+
+    #[derive(Default)]
+    struct CountingTap(std::sync::atomic::AtomicUsize);
+
+    impl AudioTap for CountingTap {
+        fn on_processed_block(&self, _start_frame: u64, _block: &AudioBlock) {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    #[test]
+    fn recorder_branch_plays_without_a_file_and_records_once_one_is_attached() {
+        let mut graph = session();
+        graph.nodes.push(Node {
+            id: EntityId::new("recorder-node"),
+            kind: NodeKind::Recorder,
+            type_version: 1,
+            name: "Recorder".into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports: vec![],
+        });
+        let session_id = graph.id.clone();
+        let node_id = EntityId::new("recorder-node");
+        let mut plane = ControlPlane::default();
+        plane.insert_session(graph).unwrap();
+        // Play binds the branch before anyone pressed Record: no error, and
+        // the audio has nowhere to go yet.
+        let bound = plane.recorder_tap_set_for_node(&session_id, &node_id).expect("recorder branch binds without a file");
+        let block = AudioBlock::new(1, 128).unwrap();
+        bound.on_processed_block(0, &block);
+        // Record attaches a file worker behind the same, already bound tap.
+        let counter = Arc::new(CountingTap::default());
+        plane.attach_recorder_worker_to_node(&session_id, node_id.clone(), Box::new(SuccessfulTapRecorderWorker { tap: counter.clone() })).unwrap();
+        bound.on_processed_block(128, &block);
+        bound.on_processed_block(256, &block);
+        assert_eq!(counter.0.load(std::sync::atomic::Ordering::Relaxed), 2, "blocks after Record reach the file");
+        // The endpoint-scheduler binding path also succeeds.
+        assert!(plane.recorder_tap_bindings(&session_id, RuntimeGeneration::new(3)).is_ok());
+    }
+
+    #[test]
+    fn recording_folder_is_chosen_in_the_app_and_unlocks_one_click_recording() {
+        let base = std::env::temp_dir().join(format!("audiorouter-root-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let mut graph = session();
+        graph.nodes.push(Node {
+            id: EntityId::new("rec"),
+            kind: NodeKind::Recorder,
+            type_version: 1,
+            name: "Recorder".into(),
+            enabled: true,
+            bypass: false,
+            parameters: serde_json::from_value(json!({ "format": "wavPcm16" })).unwrap(),
+            ports: vec![Port { name: "in".into(), direction: PortDirection::Input, channels: 2 }],
+        });
+        let session_id = graph.id.clone();
+        let mut plane = ControlPlane::default();
+        plane.insert_session(graph).unwrap();
+        let request = |plane: &mut ControlPlane, method: &str, params: Value| {
+            plane.dispatch(JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(json!(1)), method: method.into(), params: Some(params) })
+        };
+        // Nothing approved yet: a suggestion is offered, never applied.
+        let root = request(&mut plane, "recordings.getRoot", json!({})).result.unwrap();
+        assert!(root["root"].is_null());
+        assert!(root["suggestedRoot"].as_str().is_some_and(|path| path.ends_with("AudioRouter Recordings")));
+        // Record explains where to choose the folder.
+        let refused = request(&mut plane, "recorders.startRecording", json!({ "sessionId": session_id, "nodeId": "rec", "idempotencyKey": "early" }));
+        assert!(refused.error.unwrap().message.contains("Recording folder"));
+        // Unusable folders are refused with plain reasons and change nothing.
+        for (path, reason) in [
+            ("relative\\folder", "full folder path"),
+            ("\\\\server\\share\\rec", "network share"),
+        ] {
+            let error = request(&mut plane, "recordings.setRoot", json!({ "root": path, "create": true, "idempotencyKey": path })).error.unwrap();
+            assert!(error.message.contains(reason), "{path}: {}", error.message);
+        }
+        let missing = base.join("missing");
+        let error = request(&mut plane, "recordings.setRoot", json!({ "root": missing, "idempotencyKey": "no-create" })).error.unwrap();
+        assert!(error.message.contains("does not exist"), "{}", error.message);
+        assert!(!missing.exists());
+        std::fs::create_dir_all(&base).unwrap();
+        let file = base.join("file.txt");
+        std::fs::write(&file, b"x").unwrap();
+        let error = request(&mut plane, "recordings.setRoot", json!({ "root": file, "idempotencyKey": "file" })).error.unwrap();
+        assert!(error.message.contains("not a folder"), "{}", error.message);
+        assert!(request(&mut plane, "recordings.getRoot", json!({})).result.unwrap()["root"].is_null());
+        // Approve (and create) a folder; a retry with the same key replays.
+        let chosen = base.join("My Recordings");
+        let set = request(&mut plane, "recordings.setRoot", json!({ "root": chosen, "create": true, "idempotencyKey": "choose" })).result.unwrap();
+        assert_eq!(set["created"], true);
+        assert!(chosen.is_dir());
+        let again = request(&mut plane, "recordings.setRoot", json!({ "root": chosen, "create": true, "idempotencyKey": "choose" })).result.unwrap();
+        assert_eq!(again, set);
+        let shown = request(&mut plane, "recordings.getRoot", json!({})).result.unwrap();
+        assert_eq!(shown["root"], set["root"]);
+        assert!(!shown["root"].as_str().unwrap().starts_with("\\\\?\\"));
+        // Record now writes into the chosen folder.
+        let started = request(&mut plane, "recorders.startRecording", json!({ "sessionId": session_id, "nodeId": "rec", "idempotencyKey": "now" })).result.unwrap();
+        assert_eq!(started["state"], "recording");
+        let path = std::path::PathBuf::from(started["path"].as_str().unwrap());
+        assert_eq!(path.parent().unwrap().canonicalize().unwrap(), chosen.canonicalize().unwrap());
+        request(&mut plane, "recorders.stopRecording", json!({ "sessionId": session_id, "nodeId": "rec", "idempotencyKey": "stop" }));
+        drop(plane);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn one_click_recording_writes_splits_stops_and_never_blocks_stopping_playback() {
+        let root = std::env::temp_dir().join(format!("audiorouter-one-click-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir_all(&root).unwrap();
+        let mut graph = session();
+        graph.nodes.push(Node {
+            id: EntityId::new("rec"),
+            kind: NodeKind::Recorder,
+            type_version: 1,
+            name: "Recorder".into(),
+            enabled: true,
+            bypass: false,
+            parameters: serde_json::from_value(json!({ "format": "wavPcm16", "splitMinutes": 10 })).unwrap(),
+            ports: vec![Port { name: "in".into(), direction: PortDirection::Input, channels: 2 }],
+        });
+        let session_id = graph.id.clone();
+        let node_id = EntityId::new("rec");
+        let mut plane = ControlPlane::default();
+        plane.insert_session(graph).unwrap();
+        plane.configure_recording_root(&root).unwrap();
+        let call = |plane: &mut ControlPlane, method: &str, key: &str| {
+            let response = plane.dispatch(JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(json!(1)), method: method.into(), params: Some(json!({ "sessionId": session_id, "nodeId": "rec", "idempotencyKey": key })) });
+            assert!(response.error.is_none(), "{method}: {:?}", response.error);
+            response.result.unwrap()
+        };
+        // Stop with nothing recording is a harmless no-op (StreamDeck safe).
+        assert_eq!(call(&mut plane, "recorders.stopRecording", "stop-0")["state"], "idle");
+        let tap = plane.recorder_tap_set_for_node(&session_id, &node_id).unwrap();
+        let started = call(&mut plane, "recorders.startRecording", "start-1");
+        assert_eq!(started["state"], "recording");
+        assert_eq!(started["splitMinutes"], 10);
+        // A second Record press while recording keeps the same take.
+        assert_eq!(call(&mut plane, "recorders.startRecording", "start-again")["alreadyRecording"], true);
+        let mut block = AudioBlock::new(2, 128).unwrap();
+        block.channel_mut(0).unwrap().fill(0.25);
+        block.channel_mut(1).unwrap().fill(-0.25);
+        let mut frame = 1_000_000_u64;
+        let mut feed = |plane: &mut ControlPlane, blocks: usize| {
+            for _ in 0..blocks {
+                tap.on_processed_block(frame, &block);
+                frame += 128;
+                plane.drain_attached_recorders().unwrap();
+            }
+        };
+        feed(&mut plane, 20);
+        // Automatic split (shortened for the test): the WAV splits in place.
+        plane.recording_splits.get_mut(&node_id).unwrap().every_frames = 128 * 10;
+        plane.maintain_node_recordings(std::time::Instant::now());
+        feed(&mut plane, 20);
+        plane.recording_maintained_at = None;
+        plane.maintain_node_recordings(std::time::Instant::now());
+        feed(&mut plane, 5);
+        let stopped = call(&mut plane, "recorders.stopRecording", "stop-1");
+        assert_eq!(stopped["state"], "completed");
+        assert!(stopped["parts"].as_array().unwrap().len() >= 2, "split produced parts: {stopped}");
+        // Every split part must open in a player, not just be non-empty.
+        for entry in std::fs::read_dir(&root).unwrap() {
+            assert_playable_wav(&entry.unwrap().path());
+        }
+        // A new take is a new file; stopping playback finalizes it rather
+        // than refusing to stop.
+        let second = call(&mut plane, "recorders.startRecording", "start-2");
+        assert_ne!(second["path"], started["path"]);
+        feed(&mut plane, 4);
+        let stop_error = plane.session_stop(&session_id).err().map(|error| format!("{error:?}"));
+        assert!(!stop_error.as_deref().unwrap_or("").contains("must be finalized"), "{stop_error:?}");
+        assert!(!plane.recorder_node_workers.contains_key(&node_id), "recording finalized by Stop");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A WAV a player accepts: RIFF size matches the file, and a `data`
+    /// chunk with audio ends inside the file. Returns the data byte count.
+    fn assert_playable_wav(path: &std::path::Path) -> u64 {
+        let bytes = std::fs::read(path).unwrap();
+        assert!(bytes.len() > 44 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WAVE", "{path:?} is not a WAV");
+        let riff = u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize;
+        assert_eq!(riff, bytes.len() - 8, "{path:?}: RIFF size not finalized");
+        let mut offset = 12;
+        while offset + 8 <= bytes.len() {
+            let id = &bytes[offset..offset + 4];
+            let size = u32::from_le_bytes(bytes[offset + 4..offset + 8].try_into().unwrap()) as usize;
+            if id == b"data" {
+                assert!(size > 0, "{path:?}: empty data chunk");
+                assert!(offset + 8 + size <= bytes.len(), "{path:?}: data chunk overruns the file");
+                return size as u64;
+            }
+            offset += 8 + size + (size & 1);
+        }
+        panic!("{path:?}: no data chunk");
+    }
+
+    /// Real playback is not a perfect stream. A service stall shorter than
+    /// the two-second queue (REC-08) must not lose anything. A real gap, a
+    /// repeated block or a longer stall fails the take, but Stop still
+    /// succeeds, keeps a playable file up to that point and says why.
+    #[test]
+    fn one_click_recording_survives_dropped_and_repeated_blocks_and_stays_playable() {
+        for case in ["short stall", "dropped block", "long stall", "repeated block"] {
+            let root = std::env::temp_dir().join(format!("audiorouter-gap-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+            std::fs::create_dir_all(&root).unwrap();
+            let mut graph = session();
+            graph.nodes.push(Node {
+                id: EntityId::new("rec"),
+                kind: NodeKind::Recorder,
+                type_version: 1,
+                name: "Recorder".into(),
+                enabled: true,
+                bypass: false,
+                parameters: serde_json::from_value(json!({ "format": "wavPcm16" })).unwrap(),
+                ports: vec![Port { name: "in".into(), direction: PortDirection::Input, channels: 2 }],
+            });
+            let session_id = graph.id.clone();
+            let node_id = EntityId::new("rec");
+            let mut plane = ControlPlane::default();
+            plane.insert_session(graph).unwrap();
+            plane.configure_recording_root(&root).unwrap();
+            let tap = plane.recorder_tap_set_for_node(&session_id, &node_id).unwrap();
+            let request = |plane: &mut ControlPlane, method: &str, key: &str| {
+                plane.dispatch(JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(json!(1)), method: method.into(), params: Some(json!({ "sessionId": session_id, "nodeId": "rec", "idempotencyKey": key })) })
+            };
+            let started = request(&mut plane, "recorders.startRecording", "start").result.unwrap();
+            let path = std::path::PathBuf::from(started["path"].as_str().unwrap());
+            let mut block = AudioBlock::new(2, 128).unwrap();
+            block.channel_mut(0).unwrap().fill(0.25);
+            block.channel_mut(1).unwrap().fill(-0.25);
+            let mut frame = 5_000_u64;
+            let send = |plane: &mut ControlPlane, frame: &mut u64, blocks: usize, drain: bool| {
+                for _ in 0..blocks {
+                    tap.on_processed_block(*frame, &block);
+                    *frame += 128;
+                    if drain {
+                        let _ = plane.drain_attached_recorders();
+                    }
+                }
+            };
+            send(&mut plane, &mut frame, 10, true);
+            match case {
+                // ~1 s with no service pass: within the queue.
+                "short stall" => send(&mut plane, &mut frame, 375, false),
+                "dropped block" => frame += 128,
+                // ~4 s with no service pass: the queue overflows.
+                "long stall" => send(&mut plane, &mut frame, 1500, false),
+                _ => {
+                    frame -= 128;
+                    send(&mut plane, &mut frame, 1, true);
+                }
+            }
+            send(&mut plane, &mut frame, 10, true);
+            let stopped = request(&mut plane, "recorders.stopRecording", "stop");
+            assert!(stopped.error.is_none(), "{case}: Stop failed: {:?}", stopped.error);
+            let stopped = stopped.result.unwrap();
+            let data = assert_playable_wav(&path);
+            if case == "short stall" {
+                assert_eq!(stopped["state"], "completed", "{case}: {stopped}");
+                // Every block arrived: 10 + 375 + 10 (2 ch × 16-bit).
+                assert_eq!(data, 395 * 128 * 4, "{case}");
+            } else {
+                assert_eq!(stopped["state"], "failed", "{case}: {stopped}");
+                assert!(stopped["reason"].as_str().is_some_and(|reason| reason.contains("audio was lost") && reason.contains("keeps everything")), "{case}: {stopped}");
+                assert_eq!(stopped["paths"][0], json!(path.to_str().unwrap()), "{case}");
+                // The ten blocks before the problem are kept and playable.
+                assert!(data >= 10 * 128 * 4, "{case}: only {data} bytes of audio");
+            }
+            // The node is free for a fresh take.
+            let again = request(&mut plane, "recorders.startRecording", "again").result.unwrap();
+            assert_eq!(again["state"], "recording", "{case}");
+            request(&mut plane, "recorders.stopRecording", "again-stop");
+            drop(plane);
+            let _ = std::fs::remove_dir_all(&root);
+        }
+    }
+
+    #[test]
+    fn one_click_flac_and_mp3_keep_a_finished_file_after_lost_audio() {
+        for format in ["flac24", "mp3"] {
+            let root = std::env::temp_dir().join(format!("audiorouter-gap-{format}-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+            std::fs::create_dir_all(&root).unwrap();
+            let mut graph = session();
+            graph.nodes.push(Node {
+                id: EntityId::new("rec"),
+                kind: NodeKind::Recorder,
+                type_version: 1,
+                name: "Recorder".into(),
+                enabled: true,
+                bypass: false,
+                parameters: serde_json::from_value(json!({ "format": format })).unwrap(),
+                ports: vec![Port { name: "in".into(), direction: PortDirection::Input, channels: 2 }],
+            });
+            let session_id = graph.id.clone();
+            let node_id = EntityId::new("rec");
+            let mut plane = ControlPlane::default();
+            plane.insert_session(graph).unwrap();
+            plane.configure_recording_root(&root).unwrap();
+            let tap = plane.recorder_tap_set_for_node(&session_id, &node_id).unwrap();
+            let request = |plane: &mut ControlPlane, method: &str, key: &str| {
+                plane.dispatch(JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(json!(1)), method: method.into(), params: Some(json!({ "sessionId": session_id, "nodeId": "rec", "idempotencyKey": key })) })
+            };
+            let started = request(&mut plane, "recorders.startRecording", "start").result.unwrap();
+            let path = std::path::PathBuf::from(started["path"].as_str().unwrap());
+            let mut block = AudioBlock::new(2, 128).unwrap();
+            block.channel_mut(0).unwrap().fill(0.25);
+            block.channel_mut(1).unwrap().fill(-0.25);
+            let mut frame = 9_000_u64;
+            for index in 0..200 {
+                if index == 150 {
+                    frame += 128; // one dropped block
+                }
+                tap.on_processed_block(frame, &block);
+                frame += 128;
+                plane.drain_attached_recorders().unwrap();
+            }
+            let stopped = request(&mut plane, "recorders.stopRecording", "stop");
+            assert!(stopped.error.is_none(), "{format}: Stop failed: {:?}", stopped.error);
+            let stopped = stopped.result.unwrap();
+            assert_eq!(stopped["state"], "failed", "{format}: {stopped}");
+            assert!(std::fs::metadata(&path).unwrap().len() > 1_000, "{format}: file too small");
+            if format == "flac24" {
+                let info = audiorouter_recording::inspect_flac_file(&path).unwrap();
+                assert_eq!(info.frames, 150 * 128, "{format}: STREAMINFO frames");
+            }
+            drop(plane);
+            let _ = std::fs::remove_dir_all(&root);
+        }
     }
 
     struct TestRecorderWorker;
@@ -21654,6 +22650,243 @@ mod tests {
     /// session (`AUDIOROUTER_LIVE_PATHS_SESSION`, default
     /// `patrick-main-session`) and `AUDIOROUTER_PLUGIN_WORKER_PATH` at a built
     /// plugin worker.
+    /// The whole product path of the network tools, with no audio device:
+    /// Test Signal -> Network Send -> UDP (127.0.0.1) -> Network Receive ->
+    /// Recorder, prepared and started like Play, serviced by the backend
+    /// audio loop, reported in telemetry, and recorded as a continuous tone.
+    #[cfg(windows)]
+    #[test]
+    fn network_send_and_receive_carry_a_continuous_tone_through_the_backend() {
+        let root = std::env::temp_dir().join(format!("audiorouter-net-route-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir_all(&root).unwrap();
+        let port_number = std::net::UdpSocket::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let port = |name: &str, direction| Port { name: name.into(), direction, channels: 2 };
+        let node = |id: &str, kind, ports, parameters: Value| Node {
+            id: EntityId::new(id),
+            kind,
+            type_version: 1,
+            name: id.into(),
+            enabled: true,
+            bypass: false,
+            parameters: serde_json::from_value(parameters).unwrap(),
+            ports,
+        };
+        let edge = |from: &str, to: &str| audiorouter_domain::Edge {
+            id: EntityId::new(format!("{from}-{to}")),
+            source_node: EntityId::new(from),
+            source_port: "out".into(),
+            destination_node: EntityId::new(to),
+            destination_port: "in".into(),
+            matrix: vec![1.0, 0.0, 0.0, 1.0],
+            enabled: true,
+        };
+        let tone = node("tone", NodeKind::TestSignal, vec![port("out", PortDirection::Output)], json!({ "frequencyHz": 997.0, "levelDb": -12.0, "durationMs": 600000.0 }));
+        let send = node("net-send", NodeKind::NetworkSend, vec![port("in", PortDirection::Input)], json!({ "host": "127.0.0.1", "port": port_number }));
+        let receive = node("net-receive", NodeKind::NetworkReceive, vec![port("out", PortDirection::Output)], json!({ "sender": "127.0.0.1", "port": port_number, "bufferMs": 40.0 }));
+        let rec = node("rec", NodeKind::Recorder, vec![port("in", PortDirection::Input)], json!({ "format": "wavFloat32" }));
+        let session = |id: &str, nodes: Vec<Node>, edges| Session {
+            id: EntityId::new(id),
+            name: id.into(),
+            schema_version: 1,
+            revision: 0,
+            nodes,
+            edges,
+        };
+        // One session holding both ends, then two separate backends (two
+        // computers: each its own worker, clock and timeline).
+        for two_computers in [false, true] {
+            let sessions = if two_computers {
+                vec![
+                    session("sending-pc", vec![tone.clone(), send.clone()], vec![edge("tone", "net-send")]),
+                    session("receiving-pc", vec![receive.clone(), rec.clone()], vec![edge("net-receive", "rec")]),
+                ]
+            } else {
+                vec![session("network-route", vec![tone.clone(), send.clone(), receive.clone(), rec.clone()], vec![edge("tone", "net-send"), edge("net-receive", "rec")])]
+            };
+            let mut planes = sessions
+                .into_iter()
+                .map(|session| {
+                    let id = session.id.clone();
+                    let mut plane = ControlPlane::default();
+                    plane.insert_session(session).unwrap();
+                    plane.configure_recording_root(&root).unwrap();
+                    (plane, id)
+                })
+                .collect::<Vec<_>>();
+            let call = |plane: &mut ControlPlane, method: &str, params: Value| {
+                let response = plane.dispatch(JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(json!(1)), method: method.into(), params: Some(params) });
+                assert!(response.error.is_none(), "{method}: {:?}", response.error);
+                response.result.unwrap()
+            };
+            // Receiver first, as on two computers it is usually already playing.
+            for (plane, id) in planes.iter_mut().rev() {
+                call(plane, "nativePaths.prepare", json!({ "sessionId": id }));
+                call(plane, "session.start", json!({ "sessionId": id, "idempotencyKey": "net-start" }));
+            }
+            let service = |planes: &mut Vec<(ControlPlane, EntityId)>, seconds: f64| {
+                let until = Instant::now() + Duration::from_secs_f64(seconds);
+                while Instant::now() < until {
+                    for (plane, _) in planes.iter_mut() {
+                        plane.service_running_native_audio(Instant::now());
+                    }
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+            };
+            // Play the tone (as the node's Play button does), let the jitter
+            // buffer fill, then record three seconds.
+            let sender = 0;
+            let receiver = planes.len() - 1;
+            let (plane, id) = &mut planes[sender];
+            call(plane, "audioSources.transport", json!({ "sessionId": id, "nodeId": "tone", "action": "play" }));
+            service(&mut planes, 0.5);
+            let (plane, id) = &mut planes[receiver];
+            let started = call(plane, "recorders.startRecording", json!({ "sessionId": id, "nodeId": "rec", "idempotencyKey": "net-rec" }));
+            let path = std::path::PathBuf::from(started["path"].as_str().unwrap());
+            service(&mut planes, 3.0);
+            let telemetry = |plane: &mut ControlPlane, node_id: &str| {
+                let diagnostics = call(plane, "system.diagnostics", json!({}));
+                diagnostics["nodeTelemetry"].as_array().unwrap().iter().find(|item| item["nodeId"] == node_id).map(|item| item["network"].clone()).unwrap_or(Value::Null)
+            };
+            let send = telemetry(&mut planes[sender].0, "net-send");
+            let receive = telemetry(&mut planes[receiver].0, "net-receive");
+            let (plane, id) = &mut planes[receiver];
+            let stopped = call(plane, "recorders.stopRecording", json!({ "sessionId": id, "nodeId": "rec", "idempotencyKey": "net-rec-stop" }));
+            for (plane, id) in planes.iter_mut() {
+                call(plane, "session.stop", json!({ "sessionId": id, "idempotencyKey": "net-stop" }));
+            }
+            let layout = if two_computers { "two backends" } else { "one session" };
+            eprintln!("{layout}: send {send}\nreceive {receive}\nstopped {stopped}");
+            assert_eq!(stopped["state"], "completed", "{layout}: {stopped}");
+            assert!(send["sentPackets"].as_u64().unwrap_or(0) > 1_000, "{layout}: sender telemetry: {send}");
+            assert_eq!(send["droppedPackets"], 0, "{layout}: {send}");
+            assert!(receive["receivedPackets"].as_u64().unwrap_or(0) > 1_000, "{layout}: receiver telemetry: {receive}");
+            assert_eq!(receive["rejectedDatagrams"], 0, "{layout}: {receive}");
+            assert_eq!(receive["lostPackets"], 0, "{layout}: {receive}");
+            // The recorded tone: ~3 s, continuous (no gap, no repeat, no step).
+            assert_playable_wav(&path);
+            let bytes = std::fs::read(&path).unwrap();
+            let data = bytes.windows(4).position(|window| window == b"data").unwrap() + 8;
+            let left = bytes[data..].chunks_exact(8).map(|frame| f32::from_le_bytes(frame[..4].try_into().unwrap())).collect::<Vec<_>>();
+            assert!(left.len() > 48_000 * 2, "{layout}: recorded {} frames", left.len());
+            let peak = left.iter().fold(0.0_f32, |peak, sample| peak.max(sample.abs()));
+            assert!((peak - 10_f32.powf(-12.0 / 20.0)).abs() < 0.02, "{layout}: level preserved over the network: {peak}");
+            let start = left.iter().position(|sample| sample.abs() > peak / 2.0).unwrap();
+            let coefficient = (2.0 * (2.0 * std::f64::consts::PI * 997.0 / 48_000.0).cos()) as f32;
+            let steps = left[start..]
+                .windows(3)
+                .filter(|window| (window[2] - (coefficient * window[1] - window[0])).abs() > peak * 0.05)
+                .count();
+            assert_eq!(steps, 0, "{layout}: the received tone is continuous");
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Two computers set up with mistakes, corrected while playing: the
+    /// receiver expects the wrong sending computer and the sender uses the
+    /// wrong port. Telemetry names the real sender, and fixing either
+    /// setting (as the UI's auto-save or a StreamDeck `nodes.set` does)
+    /// takes effect at once, without Stop/Play.
+    #[cfg(windows)]
+    #[test]
+    fn network_settings_corrected_while_playing_take_effect_without_restart() {
+        let send_port = std::net::UdpSocket::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let wrong_port = std::net::UdpSocket::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let port = |name: &str, direction| Port { name: name.into(), direction, channels: 2 };
+        let node = |id: &str, kind, ports, parameters: Value| Node {
+            id: EntityId::new(id),
+            kind,
+            type_version: 1,
+            name: id.into(),
+            enabled: true,
+            bypass: false,
+            parameters: serde_json::from_value(parameters).unwrap(),
+            ports,
+        };
+        let edge = |from: &str, to: &str| audiorouter_domain::Edge {
+            id: EntityId::new(format!("{from}-{to}")),
+            source_node: EntityId::new(from),
+            source_port: "out".into(),
+            destination_node: EntityId::new(to),
+            destination_port: "in".into(),
+            matrix: vec![1.0, 0.0, 0.0, 1.0],
+            enabled: true,
+        };
+        let session = |id: &str, nodes, edges| Session { id: EntityId::new(id), name: id.into(), schema_version: 1, revision: 0, nodes, edges };
+        let sending = session("sending-pc", vec![
+            node("tone", NodeKind::TestSignal, vec![port("out", PortDirection::Output)], json!({ "frequencyHz": 997.0, "levelDb": -12.0, "durationMs": 600000.0 })),
+            // Mistake 1: the receiving computer listens on another port.
+            node("net-send", NodeKind::NetworkSend, vec![port("in", PortDirection::Input)], json!({ "host": "127.0.0.1", "port": wrong_port })),
+        ], vec![edge("tone", "net-send")]);
+        let receiving = session("receiving-pc", vec![
+            // Mistake 2: the wrong sending computer's address.
+            node("net-receive", NodeKind::NetworkReceive, vec![port("out", PortDirection::Output)], json!({ "sender": "127.0.0.2", "port": send_port, "bufferMs": 40.0 })),
+            node("rec", NodeKind::Recorder, vec![port("in", PortDirection::Input)], json!({ "format": "wavFloat32" })),
+        ], vec![edge("net-receive", "rec")]);
+        let mut planes = [sending, receiving].map(|session| {
+            let id = session.id.clone();
+            let mut plane = ControlPlane::default();
+            plane.insert_session(session).unwrap();
+            (plane, id)
+        });
+        let call = |plane: &mut ControlPlane, method: &str, params: Value| {
+            let response = plane.dispatch(JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(json!(1)), method: method.into(), params: Some(params) });
+            assert!(response.error.is_none(), "{method}: {:?}", response.error);
+            response.result.unwrap()
+        };
+        for (plane, id) in planes.iter_mut() {
+            call(plane, "nativePaths.prepare", json!({ "sessionId": id }));
+            call(plane, "session.start", json!({ "sessionId": id, "idempotencyKey": "start" }));
+            call(plane, "sessions.active.set", json!({ "sessionId": id, "idempotencyKey": "active" }));
+        }
+        let (plane, id) = &mut planes[0];
+        call(plane, "audioSources.transport", json!({ "sessionId": id, "nodeId": "tone", "action": "play" }));
+        let service = |planes: &mut [(ControlPlane, EntityId); 2], seconds: f64| {
+            let until = Instant::now() + Duration::from_secs_f64(seconds);
+            while Instant::now() < until {
+                for (plane, _) in planes.iter_mut() {
+                    plane.service_running_native_audio(Instant::now());
+                }
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        };
+        let receive_telemetry = |planes: &mut [(ControlPlane, EntityId); 2]| {
+            let diagnostics = call(&mut planes[1].0, "system.diagnostics", json!({}));
+            diagnostics["nodeTelemetry"].as_array().unwrap().iter().find(|item| item["nodeId"] == "net-receive").unwrap()["network"].clone()
+        };
+        service(&mut planes, 0.5);
+        assert_eq!(receive_telemetry(&mut planes)["receivedPackets"], 0, "nothing reaches the wrong port");
+        // Fix the sender's port while playing.
+        let (plane, _) = &mut planes[0];
+        let fixed = call(plane, "nodes.set", json!({ "node": "net-send", "parameters": { "port": send_port }, "idempotencyKey": "fix-port" }));
+        assert_ne!(fixed["activation"]["native"]["state"], "restartRequired", "{fixed}");
+        service(&mut planes, 0.5);
+        let waiting = receive_telemetry(&mut planes);
+        assert_eq!(waiting["receivedPackets"], 0, "still the wrong sender address: {waiting}");
+        assert!(waiting["rejectedDatagrams"].as_u64().unwrap_or(0) > 50, "{waiting}");
+        assert_eq!(waiting["rejectedFrom"], "127.0.0.1", "the real sender is named: {waiting}");
+        // Use the named address while playing (the UI's one-click fix).
+        let (plane, _) = &mut planes[1];
+        let fixed = call(plane, "nodes.set", json!({ "node": "net-receive", "parameters": { "sender": "127.0.0.1" }, "idempotencyKey": "fix-sender" }));
+        assert_ne!(fixed["activation"]["native"]["state"], "restartRequired", "{fixed}");
+        service(&mut planes, 1.0);
+        let receiving = receive_telemetry(&mut planes);
+        eprintln!("after both fixes: {receiving}");
+        assert!(receiving["receivedPackets"].as_u64().unwrap_or(0) > 200, "audio flows after the live fix: {receiving}");
+        assert!(receiving.get("rejectedFrom").is_none(), "the old hint is cleared: {receiving}");
+        // A port change on the receiver opens a new socket, also live.
+        let new_port = std::net::UdpSocket::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let (plane, _) = &mut planes[1];
+        call(plane, "nodes.set", json!({ "node": "net-receive", "parameters": { "port": new_port }, "idempotencyKey": "move-port" }));
+        let (plane, _) = &mut planes[0];
+        call(plane, "nodes.set", json!({ "node": "net-send", "parameters": { "port": new_port }, "idempotencyKey": "follow-port" }));
+        service(&mut planes, 1.0);
+        let moved = receive_telemetry(&mut planes);
+        assert!(moved["receivedPackets"].as_u64().unwrap_or(0) > 200, "audio follows the new port: {moved}");
+        for (plane, id) in planes.iter_mut() {
+            call(plane, "session.stop", json!({ "sessionId": id, "idempotencyKey": "stop" }));
+        }
+    }
+
     #[cfg(windows)]
     #[test]
     #[ignore = "live Windows audio devices and plugins"]
@@ -21767,6 +23000,54 @@ mod tests {
                 plugin_ids.iter().map(EntityId::as_str).collect::<Vec<_>>().join(" -> ")
             );
         }
+    }
+
+    /// Qualify the exact saved Meter topology without writing the user DB or
+    /// recording audio. All test-owned output is privacy-muted. The caller
+    /// supplies an API session snapshot and must ensure endpoints are free.
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "live exact Windows endpoints; privacy-muted isolated session"]
+    fn live_native_meter_saved_route_starts_pumps_and_resets() {
+        let Some(path) = std::env::var_os("AUDIOROUTER_LIVE_METER_SESSION_JSON") else { return; };
+        let text = std::fs::read_to_string(path).unwrap();
+        let session: Session = serde_json::from_str(text.trim_start_matches('\u{feff}')).unwrap();
+        assert!(session.nodes.iter().all(|node| node.kind != NodeKind::Plugin), "this fixture is native-only");
+        let session_id = session.id.clone();
+        let meter_id = session.nodes.iter().find(|node| node.kind == NodeKind::Meter).expect("fixture contains a Meter").id.clone();
+        let mut plane = ControlPlane::default();
+        plane.insert_session(session.clone()).unwrap();
+        let key = format!("meter-{}", std::process::id());
+        let request = |method: &str, params: Value| JsonRpcRequest {
+            jsonrpc: "2.0".into(), id: Some(json!(1)), method: method.into(), params: Some(params),
+        };
+        assert!(plane.dispatch(request("safety.setPrivacyMute", json!({"muted":true,"idempotencyKey":format!("{key}-mute")}))).error.is_none());
+        let prepared = plane.dispatch(request("nativePaths.prepare", json!({"sessionId":session_id})));
+        assert!(prepared.error.is_none(), "prepare: {:?}", prepared.error);
+        let started = plane.dispatch(request("session.start", json!({"sessionId":session_id,"idempotencyKey":format!("{key}-start")})));
+        assert!(started.error.is_none(), "start: {:?}", started.error);
+        let generation = started.result.unwrap()["generation"].as_u64().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(4);
+        let mut delivered = 0;
+        while Instant::now() < deadline {
+            let pump = plane.dispatch(request("nativeMultiInputs.pump", json!({"sessionId":session_id,"generation":generation,"maxPackets":64})));
+            assert!(pump.error.is_none(), "pump: {:?}", pump.error);
+            delivered += pump.result.unwrap()["deliveredQuanta"].as_u64().unwrap_or(0);
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        let diagnostics = plane.dispatch(request("system.diagnostics", json!({}))).result.unwrap();
+        let meter = diagnostics["nodeTelemetry"].as_array().unwrap().iter().find(|item| item["nodeId"] == json!(meter_id)).expect("native Meter telemetry");
+        assert!(meter["meter"]["observedFrames"].as_u64().unwrap() > 0);
+        let reset = plane.dispatch(request("meters.reset", json!({"sessionId":session_id,"nodeId":meter_id})));
+        assert!(reset.error.is_none(), "reset: {:?}", reset.error);
+        assert_eq!(reset.result.unwrap()["reset"], true);
+        let after = plane.dispatch(request("system.diagnostics", json!({}))).result.unwrap();
+        let meter = after["nodeTelemetry"].as_array().unwrap().iter().find(|item| item["nodeId"] == json!(meter_id)).unwrap();
+        assert_eq!(meter["meter"]["observedFrames"], 0);
+        assert_eq!(plane.get_session(&session_id).unwrap(), &session, "runtime reset does not save or alter graph");
+        assert!(plane.dispatch(request("session.stop", json!({"sessionId":session_id,"idempotencyKey":format!("{key}-stop")}))).error.is_none());
+        assert!(delivered > 0);
+        eprintln!("native Meter route prepared, started, delivered {delivered} branch blocks, exposed frames, reset and stopped; saved graph unchanged");
     }
 
     /// A plugin setting changed while playing (as in its editor) must come
@@ -22920,7 +24201,7 @@ mod tests {
             .iter()
             .any(|node| node["type"] == "virtual-render-source@1"
                 && node["availability"]["status"] == "unavailable"));
-        assert_eq!(description["processors"].as_array().unwrap().len(), 17);
+        assert_eq!(description["processors"].as_array().unwrap().len(), 18);
         assert_eq!(
             description["processors"][0]["availability"]["status"],
             "available"
@@ -23017,7 +24298,7 @@ mod tests {
             params: None,
         });
         let result = processors.result.unwrap();
-        assert_eq!(result.as_array().unwrap().len(), 17);
+        assert_eq!(result.as_array().unwrap().len(), 18);
         assert_eq!(result[0]["availability"]["status"], "available");
     }
 

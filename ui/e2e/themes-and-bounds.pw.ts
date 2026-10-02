@@ -29,7 +29,8 @@ for (const theme of ["dark", "light", "high-contrast"]) {
         const style = getComputedStyle(element);
         return { radius: style.borderRadius, shadow: style.boxShadow, background: style.backgroundImage };
       });
-      expect(style).toEqual({ radius: "9px", shadow: "none", background: "none" });
+      // Form fields use the app field style; Input Switch is a pair of choice buttons.
+      if (await field.evaluate((element) => ["INPUT", "SELECT", "TEXTAREA"].includes(element.tagName))) expect(style).toEqual({ radius: "9px", shadow: "none", background: "none" });
       if (kind === "networkSend" || kind === "networkReceive") {
         await field.fill("192.168.1.20");
         await expect(page.getByTestId(`rf__node-${kind}-1`)).toContainText(`${kind === "networkSend" ? "To" : "From"} 192.168.1.20:47800`);
