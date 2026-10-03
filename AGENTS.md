@@ -54,6 +54,16 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-02 — Qualify tool flags through the multi-path compiler, for every tool.**
+  Evidence: [tool combination suite](docs/plans/active/evidence/2026-10-02-tool-combinations-duck-icon-quit.md).
+  Scope: new or changed tools, bypass/enable rules, connected Mixers.
+  Consequence: a bypassed Duck between two Mixers made the user's route
+  unsupported (audio stopped) because the dry-bypass allow-lists omitted Duck,
+  while the single-chain bypass test listed only older tools. Add each new
+  tool to `crates/engine/tests/tool_combinations.rs` `TOOLS`; it compiles
+  every flag pattern in Mixer and connected-Mixer layouts and checks live
+  replacement and the dry mix.
+
 - **2026-10-02 — Inspector identity footers need distinct sibling keys.**
   Evidence: [selection regression and three-theme repair](docs/plans/active/evidence/2026-10-02-inspector-and-connected-mixers.md).
   Scope: React tool inspector children. Consequence: giving both a live editor

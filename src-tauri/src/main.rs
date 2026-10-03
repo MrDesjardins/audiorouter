@@ -334,6 +334,39 @@ fn rpc_request(
     response
 }
 
+/// The window's Quit button: the same backend finalization as the tray's
+/// "Quit and stop audio" (stop audio, finish recordings), then exit. A refused
+/// quit leaves everything running and returns the reason to the window.
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle, state: State<'_, ShellState>) -> Result<(), String> {
+    // A fresh key per click: a refused quit must not replay on retry.
+    let key = format!(
+        "window-quit-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_nanos())
+    );
+    let request = JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(serde_json::json!("window-quit")),
+        method: "system.quit".into(),
+        params: Some(serde_json::json!({ "idempotencyKey": key })),
+    };
+    let response = forward_rpc_request(&request, &state.pipe_name);
+    log_shell_rpc(&request, &response);
+    let response = response?;
+    if response.result.as_ref().and_then(|result| result.get("state")).and_then(serde_json::Value::as_str)
+        == Some("stopped")
+    {
+        app.exit(0);
+        return Ok(());
+    }
+    Err(response
+        .error
+        .map(|error| error.message)
+        .unwrap_or_else(|| "backend finalization failed".into()))
+}
+
 /// Open a playing plugin node's own editor in a native window owned by this
 /// shell. The backend authorizes the window for this process and asks the
 /// isolated worker to create the editor inside it; closing the window closes
@@ -1120,6 +1153,7 @@ fn main() {
         .manage(HttpApiState::default())
         .invoke_handler(tauri::generate_handler![
             rpc_request,
+            quit_app,
             http_api_control,
             open_plugin_editor,
             choose_session_file,

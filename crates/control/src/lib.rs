@@ -38,6 +38,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 pub mod os_transition;
+mod siege_round;
 mod simple;
 mod threaded_recorder;
 
@@ -4791,6 +4792,18 @@ fn diagnostics_output_schema() -> Value {
                 "required": ["latestSequence", "retained"],
                 "additionalProperties": false
             },
+            "gameRound": {
+                "type": "object",
+                "description": "Stats.cc feed for Ducks that follow the Siege round.",
+                "properties": {
+                    "source": { "const": "statsCc" },
+                    "state": { "enum": ["off", "connecting", "waitingForUpdate", "connected", "unavailable"] },
+                    "phase": { "enum": ["unknown", "menu", "prep", "betweenRounds", "action"] },
+                    "feedConfigured": { "type": ["boolean", "null"] }
+                },
+                "required": ["source", "state", "phase", "feedConfigured"],
+                "additionalProperties": false
+            },
             "redacted": { "const": true }
         },
         "required": ["build", "backend", "storage", "audio", "nativeAdapter", "nativeAdapterKind", "nativeSessionId", "schedulerTelemetry", "nodeTelemetry", "applicationCaptureStates", "privacyMute", "recovery", "eventLog", "redacted"],
@@ -5585,6 +5598,8 @@ pub struct ControlPlane {
     /// mono endpoint (see `native_paths_session`).
     #[cfg(windows)]
     native_multi_input_mono_nodes: Vec<EntityId>,
+    /// Stats.cc client for Ducks following the Siege round (started on demand).
+    siege_round_feed: siege_round::SiegeRoundFeed,
     native_endpoint_taps: Option<AudioTapSet>,
     native_endpoint_taps_secondary: Option<AudioTapSet>,
     native_endpoint_rejections: u64,
@@ -6239,6 +6254,7 @@ impl ControlPlane {
             multi_input_application_sources: Vec::new(),
             #[cfg(windows)]
             native_multi_input_mono_nodes: Vec::new(),
+            siege_round_feed: Default::default(),
             native_endpoint_taps: None,
             native_endpoint_taps_secondary: None,
             native_endpoint_rejections: 0,
@@ -10475,6 +10491,7 @@ impl ControlPlane {
             multi_input_application_sources: Vec::new(),
             #[cfg(windows)]
             native_multi_input_mono_nodes: Vec::new(),
+            siege_round_feed: Default::default(),
             native_endpoint_taps: None,
             native_endpoint_taps_secondary: None,
             native_endpoint_rejections: 0,
@@ -13372,6 +13389,16 @@ impl ControlPlane {
         None
     }
 
+    /// Connect the Stats.cc feed only while a playing session has a Duck
+    /// following the Siege round.
+    fn refresh_siege_round_feed(&mut self) {
+        let wanted = self.runtimes.iter().any(|(session_id, runtime)| {
+            runtime.state() == RuntimeState::Running
+                && self.store.session(session_id).is_some_and(audiorouter_engine::session_follows_game_round)
+        });
+        self.siege_round_feed.set_wanted(wanted);
+    }
+
     /// Whether any recorder of the session is taking a recording.
     fn session_is_recording(&self, session_id: &EntityId) -> bool {
         let node_recording = self.get_session(session_id).is_ok_and(|session| {
@@ -14818,6 +14845,7 @@ impl ControlPlane {
                         "schedulerTelemetry": self.native_scheduler_telemetry(),
                         "nodeTelemetry": node_telemetry,
                         "applicationCaptureStates": self.application_capture_states(),
+                        "gameRound": self.siege_round_feed.status_json(),
                         "privacyMute": {
                             "muted": self.privacy_muted,
                             "persistence": if self.storage.is_some() { "durable" } else { "memory" }
@@ -14976,6 +15004,9 @@ impl ControlPlane {
                     _ => Err(ControlError::InvalidRequest("method not found".into())),
                 }
             });
+        if mutating {
+            self.refresh_siege_round_feed();
+        }
         match result {
             Ok(value) => JsonRpcResponse::success(id, value),
             Err(ControlError::InvalidRequest(message)) if message == "method not found" => {

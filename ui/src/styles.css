@@ -812,6 +812,11 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .theme-light .advanced-eq-zero { stroke: #62788e; }
 .theme-light .advanced-eq-axis { fill: #42546a; }
 .theme-light .advanced-eq-curve { stroke: #173e67; }
+/* Live spectrum of the sound entering the EQ, behind the response curve. */
+.advanced-eq-spectrum { fill: color-mix(in srgb, var(--cyan) 26%, transparent); stroke: color-mix(in srgb, var(--cyan) 70%, transparent); stroke-width: 1; stroke-linejoin: round; pointer-events: none; }
+.advanced-eq-spectrum-label { fill: var(--cyan); font-size: 9px; font-weight: 600; pointer-events: none; }
+.theme-light .advanced-eq-spectrum { fill: rgb(14 116 144 / 18%); stroke: rgb(14 116 144 / 65%); }
+.theme-light .advanced-eq-spectrum-label { fill: #0e7490; }
 .theme-light .advanced-eq-leader { stroke: #42546a; }
 .theme-light .advanced-eq-anchor { stroke: #fff; }
 .theme-high-contrast .advanced-eq-graph, .theme-high-contrast .advanced-eq-plot { background: #000; fill: #000; }
@@ -1239,6 +1244,9 @@ input[type="color"] { width: 100%; }
 .node-duck-reduction span { display: block; height: 100%; border-radius: inherit; background: var(--duck-active, #ff9c3b); transition: width 140ms ease-out; }
 .duck-trigger-choice { display: grid; gap: .3rem; color: var(--text-soft); font-size: .8rem; }
 .duck-trigger-choice select { width: 100%; min-width: 0; }
+.duck-round-phases { display: grid; gap: .35rem; margin: 0; padding: .55rem .7rem; border: 1px solid var(--ambient-edge); border-radius: 9px; }
+.duck-round-phases legend { padding: 0 .3rem; color: var(--text-soft); font-size: .8rem; }
+.duck-round-phases label { display: flex; align-items: center; gap: .5rem; font-size: .85rem; }
 .duck-bars { display: grid; gap: .4rem; }
 .duck-bar { display: grid; grid-template-columns: 5.6rem minmax(0, 1fr) 4.6rem; align-items: center; gap: .5rem; font-size: .76rem; color: var(--text-soft); }
 .duck-bar strong { color: var(--text-strong); font-variant-numeric: tabular-nums; text-align: right; }
@@ -1306,3 +1314,14 @@ input[type="color"] { width: 100%; }
 .network-route-link { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: .25rem; }
 .network-route-link > span { font-size: 1.8rem; }
 .network-route-diagram figcaption { grid-column: 1 / -1; font-size: .75rem; text-align: center; line-height: 1.5; margin-top: .5rem; }
+/* Window Quit: the confirm step is unmistakable but keeps the button shape. */
+.topbar .quit-button.is-armed, .quit-button.is-armed { border-color: #b71c1c; background: #b71c1c; background-image: none; color: #fff; font-weight: 700; }
+/* Duck widget: a small duck surfaces and bobs while ducking. */
+.node-duck-badge { flex: none; color: var(--duck-active, #ff9c3b); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--duck-active, #ff9c3b) 70%, transparent)); animation: node-duck-bob 1.4s ease-in-out infinite, node-duck-in 220ms ease-out; }
+@keyframes node-duck-bob { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-1.5px) rotate(-6deg); } }
+@keyframes node-duck-in { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .node-duck-badge { animation: none; } }
+/* Duck amount slider: caption and value above a full-width slider. */
+.duck-amount { display: grid; gap: .25rem; color: var(--text-soft); font-size: .8rem; }
+.duck-amount input[type="range"] { width: 100%; }
+.duck-amount-scale { display: flex; justify-content: space-between; color: var(--text-soft); font-size: .68rem; }

@@ -809,6 +809,14 @@ export interface DiagnosticsSnapshot {
   privacyMute: { muted: boolean; persistence: "durable" | "memory" };
   recovery: { safeMode: boolean; recentCrashes: number; persistence: "durable" | "memory" };
   eventLog: { latestSequence: number; retained: number };
+  /** Stats.cc feed for Ducks following the Siege round; older backends omit it. */
+  gameRound?: {
+    source: "statsCc";
+    state: "off" | "connecting" | "waitingForUpdate" | "connected" | "unavailable";
+    phase: "unknown" | "menu" | "prep" | "betweenRounds" | "action";
+    /** Whether Stats.cc's feed file exists; null when it cannot be checked. */
+    feedConfigured: boolean | null;
+  };
   redacted: true;
 }
 

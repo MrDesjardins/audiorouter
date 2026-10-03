@@ -1,8 +1,20 @@
-﻿# Active plan — v0.0.4 release qualification
+# Active plan — v0.0.5 release preparation
 
-Updated: 2026-10-02. v0.0.4 experimental prerelease published; work stopped at user's request.
+Updated: 2026-10-02. v0.0.4 is published; v0.0.5 preparation authorized.
 
 ## Objective and scope
+
+Current request: prepare v0.0.5 (existing three-part version format), commit and
+push all tonight's changes. Include built-in Siege-round Duck, connected-Mixer
+Duck bypass repair, 1,800 tool combinations, Duck controls/icon/widget, Advanced
+EQ input spectrum and window Quit. Requirements DSP-19, GRAPH-08/14/15,
+UI-05/11/12/13, AUTO-15, ARCH-04, SEC-01/10 and DIST-01–08.
+Steps: review diff/evidence/secrets; bump metadata; run locked source checks;
+commit clean inputs; build unsigned matching installer/artifacts; exact-exe
+fresh-install after normal app closure; push source/tag and publish prerelease;
+download and verify hashes. Current shell PID 61752 and RainbowSix PID 49376
+must remain untouched. Native/attended and wider M08 limits stay disclosed.
+Rollback retains v0.0.4 and compatible backups. No VST or user-data changes.
 
 Prepare and publish the user-requested unsigned Windows x64 prerelease with
 inspector selection fixes, connected Mixers, recording service isolation,
@@ -15,6 +27,55 @@ Requirements: GRAPH-01/02/04/14/15, CAP-06/11/13/14, REC-01/08,
 ARCH-04/09, UI-05/11/12, HTTP-03, API-09, AUTO-15, SEC-01/10 and DIST-01–08.
 Contracts: graph/spec04, capture/spec05, recording/spec08, interface/spec09,
 local HTTP/spec16; release gates in [M08](../../milestones/M08-release.md).
+
+## Current slice: Siege round trigger for Duck (2026-10-02, user approved)
+
+User finds Stats.cc + Node script + AudioRouter too much to run. Replace the
+script for this use: Duck gains `trigger` = `level` (existing, `keyNodeId`) or
+`siegeRound`. In `siegeRound` mode the backend reads Stats.cc's existing local
+feed (`ws://127.0.0.1:17892`, client only, loopback only) and the Duck lowers
+by its own Amount with its Attack/Release during the phases the user ticks
+(`duckMenu`, `duckPrep`, `duckBetweenRounds`; all default on) and releases in
+`action`. Phase changes are runtime-only (no saved revision). Fail-safe: no feed,
+unknown or malformed state releases the Duck (full volume). Phase rules match
+`examples/integrations/stats-cc-siege/core.mjs` `phaseState`. Requirements:
+AUTO-15, GRAPH-08, PROC Duck (07-processing), UI-05/11, ARCH-04, SEC-01.
+Realtime: the Duck reads one atomic; no locks, I/O or allocation in the audio
+path. Network: one bounded client thread with backoff, started only while a
+playing route has a `siegeRound` Duck; raw snapshots never logged (they contain
+player data). New dependency: `tungstenite` (no TLS features). Stats.cc's feed is
+an undocumented vendor interface (inspected 1.8.1) and binds all interfaces
+without authentication; AudioRouter never opens or changes it beyond an
+explicit, consented "Enable Stats.cc feed" file write (same rules as the
+example's `setup-stats.mjs`).
+Tasks: (1) engine/DSP external engage for Duck + tests; (2) phase rules + feed
+client + status in control/diagnostics + tests (fake WebSocket server);
+(3) enable-feed RPC with consent; (4) UI Trigger choice, phase checkboxes,
+status, three themes; (5) spec/docs; (6) live check against the user's running
+Stats.cc (read-only), then attended match. The Node example stays until the
+built-in version is verified. Rollback: remove `trigger`/phase parameters and
+the client; level-triggered Ducks are unchanged.
+Implemented tasks 1, 2, 4, 5 (DSP-19); task 3 (feed-enable button) deferred:
+the status line points to the existing setup script and the user's feed is
+already enabled. Live read-only connect to the user's Stats.cc passed. See
+[Duck round evidence](evidence/2026-10-02-duck-siege-round.md). Review build
+`target/reviews/duck-siege-round-20261002/`. Next: user closes the running
+review app normally, launches this build, sets the game Duck's Trigger to
+Siege round, and checks menu/prep ducking, action release and release when
+Stats.cc closes. Not committed or published.
+Follow-ups (2026-10-02, user requests): Duck bypass between Mixers repaired;
+1 800-combination tool suite; duck icon; window Quit (two-step confirm,
+`quit_app` → `system.quit`). See
+[combination/icon/quit evidence](evidence/2026-10-02-tool-combinations-duck-icon-quit.md).
+Latest review build `target/reviews/duck-quit-combos-20261002/` supersedes the
+two Duck review builds. Next: attended check of window Quit and the Siege
+round Duck in a match.
+Advanced EQ live spectrum (2026-10-02, user request): display-only analyzer of
+the incoming sound behind the curve. See
+[EQ spectrum evidence](evidence/2026-10-02-eq-live-spectrum.md).
+Duck amount slider and canvas duck while ducking (user request); see
+[Duck widget evidence](evidence/2026-10-02-duck-widget-slider.md). Latest
+review build `target/reviews/duck-widget-20261002/` includes all changes above.
 
 ## Where things stand
 

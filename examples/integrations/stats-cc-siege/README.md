@@ -5,6 +5,11 @@ calling AudioRouter's local REST API. No VST or AudioRouter implementation chang
 The inspected Stats.cc installation is **1.8.1-stable** (Electron/overlayed.gg).
 Its optional state feed is an undocumented vendor interface and can change.
 
+> **Built-in alternative:** AudioRouter builds after v0.0.4 can follow the Siege
+> round without this service. Add a **Duck** on the game line and set its
+> Trigger to **Siege round (Stats.cc)**; only Stats.cc and AudioRouter need to
+> run. This example remains for Mixer-level control and as a REST reference.
+
 ## Behavior
 
 | Stats.cc state | Siege Mixer input | Discord Mixer input |

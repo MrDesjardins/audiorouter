@@ -457,6 +457,23 @@ mod tests {
     }
 
     #[test]
+    fn connected_mixers_pass_a_bypassed_duck_dry() {
+        // Regression: bypassing a Duck between two Mixers was rejected as an
+        // unsupported path, so the live toggle failed and Play refused the route.
+        for bypass in [false, true] {
+            let mut session = fixture();
+            let duck = session.nodes.iter_mut().find(|node| node.id.as_str() == "game-eq").unwrap();
+            duck.kind = NodeKind::Duck;
+            duck.bypass = bypass;
+            duck.parameters = serde_json::from_value(serde_json::json!({ "trigger": "siegeRound", "amountDb": 20.0 })).unwrap();
+            let set = compile_fixture(&session);
+            let output = run(&set.paths[0]);
+            // No round signal is published here, so an active Duck is released too.
+            assert!((output["game-output"] - 0.5).abs() < 1e-4, "bypass {bypass}: {}", output["game-output"]);
+        }
+    }
+
+    #[test]
     fn connected_mixers_flags_silence_only_authored_contributions() {
         for disabled in [false, true] {
             let mut session = fixture();

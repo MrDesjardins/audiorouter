@@ -1765,6 +1765,11 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::Duck, "keyNodeId") => value.as_str().is_some_and(|key| {
                     key.len() <= MAX_ENTITY_ID_BYTES && !key.chars().any(char::is_control)
                 }),
+                // `level` follows keyNodeId; `siegeRound` follows the game phase (Stats.cc).
+                (NodeKind::Duck, "trigger") => value
+                    .as_str()
+                    .is_some_and(|trigger| matches!(trigger, "level" | "siegeRound")),
+                (NodeKind::Duck, "duckMenu" | "duckPrep" | "duckBetweenRounds") => value.is_boolean(),
                 (NodeKind::Duck, name) => {
                     let range = match name {
                         "thresholdDb" => Some(-80.0..=0.0),

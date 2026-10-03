@@ -4,13 +4,13 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { createDisconnectedBackend, type UiBackend } from "./backend";
 import { demoSession } from "./fixtures";
-import type { Session, DiscoveryDocument } from "@audiorouter/contracts";
+import type { Session, DiscoveryDocument, DiagnosticsSnapshot } from "@audiorouter/contracts";
 import "./styles.css";
 
 let planned: Session | null = null;
 // Test hooks: a Playwright init script may inject a session, the backend
 // telemetry recorded from a real run, and start the fixture already playing.
-const injected = globalThis as { __routeFixtureSession?: Session; __routeFixtureTelemetry?: unknown[]; __routeFixtureRunning?: boolean; __routeFixtureProcessors?: DiscoveryDocument["processors"]; __routeFixtureDelayMs?: number; __routeFixtureNoRecordingRoot?: boolean; __routeFixtureRecordingLostAudio?: boolean; __routeFixtureFreshInstall?: boolean };
+const injected = globalThis as { __routeFixtureSession?: Session; __routeFixtureTelemetry?: unknown[]; __routeFixtureRunning?: boolean; __routeFixtureProcessors?: DiscoveryDocument["processors"]; __routeFixtureDelayMs?: number; __routeFixtureNoRecordingRoot?: boolean; __routeFixtureRecordingLostAudio?: boolean; __routeFixtureFreshInstall?: boolean; __routeFixtureGameRound?: DiagnosticsSnapshot["gameRound"] };
 let committed = structuredClone(injected.__routeFixtureSession ?? demoSession);
 let previewCandidate: Session | null = null;
 let running = injected.__routeFixtureRunning === true;
@@ -38,6 +38,8 @@ const diagnostics = () => ({
   nativeSessionId: prepared ? committed.id : null,
   nativeAdapter: prepared ? running ? "running" as const : "configured-stopped" as const : "implemented-not-activated" as const,
   nativeAdapterKind: prepared ? "endpoint" as const : null,
+  // Optional Stats.cc state for round-following Duck previews.
+  ...(injected.__routeFixtureGameRound ? { gameRound: structuredClone(injected.__routeFixtureGameRound) } : {}),
 });
 
 function graphValidationError(session: Session): string | null {

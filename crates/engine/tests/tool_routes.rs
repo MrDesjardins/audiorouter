@@ -291,3 +291,35 @@ fn gain_and_volume_parameters_change_real_samples_and_keep_channels_isolated() {
         assert_eq!(block.channel(1).unwrap(), &[0.0; 128]);
     }
 }
+
+#[test]
+fn advanced_eq_reports_the_incoming_spectrum_without_changing_audio() {
+    let session = route(NodeKind::ParametricEq);
+    let graph = compile_session(&session, RuntimeGeneration::new(5)).unwrap();
+    let id = EntityId::new("tool");
+    assert!(graph.spectrum_levels_for_node(&id).is_none(), "no spectrum before audio");
+    let reference = compile_session(&route(NodeKind::Gain), RuntimeGeneration::new(6)).unwrap();
+    for quantum in 0..120 {
+        let mut block = AudioBlock::new(2, 128).unwrap();
+        for channel in 0..2 {
+            for (frame, sample) in block.channel_mut(channel).unwrap().iter_mut().enumerate() {
+                *sample = 0.3 * (std::f64::consts::TAU * 1_000.0 * (quantum * 128 + frame) as f64 / 48_000.0).sin() as f32;
+            }
+        }
+        let mut flat = AudioBlock::new(2, 128).unwrap();
+        for channel in 0..2 { flat.channel_mut(channel).unwrap().copy_from_slice(block.channel(channel).unwrap()); }
+        graph.process(&mut block);
+        reference.process(&mut flat);
+        // A default (flat) Advanced EQ passes the tone like a 0 dB Gain.
+        for channel in 0..2 {
+            for (eq, gain) in block.channel(channel).unwrap().iter().zip(flat.channel(channel).unwrap()) {
+                assert!((eq - gain).abs() < 1e-4, "analysis must not change the audio");
+            }
+        }
+    }
+    let levels = graph.spectrum_levels_for_node(&id).expect("spectrum while playing");
+    let centers = audiorouter_engine::spectrum_band_frequencies_hz();
+    let loudest = (0..levels.len()).max_by(|a, b| levels[*a].total_cmp(&levels[*b])).unwrap();
+    assert!((800.0..1_250.0).contains(&centers[loudest]), "peak at {} Hz", centers[loudest]);
+    assert!(compile_session(&route(NodeKind::BassTreble), RuntimeGeneration::new(7)).unwrap().spectrum_levels_for_node(&id).is_none());
+}

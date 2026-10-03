@@ -42,6 +42,7 @@ const DROP_PREVIEW_ID = "__drop-preview";
 /** Where the pointer holds the preview card (its title area). */
 const DROP_GRAB_OFFSET = { x: 90, y: 28 };
 import { nextPeakHold, type PeakHold } from "./dynamics";
+import { DuckGlyph } from "./DuckGlyph";
 
 export const LIBRARY_DROP_SOURCE = "__audiorouter_library_drop__";
 export { LIBRARY_DROP_MIME } from "./libraryDrag";
@@ -670,9 +671,17 @@ function DuckVisual({ node, telemetry, triggerName, onSetNodeParameter }: { node
   const amount = Number(node.parameters.amountDb ?? 6);
   const ducking = telemetry?.processor?.gateOpen.some(Boolean) ?? false;
   const reduction = Math.max(0, ...(telemetry?.processor?.gainReductionDb ?? [0]));
-  const status = !triggerName ? "Choose a trigger in Properties" : ducking ? `Ducking −${reduction.toFixed(1)} dB` : `Listening to ${triggerName}`;
+  const roundMode = node.parameters.trigger === "siegeRound";
+  const status = ducking ? `Ducking −${reduction.toFixed(1)} dB`
+    : roundMode ? "Siege round · full volume"
+      : !triggerName ? "Choose a trigger in Properties" : `Listening to ${triggerName}`;
+  const title = roundMode ? "Follows the Siege round (Stats.cc)" : triggerName ? `Triggered by ${triggerName}` : undefined;
   return <div className="node-fader-stack nodrag nopan">
-    <span className={`node-duck-status${ducking ? " is-ducking" : ""}`} role="status" title={triggerName ? `Triggered by ${triggerName}` : undefined}><span className="node-duck-dot" aria-hidden="true" />{status}</span>
+    <span className={`node-duck-status${ducking ? " is-ducking" : ""}`} role="status" title={title}>
+      {/* The duck surfaces while it is turning this audio down. */}
+      {ducking ? <DuckGlyph className="node-duck-badge" size="1.15rem" /> : <span className="node-duck-dot" aria-hidden="true" />}
+      {status}
+    </span>
     <div className="node-duck-reduction" aria-hidden="true"><span style={{ width: `${amount > 0 ? clamp(reduction / amount * 100, 0, 100) : 0}%` }} /></div>
     <MiniFader label="Amount" value={amount} min={0} max={40} step={1} formatValue={(value) => `−${Math.round(value)} dB`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "amountDb", Math.round(value)) : undefined} ariaLabel={`${node.name} duck amount`} />
   </div>;

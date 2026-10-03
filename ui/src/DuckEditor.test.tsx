@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { Node } from "@audiorouter/contracts";
-import { DuckEditor, duckSettings, duckSketch, duckTriggerChoices } from "./DuckEditor";
+import { DuckEditor, duckSettings, duckSketch, duckTriggerChoices, roundFeedStatus } from "./DuckEditor";
 
 afterEach(cleanup);
 
@@ -39,7 +39,7 @@ describe("Duck editor", () => {
     expect(screen.getByRole("status").textContent).toBe("No trigger");
     fireEvent.change(screen.getByLabelText("Triggered by"), { target: { value: "mic" } });
     expect(onChange).toHaveBeenLastCalledWith("keyNodeId", "mic");
-    fireEvent.click(screen.getByRole("button", { name: "−10 dB" }));
+    fireEvent.change(screen.getByRole("slider", { name: "Duck amount" }), { target: { value: "10" } });
     expect(onChange).toHaveBeenLastCalledWith("amountDb", 10);
     fireEvent.keyDown(screen.getByRole("slider", { name: "Trigger level line" }), { key: "ArrowUp" });
     expect(onChange).toHaveBeenLastCalledWith("thresholdDb", -34);
@@ -69,5 +69,33 @@ describe("Duck editor", () => {
       expect(screen.getByRole("status").textContent).toBe(flags.enabled === false ? "Off" : "Bypassed");
       cleanup();
     }
+  });
+
+  it("switches to the Siege round trigger with phase choices and Stats.cc status", () => {
+    const onChange = vi.fn();
+    const round = { source: "statsCc" as const, state: "connected" as const, phase: "prep" as const, feedConfigured: true };
+    const view = render(<DuckEditor node={duck({ trigger: "siegeRound", duckBetweenRounds: false, amountDb: 20 })} session={{ nodes: [mic, gate, out] }} telemetry={telemetry(-120, 20, true)} running disabled={false} gameRound={round} onChange={onChange} />);
+    expect((screen.getByLabelText("Duck trigger") as HTMLSelectElement).value).toBe("siegeRound");
+    expect(screen.queryByLabelText("Triggered by")).toBeNull();
+    expect(screen.queryByRole("meter", { name: "Trigger" })).toBeNull();
+    expect((screen.getByLabelText("Menu and matchmaking") as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText("Between rounds and results") as HTMLInputElement).checked).toBe(false);
+    expect(screen.getByRole("status").textContent).toBe("Ducking −20.0 dB");
+    expect(screen.getByText("Stats.cc: preparation.")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("Between rounds and results"));
+    expect(onChange).toHaveBeenCalledWith("duckBetweenRounds", true);
+    fireEvent.change(screen.getByLabelText("Duck trigger"), { target: { value: "level" } });
+    expect(onChange).toHaveBeenCalledWith("trigger", "level");
+    view.rerender(<DuckEditor node={duck({ trigger: "siegeRound" })} session={{ nodes: [mic] }} telemetry={telemetry(-120, 0, false)} running disabled={false} gameRound={{ ...round, phase: "action" }} onChange={onChange} />);
+    expect(screen.getByRole("status").textContent).toBe("Full volume");
+  });
+
+  it("explains every Stats.cc feed state in plain language", () => {
+    const round = (state: "off" | "connecting" | "waitingForUpdate" | "connected" | "unavailable", feedConfigured: boolean | null = true) => ({ source: "statsCc" as const, state, phase: "unknown" as const, feedConfigured });
+    expect(roundFeedStatus(null, false)).toContain("Press Play");
+    expect(roundFeedStatus(round("connecting"), true)).toBe("Connecting to Stats.cc…");
+    expect(roundFeedStatus(round("unavailable", false), true)).toContain("examples\\integrations\\stats-cc-siege");
+    expect(roundFeedStatus(round("unavailable"), true)).toContain("not running");
+    expect(roundFeedStatus(round("waitingForUpdate"), true)).toContain("Full volume until");
   });
 });

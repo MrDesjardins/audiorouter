@@ -2636,7 +2636,8 @@ impl<T: std::fmt::Debug> std::fmt::Debug for RealtimeDsp<T> {
 pub enum ProcessingStage {
     /// Side-chain ducker following another node's published level. `carry`
     /// keeps the gain across recompilation.
-    Duck { key: Option<Arc<NodeLevel>>, carry: Arc<NodeLevel>, state: Box<RealtimeDsp<DuckState>> },
+    /// `round`: follow the Siege round signal with this phase mask instead of a key node.
+    Duck { key: Option<Arc<NodeLevel>>, round: Option<u8>, carry: Arc<NodeLevel>, state: Box<RealtimeDsp<DuckState>> },
     /// Shared DVR buffer with pause/jump transport (no latency when live).
     TimeShift { state: Arc<TimeShiftState> },
     /// Per-channel impulse-response convolution (disclosed one-block latency).
@@ -2692,6 +2693,8 @@ pub enum ProcessingStage {
     ParametricEq {
         left: Box<RealtimeDsp<audiorouter_dsp::ParametricEq>>,
         right: Option<Box<RealtimeDsp<audiorouter_dsp::ParametricEq>>>,
+        /// Advanced EQ only: display spectrum of the incoming audio (read-only).
+        spectrum: Option<(Box<RealtimeDsp<audiorouter_dsp::spectral::SpectrumAnalyzer>>, Arc<audiorouter_dsp::spectral::SpectrumTap>)>,
     },
     Compressor {
         left: Box<RealtimeDsp<audiorouter_dsp::Compressor>>,
@@ -3240,6 +3243,87 @@ fn node_level_for(session_id: &str, node_id: &str) -> Arc<NodeLevel> {
 /// stopped or removed trigger never leaves the audio turned down.
 const DUCK_STALE_FRAMES: usize = 4_800;
 
+/// Game round phases a Duck can follow (Rainbow Six Siege via Stats.cc).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u8)]
+pub enum RoundPhase {
+    /// No reliable game state: a following Duck releases (full volume).
+    Unknown = 0,
+    /// Main menu or matchmaking queue.
+    Menu = 1,
+    /// Match setup, map/operator selection, planning or preparation.
+    Prep = 2,
+    /// Round or match results, between rounds.
+    BetweenRounds = 3,
+    /// A round is being played.
+    Action = 4,
+}
+
+impl RoundPhase {
+    fn from_u8(value: u8) -> Self {
+        match value {
+            1 => Self::Menu,
+            2 => Self::Prep,
+            3 => Self::BetweenRounds,
+            4 => Self::Action,
+            _ => Self::Unknown,
+        }
+    }
+
+    /// Bit in a Duck's phase mask (`ROUND_DUCK_*`).
+    pub fn mask_bit(self) -> u8 {
+        1 << (self as u8)
+    }
+}
+
+pub const ROUND_DUCK_MENU: u8 = 1 << 1;
+pub const ROUND_DUCK_PREP: u8 = 1 << 2;
+pub const ROUND_DUCK_BETWEEN_ROUNDS: u8 = 1 << 3;
+
+/// A round phase not refreshed for this long releases a following Duck, so a
+/// stopped feed never leaves the game turned down. Publishers refresh it at
+/// least every 250 ms.
+const ROUND_STALE_FRAMES: usize = 48_000;
+
+/// The current game round phase, published lock-free by the control plane's
+/// feed client and read once per block by Ducks in round mode.
+#[derive(Debug, Default)]
+pub struct RoundSignal {
+    phase: std::sync::atomic::AtomicU8,
+    sequence: AtomicU64,
+}
+
+impl RoundSignal {
+    /// Publish (or refresh) the phase. Call at least every 250 ms while known.
+    pub fn publish(&self, phase: RoundPhase) {
+        self.phase.store(phase as u8, Ordering::Relaxed);
+        self.sequence.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn phase(&self) -> RoundPhase {
+        RoundPhase::from_u8(self.phase.load(Ordering::Relaxed))
+    }
+
+    fn read(&self) -> (RoundPhase, u64) {
+        (self.phase(), self.sequence.load(Ordering::Relaxed))
+    }
+}
+
+/// The process-wide Siege round signal.
+pub fn siege_round_signal() -> &'static RoundSignal {
+    static SIGNAL: std::sync::OnceLock<RoundSignal> = std::sync::OnceLock::new();
+    SIGNAL.get_or_init(RoundSignal::default)
+}
+
+/// Whether any enabled Duck in the session follows the game round.
+pub fn session_follows_game_round(session: &audiorouter_domain::Session) -> bool {
+    session.nodes.iter().any(|node| {
+        node.kind == audiorouter_domain::NodeKind::Duck
+            && node.enabled
+            && node.parameters.get("trigger").and_then(|value| value.as_str()) == Some("siegeRound")
+    })
+}
+
 /// Lowers its audio by `amount_db` while the trigger node's peak is at or
 /// above `threshold_db`, keeps it down for `hold_ms` after the trigger falls,
 /// and glides with `attack_ms` (down) and `release_ms` (back up).
@@ -3257,6 +3341,8 @@ pub struct DuckState {
     stale_frames: usize,
     key_db: f32,
     output_level: audiorouter_dsp::LevelFollower,
+    last_round_sequence: u64,
+    round_stale_frames: usize,
 }
 
 impl DuckState {
@@ -3274,6 +3360,8 @@ impl DuckState {
             stale_frames: DUCK_STALE_FRAMES + 1,
             key_db: audiorouter_dsp::LevelFollower::FLOOR_DB,
             output_level: audiorouter_dsp::LevelFollower::new(),
+            last_round_sequence: 0,
+            round_stale_frames: ROUND_STALE_FRAMES + 1,
         }
     }
 
@@ -3284,12 +3372,32 @@ impl DuckState {
         self.stale_frames = DUCK_STALE_FRAMES + 1;
         self.key_db = audiorouter_dsp::LevelFollower::FLOOR_DB;
         self.output_level.reset();
+        self.round_stale_frames = ROUND_STALE_FRAMES + 1;
+    }
+
+    /// Round mode: duck while the published phase is in `mask` and fresh.
+    /// Unknown or stale state releases. Hold does not apply.
+    fn follow_round(&mut self, signal: &RoundSignal, mask: u8, frames: usize) {
+        let (phase, sequence) = signal.read();
+        if sequence != self.last_round_sequence {
+            self.last_round_sequence = sequence;
+            self.round_stale_frames = 0;
+        } else {
+            self.round_stale_frames = self.round_stale_frames.saturating_add(frames);
+        }
+        self.ducking = self.round_stale_frames <= ROUND_STALE_FRAMES
+            && phase != RoundPhase::Unknown
+            && mask & phase.mask_bit() != 0;
+        self.hold_frames = 0;
     }
 
     /// Allocation-free: one key read, two exp/powf per block, a linear ramp.
-    fn process(&mut self, key: Option<&NodeLevel>, block: &mut AudioBlock, sample_rate: f32) {
+    fn process(&mut self, key: Option<&NodeLevel>, round: Option<(&RoundSignal, u8)>, block: &mut AudioBlock, sample_rate: f32) {
         let frames = block.frames();
         let floor = audiorouter_dsp::LevelFollower::FLOOR_DB;
+        if let Some((signal, mask)) = round {
+            self.follow_round(signal, mask, frames);
+        } else {
         self.key_db = match key {
             Some(level) => {
                 let (peak, sequence) = level.read();
@@ -3311,6 +3419,7 @@ impl DuckState {
             self.hold_frames = self.hold_frames.saturating_sub(frames);
         } else {
             self.ducking = false;
+        }
         }
         let target = if self.ducking { -self.amount_db } else { 0.0 };
         let time_ms = if target < self.gain_db { self.attack_ms } else { self.release_ms };
@@ -5156,6 +5265,7 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                         | NodeKind::GraphicEq
                         | NodeKind::Pitch
                         | NodeKind::Plugin
+                        | NodeKind::Duck
                 ))
                 || (destination.bypass
                     && !matches!(
@@ -5180,6 +5290,7 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                             | NodeKind::GraphicEq
                             | NodeKind::Pitch
                             | NodeKind::Plugin
+                            | NodeKind::Duck
                     ))
             {
                 return Err(GraphCompileError::UnsupportedTopology);
@@ -5403,10 +5514,20 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                         .clamp(*range.start(), *range.end()) as f32
                 };
                 let owner = owning_session_id(session.id.as_str());
+                let flag = |name: &str| node.parameters.get(name).and_then(|value| value.as_bool()).unwrap_or(true);
+                // Siege round mode follows the game phase instead of a node.
+                let round = (node.parameters.get("trigger").and_then(|value| value.as_str()) == Some("siegeRound"))
+                    .then(|| {
+                        [("duckMenu", ROUND_DUCK_MENU), ("duckPrep", ROUND_DUCK_PREP), ("duckBetweenRounds", ROUND_DUCK_BETWEEN_ROUNDS)]
+                            .into_iter()
+                            .filter(|(name, _)| flag(name))
+                            .fold(0u8, |mask, (_, bit)| mask | bit)
+                    });
                 // No trigger chosen (or itself): the audio passes unchanged.
                 let key = node
                     .parameters
                     .get("keyNodeId")
+                    .filter(|_| round.is_none())
                     .and_then(|value| value.as_str())
                     .filter(|key| !key.is_empty() && *key != node_id.as_str())
                     .map(|key| node_level_for(owner, key));
@@ -5417,6 +5538,7 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                     node_id,
                     ProcessingStage::Duck {
                         key,
+                        round,
                         state: Box::new(RealtimeDsp::new(DuckState::new(
                             number("thresholdDb", -35.0, -80.0..=0.0),
                             amount,
@@ -5496,6 +5618,7 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                     ProcessingStage::ParametricEq {
                         left: Box::new(RealtimeDsp::new(left)),
                         right: right.map(|filter| Box::new(RealtimeDsp::new(filter))),
+                        spectrum: None,
                     }
                 );
             }
@@ -5767,6 +5890,10 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                     ProcessingStage::ParametricEq {
                         left: Box::new(RealtimeDsp::new(left)),
                         right: right.map(|filter| Box::new(RealtimeDsp::new(filter))),
+                        spectrum: Some({
+                            let tap = Arc::new(audiorouter_dsp::spectral::SpectrumTap::default());
+                            (Box::new(RealtimeDsp::new(audiorouter_dsp::spectral::SpectrumAnalyzer::new(tap.clone()))), tap)
+                        }),
                     }
                 );
             }
@@ -6899,6 +7026,12 @@ impl CompiledPathSet {
 
     pub fn path_count(&self) -> usize {
         self.paths.len()
+    }
+
+    /// The compiled independent paths, in input order (read-only; used by
+    /// offline qualification to process blocks without devices).
+    pub fn paths(&self) -> &[CompiledMixerFanoutGraph] {
+        &self.paths
     }
 
     /// Source nodes in native input order (path by path).
@@ -8363,6 +8496,7 @@ impl RuntimeGraph {
             .find_map(|(stage_index, candidate)| {
                 (candidate == node_id).then(|| match self.stages.get(stage_index) {
                     Some(ProcessingStage::SpectralGate { tap, .. }) => tap.levels_db(),
+                    Some(ProcessingStage::ParametricEq { spectrum: Some((_, tap)), .. }) => tap.levels_db(),
                     _ => None,
                 })?
             })
@@ -8460,7 +8594,10 @@ impl RuntimeGraph {
                     }
                     carry.publish(0.0);
                 }
-                ProcessingStage::ParametricEq { left, right } => {
+                ProcessingStage::ParametricEq { left, right, spectrum } => {
+                    if let Some((analyzer, _)) = spectrum {
+                        let _ = reset_dsp(analyzer, |analyzer| analyzer.reset());
+                    }
                     if !reset_dsp(left, |processor| processor.reset()) {
                         success = false;
                     }
@@ -8628,10 +8765,11 @@ impl RuntimeGraph {
                         }
                     }
                 }
-                ProcessingStage::Duck { key, carry, state } => {
+                ProcessingStage::Duck { key, round, carry, state } => {
                     let sample_rate = self.sample_rate_hz as f32;
+                    let round = round.map(|mask| (siege_round_signal(), mask));
                     match state.try_with(|duck| {
-                        duck.process(key.as_deref(), block, sample_rate);
+                        duck.process(key.as_deref(), round, block, sample_rate);
                         duck.gain_db
                     }) {
                         Some(gain_db) => carry.publish(gain_db),
@@ -8713,7 +8851,15 @@ impl RuntimeGraph {
                         meter.observe(block);
                     }
                 }
-                ProcessingStage::ParametricEq { left, right } => {
+                ProcessingStage::ParametricEq { left, right, spectrum } => {
+                    if let Some((analyzer, _)) = spectrum {
+                        // Read-only: a busy analyzer skips this block of display.
+                        let _ = analyzer.try_with(|analyzer| {
+                            if let Some(first) = block.channel(0) {
+                                analyzer.analyze(first, block.channel(1));
+                            }
+                        });
+                    }
                     if block.channels() == 1 {
                         if left
                             .try_with(|processor| {
@@ -9672,6 +9818,53 @@ mod tests {
             let recovered = run(0.0, 200);
             assert!((recovered - 0.5).abs() < 0.005, "{key}: recovered to {recovered}");
         }
+    }
+
+    #[test]
+    fn round_duck_follows_ticked_game_phases_and_releases_when_the_feed_stops() {
+        use audiorouter_domain::{EntityId, NodeKind};
+        let mut session = voice_and_game_session();
+        session.id = EntityId::new("duck-round-test");
+        let duck = session.nodes.iter_mut().find(|node| node.id.as_str() == "game-eq").unwrap();
+        duck.kind = NodeKind::Duck;
+        // Between rounds is left unticked; the key node is ignored in round mode.
+        duck.parameters = serde_json::from_value(serde_json::json!({
+            "trigger": "siegeRound", "keyNodeId": "mic", "duckBetweenRounds": false,
+            "amountDb": 20.0, "attackMs": 5.0, "releaseMs": 50.0
+        })).unwrap();
+        assert!(session_follows_game_round(&session));
+        let set = compile_native_paths_with_plugins_and_audio(&session, RuntimeGeneration::new(1), &Default::default(), &Default::default()).unwrap();
+        let game_path = set.paths.iter().position(|path| path.input_node_ids()[0].as_str() == "cable-b").unwrap();
+        let signal = siege_round_signal();
+        let frames = PROCESSING_QUANTUM_FRAMES;
+        let run = |phase: Option<RoundPhase>, blocks: usize| {
+            let mut level = 0.0;
+            for _ in 0..blocks {
+                if let Some(phase) = phase {
+                    signal.publish(phase);
+                }
+                let mut game = AudioBlock::new(2, frames).unwrap();
+                game.channel_mut(0).unwrap().fill(0.5);
+                game.channel_mut(1).unwrap().fill(0.5);
+                let mut scratch = AudioBlock::new(set.paths[game_path].mixer_channels(), frames).unwrap();
+                let mut speakers = AudioBlock::new(2, frames).unwrap();
+                set.paths[game_path].process(&[game], &mut scratch, &mut [&mut speakers]).unwrap();
+                level = speakers.channel(0).unwrap()[frames - 1];
+            }
+            20.0 * (level / 0.5).log10()
+        };
+        // Durations in seconds of audio.
+        let blocks = |seconds: f32| (seconds * INTERNAL_SAMPLE_RATE_HZ as f32 / frames as f32) as usize;
+        assert!((run(Some(RoundPhase::Prep), blocks(1.0)) + 20.0).abs() < 0.05, "prep ducks by the Amount");
+        assert!(run(Some(RoundPhase::Action), blocks(1.0)).abs() < 0.01, "action releases");
+        assert!((run(Some(RoundPhase::Menu), blocks(1.0)) + 20.0).abs() < 0.05, "menu ducks");
+        assert!(run(Some(RoundPhase::BetweenRounds), blocks(1.0)).abs() < 0.01, "unticked phase releases");
+        assert!((run(Some(RoundPhase::Prep), blocks(1.0)) + 20.0).abs() < 0.05);
+        // The feed stops: one second without a refresh, then the game comes back.
+        assert!((run(None, blocks(0.9)) + 20.0).abs() < 0.05, "still ducked within the stale window");
+        assert!(run(None, blocks(1.1)).abs() < 0.01, "stale feed releases");
+        assert!((run(Some(RoundPhase::Prep), blocks(1.0)) + 20.0).abs() < 0.05);
+        assert!(run(Some(RoundPhase::Unknown), blocks(1.0)).abs() < 0.01, "unknown state releases");
     }
 
     #[test]
@@ -11647,6 +11840,7 @@ mod tests {
                 .unwrap(),
             )),
             right: None,
+            spectrum: None,
         };
         let graph = RuntimeGraph::prepare(RuntimeGeneration::new(10), vec![stage]);
         let mut block = AudioBlock::new(1, 128).unwrap();

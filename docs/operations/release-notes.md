@@ -1,5 +1,26 @@
 # AudioRouter release notes
 
+## 0.0.5 — 2026-10-02 (unsigned experimental preview)
+
+- Duck can follow Siege rounds directly through Stats.cc; choose menu,
+  preparation and between-round phases to quiet. Action or unavailable state
+  restores full volume. Existing feed setup is required; no Node service or
+  REST token is needed for this built-in mode.
+- Fix bypassing a Duck between connected Mixers. The regression suite exercises
+  1,800 tool/graph/flag combinations and live path replacement.
+- Advanced EQ displays the incoming sound spectrum behind its response curve.
+- Duck amount uses a slider; the canvas shows a duck while ducking, respecting
+  reduced-motion preferences.
+- The desktop top bar has a confirmed Quit action using backend finalization.
+
+Unsigned prerelease: real-match Duck behavior, native Quit/process exit, final
+combined continuity/spatial listening and wider M08 install/hardware/accessibility
+qualification remain open. Unknown feed state releases ducking; vendor protocol
+changes can break detection. Stats.cc setup remains explicit and its optional
+1.8.1 feed binds all interfaces without authentication; keep inbound access blocked.
+Close the old integration and AudioRouter before upgrading. Keep v0.0.4 and a
+compatible configuration/recording backup for rollback; credentials stay local.
+
 ## 0.0.4 — 2026-10-02 (unsigned preview)
 
 - Tool inspectors switch correctly between EQ, dynamics and Meter controls.

@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AdvancedEqEditor, layoutPointCallouts } from "./AdvancedEqEditor";
+import { AdvancedEqEditor, EqSpectrumContext, layoutPointCallouts, nextSpectrumTop, spectrumArea } from "./AdvancedEqEditor";
 import { appendLibraryNode } from "./draft";
 import { demoSession } from "./fixtures";
 import type { UiBackend } from "./backend";
@@ -108,5 +108,35 @@ describe("Advanced EQ editor", () => {
     const view = render(<AdvancedEqEditor node={node} backend={backend} connected={false} onChange={vi.fn()} />);
     expect((view.getByRole("button", { name: "Add point" }) as HTMLButtonElement).disabled).toBe(true);
     expect(backend.processorResponse).not.toHaveBeenCalled();
+  });
+});
+
+describe("Advanced EQ live spectrum", () => {
+  const bandFrequenciesHz = Array.from({ length: 64 }, (_, index) => 20 * Math.pow(1000, index / 63));
+  const tone = (peakIndex: number, peakDb: number) => ({ bandFrequenciesHz, levelsDb: bandFrequenciesHz.map((_, index) => (index === peakIndex ? peakDb : -110)) });
+
+  it("keeps a ceiling that jumps to peaks and falls slowly, never below -40 dB", () => {
+    expect(nextSpectrumTop(null, tone(10, -80))).toBe(-40);
+    expect(nextSpectrumTop(-40, tone(10, -10))).toBe(-7);
+    expect(nextSpectrumTop(-7, tone(10, -60))).toBe(-8);
+  });
+
+  it("draws the loudest band highest and stays inside the plot", () => {
+    const area = spectrumArea(tone(40, -20), -17)!;
+    const points = area.split(" ").map((pair) => pair.split(",").map(Number));
+    const highest = points.reduce((best, point) => (point[1] < best[1] ? point : best));
+    expect(Math.round(highest[0])).toBeGreaterThan(150);
+    expect(points.every(([, y]) => y >= 16 && y <= 190)).toBe(true);
+    expect(spectrumArea({ bandFrequenciesHz: [5], levelsDb: [-20] }, -17)).toBeNull();
+  });
+
+  it("shows the shaded live area only while a spectrum is provided", () => {
+    const node = appendLibraryNode(demoSession, "parametricEq").nodes.at(-1)!;
+    const backend = { processorResponse: vi.fn().mockResolvedValue(null) } as unknown as UiBackend;
+    const view = render(<EqSpectrumContext.Provider value={tone(30, -30)}><AdvancedEqEditor node={node} backend={backend} connected onChange={vi.fn()} /></EqSpectrumContext.Provider>);
+    expect(view.container.querySelector(".advanced-eq-spectrum")).not.toBeNull();
+    expect(view.getByText("Live sound in (before EQ)")).toBeTruthy();
+    view.rerender(<EqSpectrumContext.Provider value={null}><AdvancedEqEditor node={node} backend={backend} connected onChange={vi.fn()} /></EqSpectrumContext.Provider>);
+    expect(view.container.querySelector(".advanced-eq-spectrum")).toBeNull();
   });
 });

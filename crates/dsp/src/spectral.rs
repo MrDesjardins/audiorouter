@@ -317,6 +317,100 @@ impl SpectrumTap {
     }
 }
 
+/// Hop between analysed frames of a [`SpectrumAnalyzer`] (about 94 frames/s at 48 kHz).
+const ANALYZER_HOP: usize = SPECTRAL_FRAME / 2;
+
+/// Display-only spectrum of a signal: Hann-windowed 1024-sample frames every
+/// 512 samples, published as 64 log-spaced band powers to a [`SpectrumTap`].
+/// It only reads samples, so the audio is unchanged and no latency is added.
+/// Storage is allocated in [`SpectrumAnalyzer::new`]; `analyze` never
+/// allocates, locks or waits.
+#[derive(Debug)]
+pub struct SpectrumAnalyzer {
+    fft: Fft,
+    window: Vec<f32>,
+    /// Power scale: a full-scale sine reads about 0 dB in its bin.
+    scale: f32,
+    history: Vec<f32>,
+    write: usize,
+    since_frame: usize,
+    real: Vec<f32>,
+    imag: Vec<f32>,
+    edges: [usize; NOISE_PROFILE_BANDS + 1],
+    level: [f32; NOISE_PROFILE_BANDS],
+    tap: std::sync::Arc<SpectrumTap>,
+}
+
+impl SpectrumAnalyzer {
+    pub fn new(tap: std::sync::Arc<SpectrumTap>) -> Self {
+        let window = (0..SPECTRAL_FRAME)
+            .map(|index| 0.5 - 0.5 * (2.0 * PI * index as f32 / SPECTRAL_FRAME as f32).cos())
+            .collect::<Vec<f32>>();
+        let sum = window.iter().sum::<f32>();
+        Self {
+            fft: Fft::new(SPECTRAL_FRAME),
+            scale: 4.0 / (sum * sum),
+            window,
+            history: vec![0.0; SPECTRAL_FRAME],
+            write: 0,
+            since_frame: 0,
+            real: vec![0.0; SPECTRAL_FRAME],
+            imag: vec![0.0; SPECTRAL_FRAME],
+            edges: band_edges(),
+            level: [0.0; NOISE_PROFILE_BANDS],
+            tap,
+        }
+    }
+
+    /// Feed one block; a stereo block is analysed as the mean of its channels.
+    pub fn analyze(&mut self, left: &[f32], right: Option<&[f32]>) {
+        for (index, &sample) in left.iter().enumerate() {
+            let mono = match right.and_then(|right| right.get(index)) {
+                Some(&other) => 0.5 * (sample + other),
+                None => sample,
+            };
+            self.history[self.write] = if mono.is_finite() { mono } else { 0.0 };
+            self.write = (self.write + 1) % SPECTRAL_FRAME;
+            self.since_frame += 1;
+            if self.since_frame >= ANALYZER_HOP {
+                self.since_frame = 0;
+                self.frame();
+            }
+        }
+    }
+
+    fn frame(&mut self) {
+        // Oldest sample first: the ring's write position is the oldest.
+        for index in 0..SPECTRAL_FRAME {
+            self.real[index] = self.history[(self.write + index) % SPECTRAL_FRAME] * self.window[index];
+        }
+        self.imag.fill(0.0);
+        self.fft.transform(&mut self.real, &mut self.imag, false);
+        for band in 0..NOISE_PROFILE_BANDS {
+            let bins = self.edges[band]..self.edges[band + 1];
+            let count = bins.len().max(1) as f32;
+            let mean = bins
+                .map(|bin| self.real[bin] * self.real[bin] + self.imag[bin] * self.imag[bin])
+                .sum::<f32>()
+                * self.scale
+                / count;
+            let mean = if mean.is_finite() { mean } else { 0.0 };
+            // Rise fast so a footstep or shot shows at once, fall gently.
+            let weight = if mean > self.level[band] { 0.6 } else { 0.15 };
+            self.level[band] += (mean - self.level[band]) * weight;
+            self.tap.levels[band].store(self.level[band].to_bits(), Ordering::Relaxed);
+        }
+        self.tap.frames.fetch_add(1, Ordering::Release);
+    }
+
+    pub fn reset(&mut self) {
+        self.history.fill(0.0);
+        self.write = 0;
+        self.since_frame = 0;
+        self.level = [0.0; NOISE_PROFILE_BANDS];
+    }
+}
+
 fn power_db(power: f32) -> f32 {
     10.0 * power.max(1.0e-30).log10()
 }
@@ -745,6 +839,50 @@ pub fn decode_noise_profile(encoded: &str, noise: &mut [f32]) -> bool {
 /// Whether a string is a well-formed serialized noise profile.
 pub fn is_noise_profile(encoded: &str) -> bool {
     encoded.len() == NOISE_PROFILE_BANDS * 2 && encoded.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+#[cfg(test)]
+mod analyzer_tests {
+    use super::*;
+
+    fn tone_levels(frequency: f32, amplitude: f32) -> [f32; NOISE_PROFILE_BANDS] {
+        let tap = std::sync::Arc::new(SpectrumTap::default());
+        let mut analyzer = SpectrumAnalyzer::new(tap.clone());
+        assert!(tap.levels_db().is_none(), "nothing before the first frame");
+        for block in 0..200 {
+            let samples = (0..128)
+                .map(|frame| amplitude * (2.0 * PI * frequency * (block * 128 + frame) as f32 / 48_000.0).sin())
+                .collect::<Vec<_>>();
+            analyzer.analyze(&samples, Some(&samples));
+        }
+        tap.levels_db().unwrap()
+    }
+
+    #[test]
+    fn analyzer_places_a_tone_in_its_band_and_leaves_others_low() {
+        let centers = profile_band_frequencies_hz(48_000.0);
+        // 1024-sample frames give ~47 Hz bins: below ~150 Hz the display is coarse.
+        for frequency in [250.0, 1_000.0, 6_000.0] {
+            let levels = tone_levels(frequency, 0.5);
+            let loudest = (0..NOISE_PROFILE_BANDS).max_by(|a, b| levels[*a].total_cmp(&levels[*b])).unwrap();
+            let ratio = centers[loudest] / frequency;
+            assert!((0.8..1.25).contains(&ratio), "{frequency} Hz peaked at {} Hz", centers[loudest]);
+            assert!(levels[loudest] > -20.0 && levels[loudest] < 0.0, "{frequency} Hz level {}", levels[loudest]);
+            let far = (0..NOISE_PROFILE_BANDS).filter(|band| {
+                let r = centers[*band] / frequency;
+                !(0.25..4.0).contains(&r)
+            });
+            for band in far {
+                assert!(levels[band] < levels[loudest] - 40.0, "{frequency} Hz leaked into {} Hz", centers[band]);
+            }
+        }
+    }
+
+    #[test]
+    fn analyzer_reads_silence_as_the_floor_and_resets() {
+        let levels = tone_levels(1_000.0, 0.0);
+        assert!(levels.iter().all(|level| *level < -150.0));
+    }
 }
 
 #[cfg(test)]

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import type { Node } from "@audiorouter/contracts";
 import type { UiBackend, ProcessorResponse } from "./backend";
 import { NumberField } from "./NumberField";
@@ -31,6 +31,28 @@ const xForHz = (frequency: number) => LEFT + (Math.log10(clamp(frequency, 20, 20
 const hzForX = (x: number) => Math.round(20 * Math.pow(1000, clamp((x - LEFT) / (RIGHT - LEFT), 0, 1)));
 const yForDb = (gain: number) => TOP + ((DB_MAX - clamp(gain, DB_MIN, DB_MAX)) / (DB_MAX - DB_MIN)) * (BOTTOM - TOP);
 const dbForY = (y: number) => Math.round((DB_MAX - clamp((y - TOP) / (BOTTOM - TOP), 0, 1) * (DB_MAX - DB_MIN)) * 10) / 10;
+
+export type LiveSpectrum = { levelsDb: number[]; bandFrequenciesHz: number[] };
+/** The live sound entering this EQ (backend spectrum telemetry); null when not playing. */
+export const EqSpectrumContext = createContext<LiveSpectrum | null>(null);
+const SPECTRUM_RANGE_DB = 60;
+
+/** Next display ceiling: jumps up to a new peak, then falls 1 dB per update, never below -40 dB. */
+export function nextSpectrumTop(previous: number | null, spectrum: LiveSpectrum): number {
+  const loudest = Math.max(...spectrum.levelsDb) + 3;
+  return Math.max(-40, loudest, previous === null ? loudest : previous - 1);
+}
+
+/** Area points for the live spectrum under a display ceiling (top of the plot). */
+export function spectrumArea(spectrum: LiveSpectrum, top: number): string | null {
+  const bands = spectrum.bandFrequenciesHz
+    .map((hz, index) => ({ hz, db: spectrum.levelsDb[index] ?? -160 }))
+    .filter(({ hz }) => hz >= 20 && hz <= 20000);
+  if (bands.length < 2) return null;
+  const y = (db: number) => BOTTOM - clamp((db - (top - SPECTRUM_RANGE_DB)) / SPECTRUM_RANGE_DB, 0, 1) * (BOTTOM - TOP);
+  const points = bands.map(({ hz, db }) => `${xForHz(hz).toFixed(1)},${y(db).toFixed(1)}`);
+  return `${xForHz(bands[0].hz).toFixed(1)},${BOTTOM} ${points.join(" ")} ${xForHz(bands[bands.length - 1].hz).toFixed(1)},${BOTTOM}`;
+}
 
 type LabelPoint = { index: number; x: number; y: number };
 type PointCallout = LabelPoint & { labelX: number; labelY: number };
@@ -87,6 +109,15 @@ export function AdvancedEqEditor({ node, backend, connected, onChange }: {
   const [responseError, setResponseError] = useState<string | null>(null);
   const [drag, setDrag] = useState<{ index: number; frequencyHz: number; gainDb: number; moved: boolean; startX: number; startY: number } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  // Live sound entering the EQ: the ceiling follows recent peaks so a shot
+  // or footstep stands out against quieter moments.
+  const spectrum = useContext(EqSpectrumContext);
+  const spectrumTop = useRef<number | null>(null);
+  const liveArea = useMemo(() => {
+    if (!spectrum) { spectrumTop.current = null; return null; }
+    spectrumTop.current = nextSpectrumTop(spectrumTop.current, spectrum);
+    return spectrumArea(spectrum, spectrumTop.current);
+  }, [spectrum]);
   const selected = bands[selectedIndex] ?? bands[0];
   const enabledCount = bands.filter((band) => band.enabled).length;
 
@@ -146,11 +177,13 @@ export function AdvancedEqEditor({ node, backend, connected, onChange }: {
 
   return <section className="advanced-eq" aria-label="Advanced EQ editor">
     <div className="advanced-eq-heading"><div><strong>Frequency response</strong><small>{enabledCount} of {BAND_COUNT} points active</small></div><button type="button" className="secondary" onClick={() => addPoint()} disabled={!connected || enabledCount === BAND_COUNT}>Add point</button></div>
-    <p className="muted">Choose a point below to edit it without moving it. Drag to change frequency and applicable gain. The chart shows ±12 dB; precise gain controls retain the full ±24 dB range. Double-click the graph to add a Peaking/Band point.</p>
+    <p className="muted">Choose a point below to edit it without moving it. Drag to change frequency and applicable gain. The chart shows ±12 dB; precise gain controls retain the full ±24 dB range. Double-click the graph to add a Peaking/Band point. While audio plays, the shaded area shows the sound coming in: walk or shoot and watch which frequencies rise.</p>
     <svg ref={svgRef} className="advanced-eq-graph" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label="EQ frequency response and movable filter points" onPointerMove={movePoint} onPointerUp={finishDrag} onPointerCancel={finishDrag} onDoubleClick={(event) => { if (!connected || (event.target as Element).closest(".advanced-eq-point")) return; const { x, y } = pointerCoordinates(event); addPoint(hzForX(x), dbForY(y)); }}>
       <rect x={LEFT} y={TOP} width={RIGHT - LEFT} height={BOTTOM - TOP} className="advanced-eq-plot" />
       {[-12, -6, 0, 6, 12].map((db) => <g key={db}><line x1={LEFT} x2={RIGHT} y1={yForDb(db)} y2={yForDb(db)} className={db === 0 ? "advanced-eq-zero" : "advanced-eq-grid"} /><text x={LEFT - 5} y={yForDb(db) + 3} textAnchor="end" className="advanced-eq-axis">{db > 0 ? `+${db}` : db}</text></g>)}
       {TICKS.map((frequency) => <g key={frequency}><line x1={xForHz(frequency)} x2={xForHz(frequency)} y1={TOP} y2={BOTTOM} className="advanced-eq-grid" /><text x={xForHz(frequency)} y={HEIGHT - 12} textAnchor="middle" className="advanced-eq-axis">{frequency >= 1000 ? `${frequency / 1000}k` : frequency}</text></g>)}
+      {liveArea && <polygon points={liveArea} className="advanced-eq-spectrum" aria-hidden="true" />}
+      {liveArea && <text x={LEFT + 6} y={TOP + 12} className="advanced-eq-spectrum-label">Live sound in (before EQ)</text>}
       {curve && <polyline points={curve} className="advanced-eq-curve" />}
       {visiblePoints.map(({ band, x, y }) => {
         const callout = callouts.get(band.index);
