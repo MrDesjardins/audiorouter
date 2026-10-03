@@ -1,6 +1,6 @@
-﻿# Active plan — post-0.0.6 maintenance
+﻿# Active plan — post-0.0.7 maintenance
 
-Updated 2026-10-03. v0.0.7 release in preparation (user-requested); checks pass, see [0.0.7 evidence](evidence/2026-10-03-release-0.0.7.md). v0.0.6 is published.
+Updated 2026-10-03. v0.0.7 published as an unsigned prerelease; see [0.0.7 evidence](evidence/2026-10-03-release-0.0.7.md).
 
 ## Objective and scope
 
@@ -120,9 +120,9 @@ machine install/upgrade/uninstall, WebView2 absence, hardware/endurance,
 accessibility and signing remain open and disclosed. These are not implied by
 portable tests or this experimental publication.
 
-Exact next task: user testing/support of v0.0.6 (attended drag-to-canvas and
-device-picker confirmation); fix `create-draft-release.ps1` gh stderr handling
-and the seven stale Edge tests. On a
+Exact next task: user testing/support of v0.0.7 (attended drag-to-canvas, named
+busy-device message and device-picker confirmation); investigate the
+intermittent live-autosave timing test. On a
 new request, plan attended/native
 qualification with a quiet reference and closed competing apps. Do not run new
 implementation or disturb the user's audio autonomously after this release.
