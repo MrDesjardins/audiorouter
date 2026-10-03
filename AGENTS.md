@@ -55,6 +55,15 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-03 — A control must show the node's own saved value, never a fallback.**
+  Evidence: [active plan, borrowed device picker](docs/plans/active/current.md),
+  `ui/e2e/device-binding.pw.ts`. Scope: inspector selects and fields bound to
+  node parameters. Consequence: device pickers displayed a remembered
+  endpoint for nodes with none, so choosing the visible device was a no-op and
+  a friend's saved route could never Play. Show the empty choice plus a
+  "not chosen" note when the node has no value, and regress with a
+  remembered value present.
+
 - **2026-10-03 — Regress live panels for layout shift, not only content (user preference).**
   Evidence: [active plan, stable dynamics suggestion](docs/plans/active/current.md),
   `ui/e2e/dynamics-editor.pw.ts`. Scope: inspectors and panels fed by

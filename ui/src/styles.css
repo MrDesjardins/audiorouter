@@ -725,6 +725,9 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .node-binding-editor > * { min-width: 0; max-width: 100%; box-sizing: border-box; }
 .node-binding-editor select { width: 100%; min-width: 0; color: var(--text-strong); background: var(--ambient-surface-hi); }
 .node-binding-editor select option { color: var(--text-strong); background: var(--ambient-surface-hi); }
+.node-binding-editor .node-binding-missing { color: #ffc768; font-weight: 650; }
+.theme-light .node-binding-editor .node-binding-missing { color: #8a4b00; }
+.theme-high-contrast .node-binding-editor .node-binding-missing { color: #ffff00; }
 .node-binding-editor strong { display: block; margin-top: .2rem; color: var(--text-strong); font-size: .85rem; }
 .node-binding-editor label { display: grid; gap: .3rem; color: var(--text-soft); font-size: .78rem; }
 .node-binding-editor input[readonly] { color: var(--text-soft); font-size: .75rem; }
