@@ -16,6 +16,7 @@ These ideas are recorded for later prioritization. They are not authorized imple
 | Candidate | User value | Reconsider only when |
 | --- | --- | --- |
 | [External app integrations](external-app-integrations.md) | Generate REST requests by selecting a session, tool and property; game menu/match volume events | Existing API use cases reviewed; user approves request-builder scope, temporary-state and multi-tool policies |
+| [Siege footstep EQ](siege-footstep-eq.md) | Hear steps and drones better from a measured EQ + dynamics chain | User reference recordings exist; user requested 2026-10-03 |
 | [Spatial audio](spatial-audio.md) | Speaker mode, distance/room, head tracking and other rates beyond the implemented 5.1/7.1 surround-to-headphones input (CAP-14) | Method, listening/measurement criteria and latency are specified per extension |
 | VST2/ReaPlugs legacy hosting or migration | Reuse exact existing effects | The explicitly authorized gated M06 extension is already tracked in the active milestone; further promotion beyond the current x64 worker evidence still requires rights, editor compatibility, independent coverage, maintenance, and release qualification |
 | Native ARM64 Windows | Support ARM laptops | Driver, plugin architecture, shell, and hardware test matrix funded; still Windows-only |
