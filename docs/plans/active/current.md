@@ -1,6 +1,6 @@
 ﻿# Active plan — post-0.0.6 maintenance
 
-Updated 2026-10-03. v0.0.6 published as an unsigned prerelease; see [0.0.6 evidence](evidence/2026-10-03-release-0.0.6.md).
+Updated 2026-10-03. v0.0.7 release in preparation (user-requested); checks pass, see [0.0.7 evidence](evidence/2026-10-03-release-0.0.7.md). v0.0.6 is published.
 
 ## Objective and scope
 
@@ -81,6 +81,36 @@ this change (pre-existing: `live-controls` "refuse unsaved topology edits"
 gets a saved message; `media-and-routing` occupied-output finds two Undo
 buttons). Those two need separate investigation. Single-path routes still
 play on the remembered binding when the node has none; unchanged.
+
+## 2026-10-03 — 0.0.7 patch: test suite, release script, named busy device
+
+User asked to fix the remaining 0.0.6 issues and ship a follow-up release.
+
+- Seven stale Edge tests fixed (test-only): EQ point dot targeted by its
+  "Point 2" group (each point draws several circles); Session-tab Undo/Redo
+  scoped to `.session-page` (toolbar has its own Undo); enable/bypass by
+  checkbox role (a "Node status: Bypass" badge shares the label);
+  live-controls rewritten to the 0f32e9a7 contract (live flag commits only
+  the flag; an added Gain stays unsaved, Save still enabled, then saved).
+- `real-backend.ts` answered an abandoned request twice ("Route is already
+  handled"), failing session-file/export under full-suite load; now answers once.
+- Five tests wrote screenshots into `docs/plans/active/evidence`; now
+  `testInfo.outputPath`.
+- `create-draft-release.ps1`: missing-release check no longer fatal under
+  PowerShell 5.1; verified against GitHub for a missing (v9.9.9) and an
+  existing (v0.0.6) tag. Release tool self-tests pass.
+- Support question "device is in use by another application" (user's
+  Siege Footstep session, `0x8889000A` on render initialize, only one
+  AudioRouter running; Discord and Overwolf running). Guidance given: untick
+  exclusive control on CABLE Input, CABLE-A Input and Focusrite Speakers.
+  Product gap: the error did not say which device. `ControlError::Audio` now
+  carries `resource_ids`; multi-input render and physical capture opens
+  report the endpoint in `resourceIds` (logs unchanged, no device names);
+  the UI names the device from the last device list with the exclusive-mode
+  remedy. Rust unit test and `backend.test.ts` regression added.
+
+Full development Edge suite after the test fixes: 202 passed, 9 skipped
+(on-request), 0 failed; no tracked files modified by the run.
 
 ## Remaining qualification and next action
 

@@ -55,6 +55,29 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-03 — Bump versions by package name, never by a bare version string.**
+  Evidence: [0.0.7 release evidence](docs/plans/active/evidence/2026-10-03-release-0.0.7.md).
+  Scope: release version bumps in `Cargo.lock`/`src-tauri/Cargo.lock`.
+  Consequence: replacing every `version = "0.0.6"` also bumped the
+  third-party `dtor-proc-macro`, which `--locked` builds would reject. After
+  a bump, list every changed `[[package]]` name and require only
+  `audiorouter-*` entries.
+
+- **2026-10-03 — Redirected native stderr is fatal under PowerShell 5.1 with "Stop".**
+  Evidence: [0.0.6 release evidence](docs/plans/active/evidence/2026-10-03-release-0.0.6.md),
+  `tools/release/create-draft-release.ps1`. Scope: release and tooling
+  scripts calling `gh`, `cargo` or `git` with `*>`/`2>` redirection.
+  Consequence: `gh release view … *> $null` for a not-yet-existing release
+  aborted the draft script before it built anything. Relax
+  `$ErrorActionPreference` around expected-failure native calls and decide
+  on `$LASTEXITCODE`; exercise both the missing and the existing case.
+
+- **2026-10-03 — Browser tests must write screenshots to `testInfo.outputPath`, never into `docs/`.**
+  Evidence: [0.0.6 release evidence](docs/plans/active/evidence/2026-10-03-release-0.0.6.md).
+  Scope: `ui/e2e/*.pw.ts`. Consequence: a full suite run rewrote twelve
+  committed evidence images; only on-request generators gated by an
+  environment variable (README screenshots) may write into the repository.
+
 - **2026-10-03 — A control must show the node's own saved value, never a fallback.**
   Evidence: [active plan, borrowed device picker](docs/plans/active/current.md),
   `ui/e2e/device-binding.pw.ts`. Scope: inspector selects and fields bound to

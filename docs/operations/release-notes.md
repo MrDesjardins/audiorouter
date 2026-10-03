@@ -1,5 +1,26 @@
 # AudioRouter release notes
 
+## 0.0.7 — 2026-10-03 (unsigned experimental preview)
+
+- "Device in use" now names the exact device another application holds
+  (for example "CABLE Input … is in use by another application") and says
+  how to stop apps from locking it (Windows Sound → Properties → Advanced →
+  untick exclusive control). Previously the message named only the node type.
+- The full browser test suite passes again. Seven tests that failed since
+  0.0.5 targeted the wrong element (several circles per EQ point, the Session
+  tab's Undo beside the toolbar Undo, the Bypass badge beside its checkbox)
+  or described the pre-0f32e9a7 live-flag behaviour; the live-flag test now
+  also proves an unsaved added tool is not saved with a live Bypass.
+- Browser tests no longer overwrite committed evidence screenshots.
+- The draft-release script no longer stops under Windows PowerShell 5.1 when
+  the release does not exist yet.
+
+Unsigned experimental prerelease; Windows may warn. No data migration or
+device-format change. One autosave timing test failed once and passed 20/20
+on rerun; under investigation. Real-match Duck, native Quit, combined continuity,
+spatial listening and full M08 install/hardware/accessibility/signing
+qualification remain open.
+
 ## 0.0.6 — 2026-10-03 (unsigned experimental preview)
 
 - Fix "No audio started. Choose the device for …" after choosing the device:
@@ -21,7 +42,7 @@ Unsigned experimental prerelease; Windows may warn. No data migration or
 device-format change; keep 0.0.5 and a configuration backup for rollback.
 Seven browser-harness tests (Undo/EQ history, enable/bypass label, two live
 draft checks) fail identically on 0.0.5 and are test defects under review,
-not new regressions. Real-match Duck, native Quit, combined continuity,
+not new regressions (fixed in 0.0.7). Real-match Duck, native Quit, combined continuity,
 spatial listening and full M08 install/hardware/accessibility/signing
 qualification remain open.
 
