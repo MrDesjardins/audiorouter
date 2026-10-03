@@ -88,7 +88,15 @@ validation. Do not publish reproducible dropouts or claim complete M08 evidence.
 Keep published v0.0.3 and compatible backups for rollback; older tokens need
 integration reconfiguration. No schema migration or driver install in this slice.
 
-Exact next action: finish combined source checks and prepare new local artifacts
-while the user plays; final native/fresh-install checks wait for normal closure.
+Package prepared and verified from source `240721b639d19da25805b1606a20ff43b41b4ecb`:
+`target/releases/v0.0.4-fixed/AudioRouter_0.0.4_x64-setup.exe`, matching shell,
+CLI/worker, public examples ZIP, UI, SBOM, notices, hashes and manifest.
+Examples ZIP inspected: no private configuration, token file or node_modules.
+Exact packaged fresh-install check passes 1/1: disposable database, default pipe,
+no developer access variable, consent denied then allowed, no audio device opened.
+Log: `target/release-004-fixed-fresh-install.log`. AudioRouter was closed; Siege
+PID 49376 remained. User is starting another match. Leave it alone; final quiet
+native continuity and live path-change checks wait for normal game closure.
+No tag/source push or publication yet. Package is available for local review.
 Prior detailed decisions/results are retained in the
 [superseded execution record](../archived/2026-10-02-release-repair-execution.md).

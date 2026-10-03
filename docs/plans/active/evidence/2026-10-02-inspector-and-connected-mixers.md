@@ -200,3 +200,30 @@ loopback prepares and records, but gameplay contaminates the reference, so the
 run is inconclusive. The exact contaminated temporary WAV was removed.
 User requests preparation while playing; user apps and formats remain untouched.
 Publication awaits a quiet final reference and exact packaged fresh-install test.
+
+## Prepared final package (not published)
+
+Clean source `240721b639d19da25805b1606a20ff43b41b4ecb`; Windows release build
+with `AUDIOROUTER_BUILD_ID=v0.0.4`, `tools/release/prepare-artifacts.ps1`
+output `target/releases/v0.0.4-fixed` passes. Artifact verification passes;
+examples ZIP contains committed public sources only (15 entries, directories
+included). No token/private configuration or node_modules. Stable earlier
+experimental executable remains unchanged. Build log:
+`target/release-004-fixed-package.log`.
+
+- Installer `AudioRouter_0.0.4_x64-setup.exe` SHA-256:
+  `4815AE5CCA8E39AFE6AF97946C64868DEF7C7AAACD1F3BDD915D60B8CBED6D0F`.
+- Shell `audiorouter-shell.exe`, 23,519,232 bytes, SHA-256:
+  `184F9D35479CCB60B10A36B650681F169788D0D85270FC27B8DC34DE3D1B49EE`.
+- UI index 19:51:02, shell 19:54:25 PDT; embedded input bundle
+  `index-g6aZtih7.js` contains the surround inspector string.
+
+User confirmed all three apps closed after the package was prepared. Final
+native and exact-exe fresh-install checks now proceed. No release publication.
+
+Exact packaged fresh-install test passes 1/1 (`target/release-004-fixed-fresh-install.log`):
+new database/default pipe/no developer grant, consent refusal and subsequent
+authorization verified; no real audio opened. User's AudioRouter was closed;
+RainbowSix PID 49376 remained. User then reported another match soon. Building
+is compatible with playing, but final same-cable continuity needs a quiet game
+reference. Preserve the game; publication remains held for final native checks.
