@@ -15,7 +15,7 @@ User still uses AudioRouter and requested preparation first. Leave shell PID
 61752 and Siege PID 49376 alone. No second desktop shell. Final closure request
 is pending after concrete assets are ready; Siege may stay open for first-run.
 
-## Evidence and artifacts
+## Where things stand
 
 Source/tag: 6e8148fcfcb6b4b85c47d3e007d8149b17ca2ae0 / v0.0.5.
 [Release evidence](evidence/2026-10-02-release-0.0.5.md) records commands,
