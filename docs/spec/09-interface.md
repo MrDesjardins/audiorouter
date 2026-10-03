@@ -241,6 +241,12 @@ audio readiness and explains the exact endpoint and authorization steps.
 
 ## Verification
 
+Switching node selection must remove the preceding tool's editor and timing
+controls, including while telemetry refreshes. EQ uses its frequency-response
+editor, Meter uses its signal-level inspector, and Compressor/Gate use their
+respective dynamics views. Identity footers must not share sibling React keys
+with live editors; parameter-editor hooks run unconditionally across tool kinds.
+
 Node Properties ends with a muted, selectable full Node ID and an accessible
 copy button titled "Copy node ID for API integrations". The Session tab shows
 the selected Session ID with the same controls. Copy announces a brief success

@@ -1937,6 +1937,10 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::PhysicalInput | NodeKind::PhysicalOutput, "endpointId") => {
                     valid_bounded_string(value, MAX_ENTITY_ID_BYTES)
                 }
+                // Render a 5.1/7.1 capture endpoint to stereo for headphones.
+                (NodeKind::PhysicalInput, "spatialMode") => value
+                    .as_str()
+                    .is_some_and(|mode| matches!(mode, "off" | "headphones")),
                 (NodeKind::EndpointLoopback, "defaultRole") => value.as_str().is_some_and(|role| {
                     matches!(role, "console" | "multimedia" | "communications")
                 }),
@@ -3431,6 +3435,20 @@ mod tests {
             .parameters
             .insert("endpointId".into(), serde_json::json!("x".repeat(MAX_ENTITY_ID_BYTES + 1)));
         assert!(validate_session(&session(vec![input], vec![])).is_err());
+    }
+
+    #[test]
+    fn physical_inputs_accept_only_known_spatial_modes() {
+        let mut input = node("in", NodeKind::PhysicalInput, PortDirection::Output);
+        for mode in ["off", "headphones"] {
+            input.parameters.insert("spatialMode".into(), serde_json::json!(mode));
+            assert!(validate_session(&session(vec![input.clone()], vec![])).is_ok());
+        }
+        input.parameters.insert("spatialMode".into(), serde_json::json!("speakers"));
+        assert!(validate_session(&session(vec![input.clone()], vec![])).is_err());
+        let mut output = node("out", NodeKind::PhysicalOutput, PortDirection::Input);
+        output.parameters.insert("spatialMode".into(), serde_json::json!("headphones"));
+        assert!(validate_session(&session(vec![output], vec![])).is_err());
     }
 
     #[test]

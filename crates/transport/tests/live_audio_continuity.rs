@@ -132,6 +132,10 @@ mod live {
         std::env::var("AUDIOROUTER_CONTINUITY_PRE_MIXER").as_deref() == Ok("1")
     }
 
+    fn spatial_mode() -> bool {
+        std::env::var("AUDIOROUTER_CONTINUITY_SPATIAL").as_deref() == Ok("1")
+    }
+
     /// Left channel of a float32 stereo WAV written by the recorder.
     fn wav_float32_left(path: &str) -> Vec<f32> {
         let bytes = std::fs::read(path).unwrap_or_else(|error| panic!("{path}: {error}"));
@@ -193,7 +197,7 @@ mod live {
         // `AUDIOROUTER_CONTINUITY_SOURCE=testSignal` replaces the captured
         // tone with AudioRouter's own Test Signal generator at the same
         // frequency and level (paced only by the output device).
-        let source_node = if test_signal_source() {
+        let mut source_node = if test_signal_source() {
             let mut parameters = serde_json::Map::new();
             parameters.insert("frequencyHz".into(), json!(live_tone_hz()));
             parameters.insert("levelDb".into(), json!(20.0 * f64::from(AMPLITUDE).log10()));
@@ -212,6 +216,7 @@ mod live {
                 endpoint_parameters(source),
             )
         };
+        if spatial_mode() { source_node.parameters.insert("spatialMode".into(), json!("headphones")); }
         let mut nodes = vec![source_node];
         for (index, kind) in chain.iter().enumerate() {
             let mut parameters = serde_json::Map::new();
@@ -373,18 +378,23 @@ mod live {
     fn generator(endpoint_id: String, stop: Arc<AtomicBool>) -> std::thread::JoinHandle<()> {
         std::thread::spawn(move || {
             let (_scheduling, _) = AudioServiceThreadGuard::enter();
+            let endpoint = enumerate_active_endpoints().unwrap().into_iter().find(|endpoint| endpoint.id == endpoint_id).unwrap();
+            assert!(endpoint.is_ieee_float32() && endpoint.sample_rate_hz == 48_000);
+            let channels = usize::from(endpoint.channels);
+            let spatial = spatial_mode();
             let mut render = SharedRender::open_with_headroom(&endpoint_id, 500_000).unwrap();
             eprintln!("tone render buffer: {} frames", render.buffer_frames());
             let mut next = 0_u64;
-            let mut chunk = Vec::with_capacity(4096 * 8);
+            let mut chunk = Vec::with_capacity(4096 * channels * 4);
             let mut fill = |render: &SharedRender, next: &mut u64| {
                 chunk.clear();
                 for index in *next..*next + 4096 {
                     let bytes = tone(index).to_le_bytes();
-                    chunk.extend_from_slice(&bytes);
-                    chunk.extend_from_slice(&bytes);
+                    for channel in 0..channels {
+                        chunk.extend_from_slice(if spatial && channel != 0 { &[0; 4] } else { &bytes });
+                    }
                 }
-                *next += u64::from(render.submit_bytes(&chunk, 8).unwrap());
+                *next += u64::from(render.submit_bytes(&chunk, channels * 4).unwrap());
             };
             fill(&render, &mut next);
             render.start().unwrap();
@@ -410,8 +420,12 @@ mod live {
     ) -> std::thread::JoinHandle<Recording> {
         std::thread::spawn(move || {
             let (_scheduling, _) = AudioServiceThreadGuard::enter();
-            let mut capture = SharedCapture::open(&endpoint_id, 0).unwrap();
-            let mut buffer = vec![0_u8; 48_000 * 8];
+            let endpoint = enumerate_active_endpoints().unwrap().into_iter().find(|endpoint| endpoint.id == endpoint_id).unwrap();
+            let bytes_per_frame = usize::from(endpoint.channels) * 4;
+            let mut capture = if endpoint.direction == EndpointDirection::Render {
+                SharedCapture::open_loopback(&endpoint_id).unwrap()
+            } else { SharedCapture::open(&endpoint_id, 0).unwrap() };
+            let mut buffer = vec![0_u8; 48_000 * bytes_per_frame];
             let mut recording = Recording {
                 left: Vec::with_capacity(48_000 * 120),
                 discontinuity_flags: 0,
@@ -419,7 +433,7 @@ mod live {
             capture.start().unwrap();
             while !stop.load(Ordering::Acquire) {
                 capture.wait_for_data(20).unwrap();
-                while let Some((packet, bytes)) = capture.next_packet_into(&mut buffer, 8).unwrap() {
+                while let Some((packet, bytes)) = capture.next_packet_into(&mut buffer, bytes_per_frame).unwrap() {
                     if !measuring.load(Ordering::Acquire) {
                         continue;
                     }
@@ -427,7 +441,7 @@ mod live {
                     if packet.flags & 0x1 != 0 {
                         recording.discontinuity_flags += 1;
                     }
-                    for frame in buffer[..bytes].chunks_exact(8) {
+                    for frame in buffer[..bytes].chunks_exact(bytes_per_frame) {
                         recording
                             .left
                             .push(f32::from_le_bytes(frame[..4].try_into().unwrap()));
@@ -511,7 +525,7 @@ mod live {
         let route_capture = endpoint(
             "AUDIOROUTER_CONTINUITY_ROUTE_CAPTURE_ID",
             "{0.0.1.00000000}.{06268191-5f8c-42ed-827e-d3c7a19637ed}",
-            EndpointDirection::Capture,
+            if spatial_mode() { EndpointDirection::Render } else { EndpointDirection::Capture },
         );
         let route_render = endpoint(
             "AUDIOROUTER_CONTINUITY_ROUTE_RENDER_ID",
@@ -549,6 +563,25 @@ mod live {
         let server_pipe = pipe.clone();
         let (route_capture_id, route_render_id) = (route_capture.clone(), route_render.clone());
         let server_chain = chain.clone();
+        let (timings, timing_samples) = std::sync::mpsc::sync_channel(256);
+        let timing_stop = Arc::new(AtomicBool::new(false));
+        let collector_stop = Arc::clone(&timing_stop);
+        let timing_collector = std::thread::spawn(move || {
+            let mut maxima = [Duration::ZERO; 3];
+            let mut slow = Vec::new();
+            while !collector_stop.load(Ordering::Acquire) {
+                let Ok(sample) = timing_samples.recv_timeout(Duration::from_millis(100)) else { continue; };
+                let sample: audiorouter_transport::AudioServicePassTiming = sample;
+                if !sample.running { continue; }
+                for (maximum, value) in maxima.iter_mut().zip([sample.wait, sample.dispatch, sample.service]) {
+                    *maximum = (*maximum).max(value);
+                }
+                if sample.wait + sample.dispatch + sample.service > Duration::from_millis(5) && slow.len() < 256 {
+                    slow.push(sample);
+                }
+            }
+            (maxima, slow)
+        });
         std::thread::spawn(move || {
             let mut plane = match plugin_database {
                 Some(path) => audiorouter_control::ControlPlane::with_storage(
@@ -621,10 +654,11 @@ mod live {
                 audiorouter_domain::PermissionScope::Record,
                 audiorouter_domain::PermissionScope::DeviceAdministration,
             ]);
-            let _ = audiorouter_transport::serve_control_connections_forever_with_grant(
+            let _ = audiorouter_transport::serve_control_connections_forever_observed(
                 &server_pipe,
                 plane,
                 grant,
+                Some(timings),
             );
         });
         std::thread::sleep(Duration::from_millis(300));
@@ -758,6 +792,11 @@ mod live {
         tone.join().unwrap();
         let reference = reference.join().unwrap();
         let result = result.join().unwrap();
+
+        timing_stop.store(true, Ordering::Release);
+        let (phase_maxima, slow_passes) = timing_collector.join().unwrap();
+        eprintln!("service phase maxima (wait, dispatch, pump): {phase_maxima:?}");
+        for sample in slow_passes { eprintln!("slow service pass: {sample:?}"); }
 
         eprintln!("chain: {chain:?}; audio service: {last_service}; output underruns: {last_underruns}");
         for item in diagnostics["nodeTelemetry"].as_array().into_iter().flatten() {

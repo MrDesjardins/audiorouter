@@ -54,6 +54,14 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-02 — Inspector identity footers need distinct sibling keys.**
+  Evidence: [selection regression and three-theme repair](docs/plans/active/evidence/2026-10-02-inspector-and-connected-mixers.md).
+  Scope: React tool inspector children. Consequence: giving both a live editor
+  and its Node ID footer the selected node ID as their sibling key retained
+  stale Compressor controls under EQ/Meter headings. Use distinct keys or
+  omit a redundant outer key, and regress repeated tool switching during
+  telemetry refresh; isolated panel snapshots do not detect this failure.
+
 - **2026-10-01 — Qualify a release by launching the built app as a fresh install.**
   Evidence: [active plan, release 0.0.1 permission defect](docs/plans/active/current.md),
   `crates/transport/tests/fresh_install_shell.rs`.

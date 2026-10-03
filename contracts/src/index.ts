@@ -164,7 +164,7 @@ export interface GraphCommitResult {
   idempotentReplay?: boolean;
   activation?:
     | { state: "pending"; runtime: "fake" }
-    | { state: "running"; generation: number; runtime: "fake" | "native"; native?: { state: "applied"; adapter: string } | { state: "restartRequired"; reason: string } | null };
+    | { state: "running"; generation: number; runtime: "fake" | "native"; native?: { state: "applied"; adapter: string } | { state: "restarted"; adapter: string; reason: string } | { state: "restartRequired"; reason: string } | null };
 }
 
 export interface OperationCompleted {

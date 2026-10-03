@@ -1,5 +1,7 @@
 //! Allocation-free built-in DSP primitives for M04.
 
+pub mod binaural;
+mod kemar_hrir;
 mod pitch_shift;
 pub mod restoration;
 pub mod spectral;

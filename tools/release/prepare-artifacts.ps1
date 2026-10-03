@@ -169,7 +169,21 @@ try {
         $source = if ([string]::IsNullOrWhiteSpace($package.source)) { "workspace" } else { $package.source }
         $noticeLines += "- $($package.name) $($package.version) - $license - $source"
     }
+    $noticeLines += @(
+        ""
+        "Bundled data"
+        "- Head-related impulse responses (surround to headphones) derived from the MIT Media Lab KEMAR set:"
+        "  Bill Gardner and Keith Martin, ""HRTF Measurements of a KEMAR Dummy-Head Microphone"","
+        "  MIT Media Lab Perceptual Computing Technical Report #280, 1994. Copyright 1994 MIT Media Laboratory;"
+        "  provided free with no restrictions on use, provided the authors are cited."
+        "  https://sound.media.mit.edu/resources/KEMAR.html"
+    )
     $noticeLines | Set-Content -LiteralPath (Join-Path $output "THIRD-PARTY-NOTICES.txt") -Encoding utf8
+
+    # Archive only committed example sources: private local configuration and
+    # installed dependencies are ignored and must never enter release assets.
+    & git archive --format=zip "--output=$(Join-Path $output 'audiorouter-examples.zip')" HEAD examples
+    if ($LASTEXITCODE -ne 0) { throw "tracked examples archive failed" }
 
     $files = Get-ChildItem -LiteralPath $output -File | Sort-Object Name
     $checksums = @(foreach ($file in $files) {

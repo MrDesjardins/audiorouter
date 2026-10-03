@@ -29,6 +29,14 @@ admission is bounded and never waits. Resume reopens admission only after the
 encoder accepts the new frame position. Encoder transition/finalization errors
 publish `failed`; snapshots must not continue reporting `recording`.
 
+Factory-created file encoders own a dedicated worker thread and the existing
+pooled recording queue. Routine native service passes collect bounded progress
+and failure notifications without waiting for file writes or encoding. Explicit
+Pause, Split and Stop retain their frame barriers and return the durable encoder
+outcome; Split drains pre-boundary audio before advancing the writer timeline.
+Slow storage or queue overflow fails only the affected recorder and preserves
+its recoverable prefix. No additional live-audio buffering is introduced.
+
 ## Crash durability target
 
 Checkpoint at most every second of encoded data, without adding realtime work. Following an ordinary process crash, a WAV recovery test shall lose at most the final two seconds and identify exact recoverable duration. Sudden power loss/storage hardware failure cannot have the same guarantee unless measured with the selected filesystem/durability policy; document that limit. Support both graceful shutdown and forced-termination test evidence.

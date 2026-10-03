@@ -39,6 +39,7 @@ use std::time::{Duration, Instant};
 
 pub mod os_transition;
 mod simple;
+mod threaded_recorder;
 
 use os_transition::{plan_os_transition, OsTransition};
 
@@ -435,6 +436,8 @@ fn finalized_mp3_recording(
 /// decision and will stop a session only after this method reports a finalized
 /// file. The frame is the last committed control-plane boundary.
 pub trait RecorderWorker: Send {
+    /// Shared frame/admission state for off-thread file encoders.
+    fn shared_recording_queue(&self) -> Option<Arc<RecordingQueue>> { None }
     /// Exposes the worker's preallocated queue observer for a prepared engine
     /// tap set. The control plane never invokes it from the audio callback.
     fn shared_audio_tap(&self) -> Option<Arc<dyn AudioTap>> {
@@ -615,6 +618,7 @@ impl WavRecorderWorker {
 }
 
 impl RecorderWorker for WavRecorderWorker {
+    fn shared_recording_queue(&self) -> Option<Arc<RecordingQueue>> { Some(self.queue.clone()) }
     fn committed_end_frame(&self) -> Option<u64> {
         self.queue.committed_end_frame()
     }
@@ -913,7 +917,8 @@ pub fn create_file_recorder_with_config(
             (path, Box::new(worker))
         }
     };
-    Ok((path, worker))
+    let worker = threaded_recorder::ThreadedRecorderWorker::new(worker, config.maximum_chunks_per_pass)?;
+    Ok((path, Box::new(worker)))
 }
 
 type SegmentedWavFactory = Box<dyn FnMut(u32) -> Result<std::fs::File, RecordingError> + Send>;
@@ -1136,6 +1141,7 @@ impl SegmentedWavRecorderWorker {
 }
 
 impl RecorderWorker for SegmentedWavRecorderWorker {
+    fn shared_recording_queue(&self) -> Option<Arc<RecordingQueue>> { Some(self.queue.clone()) }
     fn committed_end_frame(&self) -> Option<u64> {
         self.queue.committed_end_frame()
     }
@@ -1676,6 +1682,7 @@ impl StreamingFlacRecorderWorker {
 }
 
 impl RecorderWorker for StreamingFlacRecorderWorker {
+    fn shared_recording_queue(&self) -> Option<Arc<RecordingQueue>> { Some(self.queue.clone()) }
     fn committed_end_frame(&self) -> Option<u64> {
         self.queue.committed_end_frame()
     }
@@ -1904,6 +1911,7 @@ impl Mp3RecorderWorker {
 }
 
 impl RecorderWorker for Mp3RecorderWorker {
+    fn shared_recording_queue(&self) -> Option<Arc<RecordingQueue>> { Some(self.queue.clone()) }
     fn committed_end_frame(&self) -> Option<u64> {
         self.queue.committed_end_frame()
     }
@@ -5199,6 +5207,12 @@ pub struct ClientGrant {
     device_consent: bool,
 }
 
+fn caller_can_restart_devices(grant: &ClientGrant, consent: bool) -> bool {
+    grant.allows(PermissionScope::SessionControl)
+        && (grant.allows(PermissionScope::DeviceAdministration)
+            || (grant.accepts_device_consent() && consent))
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ClientRole {
     Observer,
@@ -5400,6 +5414,8 @@ pub struct AudioServiceStats {
     pub passes: u64,
     pub late_gaps: u64,
     pub max_gap_micros: u64,
+    /// Internal phase probe, excluded from the application diagnostics contract.
+    pub recorder_drain_micros: u64,
     last_pass: Option<std::time::Instant>,
 }
 
@@ -5537,6 +5553,9 @@ pub struct ControlPlane {
     session_import_plans: HashMap<EntityId, (Session, Instant)>,
     next_session_import_plan: u64,
     active_idempotency_scope: Option<String>,
+    /// Authority for nested device preparation in a graph edit. None denotes
+    /// a trusted internal call; adapter dispatch always supplies the grant.
+    active_device_restart_allowed: Option<bool>,
     endpoint_monitor: Option<audiorouter_windows_audio::EndpointMonitor>,
     /// Changes observed by read-only inventory but not yet handled at a
     /// mutating native lifecycle boundary. Keeping these pending prevents a
@@ -5935,6 +5954,12 @@ fn session_virtual_capture_bus_ids(session: &Session) -> Vec<EntityId> {
         .collect()
 }
 
+/// Whether a Physical Input renders its 5.1/7.1 capture to headphones.
+fn node_spatial_headphones(node: &audiorouter_domain::Node) -> bool {
+    node.kind == NodeKind::PhysicalInput
+        && node.parameters.get("spatialMode").and_then(Value::as_str) == Some("headphones")
+}
+
 /// Preserve prepared transport identities during live flag changes. Silent
 /// sources/sinks keep draining; matrices silence every outgoing branch.
 fn normalize_live_path_flags(session: &mut Session, inputs: &[EntityId], outputs: &[EntityId]) {
@@ -5973,7 +5998,7 @@ fn reject_endpoint_feedback(session: &Session, returns: &[(String, String)]) -> 
                 let Some(node) = session.nodes.iter().find(|node| node.id == edge.destination_node) else { continue };
                 if node.kind == NodeKind::PhysicalOutput && node.enabled && !node.bypass {
                     if let Some(render) = node.parameters.get("endpointId").and_then(Value::as_str) {
-                        if (source.kind == NodeKind::EndpointLoopback && render == capture)
+                        if ((source.kind == NodeKind::EndpointLoopback || node_spatial_headphones(source)) && render == capture)
                             || returns.iter().any(|(r, c)| r == render && c == capture)
                         {
                             return Err(ControlError::InvalidRequest(format!(
@@ -6195,6 +6220,7 @@ impl ControlPlane {
             session_import_plans: HashMap::new(),
             next_session_import_plan: 1,
             active_idempotency_scope: None,
+            active_device_restart_allowed: None,
             endpoint_monitor: None,
             pending_endpoint_changes: Vec::new(),
             audio_service: AudioServiceStats::default(),
@@ -6570,6 +6596,8 @@ impl ControlPlane {
                 .collect::<Result<Vec<_>, _>>()?,
         };
         let mut source_channels = Vec::with_capacity(source_node_ids.len());
+        // Per source: render a 5.1/7.1 capture to headphones (stereo).
+        let mut binaural_sources = Vec::with_capacity(source_node_ids.len());
         for (node_id, binding) in source_node_ids.iter().zip(bindings.iter().copied()) {
             let node = session
                 .nodes
@@ -6599,6 +6627,34 @@ impl ControlPlane {
                             "a Network Receive node plays mono or stereo audio".into(),
                         ));
                     }
+                }
+                (NodeKind::PhysicalInput, NativeMultiInputSourceBinding::Physical(endpoint))
+                    if node_spatial_headphones(node) =>
+                {
+                    if !endpoint.is_ieee_float32()
+                        || endpoint.sample_rate_hz != audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ
+                        || channels != 2
+                    {
+                        return Err(ControlError::InvalidRequest(format!(
+                            "{}: surround to headphones needs a 48 kHz float capture device",
+                            node.name
+                        )));
+                    }
+                    if !matches!(endpoint.channels, 6 | 8)
+                        || audiorouter_dsp::binaural::BinauralRenderer::new(
+                            usize::from(endpoint.channels),
+                            endpoint.channel_mask,
+                        )
+                        .is_err()
+                    {
+                        return Err(ControlError::InvalidRequest(format!(
+                            "{}: surround to headphones needs a 5.1 or 7.1 device, but the selected device has {} channel(s). Set the game's playback device to 7.1 in Windows Sound settings (Configure speakers), or turn surround off for this input",
+                            node.name, endpoint.channels
+                        )));
+                    }
+                    binaural_sources.push(true);
+                    source_channels.push(channels);
+                    continue;
                 }
                 (NodeKind::PhysicalInput, NativeMultiInputSourceBinding::Physical(endpoint)) => {
                     if endpoint.direction != audiorouter_windows_audio::EndpointDirection::Capture
@@ -6647,6 +6703,7 @@ impl ControlPlane {
                     ));
                 }
             }
+            binaural_sources.push(false);
             source_channels.push(channels);
         }
         let mixer = audiorouter_engine::RealtimeMixerFanout::from_paths(
@@ -6667,7 +6724,7 @@ impl ControlPlane {
         }
         let mut capture_clients = Vec::with_capacity(bindings.len());
         let mut application_sources = Vec::new();
-        for binding in bindings.iter().copied() {
+        for (binding, binaural) in bindings.iter().copied().zip(binaural_sources.iter().copied()) {
             match binding {
                 NativeMultiInputSourceBinding::Network(node) => capture_clients.push(
                     audiorouter_windows_audio::MultiInputCaptureSource::Network(
@@ -6684,13 +6741,32 @@ impl ControlPlane {
                         .endpoint_monitor
                         .as_mut()
                         .expect("endpoint monitor initialized above");
-                    match audiorouter_windows_audio::SharedCapture::open_refreshed_bound_with_retry(
-                        monitor,
-                        endpoint,
-                        buffer_duration_100ns,
-                        max_attempts,
-                        retry_delay_ms,
-                    ) {
+                    let opened = if endpoint.direction == audiorouter_windows_audio::EndpointDirection::Render {
+                        audiorouter_windows_audio::SharedCapture::open_loopback(&endpoint.id)
+                    } else {
+                        audiorouter_windows_audio::SharedCapture::open_refreshed_bound_with_retry(
+                            monitor,
+                            endpoint,
+                            buffer_duration_100ns,
+                            max_attempts,
+                            retry_delay_ms,
+                        )
+                    };
+                    match opened {
+                        Ok(client) if binaural => capture_clients.push(
+                            audiorouter_windows_audio::MultiInputCaptureSource::Binaural(
+                                audiorouter_windows_audio::BinauralCapture::new(
+                                    client,
+                                    usize::from(endpoint.channels),
+                                    endpoint.channel_mask,
+                                )
+                                .map_err(|error| {
+                                    ControlError::InvalidRequest(format!(
+                                        "surround to headphones cannot use this device layout: {error:?}"
+                                    ))
+                                })?,
+                            ),
+                        ),
                         Ok(client) => capture_clients.push(
                             audiorouter_windows_audio::MultiInputCaptureSource::Physical(client),
                         ),
@@ -6872,6 +6948,7 @@ impl ControlPlane {
     /// service only skips a worker whose session generation is not running.
     /// Returns the number of workers serviced.
     pub fn service_running_native_audio(&mut self, now: std::time::Instant) -> usize {
+        self.audio_service.recorder_drain_micros = 0;
         let running = |plane: &Self, session: &Option<EntityId>| -> Option<(EntityId, u64)> {
             let session = session.as_ref()?;
             plane
@@ -9427,6 +9504,7 @@ impl ControlPlane {
     /// control thread. The realtime tap remains a bounded enqueue-only path;
     /// file encoding and flushing never run in the audio callback.
     fn drain_attached_recorders(&mut self) -> Result<usize, ControlError> {
+        let begin = std::time::Instant::now();
         let mut drained = 0usize;
         for worker in self.recorder_workers.values_mut() {
             let count = worker
@@ -9448,6 +9526,8 @@ impl ControlPlane {
                 }
             }
         }
+        self.audio_service.recorder_drain_micros = self.audio_service.recorder_drain_micros
+            .saturating_add(u64::try_from(begin.elapsed().as_micros()).unwrap_or(u64::MAX));
         Ok(drained)
     }
 
@@ -10376,6 +10456,7 @@ impl ControlPlane {
             session_import_plans: HashMap::new(),
             next_session_import_plan: 1,
             active_idempotency_scope: None,
+            active_device_restart_allowed: None,
             endpoint_monitor: None,
             pending_endpoint_changes: Vec::new(),
             audio_service: AudioServiceStats::default(),
@@ -13170,6 +13251,20 @@ impl ControlPlane {
         if self.native_multi_input_worker_session.as_ref() == Some(session_id)
             && self.native_multi_input_worker.is_some()
         {
+            // The surround renderer is chosen when the capture opens.
+            let worker = self.native_multi_input_worker.as_ref().expect("attached above");
+            let current = self.get_session(session_id)?;
+            for (index, node_id) in worker.input_node_ids().iter().enumerate() {
+                if current.nodes.iter().any(|node| {
+                    node.id == *node_id
+                        && node.kind == NodeKind::PhysicalInput
+                        && node_spatial_headphones(node) != worker.capture_is_binaural(index)
+                }) {
+                    return Err(ControlError::InvalidRequest(
+                        "surround to headphones changed; stop and press Play to apply".into(),
+                    ));
+                }
+            }
             let mut session = if flags_only {
                 self.adapt_native_paths_session(self.get_session(session_id)?.clone())?
             } else {
@@ -13232,6 +13327,65 @@ impl ControlPlane {
             return Ok(Some("multi-input"));
         }
         Ok(None)
+    }
+
+    /// A saved change the playing multi-path route could not absorb (new
+    /// sources, outputs or path layout). The commit already started a new
+    /// runtime generation, which the old worker does not serve: left alone,
+    /// the service stops pumping it and the route falls silent. Restart it
+    /// with the saved graph (Stop, detach, prepare, Play), as the desktop
+    /// Play does. While a recording runs, a restart would split the take, so
+    /// the old route keeps playing instead and Stop/Play stays the user's
+    /// choice. `None` when no multi-path worker plays this session.
+    #[cfg(windows)]
+    fn restart_or_keep_multi_input_route(
+        &mut self,
+        session_id: &EntityId,
+        generation: u64,
+    ) -> Option<Result<u64, ControlError>> {
+        if self.native_multi_input_worker_session.as_ref() != Some(session_id)
+            || self.native_multi_input_worker.is_none()
+        {
+            return None;
+        }
+        if self.session_is_recording(session_id)
+            || self.active_device_restart_allowed == Some(false)
+        {
+            self.native_multi_input_applied_generation = Some(generation);
+            return None;
+        }
+        Some((|| {
+            self.session_stop(session_id)?;
+            self.detach_native_multi_input_worker()?;
+            self.dispatch_native_paths_prepare(Some(json!({ "sessionId": session_id.as_str() })))?;
+            let started = self.session_start(session_id)?;
+            Ok(started.get("generation").and_then(Value::as_u64).unwrap_or(generation))
+        })())
+    }
+
+    #[cfg(not(windows))]
+    fn restart_or_keep_multi_input_route(
+        &mut self,
+        _session_id: &EntityId,
+        _generation: u64,
+    ) -> Option<Result<u64, ControlError>> {
+        None
+    }
+
+    /// Whether any recorder of the session is taking a recording.
+    fn session_is_recording(&self, session_id: &EntityId) -> bool {
+        let node_recording = self.get_session(session_id).is_ok_and(|session| {
+            session.nodes.iter().any(|node| {
+                node.kind == NodeKind::Recorder && self.recorder_node_workers.contains_key(&node.id)
+            })
+        });
+        node_recording
+            || self.recorders.get(session_id).is_some_and(|recorder| {
+                matches!(
+                    recorder.state(),
+                    RecorderState::Recording | RecorderState::Paused | RecorderState::Stopping
+                )
+            })
     }
 
     /// Expose Play/Stop for Test Signal and Audio File nodes that feed the
@@ -14025,6 +14179,7 @@ impl ControlPlane {
             };
             #[cfg(not(windows))]
             let network: Result<(), ControlError> = Ok(());
+            let mut generation = generation;
             let native = match network.and_then(|()| self.republish_running_native_graph(
                 &result.session_id,
                 generation,
@@ -14032,10 +14187,25 @@ impl ControlPlane {
             )) {
                 Ok(Some(adapter)) => json!({ "state": "applied", "adapter": adapter }),
                 Ok(None) => Value::Null,
-                Err(error) => json!({ "state": "restartRequired", "reason": control_error_message(&error) }),
+                Err(error) => {
+                    let reason = control_error_message(&error);
+                    match self.restart_or_keep_multi_input_route(&result.session_id, generation) {
+                        Some(Ok(restarted)) => {
+                            generation = restarted;
+                            json!({ "state": "restarted", "adapter": "multi-input", "reason": reason })
+                        }
+                        Some(Err(restart)) => json!({
+                            "state": "restartRequired",
+                            "reason": format!("{reason}; automatic restart failed: {}", control_error_message(&restart)),
+                        }),
+                        None => json!({ "state": "restartRequired", "reason": reason }),
+                    }
+                }
             };
+            let still_running = self.runtimes.get(&result.session_id)
+                .is_some_and(|runtime| runtime.state() == RuntimeState::Running);
             response["activation"] = json!({
-                "state": "running",
+                "state": if still_running { "running" } else { "stopped" },
                 "generation": generation,
                 "runtime": if native.is_null() { "fake" } else { "native" },
                 "native": native,
@@ -14913,7 +15083,11 @@ impl ControlPlane {
                 .filter(|client| !client.is_empty())
                 .map(str::to_owned),
         );
+        let previous_restart = self.active_device_restart_allowed.replace(
+            caller_can_restart_devices(grant, self.device_access_allowed),
+        );
         let response = self.dispatch(request);
+        self.active_device_restart_allowed = previous_restart;
         self.active_idempotency_scope = previous_scope;
         response
     }
@@ -17962,14 +18136,20 @@ impl ControlPlane {
         }) {
             let binding = match node.kind {
                 NodeKind::PhysicalInput => {
-                    let endpoint =
-                        endpoint_for(node, audiorouter_windows_audio::EndpointDirection::Capture)?;
+                    // Surround to headphones may loopback-capture a 5.1/7.1
+                    // playback device, such as a virtual cable set to 7.1.
+                    let endpoint = match endpoint_for(node, audiorouter_windows_audio::EndpointDirection::Capture) {
+                        Err(_) if node_spatial_headphones(node) => {
+                            endpoint_for(node, audiorouter_windows_audio::EndpointDirection::Render)?
+                        }
+                        result => result?,
+                    };
                     let node_channels = node
                         .ports
                         .iter()
                         .find(|port| port.direction == PortDirection::Output)
                         .map(|port| port.channels);
-                    if endpoint.channels == 1 && node_channels == Some(2) {
+                    if endpoint.channels == 1 && node_channels == Some(2) && !node_spatial_headphones(node) {
                         mono_nodes.push(node.id.clone());
                     }
                     NativeMultiInputSourceBinding::Physical(endpoint)
@@ -20458,6 +20638,44 @@ mod tests {
     }
 
     #[test]
+    fn surround_loopback_input_cannot_play_back_into_its_own_device() {
+        let mut session = feedback_fixture();
+        // A 7.1 playback device captured by loopback and rendered for headphones.
+        session.nodes[0].parameters.insert("endpointId".into(), json!("cable-b-input"));
+        session.nodes[0].parameters.insert("spatialMode".into(), json!("headphones"));
+        assert!(reject_endpoint_feedback(&session, &[]).is_err());
+        session.nodes[3].parameters.insert("endpointId".into(), json!("headphones"));
+        reject_endpoint_feedback(&session, &[]).unwrap();
+        // An ordinary input naming the same ID is a recording device, not a loop.
+        session.nodes[0].parameters.insert("spatialMode".into(), json!("off"));
+        session.nodes[3].parameters.insert("endpointId".into(), json!("cable-b-input"));
+        reject_endpoint_feedback(&session, &[]).unwrap();
+    }
+
+    #[test]
+    fn automatic_route_restart_requires_device_and_lifecycle_authority() {
+        assert!(!caller_can_restart_devices(&ClientGrant::with_scopes([
+            PermissionScope::GraphWrite, PermissionScope::SessionControl,
+        ]), true));
+        assert!(!caller_can_restart_devices(&ClientGrant::with_scopes([
+            PermissionScope::DeviceAdministration,
+        ]), false));
+        assert!(caller_can_restart_devices(&ClientGrant::with_scopes([
+            PermissionScope::DeviceAdministration, PermissionScope::SessionControl,
+        ]), false));
+        let desktop = ClientGrant::for_desktop_shell();
+        assert!(!caller_can_restart_devices(&desktop, false));
+        assert!(caller_can_restart_devices(&desktop, true));
+        let mut plane = ControlPlane::default();
+        plane.active_device_restart_allowed = Some(false);
+        let response = plane.dispatch_authorized(JsonRpcRequest {
+            jsonrpc: "2.0".into(), id: Some(json!(1)), method: "system.diagnostics".into(), params: None,
+        }, &ClientGrant::with_scopes([PermissionScope::Read]));
+        assert!(response.error.is_none(), "{:?}", response.error);
+        assert_eq!(plane.active_device_restart_allowed, Some(false));
+    }
+
+    #[test]
     fn feedback_selection_can_be_saved_only_after_review_but_not_prepared() {
         let mut candidate = feedback_fixture();
         candidate.nodes[0].kind = NodeKind::EndpointLoopback;
@@ -20828,7 +21046,9 @@ mod tests {
     /// succeeds, keeps a playable file up to that point and says why.
     #[test]
     fn one_click_recording_survives_dropped_and_repeated_blocks_and_stays_playable() {
-        for case in ["short stall", "dropped block", "long stall", "repeated block"] {
+        // Stalling the control thread no longer stalls the encoder. Deliberate
+        // blocked-storage overflow is qualified in threaded_recorder tests.
+        for case in ["short stall", "dropped block", "repeated block"] {
             let root = std::env::temp_dir().join(format!("audiorouter-gap-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
             std::fs::create_dir_all(&root).unwrap();
             let mut graph = session();
@@ -20871,8 +21091,6 @@ mod tests {
                 // ~1 s with no service pass: within the queue.
                 "short stall" => send(&mut plane, &mut frame, 375, false),
                 "dropped block" => frame += 128,
-                // ~4 s with no service pass: the queue overflows.
-                "long stall" => send(&mut plane, &mut frame, 1500, false),
                 _ => {
                     frame -= 128;
                     send(&mut plane, &mut frame, 1, true);
@@ -27615,6 +27833,11 @@ mod tests {
             .copy_from_slice(&[0.1, 0.2]);
         taps.on_processed_block(0, &first_block);
 
+        // Idle audio is not retained. Start is the admission boundary.
+        let queue = plane.recorder_workers[&original.id].shared_recording_queue().unwrap();
+        assert_eq!(queue.len(), 0);
+        assert_eq!(queue.overruns(), 0);
+
         for (id, method, frame) in [
             (1, "recorders.arm", None),
             (2, "recorders.start", Some(0)),
@@ -27638,6 +27861,7 @@ mod tests {
                 params: Some(params),
             });
             assert!(response.result.is_some(), "{method}: {response:?}");
+            if method == "recorders.start" { taps.on_processed_block(0, &first_block); }
         }
         let mut second_block = AudioBlock::new(1, 2).unwrap();
         second_block
@@ -28760,7 +28984,8 @@ mod tests {
             .unwrap()
             .copy_from_slice(&[0.25, -0.25]);
         tap.on_processed_block(0, &block);
-        assert_eq!(worker.drain_pending(1).unwrap(), 1);
+        // Service reads progress without waiting; Finalize is the durable barrier.
+        worker.drain_pending(1).unwrap();
         assert_eq!(worker.finalize(2).unwrap().state, "completed");
         assert_eq!(
             audiorouter_recording::inspect_flac_file(&path)
@@ -28809,7 +29034,7 @@ mod tests {
             .unwrap()
             .copy_from_slice(&[0.25, -0.25, 0.1, -0.1]);
         tap.on_processed_block(0, &block);
-        assert_eq!(worker.drain_pending(1).unwrap(), 1);
+        worker.drain_pending(1).unwrap();
         assert_eq!(worker.finalize(4).unwrap().state, "completed");
         assert_eq!(
             path.extension().and_then(|extension| extension.to_str()),

@@ -2,6 +2,20 @@
 
 ## 0.0.4 — 2026-10-02 (unsigned preview)
 
+- Tool inspectors switch correctly between EQ, dynamics and Meter controls.
+- Connected Mixers support the separate microphone, game/Discord and combined
+  headphone branches without processing the same source twice.
+- File recording runs on a dedicated bounded worker so encoder/disk stalls do
+  not block routine audio service. Recording overflow preserves a playable
+  prefix and reports failure instead of silently completing a truncated take.
+- Surround to headphones is an experimental Physical Input option for 5.1/7.1
+  48 kHz float endpoints, including playback loopback, using measured KEMAR HRTFs.
+  End-to-end continuity and attended spatial listening qualification are pending.
+- Refused live multi-input graph changes can restart the route when device and
+  session permissions allow. During recording, or without those permissions,
+  the existing route continues and the API reports `restartRequired`.
+- README includes the two-minute overview video. The examples archive contains
+  public integration sources only; configure credentials locally.
 - Fixes sustained breakup when a Mixer combines physical game audio and
   application capture: application capture now uses the graph's 48 kHz rate.
 - Routine application liveness checks avoid a full Windows process inventory

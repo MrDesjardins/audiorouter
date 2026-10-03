@@ -128,7 +128,7 @@ pub fn graph_activation_log_summary(result: &serde_json::Value) -> serde_json::V
     let state = result.pointer("/activation/state").and_then(serde_json::Value::as_str)
         .filter(|state| matches!(*state, "running" | "pending"));
     let native = result.pointer("/activation/native/state").and_then(serde_json::Value::as_str)
-        .filter(|state| matches!(*state, "applied" | "restartRequired"));
+        .filter(|state| matches!(*state, "applied" | "restarted" | "restartRequired"));
     serde_json::json!({
         "revision": result.get("revision").and_then(serde_json::Value::as_u64),
         "state": state,
@@ -1030,8 +1030,34 @@ struct ControlFrame {
 /// depends on them.
 pub fn serve_control_connections_forever_with_grant(
     name: &str,
+    plane: audiorouter_control::ControlPlane,
+    grant: audiorouter_control::ClientGrant,
+) -> Result<(), TransportError> {
+    serve_control_connections_forever_observed(name, plane, grant, None)
+}
+
+/// Numeric phase timings for native continuity qualification. No client data.
+#[cfg(windows)]
+#[derive(Clone, Copy, Debug)]
+pub struct AudioServicePassTiming {
+    pub elapsed: std::time::Duration,
+    pub wait: std::time::Duration,
+    pub dispatch: std::time::Duration,
+    pub service: std::time::Duration,
+    pub recorder_drain_micros: u64,
+    pub running: bool,
+}
+
+/// Internal qualification seam; this is not an application API. The observer
+/// must use a bounded channel: full or disconnected channels drop samples.
+/// Reporting occurs after pumping, never in a DSP callback. Production uses
+/// `None`, so no timing probe runs unless explicitly supplied by a harness.
+#[cfg(windows)]
+pub fn serve_control_connections_forever_observed(
+    name: &str,
     mut plane: audiorouter_control::ControlPlane,
     grant: audiorouter_control::ClientGrant,
+    observer: Option<std::sync::mpsc::SyncSender<AudioServicePassTiming>>,
 ) -> Result<(), TransportError> {
     let _singleton = acquire_server_singleton(name)?;
     let (frames, received) = std::sync::mpsc::sync_channel::<ControlFrame>(0);
@@ -1058,13 +1084,20 @@ pub fn serve_control_connections_forever_with_grant(
         .map_err(|error| TransportError::Windows(format!("control I/O thread: {error}")))?;
     let (_scheduling, _capabilities) = audiorouter_windows_audio::AudioServiceThreadGuard::enter();
     plane.mark_audio_service_started();
+    let origin = std::time::Instant::now();
     loop {
+        let wait_start = observer.as_ref().map(|_| std::time::Instant::now());
+        let mut dispatch = std::time::Duration::ZERO;
+        let wait;
         match received.recv_timeout(AUDIO_SERVICE_INTERVAL) {
             Ok(request) => {
+                wait = wait_start.map(|start| start.elapsed()).unwrap_or_default();
+                let dispatch_start = observer.as_ref().map(|_| std::time::Instant::now());
                 let result = dispatch_control_frame(&mut plane, &grant, request.client_pid, &request.frame);
                 let _ = request.reply.send(result);
+                dispatch = dispatch_start.map(|start| start.elapsed()).unwrap_or_default();
             }
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => { wait = wait_start.map(|start| start.elapsed()).unwrap_or_default(); }
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                 return match io.join() {
                     Ok(result) => result,
@@ -1072,7 +1105,18 @@ pub fn serve_control_connections_forever_with_grant(
                 };
             }
         }
-        plane.service_running_native_audio(std::time::Instant::now());
+        let service_start = std::time::Instant::now();
+        let running = plane.service_running_native_audio(service_start) != 0;
+        if let Some(observer) = &observer {
+            let _ = observer.try_send(AudioServicePassTiming {
+                elapsed: service_start.saturating_duration_since(origin),
+                wait,
+                dispatch,
+                service: service_start.elapsed(),
+                recorder_drain_micros: plane.audio_service_stats().recorder_drain_micros,
+                running,
+            });
+        }
     }
 }
 

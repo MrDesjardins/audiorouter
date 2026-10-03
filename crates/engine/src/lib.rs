@@ -38,6 +38,7 @@ pub const MAX_DRIFT_CORRECTION_PPM: f64 = 999_999.0;
 pub const MAX_RMS_WINDOW_SAMPLES: usize = INTERNAL_SAMPLE_RATE_HZ as usize * 10;
 
 mod audio_file_source;
+mod connected_mixers;
 pub use audio_file_source::{
     decode_audio_bytes, decode_audio_file, AudioFileDecodeError, AudioFileSource, DecodedAudio,
 };
@@ -2991,8 +2992,8 @@ pub struct CompiledMixerGraph {
     output_matrix: Vec<f32>,
 }
 
-/// A prepared bounded graph where multiple sources converge through one
-/// explicit mixer, pass through an optional prepared linear processor chain,
+/// A prepared bounded graph where multiple sources converge through explicit
+/// mixers, pass through prepared processor chains,
 /// and fan out to multiple destinations. The caller owns the preallocated
 /// source, scratch, and destination blocks.
 pub struct CompiledMixerFanoutGraph {
@@ -3044,6 +3045,17 @@ struct OutputProcessorChain {
     channels: usize,
     block: RealtimeDsp<AudioBlock>,
     ready: AtomicBool,
+    /// Several authored parents converge here. All are earlier cached stages;
+    /// no recursive processing or source duplication occurs in the callback.
+    convergence: Option<CachedConvergence>,
+}
+
+struct CachedConvergence {
+    node_id: audiorouter_domain::EntityId,
+    sources: Vec<OutputBranchSource>,
+    mixer: MixerStage,
+    switch: Option<InputSwitchState>,
+    meter: BlockMeter,
 }
 
 /// A prepared bounded fan-out graph. One enabled source feeds up to eight
@@ -3422,6 +3434,27 @@ impl CompiledMixerFanoutGraph {
         for chain in &self.output_chains { chain.ready.store(false, Ordering::Release); }
         for chain in &self.output_chains {
             let processed = chain.block.try_with(|block| {
+                if let Some(convergence) = &chain.convergence {
+                    block.clear();
+                    let fade = convergence.switch.as_ref().map(|switch| switch.advance(block.frames()));
+                    for (index, source) in convergence.sources.iter().enumerate() {
+                        let (start, end) = match (&convergence.switch, fade) {
+                            (Some(switch), Some((start, end))) => (
+                                InputSwitchState::gain(switch.sides[index], start),
+                                InputSwitchState::gain(switch.sides[index], end)),
+                            _ => (1.0, 1.0),
+                        };
+                        // Unavailable parents contribute silence for this quantum.
+                        if let Some(result) = self.with_output_source(*source, mixed, |source| {
+                            convergence.mixer.mix_input_ramped(block, index, source, start, end)
+                        }) {
+                            if result.is_err() { return Some(Err(BlockError::ShapeMismatch)); }
+                        }
+                    }
+                    block.sanitize_non_finite();
+                    convergence.meter.observe(block);
+                    return Some(Ok::<_, BlockError>(()));
+                }
                 self.with_output_source(chain.source, mixed, |source| {
                     block.map_from(source, &chain.entry_matrix)?;
                     chain.graph.process(block);
@@ -3533,6 +3566,9 @@ impl CompiledMixerFanoutGraph {
     /// Publish source, output and Mixer levels for Duck triggers; tool chains
     /// link their own stage meters when compiled.
     fn link_node_levels(&self, session_id: &str) {
+        for convergence in self.output_chains.iter().filter_map(|chain| chain.convergence.as_ref()) {
+            convergence.meter.publish_to(node_level_for(session_id, convergence.node_id.as_str()));
+        }
         for (node_id, meter) in self.input_node_ids.iter().zip(&self.input_meters)
             .chain(self.output_node_ids.iter().zip(&self.output_meters))
             .chain(self.mixer_node_id.iter().zip(std::iter::once(&self.mixer_meter)))
@@ -3562,6 +3598,10 @@ impl CompiledMixerFanoutGraph {
         }
         if self.mixer_node_id.as_ref() == Some(node_id) {
             return Some(self.mixer_meter.snapshot());
+        }
+        if let Some(convergence) = self.output_chains.iter().filter_map(|chain| chain.convergence.as_ref())
+            .find(|convergence| &convergence.node_id == node_id) {
+            return Some(convergence.meter.snapshot());
         }
         self.processing_graph
             .iter()
@@ -3613,7 +3653,9 @@ impl CompiledMixerFanoutGraph {
         self.input_chains
             .iter()
             .flatten()
-            .find_map(|chain| chain.graph.test_signal_source_for_node(node_id))
+            .map(|chain| &chain.graph)
+            .chain(self.output_chains.iter().map(|chain| &chain.graph))
+            .find_map(|graph| graph.test_signal_source_for_node(node_id))
     }
 
     /// Transport handle for an Audio File feeding a Mixer input.
@@ -3621,7 +3663,9 @@ impl CompiledMixerFanoutGraph {
         self.input_chains
             .iter()
             .flatten()
-            .find_map(|chain| chain.graph.audio_file_source_for_node(node_id))
+            .map(|chain| &chain.graph)
+            .chain(self.output_chains.iter().map(|chain| &chain.graph))
+            .find_map(|graph| graph.audio_file_source_for_node(node_id))
     }
 
     /// Learned noise profile of a learning Denoise node in any chain.
@@ -3969,6 +4013,14 @@ impl RealtimeMixerFanout {
             graph.privacy_mute.set_muted(path.graph.privacy_mute.is_muted());
             if let (Some(next), Some(previous)) = (&graph.input_switch, &path.graph.input_switch) {
                 next.position.store(previous.position.load(Ordering::Relaxed), Ordering::Relaxed);
+            }
+            for next in graph.output_chains.iter().filter_map(|chain| chain.convergence.as_ref()) {
+                if let Some(previous) = path.graph.output_chains.iter().filter_map(|chain| chain.convergence.as_ref())
+                    .find(|previous| previous.node_id == next.node_id) {
+                    if let (Some(next), Some(previous)) = (&next.switch, &previous.switch) {
+                        next.position.store(previous.position.load(Ordering::Relaxed), Ordering::Relaxed);
+                    }
+                }
             }
             path.graph = graph;
         }
@@ -6308,6 +6360,7 @@ impl OutputBranchCompiler<'_> {
             block: RealtimeDsp::new(AudioBlock::new(usize::from(input.channels), PROCESSING_QUANTUM_FRAMES)
                 .map_err(|_| GraphCompileError::UnsupportedTopology)?),
             ready: AtomicBool::new(false),
+            convergence: None,
         });
         for child in children {
             self.compile(child, OutputBranchSource::Chain(index), &node.id, &output.name, output.channels)?;
@@ -6931,8 +6984,8 @@ pub fn independent_path_sessions(
 }
 
 /// Compile every independent path of a session for one native multi-input
-/// worker. A path is one source, or one Mixer/Input Switch of sources, then
-/// an optional linear chain, then 1..8 outputs. Paths never exchange audio:
+/// worker. A path is one connected DAG of sources, prepared tools and explicit
+/// Mixers/Input Switches, then 1..8 outputs. Paths never exchange audio:
 /// summing needs an explicit Mixer. An unsupported path is rejected with
 /// its position and first node named; no path falls back to a shared mix.
 /// Built-in processors work at any channel count, so a chain's width is set
@@ -7061,6 +7114,16 @@ pub fn compile_native_paths_with_plugins_and_audio(
                 component.nodes.first().map_or("", |node| node.name.as_str())
             ))
         };
+        let convergence_count = component.nodes.iter()
+            .filter(|node| matches!(node.kind, NodeKind::Mixer | NodeKind::InputSwitch)).count();
+        if convergence_count > 1 {
+            paths.push(connected_mixers::compile(component, generation, plugins, audio_media)
+                .map_err(|error| match error {
+                    GraphCompileError::UnsupportedTopology => unsupported(),
+                    other => other,
+                })?);
+            continue;
+        }
         let mixers = component
             .nodes
             .iter()
@@ -14744,4 +14807,3 @@ mod tests {
         assert_eq!(block.channel(1).unwrap(), &[-0.5, -0.25]);
     }
 }
-

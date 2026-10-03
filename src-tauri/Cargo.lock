@@ -249,6 +249,7 @@ name = "audiorouter-windows-audio"
 version = "0.0.4"
 dependencies = [
  "audiorouter-domain",
+ "audiorouter-dsp",
  "audiorouter-engine",
  "audiorouter-protocol",
  "crossbeam-queue",

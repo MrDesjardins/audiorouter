@@ -7,6 +7,7 @@ rust-version.workspace = true
 
 [dependencies]
 audiorouter-domain = { path = "../domain" }
+audiorouter-dsp = { path = "../dsp" }
 audiorouter-engine = { path = "../engine" }
 audiorouter-protocol = { path = "../protocol" }
 memmap2.workspace = true

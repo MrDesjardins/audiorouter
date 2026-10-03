@@ -663,7 +663,10 @@ impl RecordingQueue {
     /// Acquire one preallocated chunk for a realtime producer. The returned
     /// chunk is not visible to consumers until `try_commit` succeeds.
     pub fn try_acquire(&self) -> Option<RecordingChunk> {
-        self.free_chunks.as_ref()?.pop()
+        let free = self.free_chunks.as_ref()?;
+        let chunk = free.pop();
+        if chunk.is_none() { self.overruns.fetch_add(1, Ordering::Relaxed); }
+        chunk
     }
 
     /// Commit an acquired chunk without allocating. A full active queue
@@ -3485,6 +3488,16 @@ mod tests {
             RecordingQueue::new(usize::MAX),
             Err(RecordingError::InvalidQueueCapacity)
         ));
+    }
+
+    #[test]
+    fn pooled_queue_counts_a_dropped_tail_when_no_chunk_is_free() {
+        let queue = RecordingQueue::new_pooled(1, 1, 128).unwrap();
+        let chunk = queue.try_acquire().unwrap();
+        assert!(queue.try_acquire().is_none());
+        assert_eq!(queue.overruns(), 1);
+        queue.recycle(chunk);
+        assert!(queue.try_acquire().is_some());
     }
 
     #[test]

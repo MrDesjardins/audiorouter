@@ -168,8 +168,12 @@ Each ID must match exactly one active endpoint of its requested direction.
 
 A session can hold several separate paths that run together, for example a
 microphone through voice plugins to a virtual cable, and a game cable through
-an EQ to the headphones. A path is one source (or one Mixer of sources), then
-a single chain of tools, then one or more outputs. A source's final tool before
+an EQ to the headphones. Connected Mixers can combine explicit branches in
+stages, with tools between them and separate outputs before or after each mix.
+For example, game + Discord can feed a recording output and a second Mixer
+that adds the microphone for headphones; the microphone-only cable stays
+separate. Each shared tool runs once and each Mixer keeps its input volumes.
+A source's final tool before
 a Mixer may also feed direct outputs: its processed signal is reused before
 Mixer input gain, without the other mixed sources. Paths never mix unless you
 add a Mixer. Choose each Input device and Output device node's device in its
@@ -690,6 +694,19 @@ louder than the trigger level, this audio goes down by the set amount. It comes
 back after Hold and Release. Drag the orange line in its live view, or use the
 suggested level calculated from your voice and room noise. A dashed violet
 line on the canvas shows which node triggers it.
+
+## Surround game audio on headphones
+
+A game sends 5.1/7.1 only to a playback device that Windows reports as 5.1/7.1.
+In **Sound settings → More sound settings → Playback**, select the device the
+game plays to (for example **CABLE-B Input**), choose **Configure**, pick
+**7.1 Surround** and finish the wizard; the device must stay at 48 kHz. Restart
+the game so it opens 7.1. In AudioRouter, select the game's input node, set
+**Spatial audio** to **Surround to headphones**, then choose that playback
+device from the **Loopback** entries of the capture list, and press Play. Each
+speaker is placed around your head with a measured dummy head (MIT KEMAR); the
+rest of the route stays stereo. A 2-channel device is refused with a message
+naming the node. Changing the mode while playing needs Stop and Play.
 
 ## Properties status and timing
 

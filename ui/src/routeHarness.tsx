@@ -178,6 +178,8 @@ const previewBackend: UiBackend = {
     return [
       { id: "capture-preview", name: "Preview Microphone", direction: "capture", state: "active", defaultRoles: [], format, periods },
       { id: "render-preview", name: "Preview Output", direction: "render", state: "active", defaultRoles: [], format, periods },
+      // A playback device configured as 7.1, offered as a surround loopback source.
+      { id: "surround-preview", name: "Preview Game (7.1)", direction: "render", state: "active", defaultRoles: [], format: { ...format, channels: 8, bytesPerFrame: 32 }, periods },
     ];
   },
   async beginAudioUpload(fileName, sizeBytes) {

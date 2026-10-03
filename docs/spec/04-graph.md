@@ -50,6 +50,17 @@ Node: desired enable/bypass/mute fields are separate from observed `ready`, `una
 
 ## Acceptance examples
 
+Connected native Mixers retain their authored boundaries: game and call inputs
+may feed one Mixer, whose output feeds both a recording destination and a second
+Mixer with the processed microphone. The microphone-only destination receives
+no game/call audio. Shared upstream processors execute once per quantum and
+their cached output is reused by all branches. Each Mixer retains its own
+input volume and silent enabled/bypass semantics. Compilation prepares bounded
+buffers and a topological schedule before activation; it never flattens away
+nonlinear processors or implicitly opens another capture stream. A live edit
+that changes prepared source or destination identities requires Stop/Play;
+parameter edits retaining those identities can replace the compiled schedule.
+
 A mic split into three branches opens one capture stream. A cycle introduced by a virtual bus is rejected even if edges belong to different sessions. Disabling an EQ passes dry; disabling a mixer silences it. A transaction removing an EQ and adding a compatible replacement appears as one new revision, never an intermediate broken graph. Concurrent changes from base revision N result in one commit and one conflict. Imported missing plugins remain visible and silence protected outputs until resolved or deliberately bypassed.
 
 For independently prepared native paths, a deliberately disabled source and

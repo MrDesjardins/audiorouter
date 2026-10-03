@@ -30,7 +30,7 @@ as VB-Cable is needed only when routing into another app.
 
 | Video | Watch |
 | --- | --- |
-| AudioRouter overview | Coming soon — video placeholder |
+| AudioRouter overview (2 minutes) | [Watch on YouTube](https://youtu.be/IHitHqpi87s) |
 | Your first route | Coming soon — video placeholder |
 | Streaming audio between two PCs | Coming soon — video placeholder |
 

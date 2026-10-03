@@ -3,6 +3,30 @@ import { demoSession } from "../src/fixtures";
 import { appendLibraryNode } from "../src/draft";
 
 for (const theme of ["dark", "light", "high-contrast"]) {
+  test(`tool properties stay isolated while switching in ${theme}`, async ({ page }, info) => {
+    const session = ["parametricEq", "compressor", "gate", "meter"].reduce((graph, kind) => appendLibraryNode(graph, kind as Parameters<typeof appendLibraryNode>[1]), demoSession);
+    await page.addInitScript(({ session, theme }) => {
+      Object.assign(window, { __routeFixtureSession: session, __routeFixtureRunning: true });
+      localStorage.setItem("audiorouter.ui.theme", theme);
+    }, { session, theme });
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.goto("/route-harness.html");
+    for (const kind of ["compressor", "parametricEq", "meter", "gate", "parametricEq", "compressor", "meter"]) {
+      await page.getByTestId(`rf__node-${kind}-1`).locator(".flow-node-title").click();
+      const inspector = page.locator(".panel.inspector");
+      await expect(inspector.getByLabel("Node ID", { exact: true })).toHaveText(`${kind}-1`);
+      const dynamics = kind === "compressor" || kind === "gate";
+      await expect(inspector.locator(".dynamics-editor")).toHaveCount(dynamics ? 1 : 0);
+      await expect(inspector.getByText(/How one word is shaped by Attack/)).toHaveCount(dynamics ? 1 : 0);
+      if (!dynamics) await expect(inspector.getByRole("slider", { name: /attack|release/i })).toHaveCount(0);
+      await page.waitForTimeout(150);
+      await expect(inspector.getByLabel("Node ID", { exact: true })).toHaveText(`${kind}-1`);
+      await page.screenshot({ path: info.outputPath(`${theme}-${kind}-properties.png`) });
+    }
+    expect(errors).toEqual([]);
+  });
   test(`saved token visibility and copying in ${theme}`, async ({ page }, info) => {
     await page.addInitScript(({ theme }) => {
       localStorage.setItem("audiorouter.ui.theme", theme);

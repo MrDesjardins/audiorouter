@@ -1,27 +1,32 @@
-# Spatial audio exploration
+# Spatial audio
 
-Status: optional future processor; no implementation authorized by the EQ
-screenshot alone. The user wants to consider spatial processing for Siege and
-provided a SteelSeries GG image with headphone/speaker modes, a
-performance-to-immersion control, and distance control.
+Status: first slice implemented 2026-10-02 as **CAP-14 — Surround to
+headphones** ([spec](../../spec/05-windows-capture.md)); execution record in the
+[active plan](../active/current.md) and
+[evidence](../active/evidence/2026-10-02-spatial-audio.md). The user chose real
+5.1/7.1 capture rendered with a measured HRTF (MIT KEMAR) over a stereo-only
+virtual-speaker processor.
 
-The first product decision is the input/output channel contract: stereo game
-audio cannot reliably reconstruct discrete rear/height objects that are not
-present in the source. A multi-channel or object stream could carry more
-directional information, but requires endpoint, game, graph, and recording
-qualification. An initial experiment could compare unprocessed stereo,
-Windows spatial output, and one explicit HRTF renderer using known directional
-test material. Avoid stacking spatial processors in the listening path.
+Still future (not authorized by the first slice):
 
-Before implementation, specify headphone and speaker behavior separately,
-supported channel layouts, orientation/head-tracking policy, distance and
-tuning semantics, latency/CPU bounds, bypass/failure behavior, preset storage,
-and a listening test that checks front/back and left/right localization without
-unacceptable coloration. Confirm whether Outplayed should receive spatialized
-headphone audio or an unprocessed recording branch. The visual controls alone
-do not define a reproducible DSP algorithm or equivalence to SteelSeries Sonar.
+- Speaker-mode output (crosstalk cancellation) and a separate headphone/speaker
+  HRTF choice.
+- Distance, "immersion" or room/reverb control, and per-speaker gain or angle
+  editing. The SteelSeries Sonar controls describe product behavior, not a
+  reproducible algorithm.
+- Head tracking, elevation/height channels, object audio (Windows Sonic /
+  Spatial Sound APIs) and personalised HRTFs.
+- Capturing 44.1/96 kHz surround endpoints with sample-rate conversion; the
+  first slice requires 48 kHz.
+- A listening test that scores front/back and left/right localization and
+  coloration across several listeners. The first slice has objective tests
+  (ear energy per speaker, front/back difference) and one attended Siege check.
+- Whether Outplayed or a Recorder should receive the spatialized mix or an
+  unprocessed branch; today a surround input feeds every connected branch the
+  same binaural stereo.
 
 Official context: [SteelSeries Sonar settings](https://support.steelseries.com/hc/en-us/articles/22291026664717-Getting-to-know-your-sonar-settings)
 describes virtual speaker proximity and immersion; its [GG 20 release notes](https://techblog.steelseries.com/2022/06/21/GG-notes-20.0.0.html)
-state that headphone/speaker mode changes its HRTF. These are product behavior
-descriptions, not a transferable implementation specification.
+state that headphone/speaker mode changes its HRTF. The
+[KEMAR data](https://sound.media.mit.edu/resources/KEMAR.html) is free to use
+with citation.

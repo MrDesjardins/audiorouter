@@ -4506,7 +4506,7 @@ impl SharedCapture {
     /// The duration argument is retained for API compatibility; event-driven
     /// shared-mode WASAPI requires `Initialize` to receive zero here.
     pub fn open(endpoint_id: &str, _buffer_duration_100ns: i64) -> Result<Self, AudioError> {
-        match Self::open_internal(endpoint_id, true, 0) {
+        match Self::open_internal(endpoint_id, true, 0, false) {
             Err(AudioError::WindowsOperation { error, .. })
                 if should_retry_capture_initialization(&error) =>
             {
@@ -4515,7 +4515,7 @@ impl SharedCapture {
                 // permission failures, and endpoint disappearance must remain
                 // visible to the caller instead of being relabeled as a mode
                 // compatibility issue.
-                Self::open_internal(endpoint_id, false, DEFAULT_CAPTURE_POLLING_BUFFER_100NS)
+                Self::open_internal(endpoint_id, false, DEFAULT_CAPTURE_POLLING_BUFFER_100NS, false)
             }
             result => result,
         }
@@ -4534,25 +4534,36 @@ impl SharedCapture {
         } else {
             DEFAULT_CAPTURE_POLLING_BUFFER_100NS
         };
-        Self::open_internal(endpoint_id, false, duration)
+        Self::open_internal(endpoint_id, false, duration, false)
+    }
+
+    /// Open a shared loopback capture of an exact active render endpoint: the
+    /// stream carries what other applications play to that endpoint, in its
+    /// mix format (for example 8 channels when it is configured as 7.1).
+    /// Delivery is polled; the worker services sources every millisecond.
+    pub fn open_loopback(render_endpoint_id: &str) -> Result<Self, AudioError> {
+        Self::open_internal(render_endpoint_id, false, DEFAULT_CAPTURE_POLLING_BUFFER_100NS, true)
     }
 
     fn open_internal(
         endpoint_id: &str,
         event_driven: bool,
         buffer_duration_100ns: i64,
+        loopback: bool,
     ) -> Result<Self, AudioError> {
         use windows::Win32::Media::Audio::{
-            eCapture, IAudioCaptureClient, IAudioClient, IMMDeviceEnumerator, MMDeviceEnumerator,
-            AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
-            AUDCLNT_STREAMFLAGS_EVENTCALLBACK, AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE,
+            eCapture, eRender, IAudioCaptureClient, IAudioClient, IMMDeviceEnumerator,
+            MMDeviceEnumerator, AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
+            AUDCLNT_STREAMFLAGS_EVENTCALLBACK, AUDCLNT_STREAMFLAGS_LOOPBACK,
+            AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE,
         };
         use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
         let com = ComApartment::initialize()?;
         let enumerator: IMMDeviceEnumerator =
             unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)? };
-        let devices = unsafe { enumerator.EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE)? };
+        let flow = if loopback { eRender } else { eCapture };
+        let devices = unsafe { enumerator.EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE)? };
         let count = unsafe { devices.GetCount()? };
         let mut selected = None;
         for index in 0..count {
@@ -4591,7 +4602,7 @@ impl SharedCapture {
                 | AUDCLNT_STREAMFLAGS_NOPERSIST
         } else {
             AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST
-        };
+        } | if loopback { AUDCLNT_STREAMFLAGS_LOOPBACK } else { 0 };
         let initialized = unsafe {
             client.Initialize(
                 AUDCLNT_SHAREMODE_SHARED,
@@ -6015,12 +6026,141 @@ pub enum NativeMultiInputWorkerError {
 /// giving either variant special-cased realtime handling.
 pub enum MultiInputCaptureSource {
     Physical(SharedCapture),
+    /// A 5.1/7.1 capture endpoint rendered to two ears ("surround to
+    /// headphones"); it delivers stereo like any other physical input.
+    Binaural(BinauralCapture),
     ApplicationLoopback(ProcessLoopbackCapture),
     /// Stand-in for an application that has closed: it offers silent
     /// packets so the Mixer keeps producing the other inputs.
     Silence(SilentCapture),
     /// Audio streamed from another computer by a Network Send node.
     Network(crate::NetworkReceiver),
+}
+
+/// Converts packets of an interleaved 5.1/7.1 float32 capture source into
+/// interleaved stereo float32 rendered for headphones. All buffers are sized
+/// for the largest permitted packet at construction; conversion never
+/// allocates, waits or logs.
+pub struct BinauralPacketConverter {
+    renderer: audiorouter_dsp::binaural::BinauralRenderer,
+    raw: Vec<u8>,
+    speakers: Vec<f32>,
+    ears: Vec<f32>,
+}
+
+impl BinauralPacketConverter {
+    pub fn new(
+        channels: usize,
+        channel_mask: u32,
+        max_packet_frames: usize,
+    ) -> Result<Self, audiorouter_dsp::binaural::BinauralError> {
+        let renderer = audiorouter_dsp::binaural::BinauralRenderer::new(channels, channel_mask)?;
+        let frames = max_packet_frames.clamp(1, MAX_FLOAT32_ACCUMULATOR_FRAMES);
+        Ok(Self {
+            renderer,
+            raw: vec![0; frames * channels * std::mem::size_of::<f32>()],
+            speakers: vec![0.0; frames * channels],
+            ears: vec![0.0; frames * 2],
+        })
+    }
+
+    /// Read one speaker packet from `source` and write it to `destination` as
+    /// stereo float32 frames (`bytes_per_frame` must be 8).
+    pub fn next_packet_into(
+        &mut self,
+        source: &dyn AudioCaptureSource,
+        destination: &mut [u8],
+        bytes_per_frame: usize,
+    ) -> Result<Option<(CapturePacket, usize)>, AudioError> {
+        const STEREO_BYTES: usize = 2 * std::mem::size_of::<f32>();
+        if bytes_per_frame != STEREO_BYTES {
+            return Err(AudioError::InvalidFrameSize);
+        }
+        let channels = self.renderer.input_channels();
+        let input_bytes_per_frame = channels * std::mem::size_of::<f32>();
+        // Never read more frames than the stereo destination can hold.
+        let max_frames = (destination.len() / STEREO_BYTES).min(self.ears.len() / 2);
+        let readable = max_frames * input_bytes_per_frame;
+        let Some((packet, packet_bytes)) =
+            source.next_packet_into(&mut self.raw[..readable], input_bytes_per_frame)?
+        else {
+            return Ok(None);
+        };
+        if packet_bytes % input_bytes_per_frame != 0 {
+            return Err(AudioError::InvalidFrameSize);
+        }
+        let frames = packet_bytes / input_bytes_per_frame;
+        for (sample, bytes) in self.speakers[..frames * channels]
+            .iter_mut()
+            .zip(self.raw[..packet_bytes].chunks_exact(4))
+        {
+            *sample = f32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        }
+        self.renderer
+            .render_interleaved(&self.speakers[..frames * channels], &mut self.ears[..frames * 2])
+            .map_err(|_| AudioError::InvalidFrameSize)?;
+        for (bytes, sample) in destination[..frames * STEREO_BYTES]
+            .chunks_exact_mut(4)
+            .zip(&self.ears[..frames * 2])
+        {
+            bytes.copy_from_slice(&sample.to_ne_bytes());
+        }
+        Ok(Some((packet, frames * STEREO_BYTES)))
+    }
+
+    pub fn reset(&mut self) {
+        self.renderer.reset();
+    }
+}
+
+/// A multichannel physical capture rendered to stereo for headphones.
+pub struct BinauralCapture {
+    capture: SharedCapture,
+    // `next_packet_into` takes `&self`; the worker pumps one source at a time
+    // from its single owning thread, so the borrow is never contended.
+    converter: std::cell::RefCell<BinauralPacketConverter>,
+}
+
+impl BinauralCapture {
+    /// Wrap an opened capture whose mix format is `channels` float32 samples
+    /// at the internal rate laid out by `channel_mask`.
+    pub fn new(
+        capture: SharedCapture,
+        channels: usize,
+        channel_mask: u32,
+    ) -> Result<Self, audiorouter_dsp::binaural::BinauralError> {
+        Ok(Self {
+            capture,
+            converter: std::cell::RefCell::new(BinauralPacketConverter::new(
+                channels,
+                channel_mask,
+                MAX_FLOAT32_ACCUMULATOR_FRAMES,
+            )?),
+        })
+    }
+
+    pub fn start(&mut self) -> Result<(), AudioError> {
+        self.converter.get_mut().reset();
+        self.capture.start()
+    }
+
+    pub fn stop(&mut self) -> Result<(), AudioError> {
+        self.capture.stop()
+    }
+}
+
+impl AudioCaptureSource for BinauralCapture {
+    fn next_packet_into(
+        &self,
+        destination: &mut [u8],
+        bytes_per_frame: usize,
+    ) -> Result<Option<(CapturePacket, usize)>, AudioError> {
+        let mut converter = self
+            .converter
+            .try_borrow_mut()
+            .map_err(|_| AudioError::ProcessingStateUnavailable)?;
+        converter.next_packet_into(&self.capture, destination, bytes_per_frame)
+    }
 }
 
 /// Real-time-paced silent capture. It paces generated sources (Test Signal,
@@ -6119,6 +6259,7 @@ impl MultiInputCaptureSource {
     pub fn physical_endpoint_id(&self) -> Option<&str> {
         match self {
             Self::Physical(capture) => Some(capture.endpoint_id()),
+            Self::Binaural(capture) => Some(capture.capture.endpoint_id()),
             Self::ApplicationLoopback(_) | Self::Silence(_) | Self::Network(_) => None,
         }
     }
@@ -6128,6 +6269,7 @@ impl EndpointLifecycle for MultiInputCaptureSource {
     fn start(&mut self) -> Result<(), AudioError> {
         match self {
             Self::Physical(capture) => capture.start(),
+            Self::Binaural(capture) => capture.start(),
             Self::ApplicationLoopback(capture) => capture.start(),
             Self::Silence(_) => Ok(()),
             Self::Network(receiver) => {
@@ -6140,6 +6282,7 @@ impl EndpointLifecycle for MultiInputCaptureSource {
     fn stop(&mut self) -> Result<(), AudioError> {
         match self {
             Self::Physical(capture) => capture.stop(),
+            Self::Binaural(capture) => capture.stop(),
             Self::ApplicationLoopback(capture) => capture.stop(),
             Self::Silence(_) => Ok(()),
             Self::Network(_) => Ok(()),
@@ -6155,6 +6298,7 @@ impl AudioCaptureSource for MultiInputCaptureSource {
     ) -> Result<Option<(CapturePacket, usize)>, AudioError> {
         match self {
             Self::Physical(capture) => capture.next_packet_into(destination, bytes_per_frame),
+            Self::Binaural(capture) => capture.next_packet_into(destination, bytes_per_frame),
             Self::ApplicationLoopback(capture) => {
                 capture.next_packet_into(destination, bytes_per_frame)
             }
@@ -6521,6 +6665,11 @@ impl NativeMultiInputWorker {
     /// Whether an input currently carries the silent stand-in.
     pub fn capture_is_silent(&self, index: usize) -> bool {
         matches!(self.captures.get(index), Some(MultiInputCaptureSource::Silence(_)))
+    }
+
+    /// Whether an input renders a surround capture to headphones.
+    pub fn capture_is_binaural(&self, index: usize) -> bool {
+        matches!(self.captures.get(index), Some(MultiInputCaptureSource::Binaural(_)))
     }
 
     pub fn stop(&mut self) -> Result<(), NativeMultiInputWorkerError> {
@@ -8586,6 +8735,105 @@ mod tests {
     }
 
     #[cfg(windows)]
+    #[test]
+    fn binaural_converter_turns_seven_one_packets_into_stereo_frames() {
+        struct Speakers {
+            frames: usize,
+        }
+        impl AudioCaptureSource for Speakers {
+            fn next_packet_into(
+                &self,
+                destination: &mut [u8],
+                bytes_per_frame: usize,
+            ) -> Result<Option<(CapturePacket, usize)>, AudioError> {
+                assert_eq!(bytes_per_frame, 8 * std::mem::size_of::<f32>());
+                let bytes = self.frames * bytes_per_frame;
+                assert!(destination.len() >= bytes, "converter limits reads to its destination");
+                for (frame, chunk) in destination[..bytes].chunks_exact_mut(bytes_per_frame).enumerate() {
+                    // Side-right speaker (channel 7) only: a sparse (broadband) impulse train.
+                    for (channel, sample) in chunk.chunks_exact_mut(4).enumerate() {
+                        let value = if channel == 7 && frame % 37 == 0 { 0.5f32 } else { 0.0 };
+                        sample.copy_from_slice(&value.to_ne_bytes());
+                    }
+                }
+                Ok(Some((
+                    CapturePacket { frames: self.frames as u32, flags: 0, device_position: 0, qpc_position: 0 },
+                    bytes,
+                )))
+            }
+        }
+        let mut converter = BinauralPacketConverter::new(8, 0, 480).unwrap();
+        let mut destination = vec![0u8; 480 * 8];
+        let (packet, bytes) = converter
+            .next_packet_into(&Speakers { frames: 480 }, &mut destination, 8)
+            .unwrap()
+            .unwrap();
+        assert_eq!((packet.frames, bytes), (480, 480 * 8));
+        let samples = destination
+            .chunks_exact(4)
+            .map(|bytes| f32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+            .collect::<Vec<_>>();
+        let energy = |ear: usize| samples.iter().skip(ear).step_by(2).map(|v| v * v).sum::<f32>();
+        assert!(energy(1) > 4.0 * energy(0), "side-right source lands in the right ear");
+        assert!(matches!(
+            converter.next_packet_into(&Speakers { frames: 4 }, &mut destination, 4),
+            Err(AudioError::InvalidFrameSize)
+        ));
+    }
+
+    #[test]
+    #[ignore = "opens a live loopback capture of AUDIOROUTER_BINAURAL_LOOPBACK_ENDPOINT; renders nothing"]
+    fn live_binaural_loopback_reads_a_surround_render_endpoint() {
+        let endpoint_id = std::env::var("AUDIOROUTER_BINAURAL_LOOPBACK_ENDPOINT").expect("explicit render endpoint id");
+        let endpoint = enumerate_active_endpoints()
+            .unwrap()
+            .into_iter()
+            .find(|endpoint| endpoint.id == endpoint_id && endpoint.direction == EndpointDirection::Render)
+            .expect("active render endpoint");
+        // Opening and packet delivery only; production also requires 48 kHz.
+        assert!(endpoint.is_ieee_float32(), "{endpoint:?}");
+        let channels = usize::from(endpoint.channels);
+        let capture = SharedCapture::open_loopback(&endpoint_id).unwrap();
+        if !matches!(channels, 6 | 8) {
+            // A stereo endpoint checks loopback delivery without rendering.
+            let mut capture = capture;
+            capture.start().unwrap();
+            let mut raw = vec![0u8; MAX_FLOAT32_ACCUMULATOR_FRAMES * channels * 4];
+            let (mut packets, mut frames) = (0usize, 0usize);
+            let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
+            while std::time::Instant::now() < deadline {
+                while let Some((packet, _)) = capture.next_packet_into(&mut raw, channels * 4).unwrap() {
+                    packets += 1;
+                    frames += packet.frames as usize;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(2));
+            }
+            capture.stop().unwrap();
+            eprintln!("loopback {channels} ch (no rendering): {packets} packets, {frames} frames in 500 ms");
+            return;
+        }
+        let mut binaural = BinauralCapture::new(capture, channels, endpoint.channel_mask).unwrap();
+        binaural.start().unwrap();
+        let mut destination = vec![0u8; MAX_FLOAT32_ACCUMULATOR_FRAMES * 8];
+        let (mut packets, mut frames, mut peak) = (0usize, 0usize, 0.0f32);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
+        while std::time::Instant::now() < deadline {
+            while let Some((packet, bytes)) = binaural.next_packet_into(&mut destination, 8).unwrap() {
+                packets += 1;
+                frames += packet.frames as usize;
+                for sample in destination[..bytes].chunks_exact(4) {
+                    peak = peak.max(f32::from_ne_bytes([sample[0], sample[1], sample[2], sample[3]]).abs());
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        binaural.stop().unwrap();
+        eprintln!(
+            "loopback {channels} ch mask {:#x}: {packets} packets, {frames} frames in 500 ms, stereo peak {peak}",
+            endpoint.channel_mask
+        );
+    }
+
     #[test]
     fn native_render_source_transient_read_failures_fail_closed_to_silence() {
         let transient = [
