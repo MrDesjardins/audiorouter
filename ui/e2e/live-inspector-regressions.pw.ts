@@ -4,7 +4,9 @@ const session = { ...demoSession, nodes: demoSession.nodes.map(n => n.id === "vo
 test("failed live autosave does not retry unchanged draft; explicit Save still works", async ({ page }) => {
   await page.addInitScript(session => Object.assign(window, { __routeFixtureSession: session, __routeFixtureRunning: true, __routeFixturePlanConflict: true }), session);
   await page.goto("/route-harness.html");
-  await page.getByTestId("rf__node-voice").click();
+  // Click the title: the card centre holds an inline threshold slider, and a
+  // click there is a real edit that autosave saves before "Learn again".
+  await page.getByTestId("rf__node-voice").locator(".flow-node-title").click();
   await page.getByRole("button", { name: "Learn again" }).click();
   await expect(page.locator(".global-action-message")).toContainText("Another save changed");
   // More than five previous 400 ms retry intervals.
@@ -20,7 +22,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       Object.assign(window, { __routeFixtureSession: session, __routeFixtureRunning: true, __routeFixtureTelemetry: [{ nodeId: "voice", kind: "spectral-gate", meter: { peakDb: -99.9, rmsDb: -99.9, clippedSamples: 0, channelPeakDb: [-99.9], channelRmsDb: [-99.9], channelClippedSamples: [0] }, processor: null, plugin: null }] });
     }, { session, theme });
     await page.goto("/route-harness.html");
-    await page.getByTestId("rf__node-voice").click();
+    await page.getByTestId("rf__node-voice").locator(".flow-node-title").click();
     const panel = page.locator(".node-telemetry");
     await expect(panel).toContainText("-99.9");
     const before = await panel.boundingBox();

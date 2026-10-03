@@ -75,6 +75,28 @@ describe("UI error formatting", () => {
     expect(formatUiError(busy(["mic"]), "fallback")).toContain("Recording → Microphone (PD200X)");
     // An unknown device keeps the generic guidance.
     expect(formatUiError(busy(["gone"]), "fallback")).toContain("The selected audio device is in use by another application.");
+    // No 16ch twin in the list: no VB-Cable twin hint.
+    expect(formatUiError(busy(["cable-input"]), "fallback")).not.toContain("twin");
+  });
+
+  it("points at the VB-Cable 16ch twin of the same cable when it exists", () => {
+    const busy = new AudioRouterRpcError({
+      code: -32000,
+      message: "audio endpoint is busy",
+      data: { code: "deviceInUse", fieldPath: null, resourceIds: ["cable-input"], retryable: true, remediation: "", hresult: 0x8889000A },
+    });
+    const format = { tag: 3, channels: 2, sampleRateHz: 48000, bitsPerSample: 32, bytesPerFrame: 8, channelMask: 3, subformat: null } as never;
+    const render = (id: string, name: string) => ({ id, name, direction: "render" as const, state: "active" as const, defaultRoles: [], format, periods: null as never });
+    rememberDeviceNames([
+      render("cable-input", "CABLE Input (VB-Audio Virtual Cable)"),
+      render("cable-16", "CABLE In 16ch (VB-Audio Virtual Cable)"),
+      render("cable-a-16", "CABLE-A In 16ch (VB-Audio Virtual Cable A)"),
+    ]);
+    const text = formatUiError(busy, "fallback");
+    expect(text).toContain("its twin \"CABLE In 16ch (VB-Audio Virtual Cable)\" (the same cable)");
+    expect(text).toContain("set that application to \"CABLE Input (VB-Audio Virtual Cable)\"");
+    // Another cable's 16ch endpoint is not this cable's twin.
+    expect(text).not.toContain("CABLE-A In 16ch");
   });
 
   it("explains an unsupported audio route without blaming channel counts", () => {

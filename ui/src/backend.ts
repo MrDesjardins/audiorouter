@@ -88,6 +88,20 @@ function failedDevice(error: unknown) {
   return id ? deviceNames.get(id) ?? null : null;
 }
 
+/**
+ * VB-Cable exposes each cable as a stereo endpoint and a "… In 16ch"/"… Out
+ * 16ch" twin; an application using one makes Windows refuse the other.
+ * Return the twin's name from the last device list, when there is one.
+ */
+function sameCableTwin(device: { name: string; direction: string }) {
+  const cable = /\((VB-Audio[^)]*)\)\s*$/.exec(device.name)?.[1];
+  if (!cable) return null;
+  for (const other of deviceNames.values()) {
+    if (other.name !== device.name && other.direction === device.direction && other.name.endsWith(`(${cable})`) && /16ch/i.test(other.name) !== /16ch/i.test(device.name)) return other.name;
+  }
+  return null;
+}
+
 /** Formats structured backend failures without losing actionable audio guidance. */
 /** Readable text for a caught error; the message is shown with the error tone. */
 export function formatUiError(error: unknown, fallback: string): string {
@@ -109,7 +123,11 @@ function formatUiErrorText(error: unknown, fallback: string): string {
     const device = failedDevice(error);
     if (device) {
       const tab = device.direction === "capture" ? "Recording" : "Playback";
-      return `"${device.name}" is in use by another application, which has taken it exclusively. Close or reconfigure that application, or stop apps from locking it: Windows Sound settings → ${tab} → ${device.name} → Properties → Advanced → untick "Allow applications to take exclusive control". Then press Play again.`;
+      const twin = sameCableTwin(device);
+      const twinText = twin
+        ? ` This is a VB-Cable: an application playing to its twin "${twin}" (the same cable) also blocks it, so set that application to "${device.name}" instead.`
+        : "";
+      return `"${device.name}" is in use by another application, which has taken it exclusively.${twinText} Close or reconfigure that application, or stop apps from locking it: Windows Sound settings → ${tab} → ${device.name} → Properties → Advanced → untick "Allow applications to take exclusive control". Then press Play again.`;
     }
     return "The selected audio device is in use by another application. Choose a different device in the Output Device node's Properties, or release this exact device in the application using it, then prepare it again.";
   }

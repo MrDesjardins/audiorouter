@@ -1,5 +1,9 @@
 # Plan: sign the Windows release and publish it on GitHub
 
+**Decision (2026-10-03, user): parked.** Keep publishing unsigned
+prereleases while the project builds the public track record SignPath
+Foundation expects, then apply. No purchase or enrollment now.
+
 **Current status (2026-10-03): blocked on the user's signing decision.**
 Unsigned prereleases 0.0.2–0.0.7 are public on GitHub with their tags, and
 the release tooling (`prepare-artifacts.ps1`, `verify-artifacts.ps1`, the

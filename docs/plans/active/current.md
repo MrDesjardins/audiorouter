@@ -22,15 +22,33 @@ ARCH-04, SEC-01/10 and DIST-01–08 stay traceable through the release evidence.
 - Other active plan: [app/installer signing](release-signing-and-publication.md),
   blocked on the user's provider choice and enrollment.
 
+## Decisions (2026-10-03, user)
+
+- Signing: keep publishing unsigned prereleases while the project builds the
+  public track record SignPath Foundation expects; apply later. The signing
+  plan stays parked.
+- Authorized now, in this order after items 1–2: Siege compressor
+  simulation (item 3); Surround to headphones for 44.1/96 kHz 5.1/7.1 devices
+  by resampling; the API request builder from the
+  [external app integrations plan](../future/external-app-integrations.md);
+  spatial speaker mode and distance/room controls from the
+  [spatial audio plan](../future/spatial-audio.md). Each gets its own section
+  here with requirement IDs, steps, validation and rollback before coding.
+
 ## Open work
 
 Agent work (no hardware or credentials needed):
 
-1. Investigate the intermittent production test `live-inspector-regressions`
-   "failed live autosave does not retry unchanged draft" (2 plan calls instead
-   of 1 once; 20/20 on rerun): a real retry or a second legitimate edit.
-2. Busy-device message: mention the VB-Cable "… In 16ch" twin when the refused
-   endpoint is a VB-Cable (the 2026-10-03 cause was Discord on "CABLE In 16ch").
+1. Done 2026-10-03: the intermittent `live-inspector-regressions` autosave
+   test (reproduced 9/40 with 8 workers) was a test defect. Clicking the node
+   card centre landed on its inline threshold slider, a real edit
+   (`thresholdDb` −0.5) that autosave saved 400 ms later; under load "Learn
+   again" came after that save, giving two plans. The test now selects the
+   node by its title (as other tests do): 160/160 under the same load.
+2. Done 2026-10-03: the busy-device message names the VB-Cable "… 16ch" twin
+   of the same cable when the last device list contains it (matched on the
+   full "(VB-Audio …)" cable name, so CABLE and CABLE-A stay apart).
+   `backend.test.ts` regression added.
 3. [Siege footstep EQ](../future/siege-footstep-eq.md): simulate the
    compressor on the reference takes and tune after the user's match feedback.
 
