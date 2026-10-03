@@ -16,6 +16,7 @@ Keep an index below with date, milestone/task, outcome, and path. Do not move st
 
 | Date | Milestone / task | Outcome | Path |
 | --- | --- | --- | --- |
+| 2026-10-02 | 0.0.5 experimental prerelease publication | Release subset completed: exact packaged first-run passes, public assets verified. Full M08/native/attended gates remain open. | [2026-10-02-release-0.0.5-published.md](2026-10-02-release-0.0.5-published.md) |
 | 2026-10-02 | 0.0.5 preparation / prior 0.0.4 execution | Superseded, not completed M08: source and draft prepared; exact-exe first-run and publication remain in the concise active plan. | [2026-10-02-release-0.0.5-preparation.md](2026-10-02-release-0.0.5-preparation.md) |
 | 2026-10-02 | Release and connected-Mixer repair execution history | Superseded, not completed M08: ongoing native/package gates remain in the concise active plan. | [2026-10-02-release-repair-execution.md](2026-10-02-release-repair-execution.md) |
 | 2026-10-02 | Release and connected-Mixer repair execution history | Superseded, not completed M08: ongoing native/package gates remain in the concise active plan. | [2026-10-02-release-repair-execution.md](2026-10-02-release-repair-execution.md) |

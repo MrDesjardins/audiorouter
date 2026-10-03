@@ -1,54 +1,42 @@
-﻿# Active plan — v0.0.5 draft, final first-run check
+﻿# Active plan — post-0.0.5 maintenance
 
-Updated 2026-10-02. All tonight's source changes and version tag are pushed.
-Verified installer and GitHub prerelease draft are prepared. Not published yet.
+Updated 2026-10-02. User-requested unsigned experimental prerelease published.
 
-## Objective, requirements and decisions
+## Objective and scope
 
-Finish the requested 0.0.5 experimental release. Includes built-in Siege-round
-Duck, connected-Mixer Duck bypass repair, 1,800 tool combinations, Advanced EQ
-input spectrum, Duck slider/icon/widget and desktop Quit. Requirements DSP-19,
-GRAPH-08/14/15, AUTO-15, UI-05/11/12/13, ARCH-04, SEC-01/10, DIST-01–08.
-No VST implementation, user data, API token or device-format changes.
-
-User still uses AudioRouter and requested preparation first. Leave shell PID
-61752 and Siege PID 49376 alone. No second desktop shell. Final closure request
-is pending after concrete assets are ready; Siege may stay open for first-run.
+Track support and remaining qualification after v0.0.5. No new implementation
+is authorized by this plan. Preserve sessions, local API credentials, device
+formats and published assets; no VST changes. Requirements DSP-19, GRAPH-08/14/15,
+UI-05/11/12/13, AUTO-15, ARCH-04, SEC-01/10, DIST-01–08 remain traceable through
+[release evidence](evidence/2026-10-02-release-0.0.5.md).
 
 ## Where things stand
 
-Source/tag: 6e8148fcfcb6b4b85c47d3e007d8149b17ca2ae0 / v0.0.5.
-[Release evidence](evidence/2026-10-02-release-0.0.5.md) records commands,
-failures, checksums, source identity, build and downloaded-asset verification.
+[v0.0.5](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.5) is
+public, explicitly unsigned/experimental/prerelease. Source and tag point to
+6e8148fcfcb6b4b85c47d3e007d8149b17ca2ae0; documentation updates are pushed separately.
+Locked workspace, shell, 453 UI, contracts/example and 40 production Edge checks
+pass. Exact packaged first-run passes 1/1 after user app closure. Public assets
+were downloaded and all hashes/provenance verified. No live cable test or device
+format change in the publication turn.
 
-| Gate | Result |
-| --- | --- |
-| Locked workspace and shell | Pass; native/attended opt-in fixtures ignored; shell 44/1 ignored |
-| UI/build/contracts/example | 453 UI tests pass after initial load-related timeout; build/typecheck/contracts and 11 example tests pass |
-| Production Edge / visuals | 40 pass; three-theme EQ/Duck/Quit screenshots inspected |
-| Package | Unsigned installer/shell/CLI/worker/examples/UI/SBOM/notices/hashes verified locally and after draft download |
-| Exact packaged first run | Pending normal app closure; earlier version passes do not qualify 0.0.5 |
-| Native / full M08 | Real-match Duck, native Quit, combined continuity/path-change/spatial listening, installer/hardware/accessibility/signing remain open and disclosed |
+## Remaining qualification and next action
 
-Installer: target/releases/v0.0.5/AudioRouter_0.0.5_x64-setup.exe.
-GitHub draft is tagged v0.0.5 and explicitly prerelease. Previous v0.0.4 remains
-published. Runtime game snapshots and private configurations are excluded.
+Real-match Duck/failure release, native Quit process exit, combined quiet-tone
+continuity, live path-change and spatial listening remain open. Full M08 clean-
+machine install/upgrade/uninstall, WebView2 absence, hardware/endurance,
+accessibility and signing remain open and disclosed. These are not implied by
+portable tests or this experimental publication.
 
-## Ordered remaining tasks
+Exact next task: user testing/support; on a new request, plan attended/native
+qualification with a quiet reference and closed competing apps. Do not run new
+implementation or disturb the user's audio autonomously after this release.
 
-1. Once user quits AudioRouter normally, confirm no instance; run fresh_install_shell
-   on this exact packaged shell, new database/default pipe/no developer grant.
-2. Record result; if passing, publish the already-authorized experimental release
-   and verify published state/downloaded hashes. If failing, repair and rebuild.
-3. Commit/push final evidence and archive this preparation plan. Keep open M08
-   gates in a maintenance plan; do not represent this as completed M08.
+## Risks, evidence and rollback
 
-## Risks and rollback
+Stats.cc's undocumented feed can change; unknown state releases Duck. Independent
+clock drift/queue latency remain limits. Keep v0.0.4 and compatible configuration/
+recording backups for rollback; no migration or driver install. Published assets
+are immutable; repairs use a new version.
 
-Undocumented Stats.cc protocol may change; its feed setup remains explicit.
-Unknown feed state releases Duck. Independent-clock drift/queue latency and
-unqualified native scenarios remain limits. Keep v0.0.4 and compatible backups;
-no migration or driver install. Never overwrite published assets.
-
-Exact next action: await normal AudioRouter closure for exact-executable first-run.
-Prior execution history: [superseded preparation](../archived/2026-10-02-release-0.0.5-preparation.md).
+Completed publication history: [execution record](../archived/2026-10-02-release-0.0.5-published.md).
