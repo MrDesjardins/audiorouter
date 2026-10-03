@@ -62,8 +62,29 @@ describe("level statistics and suggestions", () => {
     const stats = levelStatistics(samples([...Array(60).fill(-62), ...Array(40).fill(-18)]))!;
     expect(stats).toEqual({ noiseDb: -62, voiceDb: -18 });
     expect(suggestGateThreshold(stats)).toBe(-47);
-    expect(suggestCompressorThreshold(-18, 3)).toBe(-27); // 9 dB over at 3:1 → 6 dB reduction
+    const compressor = suggestCompressorThreshold(stats, 3); // 9 dB over at 3:1
+    expect(compressor.thresholdDb).toBe(-27);
+    expect(compressor.reductionDb).toBeCloseTo(6);
     expect(suggestGateThreshold({ noiseDb: -90, voiceDb: -20 })).toBeGreaterThanOrEqual(-80);
+  });
+  it("keeps the gate's closing point clear of room noise without shutting out quiet words", () => {
+    expect(suggestGateThreshold({ noiseDb: -62, voiceDb: -18 }, 3)).toBe(-47); // closes at −50, 12 dB above noise
+    expect(suggestGateThreshold({ noiseDb: -60, voiceDb: -30 }, 6)).toBe(-48); // a third would close only 4 dB above noise
+    expect(suggestGateThreshold({ noiseDb: -40, voiceDb: -28 }, 12)).toBe(-34); // never above the noise-to-voice midpoint
+  });
+  it("measures the voice from speech alone, however briefly the person talks", () => {
+    const stats = levelStatistics(samples([...Array(92).fill(-62), ...Array(8).fill(-18)]))!;
+    expect(stats).toEqual({ noiseDb: -62, voiceDb: -18 });
+    expect(levelStatistics(samples([...Array(95).fill(-62), ...Array(5).fill(-18)]))).toBeNull();
+  });
+  it("keeps a compressor threshold near the voice peaks instead of chasing a gentle ratio into the noise", () => {
+    // 1.5:1 would need 18 dB over for 6 dB; the suggestion stops 12 dB under the peaks and reports 4 dB.
+    const gentle = suggestCompressorThreshold({ noiseDb: -62, voiceDb: -18 }, 1.5);
+    expect(gentle.thresholdDb).toBe(-30);
+    expect(gentle.reductionDb).toBeCloseTo(4);
+    // A small noise-to-voice gap keeps the threshold in its upper half.
+    expect(suggestCompressorThreshold({ noiseDb: -40, voiceDb: -24 }, 2).thresholdDb).toBe(-32);
+    expect(suggestCompressorThreshold({ noiseDb: -62, voiceDb: -18 }, 1).reductionDb).toBe(0);
   });
 });
 

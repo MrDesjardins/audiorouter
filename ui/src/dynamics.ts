@@ -145,29 +145,54 @@ export type LevelSample = { at: number; inputDb: number; outputDb: number; reduc
 
 /**
  * Estimate the room-noise floor and the voice level from recent input
- * levels: the 15th and 90th percentiles of the readings above silence.
- * Returns null until there is enough material and a usable gap.
+ * levels. Noise is the 15th percentile of the readings above silence; voice
+ * is the 90th percentile of the readings at least 10 dB above that noise, so
+ * it does not sink toward the noise when the person talks only briefly.
+ * Returns null until there is enough material and enough speech.
  */
 export function levelStatistics(samples: LevelSample[]): { noiseDb: number; voiceDb: number } | null {
   const levels = samples.map((sample) => sample.inputDb).filter((db) => Number.isFinite(db) && db > -110).sort((a, b) => a - b);
   if (levels.length < 40) return null;
-  const at = (fraction: number) => levels[Math.min(levels.length - 1, Math.floor(fraction * levels.length))];
-  const noiseDb = at(0.15);
-  const voiceDb = at(0.9);
-  return voiceDb - noiseDb >= 10 ? { noiseDb, voiceDb } : null;
+  const noiseDb = levels[Math.floor(0.15 * levels.length)];
+  const speech = levels.filter((db) => db >= noiseDb + 10);
+  if (speech.length < 8) return null;
+  const voiceDb = speech[Math.min(speech.length - 1, Math.floor(0.9 * speech.length))];
+  return { noiseDb, voiceDb };
 }
 
 const round = (value: number, step: number) => Math.round(value / step) * step;
 
-/** Gate threshold a third of the way from the noise floor to the voice, at least 6 dB above the noise. */
-export function suggestGateThreshold({ noiseDb, voiceDb }: { noiseDb: number; voiceDb: number }): number {
-  return Math.min(0, Math.max(-80, round(Math.max(noiseDb + 6, noiseDb + (voiceDb - noiseDb) / 3), 1)));
+/**
+ * Gate threshold a third of the way from the noise floor to the voice. The
+ * closing point (threshold − `hysteresisDb`) stays at least 6 dB above the
+ * noise so room noise cannot reopen it, and the threshold stays in the lower
+ * half of the noise-to-voice range so quiet words still open it.
+ */
+export function suggestGateThreshold({ noiseDb, voiceDb }: { noiseDb: number; voiceDb: number }, hysteresisDb = 0): number {
+  const third = noiseDb + (voiceDb - noiseDb) / 3;
+  const lowest = noiseDb + 6 + Math.max(0, hysteresisDb);
+  const highest = (noiseDb + voiceDb) / 2;
+  return Math.min(0, Math.max(-80, round(Math.min(Math.max(third, lowest), Math.max(highest, third)), 1)));
 }
 
-/** Compressor threshold that takes about `targetDb` off typical voice peaks at the current ratio. */
-export function suggestCompressorThreshold(voiceDb: number, ratio: number, targetDb = 6): number {
-  const over = ratio > 1.01 ? targetDb / (1 - 1 / ratio) : targetDb;
-  return Math.min(0, Math.max(-60, round(voiceDb - over, 1)));
+/** Voice peaks below this are quiet: raising the level beats a very low compressor threshold. */
+export const QUIET_VOICE_DB = -24;
+/** A suggested compressor threshold never sits further than this under the voice peaks. */
+export const MAX_COMPRESSOR_DEPTH_DB = 12;
+
+/**
+ * Compressor threshold that takes about `targetDb` off voice peaks at the
+ * current ratio. It stays within `MAX_COMPRESSOR_DEPTH_DB` of the voice peaks
+ * and in the upper half of the noise-to-voice range, so a gentle ratio gets
+ * less reduction instead of a threshold that also squeezes breaths and room
+ * noise. Returns the threshold and the reduction it gives on voice peaks.
+ */
+export function suggestCompressorThreshold({ noiseDb, voiceDb }: { noiseDb: number; voiceDb: number }, ratio: number, targetDb = 6): { thresholdDb: number; reductionDb: number } {
+  const slope = ratio > 1.01 ? 1 - 1 / ratio : 0;
+  const ideal = slope > 0 ? voiceDb - targetDb / slope : voiceDb;
+  const lowest = Math.max(voiceDb - MAX_COMPRESSOR_DEPTH_DB, (noiseDb + voiceDb) / 2);
+  const thresholdDb = Math.min(0, Math.max(-60, round(Math.max(ideal, lowest), 1)));
+  return { thresholdDb, reductionDb: Math.max(0, voiceDb - thresholdDb) * slope };
 }
 
 export const PEAK_HOLD_MS = 1200;

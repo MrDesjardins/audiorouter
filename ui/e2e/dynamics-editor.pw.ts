@@ -35,7 +35,19 @@ for (const kind of ["compressor", "gate"] as const) {
       await expect(editor.getByRole("slider", { name: kind === "gate" ? "Threshold (opens)" : "Threshold", exact: true })).toHaveAttribute("aria-valuenow", String(parameters.thresholdDb));
       // Let the 8 s history fill with words and pauses.
       await expect(editor.locator(".dynamics-live-dot")).toBeVisible();
-      await page.waitForTimeout(5500);
+      // The pill, status and suggestion change during talk (and the suggestion
+      // first appears); nothing below them may move (UI-17).
+      const offsets = await editor.evaluate(async (element) => {
+        const sketch = element.querySelector(".dynamics-sketch-details")!;
+        const seen = new Set<number>();
+        const until = performance.now() + 5500;
+        while (performance.now() < until) {
+          seen.add(Math.round(sketch.getBoundingClientRect().top - element.getBoundingClientRect().top));
+          await new Promise((resolve) => setTimeout(resolve, 40));
+        }
+        return [...seen];
+      });
+      expect(offsets).toHaveLength(1);
       await expect(editor.locator(".dynamics-suggestion")).toContainText("room noise");
       await editor.scrollIntoViewIfNeeded();
       await editor.screenshot({ path: testInfo.outputPath(`${kind}-${theme}.png`) });
@@ -43,6 +55,7 @@ for (const kind of ["compressor", "gate"] as const) {
 
       // Drag the threshold handle on the curve: the draft parameter follows.
       const handle = editor.getByRole("slider", { name: kind === "gate" ? "Threshold (opens)" : "Threshold", exact: true });
+      await handle.scrollIntoViewIfNeeded();
       const box = (await handle.boundingBox())!;
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await page.mouse.down();

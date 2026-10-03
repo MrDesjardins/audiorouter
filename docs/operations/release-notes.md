@@ -1,5 +1,17 @@
 # AudioRouter release notes
 
+## Unreleased
+
+- Compressor, Gate and Duck threshold suggestions no longer make the panel
+  jump: the suggestion keeps a fixed place and its last measurement.
+- The compressor suggestion stays close to your voice peaks instead of
+  dropping toward room noise at gentle ratios, and suggests turning the
+  microphone up when your voice is quiet.
+- The Gate suggestion keeps its closing point clear of room noise (it accounts
+  for Hysteresis) and says where the gate closes.
+- Fix dragging tools onto the canvas in the desktop app: the drop preview
+  shows and dropping adds the tool.
+
 ## 0.0.5 — 2026-10-02 (unsigned experimental preview)
 
 - Duck can follow Siege rounds directly through Stats.cc; choose menu,

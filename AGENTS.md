@@ -28,6 +28,7 @@ Use this canonical uppercase filename on Windows. Do not add `agent.md`, `agents
 
 - **Form controls use the app style, never browser defaults.** Text inputs, selects, textareas, and file pickers inherit the app-wide field style in `ui/src/styles.css` (flat, 9 px radius, dark `color-scheme` so native dropdown lists are dark, themed `::file-selector-button`, light/high-contrast variants). Only buttons are bevelled. Do not restyle fields per panel or reintroduce gradients/inset shadows on them; new dialogs, panels, and inspectors must render correctly with no extra field CSS.
 - Stack a field's caption above a full-width field; do not let a label, field, and buttons flow inline.
+- **No layout shift (UX rule, spec UI-17).** Live data, suggestions, status text and pills must never make the UI move up and down. Always render such slots at a reserved size, swap their contents (placeholder plus disabled action while waiting), keep the last good value through brief gaps, and fix the width of changing labels. Only a deliberate user action may change layout.
 - Verify new or changed UI visually in the dark, light, and high-contrast themes (for example with the Edge/Playwright screenshot approach recorded in the active plan). jsdom tests do not check styling.
 
 ## Work and documentation lifecycle
@@ -53,6 +54,15 @@ Do not modify user authorization, relax acceptance criteria, or turn external co
 Report the result, affected requirement IDs/files, checks performed and limitations, unresolved blockers, and the exact next milestone/task. Keep the active plan sufficient for a new agent to resume without chat history. Never invent commit hashes, test results, driver capabilities, or installed dependencies.
 
 ## Validated lessons
+
+- **2026-10-03 — Regress live panels for layout shift, not only content (user preference).**
+  Evidence: [active plan, stable dynamics suggestion](docs/plans/active/current.md),
+  `ui/e2e/dynamics-editor.pw.ts`. Scope: inspectors and panels fed by
+  telemetry. Consequence: the Compressor/Gate threshold suggestion appeared
+  and vanished as its estimate flickered, moving everything below it by
+  124 px; jsdom tests only checked its text. Reserve the slot (UI-17) and,
+  in the Edge harness, sample the offset of content below the changing area
+  during simulated talk and require one value.
 
 - **2026-10-02 — Qualify tool flags through the multi-path compiler, for every tool.**
   Evidence: [tool combination suite](docs/plans/active/evidence/2026-10-02-tool-combinations-duck-icon-quit.md).

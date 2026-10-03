@@ -60,6 +60,27 @@ describe("Dynamics editor", () => {
     expect(screen.getByRole("meter", { name: "Level entering the tool" }).getAttribute("aria-valuetext")).toBe("−18.0 dB");
   });
 
+  it("reserves the compressor suggestion, keeps it through a lapse and flags a quiet voice", () => {
+    const onChange = vi.fn();
+    const compressor = node("compressor", { thresholdDb: -18, ratio: 3 });
+    const view = render(<DynamicsEditor kind="compressor" node={compressor} telemetry={telemetry(-62, -62, 0)} channels={1} running disabled={false} onChange={onChange} />);
+    const box = view.container.querySelector(".dynamics-suggestion");
+    expect(box?.textContent).toMatch(/talk normally for a few seconds/);
+    expect((screen.getByRole("button", { name: "Use suggestion" }) as HTMLButtonElement).disabled).toBe(true);
+    for (let index = 0; index < 60; index += 1) {
+      view.rerender(<DynamicsEditor kind="compressor" node={compressor} telemetry={index % 3 === 0 ? telemetry(-36, -36, 0) : telemetry(-62, -62, 0)} channels={1} running disabled={false} onChange={onChange} />);
+    }
+    expect(view.container.querySelector(".dynamics-suggestion")).toBe(box);
+    expect(box?.textContent).toMatch(/voice ≈ −36 dB\. Suggested threshold −45 dB \(about 6 dB off your loud words at 3\.0:1\)/);
+    expect(box?.textContent).toMatch(/Your voice is quiet/);
+    // Steady level with no pauses makes the live estimate unusable; the last suggestion stays in place.
+    for (let index = 0; index < 300; index += 1) {
+      view.rerender(<DynamicsEditor kind="compressor" node={compressor} telemetry={telemetry(-36, -36, 0)} channels={1} running disabled={false} onChange={onChange} />);
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Use −45 dB" }));
+    expect(onChange).toHaveBeenLastCalledWith("thresholdDb", -45);
+  });
+
   it("reports compressor gain reduction and explains bypass without stale levels", () => {
     const compressor = node("compressor", { thresholdDb: -24, ratio: 3 });
     const view = render(<DynamicsEditor kind="compressor" node={compressor} telemetry={telemetry(-12, -20, 8)} channels={1} running disabled={false} onChange={() => undefined} />);

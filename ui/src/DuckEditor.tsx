@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DiagnosticsSnapshot, Node, Session } from "@audiorouter/contracts";
 import { Handle, type HandleSpec } from "./SvgHandle";
-import { levelStatistics, nextFallingLevel, nextPeakHold, suggestGateThreshold, type LevelSample, type PeakHold } from "./dynamics";
+import { nextFallingLevel, nextPeakHold, suggestGateThreshold, type LevelSample, type PeakHold } from "./dynamics";
+import { useLastStatistics } from "./DynamicsEditor";
 
 type ProcessorTelemetry = NonNullable<DiagnosticsSnapshot["nodeTelemetry"][number]["processor"]>;
 type Change = (name: string, value: number | string | boolean) => void;
@@ -111,7 +112,7 @@ export function DuckEditor({ node, session, telemetry, running, disabled, onChan
   const history = useHistory(telemetry, active);
   const latest = active ? history.at(-1) ?? null : null;
   const now = latest?.at ?? performance.now();
-  const statistics = useMemo(() => levelStatistics(history), [history]);
+  const statistics = useLastStatistics(history);
   const triggerHeld = useHeld(latest ? latest.inputDb : null);
   const ducking = latest?.open ?? false;
   const reduction = latest?.reductionDb ?? 0;
@@ -194,9 +195,12 @@ export function DuckEditor({ node, session, telemetry, running, disabled, onChan
       <input type="range" aria-label="Duck amount" aria-valuetext={`−${settings.amountDb} dB`} min={0} max={40} step={1} value={settings.amountDb} disabled={disabled} onChange={(event) => onChange("amountDb", Number(event.target.value))} />
       <span className="duck-amount-scale" aria-hidden="true"><span>0 dB</span><span>−20</span><span>−40 dB</span></span>
     </label>
-    {!roundMode && suggestion !== null && statistics && <div className="dynamics-suggestion">
-      <span>Last 8 s of {trigger?.name ?? "the trigger"}: room noise ≈ {db(statistics.noiseDb)} dB, voice ≈ {db(statistics.voiceDb)} dB. Suggested trigger level {db(suggestion)} dB.</span>
-      <button type="button" className="secondary" disabled={disabled || Math.abs(suggestion - settings.thresholdDb) < 0.5} onClick={() => onChange("thresholdDb", suggestion)}>Use {db(suggestion)} dB</button>
+    {!roundMode && <div className="dynamics-suggestion">
+      {/* Always rendered at a reserved size so the panel never jumps when a measurement arrives or lapses. */}
+      {suggestion !== null && statistics
+        ? <span>Last 8 s of {trigger?.name ?? "the trigger"}: room noise ≈ {db(statistics.noiseDb)} dB, voice ≈ {db(statistics.voiceDb)} dB. Suggested trigger level {db(suggestion)} dB.</span>
+        : <span className="muted">Suggested trigger level: press Play and talk normally for a few seconds, with short pauses, to measure {trigger?.name ?? "the trigger"}.</span>}
+      <button type="button" className="secondary" disabled={disabled || suggestion === null || Math.abs(suggestion - settings.thresholdDb) < 0.5} onClick={() => suggestion !== null && onChange("thresholdDb", suggestion)}>{suggestion !== null ? `Use ${db(suggestion)} dB` : "Use suggestion"}</button>
     </div>}
     <p className="muted dynamics-status">{status}</p>
     {!roundMode && <details className="dynamics-sketch-details" open>

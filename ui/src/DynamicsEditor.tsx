@@ -3,7 +3,7 @@ import { Handle, type HandleSpec } from "./SvgHandle";
 import type { DiagnosticsSnapshot, Node } from "@audiorouter/contracts";
 import {
   compressorOutputDb, compressorSettings, gateOutputDb, gateSettings, levelStatistics, limiterOutputDb, limiterSettings,
-  nextFallingLevel, nextPeakHold, ratioForOutputAtFullScale, responseSketch, suggestCompressorThreshold, suggestGateThreshold,
+  nextFallingLevel, nextPeakHold, QUIET_VOICE_DB, ratioForOutputAtFullScale, responseSketch, suggestCompressorThreshold, suggestGateThreshold,
   type DynamicsKind, type LevelSample, type PeakHold,
 } from "./dynamics";
 
@@ -38,6 +38,19 @@ function useHistory(kind: DynamicsKind, telemetry: ProcessorTelemetry | null, ch
     setHistory((current) => [...current.filter((item) => now - item.at <= HISTORY_MS), sample]);
   }, [kind, telemetry, channels, active]);
   return history;
+}
+
+/**
+ * Level statistics that keep the last good measurement while readings
+ * continue, so the suggestion does not appear and vanish each time a pause
+ * or a burst of talk briefly makes the estimate unusable.
+ */
+export function useLastStatistics(history: LevelSample[]) {
+  const last = useRef<ReturnType<typeof levelStatistics>>(null);
+  const live = useMemo(() => levelStatistics(history), [history]);
+  if (!history.length) last.current = null;
+  else if (live) last.current = live;
+  return last.current;
 }
 
 /** Smooth a reading for display: instant rise, steady fall, optional held peak. */
@@ -225,7 +238,7 @@ export function DynamicsEditor({ kind, node, telemetry, channels, running, disab
   const history = useHistory(kind, hasLevels ? telemetry : null, channels, active);
   const latest = active && hasLevels ? history.at(-1) ?? null : null;
   const now = latest?.at ?? performance.now();
-  const statistics = useMemo(() => levelStatistics(history), [history]);
+  const statistics = useLastStatistics(history);
   const input = useBallistics(latest?.inputDb ?? null);
   const output = useBallistics(latest?.outputDb ?? null);
   const reduction = latest ? latest.reductionDb : null;
@@ -252,9 +265,15 @@ export function DynamicsEditor({ kind, node, telemetry, channels, running, disab
   }
   const suggestion = (() => {
     if (!statistics || kind === "limiter") return null;
-    if (kind === "gate") return { value: suggestGateThreshold(statistics), why: "a third of the way from room noise up to your voice" };
+    if (kind === "gate") {
+      const { hysteresisDb } = gateSettings(node);
+      const value = suggestGateThreshold(statistics, hysteresisDb);
+      return { value, why: `closes at ${db(value - hysteresisDb, 0)} dB, ${(value - hysteresisDb - statistics.noiseDb).toFixed(0)} dB above room noise` };
+    }
     const settings = compressorSettings(node);
-    return { value: suggestCompressorThreshold(statistics.voiceDb, settings.ratio), why: `takes about 6 dB off your loud words at ${settings.ratio.toFixed(1)}:1` };
+    const { thresholdDb, reductionDb } = suggestCompressorThreshold(statistics, settings.ratio);
+    const why = `about ${reductionDb.toFixed(0)} dB off your loud words at ${settings.ratio.toFixed(1)}:1${reductionDb < 5.5 ? "; raise Ratio for more" : ""}`;
+    return { value: thresholdDb, why, quiet: statistics.voiceDb < QUIET_VOICE_DB };
   })();
   const currentThreshold = kind === "gate" ? gateSettings(node).thresholdDb : kind === "compressor" ? compressorSettings(node).thresholdDb : null;
   return <section className="dynamics-editor" aria-label={`${kind === "compressor" ? "Compressor" : kind === "gate" ? "Gate" : "Limiter"} live view`}>
@@ -277,9 +296,13 @@ export function DynamicsEditor({ kind, node, telemetry, channels, running, disab
       <span><i className="dynamics-key is-threshold" />{kind === "limiter" ? "Ceiling" : "Threshold"}</span>
       {kind === "gate" && <span><i className="dynamics-key is-close" />Closes below</span>}
     </div>
-    {suggestion && currentThreshold !== null && <div className="dynamics-suggestion">
-      <span>Last 8 s: room noise ≈ {db(statistics!.noiseDb, 0)} dB, voice ≈ {db(statistics!.voiceDb, 0)} dB. Suggested threshold {db(suggestion.value, 0)} dB ({suggestion.why}).</span>
-      <button type="button" className="secondary" disabled={disabled || Math.abs(suggestion.value - currentThreshold) < 0.5} onClick={() => onChange("thresholdDb", suggestion.value)}>Use {db(suggestion.value, 0)} dB</button>
+    {currentThreshold !== null && <div className="dynamics-suggestion">
+      {/* Always rendered at a reserved size so the panel never jumps when a measurement arrives or lapses. */}
+      {suggestion && statistics ? <span>
+        Last 8 s: room noise ≈ {db(statistics.noiseDb, 0)} dB, voice ≈ {db(statistics.voiceDb, 0)} dB. Suggested threshold {db(suggestion.value, 0)} dB ({suggestion.why}).
+        {"quiet" in suggestion && suggestion.quiet && " Your voice is quiet, so the threshold is low too: turning the microphone up (Windows input level, or a Gain before this tool) works better."}
+      </span> : <span className="muted">Suggested threshold: press Play and talk normally for a few seconds, with short pauses, to measure your voice and room noise.</span>}
+      <button type="button" className="secondary" disabled={disabled || !suggestion || Math.abs(suggestion.value - currentThreshold) < 0.5} onClick={() => suggestion && onChange("thresholdDb", suggestion.value)}>{suggestion ? `Use ${db(suggestion.value, 0)} dB` : "Use suggestion"}</button>
     </div>}
     <p className="muted dynamics-status">{status}</p>
     <details className="dynamics-sketch-details" open>

@@ -845,7 +845,7 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .dynamics-heading > div { display: grid; gap: .2rem; min-width: 0; }
 .dynamics-heading strong { color: var(--text-strong); font-size: .9rem; }
 .dynamics-heading small { color: var(--text-soft); font-size: .74rem; line-height: 1.35; }
-.dynamics-pill { flex: none; padding: .2rem .55rem; border: 1px solid var(--ambient-edge); border-radius: 999px; font-size: .74rem; font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text-soft); }
+.dynamics-pill { flex: none; min-width: 7.5em; box-sizing: border-box; text-align: center; padding: .2rem .55rem; border: 1px solid var(--ambient-edge); border-radius: 999px; font-size: .74rem; font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text-soft); }
 .dynamics-pill.is-good { color: #0d2a1c; background: #4fd18f; border-color: #4fd18f; }
 .dynamics-pill.is-work { color: #2b1400; background: #ffb066; border-color: #ffb066; }
 .dynamics-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .55rem; align-items: start; }
@@ -895,8 +895,9 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .dynamics-key.is-threshold { border-top-color: #ff9c3b; }
 .dynamics-key.is-close { border-top: 2px dashed #ff9c3b; }
 .dynamics-suggestion { display: grid; gap: .45rem; padding: .55rem .65rem; border: 1px solid color-mix(in srgb, var(--cyan) 45%, var(--ambient-edge)); border-radius: 9px; background: color-mix(in srgb, var(--cyan) 8%, var(--ambient-surface)); color: var(--text-strong); font-size: .76rem; line-height: 1.4; }
+.dynamics-suggestion > span { min-height: 5.6em; } /* reserved: waiting, measured and quiet-voice texts share one size */
 .dynamics-suggestion button { justify-self: start; }
-.dynamics-status { min-height: 2.8em; margin: 0; font-size: .78rem; line-height: 1.4; }
+.dynamics-status { min-height: 4.2em; margin: 0; font-size: .78rem; line-height: 1.4; }
 .dynamics-sketch-details { display: grid; gap: .4rem; }
 .dynamics-sketch-details summary { cursor: pointer; color: var(--text-strong); font-size: .8rem; font-weight: 650; }
 .dynamics-sketch-details small { display: block; margin-top: .3rem; font-size: .72rem; line-height: 1.35; }

@@ -1390,6 +1390,10 @@ fn main() {
                 // ambiguous when no static window entry existed in the
                 // configuration.
                 .visible(true)
+                // Tauri's native drag-drop handler swallows HTML5 drag events
+                // in WebView2, so dragging a tool onto the canvas showed no
+                // preview and dropped nothing. The UI has no OS file drops.
+                .disable_drag_drop_handler()
                 .initialization_script(session_script.clone())
                 .build()?;
             Ok(())
