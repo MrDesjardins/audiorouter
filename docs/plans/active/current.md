@@ -1,6 +1,6 @@
 ﻿# Active plan — v0.0.4 release qualification
 
-Updated: 2026-10-02. Publication held pending final native checks.
+Updated: 2026-10-02. User requests immediate prerelease publication, then stop.
 
 ## Objective and scope
 
@@ -97,6 +97,10 @@ no developer access variable, consent denied then allowed, no audio device opene
 Log: `target/release-004-fixed-fresh-install.log`. AudioRouter was closed; Siege
 PID 49376 remained. User is starting another match. Leave it alone; final quiet
 native continuity and live path-change checks wait for normal game closure.
-No tag/source push or publication yet. Package is available for local review.
+Decision: user explicitly requests "Deploy the package and then just stop" while
+playing. Publish the verified package as an unsigned experimental prerelease,
+disclosing final combined native/path-change/spatial listening checks pending.
+This does not complete M08 or claim a fully qualified audio release. Stop after
+publication and uploaded artifact verification; do not run live cable checks.
 Prior detailed decisions/results are retained in the
 [superseded execution record](../archived/2026-10-02-release-repair-execution.md).

@@ -16,6 +16,13 @@
   the existing route continues and the API reports `restartRequired`.
 - README includes the two-minute overview video. The examples archive contains
   public integration sources only; configure credentials locally.
+
+Publication scope: user explicitly requested this experimental prerelease before
+the final combined quiet-audio checks. Source suites, artifact hashes and the
+exact packaged fresh-install check pass. The recorder repair passed a bounded
+clean-reference run before the final combined spatial changes; final combined
+native continuity, live topology restart and attended spatial listening remain
+pending. This is not completed M08 qualification.
 - Fixes sustained breakup when a Mixer combines physical game audio and
   application capture: application capture now uses the graph's 48 kHz rate.
 - Routine application liveness checks avoid a full Windows process inventory
