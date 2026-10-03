@@ -1,5 +1,14 @@
 # AudioRouter release notes
 
+## Unreleased
+
+- Devices at 44.1, 88.2, 96 or 192 kHz work in multi-path sessions (inputs,
+  outputs, endpoint loopback and Surround to headphones): Windows resamples
+  them to AudioRouter's 48 kHz. Previously such a device was refused, for
+  example a 96 kHz 7.1 SteelSeries Sonar channel or a DAC set to 44.1 kHz.
+- The "device in use" message also names a VB-Cable's "In 16ch" twin when an
+  application playing to it is what blocks the cable.
+
 ## 0.0.7 — 2026-10-03 (unsigned experimental preview)
 
 - "Device in use" now names the exact device another application holds

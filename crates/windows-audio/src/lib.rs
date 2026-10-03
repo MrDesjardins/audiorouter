@@ -3997,6 +3997,33 @@ impl windows::Win32::Media::Audio::IActivateAudioInterfaceCompletionHandler_Impl
     }
 }
 
+/// Ask for `sample_rate_hz` instead of a mix format's own rate, keeping its
+/// channel layout and sample format, so a shared-mode stream initialized with
+/// `AUTOCONVERTPCM | SRC_DEFAULT_QUALITY` is resampled by the Windows audio
+/// engine. Returns whether the rate changed (and so needs the SRC flag).
+/// `None`, an unchanged rate, or a rate outside 8–192 kHz leaves the format as is.
+///
+/// # Safety
+/// `format` must point to a valid, writable `WAVEFORMATEX` (or the header of a
+/// `WAVEFORMATEXTENSIBLE`) that no other code accesses during the call, such as
+/// the allocation `IAudioClient::GetMixFormat` returns before it is freed.
+unsafe fn request_sample_rate(
+    format: *mut windows::Win32::Media::Audio::WAVEFORMATEX,
+    sample_rate_hz: Option<u32>,
+) -> bool {
+    let Some(rate) = sample_rate_hz.filter(|rate| (8_000..=192_000).contains(rate)) else {
+        return false;
+    };
+    // SAFETY: the caller guarantees `format` is valid and exclusively ours.
+    let header = unsafe { &mut *format };
+    if header.nSamplesPerSec == rate || header.nBlockAlign == 0 {
+        return false;
+    }
+    header.nSamplesPerSec = rate;
+    header.nAvgBytesPerSec = rate * u32::from(header.nBlockAlign);
+    true
+}
+
 fn process_loopback_format() -> windows::Win32::Media::Audio::WAVEFORMATEX {
     windows::Win32::Media::Audio::WAVEFORMATEX {
         wFormatTag: windows::Win32::Media::Audio::WAVE_FORMAT_PCM as u16,
@@ -4506,7 +4533,7 @@ impl SharedCapture {
     /// The duration argument is retained for API compatibility; event-driven
     /// shared-mode WASAPI requires `Initialize` to receive zero here.
     pub fn open(endpoint_id: &str, _buffer_duration_100ns: i64) -> Result<Self, AudioError> {
-        match Self::open_internal(endpoint_id, true, 0, false) {
+        match Self::open_internal(endpoint_id, true, 0, false, None) {
             Err(AudioError::WindowsOperation { error, .. })
                 if should_retry_capture_initialization(&error) =>
             {
@@ -4515,7 +4542,7 @@ impl SharedCapture {
                 // permission failures, and endpoint disappearance must remain
                 // visible to the caller instead of being relabeled as a mode
                 // compatibility issue.
-                Self::open_internal(endpoint_id, false, DEFAULT_CAPTURE_POLLING_BUFFER_100NS, false)
+                Self::open_internal(endpoint_id, false, DEFAULT_CAPTURE_POLLING_BUFFER_100NS, false, None)
             }
             result => result,
         }
@@ -4534,7 +4561,7 @@ impl SharedCapture {
         } else {
             DEFAULT_CAPTURE_POLLING_BUFFER_100NS
         };
-        Self::open_internal(endpoint_id, false, duration, false)
+        Self::open_internal(endpoint_id, false, duration, false, None)
     }
 
     /// Open a shared loopback capture of an exact active render endpoint: the
@@ -4542,7 +4569,55 @@ impl SharedCapture {
     /// mix format (for example 8 channels when it is configured as 7.1).
     /// Delivery is polled; the worker services sources every millisecond.
     pub fn open_loopback(render_endpoint_id: &str) -> Result<Self, AudioError> {
-        Self::open_internal(render_endpoint_id, false, DEFAULT_CAPTURE_POLLING_BUFFER_100NS, true)
+        Self::open_internal(render_endpoint_id, false, DEFAULT_CAPTURE_POLLING_BUFFER_100NS, true, None)
+    }
+
+    /// Loopback-capture a render endpoint, delivering `sample_rate_hz` frames
+    /// whatever the endpoint's mix rate: the Windows audio engine resamples
+    /// (`AUTOCONVERTPCM | SRC_DEFAULT_QUALITY`). Channel layout and sample
+    /// format stay the endpoint's own.
+    pub fn open_loopback_at_rate(
+        render_endpoint_id: &str,
+        sample_rate_hz: u32,
+    ) -> Result<Self, AudioError> {
+        Self::open_internal(
+            render_endpoint_id,
+            false,
+            DEFAULT_CAPTURE_POLLING_BUFFER_100NS,
+            true,
+            Some(sample_rate_hz),
+        )
+    }
+
+    /// Like [`Self::open_refreshed_bound_with_retry`], but delivering
+    /// `sample_rate_hz` frames; the Windows audio engine resamples when the
+    /// endpoint's mix rate differs. Channel layout and format stay the
+    /// endpoint's own.
+    pub fn open_bound_at_rate_with_retry(
+        monitor: &mut EndpointMonitor,
+        expected: &EndpointInfo,
+        sample_rate_hz: u32,
+        max_attempts: u32,
+        retry_delay_ms: u64,
+    ) -> Result<Self, AudioError> {
+        retry_transient_audio_operation(max_attempts, retry_delay_ms, || {
+            monitor.refresh_changes()?;
+            let endpoint_id = bound_endpoint_id(monitor, expected, EndpointDirection::Capture)?;
+            match Self::open_internal(&endpoint_id, true, 0, false, Some(sample_rate_hz)) {
+                Err(AudioError::WindowsOperation { error, .. })
+                    if should_retry_capture_initialization(&error) =>
+                {
+                    Self::open_internal(
+                        &endpoint_id,
+                        false,
+                        DEFAULT_CAPTURE_POLLING_BUFFER_100NS,
+                        false,
+                        Some(sample_rate_hz),
+                    )
+                }
+                result => result,
+            }
+        })
     }
 
     fn open_internal(
@@ -4550,12 +4625,14 @@ impl SharedCapture {
         event_driven: bool,
         buffer_duration_100ns: i64,
         loopback: bool,
+        sample_rate_hz: Option<u32>,
     ) -> Result<Self, AudioError> {
         use windows::Win32::Media::Audio::{
             eCapture, eRender, IAudioCaptureClient, IAudioClient, IMMDeviceEnumerator,
             MMDeviceEnumerator, AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
             AUDCLNT_STREAMFLAGS_EVENTCALLBACK, AUDCLNT_STREAMFLAGS_LOOPBACK,
-            AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE,
+            AUDCLNT_STREAMFLAGS_NOPERSIST, AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY,
+            DEVICE_STATE_ACTIVE,
         };
         use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
@@ -4596,13 +4673,17 @@ impl SharedCapture {
         // Create the event before requesting the COM-allocated format so an
         // event-creation failure cannot leak the format buffer.
         let format = unsafe { client.GetMixFormat()? };
+        // SAFETY: `format` is the non-null COM allocation GetMixFormat just
+        // returned; it is exclusively ours until the CoTaskMemFree below.
+        let resampled = unsafe { request_sample_rate(format, sample_rate_hz) };
         let stream_flags = if event_driven {
             AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
                 | AUDCLNT_STREAMFLAGS_EVENTCALLBACK
                 | AUDCLNT_STREAMFLAGS_NOPERSIST
         } else {
             AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST
-        } | if loopback { AUDCLNT_STREAMFLAGS_LOOPBACK } else { 0 };
+        } | if loopback { AUDCLNT_STREAMFLAGS_LOOPBACK } else { 0 }
+            | if resampled { AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY } else { 0 };
         let initialized = unsafe {
             client.Initialize(
                 AUDCLNT_SHAREMODE_SHARED,
@@ -4918,7 +4999,7 @@ impl SharedRender {
     /// The duration argument is retained for API compatibility; event-driven
     /// shared-mode WASAPI requires `Initialize` to receive zero here.
     pub fn open(endpoint_id: &str, _buffer_duration_100ns: i64) -> Result<Self, AudioError> {
-        Self::open_internal(endpoint_id, 0)
+        Self::open_internal(endpoint_id, 0, None)
     }
 
     /// Open with a device buffer of at least `buffer_duration_100ns`. In
@@ -4930,14 +5011,35 @@ impl SharedRender {
         endpoint_id: &str,
         buffer_duration_100ns: i64,
     ) -> Result<Self, AudioError> {
-        Self::open_internal(endpoint_id, buffer_duration_100ns.clamp(0, 2_000_000))
+        Self::open_internal(endpoint_id, buffer_duration_100ns.clamp(0, 2_000_000), None)
     }
 
-    fn open_internal(endpoint_id: &str, buffer_duration_100ns: i64) -> Result<Self, AudioError> {
+    /// Like [`Self::open_with_headroom`], but accepting `sample_rate_hz`
+    /// frames whatever the endpoint's mix rate: the Windows audio engine
+    /// resamples (`AUTOCONVERTPCM | SRC_DEFAULT_QUALITY`). Channel layout and
+    /// sample format stay the endpoint's own.
+    pub fn open_with_headroom_at_rate(
+        endpoint_id: &str,
+        buffer_duration_100ns: i64,
+        sample_rate_hz: u32,
+    ) -> Result<Self, AudioError> {
+        Self::open_internal(
+            endpoint_id,
+            buffer_duration_100ns.clamp(0, 2_000_000),
+            Some(sample_rate_hz),
+        )
+    }
+
+    fn open_internal(
+        endpoint_id: &str,
+        buffer_duration_100ns: i64,
+        sample_rate_hz: Option<u32>,
+    ) -> Result<Self, AudioError> {
         use windows::Win32::Media::Audio::{
             eRender, IAudioClient, IAudioRenderClient, IMMDeviceEnumerator, MMDeviceEnumerator,
             AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
-            AUDCLNT_STREAMFLAGS_EVENTCALLBACK, AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE,
+            AUDCLNT_STREAMFLAGS_EVENTCALLBACK, AUDCLNT_STREAMFLAGS_NOPERSIST,
+            AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY, DEVICE_STATE_ACTIVE,
         };
         use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
@@ -4973,12 +5075,16 @@ impl SharedRender {
         // Create the event before requesting the COM-allocated format so an
         // event-creation failure cannot leak the format buffer.
         let format = unsafe { client.GetMixFormat()? };
+        // SAFETY: `format` is the non-null COM allocation GetMixFormat just
+        // returned; it is exclusively ours until the CoTaskMemFree below.
+        let resampled = unsafe { request_sample_rate(format, sample_rate_hz) };
         let initialized = unsafe {
             client.Initialize(
                 AUDCLNT_SHAREMODE_SHARED,
                 AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
                     | AUDCLNT_STREAMFLAGS_EVENTCALLBACK
-                    | AUDCLNT_STREAMFLAGS_NOPERSIST,
+                    | AUDCLNT_STREAMFLAGS_NOPERSIST
+                    | if resampled { AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY } else { 0 },
                 buffer_duration_100ns,
                 0,
                 format,
@@ -8499,6 +8605,33 @@ impl NativeBridgeSession {
 mod tests {
     use super::*;
     use audiorouter_engine::AudioTap;
+
+    #[test]
+    fn requested_rate_keeps_layout_and_updates_the_byte_rate() {
+        let mix = |rate: u32| windows::Win32::Media::Audio::WAVEFORMATEX {
+            wFormatTag: 0xFFFE,
+            nChannels: 8,
+            nSamplesPerSec: rate,
+            nAvgBytesPerSec: rate * 32,
+            nBlockAlign: 32,
+            wBitsPerSample: 32,
+            cbSize: 22,
+        };
+        // A 96 kHz 7.1 float mix is asked for at 48 kHz: only the rate changes.
+        let mut format = mix(96_000);
+        assert!(unsafe { request_sample_rate(&mut format, Some(48_000)) });
+        let (rate, bytes, channels, align) = (format.nSamplesPerSec, format.nAvgBytesPerSec, format.nChannels, format.nBlockAlign);
+        assert_eq!((rate, bytes, channels, align), (48_000, 48_000 * 32, 8, 32));
+        // Already at the rate, no request, or an implausible rate: unchanged, no SRC flag.
+        for request in [Some(48_000), None, Some(7_999), Some(192_001)] {
+            let mut format = mix(48_000);
+            assert!(!unsafe { request_sample_rate(&mut format, request) });
+            let rate = format.nSamplesPerSec;
+            assert_eq!(rate, 48_000);
+        }
+        let mut format = mix(44_100);
+        assert!(unsafe { request_sample_rate(&mut format, Some(48_000)) });
+    }
 
     #[test]
     fn multi_input_feeder_submits_coherent_sources_to_both_outputs() {

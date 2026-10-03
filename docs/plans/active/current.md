@@ -52,6 +52,19 @@ Agent work (no hardware or credentials needed):
 3. Done 2026-10-03 (simulation): [Siege footstep EQ](../future/siege-footstep-eq.md) compressor
    settings simulated with the engine DSP; Balanced/Maximum proposed, awaiting the user's choice by ear.
 
+4a. Done 2026-10-03: 44.1/96 kHz devices (CAP-14, multi-path inputs, outputs,
+   endpoint loopback, surround). New opt-in constructors
+   (`SharedCapture::open_loopback_at_rate`, `open_bound_at_rate_with_retry`,
+   `SharedRender::open_with_headroom_at_rate`) request the endpoint's own
+   layout at 48 kHz with `AUTOCONVERTPCM | SRC_DEFAULT_QUALITY`; the
+   multi-path engine uses them and accepts float32 at 8–192 kHz. Existing
+   constructors and the single-path bridge are unchanged. Unit test for the
+   format change; opt-in live test on the user's 96 kHz 7.1 "SteelSeries
+   Sonar – Media" (silence only): 48,022 frames/s converted, 96,067
+   unconverted. Control 228 and windows-audio 110 tests pass. Not yet:
+   continuity harness or attended listening through a 96 kHz device.
+   Rollback: revert the constructors' use in control.
+
 Needs the user (attended, hardware or decisions):
 
 4. Attended confirmation in the shell: drag-to-canvas, device picker on the

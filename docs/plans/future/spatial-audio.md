@@ -16,8 +16,10 @@ Still future (not authorized by the first slice):
   reproducible algorithm.
 - Head tracking, elevation/height channels, object audio (Windows Sonic /
   Spatial Sound APIs) and personalised HRTFs.
-- Capturing 44.1/96 kHz surround endpoints with sample-rate conversion; the
-  first slice requires 48 kHz.
+- ~~Capturing 44.1/96 kHz surround endpoints with sample-rate conversion~~ —
+  done 2026-10-03: multi-path inputs and outputs at 8–192 kHz are resampled to
+  the 48 kHz graph by the Windows audio engine ([CAP-14](../../spec/05-windows-capture.md)).
+  Attended listening on a 96 kHz 7.1 device remains.
 - A listening test that scores front/back and left/right localization and
   coloration across several listeners. The first slice has objective tests
   (ear energy per speaker, front/back difference) and one attended Siege check.

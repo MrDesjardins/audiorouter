@@ -5215,6 +5215,13 @@ fn audio_control_error(error: audiorouter_windows_audio::AudioError) -> ControlE
     }
 }
 
+/// Device rates the multi-path engine accepts. Its graph runs at
+/// `INTERNAL_SAMPLE_RATE_HZ`; other rates are opened at that rate and
+/// resampled by the Windows audio engine (CAP-14, 44.1/96 kHz devices).
+fn multi_path_rate_supported(sample_rate_hz: u32) -> bool {
+    (8_000..=192_000).contains(&sample_rate_hz)
+}
+
 /// An audio failure while opening one exact endpoint, identified so the
 /// client can say which device was refused (for example held exclusively).
 fn endpoint_audio_control_error(
@@ -6680,11 +6687,11 @@ impl ControlPlane {
                     if node_spatial_headphones(node) =>
                 {
                     if !endpoint.is_ieee_float32()
-                        || endpoint.sample_rate_hz != audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ
+                        || !multi_path_rate_supported(endpoint.sample_rate_hz)
                         || channels != 2
                     {
                         return Err(ControlError::InvalidRequest(format!(
-                            "{}: surround to headphones needs a 48 kHz float capture device",
+                            "{}: surround to headphones needs a float capture device at 8–192 kHz",
                             node.name
                         )));
                     }
@@ -6707,7 +6714,7 @@ impl ControlPlane {
                 (NodeKind::PhysicalInput, NativeMultiInputSourceBinding::Physical(endpoint)) => {
                     if endpoint.direction != audiorouter_windows_audio::EndpointDirection::Capture
                         || !endpoint.is_ieee_float32()
-                        || endpoint.sample_rate_hz != audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ
+                        || !multi_path_rate_supported(endpoint.sample_rate_hz)
                         || usize::from(endpoint.channels) != channels
                     {
                         return Err(ControlError::InvalidRequest(
@@ -6789,13 +6796,19 @@ impl ControlPlane {
                         .endpoint_monitor
                         .as_mut()
                         .expect("endpoint monitor initialized above");
+                    // The multi-path graph runs at 48 kHz; a 44.1/96 kHz device
+                    // is resampled by the Windows audio engine as it opens.
+                    let _ = buffer_duration_100ns;
                     let opened = if endpoint.direction == audiorouter_windows_audio::EndpointDirection::Render {
-                        audiorouter_windows_audio::SharedCapture::open_loopback(&endpoint.id)
+                        audiorouter_windows_audio::SharedCapture::open_loopback_at_rate(
+                            &endpoint.id,
+                            audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ,
+                        )
                     } else {
-                        audiorouter_windows_audio::SharedCapture::open_refreshed_bound_with_retry(
+                        audiorouter_windows_audio::SharedCapture::open_bound_at_rate_with_retry(
                             monitor,
                             endpoint,
-                            buffer_duration_100ns,
+                            audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ,
                             max_attempts,
                             retry_delay_ms,
                         )
@@ -8143,18 +8156,19 @@ impl ControlPlane {
                 })?;
             if !endpoint.is_ieee_float32()
                 || endpoint.channels != 2
-                || endpoint.sample_rate_hz != audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ
+                || !multi_path_rate_supported(endpoint.sample_rate_hz)
             {
                 return Err(ControlError::InvalidRequest(
-                    "output fan-out endpoints must be stereo 48 kHz IEEE float32".into(),
+                    "output fan-out endpoints must be stereo IEEE float32 at 8–192 kHz".into(),
                 ));
             }
             // 50 ms device headroom and an 8-quantum ring absorb capture
             // bursts and late plugin blocks. Neither adds delay: the pump
             // queues only processed audio plus its bounded jitter cushion.
-            let render = audiorouter_windows_audio::SharedRender::open_with_headroom(
+            let render = audiorouter_windows_audio::SharedRender::open_with_headroom_at_rate(
                 endpoint_id,
                 MULTI_INPUT_RENDER_HEADROOM_100NS,
+                audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ,
             )
             .map_err(|error| endpoint_audio_control_error(error, endpoint_id))?;
             let ring = Arc::new(
