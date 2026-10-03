@@ -1,6 +1,6 @@
 ﻿# Active plan — post-0.0.5 maintenance
 
-Updated 2026-10-02. User-requested unsigned experimental prerelease published.
+Updated 2026-10-03. v0.0.6 release in preparation (user-requested); checks pass, see [0.0.6 evidence](evidence/2026-10-03-release-0.0.6.md).
 
 ## Objective and scope
 
@@ -57,6 +57,31 @@ states where the gate closes. `npm.cmd test` 457 pass; `tsc` clean;
 dynamics/drag-place/duck Playwright 13 pass; release shell rebuilt with
 `custom-protocol` at 13:37, embedding `index-BtvRU4mQ.js`.
 
+## 2026-10-03 — Device picker showed a borrowed device (support report, UI-05/UI-08)
+
+Report: a user's friend on v0.0.3 pressed Play and got "No audio started.
+Choose the device for SMSL DAC, Mic Desktop Input in Properties, save, then
+press Play." Their logs (discovery.jsonl, shell.jsonl; kept outside the repo)
+show: a ghost render endpoint (index 37, `0xE000020B`) broke `devices.list`
+before 0.0.3 and is skipped since (28 devices listed); one `graph.commit`, then
+no prepare/start request, i.e. the UI refused Play because both saved device
+nodes had no `endpointId`. Cause (also in 0.0.5): the Physical Input/Output
+pickers displayed the remembered app-wide endpoint when the node had none, so
+selecting that visible device fired no change and Save stored no device.
+Workaround given: choose another device, then the correct one, Save, Play.
+
+Fix: pickers and the Surround check use only the node's own `endpointId`; an
+unbound node shows the empty choice and "No device is chosen for this node
+yet. Choose one, then Save." (themed for dark/light/high contrast). Regression
+`ui/e2e/device-binding.pw.ts` (3 themes) fails on the previous code (value
+`render-preview` instead of empty) and passes now. `npm.cmd test` 457 pass,
+`tsc` clean; device-consent, live-controls, media-and-routing, banner,
+spatial and device-binding Edge suites: 20 pass, 2 fail identically without
+this change (pre-existing: `live-controls` "refuse unsaved topology edits"
+gets a saved message; `media-and-routing` occupied-output finds two Undo
+buttons). Those two need separate investigation. Single-path routes still
+play on the remembered binding when the node has none; unchanged.
+
 ## Remaining qualification and next action
 
 Real-match Duck/failure release, native Quit process exit, combined quiet-tone
@@ -65,7 +90,9 @@ machine install/upgrade/uninstall, WebView2 absence, hardware/endurance,
 accessibility and signing remain open and disclosed. These are not implied by
 portable tests or this experimental publication.
 
-Exact next task: user testing/support; on a new request, plan attended/native
+Exact next task: finish v0.0.6 (package, draft, exact packaged first run with
+AudioRouter closed, publish, verify downloads); then user testing/support. On a
+new request, plan attended/native
 qualification with a quiet reference and closed competing apps. Do not run new
 implementation or disturb the user's audio autonomously after this release.
 

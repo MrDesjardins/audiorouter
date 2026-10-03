@@ -1,7 +1,14 @@
 # AudioRouter release notes
 
-## Unreleased
+## 0.0.6 — 2026-10-03 (unsigned experimental preview)
 
+- Fix "No audio started. Choose the device for …" after choosing the device:
+  a device node without a saved device showed a device remembered from
+  elsewhere, so choosing it did nothing. The picker now starts empty and
+  says the node has no device yet. (Workaround on older versions: pick another
+  device, then the correct one, Save, Play.)
+- Fix dragging tools onto the canvas in the desktop app: the drop preview
+  shows and dropping adds the tool.
 - Compressor, Gate and Duck threshold suggestions no longer make the panel
   jump: the suggestion keeps a fixed place and its last measurement.
 - The compressor suggestion stays close to your voice peaks instead of
@@ -9,8 +16,14 @@
   microphone up when your voice is quiet.
 - The Gate suggestion keeps its closing point clear of room noise (it accounts
   for Hysteresis) and says where the gate closes.
-- Fix dragging tools onto the canvas in the desktop app: the drop preview
-  shows and dropping adds the tool.
+
+Unsigned experimental prerelease; Windows may warn. No data migration or
+device-format change; keep 0.0.5 and a configuration backup for rollback.
+Seven browser-harness tests (Undo/EQ history, enable/bypass label, two live
+draft checks) fail identically on 0.0.5 and are test defects under review,
+not new regressions. Real-match Duck, native Quit, combined continuity,
+spatial listening and full M08 install/hardware/accessibility/signing
+qualification remain open.
 
 ## 0.0.5 — 2026-10-02 (unsigned experimental preview)
 
