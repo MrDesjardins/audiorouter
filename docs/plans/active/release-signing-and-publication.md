@@ -1,5 +1,17 @@
 # Plan: sign the Windows release and publish it on GitHub
 
+**Current status (2026-10-03): blocked on the user's signing decision.**
+Unsigned prereleases 0.0.2–0.0.7 are public on GitHub with their tags, and
+the release tooling (`prepare-artifacts.ps1`, `verify-artifacts.ps1`, the
+repaired `create-draft-release.ps1`) works end to end; the "tags only local"
+and "no releases" statements below are history. Nothing is signed. The next
+step needs the user, not an agent: choose a provider (SignPath Foundation's
+free OSS route, which requires applying with the maintainer's identity, or a
+paid certificate) and enroll. Tasks 1–3 (sign a test file, add `-Sign`,
+verify signatures) can start once a credential exists. Driver signing stays
+set aside ([M03](../future/M03-driver-signing.md)); this plan is only about
+the app and installer.
+
 Status: preflight started; signing decisions pending (2026-10-01). It is authorized by the user to be
 executed by another agent. Read this whole file, `AGENTS.md`,
 `docs/plans/active/current.md`, `docs/operations/distribution.md` and

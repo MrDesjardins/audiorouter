@@ -151,5 +151,5 @@ node IDs and incoming edges. Real Stats.cc broadcast delivery, gameplay phases
 and heard/native sample levels still require the attended steps above; fixtures
 do not prove a live match. Stats.cc and AudioRouter's running setup were unchanged.
 
-See the [implementation plan](../../../docs/plans/active/stats-cc-siege-integration.md)
+See the [implementation plan](../../../docs/plans/archived/2026-10-02-stats-cc-siege-integration.md)
 and [HTTP guide](../../../docs/operations/local-http-api.md).

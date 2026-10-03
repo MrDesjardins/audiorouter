@@ -251,7 +251,7 @@ Implemented and qualified by 44 shell tests (1 ignored), 7 focused UI tests,
 Close the old app normally before launching it; no fresh-install/installer gate
 is claimed for this unpublished review build.
 
-Current authorized task: [Stats.cc Siege integration](../active/stats-cc-siege-integration.md).
+Current authorized task: [Stats.cc Siege integration](2026-10-02-stats-cc-siege-integration.md).
 Investigate its local state data, then implement an independent example service
 under `examples/integrations/` controlling only the intended mixer input levels.
 Release qualification remains open; this task does not reopen VST implementation.
@@ -383,7 +383,7 @@ notes heading link was repaired before packaging. See the
 [Joe release evidence](../active/evidence/2026-10-02-joe-prerelease-0.0.3.md).
 
 **Exact next task:** attended setup and validation of the
-[Stats.cc integration example](../active/stats-cc-siege-integration.md): prep 30%, action
+[Stats.cc integration example](2026-10-02-stats-cc-siege-integration.md): prep 30%, action
 100%, Discord always 100%. Implementation and 11 fixture checks are complete;
 Private example configuration and read-only authenticated HTTP inspection passed.
 Stats.cc feed and real gameplay are pending. Joe's enumeration

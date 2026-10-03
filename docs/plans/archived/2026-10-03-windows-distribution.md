@@ -1,5 +1,16 @@
 # Windows distribution and manual GitHub release plan
 
+Archived 2026-10-03: **implementation completed; qualification gates open.**
+Promoted to M08 by DEC-17. Steps 1–5 and 7 are done: per-user NSIS installer
+with the CLI and plugin worker, version/tag-checked `tools/release/` scripts
+and `manual-release.yml` that build, verify and create a GitHub draft only,
+onboarding with explicit device consent, and the distribution/release-notes
+docs. Unsigned prereleases 0.0.2–0.0.7 were published from it, each with an
+exact-package fresh-install check and downloaded-asset verification. Step 6
+(clean-machine install/upgrade/uninstall, missing WebView2, signatures) is
+not done and is tracked in the active plan and the
+[signing plan](../active/release-signing-and-publication.md).
+
 Status: planning requested 2026-09-28; implementation is not authorized by
 this plan. The user asked for an easy integrated install and a manual official
 release process. This plan defines a reviewable route from the current

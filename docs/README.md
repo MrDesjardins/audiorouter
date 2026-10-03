@@ -63,7 +63,7 @@ the native/signing/installer gates that remain open.
 
 The [distribution runbook](operations/distribution.md) states current installer
 and release availability. The
-[Windows distribution plan](plans/future/windows-distribution.md) now records
+[Windows distribution plan](plans/archived/2026-10-03-windows-distribution.md) now records
 the DEC-17 M08 scope and remaining install/publication evidence.
 
 The [development release notes](operations/release-notes.md) summarize the

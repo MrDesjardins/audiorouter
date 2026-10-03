@@ -1,5 +1,12 @@
 # Stats.cc → Siege mixer integration
 
+Archived 2026-10-03: **completed.** The standalone example is implemented and
+tested (11/11), the user enabled the Stats.cc feed and confirmed it working in
+Siege, and the 30% policy is in place. Since 0.0.5 the built-in Duck
+`siegeRound` trigger (DSP-19) covers the same need without a separate
+service; the example remains a reference for REST integrations. The
+undocumented Stats.cc feed can change; see the active plan for risks.
+
 Date: 2026-10-02. User authorizes investigation, a plan and a standalone example
 service. This is an external integration; no AudioRouter backend/VST changes.
 
@@ -119,7 +126,7 @@ the real session and three target IDs. The example now reads that saved credenti
 without prompting. `npm run inspect` authenticated to the running real HTTP API
 and validated all target IDs; no audio levels changed. The eleven fixture tests
 passed again. Token persistence and UI IDs are a separately authorized AudioRouter
-change; see [evidence](evidence/2026-10-02-identity-and-persistent-token.md).
+change; see [evidence](../active/evidence/2026-10-02-identity-and-persistent-token.md).
 
 Attended follow-up: user enabled the feed and reports integration working in
 Siege. On 2026-10-02 the user requested non-action volume 30% instead of the

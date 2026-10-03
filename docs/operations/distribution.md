@@ -1,5 +1,16 @@
 # Distribution status and intended release path
 
+The latest release is [0.0.7](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.7),
+an unsigned experimental prerelease. Download `AudioRouter_0.0.7_x64-setup.exe`
+from its assets. Every release from 0.0.3 to 0.0.7 was built from a clean tag
+with `tools/release/`, passed the exact-package fresh-install check, and had
+its published assets downloaded and verified; see the
+[release notes](release-notes.md) and the evidence files under
+`docs/plans/active/evidence/` (for example
+[0.0.7](../plans/active/evidence/2026-10-03-release-0.0.7.md)). Signing,
+clean-machine install/upgrade/uninstall and missing-WebView2 checks remain
+open. The paragraphs below are kept as history.
+
 [0.0.3](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.3) is published
 as an unsigned test prerelease for Joe's device-discovery
 failure, clearer logging, instance recovery and usability fixes. Use its
@@ -45,7 +56,7 @@ candidate should include a setup package, release notes, checksums, a
 provenance manifest, SBOMs, and third-party notices. Drafts and source ZIPs
 are not equivalent to an installed application.
 
-The implementation and runbook are in [Windows distribution planning](../plans/future/windows-distribution.md)
+The implementation and runbook are in [Windows distribution planning](../plans/archived/2026-10-03-windows-distribution.md)
 and `tools/release/`. The checked-in workflow requires a reviewed existing
 `vMAJOR.MINOR.PATCH` tag matching all app version files, validates its ancestry
 against the default branch, runs acceptance checks, and creates a verified
