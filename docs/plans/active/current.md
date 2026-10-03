@@ -1,6 +1,6 @@
 ﻿# Active plan — v0.0.4 release qualification
 
-Updated: 2026-10-02. User requests immediate prerelease publication, then stop.
+Updated: 2026-10-02. v0.0.4 experimental prerelease published; work stopped at user's request.
 
 ## Objective and scope
 
@@ -102,5 +102,11 @@ playing. Publish the verified package as an unsigned experimental prerelease,
 disclosing final combined native/path-change/spatial listening checks pending.
 This does not complete M08 or claim a fully qualified audio release. Stop after
 publication and uploaded artifact verification; do not run live cable checks.
+Published: [v0.0.4](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.4),
+not draft, explicitly prerelease. Tag points to packaged source `240721b6`.
+Downloaded all uploaded assets into `target/releases/v0.0.4-downloaded` and
+artifact hash/provenance verification passes. No live check during gameplay.
+Exact next task, only when the user resumes: remaining quiet native continuity,
+live path-change and spatial listening qualification. Full M08 remains open.
 Prior detailed decisions/results are retained in the
 [superseded execution record](../archived/2026-10-02-release-repair-execution.md).
