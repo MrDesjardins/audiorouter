@@ -88,6 +88,36 @@ at 3–10 kHz; peak +9 dB is safe at −18 dBFS game peaks with the limiter.
 Trade-off: A-weighted steps versus gunfire change −0.8…+0.3 dB (gunfire is
 brighter too); drones +1.1…+1.4 dB. Awaiting the user's v2 listening result.
 
+## Compressor simulation with the engine DSP (2026-10-03)
+
+`cargo run -p audiorouter-dsp --example siege_chain --release -- <folder>
+[--grid] [--try thr,ratio,attack,release,makeup ...]` runs the takes through
+the engine's own `ParametricEq` (v2 bands), `Compressor` (knee 6 dB) and
+`PeakLimiter` (−1 dBFS, 5 ms lookahead, 100 ms release) in 128-frame blocks.
+Metric: power mean of the quieter half of each take's events (50 ms RMS
+windows ≥6 dB above its floor) minus the gunfire take's 95th-percentile
+window. "Step squeeze" is the median compressor gain reduction during step
+events.
+
+| Chain | Steps − gunfire | Drones − gunfire | Step squeeze | Gunfire GR | Ambience |
+| --- | --- | --- | --- | --- | --- |
+| Raw | −9.5 dB | −10.2 dB | — | — | 0 |
+| EQ v2 only | −10.3 | −12.1 | — | — | +0.8 |
+| v2 chain: −42 dB, 3:1, 15/120 ms, +6 | −4.8 | −6.0 | 0.5 | 7.1 | +6.7 |
+| Balanced: −42, 6:1, 10/120 ms | −3.0 | −3.5 | 1.1 | 9.5 | +6.4 |
+| Maximum: −42, 6:1, 5/80 ms | −1.7 | −2.9 | 1.4 | 9.8 | +6.3 |
+| −46, 4:1, 10/120 ms | −1.1 | −2.1 | 4.1 (too much) | 11.6 | +4.5 |
+
+The current v2 chain already improves every step take by +3.7 to +5.6 dB
+relative to gunfire, confirming the user's listening. A 452-setting grid
+(threshold −50…−34, ratio 2–6, attack 5–30 ms, release 80–200 ms, makeup
+4–10 dB; limits: step squeeze ≤2 dB, peak ≤ −1 dBFS) ranks 6:1 with 5 ms
+attack first. Makeup gain does not change the balance, only overall level and
+background. Thresholds below −42 dB start compressing the steps themselves.
+Recommendation: try **Balanced** first (keeps step clicks, which a 3 ms attack
+dulled in v1), then Maximum if steps still need help; listen for pumping with
+the 80 ms release. Not yet applied to the session.
+
 ## Risks
 
 Boosting step bands also boosts guns that share them; gains are bounded and

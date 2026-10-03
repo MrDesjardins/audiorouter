@@ -49,8 +49,8 @@ Agent work (no hardware or credentials needed):
    of the same cable when the last device list contains it (matched on the
    full "(VB-Audio …)" cable name, so CABLE and CABLE-A stay apart).
    `backend.test.ts` regression added.
-3. [Siege footstep EQ](../future/siege-footstep-eq.md): simulate the
-   compressor on the reference takes and tune after the user's match feedback.
+3. Done 2026-10-03 (simulation): [Siege footstep EQ](../future/siege-footstep-eq.md) compressor
+   settings simulated with the engine DSP; Balanced/Maximum proposed, awaiting the user's choice by ear.
 
 Needs the user (attended, hardware or decisions):
 
