@@ -43,7 +43,7 @@ test("occupied output inserts a real Mixer, undo restores edges, and saved routi
   await expect(page.locator(".global-action-message")).toContainText("Added a Mixer");
   await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(4);
   await page.getByRole("tab", { name: "Session", exact: true }).click();
-  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await page.locator(".session-page").getByRole("button", { name: "Undo", exact: true }).click();
   await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(2);
   await connect();
   await page.locator(".topbar").getByRole("button", { name: "Save", exact: true }).click();

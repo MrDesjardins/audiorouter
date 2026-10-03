@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 for (const theme of ["dark", "light", "high-contrast"]) {
-  test(`API listener controls and address in ${theme}`, async ({ page }) => {
+  test(`API listener controls and address in ${theme}`, async ({ page }, testInfo) => {
     await page.addInitScript(() => {
       let running = false;
       Object.assign(window, { __TAURI_INTERNALS__: { invoke: async (command: string, args?: { action?: string; port?: number }) => {
@@ -19,7 +19,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(page.getByLabel("API port")).toBeDisabled();
     await expect(page.getByRole("button", { name: "Open Swagger documentation" })).toBeEnabled();
     await expect(page.getByRole("button", { name: "Reveal API token" })).toBeVisible();
-    await page.screenshot({ path: `../docs/plans/active/evidence/2026-09-29-api-running-${theme}.png` });
+    await page.screenshot({ path: testInfo.outputPath(`2026-09-29-api-running-${theme}.png`) });
     await page.getByRole("button", { name: "Stop API" }).click();
     await expect(page.getByLabel("API URL")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Start API" })).toBeVisible();

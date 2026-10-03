@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createDisconnectedBackend, createLiveBackend, createLiveBackendFromTransport, formatUiError, isRevisionConflict, SnapshotCache, type UiBackend } from "./backend";
+import { createDisconnectedBackend, createLiveBackend, createLiveBackendFromTransport, formatUiError, isRevisionConflict, rememberDeviceNames, SnapshotCache, type UiBackend } from "./backend";
 import { AudioRouterRpcError } from "@audiorouter/contracts";
 import { demoSession } from "./fixtures";
 import { applyGraphDraft, describeDraftChanges, setNodeDraftFlag, setNodeDraftParameter } from "./draft";
@@ -57,6 +57,24 @@ describe("UI error formatting", () => {
     expect(formatUiError(error, "fallback")).toBe(
       "The selected audio device is in use by another application. Choose a different device in the Output Device node's Properties, or release this exact device in the application using it, then prepare it again.",
     );
+  });
+
+  it("names the exact device another application holds, from the last device list", () => {
+    const busy = (resourceIds: string[]) => new AudioRouterRpcError({
+      code: -32000,
+      message: "audio endpoint is busy",
+      data: { code: "deviceInUse", fieldPath: null, resourceIds, retryable: true, remediation: "", hresult: 0x8889000A },
+    });
+    const format = { tag: 3, channels: 2, sampleRateHz: 48000, bitsPerSample: 32, bytesPerFrame: 8, channelMask: 3, subformat: null } as never;
+    rememberDeviceNames([
+      { id: "cable-input", name: "CABLE Input (VB-Audio Virtual Cable)", direction: "render", state: "active", defaultRoles: [], format, periods: null as never },
+      { id: "mic", name: "Microphone (PD200X)", direction: "capture", state: "active", defaultRoles: [], format, periods: null as never },
+    ]);
+    expect(formatUiError(busy(["cable-input"]), "fallback")).toContain("\"CABLE Input (VB-Audio Virtual Cable)\" is in use by another application");
+    expect(formatUiError(busy(["cable-input"]), "fallback")).toContain("Playback → CABLE Input (VB-Audio Virtual Cable) → Properties → Advanced");
+    expect(formatUiError(busy(["mic"]), "fallback")).toContain("Recording → Microphone (PD200X)");
+    // An unknown device keeps the generic guidance.
+    expect(formatUiError(busy(["gone"]), "fallback")).toContain("The selected audio device is in use by another application.");
   });
 
   it("explains an unsupported audio route without blaming channel counts", () => {

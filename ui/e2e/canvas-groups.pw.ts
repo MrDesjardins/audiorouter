@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { demoSession } from "../src/fixtures";
 
 for (const theme of ["dark", "light", "high-contrast"]) {
-  test(`visual groups remain behind editable audio in ${theme}`, async ({ page }) => {
+  test(`visual groups remain behind editable audio in ${theme}`, async ({ page }, testInfo) => {
     await page.addInitScript((session) => { Object.assign(window, { __routeFixtureSession: session }); }, { ...demoSession, edges: [
       { id: "mic-voice", sourceNode: "mic", sourcePort: "out", destinationNode: "voice", destinationPort: "in", matrix: [1], enabled: true },
       { id: "voice-output", sourceNode: "voice", sourcePort: "out", destinationNode: "headphones", destinationPort: "in", matrix: [1, 1], enabled: true },
@@ -31,13 +31,13 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(page.locator(".react-flow__node-flowNode")).toHaveCount(nodes);
     await expect(page.locator(".react-flow__edge")).toHaveCount(edges);
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
-    await page.screenshot({ path: `../docs/plans/active/evidence/2026-09-29-groups-${theme}.png` });
+    await page.screenshot({ path: testInfo.outputPath(`2026-09-29-groups-${theme}.png`) });
     await page.getByTestId("rf__node-voice").locator(".flow-node-title").click();
     await expect(page.getByLabel("Node name", { exact: true })).toBeVisible();
     await page.getByRole("tab", { name: "API", exact: true }).click();
     await expect(page.getByLabel("API port")).toHaveValue("17891");
     await expect(page.getByRole("button", { name: "Start API" })).toBeDisabled();
-    await page.screenshot({ path: `../docs/plans/active/evidence/2026-09-29-api-${theme}.png` });
+    await page.screenshot({ path: testInfo.outputPath(`2026-09-29-api-${theme}.png`) });
     await page.reload();
     await expect(page.locator(".canvas-group-caption")).toHaveText("Game");
     await page.locator(".canvas-group-caption").click();

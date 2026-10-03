@@ -2,7 +2,7 @@ import {test, expect} from '@playwright/test';
 import {demoSession} from '../src/fixtures';
 
 for (const theme of ['dark', 'light', 'high-contrast']) {
-  test(`live bypass preserves unsaved edits in ${theme}`, async ({page}) => {
+  test(`live bypass preserves unsaved edits in ${theme}`, async ({page}, testInfo) => {
     const session = {...demoSession, edges: [
       {id:'mic-voice',sourceNode:'mic',sourcePort:'out',destinationNode:'voice',destinationPort:'in',matrix:[1],enabled:true},
       {id:'voice-output',sourceNode:'voice',sourcePort:'out',destinationNode:'headphones',destinationPort:'in',matrix:[1,1],enabled:true},
@@ -22,7 +22,7 @@ for (const theme of ['dark', 'light', 'high-contrast']) {
     await expect(page.getByLabel('Node name', {exact:true})).toHaveValue('Unsaved voice name');
     await expect(page.getByLabel('Bypass', {exact:true})).toBeChecked();
     await expect(page.locator('.audio-run-state')).toContainText('Audio running');
-    await page.screenshot({path:`../docs/plans/active/evidence/2026-09-29-live-bypass-${theme}.png`});
+    await page.screenshot({path:testInfo.outputPath(`2026-09-29-live-bypass-${theme}.png`)});
     await page.getByLabel('Bypass', {exact:true}).uncheck();
     await expect(page.locator('.global-action-message')).toContainText('applied to the playing audio');
     await expect(page.getByLabel('Node name', {exact:true})).toHaveValue('Unsaved voice name');

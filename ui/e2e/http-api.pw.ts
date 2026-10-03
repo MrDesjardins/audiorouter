@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test("HTTP mutation reaches the authoritative backend and refreshes the frontend; Swagger works offline", async ({ page, request, context }) => {
+test("HTTP mutation reaches the authoritative backend and refreshes the frontend; Swagger works offline", async ({ page, request, context }, testInfo) => {
   test.skip(!process.env.AUDIOROUTER_HTTP_FIXTURE_TOKEN, "Requires the disposable Rust HTTP/pipe fixture");
   const url = "http://127.0.0.1:17893";
   const headers = { Authorization: `Bearer ${process.env.AUDIOROUTER_HTTP_FIXTURE_TOKEN}` };
@@ -33,7 +33,7 @@ test("HTTP mutation reaches the authoritative backend and refreshes the frontend
   await call("graph.commit", { planId: next.planId, baseRevision: latest.revision, idempotencyKey: `http-dirty-edit-${latest.revision}` });
   await expect(page.locator(".global-action-message")).toContainText("This session changed elsewhere", { timeout: 10000 });
   await expect(page.getByLabel("Node name", { exact: true })).toHaveValue("Unsaved local label");
-  await page.screenshot({ path: "../docs/plans/active/evidence/2026-09-29-http-refresh.png" });
+  await page.screenshot({ path: testInfo.outputPath("2026-09-29-http-refresh.png") });
   const docs = await context.newPage();
   const remote: string[] = [];
   docs.on("request", (request) => { if (!request.url().startsWith(url)) remote.push(request.url()); });
@@ -41,7 +41,7 @@ test("HTTP mutation reaches the authoritative backend and refreshes the frontend
   await expect(docs.locator(".swagger-ui .info .title")).toContainText("AudioRouter local API");
   await expect(docs.locator(".opblock")).toHaveCount(103);
   expect(remote).toEqual([]);
-  await docs.screenshot({ path: "../docs/plans/active/evidence/2026-09-29-swagger.png" });
+  await docs.screenshot({ path: testInfo.outputPath("2026-09-29-swagger.png") });
   await docs.getByRole("button", { name: "Authorize", exact: true }).click();
   await docs.locator(".dialog-ux .auth-container input").fill(process.env.AUDIOROUTER_HTTP_FIXTURE_TOKEN!);
   await docs.locator(".dialog-ux button.authorize").click();

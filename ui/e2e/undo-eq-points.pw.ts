@@ -33,7 +33,8 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await page.keyboard.press("Control+z");
     await expect(filter).toHaveValue("peaking");
     // A small hand movement while clicking a point must not edit its value.
-    const dot = editor.locator(".advanced-eq-point circle").nth(1);
+    // Each point draws several circles (hit target, dot, marker); aim at point 2 by its label.
+    const dot = editor.locator('.advanced-eq-point[aria-label="Point 2"] .advanced-eq-point-hit-target');
     const box = (await dot.boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();

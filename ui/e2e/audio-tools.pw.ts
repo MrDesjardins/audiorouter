@@ -314,12 +314,12 @@ test("every built-in modifier exposes working enable and bypass draft controls",
     await node.click();
     await page.getByRole("tab", { name: "Properties" }).click();
     await expect(page.getByRole("tab", { name: "Properties" })).toHaveAttribute("aria-selected", "true");
-    const enabled = inspector.getByLabel("Enabled");
+    const enabled = inspector.getByRole("checkbox", { name: "Enabled", exact: true });
     await enabled.uncheck();
     await expect(enabled).not.toBeChecked();
     await enabled.check();
     await expect(enabled).toBeChecked();
-    const bypass = inspector.getByLabel("Bypass");
+    const bypass = inspector.getByRole("checkbox", { name: "Bypass", exact: true });
     await bypass.check();
     await expect(bypass).toBeChecked();
     await bypass.uncheck();

@@ -84,8 +84,15 @@ export const test = base.extend<{ backend: RealBackend }>({
     try {
       await backend.call("sessions.create", { session: initialSession, idempotencyKey: "fixture-create" });
       await page.route("**/__e2e_rpc", async route => {
-        try { await route.fulfill({ contentType: "application/json", body: JSON.stringify(await backend.send(route.request().postDataJSON())) }); }
-        catch (error) { if (!page.isClosed()) await route.fulfill({ status: 503, body: String(error) }); }
+        // Answer each request exactly once: a backend failure becomes a 503,
+        // while a fulfil that fails because the page already abandoned the
+        // request has nobody left to answer (answering again would throw
+        // "Route is already handled" and hide the real outcome).
+        let response: { status: number; contentType?: string; body: string };
+        try { response = { status: 200, contentType: "application/json", body: JSON.stringify(await backend.send(route.request().postDataJSON())) }; }
+        catch (error) { response = { status: 503, body: String(error) }; }
+        if (page.isClosed()) return;
+        await route.fulfill(response).catch(() => undefined);
       });
       await use(backend);
       expect(pageErrors, "No uncaught UI exceptions").toEqual([]);

@@ -5191,6 +5191,9 @@ pub enum ControlError {
         retryable: bool,
         remediation: &'static str,
         message: String,
+        /// Exact endpoint IDs the failed operation was opening, reported as
+        /// `resourceIds` so clients can name the device (never logged).
+        resource_ids: Vec<String>,
     },
     PluginScan(audiorouter_plugin_host::ScanError),
     IdempotencyConflict,
@@ -5208,6 +5211,35 @@ fn audio_control_error(error: audiorouter_windows_audio::AudioError) -> ControlE
         retryable: error.is_retryable(),
         remediation: error.remediation(),
         message: error.to_string(),
+        resource_ids: Vec::new(),
+    }
+}
+
+/// An audio failure while opening one exact endpoint, identified so the
+/// client can say which device was refused (for example held exclusively).
+fn endpoint_audio_control_error(
+    error: audiorouter_windows_audio::AudioError,
+    endpoint_id: &str,
+) -> ControlError {
+    match audio_control_error(error) {
+        ControlError::Audio {
+            code,
+            operation,
+            hresult,
+            retryable,
+            remediation,
+            message,
+            ..
+        } => ControlError::Audio {
+            code,
+            operation,
+            hresult,
+            retryable,
+            remediation,
+            message,
+            resource_ids: vec![endpoint_id.to_owned()],
+        },
+        other => other,
     }
 }
 
@@ -6786,7 +6818,7 @@ impl ControlPlane {
                         Ok(client) => capture_clients.push(
                             audiorouter_windows_audio::MultiInputCaptureSource::Physical(client),
                         ),
-                        Err(error) => return Err(audio_control_error(error)),
+                        Err(error) => return Err(endpoint_audio_control_error(error, &endpoint.id)),
                     }
                 }
                 NativeMultiInputSourceBinding::Application {
@@ -8124,7 +8156,7 @@ impl ControlPlane {
                 endpoint_id,
                 MULTI_INPUT_RENDER_HEADROOM_100NS,
             )
-            .map_err(audio_control_error)?;
+            .map_err(|error| endpoint_audio_control_error(error, endpoint_id))?;
             let ring = Arc::new(
                 audiorouter_engine::AudioBlockRing::new(
                     8,
@@ -20556,18 +20588,20 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
             retryable,
             remediation,
             operation,
+            resource_ids,
             ..
-        } => Some((*hresult, *retryable, *remediation, *operation)),
+        } => Some((*hresult, *retryable, *remediation, *operation, resource_ids.clone())),
         _ => None,
     };
     let mut response = JsonRpcResponse::failure(id, -32000, message);
     if let Some(error) = response.error.as_mut() {
         let mut data = application_error_data(code);
-        if let Some((hresult, retryable, remediation, operation)) = audio_details {
+        if let Some((hresult, retryable, remediation, operation, resource_ids)) = audio_details {
             data["hresult"] = json!(hresult);
             data["retryable"] = json!(retryable);
             data["remediation"] = json!(remediation);
             data["operation"] = json!(operation);
+            data["resourceIds"] = json!(resource_ids);
         }
         error.data = Some(data);
     }
@@ -30264,6 +30298,21 @@ mod tests {
     }
 
     #[test]
+    fn endpoint_audio_errors_name_the_endpoint_being_opened() {
+        let plain = audio_control_error(audiorouter_windows_audio::AudioError::InvalidUtf16);
+        let named = endpoint_audio_control_error(
+            audiorouter_windows_audio::AudioError::InvalidUtf16,
+            "{0.0.0.00000000}.{cable-input}",
+        );
+        let data = |error| application_error_response(Some(json!(1)), error).error.unwrap().data.unwrap();
+        let (plain, named) = (data(plain), data(named));
+        assert_eq!(plain["resourceIds"], json!([]));
+        assert_eq!(named["resourceIds"], json!(["{0.0.0.00000000}.{cable-input}"]));
+        assert_eq!(named["code"], plain["code"]);
+        assert_eq!(named["hresult"], plain["hresult"]);
+    }
+
+    #[test]
     fn audio_error_response_preserves_hresult_and_contention_guidance() {
         let response = application_error_response(
             Some(json!(1)),
@@ -30275,12 +30324,14 @@ mod tests {
                 remediation:
                     "identify the owning stream, select another endpoint, or close it and retry",
                 message: "audio endpoint is busy".into(),
+                resource_ids: vec!["{0.0.0.00000000}.{busy-render}".into()],
             },
         );
         let error = response.error.unwrap();
         assert_eq!(error.message, "audio endpoint is busy");
         let data = error.data.unwrap();
         assert_eq!(data["code"], "deviceInUse");
+        assert_eq!(data["resourceIds"], json!(["{0.0.0.00000000}.{busy-render}"]));
         assert_eq!(data["hresult"], 0x8889_000A_u32);
         assert_eq!(data["operation"], "IAudioClient::Initialize(render)");
         assert_eq!(data["retryable"], true);

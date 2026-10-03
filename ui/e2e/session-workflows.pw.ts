@@ -72,9 +72,9 @@ test("draft undo, redo and revert restore exact nodes without saving accidental 
   await page.locator(".tool-card").filter({ has: page.getByText("Gain", { exact: true }) }).click();
   await expect(page.getByTestId("rf__node-gain-1")).toBeVisible();
   await page.getByRole("tab", { name: "Session", exact: true }).click();
-  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await page.locator(".session-page").getByRole("button", { name: "Undo", exact: true }).click();
   await expect(page.getByTestId("rf__node-gain-1")).toHaveCount(0);
-  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await page.locator(".session-page").getByRole("button", { name: "Redo", exact: true }).click();
   await expect(page.getByTestId("rf__node-gain-1")).toBeVisible();
   await page.getByRole("button", { name: "Revert edits", exact: true }).click();
   await expect(page.getByTestId("rf__node-gain-1")).toHaveCount(0);

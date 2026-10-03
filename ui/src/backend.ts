@@ -73,6 +73,21 @@ export type ClientRevokeResult = MethodResult["clients.revoke"];
 export type GraphHistoryPage = MethodResult["graph.history"];
 export type GraphUndoPlanResult = MethodResult["graph.undoPlan"];
 
+/** Device names from the last device list, so errors can name an exact endpoint. */
+const deviceNames = new Map<string, { name: string; direction: string }>();
+
+export function rememberDeviceNames(devices: readonly DeviceListItem[]) {
+  deviceNames.clear();
+  for (const device of devices) if ("name" in device && typeof device.name === "string") deviceNames.set(device.id, { name: device.name, direction: device.direction });
+}
+
+/** The device a failed audio operation reports in `resourceIds`, when it is known. */
+function failedDevice(error: unknown) {
+  const ids = error instanceof AudioRouterRpcError ? error.data?.resourceIds : undefined;
+  const id = Array.isArray(ids) && typeof ids[0] === "string" ? ids[0] : null;
+  return id ? deviceNames.get(id) ?? null : null;
+}
+
 /** Formats structured backend failures without losing actionable audio guidance. */
 /** Readable text for a caught error; the message is shown with the error tone. */
 export function formatUiError(error: unknown, fallback: string): string {
@@ -91,6 +106,11 @@ function formatUiErrorText(error: unknown, fallback: string): string {
     return "The selected audio device changed or disconnected. Stop audio, refresh the device list, then select the exact input and output again. Play will reopen those devices. If one is missing, reconnect it before retrying.";
   }
   if (/0x8889000a/i.test(error.message) || (error instanceof AudioRouterRpcError && typeof error.data?.hresult === "number" && (error.data.hresult >>> 0) === 0x8889000A)) {
+    const device = failedDevice(error);
+    if (device) {
+      const tab = device.direction === "capture" ? "Recording" : "Playback";
+      return `"${device.name}" is in use by another application, which has taken it exclusively. Close or reconfigure that application, or stop apps from locking it: Windows Sound settings → ${tab} → ${device.name} → Properties → Advanced → untick "Allow applications to take exclusive control". Then press Play again.`;
+    }
     return "The selected audio device is in use by another application. Choose a different device in the Output Device node's Properties, or release this exact device in the application using it, then prepare it again.";
   }
   if (/native graph rejected: UnsupportedTopology/.test(error.message)) {
@@ -649,9 +669,11 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
       return client.request("applications.list", undefined);
     },
     async listDevices() {
-      return collectPagedRows((cursor) => client.request("devices.list", cursor === null
+      const devices: DeviceListItem[] = await collectPagedRows((cursor) => client.request("devices.list", cursor === null
         ? { limit: 500 }
         : { limit: 500, cursor }));
+      rememberDeviceNames(devices);
+      return devices;
     },
     async prepareNativeEndpoint(currentSessionId, captureEndpointId, renderEndpointId) {
       return client.request("nativeEndpoints.prepare", {

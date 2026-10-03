@@ -57,14 +57,27 @@ for (const mode of ["reject", "restart"]) {
   });
 }
 
-test("live flags refuse unsaved topology edits without silently saving the draft", async ({ page }) => {
+// Since 0f32e9a7 a live flag commits only that flag against the saved route;
+// unsaved topology stays in the draft until an explicit Save.
+test("live flags apply only the flag and keep unsaved topology edits in the draft", async ({ page }) => {
   await playingRoute(page);
+  const save = page.locator(".topbar").getByRole("button", { name: "Save", exact: true });
   await page.getByRole("tab", { name: "Tools", exact: true }).click();
   await page.locator(".tool-card").filter({ has: page.getByText("Gain", { exact: true }) }).click();
+  await expect(page.getByTestId("rf__node-gain-1")).toBeVisible();
+  await expect(save).toBeEnabled();
   await page.getByTestId("rf__node-voice").locator(".flow-node-title").click();
-  await page.locator(".main-content > .inspector").getByLabel("Bypass", { exact: true }).click();
-  await expect(page.locator(".global-action-message")).toContainText("Save your pending route edits");
-  await expect(page.locator(".main-content > .inspector").getByLabel("Bypass", { exact: true })).not.toBeChecked();
-  expect((await calls(page)).filter(call => call === "commit")).toHaveLength(1);
+  const bypass = page.locator(".main-content > .inspector").getByRole("checkbox", { name: "Bypass", exact: true });
+  await bypass.click();
+  await expect(page.locator(".global-action-message")).toContainText("applied to the playing audio");
+  await expect(bypass).toBeChecked();
+  expect((await calls(page)).filter(call => call === "commit")).toHaveLength(2);
+  // The added Gain was not saved with the flag: it is still on the canvas and Save is still needed.
+  await expect(page.getByTestId("rf__node-gain-1")).toBeVisible();
+  await expect(save).toBeEnabled();
   await expect(page.locator(".audio-run-state")).toContainText("Audio running");
+  await save.click();
+  await expect(page.locator(".global-action-message")).toContainText(/saved.*revision/i);
+  await expect(save).toBeDisabled();
+  expect((await calls(page)).filter(call => call === "commit")).toHaveLength(3);
 });

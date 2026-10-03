@@ -43,8 +43,18 @@ try {
     $null = Get-Command gh -ErrorAction Stop
     & gh auth status --hostname github.com
     if ($LASTEXITCODE -ne 0) { throw "GitHub CLI is not authenticated" }
-    & gh release view $Tag --repo $repository *> $null
-    if ($LASTEXITCODE -eq 0) { throw "a GitHub release already exists for $Tag; refusing to replace it" }
+    # A missing release is the expected case and gh reports it on stderr.
+    # Under Windows PowerShell 5.1 a redirected native stderr line becomes an
+    # error record, which "Stop" would turn into a failure, so relax it here.
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & gh release view $Tag --repo $repository *> $null
+        $releaseExists = $LASTEXITCODE -eq 0
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
+    if ($releaseExists) { throw "a GitHub release already exists for $Tag; refusing to replace it" }
 
     $output = [IO.Path]::GetFullPath($OutputDirectory)
     $outputParent = Split-Path -Parent $output
