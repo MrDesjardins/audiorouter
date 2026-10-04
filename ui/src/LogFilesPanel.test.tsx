@@ -28,6 +28,7 @@ it("opens the fixed logs folder and copies its path", async () => {
   await screen.findByText("Folder path copied.");
   expect(copy).toHaveBeenCalledWith("C:/Users/example/AppData/Local/AudioRouter/logs");
   expect(screen.getByText(/attach shell.jsonl/).textContent).toContain("discovery.jsonl");
+  expect(screen.getByText(/attach shell.jsonl/).textContent).toContain("network.jsonl");
 });
 
 it("gives a useful fallback when Explorer cannot open", async () => {

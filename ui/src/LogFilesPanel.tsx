@@ -26,7 +26,7 @@ export function LogFilesPanel() {
   };
   return <section className="log-files-panel" aria-labelledby="log-files-heading">
     <h3 id="log-files-heading">Send logs for support</h3>
-    <p className="muted">Open the folder and attach shell.jsonl, backend.jsonl and discovery.jsonl, plus their .previous.jsonl files if present. Include what happened and the approximate time.</p>
+    <p className="muted">Open the folder and attach shell.jsonl, backend.jsonl, discovery.jsonl and network.jsonl, plus their .previous.jsonl files if present. For a problem between two computers, send the folder from both. Include what happened and the approximate time.</p>
     <div className="actions">
       <button type="button" onClick={() => void open()} disabled={!invoke || busy}>{busy ? "Opening logs…" : "Open logs folder"}</button>
       <button type="button" className="secondary" onClick={() => void copy()} disabled={!path}>Copy folder path</button>

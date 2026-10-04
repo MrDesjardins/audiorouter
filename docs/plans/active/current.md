@@ -191,6 +191,46 @@ Agent work (no hardware or credentials needed):
    the cap and the wry defaults and no debugging port. Open: the rendering CPU of
    the animated connections deserves its own measurement.
 
+8. In progress 2026-10-04 (user request): free the WebView when the editor
+   is closed to the tray. A hidden window keeps the page (340–450 MB), GPU
+   (~150 MB) and WebView2 browser processes and its timers alive; audio is
+   owned by the shell's backend, not the page. Decision (user): close
+   destroys the window when the page reports no unsaved route edits, and
+   only hides it when there are some, so nothing is lost; tray Open
+   recreates it (fresh page, same database and running session).
+   Steps: UI reports unsaved state to the shell (`set_ui_unsaved`); the
+   shell's CloseRequested and tray Close choose hide or destroy; the app
+   no longer exits when its last window closes (only Quit exits); tray
+   Open/Quit/privacy work with no window. Validation: shell unit tests for
+   the decision and exit rule; UI test for the report; attended check:
+   close → WebView2 processes exit, shell and audio keep running, pipe
+   answers; tray Open → UI back with audio live; unsaved edit → close
+   hides, edit still there on Open; Quit still finalizes and exits.
+   Rollback: revert the commit (hide-only behavior).
+   Extended (user request, same day): tray Play and Stop audio (the
+   window's saved-route Play: `nativePaths.prepare` then `session.start`,
+   via `src-tauri/src/tray_playback.rs`); autoplay when AudioRouter starts
+   (`shell-settings.json` beside the database, Advanced → When AudioRouter
+   starts); sign-in registration now `"<exe>" --tray`, starting with no
+   window; the selected session persists in the backend
+   (`control_settings.activeSessionId`) so a restart plays the right route.
+   Decision: autoplay is a shell launch preference stored by the shell, like
+   the Run registration; CLI/MCP do not launch the shell.
+
+9. In progress 2026-10-04 (Joe's report: Network Send/Receive between two
+   computers silent): his logs (laptop sender, desktop receiver, both
+   0.0.9) show both sessions playing at the same time (18:44:32–18:47:09
+   and 18:49:45–18:50:36 UTC) with no failed call, but contain no network
+   detail. Added `network.jsonl` (control `network_log.rs`): socket
+   start/failure with Windows error code, summaries every 5 s for the first
+   minute then 30 s (packets, losses, rejected senders, the sender's real
+   source address, the receiver's address toward the sender), a final
+   summary on stop, and plain-language hints (nothing arrived → firewall or
+   address; audio from another address → set it; 10054 → receiver port
+   closed). Logs tab asks for network.jsonl from both computers. Tests:
+   network_log unit tests, real UDP loopback asserting summaries, socket
+   tests. Next: ask Joe to retry with this build and send both folders.
+
 Needs the user (attended, hardware or decisions):
 
 4. Attended confirmation in the shell: drag-to-canvas, device picker on the

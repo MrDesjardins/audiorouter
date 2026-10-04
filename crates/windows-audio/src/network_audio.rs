@@ -163,6 +163,12 @@ pub struct NetworkSendStats {
     /// Quanta not sent because the send queue was full.
     pub dropped_packets: u64,
     pub send_errors: u64,
+    /// The Windows socket error of the latest failed send (for example
+    /// 10054: the receiving computer answered "port closed").
+    pub last_error_code: Option<i32>,
+    /// The local address the audio leaves from; the receiver must expect
+    /// this address (a computer with several adapters may use another one).
+    pub local_address: Option<SocketAddr>,
 }
 
 struct SendPacket {
@@ -179,10 +185,35 @@ struct SenderShared {
     sent: AtomicU64,
     dropped: AtomicU64,
     errors: AtomicU64,
+    /// Latest send error's OS code; 0 when none.
+    last_error: std::sync::atomic::AtomicI32,
+    /// The socket's local address, refreshed when it reconnects.
+    local: Mutex<Option<SocketAddr>>,
     thread: std::sync::OnceLock<std::thread::Thread>,
     /// A new destination requested while running; applied by the I/O thread
     /// before its next send (a new socket when the IP family changes).
     retarget: Mutex<Option<SocketAddr>>,
+}
+
+impl SenderShared {
+    fn record_error(&self, error: &std::io::Error) {
+        self.errors.fetch_add(1, Ordering::Relaxed);
+        self.last_error.store(error.raw_os_error().unwrap_or(-1), Ordering::Relaxed);
+    }
+
+    fn record_local(&self, socket: &UdpSocket) {
+        if let Ok(mut local) = self.local.lock() {
+            *local = socket.local_addr().ok();
+        }
+    }
+}
+
+/// The local address this computer uses to reach `remote` (route lookup by a
+/// UDP connect; no packet is sent). On the receiving computer this is the
+/// address the sender must target; it reveals a wrong adapter or subnet.
+pub fn local_address_toward(remote: IpAddr) -> Option<IpAddr> {
+    let probe = connected_socket(SocketAddr::new(remote, 9)).ok()?;
+    probe.local_addr().ok().map(|local| local.ip())
 }
 
 fn connected_socket(destination: SocketAddr) -> Result<UdpSocket, std::io::Error> {
@@ -216,6 +247,8 @@ impl NetworkSender {
             sent: AtomicU64::new(0),
             dropped: AtomicU64::new(0),
             errors: AtomicU64::new(0),
+            last_error: std::sync::atomic::AtomicI32::new(0),
+            local: Mutex::new(socket.local_addr().ok()),
             thread: std::sync::OnceLock::new(),
             retarget: Mutex::new(None),
         });
@@ -240,16 +273,17 @@ impl NetworkSender {
                         match reconnected {
                             Ok(Some(replacement)) => socket = replacement,
                             Ok(None) => {}
-                            Err(_) => {
-                                thread_shared.errors.fetch_add(1, Ordering::Relaxed);
-                            }
+                            Err(error) => thread_shared.record_error(&error),
                         }
+                        thread_shared.record_local(&socket);
                     }
                     while let Some(packet) = thread_shared.ready.pop() {
                         match socket.send(&packet.bytes[..packet.length]) {
-                            Ok(_) => thread_shared.sent.fetch_add(1, Ordering::Relaxed),
-                            Err(_) => thread_shared.errors.fetch_add(1, Ordering::Relaxed),
-                        };
+                            Ok(_) => {
+                                thread_shared.sent.fetch_add(1, Ordering::Relaxed);
+                            }
+                            Err(error) => thread_shared.record_error(&error),
+                        }
                         let _ = thread_shared.free.push(packet);
                     }
                     std::thread::park_timeout(Duration::from_millis(20));
@@ -294,6 +328,8 @@ impl NetworkSender {
             sent_packets: self.shared.sent.load(Ordering::Relaxed),
             dropped_packets: self.shared.dropped.load(Ordering::Relaxed),
             send_errors: self.shared.errors.load(Ordering::Relaxed),
+            last_error_code: Some(self.shared.last_error.load(Ordering::Relaxed)).filter(|code| *code != 0),
+            local_address: self.shared.local.lock().ok().and_then(|local| *local),
         }
     }
 }
@@ -387,6 +423,10 @@ pub struct NetworkReceiveStats {
     pub overflow_packets: u64,
     /// Audio currently buffered ahead of playout, in frames.
     pub buffered_frames: u64,
+    /// Socket receive failures other than the periodic read timeout.
+    pub receive_errors: u64,
+    /// The Windows socket error of the latest receive failure.
+    pub last_error_code: Option<i32>,
 }
 
 struct ReceivePacket {
@@ -406,6 +446,9 @@ struct ReceiverShared {
     rejected: AtomicU64,
     underruns: AtomicU64,
     overflows: AtomicU64,
+    receive_errors: AtomicU64,
+    /// Latest receive error OS code; 0 when none.
+    last_error: std::sync::atomic::AtomicI32,
     /// Written by the receive thread only; read for telemetry.
     last_rejected_sender: Mutex<Option<IpAddr>>,
     /// The only address accepted; changeable while running.
@@ -484,6 +527,8 @@ impl NetworkReceiver {
             rejected: AtomicU64::new(0),
             underruns: AtomicU64::new(0),
             overflows: AtomicU64::new(0),
+            receive_errors: AtomicU64::new(0),
+            last_error: std::sync::atomic::AtomicI32::new(0),
             last_rejected_sender: Mutex::new(None),
             sender: Mutex::new(sender),
             target_frames: AtomicUsize::new(target_frames),
@@ -552,6 +597,8 @@ impl NetworkReceiver {
             underruns: self.shared.underruns.load(Ordering::Relaxed),
             overflow_packets: self.shared.overflows.load(Ordering::Relaxed),
             buffered_frames: self.shared.queued_frames.load(Ordering::Acquire) as u64,
+            receive_errors: self.shared.receive_errors.load(Ordering::Relaxed),
+            last_error_code: Some(self.shared.last_error.load(Ordering::Relaxed)).filter(|code| *code != 0),
         }
     }
 
@@ -587,8 +634,15 @@ fn receive_loop(socket: &UdpSocket, shared: &ReceiverShared) {
     let mut datagram = vec![0_u8; MAX_NETWORK_PACKET_BYTES + 1];
     let mut stream: Option<(u32, u32)> = None; // (stream id, next sequence)
     while shared.running.load(Ordering::Acquire) {
-        let Ok((length, from)) = socket.recv_from(&mut datagram) else {
-            continue;
+        let (length, from) = match socket.recv_from(&mut datagram) {
+            Ok(received) => received,
+            // The 100 ms read timeout only re-checks `running`.
+            Err(error) if matches!(error.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => continue,
+            Err(error) => {
+                shared.receive_errors.fetch_add(1, Ordering::Relaxed);
+                shared.last_error.store(error.raw_os_error().unwrap_or(-1), Ordering::Relaxed);
+                continue;
+            }
         };
         if length > MAX_NETWORK_PACKET_BYTES {
             shared.rejected.fetch_add(1, Ordering::Relaxed);

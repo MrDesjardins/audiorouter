@@ -38,6 +38,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 pub mod os_transition;
+mod network_log;
 mod siege_round;
 mod simple;
 mod threaded_recorder;
@@ -5404,9 +5405,32 @@ fn start_network_sender(
             node.name
         ))
     })?;
-    audiorouter_windows_audio::NetworkSender::start(destination).map_err(|error| {
-        ControlError::InvalidRequest(format!("{} could not open its network socket: {error}", node.name))
-    })
+    match audiorouter_windows_audio::NetworkSender::start(destination) {
+        Ok(sender) => {
+            network_log::write(json!({
+                "event": "sendStarted", "role": "send", "nodeId": node.id.as_str(),
+                "destination": destination.to_string(),
+                "localAddress": sender.stats().local_address.map(|address| address.to_string()),
+            }));
+            Ok(sender)
+        }
+        Err(error) => {
+            let code = os_error_code(&error.to_string());
+            network_log::write(json!({
+                "event": "sendFailed", "role": "send", "nodeId": node.id.as_str(),
+                "destination": destination.to_string(), "errorCode": code,
+                "hint": code.and_then(network_log::socket_error_hint),
+            }));
+            Err(ControlError::InvalidRequest(format!("{} could not open its network socket: {error}", node.name)))
+        }
+    }
+}
+
+/// The Windows socket error code inside an I/O error message
+/// ("… (os error 10048)"), for the network log; never the text itself.
+fn os_error_code(message: &str) -> Option<i32> {
+    let start = message.rfind("(os error ")? + "(os error ".len();
+    message[start..].strip_suffix(')').and_then(|code| code.parse().ok())
 }
 
 /// Open the UDP receiver of a Network Receive node from its validated
@@ -5440,12 +5464,31 @@ fn start_network_receiver(
         .get("bufferMs")
         .and_then(Value::as_f64)
         .unwrap_or(audiorouter_domain::DEFAULT_NETWORK_BUFFER_MS);
-    audiorouter_windows_audio::NetworkReceiver::start(sender, port, buffer_ms).map_err(|error| {
-        ControlError::InvalidRequest(format!(
-            "{} could not listen on UDP port {port} (is another program using it?): {error}",
-            node.name
-        ))
-    })
+    // The address the sending computer must target, as routed from here.
+    let local_toward_sender = audiorouter_windows_audio::local_address_toward(sender).map(|address| address.to_string());
+    match audiorouter_windows_audio::NetworkReceiver::start(sender, port, buffer_ms) {
+        Ok(receiver) => {
+            network_log::write(json!({
+                "event": "receiveStarted", "role": "receive", "nodeId": node.id.as_str(),
+                "expectedSender": sender.to_string(), "port": port, "bufferMs": buffer_ms,
+                "listen": receiver.listen_address().to_string(),
+                "localAddressTowardSender": local_toward_sender,
+            }));
+            Ok(receiver)
+        }
+        Err(error) => {
+            let code = os_error_code(&error.to_string());
+            network_log::write(json!({
+                "event": "receiveFailed", "role": "receive", "nodeId": node.id.as_str(),
+                "expectedSender": sender.to_string(), "port": port, "errorCode": code,
+                "hint": code.and_then(network_log::socket_error_hint),
+            }));
+            Err(ControlError::InvalidRequest(format!(
+                "{} could not listen on UDP port {port} (is another program using it?): {error}",
+                node.name
+            )))
+        }
+    }
 }
 
 /// Device buffer requested for multi-input physical outputs (100 ns units).
@@ -5637,6 +5680,8 @@ pub struct ControlPlane {
     /// mono endpoint (see `native_paths_session`).
     #[cfg(windows)]
     native_multi_input_mono_nodes: Vec<EntityId>,
+    /// Paces `network.jsonl` summaries of playing network nodes.
+    network_log: network_log::Sampler,
     /// Stats.cc client for Ducks following the Siege round (started on demand).
     siege_round_feed: siege_round::SiegeRoundFeed,
     native_endpoint_taps: Option<AudioTapSet>,
@@ -6309,6 +6354,7 @@ impl ControlPlane {
             multi_input_application_sources: Vec::new(),
             #[cfg(windows)]
             native_multi_input_mono_nodes: Vec::new(),
+            network_log: network_log::Sampler::default(),
             siege_round_feed: Default::default(),
             native_endpoint_taps: None,
             native_endpoint_taps_secondary: None,
@@ -7025,6 +7071,81 @@ impl ControlPlane {
     /// Errors are left for the UI/diagnostic pump paths to report; the
     /// service only skips a worker whose session generation is not running.
     /// Returns the number of workers serviced.
+    /// Summarize playing Network Send/Receive nodes into `network.jsonl`
+    /// (paced by the sampler), and write their last summaries on stop.
+    #[cfg(windows)]
+    fn sample_network_diagnostics(&mut self, now: std::time::Instant, playing: Option<EntityId>) {
+        let Some(session_id) = playing else {
+            for record in self.network_log.finish() {
+                network_log::write(record);
+            }
+            return;
+        };
+        if !self.network_log.due(now) {
+            return;
+        }
+        // The worker borrows the plane; the sampler is moved out meanwhile.
+        let mut sampler = std::mem::take(&mut self.network_log);
+        let _ = self.write_network_summaries(&session_id, &mut sampler, now);
+        self.network_log = sampler;
+    }
+
+    #[cfg(windows)]
+    fn write_network_summaries(&self, session_id: &EntityId, sampler: &mut network_log::Sampler, now: std::time::Instant) -> Vec<Value> {
+        let Some(worker) = self.native_multi_input_worker.as_ref() else { return Vec::new() };
+        let Ok(session) = self.get_session(session_id) else { return Vec::new() };
+        let seconds_playing = sampler.seconds_playing(now);
+        let parameter = |node_id: &EntityId, name: &str| {
+            session.nodes.iter().find(|node| node.id == *node_id).and_then(|node| node.parameters.get(name).cloned())
+        };
+        let mut records = Vec::new();
+        for (index, node_id) in worker.input_node_ids().iter().enumerate() {
+            let Some(stats) = worker.network_receive_stats(index) else { continue };
+            let expected = parameter(node_id, "sender").and_then(|value| value.as_str().map(str::to_owned)).unwrap_or_default();
+            let port = parameter(node_id, "port").and_then(|value| value.as_u64()).and_then(|port| u16::try_from(port).ok()).unwrap_or(audiorouter_domain::DEFAULT_NETWORK_AUDIO_PORT);
+            let underruns_since_last = sampler.underruns_since_last(node_id.as_str(), stats.underruns);
+            let summary = network_log::ReceiveSummary {
+                node_id: node_id.as_str().to_owned(),
+                local_address_toward_sender: expected.parse().ok().and_then(audiorouter_windows_audio::local_address_toward).map(|address| address.to_string()),
+                expected_sender: expected,
+                port,
+                seconds_playing,
+                received_packets: stats.received_packets,
+                lost_packets: stats.lost_packets,
+                late_packets: stats.late_packets,
+                rejected_datagrams: stats.rejected_datagrams,
+                last_rejected_sender: stats.last_rejected_sender.map(|address| address.to_string()),
+                underruns: stats.underruns,
+                underruns_since_last,
+                overflow_packets: stats.overflow_packets,
+                receive_errors: stats.receive_errors,
+                last_error_code: stats.last_error_code,
+            };
+            records.push((node_id.as_str().to_owned(), summary.to_record("summary")));
+        }
+        for (index, node_id) in worker.output_node_ids().iter().enumerate() {
+            let (Some(stats), Some(sender)) = (worker.network_send_stats(index), worker.network_sender(index)) else { continue };
+            let summary = network_log::SendSummary {
+                node_id: node_id.as_str().to_owned(),
+                destination: sender.destination().to_string(),
+                local_address: stats.local_address.map(|address| address.to_string()),
+                seconds_playing,
+                sent_packets: stats.sent_packets,
+                dropped_packets: stats.dropped_packets,
+                send_errors: stats.send_errors,
+                last_error_code: stats.last_error_code,
+            };
+            records.push((node_id.as_str().to_owned(), summary.to_record("summary")));
+        }
+        let mut written = Vec::with_capacity(records.len());
+        for (node_id, record) in records {
+            network_log::write(record.clone());
+            sampler.remember(&node_id, record.clone());
+            written.push(record);
+        }
+        written
+    }
+
     pub fn service_running_native_audio(&mut self, now: std::time::Instant) -> usize {
         self.audio_service.recorder_drain_micros = 0;
         let running = |plane: &Self, session: &Option<EntityId>| -> Option<(EntityId, u64)> {
@@ -7046,6 +7167,10 @@ impl ControlPlane {
                 let _ = self.pump_native_multi_input_worker(&session, generation, budget);
                 serviced += 1;
             }
+            let playing = running(self, &self.native_multi_input_worker_session)
+                .filter(|_| self.native_multi_input_worker.is_some())
+                .map(|(session, _)| session);
+            self.sample_network_diagnostics(now, playing);
             for slot in [
                 self.native_endpoint_session.clone(),
                 self.native_endpoint_session_secondary.clone(),
@@ -10559,6 +10684,7 @@ impl ControlPlane {
             multi_input_application_sources: Vec::new(),
             #[cfg(windows)]
             native_multi_input_mono_nodes: Vec::new(),
+            network_log: network_log::Sampler::default(),
             siege_round_feed: Default::default(),
             native_endpoint_taps: None,
             native_endpoint_taps_secondary: None,
@@ -21896,6 +22022,44 @@ mod tests {
         let _ = std::fs::remove_file(&path);
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn network_log_keeps_only_the_windows_socket_error_code() {
+        assert_eq!(os_error_code("network I/O failed: Only one usage of each socket address is normally permitted. (os error 10048)"), Some(10048));
+        assert_eq!(os_error_code("no code here"), None);
+        assert_eq!(os_error_code("(os error x)"), None);
+    }
+
+    #[test]
+    fn the_selected_session_survives_a_backend_restart() {
+        let path = std::env::temp_dir().join(format!("audiorouter-active-session-{}.sqlite", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let shell = ClientGrant::for_desktop_shell();
+        let call = |plane: &mut ControlPlane, method: &str, params: Value| {
+            plane.dispatch_authorized_for_client(
+                JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(json!(1)), method: method.into(), params: Some(params) },
+                "active-session-test",
+                &shell,
+            )
+        };
+        let session = |id: &str| json!({ "id": id, "name": id, "schemaVersion": 1, "revision": 0, "nodes": [], "edges": [] });
+        {
+            let mut plane = ControlPlane::with_storage("active-first", Storage::open(&path).unwrap());
+            for id in ["a-first", "z-mine"] {
+                let created = call(&mut plane, "sessions.create", json!({ "session": session(id), "idempotencyKey": format!("create-{id}") }));
+                assert!(created.error.is_none(), "{created:?}");
+            }
+            let selected = call(&mut plane, "sessions.active.set", json!({ "sessionId": "z-mine", "idempotencyKey": "select" }));
+            assert!(selected.error.is_none(), "{selected:?}");
+        }
+        {
+            // Tray Play and autoplay at sign-in play this session, not the first one.
+            let mut plane = ControlPlane::with_storage("active-second", Storage::open(&path).unwrap());
+            assert_eq!(call(&mut plane, "sessions.active.get", json!({})).result.unwrap()["sessionId"], "z-mine");
+        }
+        let _ = std::fs::remove_file(&path);
+    }
+
     #[test]
     fn storage_backed_virtual_device_plan_survives_control_restart() {
         let path = std::env::temp_dir().join(format!(
@@ -23237,6 +23401,18 @@ mod tests {
             };
             let send = telemetry(&mut planes[sender].0, "net-send");
             let receive = telemetry(&mut planes[receiver].0, "net-receive");
+            // The network log summarizes both sides from the same counters.
+            let summaries = planes.iter()
+                .flat_map(|(plane, id)| plane.write_network_summaries(id, &mut network_log::Sampler::default(), Instant::now()))
+                .collect::<Vec<_>>();
+            let summary = |role: &str| summaries.iter().find(|record| record["role"] == role).cloned().unwrap_or(Value::Null);
+            let (send_summary, receive_summary) = (summary("send"), summary("receive"));
+            assert!(send_summary["sentPackets"].as_u64().unwrap_or(0) > 100, "{send_summary}");
+            assert_eq!(send_summary["sendErrors"], 0, "{send_summary}");
+            assert!(send_summary["localAddress"].as_str().is_some_and(|address| address.contains(':')), "{send_summary}");
+            assert!(receive_summary["receivedPackets"].as_u64().unwrap_or(0) > 100, "{receive_summary}");
+            assert_eq!(receive_summary["rejectedDatagrams"], 0, "{receive_summary}");
+            assert!(receive_summary["hint"].is_null(), "a healthy stream has no hint: {receive_summary}");
             let (plane, id) = &mut planes[receiver];
             let stopped = call(plane, "recorders.stopRecording", json!({ "sessionId": id, "nodeId": "rec", "idempotencyKey": "net-rec-stop" }));
             for (plane, id) in planes.iter_mut() {
