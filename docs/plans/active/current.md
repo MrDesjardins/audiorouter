@@ -146,6 +146,7 @@ Agent work (no hardware or credentials needed):
    471, Edge 216 (213 + 3 theme cases) / production 27. Possible next step:
    cap the WebView2 V8 heap (`--js-flags=--max-old-space-size`) so garbage
    is collected sooner; needs a measured trial.
+   Item 7 below follows up on the remaining process growth.
    Original plan (in progress until the results above):
    canvas performance
    without regressions (UI-17, M05 canvas lessons). Cause: every telemetry
@@ -170,6 +171,25 @@ Agent work (no hardware or credentials needed):
    playing canvas; then a CDP measurement in the release shell on the
    user's database. Rollback: revert the canvas/App commit; 0.0.9 is the
    released baseline.
+
+7. Done 2026-10-04 (user request): cap the WebView2 V8 heap. Trial on the
+   user's database with the canvas build, playing (19 meters), cap passed
+   via `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`; V8 reported a 352 MB heap
+   limit. Over the same ~6 min of playback the renderer levelled at
+   415–430 MB (uncapped: climbing to 750–770 MB); JS heap 158 MB used of
+   352. CPU profile over 5 s: garbage collector 1.0% of main-thread
+   samples; the renderer used ~1.1 cores, mostly native rendering
+   ("(program)" 61%, script 0.54 s of 5 s), i.e. painting the animated SVG
+   connections, unrelated to the cap. Shipped as `WEBVIEW_BROWSER_ARGS` in
+   `src-tauri/src/main.rs` (wry's default `--disable-features=...` kept,
+   since setting arguments replaces it); shell test
+   `webview_arguments_keep_wry_defaults_and_cap_the_js_heap`. Risk: a live
+   heap above 256 MB would crash the page (live heap is ~13 MB). Rollback:
+   remove the `.additional_browser_args` call. Over the full 15 min capped
+   run the renderer stayed at 340–450 MB with periodic full-GC drops. The
+   built shell, launched with no WebView2 variable set, starts its page with
+   the cap and the wry defaults and no debugging port. Open: the rendering CPU of
+   the animated connections deserves its own measurement.
 
 Needs the user (attended, hardware or decisions):
 

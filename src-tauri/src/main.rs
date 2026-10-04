@@ -34,6 +34,14 @@ const DEFAULT_DATABASE_DIRECTORY: &str = "AudioRouter";
 const DEFAULT_DATABASE_FILE: &str = "state.sqlite";
 const DESKTOP_SESSION_ID: &str = "desktop-session";
 const DIAGNOSTIC_LOG_LIMIT_BYTES: u64 = 5 * 1024 * 1024;
+/// WebView2 arguments: wry's defaults (setting any arguments replaces them)
+/// plus a 256 MB V8 old-space cap. While audio plays the UI makes short-lived
+/// garbage continuously; uncapped, V8 deferred full collection on a PC with
+/// free RAM and the page grew to ~770 MB around a 13 MB live heap. Capped,
+/// it settled near 420 MB with garbage collection at about 1% of the main
+/// thread (2026-10-04 measurement, active plan item 7).
+const WEBVIEW_BROWSER_ARGS: &str =
+    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --js-flags=--max-old-space-size=256";
 
 /// Append bounded, privacy-conscious control-flow diagnostics for failures
 /// that cannot be inspected through the WebView console in an attended shell.
@@ -1426,6 +1434,7 @@ fn main() {
                 // in WebView2, so dragging a tool onto the canvas showed no
                 // preview and dropped nothing. The UI has no OS file drops.
                 .disable_drag_drop_handler()
+                .additional_browser_args(WEBVIEW_BROWSER_ARGS)
                 .initialization_script(session_script.clone())
                 .build()?;
             Ok(())
@@ -1456,6 +1465,14 @@ mod tests {
         for bad in ["0.0.9", "v0.0", "v0.0.9.1", "v0.0.9-beta", "v0.0.9/../../evil", "v0.0.x", "v.0.9", "v0.0.1234567", "https://evil.example/v1.2.3", ""] {
             assert_eq!(release_page_url(bad), None, "{bad}");
         }
+    }
+
+    /// Setting WebView2 arguments replaces wry's defaults, so they must be
+    /// kept beside the heap cap; nothing else (no debugging port) may ship.
+    #[test]
+    fn webview_arguments_keep_wry_defaults_and_cap_the_js_heap() {
+        let arguments = WEBVIEW_BROWSER_ARGS.split_whitespace().collect::<Vec<_>>();
+        assert_eq!(arguments, ["--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection", "--js-flags=--max-old-space-size=256"]);
     }
 
     /// The grant of the first launch of a fresh install (enrolled just now)
