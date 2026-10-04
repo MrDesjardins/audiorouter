@@ -312,6 +312,30 @@ fn http_api_network(network: Option<&str>) -> Result<Option<std::net::Ipv4Addr>,
     Ok(Some(address))
 }
 
+fn start_http_api(port: u16, lan: Option<std::net::Ipv4Addr>, pipe: &str) -> Result<http_api::HttpApi, String> {
+    let token = api_token::load_or_create(&api_token::default_path()?)?;
+    let pipe = pipe.to_owned();
+    http_api::HttpApi::start_on(port, token, lan, std::sync::Arc::new(move |request| forward_rpc_request(request, &pipe)))
+}
+
+/// Remember whether the API is on, so it starts again with AudioRouter:
+/// controllers such as the Stream Deck plugin otherwise went offline after
+/// every restart until the user pressed Start in the API panel again.
+fn remember_http_api(database_path: &std::path::Path, api: Option<shell_settings::ApiListener>) -> Result<(), String> {
+    let path = shell_settings::path_beside(database_path);
+    let mut settings = shell_settings::load(&path);
+    settings.api = api;
+    shell_settings::save(&path, &settings)
+}
+
+/// Start the API the user left on. Local-network access resumes only on an
+/// address this PC still has; otherwise the API serves this PC only.
+fn resume_http_api(database_path: &std::path::Path, pipe: &str) -> Result<Option<http_api::HttpApi>, String> {
+    let Some(api) = shell_settings::load(&shell_settings::path_beside(database_path)).api else { return Ok(None) };
+    let lan = http_api_network(api.network.as_deref()).unwrap_or(None);
+    start_http_api(api.port, lan, pipe).map(Some)
+}
+
 #[tauri::command]
 fn http_api_control(action: String, port: Option<u16>, network: Option<String>, state: State<'_, ShellState>, api: State<'_, HttpApiState>) -> Result<serde_json::Value, String> {
     let mut listener = api.0.lock().map_err(|_| "API state unavailable")?;
@@ -319,12 +343,15 @@ fn http_api_control(action: String, port: Option<u16>, network: Option<String>, 
         "start" => {
             if listener.is_none() {
                 let lan = http_api_network(network.as_deref())?;
-                let pipe = state.pipe_name.clone();
-                let token = api_token::load_or_create(&api_token::default_path()?)?;
-                *listener = Some(http_api::HttpApi::start_on(port.unwrap_or(17891), token, lan, std::sync::Arc::new(move |request| forward_rpc_request(request, &pipe)))?);
+                let started = start_http_api(port.unwrap_or(17891), lan, &state.pipe_name)?;
+                remember_http_api(&state.database_path, Some(shell_settings::ApiListener { port: started.port, network: started.lan.map(|address| address.to_string()) }))?;
+                *listener = Some(started);
             }
         }
-        "stop" => { *listener = None; }
+        "stop" => {
+            *listener = None;
+            remember_http_api(&state.database_path, None)?;
+        }
         "regenerate" => {
             let token = api_token::generate()?;
             api_token::save(&api_token::default_path()?, &token)?;
@@ -1596,6 +1623,16 @@ fn main() {
             // Autoplay (Advanced): play the selected session once the
             // backend answers, with or without the window.
             let database_path = app.state::<ShellState>().database_path.clone();
+            // The local API the user left on starts with the app (HTTP API).
+            match resume_http_api(&database_path, &tray_pipe_name) {
+                Ok(Some(listener)) => {
+                    if let Ok(mut slot) = app.state::<HttpApiState>().0.lock() {
+                        *slot = Some(listener);
+                    }
+                }
+                Ok(None) => {}
+                Err(reason) => eprintln!("local API did not start: {reason}"),
+            }
             if shell_settings::load(&shell_settings::path_beside(&database_path)).auto_play {
                 let (status, recordings, pipe) = (status.clone(), recordings.clone(), tray_pipe_name.clone());
                 std::thread::spawn(move || {

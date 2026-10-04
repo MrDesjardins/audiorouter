@@ -36,6 +36,16 @@ different surface), [external app integrations](external-app-integrations.md)
   and recovery). Live routes confirmed on the user's AudioRouter (401
   without a token). Not yet: attended test on the device (latency, CPU,
   look), release integration.
+- 2026-10-04, attended defects: (1) a Session key switched the selection
+  but left the previous session prepared, so Play on the new one failed
+  ("Audio is already prepared"). The key now stops every playing session
+  (`status.get` `activeSessionIds`, then `session.stop`), selects, and plays
+  the new one when audio was playing or the key asks to
+  (`src/switching.ts`, `test/switching.test.ts`). (2) After AudioRouter
+  restarted, every key showed Offline: the local API only ran after Start
+  in the API panel. The shell now remembers the user's Start/Stop
+  (`shell-settings.json` `api`) and starts the API with the app; local-network
+  access resumes only on an address the PC still has.
 
 ## Objective
 

@@ -1,7 +1,7 @@
 import { action, type KeyDownEvent } from "@elgato/streamdeck";
-import { idempotencyKey } from "../api.js";
 import { messageFace, sessionFace } from "../faces.js";
 import type { AudioRouterStore } from "../store.js";
+import { switchSession } from "../switching.js";
 import { LiveKeyAction, type Face, type KeyTitle } from "./live-key.js";
 
 export type SessionSettings = {
@@ -9,7 +9,7 @@ export type SessionSettings = {
   mode?: "select" | "cycle";
   sessionId?: string;
   sessionName?: string;
-  /** Also start playing the session after selecting it. */
+  /** Also start playing it when nothing was playing (audio that was playing always moves along). */
   play?: boolean;
 };
 
@@ -49,9 +49,6 @@ export class SessionAction extends LiveKeyAction<SessionSettings> {
       return;
     }
     const sessionId = next;
-    await this.run(ev.action, async () => {
-      if (sessionId !== current) await this.store.call("sessions.active.set", { sessionId, idempotencyKey: idempotencyKey("session") });
-      if (settings.play) await this.store.call("sessions.play", { sessionId, idempotencyKey: idempotencyKey("play") });
-    });
+    await this.run(ev.action, () => switchSession((method, params) => this.store.call(method, params ?? {}), sessionId, current, settings.play === true));
   }
 }
