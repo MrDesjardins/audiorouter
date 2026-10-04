@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="pi.css">
+  <script src="pi.js"></script>
+</head>
+<body>
+  <div id="connection-slot"></div>
+  <label>Tool (selected session)<select id="node"></select></label>
+  <label>What to switch<select id="target"></select></label>
+  <label>Press behaviour<select id="mode">
+    <option value="latch">Each press switches</option>
+    <option value="momentary">Only while held (push-to-talk, hold to compare)</option>
+  </select></label>
+  <p class="hint">The key always shows AudioRouter's real value, also when you change it in the window.</p>
+  <script>
+    const names = { enabled: "Enabled (on / off)", bypass: "Bypass" };
+    const label = (target) => names[target] ?? target.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (first) => first.toUpperCase());
+    const node = document.getElementById("node"), target = document.getElementById("target"), mode = document.getElementById("mode");
+    function fillTargets() {
+      const chosen = (PI.options?.nodes ?? []).find((item) => item.id === PI.settings.nodeId);
+      const targets = chosen ? chosen.targets : ["enabled", "bypass"];
+      fillSelect(target, targets.map((value) => ({ value, label: label(value) })), PI.settings.target ?? "enabled");
+    }
+    PI.onSettings = (settings) => { mode.value = settings.mode ?? "latch"; fillTargets(); };
+    PI.onOptions = (options) => {
+      fillSelect(node, options.nodes.map((item) => ({ value: item.id, label: `${item.name} · ${item.kind}` })), PI.settings.nodeId, PI.settings.nodeName ? `${PI.settings.nodeName} (not found)` : undefined);
+      fillTargets();
+    };
+    node.addEventListener("change", () => {
+      const chosen = (PI.options?.nodes ?? []).find((item) => item.id === node.value);
+      PI.saveSettings({ nodeId: node.value, nodeName: chosen?.name ?? "", target: "enabled" });
+      fillTargets();
+    });
+    target.addEventListener("change", () => PI.saveSettings({ target: target.value }));
+    mode.addEventListener("change", () => PI.saveSettings({ mode: mode.value }));
+  </script>
+</body>
+</html>

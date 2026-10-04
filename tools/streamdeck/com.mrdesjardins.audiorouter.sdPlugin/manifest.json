@@ -1,0 +1,82 @@
+{
+  "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+  "UUID": "com.mrdesjardins.audiorouter",
+  "Name": "AudioRouter",
+  "Version": "0.1.0.0",
+  "Author": "Patrick Desjardins",
+  "Description": "Control AudioRouter from your Stream Deck: toggle any tool, mute your microphone, and watch live levels while you play.",
+  "URL": "https://github.com/MrDesjardins/audiorouter",
+  "Icon": "imgs/plugin-icon",
+  "CodePath": "bin/plugin.js",
+  "Nodejs": {
+    "Version": "24"
+  },
+  "Software": {
+    "MinimumVersion": "7.1"
+  },
+  "OS": [
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    }
+  ],
+  "SDKVersion": 3,
+  "Category": "AudioRouter",
+  "CategoryIcon": "imgs/category",
+  "Actions": [
+    {
+      "UUID": "com.mrdesjardins.audiorouter.toggle",
+      "Name": "Toggle",
+      "Icon": "imgs/actions/toggle",
+      "Tooltip": "Turn a tool on or off, bypass it, or flip an on/off setting (press, or hold for momentary).",
+      "PropertyInspectorPath": "ui/toggle.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "DisableAutomaticStates": true,
+      "SupportedInMultiActions": true,
+      "States": [
+        {
+          "Image": "imgs/actions/toggle-key",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "UUID": "com.mrdesjardins.audiorouter.meter",
+      "Name": "Level meter",
+      "Icon": "imgs/actions/meter",
+      "Tooltip": "A live level meter for one tool of the selected session.",
+      "PropertyInspectorPath": "ui/meter.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "DisableAutomaticStates": true,
+      "SupportedInMultiActions": false,
+      "States": [
+        {
+          "Image": "imgs/actions/meter-key",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "UUID": "com.mrdesjardins.audiorouter.privacy",
+      "Name": "Privacy mute",
+      "Icon": "imgs/actions/privacy",
+      "Tooltip": "Mute or unmute your microphone everywhere AudioRouter sends it.",
+      "PropertyInspectorPath": "ui/privacy.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "DisableAutomaticStates": true,
+      "SupportedInMultiActions": true,
+      "States": [
+        {
+          "Image": "imgs/actions/privacy-key",
+          "ShowTitle": false
+        }
+      ]
+    }
+  ]
+}

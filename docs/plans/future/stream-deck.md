@@ -7,6 +7,36 @@ Related: [hardware control panel](hardware-control-panel.md) (same API, a
 different surface), [external app integrations](external-app-integrations.md)
 (scenes and temporary overrides).
 
+## Decisions (user, 2026-10-04)
+
+1. Device: Stream Deck MK.2, 15 keys (72 px keys, 144 px @2x).
+2. Keys follow the selected session by default.
+3. Privacy mute: plain clicks. A key is Toggle, Mute only, or Unmute only
+   (two keys for separate mute and unmute buttons). No hold.
+4. Distribution: ship the packed `.streamDeckPlugin` with AudioRouter's
+   GitHub releases while in alpha; Elgato Marketplace later (same package).
+5. Phase 0 approved and started.
+
+## Progress
+
+- 2026-10-04, phase 0 started: `tools/streamdeck/` (TypeScript,
+  `@elgato/streamdeck` 3.0.1, Node 24, Stream Deck 7.1+; the user has 7.4.2).
+  Actions Toggle (latch or momentary; Enabled, Bypass, on/off and
+  two-choice settings via `nodes.toggle` / explicit `nodes.set`), Level
+  meter (`meters.levels`, polled only while visible) and Privacy mute
+  (toggle, mute only, unmute only). One shared store polls
+  `sessions.summary` every 500 ms (raw settings from `sessions.get` when the
+  revision changes); offline and not-found faces; backoff 1–10 s. Settings
+  panels use the property-inspector WebSocket protocol directly (no
+  third-party code) with live tool and setting lists. The existing API
+  already covers the plan's first gap: `meters.levels` is the compact meter
+  read. `npm run pack` validates and packs an 80 KB `.streamDeckPlugin`.
+  Tests: 12 Vitest tests (faces, client, store: follow session, raw
+  settings, quick confirm, level polling only while visible, offline backoff
+  and recovery). Live routes confirmed on the user's AudioRouter (401
+  without a token). Not yet: attended test on the device (latency, CPU,
+  look), release integration.
+
 ## Objective
 
 While a game runs full screen, every common AudioRouter action is one key or

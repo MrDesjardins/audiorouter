@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="pi.css">
+  <script src="pi.js"></script>
+</head>
+<body>
+  <div id="connection-slot"></div>
+  <label>Tool to meter (selected session)<select id="node"></select></label>
+  <p class="hint">Shows the level after that tool: bar = average level, line = peak, red dot = clipping. "muted" when the tool is off.</p>
+  <script>
+    const node = document.getElementById("node");
+    PI.onOptions = (options) => fillSelect(node, options.nodes.map((item) => ({ value: item.id, label: `${item.name} · ${item.kind}` })), PI.settings.nodeId, PI.settings.nodeName ? `${PI.settings.nodeName} (not found)` : undefined);
+    node.addEventListener("change", () => {
+      const chosen = (PI.options?.nodes ?? []).find((item) => item.id === node.value);
+      PI.saveSettings({ nodeId: node.value, nodeName: chosen?.name ?? "" });
+    });
+  </script>
+</body>
+</html>
