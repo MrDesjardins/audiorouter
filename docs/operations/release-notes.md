@@ -1,5 +1,24 @@
 # AudioRouter release notes
 
+## 0.0.9 — 2026-10-04 (unsigned experimental preview)
+
+- Input Device **Channels**: send a stereo input as mono to both ears. Use
+  "left channel only (input 1)" or "right channel only (input 2)" for a
+  single microphone on a stereo audio interface, which was otherwise heard in
+  one ear; "mix both channels" averages them. It applies while playing and is
+  saved with the node; the default stays stereo.
+- Much lower memory use while audio plays: the window no longer re-renders
+  the whole app 20 times a second for meter updates. On a measured session
+  the WebView process settled at 440–470 MB instead of swinging between 600
+  and 960 MB, and creates about a third less garbage.
+
+Unsigned experimental prerelease; Windows may warn. No data migration or
+device-format change; sessions without the new setting behave as before.
+Keep 0.0.8 and a configuration backup for rollback. Mono input passes
+sample-level tests but has not been tried on a stereo interface by ear.
+Real-match Duck, native Quit, combined continuity and full M08
+install/hardware/accessibility/signing qualification remain open.
+
 ## 0.0.8 — 2026-10-03 (unsigned experimental preview)
 
 - The window title and header show the version. Once a day the app checks

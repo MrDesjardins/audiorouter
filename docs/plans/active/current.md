@@ -1,6 +1,6 @@
 # Active plan — post-0.0.8 maintenance
 
-Updated 2026-10-03. v0.0.8 published as an unsigned prerelease; see [0.0.8 evidence](evidence/2026-10-03-release-0.0.8.md).
+Updated 2026-10-04. v0.0.9 (mono input, memory) in release; see [0.0.9 evidence](evidence/2026-10-04-release-0.0.9.md).
 
 ## Objective and scope
 
