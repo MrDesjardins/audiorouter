@@ -38,6 +38,17 @@ localhost only. No remote control, second backend or new audio permissions.
   stream. Selection does not start audio; `POST /api/v1/sessions/start` remains
   a separate operation. Selection survives restart through the UI workspace
   preference and is not persisted as audio-session data.
+- **HTTP-08 — Request builder.** The API tab builds one `POST
+  /api/v1/nodes/set` request: follow the active session (omit `sessionId`) or
+  pin one; choose a saved tool by name (kind and ID when names repeat); choose
+  Enabled, Bypass or a catalog parameter. A Mixer's `inputVolume:` family
+  expands to its connected inputs by upstream name, and a parameter marked
+  `"reference": "node"` in `nodes.catalog` (Duck `keyNodeId`) offers node
+  names and sends the node ID. Values are validated against the catalog range
+  or choices. It shows the URL, the JSON body, curl and PowerShell with a
+  token placeholder, never the saved token. Choosing never mutates; an
+  explicit Send applies the body once through the same backend method and
+  shows the result.
 - **HTTP-05 — Swagger.** `/docs` serves bundled Swagger UI, no CDN, analytics,
   remote validator or internet requirement. `/openapi.json` generates OpenAPI
   3.1 from backend discovery schemas for every method, including permissions,

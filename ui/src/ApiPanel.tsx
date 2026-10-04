@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { NumberField } from "./NumberField";
 
 type ApiStatus = { running: boolean; port: number; url: string | null; token: string | null };
-export function ApiPanel() {
+/** `builder` renders the request builder for the API base URL. */
+export function ApiPanel({ builder }: { builder?: (baseUrl: string) => ReactNode } = {}) {
   const [status, setStatus] = useState<ApiStatus>({ running: false, port: 17891, url: null, token: null });
   const [port, setPort] = useState(17891);
   const [message, setMessage] = useState("");
@@ -50,5 +51,6 @@ export function ApiPanel() {
     <p className="muted">Generate a new token only when you want to replace it. Existing integrations will need the new token.</p>
     {!regenerateConfirm ? <button type="button" className="secondary" disabled={!invoke || busy} onClick={() => setRegenerateConfirm(true)}>Generate new token</button> : <div className="api-token-confirm"><p>Replace the saved token? This disconnects integrations using the old token.</p><div className="actions"><button type="button" disabled={busy} onClick={() => void control("regenerate")}>Replace API token</button><button type="button" className="secondary" disabled={busy} onClick={() => setRegenerateConfirm(false)}>Cancel</button></div></div>}
     {message && <p role="status">{message}</p>}
+    {builder?.(status.url ?? `http://127.0.0.1:${port}`)}
   </section>;
 }

@@ -182,6 +182,8 @@ export interface UiBackend {
   listSessions(): Promise<Session[]>;
   getActiveSession?(): Promise<MethodResult["sessions.active.get"]>;
   setActiveSession?(sessionId: string): Promise<MethodResult["sessions.active.set"]>;
+  /** `nodes.set`, the same method the API tab's request builder generates (REST `POST /api/v1/nodes/set`). */
+  setNode?(params: MethodParams["nodes.set"]): Promise<MethodResult["nodes.set"]>;
   listApplications(): Promise<ApplicationRow[]>;
   listDevices(): Promise<DeviceListItem[]>;
   prepareNativeEndpoint?(sessionId: string, captureEndpointId: string, renderEndpointId: string): Promise<import("@audiorouter/contracts").NativeEndpointPrepareResult>;
@@ -679,6 +681,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
     },
     async getActiveSession() {
       return client.request("sessions.active.get", undefined);
+    },
+    async setNode(params) {
+      return client.request("nodes.set", params);
     },
     async setActiveSession(sessionId) {
       return client.request("sessions.active.set", { sessionId, idempotencyKey: uiIdempotencyKey("session-select") });

@@ -650,6 +650,10 @@ export interface DiscoveryDocument {
       minimum?: number;
       maximum?: number;
       enum?: string[];
+      /** "node": the value is the ID of another node in the same session. */
+      reference?: "node";
+      /** A parameter family such as "inputVolume:<upstreamNodeId>". */
+      namePattern?: string;
       default?: boolean | number | string;
     }>;
   }>;

@@ -48,6 +48,18 @@ AI assistants use the same operations through MCP: `get_recipes`,
 `connect_nodes`, `play`, `toggle_mic_mute`, `start_recording` and others.
 They take names and generate the idempotency key automatically.
 
+## Build a request in the app
+
+The API tab has a **Build a request** section. Choose whether the request
+follows the session selected in AudioRouter or always targets one session,
+then a tool and one setting (Enabled, Bypass, a parameter, a Mixer input's
+volume by its source's name, or a Duck's trigger node by name). It shows the
+exact `POST /api/v1/nodes/set` request as a JSON body, curl or PowerShell,
+with `<your API token>` where your token goes. Choosing changes nothing;
+**Send now** applies it once so you can hear the result. Send a new
+`idempotencyKey` for each event from your integration; reuse it only when
+retrying the same event.
+
 ## External app integration: game menu and match states
 
 For an independent executable example, see the

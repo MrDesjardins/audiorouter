@@ -1,5 +1,16 @@
 # External app integrations and a request builder
 
+**Status 2026-10-03: request builder implemented (user-authorized)** as
+[HTTP-08](../../spec/16-local-http-api.md): session follow/pin, tool and
+setting choice from `nodes.catalog`, Mixer inputs by upstream name, Duck
+trigger by node name (new `"reference": "node"` catalog marker; Duck
+`trigger` and phase settings now in the catalog), validated values, JSON/curl/
+PowerShell output with a token placeholder, and an explicit Send.
+Evidence: `ui/src/requestBuilder.test.ts`, `ui/e2e/api-request-builder.pw.ts`
+(real backend, three themes). Still open from this plan: temporary overrides,
+scenes/batches of several tools, integration-specific permissions, and the
+"affected output / preparation required" hint; each needs a decision first.
+
 Proposed 2026-10-02 from the user's game-menu/match example. Specification and
 use-case review only; feature implementation is not authorized by this plan.
 Requirements: AUTO-15, API-01/07/09/12, HTTP-01/04/05, GRAPH-05/06/08, UI-04.
@@ -13,13 +24,7 @@ edits and flags share backend graph validation, persistence and activation.
 The [HTTP guide](../../operations/local-http-api.md#external-app-integration-game-menu-and-match-states)
 contains concrete requests. VST hosting is outside this work.
 
-Current discovery gap: Duck's numeric parameters are advertised by
-`nodes.catalog`, but `keyNodeId` is described only in prose and the dedicated
-Duck editor. A general property picker needs a node-reference descriptor and
-choices from the selected graph. Mixer input parameters are a family keyed by
-upstream ID; the builder must expand them using actual connected nodes.
-
-Current discovery gap: Duck's numeric parameters are advertised by
+Discovery gap (resolved 2026-10-03 by the `"reference": "node"` marker and the builder): Duck's numeric parameters are advertised by
 `nodes.catalog`, but `keyNodeId` is described only in prose and the dedicated
 Duck editor. A general property picker needs a node-reference descriptor and
 choices from the selected graph. Mixer input parameters are a family keyed by

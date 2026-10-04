@@ -224,6 +224,19 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
 .workbench-groups .panel, .workbench-page > details .panel { margin: .55rem 0 0; padding: .65rem; }
 .workbench-page > label:not(:has(input[type="checkbox"])) { display: grid; gap: .35rem; margin: .65rem 0; color: var(--text-soft); font-size: .82rem; font-weight: 650; }
 .workbench-page > label input:not([type="checkbox"]), .workbench-page > label select { width: 100%; min-width: 0; min-height: 2.45rem; border: 1px solid var(--ambient-edge); border-radius: 9px; box-shadow: none; background: var(--ambient-surface-hi); color: var(--text-strong); padding: .5rem .7rem; }
+.request-builder { display: grid; gap: .55rem; margin-top: 1.1rem; padding-top: .9rem; border-top: 1px solid var(--ambient-edge); min-width: 0; }
+.request-builder h3 { margin: 0; color: var(--text-strong); font-size: .95rem; }
+.request-builder > label, .request-builder-session > label:not(.request-builder-radio) { display: grid; gap: .35rem; min-width: 0; color: var(--text-soft); font-size: .82rem; font-weight: 650; }
+.request-builder > label :is(input, select, textarea), .request-builder-session select { width: 100%; min-width: 0; box-sizing: border-box; }
+.request-builder textarea { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: .78rem; resize: vertical; }
+.request-builder-session { display: grid; gap: .4rem; margin: 0; padding: .6rem .7rem; border: 1px solid var(--ambient-edge); border-radius: 10px; min-width: 0; }
+.request-builder-session legend { padding: 0 .3rem; color: var(--text-soft); font-size: .78rem; font-weight: 650; }
+.request-builder-radio { display: flex; align-items: center; gap: .45rem; color: var(--text-strong); font-size: .82rem; }
+.request-builder-formats { display: flex; flex-wrap: wrap; gap: .4rem; }
+.request-builder-formats button[aria-pressed="true"] { border-color: var(--cyan); color: var(--text-strong); }
+.request-builder-error { margin: 0; color: #ff8f8f; font-size: .8rem; font-weight: 650; }
+.theme-light .request-builder-error { color: #b42318; }
+.theme-high-contrast .request-builder-error { color: #ffff00; }
 .workbench-tool-search { display: grid; gap: .5rem; padding: .75rem .9rem 0; }
 .workbench-tool-search label { display: grid; gap: .25rem; font-size: .78rem; color: var(--text-soft); }
 .workbench-tool-search input { min-height: 2.5rem; border: 1px solid var(--ambient-edge); border-radius: 9px; padding: .55rem .7rem; background: var(--ambient-surface-hi); color: var(--text-strong); }

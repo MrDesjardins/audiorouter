@@ -24,7 +24,7 @@ export type WorkbenchTab = "tools" | "properties" | "timing" | "session" | "setu
 export type McpActivity = { timeUnixMs: number; clientId: string; tool: string; argumentFields: string[]; outcome: string; errorKind?: string | null };
 export type McpSetupInfo = { cliPath: string; cliAvailable: boolean; databasePath: string; pipeName: string; transport: string };
 
-export function Workbench({ onAddGroup, tab, onTab, tools, connected, onAdd, onApplicationPicker, librarySearch, onLibrarySearch, onNewSession, onDuplicate, onDelete, onUndo, onRedo, onDiscard, actionMessage, onReplaceInputConnection, sessions, selectedSessionId, onSelectSession, sessionName, onNameChange, diagnostics, backendActivity, mcpActivity, mcpSetupInfo, clientsPanel, setupContent, timingContent, recordingContent, advancedContent, pluginsContent, sessionFileContent }: {
+export function Workbench({ onAddGroup, tab, onTab, tools, connected, onAdd, onApplicationPicker, librarySearch, onLibrarySearch, onNewSession, onDuplicate, onDelete, onUndo, onRedo, onDiscard, actionMessage, onReplaceInputConnection, sessions, selectedSessionId, onSelectSession, sessionName, onNameChange, diagnostics, backendActivity, mcpActivity, mcpSetupInfo, clientsPanel, setupContent, timingContent, recordingContent, advancedContent, pluginsContent, sessionFileContent, apiBuilder }: {
   onAddGroup?: () => void; tab: WorkbenchTab; onTab: (tab: WorkbenchTab) => void; tools: LibraryEntry[]; connected: boolean;
   onAdd: (kind: NonNullable<LibraryEntry["kind"]>) => void; onNewSession: () => void; onDuplicate: () => void;
   onApplicationPicker: () => void; librarySearch: string; onLibrarySearch: (value: string) => void;
@@ -35,7 +35,7 @@ export function Workbench({ onAddGroup, tab, onTab, tools, connected, onAdd, onA
   sessionName: string; onNameChange: (name: string) => void;
   revision?: number; warnings?: string[]; acknowledgedWarnings?: string[]; onAcknowledgeWarning?: (warning: string, checked: boolean) => void;
   diagnostics: string[]; backendActivity: Record<string, unknown>[]; mcpActivity: McpActivity[]; mcpSetupInfo: McpSetupInfo | null; clientsPanel: ReactNode;
-  setupContent: ReactNode; timingContent?: ReactNode; recordingContent: ReactNode; advancedContent: ReactNode; pluginsContent?: ReactNode; sessionFileContent?: ReactNode;
+  setupContent: ReactNode; timingContent?: ReactNode; recordingContent: ReactNode; advancedContent: ReactNode; pluginsContent?: ReactNode; sessionFileContent?: ReactNode; apiBuilder?: (baseUrl: string) => ReactNode;
 }) {
   const [mcpClientId, setMcpClientId] = useState("audiorouter-local");
   const [copyMessage, setCopyMessage] = useState("");
@@ -77,7 +77,7 @@ export function Workbench({ onAddGroup, tab, onTab, tools, connected, onAdd, onA
         <li>Press Play to hear it, and Save at the top to keep it.</li>
       </ol></details>
     </section>}
-    {tab === "api" && <ApiPanel />}
+    {tab === "api" && <ApiPanel builder={apiBuilder} />}
     {tab === "timing" && <section className="workbench-page" role="tabpanel" aria-label="Timing"><p className="eyebrow">Where the sound spends time</p><h2>Signal timing</h2>{timingContent}</section>}
     {tab === "properties" && <section className="workbench-page" role="tabpanel"><h2>Node properties</h2><p className="muted">Select a node on the canvas to edit it here.</p></section>}
     {tab === "setup" && <section className="workbench-page" role="tabpanel"><p className="eyebrow">For the whole app</p><h2>Set up this PC</h2><p className="muted">These settings apply to AudioRouter on this computer, not to one session. Build routes in Tools and choose each node's device in its Properties.</p>{setupContent}</section>}

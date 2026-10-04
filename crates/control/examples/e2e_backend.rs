@@ -110,6 +110,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 | "recordings.list"
                 | "clients.list"
                 | "startup.get"
+                // Graph edits only (no devices): the API tab's request builder.
+                | "nodes.catalog"
+                | "nodes.set"
         ) || method.starts_with("sessions.")
             || method.starts_with("graph.")
             || method.starts_with("audioMedia.")

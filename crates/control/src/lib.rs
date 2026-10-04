@@ -12461,13 +12461,19 @@ impl ControlPlane {
                 { "name": "reductionDb", "type": "number", "unit": "dB", "minimum": 0.0, "maximum": 80.0, "default": 40.0 },
                 { "name": "learning", "type": "boolean", "default": false }
             ]),
-            // `keyNodeId` (the trigger node) is chosen in the Duck editor.
+            // `keyNodeId` names another node of the same session; "reference":
+            // "node" tells clients to offer node names and send the node ID.
             audiorouter_domain::NodeKind::Duck => json!([
                 { "name": "thresholdDb", "type": "number", "unit": "dBFS", "minimum": -80.0, "maximum": 0.0, "default": -35.0 },
                 { "name": "amountDb", "type": "number", "unit": "dB", "minimum": 0.0, "maximum": 40.0, "default": 6.0 },
                 { "name": "attackMs", "type": "number", "unit": "ms", "minimum": 1.0, "maximum": 500.0, "default": 20.0 },
                 { "name": "holdMs", "type": "number", "unit": "ms", "minimum": 0.0, "maximum": 2000.0, "default": 300.0 },
-                { "name": "releaseMs", "type": "number", "unit": "ms", "minimum": 20.0, "maximum": 5000.0, "default": 500.0 }
+                { "name": "releaseMs", "type": "number", "unit": "ms", "minimum": 20.0, "maximum": 5000.0, "default": 500.0 },
+                { "name": "trigger", "type": "string", "enum": ["level", "siegeRound"], "default": "level" },
+                { "name": "keyNodeId", "type": "string", "reference": "node" },
+                { "name": "duckMenu", "type": "boolean", "default": true },
+                { "name": "duckPrep", "type": "boolean", "default": true },
+                { "name": "duckBetweenRounds", "type": "boolean", "default": true }
             ]),
             audiorouter_domain::NodeKind::Recorder => json!([
                 { "name": "format", "type": "string", "enum": ["wavPcm24", "wavPcm16", "wavFloat32", "flac24", "flac16", "mp3"], "default": "wavPcm24" },

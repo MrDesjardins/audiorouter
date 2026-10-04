@@ -65,6 +65,18 @@ Agent work (no hardware or credentials needed):
    continuity harness or attended listening through a 96 kHz device.
    Rollback: revert the constructors' use in control.
 
+4b. Done 2026-10-03: API request builder (HTTP-08, external app integrations
+   plan). API tab section builds `POST /api/v1/nodes/set` (follow/pin session,
+   tool, Enabled/Bypass/parameter, Mixer inputs by upstream name, Duck trigger
+   node by name) with catalog validation, JSON/curl/PowerShell and a token
+   placeholder; Send applies once via `nodes.set`. Catalog adds Duck `trigger`,
+   `keyNodeId` (`"reference": "node"`) and phase booleans; the inspector's
+   generic editor filters them (the Duck editor owns them). `e2e_backend`
+   allows `nodes.catalog`/`nodes.set` (graph edits, no devices). Evidence:
+   `requestBuilder.test.ts` (5), `api-request-builder.pw.ts` (3 themes with a
+   real Send; Duck-inspector check fails without the filter); UI 464, control
+   228. Open: overrides, scenes/batches, per-integration permissions.
+
 Needs the user (attended, hardware or decisions):
 
 4. Attended confirmation in the shell: drag-to-canvas, device picker on the
