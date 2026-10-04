@@ -60,6 +60,21 @@ describe("native host bridge", () => {
     expect(backend.connected).toBe(true);
   });
 
+  it("keeps native startup registration when the shell injects a host bridge too", async () => {
+    // The desktop shell provides both; 0.0.10 and earlier dropped the
+    // registration, so Start at sign-in reported "unavailable in this host".
+    const transport = { send: async (_request: JsonRpcRequest) => response };
+    const core = { invoke: vi.fn().mockImplementation((command: string) =>
+      command === "startup_register" ? Promise.resolve('"C:\\AudioRouter\\audiorouter-shell.exe" --tray') : Promise.resolve("unregistered")) };
+    const backend = createInitialBackend({ transport, sessionId: "desktop-session" }, core, "desktop-session", "http://tauri.localhost");
+    expect(backend.connected).toBe(true);
+    await expect(backend.startupRegistrationStatus?.()).resolves.toBe("unregistered");
+    await expect(backend.registerStartup?.(true)).resolves.toContain("--tray");
+    expect(core.invoke).toHaveBeenCalledWith("startup_register", { enabled: true });
+    // A host without the shell's core still has no registration.
+    expect(createInitialBackend({ transport, sessionId: "desktop-session" }).registerStartup).toBeUndefined();
+  });
+
   it("exposes explicit native startup registration through Tauri", async () => {
     const core = { invoke: vi.fn().mockImplementation((command: string) =>
       command === "startup_register" ? Promise.resolve('"C:\\Program Files\\AudioRouter\\audiorouter-shell.exe"') : Promise.resolve(response)) };

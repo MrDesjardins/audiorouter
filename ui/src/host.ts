@@ -215,22 +215,32 @@ function isTauriCore(value: unknown): value is TauriCore {
   return typeof (value as { invoke?: unknown }).invoke === "function";
 }
 
+/** The desktop shell's Windows sign-in registration commands. */
+function shellStartupRegistration(core: TauriCore) {
+  return [
+    (enabled: boolean) => Promise.resolve(core.invoke("startup_register", { enabled })).then((value) => {
+      if (typeof value !== "string") throw new Error("native startup registration returned an invalid response");
+      return value;
+    }),
+    () => Promise.resolve(core.invoke("startup_status")).then((value) => {
+      if (value !== "registered" && value !== "unregistered") throw new Error("native startup status returned an invalid response");
+      return value;
+    }),
+  ] as const;
+}
+
 /** Select the injected native backend, or remain safely disconnected. */
 export function createInitialBackend(host: unknown, webview: unknown = undefined, sessionId: unknown = undefined, webviewOrigin: unknown = undefined): UiBackend {
-  if (isHostBridge(host)) return createLiveBackendFromTransport(host.transport, host.sessionId);
+  // The desktop shell injects a host bridge and also exposes its Tauri
+  // core; sign-in registration lives in the shell, so pass it on. Without
+  // it the Start at sign-in panel reported "unavailable in this host".
+  if (isHostBridge(host)) {
+    return isTauriCore(webview)
+      ? createLiveBackendFromTransport(host.transport, host.sessionId, ...shellStartupRegistration(webview))
+      : createLiveBackendFromTransport(host.transport, host.sessionId);
+  }
   if (isTauriCore(webview) && typeof sessionId === "string" && sessionId.length > 0 && sessionId.length <= 128) {
-    return createLiveBackendFromTransport(
-      new TauriRpcTransport(webview),
-      sessionId,
-      (enabled) => Promise.resolve(webview.invoke("startup_register", { enabled })).then((value) => {
-        if (typeof value !== "string") throw new Error("native startup registration returned an invalid response");
-        return value;
-      }),
-      () => Promise.resolve(webview.invoke("startup_status")).then((value) => {
-        if (value !== "registered" && value !== "unregistered") throw new Error("native startup status returned an invalid response");
-        return value;
-      }),
-    );
+    return createLiveBackendFromTransport(new TauriRpcTransport(webview), sessionId, ...shellStartupRegistration(webview));
   }
   if (isWebView2Webview(webview) && typeof sessionId === "string" && sessionId.length > 0 && sessionId.length <= 128) {
     if (!isTrustedWebView2Origin(webviewOrigin)) return createDisconnectedBackend();
