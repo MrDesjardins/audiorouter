@@ -17,6 +17,7 @@ These ideas are recorded for later prioritization. They are not authorized imple
 | --- | --- | --- |
 | [External app integrations](external-app-integrations.md) | Generate REST requests by selecting a session, tool and property; game menu/match volume events | Existing API use cases reviewed; user approves request-builder scope, temporary-state and multi-tool policies |
 | [Siege footstep EQ](siege-footstep-eq.md) | Hear steps and drones better from a measured EQ + dynamics chain | User reference recordings exist; user requested 2026-10-03 |
+| [Hardware control panel](hardware-control-panel.md) | Raspberry Pi touch console with knobs and a shaped bezel to glance at and adjust any session while playing | Local-network listener (HTTP-09) done 2026-10-04; prototype, live-gesture method, pins and pairing each need the user's go-ahead |
 | [Spatial audio](spatial-audio.md) | Speaker mode, distance/room, head tracking and other rates beyond the implemented 5.1/7.1 surround-to-headphones input (CAP-14) | Method, listening/measurement criteria and latency are specified per extension |
 | VST2/ReaPlugs legacy hosting or migration | Reuse exact existing effects | The explicitly authorized gated M06 extension is already tracked in the active milestone; further promotion beyond the current x64 worker evidence still requires rights, editor compatibility, independent coverage, maintenance, and release qualification |
 | Native ARM64 Windows | Support ARM laptops | Driver, plugin architecture, shell, and hardware test matrix funded; still Windows-only |
@@ -33,7 +34,7 @@ These ideas are recorded for later prioritization. They are not authorized imple
 | Transcription and audio analysis | Search recordings or detect hum | Explicit audio grants, offline/cloud boundary, model costs/privacy defined |
 | Broadcasting/RTMP/Icecast | Direct streams | Networking, credentials, encoding, reconnection, and destination authorization specified |
 | Full soundboard/input switching/fades | Live show control | Mixing/shortcuts stable and additional UI remains understandable |
-| Standalone browser/remote API | Control from other devices | Authentication, origin/CSRF protections, transport, deployment, and threat model separately approved |
+| Standalone browser/remote API | Control from other devices | Partly addressed 2026-10-04 by the opt-in local-network listener (HTTP-09, [hardware control panel](hardware-control-panel.md)). Pairing, per-device grants, TLS and anything beyond one private network still need authentication, transport and threat model approval |
 | Reusable nested subgraph definitions | Share complex processing chains | Parameter scoping, cycle/version migration, and transparent route introspection designed |
 | Scripting/event schedules | Advanced local automation | Capability-scoped execution and resource limits specified; no arbitrary privileged shell |
 | Acoustic echo cancellation | Speaker-based conferencing | Reference signal, device clocks, double-talk behavior, and quality testing established |

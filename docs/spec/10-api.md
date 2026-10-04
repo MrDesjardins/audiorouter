@@ -4,7 +4,8 @@ Milestone ownership: M01 protocol/discovery/transactions; M02–M06 extend node/
 
 ## Transport and schemas
 
-The baseline application protocol is JSON-RPC 2.0 over a local Windows named pipe. The pipe is scoped to the authenticated Windows user/logon context, rejects remote clients, and uses explicit ACLs. Desktop shell, CLI, and MCP adapter use the same endpoint and generated client contracts. The user-authorized optional [localhost HTTP adapter](16-local-http-api.md) forwards to this same backend. Network-accessible HTTP remains excluded.
+The baseline application protocol is JSON-RPC 2.0 over a local Windows named pipe. The pipe is scoped to the authenticated Windows user/logon context, rejects remote clients, and uses explicit ACLs. Desktop shell, CLI, and MCP adapter use the same endpoint and generated client contracts. The user-authorized optional [localhost HTTP adapter](16-local-http-api.md) forwards to this same backend. Network access is limited to the opt-in
+local-network listener of HTTP-09; internet-facing HTTP remains excluded.
 
 Use UTF-8 messages framed by a 4-byte unsigned little-endian length, maximum 4 MiB, then exactly that many bytes. Reject malformed/oversized frames before allocation. JSON-RPC batches are supported with at most 32 requests, processed independently in supplied order; a batch is not a graph transaction. Mutating notifications without request IDs are rejected at the application boundary because callers need a result. Document this restriction in protocol discovery. [JSON-RPC 2.0](https://www.jsonrpc.org/specification) provides request/result/error semantics; framing and methods here are AudioRouter decisions.
 

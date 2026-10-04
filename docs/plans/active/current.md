@@ -246,6 +246,27 @@ Agent work (no hardware or credentials needed):
    Disabled applied from this build first (ownership check). Release
    0.0.11 pending.
 
+11. Done 2026-10-04 (user request, option A of the
+   [hardware control panel plan](../future/hardware-control-panel.md)):
+   local-network HTTP listener (HTTP-09; spec 16 decision, 13-security,
+   10-api, 09-interface amended). API tab "Who can connect": This PC only
+   (default) or one of this PC's private/link-local addresses
+   (`src-tauri/src/lan_addresses.rs`, `GetAdaptersAddresses`, connected
+   non-loopback adapters). `HttpApi::start_on` keeps the loopback listener
+   and adds one on exactly that address and port; refuses non-private
+   addresses; network peers must be private/link-local; Host must be one
+   listener's exact `address:port` and a sent Origin must match it. Same
+   token, grant, desktop-only methods and rate budget. Not remembered across
+   launches; regeneration keeps the address. Tests: shell
+   `network_listener_accepts_only_private_addresses_hosts_and_peers`,
+   `network_listener_serves_its_address_beside_loopback` (real bind on this
+   PC's 10.0.0.73: 200 with its Host, 403 with a foreign Host, OpenAPI lists
+   both servers), shell 58/0; `ApiPanel.test.tsx` network case, UI 477;
+   `api-panel.pw.ts` three themes, screenshots reviewed (dark, light, high
+   contrast). Not yet: a request from a second device (the Pi) and the
+   Windows Firewall prompt in the release shell. Rollback: "This PC only";
+   revert the commit to restore loopback-only.
+
 Needs the user (attended, hardware or decisions):
 
 4. Attended confirmation in the shell: drag-to-canvas, device picker on the

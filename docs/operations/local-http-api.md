@@ -5,6 +5,23 @@ Open **API** in the desktop sidebar, choose a port (default **17891**), then
 It accepts calls only from this PC. The API starts stopped each time you launch
 AudioRouter; no extra service, driver or machine configuration is needed.
 
+### From another device on your network
+
+To control AudioRouter from a device such as a Raspberry Pi panel or a
+tablet, choose its network under **Who can connect** before **Start API**,
+for example "Local network · Wi-Fi (192.168.1.20)". Only private home or
+office addresses are offered. The tab then also shows a **Network URL**
+(`http://192.168.1.20:17891`); use it from the other device with the same
+bearer token. Calls from this PC keep using `127.0.0.1`. The first time,
+Windows Firewall may ask to allow AudioRouter on private networks.
+
+Traffic is not encrypted: anyone on that network who obtains the token can
+control AudioRouter, including Play, Stop and privacy mute. Use it only on a
+network you trust, and generate a new token if it may have leaked. The
+choice is not remembered; it returns to "This PC only" on the next launch.
+If your PC's address changes (for example a new DHCP lease), start fails
+with a message; a DHCP reservation in your router keeps it stable.
+
 Choose **Open Swagger documentation** for the locally bundled interactive
 reference at `/docs`. The API tab shows the saved token even while stopped.
 Choose **Copy API token** to use it with your own apps or Swagger's
@@ -127,7 +144,8 @@ per-frame automation stream. Inspect returned activation state for a playing
 session; some changes require preparation. Limit calls to state transitions,
 serialize updates, handle errors/conflicts, and restore explicitly chosen levels
 on exit. A game must provide an integration/event source itself; AudioRouter
-does not infer menu/match state. Current HTTP access is localhost only.
+does not infer menu/match state. HTTP access is from this PC, plus one
+chosen local network when you pick it (see above).
 
 The next proposed UI task is an integration request builder: active/pinned
 session selector, tool selector, property selector from the backend schema,
@@ -207,7 +225,7 @@ durable save does not guarantee that every topology change can apply live.
 
 401: missing/wrong token; reveal the current one. 403: denied permission,
 foreign browser Origin or wrong Host. Use the displayed **127.0.0.1** address,
-not `localhost` or a LAN address. 409: stale revision; fetch and plan again.
+not `localhost`; from another device use the Network URL. 409: stale revision; fetch and plan again.
 429: request budget exhausted; back off. 503: backend unavailable; reconnect
 in the app. A busy port prevents startup and says to choose another port.
 Backend errors retain `error.code`, `message` and structured `data`.

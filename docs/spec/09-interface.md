@@ -13,6 +13,7 @@ routing effect and do not require Save/Stop. Persist per-session beside local ca
 included in exported audio session files in this initial version.
 
 The API tab displays the optional localhost HTTP listener URL/port, start/stop,
+the "Who can connect" choice and network URL (HTTP-09),
 explicit token reveal/copy and a link to its local Swagger documentation.
 See [HTTP acceptance](16-local-http-api.md).
 
