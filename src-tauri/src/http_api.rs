@@ -2,7 +2,7 @@
 use audiorouter_protocol::{JsonRpcRequest, JsonRpcResponse};
 use serde_json::{json, Value};
 use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{IpAddr, Ipv4Addr, TcpListener, TcpStream};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
@@ -15,6 +15,7 @@ type Forward = dyn Fn(&JsonRpcRequest) -> Result<JsonRpcResponse, String> + Send
 
 pub struct HttpApi {
     pub port: u16,
+    pub lan: Option<Ipv4Addr>,
     pub token: String,
     stop: Arc<AtomicBool>,
     thread: Option<std::thread::JoinHandle<()>>,
@@ -35,8 +36,19 @@ impl HttpApi {
         Self::start_with_token(port, bytes.iter().map(|b| format!("{b:02x}")).collect(), forward)
     }
     pub fn start_with_token(port: u16, token: String, forward: Arc<Forward>) -> Result<Self, String> {
+        Self::start_on(port, token, None, forward)
+    }
+    /// Loopback is always served. `lan` adds one listener on that exact
+    /// private or link-local address of this PC (HTTP-09); peers on it must
+    /// themselves be private or link-local. Never binds every interface.
+    pub fn start_on(port: u16, token: String, lan: Option<Ipv4Addr>, forward: Arc<Forward>) -> Result<Self, String> {
         if token.len() != 64 || !token.bytes().all(|b| b.is_ascii_hexdigit()) { return Err("Invalid API token".into()); }
-        let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port))
+        if let Some(address) = lan {
+            if !lan_address_allowed(address) {
+                return Err(format!("{address} is not a private local-network address. Choose this PC's home or office network address."));
+            }
+        }
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, port))
             .map_err(|_| format!("Cannot open localhost port {port}. Choose another port or stop the application using it."))?;
         listener
             .set_nonblocking(true)
@@ -45,10 +57,21 @@ impl HttpApi {
             .local_addr()
             .map_err(|_| "Cannot read API port")?
             .port();
+        let mut listeners = vec![(listener, false)];
+        if let Some(address) = lan {
+            let network = TcpListener::bind((address, port))
+                .map_err(|_| format!("Cannot open port {port} on {address}. Check that this PC still has that address, or choose another port."))?;
+            network
+                .set_nonblocking(true)
+                .map_err(|_| "Cannot configure API listener")?;
+            listeners.push((network, true));
+        }
+        let mut hosts = vec![format!("127.0.0.1:{port}")];
+        hosts.extend(lan.map(|address| format!("{address}:{port}")));
         let describe = forward(&rpc("system.describe", None))?
             .result
             .ok_or("Backend discovery unavailable; reconnect before starting API")?;
-        let openapi = Arc::new(openapi(&describe, port));
+        let openapi = Arc::new(openapi(&describe, port, lan));
         let stop = Arc::new(AtomicBool::new(false));
         let thread_stop = stop.clone();
         let secret = token.clone();
@@ -62,13 +85,14 @@ impl HttpApi {
                 let rate = Arc::new(Mutex::new((Instant::now(), 40f64)));
                 let mut workers = Vec::new();
                 for _ in 0..4 {
-                    let (receiver, forward, schema, token, stop, rate) = (
+                    let (receiver, forward, schema, token, stop, rate, hosts) = (
                         receiver.clone(),
                         forward.clone(),
                         openapi.clone(),
                         secret.clone(),
                         thread_stop.clone(),
                         rate.clone(),
+                        hosts.clone(),
                     );
                     workers.push(std::thread::spawn(move || loop {
                         let stream = {
@@ -82,7 +106,7 @@ impl HttpApi {
                             Ok(mut stream) => {
                                 let _ = handle(
                                     &mut stream,
-                                    port,
+                                    &hosts,
                                     &token,
                                     &schema,
                                     &forward,
@@ -95,16 +119,22 @@ impl HttpApi {
                         }
                     }));
                 }
-                while !thread_stop.load(Ordering::Acquire) {
-                    match listener.accept() {
-                        Ok((stream, address)) if address.ip().is_loopback() => {
-                            let _ = sender.try_send(stream);
+                'accept: while !thread_stop.load(Ordering::Acquire) {
+                    let mut idle = true;
+                    for (listener, network) in &listeners {
+                        match listener.accept() {
+                            Ok((stream, address)) => {
+                                idle = false;
+                                if peer_allowed(address.ip(), *network) {
+                                    let _ = sender.try_send(stream);
+                                }
+                            }
+                            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
+                            Err(_) => break 'accept,
                         }
-                        Ok(_) => {}
-                        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                            std::thread::sleep(Duration::from_millis(10))
-                        }
-                        Err(_) => break,
+                    }
+                    if idle {
+                        std::thread::sleep(Duration::from_millis(10));
                     }
                 }
                 drop(sender);
@@ -115,6 +145,7 @@ impl HttpApi {
             .map_err(|_| "Cannot start HTTP adapter")?;
         Ok(Self {
             port,
+            lan,
             token,
             stop,
             thread: Some(thread),
@@ -130,6 +161,33 @@ fn rpc(method: &str, params: Option<Value>) -> JsonRpcRequest {
         params,
     }
 }
+/// Addresses a local-network listener may use: RFC 1918 private ranges and
+/// IPv4 link-local (a direct cable). Public, CGNAT and VPN-overlay addresses
+/// are refused so a listener cannot face the internet by mistake.
+pub fn lan_address_allowed(address: Ipv4Addr) -> bool {
+    address.is_private() || address.is_link_local()
+}
+/// The loopback listener serves only this PC; the network listener serves
+/// this PC and private/link-local peers.
+fn peer_allowed(peer: IpAddr, network: bool) -> bool {
+    let peer = match peer {
+        IpAddr::V4(peer) => peer,
+        IpAddr::V6(peer) if peer.is_loopback() => return true,
+        IpAddr::V6(peer) => match peer.to_ipv4_mapped() {
+            Some(peer) => peer,
+            None => return false,
+        },
+    };
+    peer.is_loopback() || (network && lan_address_allowed(peer))
+}
+/// Exact Host check: one of the listener addresses with the active port.
+/// A browser Origin, when sent, must be the same Host.
+fn host_allowed(host: Option<&str>, origin: Option<&str>, hosts: &[String]) -> bool {
+    let Some(host) = host.filter(|host| hosts.iter().any(|allowed| allowed == host)) else {
+        return false;
+    };
+    origin.is_none_or(|origin| origin == format!("http://{host}"))
+}
 /// Methods only the desktop window may call: approving a recording folder is
 /// the user's own file-root decision (REC-07, SEC authorization UX), so a
 /// token holder on localhost cannot redirect recordings.
@@ -138,7 +196,7 @@ pub const DESKTOP_ONLY_METHODS: &[&str] = &["recordings.setRoot", "devices.setAc
 pub fn operation_path(name: &str) -> String {
     format!("/api/v1/{}", name.replace('.', "/"))
 }
-pub fn openapi(describe: &Value, port: u16) -> Value {
+pub fn openapi(describe: &Value, port: u16, lan: Option<Ipv4Addr>) -> Value {
     let mut paths = serde_json::Map::new();
     for method in describe["methods"].as_array().into_iter().flatten() {
         let Some(name) = method["name"].as_str() else {
@@ -175,7 +233,7 @@ pub fn openapi(describe: &Value, port: u16) -> Value {
     let active_path = paths.entry("/api/v1/sessions/active").or_insert_with(|| json!({}));
     active_path["get"] = json!({ "operationId": "http.sessions.active", "responses": { "200": { "description": "Currently selected editing session; audio is not started", "content": { "application/json": { "schema": active_get } } } }, "security": [{"bearerAuth": []}] });
     active_path["put"] = json!({ "operationId": "http.sessions.activate", "summary": "Select the editing session without starting audio", "requestBody": { "required": true, "content": { "application/json": { "schema": active_set.map(|method| method["inputSchema"].clone()).unwrap_or(json!({})) } } }, "responses": { "200": { "description": "Selected session", "content": { "application/json": { "schema": active_set.map(|method| method["outputSchema"].clone()).unwrap_or(json!({})) } } }, "400": { "description": "Unknown session"}, "403": { "description": "Permission denied"} }, "security": [{"bearerAuth": []}] });
-    json!({"openapi": "3.1.0", "info": {"title": "AudioRouter local API", "version": "1.0.0"}, "servers": [{"url": format!("http://127.0.0.1:{port}")}], "paths": paths, "components": {"securitySchemes": {"bearerAuth": {"type": "http", "scheme": "bearer"}}}})
+    json!({"openapi": "3.1.0", "info": {"title": "AudioRouter local API", "version": "1.0.0"}, "servers": std::iter::once(format!("http://127.0.0.1:{port}")).chain(lan.map(|address| format!("http://{address}:{port}"))).map(|url| json!({"url": url})).collect::<Vec<_>>(), "paths": paths, "components": {"securitySchemes": {"bearerAuth": {"type": "http", "scheme": "bearer"}}}})
 }
 
 fn reply(
@@ -224,7 +282,7 @@ fn token_matches(actual: &str, token: &str) -> bool {
 }
 fn handle(
     stream: &mut TcpStream,
-    port: u16,
+    hosts: &[String],
     token: &str,
     schema: &Value,
     forward: &Arc<Forward>,
@@ -273,16 +331,11 @@ fn handle(
             return fail(stream, 400, "Duplicate or invalid header");
         }
     }
-    let host = format!("127.0.0.1:{port}");
-    if fields.get("host") != Some(&host.as_str())
-        || fields
-            .get("origin")
-            .is_some_and(|origin| **origin != format!("http://{host}"))
-    {
+    if !host_allowed(fields.get("host").copied(), fields.get("origin").copied(), hosts) {
         return fail(
             stream,
             403,
-            "Only exact localhost Host and same-origin requests are allowed",
+            "Only this API's exact Host and same-origin requests are allowed",
         );
     }
     if fields.contains_key("transfer-encoding") || path.contains('?') {
@@ -616,6 +669,77 @@ mod tests {
             .err()
             .unwrap()
             .contains("Choose another port"));
+    }
+
+    #[test]
+    fn network_listener_accepts_only_private_addresses_hosts_and_peers() {
+        for (address, allowed) in [
+            ("192.168.1.20", true),
+            ("10.0.0.5", true),
+            ("172.16.0.1", true),
+            ("169.254.10.2", true),
+            ("8.8.8.8", false),
+            ("100.64.0.1", false),
+            ("0.0.0.0", false),
+            ("127.0.0.1", false),
+        ] {
+            assert_eq!(lan_address_allowed(address.parse().unwrap()), allowed, "{address}");
+        }
+        assert!(HttpApi::start_on(0, "a".repeat(64), Some("8.8.8.8".parse().unwrap()), Arc::new(|_| unreachable!()))
+            .err()
+            .unwrap()
+            .contains("not a private"));
+        assert!(peer_allowed("127.0.0.1".parse().unwrap(), false));
+        assert!(!peer_allowed("192.168.1.30".parse().unwrap(), false));
+        assert!(peer_allowed("192.168.1.30".parse().unwrap(), true));
+        assert!(!peer_allowed("203.0.113.9".parse().unwrap(), true));
+        assert!(peer_allowed("::ffff:192.168.1.30".parse().unwrap(), true));
+        assert!(!peer_allowed("fe80::1".parse().unwrap(), true));
+        let hosts = ["127.0.0.1:17891".to_string(), "192.168.1.20:17891".to_string()];
+        assert!(host_allowed(Some("192.168.1.20:17891"), None, &hosts));
+        assert!(host_allowed(Some("192.168.1.20:17891"), Some("http://192.168.1.20:17891"), &hosts));
+        assert!(!host_allowed(Some("192.168.1.20:17891"), Some("http://127.0.0.1:17891"), &hosts));
+        assert!(!host_allowed(Some("192.168.1.21:17891"), None, &hosts));
+        assert!(!host_allowed(Some("audiorouter.local:17891"), None, &hosts));
+        assert!(!host_allowed(None, None, &hosts));
+    }
+
+    /// Uses this PC's own private address when it has one; a PC with no
+    /// connected private network has nothing to bind and skips.
+    #[test]
+    fn network_listener_serves_its_address_beside_loopback() {
+        let Some(lan) = crate::lan_addresses::list().unwrap().first().map(|entry| entry.address) else {
+            eprintln!("no private IPv4 address on this PC; skipped");
+            return;
+        };
+        let schema = ControlPlane::new("http-lan").describe();
+        let api = HttpApi::start_on(
+            0,
+            "c".repeat(64),
+            Some(lan),
+            Arc::new(move |request| {
+                if request.method == "system.describe" {
+                    return Ok(JsonRpcResponse::success(request.id.clone(), schema.clone()));
+                }
+                Ok(ControlPlane::new("http-lan").dispatch(request.clone()))
+            }),
+        )
+        .unwrap();
+        assert_eq!(api.lan, Some(lan));
+        assert_eq!(call(&api, "/api/v1/status", None).0, 200);
+        let port = api.port;
+        let over_network = |host: String| {
+            let mut stream = TcpStream::connect((lan, port)).unwrap();
+            stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+            write!(stream, "GET /api/v1/status HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {}\r\n\r\n", api.token).unwrap();
+            let mut result = String::new();
+            stream.read_to_string(&mut result).unwrap();
+            result
+        };
+        assert!(over_network(format!("{lan}:{port}")).starts_with("HTTP/1.1 200"));
+        assert!(over_network(format!("attacker.test:{port}")).starts_with("HTTP/1.1 403"));
+        let (_, schema) = call(&api, "/openapi.json", None);
+        assert_eq!(schema["servers"][1]["url"], format!("http://{lan}:{port}"));
     }
 
     #[test]

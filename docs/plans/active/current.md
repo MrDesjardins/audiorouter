@@ -238,8 +238,13 @@ Agent work (no hardware or credentials needed):
    dropped the shell's `startup_register`/`startup_status`, present only on
    the Tauri-core branch; never worked in the app. Fix passes them whenever
    the Tauri core exists (`c6e9b2d8`); `host.test.ts` covers bridge plus
-   core and fails on the old code. Live check in the shell and release
-   pending.
+   core and fails on the old code. Live check 2026-10-04 in the user's
+   rebuilt shell: Native registration unregistered → Plan → Apply →
+   "registered"; HKCU Run AudioRouter = `"<repo>\src-tauri\target\release\audiorouter-shell.exe" --tray`;
+   shell-settings.json autoPlay true. Not yet: an actual sign-in. Note:
+   the Run value names this exe; switching to an installed build needs
+   Disabled applied from this build first (ownership check). Release
+   0.0.11 pending.
 
 Needs the user (attended, hardware or decisions):
 

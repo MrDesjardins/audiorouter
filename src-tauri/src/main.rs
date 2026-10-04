@@ -19,6 +19,7 @@ mod tray_playback;
 #[cfg(windows)]
 mod instance_windows;
 mod http_api;
+mod lan_addresses;
 #[cfg(windows)]
 mod api_token;
 #[cfg(windows)]
@@ -294,15 +295,33 @@ fn open_release_page(tag: String) -> Result<(), String> {
     Ok(())
 }
 
+/// This PC's private IPv4 addresses the API may also listen on (HTTP-09).
 #[tauri::command]
-fn http_api_control(action: String, port: Option<u16>, state: State<'_, ShellState>, api: State<'_, HttpApiState>) -> Result<serde_json::Value, String> {
+fn http_api_addresses() -> Result<Vec<lan_addresses::LanAddress>, String> {
+    lan_addresses::list()
+}
+
+/// `network` is one of this PC's private addresses for local-network access,
+/// or absent for this PC only. It must be listed by `http_api_addresses`.
+fn http_api_network(network: Option<&str>) -> Result<Option<std::net::Ipv4Addr>, String> {
+    let Some(network) = network.filter(|value| !value.is_empty()) else { return Ok(None) };
+    let address = network.parse::<std::net::Ipv4Addr>().map_err(|_| "Choose a network address from the list")?;
+    if !lan_addresses::list()?.iter().any(|entry| entry.address == address) {
+        return Err(format!("This PC no longer has the address {address}. Choose another network."));
+    }
+    Ok(Some(address))
+}
+
+#[tauri::command]
+fn http_api_control(action: String, port: Option<u16>, network: Option<String>, state: State<'_, ShellState>, api: State<'_, HttpApiState>) -> Result<serde_json::Value, String> {
     let mut listener = api.0.lock().map_err(|_| "API state unavailable")?;
     match action.as_str() {
         "start" => {
             if listener.is_none() {
+                let lan = http_api_network(network.as_deref())?;
                 let pipe = state.pipe_name.clone();
                 let token = api_token::load_or_create(&api_token::default_path()?)?;
-                *listener = Some(http_api::HttpApi::start_with_token(port.unwrap_or(17891), token, std::sync::Arc::new(move |request| forward_rpc_request(request, &pipe)))?);
+                *listener = Some(http_api::HttpApi::start_on(port.unwrap_or(17891), token, lan, std::sync::Arc::new(move |request| forward_rpc_request(request, &pipe)))?);
             }
         }
         "stop" => { *listener = None; }
@@ -310,10 +329,10 @@ fn http_api_control(action: String, port: Option<u16>, state: State<'_, ShellSta
             let token = api_token::generate()?;
             api_token::save(&api_token::default_path()?, &token)?;
             if let Some(previous) = listener.take() {
-                let active_port = previous.port;
+                let (active_port, lan) = (previous.port, previous.lan);
                 drop(previous);
                 let pipe = state.pipe_name.clone();
-                *listener = Some(http_api::HttpApi::start_with_token(active_port, token, std::sync::Arc::new(move |request| forward_rpc_request(request, &pipe)))?);
+                *listener = Some(http_api::HttpApi::start_on(active_port, token, lan, std::sync::Arc::new(move |request| forward_rpc_request(request, &pipe)))?);
             }
         }
         "openDocs" => {
@@ -341,8 +360,8 @@ fn http_api_control(action: String, port: Option<u16>, state: State<'_, ShellSta
         })
     } else { None };
     Ok(match listener.as_ref() {
-        Some(listener) => serde_json::json!({ "running": true, "port": listener.port, "url": format!("http://127.0.0.1:{}", listener.port), "token": revealed_token }),
-        None => serde_json::json!({ "running": false, "port": port.unwrap_or(17891), "url": null, "token": revealed_token }),
+        Some(listener) => serde_json::json!({ "running": true, "port": listener.port, "url": format!("http://127.0.0.1:{}", listener.port), "network": listener.lan.map(|address| address.to_string()), "networkUrl": listener.lan.map(|address| format!("http://{address}:{}", listener.port)), "token": revealed_token }),
+        None => serde_json::json!({ "running": false, "port": port.unwrap_or(17891), "url": null, "network": null, "networkUrl": null, "token": revealed_token }),
     })
 }
 
@@ -1302,6 +1321,7 @@ fn main() {
             autoplay_get,
             autoplay_set,
             http_api_control,
+            http_api_addresses,
             open_release_page,
             open_plugin_editor,
             choose_session_file,

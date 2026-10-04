@@ -46,3 +46,29 @@ test("missing clipboard offers manual copy", async () => {
   fireEvent.click(screen.getByText("Copy API token"));
   await screen.findByText("Select the token and copy it manually.");
 });
+test("local-network choice is sent on start, shown with its URL, and locked while running", async () => {
+  let running = false; let network: string | null = null;
+  const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+    if (command === "http_api_addresses") return [{ address: "10.0.0.73", adapter: "Ethernet" }];
+    if (args?.action === "start") { running = true; network = (args.network as string | null) ?? null; }
+    if (args?.action === "stop") { running = false; network = null; }
+    return { running, port: 17891, url: running ? "http://127.0.0.1:17891" : null, network, networkUrl: running && network ? `http://${network}:17891` : null, token: null };
+  });
+  window.__TAURI_INTERNALS__ = { invoke }; render(<ApiPanel />);
+  const choice = screen.getByLabelText("Who can connect") as HTMLSelectElement;
+  await screen.findByText("Local network · Ethernet (10.0.0.73)");
+  expect(screen.getByText(/Only programs on this PC can connect/)).toBeTruthy();
+  fireEvent.change(choice, { target: { value: "10.0.0.73" } });
+  expect(screen.getByText(/Traffic is not encrypted/)).toBeTruthy();
+  fireEvent.click(screen.getByText("Start API")); await screen.findByText("Stop API");
+  expect(invoke).toHaveBeenCalledWith("http_api_control", { action: "start", port: 17891, network: "10.0.0.73" });
+  expect(screen.getByText("API running · this PC and local network (10.0.0.73)")).toBeTruthy();
+  expect((screen.getByLabelText("API network URL") as HTMLInputElement).value).toBe("http://10.0.0.73:17891");
+  expect(choice.disabled).toBe(true);
+  fireEvent.click(screen.getByText("Stop API")); await screen.findByText("Start API");
+  expect(screen.queryByLabelText("API network URL")).toBeNull();
+  fireEvent.change(choice, { target: { value: "" } });
+  fireEvent.click(screen.getByText("Start API")); await screen.findByText("Stop API");
+  expect(invoke).toHaveBeenLastCalledWith("http_api_control", { action: "start", port: 17891, network: null });
+  expect(screen.getByText("API running · localhost only")).toBeTruthy();
+});
