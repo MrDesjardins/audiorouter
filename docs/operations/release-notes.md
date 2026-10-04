@@ -1,5 +1,35 @@
 # AudioRouter release notes
 
+## 0.0.10 — 2026-10-04 (unsigned experimental preview)
+
+- Much less memory while audio plays. Meter updates no longer redraw the
+  route canvas, and the window's JavaScript memory is capped at 256 MB. On a
+  measured session the window settled at 340–450 MB instead of climbing to
+  about 770 MB.
+- Closing the window to the tray now frees it entirely: only the small
+  AudioRouter process stays (about 30 MB) and audio keeps playing. Open it
+  again from the tray. If the route has unsaved changes, the window is only
+  hidden, so nothing is lost.
+- Tray menu: **Play** and **Stop audio** play or stop the selected session
+  without opening the window.
+- Advanced → **When AudioRouter starts**: start AudioRouter when you sign in to
+  Windows, now in the tray without opening a window, and **Play the selected
+  session automatically** when it starts. AudioRouter now remembers the
+  selected session across restarts.
+- Network Send/Receive troubleshooting: a new `network.jsonl` log records each
+  computer's addresses, packets sent and received, socket errors and a
+  plain-language hint (for example "nothing arrived: check the address and
+  that Windows Firewall allows AudioRouter"). For a problem between two
+  computers, send the logs folder from both (Logs tab → Open folder).
+
+Unsigned experimental prerelease; Windows may warn. No data migration or
+device-format change. If you used Start at sign-in before, apply it again
+once (Advanced → When AudioRouter starts) to start in the tray. Tray Play,
+autoplay and sign-in start were tested on a scratch database and by unit
+tests; autoplay needs device access to have been allowed once in the window.
+Keep 0.0.9 and a configuration backup for rollback. Full M08
+install/hardware/accessibility/signing qualification remains open.
+
 ## 0.0.9 — 2026-10-04 (unsigned experimental preview)
 
 - Input Device **Channels**: send a stereo input as mono to both ears. Use
