@@ -55,6 +55,16 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-04 — Test the backend the shell really builds, not one the test hands in.**
+  Evidence: [active plan, item 10](docs/plans/active/current.md),
+  `ui/src/host.test.ts`. Scope: `createInitialBackend` and any capability
+  passed from the desktop shell to the UI. Consequence: the shell injects a
+  host bridge and its Tauri core; the bridge branch dropped the sign-in
+  registration, so Start at sign-in never worked in the app while every
+  panel test (which passed `registerStartup` itself) stayed green. Cover the
+  exact combination the shell injects (`__AUDIO_ROUTER_HOST__` plus Tauri
+  core) for every shell-provided capability.
+
 - **2026-10-04 — Keep 20 Hz telemetry out of App state; measure WebView memory with a forced GC.**
   Evidence: [active plan, item 5](docs/plans/active/current.md).
   Scope: UI polling loops and WebView2 memory reports. Consequence: a 50 ms

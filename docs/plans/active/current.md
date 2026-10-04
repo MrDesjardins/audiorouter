@@ -231,6 +231,16 @@ Agent work (no hardware or credentials needed):
    network_log unit tests, real UDP loopback asserting summaries, socket
    tests. Next: ask Joe to retry with this build and send both folders.
 
+10. Done 2026-10-04 (user report on 0.0.10): Advanced → Start at sign-in
+   showed "Native registration: unavailable" and "unavailable in this
+   host" in the desktop app. Cause: `createInitialBackend` took the
+   host-bridge branch (the shell injects `__AUDIO_ROUTER_HOST__`) and
+   dropped the shell's `startup_register`/`startup_status`, present only on
+   the Tauri-core branch; never worked in the app. Fix passes them whenever
+   the Tauri core exists (`c6e9b2d8`); `host.test.ts` covers bridge plus
+   core and fails on the old code. Live check in the shell and release
+   pending.
+
 Needs the user (attended, hardware or decisions):
 
 4. Attended confirmation in the shell: drag-to-canvas, device picker on the
