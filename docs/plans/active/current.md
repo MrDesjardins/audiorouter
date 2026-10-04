@@ -1,6 +1,6 @@
 # Active plan — post-0.0.8 maintenance
 
-Updated 2026-10-04. v0.0.11 (sign-in start, local-network API) in release; see [0.0.11 evidence](evidence/2026-10-04-release-0.0.11.md).
+Updated 2026-10-04. v0.0.11 published as an unsigned prerelease; see [0.0.11 evidence](evidence/2026-10-04-release-0.0.11.md).
 
 ## Objective and scope
 
