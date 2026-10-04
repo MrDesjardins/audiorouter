@@ -10,7 +10,7 @@ import "./styles.css";
 let planned: Session | null = null;
 // Test hooks: a Playwright init script may inject a session, the backend
 // telemetry recorded from a real run, and start the fixture already playing.
-const injected = globalThis as { __routeFixtureSession?: Session; __routeFixtureTelemetry?: unknown[]; __routeFixtureRunning?: boolean; __routeFixturePrivacyMuted?: boolean; __routeFixtureProcessors?: DiscoveryDocument["processors"]; __routeFixtureDelayMs?: number; __routeFixtureNoRecordingRoot?: boolean; __routeFixtureRecordingLostAudio?: boolean; __routeFixtureFreshInstall?: boolean; __routeFixtureGameRound?: DiagnosticsSnapshot["gameRound"] };
+const injected = globalThis as { __routeFixtureSession?: Session; __routeFixtureTelemetry?: unknown[]; __routeFixtureRunning?: boolean; __routeFixturePrivacyMuted?: boolean; __routeFixtureRecordings?: unknown[]; __routeFixtureProcessors?: DiscoveryDocument["processors"]; __routeFixtureDelayMs?: number; __routeFixtureNoRecordingRoot?: boolean; __routeFixtureRecordingLostAudio?: boolean; __routeFixtureFreshInstall?: boolean; __routeFixtureGameRound?: DiagnosticsSnapshot["gameRound"] };
 let committed = structuredClone(injected.__routeFixtureSession ?? demoSession);
 let previewCandidate: Session | null = null;
 let running = injected.__routeFixtureRunning === true;
@@ -85,6 +85,8 @@ const previewBackend: UiBackend = {
   ...fixtureBackend,
   connected: true,
   async listProcessors() { return injected.__routeFixtureProcessors ?? fixtureBackend.listProcessors(); },
+  // Opt-in: recordings for the Recording tab library (browser tests).
+  async listRecordings(sessionId?: string) { return (injected.__routeFixtureRecordings as Awaited<ReturnType<typeof fixtureBackend.listRecordings>> | undefined) ?? fixtureBackend.listRecordings(sessionId); },
   async snapshot() {
     if (injected.__routeFixtureDelayMs) await new Promise(resolve => setTimeout(resolve, injected.__routeFixtureDelayMs));
     return structuredClone({ ...initial, session: committed, diagnostics: diagnostics(), status: { ...initial.status, activeSessionIds: running ? [committed.id] : [], reason: "Browser fixture: simulated audio; no devices are opened." } });

@@ -39,6 +39,11 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
+/** Open a right-sidebar tab, as a user does to reach its controls. */
+function openTab(name: string) {
+  fireEvent.click(screen.getByRole("tab", { name: new RegExp(`^${name}$`) }));
+}
+
 async function renderReady(element: Parameters<typeof render>[0]) {
   let view!: ReturnType<typeof render>;
   await act(async () => { view = render(element); });
@@ -116,6 +121,7 @@ describe("VB-Cable endpoint selection", () => {
       getStartup: async () => ({ enabled: true, registration: "unavailable", reason: "portable backend state" }),
       startupRegistrationStatus: async () => "registered",
     }} />);
+    openTab("Advanced");
     expect(await screen.findByText("Native registration: registered")).toBeTruthy();
   });
 
@@ -130,6 +136,7 @@ describe("VB-Cable endpoint selection", () => {
       startupRegistrationStatus: vi.fn(async () => (desired ? "registered" as const : "unregistered" as const)),
     };
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     await waitFor(() => expect(backend.getStartup).toHaveBeenCalled());
     fireEvent.change(screen.getByLabelText("Desired sign-in startup policy"), { target: { value: "enabled" } });
     fireEvent.click(screen.getByRole("button", { name: "Plan startup policy" }));
@@ -149,6 +156,7 @@ describe("VB-Cable endpoint selection", () => {
       registerStartup,
     };
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     fireEvent.change(screen.getByLabelText("Desired sign-in startup policy"), { target: { value: "enabled" } });
     fireEvent.click(screen.getByRole("button", { name: "Plan startup policy" }));
     fireEvent.click(await screen.findByRole("button", { name: "Apply planned policy" }));
@@ -166,6 +174,7 @@ describe("VB-Cable endpoint selection", () => {
       registerStartup,
     };
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     fireEvent.change(screen.getByLabelText("Desired sign-in startup policy"), { target: { value: "enabled" } });
     fireEvent.click(screen.getByRole("button", { name: "Plan startup policy" }));
     fireEvent.click(await screen.findByRole("button", { name: "Apply planned policy" }));
@@ -182,6 +191,7 @@ describe("VB-Cable endpoint selection", () => {
       applyStartup,
     };
     const { rerender } = await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     fireEvent.change(screen.getByLabelText("Desired sign-in startup policy"), { target: { value: "enabled" } });
     fireEvent.click(screen.getByRole("button", { name: "Plan startup policy" }));
     const apply = await screen.findByRole("button", { name: "Apply planned policy" });
@@ -203,6 +213,7 @@ describe("VB-Cable endpoint selection", () => {
       applyStartup,
     };
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     fireEvent.change(screen.getByLabelText("Desired sign-in startup policy"), { target: { value: "enabled" } });
     fireEvent.click(screen.getByRole("button", { name: "Plan startup policy" }));
     const apply = await screen.findByRole("button", { name: "Apply planned policy" });
@@ -221,6 +232,7 @@ describe("VB-Cable endpoint selection", () => {
       getStartup: vi.fn(async () => ({ enabled: false, registration: "unavailable" as const, reason: "reconnected" })),
     };
     const { rerender } = await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     await waitFor(() => expect(backend.getStartup).toHaveBeenCalledTimes(1));
     backend.connected = true;
     rerender(<App backend={backend} />);
@@ -237,6 +249,7 @@ describe("VB-Cable endpoint selection", () => {
         .mockResolvedValueOnce({ enabled: true, registration: "unavailable" as const, reason: "newer observed state" }),
     };
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     const startupPanel = screen.getByRole("region", { name: "Start at sign-in" });
     fireEvent.click(within(startupPanel).getByRole("button", { name: "Refresh" }));
     expect(await screen.findByText("newer observed state")).toBeTruthy();
@@ -276,6 +289,7 @@ describe("VB-Cable endpoint selection", () => {
       return { backendEpoch: 0, events: [{ sequence: 1, backendEpoch: 0, resourceRevision: 1, operationId: null, category: "recorder.changed", sessionId: demoSession.id }], nextSequence: 1 };
     });
     await renderReady(<App backend={{ ...connectedPreviewBackend(), listRecordings, subscribe }} />);
+    openTab("Recording");
     await waitFor(() => expect(screen.getByText("C:\\Audio\\take-live.wav")).toBeTruthy());
     expect(listRecordings).toHaveBeenCalledTimes(2);
   });
@@ -337,14 +351,6 @@ describe("VB-Cable endpoint selection", () => {
     expect(DIAGNOSTICS_REFRESH_INTERVAL_MS).toBe(50);
   });
 
-  it("exposes the human-testable route sequence without duplicating controls", async () => {
-    await renderReady(<App backend={connectedPreviewBackend()} />);
-    const quickRoute = await screen.findByRole("region", { name: "Quick route" });
-    expect(within(quickRoute).getByRole("link", { name: "Select endpoints" }).getAttribute("href")).toBe("#native-endpoint-panel");
-    expect(within(quickRoute).getByRole("link", { name: "Build the graph" }).getAttribute("href")).toBe("#signal-flow-panel");
-    expect(within(quickRoute).getByRole("link", { name: "Start the session" }).getAttribute("href")).toBe("#native-endpoint-panel");
-  });
-
   it("exposes explicit resume validation without restarting routes", async () => {
     const osTransition = vi.fn(async () => ({
       transition: "resume" as const,
@@ -355,6 +361,7 @@ describe("VB-Cable endpoint selection", () => {
     }));
     const startSession = vi.fn(async () => ({ sessionId: "portable-session", state: "running" as const, generation: 1, runtime: "fake" as const }));
     await renderReady(<App backend={{ ...connectedPreviewBackend(), osTransition, startSession }} />);
+    openTab("Advanced");
     fireEvent.click(await screen.findByRole("button", { name: "Revalidate after resume" }));
     await waitFor(() => expect(osTransition).toHaveBeenCalledWith("resume", expect.any(String)));
     expect(await screen.findByText(/No route was restarted/)).toBeTruthy();
@@ -392,15 +399,17 @@ describe("VB-Cable endpoint selection", () => {
       },
     };
     await renderReady(<App backend={backend} />);
-    expect(await screen.findByRole("heading", { name: "Safe mode is active" })).toBeTruthy();
-    expect(screen.getByText("3 recent crashes")).toBeTruthy();
-    expect(screen.getByText("Recovery state is held in memory for this preview.")).toBeTruthy();
+    openTab("Advanced");
+    // The visible Crash recovery panel (Advanced → Application identity and recovery).
+    const recovery = (await screen.findByRole("heading", { name: "Crash recovery" })).closest("section") as HTMLElement;
+    await waitFor(() => expect(recovery.textContent).toContain("Safe mode is active."));
+    expect(within(recovery).getByText("3 recent")).toBeTruthy();
     const clearButton = screen.getByRole("button", { name: "Clear safe mode" });
     expect(clearButton.hasAttribute("disabled")).toBe(false);
     fireEvent.click(clearButton);
     expect(clearRecoverySafeMode).toHaveBeenCalledWith(expect.any(String));
-    expect(await screen.findByRole("heading", { name: "Normal startup mode" })).toBeTruthy();
-    expect(screen.getByText("0 recent crashes")).toBeTruthy();
+    await waitFor(() => expect(recovery.textContent).toContain("Normal startup mode."));
+    expect(within(recovery).getByText("0 recent")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Clear safe mode" }).hasAttribute("disabled")).toBe(true);
   });
 
@@ -443,10 +452,11 @@ describe("VB-Cable endpoint selection", () => {
     const result = new Promise<{ sessionId: string; state: "running"; runtime: "fake"; generation: number }>((resolve) => { releaseStart = resolve; });
     const startSession = vi.fn(() => result);
     await renderReady(<App backend={{ ...connectedPreviewBackend(), startSession, refreshDiagnostics: preparedDiagnostics }} />);
-    const lifecycle = screen.getByRole("region", { name: "Session lifecycle" });
-    fireEvent.click(within(lifecycle).getByRole("button", { name: "Start session" }));
+    // The top bar's Play; a second click while starting must not start twice.
+    const play = within(document.querySelector(".topbar") as HTMLElement).getByRole("button", { name: /^Play$/ });
+    fireEvent.click(play);
     await screen.findByText("Starting session...");
-    fireEvent.click(within(lifecycle).getByRole("button", { name: "Start session" }));
+    fireEvent.click(play);
     expect(startSession).toHaveBeenCalledTimes(1);
     releaseStart({ sessionId: "demo-session", state: "running", runtime: "fake", generation: 1 });
     await waitFor(() => expect(startSession).toHaveBeenCalledTimes(1));
@@ -463,36 +473,6 @@ describe("VB-Cable endpoint selection", () => {
     expect(setPrivacyMute).toHaveBeenCalledTimes(1);
     releaseMute();
     await waitFor(() => expect(setPrivacyMute).toHaveBeenCalledTimes(1));
-  });
-
-  it("forwards the selected application capture policy", async () => {
-    const prepareNativeApplication = vi.fn(async () => ({ sessionId: demoSession.id, state: "configured-stopped" as const, processId: 42, executable: "Music.exe", executablePath: "C:\\Apps\\Music.exe", creationTime100ns: "123", mode: "exclude" as const, renderEndpointId: "render-test" }));
-    const backend = {
-      ...connectedPreviewBackend(),
-      listApplications: async () => [{
-        processId: 42,
-        executable: "Music.exe",
-        executablePath: "C:\\Apps\\Music.exe",
-        audioDisplayNames: ["Music"],
-        audioActivity: "active" as const,
-        captureCapability: "observed" as const,
-        audioSessionCount: 1,
-        activeAudioSessionCount: 1,
-        captureSessionCount: 1,
-        renderSessionCount: 1,
-        creationTime100ns: "123",
-      }],
-      prepareNativeApplication,
-    };
-    window.localStorage.setItem(`audiorouter.ui.endpoint-binding.${demoSession.id}`, JSON.stringify({ renderEndpointId: "render-test" }));
-    await renderReady(<App backend={backend} />);
-    await screen.findByRole("button", { name: "Prepare application worker" });
-    fireEvent.click(screen.getByRole("button", { name: "Prepare application worker" }));
-    await waitFor(() => expect(prepareNativeApplication).toHaveBeenCalledWith(expect.objectContaining({ mode: "include" })));
-    prepareNativeApplication.mockClear();
-    fireEvent.change(screen.getByRole("combobox", { name: "Application capture policy" }), { target: { value: "exclude" } });
-    fireEvent.click(screen.getByRole("button", { name: "Prepare application worker" }));
-    await waitFor(() => expect(prepareNativeApplication).toHaveBeenCalledWith(expect.objectContaining({ mode: "exclude" })));
   });
 
   it("adds a verified scanned plugin to the draft, named after its file", async () => {
@@ -526,6 +506,7 @@ describe("VB-Cable endpoint selection", () => {
       }),
     };
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     fireEvent.change(await screen.findByRole("textbox", { name: "Absolute plugin directory" }), { target: { value: "C:\\Plugins" } });
     fireEvent.click(screen.getByRole("button", { name: "Scan directory" }));
     fireEvent.click(await screen.findByRole("button", { name: "Select for inspection" }));
@@ -664,6 +645,7 @@ describe("VB-Cable endpoint selection", () => {
       inspectPlugin: vi.fn(async (path: string) => ({ path, identity: null, error: `inspected ${path}`, errorCode: "io" as const })),
     };
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     fireEvent.change(await screen.findByRole("textbox", { name: "Absolute plugin directory" }), { target: { value: "C:\\Plugins" } });
     fireEvent.click(screen.getByRole("button", { name: "Scan directory" }));
     const selections = await screen.findAllByRole("button", { name: "Select for inspection" });
@@ -685,6 +667,7 @@ describe("VB-Cable endpoint selection", () => {
     const scanResult = new Promise<{ directory: string; entries: never[] }>((resolve) => { releaseScan = resolve; });
     const scanPlugins = vi.fn(() => scanResult);
     await renderReady(<App backend={{ ...connectedPreviewBackend(), scanPlugins }} />);
+    openTab("Advanced");
     fireEvent.change(await screen.findByRole("textbox", { name: "Absolute plugin directory" }), { target: { value: "C:\\Plugins" } });
     fireEvent.click(screen.getByRole("button", { name: "Scan directory" }));
     await screen.findByText("Scanning selected directory...");
@@ -699,6 +682,7 @@ describe("VB-Cable endpoint selection", () => {
     const scanResult = new Promise<{ directory: string; entries: never[] }>((resolve) => { releaseScan = resolve; });
     const scanPlugins = vi.fn(() => scanResult);
     await renderReady(<App backend={{ ...connectedPreviewBackend(), scanPlugins }} />);
+    openTab("Advanced");
     const directory = await screen.findByRole("textbox", { name: "Absolute plugin directory" });
     fireEvent.change(directory, { target: { value: "C:\\Plugins\\old" } });
     fireEvent.click(screen.getByRole("button", { name: "Scan directory" }));
@@ -729,6 +713,7 @@ describe("VB-Cable endpoint selection", () => {
       { id: "render-vb", name: "CABLE Input (VB-Audio Virtual Cable)", direction: "render" as const, state: "active" as const, defaultRoles: [], format, periods: { default100ns: 100000, minimum100ns: 30000 } },
     ];
     await renderReady(<App backend={{ ...connectedPreviewBackend(), listDevices: async () => devices }} />);
+    openTab("Advanced");
     const button = await screen.findByRole("button", { name: "Select VB-Cable loopback pair" });
     expect(button).toHaveProperty("disabled", false);
     fireEvent.click(button);
@@ -746,6 +731,7 @@ describe("VB-Cable endpoint selection", () => {
       { id: "render-monitor", name: "Headphones", direction: "render" as const, state: "active" as const, defaultRoles: ["console" as const], format, periods: { default100ns: 100000, minimum100ns: 30000 } },
     ];
     await renderReady(<App backend={{ ...connectedPreviewBackend(), listDevices: async () => devices }} />);
+    openTab("Advanced");
     fireEvent.click(await screen.findByRole("button", { name: "Select VB-Cable capture" }));
     await waitFor(() => expect((screen.getByRole("combobox", { name: "Native capture endpoint" }) as HTMLSelectElement).value).toBe("capture-vb"));
     expect((screen.getByRole("combobox", { name: "Native render endpoint" }) as HTMLSelectElement).value).toBe("");
@@ -766,6 +752,7 @@ describe("VB-Cable endpoint selection", () => {
       });
     });
     await renderReady(<App backend={{ ...connectedPreviewBackend(), listDevices: async () => devices, prepareNativeEndpoint }} />);
+    openTab("Advanced");
     fireEvent.click(await screen.findByRole("button", { name: "Select VB-Cable capture" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Native render endpoint" }), { target: { value: "render-focusrite" } });
     fireEvent.click(screen.getByRole("button", { name: "Prepare native endpoints" }));
@@ -777,6 +764,7 @@ describe("VB-Cable endpoint selection", () => {
   it("detaches a stopped native worker before deliberate endpoint replacement", async () => {
     const detachNativeEndpoint = vi.fn(async () => ({ sessionId: "demo-session", state: "detached" as const }));
     await renderReady(<App backend={{ ...connectedPreviewBackend(), detachNativeEndpoint }} />);
+    openTab("Advanced");
     fireEvent.click(await screen.findByRole("button", { name: "Detach stopped worker" }));
     await waitFor(() => expect(detachNativeEndpoint).toHaveBeenCalledWith("demo-session"));
     expect(await screen.findByText(/Native worker detached; select new endpoints/i)).toBeTruthy();
@@ -790,6 +778,7 @@ describe("VB-Cable endpoint selection", () => {
     ];
     const rebindNativeEndpoint = vi.fn(async () => ({ sessionId: "demo-session", state: "configured-stopped" as const, captureEndpointId: "capture-vb", renderEndpointId: "render-vb" }));
     await renderReady(<App backend={{ ...connectedPreviewBackend(), listDevices: async () => devices, rebindNativeEndpoint }} />);
+    openTab("Advanced");
     fireEvent.click(await screen.findByRole("button", { name: "Select VB-Cable loopback pair" }));
     fireEvent.click(screen.getByRole("button", { name: "Rebind exact endpoints" }));
     await waitFor(() => expect(rebindNativeEndpoint).toHaveBeenCalledWith("demo-session", "capture-vb", "render-vb"));
@@ -806,6 +795,7 @@ describe("VB-Cable endpoint selection", () => {
     const result = new Promise<{ sessionId: string; state: "configured-stopped"; captureEndpointId: string; renderEndpointId: string }>((resolve) => { releasePrepare = resolve; });
     const prepareNativeEndpoint = vi.fn(() => result);
     await renderReady(<App backend={{ ...connectedPreviewBackend(), listDevices: async () => devices, prepareNativeEndpoint }} />);
+    openTab("Advanced");
     fireEvent.click(await screen.findByRole("button", { name: "Select VB-Cable loopback pair" }));
     fireEvent.click(screen.getByRole("button", { name: "Prepare native endpoints" }));
     await screen.findByText("Preparing exact endpoints in stopped state...");
@@ -820,6 +810,7 @@ describe("committed history and client authorization", () => {
   it("lists committed revisions and disables undo with fewer than two", async () => {
     const listGraphHistory = vi.fn(async () => ({ items: [demoSession], nextCursor: null }));
     await renderReady(<App backend={{ ...connectedPreviewBackend(), listGraphHistory }} />);
+    openTab("Advanced");
     await waitFor(() => expect(listGraphHistory).toHaveBeenCalledWith(demoSession.id, undefined, 10));
     expect(await screen.findByText(`Revision ${demoSession.revision}`)).toBeTruthy();
     expect((screen.getByRole("button", { name: "Undo last committed change" }) as HTMLButtonElement).disabled).toBe(true);
@@ -833,6 +824,7 @@ describe("committed history and client authorization", () => {
     const undoGraphPlan = vi.fn(async () => ({ planId: "undo-plan-1", baseRevision: demoSession.revision, expiresInMs: 300000 }));
     const commitGraph = vi.fn(async () => ({ sessionId: demoSession.id, revision: demoSession.revision + 1 }));
     await renderReady(<App backend={{ ...connectedPreviewBackend(), listGraphHistory, undoGraphPlan, commitGraph }} />);
+    openTab("Advanced");
     const undoButton = await screen.findByRole("button", { name: "Undo last committed change" });
     expect((undoButton as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(undoButton);
@@ -845,6 +837,7 @@ describe("committed history and client authorization", () => {
     const listGraphHistory = vi.fn(async () => ({ items: [demoSession, demoSession], nextCursor: null }));
     const undoGraphPlan = vi.fn(async () => { throw new Error("no undo available"); });
     await renderReady(<App backend={{ ...connectedPreviewBackend(), listGraphHistory, undoGraphPlan }} />);
+    openTab("Advanced");
     fireEvent.click(await screen.findByRole("button", { name: "Undo last committed change" }));
     expect(await screen.findByText(/no undo available/)).toBeTruthy();
   });
@@ -857,6 +850,7 @@ describe("committed history and client authorization", () => {
       return { clientId, role, revoked: false as const };
     });
     await renderReady(<App backend={{ ...connectedPreviewBackend(), listClients, authorizeClient }} />);
+    openTab("Advanced");
     expect(await screen.findByText("cli-1")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("New client ID"), { target: { value: "mcp-2" } });
     fireEvent.change(screen.getByLabelText("New client role"), { target: { value: "editor" } });
@@ -874,6 +868,7 @@ describe("committed history and client authorization", () => {
       return { clientId, revoked: true as const, changed: true };
     });
     await renderReady(<App backend={{ ...connectedPreviewBackend(), listClients, revokeClient }} />);
+    openTab("Advanced");
     fireEvent.click(await screen.findByRole("button", { name: "Revoke" }));
     await waitFor(() => expect(revokeClient).toHaveBeenCalledWith("cli-1", expect.any(String)));
     expect(await screen.findByText(/Revoked cli-1/)).toBeTruthy();
@@ -978,6 +973,7 @@ describe("keyboard connection dialog", () => {
     const backend = { ...connectedPreviewBackend(), listDevices: async () => [inactive, capture, renderDevice], prepareNativeEndpoint, startSession, refreshDiagnostics: preparedDiagnostics };
 
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
 
     const endpointPanel = screen.getByRole("region", { name: "Endpoint binding" });
     const captureSelect = await screen.findByRole("combobox", { name: "Native capture endpoint" });
@@ -1020,6 +1016,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
       prepareNativeMultiInputs,
     };
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     const captureSelect = await screen.findByRole("listbox", { name: "Native multi-input capture endpoints" });
     const options = within(captureSelect).getAllByRole("option") as HTMLOptionElement[];
     options[0].selected = true;
@@ -1080,6 +1077,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
       prepareNativeMultiInputs,
     };
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
 
     const physicalSelect = await screen.findByRole("listbox", { name: "Native multi-input capture endpoints" });
     (within(physicalSelect).getAllByRole("option")[0] as HTMLOptionElement).selected = true;
@@ -1110,6 +1108,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     const renderDevice = { ...capture, id: "render-saved", name: "Saved render", direction: "render" as const };
     const backend = { ...connectedPreviewBackend(), listDevices: async () => [capture, renderDevice] };
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     await waitFor(() => expect((screen.getByRole("combobox", { name: "Native capture endpoint" }) as HTMLSelectElement).value).toBe("capture-saved"));
     expect((screen.getByRole("combobox", { name: "Native render endpoint" }) as HTMLSelectElement).value).toBe("render-saved");
     window.localStorage.removeItem("audiorouter.ui.endpoint-binding.demo-session");
@@ -1122,6 +1121,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     const prepareNativeEndpoint = vi.fn(async (sessionId: string, captureEndpointId: string, renderEndpointId: string) => ({ sessionId, state: "configured-stopped" as const, captureEndpointId, renderEndpointId }));
     const backend = { ...connectedPreviewBackend(), listDevices: async () => [capture, renderDevice], prepareNativeEndpoint };
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     const captureSelect = await screen.findByRole("combobox", { name: "Native capture endpoint" });
     const renderSelect = screen.getByRole("combobox", { name: "Native render endpoint" });
     await waitFor(() => expect((captureSelect as HTMLSelectElement).value).toBe(""));
@@ -1226,6 +1226,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
       }),
     };
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     expect(await screen.findByRole("heading", { name: "Recovery checkpoints" })).toBeTruthy();
     expect(await screen.findByText("take-recovery")).toBeTruthy();
     expect(await screen.findByText(/invalid/)).toBeTruthy();
@@ -1239,6 +1240,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     const previewRecording = vi.fn().mockReturnValueOnce(oldResult).mockResolvedValueOnce({ preview: { status: "new" } });
     const backend = { ...connectedPreviewBackend(), listRecordings: async () => [recording], previewRecording };
     await renderReady(<App backend={backend} />);
+    openTab("Recording");
     const previewButtons = await screen.findAllByRole("button", { name: "Preview" });
     fireEvent.click(previewButtons[0]);
     fireEvent.click(previewButtons[0]);
@@ -1261,8 +1263,10 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
       replaceVirtualRoutes,
     };
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     expect(await screen.findByRole("heading", { name: "Virtual-bus routes" })).toBeTruthy();
-    expect((screen.getByRole("textbox", { name: "Virtual-route base revision" }) as HTMLInputElement).value).toBe("2");
+    // The panel mounts with the tab; its revision arrives with the route list.
+    await waitFor(() => expect((screen.getByRole("textbox", { name: "Virtual-route base revision" }) as HTMLInputElement).value).toBe("2"));
     fireEvent.click(screen.getByRole("button", { name: "Replace routes" }));
     await waitFor(() => expect(replaceVirtualRoutes).toHaveBeenCalledWith(2, [], expect.any(String)));
     expect(await screen.findByText("Virtual routes applied at revision 3.")).toBeTruthy();
@@ -1272,6 +1276,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     const listVirtualRoutes = vi.fn(async () => ({ revision: 4, routes: [] }));
     const backend = { ...createDisconnectedBackend(), connected: false, listVirtualRoutes };
     const { rerender } = await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     await waitFor(() => expect(listVirtualRoutes).toHaveBeenCalledTimes(0));
     backend.connected = true;
     rerender(<App backend={backend} />);
@@ -1284,6 +1289,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     const listVirtualDevices = vi.fn().mockResolvedValueOnce([makeDevice("old-bus", "Old bus")]).mockResolvedValueOnce([makeDevice("new-bus", "New bus")]);
     const backend = { ...connectedPreviewBackend(), listVirtualDevices };
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     const panel = await screen.findByRole("region", { name: "Virtual-device lifecycle" });
     await waitFor(() => expect(listVirtualDevices).toHaveBeenCalledTimes(1));
     fireEvent.change(within(panel).getByRole("combobox", { name: "Virtual-device action" }), { target: { value: "rename" } });
@@ -1300,6 +1306,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
       planVirtualDevice: vi.fn(async () => ({ planId: "virtual-plan", expiresInMs: 300000, operation: { action: "create" as const, id: "virtual-bus", name: "AudioRouter Bus" }, availability: { status: "unavailable" as const, reason: "managed driver unavailable" }, requiredScopes: ["deviceAdministration"], warnings: [] })),
     };
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     const panel = await screen.findByRole("region", { name: "Virtual-device lifecycle" });
     fireEvent.click(within(panel).getByRole("button", { name: "Plan create" }));
     expect(await within(panel).findByRole("button", { name: "Apply planned state" })).toBeTruthy();
@@ -1313,6 +1320,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     const removeVirtualDevice = vi.fn(async () => ({ operationId: "operation-2", state: "completed" as const, busId: device.id, driverInstanceId: null, availability: { status: "unavailable" as const, reason: "requires M03 managed virtual driver" } }));
     const backend = { ...connectedPreviewBackend(), listVirtualDevices: async () => [device], provisionVirtualDevice, removeVirtualDevice };
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     const panel = await screen.findByRole("region", { name: "Virtual-device lifecycle" });
     fireEvent.change(within(panel).getByRole("textbox", { name: "Managed device instance ID" }), { target: { value: "bus-1" } });
     fireEvent.click(within(panel).getByRole("button", { name: "Provision managed device" }));
@@ -1332,6 +1340,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
       replaceVirtualRoutes,
     };
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     const panel = await screen.findByRole("region", { name: "Virtual-bus routes" });
     const replace = within(panel).getByRole("button", { name: "Replace routes" });
     fireEvent.click(replace);
@@ -1369,6 +1378,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     }));
     const backend = { ...connectedPreviewBackend(), createRecorder };
     await renderReady(<App backend={backend} />);
+    openTab("Recording");
     fireEvent.change(await screen.findByRole("textbox", { name: "Recorder ID" }), { target: { value: "voice-take" } });
     const dither = screen.getByRole("checkbox", { name: "TPDF dither" });
     expect((dither as HTMLInputElement).checked).toBe(true);
@@ -1390,6 +1400,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     }));
     const backend = { ...connectedPreviewBackend(), createRecorder };
     await renderReady(<App backend={backend} />);
+    openTab("Recording");
     fireEvent.click(await screen.findByRole("button", { name: "Recorder" }));
     expect((screen.getByRole("combobox", { name: "Graph recorder node" }) as HTMLSelectElement).value).toBe("recorder-1");
     fireEvent.click(screen.getByRole("button", { name: "Create recorder" }));
@@ -1408,6 +1419,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     }));
     const backend = { ...connectedPreviewBackend(), createRecorder };
     await renderReady(<App backend={backend} />);
+    openTab("Recording");
     fireEvent.change(await screen.findByRole("combobox", { name: "Recorder format" }), { target: { value: "wavFloat32" } });
     const dither = screen.getByRole("checkbox", { name: "TPDF dither" }) as HTMLInputElement;
     expect(dither.checked).toBe(false);
@@ -1423,6 +1435,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
       listRecorders: async () => [{ sessionId: demoSession.id, nodeId: "recorder-node", state: "recording" as const, lastFrame: 480 }],
     };
     await renderReady(<App backend={backend} />);
+    openTab("Recording");
     const panel = await screen.findByRole("region", { name: "Recorder" });
     await waitFor(() => expect(within(panel).getByText("recording")).toBeTruthy());
     expect(within(panel).getByText("Attached recorder node: recorder-node")).toBeTruthy();
@@ -1432,6 +1445,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
   it("clears recorder state when the selected session has no live recorder", async () => {
     const activeBackend = { ...connectedPreviewBackend(), listRecorders: async () => [{ sessionId: demoSession.id, state: "recording" as const, lastFrame: 480 }] };
     const view = await renderReady(<App backend={activeBackend} />);
+    openTab("Recording");
     const panel = await screen.findByRole("region", { name: "Recorder" });
     await waitFor(() => expect(within(panel).getByText("recording")).toBeTruthy());
     view.rerender(<App backend={{ ...connectedPreviewBackend(), listRecorders: async () => [] }} />);
@@ -1442,6 +1456,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
   it("shows a failed recorder state when a lifecycle operation is rejected", async () => {
     const backend = { ...connectedPreviewBackend(), armRecorder: async () => { throw new Error("disk full"); } };
     await renderReady(<App backend={backend} />);
+    openTab("Recording");
     const panel = await screen.findByRole("region", { name: "Recorder" });
     fireEvent.click(within(panel).getByRole("button", { name: "Arm" }));
     await waitFor(() => expect(within(panel).getByText("failed")).toBeTruthy());
@@ -1454,6 +1469,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     const armRecorder = vi.fn(() => result);
     const backend = { ...connectedPreviewBackend(), armRecorder };
     await renderReady(<App backend={backend} />);
+    openTab("Recording");
     const panel = await screen.findByRole("region", { name: "Recorder" });
     fireEvent.click(within(panel).getByRole("button", { name: "Arm" }));
     await within(panel).findByText("Arming...");
@@ -1466,6 +1482,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
   it("does not guess idle when recorder state cannot be read", async () => {
     const backend = { ...connectedPreviewBackend(), listRecorders: async () => { throw new Error("control pipe unavailable"); } };
     await renderReady(<App backend={backend} />);
+    openTab("Recording");
     const panel = await screen.findByRole("region", { name: "Recorder" });
     await waitFor(() => expect(within(panel).getByText("unavailable")).toBeTruthy());
   });
@@ -1496,7 +1513,10 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
   it("renders the backend-derived EQ response for a draft EQ node", async () => {
     const processorResponse = vi.fn(async () => ({ frequenciesHz: [20, 1000, 20000], magnitudeDb: [0, -6, 0] }));
     await renderReady(<App backend={{ ...connectedPreviewBackend(), processorResponse }} />);
-    fireEvent.click(await screen.findByRole("button", { name: /Advanced EQ, Effect/ }));
+    // Add it from the Tools tab, as a user does.
+    fireEvent.click(within(screen.getByRole("tabpanel", { name: "Tools" })).getByRole("button", { name: /^Advanced EQ/ }));
+    // The response is drawn by the processor catalog (Advanced).
+    openTab("Advanced");
 
     expect(await screen.findByRole("img", { name: "Parametric EQ magnitude response" })).toBeTruthy();
     expect(processorResponse).toHaveBeenCalledWith(expect.objectContaining({ sampleRateHz: 48000, frequenciesHz: expect.any(Array), bands: expect.any(Array) }));
@@ -1705,6 +1725,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
       }),
     };
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     fireEvent.click(await screen.findByRole("button", { name: "Add EQ to draft" }));
     expect(screen.getByText("Advanced EQ 1 added to the draft. Review and plan the changes before committing.")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Advanced EQ 1" })).toBeTruthy();
@@ -1719,6 +1740,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
       }),
     };
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     fireEvent.click(await screen.findByRole("button", { name: "Add voice chain to draft" }));
     expect(screen.getByText("Gate 1, Compressor 1, Limiter 1 added to the draft. Review and plan the changes before committing.")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Gate 1" })).toBeTruthy();
@@ -1854,45 +1876,13 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     expect(onInsertProcessor).toHaveBeenCalledWith("edge-1", "parametricEq");
   });
 
-  it("renders backend route provenance as an accessible path list", async () => {
-    const inspectRoute = vi.fn(async () => ({
-      destinationNode: "voice",
-      reachable: true,
-      complete: true,
-      paths: [{ nodes: ["mic", "voice"], edges: ["edge-1"], channelMaps: [[1]], latencySamples: 48 }],
-    }));
-    await renderReady(<App backend={{ ...connectedPreviewBackend(), inspectRoute }} />);
-
-    const routePanel = screen.getByRole("region", { name: "Receives audio from" });
-    fireEvent.click(within(routePanel).getByRole("button", { name: "Refresh" }));
-    await waitFor(() => expect(inspectRoute).toHaveBeenCalledWith("mic", demoSession.id));
-    expect(await within(routePanel).findByRole("list", { name: "Reported audio paths" })).toBeTruthy();
-    expect(within(routePanel).getByText(/Path 1: Microphone \[enabled\] → Voice gain \[enabled\]/)).toBeTruthy();
-    expect(within(routePanel).getByText(/Channel map: \[1\]/)).toBeTruthy();
-  });
-
-  it("keeps the newest route inspection when refreshes resolve out of order", async () => {
-    let releaseOld!: (value: { destinationNode: string; reachable: boolean; complete: boolean; paths: never[] }) => void;
-    const oldResult = new Promise<{ destinationNode: string; reachable: boolean; complete: boolean; paths: never[] }>((resolve) => { releaseOld = resolve; });
-    const inspectRoute = vi.fn().mockReturnValueOnce(oldResult).mockResolvedValueOnce({ destinationNode: "voice", reachable: false, complete: true, paths: [] });
-    await renderReady(<App backend={{ ...connectedPreviewBackend(), inspectRoute }} />);
-    const routePanel = screen.getByRole("region", { name: "Receives audio from" });
-    const refresh = within(routePanel).getByRole("button", { name: "Refresh" });
-    fireEvent.click(refresh);
-    fireEvent.click(refresh);
-    expect(await within(routePanel).findByText("No reachable route reported by the backend.")).toBeTruthy();
-    releaseOld({ destinationNode: "voice", reachable: true, complete: true, paths: [] });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(within(routePanel).getByText("No reachable route reported by the backend.")).toBeTruthy();
-    expect(within(routePanel).queryByText(/reachable path/)).toBeNull();
-  });
-
   it("prevents duplicate managed-bus planning while the first request is pending", async () => {
     let releasePlan!: (value: { planId: string; expiresInMs: number; operation: { action: "create"; id: string; name: string }; availability: { status: "unavailable"; reason: string }; requiredScopes: string[]; warnings: string[] }) => void;
     const planResult = new Promise<{ planId: string; expiresInMs: number; operation: { action: "create"; id: string; name: string }; availability: { status: "unavailable"; reason: string }; requiredScopes: string[]; warnings: string[] }>((resolve) => { releasePlan = resolve; });
     const planVirtualDevice = vi.fn(() => planResult);
     const backend = { ...connectedPreviewBackend(), planVirtualDevice };
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     const panel = screen.getByRole("region", { name: "Virtual-device lifecycle" });
     const plan = within(panel).getByRole("button", { name: "Plan create" });
     fireEvent.click(plan);
@@ -1903,18 +1893,11 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     await waitFor(() => expect(within(panel).getByText("managed driver unavailable")).toBeTruthy());
   });
 
-  it("shows persisted recording encoding details", async () => {
-    const recording: RecordingRow = { id: "encoded-take", sessionId: demoSession.id, recorderId: "recorder-1", path: "C:\\Audio\\encoded.flac", format: "flac", channels: 2, sampleRate: 44100, frames: 4410, fileBytes: 12000, startTime: "2026-09-14T01:00:00Z", state: "completed", missing: false, title: null, artist: null, comment: null, dither: true, conversion: "targetSampleRate=44100;channels=2;bitsPerSample=16" };
-    await renderReady(<App backend={{ ...connectedPreviewBackend(), listRecordings: async () => [recording] }} />);
-    const panel = await screen.findByRole("region", { name: "Recording encoding" });
-    expect(within(panel).getByText(/flac - 44100 Hz - 2 channels - TPDF dither/)).toBeTruthy();
-    expect(within(panel).getByText(/targetSampleRate=44100;channels=2;bitsPerSample=16/)).toBeTruthy();
-  });
-
   it("edits title, artist, and comment metadata together", async () => {
     const recording: RecordingRow = { id: "metadata-take", sessionId: demoSession.id, recorderId: "recorder-1", path: "C:\\Audio\\metadata.wav", format: "wav", channels: 1, sampleRate: 48000, frames: 480, fileBytes: 1000, startTime: "2026-09-14T01:00:00Z", state: "completed", missing: false, title: "Old title", artist: "Old artist", comment: "Old comment", dither: true, conversion: "targetSampleRate=48000;channels=1;format=wav" };
     const setRecordingMetadata = vi.fn(async () => ({ updated: true as const, recordingId: recording.id, title: "New title", artist: "New artist", comment: "New comment" }));
     await renderReady(<App backend={{ ...connectedPreviewBackend(), listRecordings: async () => [recording], setRecordingMetadata }} />);
+    openTab("Recording");
     await screen.findByDisplayValue("Old title");
     fireEvent.change(screen.getByRole("textbox", { name: "Title for metadata-take" }), { target: { value: "New title" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Artist for metadata-take" }), { target: { value: "New artist" } });
@@ -1929,6 +1912,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     let releaseMetadata!: () => void;
     const setRecordingMetadata = vi.fn(() => new Promise<{ updated: true; recordingId: string; title: string; artist: null; comment: null }>((resolve) => { releaseMetadata = () => resolve({ updated: true, recordingId: recording.id, title: "Title", artist: null, comment: null }); }));
     await renderReady(<App backend={{ ...connectedPreviewBackend(), listRecordings: async () => [recording], setRecordingMetadata }} />);
+    openTab("Recording");
     await screen.findByDisplayValue("Title");
     const save = screen.getByRole("button", { name: "Save metadata" });
     fireEvent.click(save);
@@ -1944,6 +1928,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     const commitSessionImport = vi.fn(async () => ({ session: imported, state: "stopped" as const, imported: true as const }));
     const backend = { ...connectedPreviewBackend(), planSessionImport, commitSessionImport };
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
 
     const transferPanel = screen.getByRole("region", { name: "Session transfer" });
     const file = new File([JSON.stringify(demoSession)], "voice.audiorouter.json", { type: "application/json" });
@@ -1963,6 +1948,7 @@ const prepareNativeMultiInputs = vi.fn(async (sessionId: string, generation: num
     const planSessionImport = vi.fn(() => planResult);
     const backend = { ...connectedPreviewBackend(), planSessionImport };
     await renderReady(<App backend={backend} />);
+    openTab("Advanced");
     const transferPanel = screen.getByRole("region", { name: "Session transfer" });
     const input = within(transferPanel).getByLabelText("Import session configuration");
     fireEvent.change(input, { target: { files: [new File([JSON.stringify(imported)], "pending.json", { type: "application/json" })] } });

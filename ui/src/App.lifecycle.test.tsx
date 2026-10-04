@@ -40,7 +40,8 @@ async function fixture(savedSession = demoSession) {
 const sessionPanel = () => within(document.querySelector<HTMLElement>(".right-workbench")!);
 const messageBar = () => within(document.querySelector<HTMLElement>(".global-action-message")!);
 function addGain() { fireEvent.click(screen.getByRole("tab", { name: "Tools" })); fireEvent.click(sessionPanel().getByRole("button", { name: /^Gain / })); }
-function start() { fireEvent.click(within(screen.getByRole("region", { name: "Session lifecycle" })).getByRole("button", { name: "Start session" })); }
+// The top bar's Play (the removed hidden lifecycle panel had the same handler).
+function start() { fireEvent.click(within(document.querySelector(".topbar") as HTMLElement).getByRole("button", { name: /^Play$/ })); }
 
 async function renderReady(element: Parameters<typeof render>[0]) {
   let view!: ReturnType<typeof render>;

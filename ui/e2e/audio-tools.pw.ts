@@ -642,7 +642,7 @@ test("workspace and recording tab fit desktop viewports without page scrolling",
   }
   console.log("DESIGN_GEOMETRY", JSON.stringify(report));
   await page.getByRole("tab", { name: "Recording" }).click();
-  await expect(page.getByRole("heading", { name: "Recording" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Recording", exact: true })).toBeVisible();
   const recordingPanel = page.locator(".right-workbench");
   await expect(recordingPanel.getByLabel("Recorder ID")).toHaveValue("voice-recording");
   await expect(recordingPanel.getByLabel("Recorder sample rate")).toHaveValue("48000");
