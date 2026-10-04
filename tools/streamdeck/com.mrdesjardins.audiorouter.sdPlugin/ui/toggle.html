@@ -13,17 +13,34 @@
     <option value="latch">Each press switches</option>
     <option value="momentary">Only while held (push-to-talk, hold to compare)</option>
   </select></label>
+  <details class="group">
+    <summary>Appearance</summary>
+    <label>Colour when on<select id="onColor"></select></label>
+    <label>Colour when off<select id="offColor"></select></label>
+    <label>Word when on<input id="onText" maxlength="8" placeholder="ON"></label>
+    <label>Word when off<input id="offText" maxlength="8" placeholder="OFF"></label>
+    <label class="check"><input id="showDetail" type="checkbox" checked>Show what it switches under the name</label>
+    <p class="hint">Title: type one in Stream Deck's Title field to replace the tool's name. Turn on Stream Deck's "Show title" to style it with your own font and position. Images: pick your own image for the Off and On states in Stream Deck; the key still follows AudioRouter.</p>
+  </details>
   <p class="hint">The key always shows AudioRouter's real value, also when you change it in the window.</p>
   <script>
     const names = { enabled: "Enabled (on / off)", bypass: "Bypass" };
     const label = (target) => names[target] ?? target.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (first) => first.toUpperCase());
     const node = document.getElementById("node"), target = document.getElementById("target"), mode = document.getElementById("mode");
+    fillPalette(document.getElementById("onColor")); fillPalette(document.getElementById("offColor"));
+    bindSetting(mode, "mode", "latch");
+    bindSetting(document.getElementById("onColor"), "onColor", "");
+    bindSetting(document.getElementById("offColor"), "offColor", "");
+    bindSetting(document.getElementById("onText"), "onText", "");
+    bindSetting(document.getElementById("offText"), "offText", "");
+    bindSetting(document.getElementById("showDetail"), "showDetail", true);
     function fillTargets() {
       const chosen = (PI.options?.nodes ?? []).find((item) => item.id === PI.settings.nodeId);
       const targets = chosen ? chosen.targets : ["enabled", "bypass"];
       fillSelect(target, targets.map((value) => ({ value, label: label(value) })), PI.settings.target ?? "enabled");
     }
-    PI.onSettings = (settings) => { mode.value = settings.mode ?? "latch"; fillTargets(); };
+    const previous = PI.onSettings;
+    PI.onSettings = (settings) => { previous(settings); fillTargets(); };
     PI.onOptions = (options) => {
       fillSelect(node, options.nodes.map((item) => ({ value: item.id, label: `${item.name} · ${item.kind}` })), PI.settings.nodeId, PI.settings.nodeName ? `${PI.settings.nodeName} (not found)` : undefined);
       fillTargets();
@@ -34,7 +51,6 @@
       fillTargets();
     });
     target.addEventListener("change", () => PI.saveSettings({ target: target.value }));
-    mode.addEventListener("change", () => PI.saveSettings({ mode: mode.value }));
   </script>
 </body>
 </html>

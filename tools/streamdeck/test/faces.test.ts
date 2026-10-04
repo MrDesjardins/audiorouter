@@ -28,10 +28,10 @@ describe("faces", () => {
   });
 
   it("draws a switch that says what it does", () => {
-    expect(toggleFace({ label: "Voice EQ", target: "enabled", on: true, pending: false })).toContain(">ON<");
-    expect(toggleFace({ label: "Voice EQ", target: "enabled", on: false, pending: false })).toContain(">OFF<");
-    expect(toggleFace({ label: "Voice EQ", target: "bypass", on: true, pending: false })).toContain(">BYPASS<");
-    expect(toggleFace({ label: "Switch", target: "selected", on: true, pending: false, valueText: "B" })).toContain(">B<");
+    expect(toggleFace({ label: "Voice EQ", detail: "Enabled", target: "enabled", on: true, pending: false })).toContain(">ON<");
+    expect(toggleFace({ label: "Voice EQ", detail: "Enabled", target: "enabled", on: false, pending: false })).toContain(">OFF<");
+    expect(toggleFace({ label: "Voice EQ", detail: null, target: "bypass", on: true, pending: false })).toContain(">BYPASS<");
+    expect(toggleFace({ label: "Switch", detail: null, target: "selected", on: true, pending: false, valueText: "B" })).toContain(">B<");
     expect(targetLabel("phaseInvert")).toBe("Phase Invert");
   });
 

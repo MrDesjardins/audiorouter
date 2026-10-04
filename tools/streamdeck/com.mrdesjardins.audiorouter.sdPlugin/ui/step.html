@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="pi.css">
+  <script src="pi.js"></script>
+</head>
+<body>
+  <div id="connection-slot"></div>
+  <label>Tool (selected session)<select id="node"></select></label>
+  <label>Setting<select id="parameter"></select></label>
+  <label>Each press<select id="mode">
+    <option value="add">Adds the amount (use a negative amount to go down)</option>
+    <option value="set">Sets exactly the amount (a preset)</option>
+  </select></label>
+  <label>Amount<input id="step" type="number" step="0.5" value="1"></label>
+  <label class="check"><input id="showDetail" type="checkbox" checked>Show the setting's name</label>
+  <p id="range" class="hint"></p>
+  <p class="hint">Make one key with +1 and another with −1 for up and down. The value stays within the setting's range.</p>
+  <script>
+    const node = document.getElementById("node"), parameter = document.getElementById("parameter"), range = document.getElementById("range");
+    const label = (name) => name.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (first) => first.toUpperCase());
+    bindSetting(document.getElementById("mode"), "mode", "add");
+    bindSetting(document.getElementById("step"), "step", 1);
+    bindSetting(document.getElementById("showDetail"), "showDetail", true);
+    function fillParameters() {
+      const chosen = (PI.options?.nodes ?? []).find((item) => item.id === PI.settings.nodeId);
+      const numbers = chosen?.numbers ?? [];
+      fillSelect(parameter, numbers.map((item) => ({ value: item.name, label: `${label(item.name)}${item.unit ? ` (${item.unit})` : ""}` })), PI.settings.parameter);
+      const spec = numbers.find((item) => item.name === PI.settings.parameter);
+      range.textContent = spec && spec.minimum !== null ? `Range ${spec.minimum} to ${spec.maximum}${spec.unit ? ` ${spec.unit}` : ""}.` : "";
+    }
+    const previous = PI.onSettings;
+    PI.onSettings = (settings) => { previous(settings); fillParameters(); };
+    PI.onOptions = (options) => {
+      fillSelect(node, options.nodes.filter((item) => item.numbers.length > 0).map((item) => ({ value: item.id, label: `${item.name} · ${item.kind}` })), PI.settings.nodeId, PI.settings.nodeName ? `${PI.settings.nodeName} (not found)` : undefined);
+      fillParameters();
+    };
+    node.addEventListener("change", () => {
+      const chosen = (PI.options?.nodes ?? []).find((item) => item.id === node.value);
+      PI.saveSettings({ nodeId: node.value, nodeName: chosen?.name ?? "", parameter: chosen?.numbers[0]?.name ?? "" });
+      fillParameters();
+    });
+    parameter.addEventListener("change", () => { PI.saveSettings({ parameter: parameter.value }); fillParameters(); });
+  </script>
+</body>
+</html>

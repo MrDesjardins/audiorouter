@@ -12,11 +12,19 @@
     <option value="mute">Only mutes</option>
     <option value="unmute">Only unmutes</option>
   </select></label>
+  <details class="group">
+    <summary>Appearance</summary>
+    <label>Word when muted<input id="mutedText" maxlength="10" placeholder="MUTED"></label>
+    <label>Word when live<input id="liveText" maxlength="10" placeholder="LIVE"></label>
+    <label class="check"><input id="showDetail" type="checkbox" checked>Show what the key does</label>
+    <p class="hint">Pick your own image for the Live and Muted states in Stream Deck; the key still follows AudioRouter.</p>
+  </details>
   <p class="hint">Privacy mute silences your microphone everywhere AudioRouter sends it. Use two keys (Only mutes, Only unmutes) if you prefer separate buttons.</p>
   <script>
-    const mode = document.getElementById("mode");
-    PI.onSettings = (settings) => { mode.value = settings.mode ?? "toggle"; };
-    mode.addEventListener("change", () => PI.saveSettings({ mode: mode.value }));
+    bindSetting(document.getElementById("mode"), "mode", "toggle");
+    bindSetting(document.getElementById("mutedText"), "mutedText", "");
+    bindSetting(document.getElementById("liveText"), "liveText", "");
+    bindSetting(document.getElementById("showDetail"), "showDetail", true);
   </script>
 </body>
 </html>

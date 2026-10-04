@@ -37,12 +37,13 @@ export class AudioRouterClient {
 
   /** Call one backend method, e.g. `call("meters.levels", {})`. */
   async call<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
-    const [namespace, operation] = method.split(".");
-    if (!namespace || !operation) throw new ApiError(`bad method ${method}`, null);
+    // The HTTP API maps POST /api/v1/a/b/c to method a.b.c (e.g. sessions.active.set).
+    const parts = method.split(".");
+    if (parts.length < 2 || parts.some((part) => !/^[A-Za-z]+$/.test(part))) throw new ApiError(`bad method ${method}`, null);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const response = await this.fetcher(`${this.connection.baseUrl}/api/v1/${namespace}/${operation}`, {
+      const response = await this.fetcher(`${this.connection.baseUrl}/api/v1/${parts.join("/")}`, {
         method: "POST",
         headers: { Authorization: `Bearer ${this.connection.token}`, "Content-Type": "application/json" },
         body: JSON.stringify(params),

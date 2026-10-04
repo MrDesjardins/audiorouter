@@ -8,9 +8,26 @@
 <body>
   <div id="connection-slot"></div>
   <label>Tool to meter (selected session)<select id="node"></select></label>
+  <label>When pressed<select id="press">
+    <option value="none">Nothing</option>
+    <option value="enabled">Switch the tool off / on</option>
+    <option value="bypass">Bypass the tool</option>
+  </select></label>
+  <details class="group">
+    <summary>Appearance</summary>
+    <label>Colours<select id="scheme">
+      <option value="canvas">AudioRouter (teal, gold, orange, red)</option>
+      <option value="classic">Classic (green, yellow, red)</option>
+    </select></label>
+    <label class="check"><input id="showValue" type="checkbox" checked>Show the level in dB</label>
+    <p class="hint">Type a title in Stream Deck to replace the tool's name.</p>
+  </details>
   <p class="hint">Shows the level after that tool: bar = average level, line = peak, red dot = clipping. "muted" when the tool is off.</p>
   <script>
     const node = document.getElementById("node");
+    bindSetting(document.getElementById("press"), "press", "none");
+    bindSetting(document.getElementById("scheme"), "scheme", "canvas");
+    bindSetting(document.getElementById("showValue"), "showValue", true);
     PI.onOptions = (options) => fillSelect(node, options.nodes.map((item) => ({ value: item.id, label: `${item.name} · ${item.kind}` })), PI.settings.nodeId, PI.settings.nodeName ? `${PI.settings.nodeName} (not found)` : undefined);
     node.addEventListener("change", () => {
       const chosen = (PI.options?.nodes ?? []).find((item) => item.id === node.value);

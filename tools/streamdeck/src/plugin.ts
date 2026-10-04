@@ -1,7 +1,10 @@
 import streamDeck from "@elgato/streamdeck";
 import { normalizeBaseUrl } from "./api.js";
 import { MeterAction } from "./actions/meter.js";
+import { PlayAction } from "./actions/play.js";
 import { PrivacyAction } from "./actions/privacy.js";
+import { SessionAction } from "./actions/session.js";
+import { StepAction } from "./actions/step.js";
 import { ToggleAction } from "./actions/toggle.js";
 import { AudioRouterStore, toggleTargets } from "./store.js";
 
@@ -23,11 +26,15 @@ function panelOptions() {
     state: store.state,
     error: store.error,
     session: store.summary?.name ?? null,
+    sessions: store.sessions,
     nodes: (store.summary?.nodes ?? []).map((node) => ({
       id: node.id,
       name: node.name,
       kind: store.kind(node.kind)?.name ?? node.kind,
       targets: toggleTargets(store.kind(node.kind)),
+      numbers: (store.kind(node.kind)?.parameters ?? [])
+        .filter((spec) => spec.type === "number")
+        .map((spec) => ({ name: spec.name, unit: spec.unit ?? "", minimum: spec.minimum ?? null, maximum: spec.maximum ?? null })),
     })),
   };
 }
@@ -50,6 +57,9 @@ store.subscribe(() => {
 streamDeck.actions.registerAction(new ToggleAction(store));
 streamDeck.actions.registerAction(new MeterAction(store));
 streamDeck.actions.registerAction(new PrivacyAction(store));
+streamDeck.actions.registerAction(new PlayAction(store));
+streamDeck.actions.registerAction(new SessionAction(store));
+streamDeck.actions.registerAction(new StepAction(store));
 
 await streamDeck.connect();
 applyConnection(await streamDeck.settings.getGlobalSettings<GlobalSettings>());

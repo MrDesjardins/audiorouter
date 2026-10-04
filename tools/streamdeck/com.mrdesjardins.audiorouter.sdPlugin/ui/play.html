@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="pi.css">
+  <script src="pi.js"></script>
+</head>
+<body>
+  <div id="connection-slot"></div>
+  <label>This key<select id="press">
+    <option value="toggle">Plays and stops (toggle)</option>
+    <option value="play">Only plays</option>
+    <option value="stop">Only stops</option>
+  </select></label>
+  <p class="hint">Acts on the selected session (the one open in AudioRouter, or chosen with a Session key). Pick your own image for the Stopped and Playing states in Stream Deck.</p>
+  <script>
+    bindSetting(document.getElementById("press"), "press", "toggle");
+  </script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="pi.css">
+  <script src="pi.js"></script>
+</head>
+<body>
+  <div id="connection-slot"></div>
+  <label>This key<select id="mode">
+    <option value="select">Selects one session</option>
+    <option value="cycle">Steps to the next session</option>
+  </select></label>
+  <label id="session-row">Session<select id="session"></select></label>
+  <label class="check"><input id="play" type="checkbox">Also start playing it</label>
+  <p class="hint">Every key set to the selected session follows this choice, and so does AudioRouter's window.</p>
+  <script>
+    const session = document.getElementById("session"), mode = document.getElementById("mode"), row = document.getElementById("session-row");
+    bindSetting(mode, "mode", "select");
+    bindSetting(document.getElementById("play"), "play", false);
+    const showRow = () => { row.style.display = mode.value === "cycle" ? "none" : ""; };
+    const previous = PI.onSettings;
+    PI.onSettings = (settings) => { previous(settings); showRow(); };
+    mode.addEventListener("change", showRow);
+    PI.onOptions = (options) => fillSelect(session, (options.sessions ?? []).map((item) => ({ value: item.id, label: item.name })), PI.settings.sessionId, PI.settings.sessionName ? `${PI.settings.sessionName} (not found)` : undefined);
+    session.addEventListener("change", () => {
+      const chosen = (PI.options?.sessions ?? []).find((item) => item.id === session.value);
+      PI.saveSettings({ sessionId: session.value, sessionName: chosen?.name ?? "" });
+    });
+  </script>
+</body>
+</html>

@@ -38,7 +38,11 @@
       "States": [
         {
           "Image": "imgs/actions/toggle-key",
-          "ShowTitle": false
+          "Name": "Off"
+        },
+        {
+          "Image": "imgs/actions/toggle-key",
+          "Name": "On"
         }
       ]
     },
@@ -55,8 +59,7 @@
       "SupportedInMultiActions": false,
       "States": [
         {
-          "Image": "imgs/actions/meter-key",
-          "ShowTitle": false
+          "Image": "imgs/actions/meter-key"
         }
       ]
     },
@@ -74,7 +77,72 @@
       "States": [
         {
           "Image": "imgs/actions/privacy-key",
-          "ShowTitle": false
+          "Name": "Live"
+        },
+        {
+          "Image": "imgs/actions/privacy-key",
+          "Name": "Muted"
+        }
+      ]
+    },
+    {
+      "UUID": "com.mrdesjardins.audiorouter.play",
+      "Name": "Play / Stop",
+      "Icon": "imgs/actions/play",
+      "Tooltip": "Play or stop the selected session.",
+      "PropertyInspectorPath": "ui/play.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "DisableAutomaticStates": true,
+      "SupportedInMultiActions": true,
+      "States": [
+        {
+          "Image": "imgs/actions/play-key",
+          "Name": "Stopped"
+        },
+        {
+          "Image": "imgs/actions/play-key",
+          "Name": "Playing"
+        }
+      ]
+    },
+    {
+      "UUID": "com.mrdesjardins.audiorouter.session",
+      "Name": "Session",
+      "Icon": "imgs/actions/session",
+      "Tooltip": "Select a session (or step through them), optionally starting it.",
+      "PropertyInspectorPath": "ui/session.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "DisableAutomaticStates": true,
+      "SupportedInMultiActions": true,
+      "States": [
+        {
+          "Image": "imgs/actions/session-key",
+          "Name": "Not selected"
+        },
+        {
+          "Image": "imgs/actions/session-key",
+          "Name": "Selected"
+        }
+      ]
+    },
+    {
+      "UUID": "com.mrdesjardins.audiorouter.step",
+      "Name": "Value step",
+      "Icon": "imgs/actions/step",
+      "Tooltip": "Nudge a setting such as a gain or volume up or down, or set it to a value.",
+      "PropertyInspectorPath": "ui/step.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "DisableAutomaticStates": true,
+      "SupportedInMultiActions": true,
+      "States": [
+        {
+          "Image": "imgs/actions/step-key"
         }
       ]
     }

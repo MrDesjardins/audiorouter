@@ -1,8 +1,8 @@
 import { action, type KeyDownEvent, type KeyUpEvent } from "@elgato/streamdeck";
 import { idempotencyKey } from "../api.js";
-import { fit, messageFace, toggleFace } from "../faces.js";
+import { fit, messageFace, targetLabel, toggleFace } from "../faces.js";
 import type { SummaryNode } from "../store.js";
-import { LiveKeyAction } from "./live-key.js";
+import { LiveKeyAction, type Face, type KeyTitle } from "./live-key.js";
 
 export type ToggleSettings = {
   /** The tool, by ID, with its name to find it again if it is re-created. */
@@ -12,6 +12,12 @@ export type ToggleSettings = {
   target?: string;
   /** latch: each press flips; momentary: on while held, back on release. */
   mode?: "latch" | "momentary";
+  /** Look: colours from the palette, words for each state, the second line. */
+  onColor?: string;
+  offColor?: string;
+  onText?: string;
+  offText?: string;
+  showDetail?: boolean;
 };
 
 /**
@@ -23,15 +29,27 @@ export class ToggleAction extends LiveKeyAction<ToggleSettings> {
   /** Momentary keys: the value to restore on release. */
   private readonly held = new Map<string, unknown>();
 
-  protected face(settings: ToggleSettings, actionId: string): string {
+  protected face(settings: ToggleSettings, actionId: string, title: KeyTitle): Face {
     const node = this.resolve(settings);
     if (!node) return messageFace(fit(settings.nodeName || "Choose"), settings.nodeName ? "not found" : "a tool");
     const target = settings.target || "enabled";
     const value = this.store.setting(node, target);
-    const choices = this.store.kind(node.kind)?.parameters.find((spec) => spec.name === target)?.enum;
-    const on = Array.isArray(choices) && choices.length === 2 ? value === choices[1] : value === true;
-    const valueText = Array.isArray(choices) && choices.length === 2 ? String(value ?? "").toUpperCase() : undefined;
-    return toggleFace({ label: node.name, target, on, pending: this.pending.has(actionId), valueText });
+    const choices = this.store.spec(node, target)?.enum;
+    const twoChoice = Array.isArray(choices) && choices.length === 2;
+    const on = twoChoice ? value === choices[1] : value === true;
+    const svg = toggleFace({
+      label: this.label(title, node.name),
+      detail: settings.showDetail === false ? null : targetLabel(target),
+      target,
+      on,
+      pending: this.pending.has(actionId),
+      valueText: twoChoice ? String(value ?? "").toUpperCase() : undefined,
+      onColor: settings.onColor,
+      offColor: settings.offColor,
+      onText: settings.onText,
+      offText: settings.offText,
+    });
+    return { svg, state: on ? 1 : 0 };
   }
 
   private resolve(settings: ToggleSettings): SummaryNode | undefined {
@@ -66,7 +84,7 @@ export class ToggleAction extends LiveKeyAction<ToggleSettings> {
 
   /** The other value of a switch (boolean or two-choice setting). */
   private opposite(node: SummaryNode, target: string, value: unknown): unknown {
-    const choices = this.store.kind(node.kind)?.parameters.find((spec) => spec.name === target)?.enum;
+    const choices = this.store.spec(node, target)?.enum;
     if (Array.isArray(choices) && choices.length === 2) return value === choices[0] ? choices[1] : choices[0];
     return !(value === true);
   }

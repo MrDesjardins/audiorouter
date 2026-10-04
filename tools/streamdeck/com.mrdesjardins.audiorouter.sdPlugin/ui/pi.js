@@ -100,4 +100,22 @@ function fillSelect(select, items, saved, missingLabel) {
   select.value = current;
 }
 
+/** Colours a key can use (same names as the plugin's palette). */
+const PALETTE = [["", "Default"], ["teal", "Teal"], ["green", "Green"], ["yellow", "Yellow"], ["orange", "Orange"], ["red", "Red"], ["blue", "Blue"], ["purple", "Purple"], ["white", "White"], ["grey", "Grey"]];
+
+function fillPalette(select, saved) {
+  select.innerHTML = "";
+  for (const [value, label] of PALETTE) select.add(new Option(label, value));
+  select.value = saved ?? "";
+}
+
+/** Bind an input/select/checkbox to one saved setting. */
+function bindSetting(element, key, fallback) {
+  const read = () => element.type === "checkbox" ? element.checked : element.type === "number" ? Number(element.value) : element.value.trim();
+  const write = (value) => { if (element.type === "checkbox") element.checked = value !== false; else element.value = value ?? fallback ?? ""; };
+  const previous = PI.onSettings;
+  PI.onSettings = (settings) => { previous(settings); write(settings[key] ?? fallback); };
+  element.addEventListener("change", () => PI.saveSettings({ [key]: read() }));
+}
+
 window.addEventListener("DOMContentLoaded", wireConnection);

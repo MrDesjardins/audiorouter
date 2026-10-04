@@ -9,7 +9,8 @@ import { ApiError, AudioRouterClient, type Connection, type Fetch } from "./api.
 export type SummaryNode = { id: string; name: string; kind: string; enabled: boolean; bypass: boolean };
 export type Summary = { sessionId: string; name: string; revision: number; playing: boolean; privacyMuted: boolean; nodes: SummaryNode[] };
 export type Level = { nodeId: string; name: string; peakDb: number | null; rmsDb: number | null; clipped: boolean; reductionDb: number | null; active: boolean | null };
-export type ParameterSpec = { name: string; type?: string; enum?: unknown[]; default?: unknown };
+export type ParameterSpec = { name: string; type?: string; enum?: unknown[]; default?: unknown; minimum?: number; maximum?: number; unit?: string };
+export type SessionItem = { id: string; name: string };
 export type CatalogKind = { kind: string; name: string; parameters: ParameterSpec[] };
 type RawSession = { id: string; revision: number; nodes: { id: string; kind: string; parameters: Record<string, unknown> }[] };
 
@@ -33,6 +34,10 @@ export class AudioRouterStore {
   summary: Summary | null = null;
   catalog: CatalogKind[] = [];
   levels = new Map<string, Level>();
+  /** All sessions (read while a Session key is visible). */
+  sessions: SessionItem[] = [];
+  private sessionWatchers = 0;
+  private sessionsReadAt = 0;
   private parameters = new Map<string, Record<string, unknown>>();
   private client: AudioRouterClient | null = null;
   private generation = 0;
@@ -81,6 +86,12 @@ export class AudioRouterStore {
     if (this.levelWatchers === 0 && this.levelsTimer) { clearTimeout(this.levelsTimer); this.levelsTimer = null; }
   }
 
+  /** A Session key appeared (+1) or disappeared (−1). */
+  watchSessions(delta: 1 | -1) {
+    this.sessionWatchers = Math.max(0, this.sessionWatchers + delta);
+    if (delta > 0) this.sessionsReadAt = 0;
+  }
+
   /** Read the summary now (after a press), instead of at the next tick. */
   refreshSoon() {
     if (!this.client) return;
@@ -100,6 +111,11 @@ export class AudioRouterStore {
     const saved = this.parameters.get(node.id)?.[name];
     if (saved !== undefined) return saved;
     return this.kind(node.kind)?.parameters.find((spec) => spec.name === name)?.default;
+  }
+
+  /** A setting's catalog description (range, unit, choices). */
+  spec(node: SummaryNode, name: string): ParameterSpec | undefined {
+    return this.kind(node.kind)?.parameters.find((spec) => spec.name === name);
   }
 
   kind(kind: string): CatalogKind | undefined {
@@ -123,7 +139,17 @@ export class AudioRouterStore {
         if (generation !== this.generation) return;
         this.parameters = new Map(raw.nodes.map((node) => [node.id, node.parameters ?? {}]));
       }
-      const changed = this.state !== "online" || JSON.stringify(summary) !== JSON.stringify(this.summary);
+      // The session list changes rarely: read it every 2 s while a Session key shows.
+      let sessionsChanged = false;
+      if (this.sessionWatchers > 0 && Date.now() - this.sessionsReadAt >= 2000) {
+        const list = await this.call<{ items: SessionItem[] }>("sessions.list", { limit: 100 });
+        if (generation !== this.generation) return;
+        const sessions = list.items.map((item) => ({ id: item.id, name: item.name }));
+        sessionsChanged = JSON.stringify(sessions) !== JSON.stringify(this.sessions);
+        this.sessions = sessions;
+        this.sessionsReadAt = Date.now();
+      }
+      const changed = sessionsChanged || this.state !== "online" || JSON.stringify(summary) !== JSON.stringify(this.summary);
       this.summary = summary;
       this.failures = 0;
       this.error = null;

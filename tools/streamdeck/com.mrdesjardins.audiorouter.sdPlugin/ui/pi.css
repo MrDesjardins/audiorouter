@@ -10,3 +10,7 @@ details.connection summary { cursor: pointer; padding: 2px 0 8px; color: #d8d8d8
 .state { float: right; font-size: 11px; color: #9a9a9a; }
 .state.is-online { color: #3fd2c7; }
 .state.is-offline, .state.is-unconfigured { color: #ff9640; }
+details.group { margin: 4px 0 12px; padding: 6px 8px 2px; border: 1px solid #444; border-radius: 6px; }
+details.group summary { cursor: pointer; padding: 2px 0 8px; }
+label.check { display: flex; align-items: center; gap: 8px; color: #d8d8d8; }
+label.check input { width: auto; }
