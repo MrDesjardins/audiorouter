@@ -87,6 +87,21 @@ describe("NetworkNodeEditor", () => {
     expect(screen.getByRole("status").textContent).toBe("Receiving · 12 packets · 40 ms buffered");
   });
 
+  it("names this computer's real address while playing, and explains a closed port", () => {
+    const receive = appendLibraryNode(demoSession, "networkReceive").nodes.at(-1)!;
+    const view = render(<NetworkNodeEditor node={receive} disabled={false} telemetry={{ direction: "receive", receivedPackets: 0, thisAddress: "192.168.1.30" }} onChange={() => {}} />);
+    const help = screen.getByText(/add a Network Send node/);
+    expect(help.textContent).toContain("this computer's address 192.168.1.30 and port");
+    expect(help.textContent).not.toContain("ipconfig");
+    view.unmount();
+    const send = appendLibraryNode(demoSession, "networkSend").nodes.at(-1)!;
+    render(<NetworkNodeEditor node={send} disabled={false} telemetry={{ direction: "send", sentPackets: 40, sendErrors: 3, lastErrorCode: 10054, localAddress: "10.0.0.7" }} onChange={() => {}} />);
+    expect(screen.getByText(/add a Network Receive node/).textContent).toContain("this computer's address 10.0.0.7 as the sender");
+    expect(screen.getByRole("status").textContent).toContain("3 send errors (the receiving computer is not listening on this port)");
+    // Stopped: no telemetry, the generic advice with ipconfig.
+    expect(networkTelemetryText({ direction: "send", sentPackets: 1, sendErrors: 1, lastErrorCode: 10065 })).toBe("Sending · 1 packets · 1 send errors");
+  });
+
   it("names the address audio really comes from and fixes the sender in one click", () => {
     const base = appendLibraryNode(demoSession, "networkReceive").nodes.at(-1)!;
     const node = { ...base, parameters: { ...base.parameters, sender: "192.168.1.20" } };

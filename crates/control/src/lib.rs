@@ -4745,7 +4745,10 @@ fn diagnostics_output_schema() -> Value {
                                 "underruns": { "type": "integer", "minimum": 0 },
                                 "overflowPackets": { "type": "integer", "minimum": 0 },
                                 "bufferedMs": { "type": "number", "minimum": 0 },
-                                "rejectedFrom": { "type": "string", "maxLength": 64 }
+                                "rejectedFrom": { "type": "string", "maxLength": 64 },
+                                "thisAddress": { "type": "string", "maxLength": 64 },
+                                "localAddress": { "type": "string", "maxLength": 64 },
+                                "lastErrorCode": { "type": "integer" }
                             },
                             "required": ["direction"],
                             "additionalProperties": false
@@ -10393,17 +10396,29 @@ impl ControlPlane {
                         if let Some(address) = stats.last_rejected_sender {
                             telemetry["rejectedFrom"] = json!(address.to_string());
                         }
+                        // The address the sending computer must target.
+                        if let Some(address) = stats.local_address_toward_sender {
+                            telemetry["thisAddress"] = json!(address.to_string());
+                        }
                         telemetry
                     })
                     .or_else(|| {
                         let index = worker.output_node_ids().iter().position(|id| *id == node.id)?;
                         worker.network_send_stats(index).map(|stats| {
-                            json!({
+                            let mut telemetry = json!({
                                 "direction": "send",
                                 "sentPackets": stats.sent_packets,
                                 "droppedPackets": stats.dropped_packets,
                                 "sendErrors": stats.send_errors,
-                            })
+                            });
+                            // The address the receiver must accept.
+                            if let Some(address) = stats.local_address {
+                                telemetry["localAddress"] = json!(address.ip().to_string());
+                            }
+                            if let Some(code) = stats.last_error_code {
+                                telemetry["lastErrorCode"] = json!(code);
+                            }
+                            telemetry
                         })
                     });
                 let noise_profile = worker.noise_profile_for_node(&node.id);
@@ -23401,6 +23416,10 @@ mod tests {
             };
             let send = telemetry(&mut planes[sender].0, "net-send");
             let receive = telemetry(&mut planes[receiver].0, "net-receive");
+            // The window names the addresses each computer must use.
+            assert_eq!(receive["thisAddress"], "127.0.0.1", "{receive}");
+            assert_eq!(send["localAddress"], "127.0.0.1", "{send}");
+            assert!(send.get("lastErrorCode").is_none(), "{send}");
             // The network log summarizes both sides from the same counters.
             let summaries = planes.iter()
                 .flat_map(|(plane, id)| plane.write_network_summaries(id, &mut network_log::Sampler::default(), Instant::now()))

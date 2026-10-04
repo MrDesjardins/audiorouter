@@ -430,6 +430,12 @@ export interface NetworkNodeTelemetry {
   rejectedDatagrams?: number;
   /** Latest address that sent AudioRouter audio but is not the configured sender. */
   rejectedFrom?: string;
+  /** Receive: this computer's address toward the sender; the sender must target it. */
+  thisAddress?: string;
+  /** Send: the address the audio leaves from; the receiver must accept it. */
+  localAddress?: string;
+  /** Send: Windows socket error of the latest failed send (10054: port closed there). */
+  lastErrorCode?: number;
   /** Times the receive buffer ran empty (audible gaps). */
   underruns?: number;
   overflowPackets?: number;

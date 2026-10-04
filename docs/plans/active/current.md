@@ -191,7 +191,7 @@ Agent work (no hardware or credentials needed):
    the cap and the wry defaults and no debugging port. Open: the rendering CPU of
    the animated connections deserves its own measurement.
 
-8. In progress 2026-10-04 (user request): free the WebView when the editor
+8. Done 2026-10-04, released in 0.0.10 (user request): free the WebView when the editor
    is closed to the tray. A hidden window keeps the page (340–450 MB), GPU
    (~150 MB) and WebView2 browser processes and its timers alive; audio is
    owned by the shell's backend, not the page. Decision (user): close
@@ -229,7 +229,12 @@ Agent work (no hardware or credentials needed):
    address; audio from another address → set it; 10054 → receiver port
    closed). Logs tab asks for network.jsonl from both computers. Tests:
    network_log unit tests, real UDP loopback asserting summaries, socket
-   tests. Next: ask Joe to retry with this build and send both folders.
+   tests. Released in 0.0.10. Also (after 0.0.11): the window names each
+   computer's real address while playing (receive telemetry `thisAddress`,
+   send `localAddress`/`lastErrorCode`; inspector help and diagram caption;
+   "receiving computer is not listening" for 10054), asserted over real
+   UDP and in `network-receive-hint.pw.ts` (three themes reviewed). Next:
+   Joe retries on the next release and sends both folders.
 
 10. Done 2026-10-04 (user report on 0.0.10): Advanced → Start at sign-in
    showed "Native registration: unavailable" and "unavailable in this

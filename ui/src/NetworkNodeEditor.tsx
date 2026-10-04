@@ -19,7 +19,7 @@ export function networkTelemetryText(telemetry: NetworkNodeTelemetry | null | un
   if (telemetry.direction === "send") {
     const problems = [
       telemetry.droppedPackets ? `${telemetry.droppedPackets} dropped` : null,
-      telemetry.sendErrors ? `${telemetry.sendErrors} send errors` : null,
+      telemetry.sendErrors ? `${telemetry.sendErrors} send errors${telemetry.lastErrorCode === 10054 ? " (the receiving computer is not listening on this port)" : ""}` : null,
     ].filter(Boolean);
     return `Sending · ${telemetry.sentPackets ?? 0} packets${problems.length ? ` · ${problems.join(" · ")}` : ""}`;
   }
@@ -64,6 +64,7 @@ export function NetworkNodeEditor({ node, disabled, telemetry, onChange }: {
   const bufferNumber = Number(buffer);
   const bufferValid = Number.isFinite(bufferNumber) && bufferNumber >= 10 && bufferNumber <= 500;
   const status = networkTelemetryText(telemetry);
+  const thisPc = sending ? telemetry?.localAddress : telemetry?.thisAddress;
   const addressLabel = sending ? "Receiving computer's IP address" : "Sending computer's IP address";
 
   return <div className="node-binding-editor network-node-editor" aria-label={sending ? "Network send settings" : "Network receive settings"}>
@@ -72,7 +73,7 @@ export function NetworkNodeEditor({ node, disabled, telemetry, onChange }: {
       <div className="network-route-computer"><svg viewBox="0 0 48 36" aria-hidden="true"><rect x="6" y="2" width="36" height="24" rx="3" /><path d="M18 34h12M24 26v8M12 16h4l3-7 6 13 4-9h7" /></svg><strong>{sending ? "This PC" : "Sending PC"}</strong><span>Audio in</span><b>Network Send</b><code>{sending ? "Your input / mix" : addressValid ? address : "Sender IP"}</code></div>
       <div className="network-route-link"><span aria-hidden="true">→</span><small>UDP</small><code>{portValid ? portNumber : "Port"}</code></div>
       <div className="network-route-computer"><svg viewBox="0 0 48 36" aria-hidden="true"><rect x="6" y="2" width="36" height="24" rx="3" /><path d="M18 34h12M24 26v8M12 16h4l3-7 6 13 4-9h7" /></svg><strong>{sending ? "Receiving PC" : "This PC"}</strong><span>Audio out</span><b>Network Receive</b><code>{sending ? addressValid ? address : "Destination IP" : "Your output / OBS"}</code></div>
-      <figcaption>{sending ? "Set Receive's sender to this PC's IP." : "Set Send's destination to this PC's IP."} Use port {portValid ? portNumber : "the same port"} on both PCs.</figcaption>
+      <figcaption>{sending ? `Set Receive's sender to ${thisPc ?? "this PC's IP"}.` : `Set Send's destination to ${thisPc ?? "this PC's IP"}.`} Use port {portValid ? portNumber : "the same port"} on both PCs.</figcaption>
     </figure>
     <label>{addressLabel}<input type="text" inputMode="decimal" autoComplete="off" spellCheck={false} placeholder="192.168.1.20" value={address} disabled={disabled} aria-invalid={address.length > 0 && !addressValid}
       onChange={(event) => { const value = event.target.value.trim(); setAddress(value); if (isNetworkAddress(value)) onChange(addressKey, value); }} /></label>
@@ -86,9 +87,11 @@ export function NetworkNodeEditor({ node, disabled, telemetry, onChange }: {
       <span>AudioRouter audio is arriving from <code>{telemetry.rejectedFrom}</code>. If that is the sending computer, use its address.</span>
       <button type="button" className="secondary" disabled={disabled} onClick={() => { setAddress(telemetry.rejectedFrom!); onChange("sender", telemetry.rejectedFrom!); }}>Use {telemetry.rejectedFrom}</button>
     </div>}
+    {/* While playing, name this computer's real address: with several network
+        adapters, the one ipconfig lists first is often not the one used. */}
     <small>{sending
-      ? "On the other computer, add a Network Receive node with this computer's IP address as the sender and the same port. Both computers must be on the same local network. Audio is sent unencrypted, so use it only on a network you trust."
-      : "On the other computer, add a Network Send node with this computer's IP address and the same port. Audio from any other address is ignored. The first time, Windows Firewall may ask you to allow AudioRouter on private networks. A larger buffer rides out Wi-Fi hiccups but adds delay."}
-      {" "}To find a computer's IP address, run <code>ipconfig</code> and read its IPv4 Address.</small>
+      ? <>On the other computer, add a Network Receive node with {thisPc ? <>this computer's address <code>{thisPc}</code></> : "this computer's IP address"} as the sender and the same port. Both computers must be on the same local network. Audio is sent unencrypted, so use it only on a network you trust.</>
+      : <>On the other computer, add a Network Send node with {thisPc ? <>this computer's address <code>{thisPc}</code></> : "this computer's IP address"} and port {portValid ? portNumber : "the same port"}. Audio from any other address is ignored. The first time, Windows Firewall may ask you to allow AudioRouter on private networks. A larger buffer rides out Wi-Fi hiccups but adds delay.</>}
+      {!thisPc && <>{" "}To find a computer's IP address, run <code>ipconfig</code> and read its IPv4 Address.</>}</small>
   </div>;
 }

@@ -13,7 +13,7 @@ const session = {
   ],
   edges: [{ id: "net-speakers", sourceNode: "net-receive", sourcePort: "out", destinationNode: "speakers", destinationPort: "in", matrix: [1, 0, 0, 1], enabled: true }],
 };
-const telemetry = [{ nodeId: "net-receive", meter: null, network: { direction: "receive", receivedPackets: 0, rejectedDatagrams: 120, rejectedFrom: "192.168.1.51", bufferedMs: 0 } }];
+const telemetry = [{ nodeId: "net-receive", meter: null, network: { direction: "receive", receivedPackets: 0, rejectedDatagrams: 120, rejectedFrom: "192.168.1.51", bufferedMs: 0, thisAddress: "192.168.1.30" } }];
 
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`network receive names the real sender and fixes it in one click in ${theme}`, async ({ page }, testInfo) => {
@@ -27,6 +27,9 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(editor.getByRole("status")).toContainText("audio from 192.168.1.51 was ignored");
     const fix = editor.getByRole("alert");
     await expect(fix).toContainText("arriving from 192.168.1.51");
+    // This PC's real address, for the sending computer's Network Send.
+    await expect(editor).toContainText("this computer's address 192.168.1.30 and port 47800");
+    await expect(editor.locator("figcaption")).toContainText("Set Send's destination to 192.168.1.30.");
     await editor.screenshot({ path: testInfo.outputPath(`network-receive-hint-${theme}.png`) });
     await fix.getByRole("button", { name: "Use 192.168.1.51" }).click();
     await expect(editor.getByLabel("Sending computer's IP address")).toHaveValue("192.168.1.51");

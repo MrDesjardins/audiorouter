@@ -427,6 +427,9 @@ pub struct NetworkReceiveStats {
     pub receive_errors: u64,
     /// The Windows socket error of the latest receive failure.
     pub last_error_code: Option<i32>,
+    /// This computer's address toward the configured sender: the address
+    /// the sending computer must target.
+    pub local_address_toward_sender: Option<IpAddr>,
 }
 
 struct ReceivePacket {
@@ -449,6 +452,8 @@ struct ReceiverShared {
     receive_errors: AtomicU64,
     /// Latest receive error OS code; 0 when none.
     last_error: std::sync::atomic::AtomicI32,
+    /// Route lookup toward the sender, refreshed when the sender changes.
+    local_toward_sender: Mutex<Option<IpAddr>>,
     /// Written by the receive thread only; read for telemetry.
     last_rejected_sender: Mutex<Option<IpAddr>>,
     /// The only address accepted; changeable while running.
@@ -529,6 +534,7 @@ impl NetworkReceiver {
             overflows: AtomicU64::new(0),
             receive_errors: AtomicU64::new(0),
             last_error: std::sync::atomic::AtomicI32::new(0),
+            local_toward_sender: Mutex::new(local_address_toward(sender)),
             last_rejected_sender: Mutex::new(None),
             sender: Mutex::new(sender),
             target_frames: AtomicUsize::new(target_frames),
@@ -577,6 +583,9 @@ impl NetworkReceiver {
         if let Ok(mut current) = self.shared.sender.lock() {
             *current = sender;
         }
+        if let Ok(mut local) = self.shared.local_toward_sender.lock() {
+            *local = local_address_toward(sender);
+        }
         if let Ok(mut last) = self.shared.last_rejected_sender.lock() {
             *last = None;
         }
@@ -599,6 +608,7 @@ impl NetworkReceiver {
             buffered_frames: self.shared.queued_frames.load(Ordering::Acquire) as u64,
             receive_errors: self.shared.receive_errors.load(Ordering::Relaxed),
             last_error_code: Some(self.shared.last_error.load(Ordering::Relaxed)).filter(|code| *code != 0),
+            local_address_toward_sender: self.shared.local_toward_sender.lock().ok().and_then(|local| *local),
         }
     }
 
