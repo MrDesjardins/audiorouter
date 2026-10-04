@@ -27,6 +27,9 @@ for (const entry of libraryEntries.filter(entry => entry.kind)) {
       for (const parameter of descriptor?.parameters ?? []) {
         // Learning is driven by the Learn buttons, not a settings field.
         if (parameter.name.endsWith(":") || parameter.name === "learning") continue;
+        // Node references and the Duck trigger/phase choices live in the Duck
+        // editor (duck-widget and duck-siege-round tests), not generic fields.
+        if ("reference" in parameter || (entry.kind === "duck" && ["trigger", "duckMenu", "duckPrep", "duckBetweenRounds"].includes(parameter.name))) continue;
         if (parameter.type === "number") {
           // Graphic EQ edits one selected band exactly; select it by its fader.
           if (entry.kind === "graphicEq") await inspector.getByRole("slider", { name: `${parameterText(entry.kind, parameter.name).label} band`, exact: true }).focus();

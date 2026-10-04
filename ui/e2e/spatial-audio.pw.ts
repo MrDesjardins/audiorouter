@@ -27,7 +27,17 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(endpoint.locator("option", { hasText: "Loopback · 8-channel multichannel" })).toHaveCount(1);
     await page.getByLabel("Physical input binding").scrollIntoViewIfNeeded();
     await page.screenshot({ path: testInfo.outputPath(`spatial-audio-${theme}.png`) });
+    // Speakers keep the loopback choices and show the room control.
+    await page.getByLabel("Spatial audio mode").selectOption("speakers");
+    await expect(field).toContainText("two speakers about ±30°");
+    await expect(endpoint.locator("option", { hasText: "Loopback · 8-channel multichannel" })).toHaveCount(1);
+    const room = page.getByRole("slider", { name: "Room" });
+    await room.fill("40");
+    await expect(room).toHaveAttribute("aria-valuetext", "40 percent");
+    await field.scrollIntoViewIfNeeded();
+    await field.screenshot({ path: testInfo.outputPath(`spatial-speakers-${theme}.png`) });
     await page.getByLabel("Spatial audio mode").selectOption("off");
+    await expect(page.getByRole("slider", { name: "Room" })).toHaveCount(0);
     await expect(endpoint.locator("option", { hasText: "Loopback ·" })).toHaveCount(0);
     expect(await page.evaluate(() => (window as any).__routeFixtureCalls().filter((call: string) => call === "commit"))).toEqual([]);
   });

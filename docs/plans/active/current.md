@@ -77,6 +77,17 @@ Agent work (no hardware or credentials needed):
    real Send; Duck-inspector check fails without the filter); UI 464, control
    228. Open: overrides, scenes/batches, per-integration permissions.
 
+4c. Done 2026-10-03: spatial speaker mode and room (CAP-14, spatial plan).
+   `BinauralRenderer::with_options` adds RACE crosstalk cancellation
+   (`spatialMode: "speakers"`) and a four-line FDN room
+   (`spatialRoomPercent` 0–100); defaults stay bit-identical. Domain accepts
+   both; the running capture keeps its options and a change reports restart
+   required. UI adds the speakers mode and a Room slider (three themes
+   reviewed). Objective tests: 1 kHz ear separation 4.4 → 18.8 dB in a
+   simulated speaker-to-ear path; room tail present and −51 dB from
+   50–150 ms to 400–500 ms; bounded on full-scale 7.1 noise. Not yet: attended
+   listening on speakers or with the room.
+
 Needs the user (attended, hardware or decisions):
 
 4. Attended confirmation in the shell: drag-to-canvas, device picker on the

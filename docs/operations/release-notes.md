@@ -8,6 +8,13 @@
   example a 96 kHz 7.1 SteelSeries Sonar channel or a DAC set to 44.1 kHz.
 - The "device in use" message also names a VB-Cable's "In 16ch" twin when an
   application playing to it is what blocks the cable.
+- Surround to **speakers**: a 5.1/7.1 input can be rendered for two speakers in
+  front of you, with crosstalk cancellation so each ear mostly hears its own
+  channel (sit centred). New **Room** slider for both surround modes adds a
+  small room; higher sounds further away. Change either, then Stop and Play.
+- API tab: **Build a request** generates the exact REST request (JSON, curl or
+  PowerShell) for a tool setting, including Mixer input volumes by source name
+  and a Duck's trigger, and can send it once to try it.
 
 ## 0.0.7 — 2026-10-03 (unsigned experimental preview)
 

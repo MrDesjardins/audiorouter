@@ -1942,10 +1942,15 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::PhysicalInput | NodeKind::PhysicalOutput, "endpointId") => {
                     valid_bounded_string(value, MAX_ENTITY_ID_BYTES)
                 }
-                // Render a 5.1/7.1 capture endpoint to stereo for headphones.
+                // Render a 5.1/7.1 capture endpoint to two ears for headphones
+                // or, with crosstalk cancellation, for two speakers.
                 (NodeKind::PhysicalInput, "spatialMode") => value
                     .as_str()
-                    .is_some_and(|mode| matches!(mode, "off" | "headphones")),
+                    .is_some_and(|mode| matches!(mode, "off" | "headphones" | "speakers")),
+                // Room blend around the virtual speakers (CAP-14).
+                (NodeKind::PhysicalInput, "spatialRoomPercent") => value
+                    .as_f64()
+                    .is_some_and(|percent| percent.is_finite() && (0.0..=100.0).contains(&percent)),
                 (NodeKind::EndpointLoopback, "defaultRole") => value.as_str().is_some_and(|role| {
                     matches!(role, "console" | "multimedia" | "communications")
                 }),
@@ -3445,12 +3450,17 @@ mod tests {
     #[test]
     fn physical_inputs_accept_only_known_spatial_modes() {
         let mut input = node("in", NodeKind::PhysicalInput, PortDirection::Output);
-        for mode in ["off", "headphones"] {
+        for mode in ["off", "headphones", "speakers"] {
             input.parameters.insert("spatialMode".into(), serde_json::json!(mode));
             assert!(validate_session(&session(vec![input.clone()], vec![])).is_ok());
         }
-        input.parameters.insert("spatialMode".into(), serde_json::json!("speakers"));
+        input.parameters.insert("spatialMode".into(), serde_json::json!("ambisonic"));
         assert!(validate_session(&session(vec![input.clone()], vec![])).is_err());
+        input.parameters.insert("spatialMode".into(), serde_json::json!("speakers"));
+        for (room, valid) in [(0.0, true), (100.0, true), (100.5, false), (-1.0, false)] {
+            input.parameters.insert("spatialRoomPercent".into(), serde_json::json!(room));
+            assert_eq!(validate_session(&session(vec![input.clone()], vec![])).is_ok(), valid, "room {room}");
+        }
         let mut output = node("out", NodeKind::PhysicalOutput, PortDirection::Input);
         output.parameters.insert("spatialMode".into(), serde_json::json!("headphones"));
         assert!(validate_session(&session(vec![output], vec![])).is_err());

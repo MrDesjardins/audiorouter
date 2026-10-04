@@ -9,11 +9,17 @@ virtual-speaker processor.
 
 Still future (not authorized by the first slice):
 
-- Speaker-mode output (crosstalk cancellation) and a separate headphone/speaker
-  HRTF choice.
-- Distance, "immersion" or room/reverb control, and per-speaker gain or angle
-  editing. The SteelSeries Sonar controls describe product behavior, not a
-  reproducible algorithm.
+- ~~Speaker-mode output (crosstalk cancellation)~~ — done 2026-10-03 as
+  `spatialMode: "speakers"` (RACE, see [CAP-14](../../spec/05-windows-capture.md)).
+  Still future: a separate speaker HRTF set and per-listener speaker angle.
+- ~~Room/reverb control~~ — done 2026-10-03 as `spatialRoomPercent` (small-room
+  feedback delay network; higher sounds further away). Still future:
+  per-speaker distance, gain or angle editing and an "immersion" control. The
+  SteelSeries Sonar controls describe product behavior, not a reproducible
+  algorithm.
+- Attended listening for both: speaker placement and room level have objective
+  tests only (crosstalk separation in a simulated speaker-to-ear path, tail
+  decay, stability).
 - Head tracking, elevation/height channels, object audio (Windows Sonic /
   Spatial Sound APIs) and personalised HRTFs.
 - ~~Capturing 44.1/96 kHz surround endpoints with sample-rate conversion~~ —

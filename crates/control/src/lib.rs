@@ -6008,10 +6008,26 @@ fn session_virtual_capture_bus_ids(session: &Session) -> Vec<EntityId> {
         .collect()
 }
 
-/// Whether a Physical Input renders its 5.1/7.1 capture to headphones.
+/// Whether a Physical Input renders its 5.1/7.1 capture to two ears
+/// (`spatialMode` headphones or speakers).
 fn node_spatial_headphones(node: &audiorouter_domain::Node) -> bool {
-    node.kind == NodeKind::PhysicalInput
-        && node.parameters.get("spatialMode").and_then(Value::as_str) == Some("headphones")
+    node_spatial_options(node).is_some()
+}
+
+/// The surround rendering a Physical Input asks for, when it renders one:
+/// headphones or speakers (crosstalk cancellation) and the room blend.
+fn node_spatial_options(node: &audiorouter_domain::Node) -> Option<audiorouter_dsp::binaural::SpatialOptions> {
+    use audiorouter_dsp::binaural::{SpatialOptions, SpatialOutput};
+    if node.kind != NodeKind::PhysicalInput {
+        return None;
+    }
+    let output = match node.parameters.get("spatialMode").and_then(Value::as_str) {
+        Some("headphones") => SpatialOutput::Headphones,
+        Some("speakers") => SpatialOutput::Speakers,
+        _ => return None,
+    };
+    let room_percent = node.parameters.get("spatialRoomPercent").and_then(Value::as_f64).unwrap_or(0.0) as f32;
+    Some(SpatialOptions { output, room_percent })
 }
 
 /// Preserve prepared transport identities during live flag changes. Silent
@@ -6651,7 +6667,7 @@ impl ControlPlane {
                 .collect::<Result<Vec<_>, _>>()?,
         };
         let mut source_channels = Vec::with_capacity(source_node_ids.len());
-        // Per source: render a 5.1/7.1 capture to headphones (stereo).
+        // Per source: render a 5.1/7.1 capture to two ears (headphones or speakers).
         let mut binaural_sources = Vec::with_capacity(source_node_ids.len());
         for (node_id, binding) in source_node_ids.iter().zip(bindings.iter().copied()) {
             let node = session
@@ -6707,7 +6723,7 @@ impl ControlPlane {
                             node.name, endpoint.channels
                         )));
                     }
-                    binaural_sources.push(true);
+                    binaural_sources.push(node_spatial_options(node));
                     source_channels.push(channels);
                     continue;
                 }
@@ -6758,7 +6774,7 @@ impl ControlPlane {
                     ));
                 }
             }
-            binaural_sources.push(false);
+            binaural_sources.push(None);
             source_channels.push(channels);
         }
         let mixer = audiorouter_engine::RealtimeMixerFanout::from_paths(
@@ -6814,12 +6830,13 @@ impl ControlPlane {
                         )
                     };
                     match opened {
-                        Ok(client) if binaural => capture_clients.push(
+                        Ok(client) if binaural.is_some() => capture_clients.push(
                             audiorouter_windows_audio::MultiInputCaptureSource::Binaural(
                                 audiorouter_windows_audio::BinauralCapture::new(
                                     client,
                                     usize::from(endpoint.channels),
                                     endpoint.channel_mask,
+                                    binaural.unwrap_or_default(),
                                 )
                                 .map_err(|error| {
                                     ControlError::InvalidRequest(format!(
@@ -13327,10 +13344,10 @@ impl ControlPlane {
                 if current.nodes.iter().any(|node| {
                     node.id == *node_id
                         && node.kind == NodeKind::PhysicalInput
-                        && node_spatial_headphones(node) != worker.capture_is_binaural(index)
+                        && node_spatial_options(node) != worker.capture_spatial_options(index)
                 }) {
                     return Err(ControlError::InvalidRequest(
-                        "surround to headphones changed; stop and press Play to apply".into(),
+                        "surround settings changed; stop and press Play to apply".into(),
                     ));
                 }
             }

@@ -6159,8 +6159,9 @@ impl BinauralPacketConverter {
         channels: usize,
         channel_mask: u32,
         max_packet_frames: usize,
+        options: audiorouter_dsp::binaural::SpatialOptions,
     ) -> Result<Self, audiorouter_dsp::binaural::BinauralError> {
-        let renderer = audiorouter_dsp::binaural::BinauralRenderer::new(channels, channel_mask)?;
+        let renderer = audiorouter_dsp::binaural::BinauralRenderer::with_options(channels, channel_mask, options)?;
         let frames = max_packet_frames.clamp(1, MAX_FLOAT32_ACCUMULATOR_FRAMES);
         Ok(Self {
             renderer,
@@ -6225,15 +6226,18 @@ pub struct BinauralCapture {
     // `next_packet_into` takes `&self`; the worker pumps one source at a time
     // from its single owning thread, so the borrow is never contended.
     converter: std::cell::RefCell<BinauralPacketConverter>,
+    options: audiorouter_dsp::binaural::SpatialOptions,
 }
 
 impl BinauralCapture {
     /// Wrap an opened capture whose mix format is `channels` float32 samples
-    /// at the internal rate laid out by `channel_mask`.
+    /// at the internal rate laid out by `channel_mask`, rendered for
+    /// headphones or speakers with an optional room (`options`).
     pub fn new(
         capture: SharedCapture,
         channels: usize,
         channel_mask: u32,
+        options: audiorouter_dsp::binaural::SpatialOptions,
     ) -> Result<Self, audiorouter_dsp::binaural::BinauralError> {
         Ok(Self {
             capture,
@@ -6241,7 +6245,9 @@ impl BinauralCapture {
                 channels,
                 channel_mask,
                 MAX_FLOAT32_ACCUMULATOR_FRAMES,
+                options,
             )?),
+            options,
         })
     }
 
@@ -6774,6 +6780,14 @@ impl NativeMultiInputWorker {
     }
 
     /// Whether an input renders a surround capture to headphones.
+    /// The surround options of the capture at `index`, when it renders surround.
+    pub fn capture_spatial_options(&self, index: usize) -> Option<audiorouter_dsp::binaural::SpatialOptions> {
+        match self.captures.get(index) {
+            Some(MultiInputCaptureSource::Binaural(capture)) => Some(capture.options),
+            _ => None,
+        }
+    }
+
     pub fn capture_is_binaural(&self, index: usize) -> bool {
         matches!(self.captures.get(index), Some(MultiInputCaptureSource::Binaural(_)))
     }
@@ -8895,7 +8909,7 @@ mod tests {
                 )))
             }
         }
-        let mut converter = BinauralPacketConverter::new(8, 0, 480).unwrap();
+        let mut converter = BinauralPacketConverter::new(8, 0, 480, Default::default()).unwrap();
         let mut destination = vec![0u8; 480 * 8];
         let (packet, bytes) = converter
             .next_packet_into(&Speakers { frames: 480 }, &mut destination, 8)
@@ -8945,7 +8959,7 @@ mod tests {
             eprintln!("loopback {channels} ch (no rendering): {packets} packets, {frames} frames in 500 ms");
             return;
         }
-        let mut binaural = BinauralCapture::new(capture, channels, endpoint.channel_mask).unwrap();
+        let mut binaural = BinauralCapture::new(capture, channels, endpoint.channel_mask, Default::default()).unwrap();
         binaural.start().unwrap();
         let mut destination = vec![0u8; MAX_FLOAT32_ACCUMULATOR_FRAMES * 8];
         let (mut packets, mut frames, mut peak) = (0usize, 0usize, 0.0f32);

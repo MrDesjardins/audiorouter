@@ -55,8 +55,30 @@ enum Placement {
     LowFrequency,
 }
 
+/// Where the rendered ears are heard.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum SpatialOutput {
+    /// Each ear hears only its own channel.
+    #[default]
+    Headphones,
+    /// Two speakers at about ±30°: each ear also hears the other speaker, so
+    /// recursive crosstalk cancellation (RACE) is applied to the ear signals.
+    Speakers,
+}
+
+/// Optional stages after the ear rendering. The default (headphones, no
+/// room) leaves the rendered ears unchanged.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct SpatialOptions {
+    pub output: SpatialOutput,
+    /// 0–100: blend of a small room reverb; higher sounds further away.
+    pub room_percent: f32,
+}
+
 /// Static binaural renderer for one interleaved speaker stream.
 pub struct BinauralRenderer {
+    room: Option<Room>,
+    crosstalk: Option<Crosstalk>,
     channels: usize,
     placements: [Placement; MAX_BINAURAL_INPUT_CHANNELS],
     /// Per input channel: the left and right ear responses, time-reversed so
@@ -74,6 +96,16 @@ impl BinauralRenderer {
     /// by the Windows `channel_mask`. A zero mask selects the Windows default
     /// layout for the channel count.
     pub fn new(channels: usize, channel_mask: u32) -> Result<Self, BinauralError> {
+        Self::with_options(channels, channel_mask, SpatialOptions::default())
+    }
+
+    /// Like [`Self::new`], with a room blend and/or speaker playback.
+    pub fn with_options(
+        channels: usize,
+        channel_mask: u32,
+        options: SpatialOptions,
+    ) -> Result<Self, BinauralError> {
+        let room_amount = if options.room_percent.is_finite() { (options.room_percent / 100.0).clamp(0.0, 1.0) } else { 0.0 };
         let mask = match (channels, channel_mask) {
             (6, 0) => CHANNEL_MASK_5POINT1,
             (8, 0) => CHANNEL_MASK_7POINT1_SURROUND,
@@ -116,6 +148,8 @@ impl BinauralRenderer {
             channel += 1;
         }
         Ok(Self {
+            room: (room_amount > 0.0).then(|| Room::new(room_amount)),
+            crosstalk: (options.output == SpatialOutput::Speakers).then(Crosstalk::new),
             channels,
             placements,
             reversed,
@@ -164,6 +198,12 @@ impl BinauralRenderer {
                     }
                 }
             }
+            if let Some(room) = self.room.as_mut() {
+                (left, right) = room.process(left, right);
+            }
+            if let Some(crosstalk) = self.crosstalk.as_mut() {
+                (left, right) = crosstalk.process(left, right);
+            }
             out[0] = left;
             out[1] = right;
             self.position = if write + 1 == KEMAR_TAPS { 0 } else { write + 1 };
@@ -175,6 +215,128 @@ impl BinauralRenderer {
     pub fn reset(&mut self) {
         self.history.fill(0.0);
         self.position = 0;
+        if let Some(room) = self.room.as_mut() {
+            room.reset();
+        }
+        if let Some(crosstalk) = self.crosstalk.as_mut() {
+            crosstalk.reset();
+        }
+    }
+}
+
+/// Small-room reverb: a four-line feedback delay network with a Householder
+/// mixing matrix and per-line damping (decay about 0.45 s at 48 kHz). Lines
+/// are preallocated; processing is allocation-free.
+struct Room {
+    lines: [Vec<f32>; 4],
+    positions: [usize; 4],
+    feedback: [f32; 4],
+    damping_state: [f32; 4],
+    wet: f32,
+    direct: f32,
+}
+
+/// Mutually prime line lengths (31–47 ms at 48 kHz) to avoid stacked echoes.
+const ROOM_LINE_SAMPLES: [usize; 4] = [1_487, 1_789, 1_997, 2_269];
+const ROOM_DECAY_SECONDS: f32 = 0.45;
+const ROOM_DAMPING: f32 = 0.35;
+
+impl Room {
+    fn new(amount: f32) -> Self {
+        let rate = BINAURAL_SAMPLE_RATE_HZ as f32;
+        Self {
+            lines: ROOM_LINE_SAMPLES.map(|length| vec![0.0; length]),
+            positions: [0; 4],
+            // -60 dB after ROOM_DECAY_SECONDS for each line's round trip.
+            feedback: ROOM_LINE_SAMPLES.map(|length| 10f32.powf(-3.0 * length as f32 / (ROOM_DECAY_SECONDS * rate))),
+            damping_state: [0.0; 4],
+            wet: 0.6 * amount,
+            direct: 1.0 - 0.25 * amount,
+        }
+    }
+
+    fn process(&mut self, left: f32, right: f32) -> (f32, f32) {
+        let outputs: [f32; 4] = std::array::from_fn(|line| self.lines[line][self.positions[line]]);
+        // Householder reflection keeps the network lossless before the
+        // per-line feedback gains, so it stays stable.
+        let mean = outputs.iter().sum::<f32>() * 0.5;
+        let input = 0.5 * (left + right);
+        for line in 0..4 {
+            let mixed = (outputs[line] - mean) * self.feedback[line];
+            self.damping_state[line] = (1.0 - ROOM_DAMPING) * mixed + ROOM_DAMPING * self.damping_state[line];
+            let value = input + self.damping_state[line];
+            self.lines[line][self.positions[line]] = if value.abs() < 1.0e-20 { 0.0 } else { value };
+            self.positions[line] = (self.positions[line] + 1) % ROOM_LINE_SAMPLES[line];
+        }
+        let wet_left = 0.35 * (outputs[0] + outputs[2]);
+        let wet_right = 0.35 * (outputs[1] + outputs[3]);
+        (self.direct * left + self.wet * wet_left, self.direct * right + self.wet * wet_right)
+    }
+
+    fn reset(&mut self) {
+        for line in &mut self.lines {
+            line.fill(0.0);
+        }
+        self.damping_state = [0.0; 4];
+    }
+}
+
+/// Recursive Ambiophonics Crosstalk Elimination: each output subtracts the
+/// other output, delayed by the extra path to the far ear and attenuated, so
+/// a listener between speakers at about ±30° hears mostly the matching ear
+/// signal. The cancelled band is limited to about 250 Hz–6 kHz, where the
+/// head shadow model holds; outside it the ears pass unchanged.
+struct Crosstalk {
+    delayed: [[f32; CROSSTALK_DELAY_SAMPLES]; 2],
+    position: usize,
+    high_pass: [(f32, f32); 2],
+    low_pass: [f32; 2],
+}
+
+/// About 62.5 µs at 48 kHz: the extra travel time to the far ear.
+const CROSSTALK_DELAY_SAMPLES: usize = 3;
+/// Attenuation of each cancellation pass (about −4.4 dB).
+const CROSSTALK_GAIN: f32 = 0.6;
+/// Output trim so wide (side) content keeps headroom.
+const CROSSTALK_TRIM: f32 = 0.8;
+
+impl Crosstalk {
+    fn new() -> Self {
+        Self { delayed: [[0.0; CROSSTALK_DELAY_SAMPLES]; 2], position: 0, high_pass: [(0.0, 0.0); 2], low_pass: [0.0; 2] }
+    }
+
+    /// One-pole coefficient for `cutoff_hz` at the renderer rate.
+    fn coefficient(cutoff_hz: f32) -> f32 {
+        (-2.0 * std::f32::consts::PI * cutoff_hz / BINAURAL_SAMPLE_RATE_HZ as f32).exp()
+    }
+
+    fn band(&mut self, side: usize, sample: f32) -> f32 {
+        let high = Self::coefficient(250.0);
+        let low = Self::coefficient(6_000.0);
+        // One-pole high-pass (y = a·(y₁ + x − x₁)), then one-pole low-pass.
+        let (previous_in, previous_out) = self.high_pass[side];
+        let high_passed = high * (previous_out + sample - previous_in);
+        self.high_pass[side] = (sample, high_passed);
+        self.low_pass[side] = (1.0 - low) * high_passed + low * self.low_pass[side];
+        self.low_pass[side]
+    }
+
+    fn process(&mut self, left: f32, right: f32) -> (f32, f32) {
+        let [from_right, from_left] = [self.delayed[1][self.position], self.delayed[0][self.position]];
+        let cancel_left = self.band(0, from_right);
+        let cancel_right = self.band(1, from_left);
+        let out_left = left - CROSSTALK_GAIN * cancel_left;
+        let out_right = right - CROSSTALK_GAIN * cancel_right;
+        self.delayed[0][self.position] = out_left;
+        self.delayed[1][self.position] = out_right;
+        self.position = (self.position + 1) % CROSSTALK_DELAY_SAMPLES;
+        (CROSSTALK_TRIM * out_left, CROSSTALK_TRIM * out_right)
+    }
+
+    fn reset(&mut self) {
+        self.delayed = [[0.0; CROSSTALK_DELAY_SAMPLES]; 2];
+        self.high_pass = [(0.0, 0.0); 2];
+        self.low_pass = [0.0; 2];
     }
 }
 
@@ -237,6 +399,84 @@ mod tests {
 
     fn db(ratio: f64) -> f64 {
         10.0 * ratio.log10()
+    }
+
+    fn render_with(options: SpatialOptions, input: &[f32]) -> Vec<f32> {
+        let mut renderer = BinauralRenderer::with_options(8, CHANNEL_MASK_7POINT1_SURROUND, options).unwrap();
+        let mut output = vec![0.0; input.len() / 8 * 2];
+        renderer.render_interleaved(input, &mut output).unwrap();
+        output
+    }
+
+    #[test]
+    fn default_options_leave_the_rendered_ears_unchanged() {
+        let input = noise(FRAMES * 8);
+        let plain = {
+            let mut renderer = BinauralRenderer::new(8, CHANNEL_MASK_7POINT1_SURROUND).unwrap();
+            let mut output = vec![0.0; FRAMES * 2];
+            renderer.render_interleaved(&input, &mut output).unwrap();
+            output
+        };
+        assert_eq!(render_with(SpatialOptions::default(), &input), plain);
+        assert_eq!(render_with(SpatialOptions { output: SpatialOutput::Headphones, room_percent: 0.0 }, &input), plain);
+        assert_eq!(render_with(SpatialOptions { output: SpatialOutput::Headphones, room_percent: f32::NAN }, &input), plain);
+    }
+
+    /// Two speakers heard by two ears: each ear also hears the far speaker,
+    /// attenuated and later (the model the canceller inverts).
+    fn ears_from_speakers(speakers: &[(f32, f32)]) -> Vec<(f32, f32)> {
+        (0..speakers.len())
+            .map(|n| {
+                let far = n.checked_sub(CROSSTALK_DELAY_SAMPLES).map_or((0.0, 0.0), |m| speakers[m]);
+                (speakers[n].0 + CROSSTALK_GAIN * far.1, speakers[n].1 + CROSSTALK_GAIN * far.0)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn speaker_mode_cancels_crosstalk_in_its_band() {
+        // A 1 kHz signal meant for the left ear only.
+        let frames = 48_000;
+        let left: Vec<f32> = (0..frames).map(|n| (2.0 * std::f32::consts::PI * 1_000.0 * n as f32 / 48_000.0).sin()).collect();
+        let separation = |speakers: Vec<(f32, f32)>| {
+            let ears = ears_from_speakers(&speakers);
+            let (mut near, mut far) = (0.0f64, 0.0f64);
+            for (l, r) in &ears[frames / 2..] {
+                near += f64::from(*l).powi(2);
+                far += f64::from(*r).powi(2);
+            }
+            db(near / far)
+        };
+        let without = separation(left.iter().map(|l| (*l, 0.0)).collect());
+        let mut crosstalk = Crosstalk::new();
+        let with = separation(left.iter().map(|l| crosstalk.process(*l, 0.0)).collect());
+        println!("left/right ear separation at 1 kHz: {without:.1} dB without, {with:.1} dB with cancellation");
+        assert!(with > without + 10.0, "cancellation should add at least 10 dB of separation ({without:.1} -> {with:.1})");
+    }
+
+    #[test]
+    fn room_adds_a_decaying_tail_and_stays_bounded() {
+        let mut impulse = vec![0.0; 48_000 * 8];
+        impulse[0] = 1.0; // front left
+        let dry = render_with(SpatialOptions::default(), &impulse);
+        let wet = render_with(SpatialOptions { output: SpatialOutput::Headphones, room_percent: 100.0 }, &impulse);
+        let energy = |output: &[f32], from_ms: usize, to_ms: usize| output[from_ms * 96..to_ms * 96].iter().map(|v| f64::from(*v).powi(2)).sum::<f64>();
+        assert_eq!(energy(&dry, 50, 150), 0.0, "the plain renderer has no tail after its 4 ms responses");
+        let early = energy(&wet, 50, 150);
+        let late = energy(&wet, 400, 500);
+        println!("room tail energy: 50-150 ms {early:.3e}, 400-500 ms {late:.3e} ({:.1} dB)", db(late / early));
+        assert!(early > 1.0e-4, "the room adds a tail");
+        assert!(late < early * 0.1, "the tail decays");
+        assert!(wet.iter().all(|v| v.is_finite() && v.abs() < 1.5));
+    }
+
+    #[test]
+    fn speakers_and_room_stay_finite_and_bounded_on_noise() {
+        let input = noise(48_000 * 8);
+        let output = render_with(SpatialOptions { output: SpatialOutput::Speakers, room_percent: 100.0 }, &input);
+        let peak = output.iter().fold(0.0f32, |m, v| m.max(v.abs()));
+        println!("speakers + room peak on full-scale 7.1 noise: {peak:.2}");
+        assert!(output.iter().all(|v| v.is_finite()) && peak < 8.0);
     }
 
     #[test]
