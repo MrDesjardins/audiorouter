@@ -7,8 +7,11 @@ const version = (JSON.parse(readFileSync(new URL("../package.json", import.meta.
 
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`header shows the version and a newer release in ${theme}`, async ({ page, context }, testInfo) => {
+    // Count only the app page's requests; the release page popup is answered
+    // locally so the test never loads github.com (whose page calls its API).
     let githubRequests = 0;
-    await context.route("https://api.github.com/**", (route) => { githubRequests += 1; return route.abort(); });
+    await page.route("https://api.github.com/**", (route) => { githubRequests += 1; return route.abort(); });
+    await context.route("https://github.com/**", (route) => route.fulfill({ contentType: "text/html", body: "<title>release page stub</title>" }));
     await page.addInitScript((theme) => {
       localStorage.setItem("audiorouter.ui.theme", theme);
       localStorage.removeItem("audiorouter.ui.update-check");
