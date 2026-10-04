@@ -27,7 +27,7 @@ export abstract class LiveKeyAction<T extends JsonObject> extends SingletonActio
   private readonly visible = new Map<string, Visible<T>>();
   protected readonly pending = new Set<string>();
 
-  constructor(protected readonly store: AudioRouterStore, private readonly watch: { levels?: boolean; sessions?: boolean } = {}) {
+  constructor(protected readonly store: AudioRouterStore, private readonly watch: { levels?: boolean; sessions?: boolean; recorders?: boolean } = {}) {
     super();
     store.subscribe(() => this.renderAll());
   }
@@ -46,6 +46,7 @@ export abstract class LiveKeyAction<T extends JsonObject> extends SingletonActio
     this.visible.set(ev.action.id, { action: ev.action, settings: ev.payload.settings, title: { text: "", shown: false }, image: "", state: null });
     if (this.watch.levels) this.store.watchLevels(1);
     if (this.watch.sessions) this.store.watchSessions(1);
+    if (this.watch.recorders) { this.store.watchRecorders(1); this.store.refreshSoon(); }
     this.render(ev.action.id);
   }
 
@@ -53,6 +54,7 @@ export abstract class LiveKeyAction<T extends JsonObject> extends SingletonActio
     if (!this.visible.delete(ev.action.id)) return;
     if (this.watch.levels) this.store.watchLevels(-1);
     if (this.watch.sessions) this.store.watchSessions(-1);
+    if (this.watch.recorders) this.store.watchRecorders(-1);
   }
 
   override onDidReceiveSettings(ev: DidReceiveSettingsEvent<T>) {

@@ -190,3 +190,21 @@ export function stepFace({ label, detail, valueText, step, pending, atLimit }: {
   const color = atLimit ? OFF : COLD;
   return frame(heading(label, detail, 38, 58) + `<g opacity="${pending ? 0.55 : 1}">` + text(valueText, 94, 26, INK, 800) + "</g>" + text(step, 124, 17, color, 800), color);
 }
+
+export type RecordFace = { label: string | null; recording: boolean; elapsed: string; canStart: boolean; pending: boolean };
+
+/** A Record key: a red dot to start, a square and the running time while recording. */
+export function recordFace(face: RecordFace): string {
+  const color = face.recording ? CLIP : face.canStart ? CLIP : OFF;
+  const symbol = face.recording
+    ? `<rect x="56" y="54" width="32" height="32" rx="5" fill="${CLIP}"/>`
+    : `<circle cx="72" cy="70" r="19" fill="${face.canStart ? CLIP : OFF}"/>`;
+  const status = face.recording ? `REC ${face.elapsed}` : face.canStart ? "RECORD" : "PLAY FIRST";
+  return frame((face.label ? text(fit(face.label), 34, 18, SOFT, 700) : "") + `<g opacity="${face.pending ? 0.55 : 1}">${symbol}</g>` + text(status, 120, 17, face.recording ? CLIP : face.canStart ? INK : SOFT, 800), face.recording ? color : OFF);
+}
+
+/** Elapsed seconds as m:ss or h:mm:ss, like AudioRouter's Record button. */
+export function formatElapsed(seconds: number): string {
+  const hours = Math.floor(seconds / 3600), minutes = Math.floor((seconds % 3600) / 60), rest = seconds % 60;
+  return `${hours > 0 ? `${hours}:` : ""}${String(minutes).padStart(hours > 0 ? 2 : 1, "0")}:${String(rest).padStart(2, "0")}`;
+}

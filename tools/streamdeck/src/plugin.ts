@@ -3,6 +3,7 @@ import { normalizeBaseUrl } from "./api.js";
 import { MeterAction } from "./actions/meter.js";
 import { PlayAction } from "./actions/play.js";
 import { PrivacyAction } from "./actions/privacy.js";
+import { RecordAction } from "./actions/record.js";
 import { SessionAction } from "./actions/session.js";
 import { StepAction } from "./actions/step.js";
 import { ToggleAction } from "./actions/toggle.js";
@@ -31,6 +32,7 @@ function panelOptions() {
       id: node.id,
       name: node.name,
       kind: store.kind(node.kind)?.name ?? node.kind,
+      type: node.kind,
       targets: toggleTargets(store.kind(node.kind)),
       numbers: (store.kind(node.kind)?.parameters ?? [])
         .filter((spec) => spec.type === "number")
@@ -60,6 +62,7 @@ streamDeck.actions.registerAction(new PrivacyAction(store));
 streamDeck.actions.registerAction(new PlayAction(store));
 streamDeck.actions.registerAction(new SessionAction(store));
 streamDeck.actions.registerAction(new StepAction(store));
+streamDeck.actions.registerAction(new RecordAction(store));
 
 await streamDeck.connect();
 applyConnection(await streamDeck.settings.getGlobalSettings<GlobalSettings>());

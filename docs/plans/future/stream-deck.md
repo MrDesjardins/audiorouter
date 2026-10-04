@@ -49,6 +49,14 @@ different surface), [external app integrations](external-app-integrations.md)
   `api_autostart_get`/`_set`). It uses the port and network the API last
   started with (`api`), or this PC only on 17891; local-network access
   resumes only on an address the PC still has.
+- 2026-10-04, Record key (user request): Record / Stop on a Recorder node of
+  the selected session, like its Record button (`recorders.startRecording`
+  / `recorders.stopRecording`). Press: toggle, only start, only stop. The
+  key names a Recorder, or follows the session's only one. The store reads
+  `recorders.list` with the summary only while a Record key shows; the face
+  shows RECORD, REC m:ss while recording, or PLAY FIRST when the session is
+  stopped (a press then alerts). Two states for custom images. Tests:
+  `test/record.test.ts`. Not yet: attended test on the device.
 
 ## Objective
 

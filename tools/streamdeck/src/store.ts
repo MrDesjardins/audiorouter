@@ -11,6 +11,9 @@ export type Summary = { sessionId: string; name: string; revision: number; playi
 export type Level = { nodeId: string; name: string; peakDb: number | null; rmsDb: number | null; clipped: boolean; reductionDb: number | null; active: boolean | null };
 export type ParameterSpec = { name: string; type?: string; enum?: unknown[]; default?: unknown; minimum?: number; maximum?: number; unit?: string };
 export type SessionItem = { id: string; name: string };
+/** A Recorder node's state, from `recorders.list`. */
+export type RecorderState = "idle" | "armed" | "recording" | "paused" | "stopping" | "completed" | "failed";
+type RecorderItem = { sessionId: string; nodeId: string | null; state: RecorderState };
 export type CatalogKind = { kind: string; name: string; parameters: ParameterSpec[] };
 type RawSession = { id: string; revision: number; nodes: { id: string; kind: string; parameters: Record<string, unknown> }[] };
 
@@ -37,6 +40,11 @@ export class AudioRouterStore {
   /** All sessions (read while a Session key is visible). */
   sessions: SessionItem[] = [];
   private sessionWatchers = 0;
+  /** Recorder states of the selected session by node (read while a Record key is visible). */
+  recorders = new Map<string, RecorderState>();
+  /** When each recording was first seen running, for the elapsed time. */
+  recordingSince = new Map<string, number>();
+  private recorderWatchers = 0;
   private sessionsReadAt = 0;
   private parameters = new Map<string, Record<string, unknown>>();
   private client: AudioRouterClient | null = null;
@@ -65,6 +73,8 @@ export class AudioRouterStore {
     this.summary = null;
     this.levels.clear();
     this.parameters.clear();
+    this.recorders.clear();
+    this.recordingSince.clear();
     this.failures = 0;
     this.client = connection ? new AudioRouterClient(connection, this.fetcher) : null;
     this.state = connection ? "connecting" : "unconfigured";
@@ -90,6 +100,17 @@ export class AudioRouterStore {
   watchSessions(delta: 1 | -1) {
     this.sessionWatchers = Math.max(0, this.sessionWatchers + delta);
     if (delta > 0) this.sessionsReadAt = 0;
+  }
+
+  /** A Record key appeared (+1) or disappeared (−1). */
+  watchRecorders(delta: 1 | -1) {
+    this.recorderWatchers = Math.max(0, this.recorderWatchers + delta);
+  }
+
+  /** True while the node records (or is paused in a recording). */
+  isRecording(nodeId: string): boolean {
+    const state = this.recorders.get(nodeId);
+    return state === "recording" || state === "paused";
   }
 
   /** Read the summary now (after a press), instead of at the next tick. */
@@ -149,7 +170,22 @@ export class AudioRouterStore {
         this.sessions = sessions;
         this.sessionsReadAt = Date.now();
       }
-      const changed = sessionsChanged || this.state !== "online" || JSON.stringify(summary) !== JSON.stringify(this.summary);
+      // Recorder states, while a Record key shows: same tick as the summary.
+      let recordersChanged = false;
+      if (this.recorderWatchers > 0) {
+        const list = await this.call<RecorderItem[]>("recorders.list");
+        if (generation !== this.generation) return;
+        const next = new Map<string, RecorderState>();
+        for (const item of list) if (item.sessionId === summary.sessionId && item.nodeId) next.set(item.nodeId, item.state);
+        recordersChanged = JSON.stringify([...next]) !== JSON.stringify([...this.recorders]);
+        this.recorders = next;
+        const now = Date.now();
+        for (const [nodeId] of next) if (this.isRecording(nodeId) && !this.recordingSince.has(nodeId)) this.recordingSince.set(nodeId, now);
+        for (const nodeId of [...this.recordingSince.keys()]) if (!this.isRecording(nodeId)) this.recordingSince.delete(nodeId);
+        // Recording keys show elapsed time: redraw every tick while one runs.
+        if (this.recordingSince.size > 0) recordersChanged = true;
+      }
+      const changed = recordersChanged || sessionsChanged || this.state !== "online" || JSON.stringify(summary) !== JSON.stringify(this.summary);
       this.summary = summary;
       this.failures = 0;
       this.error = null;

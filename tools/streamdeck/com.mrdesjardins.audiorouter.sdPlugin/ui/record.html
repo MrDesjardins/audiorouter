@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="pi.css">
+  <script src="pi.js"></script>
+</head>
+<body>
+  <div id="connection-slot"></div>
+  <label>Recorder (selected session)<select id="node"></select></label>
+  <label>This key<select id="press">
+    <option value="toggle">Records and stops (toggle)</option>
+    <option value="start">Only starts recording</option>
+    <option value="stop">Only stops and saves</option>
+  </select></label>
+  <p class="hint">Works like the Recorder's Record button: each recording is a new file in your recording folder. The session must be playing to start. Pick your own image for the Not recording and Recording states in Stream Deck.</p>
+  <script>
+    const node = document.getElementById("node");
+    bindSetting(document.getElementById("press"), "press", "toggle");
+    PI.onOptions = (options) => {
+      const recorders = (options.nodes ?? []).filter((item) => item.type === "recorder");
+      fillSelect(node, recorders.map((item) => ({ value: item.id, label: item.name })), PI.settings.nodeId ?? "", PI.settings.nodeName ? `${PI.settings.nodeName} (not found)` : undefined);
+      // The empty choice follows the session: its Recorder when it has exactly one.
+      node.options[0].text = recorders.length === 1 ? `The session's Recorder (${recorders[0].name})` : "The session's only Recorder";
+    };
+    node.addEventListener("change", () => {
+      const chosen = (PI.options?.nodes ?? []).find((item) => item.id === node.value);
+      PI.saveSettings({ nodeId: node.value, nodeName: chosen?.name ?? "" });
+    });
+  </script>
+</body>
+</html>

@@ -145,6 +145,28 @@
           "Image": "imgs/actions/step-key"
         }
       ]
+    },
+    {
+      "UUID": "com.mrdesjardins.audiorouter.record",
+      "Name": "Record",
+      "Icon": "imgs/actions/record",
+      "Tooltip": "Start or stop a Recorder of the selected session, like its Record button.",
+      "PropertyInspectorPath": "ui/record.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "DisableAutomaticStates": true,
+      "SupportedInMultiActions": true,
+      "States": [
+        {
+          "Image": "imgs/actions/record-key",
+          "Name": "Not recording"
+        },
+        {
+          "Image": "imgs/actions/record-key",
+          "Name": "Recording"
+        }
+      ]
     }
   ]
 }
