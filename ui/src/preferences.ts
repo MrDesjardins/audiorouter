@@ -17,6 +17,22 @@ export function writeLastSession(storage: Pick<Storage, "setItem"> | null, sessi
   try { storage?.setItem(LAST_SESSION_KEY, sessionId); } catch { /* Optional workspace preference. */ }
 }
 
+/** Moving lights on live connections: always, only while AudioRouter is the
+ * active window, or never. The lights cost most of the canvas's CPU. */
+export type FlowAnimationMode = "on" | "focus" | "off";
+const FLOW_ANIMATION_KEY = "audiorouter.ui.flow-animation";
+
+export function readFlowAnimation(storage: Pick<Storage, "getItem"> | null): FlowAnimationMode {
+  try {
+    const value = storage?.getItem(FLOW_ANIMATION_KEY);
+    return value === "focus" || value === "off" ? value : "on";
+  } catch { return "on"; }
+}
+
+export function writeFlowAnimation(storage: Pick<Storage, "setItem"> | null, mode: FlowAnimationMode): void {
+  try { storage?.setItem(FLOW_ANIMATION_KEY, mode); } catch { /* Optional presentation preference. */ }
+}
+
 export function readTheme(storage: Pick<Storage, "getItem"> | null): ThemeMode {
   const value = storage?.getItem(THEME_KEY);
   return value === "light" || value === "high-contrast" ? value : "dark";

@@ -32,7 +32,8 @@ import { TestSignalPlaybackControls } from "./TestSignalPlaybackControls";
 import type { RecorderStatus } from "./backend";
 import { hasLearnedNoise } from "./SpectralGateEditor";
 import { CanvasGroupRenderer, type CanvasGroup } from "./CanvasGroups";
-import { FlowActiveLayers, FlowArrow } from "./flowLine";
+import { FlowActiveLayers, FlowArrow, FlowMotionProvider } from "./flowLine";
+import type { FlowAnimationMode } from "./preferences";
 import { RecordButton } from "./RecorderControls";
 import { appendLibraryNode as appendPreviewNode } from "./draft";
 import { draggedLibraryKind, endLibraryDrag, readLibraryDropKind, setLibraryDragOverCanvas, startLibraryDrag } from "./libraryDrag";
@@ -69,6 +70,8 @@ type SessionFlowCanvasProps = {
   diagnostics?: DiagnosticsSnapshot | null;
   /** Live meter telemetry for `diagnostics`; read only by the views that show it. */
   telemetryStore?: TelemetryStore;
+  /** Setup → Animated connections; comets move only when this allows. */
+  flowAnimation?: FlowAnimationMode;
   sessionRunning?: boolean;
   sessionActionBusy?: boolean;
   testSignalPlaybackReady?: boolean;
@@ -960,7 +963,7 @@ function NodeVisual({ node, telemetry, applicationCaptureState, onSetNodeParamet
   return <div className="node-activity" aria-label={node.enabled && !node.bypass ? "Processor ready" : "Processor inactive"}><span className="activity-dot" />{node.bypass ? "Bypassed" : node.enabled ? "Ready" : "Disabled"}</div>;
 }
 
-export function SessionFlowCanvas({ telemetryStore, onToggleRecording, recordingBusyNodeId = null, groups = [], selectedGroupId = "", onSelectGroup, onChangeGroup, onRemoveGroup, session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onToggleConnection, onInsertProcessor, onRemoveNode, onAddLibraryNode, onAddVirtualBusNode, diagnostics, sessionRunning, sessionActionBusy = false, testSignalPlaybackReady = false, testSignalEndpointPrepared = false, onStartTestSignal, onStopTestSignal, onAudioSourceTransport, audioSourceStates, onTimeShiftTransport, timeShiftStatuses, recorderStatuses = [], onSetNodeParameter, onOpenPluginPicker, onOpenApplicationPicker, onConnectionRejected, canEdit = true }: SessionFlowCanvasProps) {
+export function SessionFlowCanvas({ telemetryStore, flowAnimation = "on", onToggleRecording, recordingBusyNodeId = null, groups = [], selectedGroupId = "", onSelectGroup, onChangeGroup, onRemoveGroup, session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onToggleConnection, onInsertProcessor, onRemoveNode, onAddLibraryNode, onAddVirtualBusNode, diagnostics, sessionRunning, sessionActionBusy = false, testSignalPlaybackReady = false, testSignalEndpointPrepared = false, onStartTestSignal, onStopTestSignal, onAudioSourceTransport, audioSourceStates, onTimeShiftTransport, timeShiftStatuses, recorderStatuses = [], onSetNodeParameter, onOpenPluginPicker, onOpenApplicationPicker, onConnectionRejected, canEdit = true }: SessionFlowCanvasProps) {
   const graphRunning = sessionRunning ?? diagnostics?.schedulerTelemetry?.activeGeneration != null;
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
   const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey));
@@ -1205,7 +1208,7 @@ export function SessionFlowCanvas({ telemetryStore, onToggleRecording, recording
   }
 
   return (
-    <LiveCanvasProvider store={telemetryStore} diagnostics={diagnostics ?? null}>
+    <LiveCanvasProvider store={telemetryStore} diagnostics={diagnostics ?? null}><FlowMotionProvider mode={flowAnimation}>
     <div className="canvas-layout-actions" aria-label="Canvas layout actions"><span className="muted" role="status" aria-live="polite">{selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} selected</span><button type="button" className="secondary" title="Inputs on the left, outputs on the right, tools in between, with room around every connection" onClick={tidyLayout}>Arrange</button>{arrangeUndo && <button type="button" className="secondary" onClick={undoArrange}>Undo arrange</button>}</div>
     <SignalFlowLegend />
     <div className="session-flow-canvas" aria-label="Signal-flow graph" data-connection-mode={connectionHandleMode} onDragOver={(event) => {
@@ -1302,6 +1305,6 @@ export function SessionFlowCanvas({ telemetryStore, onToggleRecording, recording
         <Controls showInteractive={false} />
       </ReactFlow>
     </div>
-    </LiveCanvasProvider>
+    </FlowMotionProvider></LiveCanvasProvider>
   );
 }

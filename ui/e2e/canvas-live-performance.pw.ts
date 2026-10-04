@@ -74,3 +74,35 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(page.locator(".react-flow__edges .flow-edge-stopped").first()).toBeAttached();
   });
 }
+
+for (const theme of ["dark", "light", "high-contrast"]) {
+  test(`Animated connections: on, only while focused, and off in ${theme}`, async ({ page }, testInfo) => {
+    await page.addInitScript((theme) => localStorage.setItem("audiorouter.ui.theme", theme), theme);
+    await playWithChangingMeters(page);
+    const active = page.locator(".react-flow__edges g.flow-line.flow-edge-active");
+    const comets = page.locator(".react-flow__edges .flow-comet");
+    await expect.poll(() => active.count()).toBeGreaterThan(0);
+    await expect.poll(() => comets.count()).toBeGreaterThan(0);
+    await page.getByRole("tab", { name: "Setup" }).click();
+    const panel = page.locator(".flow-animation-panel");
+    const choice = panel.getByLabel("Travelling lights on connections");
+    await expect(choice).toHaveValue("on");
+    // Off: no travelling lights; the level still colours the live connections.
+    await choice.selectOption("off");
+    await expect(comets).toHaveCount(0);
+    await expect.poll(() => active.count()).toBeGreaterThan(0);
+    // Only while focused: pause on blur, resume on focus.
+    await choice.selectOption("focus");
+    await expect.poll(() => comets.count()).toBeGreaterThan(0);
+    await page.evaluate(() => { Object.defineProperty(document, "hasFocus", { configurable: true, value: () => false }); window.dispatchEvent(new Event("blur")); });
+    await expect(comets).toHaveCount(0);
+    await page.evaluate(() => { Object.defineProperty(document, "hasFocus", { configurable: true, value: () => true }); window.dispatchEvent(new Event("focus")); });
+    await expect.poll(() => comets.count()).toBeGreaterThan(0);
+    await panel.scrollIntoViewIfNeeded();
+    await panel.screenshot({ path: testInfo.outputPath(`flow-animation-${theme}.png`) });
+    // The choice is remembered.
+    await page.reload();
+    await page.getByRole("tab", { name: "Setup" }).click();
+    await expect(page.locator(".flow-animation-panel").getByLabel("Travelling lights on connections")).toHaveValue("focus");
+  });
+}

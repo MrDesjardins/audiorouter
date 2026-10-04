@@ -236,6 +236,19 @@ Agent work (no hardware or credentials needed):
    UDP and in `network-receive-hint.pw.ts` (three themes reviewed). Next:
    Joe retries on the next release and sends both folders.
 
+12. Done 2026-10-04 (user decision): Setup → Animated connections, On
+   (default) / When AudioRouter is in focus / Off, remembered per computer
+   (`audiorouter.ui.flow-animation`). Measured in the Edge harness (12 nodes,
+   8 live connections): main thread 53% with comets, 18% without (script
+   13% → 10%); the travelling comets are about two thirds of the canvas
+   work. Off and an unfocused window reuse the reduced-motion rendering
+   (colour, glow, meters and arrows keep updating; comets stop) through
+   `FlowMotionProvider`, so focus changes re-render only the connection
+   layers. Tests: `FlowAnimationSetting.test.tsx` (storage, choices, comets
+   on/off/blur/focus), `canvas-live-performance.pw.ts` three themes (switch,
+   blur pause, focus resume, remembered after reload; label fit reviewed).
+   UI 481, Edge 222.
+
 10. Done 2026-10-04 (user report on 0.0.10): Advanced → Start at sign-in
    showed "Native registration: unavailable" and "unavailable in this
    host" in the desktop app. Cause: `createInitialBackend` took the

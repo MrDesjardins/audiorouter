@@ -4,7 +4,40 @@
  * travelling with the audio, and a fixed-size arrowhead. Colours come from
  * theme variables (--flow-*), so the same geometry works in every theme.
  */
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import type { FlowAnimationMode } from "./preferences";
+
+/** Whether connection comets may move now (Setup → Animated connections). */
+const FlowMotionContext = createContext(true);
+
+/** Whether AudioRouter is the active, visible window. */
+export function useWindowFocused() {
+  const [focused, setFocused] = useState(() => typeof document === "undefined" || (document.hasFocus() && !document.hidden));
+  useEffect(() => {
+    const onFocus = () => setFocused(!document.hidden);
+    const onBlur = () => setFocused(false);
+    const onVisibility = () => setFocused(!document.hidden && document.hasFocus());
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("blur", onBlur);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("blur", onBlur);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
+  return focused;
+}
+
+/**
+ * Applies the Animated connections setting below it. Focus changes reach only
+ * the connection layers (context consumers), not the canvas.
+ */
+export function FlowMotionProvider({ mode, children }: { mode: FlowAnimationMode; children: ReactNode }) {
+  const focused = useWindowFocused();
+  const moving = mode === "on" || (mode === "focus" && focused);
+  return <FlowMotionContext.Provider value={moving}>{children}</FlowMotionContext.Provider>;
+}
 
 export type FlowSide = "left" | "right" | "top" | "bottom";
 type Point = { x: number; y: number };
@@ -80,7 +113,11 @@ export function bezierLength(path: string): number {
  * path (the interactive React Flow edge path) with `stroke: url(#gradientId)`.
  */
 export function FlowActiveLayers({ id, path, source, target, targetSide, levelDb, core }: { id: string; path: string; source: Point; target: Point; targetSide: FlowSide; levelDb: number | null; core: (style: CSSProperties) => ReactNode }) {
-  const reduced = usePrefersReducedMotion();
+  // Reduced motion, or the Animated connections setting, keeps colour, glow
+  // and the arrow and stops only the travelling comets.
+  const prefersReduced = usePrefersReducedMotion();
+  const motionAllowed = useContext(FlowMotionContext);
+  const reduced = prefersReduced || !motionAllowed;
   const visual = flowVisual(levelDb);
   const color = flowColor(levelDb);
   // Round the length so dragging a node does not restart every comet.
