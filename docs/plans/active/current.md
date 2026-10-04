@@ -1,6 +1,6 @@
 # Active plan — post-0.0.8 maintenance
 
-Updated 2026-10-04. v0.0.10 (memory, tray, network logs) in release; see [0.0.10 evidence](evidence/2026-10-04-release-0.0.10.md).
+Updated 2026-10-04. v0.0.10 published as an unsigned prerelease; see [0.0.10 evidence](evidence/2026-10-04-release-0.0.10.md).
 
 ## Objective and scope
 
