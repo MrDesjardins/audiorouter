@@ -10,7 +10,7 @@ import "./styles.css";
 let planned: Session | null = null;
 // Test hooks: a Playwright init script may inject a session, the backend
 // telemetry recorded from a real run, and start the fixture already playing.
-const injected = globalThis as { __routeFixtureSession?: Session; __routeFixtureTelemetry?: unknown[]; __routeFixtureRunning?: boolean; __routeFixtureProcessors?: DiscoveryDocument["processors"]; __routeFixtureDelayMs?: number; __routeFixtureNoRecordingRoot?: boolean; __routeFixtureRecordingLostAudio?: boolean; __routeFixtureFreshInstall?: boolean; __routeFixtureGameRound?: DiagnosticsSnapshot["gameRound"] };
+const injected = globalThis as { __routeFixtureSession?: Session; __routeFixtureTelemetry?: unknown[]; __routeFixtureRunning?: boolean; __routeFixturePrivacyMuted?: boolean; __routeFixtureProcessors?: DiscoveryDocument["processors"]; __routeFixtureDelayMs?: number; __routeFixtureNoRecordingRoot?: boolean; __routeFixtureRecordingLostAudio?: boolean; __routeFixtureFreshInstall?: boolean; __routeFixtureGameRound?: DiagnosticsSnapshot["gameRound"] };
 let committed = structuredClone(injected.__routeFixtureSession ?? demoSession);
 let previewCandidate: Session | null = null;
 let running = injected.__routeFixtureRunning === true;
@@ -30,6 +30,8 @@ const fixtureBackend = createDisconnectedBackend(demoSession);
 const initial = await fixtureBackend.snapshot();
 const diagnostics = () => ({
   ...initial.diagnostics,
+  // Opt-in: play microphone paths without privacy mute (live canvas tests).
+  ...(injected.__routeFixturePrivacyMuted === false ? { privacyMute: { ...initial.diagnostics.privacyMute, muted: false } } : {}),
   audio: { state: running ? "available" as const : "unavailable" as const, reason: "Browser fixture: simulated audio; no devices are opened." },
   nodeTelemetry: running && injected.__routeFixtureTelemetry ? structuredClone(injected.__routeFixtureTelemetry) as typeof initial.diagnostics.nodeTelemetry : running && (!(previewCandidate ?? committed).nodes.some((node) => node.kind === "testSignal") || (previewCandidate ?? committed).nodes.some((node) => node.kind === "testSignal" && sourceStates.get(node.id) === "playing")) ? (previewCandidate ?? committed).nodes.filter((node) => node.kind === "physicalOutput").map((node) => {
     const rmsDb = -28 + Math.sin(Date.now() / 300) * 10;

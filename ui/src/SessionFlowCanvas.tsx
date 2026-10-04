@@ -19,7 +19,8 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useLiveDiagnostics, type TelemetryStore } from "./liveTelemetry";
 import type { DiagnosticsSnapshot, Node, NodeKind, Session } from "@audiorouter/contracts";
 import { readLayout, writeLayout, type LayoutPositions } from "./layout";
 import { nodePortLabels } from "./graphView";
@@ -66,6 +67,8 @@ type SessionFlowCanvasProps = {
   onAddLibraryNode?: (kind: LibraryNodeKind, position: { x: number; y: number }) => string | void;
   onAddVirtualBusNode?: (direction: "renderSource" | "captureSink", position: { x: number; y: number }) => string | void;
   diagnostics?: DiagnosticsSnapshot | null;
+  /** Live meter telemetry for `diagnostics`; read only by the views that show it. */
+  telemetryStore?: TelemetryStore;
   sessionRunning?: boolean;
   sessionActionBusy?: boolean;
   testSignalPlaybackReady?: boolean;
@@ -100,7 +103,34 @@ type SessionFlowCanvasProps = {
 // every render is a documented React Flow foot-gun that forces internal
 // node type remounts.
 function FlowNodeRenderer({ data }: NodeProps) {
+  // A test that sets this counter proves meter ticks leave the cards alone
+  // (e2e/canvas-live-performance.pw.ts); otherwise nothing is counted.
+  const counts = globalThis as { __audiorouterCardRenders?: number };
+  if (typeof counts.__audiorouterCardRenders === "number") counts.__audiorouterCardRenders += 1;
   return <>{(data as { label?: ReactNode }).label}</>;
+}
+
+/**
+ * Live meter values for the canvas. Meter ticks reach only the views that
+ * read this context (node visuals, connection lights, Duck trigger links),
+ * so the canvas, its node cards and React Flow's node store are rebuilt only
+ * on real changes, not 20 times a second while audio plays.
+ */
+type LiveCanvas = { diagnostics: DiagnosticsSnapshot | null; fresh: boolean };
+const LiveCanvasContext = createContext<LiveCanvas>({ diagnostics: null, fresh: false });
+
+function LiveCanvasProvider({ store, diagnostics, children }: { store?: TelemetryStore; diagnostics: DiagnosticsSnapshot | null; children: ReactNode }) {
+  const live = useLiveDiagnostics(store, diagnostics);
+  // Telemetry is fresh for 160 ms after each update; then connections show stale.
+  const [fresh, setFresh] = useState(false);
+  useEffect(() => {
+    if (!live) { setFresh(false); return; }
+    setFresh(true);
+    const timer = window.setTimeout(() => setFresh(false), 160);
+    return () => window.clearTimeout(timer);
+  }, [live]);
+  const value = useMemo<LiveCanvas>(() => ({ diagnostics: live, fresh }), [live, fresh]);
+  return <LiveCanvasContext.Provider value={value}>{children}</LiveCanvasContext.Provider>;
 }
 const NODE_TYPES = { flowNode: FlowNodeRenderer, visualGroup: CanvasGroupRenderer };
 
@@ -301,12 +331,18 @@ function positionFor(index: number) {
   };
 }
 
-function AudioEdgeActions({ id, source, target, sourceX, sourceY, targetX, targetY, data, style, selected }: EdgeProps) {
+function AudioEdgeActions({ id, source, target, sourceX, sourceY, targetX, targetY, data, style: edgeStyle, selected }: EdgeProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
   const sourceNode = useInternalNode(source);
   const targetNode = useInternalNode(target);
-  const edgeData = data as { enabled?: boolean; active?: boolean; levelDb?: number | null; signalState?: string; signalLabel?: string; sourceSide?: EdgeSide; targetSide?: EdgeSide; onSetSide?: (edgeId: string, endpoint: "source" | "target", side: EdgeSide) => void; onToggle?: SessionFlowCanvasProps["onToggleConnection"]; onRemove?: SessionFlowCanvasProps["onRemoveConnection"]; onInsert?: SessionFlowCanvasProps["onInsertProcessor"]; onOpenPluginPicker?: SessionFlowCanvasProps["onOpenPluginPicker"]; canEdit?: boolean } | undefined;
+  const rawData = data as { edge: Session["edges"][number]; session: Session; running: boolean; enabled?: boolean; sourceSide?: EdgeSide; targetSide?: EdgeSide; onSetSide?: (edgeId: string, endpoint: "source" | "target", side: EdgeSide) => void; onToggle?: SessionFlowCanvasProps["onToggleConnection"]; onRemove?: SessionFlowCanvasProps["onRemoveConnection"]; onInsert?: SessionFlowCanvasProps["onInsertProcessor"]; onOpenPluginPicker?: SessionFlowCanvasProps["onOpenPluginPicker"]; canEdit?: boolean } | undefined;
+  // The live signal comes from the canvas context, so meter ticks redraw only
+  // the connection lights, not the canvas.
+  const live = useContext(LiveCanvasContext);
+  const signal = rawData ? edgeSignalForConnection(rawData.edge, rawData.session, live.diagnostics, rawData.running, live.fresh) : null;
+  const edgeData = rawData && signal ? { ...rawData, active: signal.active, levelDb: signal.levelDb, signalState: signal.state, signalLabel: signal.label } : undefined;
+  const style = signal?.active ? edgeStyle : { ...edgeStyle, strokeWidth: 2.5 };
   const sourceSide = edgeData?.sourceSide ?? "right";
   const targetSide = edgeData?.targetSide ?? "left";
   const sourcePoint = edgePoint(sourceNode, sourceSide, sourceX, sourceY);
@@ -316,7 +352,7 @@ function AudioEdgeActions({ id, source, target, sourceX, sourceY, targetX, targe
   // Track under every connection; active ones add glow, level colour and
   // travelling comets around the interactive core path.
   return <>
-    <g className="flow-line" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+    <g className={`flow-line ${stateClass}`} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
       <path d={path} className="flow-track" />
       {edgeData?.active
         ? <FlowActiveLayers id={id} path={path} source={sourcePoint} target={targetPoint} targetSide={targetSide} levelDb={edgeData.levelDb ?? null} core={(coreStyle) => <BaseEdge path={path} style={{ ...style, ...coreStyle }} className={stateClass} />} />
@@ -350,7 +386,9 @@ function DuckTriggerEdge({ id, source, target, sourceX, sourceY, targetX, target
     : targetTop.y > sourceBottom.y + 24
       ? [sourceBottom, targetTop, "top" as const, `M${sourceBottom.x},${sourceBottom.y} C${sourceBottom.x},${(sourceBottom.y + targetTop.y) / 2} ${targetTop.x},${(sourceBottom.y + targetTop.y) / 2} ${targetTop.x},${targetTop.y}`, (sourceBottom.y + targetTop.y) / 2 - 6]
       : (() => { const dip = Math.max(sourceBottom.y, targetBottom.y) + 56; return [sourceBottom, targetBottom, "bottom" as const, `M${sourceBottom.x},${sourceBottom.y} C${sourceBottom.x},${dip} ${targetBottom.x},${dip} ${targetBottom.x},${targetBottom.y}`, dip - 4] as const; })();
-  const ducking = (data as { ducking?: boolean } | undefined)?.ducking === true;
+  const trigger = data as { duck: Node; running: boolean } | undefined;
+  const live = useContext(LiveCanvasContext);
+  const ducking = Boolean(trigger?.running && (nodeTelemetryFor(trigger.duck, live.diagnostics)?.processor?.gateOpen.some(Boolean) ?? false));
   return <g className={`duck-trigger-edge${ducking ? " is-ducking" : ""}`} aria-label={`Trigger for ${id.replace(/^trigger-/, "")}`}>
     <path d={path} className="duck-trigger-path" />
     <FlowArrow at={to} side={entry} className="duck-trigger-arrow" />
@@ -849,6 +887,19 @@ export function AudioFileNodeControls({ node, state = "stopped", onTransport }: 
   return <div className="audio-file-node"><span className="audio-file-node-name" title={String(node.parameters.fileName ?? "")}>{String(node.parameters.fileName ?? "Choose audio in properties")}</span><div className="audio-file-node-controls"><button type="button" disabled={!node.enabled || !node.parameters.mediaId || state === "playing"} aria-label={`Play ${node.name}`} onClick={(event) => { event.stopPropagation(); onTransport?.(node.id, "play"); }}>Play</button><button type="button" disabled={!node.enabled || !node.parameters.mediaId || state === "stopped"} aria-label={`Stop ${node.name}`} onClick={(event) => { event.stopPropagation(); onTransport?.(node.id, "stop"); }}>Stop</button></div><span className="audio-file-node-state" role="status">{state}</span></div>;
 }
 
+/** A node's visual, fed with that node's live telemetry from the canvas. */
+function LiveNodeVisual(props: Omit<Parameters<typeof NodeVisual>[0], "telemetry">) {
+  const live = useContext(LiveCanvasContext);
+  return <MemoNodeVisual {...props} telemetry={nodeTelemetryFor(props.node, live.diagnostics)} />;
+}
+// Each tick delivers new telemetry objects; redraw only when this node's values change.
+const MemoNodeVisual = memo(NodeVisual, (before, after) => {
+  for (const key of new Set([...Object.keys(before), ...Object.keys(after)]) as Set<keyof typeof before>) {
+    if (key === "telemetry" ? JSON.stringify(before.telemetry) !== JSON.stringify(after.telemetry) : !Object.is(before[key], after[key])) return false;
+  }
+  return true;
+});
+
 function NodeVisual({ node, telemetry, applicationCaptureState, onSetNodeParameter, onToggleRecording, recordingBusyNodeId, recorderStatus, mixerInputCount, mixerInputList, duckTriggerName, switchSourceNames, routed, sessionRunning, sessionActionBusy, testSignalPlaybackReady, testSignalEndpointPrepared, onStartTestSignal, onStopTestSignal, onAudioSourceTransport, audioSourceStates, onTimeShiftTransport, timeShiftStatuses }: { node: Node; telemetry: ReturnType<typeof nodeTelemetryFor>; applicationCaptureState: DiagnosticsSnapshot["applicationCaptureStates"][number] | null; onSetNodeParameter?: SessionFlowCanvasProps["onSetNodeParameter"]; recorderStatus?: RecorderStatus | null; mixerInputCount?: number; mixerInputList?: ReturnType<typeof mixerInputs>; duckTriggerName?: string | null; onToggleRecording?: (nodeId: string, record: boolean) => void; recordingBusyNodeId?: string | null; switchSourceNames?: { a: string | null; b: string | null }; routed: boolean; sessionRunning: boolean; sessionActionBusy: boolean; testSignalPlaybackReady: boolean; testSignalEndpointPrepared: boolean; onStartTestSignal?: () => void; onStopTestSignal?: () => void; onAudioSourceTransport?: SessionFlowCanvasProps["onAudioSourceTransport"]; audioSourceStates?: SessionFlowCanvasProps["audioSourceStates"]; onTimeShiftTransport?: SessionFlowCanvasProps["onTimeShiftTransport"]; timeShiftStatuses?: SessionFlowCanvasProps["timeShiftStatuses"] }) {
   if (node.kind === "parametricEq" || node.kind === "graphicEq") return <MiniEq node={node} onSetNodeParameter={onSetNodeParameter} />;
   if (node.kind === "networkSend" || node.kind === "networkReceive") {
@@ -909,7 +960,7 @@ function NodeVisual({ node, telemetry, applicationCaptureState, onSetNodeParamet
   return <div className="node-activity" aria-label={node.enabled && !node.bypass ? "Processor ready" : "Processor inactive"}><span className="activity-dot" />{node.bypass ? "Bypassed" : node.enabled ? "Ready" : "Disabled"}</div>;
 }
 
-export function SessionFlowCanvas({ onToggleRecording, recordingBusyNodeId = null, groups = [], selectedGroupId = "", onSelectGroup, onChangeGroup, onRemoveGroup, session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onToggleConnection, onInsertProcessor, onRemoveNode, onAddLibraryNode, onAddVirtualBusNode, diagnostics, sessionRunning, sessionActionBusy = false, testSignalPlaybackReady = false, testSignalEndpointPrepared = false, onStartTestSignal, onStopTestSignal, onAudioSourceTransport, audioSourceStates, onTimeShiftTransport, timeShiftStatuses, recorderStatuses = [], onSetNodeParameter, onOpenPluginPicker, onOpenApplicationPicker, onConnectionRejected, canEdit = true }: SessionFlowCanvasProps) {
+export function SessionFlowCanvas({ telemetryStore, onToggleRecording, recordingBusyNodeId = null, groups = [], selectedGroupId = "", onSelectGroup, onChangeGroup, onRemoveGroup, session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onToggleConnection, onInsertProcessor, onRemoveNode, onAddLibraryNode, onAddVirtualBusNode, diagnostics, sessionRunning, sessionActionBusy = false, testSignalPlaybackReady = false, testSignalEndpointPrepared = false, onStartTestSignal, onStopTestSignal, onAudioSourceTransport, audioSourceStates, onTimeShiftTransport, timeShiftStatuses, recorderStatuses = [], onSetNodeParameter, onOpenPluginPicker, onOpenApplicationPicker, onConnectionRejected, canEdit = true }: SessionFlowCanvasProps) {
   const graphRunning = sessionRunning ?? diagnostics?.schedulerTelemetry?.activeGeneration != null;
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
   const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey));
@@ -918,13 +969,6 @@ export function SessionFlowCanvas({ onToggleRecording, recordingBusyNodeId = nul
   // updates. Omitting them on every 20 Hz render resets handle bounds and can
   // leave every node hidden until a new ResizeObserver notification arrives.
   const [measured, setMeasured] = useState<Record<string, { width: number; height: number }>>({});
-  const [telemetryFresh, setTelemetryFresh] = useState(false);
-  useEffect(() => {
-    if (!diagnostics) { setTelemetryFresh(false); return; }
-    setTelemetryFresh(true);
-    const timer = window.setTimeout(() => setTelemetryFresh(false), 160);
-    return () => window.clearTimeout(timer);
-  }, [diagnostics]);
   const edgeLayoutKey = `${layoutKey}.edges`;
   const [edgeSides, setEdgeSides] = useState<Record<string, { source: EdgeSide; target: EdgeSide }>>(() => {
     if (typeof window === "undefined") return {};
@@ -1101,7 +1145,6 @@ export function SessionFlowCanvas({ onToggleRecording, recordingBusyNodeId = nul
     ? { ...appendPreviewNode({ ...session, nodes: [], edges: [] }, dropPreview.kind).nodes[0], id: DROP_PREVIEW_ID }
     : null;
   const nodes: FlowNode[] = (previewNode ? [...session.nodes, previewNode] : session.nodes).map((node, index) => {
-    const telemetry = nodeTelemetryFor(node, diagnostics);
     const applicationCaptureState = diagnostics?.applicationCaptureStates.find((item) => item.nodeId === node.id) ?? null;
     const headerState = nodeHeaderState(node, applicationCaptureState);
     const recorderStatus = node.kind === "recorder" ? recorderStatuses.find((status) => status.nodeId === node.id) ?? null : null;
@@ -1118,7 +1161,7 @@ export function SessionFlowCanvas({ onToggleRecording, recordingBusyNodeId = nul
           {node.ports.filter((port) => port.direction === "input").map((port) => { const offset = portOffset(node, port); return EDGE_SIDES.map((side) => { const handleId = edgeHandleId(port.name, side); return <Handle key={`input-${port.name}-${side}`} type="target" id={handleId} position={edgeSidePosition(side)} style={side === "left" || side === "right" ? { top: offset } : { left: offset }} aria-label={side === "left" ? `${node.name} ${port.name} input` : `${node.name} ${port.name} input ${side} connector`} data-debug-side={side} data-debug-direction="target" data-debug-handle-id={handleId} onMouseDown={(event) => { targetHandleRef.current = { nodeId: node.id, handleId, side }; logConnectionDebug("handle-mousedown", { nodeId: node.id, nodeName: node.name, direction: "target", port: port.name, side, handleId, clientX: event.clientX, clientY: event.clientY, button: event.button }); }} onPointerDown={(event) => logConnectionDebug("handle-pointer-down", { nodeId: node.id, nodeName: node.name, direction: "target", port: port.name, side, handleId, clientX: event.clientX, clientY: event.clientY, button: event.button })} />; }); })}
           <div className="flow-node-kicker"><span className={`node-kind-family node-kind-family-${nodeKindFamily(node.kind)}`}>{NODE_KIND_FAMILY_LABELS[nodeKindFamily(node.kind)]}</span><span className="node-kind">{humanizeNodeKind(node)}</span><span className={`node-state is-${headerState.tone}`} title={applicationCaptureState?.detail}>{headerState.label}</span></div>
           <div className="flow-node-title"><strong>{node.name}</strong>{canEdit && <button type="button" className="flow-node-delete" aria-label={`Delete ${node.name}`} title={`Delete ${node.name}`} onClick={(event) => { event.stopPropagation(); if (onRemoveNode) onRemoveNode(node.id); else globalThis.dispatchEvent(new CustomEvent("audiorouter:remove-node", { detail: { nodeId: node.id } })); }}>×</button>}</div>
-          <NodeVisual node={node} telemetry={telemetry} applicationCaptureState={applicationCaptureState} onSetNodeParameter={onSetNodeParameter} onToggleRecording={canEdit ? onToggleRecording : undefined} recordingBusyNodeId={recordingBusyNodeId} recorderStatus={recorderStatus} mixerInputCount={mixerInputCount} mixerInputList={node.kind === "mixer" ? mixerInputs(session, node.id) : undefined} switchSourceNames={node.kind === "inputSwitch" ? inputSwitchSourceNames(session, node.id) : undefined} duckTriggerName={node.kind === "duck" ? session.nodes.find((candidate) => candidate.id === node.parameters.keyNodeId)?.name ?? null : undefined} routed={node.kind === "testSignal" && testSignalHasPhysicalOutputPath(session, node.id)} sessionRunning={Boolean(sessionRunning)} sessionActionBusy={sessionActionBusy} testSignalPlaybackReady={testSignalPlaybackReady} testSignalEndpointPrepared={testSignalEndpointPrepared} onStartTestSignal={canEdit ? onStartTestSignal : undefined} onStopTestSignal={canEdit ? onStopTestSignal : undefined} onAudioSourceTransport={onAudioSourceTransport} audioSourceStates={audioSourceStates} onTimeShiftTransport={onTimeShiftTransport} timeShiftStatuses={timeShiftStatuses} />
+          <LiveNodeVisual node={node} applicationCaptureState={applicationCaptureState} onSetNodeParameter={onSetNodeParameter} onToggleRecording={canEdit ? onToggleRecording : undefined} recordingBusyNodeId={recordingBusyNodeId} recorderStatus={recorderStatus} mixerInputCount={mixerInputCount} mixerInputList={node.kind === "mixer" ? mixerInputs(session, node.id) : undefined} switchSourceNames={node.kind === "inputSwitch" ? inputSwitchSourceNames(session, node.id) : undefined} duckTriggerName={node.kind === "duck" ? session.nodes.find((candidate) => candidate.id === node.parameters.keyNodeId)?.name ?? null : undefined} routed={node.kind === "testSignal" && testSignalHasPhysicalOutputPath(session, node.id)} sessionRunning={Boolean(sessionRunning)} sessionActionBusy={sessionActionBusy} testSignalPlaybackReady={testSignalPlaybackReady} testSignalEndpointPrepared={testSignalEndpointPrepared} onStartTestSignal={canEdit ? onStartTestSignal : undefined} onStopTestSignal={canEdit ? onStopTestSignal : undefined} onAudioSourceTransport={onAudioSourceTransport} audioSourceStates={audioSourceStates} onTimeShiftTransport={onTimeShiftTransport} timeShiftStatuses={timeShiftStatuses} />
           <small className="node-port-count">{node.ports.length} port{node.ports.length === 1 ? "" : "s"} · {node.enabled ? "enabled" : "disabled"}</small>
           <span className="flow-port-list">{nodePortLabels(node).map((port) => <small key={port}>{port}</small>)}</span>
           {node.ports.filter((port) => port.direction === "output").map((port) => { const offset = portOffset(node, port); return EDGE_SIDES.map((side) => { const handleId = edgeHandleId(port.name, side); return <Handle key={`output-${port.name}-${side}`} type="source" id={handleId} position={edgeSidePosition(side)} style={side === "left" || side === "right" ? { top: offset } : { left: offset }} aria-label={side === "right" ? `${node.name} ${port.name} output` : `${node.name} ${port.name} output ${side} connector`} data-debug-side={side} data-debug-direction="source" data-debug-handle-id={handleId} onMouseDown={(event) => { sourceHandleRef.current = { nodeId: node.id, handleId, side }; logConnectionDebug("handle-mousedown", { nodeId: node.id, nodeName: node.name, direction: "source", port: port.name, side, handleId, clientX: event.clientX, clientY: event.clientY, button: event.button }); }} onPointerDown={(event) => logConnectionDebug("handle-pointer-down", { nodeId: node.id, nodeName: node.name, direction: "source", port: port.name, side, handleId, clientX: event.clientX, clientY: event.clientY, button: event.button })} />; }); })}
@@ -1142,32 +1185,27 @@ export function SessionFlowCanvas({ onToggleRecording, recordingBusyNodeId = nul
     });
   });
 
-  const edges: FlowEdge[] = session.edges.map((edge) => {
-    const signal = edgeSignalForConnection(edge, session, diagnostics, graphRunning, telemetryFresh);
-    const active = signal.active;
-    return ({
+  // Connection signals and Duck trigger states are read live inside the edge
+  // components (LiveCanvasContext); edge data changes only with the route.
+  const edges: FlowEdge[] = session.edges.map((edge) => ({
     id: edge.id,
     source: edge.sourceNode,
     target: edge.destinationNode,
     type: "audioActions",
-    data: { enabled: edge.enabled, active, levelDb: signal.levelDb, signalState: signal.state, signalLabel: signal.label, sourceSide: edgeSides[edge.id]?.source, targetSide: edgeSides[edge.id]?.target, onSetSide: setEdgeSide, onToggle: onToggleConnection, onRemove: onRemoveConnection, onInsert: onInsertProcessor, onOpenPluginPicker, canEdit },
+    data: { edge, session, running: graphRunning, enabled: edge.enabled, sourceSide: edgeSides[edge.id]?.source, targetSide: edgeSides[edge.id]?.target, onSetSide: setEdgeSide, onToggle: onToggleConnection, onRemove: onRemoveConnection, onInsert: onInsertProcessor, onOpenPluginPicker, canEdit },
     deletable: canEdit && onRemoveConnection !== undefined,
     selectable: true,
-    className: `flow-edge-${signal.state}${active ? " flow-edge-active" : ""}`,
-    style: active ? undefined : { strokeWidth: 2.5 },
-    });
-  });
+  }));
 
   // Side-chain links: drawn, but not selectable, deletable or connectable.
   for (const duck of session.nodes) {
     const key = duck.kind === "duck" ? duck.parameters.keyNodeId : undefined;
     if (typeof key !== "string" || !key || key === duck.id || !session.nodes.some((node) => node.id === key)) continue;
-    const ducking = graphRunning && (nodeTelemetryFor(duck, diagnostics)?.processor?.gateOpen.some(Boolean) ?? false);
-    edges.push({ id: `trigger-${duck.id}`, source: key, target: duck.id, type: "duckTrigger", data: { ducking }, selectable: false, deletable: false, focusable: false, reconnectable: false, className: "duck-trigger" });
+    edges.push({ id: `trigger-${duck.id}`, source: key, target: duck.id, type: "duckTrigger", data: { duck, running: graphRunning }, selectable: false, deletable: false, focusable: false, reconnectable: false, className: "duck-trigger" });
   }
 
   return (
-    <>
+    <LiveCanvasProvider store={telemetryStore} diagnostics={diagnostics ?? null}>
     <div className="canvas-layout-actions" aria-label="Canvas layout actions"><span className="muted" role="status" aria-live="polite">{selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} selected</span><button type="button" className="secondary" title="Inputs on the left, outputs on the right, tools in between, with room around every connection" onClick={tidyLayout}>Arrange</button>{arrangeUndo && <button type="button" className="secondary" onClick={undoArrange}>Undo arrange</button>}</div>
     <SignalFlowLegend />
     <div className="session-flow-canvas" aria-label="Signal-flow graph" data-connection-mode={connectionHandleMode} onDragOver={(event) => {
@@ -1264,6 +1302,6 @@ export function SessionFlowCanvas({ onToggleRecording, recordingBusyNodeId = nul
         <Controls showInteractive={false} />
       </ReactFlow>
     </div>
-    </>
+    </LiveCanvasProvider>
   );
 }

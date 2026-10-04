@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { DiagnosticsSnapshot } from "@audiorouter/contracts";
 
 /**
@@ -44,17 +44,28 @@ export function differsOnlyInTelemetry(previous: DiagnosticsSnapshot | null | un
   return true;
 }
 
+const noStore: TelemetryStore = { get: () => null, set: () => {}, subscribe: () => () => {} };
+
 /**
- * Renders `children` with `diagnostics` carrying the latest live telemetry.
- * The store value applies only to the diagnostics object it was taken
- * against, so any newer App snapshot (a state change, or Stop) wins at once.
+ * `diagnostics` carrying the latest live telemetry. The store value applies
+ * only to the diagnostics object it was taken against, so any newer App
+ * snapshot (a state change, or Stop) wins at once. Without a store the
+ * diagnostics are returned as they are.
  */
+export function useLiveDiagnostics(store: TelemetryStore | undefined, diagnostics: DiagnosticsSnapshot | null): DiagnosticsSnapshot | null {
+  const source = store ?? noStore;
+  const live = useSyncExternalStore(source.subscribe, source.get, source.get);
+  return useMemo(
+    () => diagnostics && live && live.basis === diagnostics ? { ...diagnostics, nodeTelemetry: live.nodeTelemetry } : diagnostics,
+    [diagnostics, live],
+  );
+}
+
+/** Renders `children` with the latest live diagnostics (see `useLiveDiagnostics`). */
 export function LiveTelemetry({ store, diagnostics, children }: {
   store: TelemetryStore;
   diagnostics: DiagnosticsSnapshot | null;
   children: (diagnostics: DiagnosticsSnapshot | null) => ReactNode;
 }) {
-  const live = useSyncExternalStore(store.subscribe, store.get, store.get);
-  const current = diagnostics && live && live.basis === diagnostics ? { ...diagnostics, nodeTelemetry: live.nodeTelemetry } : diagnostics;
-  return <>{children(current)}</>;
+  return <>{children(useLiveDiagnostics(store, diagnostics))}</>;
 }

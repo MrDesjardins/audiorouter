@@ -132,6 +132,45 @@ Agent work (no hardware or credentials needed):
    query some of them). Rollback: revert the `LiveTelemetry` wrappers and
    the refresh change in `App.tsx`.
 
+6. Done 2026-10-04 (implementation below; results): the canvas element is
+   built once per App render and `LiveCanvasContext` feeds node visuals,
+   connection lights and Duck links. Edge harness (12 nodes, 8 live links,
+   meters changing every tick): card renders over ~40 ticks 0 (was every
+   tick), allocation 312 → 186 MB per 5 s (dev build). Real shell, user's
+   database (23 nodes, 19 meters, playing): 61 MB per 5 s (0.0.9: 149,
+   0.0.8: 237); live JS heap 13.2 MB; a forced GC took the renderer from
+   ~770 MB to 165 MB. The process still climbs because V8 defers full GC
+   while allocation pressure is low and RAM is free: uncollected garbage,
+   not a leak. Tests: `canvas-live-performance.pw.ts` (0 card renders,
+   lights and meters move, Stop clears lights at once, three themes), UI
+   471, Edge 216 (213 + 3 theme cases) / production 27. Possible next step:
+   cap the WebView2 V8 heap (`--js-flags=--max-old-space-size`) so garbage
+   is collected sooner; needs a measured trial.
+   Original plan (in progress until the results above):
+   canvas performance
+   without regressions (UI-17, M05 canvas lessons). Cause: every telemetry
+   tick re-renders `SessionFlowCanvas`, which rebuilds each node's
+   `data.label` JSX (handles, header, ports, `NodeVisual`) and edge data and
+   hands React Flow new `nodes`/`edges` arrays, so every card re-renders and
+   React Flow re-adopts every node.
+   Steps: (1) baseline in the Edge harness with telemetry changing every
+   refresh: allocation per 5 s and card render count; (2) build the canvas
+   element once per App render (not inside the per-tick render prop) and
+   pass the slow diagnostics plus `telemetryStore`; (3) a canvas live
+   provider merges store telemetry (same basis rule as `LiveTelemetry`) and
+   owns the 160 ms freshness flag; only `NodeVisual`, the edge components and
+   the Duck trigger edge read it through context, so the canvas, its node
+   array and React Flow's store change only on real state changes;
+   (4) measured sizes, selection, drag positions and edge sides stay where
+   they are.
+   Validation: new Edge test with changing telemetry asserting meters and
+   edge signal classes update while card renders stay flat, plus an
+   allocation budget; full Edge suite (canvas, drag, measured-size,
+   inspector, connection tests), UI unit tests, three-theme check of a
+   playing canvas; then a CDP measurement in the release shell on the
+   user's database. Rollback: revert the canvas/App commit; 0.0.9 is the
+   released baseline.
+
 Needs the user (attended, hardware or decisions):
 
 4. Attended confirmation in the shell: drag-to-canvas, device picker on the
