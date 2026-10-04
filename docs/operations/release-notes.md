@@ -1,6 +1,6 @@
 # AudioRouter release notes
 
-## Unreleased
+## 0.0.8 — 2026-10-03 (unsigned experimental preview)
 
 - The window title and header show the version. Once a day the app checks
   GitHub's public release list and, when a newer version exists, shows
@@ -19,6 +19,16 @@
 - API tab: **Build a request** generates the exact REST request (JSON, curl or
   PowerShell) for a tool setting, including Mixer input volumes by source name
   and a Duck's trigger, and can send it once to try it.
+- Test and tooling: the intermittent autosave test was a test defect (it
+  clicked a node's inline slider) and is fixed.
+
+Unsigned experimental prerelease; Windows may warn. No data migration or
+device-format change; keep 0.0.7 and a configuration backup for rollback.
+The new-version check reads api.github.com once a day (Setup → New versions
+turns it off). Speaker mode, Room and 44.1/96 kHz conversion pass objective
+and live-device tests but have not been judged by ear yet. Real-match Duck,
+native Quit, combined continuity and full M08 install/hardware/accessibility/
+signing qualification remain open.
 
 ## 0.0.7 — 2026-10-03 (unsigned experimental preview)
 
