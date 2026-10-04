@@ -37,11 +37,18 @@ mod windows_registry {
         Ok(wide(text))
     }
 
+    /// Ours: the bare or quoted path (earlier versions), or the quoted path
+    /// with `--tray` (current). Any other argument is someone else's value.
     fn registration_matches(value: &str, executable: &str) -> bool {
-        let unquoted = value
+        let command = value
+            .strip_suffix(super::TRAY_ARGUMENT)
+            .and_then(|command| command.strip_suffix(' '))
+            .filter(|command| command.starts_with('"'))
+            .unwrap_or(value);
+        let unquoted = command
             .strip_prefix('"')
             .and_then(|candidate| candidate.strip_suffix('"'))
-            .unwrap_or(value);
+            .unwrap_or(command);
         unquoted.eq_ignore_ascii_case(executable)
     }
 
@@ -162,13 +169,15 @@ mod windows_registry {
             {
                 return Err("existing startup registration is owned by another command".into());
             }
-            // `executable` is a live Vec<u16>; its nul terminator is excluded
-            // and the byte view preserves the UTF-16LE representation expected
-            // by REG_SZ. The view is consumed before the Vec can move.
+            // Start in the tray at sign-in: quoted path plus `--tray`.
+            let value = wide(&super::run_value(&executable_text));
+            // `value` is a live Vec<u16>; its nul terminator is excluded and
+            // the byte view preserves the UTF-16LE representation expected by
+            // REG_SZ. The view is consumed before the Vec can move.
             let bytes = unsafe {
                 std::slice::from_raw_parts(
-                    executable.as_ptr().cast::<u8>(),
-                    (executable.len() - 1) * std::mem::size_of::<u16>(),
+                    value.as_ptr().cast::<u8>(),
+                    (value.len() - 1) * std::mem::size_of::<u16>(),
                 )
             };
             unsafe { RegSetValueExW(raw, PCWSTR(name.as_ptr()), Some(0), REG_SZ, Some(bytes)) }
@@ -245,6 +254,15 @@ mod windows_registry {
         }
 
         #[test]
+        fn ownership_accepts_the_tray_start_value_and_older_ones() {
+            let exe = r#"C:\Program Files\AudioRouter\shell.exe"#;
+            assert!(registration_matches(&super::super::run_value(exe), exe));
+            assert!(registration_matches(exe, exe), "0.0.9 and earlier wrote the bare path");
+            assert!(!registration_matches(&format!("{exe} --tray"), exe), "--tray needs the quoted path");
+            assert!(!registration_matches(r#""C:\Other\shell.exe" --tray"#, exe));
+        }
+
+        #[test]
         fn opt_in_registry_round_trip_restores_an_unregistered_value() {
             if std::env::var_os("AUDIOROUTER_ALLOW_STARTUP_REGISTRY_TEST").is_none() {
                 return;
@@ -286,6 +304,15 @@ pub fn is_registered(_executable: &std::path::Path) -> Result<bool, String> {
     Err("sign-in startup registration is only available on Windows".into())
 }
 
+/// Started at sign-in: stay in the tray and build no window (no WebView).
+pub const TRAY_ARGUMENT: &str = "--tray";
+
+/// The Run value: the quoted executable (Windows paths cannot contain `"`)
+/// and the tray argument.
+pub fn run_value(executable: &str) -> String {
+    format!(r#""{executable}" {TRAY_ARGUMENT}"#)
+}
+
 pub fn command_line(executable: &std::path::Path) -> Result<String, String> {
     if !executable.is_absolute() {
         return Err("startup executable must be an absolute path".into());
@@ -293,7 +320,10 @@ pub fn command_line(executable: &std::path::Path) -> Result<String, String> {
     let text = executable
         .to_str()
         .ok_or_else(|| "startup executable path is not valid UTF-8".to_owned())?;
-    Ok(format!(r#""{}""#, text.replace('"', "\\\"")))
+    if text.contains('"') {
+        return Err("startup executable path must not contain quotes".into());
+    }
+    Ok(run_value(text))
 }
 
 #[cfg(test)]
@@ -310,7 +340,7 @@ mod tests {
         };
         assert_eq!(
             command_line(Path::new(path)).unwrap(),
-            format!(r#""{}""#, path)
+            format!(r#""{}" --tray"#, path)
         );
     }
 

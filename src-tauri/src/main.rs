@@ -14,6 +14,8 @@ use tauri::{
 };
 
 mod backend_supervisor;
+mod shell_settings;
+mod tray_playback;
 #[cfg(windows)]
 mod instance_windows;
 mod http_api;
@@ -404,6 +406,108 @@ fn quit_app(app: tauri::AppHandle, state: State<'_, ShellState>) -> Result<(), S
         .error
         .map(|error| error.message)
         .unwrap_or_else(|| "backend finalization failed".into()))
+}
+
+/// Whether the editor page holds route edits that are not saved yet. The
+/// page reports every change; a fresh page starts clean.
+#[derive(Default)]
+struct UiUnsaved(std::sync::atomic::AtomicBool);
+
+#[tauri::command]
+fn set_ui_unsaved(unsaved: bool, flag: State<'_, UiUnsaved>) {
+    flag.0.store(unsaved, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// The page's initialization script, kept to recreate the editor window.
+struct MainWindowScript(String);
+
+/// One backend call through the shell's own pipe connection, for the tray
+/// and autoplay (no window needed): the `result`, or the error message.
+fn backend_call(pipe_name: &str) -> impl FnMut(&str, serde_json::Value) -> Result<serde_json::Value, String> + '_ {
+    move |method, params| {
+        let request = JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(serde_json::json!(format!("tray-{method}"))), method: method.into(), params: Some(params) };
+        let response = forward_rpc_request(&request, pipe_name);
+        log_shell_rpc(&request, &response);
+        let response = response?;
+        match (response.result, response.error) {
+            (_, Some(error)) => Err(error.message),
+            (Some(result), None) => Ok(result),
+            (None, None) => Err("empty backend response".into()),
+        }
+    }
+}
+
+/// Whether the selected session plays when AudioRouter starts (Advanced).
+#[tauri::command]
+fn autoplay_get(state: State<'_, ShellState>) -> bool {
+    shell_settings::load(&shell_settings::path_beside(&state.database_path)).auto_play
+}
+
+#[tauri::command]
+fn autoplay_set(enabled: bool, state: State<'_, ShellState>) -> Result<bool, String> {
+    let path = shell_settings::path_beside(&state.database_path);
+    let mut settings = shell_settings::load(&path);
+    settings.auto_play = enabled;
+    shell_settings::save(&path, &settings)?;
+    Ok(enabled)
+}
+
+/// `--tray`: started at sign-in; stay in the tray without building a window.
+fn starts_in_tray(arguments: impl IntoIterator<Item = String>) -> bool {
+    arguments.into_iter().skip(1).any(|argument| argument == startup::TRAY_ARGUMENT)
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum CloseAction {
+    Hide,
+    Release,
+}
+
+/// Closing the editor to the tray frees the WebView (its page, GPU and
+/// browser processes, several hundred MB) unless the page holds unsaved route
+/// edits, which only a hidden page keeps. Audio is owned by this process's
+/// backend, so it keeps playing either way; tray Open builds a fresh page.
+fn close_action(unsaved: bool) -> CloseAction {
+    if unsaved {
+        CloseAction::Hide
+    } else {
+        CloseAction::Release
+    }
+}
+
+/// Only an explicit exit (Quit, which passes a code after finalizing) ends
+/// the app; the last window closing leaves the backend running in the tray.
+fn allow_exit(code: Option<i32>) -> bool {
+    code.is_some()
+}
+
+/// Show the editor window, building a new one when it was released.
+fn open_main_window(app: &tauri::AppHandle) -> tauri::Result<()> {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+        return Ok(());
+    }
+    let script = app.state::<MainWindowScript>().0.clone();
+    WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+        .title(format!("AudioRouter {}", env!("CARGO_PKG_VERSION")))
+        .inner_size(1280.0, 800.0)
+        .resizable(true)
+        // Keep the editor visible on first launch. The tray's Open
+        // action can still hide/show this same window; relying on a
+        // framework default here made packaged-shell diagnostics
+        // ambiguous when no static window entry existed in the
+        // configuration.
+        .visible(true)
+        // Tauri's native drag-drop handler swallows HTML5 drag events
+        // in WebView2, so dragging a tool onto the canvas showed no
+        // preview and dropped nothing. The UI has no OS file drops.
+        .disable_drag_drop_handler()
+        .additional_browser_args(WEBVIEW_BROWSER_ARGS)
+        .initialization_script(script)
+        .build()?;
+    Ok(())
 }
 
 /// Open a playing plugin node's own editor in a native window owned by this
@@ -1190,9 +1294,13 @@ fn main() {
     tauri::Builder::default()
         .manage(state)
         .manage(HttpApiState::default())
+        .manage(UiUnsaved::default())
         .invoke_handler(tauri::generate_handler![
             rpc_request,
             quit_app,
+            set_ui_unsaved,
+            autoplay_get,
+            autoplay_set,
             http_api_control,
             open_release_page,
             open_plugin_editor,
@@ -1254,6 +1362,8 @@ fn main() {
             }
             let open = MenuItem::with_id(app, "open", "Open AudioRouter", true, None::<&str>)?;
             let close = MenuItem::with_id(app, "close", "Close window", true, None::<&str>)?;
+            let play = MenuItem::with_id(app, "play", "Play", true, None::<&str>)?;
+            let stop = MenuItem::with_id(app, "stop", "Stop audio", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit and stop audio", true, None::<&str>)?;
             let privacy =
                 MenuItem::with_id(app, "privacy", "Toggle privacy mute", true, None::<&str>)?;
@@ -1286,6 +1396,8 @@ fn main() {
                 &[
                     &open,
                     &close,
+                    &play,
+                    &stop,
                     &quit,
                     &privacy,
                     &refresh_status,
@@ -1319,17 +1431,34 @@ fn main() {
                 .menu(&menu)
                 .tooltip("AudioRouter")
                 .on_menu_event(move |app, event| {
-                    let Some(window) = app.get_webview_window("main") else {
-                        return;
-                    };
+                    // The editor window may have been released (closed to
+                    // the tray); every action except Close works without it.
                     match event.id().as_ref() {
                         "open" => {
-                            let _ = window.show();
-                            let _ = window.unminimize();
-                            let _ = window.set_focus();
+                            if let Err(error) = open_main_window(app) {
+                                eprintln!("AudioRouter window could not open: {error}");
+                            }
                         }
                         "close" => {
-                            let _ = window.hide();
+                            // Same path as the window's own close button.
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.close();
+                            }
+                        }
+                        // Play/stop the selected session without the window.
+                        "play" | "stop" => {
+                            let mut call = backend_call(&pipe_name);
+                            let outcome = if event.id().as_ref() == "play" {
+                                tray_playback::play_saved_session(&mut call)
+                            } else {
+                                tray_playback::stop_playing(&mut call)
+                            };
+                            match outcome {
+                                Ok(_) => refresh_tray_status(&status_for_handler, &recordings_for_handler, &pipe_name),
+                                Err(reason) => {
+                                    let _ = status_for_handler.set_text(reason);
+                                }
+                            }
                         }
                         "quit" => {
                             let request = JsonRpcRequest {
@@ -1420,36 +1549,55 @@ fn main() {
                 })
                 .build(app)?;
             refresh_tray_status(&status, &recordings, &tray_pipe_name);
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-                .title(format!("AudioRouter {}", env!("CARGO_PKG_VERSION")))
-                .inner_size(1280.0, 800.0)
-                .resizable(true)
-                // Keep the editor visible on first launch. The tray's Open
-                // action can still hide/show this same window; relying on a
-                // framework default here made packaged-shell diagnostics
-                // ambiguous when no static window entry existed in the
-                // configuration.
-                .visible(true)
-                // Tauri's native drag-drop handler swallows HTML5 drag events
-                // in WebView2, so dragging a tool onto the canvas showed no
-                // preview and dropped nothing. The UI has no OS file drops.
-                .disable_drag_drop_handler()
-                .additional_browser_args(WEBVIEW_BROWSER_ARGS)
-                .initialization_script(session_script.clone())
-                .build()?;
+            app.manage(MainWindowScript(session_script.clone()));
+            // Started at sign-in (`--tray`): no window, so no WebView, until
+            // the user opens it from the tray.
+            if !starts_in_tray(std::env::args()) {
+                open_main_window(app.handle())?;
+            }
+            // Autoplay (Advanced): play the selected session once the
+            // backend answers, with or without the window.
+            let database_path = app.state::<ShellState>().database_path.clone();
+            if shell_settings::load(&shell_settings::path_beside(&database_path)).auto_play {
+                let (status, recordings, pipe) = (status.clone(), recordings.clone(), tray_pipe_name.clone());
+                std::thread::spawn(move || {
+                    let outcome = tray_playback::autoplay(&mut backend_call(&pipe), 40, std::time::Duration::from_millis(500));
+                    match outcome {
+                        Ok(_) => refresh_tray_status(&status, &recordings, &pipe),
+                        Err(reason) => {
+                            let _ = status.set_text(reason);
+                        }
+                    }
+                });
+            }
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                // Closing the editor must not tear down an independently owned
-                // backend/audio process. Tray Quit uses an explicit
-                // stop/finalize path before allowing application exit.
-                api.prevent_close();
-                let _ = window.hide();
+        .on_window_event(|window, event| match event {
+            // Closing the editor never tears down the backend or audio; Quit
+            // uses an explicit stop/finalize path. A page with unsaved edits
+            // is only hidden; otherwise the WebView is released.
+            tauri::WindowEvent::CloseRequested { api, .. } => {
+                let unsaved = window.state::<UiUnsaved>().0.load(std::sync::atomic::Ordering::Relaxed);
+                if close_action(unsaved) == CloseAction::Hide {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
             }
+            // The next page starts clean and reports its own edits.
+            tauri::WindowEvent::Destroyed => {
+                window.state::<UiUnsaved>().0.store(false, std::sync::atomic::Ordering::Relaxed);
+            }
+            _ => {}
         })
-        .run(tauri::generate_context!())
-        .expect("error while running AudioRouter shell");
+        .build(tauri::generate_context!())
+        .expect("error while building AudioRouter shell")
+        .run(|_app, event| {
+            if let tauri::RunEvent::ExitRequested { code, api, .. } = event {
+                if !allow_exit(code) {
+                    api.prevent_exit();
+                }
+            }
+        });
 }
 
 #[cfg(test)]
@@ -1465,6 +1613,28 @@ mod tests {
         for bad in ["0.0.9", "v0.0", "v0.0.9.1", "v0.0.9-beta", "v0.0.9/../../evil", "v0.0.x", "v.0.9", "v0.0.1234567", "https://evil.example/v1.2.3", ""] {
             assert_eq!(release_page_url(bad), None, "{bad}");
         }
+    }
+
+    /// Only the sign-in registration's own argument starts without a window;
+    /// the program name itself never counts.
+    #[test]
+    fn only_the_tray_argument_starts_without_a_window() {
+        let args = |list: &[&str]| list.iter().map(|item| (*item).to_owned()).collect::<Vec<_>>();
+        assert!(starts_in_tray(args(&["shell.exe", "--tray"])));
+        assert!(!starts_in_tray(args(&["shell.exe"])));
+        assert!(!starts_in_tray(args(&["--tray"])), "argv[0] is the program");
+        assert!(!starts_in_tray(args(&["shell.exe", "--tray=no", "--traY"])));
+    }
+
+    /// Closing to the tray frees the WebView only when nothing would be lost,
+    /// and only an explicit Quit (with a code) may end the app.
+    #[test]
+    fn closing_the_editor_frees_the_webview_unless_edits_are_unsaved() {
+        assert_eq!(close_action(false), CloseAction::Release);
+        assert_eq!(close_action(true), CloseAction::Hide);
+        assert!(!allow_exit(None), "the last window closing keeps the backend in the tray");
+        assert!(allow_exit(Some(0)), "Quit exits after finalizing");
+        assert!(!UiUnsaved::default().0.load(std::sync::atomic::Ordering::Relaxed), "a fresh page starts clean");
     }
 
     /// Setting WebView2 arguments replaces wry's defaults, so they must be

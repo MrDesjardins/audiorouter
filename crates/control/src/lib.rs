@@ -10478,7 +10478,12 @@ impl ControlPlane {
         // read and validated successfully; failed startup must not mutate the
         // durable database while reporting an initialization error.
         let backend_epoch = storage.claim_backend_epoch()?;
-        let active_session_id = store.sessions_after(None, 1).first().map(|session| session.id.clone());
+        // The last selected session survives a restart (tray Play and
+        // autoplay at sign-in play it); otherwise the first session.
+        let active_session_id = storage
+            .load_active_session_id()?
+            .filter(|id| store.session(id).is_some())
+            .or_else(|| store.sessions_after(None, 1).first().map(|session| session.id.clone()));
         let mut plane = Self {
             store,
             active_session_id,
@@ -15880,6 +15885,9 @@ impl ControlPlane {
             .session(&session_id)
             .ok_or_else(|| ControlError::from(audiorouter_domain::StoreError::SessionNotFound))?;
         if self.active_session_id.as_ref() != Some(&session_id) {
+            if let Some(storage) = self.storage.as_ref() {
+                storage.save_active_session_id(&session_id).map_err(storage_error)?;
+            }
             self.active_session_id = Some(session_id.clone());
             self.events.append(session.revision, None, "session.selectionChanged", None);
         }

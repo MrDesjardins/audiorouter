@@ -1355,5 +1355,6 @@ input[type="color"] { width: 100%; }
 .theme-high-contrast .update-link { color: #ffff00; }
 .updates-panel { display: grid; gap: .5rem; }
 .updates-panel h3 { margin: 0; }
-.updates-toggle { display: flex; align-items: center; gap: .5rem; color: var(--text-strong); font-size: .85rem; }
+.updates-toggle, .autoplay-toggle { display: flex; align-items: center; gap: .5rem; color: var(--text-strong); font-size: .85rem; }
+.startup-autoplay .autoplay-message { margin-top: .45rem; color: var(--text-strong); }
 .updates-panel > button { justify-self: start; }

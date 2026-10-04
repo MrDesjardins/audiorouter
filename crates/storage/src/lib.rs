@@ -1347,6 +1347,31 @@ impl Storage {
     }
 
     /// Persist the bounded explicit cross-session virtual-bus route registry.
+    /// Remember the session the user last selected, so a restart (for example
+    /// AudioRouter started at sign-in with autoplay) selects the same route.
+    pub fn save_active_session_id(&self, session_id: &EntityId) -> Result<(), StorageError> {
+        self.connection.execute(
+            "INSERT INTO control_settings(key, value) VALUES ('activeSessionId', ?1)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            params![session_id.as_str()],
+        )?;
+        Ok(())
+    }
+
+    /// The last selected session ID, if one was saved. The caller checks it
+    /// still names a stored session.
+    pub fn load_active_session_id(&self) -> Result<Option<EntityId>, StorageError> {
+        let value = self
+            .connection
+            .query_row(
+                "SELECT value FROM control_settings WHERE key = 'activeSessionId'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        Ok(value.filter(|id| !id.is_empty() && id.len() <= audiorouter_domain::MAX_ENTITY_ID_BYTES).map(EntityId::new))
+    }
+
     /// Runtime leases and driver handles are intentionally not serialized.
     pub fn save_virtual_bus_routes(
         &self,
