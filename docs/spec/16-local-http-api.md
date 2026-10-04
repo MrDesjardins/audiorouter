@@ -41,8 +41,10 @@ second backend.
   `idempotencyKey`
   selects an existing session and updates the open UI through the backend event
   stream. Selection does not start audio; `POST /api/v1/sessions/start` remains
-  a separate operation. Selection survives restart through the UI workspace
-  preference and is not persisted as audio-session data.
+  a separate operation. Selection survives restart: the backend remembers it
+  (`control_settings.activeSessionId`, since 0.0.10, so autoplay and tray Play
+  use it) and the UI keeps its workspace preference. It is not part of the
+  session data.
 - **HTTP-08 — Request builder.** The API tab builds one `POST
   /api/v1/nodes/set` request: follow the active session (omit `sessionId`) or
   pin one; choose a saved tool by name (kind and ID when names repeat); choose

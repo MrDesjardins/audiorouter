@@ -249,6 +249,20 @@ Agent work (no hardware or credentials needed):
    blur pause, focus resume, remembered after reload; label fit reviewed).
    UI 481, Edge 222.
 
+13. Done 2026-10-04 (user request, list A): (A1) a second launch of the same
+   program shows the running instance's window (per-user event
+   `Local\AudioRouter.ShowWindow.<SID>`; another build keeps the close-it
+   dialog), `577f1526`, unit-tested, live check pending with the release;
+   (A2) always-hidden legacy panels no longer render (harness 1,110 → 597
+   elements), 70 App tests moved to the visible tabs, 5 tests of unreachable
+   UI removed, the recording library surfaced in the Recording tab
+   (`recording-library.pw.ts`, three themes), `3e5cad65`; device-list and
+   session-list errors were shown only in the removed panels and are now
+   unread state (follow-up: show them in Setup and Session); (A3) future
+   index corrected (denoise/dehum/declick, Duck, FIR, Time Shift, Input
+   Switch exist) and the [Stream Deck plan](../future/stream-deck.md) added;
+   spec 16 HTTP-07 now states the backend remembers the selected session.
+
 10. Done 2026-10-04 (user report on 0.0.10): Advanced → Start at sign-in
    showed "Native registration: unavailable" and "unavailable in this
    host" in the desktop app. Cause: `createInitialBackend` took the
