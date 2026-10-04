@@ -1,6 +1,6 @@
-# Active plan — post-0.0.7 maintenance (0.0.8 in preparation)
+# Active plan — post-0.0.8 maintenance
 
-Updated 2026-10-03. v0.0.8 release in preparation (user-requested); see [0.0.8 evidence](evidence/2026-10-03-release-0.0.8.md). v0.0.7 is published.
+Updated 2026-10-03. v0.0.8 published as an unsigned prerelease; see [0.0.8 evidence](evidence/2026-10-03-release-0.0.8.md).
 
 ## Objective and scope
 
