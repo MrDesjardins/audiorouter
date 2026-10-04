@@ -743,6 +743,7 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .theme-high-contrast .node-binding-editor .node-binding-missing { color: #ffff00; }
 .node-binding-editor strong { display: block; margin-top: .2rem; color: var(--text-strong); font-size: .85rem; }
 .node-binding-editor label { display: grid; gap: .3rem; color: var(--text-soft); font-size: .78rem; }
+.node-binding-editor .input-channels-guidance { min-height: 4lh; } /* UI-17: guidance swaps without moving the inspector */
 .node-binding-editor input[readonly] { color: var(--text-soft); font-size: .75rem; }
 .node-binding-editor small { color: var(--text-soft); line-height: 1.4; }
 .recorder-node-editor { border-color: #716746; background: linear-gradient(145deg, rgb(61 53 34 / 72%), rgb(33 34 35 / 88%)); }

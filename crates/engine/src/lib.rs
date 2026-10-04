@@ -4900,6 +4900,75 @@ pub fn prune_inactive_upstream(
     prune_unfed_nodes(session, true)
 }
 
+/// The weights `[left, right]` a stereo Input Device's `channelMode` folds
+/// into one signal, or `None` to keep its channels as they are. "mono" is
+/// the GRAPH-03 `0.5L + 0.5R` downmix; "left"/"right" take one channel, for
+/// a single microphone on one input of a stereo audio interface. Surround
+/// rendered to two ears (`spatialMode`) is never folded.
+pub fn input_channel_mode_weights(node: &audiorouter_domain::Node) -> Option<[f32; 2]> {
+    if node.kind != audiorouter_domain::NodeKind::PhysicalInput
+        || node
+            .parameters
+            .get("spatialMode")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|mode| mode != "off")
+    {
+        return None;
+    }
+    match node.parameters.get("channelMode").and_then(serde_json::Value::as_str) {
+        Some("mono") => Some([0.5, 0.5]),
+        Some("left") => Some([1.0, 0.0]),
+        Some("right") => Some([0.0, 1.0]),
+        _ => None,
+    }
+}
+
+/// Folds each stereo Input Device's `channelMode` into its outgoing channel
+/// matrices, so both channels downstream carry the same mono signal and a
+/// voice on one interface input reaches both ears. A destination row `d`
+/// becomes `(M[d][L] + M[d][R]) * weights`; an identity matrix becomes
+/// `[wL, wR, wL, wR]`. Matrices are row-major `[destination][source]`.
+/// Coefficients stay within the GRAPH-03 bound. The realtime path is
+/// unchanged: only the compiled session copy differs.
+pub fn fold_input_channel_modes(
+    session: &audiorouter_domain::Session,
+) -> std::borrow::Cow<'_, audiorouter_domain::Session> {
+    use audiorouter_domain::PortDirection;
+    let folds = session
+        .nodes
+        .iter()
+        .filter_map(|node| {
+            let weights = input_channel_mode_weights(node)?;
+            let stereo_ports = node
+                .ports
+                .iter()
+                .filter(|port| port.direction == PortDirection::Output && port.channels == 2)
+                .map(|port| port.name.clone())
+                .collect::<Vec<_>>();
+            (!stereo_ports.is_empty()).then(|| (node.id.clone(), stereo_ports, weights))
+        })
+        .collect::<Vec<_>>();
+    if folds.is_empty() {
+        return std::borrow::Cow::Borrowed(session);
+    }
+    let mut owned = session.clone();
+    for (node_id, ports, [left, right]) in folds {
+        for edge in owned.edges.iter_mut().filter(|edge| {
+            edge.source_node == node_id && ports.contains(&edge.source_port) && edge.matrix.len() % 2 == 0
+        }) {
+            edge.matrix = edge
+                .matrix
+                .chunks(2)
+                .flat_map(|row| {
+                    let total = row[0] + row[1];
+                    [(total * left).clamp(-2.0, 2.0), (total * right).clamp(-2.0, 2.0)]
+                })
+                .collect();
+        }
+    }
+    std::borrow::Cow::Owned(owned)
+}
+
 /// Exclude inputless chains while preserving disabled capture mute stages.
 /// Safe for a worker whose physical capture is already open.
 pub fn prune_unfed_upstream(
@@ -5205,6 +5274,8 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
     let session = prune_unfed_upstream(session);
     let session = session.as_ref();
     let session = harmonize_chain_widths(session);
+    let session = session.as_ref();
+    let session = fold_input_channel_modes(session);
     let session = session.as_ref();
     if let Some(result) =
         compile_capture_test_signal_mixer(session, generation, sample_rate_hz, plugins, audio_media)
@@ -6233,6 +6304,8 @@ pub fn compile_mixer_session(
     use audiorouter_domain::{validate_session, NodeKind};
 
     validate_session(session).map_err(GraphCompileError::InvalidGraph)?;
+    let session = fold_input_channel_modes(session);
+    let session = session.as_ref();
     let mixers = session
         .nodes
         .iter()
@@ -6388,6 +6461,8 @@ pub fn compile_mixer_fanout_session_with_plugins_and_audio(
     use audiorouter_domain::{validate_session, NodeKind};
 
     validate_session(session).map_err(GraphCompileError::InvalidGraph)?;
+    let session = fold_input_channel_modes(session);
+    let session = session.as_ref();
     let mixers = session
         .nodes
         .iter()
@@ -7234,6 +7309,8 @@ pub fn compile_native_paths_with_plugins_and_audio(
     let session = session.as_ref();
     let session = harmonize_chain_widths(session);
     let session = session.as_ref();
+    let session = fold_input_channel_modes(session);
+    let session = session.as_ref();
     let components = independent_path_sessions(session);
     if components.is_empty() {
         return Err(GraphCompileError::UnsupportedTopology);
@@ -7461,6 +7538,8 @@ pub fn compile_fanout_session(
     use audiorouter_domain::{validate_session, NodeKind, PortDirection};
 
     validate_session(session).map_err(GraphCompileError::InvalidGraph)?;
+    let session = fold_input_channel_modes(session);
+    let session = session.as_ref();
     let enabled_edges = session
         .edges
         .iter()
@@ -12891,6 +12970,75 @@ mod tests {
         assert_eq!(adapted.edges[1].matrix, vec![1.0]);
         assert_eq!(adapted.edges[2].matrix, vec![1.0, 1.0], "outputs keep their mono-to-stereo copy");
         assert!(audiorouter_domain::validate_session(&adapted).is_ok());
+    }
+
+    #[test]
+    fn input_channel_mode_sends_one_interface_input_to_both_ears() {
+        use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+        let node = |id: &str, kind, direction, mode: Option<&str>| Node {
+            id: EntityId::new(id),
+            kind,
+            type_version: 1,
+            name: id.into(),
+            enabled: true,
+            bypass: false,
+            parameters: mode
+                .map(|mode| [("channelMode".to_string(), serde_json::json!(mode))].into_iter().collect())
+                .unwrap_or_default(),
+            ports: vec![Port { name: "main".into(), direction, channels: 2 }],
+        };
+        let session = |mode: Option<&str>| Session {
+            id: EntityId::new("interface"),
+            name: "Stereo interface".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![
+                node("mic", NodeKind::PhysicalInput, PortDirection::Output, mode),
+                node("cable", NodeKind::PhysicalOutput, PortDirection::Input, None),
+            ],
+            edges: vec![Edge {
+                id: EntityId::new("e1"),
+                source_node: EntityId::new("mic"),
+                source_port: "main".into(),
+                destination_node: EntityId::new("cable"),
+                destination_port: "main".into(),
+                matrix: vec![1.0, 0.0, 0.0, 1.0],
+                enabled: true,
+            }],
+        };
+        // A voice on input 1 only (left), as a stereo interface delivers it.
+        let play = |mode: Option<&str>| {
+            let graph = compile_session(&session(mode), RuntimeGeneration::new(1)).unwrap();
+            let mut block = AudioBlock::new(2, 4).unwrap();
+            block.channel_mut(0).unwrap().fill(0.8);
+            block.channel_mut(1).unwrap().fill(0.2);
+            graph.process(&mut block);
+            (block.channel(0).unwrap()[3], block.channel(1).unwrap()[3])
+        };
+        assert_eq!(play(None), (0.8, 0.2), "absent keeps stereo");
+        assert_eq!(play(Some("stereo")), (0.8, 0.2));
+        assert_eq!(play(Some("mono")), (0.5, 0.5));
+        assert_eq!(play(Some("left")), (0.8, 0.8));
+        assert_eq!(play(Some("right")), (0.2, 0.2));
+
+        // Only the compiled copy changes; stereo needs no copy.
+        assert!(matches!(fold_input_channel_modes(&session(Some("stereo"))), std::borrow::Cow::Borrowed(_)));
+        let left = session(Some("left"));
+        let folded = fold_input_channel_modes(&left);
+        assert_eq!(folded.edges[0].matrix, vec![1.0, 0.0, 1.0, 0.0]);
+        assert!(audiorouter_domain::validate_session(&folded).is_ok());
+        // Surround rendered to two ears is never folded.
+        let mut spatial = session(Some("mono"));
+        spatial.nodes[0].parameters.insert("spatialMode".into(), serde_json::json!("headphones"));
+        assert!(matches!(fold_input_channel_modes(&spatial), std::borrow::Cow::Borrowed(_)));
+        // The multi-path worker compiles the same route.
+        assert!(compile_native_paths_with_plugins_and_audio(
+            &session(Some("left")),
+            RuntimeGeneration::new(1),
+            &Default::default(),
+            &Default::default()
+        )
+        .is_ok());
     }
 
     #[test]

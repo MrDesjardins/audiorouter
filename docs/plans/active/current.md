@@ -97,6 +97,41 @@ Agent work (no hardware or credentials needed):
    Tests: `updateCheck.test.ts`, shell `release_page_opens_only_this_repository_for_numeric_tags`,
    `update-notice.pw.ts` (three themes, injected list, zero GitHub requests).
 
+4e. Done 2026-10-03 (user request, a friend's stereo interface): mono input
+   (CAP-03). Input Device `channelMode` stereo/mono/left/right, validated in
+   the domain and folded by `fold_input_channel_modes` into the input's
+   outgoing matrices at every engine compile entry (after width
+   harmonization), so all workers and live saves get it; no realtime code
+   change; skipped while surround renders. Inspector "Channels" select with
+   reserved guidance height (UI-17). Tests: engine
+   `input_channel_mode_sends_one_interface_input_to_both_ears` (samples
+   through the compiled graph), domain validation, `InputChannelsField.test.tsx`,
+   `input-channels.pw.ts` (three themes, no shift, no commit). Workspace
+   control 228, engine 158, domain 72, UI 469 pass. Not yet: attended
+   listening on a stereo interface. Rollback: revert the fold calls; saved
+   `channelMode` values then stop validating and must be removed.
+
+5. Done 2026-10-04 (user request): desktop UI 800–1000 MB during playback.
+   Not a leak: garbage. Measured on the user's database with the release
+   shell and `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222`
+   (CDP, read-only): renderer 65 MB stopped, 600–960 MB after 6 min of
+   playback; JS heap 100.7 MB used / 73k listeners before a forced GC,
+   13.5 MB / 1.5k after, and the renderer fell to 92 MB. Allocation 237 MB
+   per 5 s. Cause: the 50 ms `system.diagnostics` refresh set App state
+   although only `nodeTelemetry` changes between ticks, re-rendering about
+   5,200 elements (4,000 of them always-hidden legacy panels) 20×/s. Fix:
+   `ui/src/liveTelemetry.tsx`; a meter-only refresh goes to a store that
+   only the canvas, inspector and Timing views subscribe to; any other
+   change still updates App state. After: allocation 149 MB per 5 s,
+   renderer plateau 440–470 MB over 5 min of playback. Tests:
+   `liveTelemetry.test.tsx`, UI 471, Edge 212/212. Remaining: the canvas
+   rebuilds every node card as new JSX each tick (React Flow re-diffs all
+   nodes); memoized custom node types would cut most of the rest but touch
+   the measured-size/selection/drag regressions, so it is proposed, not
+   done. The always-hidden legacy panels could also be unmounted (tests
+   query some of them). Rollback: revert the `LiveTelemetry` wrappers and
+   the refresh change in `App.tsx`.
+
 Needs the user (attended, hardware or decisions):
 
 4. Attended confirmation in the shell: drag-to-canvas, device picker on the

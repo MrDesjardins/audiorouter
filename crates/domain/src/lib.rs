@@ -1947,6 +1947,11 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::PhysicalInput, "spatialMode") => value
                     .as_str()
                     .is_some_and(|mode| matches!(mode, "off" | "headphones" | "speakers")),
+                // CAP-03: send a stereo device as one mono signal to both
+                // channels (both mixed, or one interface input only).
+                (NodeKind::PhysicalInput, "channelMode") => value
+                    .as_str()
+                    .is_some_and(|mode| matches!(mode, "stereo" | "mono" | "left" | "right")),
                 // Room blend around the virtual speakers (CAP-14).
                 (NodeKind::PhysicalInput, "spatialRoomPercent") => value
                     .as_f64()
@@ -3463,6 +3468,22 @@ mod tests {
         }
         let mut output = node("out", NodeKind::PhysicalOutput, PortDirection::Input);
         output.parameters.insert("spatialMode".into(), serde_json::json!("headphones"));
+        assert!(validate_session(&session(vec![output], vec![])).is_err());
+    }
+
+    #[test]
+    fn physical_inputs_accept_only_known_channel_modes() {
+        let mut input = node("in", NodeKind::PhysicalInput, PortDirection::Output);
+        for mode in ["stereo", "mono", "left", "right"] {
+            input.parameters.insert("channelMode".into(), serde_json::json!(mode));
+            assert!(validate_session(&session(vec![input.clone()], vec![])).is_ok(), "{mode}");
+        }
+        for invalid in [serde_json::json!("swap"), serde_json::json!(1)] {
+            input.parameters.insert("channelMode".into(), invalid);
+            assert!(validate_session(&session(vec![input.clone()], vec![])).is_err());
+        }
+        let mut output = node("out", NodeKind::PhysicalOutput, PortDirection::Input);
+        output.parameters.insert("channelMode".into(), serde_json::json!("mono"));
         assert!(validate_session(&session(vec![output], vec![])).is_err());
     }
 

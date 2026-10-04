@@ -55,6 +55,17 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-04 — Keep 20 Hz telemetry out of App state; measure WebView memory with a forced GC.**
+  Evidence: [active plan, item 5](docs/plans/active/current.md).
+  Scope: UI polling loops and WebView2 memory reports. Consequence: a 50 ms
+  diagnostics refresh whose only change was `nodeTelemetry` re-rendered the
+  whole app, and the renderer reached ~900 MB of garbage (13.5 MB live).
+  Publish live values through `liveTelemetry.tsx` to the views that show
+  them. Before calling growth a leak, launch with
+  `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` and
+  compare the CDP JS heap before and after `HeapProfiler.collectGarbage`;
+  never leave that port on a daily-use launch.
+
 - **2026-10-03 — Bump versions by package name, never by a bare version string.**
   Evidence: [0.0.7 release evidence](docs/plans/active/evidence/2026-10-03-release-0.0.7.md).
   Scope: release version bumps in `Cargo.lock`/`src-tauri/Cargo.lock`.
