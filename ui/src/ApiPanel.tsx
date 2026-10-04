@@ -57,6 +57,7 @@ export function ApiPanel({ builder }: { builder?: (baseUrl: string) => ReactNode
       : <p className="muted">Only programs on this PC can connect.{addresses.length === 0 && invoke ? " No home or office network address was found." : ""}</p>}
     <p role="status">{status.running ? (status.network ? `API running · this PC and local network (${status.network})` : "API running · localhost only") : "API stopped"}</p>
     <button type="button" disabled={!invoke || busy} onClick={() => void control(status.running ? "stop" : "start")}>{busy ? "Working…" : status.running ? "Stop API" : "Start API"}</button>
+    <p className="muted">To start the API every time AudioRouter starts, turn on "Start the local API automatically" in Advanced, under When AudioRouter starts.</p>
     {status.url && <><label>URL<input aria-label="API URL" readOnly value={status.url} /></label>
       {status.networkUrl && <label>Network URL<input aria-label="API network URL" readOnly value={status.networkUrl} /></label>}
       <button type="button" className="secondary" disabled={busy} onClick={() => void control("openDocs")}>Open Swagger documentation</button>

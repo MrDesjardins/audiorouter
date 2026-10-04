@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { AutoplaySetting } from "./AutoplaySetting";
+import { ApiAutostartSetting, AutoplaySetting } from "./AutoplaySetting";
 
 afterEach(cleanup);
 
@@ -33,4 +33,21 @@ it("keeps the saved value when saving fails, and is unavailable outside the desk
   render(<AutoplaySetting invoke={undefined} />);
   expect((screen.getByLabelText("Play the selected session automatically") as HTMLInputElement).disabled).toBe(true);
   expect(screen.getByText("Available in the AudioRouter desktop app.")).toBeTruthy();
+});
+
+it("shows and saves API auto-start through its own shell command", async () => {
+  let saved = false;
+  const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+    if (command === "api_autostart_get") return saved;
+    if (command === "api_autostart_set") { saved = args?.enabled === true; return saved; }
+    throw new Error(`unexpected ${command}`);
+  });
+  render(<ApiAutostartSetting invoke={invoke} />);
+  const box = screen.getByLabelText("Start the local API automatically") as HTMLInputElement;
+  await waitFor(() => expect(box.disabled).toBe(false));
+  expect(box.checked).toBe(false);
+  fireEvent.click(box);
+  await waitFor(() => expect(box.checked).toBe(true));
+  expect(invoke).toHaveBeenCalledWith("api_autostart_set", { enabled: true });
+  expect(screen.getByRole("status").textContent).toContain("will start with AudioRouter");
 });

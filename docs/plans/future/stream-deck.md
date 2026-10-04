@@ -43,9 +43,12 @@ different surface), [external app integrations](external-app-integrations.md)
   the new one when audio was playing or the key asks to
   (`src/switching.ts`, `test/switching.test.ts`). (2) After AudioRouter
   restarted, every key showed Offline: the local API only ran after Start
-  in the API panel. The shell now remembers the user's Start/Stop
-  (`shell-settings.json` `api`) and starts the API with the app; local-network
-  access resumes only on an address the PC still has.
+  in the API panel. By user request this is an explicit option, like
+  autoplay: Advanced → When AudioRouter starts → "Start the local API
+  automatically" (`shell-settings.json` `apiAutoStart`, commands
+  `api_autostart_get`/`_set`). It uses the port and network the API last
+  started with (`api`), or this PC only on 17891; local-network access
+  resumes only on an address the PC still has.
 
 ## Objective
 

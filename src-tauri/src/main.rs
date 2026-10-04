@@ -318,22 +318,39 @@ fn start_http_api(port: u16, lan: Option<std::net::Ipv4Addr>, pipe: &str) -> Res
     http_api::HttpApi::start_on(port, token, lan, std::sync::Arc::new(move |request| forward_rpc_request(request, &pipe)))
 }
 
-/// Remember whether the API is on, so it starts again with AudioRouter:
-/// controllers such as the Stream Deck plugin otherwise went offline after
-/// every restart until the user pressed Start in the API panel again.
-fn remember_http_api(database_path: &std::path::Path, api: Option<shell_settings::ApiListener>) -> Result<(), String> {
+/// Remember the port and network the API started with, for auto-start.
+fn remember_http_api(database_path: &std::path::Path, api: shell_settings::ApiListener) -> Result<(), String> {
     let path = shell_settings::path_beside(database_path);
     let mut settings = shell_settings::load(&path);
-    settings.api = api;
+    settings.api = Some(api);
     shell_settings::save(&path, &settings)
 }
 
-/// Start the API the user left on. Local-network access resumes only on an
-/// address this PC still has; otherwise the API serves this PC only.
-fn resume_http_api(database_path: &std::path::Path, pipe: &str) -> Result<Option<http_api::HttpApi>, String> {
-    let Some(api) = shell_settings::load(&shell_settings::path_beside(database_path)).api else { return Ok(None) };
+/// API auto-start (Advanced): controllers such as the Stream Deck plugin
+/// otherwise go offline after every restart until the user presses Start in
+/// the API panel. Uses the last port and network; local-network access
+/// resumes only on an address this PC still has, otherwise this PC only.
+fn auto_start_http_api(database_path: &std::path::Path, pipe: &str) -> Result<Option<http_api::HttpApi>, String> {
+    let settings = shell_settings::load(&shell_settings::path_beside(database_path));
+    if !settings.api_auto_start { return Ok(None) }
+    let api = settings.api.unwrap_or(shell_settings::ApiListener { port: 17891, network: None });
     let lan = http_api_network(api.network.as_deref()).unwrap_or(None);
     start_http_api(api.port, lan, pipe).map(Some)
+}
+
+/// Whether the local API starts when AudioRouter starts (Advanced).
+#[tauri::command]
+fn api_autostart_get(state: State<'_, ShellState>) -> bool {
+    shell_settings::load(&shell_settings::path_beside(&state.database_path)).api_auto_start
+}
+
+#[tauri::command]
+fn api_autostart_set(enabled: bool, state: State<'_, ShellState>) -> Result<bool, String> {
+    let path = shell_settings::path_beside(&state.database_path);
+    let mut settings = shell_settings::load(&path);
+    settings.api_auto_start = enabled;
+    shell_settings::save(&path, &settings)?;
+    Ok(enabled)
 }
 
 #[tauri::command]
@@ -344,14 +361,11 @@ fn http_api_control(action: String, port: Option<u16>, network: Option<String>, 
             if listener.is_none() {
                 let lan = http_api_network(network.as_deref())?;
                 let started = start_http_api(port.unwrap_or(17891), lan, &state.pipe_name)?;
-                remember_http_api(&state.database_path, Some(shell_settings::ApiListener { port: started.port, network: started.lan.map(|address| address.to_string()) }))?;
+                remember_http_api(&state.database_path, shell_settings::ApiListener { port: started.port, network: started.lan.map(|address| address.to_string()) })?;
                 *listener = Some(started);
             }
         }
-        "stop" => {
-            *listener = None;
-            remember_http_api(&state.database_path, None)?;
-        }
+        "stop" => { *listener = None; }
         "regenerate" => {
             let token = api_token::generate()?;
             api_token::save(&api_token::default_path()?, &token)?;
@@ -1352,6 +1366,8 @@ fn main() {
             set_ui_unsaved,
             autoplay_get,
             autoplay_set,
+            api_autostart_get,
+            api_autostart_set,
             http_api_control,
             http_api_addresses,
             open_release_page,
@@ -1623,8 +1639,8 @@ fn main() {
             // Autoplay (Advanced): play the selected session once the
             // backend answers, with or without the window.
             let database_path = app.state::<ShellState>().database_path.clone();
-            // The local API the user left on starts with the app (HTTP API).
-            match resume_http_api(&database_path, &tray_pipe_name) {
+            // API auto-start (Advanced), with or without the window.
+            match auto_start_http_api(&database_path, &tray_pipe_name) {
                 Ok(Some(listener)) => {
                     if let Ok(mut slot) = app.state::<HttpApiState>().0.lock() {
                         *slot = Some(listener);

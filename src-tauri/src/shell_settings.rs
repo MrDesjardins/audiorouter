@@ -1,7 +1,7 @@
 //! Desktop-shell preferences the shell needs before any window exists, kept
 //! beside the database (`shell-settings.json`). Today: autoplay, which plays
 //! the selected session when AudioRouter starts (for example at sign-in),
-//! and the local API the user left on, so it starts again with the app.
+//! and API auto-start, which starts the local API with the app.
 //! Unreadable or oversized content falls back to the defaults (autoplay off).
 
 use serde::{Deserialize, Serialize};
@@ -13,7 +13,9 @@ const MAX_SETTINGS_BYTES: u64 = 4 * 1024;
 #[serde(rename_all = "camelCase", default)]
 pub struct ShellSettings {
     pub auto_play: bool,
-    /// The local API listener the user last started; `None` while it is off.
+    /// Start the local API when AudioRouter starts (Advanced).
+    pub api_auto_start: bool,
+    /// The port and network the API last started with, reused by auto-start.
     pub api: Option<ApiListener>,
 }
 
@@ -61,7 +63,7 @@ mod tests {
         let path = path_beside(&folder.join("state.sqlite"));
         assert_eq!(path.file_name().unwrap(), "shell-settings.json");
         assert_eq!(load(&path), ShellSettings::default(), "missing file: autoplay off");
-        save(&path, &ShellSettings { auto_play: true, api: None }).unwrap();
+        save(&path, &ShellSettings { auto_play: true, ..ShellSettings::default() }).unwrap();
         assert!(load(&path).auto_play);
         std::fs::write(&path, "{ not json").unwrap();
         assert!(!load(&path).auto_play, "corrupt file: off");
@@ -79,8 +81,9 @@ mod tests {
         std::fs::create_dir_all(&folder).unwrap();
         let path = path_beside(&folder.join("state.sqlite"));
         std::fs::write(&path, "{\"autoPlay\": true}").unwrap();
-        assert_eq!(load(&path).api, None, "files from before this setting: API off");
-        let on = ShellSettings { auto_play: false, api: Some(ApiListener { port: 17891, network: Some("192.168.1.20".into()) }) };
+        assert!(!load(&path).api_auto_start, "files from before this setting: no API auto-start");
+        assert_eq!(load(&path).api, None);
+        let on = ShellSettings { auto_play: false, api_auto_start: true, api: Some(ApiListener { port: 17891, network: Some("192.168.1.20".into()) }) };
         save(&path, &on).unwrap();
         assert_eq!(load(&path), on);
         let _ = std::fs::remove_dir_all(&folder);
