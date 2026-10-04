@@ -55,6 +55,14 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-04 — Stage files by name when another session shares the working tree.**
+  Evidence: commit `962ed8a1` and its explanation in `d2b703b4`. Scope: git
+  commits while another agent session edits this repository. Consequence: a
+  `git add -A` for a two-line plan note swept another session's unfinished
+  HTTP API code into a commit with an unrelated message. List the exact
+  paths you changed (`git add <paths>`), check `git diff --cached --stat`
+  before committing, and never rewrite shared history to repair it.
+
 - **2026-10-04 — Test the backend the shell really builds, not one the test hands in.**
   Evidence: [active plan, item 10](docs/plans/active/current.md),
   `ui/src/host.test.ts`. Scope: `createInitialBackend` and any capability

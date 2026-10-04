@@ -1,5 +1,24 @@
 # AudioRouter release notes
 
+## 0.0.11 — 2026-10-04 (unsigned experimental preview)
+
+- **Start at sign-in works.** In the app, Advanced → When AudioRouter starts
+  showed "Native registration: unavailable" and never registered with
+  Windows (this was broken in every earlier version). Set Desired policy to
+  Enabled, then Plan and Apply: AudioRouter then starts in the tray at
+  sign-in and, with "Play the selected session automatically", plays it.
+- **API on your local network** (API tab → Who can connect): besides "This PC
+  only" (the default), choose one of this PC's private network addresses so a
+  device on your home network, such as a Raspberry Pi control panel, can call
+  the same API with the same token. Only private and link-local addresses and
+  peers are accepted; the choice is not remembered across launches. Windows
+  Firewall may ask to allow AudioRouter the first time.
+
+Unsigned experimental prerelease; Windows may warn. No data migration or
+device-format change. Not yet tried: a request from a second device and an
+actual sign-in start. Keep 0.0.10 and a configuration backup for rollback.
+Full M08 install/hardware/accessibility/signing qualification remains open.
+
 ## 0.0.10 — 2026-10-04 (unsigned experimental preview)
 
 - Much less memory while audio plays. Meter updates no longer redraw the
