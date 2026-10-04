@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The window title and header show the version. Once a day the app checks
+  GitHub's public release list and, when a newer version exists, shows
+  "<version> available" next to it; click it to open the release page. Turn it
+  off in Setup → New versions. Nothing about you or your audio is sent.
 - Devices at 44.1, 88.2, 96 or 192 kHz work in multi-path sessions (inputs,
   outputs, endpoint loopback and Surround to headphones): Windows resamples
   them to AudioRouter's 48 kHz. Previously such a device was refused, for

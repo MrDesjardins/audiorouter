@@ -1,9 +1,15 @@
 import os from "node:os";
 import path from "node:path";
+import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+// The app version shown in the header; release bumps keep it equal to the
+// shell and backend versions.
+const appVersion = (JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as { version: string }).version;
+
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(appVersion) },
   // Tauri serves the bundled frontend from its app protocol rather than a
   // host-rooted web server. Relative assets are required for the shell to
   // load the entry module and reach the native IPC bridge.

@@ -88,6 +88,16 @@ Agent work (no hardware or credentials needed):
    50–150 ms to 400–500 ms; bounded on full-scale 7.1 noise. Not yet: attended
    listening on speakers or with the room.
 
+4d. Done 2026-10-03 (user request): version in the window title and header,
+   and an optional daily new-version check (UI-18; PROD-06 amended with this
+   one user-authorized network read). UI reads the public GitHub releases list
+   (CSP `connect-src` adds only `https://api.github.com`), caches it a day,
+   compares `vX.Y.Z` tags including prereleases, and shows "<version>
+   available" on the header line; `open_release_page` opens only this
+   repository's validated release URL. Setup → New versions turns it off.
+   Tests: `updateCheck.test.ts`, shell `release_page_opens_only_this_repository_for_numeric_tags`,
+   `update-notice.pw.ts` (three themes, injected list, zero GitHub requests).
+
 Needs the user (attended, hardware or decisions):
 
 4. Attended confirmation in the shell: drag-to-canvas, device picker on the

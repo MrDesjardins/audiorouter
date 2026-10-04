@@ -253,6 +253,37 @@ struct ShellState {
 #[derive(Default)]
 struct HttpApiState(std::sync::Mutex<Option<http_api::HttpApi>>);
 
+/// The project release page for one tag (UI-18), opened in the default
+/// browser. Only `vMAJOR.MINOR.PATCH` tags of this repository are accepted.
+fn release_page_url(tag: &str) -> Option<String> {
+    let mut parts = tag.strip_prefix('v')?.split('.');
+    let valid = (0..3).all(|_| parts.next().is_some_and(|part| !part.is_empty() && part.len() <= 6 && part.bytes().all(|byte| byte.is_ascii_digit())))
+        && parts.next().is_none();
+    valid.then(|| format!("https://github.com/MrDesjardins/audiorouter/releases/tag/{tag}"))
+}
+
+#[tauri::command]
+fn open_release_page(tag: String) -> Result<(), String> {
+    let url = release_page_url(&tag).ok_or("Not an AudioRouter release tag")?;
+    #[cfg(windows)]
+    {
+        use windows::core::{w, PCWSTR};
+        use windows::Win32::UI::Shell::ShellExecuteW;
+        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+        let wide = url.encode_utf16().chain(Some(0)).collect::<Vec<_>>();
+        // Only this repository's release URL for a validated numeric tag is
+        // opened. Both strings are NUL-terminated and stay alive throughout
+        // ShellExecuteW; no user-controlled command, path or argument is passed.
+        let result = unsafe { ShellExecuteW(None, w!("open"), PCWSTR(wide.as_ptr()), None, None, SW_SHOWNORMAL) };
+        if result.0 as isize <= 32 {
+            return Err(format!("Cannot open the browser. Visit {url}"));
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = url;
+    Ok(())
+}
+
 #[tauri::command]
 fn http_api_control(action: String, port: Option<u16>, state: State<'_, ShellState>, api: State<'_, HttpApiState>) -> Result<serde_json::Value, String> {
     let mut listener = api.0.lock().map_err(|_| "API state unavailable")?;
@@ -1155,6 +1186,7 @@ fn main() {
             rpc_request,
             quit_app,
             http_api_control,
+            open_release_page,
             open_plugin_editor,
             choose_session_file,
             session_id,
@@ -1381,7 +1413,7 @@ fn main() {
                 .build(app)?;
             refresh_tray_status(&status, &recordings, &tray_pipe_name);
             WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-                .title("AudioRouter")
+                .title(format!("AudioRouter {}", env!("CARGO_PKG_VERSION")))
                 .inner_size(1280.0, 800.0)
                 .resizable(true)
                 // Keep the editor visible on first launch. The tray's Open
@@ -1416,6 +1448,15 @@ mod tests {
     use super::*;
     use audiorouter_control::ControlPlane;
     use audiorouter_domain::validate_session;
+
+    #[test]
+    fn release_page_opens_only_this_repository_for_numeric_tags() {
+        assert_eq!(release_page_url("v0.0.9").as_deref(), Some("https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.9"));
+        assert_eq!(release_page_url("v12.0.100").as_deref(), Some("https://github.com/MrDesjardins/audiorouter/releases/tag/v12.0.100"));
+        for bad in ["0.0.9", "v0.0", "v0.0.9.1", "v0.0.9-beta", "v0.0.9/../../evil", "v0.0.x", "v.0.9", "v0.0.1234567", "https://evil.example/v1.2.3", ""] {
+            assert_eq!(release_page_url(bad), None, "{bad}");
+        }
+    }
 
     /// The grant of the first launch of a fresh install (enrolled just now)
     /// must equal every later launch's: the desktop grant that can accept

@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' http://localhost:5173; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; connect-src 'self' http://localhost:5173 https://api.github.com; style-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {

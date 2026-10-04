@@ -1342,3 +1342,17 @@ input[type="color"] { width: 100%; }
 .duck-amount { display: grid; gap: .25rem; color: var(--text-soft); font-size: .8rem; }
 .duck-amount input[type="range"] { width: 100%; }
 .duck-amount-scale { display: flex; justify-content: space-between; color: var(--text-soft); font-size: .68rem; }
+
+/* UI-18: version and new-version notice on the header's eyebrow line. */
+.app-version-line { white-space: nowrap; }
+.app-version { font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+.update-link { display: inline; min-height: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; color: #ffc768; font: inherit; letter-spacing: inherit; text-transform: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.update-link:hover, .update-link:focus-visible { color: #ffe0a8; }
+.theme-light .update-link, .theme-high-contrast .update-link, .theme-dark .update-link { min-height: 0; padding: 0; border: 0; background: none; box-shadow: none; }
+.theme-light .update-link { color: #8a4b00; }
+.theme-light .update-link:hover, .theme-light .update-link:focus-visible { color: #5c3200; }
+.theme-high-contrast .update-link { color: #ffff00; }
+.updates-panel { display: grid; gap: .5rem; }
+.updates-panel h3 { margin: 0; }
+.updates-toggle { display: flex; align-items: center; gap: .5rem; color: var(--text-strong); font-size: .85rem; }
+.updates-panel > button { justify-self: start; }
