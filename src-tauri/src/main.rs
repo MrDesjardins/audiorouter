@@ -1284,6 +1284,11 @@ fn main() {
     // starting recovery supervision. Test/external-pipe clients own no backend.
     #[cfg(windows)]
     let _instance_guard = if std::env::var_os("AUDIOROUTER_CONTROL_PIPE").is_none() {
+        // Already running (often in the tray): bring that window forward.
+        if instance_windows::show_running_instance() {
+            log_instance_check("shown");
+            return;
+        }
         match instance_windows::claim_or_recover() {
             Ok(Some(guard)) => { log_instance_check("ready"); Some(guard) },
             Ok(None) => { log_instance_check("cancelled"); return; },
@@ -1570,6 +1575,19 @@ fn main() {
                 .build(app)?;
             refresh_tray_status(&status, &recordings, &tray_pipe_name);
             app.manage(MainWindowScript(session_script.clone()));
+            // A second launch of this program shows this window instead.
+            #[cfg(windows)]
+            {
+                let handle = app.handle().clone();
+                instance_windows::listen_for_show_requests(move || {
+                    let target = handle.clone();
+                    let _ = handle.run_on_main_thread(move || {
+                        if let Err(error) = open_main_window(&target) {
+                            eprintln!("AudioRouter window could not open: {error}");
+                        }
+                    });
+                });
+            }
             // Started at sign-in (`--tray`): no window, so no WebView, until
             // the user opens it from the tray.
             if !starts_in_tray(std::env::args()) {
