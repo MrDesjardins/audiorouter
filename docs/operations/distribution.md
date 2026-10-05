@@ -45,7 +45,8 @@ WASAPI, or compatible installed endpoints. The installer will not provision
 an AudioRouter-owned virtual device under the current scope, install or remove
 third-party drivers, or silently change Windows default audio devices. A
 machine without a supported endpoint must receive clear setup guidance; the
-product cannot promise a virtual microphone on a clean machine under DEC-16.
+product cannot promise a virtual microphone on a clean machine until the
+AudioRouter cable planned under DEC-18 ships as a separate signed package.
 
 The intended official release remains maintainer-driven. A maintainer will
 explicitly run a release script or manually dispatch a GitHub Actions
@@ -65,7 +66,8 @@ GitHub **draft**. Maintainers inspect and publish it manually.
 The user selected an unsigned first app release. Release notes and the
 manifest must state that the app and installer are unsigned; Windows trust
 prompts are expected. App signing is separate from driver signing. The
-AudioRouter-owned driver and driver signing remain excluded under DEC-16.
+AudioRouter-owned driver is planned under DEC-18 as a separate signed
+package; current releases do not include it.
 Standard-user install, upgrade/rollback, uninstall/data retention,
 clean-machine and missing-WebView2 qualification remain open M08 gates, so do
 not present the current bundle as a supported consumer release.

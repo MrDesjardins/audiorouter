@@ -8,9 +8,9 @@ The current delivery track supports routing through already-installed VB-Cable,
 Voicemeeter, physical WASAPI, and other existing virtual endpoints. This
 provides the usable external-device boundary for the non-driver feature set.
 AudioRouter-owned virtual endpoint provisioning and persistence remain
-normative product requirements, but are deferred because production signing,
-trusted installation, and clean-machine driver qualification are not currently
-available. Existing-device routing must not be described as an AudioRouter
+normative product requirements. They were deferred for lack of production
+signing; DEC-18 (2026-10-05) reopened them so AudioRouter can ship its own
+signed virtual cable, which is not yet available. Existing-device routing must not be described as an AudioRouter
 driver or as completion of the managed virtual-device requirements.
 
 ## Product intent

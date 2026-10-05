@@ -21,6 +21,48 @@ ARCH-04, SEC-01/10 and DIST-01–08 stay traceable through the release evidence.
 - Other active plan: [app/installer signing](release-signing-and-publication.md),
   blocked on the user's provider choice and enrollment.
 
+## Decision (2026-10-05, user): ship AudioRouter's own virtual cable (DEC-18)
+
+AudioRouter will ship its own signed virtual cable so users do not need
+VB-Cable; VB-Cable/Voicemeeter stay supported. Lowest-cost signing
+(attestation, EV certificate bought only for driver-release windows).
+Recorded in [15-delivery DEC-18](../../spec/15-delivery.md); full plan,
+costs and phases in the [driver track](../future/M03-driver-signing.md).
+
+- Requirements: VDEV-01–12, SEC-08, NFR-16, DIST-01/03/07 (amended).
+- Prerequisites for phase 1: a Hyper-V VM (Windows 11, Gen2) or a spare PC,
+  created by the user; test signing only inside it. Nothing is installed or
+  changed on the daily workstation.
+- **Execution plan with work packages WP-00…WP-15:**
+  [virtual cable plan](virtual-cable.md). Design: [17 Virtual
+  cable](../../spec/17-virtual-cable.md). Signing runbook:
+  [virtual cable signing](../../operations/virtual-cable-signing.md).
+  Nothing there is built or run yet.
+- Test procedure (stages A–E, VM to main PC): [virtual cable
+  testing](../../operations/virtual-cable-testing.md).
+- Next action: the plan's WP-00 (user confirms D1–D6) and WP-01 (Windows
+  PC + VM), then WP-02 on Windows. Summary of the first steps:
+  1. User: enable Hyper-V, create `AR-DriverTest` and checkpoints
+     `01-clean-windows` and `02-test-signing-ready` as in the procedure.
+  2. Agent: make `build.ps1` produce a test-signed catalog (or document the
+     exact `inf2cat`/`signtool` step) and export only the `.cer`.
+  3. Agent: `tests/acceptance/m03-driver-vm.ps1`, run inside the VM, doing
+     A1 baseline, A2 install, A3 device check, A14 uninstall and baseline
+     compare, writing `C:\ar\evidence\`.
+  4. User: run it in the VM, restore `02-test-signing-ready`, send the
+     evidence.
+  Validation: the script passes twice from the checkpoint; the host shows no
+  driver, device or Secure Boot change. Rollback: restore the checkpoint.
+  Phase 2 (driver completion) then makes A4–A13 pass.
+- Needs a separate user go-ahead: buying the EV certificate (phase 5) and
+  the first public driver release.
+- Cables: up to 8 (A–H), user enables 1–8, default 2; develop and test with
+  2, qualify all 8 before signing (user, 2026-10-05).
+- Open choices: see WP-00 D2–D6 in the [virtual cable plan](virtual-cable.md).
+- Rollback: the driver is a separate optional package; releases without it
+  keep today's VB-Cable workflow. Revert DEC-18 doc changes to return to
+  DEC-16.
+
 ## Decisions (2026-10-03, user)
 
 - Signing: keep publishing unsigned prereleases while the project builds the

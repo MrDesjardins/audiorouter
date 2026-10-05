@@ -18,7 +18,7 @@ All specification files, [delivery traceability](../spec/15-delivery.md), prior 
 
 ## Mandatory release gate
 
-All approved v1 PROD, ARCH, GRAPH, CAP, DSP, PLUG, REC, UI, API, AUTO, STATE, SEC, NFR, QUAL, and ENG requirements have evidence. VDEV-01/03/09 and SEC-08 are excluded from v1 by DEC-16 and remain normative only for a separately authorized future driver track. The primary workflow works with the documented existing-device boundary. UI closure, backend crash, reboot/sign-in, disk failure, plugin failure, and user switching exhibit the specified behavior.
+All approved v1 PROD, ARCH, GRAPH, CAP, DSP, PLUG, REC, UI, API, AUTO, STATE, SEC, NFR, QUAL, and ENG requirements have evidence. VDEV-01/03/09 and SEC-08 were excluded by DEC-16 and reopened by DEC-18 (2026-10-05); they gate only a release that ships the AudioRouter cable, through the [driver track](../plans/future/M03-driver-signing.md). The primary workflow works with the documented existing-device boundary. UI closure, backend crash, reboot/sign-in, disk failure, plugin failure, and user switching exhibit the specified behavior.
 
 Performance targets are met on the declared reference hardware, with distributions and workload details published. No universal Bluetooth or arbitrary-plugin latency claim is made. The primary workflow documents the separately installed, supported external endpoints it requires. At least four of five first-time users complete the setup within ten minutes and all identify Discord's source set. Keyboard/Narrator and 200% scaling checks pass. External AI control is optional, local, discoverable, and permission-constrained.
 

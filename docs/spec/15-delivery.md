@@ -2,7 +2,18 @@
 
 Milestone ownership: all milestones. This is the stable release map; execution status lives in the [active plan](../plans/active/current.md).
 
-## Active scope decision (2026-09-19, supersedes 2026-09-17)
+## Active scope decision (2026-10-05, DEC-18)
+
+The user reopened the AudioRouter-owned virtual cable on 2026-10-05
+(DEC-18): AudioRouter will ship its own signed virtual cable so users do not
+need to install VB-Cable. Existing VB-Cable/Voicemeeter and physical
+endpoints stay fully supported. VDEV-01–12 and SEC-08 return to scope under
+the [driver track](../plans/future/M03-driver-signing.md); their release gate
+is the signed driver, which requires a separate user go-ahead for the
+certificate purchase. Until that driver ships, the 2026-09-19 text below
+describes what releases contain.
+
+## Previous scope decision (2026-09-19, superseded for the driver by DEC-18)
 
 The delivery track is VB-Cable/Voicemeeter-first, permanently: the
 project-owned kernel driver, PortCls integration, and production driver
@@ -36,7 +47,7 @@ See [the set-aside driver plan](../plans/future/M03-driver-signing.md).
 | [M07](../milestones/M07-automation-recovery.md) | Full MCP, background lifecycle, recovery/security | M06 | Concurrent clients, restart, privacy, migration |
 | [M08](../milestones/M08-release.md) | Qualified, documented Windows v1 for the VB-Cable-first profile | M07 | All approved v1 requirements and release evidence; DEC-16 exclusions remain outside this gate |
 
-Default execution is sequential and each milestone can be requested independently. Do not ask one LLM to generate the whole application in one step. Split a milestone into bounded active-plan tasks when necessary, retaining its gate. Earlier functionality must remain usable while later work is added. The M00 driver decision is resolved for v1 by DEC-16; any future driver work requires a separate explicit scope decision.
+Default execution is sequential and each milestone can be requested independently. Do not ask one LLM to generate the whole application in one step. Split a milestone into bounded active-plan tasks when necessary, retaining its gate. Earlier functionality must remain usable while later work is added. The M00 driver decision was resolved by DEC-16 and reopened by DEC-18: the AudioRouter cable follows the driver track.
 
 ## Requirement traceability
 
@@ -56,8 +67,8 @@ The ranges below include every normative ID; each milestone must attach evidence
 | CAP-09–10 | M03/M05 | UC-01, duplicate-playback validation |
 | CAP-11–12 | M02/M07 | UC-03/06, OS transitions |
 | CAP-13 | M02 | Concurrent exact-endpoint ownership in multi-path sessions |
-| VDEV-01/03/09 | Future track only (DEC-16) | Normative future driver requirements; excluded from v1 |
-| VDEV-02, VDEV-04–08, VDEV-10–12 | M03/M07 where applicable to existing endpoints | UC-01/05/09/10, supported endpoint behavior; driver lifecycle portions excluded by DEC-16 |
+| VDEV-01/03/09 | Driver track (DEC-18) | Isolated-VM evidence, then signed-package and clean-machine evidence before shipping |
+| VDEV-02, VDEV-04–08, VDEV-10–12 | M03/M07 for existing endpoints; driver track (DEC-18) for the AudioRouter cable | UC-01/05/09/10, supported endpoint behavior; driver lifecycle evidence per the driver track |
 | DSP-01–05, DSP-07–09 | M04 | UC-02, transfer-function vectors |
 | DSP-06, PLUG-01–06 | M06 | UC-02/06, pitch/worker/format evidence |
 | DSP-10–18 | M04/M05 | UC-02, DSP/engine response, latency and bounds tests; local voice-sample qualification in [active evidence](../plans/active/evidence/2026-09-27-voice-tools.md). Combination coverage and release gates remain tracked in the active plan. |
@@ -76,7 +87,7 @@ The ranges below include every normative ID; each milestone must attach evidence
 | STATE-08–11 | M07 | UC-06/09, startup/sign-out/recovery |
 | SEC-01–06, SEC-10, SEC-12 | M01, M07 audit | Scope, pipe, shell, abuse cases |
 | SEC-07 | M06 | Plugin containment evidence |
-| SEC-08 | Future track only (DEC-16) | Normative future driver boundary/signing review; excluded from v1 |
+| SEC-08 | Driver track (DEC-18) | Driver boundary review, IOCTL fuzzing, Driver Verifier; required before the signed package ships |
 | SEC-09 | M04/M07 | Path and bundle attacks |
 | SEC-11 | Future distribution track only (DEC-16) | Normative signed-update/rollback requirement; excluded from v1 |
 | SEC-13 | M02 (network extension, 2026-09-26) | Sender-address filter, malformed-datagram and bounds tests |
@@ -98,7 +109,10 @@ The ranges below include every normative ID; each milestone must attach evidence
   endpoints and explains the supported existing-endpoint workflow. Missing
   endpoints are reported with actionable vendor guidance. No installer or
   first-run step installs a driver, changes Windows default devices/volumes,
-  or starts audio without deliberate user action.
+  or starts audio without deliberate user action. Under DEC-18 the
+  AudioRouter cable may be offered, and is installed only after the user
+  chooses it and approves the Windows elevation prompt; skipping it keeps the
+  existing-endpoint workflow.
 - **DIST-04 — Offline operation.** After setup and WebView2 availability,
   application routing, effects, recording, editing, CLI/MCP, and local
   discovery remain offline per PROD-06. The initial setup may use the
@@ -113,8 +127,8 @@ The ranges below include every normative ID; each milestone must attach evidence
   architecture must agree. The published package is x64 Windows 11.
 - **DIST-07 — Unsigned first app release.** The first app/installer release
   may be unsigned, must state that it is unsigned, and must not claim a
-  publisher signature. This does not change the exclusion of the
-  AudioRouter-owned driver or its signing (DEC-16).
+  publisher signature. The AudioRouter-owned driver is a separate signed
+  package under DEC-18; an unsigned driver is never shipped.
 - **DIST-08 — Install qualification.** Before M08 completion, standard-user
   install, upgrade/repair, uninstall/data retention, missing/present WebView2,
   companion executable resolution, and first-run endpoint states are tested
@@ -133,7 +147,7 @@ These decisions are the proposed baseline for implementation. Evidence may chang
 | DEC-04 | Shared JSON-RPC application API over restricted named pipe | Baseline; local headless/GUI parity without exposed TCP |
 | DEC-05 | Per-user background engine, sign-in startup | Baseline; separate user capture from privileged driver lifecycle |
 | DEC-06 | 48 kHz float32, initial 128-frame quantum | Retained as the graph baseline; native endpoint formats and process-loopback evidence exist, but physical latency/quantum measurements are still required before making the quantum final |
-| DEC-07 | Managed persistent driver, not user-mode-only virtual microphones | Superseded for v1 by DEC-16; the project-owned prototype is not part of the approved delivery track |
+| DEC-07 | Managed persistent driver, not user-mode-only virtual microphones | Superseded for v1 by DEC-16; restored by DEC-18 (2026-10-05) for the AudioRouter cable |
 | DEC-08 | VST3 x64 plus built-ins; gated legacy VST2 x64 extension | Baseline release path remains VST3 plus built-ins; the explicitly approved PLUG-07 extension adds contained x64 VST2 effects only after ABI, rights, worker, editor, compatibility, and release evidence is complete |
 | DEC-09 | Explicit virtual desktop render route; capture-only app sources | Baseline; automatic capture-and-mute not assumed |
 | DEC-10 | Protected voice paths silence on effect failure | Baseline; deliberate user bypass is a separate action |
@@ -142,14 +156,15 @@ These decisions are the proposed baseline for implementation. Evidence may chang
 | DEC-13 | Legacy VST2 is an explicitly approved, gated M06 extension | User approved planning on 2026-09-08; the original V1 baseline remains VST3 plus built-ins, while actual ABI, rights, worker, and compatibility evidence remain required |
 | DEC-14 | NFR-01 wired physical loopback latency target revised from ≤30 ms to ≤250 ms p95 | User-approved 2026-09-21 after calibrated measurement (see [14-quality.md](14-quality.md) NFR-01 and [M00 WASAPI probe evidence](../plans/active/evidence/M00-wasapi-probe.md)): a real reference device (Focusrite Scarlett Solo) measured p95 ≈ 185.5–185.9 ms in WASAPI shared mode — AudioRouter's production sharing model, not exclusive/ASIO — across three reproducible runs, after an initial calibration bug was found and fixed. Buffer size and Windows 10+ `IAudioClient3` low-latency shared-mode tuning were both tested and ruled out as a fix on this device (its low-latency engine-period floor is a fixed 10 ms). The original ≤30 ms figure was an unvalidated aspirational target. The revised target is only validated on one device; it is not yet known whether other supported interfaces perform better or worse, and closing the gap further (e.g. via exclusive mode) remains unexplored future work, not authorized by this decision |
 | DEC-15 | NFR-02 mic-to-virtual-capture latency target revised from ≤40 ms to ≤160 ms p95 | User-approved 2026-09-21 after calibrated measurement through the real engine route (see [14-quality.md](14-quality.md) NFR-02 and [M00 WASAPI probe evidence](../plans/active/evidence/M00-wasapi-probe.md)): the same reference device measured p95 of 97.5/102.9/115.5/110.9 ms across four runs (physical mic capture → real `PhysicalInput → Gain → Recorder → PhysicalOutput` graph/scheduler → virtual render → virtual capture read), each run's own internal spread under ~13 ms with more run-to-run variance across separate engine-route launches than NFR-01 showed. The revised ≤160 ms target follows the same DEC-14 methodology: roughly 35% headroom over the worst observed run (115.461 ms). Also validated on one device only; not yet known whether this cross-run variance narrows on repeated measurement or with a different mic/driver |
-| DEC-16 | AudioRouter-owned driver, PortCls endpoint, production driver signing, and M08 installer/clean-machine gates excluded from the approved v1 track | User decision 2026-09-19 based on unfunded driver-signing/distribution cost. Existing VB-Cable/Voicemeeter and physical WASAPI endpoints are the supported boundary. VDEV-01/03/09 and SEC-08 remain normative only for a separately authorized future track. This decision does not settle Authenticode signing for the desktop app or installer; unsigned artifact preparation does not imply publication or a releasable installer |
+| DEC-16 | AudioRouter-owned driver, PortCls endpoint, production driver signing, and M08 installer/clean-machine gates excluded from the approved v1 track (installer reopened by DEC-17, driver by DEC-18) | User decision 2026-09-19 based on unfunded driver-signing/distribution cost. Existing VB-Cable/Voicemeeter and physical WASAPI endpoints are the supported boundary. VDEV-01/03/09 and SEC-08 remain normative only for a separately authorized future track. This decision does not settle Authenticode signing for the desktop app or installer; unsigned artifact preparation does not imply publication or a releasable installer |
+| DEC-18 | Reopen and ship an AudioRouter-owned virtual cable with the app to remove the VB-Cable install step | User decision 2026-10-05. Supersedes DEC-16 for the driver only. Lowest-cost signing: Microsoft attestation through Partner Center with an EV certificate bought only for driver-release windows (about USD 300–450 each), the app keeps its own signing route. Development and loading tests only in an isolated test-signed VM, never on the user's workstation. Driver install is a separate elevated, optional step (VDEV-08); the per-user app installer stays standard-user (DIST-01). VB-Cable/Voicemeeter stay supported. The certificate purchase and the first public driver release each need an explicit user go-ahead. Plan: [driver track](../plans/future/M03-driver-signing.md) |
 | DEC-17 | Implement an integrated per-user app installer and manually initiated GitHub draft-release path in M08; permit unsigned first app release | User request and signing preference, 2026-09-28. DEC-17 supersedes DEC-16 only for app installer/release planning and acceptance. Driver, PortCls, and driver signing remain excluded. App/installer Authenticode signing is not required for the first release; unsigned status/trust behavior must be disclosed. GitHub automation creates a draft only; a human publishes it. |
 
 ## Risk and dependency register
 
 | Risk | Consequence | Required mitigation / owner gate |
 | --- | --- | --- |
-| AudioRouter-owned driver redistribution/signing unavailable | No project-owned virtual endpoints | Excluded from v1 by DEC-16; reconsider only under a separately authorized future track |
+| AudioRouter-owned driver signing unavailable or attestation ended by Microsoft | No project-owned virtual endpoints | DEC-18: keep VB-Cable support; buy the EV certificate only after the VM gates pass; move to WHCP/HLK if attestation ends |
 | Future driver bugs/security weakness | System instability or cross-user audio leak | Dedicated test systems, small interface, verifier/security tests, signed rollback before any separately authorized driver release |
 | Process capture misses protected/complex apps | Capture scope differs from expectation | Capability errors and virtual-output alternative; M00/M02/M08 |
 | Desktop loopback captures own monitor | Feedback or duplicate audio | Explicit desktop bus plus global topology validation; M03 |

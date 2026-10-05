@@ -2,7 +2,18 @@
 
 Milestone ownership: M00 driver decision/prototype; M03 endpoint functionality; M07 ownership/recovery; M08 production signing, installation, and uninstall.
 
-## Current scope decision (2026-09-19, supersedes 2026-09-17)
+## Current scope decision (2026-10-05, DEC-18)
+
+The user reopened the AudioRouter-owned virtual cable: AudioRouter will ship
+its own signed virtual cable so users do not need to install VB-Cable. The
+requirements below apply to it; VDEV-09 (production signing) is its ship
+gate. Existing VB-Cable/Voicemeeter and physical endpoints remain supported.
+Until the signed driver ships, releases follow the 2026-09-19 text below.
+Technical design of the first release (up to eight cables, first N enabled):
+[17 Virtual cable](17-virtual-cable.md). Plan and costs:
+[driver track](../plans/future/M03-driver-signing.md).
+
+## Previous scope decision (2026-09-19, superseded by DEC-18)
 
 AudioRouter-owned kernel virtual-device development is set aside indefinitely
 by explicit user decision: production driver signing costs money the project

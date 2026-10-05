@@ -3,8 +3,8 @@
 Status: VB-Cable-first existing-device routing, native endpoint identity, and
 multi-input/many-output lifecycle are implemented and guarded-qualified.
 AudioRouter-owned virtual-driver provisioning, PortCls transport, production
-signing, and clean-machine installation are deferred to the future driver
-track. Prerequisites for the current track: M02 and an installed supported
+signing, and clean-machine installation were reopened by DEC-18 (2026-10-05)
+and follow the driver track. Prerequisites for the current track: M02 and an installed supported
 VB-Cable/physical/Voicemeeter endpoint. Outcome: supported applications and
 tools can use existing endpoint routes without requiring AudioRouter to create
 a kernel device.
@@ -26,13 +26,14 @@ not required for current non-driver completion.
 
 ## Ordered implementation
 
-1. **Future track only (DEC-16):** managed driver/package/broker work is not
-   part of this milestone's approved v1 execution. Do not treat the prototype
-   or this milestone text as authorization to install or ship a driver.
-2. **Future track only (DEC-16):** managed bus inventory and lifecycle
-   operations are excluded from the approved v1 scope. The current API may
-   describe these normative requirements, but this task does not authorize
-   implementation.
+1. **Driver track (DEC-18, reopened 2026-10-05):** managed driver, package
+   and elevated helper work follows the phases in the
+   [driver track](../plans/future/M03-driver-signing.md). Loading tests run
+   only in an isolated test-signed VM; shipping needs the signed package and
+   the user's go-ahead.
+2. **Driver track (DEC-18):** managed bus inventory and lifecycle operations
+   (`virtualDevices.*`) become real once the driver loads in the VM; until
+   then they stay `unavailable`.
 3. Implement and qualify existing-device render/capture source and sink
    adapters, initialized silence, ownership reset, multiple consumers, and
    explicit pass-through templates without creating a kernel device.
@@ -60,8 +61,8 @@ Current-track evidence covers applicable existing-endpoint identity/lifecycle,
 GRAPH-11 route validation, CAP-09/10 policy, NFR-02/10/16 and QUAL-01. The
 UC-01 guarded route passes its recorded isolation checks: Discord receives mic
 only, Game Recording receives desktop only by default, and headphones receive
-one desktop copy. VDEV-01/03/09 and SEC-08 remain future-track requirements
-under DEC-16; other VDEV requirements apply only where they describe supported
+one desktop copy. VDEV-01/03/09 and SEC-08 belong to the driver track
+reopened by DEC-18; other VDEV requirements apply only where they describe supported
 existing-endpoint behavior.
 
 Any separately authorized future managed-driver profile must manage at least

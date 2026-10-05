@@ -1,10 +1,11 @@
 # Future plans and explicit v1 exclusions
 
 The AudioRouter-owned kernel-driver, PortCls, production driver-signing, and
-managed-driver qualification track is explicitly deferred to
-[M03-driver-signing.md](M03-driver-signing.md). It is not an active
-implementation task and must not be pulled into the VB-Cable-first completion
-track without a new explicit scope decision.
+managed-driver qualification track in
+[M03-driver-signing.md](M03-driver-signing.md) was reopened by the user on
+2026-10-05 (DEC-18): AudioRouter will ship its own signed virtual cable.
+Execution status is in the [active plan](../active/current.md); the
+certificate purchase and first driver release need a separate user go-ahead.
 
 The Windows app installer and manual GitHub draft-release track was promoted
 to M08 by DEC-17. Its current status is in the

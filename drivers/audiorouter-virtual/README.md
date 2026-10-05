@@ -64,6 +64,16 @@ Secure Boot, HVCI, audio defaults, or endpoint selections. Do not run it on the
 daily workstation until the isolated-target procedure and rollback evidence
 are approved.
 
+## Roadmap (DEC-18)
+
+This prototype becomes the shipped AudioRouter Cable A–H driver (up to 8
+cables, 2 enabled by default). What must change (16 endpoints, enabled
+count, protocol 1.1, security fixes, helper, signing) is in
+[17 Virtual cable](../../docs/spec/17-virtual-cable.md) and the
+[virtual cable plan](../../docs/plans/active/virtual-cable.md). Test only in
+the VM described in
+[virtual cable testing](../../docs/operations/virtual-cable-testing.md).
+
 ## Current limits and next integration work
 
 - The prototype is x64 and ARM64 compile-qualified; the active plan records

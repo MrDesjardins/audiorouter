@@ -35,6 +35,7 @@ Read 01–04 first, then the feature areas needed for a milestone. `MUST`/`shall
 | [14 Quality](spec/14-quality.md) | Measurable budgets, test matrix, release evidence | M00–M08 |
 | [15 Delivery](spec/15-delivery.md) | Sequence, traceability, decisions, risks, sources | M00–M08 |
 | [16 Local HTTP](spec/16-local-http-api.md) | Optional localhost REST, API tab, Swagger, token and bounds | M05/M07/M08 |
+| [17 Virtual cable](spec/17-virtual-cable.md) | AudioRouter-owned Cable A–H (up to 8): driver, bridge, helper, install, integration (DEC-18) | M03 driver track |
 
 ## Operational runbooks
 
@@ -56,6 +57,13 @@ dependencies.
 The [API reference](operations/api-reference.md) lists every discovered public
 method, permission, side-effect class, node type, and preset; use `schema
 --json` for the exact machine-readable contracts.
+
+The [virtual cable test procedure](operations/virtual-cable-testing.md) takes
+the AudioRouter-owned cable (DEC-18) from a test-signed VM to a
+Microsoft-signed package on the main PC and beta testers; the
+[signing runbook](operations/virtual-cable-signing.md) covers the paid
+Microsoft steps, and the [virtual cable plan](plans/active/virtual-cable.md)
+lists the work packages.
 
 The [release qualification checklist](operations/release-qualification.md)
 records the reproducible unsigned artifact flow, recovery expectations, and

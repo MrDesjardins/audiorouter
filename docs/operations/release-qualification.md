@@ -5,8 +5,10 @@ plane, CLI, MCP adapter, DSP, recording, plugin-worker, crash-recovery
 orchestration boundaries, and the shell-owned control backend are implemented
 and tested. The current supported development I/O boundary is an existing
 VB-Cable/Voicemeeter installation plus physical WASAPI endpoints; the
-AudioRouter-owned virtual-device driver is on hold because it is excluded by
-DEC-16. Managed-driver routing and production driver signing are not M08 gates.
+AudioRouter-owned virtual-device driver was reopened by DEC-18 (2026-10-05)
+and is qualified on its own driver track. Releases without the driver have no
+managed-driver or driver-signing gate; a release that ships it must pass the
+driver track's qualification first.
 The first app release is explicitly allowed to be unsigned under DEC-17; app
 Authenticode signing is separate. The integrated installer now builds, while
 clean-machine and install qualification remain open M08 release gates.
