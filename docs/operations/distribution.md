@@ -1,7 +1,7 @@
 # Distribution status and intended release path
 
-The latest release is [0.0.7](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.7),
-an unsigned experimental prerelease. Download `AudioRouter_0.0.7_x64-setup.exe`
+The latest release is [0.0.12](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.12),
+an unsigned experimental prerelease. Download `AudioRouter_0.0.12_x64-setup.exe`
 from its assets. Every release from 0.0.3 to 0.0.7 was built from a clean tag
 with `tools/release/`, passed the exact-package fresh-install check, and had
 its published assets downloaded and verified; see the

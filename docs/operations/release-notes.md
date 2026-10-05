@@ -1,5 +1,27 @@
 # AudioRouter release notes
 
+## 0.0.12 — 2026-10-04 (unsigned experimental preview)
+
+- **Stream Deck plugin:** Toggle, Level meter, Privacy mute, Play/Stop,
+  Session, Value step and Record keys, with custom titles, images and key
+  looks. Install the `.streamDeckPlugin` release asset in Stream Deck 7.1
+  or newer, then enter AudioRouter's local API address and token in an
+  action's settings. Keys follow the selected session or a pinned session.
+- Switching sessions from a Session key moves playback to the new session.
+  A Record key starts/stops a Recorder while its session is playing.
+- Advanced → When AudioRouter starts → **Start the local API automatically**
+  keeps keys connected after restart. The API remembers its last port and
+  network address; network access resumes only if the PC still has that address.
+- Setup → **Animated connections**: On, When AudioRouter is in focus, or Off.
+  Opening the same build again shows its running window. The Recording tab
+  now includes the recording library, and network tools show the PC's real address.
+
+Windows 11 x64; app and installer unsigned. No data migration or driver
+installation. Close AudioRouter before upgrading; retain 0.0.11 and compatible
+configuration/recording backups for rollback. Stream Deck device latency,
+CPU and the new Record key still need attended qualification. Full M08
+install/hardware/accessibility/signing gates remain open.
+
 ## 0.0.11 — 2026-10-04 (unsigned experimental preview)
 
 - **Start at sign-in works.** In the app, Advanced → When AudioRouter starts

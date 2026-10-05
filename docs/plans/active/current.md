@@ -36,6 +36,29 @@ ARCH-04, SEC-01/10 and DIST-01–08 stay traceable through the release evidence.
 
 ## Open work
 
+### Release 0.0.12 (2026-10-04, user authorized)
+
+Objective: publish the Stream Deck changes as an unsigned experimental
+prerelease and push all committed code to main. Requirements: HTTP-07/09,
+AUTO-15, UI-17, DIST-01–08; Stream Deck phase 0 and subsequent user-requested
+actions are recorded in the linked Stream Deck plan.
+
+Ordered tasks: bump AudioRouter manifests by package name; integrate the
+validated packed Stream Deck plugin into release assets and checksums; run
+locked workspace/shell tests, UI typecheck/unit/Edge suites, plugin
+typecheck/tests/pack, contracts and documentation checks; commit named paths,
+tag clean source, push main/tag; build and verify draft assets; run the exact
+packaged fresh-install check; publish prerelease and verify downloaded assets.
+
+Prerequisites: Windows/MSVC, existing locked dependencies, GitHub credentials;
+the user's running shell must close before rebuilding/first-run validation.
+No hardware audio test or Stream Deck device operation is part of packaging.
+Evidence: `evidence/2026-10-04-release-0.0.12.md` (created at handoff), logs under
+`target/release-012-*`. Hardware, sign-in, install/upgrade/uninstall, missing
+WebView2, accessibility and signing gates remain open. Rollback: retain
+0.0.11 and compatible configuration/recording backups; never replace published
+assets. Next action: release validation and package preparation.
+
 Agent work (no hardware or credentials needed):
 
 1. Done 2026-10-03: the intermittent `live-inspector-regressions` autosave

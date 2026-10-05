@@ -118,6 +118,9 @@ $requiredArtifacts = @(
     "sbom.cargo.json",
     "sbom.npm.json",
     "sbom.npm.package-lock.json",
+    "com.mrdesjardins.audiorouter.streamDeckPlugin",
+    "sbom.streamdeck.package-lock.json",
+    "sbom.streamdeck.json",
     "THIRD-PARTY-NOTICES.txt",
     "SHA256SUMS.txt"
 )

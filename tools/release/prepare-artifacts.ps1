@@ -185,6 +185,23 @@ try {
     & git archive --format=zip "--output=$(Join-Path $output 'audiorouter-examples.zip')" HEAD examples
     if ($LASTEXITCODE -ne 0) { throw "tracked examples archive failed" }
 
+    & npm.cmd ci --prefix tools/streamdeck
+    if ($LASTEXITCODE -ne 0) { throw "Stream Deck locked dependency installation failed" }
+    & npm.cmd run typecheck --prefix tools/streamdeck
+    if ($LASTEXITCODE -ne 0) { throw "Stream Deck typecheck failed" }
+    & npm.cmd test --prefix tools/streamdeck
+    if ($LASTEXITCODE -ne 0) { throw "Stream Deck tests failed" }
+    & npm.cmd run pack --prefix tools/streamdeck
+    if ($LASTEXITCODE -ne 0) { throw "Stream Deck validation and packing failed" }
+    $pluginPackage = Join-Path $workspace "tools/streamdeck/dist/com.mrdesjardins.audiorouter.streamDeckPlugin"
+    if (-not (Test-Path -LiteralPath $pluginPackage -PathType Leaf)) {
+        throw "Stream Deck package is missing: $pluginPackage"
+    }
+    Copy-Item -LiteralPath $pluginPackage -Destination $output
+    Copy-Item -LiteralPath (Join-Path $workspace "tools/streamdeck/package-lock.json") -Destination (Join-Path $output "sbom.streamdeck.package-lock.json")
+    & node.exe (Join-Path $workspace "tools/release/generate-npm-sbom.mjs") (Join-Path $workspace "tools/streamdeck/package-lock.json") (Join-Path $output "sbom.streamdeck.json")
+    if ($LASTEXITCODE -ne 0) { throw "Stream Deck npm SBOM generation failed" }
+
     $files = Get-ChildItem -LiteralPath $output -File | Sort-Object Name
     $checksums = @(foreach ($file in $files) {
         $hash = Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256

@@ -59,8 +59,9 @@ second backend.
 - **HTTP-09 — Local-network listener (opt-in).** The API tab's "Who can
   connect" offers "This PC only" (default) and each private (RFC 1918) or
   IPv4 link-local address of a connected, non-loopback adapter on this PC,
-  named by adapter. The choice is locked while running and not remembered
-  across launches. Choosing one adds a second listener on exactly that
+  named by adapter. The choice is locked while running and remembered after a successful
+  start. Automatic startup is opt-in; a saved network address resumes only
+  while the PC still owns that private/link-local address. Choosing one adds a second listener on exactly that
   address and the same port; loopback keeps working. Public, CGNAT, VPN
   overlay and wildcard addresses are refused, and an address the PC no longer
   has fails start with an actionable message. The network listener accepts
