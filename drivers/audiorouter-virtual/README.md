@@ -33,6 +33,41 @@ and reports the disposable package directory. It never installs the INF,
 registers a device, changes test-signing or boot policy, changes an audio
 default, or starts a driver service.
 
+## Versioned test package (WP-02)
+
+Use a fresh, empty output folder. From the repository root:
+
+```powershell
+.\drivers\audiorouter-virtual\build.ps1 -Version 0.1.0 -KeepOutput -TestSign -Output .\target\driver-test-0.1.0
+.\tests\acceptance\m03-driver-package.ps1 -Package .\target\driver-test-0.1.0
+```
+
+Omit `-TestSign` for an unsigned build; sign that staged package later with
+`sign-test.ps1 -Package <folder>`. The package contains the stamped INF,
+SYS, CAT, MS-PL license and `package.json` with version, UTC build time,
+source commit, dirty-tree flag, platform, configuration and signing state.
+Test signing adds `AudioRouterTest.cer` (public certificate only), tool logs
+and `signature-verification.json` with hashes. The SYS is signed **before**
+Inf2Cat computes catalog membership. Existing package output is never
+overwritten by a build. Paths may contain spaces; MSBuild receives an
+argument array.
+
+Signing reuses a valid CurrentUser/My WDK test certificate, or creates an
+AudioRouter test code-signing certificate with a non-exportable private key.
+`-CertificateThumbprint <40 hex digits>` selects an existing test certificate.
+No certificate is installed in Root/TrustedPublisher on the host. An
+untrusted-root result is recorded separately from verification success:
+only the specific English WDK diagnostic is accepted, and other/localized
+failures stop signing. Tests verify real catalog membership and reject
+tampered INF/SYS copies. INF errors stop signing before key creation.
+
+Local test signing is offline by default (no timestamp); the VM package is
+valid only while its certificate is valid. For longer-lived test artifacts,
+pass an explicitly chosen RFC 3161 `-TimestampUrl` to `sign-test.ps1`.
+No private-key export or Microsoft production signing happens here. Copy
+the package and CER only to the isolated test VM, following
+[the test procedure](../../docs/operations/virtual-cable-testing.md).
+
 `UPSTREAM-README.md` preserves the source sample's original documentation. Its
 deployment instructions are intentionally not an AudioRouter installation
 procedure; do not use them on a development workstation.

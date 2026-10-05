@@ -4,11 +4,16 @@ param(
     [string] $Configuration = 'Release',
     [ValidateSet('x64', 'ARM64')]
     [string] $Platform = 'x64',
+    [string] $Version = '0.1.0',
     [string] $Output,
-    [switch] $KeepOutput
+    [switch] $KeepOutput,
+    [switch] $TestSign
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'package-tools.ps1')
+$driverVersion = ConvertTo-DriverVersion $Version
+if ($TestSign -and $Platform -ne 'x64') { throw 'Test signing currently supports only x64.' }
 $driverRoot = (Resolve-Path (Join-Path $PSScriptRoot '.')).Path
 $solution = Join-Path $driverRoot 'AudioRouterVirtual.sln'
 $outputWasProvided = [bool]$Output
@@ -16,9 +21,15 @@ $outputWasProvided = [bool]$Output
 if (-not $Output) {
     $Output = Join-Path ([IO.Path]::GetTempPath()) ('audiorouter-virtual-driver-' + [guid]::NewGuid().ToString('N'))
 }
-$output = [IO.Path]::GetFullPath($Output)
+$output = Assert-DriverPackagePath $Output
 $outputExistedBeforeBuild = Test-Path -LiteralPath $output
 $platformOutputRoot = Join-Path $driverRoot $Platform
+if ($outputExistedBeforeBuild -and @(Get-ChildItem -LiteralPath $output -Force).Count -ne 0) {
+    throw 'Output must be an empty directory; choose a fresh output directory.'
+}
+foreach ($name in @('audioroutervirtual.inf', 'audioroutervirtual.sys', 'audioroutervirtual.cat', 'package.json', 'AudioRouterTest.cer', 'LICENSE-MS-PL.txt')) {
+    if (Test-Path -LiteralPath (Join-Path $output $name)) { throw "Refusing to overwrite package file $name; choose a fresh output directory." }
+}
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 
 function Remove-DisposableOutput {
@@ -57,8 +68,9 @@ if (-not $wdkTargets) {
 }
 
 $log = Join-Path $output 'build.log'
-$args = @(
+$buildArguments = @(
     $solution,
+    '/t:Rebuild',
     '/m:1',
     '/nr:false',
     "/p:Configuration=$Configuration",
@@ -73,23 +85,45 @@ $args = @(
 Write-Host "Build-only AudioRouter virtual driver qualification"
 Write-Host "MSBuild: $msbuild"
 Write-Host "WDK target: $($wdkTargets[0].FullName)"
-# PowerShell 7 can preserve both `Path` and `PATH` from the host environment.
-# .NET Framework's MSBuild task treats its environment as case-sensitive while
-# Windows treats those names as equivalent, which otherwise fails before CL.exe
-# starts. Let cmd.exe normalize the inherited environment for this build-only
-# invocation; this does not modify the persistent machine or user environment.
-$commandLine = 'set "Path=" && set "PATH=' + $env:Path + '" && "' + $msbuild + '" ' + ($args -join ' ')
-& cmd.exe /d /c $commandLine
+# Normalize duplicate Path/PATH in this build process only. Invoke MSBuild with
+# an argument array: spaces and shell metacharacters in output paths stay data.
+$buildSearchPath = $env:Path
+[Environment]::SetEnvironmentVariable('PATH', $null, 'Process')
+[Environment]::SetEnvironmentVariable('Path', $buildSearchPath, 'Process')
+& $msbuild @buildArguments
 if ($LASTEXITCODE -ne 0) { throw "MSBuild failed with exit code $LASTEXITCODE. See $log" }
 
-$sys = @(Get-ChildItem -LiteralPath $platformOutputRoot -Filter 'AudioRouterVirtual.sys' -Recurse -File | Where-Object { $_.FullName -notlike "$output*" })
-$inf = @(Get-ChildItem -LiteralPath $platformOutputRoot -Filter 'AudioRouterVirtual.inf' -Recurse -File | Where-Object { $_.FullName -notlike "$output*" })
-if (-not $sys -or -not $inf) {
-    throw "Build completed but the expected .sys/.inf package was not produced. See $log"
+# Stage only this build's package, never an arbitrary recursive search result.
+$builtPackage = Join-Path $platformOutputRoot "$Configuration\package"
+Write-Host "Driver binary: $(Join-Path $builtPackage 'audioroutervirtual.sys')"
+Write-Host "Driver INF: $(Join-Path $builtPackage 'audioroutervirtual.inf')"
+foreach ($name in @('audioroutervirtual.inf', 'audioroutervirtual.sys')) {
+    $artifact = Join-Path $builtPackage $name
+    if (-not (Test-Path -LiteralPath $artifact -PathType Leaf)) { throw "Missing freshly built artifact: $artifact" }
+    Copy-Item -LiteralPath $artifact -Destination (Join-Path $output $name)
 }
-Write-Host "Driver binary: $($sys[0].FullName)"
-Write-Host "Driver INF: $($inf[0].FullName)"
-Write-Host 'No installation, signing, boot-policy, service, or audio-device action was performed.'
+$stampinf = Find-DriverTool 'stampinf.exe'
+$date = (Get-Date).ToString('MM/dd/yyyy', [Globalization.CultureInfo]::InvariantCulture)
+$null = Invoke-DriverTool $stampinf @('-f', (Join-Path $output 'audioroutervirtual.inf'), '-d', $date, '-v', $driverVersion) (Join-Path $output 'stampinf.log')
+$stampedInf = Get-Content -LiteralPath (Join-Path $output 'audioroutervirtual.inf') -Raw
+if ($stampedInf -notmatch ('(?im)^DriverVer\s*=\s*' + [regex]::Escape($date) + ',\s*' + [regex]::Escape($driverVersion) + '\s*$')) {
+    throw 'StampInf did not write the requested date/version; check StampInf environment overrides.'
+}
+Copy-Item -LiteralPath (Join-Path $driverRoot 'LICENSE-MS-PL.txt') -Destination $output
+$git = Invoke-DriverTool 'git.exe' @('-C', $driverRoot, 'rev-parse', 'HEAD') ''
+$dirty = Invoke-DriverTool 'git.exe' @('-C', $driverRoot, 'status', '--porcelain') ''
+$metadata = [ordered]@{ version = $Version; driverVersion = $driverVersion; builtAt = [DateTime]::UtcNow.ToString('o'); gitCommit = $git.Output.Trim(); dirty = [bool]$dirty.Output; platform = $Platform; configuration = $Configuration; signed = 'unsigned' }
+Write-DriverPackageMetadata $output $metadata
+if ($TestSign) {
+    & (Join-Path $driverRoot 'sign-test.ps1') -Package $output
+} else {
+    $inf2cat = Find-DriverTool 'Inf2Cat.exe'
+    $os = if ($Platform -eq 'x64') { '10_X64' } else { '10_CO_ARM64' }
+    $null = Invoke-DriverTool $inf2cat @("/driver:$output", "/os:$os", '/uselocaltime') (Join-Path $output 'inf2cat.log')
+}
+Write-Host "Staged package: $output"
+if (-not $TestSign) { Write-Host 'No installation, signing, boot-policy, service, or audio-device action was performed.' }
+else { Write-Host 'No installation, host trust, boot-policy, service, or audio-device action was performed.' }
 Remove-DisposableOutput
 } catch {
     Remove-DisposableOutput

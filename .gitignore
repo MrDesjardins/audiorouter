@@ -4,4 +4,8 @@
 /target/
 **/target/
 /third_party/
+*.pfx
+*.cer
+*.sys
+*.cat
 /ui/dist-review-*/

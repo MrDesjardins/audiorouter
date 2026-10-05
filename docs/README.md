@@ -7,8 +7,9 @@ Windows, and what is still open. Requirements describe intended behavior
 unless the active plan or evidence explicitly records implementation and
 verification. Numeric budgets remain acceptance targets until measured.
 Portable tests do not imply packaging, signing, attended UI,
-physical-latency or hardware gates. The AudioRouter-owned driver is
-permanently out of scope (2026-09-19).
+physical-latency or hardware gates. The AudioRouter-owned driver track was
+reopened by DEC-18 (2026-10-05); current app releases still use existing
+third-party endpoints until the separate signed-driver gates pass.
 
 ## How to read the specification
 

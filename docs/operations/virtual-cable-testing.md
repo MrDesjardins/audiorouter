@@ -73,8 +73,8 @@ Set-VMFirmware -VMName $vm -EnableSecureBoot Off
 # VM, administrator PowerShell:
 bcdedit /set testsigning on
 # Trust only the PUBLIC part of the developer test certificate, in the VM:
-Import-Certificate -FilePath C:\ar\WDKTestCert.cer -CertStoreLocation Cert:\LocalMachine\Root
-Import-Certificate -FilePath C:\ar\WDKTestCert.cer -CertStoreLocation Cert:\LocalMachine\TrustedPublisher
+Import-Certificate -FilePath C:\ar\driver\AudioRouterTest.cer -CertStoreLocation Cert:\LocalMachine\Root
+Import-Certificate -FilePath C:\ar\driver\AudioRouterTest.cer -CertStoreLocation Cert:\LocalMachine\TrustedPublisher
 Restart-Computer
 ```
 
@@ -88,9 +88,10 @@ Restore-VMCheckpoint -VMName $vm -Name '02-test-signing-ready' -Confirm:$false
 ### Build on the host, copy into the VM
 
 ```powershell
-# Host, x64 Developer PowerShell (sign-test.ps1 is added by WP-02):
+# Host, x64 Developer PowerShell; choose a fresh output folder:
 .\drivers\audiorouter-virtual\build.ps1 -Configuration Release -Platform x64 -Version 0.1.0 -KeepOutput -Output C:\ar\driver-pkg
 .\drivers\audiorouter-virtual\sign-test.ps1 -Package C:\ar\driver-pkg
+.\tests\acceptance\m03-driver-package.ps1 -Package C:\ar\driver-pkg
 # Copy the driver package (with AudioRouterTest.cer), the AudioRouter build
 # and the test scripts into the VM:
 Copy-VMFile -Name $vm -SourcePath <package folder or zip> -DestinationPath C:\ar\driver\ -CreateFullPath -FileSource Host
@@ -98,6 +99,12 @@ Copy-VMFile -Name $vm -SourcePath <package folder or zip> -DestinationPath C:\ar
 
 The private key of the test certificate never leaves the host; only the
 signed package and the `.cer` go into the VM.
+`build.ps1 -TestSign` combines build and test signing in one command. Signing
+is offline without a timestamp by default; see the
+[package workflow](../../drivers/audiorouter-virtual/README.md#versioned-test-package-wp-02)
+for certificate selection and optional timestamping. Build/sign the package
+before preparing the VM certificate trust above. Host verification records an
+untrusted test root as expected and never imports that root on the host.
 
 ### Stage A checks (inside the VM)
 

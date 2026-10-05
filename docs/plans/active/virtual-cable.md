@@ -1,7 +1,8 @@
 # Active plan — AudioRouter virtual cable (DEC-18)
 
-Updated 2026-10-05. Documentation only; **nothing in this
-plan has been built or run yet.** All implementation and testing happens on
+Updated 2026-10-05. Implementation authorized by the user; WP-01 host
+baseline and WP-02 package tooling are underway. No driver has been loaded.
+All implementation and testing happens on
 the user's Windows 11 development PC and in its Hyper-V test VM.
 
 - Decision: DEC-18 in [15-delivery](../../spec/15-delivery.md).
@@ -104,7 +105,7 @@ with the driver work if a second worktree is used.
 - **Evidence:** a short note in this file (Windows build numbers, WDK
   version, VM name, checkpoint names, build result).
 - **Rollback:** delete the VM; disable the Hyper-V feature.
-- **Status:** not started.
+- **Status:** in progress 2026-10-05 (host baseline); VM evidence pending.
 
 ## WP-02 — Test-signed driver package
 
@@ -123,17 +124,20 @@ with the driver work if a second worktree is used.
      - create, if missing, a self-signed code-signing certificate
        `CN=AudioRouter Test Driver` in `Cert:\CurrentUser\My` (use the
        existing `WDKTestCert` if present);
-     - run `Inf2Cat /driver:<dir> /os:10_X64` (Windows 11 uses the 10 OS
+     - sign the `.sys` first (embedding its signature changes its bytes),
+       then run `Inf2Cat /driver:<dir> /os:10_X64` (Windows 11 uses the 10 OS
        code family in Inf2Cat; verify the accepted values with
        `Inf2Cat /?`);
-     - `signtool sign /fd sha256 /s My /n "<cert name>" /t <timestamp URL>`
-       on the `.sys` and the `.cat`;
+     - sign the `.cat` with the selected test certificate's exact thumbprint;
+       SHA-256, optional RFC 3161 timestamp URL (offline by default);
      - export only the public certificate to `<dir>\AudioRouterTest.cer`.
   3. Output layout (both for tests and later for the release):
      `audioroutervirtual.inf`, `audioroutervirtual.sys`,
      `audioroutervirtual.cat`, `LICENSE-MS-PL.txt`, `package.json`
-     (`{ version, builtAt, gitCommit, signed: "test" | "microsoft" }`).
-  4. Never commit `.pfx`, `.cer`, `.sys` or `.cat` files; add to
+     (`{ version, builtAt, gitCommit, signed: "unsigned" | "test" | "microsoft" }`,
+     plus driverVersion, platform, configuration and dirty-tree flag).
+  4. `build.ps1 -TestSign` performs build plus signing in one command.
+     Never commit `.pfx`, `.cer`, `.sys` or `.cat` files; add to
      `.gitignore`.
 - **Tests:** `signtool verify /pa /v` on the `.sys` and `.cat` (expected:
   chain to the test root, which is untrusted on the host — that is
@@ -142,7 +146,38 @@ with the driver work if a second worktree is used.
 - **Acceptance:** package folder produced in one command from a clean
   checkout; signature verification output recorded.
 - **Rollback:** revert the two scripts.
-- **Status:** not started.
+- **Status:** in progress 2026-10-05.
+
+### Execution record (2026-10-05)
+
+User authorized starting this plan with testability, performance and sound
+quality as priorities. D2–D4/D6 remain proposed defaults, as WP-00 permits;
+this tooling does not settle product decisions. Work on the host is build-only.
+The Hyper-V cmdlets are unavailable in this session; VM/checkpoint and host
+Secure Boot evidence have not been supplied. WP-01 is not complete. Independent
+package preparation proceeds; no loaded-driver or audio gate is waived.
+
+Requirements/scenarios: VDEV-09 development packaging, SEC-08 isolation,
+ENG-05 provenance; WP-02 stamped INF, unsigned build, test-signed SYS/catalog,
+public certificate export, signature/integrity checks and invalid-input tests.
+
+Ordered tasks: (1) baseline existing x64 acceptance and windows-audio tests;
+(2) validate version/output and stage exact configuration artifacts with WDK
+StampInf and metadata; (3) sign SYS before generating its catalog, sign catalog,
+export only CER, record verification without trusting a root on the host;
+(4) test pure packaging rules and real WDK tools, inspect diff, document and
+commit exact paths. No audio-path changes in WP-02; VCAB-20–30 measurements
+start with the WPs that touch audio. Rollback: revert package tooling commits;
+delete only the exact generated package; leave existing host trust/boot/audio
+configuration intact. A newly created test certificate stays in CurrentUser/My,
+never Root/TrustedPublisher, and its key is non-exportable.
+
+Validation/evidence: baseline x64 `m03-driver-build.ps1` passed; Windows Rust
+`cargo test -p audiorouter-windows-audio`: 110 passed, 2 live tests ignored.
+Logs: `target/driver-baseline-build.log`, `target/driver-baseline-rust.log`
+(local disposable evidence). Windows reported 10.0.26300.0; WDK tools
+10.0.28000.0 installed. CIM OS inventory denied access; no build number from
+CIM claimed. Full WP-02 evidence will be linked here after verification.
 
 ## WP-03 — VM smoke script (A1, A2, A3, A14)
 

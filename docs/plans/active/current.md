@@ -37,7 +37,8 @@ costs and phases in the [driver track](../future/M03-driver-signing.md).
   [virtual cable plan](virtual-cable.md). Design: [17 Virtual
   cable](../../spec/17-virtual-cable.md). Signing runbook:
   [virtual cable signing](../../operations/virtual-cable-signing.md).
-  Nothing there is built or run yet.
+  WP-01 host baseline passed; WP-02 package tooling is implemented and in
+  verification (2026-10-05). No driver has been loaded; VM evidence is pending.
 - Test procedure (stages A–E, VM to main PC): [virtual cable
   testing](../../operations/virtual-cable-testing.md).
 - Next action: the plan's WP-00 (user confirms D1–D6) and WP-01 (Windows
