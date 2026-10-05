@@ -1,6 +1,6 @@
 # Active plan — post-0.0.8 maintenance
 
-Updated 2026-10-04. v0.0.11 published as an unsigned prerelease; see [0.0.11 evidence](evidence/2026-10-04-release-0.0.11.md).
+Updated 2026-10-04. v0.0.12 published as an unsigned prerelease; see [0.0.12 evidence](evidence/2026-10-04-release-0.0.12.md).
 
 ## Objective and scope
 
@@ -36,28 +36,15 @@ ARCH-04, SEC-01/10 and DIST-01–08 stay traceable through the release evidence.
 
 ## Open work
 
-### Release 0.0.12 (2026-10-04, user authorized)
+### Release 0.0.12 — completed 2026-10-04
 
-Objective: publish the Stream Deck changes as an unsigned experimental
-prerelease and push all committed code to main. Requirements: HTTP-07/09,
-AUTO-15, UI-17, DIST-01–08; Stream Deck phase 0 and subsequent user-requested
-actions are recorded in the linked Stream Deck plan.
-
-Ordered tasks: bump AudioRouter manifests by package name; integrate the
-validated packed Stream Deck plugin into release assets and checksums; run
-locked workspace/shell tests, UI typecheck/unit/Edge suites, plugin
-typecheck/tests/pack, contracts and documentation checks; commit named paths,
-tag clean source, push main/tag; build and verify draft assets; run the exact
-packaged fresh-install check; publish prerelease and verify downloaded assets.
-
-Prerequisites: Windows/MSVC, existing locked dependencies, GitHub credentials;
-the user's running shell must close before rebuilding/first-run validation.
-No hardware audio test or Stream Deck device operation is part of packaging.
-Evidence: `evidence/2026-10-04-release-0.0.12.md` (created at handoff), logs under
-`target/release-012-*`. Hardware, sign-in, install/upgrade/uninstall, missing
-WebView2, accessibility and signing gates remain open. Rollback: retain
-0.0.11 and compatible configuration/recording backups; never replace published
-assets. Next action: release validation and package preparation.
+Published unsigned prerelease with the Stream Deck plugin; all code pushed to
+main, all 16 public assets downloaded and verified. See the
+[execution record](../archived/2026-10-04-release-0.0.12.md) and
+[release evidence](evidence/2026-10-04-release-0.0.12.md).
+Next: attended Stream Deck Record/session-switch qualification; broader M08
+gates remain open. Intermittent pipe stress timeout and existing formatting
+differences remain recorded limitations.
 
 Agent work (no hardware or credentials needed):
 
@@ -332,9 +319,9 @@ Needs the user (attended, hardware or decisions):
 6. M08: clean-machine install/upgrade/uninstall as a standard user, missing
    WebView2, hardware/endurance, accessibility (Narrator), and signing.
 
-Exact next task: item 1, then item 2; release 0.0.8 only when a user-facing
-change exists. Do not disturb the user's audio or close their apps without
-asking.
+Exact next task: attended Stream Deck Record/session-switch qualification,
+then remaining M08 gates. Do not disturb the user's audio or close their
+apps without asking.
 
 ## Risks, evidence and rollback
 
