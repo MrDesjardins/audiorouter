@@ -37,16 +37,17 @@ costs and phases in the [driver track](../future/M03-driver-signing.md).
   [virtual cable plan](virtual-cable.md). Design: [17 Virtual
   cable](../../spec/17-virtual-cable.md). Signing runbook:
   [virtual cable signing](../../operations/virtual-cable-signing.md).
-  WP-01 host baseline passed; WP-02 package tooling is implemented and in
-  verification (2026-10-05). No driver has been loaded; VM evidence is pending.
+  WP-01 host baseline passed; WP-02 package tooling complete (2026-10-05),
+  with [build/signing evidence](evidence/2026-10-05-virtual-cable-wp02.md).
+  No driver has been loaded; VM evidence is pending.
 - Test procedure (stages A–E, VM to main PC): [virtual cable
   testing](../../operations/virtual-cable-testing.md).
-- Next action: the plan's WP-00 (user confirms D1–D6) and WP-01 (Windows
-  PC + VM), then WP-02 on Windows. Summary of the first steps:
+- Next driver action: WP-03 guarded VM smoke script; user completes WP-01
+  VM/checkpoints and confirms remaining WP-00 defaults before WP-05. Summary:
   1. User: enable Hyper-V, create `AR-DriverTest` and checkpoints
      `01-clean-windows` and `02-test-signing-ready` as in the procedure.
-  2. Agent: make `build.ps1` produce a test-signed catalog (or document the
-     exact `inf2cat`/`signtool` step) and export only the `.cer`.
+  2. Done: `build.ps1 -TestSign` produces a versioned test-signed package
+     with catalog integrity checks and exports only the public `.cer`.
   3. Agent: `tests/acceptance/m03-driver-vm.ps1`, run inside the VM, doing
      A1 baseline, A2 install, A3 device check, A14 uninstall and baseline
      compare, writing `C:\ar\evidence\`.

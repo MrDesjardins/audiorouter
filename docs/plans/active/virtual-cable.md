@@ -1,7 +1,7 @@
 # Active plan — AudioRouter virtual cable (DEC-18)
 
-Updated 2026-10-05. Implementation authorized by the user; WP-01 host
-baseline and WP-02 package tooling are underway. No driver has been loaded.
+Updated 2026-10-05. WP-02 package tooling complete; WP-01 host baseline
+passed, VM evidence pending. No driver has been loaded.
 All implementation and testing happens on
 the user's Windows 11 development PC and in its Hyper-V test VM.
 
@@ -146,7 +146,9 @@ with the driver work if a second worktree is used.
 - **Acceptance:** package folder produced in one command from a clean
   checkout; signature verification output recorded.
 - **Rollback:** revert the two scripts.
-- **Status:** in progress 2026-10-05.
+- **Status:** complete 2026-10-05. [WP-02 evidence](evidence/2026-10-05-virtual-cable-wp02.md):
+  x64/ARM64 build acceptance, clean-tree one-command test package, valid INF,
+  33 packaging/integrity checks. No loaded-driver or production-signing claim.
 
 ### Execution record (2026-10-05)
 
@@ -177,7 +179,8 @@ Validation/evidence: baseline x64 `m03-driver-build.ps1` passed; Windows Rust
 Logs: `target/driver-baseline-build.log`, `target/driver-baseline-rust.log`
 (local disposable evidence). Windows reported 10.0.26300.0; WDK tools
 10.0.28000.0 installed. CIM OS inventory denied access; no build number from
-CIM claimed. Full WP-02 evidence will be linked here after verification.
+CIM claimed. Final commands, artifact hashes, initial failures and limitations
+are recorded in [WP-02 evidence](evidence/2026-10-05-virtual-cable-wp02.md).
 
 ## WP-03 — VM smoke script (A1, A2, A3, A14)
 
@@ -528,6 +531,7 @@ CIM claimed. Full WP-02 evidence will be linked here after verification.
 | SEC-08, VDEV-07 | WP-04 | Unit tests, fuzzer, verifier, second user |
 | VDEV-08, NFR-16 | WP-07, WP-08 | Only the helper elevates; backend standard user |
 | VDEV-09 | WP-13 | Microsoft signer, stage B |
+| VDEV-09 development, SEC-08 packaging, ENG-05 | WP-02 | [Versioned test package](evidence/2026-10-05-virtual-cable-wp02.md); production gate remains WP-13 |
 | VDEV-11 | WP-12, WP-14 | Discord, OBS |
 | NFR-02 | WP-12 | Impulse loopback p95 ≤ 160 ms, compared with VB-Cable |
 | VCAB-20/21/26 (bit-exact, conversions, isolation) | WP-05, WP-06, WP-09, WP-09b | Harness: noise compare, LSB error, crosstalk |
@@ -552,5 +556,7 @@ published app keeps the VB-Cable workflow. Reverting DEC-18 restores DEC-16.
 
 ## Next action
 
-User: answer D1–D6 (or accept the defaults) and do WP-01 on the Windows PC.
-Agent (on Windows): WP-02.
+Agent: WP-03 guarded VM smoke script (A1/A2/A3/A14), with negative tests of
+the host refusal. User: supply WP-01 VM/checkpoint and host-policy evidence,
+then run WP-03 twice inside `AR-DriverTest` from `02-test-signing-ready`.
+WP-00 D2–D4/D6 remain open; apply any changed answers before WP-05.
