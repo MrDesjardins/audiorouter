@@ -21,6 +21,75 @@ ARCH-04, SEC-01/10 and DIST-01–08 stay traceable through the release evidence.
 - Other active plan: [app/installer signing](release-signing-and-publication.md),
   blocked on the user's provider choice and enrollment.
 
+## Public website (user request, 2026-10-05)
+
+Objective: present the free/open-source Windows product, current tools,
+integrations, and beginner setup at `audiorouter.org` without implying that
+unreleased driver work is available. Website lives in `site/`; deployment is
+prepared by `.github/workflows/pages.yml` and awaits Pages/DNS configuration.
+
+- Current backend contract: 121 methods. The public website catalog is
+  generated from public HTTP methods plus convenience aliases; generated
+  assets currently contain 106 public backend methods and 111 HTTP operations.
+  Local Swagger remains authoritative for the installed version and schemas.
+  Catalog generation is `node site/generate-catalogs.mjs`.
+- Available-node catalog: 32 currently available node kinds. Descriptions
+  and API routes derive from repository contracts/code, while local Swagger
+  remains authoritative for request/response schemas.
+- MCP setup distinguishes ChatGPT's Secure MCP Tunnel route from Cowork's
+  local desktop-plugin route. AudioRouter does not yet ship a Cowork extension
+  package; this is stated on the site. Client instructions link to provider
+  documentation because availability and UI change over time.
+- Performance wording is limited to measured evidence: ~31 MB shell working
+  set with a live route after editor close; six WebView processes/~302 MB
+  released. The separate 4 MB reading was an idle fresh tray launch before
+  device consent, not an active audio session. Source:
+  [0.0.10 release evidence](evidence/2026-10-04-release-0.0.10.md).
+- Rollback: remove the site folder and Pages workflow. Next action: review at
+  `http://localhost:3000`, then enable GitHub Actions Pages and configure
+  domain DNS when ready.
+
+### Website presentation follow-up (2026-10-05)
+
+Objective: improve the tools visual, show current published activity, and make
+Stream Deck extension steps discoverable. No backend or app behavior changes.
+
+- Tool catalog icons now mirror the app's tool glyphs (with its Duck SVG),
+  wrapped in SVG for consistent vector rendering. The routing illustration
+  joins ports exactly and animates signal comets; reduced-motion preferences
+  hide the comets.
+- Added `site/releases.html`, which reads published release notes from the
+  public GitHub Releases API so the page updates as releases are published.
+  Added a Stream Deck setup showcase: install the release companion, enter
+  local API connection details, and assign supported key actions.
+- Validation: catalog generator reports 106 public API methods, 111 HTTP
+  operations, 32 node kinds; inspect the page locally in a browser for layout,
+  icon alignment, SVG motion, release-feed rendering, and reduced-motion.
+  No automated tests requested or run. GitHub API access is required to show
+  the release list; the page provides a GitHub Releases fallback.
+- Rollback: revert the website-only changes in `site/` and this note. Next:
+  visual browser review, then GitHub Pages configuration when ready.
+
+### Website homepage review (2026-10-05, user request)
+
+- Added a homepage "real setup" slot: `assets/setup.jpg` poster, then a muted
+  looping `assets/setup.mp4` that loads after page load and near the viewport,
+  pauses off-screen, and is skipped for reduced motion or data saver. The slot
+  shows a placeholder on localhost and is hidden in production until the files
+  exist. Recipe in `site/README.md`. The media files are still to come from
+  the user.
+- Added use-case cards (gamers/streamers/podcasts) and a three-step "first
+  route" section that replaces the old bottom CTA. Fixed `.cta .heading`
+  losing its centered margin (it affected `siege.html`). The hero caption no
+  longer overflows at phone width.
+- Verified in Edge/Playwright at 1366×900 and 390×844/Pixel 7: no horizontal
+  overflow. With sample media, the poster and video have identical boxes, the
+  video plays muted and looped after scrolling, and pauses off-screen. Also
+  checked the missing-media placeholder (localhost), hiding on a non-local
+  host, and the reduced-motion case (poster only). The site has a single dark
+  theme.
+- Rollback: revert the `site/` changes and this note.
+
 ## Decision (2026-10-05, user): GPL-3.0-only with commercial licensing (DEC-19)
 
 The user asked to stop others from profiting from AudioRouter while staying
@@ -64,20 +133,14 @@ costs and phases in the [driver track](../future/M03-driver-signing.md).
   No driver has been loaded; VM evidence is pending.
 - Test procedure (stages A–E, VM to main PC): [virtual cable
   testing](../../operations/virtual-cable-testing.md).
-- Next driver action: WP-03 guarded VM smoke script; user completes WP-01
-  VM/checkpoints and confirms remaining WP-00 defaults before WP-05. Summary:
-  1. User: enable Hyper-V, create `AR-DriverTest` and checkpoints
-     `01-clean-windows` and `02-test-signing-ready` as in the procedure.
-  2. Done: `build.ps1 -TestSign` produces a versioned test-signed package
-     with catalog integrity checks and exports only the public `.cer`.
-  3. Agent: `tests/acceptance/m03-driver-vm.ps1`, run inside the VM, doing
-     A1 baseline, A2 install, A3 device check, A14 uninstall and baseline
-     compare, writing `C:\ar\evidence\`.
-  4. User: run it in the VM, restore `02-test-signing-ready`, send the
-     evidence.
-  Validation: the script passes twice from the checkpoint; the host shows no
-  driver, device or Secure Boot change. Rollback: restore the checkpoint.
-  Phase 2 (driver completion) then makes A4–A13 pass.
+- WP-03 smoke tooling is prepared and WP-04 host bridge hardening is reviewed;
+  their VM gates (install/remove, Verifier/fuzz, second-user denial) remain
+  pending. WP-05 host endpoint, precision and format work is in progress; see
+  its execution record and evidence in the [virtual cable plan](virtual-cable.md).
+  Current WP-05 cable descriptors compile for x64/ARM64 and pass portable
+  INF/conversion checks, but remain non-loadable until timing/cleanup work,
+  WP-06 bridge/Rust compatibility and the VM gates are complete. Host builds
+  are not runtime or sound-quality evidence.
 - Needs a separate user go-ahead: buying the EV certificate (phase 5) and
   the first public driver release.
 - Cables: up to 8 (A–H), user enables 1–8, default 2; develop and test with
@@ -463,3 +526,47 @@ Independent clock drift and queue latency remain limits. Keep the previous
 installer and compatible configuration/recording backups for rollback; no
 migration or driver install. Published assets are immutable; repairs use a new
 version.
+
+### Website follow-up (2026-10-05, user request)
+
+Objective: make the homepage signal animation follow real input-to-output paths,
+show product media, and explain the Stream Deck and Siege workflows in detail.
+
+- Reworked `site/assets/hero-route.svg` so signal dots trace the microphone and
+desktop-audio paths through processing and to their destinations. Corrected
+`site/assets/branching.svg` so the Mixer-to-monitor line reaches the monitor
+port. Comets honor reduced-motion preferences.
+- Homepage now displays a real Duck inspector screenshot captured from project
+UI evidence and embeds the video requested by the user. Added dedicated
+`site/stream-deck.html` and `site/siege.html` pages; the Stream Deck page
+explains starting the integration, first-time local API connection, and all
+seven key actions.
+- Siege page uses the user-approved documented setup: anonymized Duck settings
+from the screenshot (−20 dB in menu/preparation, action full level, between
+rounds unchecked) plus the recorded EQ/compressor analysis. It does not claim
+to represent a live active session; the running app could not return a session
+snapshot through its local control pipe. Feed setup/security caveats are shown.
+- Static checks: `node --check` passed for the site JavaScript and catalog
+generator; homepage references and animated SVG features are present; local
+server returned HTTP 200. Browser visual review was not available. No
+automated tests requested or run.
+- Rollback: revert website-only changes in `site/` and this note. Next: local
+browser review at `http://localhost:3000`, then Pages/DNS setup when ready.
+
+### GitHub Pages deployment handoff (2026-10-05)
+
+- Workflow `.github/workflows/pages.yml` deploys `site/` on pushes to `main`;
+  `site/CNAME` contains `audiorouter.org`. `site/README.md` records GitHub
+  Pages and registrar setup.
+- Not published: `gh auth status` reports the saved GitHub token is invalid, and
+  `git push --dry-run origin main` could not connect to GitHub. The local
+  `main` has eight commits ahead of `origin/main`, all separate driver work;
+  pushing it would publish that work along with the site.
+- Exact next step: configure Pages and DNS as described in `site/README.md`;
+  restore GitHub access and publish the website changes on an isolated branch/PR
+  before merge to `main`. Then verify the Pages deployment and enable HTTPS.
+- **Superseded 2026-10-05 (release 0.0.14):** GitHub access works; Pages is
+  live at https://audiorouter.org with HTTPS enforced, and every push to
+  `main` deploys `site/` successfully. The site reads the newest release
+  from the GitHub API; see the
+  [0.0.14 evidence](evidence/2026-10-05-release-0.0.14.md).
