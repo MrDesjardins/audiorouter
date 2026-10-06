@@ -39,9 +39,12 @@ typedef struct _AR_BRIDGE_LEASE_STATE {
     // compared under Lock so another authorized handle cannot replay the
     // request identity to refresh or close the lease.
     PFILE_OBJECT OwnerFileObject;
+    ULONG OwnerSessionId;
+    ULONGLONG LastGeneration;
     ULONGLONG LastHeartbeat100ns;
     AR_BRIDGE_OPEN_REQUEST Request;
     PVOID SectionObject;
+    PMDL LockedMdl;
     volatile PVOID MappedView;
     volatile ULONG MappedBytes;
     volatile LONG64 NextSequence;
@@ -49,6 +52,32 @@ typedef struct _AR_BRIDGE_LEASE_STATE {
 
 #define AR_BRIDGE_LEASE_SLOTS 2
 AR_BRIDGE_LEASE_STATE g_BridgeLeases[AR_BRIDGE_LEASE_SLOTS] = {};
+// Control-plane operations only: serialized OPEN prevents the same section
+// being simultaneously claimed for both directions. No WaveRT callback takes
+// this mutex. Complete IRPs only after releasing it to avoid completion reentry.
+EX_PUSH_LOCK g_BridgeControlLock;
+struct BridgeControlGuard {
+    BridgeControlGuard() { ExAcquirePushLockExclusive(&g_BridgeControlLock); }
+    ~BridgeControlGuard() { ExReleasePushLockExclusive(&g_BridgeControlLock); }
+};
+
+static NTSTATUS PinBridgeView(PVOID View, ULONG Bytes, PMDL* LockedMdl)
+{
+    // OPEN owns a referenced, mapped section at <= APC_LEVEL. Lock its pages
+    // before publishing to DISPATCH_LEVEL callbacks; a file-backed shared view
+    // alone does not guarantee residency. Allocation/pinning never runs in audio.
+    *LockedMdl = IoAllocateMdl(View, Bytes, FALSE, FALSE, NULL);
+    if (*LockedMdl == NULL) { return STATUS_INSUFFICIENT_RESOURCES; }
+    NTSTATUS status = STATUS_SUCCESS;
+    __try {
+        MmProbeAndLockPages(*LockedMdl, KernelMode, IoModifyAccess);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        status = GetExceptionCode();
+        IoFreeMdl(*LockedMdl);
+        *LockedMdl = NULL;
+    }
+    return status;
+}
 
 static void SetBridgeMappedBytes(
     _In_ AR_BRIDGE_LEASE_STATE* Lease,
@@ -150,7 +179,7 @@ NTSTATUS AudioRouterCopyLeaseBlock(
         reinterpret_cast<volatile LONG64*>(&Lease->Request.Generation), 0, 0);
     KeMemoryBarrier();
     NTSTATUS status = STATUS_DEVICE_NOT_READY;
-    if (direction == AR_BRIDGE_DIRECTION_RENDER_SOURCE &&
+    if (direction == AR_BRIDGE_DIRECTION_CAPTURE_SINK &&
         view != NULL && mappedBytes != 0 && generation != 0) {
         volatile LONG64* state = reinterpret_cast<volatile LONG64*>(
             static_cast<UCHAR*>(view) + AR_BRIDGE_STATE_OFFSET);
@@ -173,7 +202,7 @@ NTSTATUS AudioRouterCopyLeaseBlock(
     return status;
 }
 
-// Publish one capture quantum into the mapped capture-sink slot. The caller
+// Publish one render-source quantum into the mapped lease. The caller
 // supplies an already-interleaved float32 buffer; this routine performs no
 // allocation, waits, logging, endpoint access, or control I/O.
 NTSTATUS AudioRouterPublishLeaseBlock(
@@ -208,7 +237,7 @@ NTSTATUS AudioRouterPublishLeaseBlock(
     ULONGLONG generation = InterlockedCompareExchange64(
         reinterpret_cast<volatile LONG64*>(&Lease->Request.Generation), 0, 0);
     NTSTATUS status = STATUS_DEVICE_NOT_READY;
-    if (direction != AR_BRIDGE_DIRECTION_CAPTURE_SINK || view == NULL ||
+    if (direction != AR_BRIDGE_DIRECTION_RENDER_SOURCE || view == NULL ||
         framesPerQuantum != Frames ||
         channels != Channels ||
         mappedBytes < AR_BRIDGE_PAYLOAD_OFFSET + sampleCount * sizeof(FLOAT) ||
@@ -270,12 +299,20 @@ static void RetireBridgeResources(
     _In_ AR_BRIDGE_LEASE_STATE* Lease,
     _In_opt_ PVOID MappedView,
     _In_opt_ PVOID SectionObject,
+    _In_opt_ PMDL LockedMdl,
     _In_ BOOLEAN RundownStarted)
 {
     if (RundownStarted) {
         ExWaitForRundownProtectionRelease(&Lease->Rundown);
     }
     if (MappedView != NULL) {
+        // Rundown has drained every callback. Zero the complete logical view
+        // before unpin/unmap so another session cannot inherit retained audio.
+        if (LockedMdl != NULL) {
+            RtlZeroMemory(MappedView, MmGetMdlByteCount(LockedMdl));
+            MmUnlockPages(LockedMdl);
+            IoFreeMdl(LockedMdl);
+        }
         MmUnmapViewInSystemSpace(MappedView);
     }
     if (SectionObject != NULL) {
@@ -288,10 +325,12 @@ static void ReleaseLeasesOwnedByFileObject(_In_opt_ PFILE_OBJECT FileObject)
     if (FileObject == NULL) {
         return;
     }
+    BridgeControlGuard controlGuard;
 
     for (ULONG index = 0; index < AR_BRIDGE_LEASE_SLOTS; ++index) {
         AR_BRIDGE_LEASE_STATE* lease = &g_BridgeLeases[index];
         PVOID sectionObject = NULL;
+        PMDL lockedMdl = NULL;
         PVOID mappedView = NULL;
         BOOLEAN rundownStarted = FALSE;
         KIRQL oldIrql;
@@ -300,6 +339,8 @@ static void ReleaseLeasesOwnedByFileObject(_In_opt_ PFILE_OBJECT FileObject)
         if ((lease->Active || lease->Retiring) &&
             lease->OwnerFileObject == FileObject) {
             sectionObject = lease->SectionObject;
+            lockedMdl = lease->LockedMdl;
+            lease->LockedMdl = NULL;
             mappedView = InterlockedExchangePointer(&lease->MappedView, NULL);
             rundownStarted = mappedView != NULL;
             lease->RundownStarted = rundownStarted;
@@ -308,12 +349,13 @@ static void ReleaseLeasesOwnedByFileObject(_In_opt_ PFILE_OBJECT FileObject)
             SetBridgeMappedBytes(lease, 0);
             lease->Active = FALSE;
             lease->OwnerFileObject = NULL;
+            lease->OwnerSessionId = 0;
             lease->LastHeartbeat100ns = 0;
         }
         KeReleaseSpinLock(&lease->Lock, oldIrql);
 
         if (mappedView != NULL || sectionObject != NULL) {
-            RetireBridgeResources(lease, mappedView, sectionObject,
+            RetireBridgeResources(lease, mappedView, sectionObject, lockedMdl,
                                   rundownStarted);
             KeAcquireSpinLock(&lease->Lock, &oldIrql);
             ClearBridgeRequest(lease);
@@ -391,9 +433,10 @@ NTSTATUS AudioRouterPublishLeaseBlockForDirection(
 NTSTATUS AudioRouterGetLeaseShapeForDirection(
     _In_ USHORT Direction,
     _Out_ USHORT* Frames,
-    _Out_ USHORT* Channels)
+    _Out_ USHORT* Channels,
+    _Out_ ULONGLONG* Generation)
 {
-    if (Frames == NULL || Channels == NULL) {
+    if (Frames == NULL || Channels == NULL || Generation == NULL) {
         return STATUS_INVALID_PARAMETER;
     }
     AR_BRIDGE_LEASE_STATE* lease = BridgeLeaseForDirection(Direction);
@@ -408,6 +451,8 @@ NTSTATUS AudioRouterGetLeaseShapeForDirection(
     }
     *Frames = LoadBridgeUshort(&lease->Request.FramesPerQuantum);
     *Channels = LoadBridgeUshort(&lease->Request.Channels);
+    *Generation = InterlockedCompareExchange64(
+        reinterpret_cast<volatile LONG64*>(&lease->Request.Generation), 0, 0);
     ExReleaseRundownProtection(&lease->Rundown);
     return STATUS_SUCCESS;
 }
@@ -478,14 +523,14 @@ NTSTATUS BridgeControlCreateClose(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
     return CompleteBridgeIrp(Irp, STATUS_SUCCESS);
 }
 
-NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
+static NTSTATUS HandleBridgeControlRequest(_In_ PIRP Irp)
 {
     if (Irp == NULL) {
         return STATUS_INVALID_PARAMETER;
     }
     PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(Irp);
     if (stack == NULL || stack->FileObject == NULL) {
-        return CompleteBridgeIrp(Irp, STATUS_INVALID_PARAMETER);
+        return STATUS_INVALID_PARAMETER;
     }
     ULONG code = stack->Parameters.DeviceIoControl.IoControlCode;
     NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
@@ -494,13 +539,17 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
         code == IOCTL_AUDIOROUTER_BRIDGE_CLOSE ||
         code == IOCTL_AUDIOROUTER_BRIDGE_HEARTBEAT) {
         if (stack->Parameters.DeviceIoControl.InputBufferLength !=
-            sizeof(AR_BRIDGE_OPEN_REQUEST) || Irp->AssociatedIrp.SystemBuffer == NULL) {
-            return CompleteBridgeIrp(Irp, STATUS_INVALID_PARAMETER);
+            sizeof(AR_BRIDGE_OPEN_REQUEST) ||
+            stack->Parameters.DeviceIoControl.OutputBufferLength != 0 ||
+            Irp->AssociatedIrp.SystemBuffer == NULL || Irp->RequestorMode != UserMode) {
+            return STATUS_INVALID_PARAMETER;
         }
 
         PAR_BRIDGE_OPEN_REQUEST request =
             static_cast<PAR_BRIDGE_OPEN_REQUEST>(Irp->AssociatedIrp.SystemBuffer);
         status = AudioRouterValidateBridgeOpenRequest(request);
+        ULONG sessionId = 0;
+        if (NT_SUCCESS(status)) { status = IoGetRequestorSessionId(Irp, &sessionId); }
         // OPEN must carry a section, otherwise it could publish an active
         // lease with no mapped view and fail only when audio first arrives.
         // Maintenance requests may repeat the mapping pair (as the mapped
@@ -516,10 +565,11 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
         if (NT_SUCCESS(status)) {
             AR_BRIDGE_LEASE_STATE* lease = BridgeLeaseForDirection(request->Direction);
             if (lease == NULL) {
-                return CompleteBridgeIrp(Irp, STATUS_INVALID_PARAMETER);
+                return STATUS_INVALID_PARAMETER;
             }
             PVOID sectionObject = NULL;
             PVOID mappedView = NULL;
+            PMDL lockedMdl = NULL;
             SIZE_T mappedBytes = request->MappingBytes;
             // A section is acquired only for OPEN. CLOSE and HEARTBEAT are
             // lease operations and must validate the existing identity under
@@ -529,20 +579,28 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                 SIZE_T requiredBytes = AR_BRIDGE_HEADER_BYTES +
                     static_cast<SIZE_T>(request->Channels) *
                     static_cast<SIZE_T>(request->FramesPerQuantum) * sizeof(float);
-                if (mappedBytes < requiredBytes) {
-                    status = STATUS_BUFFER_TOO_SMALL;
+                status = AudioRouterValidateMappingBytes(request);
+                if (!NT_SUCCESS(status)) {
+                    // Rejected before referencing a caller-provided handle.
                 } else {
                     status = ObReferenceObjectByHandle(
                         reinterpret_cast<HANDLE>(static_cast<ULONG_PTR>(request->SectionHandle)),
-                        SECTION_MAP_READ | SECTION_MAP_WRITE, NULL, UserMode,
+                        SECTION_MAP_READ | SECTION_MAP_WRITE, *MmSectionObjectType, UserMode,
                         &sectionObject, NULL);
                     if (NT_SUCCESS(status)) {
                         status = MmMapViewInSystemSpace(
                             sectionObject, &mappedView, &mappedBytes);
-                        if (NT_SUCCESS(status) && mappedBytes < requiredBytes) {
+                        // Logical bytes are exact; Windows returns page-rounded
+                        // view bytes. Bound the physical mapping separately and
+                        // never expose that padding to a callback's copy length.
+                        SIZE_T roundedBytes = (requiredBytes + PAGE_SIZE - 1) & ~(static_cast<SIZE_T>(PAGE_SIZE) - 1);
+                        if (NT_SUCCESS(status) && (mappedBytes < requiredBytes || mappedBytes > roundedBytes)) {
                             MmUnmapViewInSystemSpace(mappedView);
                             mappedView = NULL;
                             status = STATUS_BUFFER_TOO_SMALL;
+                        }
+                        if (NT_SUCCESS(status)) {
+                            status = PinBridgeView(mappedView, static_cast<ULONG>(requiredBytes), &lockedMdl);
                         }
                         if (!NT_SUCCESS(status)) {
                             ObDereferenceObject(sectionObject);
@@ -558,25 +616,52 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                 if (sectionObject != NULL) {
                     ObDereferenceObject(sectionObject);
                 }
-                return CompleteBridgeIrp(Irp, status);
+                return status;
             }
 
             PVOID oldSectionObject = NULL;
             PVOID oldMappedView = NULL;
+            PMDL oldLockedMdl = NULL;
             BOOLEAN oldRundownStarted = FALSE;
             BOOLEAN publishAfterRetire = FALSE;
             KIRQL oldIrql;
             KeAcquireSpinLock(&lease->Lock, &oldIrql);
             ULONGLONG now = KeQueryInterruptTime();
-            ULONGLONG leaseTicks = static_cast<ULONGLONG>(request->LeaseMs) * _100NS_PER_MILLISECOND;
+            // Expiry belongs to the stored lease, never the rival request.
+            // Otherwise an attacker could send LeaseMs=1 to seize a live owner.
+            ULONGLONG leaseTicks = static_cast<ULONGLONG>(lease->Request.LeaseMs) * _100NS_PER_MILLISECOND;
             BOOLEAN expired = lease->Active &&
                 (now - lease->LastHeartbeat100ns > leaseTicks);
 
             if (code == IOCTL_AUDIOROUTER_BRIDGE_OPEN) {
-                if ((lease->Active && !expired) || lease->Retiring) {
-                    status = STATUS_DEVICE_BUSY;
+                status = AudioRouterValidateNextGeneration(
+                    lease->LastGeneration, request->Generation);
+                if (!NT_SUCCESS(status)) {
+                    // Each successful OPEN needs a fresh generation, even
+                    // after CLOSE, so streams can detect turnover if they
+                    // were not scheduled while the lease was inactive.
+                } else if ((lease->Active && !expired) || lease->Retiring) {
+                    status = AudioRouterOpenOwnershipStatus(true, lease->OwnerSessionId, sessionId);
                 } else {
+                    // All control changes are serialized. Section identity, not
+                    // handle integer, detects duplicate handles to the same object.
+                    for (ULONG slot = 0; slot < AR_BRIDGE_LEASE_SLOTS; ++slot) {
+                        if (&g_BridgeLeases[slot] != lease &&
+                            g_BridgeLeases[slot].SectionObject == sectionObject) {
+                            status = STATUS_SHARING_VIOLATION;
+                            break;
+                        }
+                    }
+                    if (!NT_SUCCESS(status)) {
+                        KeReleaseSpinLock(&lease->Lock, oldIrql);
+                        if (lockedMdl != NULL) { MmUnlockPages(lockedMdl); IoFreeMdl(lockedMdl); }
+                        MmUnmapViewInSystemSpace(mappedView);
+                        ObDereferenceObject(sectionObject);
+                        return status;
+                    }
                     oldSectionObject = lease->SectionObject;
+                    oldLockedMdl = lease->LockedMdl;
+                    lease->LockedMdl = NULL;
                     BOOLEAN priorRundownStarted = lease->RundownStarted;
                     oldMappedView = InterlockedExchangePointer(
                         &lease->MappedView, NULL);
@@ -586,12 +671,14 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                     lease->SectionObject = NULL;
                     lease->Active = FALSE;
                     lease->OwnerFileObject = NULL;
+                    lease->OwnerSessionId = 0;
                     if (oldRundownStarted) {
                         lease->Retiring = TRUE;
                         // Reserve the replacement for this file object while
                         // callbacks drain. Cleanup must be able to cancel
                         // this in-flight OPEN before it publishes a mapping.
                         lease->OwnerFileObject = stack->FileObject;
+                        lease->OwnerSessionId = sessionId;
                         publishAfterRetire = TRUE;
                     } else {
                         if (priorRundownStarted) {
@@ -599,27 +686,32 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                             lease->RundownStarted = FALSE;
                         }
                         PublishBridgeRequest(lease, request);
+                        lease->LastGeneration = request->Generation;
                         lease->OwnerFileObject = stack->FileObject;
+                        lease->OwnerSessionId = sessionId;
                         lease->LastHeartbeat100ns = now;
                         lease->Active = TRUE;
                         lease->SectionObject = sectionObject;
+                        lease->LockedMdl = lockedMdl;
                         lease->MappedView = mappedView;
                         SetBridgeMappedBytes(
                             lease, static_cast<ULONG>(request->MappingBytes));
                         InterlockedExchange64(&lease->NextSequence, 0);
                         sectionObject = NULL;
                         mappedView = NULL;
+                        lockedMdl = NULL;
                         status = STATUS_SUCCESS;
                     }
                 }
             } else if (lease->Active && !expired && !lease->Retiring &&
-                       lease->OwnerFileObject != stack->FileObject) {
+                       (lease->OwnerFileObject != stack->FileObject || lease->OwnerSessionId != sessionId)) {
                 // A live lease belongs to the handle that opened it. Keep
                 // ownership failures distinct from an expired or invalidated
                 // lease so user mode can report authorization separately.
                 status = STATUS_ACCESS_DENIED;
             } else if (!lease->Active || expired || lease->Retiring ||
                        lease->OwnerFileObject != stack->FileObject ||
+                       lease->OwnerSessionId != sessionId ||
                        !BridgeRequestsHaveSameLeaseIdentity(
                            &lease->Request, request)) {
                 // Expiry is terminal for the mapped callback view. Detach it
@@ -627,6 +719,8 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                 // wait for any callback reader before unmapping below.
                 if (expired && lease->Active && !lease->Retiring) {
                     oldSectionObject = lease->SectionObject;
+                    oldLockedMdl = lease->LockedMdl;
+                    lease->LockedMdl = NULL;
                     oldMappedView = InterlockedExchangePointer(
                         &lease->MappedView, NULL);
                     oldRundownStarted = oldMappedView != NULL;
@@ -635,6 +729,7 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                     SetBridgeMappedBytes(lease, 0);
                     lease->Active = FALSE;
                     lease->OwnerFileObject = NULL;
+                    lease->OwnerSessionId = 0;
                     lease->Retiring = oldRundownStarted;
                     if (!oldRundownStarted) {
                         ClearBridgeRequest(lease);
@@ -643,6 +738,8 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                 status = STATUS_INVALID_DEVICE_STATE;
             } else if (code == IOCTL_AUDIOROUTER_BRIDGE_CLOSE) {
                 oldSectionObject = lease->SectionObject;
+                oldLockedMdl = lease->LockedMdl;
+                lease->LockedMdl = NULL;
                 oldMappedView = InterlockedExchangePointer(
                     &lease->MappedView, NULL);
                 oldRundownStarted = oldMappedView != NULL;
@@ -650,6 +747,7 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                 lease->Retiring = oldRundownStarted;
                 lease->Active = FALSE;
                 lease->OwnerFileObject = NULL;
+                lease->OwnerSessionId = 0;
                 lease->LastHeartbeat100ns = 0;
                 lease->SectionObject = NULL;
                 SetBridgeMappedBytes(lease, 0);
@@ -660,7 +758,7 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
             }
             KeReleaseSpinLock(&lease->Lock, oldIrql);
             if (publishAfterRetire) {
-                RetireBridgeResources(lease, oldMappedView, oldSectionObject,
+                RetireBridgeResources(lease, oldMappedView, oldSectionObject, oldLockedMdl,
                                       oldRundownStarted);
                 oldMappedView = NULL;
                 oldSectionObject = NULL;
@@ -671,9 +769,12 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                     ExReInitializeRundownProtection(&lease->Rundown);
                     lease->RundownStarted = FALSE;
                     PublishBridgeRequest(lease, request);
+                    lease->LastGeneration = request->Generation;
                     lease->OwnerFileObject = stack->FileObject;
+                    lease->OwnerSessionId = sessionId;
                     lease->LastHeartbeat100ns = now;
                     lease->SectionObject = sectionObject;
+                    lease->LockedMdl = lockedMdl;
                     SetBridgeMappedBytes(
                         lease, static_cast<ULONG>(request->MappingBytes));
                     InterlockedExchange64(&lease->NextSequence, 0);
@@ -683,6 +784,7 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                     lease->Retiring = FALSE;
                     sectionObject = NULL;
                     mappedView = NULL;
+                    lockedMdl = NULL;
                     status = STATUS_SUCCESS;
                 } else {
                     // Cleanup or a competing owner won while the old view
@@ -691,7 +793,7 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                 }
                 KeReleaseSpinLock(&lease->Lock, oldIrql);
             } else if (oldMappedView != NULL || oldSectionObject != NULL) {
-                RetireBridgeResources(lease, oldMappedView, oldSectionObject,
+                RetireBridgeResources(lease, oldMappedView, oldSectionObject, oldLockedMdl,
                                       oldRundownStarted);
                 // `oldRundownStarted` is the state captured while holding
                 // the lease lock; do not inspect the mutable lease flag after
@@ -704,6 +806,7 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                 }
             }
             if (mappedView != NULL) {
+                if (lockedMdl != NULL) { MmUnlockPages(lockedMdl); IoFreeMdl(lockedMdl); }
                 MmUnmapViewInSystemSpace(mappedView);
             }
             if (sectionObject != NULL) {
@@ -712,6 +815,17 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
         }
     }
 
+    return status;
+}
+
+NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
+{
+    if (Irp == NULL) { return STATUS_INVALID_PARAMETER; }
+    NTSTATUS status;
+    {
+        BridgeControlGuard controlGuard;
+        status = HandleBridgeControlRequest(Irp);
+    }
     return CompleteBridgeIrp(Irp, status);
 }
 
@@ -743,16 +857,20 @@ NTSTATUS CreateBridgeControlDevice(_In_ PDRIVER_OBJECT DriverObject)
 
 void DeleteBridgeControlDevice()
 {
+    BridgeControlGuard controlGuard;
     UNICODE_STRING dosName;
     RtlInitUnicodeString(&dosName, AUDIOROUTER_BRIDGE_DOS_NAME);
 
     for (ULONG index = 0; index < AR_BRIDGE_LEASE_SLOTS; ++index) {
         PVOID sectionObject = NULL;
         PVOID mappedView = NULL;
+        PMDL lockedMdl = NULL;
         BOOLEAN rundownStarted = FALSE;
         KIRQL oldIrql;
         KeAcquireSpinLock(&g_BridgeLeases[index].Lock, &oldIrql);
         sectionObject = g_BridgeLeases[index].SectionObject;
+        lockedMdl = g_BridgeLeases[index].LockedMdl;
+        g_BridgeLeases[index].LockedMdl = NULL;
         mappedView = InterlockedExchangePointer(
             &g_BridgeLeases[index].MappedView, NULL);
         rundownStarted = mappedView != NULL;
@@ -763,11 +881,12 @@ void DeleteBridgeControlDevice()
         SetBridgeMappedBytes(&g_BridgeLeases[index], 0);
         g_BridgeLeases[index].Active = FALSE;
         g_BridgeLeases[index].OwnerFileObject = NULL;
+        g_BridgeLeases[index].OwnerSessionId = 0;
         g_BridgeLeases[index].LastHeartbeat100ns = 0;
         KeReleaseSpinLock(&g_BridgeLeases[index].Lock, oldIrql);
 
         RetireBridgeResources(&g_BridgeLeases[index], mappedView,
-                              sectionObject, rundownStarted);
+                              sectionObject, lockedMdl, rundownStarted);
 
         // A callback that acquired rundown before detachment may still be
         // reading Request. Clear the contract only after that reader has
@@ -1013,6 +1132,7 @@ Return Value:
     WDF_DRIVER_CONFIG           config;
 
     DPF(D_TERSE, ("[DriverEntry]"));
+    ExInitializePushLock(&g_BridgeControlLock);
 
     // Copy registry Path name in a global variable to be used by modules inside driver.
     // !! NOTE !! Inside this function we are initializing the registrypath, so we MUST NOT add any failing calls

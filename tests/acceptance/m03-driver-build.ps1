@@ -314,6 +314,13 @@ foreach ($required in @(
 if ($copyHelper.Contains('KeAcquireSpinLock')) {
     throw 'callback lease helper must not acquire the lease spin lock'
 }
+if (-not $copyHelper.Contains('direction == AR_BRIDGE_DIRECTION_CAPTURE_SINK')) {
+    throw 'capture endpoint consumer must read the capture-sink lease'
+}
+if (-not $source.Contains('AudioRouterValidateNextGeneration(') -or
+    -not $source.Contains('lease->LastGeneration = request->Generation;')) {
+    throw 'bridge OPEN must reject reused generations and retain the last published generation'
+}
 $streamSource = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/minwavertstream.cpp') -Raw
 $readBytesStart = $streamSource.IndexOf('VOID CMiniportWaveRTStream::ReadBytes')
 $readBytesEnd = $streamSource.IndexOf('#pragma code_seg("PAGE")', $readBytesStart)
@@ -347,7 +354,7 @@ if ($publishStart -lt 0 -or $publishEnd -le $publishStart) {
 }
 $publishHelper = $source.Substring($publishStart, $publishEnd - $publishStart)
 foreach ($required in @(
-        'AR_BRIDGE_DIRECTION_CAPTURE_SINK',
+        'AR_BRIDGE_DIRECTION_RENDER_SOURCE',
         'USHORT framesPerQuantum',
         'LoadBridgeUshort(&Lease->Request.FramesPerQuantum)',
         'USHORT channels',
@@ -436,6 +443,12 @@ if (-not $writeBytesSource.Contains('AudioRouterCopyLeaseBlockForDirection')) {
 }
 if (-not $writeBytesSource.Contains('AR_BRIDGE_DIRECTION_CAPTURE_SINK')) {
     throw 'WaveRT capture callback must consume the capture-sink lease direction'
+}
+if (-not $writeBytesSource.Contains('AR_BRIDGE_DIRECTION_CAPTURE_SINK, &readFrames, &readChannels')) {
+    throw 'WaveRT capture callback must track the capture-sink lease generation'
+}
+if (-not $writeBytesSource.Contains('m_BridgeReadSequence = 0;')) {
+    throw 'WaveRT capture callback must reset its minimum sequence at sink lease turnover'
 }
 if (-not $writeBytesSource.Contains('header.Channels != bridgeChannels')) {
     throw 'WaveRT render callback must reject a bridge channel-shape mismatch'

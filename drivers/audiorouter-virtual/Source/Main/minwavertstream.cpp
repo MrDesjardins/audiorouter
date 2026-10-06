@@ -298,6 +298,8 @@ Return Value:
     m_BridgeScratchFrames = 0;
     m_BridgeScratchFrameOffset = 0;
     m_BridgeReadSequence = 0;
+    m_BridgeGeneration = 0;
+    m_BridgeReadGeneration = 0;
     m_BridgePublishFrames = 0;
     m_BridgePublishChannels = 0;
 
@@ -1707,6 +1709,28 @@ ByteDisplacement - # of bytes to process.
         return;
     }
     RefreshBridgePublishShape();
+    USHORT readFrames = 0;
+    USHORT readChannels = 0;
+    ULONGLONG readGeneration = 0;
+    const NTSTATUS readShapeStatus = AudioRouterGetLeaseShapeForDirection(
+        AR_BRIDGE_DIRECTION_CAPTURE_SINK, &readFrames, &readChannels,
+        &readGeneration);
+    if (NT_SUCCESS(readShapeStatus) && readFrames != 0 && readChannels != 0 &&
+        AudioRouterStreamGenerationChanged(m_BridgeReadGeneration, readGeneration)) {
+        RtlZeroMemory(m_BridgeScratch, sizeof(m_BridgeScratch));
+        m_BridgeScratchFrames = 0;
+        m_BridgeScratchFrameOffset = 0;
+        m_BridgeReadSequence = 0;
+        m_BridgeReadGeneration = readGeneration;
+    } else if (!NT_SUCCESS(readShapeStatus) || readFrames == 0 || readChannels == 0) {
+        if (m_BridgeReadGeneration != 0) {
+            RtlZeroMemory(m_BridgeScratch, sizeof(m_BridgeScratch));
+            m_BridgeScratchFrames = 0;
+            m_BridgeScratchFrameOffset = 0;
+            m_BridgeReadSequence = 0;
+            m_BridgeReadGeneration = 0;
+        }
+    }
     ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
 
     const BOOLEAN bridgeFormat = IsBridgePcmFormat(m_pWfExt);
@@ -1872,9 +1896,10 @@ VOID CMiniportWaveRTStream::RefreshBridgePublishShape()
     ULONG previousChannels = m_BridgePublishChannels;
     USHORT frames = 0;
     USHORT channels = 0;
+    ULONGLONG generation = 0;
     const BOOLEAN bridgeFormat = !m_bCapture && IsBridgePcmFormat(m_pWfExt);
     if (bridgeFormat && NT_SUCCESS(AudioRouterGetLeaseShapeForDirection(
-            AR_BRIDGE_DIRECTION_RENDER_SOURCE, &frames, &channels)) &&
+            AR_BRIDGE_DIRECTION_RENDER_SOURCE, &frames, &channels, &generation)) &&
         channels == m_pWfExt->Format.nChannels) {
         m_BridgePublishFrames = frames;
         m_BridgePublishChannels = channels;
@@ -1889,6 +1914,13 @@ VOID CMiniportWaveRTStream::RefreshBridgePublishShape()
         // shape from stale frame state in the callback.
         m_BridgeScratchFrames = 0;
         m_BridgeScratchFrameOffset = 0;
+    }
+    if (AudioRouterStreamGenerationChanged(m_BridgeGeneration, generation)) {
+        RtlZeroMemory(m_BridgeScratch, sizeof(m_BridgeScratch));
+        m_BridgeScratchFrames = 0;
+        m_BridgeScratchFrameOffset = 0;
+        m_BridgeReadSequence = 0;
+        m_BridgeGeneration = generation;
     }
 }
 

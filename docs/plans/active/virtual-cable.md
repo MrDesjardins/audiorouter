@@ -260,9 +260,10 @@ paths remain outside this driver change until explicitly migrated.
 
 - **Who:** agent on the host; user runs VM checks.
 - **Files:** `drivers/audiorouter-virtual/Source/Inc/bridgeio.h`,
-  `Source/Main/adapter.cpp`; new `drivers/audiorouter-virtual/tests/`
-  (user-mode unit tests for the pure helpers) and
-  `tools/m03-bridge-fuzz/` (user-mode IOCTL fuzzer).
+  `Source/Main/adapter.cpp`, `Source/Main/minwavertstream.{h,cpp}`;
+  `tests/acceptance/m03-driver-build.ps1`; new
+  `drivers/audiorouter-virtual/tests/` (user-mode unit tests for the pure
+  helpers) and `tools/m03-bridge-fuzz/` (user-mode IOCTL fuzzer).
 - **Steps:**
   1. Fix the double-fetch in `AudioRouterCopyBridgeBlock`: one volatile copy
      of the header into a local; validate and use only the local; single
@@ -297,7 +298,36 @@ paths remain outside this driver change until explicitly migrated.
   that touches user memory (list in the evidence file) by a fresh agent
   context (independent review, AGENTS.md).
 - **Rollback:** revert the commits; the prototype is unshipped.
-- **Status:** not started.
+- **Status:** host implementation and build checks complete 2026-10-05;
+  independent review has no remaining source finding; VM qualification pending.
+
+WP-04 host follow-up: keep lease control serialization at PASSIVE_LEVEL; align
+copy/publish direction guards with the capture-sink consumer and render-source
+producer; return active lease generation with shape; separately track the
+capture-sink reader's generation and clear its scratch/reset its sequence on
+turnover. Retain and enforce a strictly increasing per-direction generation
+high-water mark across close/expiry. The fuzzer's undersized-section case uses
+a valid 2-channel request whose 1056-byte extent exceeds its 64-byte section.
+Host checks: `build-tests.ps1` passed 49 checks and measured 0.122 us/block;
+`m03-driver-build.ps1` passed for x64 and ARM64; docs validation passed 122
+Markdown files/647 links; the host VM guard refused as intended. Fresh review
+confirmed fixes to all source findings. ASan linking is unavailable because
+`clang_rt.asan_static_runtime_thunk-x86_64.lib` is absent from the installed
+MSVC toolchain. The microbenchmark is not kernel DPC evidence. VM Driver
+Verifier/fuzz and A11 second-user checks remain pending and block WP completion.
+
+Steps/validation: single-read header/payload copy with fail-closed finite checks;
+user-mode MSVC shim tests including hostile mutation; typed section handles,
+exact logical quantum size with bounded OS page-rounded mapping, serialized
+control operations at PASSIVE_LEVEL for cross-direction section exclusivity,
+file/session-owned leases and post-rundown scrubbing; callback direction
+guards match endpoint roles; lease-generation changes scrub scratch and reset
+sequence state even for same-shape replacement. VM-only fuzzer compiled,
+including a real undersized section-object case. Host checks passed 45 unit
+checks, x64 and ARM64 WDK acceptance. Initial fresh-review findings prompted
+these fixes; follow-up review pending. Host microbenchmark is not kernel DPC
+evidence. Rollback: revert WP-04 changes; no driver is loaded on the host.
+VM Verifier/fuzz/second-user checks remain pending and block WP completion.
 
 ## WP-05 — Eight cables, registry configuration, formats, timing, sample cleanup (17 §5.1, §5.4, §5.5, VCAB-01/02/10–12)
 
@@ -593,7 +623,7 @@ published app keeps the VB-Cable workflow. Reverting DEC-18 restores DEC-16.
 
 ## Next action
 
-Agent: WP-03 guarded VM smoke script (A1/A2/A3/A14), with negative tests of
-the host refusal. User: supply WP-01 VM/checkpoint and host-policy evidence,
-then run WP-03 twice inside `AR-DriverTest` from `02-test-signing-ready`.
-WP-00 D2–D4/D6 remain open; apply any changed answers before WP-05.
+Finish fresh-context WP-04 review, then run its VM gates (30-minute Driver
+Verifier fuzzer and A11 second-user denial) after VM/checkpoint setup. WP-03
+A1/A2/A3/A14 checkpoint runs are also pending. WP-00 D2–D4/D6 remain open;
+apply any changed answers before dependent implementation.

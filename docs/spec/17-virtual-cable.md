@@ -206,6 +206,14 @@ device in `Source/Main/adapter.cpp` and bridge helpers in
   `cable-h` (UTF-16, no terminator inside `BusIdBytes`). Unknown value →
   `STATUS_OBJECT_NAME_NOT_FOUND`; a known but not enabled cable →
   `STATUS_DEVICE_NOT_CONNECTED`.
+- Every successful OPEN must use a nonzero generation strictly greater than
+  the last successful generation for that direction during the current driver
+  load. The driver retains the high-water mark across CLOSE/expiry so a stream
+  that missed the inactive interval can detect lease turnover and reset its
+  block sequence. A reused, decreasing, or exhausted generation is rejected
+  with `STATUS_INVALID_PARAMETER`; the client chooses a monotonically
+  increasing generation for each lease. Restarting the driver resets the
+  high-water mark.
 - `AR_BRIDGE_PROTOCOL_MINOR` = 1. The 176-byte open request stays as the
   fixed prefix; the `C_ASSERT`s stay.
 - **Extensible open request.** Protocol 1.1 accepts either the 176-byte
