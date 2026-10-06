@@ -241,6 +241,15 @@ NTSTATUS AudioRouterCopyLeaseBlock(
                 InterlockedCompareExchange64(state, 0, 0)) != stateBefore) {
             status = STATUS_RETRY;
         }
+        if (NT_SUCCESS(status)) {
+            // Flow control for the single-block slot: acknowledge the block
+            // just consumed so the user-mode producer can publish the next
+            // one immediately, paced by this stream's clock rather than its
+            // own timer. Diagnostic/pacing value only; never read back here.
+            InterlockedExchange64(reinterpret_cast<volatile LONG64*>(
+                static_cast<UCHAR*>(view) + AR_BRIDGE_READER_SEQUENCE_OFFSET),
+                static_cast<LONG64>(Header->Sequence));
+        }
     }
     ExReleaseRundownProtection(&Lease->Rundown);
     return status;
@@ -650,7 +659,7 @@ static NTSTATUS HandleBridgeControlRequest(
         }
         AudioRouterFillDriverInfo(
             static_cast<PAR_BRIDGE_DRIVER_INFO>(Irp->AssociatedIrp.SystemBuffer),
-            g_EnabledCableCount);
+            &g_BridgeConfig);
         *Information = sizeof(AR_BRIDGE_DRIVER_INFO);
         return STATUS_SUCCESS;
     }
@@ -685,6 +694,12 @@ static NTSTATUS HandleBridgeControlRequest(
                 request->BusId, request->BusIdBytes, &busIndex);
             if (NT_SUCCESS(status) && busIndex >= g_EnabledCableCount) {
                 status = STATUS_DEVICE_NOT_CONNECTED;
+            }
+            // MaxLeaseMs (17 §5.5) bounds how long a silent owner can hold a
+            // cable; maintenance requests carry the same identity and value.
+            if (NT_SUCCESS(status) &&
+                !AudioRouterLeaseWithinConfig(request->LeaseMs, &g_BridgeConfig)) {
+                status = STATUS_INVALID_PARAMETER;
             }
         }
         ULONG sessionId = 0;
@@ -1673,38 +1688,64 @@ Exit:
     return ntStatus;
 }
 
-// CableCount is stored by the INF in this adapter's hardware key. Treat a
-// missing, malformed, or out-of-range value as the compiled default (two).
-static ULONG ReadConfiguredCableCount(_In_ PDEVICE_OBJECT DeviceObject)
+// Read one REG_DWORD from the open hardware key. Any other type or size,
+// or a missing value, reports "not present" so the caller's default wins.
+static bool ReadConfigDword(_In_ HANDLE Key, _In_ PCWSTR Name, _Out_ ULONG* Value)
+{
+    PAGED_CODE();
+    *Value = 0;
+    UNICODE_STRING valueName;
+    RtlInitUnicodeString(&valueName, Name);
+    UCHAR storage[FIELD_OFFSET(KEY_VALUE_PARTIAL_INFORMATION, Data) + sizeof(ULONG)] = {};
+    ULONG resultBytes = 0;
+    NTSTATUS status = ZwQueryValueKey(Key, &valueName, KeyValuePartialInformation,
+        storage, sizeof(storage), &resultBytes);
+    if (!NT_SUCCESS(status)) {
+        return false;
+    }
+    auto value = reinterpret_cast<PKEY_VALUE_PARTIAL_INFORMATION>(storage);
+    if (value->Type != REG_DWORD || value->DataLength != sizeof(ULONG)) {
+        return false;
+    }
+    *Value = *reinterpret_cast<PULONG>(value->Data);
+    return true;
+}
+
+// 17 §5.5: configuration lives in this adapter's hardware key (HKR), written
+// by the INF (CableCount default) and the elevated helper. Every value is
+// range-checked; anything invalid falls back to the compiled default.
+static AR_BRIDGE_CONFIG ReadBridgeConfig(_In_ PDEVICE_OBJECT DeviceObject)
 {
     PAGED_CODE();
 
+    AR_BRIDGE_CONFIG config;
+    AudioRouterDefaultConfig(&config);
     PDEVICE_OBJECT pdo = NULL;
     HANDLE key = NULL;
-    ULONG count = 2;
     if (!NT_SUCCESS(PcGetPhysicalDeviceObject(DeviceObject, &pdo)) || pdo == NULL ||
         !NT_SUCCESS(IoOpenDeviceRegistryKey(pdo, PLUGPLAY_REGKEY_DEVICE,
             KEY_QUERY_VALUE, &key))) {
-        return count;
+        return config;
     }
-
-    UNICODE_STRING valueName;
-    RtlInitUnicodeString(&valueName, L"CableCount");
-    UCHAR storage[FIELD_OFFSET(KEY_VALUE_PARTIAL_INFORMATION, Data) + sizeof(ULONG)] = {};
-    ULONG resultBytes = 0;
-    NTSTATUS status = ZwQueryValueKey(key, &valueName, KeyValuePartialInformation,
-        storage, sizeof(storage), &resultBytes);
+    ULONG value = 0;
+    bool present = ReadConfigDword(key, L"CableCount", &value);
+    config.CableCount = AudioRouterConfigValue(present, value, 1,
+        ARRAYSIZE(g_RenderEndpoints), AR_CONFIG_CABLE_COUNT_DEFAULT);
+    present = ReadConfigDword(key, L"MinPeriodFrames", &value);
+    config.MinPeriodFrames = AudioRouterConfigValue(present, value,
+        AR_CONFIG_MIN_PERIOD_FRAMES_LOW, AR_CONFIG_MIN_PERIOD_FRAMES_HIGH,
+        AR_CONFIG_MIN_PERIOD_FRAMES_DEFAULT);
+    present = ReadConfigDword(key, L"DefaultPeriodFrames", &value);
+    config.DefaultPeriodFrames = AudioRouterConfigValue(present, value,
+        AR_CONFIG_DEFAULT_PERIOD_FRAMES_LOW, AR_CONFIG_DEFAULT_PERIOD_FRAMES_HIGH,
+        AR_CONFIG_DEFAULT_PERIOD_FRAMES_DEFAULT);
+    present = ReadConfigDword(key, L"MaxLeaseMs", &value);
+    config.MaxLeaseMs = AudioRouterConfigValue(present, value,
+        AR_CONFIG_MAX_LEASE_MS_LOW, AR_BRIDGE_MAX_LEASE_MS,
+        AR_CONFIG_MAX_LEASE_MS_DEFAULT);
     ZwClose(key);
-    if (NT_SUCCESS(status)) {
-        auto value = reinterpret_cast<PKEY_VALUE_PARTIAL_INFORMATION>(storage);
-        if (value->Type == REG_DWORD && value->DataLength == sizeof(ULONG)) {
-            ULONG configured = *reinterpret_cast<PULONG>(value->Data);
-            if (configured >= 1 && configured <= ARRAYSIZE(g_RenderEndpoints)) {
-                count = configured;
-            }
-        }
-    }
-    return count;
+    AudioRouterNormalizeConfig(&config);
+    return config;
 }
 
 //=============================================================================
@@ -1773,7 +1814,12 @@ Return Value:
     ntStatus = pAdapterCommon->Init(DeviceObject);
     IF_FAILED_JUMP(ntStatus, Exit);
 
-    g_EnabledCableCount = ReadConfiguredCableCount(DeviceObject);
+    g_BridgeConfig = ReadBridgeConfig(DeviceObject);
+    g_EnabledCableCount = g_BridgeConfig.CableCount;
+    // Wave interfaces are registered below with this packet constraint, so
+    // set it from the configured minimum period before any filter install.
+    g_CablePacketSizeConstraints.MinPacketPeriodInHns =
+        AudioRouterMinPacketPeriodHns(g_BridgeConfig.MinPeriodFrames);
 
     //
     // register with PortCls for power-management services

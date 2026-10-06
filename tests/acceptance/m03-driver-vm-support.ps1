@@ -21,3 +21,24 @@ function Compare-DriverVmBaseline {
     }
     return $differences
 }
+# Windows composes an endpoint's friendly name from the pin/jack description
+# and the interface friendly name, e.g. "Speakers (AudioRouter Cable A Input)".
+# Accept the exact cable name or either composed form; the runner records
+# the actual names so the first VM run settles the format (17 §5.5).
+function Test-CableEndpointName {
+    param([string] $FriendlyName, [string] $Expected)
+    if ([string]::IsNullOrEmpty($FriendlyName) -or [string]::IsNullOrEmpty($Expected)) { return $false }
+    if ($FriendlyName -ceq $Expected) { return $true }
+    $escaped = [regex]::Escape($Expected)
+    return ($FriendlyName -cmatch "^[^()]+ \($escaped\)$") -or ($FriendlyName -cmatch "^$escaped \([^()]+\)$")
+}
+function Select-CableEndpoints {
+    param($Endpoints, [string[]] $Expected)
+    $result = @()
+    foreach ($name in $Expected) {
+        $found = @($Endpoints | Where-Object { Test-CableEndpointName $_.FriendlyName $name })
+        if ($found.Count -ne 1) { return $null }
+        $result += $found[0]
+    }
+    return $result
+}

@@ -32,9 +32,16 @@ a stand-alone cable like VB-Cable.
 
 ## Stage A — test-signed driver in a VM (free)
 
+**First time? Follow the [VM guide](virtual-cable-vm-guide.md).** It is the
+step-by-step version of this stage for someone who has never set up a VM,
+uses **VirtualBox** (the development PC runs Windows 11 Home, which has no
+Hyper-V), builds every test file with `tools/vm/prepare-vm-share.ps1`, and
+runs each check inside the VM with `tools/vm/vm-checks.ps1 -Step <name>`.
+The Hyper-V commands below apply only to Windows 11 Pro/Enterprise hosts.
+
 ### One-time host setup (main PC, administrator PowerShell)
 
-Requires Windows 11 Pro/Enterprise and a Windows 11 ISO. Nothing below
+Requires Windows 11 Pro/Enterprise (Hyper-V) and a Windows 11 ISO. Nothing below
 changes the host's audio, drivers, Secure Boot or test-signing state.
 
 ```powershell

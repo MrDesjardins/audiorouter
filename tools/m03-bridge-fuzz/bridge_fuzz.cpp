@@ -18,8 +18,13 @@ namespace {
 constexpr DWORD kOpen = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA);
 constexpr DWORD kClose = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x801, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA);
 constexpr DWORD kHeartbeat = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x802, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA);
-constexpr DWORD kBytes = 32 + 128 * 2 * sizeof(double);
+constexpr DWORD kQuery = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x803, METHOD_BUFFERED, FILE_READ_DATA);
+// Protocol 1.1 (bridgeio.h): 128-byte shared header, float64 payload.
+constexpr DWORD kHeaderBytes = 128;
+constexpr DWORD kBytes = kHeaderBytes + 128 * 2 * sizeof(double);
 constexpr DWORD kShortSectionBytes = 64;
+constexpr DWORD kPrefixBytes = 176;
+constexpr DWORD kDriverInfoBytes = 104;
 
 #pragma pack(push, 8)
 struct Request {
@@ -28,11 +33,14 @@ struct Request {
     ULONGLONG generation, sectionHandle;
     DWORD mappingBytes, reserved;
     wchar_t busId[64];
+    // AR_BRIDGE_OPEN_EXTENSION: OPEN requires it with FLOAT64 (bit 0).
+    DWORD extensionBytes, flags, extensionReserved[14];
 };
 #pragma pack(pop)
-static_assert(sizeof(Request) == 176, "bridge OPEN ABI drift");
+static_assert(offsetof(Request, extensionBytes) == kPrefixBytes, "bridge OPEN prefix ABI drift");
+static_assert(sizeof(Request) == 240, "bridge OPEN extension ABI drift");
 
-struct Stats { std::atomic<ULONGLONG> calls{0}, accepted{0}, rejected{0}, unexpected{0}; };
+struct Stats { std::atomic<ULONGLONG> calls{0}, accepted{0}, rejected{0}, unexpected{0}, opened{0}, queried{0}; };
 struct SharedSection {
     HANDLE handle = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, kBytes, nullptr);
     void* view = handle ? MapViewOfFile(handle, FILE_MAP_ALL_ACCESS, 0, 0, kBytes) : nullptr;
@@ -47,12 +55,31 @@ struct ShortSection {
 };
 Request makeRequest(USHORT direction, HANDLE section, ULONGLONG generation) {
     Request value{};
-    value.major = 1; value.minor = 0; value.busBytes = 14;
+    value.major = 1; value.minor = 1; value.busBytes = 14;
     value.channels = 2; value.frames = 128; value.direction = direction;
     value.rate = 48000; value.leaseMs = 2000; value.generation = generation;
     value.sectionHandle = reinterpret_cast<ULONG_PTR>(section); value.mappingBytes = kBytes;
     std::memcpy(value.busId, L"cable-a", 14);
+    value.extensionBytes = 64; value.flags = 1;
     return value;
+}
+bool expectedRejection(DWORD error) {
+    // Statuses the driver returns for refused requests, as Win32 errors
+    // (RtlNtStatusToDosError). Anything else fails the run for investigation.
+    switch (error) {
+    case ERROR_INVALID_PARAMETER: case ERROR_INSUFFICIENT_BUFFER:
+    case ERROR_INVALID_HANDLE: case ERROR_ACCESS_DENIED: case ERROR_SHARING_VIOLATION:
+    case ERROR_INVALID_FUNCTION: case ERROR_GEN_FAILURE: case ERROR_NOT_READY:
+    case ERROR_BUSY: case ERROR_INVALID_STATE:
+    case ERROR_NOT_SUPPORTED:          // unknown extension flag / prefix-only OPEN
+    case ERROR_REVISION_MISMATCH:      // protocol major/minor
+    case ERROR_DEVICE_NOT_CONNECTED:   // cable above the enabled count
+    case ERROR_FILE_NOT_FOUND:         // unknown cable ID
+    case ERROR_BAD_COMMAND:            // STATUS_INVALID_DEVICE_STATE: lease lost/replaced
+        return true;                   // (a non-section handle maps to ERROR_INVALID_HANDLE)
+    default:
+        return false;
+    }
 }
 void invoke(HANDLE device, DWORD code, const void* data, DWORD bytes, Stats& stats) {
     DWORD returned = 0;
@@ -60,15 +87,13 @@ void invoke(HANDLE device, DWORD code, const void* data, DWORD bytes, Stats& sta
     const BOOL ok = DeviceIoControl(device, code, const_cast<void*>(data), bytes,
                                     nullptr, 0, &returned, nullptr);
     ++stats.calls;
-    if (ok) { ++stats.accepted; return; }
+    if (ok) {
+        ++stats.accepted;
+        if (code == kOpen) ++stats.opened;
+        return;
+    }
     const DWORD error = GetLastError();
-    // These are expected request rejections. Any other Win32 result is kept
-    // in the evidence and makes the run fail for investigation.
-    if (error == ERROR_INVALID_PARAMETER || error == ERROR_INSUFFICIENT_BUFFER ||
-        error == ERROR_INVALID_HANDLE || error == ERROR_ACCESS_DENIED ||
-        error == ERROR_SHARING_VIOLATION || error == ERROR_INVALID_FUNCTION ||
-        error == ERROR_GEN_FAILURE || error == ERROR_NOT_READY || error == ERROR_BUSY ||
-        error == ERROR_INVALID_STATE) ++stats.rejected;
+    if (expectedRejection(error)) ++stats.rejected;
     else {
         ++stats.unexpected;
         if (stats.unexpected.load() <= 16) std::fprintf(stderr, "unexpected DeviceIoControl Win32 error %lu (code 0x%08lx)\n", error, code);
@@ -104,13 +129,13 @@ void runWorker(DWORD seconds, ULONGLONG seed, unsigned index, Stats& stats) {
         Request undersized = makeRequest(direction, shortSection.handle, generation + 1);
         undersized.channels = 2; // valid prototype shape, larger than 64-byte section
         undersized.frames = 128;
-        undersized.mappingBytes = 32 + undersized.channels * undersized.frames * sizeof(float);
+        undersized.mappingBytes = kHeaderBytes + undersized.channels * undersized.frames * sizeof(double);
         invoke(device, kOpen, &undersized, sizeof(undersized), stats);
     }
-    const DWORD lengths[] = { 0, 1, 23, 175, 176, 177, 255, 4096 };
-    const DWORD codes[] = { kOpen, kClose, kHeartbeat, 0, 0xffffffff };
+    const DWORD lengths[] = { 0, 1, 23, 175, 176, 177, 239, 240, 241, 255, 4096 };
+    const DWORD codes[] = { kOpen, kClose, kHeartbeat, kQuery, 0, 0xffffffff };
     while (GetTickCount64() < end) {
-        switch (random() % 8) {
+        switch (random() % 10) {
         case 0: { // Exercise every fixed-structure boundary on all three IOCTLs.
             auto malformed = current;
             invoke(device, codes[random() % 3], &malformed, lengths[random() % std::size(lengths)], stats);
@@ -118,7 +143,8 @@ void runWorker(DWORD seconds, ULONGLONG seed, unsigned index, Stats& stats) {
         }
         case 1: { // Invalid enums, lengths, reserved bits and hostile dimensions.
             auto malformed = current;
-            switch (random() % 8) {
+            DWORD bytes = sizeof(malformed);
+            switch (random() % 16) {
             case 0: malformed.direction = 0; break;
             case 1: malformed.channels = 0xffff; break;
             case 2: malformed.frames = 0xffff; break;
@@ -126,9 +152,47 @@ void runWorker(DWORD seconds, ULONGLONG seed, unsigned index, Stats& stats) {
             case 4: malformed.leaseMs = 0xffffffff; break;
             case 5: malformed.rate = 0xffffffff; break;
             case 6: malformed.mappingBytes--; break;
+            case 7: malformed.flags |= 1u << (1 + random() % 31); break;   // unknown flag
+            case 8: malformed.flags = 0; break;                            // no FLOAT64
+            case 9: malformed.extensionReserved[random() % 14] = 1; break;
+            case 10: malformed.extensionBytes = static_cast<DWORD>(random()); break;
+            case 11: malformed.minor = (random() & 1) ? 0 : 2; break;
+            case 12: std::memcpy(malformed.busId, L"cable-z", 14); break;  // unknown cable
+            case 13: std::memcpy(malformed.busId, L"cable-h", 14); break;  // likely not enabled
+            case 14: bytes = kPrefixBytes; break;                          // prefix-only OPEN
             default: malformed.generation = 0; break;
             }
-            invoke(device, kOpen, &malformed, sizeof(malformed), stats);
+            invoke(device, kOpen, &malformed, bytes, stats);
+            break;
+        }
+        case 8: { // QUERY: exact report, then hostile input/output lengths.
+            std::array<unsigned char, 256> out{};
+            DWORD returned = 0;
+            ++stats.calls;
+            if (DeviceIoControl(device, kQuery, nullptr, 0, out.data(), kDriverInfoBytes, &returned, nullptr)) {
+                ++stats.accepted; ++stats.queried;
+                WORD major = 0, minor = 0;
+                std::memcpy(&major, out.data(), 2); std::memcpy(&minor, out.data() + 2, 2);
+                if (returned != kDriverInfoBytes || major != 1 || minor != 1) {
+                    ++stats.unexpected;
+                    std::fprintf(stderr, "QUERY returned %lu bytes, protocol %u.%u\n", returned, major, minor);
+                }
+            } else if (expectedRejection(GetLastError())) { ++stats.rejected; } else { ++stats.unexpected; }
+            const DWORD inBytes = static_cast<DWORD>(random() % 9);
+            const DWORD outBytes = static_cast<DWORD>(random() % (out.size() + 1));
+            ++stats.calls;
+            if (DeviceIoControl(device, kQuery, out.data(), inBytes, out.data(), outBytes, &returned, nullptr)) {
+                ++stats.accepted;
+                if (inBytes != 0 || outBytes != kDriverInfoBytes) {
+                    ++stats.unexpected;
+                    std::fprintf(stderr, "QUERY accepted in=%lu out=%lu\n", inBytes, outBytes);
+                }
+            } else if (expectedRejection(GetLastError())) { ++stats.rejected; } else { ++stats.unexpected; }
+            break;
+        }
+        case 9: { // Maintenance without the extension is valid for the owner.
+            auto heartbeat = current;
+            invoke(device, kHeartbeat, &heartbeat, kPrefixBytes, stats);
             break;
         }
         case 2: { // A kernel event handle is not a section object.
@@ -204,6 +268,13 @@ int wmain(int argc, wchar_t** argv) {
         std::wprintf(L"calls=%llu accepted=%llu rejected=%llu unexpected=%llu\n", stats.calls.load(), stats.accepted.load(), stats.rejected.load(), stats.unexpected.load());
     }
     for (auto& thread : threads) thread.join();
-    std::wprintf(L"complete calls=%llu accepted=%llu rejected=%llu unexpected=%llu\n", stats.calls.load(), stats.accepted.load(), stats.rejected.load(), stats.unexpected.load());
+    std::wprintf(L"complete calls=%llu accepted=%llu rejected=%llu unexpected=%llu opened=%llu queried=%llu\n", stats.calls.load(), stats.accepted.load(), stats.rejected.load(), stats.unexpected.load(), stats.opened.load(), stats.queried.load());
+    // Coverage guard: a run in which no OPEN or QUERY ever succeeds only
+    // exercised rejection paths (for example after an ABI change) and must
+    // not count as a pass for the lease/mapping/teardown code.
+    if (stats.opened.load() == 0 || stats.queried.load() == 0) {
+        std::fwprintf(stderr, L"no successful OPEN or QUERY: the lease paths were not exercised\n");
+        return 1;
+    }
     return stats.unexpected.load() == 0 ? 0 : 1;
 }

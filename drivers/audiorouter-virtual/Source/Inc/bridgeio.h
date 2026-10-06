@@ -73,9 +73,15 @@ extern "C" NTKERNELAPI NTSTATUS IoGetRequestorSessionId(_In_ PIRP Irp, _Out_ PUL
 #define AR_BRIDGE_CAP_STREAM_COUNTERS 0x00000008UL
 #define AR_BRIDGE_CAP_CONFIG_FROM_REGISTRY 0x00000010UL
 #define AR_BRIDGE_CAP_SAMPLE_FLOAT64 0x00000020UL
+// LOW_LATENCY_PERIODS means the driver advertises packet-size constraints
+// for the configured minimum period; whether Windows grants that period is
+// measured in the VM (IAudioClient3::GetSharedModeEnginePeriod).
+// CONFIG_FROM_REGISTRY covers CableCount, period limits and MaxLeaseMs;
+// display names are applied by the helper, not the driver (17 §5.5).
 #define AR_BRIDGE_IMPLEMENTED_CAPS \
     (AR_BRIDGE_CAP_MULTICHANNEL | AR_BRIDGE_CAP_RATES_44_48_96 | \
-     AR_BRIDGE_CAP_STREAM_COUNTERS | AR_BRIDGE_CAP_SAMPLE_FLOAT64)
+     AR_BRIDGE_CAP_LOW_LATENCY_PERIODS | AR_BRIDGE_CAP_STREAM_COUNTERS | \
+     AR_BRIDGE_CAP_CONFIG_FROM_REGISTRY | AR_BRIDGE_CAP_SAMPLE_FLOAT64)
 #define AR_BRIDGE_RATE_44100 0x00000001UL
 #define AR_BRIDGE_RATE_48000 0x00000002UL
 #define AR_BRIDGE_RATE_96000 0x00000004UL
@@ -215,7 +221,8 @@ typedef struct _AR_BRIDGE_SHARED_HEADER {
     AR_BRIDGE_STREAM_COUNTERS Counters;
     ULONG SampleBytes;          // driver-written at OPEN; readers require 8
     ULONG Reserved0;
-    ULONGLONG ReaderSequence;   // render-source consumer acknowledgement (user mode)
+    ULONGLONG ReaderSequence;   // consumer acknowledgement: user mode for RENDER_SOURCE,
+                                // the driver for CAPTURE_SINK (producer flow control)
     UCHAR Reserved[24];
 } AR_BRIDGE_SHARED_HEADER, *PAR_BRIDGE_SHARED_HEADER;
 
@@ -228,8 +235,8 @@ typedef struct _AR_BRIDGE_DRIVER_INFO {
     ULONG MaxChannels;
     ULONG Capabilities;
     ULONG SupportedRates;
-    ULONG MinPeriodFrames;      // 0 while LOW_LATENCY_PERIODS is not reported
-    ULONG DefaultPeriodFrames;  // 0 while LOW_LATENCY_PERIODS is not reported
+    ULONG MinPeriodFrames;      // configured minimum period (frames at 48 kHz)
+    ULONG DefaultPeriodFrames;  // configured default period (reported only)
     ULONG Reserved[16];
 } AR_BRIDGE_DRIVER_INFO, *PAR_BRIDGE_DRIVER_INFO;
 
@@ -357,9 +364,74 @@ __forceinline NTSTATUS AudioRouterValidateBridgeQueryLength(
         ? STATUS_SUCCESS : STATUS_INVALID_PARAMETER;
 }
 
+// Registry configuration (17 §5.5), read once at StartDevice from the
+// device's hardware key. Missing, mistyped or out-of-range values fall back
+// to the compiled default; the helper is the only writer.
+#define AR_CONFIG_CABLE_COUNT_DEFAULT 2
+#define AR_CONFIG_MIN_PERIOD_FRAMES_DEFAULT 128
+#define AR_CONFIG_MIN_PERIOD_FRAMES_LOW 64
+#define AR_CONFIG_MIN_PERIOD_FRAMES_HIGH 480
+#define AR_CONFIG_DEFAULT_PERIOD_FRAMES_DEFAULT 480
+#define AR_CONFIG_DEFAULT_PERIOD_FRAMES_LOW 128
+#define AR_CONFIG_DEFAULT_PERIOD_FRAMES_HIGH 960
+#define AR_CONFIG_MAX_LEASE_MS_DEFAULT AR_BRIDGE_MAX_LEASE_MS
+#define AR_CONFIG_MAX_LEASE_MS_LOW 500
+// Period frame counts are defined at 48 kHz; the packet constraint Windows
+// reads is a duration, so it applies at every rate.
+#define AR_CONFIG_PERIOD_REFERENCE_RATE 48000
+
+typedef struct _AR_BRIDGE_CONFIG {
+    ULONG CableCount;
+    ULONG MinPeriodFrames;
+    ULONG DefaultPeriodFrames;  // reported only: Windows owns the default engine period
+    ULONG MaxLeaseMs;
+} AR_BRIDGE_CONFIG, *PAR_BRIDGE_CONFIG;
+
+__forceinline ULONG AudioRouterConfigValue(
+    _In_ bool Present,
+    _In_ ULONG Value,
+    _In_ ULONG Low,
+    _In_ ULONG High,
+    _In_ ULONG Fallback)
+{
+    return Present && Value >= Low && Value <= High ? Value : Fallback;
+}
+
+__forceinline void AudioRouterDefaultConfig(_Out_ AR_BRIDGE_CONFIG* Config)
+{
+    Config->CableCount = AR_CONFIG_CABLE_COUNT_DEFAULT;
+    Config->MinPeriodFrames = AR_CONFIG_MIN_PERIOD_FRAMES_DEFAULT;
+    Config->DefaultPeriodFrames = AR_CONFIG_DEFAULT_PERIOD_FRAMES_DEFAULT;
+    Config->MaxLeaseMs = AR_CONFIG_MAX_LEASE_MS_DEFAULT;
+}
+
+// A default period below the configured minimum cannot be honoured; raise it.
+__forceinline void AudioRouterNormalizeConfig(_Inout_ AR_BRIDGE_CONFIG* Config)
+{
+    if (Config->DefaultPeriodFrames < Config->MinPeriodFrames) {
+        Config->DefaultPeriodFrames = Config->MinPeriodFrames;
+    }
+}
+
+// KSAUDIO_PACKETSIZE_CONSTRAINTS2.MinPacketPeriodInHns for a period in
+// frames at the 48 kHz reference rate (floor; 128 frames -> 26666 hns).
+__forceinline ULONG AudioRouterMinPacketPeriodHns(_In_ ULONG PeriodFrames)
+{
+    return static_cast<ULONG>(static_cast<ULONGLONG>(PeriodFrames) * 10000000ULL /
+                              AR_CONFIG_PERIOD_REFERENCE_RATE);
+}
+
+// Lease requests above the configured cap are refused at OPEN.
+__forceinline bool AudioRouterLeaseWithinConfig(
+    _In_ ULONG LeaseMs,
+    _In_ const AR_BRIDGE_CONFIG* Config)
+{
+    return LeaseMs != 0 && LeaseMs <= Config->MaxLeaseMs;
+}
+
 __forceinline void AudioRouterFillDriverInfo(
     _Out_ AR_BRIDGE_DRIVER_INFO* Info,
-    _In_ ULONG EnabledCableCount)
+    _In_ const AR_BRIDGE_CONFIG* Config)
 {
     RtlZeroMemory(Info, sizeof(*Info));
     Info->ProtocolMajor = AR_BRIDGE_PROTOCOL_MAJOR;
@@ -368,11 +440,13 @@ __forceinline void AudioRouterFillDriverInfo(
     Info->DriverVersion[1] = AR_DRIVER_VERSION_MINOR;
     Info->DriverVersion[2] = AR_DRIVER_VERSION_PATCH;
     Info->DriverVersion[3] = AR_DRIVER_VERSION_BUILD;
-    Info->CableCount = EnabledCableCount;
+    Info->CableCount = Config->CableCount;
     Info->MaxCables = AR_BRIDGE_MAX_CABLES;
     Info->MaxChannels = AR_BRIDGE_MAX_CHANNELS;
     Info->Capabilities = AR_BRIDGE_IMPLEMENTED_CAPS;
     Info->SupportedRates = AR_BRIDGE_RATE_44100 | AR_BRIDGE_RATE_48000 | AR_BRIDGE_RATE_96000;
+    Info->MinPeriodFrames = Config->MinPeriodFrames;
+    Info->DefaultPeriodFrames = Config->DefaultPeriodFrames;
 }
 
 // Overrun rule for a render-source lease: the previously published block was

@@ -59,7 +59,9 @@ The [API reference](operations/api-reference.md) lists every discovered public
 method, permission, side-effect class, node type, and preset; use `schema
 --json` for the exact machine-readable contracts.
 
-The [virtual cable test procedure](operations/virtual-cable-testing.md) takes
+The [virtual cable VM guide](operations/virtual-cable-vm-guide.md) is the
+first-time, step-by-step setup of the VirtualBox test VM and every test
+session. The [virtual cable test procedure](operations/virtual-cable-testing.md) takes
 the AudioRouter-owned cable (DEC-18) from a test-signed VM to a
 Microsoft-signed package on the main PC and beta testers; the
 [signing runbook](operations/virtual-cable-signing.md) covers the paid

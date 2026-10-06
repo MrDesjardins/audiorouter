@@ -113,6 +113,15 @@ with the driver work if a second worktree is used.
   version, VM name, checkpoint names, build result).
 - **Rollback:** delete the VM; disable the Hyper-V feature.
 - **Status:** in progress 2026-10-05 (host baseline); VM evidence pending.
+  2026-10-06 finding: the development PC runs **Windows 11 Home** (EditionID
+  `Core`, build 26300, HVCI/VBS on), which has no Hyper-V. The VM is set up
+  with **VirtualBox** through Windows Hypervisor Platform instead, following
+  the [VM guide](../../operations/virtual-cable-vm-guide.md); snapshots
+  `01-clean-windows` and `02-test-signing-ready` replace the Hyper-V
+  checkpoints. `tools/vm/prepare-vm-share.ps1` builds every VM file (ran end
+  to end on this host into a scratch folder: package, integrity checks,
+  static-CRT tools, fuzzer, scripts, manifest) and `tools/vm/vm-checks.ps1`
+  runs each session step in the VM.
 
 ## WP-02 — Test-signed driver package
 
@@ -436,7 +445,7 @@ closed. Endpoint, one-hour drift and audio-quality VM gates remain pending.
   registry; IDs stable across count changes and renames; all formats open in
   shared mode; low-latency period available; uninstall clean.
 - **Rollback:** revert.
-- **Status:** host core complete 2026-10-05 (endpoints, CableCount, formats, conversion, timing, cleanup); step 1b registry names and period/lease/silence limits and the low-latency packet constraints (3a) are not implemented yet; VM qualification pending under WP-03/04.
+- **Status:** host work complete 2026-10-06 (endpoints, CableCount, formats, conversion, timing, cleanup; registry `MinPeriodFrames`/`DefaultPeriodFrames`/`MaxLeaseMs`; low-latency packet constraints on every cable wave interface). Decisions recorded in 17 §5.5: names are applied by the helper (endpoint description), the default period is reported only, stale-silence holds by construction. VM qualification (endpoint names, 60-format inventory, ≤128-frame period, 2→8→2 IDs) pending; `m03_cable_inventory` measures it.
 
 ## WP-06 — Bridge protocol 1.1, counters, Rust client (17 §5.2)
 
@@ -551,7 +560,13 @@ or audio evidence.
   switched to use the helper; `manage.ps1` and the helper produce the same
   end state.
 - **Rollback:** remove the crate.
-- **Status:** not started.
+- **Status:** host implementation complete 2026-10-06 (`crates/driver-helper`,
+  25 unit tests with a fake platform; release binary embeds
+  `requireAdministrator`; never run on the host). VM acceptance pending:
+  `vm-checks.ps1` sessions 1–3 exercise install/idempotent install/status/
+  set-cables/configure/remove, and the WP-03 runner gained `-Helper`. Not yet
+  exercised: `update` with a bumped version and `repair` after deleting the
+  device (add to session 3 when a second package version is built).
 
 ## WP-08 — Status detection, API, CLI, shell commands (17 §7.1–7.2)
 
@@ -732,13 +747,20 @@ published app keeps the VB-Cable workflow. Reverting DEC-18 restores DEC-16.
 
 ## Next action
 
-WP-06 host work is complete; its VM checks run with the `m03_bridge_tone`
-example ([testing procedure](../../operations/virtual-cable-testing.md#stage-a-checks-inside-the-vm)).
-Next host work: finish WP-05 step 1b/3a (registry `Cables\<n>\Name`, period,
-lease and silence limits; low-latency packet constraints), then report
-`CONFIG_FROM_REGISTRY` and `LOW_LATENCY_PERIODS` with real period values in
-QUERY. After that, WP-07 (elevated helper). The user's next VM session can
-already run WP-01 checkpoints, the WP-03 runner, WP-04 Verifier/fuzz/
-second-user, and the WP-06 tone tool on one package. Do not load the
-intermediate package on the host or call a host build a runtime or quality
-pass.
+**User (blocking):** set up the VM and run sessions 1–5 of the
+[VM guide](../../operations/virtual-cable-vm-guide.md). They cover WP-01
+(VM, snapshots), WP-03 (A1–A3, A14, twice), WP-04 (Verifier + fuzz, second
+user), WP-05 (names, 60 formats, ≤128-frame period, 2→8→2 IDs), WP-06 (tone
+both ways, counters, 8 ch/96 kHz) and WP-07 (helper install/status/
+set-cables/configure/remove). Send each session's evidence zip.
+
+**Agent (host, can start now):** WP-08 status detection and the
+`virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
+use the capture-sink acknowledgement (`consumer_sequence`) for producer
+pacing, as `m03_bridge_tone` does, and poll render-source leases faster than
+one period; a wall-clock producer against the single-block slot cannot be
+glitch-free (VCAB-24). Evidence from the VM sessions takes priority over new
+host work: fix what they find first.
+
+Do not load the intermediate package on the host or call a host build a
+runtime or quality pass.

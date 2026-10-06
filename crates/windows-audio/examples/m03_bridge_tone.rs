@@ -303,7 +303,6 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
         std::time::Duration::from_secs_f64(f64::from(options.frames) / f64::from(options.rate));
     let total_blocks =
         u64::from(options.seconds) * u64::from(options.rate) / u64::from(options.frames);
-    let stall_at = total_blocks / 2;
     let start = std::time::Instant::now();
     let mut last_heartbeat = start;
     let mut last_render_sequence = 0_u64;
@@ -315,24 +314,61 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
         997, 47, options.capture_bus, options.render_bus, options.seconds,
         options.channels, options.rate, options.frames
     );
-    for block in 0..total_blocks {
-        if block == stall_at && options.stall_ms > 0 {
+    // 1 ms scheduler resolution for this process only, so the 1 ms poll below
+    // is not stretched to Windows' default 15.6 ms tick.
+    // SAFETY: plain winmm call; matched by timeEndPeriod after the loop.
+    unsafe {
+        windows::Win32::Media::timeBeginPeriod(1);
+    }
+    let run_for = std::time::Duration::from_secs(u64::from(options.seconds));
+    let stall_at = start + run_for / 2;
+    let mut stalled = options.stall_ms == 0;
+    let mut next_block = 0_u64;
+    let mut last_written = 0_u64;
+    let mut last_write_at = start;
+    let mut last_ack = 0_u64;
+    let mut last_ack_at = start;
+    while start.elapsed() < run_for + stall_offset {
+        let now = std::time::Instant::now();
+        if !stalled && now >= stall_at {
             // Deliberate stall: neither produce nor consume, so the driver's
             // underrun/overrun counters must rise (WP-06 acceptance).
             println!("stalling for {} ms", options.stall_ms);
             let stall = std::time::Duration::from_millis(u64::from(options.stall_ms));
             std::thread::sleep(stall);
             stall_offset += stall;
+            stalled = true;
         }
-        fill_tone_block(
-            &mut tone,
-            options.channels,
-            block * u64::from(options.frames),
-            options.rate,
-        );
-        capture.write_f64(&tone).map_err(explain)?;
-        written_blocks += 1;
-        // The lease holds one block (the newest). A block replaced before we
+        // Flow control: while the driver is consuming (a recorder or
+        // "Listen" is open on the capture endpoint) it acknowledges each block
+        // it takes; publish the next one right after the acknowledgement, so
+        // the tone runs on the driver's clock. With no consumer, pace by wall
+        // clock (unread blocks are simply replaced and not counted).
+        let ack = capture.consumer_sequence();
+        if ack != last_ack {
+            last_ack = ack;
+            last_ack_at = now;
+        }
+        let consumer_active = last_ack != 0 && last_ack_at.elapsed() < block_period * 3;
+        let due = if consumer_active {
+            last_written == 0 || ack >= last_written
+        } else {
+            last_written == 0 || now.duration_since(last_write_at) >= block_period
+        };
+        if due && next_block < total_blocks {
+            fill_tone_block(
+                &mut tone,
+                options.channels,
+                next_block * u64::from(options.frames),
+                options.rate,
+            );
+            last_written = capture.write_f64(&tone).map_err(explain)?;
+            last_write_at = now;
+            next_block += 1;
+            written_blocks += 1;
+        }
+        // The render-source lease holds one block (the newest). Poll faster
+        // than one period so every block is read once; one replaced before we
         // read it is counted by the driver as an overrun, not lost silently.
         if let Ok(header) = render.read_into_f64_after(last_render_sequence, &mut received) {
             let count = usize::from(header.frames) * usize::from(header.channels);
@@ -346,14 +382,23 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
             render.heartbeat().map_err(explain)?;
             last_heartbeat = std::time::Instant::now();
         }
-        // Pace to the audio clock so the producer neither floods nor starves.
-        let due = start + stall_offset + block_period * (block as u32 + 1);
-        if let Some(wait) = due.checked_duration_since(std::time::Instant::now()) {
-            std::thread::sleep(wait);
+        // Stop as soon as the driver has taken the final tone block: from
+        // then on it would correctly count silence until the lease closes,
+        // which is the end of the test, not a glitch.
+        if next_block == total_blocks
+            && consumer_active
+            && capture.consumer_sequence() >= last_written
+        {
+            break;
         }
+        std::thread::sleep(std::time::Duration::from_millis(1));
     }
     let capture_counters = capture.counters();
     let render_counters = render.counters();
+    // SAFETY: matches timeBeginPeriod(1) above.
+    unsafe {
+        windows::Win32::Media::timeEndPeriod(1);
+    }
     let recorded_frames = wav
         .finish(options.rate)
         .map_err(|error| (1, format!("WAV finish failed: {error}")))?;
