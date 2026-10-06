@@ -72,7 +72,7 @@ jobs:
 
       - name: CLI parity acceptance
         shell: pwsh
-        run: ./tests/acceptance/m01-cli.ps1
+        run: ./tests/acceptance/m01-cli.ps1 -AllowNoAudioEndpoints
 
       - name: Install contract dependencies and check API drift
         shell: pwsh
