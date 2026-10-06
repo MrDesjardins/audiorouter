@@ -108,6 +108,34 @@ untrusted test root as expected and never imports that root on the host.
 
 ### Stage A checks (inside the VM)
 
+WP-03 runner (copy the repository scripts and `drivers/audiorouter-virtual`
+alongside the test package into the VM):
+
+```powershell
+# VM only, administrator PowerShell. Identity marker is needed if the Windows
+# computer name is not AR-DriverTest; never create this marker on the host.
+New-Item -ItemType File C:\ar\IS_TEST_VM -Force
+.\tests\acceptance\m03-driver-vm.ps1 -Package C:\ar\driver
+# If A2 reports that no root device exists, restore the checkpoint and retry
+# with the signed x64 WDK devcon.exe copied into the VM:
+.\tests\acceptance\m03-driver-vm.ps1 -Package C:\ar\driver -CreateRootDevice -Devcon C:\ar\tools\devcon.exe
+```
+
+The default profile expects the prototype's two endpoints; after WP-05 use
+`-EndpointProfile Cables` for Cable A/B's four endpoints. `-Cli <absolute exe>`
+adds CLI inventory if supplied. The runner stages a unique package beneath the
+developer wrapper's allowed driver tree, records ownership state, removes only
+the exact matching root instance and owned package in `finally`, and compares
+the full baseline. It records six actual default endpoint IDs through read-only
+MMDevice COM; `Win32_SoundDevice` inventory alone cannot prove Windows defaults.
+Failures retain `summary.json` and raw logs; redact IDs/paths before sharing.
+`-KeepInstalled` skips A14 only after successful A1–A3 and is not a full smoke
+pass. Restore the checkpoint after every run, including failures.
+
+Host-safe checks: `tests/acceptance/m03-driver-vm-guards.ps1` tests only the pure
+guard/comparison functions and read-only default enumeration. The real runner
+refuses an unidentified host before querying even its boot configuration.
+
 Each check records its output under `C:\ar\evidence\` and is copied to
 `docs/plans/active/evidence/` (redacted) when it passes. A1–A3 and A14 are
 automated by `tests/acceptance/m03-driver-vm.ps1` (WP-03); the "From WP"

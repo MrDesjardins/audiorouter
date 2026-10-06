@@ -68,6 +68,13 @@ changed answer is applied before WP-05.
 
 ## Dependencies
 
+Execution authorization (2026-10-05): user requested all steps possible on this
+computer. Finish each WP's host implementation/checks in order, record its VM
+gate as pending, and proceed with independent downstream host preparation.
+This does not authorize loading a test driver on the host or waive VM,
+hardware, signing, purchase or publication gates. Kernel security review still
+uses the fresh agent context required by WP-04.
+
 ```text
 WP-01 (VM) ─┬─► WP-02 (test-signed build) ─► WP-03 (VM smoke script)
             │                                   │
@@ -217,7 +224,37 @@ are recorded in [WP-02 evidence](evidence/2026-10-05-virtual-cable-wp02.md).
   `devcon install <inf> ROOT\AudioRouterVirtual`; `devcon.exe` is in the
   WDK tools folder). The product helper (WP-07) replaces this.
 - **Rollback:** restore the VM checkpoint.
-- **Status:** not started.
+- **Status:** host implementation/checks done 2026-10-05; VM A1/A2/A3/A14
+  acceptance pending (two checkpoint runs still required).
+
+Implementation steps: separate pure guard and baseline comparison helpers;
+reject host execution before package/files/inventory mutations; capture PnP,
+driver store and actual default endpoint IDs; stage a verified test package
+under the developer wrapper's allowed driver root; install with exact ownership
+state, optional explicit root creation; bounded endpoint check; finally remove
+only recorded package/device and compare baseline, retaining JSON failure
+evidence. Host checks: guard matrix, comparison regressions, parser check and
+real host refusal. VM checks: A1/A2/A3/A14 twice from the checkpoint (pending).
+Rollback: revert scripts; in VM restore the checkpoint if compensation fails.
+
+Evidence: Windows PowerShell `m03-driver-vm-guards.ps1` passed 16 checks
+(identity/signing matrix, baseline deltas, parser, read-only MMDevice defaults).
+Real `m03-driver-vm.ps1 -Package C:/does-not-exist` refused at VM identity before
+boot query, inventory, output or package access; log
+`target/driver-vm-host-refusal.log`. No install or VM result is claimed.
+
+### Higher-precision decision (2026-10-05, user)
+
+Host experiment: PCM32 `1073741889 / 2^31` cast to float32 and converted
+back gives `1073741952` (63 LSB error). Float32 cannot satisfy VCAB-12's
+exact PCM32 conversion and VCAB-21's ≤1 LSB round trip. User selected:
+**keep PCM32 ≤1 LSB; redesign bridge and engine around higher precision**.
+VCAB-21 is preserved; do not relax it. Before WP-05/06/09 implement revised
+17 requirements: float64 transport/internal cable path, explicit precision
+negotiation and bounded 256 KiB maximum payload; exact conversions and
+no implicit narrowing into legacy float32 stages. Record remaining design
+decisions/tests as each WP reaches that seam. Existing physical/VB-Cable
+paths remain outside this driver change until explicitly migrated.
 
 ## WP-04 — Driver security fixes (17 §5.3)
 

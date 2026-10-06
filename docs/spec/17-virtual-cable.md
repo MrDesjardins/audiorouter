@@ -94,10 +94,14 @@ passes audio when AudioRouter is not running.
 
 ## 3. Audio format
 
-- **VCAB-10 — Engine side.** The bridge carries interleaved float32, 1–8
+- **VCAB-10 — Engine side.** The precision-preserving bridge carries interleaved float64, 1–8
   channels, at the endpoint's current sample rate. `AR_BRIDGE_MAX_CHANNELS`
   becomes 8 (protocol 1.1); the lease request already carries `Channels` and
-  `SampleRateHz`.
+  `SampleRateHz`. User decision 2026-10-05: preserve VCAB-21's PCM32 ≤1 LSB
+  target by increasing precision, rather than accepting float32 loss. Float32
+  has only 24 significant bits and cannot represent arbitrary PCM32 samples.
+  The new client requires negotiated float64 capability; no silent float32
+  fallback may qualify as the high-precision path.
 - **VCAB-11 — Windows side.** Each endpoint offers:
   - sample rates **44 100, 48 000 and 96 000 Hz**;
   - channels **1, 2, 4, 6 (5.1) and 8 (7.1)** with the standard
@@ -114,12 +118,14 @@ passes audio when AudioRouter is not running.
   (`IsBridgePcmFormat`, `ReadBridgePcmSample`, `WriteBridgePcmSample` in
   `minwavertstream.cpp`).
 - **VCAB-12 — Conversions.** Float32 ↔ float32: copy, bit-exact (no clamp,
-  only NaN/Inf replaced by 0 and counted). Integer → float: exact
+  only NaN/Inf replaced by 0 and counted). Float32 → float64 → float32 is
+  exact for finite float32 input, including signed zero and subnormals.
+  Integer → float64: exact for PCM16/24/32
   (`x / 2^(bits-1)`). Float → integer: multiply by `2^(bits-1)`, round to
   nearest, clamp to the integer range, no dither (dither belongs in
   AudioRouter tools, not the kernel). **No resampling in the driver:** the
   driver runs each stream at its own rate; when an endpoint rate differs
-  from the AudioRouter graph rate (48 kHz), AudioRouter resamples in user
+  from the route's graph rate, AudioRouter resamples in user
   mode to the §11 targets.
 
 ## 4. Architecture
@@ -227,6 +233,16 @@ device in `Source/Main/adapter.cpp` and bridge helpers in
   `STATUS_REVISION_MISMATCH`, which the Rust client maps to a clear
   "AudioRouter cable driver is too old/new; repair it from Setup" error
   (VDEV-12).
+- **Precision extension (2026-10-05).** OPEN extension flag `FLOAT64` (bit 0)
+  selects 8-byte samples; QUERY capability `SAMPLE_FLOAT64` reports support.
+  Without that flag the legacy float32 transport can be selected only
+  explicitly, never as an automatic replacement for a precision-preserving
+  route. Shared header includes `SampleBytes` (4 or 8) in the previously
+  reserved area; readers require the negotiated size before payload access.
+  The maximum float64 payload is 8 × 4096 × 8 = 256 KiB per lease. Exact
+  length validation uses negotiated sample size and overflow-safe arithmetic.
+  These changes are before the first published protocol; no public 1.0 client
+  compatibility is claimed. The old 32-byte header is not accepted as a 1.1 view.
 - New IOCTL `IOCTL_AUDIOROUTER_BRIDGE_QUERY` (function 0x803, METHOD_BUFFERED,
   read access) returns `AR_BRIDGE_DRIVER_INFO { ProtocolMajor, ProtocolMinor,
   DriverVersion (4×USHORT), CableCount (enabled), MaxCables, MaxChannels,
@@ -445,10 +461,19 @@ notifications that the backend already watches.
   its quality is measured by VCAB-23. Required test: Cable A Input →
   Focusrite output for 10 minutes with zero glitches in the sine-continuity
   harness (validated lesson 2026-09-26).
-- **Rate.** If a cable endpoint runs at 44.1 or 96 kHz, the bridge worker
-  resamples to the 48 kHz graph (and back on the capture side) with the
-  high-quality user-mode resampler (VCAB-22). Same-rate paths never touch
-  the resampler.
+- **Rate and precision (user decision 2026-10-05).** A cable-only route
+  with matching endpoint rates selects a float64 runtime at that rate
+  (44.1/48/96 kHz), preserving samples without rate conversion. Mixed-clock
+  or mixed-rate routes use the 48 kHz graph and a high-quality user-mode
+  resampler where needed (VCAB-22). This resolves the former contradictory
+  instructions to resample every 44.1/96 kHz cable and also pass those same
+  rates bit-exact. The high-precision engine owns prepared float64 buffers,
+  matrices and unity/gain/mix stages; no allocation occurs in callbacks.
+  A legacy float32 DSP/plugin boundary must be explicit in the compiled plan
+  and capability reporting; it cannot masquerade as a high-precision unity
+  path. VCAB-20/21 qualification uses no tools and unity gain; processing
+  nodes have their own declared numeric behavior. Existing physical/VB-Cable
+  pipelines remain supported during the separate cable-runtime integration.
 - **Channels.** The lease carries the endpoint's channel count; stereo
   graphs get an explicit channel matrix (downmix/upmix) shown on the canvas,
   never a hidden conversion (VDEV-06). Multichannel graphs (for example OBS
@@ -568,7 +593,8 @@ real hardware in stage C** ([testing](../operations/virtual-cable-testing.md)).
   → AudioRouter (no tools, unity gain) → cable: output equals input sample
   for sample after alignment, at 44.1/48/96 kHz and 1/2/8 channels. Also
   bit-exact: silence in → digital zero out (no DC, no dither, no noise).
-- **VCAB-21 — Integer formats.** With a 16/24/32-bit device format, the
+- **VCAB-21 — Integer formats.** With a 16/24/32-bit device format and a
+  matching-rate unity route without processing tools, the
   round-trip error is at most 1 LSB of that format; full-scale input does
   not wrap (clamped).
 - **VCAB-22 — Resampling (endpoint rate ≠ 48 kHz).** Passband 20 Hz–20 kHz
