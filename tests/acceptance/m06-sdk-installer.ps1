@@ -58,3 +58,6 @@ try {
 }
 
 Write-Output 'Scope: disposable Git metadata only; no SDK, plugin, driver, or audio configuration changes.'
+# The checks above end with an expected installer failure; do not let its
+# exit code become this script's result.
+exit 0
