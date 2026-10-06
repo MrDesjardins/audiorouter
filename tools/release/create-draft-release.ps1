@@ -90,7 +90,11 @@ try {
 "@
     $releaseNotes = Join-Path ([IO.Path]::GetTempPath()) "audiorouter-release-notes-$PID.md"
     if (Test-Path -LiteralPath $releaseNotes) { throw "temporary release notes file already exists: $releaseNotes" }
-    Set-Content -LiteralPath $releaseNotes -Value ($downloadGuide + (Get-Content -LiteralPath $notes -Raw)) -Encoding utf8
+    # Windows PowerShell 5.1's "-Encoding utf8" writes a BOM, which GitHub
+    # keeps in the body and which stops the first heading from rendering.
+    # Write BOM-less UTF-8 and keep a blank line between the guide and notes.
+    $combinedNotes = $downloadGuide.TrimEnd() + "`n`n" + (Get-Content -LiteralPath $notes -Raw).TrimStart([char]0xFEFF)
+    [IO.File]::WriteAllText($releaseNotes, $combinedNotes, (New-Object Text.UTF8Encoding($false)))
     $ghArguments = @(
         "release", "create", $Tag,
         "--repo", $repository,

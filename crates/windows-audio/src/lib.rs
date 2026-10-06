@@ -160,16 +160,135 @@ fn endpoint_state_from_raw(raw_state: u32) -> EndpointState {
     }
 }
 
+/// `CTL_CODE(FILE_DEVICE_UNKNOWN, function, METHOD_BUFFERED, access)`. The
+/// driver dispatches on the exact code, so the transfer method is ABI.
 #[cfg(windows)]
-const IOCTL_AUDIOROUTER_BRIDGE_OPEN: u32 = (0x22 << 16) | (0x800 << 2) | (3 << 14) | 0x3;
+const fn native_bridge_ctl_code(function: u32, access: u32) -> u32 {
+    const FILE_DEVICE_UNKNOWN: u32 = 0x22;
+    const METHOD_BUFFERED: u32 = 0;
+    (FILE_DEVICE_UNKNOWN << 16) | (access << 14) | (function << 2) | METHOD_BUFFERED
+}
 #[cfg(windows)]
-const IOCTL_AUDIOROUTER_BRIDGE_CLOSE: u32 = (0x22 << 16) | (0x801 << 2) | (3 << 14) | 0x3;
+const IOCTL_AUDIOROUTER_BRIDGE_OPEN: u32 = native_bridge_ctl_code(0x800, 3);
 #[cfg(windows)]
-const IOCTL_AUDIOROUTER_BRIDGE_HEARTBEAT: u32 = (0x22 << 16) | (0x802 << 2) | (3 << 14) | 0x3;
+const IOCTL_AUDIOROUTER_BRIDGE_CLOSE: u32 = native_bridge_ctl_code(0x801, 3);
+#[cfg(windows)]
+const IOCTL_AUDIOROUTER_BRIDGE_HEARTBEAT: u32 = native_bridge_ctl_code(0x802, 3);
+#[cfg(windows)]
+const IOCTL_AUDIOROUTER_BRIDGE_QUERY: u32 = native_bridge_ctl_code(0x803, 1);
 #[cfg(windows)]
 const NATIVE_DRIVER_BRIDGE_PROTOCOL_MAJOR: u16 = 1;
 #[cfg(windows)]
 const NATIVE_DRIVER_BRIDGE_PROTOCOL_MINOR: u16 = 1;
+#[cfg(windows)]
+const NATIVE_DRIVER_OPEN_EXTENSION_BYTES: u32 = 64;
+#[cfg(windows)]
+const NATIVE_DRIVER_OPEN_FLAG_FLOAT64: u32 = 0x1;
+
+/// QUERY capability bits (`AR_BRIDGE_CAP_*` in bridgeio.h).
+pub const NATIVE_DRIVER_CAP_MULTICHANNEL: u32 = 0x01;
+pub const NATIVE_DRIVER_CAP_RATES_44_48_96: u32 = 0x02;
+pub const NATIVE_DRIVER_CAP_LOW_LATENCY_PERIODS: u32 = 0x04;
+pub const NATIVE_DRIVER_CAP_STREAM_COUNTERS: u32 = 0x08;
+pub const NATIVE_DRIVER_CAP_CONFIG_FROM_REGISTRY: u32 = 0x10;
+pub const NATIVE_DRIVER_CAP_SAMPLE_FLOAT64: u32 = 0x20;
+
+/// Decoded `AR_BRIDGE_DRIVER_INFO` from the QUERY IOCTL.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct NativeBridgeDriverInfo {
+    pub protocol_major: u16,
+    pub protocol_minor: u16,
+    pub driver_version: [u16; 4],
+    pub cable_count: u32,
+    pub max_cables: u32,
+    pub max_channels: u32,
+    pub capabilities: u32,
+    pub supported_rates: u32,
+    /// 0 while the driver does not report `LOW_LATENCY_PERIODS`.
+    pub min_period_frames: u32,
+    pub default_period_frames: u32,
+}
+
+impl NativeBridgeDriverInfo {
+    pub fn has(&self, capability: u32) -> bool {
+        self.capabilities & capability == capability
+    }
+
+    /// Decide whether this client can use the installed driver. A missing
+    /// float64 transport is refused: there is no silent float32 fallback for
+    /// the precision-preserving cable path (VCAB-10/21).
+    pub fn check_compatible(&self) -> Result<(), NativeBridgeDriverError> {
+        if self.protocol_major != 1 || self.protocol_minor < 1 {
+            return Err(NativeBridgeDriverError::VersionMismatch);
+        }
+        if !self.has(NATIVE_DRIVER_CAP_SAMPLE_FLOAT64) {
+            return Err(NativeBridgeDriverError::MissingCapability);
+        }
+        Ok(())
+    }
+}
+
+/// Distinct, user-explainable driver bridge failures (VDEV-07, VDEV-12).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NativeBridgeDriverError {
+    /// Protocol major/minor not accepted by the installed driver.
+    VersionMismatch,
+    /// The driver lacks a capability this client requires.
+    MissingCapability,
+    /// The driver refused an option (unknown extension flag or transport).
+    NotSupported,
+    /// Another AudioRouter handle in this session holds the lease.
+    LeaseHeld,
+    /// Another Windows session owns the lease, or the handle is not the owner.
+    AccessDenied,
+    /// The cable exists but is not among the enabled first N cables.
+    CableNotEnabled,
+    /// The lease expired, was replaced, or the identity does not match.
+    LeaseNotActive,
+    /// The bridge control device is absent: the driver is not installed or
+    /// not started.
+    DriverUnavailable,
+    Other,
+}
+
+impl NativeBridgeDriverError {
+    pub fn user_message(self) -> &'static str {
+        match self {
+            Self::VersionMismatch | Self::MissingCapability | Self::NotSupported => {
+                "The AudioRouter cable driver is too old or too new for this app; repair it from Setup."
+            }
+            Self::LeaseHeld => "This cable is already in use by another AudioRouter route.",
+            Self::AccessDenied => "This cable is in use by another Windows user.",
+            Self::CableNotEnabled => "This cable is not enabled; raise the number of cables in Setup.",
+            Self::LeaseNotActive => "The cable connection was lost; the route will reconnect.",
+            Self::DriverUnavailable => "The AudioRouter cable driver is not installed or not running.",
+            Self::Other => "The AudioRouter cable driver reported an error.",
+        }
+    }
+}
+
+/// Map a `DeviceIoControl`/`CreateFileW` failure to a driver error. The I/O
+/// manager converts the driver's NTSTATUS to a Win32 error, which the
+/// `windows` crate wraps as `HRESULT_FROM_WIN32`.
+#[cfg(windows)]
+pub fn classify_native_bridge_error(error: &windows::core::Error) -> NativeBridgeDriverError {
+    const fn win32(code: u32) -> i32 {
+        (0x8007_0000 | code) as i32
+    }
+    match error.code().0 {
+        code if code == win32(1306) => NativeBridgeDriverError::VersionMismatch, // STATUS_REVISION_MISMATCH
+        code if code == win32(50) => NativeBridgeDriverError::NotSupported, // STATUS_NOT_SUPPORTED
+        code if code == win32(32) => NativeBridgeDriverError::LeaseHeld, // STATUS_SHARING_VIOLATION
+        code if code == win32(5) => NativeBridgeDriverError::AccessDenied, // STATUS_ACCESS_DENIED
+        code if code == win32(1167) => NativeBridgeDriverError::CableNotEnabled, // STATUS_DEVICE_NOT_CONNECTED
+        code if code == win32(22) => NativeBridgeDriverError::LeaseNotActive, // STATUS_INVALID_DEVICE_STATE
+        // CreateFileW on a missing \\.\AudioRouterVirtualBridge link. The
+        // driver's unknown-cable status also maps to 2, but the client
+        // rejects non-canonical cable IDs before any IOCTL is sent.
+        code if code == win32(2) || code == win32(3) => NativeBridgeDriverError::DriverUnavailable,
+        _ => NativeBridgeDriverError::Other,
+    }
+}
 
 #[cfg(windows)]
 fn native_bridge_cable_index(bus_id: &str) -> Option<u16> {
@@ -198,6 +317,62 @@ struct NativeBridgeOpenRequest {
     mapping_bytes: u32,
     reserved2: u32,
     bus_id: [u16; 64],
+}
+
+/// `AR_BRIDGE_OPEN_EXTENSION`: negotiates float64 samples (17 §5.2).
+#[cfg(windows)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+struct NativeBridgeOpenExtension {
+    extension_bytes: u32,
+    flags: u32,
+    reserved: [u32; 14],
+}
+
+/// The 240-byte request every control IOCTL sends: the fixed 176-byte
+/// prefix followed by the extension. OPEN requires the extension.
+#[cfg(windows)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+struct NativeBridgeOpenRequestEx {
+    request: NativeBridgeOpenRequest,
+    extension: NativeBridgeOpenExtension,
+}
+
+/// `AR_BRIDGE_DRIVER_INFO` as returned by QUERY (104 bytes).
+#[cfg(windows)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+struct NativeBridgeDriverInfoRaw {
+    protocol_major: u16,
+    protocol_minor: u16,
+    driver_version: [u16; 4],
+    cable_count: u32,
+    max_cables: u32,
+    max_channels: u32,
+    capabilities: u32,
+    supported_rates: u32,
+    min_period_frames: u32,
+    default_period_frames: u32,
+    reserved: [u32; 16],
+}
+
+#[cfg(windows)]
+impl From<NativeBridgeDriverInfoRaw> for NativeBridgeDriverInfo {
+    fn from(raw: NativeBridgeDriverInfoRaw) -> Self {
+        Self {
+            protocol_major: raw.protocol_major,
+            protocol_minor: raw.protocol_minor,
+            driver_version: raw.driver_version,
+            cable_count: raw.cable_count,
+            max_cables: raw.max_cables,
+            max_channels: raw.max_channels,
+            capabilities: raw.capabilities,
+            supported_rates: raw.supported_rates,
+            min_period_frames: raw.min_period_frames,
+            default_period_frames: raw.default_period_frames,
+        }
+    }
 }
 
 #[cfg(windows)]
@@ -1197,6 +1372,43 @@ impl NativeBridgeController {
             .map_err(NativeBridgeControllerError::Session)
     }
 
+    /// Publish float64 samples without narrowing (capture-sink leases).
+    pub fn write_f64(&mut self, samples: &[f64]) -> Result<u64, NativeBridgeControllerError> {
+        self.session
+            .as_mut()
+            .expect("native bridge session remains owned until close")
+            .write_f64(samples)
+            .map_err(NativeBridgeControllerError::Session)
+    }
+
+    /// Read a float64 block newer than `minimum_sequence` (render-source leases).
+    pub fn read_into_f64_after(
+        &self,
+        minimum_sequence: u64,
+        samples: &mut [f64],
+    ) -> Result<NativeBridgeFloat64BlockHeader, NativeBridgeControllerError> {
+        self.session
+            .as_ref()
+            .expect("native bridge session remains owned until close")
+            .read_into_f64_after(minimum_sequence, samples)
+            .map_err(NativeBridgeControllerError::Session)
+    }
+
+    /// Driver-written stream counters for this lease (17 §5.2).
+    pub fn counters(&self) -> NativeBridgeStreamCounters {
+        self.session
+            .as_ref()
+            .expect("native bridge session remains owned until close")
+            .counters()
+    }
+
+    /// The driver's capability report, read over this controller's handle.
+    pub fn query_driver(&self) -> Result<NativeBridgeDriverInfo, NativeBridgeControllerError> {
+        self.client
+            .query()
+            .map_err(NativeBridgeControllerError::Windows)
+    }
+
     /// Create the realtime producer view for this negotiated bridge. The
     /// returned writer owns an independent file mapping and may be shared as
     /// an `AudioTap`; lease heartbeat and close remain owned by this
@@ -1487,7 +1699,7 @@ impl NativeBridgeControlClient {
         &self,
         hello: &audiorouter_protocol::AudioBridgeHello,
     ) -> Result<(), windows::core::Error> {
-        let request = native_bridge_open_request(hello, 0, 0).map_err(|_| {
+        let request = native_bridge_open_request_ex(hello, 0, 0).map_err(|_| {
             windows::core::Error::new(
                 windows::core::HRESULT(0x80070057u32 as i32),
                 "invalid hello",
@@ -1503,7 +1715,7 @@ impl NativeBridgeControlClient {
         mapping_bytes: u32,
     ) -> Result<(), windows::core::Error> {
         let request =
-            native_bridge_open_request(hello, section_handle, mapping_bytes).map_err(|_| {
+            native_bridge_open_request_ex(hello, section_handle, mapping_bytes).map_err(|_| {
                 windows::core::Error::new(
                     windows::core::HRESULT(0x80070057u32 as i32),
                     "invalid hello or mapping",
@@ -1516,7 +1728,7 @@ impl NativeBridgeControlClient {
         &self,
         hello: &audiorouter_protocol::AudioBridgeHello,
     ) -> Result<(), windows::core::Error> {
-        let request = native_bridge_open_request(hello, 0, 0).map_err(|_| {
+        let request = native_bridge_open_request_ex(hello, 0, 0).map_err(|_| {
             windows::core::Error::new(
                 windows::core::HRESULT(0x80070057u32 as i32),
                 "invalid hello",
@@ -1532,7 +1744,7 @@ impl NativeBridgeControlClient {
         mapping_bytes: u32,
     ) -> Result<(), windows::core::Error> {
         let request =
-            native_bridge_open_request(hello, section_handle, mapping_bytes).map_err(|_| {
+            native_bridge_open_request_ex(hello, section_handle, mapping_bytes).map_err(|_| {
                 windows::core::Error::new(
                     windows::core::HRESULT(0x80070057u32 as i32),
                     "invalid hello or mapping",
@@ -1545,7 +1757,7 @@ impl NativeBridgeControlClient {
         &self,
         hello: &audiorouter_protocol::AudioBridgeHello,
     ) -> Result<(), windows::core::Error> {
-        let request = native_bridge_open_request(hello, 0, 0).map_err(|_| {
+        let request = native_bridge_open_request_ex(hello, 0, 0).map_err(|_| {
             windows::core::Error::new(
                 windows::core::HRESULT(0x80070057u32 as i32),
                 "invalid hello",
@@ -1561,13 +1773,42 @@ impl NativeBridgeControlClient {
         mapping_bytes: u32,
     ) -> Result<(), windows::core::Error> {
         let request =
-            native_bridge_open_request(hello, section_handle, mapping_bytes).map_err(|_| {
+            native_bridge_open_request_ex(hello, section_handle, mapping_bytes).map_err(|_| {
                 windows::core::Error::new(
                     windows::core::HRESULT(0x80070057u32 as i32),
                     "invalid hello or mapping",
                 )
             })?;
         self.ioctl(IOCTL_AUDIOROUTER_BRIDGE_CLOSE, &request)
+    }
+
+    /// Reads the driver's protocol, version, limits and capabilities. Call
+    /// `check_compatible` before opening a lease.
+    pub fn query(&self) -> Result<NativeBridgeDriverInfo, windows::core::Error> {
+        use windows::Win32::System::IO::DeviceIoControl;
+        let mut raw = NativeBridgeDriverInfoRaw::default();
+        let mut returned = 0_u32;
+        // SAFETY: `raw` is a live, writable #[repr(C)] buffer of exactly the
+        // size passed; METHOD_BUFFERED copies at most that many bytes back.
+        unsafe {
+            DeviceIoControl(
+                self.handle,
+                IOCTL_AUDIOROUTER_BRIDGE_QUERY,
+                None,
+                0,
+                Some(&mut raw as *mut NativeBridgeDriverInfoRaw as *mut std::ffi::c_void),
+                std::mem::size_of::<NativeBridgeDriverInfoRaw>() as u32,
+                Some(&mut returned),
+                None,
+            )?
+        };
+        if returned as usize != std::mem::size_of::<NativeBridgeDriverInfoRaw>() {
+            return Err(windows::core::Error::new(
+                windows::core::HRESULT(0x8007_000Du32 as i32),
+                "driver returned a short capability report",
+            ));
+        }
+        Ok(raw.into())
     }
 
     fn ioctl<T>(&self, code: u32, request: &T) -> Result<(), windows::core::Error> {
@@ -1604,7 +1845,9 @@ fn native_bridge_open_request(
     section_handle: u64,
     mapping_bytes: u32,
 ) -> Result<NativeBridgeOpenRequest, ()> {
-    hello.validate().map_err(|_| ())?;
+    hello
+        .validate_with_max_channels(NATIVE_DRIVER_MAX_CHANNELS)
+        .map_err(|_| ())?;
     native_bridge_cable_index(&hello.bus_id).ok_or(())?;
     let encoded: Vec<u16> = hello.bus_id.encode_utf16().collect();
     if encoded.len() > 64 || encoded.len() * std::mem::size_of::<u16>() > 128 {
@@ -1612,7 +1855,8 @@ fn native_bridge_open_request(
     }
     let mut bus_id = [0; 64];
     bus_id[..encoded.len()].copy_from_slice(&encoded);
-    if (section_handle == 0) != (mapping_bytes == 0) || (section_handle != 0 && mapping_bytes < 32)
+    if (section_handle == 0) != (mapping_bytes == 0)
+        || (section_handle != 0 && (mapping_bytes as usize) < BRIDGE_PAYLOAD_OFFSET)
     {
         return Err(());
     }
@@ -1632,6 +1876,22 @@ fn native_bridge_open_request(
         direction: match hello.direction {
             audiorouter_protocol::AudioBridgeDirection::RenderSource => 1,
             audiorouter_protocol::AudioBridgeDirection::CaptureSink => 2,
+        },
+    })
+}
+
+#[cfg(windows)]
+fn native_bridge_open_request_ex(
+    hello: &audiorouter_protocol::AudioBridgeHello,
+    section_handle: u64,
+    mapping_bytes: u32,
+) -> Result<NativeBridgeOpenRequestEx, ()> {
+    Ok(NativeBridgeOpenRequestEx {
+        request: native_bridge_open_request(hello, section_handle, mapping_bytes)?,
+        extension: NativeBridgeOpenExtension {
+            extension_bytes: NATIVE_DRIVER_OPEN_EXTENSION_BYTES,
+            flags: NATIVE_DRIVER_OPEN_FLAG_FLOAT64,
+            reserved: [0; 14],
         },
     })
 }
@@ -8108,10 +8368,36 @@ unsafe fn enumerate_states_after_com_init() -> Result<Vec<EndpointStateInfo>, Au
     Ok(result)
 }
 
+// Kernel bridge shared-section layout, protocol 1.1. Mirrors
+// `AR_BRIDGE_SHARED_HEADER` and its C_ASSERTs in
+// drivers/audiorouter-virtual/Source/Inc/bridgeio.h.
 const BRIDGE_STATE_OFFSET: usize = 0;
 const BRIDGE_HEADER_OFFSET: usize = 8;
-const BRIDGE_HEADER_BYTES: usize = 24;
-const BRIDGE_PAYLOAD_OFFSET: usize = BRIDGE_HEADER_OFFSET + BRIDGE_HEADER_BYTES;
+const BRIDGE_COUNTERS_OFFSET: usize = 32;
+const BRIDGE_SAMPLE_BYTES_OFFSET: usize = 88;
+const BRIDGE_READER_SEQUENCE_OFFSET: usize = 96;
+const BRIDGE_PAYLOAD_OFFSET: usize = 128;
+const BRIDGE_SAMPLE_BYTES_FLOAT64: u32 = 8;
+/// `AR_BRIDGE_MAX_CHANNELS`: the kernel cable bridge carries up to 7.1. This
+/// is separate from the internal 2-channel AudioBridge protocol bound.
+pub const NATIVE_DRIVER_MAX_CHANNELS: u16 = 8;
+/// `AR_BRIDGE_MAX_PAYLOAD_BYTES`: 8 channels × 4096 frames × 8-byte samples.
+pub const NATIVE_DRIVER_MAX_PAYLOAD_BYTES: usize = NATIVE_DRIVER_MAX_CHANNELS as usize
+    * audiorouter_protocol::MAX_AUDIO_BRIDGE_FRAMES as usize
+    * std::mem::size_of::<f64>();
+
+/// Driver-written stream counters from the shared header (17 §5.2). User
+/// mode only reads them; all values are monotonic within one lease.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct NativeBridgeStreamCounters {
+    pub underrun_frames: u64,
+    pub overrun_frames: u64,
+    pub sequence_gaps: u64,
+    pub non_finite_samples: u64,
+    pub format_mismatches: u64,
+    pub last_device_position: u64,
+    pub last_qpc_time: u64,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NativeBridgeRegionError {
@@ -8125,6 +8411,9 @@ pub enum NativeBridgeRegionError {
     SequenceRegression,
     SequenceExhausted,
     InvalidFrame,
+    /// The header does not announce the negotiated float64 sample size, so
+    /// the payload must not be interpreted.
+    SampleSizeMismatch,
     Io(String),
     Contract(audiorouter_protocol::AudioBridgeContractError),
 }
@@ -8145,7 +8434,7 @@ impl NativeBridgeFloat64BlockHeader {
     fn validate(&self) -> Result<(), NativeBridgeRegionError> {
         if self.generation == 0
             || self.sequence == 0
-            || !(1..=audiorouter_protocol::MAX_AUDIO_BRIDGE_CHANNELS).contains(&self.channels)
+            || !(1..=NATIVE_DRIVER_MAX_CHANNELS).contains(&self.channels)
             || !(1..=audiorouter_protocol::MAX_AUDIO_BRIDGE_FRAMES).contains(&self.frames)
         {
             return Err(NativeBridgeRegionError::InvalidFrame);
@@ -8154,7 +8443,7 @@ impl NativeBridgeFloat64BlockHeader {
             .checked_mul(usize::from(self.channels))
             .and_then(|samples| samples.checked_mul(std::mem::size_of::<f64>()))
             .ok_or(NativeBridgeRegionError::InvalidFrame)?;
-        if expected > audiorouter_protocol::MAX_AUDIO_BRIDGE_PAYLOAD_BYTES * 2
+        if expected > NATIVE_DRIVER_MAX_PAYLOAD_BYTES
             || usize::try_from(self.payload_bytes).ok() != Some(expected)
         {
             return Err(NativeBridgeRegionError::BufferTooSmall);
@@ -8213,8 +8502,12 @@ impl NativeBridgeRegion {
             .map_err(|error| NativeBridgeRegionError::Io(error.to_string()))?;
         // SAFETY: the file is resized to the exact mapping length immediately
         // above and the mapping is kept alive by `self.file` for its lifetime.
-        let map = unsafe { memmap2::MmapOptions::new().len(length).map_mut(&file) }
+        let mut map = unsafe { memmap2::MmapOptions::new().len(length).map_mut(&file) }
             .map_err(|error| NativeBridgeRegionError::Io(error.to_string()))?;
+        // Announce the float64 sample size this client negotiates; the driver
+        // rewrites the same value (and resets the counters) at OPEN.
+        map[BRIDGE_SAMPLE_BYTES_OFFSET..BRIDGE_SAMPLE_BYTES_OFFSET + 4]
+            .copy_from_slice(&BRIDGE_SAMPLE_BYTES_FLOAT64.to_le_bytes());
         Ok(Self {
             _file: file,
             map,
@@ -8439,6 +8732,9 @@ impl NativeBridgeRegion {
         samples: &mut [T],
         convert: impl Fn(f64) -> Option<T>,
     ) -> Result<NativeBridgeFloat64BlockHeader, NativeBridgeRegionError> {
+        if self.sample_bytes() != BRIDGE_SAMPLE_BYTES_FLOAT64 {
+            return Err(NativeBridgeRegionError::SampleSizeMismatch);
+        }
         let state = self.state();
         let before = state.load(std::sync::atomic::Ordering::Acquire);
         if before == 0 {
@@ -8474,7 +8770,53 @@ impl NativeBridgeRegion {
             samples[..sample_count].fill(T::default());
             return Err(NativeBridgeRegionError::TornRead);
         }
+        // Acknowledge the consumed block so the driver can count a render
+        // overrun when it replaces a block nobody read.
+        self.reader_sequence()
+            .store(header.sequence, std::sync::atomic::Ordering::Release);
         Ok(header)
+    }
+
+    /// Snapshot of the driver-written stream counters. Each field is read
+    /// atomically; the set is not a single consistent snapshot.
+    pub fn counters(&self) -> NativeBridgeStreamCounters {
+        let field = |index: usize| {
+            // SAFETY: the mapping is at least `BRIDGE_PAYLOAD_OFFSET` bytes,
+            // so every counter (offset 32..88) lies inside it; offsets are
+            // multiples of 8 from a page-aligned base, as AtomicU64 requires.
+            unsafe {
+                &*(self.map.as_ptr().add(BRIDGE_COUNTERS_OFFSET + index * 8)
+                    as *const std::sync::atomic::AtomicU64)
+            }
+            .load(std::sync::atomic::Ordering::Acquire)
+        };
+        NativeBridgeStreamCounters {
+            underrun_frames: field(0),
+            overrun_frames: field(1),
+            sequence_gaps: field(2),
+            non_finite_samples: field(3),
+            format_mismatches: field(4),
+            last_device_position: field(5),
+            last_qpc_time: field(6),
+        }
+    }
+
+    fn sample_bytes(&self) -> u32 {
+        // SAFETY: offset 88 is inside the header and 4-byte aligned.
+        unsafe {
+            &*(self.map.as_ptr().add(BRIDGE_SAMPLE_BYTES_OFFSET)
+                as *const std::sync::atomic::AtomicU32)
+        }
+        .load(std::sync::atomic::Ordering::Acquire)
+    }
+
+    fn reader_sequence(&self) -> &std::sync::atomic::AtomicU64 {
+        // SAFETY: offset 96 is inside the header and 8-byte aligned; the
+        // reference lives no longer than `self`, which owns the mapping.
+        unsafe {
+            &*(self.map.as_ptr().add(BRIDGE_READER_SEQUENCE_OFFSET)
+                as *const std::sync::atomic::AtomicU64)
+        }
     }
 
     pub fn flush(&mut self) -> Result<(), NativeBridgeRegionError> {
@@ -8502,7 +8844,7 @@ impl NativeBridgeRegion {
             }
             current = parent.parent();
         }
-        if !(1..=audiorouter_protocol::MAX_AUDIO_BRIDGE_CHANNELS).contains(&channels)
+        if !(1..=NATIVE_DRIVER_MAX_CHANNELS).contains(&channels)
             || !(1..=audiorouter_protocol::MAX_AUDIO_BRIDGE_FRAMES).contains(&max_frames)
         {
             return Err(NativeBridgeRegionError::InvalidFrame);
@@ -8709,7 +9051,7 @@ impl NativeBridgeSession {
         hello: audiorouter_protocol::AudioBridgeHello,
     ) -> Result<Self, NativeBridgeSessionError> {
         hello
-            .validate()
+            .validate_with_max_channels(NATIVE_DRIVER_MAX_CHANNELS)
             .map_err(NativeBridgeSessionError::InvalidHello)?;
         let mapping_path = path.as_ref().to_path_buf();
         let region =
@@ -8730,7 +9072,7 @@ impl NativeBridgeSession {
         hello: audiorouter_protocol::AudioBridgeHello,
     ) -> Result<Self, NativeBridgeSessionError> {
         hello
-            .validate()
+            .validate_with_max_channels(NATIVE_DRIVER_MAX_CHANNELS)
             .map_err(NativeBridgeSessionError::InvalidHello)?;
         let mapping_path = path.as_ref().to_path_buf();
         let region =
@@ -8744,6 +9086,11 @@ impl NativeBridgeSession {
             next_sequence: 0,
             last_heartbeat: std::time::Instant::now(),
         })
+    }
+
+    /// Driver-written stream counters from this session's mapped header.
+    pub fn counters(&self) -> NativeBridgeStreamCounters {
+        self.region.counters()
     }
 
     pub fn hello(&self) -> &audiorouter_protocol::AudioBridgeHello {
@@ -11665,6 +12012,294 @@ mod tests {
     }
 
     #[test]
+    fn native_bridge_header_announces_float64_acknowledges_reads_and_exposes_counters() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-header-{}-{}.slot",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let region = NativeBridgeRegion::create(&path, 2, 4).unwrap();
+        // Layout mirrors AR_BRIDGE_SHARED_HEADER's C_ASSERTs in bridgeio.h.
+        assert_eq!(region.mapping_bytes(), 128 + 2 * 4 * 8);
+        assert_eq!(
+            u32::from_le_bytes(region.map[88..92].try_into().unwrap()),
+            8,
+            "a new region announces float64 samples"
+        );
+        assert_eq!(region.counters(), NativeBridgeStreamCounters::default());
+        region.write_f64(9, 3, &[0.5, -0.5]).unwrap();
+        let mut output = [0.0_f64; 2];
+        region.read_into_f64(9, &mut output).unwrap();
+        assert_eq!(
+            u64::from_le_bytes(region.map[96..104].try_into().unwrap()),
+            3,
+            "the consumer acknowledges the block it read"
+        );
+        // Simulate the driver-written counters and check each field offset.
+        let raw = unsafe {
+            std::slice::from_raw_parts_mut(region.map.as_ptr() as *mut u8, region.map.len())
+        };
+        for (index, value) in (1_u64..=7).enumerate() {
+            raw[32 + index * 8..40 + index * 8].copy_from_slice(&value.to_le_bytes());
+        }
+        assert_eq!(
+            region.counters(),
+            NativeBridgeStreamCounters {
+                underrun_frames: 1,
+                overrun_frames: 2,
+                sequence_gaps: 3,
+                non_finite_samples: 4,
+                format_mismatches: 5,
+                last_device_position: 6,
+                last_qpc_time: 7,
+            }
+        );
+        // A header without the negotiated sample size must not be decoded.
+        raw[88..92].copy_from_slice(&4_u32.to_le_bytes());
+        assert_eq!(
+            region.read_into_f64(9, &mut output),
+            Err(NativeBridgeRegionError::SampleSizeMismatch)
+        );
+        drop(region);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_bridge_protocol_1_1_abi_matches_driver_header() {
+        // Exact codes from the C_ASSERTs in bridgeio.h (METHOD_BUFFERED).
+        assert_eq!(IOCTL_AUDIOROUTER_BRIDGE_OPEN, 0x0022_E000);
+        assert_eq!(IOCTL_AUDIOROUTER_BRIDGE_CLOSE, 0x0022_E004);
+        assert_eq!(IOCTL_AUDIOROUTER_BRIDGE_HEARTBEAT, 0x0022_E008);
+        assert_eq!(IOCTL_AUDIOROUTER_BRIDGE_QUERY, 0x0022_600C);
+        assert_eq!(std::mem::size_of::<NativeBridgeOpenExtension>(), 64);
+        assert_eq!(std::mem::offset_of!(NativeBridgeOpenExtension, flags), 4);
+        assert_eq!(std::mem::size_of::<NativeBridgeOpenRequestEx>(), 240);
+        assert_eq!(
+            std::mem::offset_of!(NativeBridgeOpenRequestEx, extension),
+            176
+        );
+        assert_eq!(
+            std::mem::offset_of!(NativeBridgeOpenRequest, generation),
+            24
+        );
+        assert_eq!(
+            std::mem::offset_of!(NativeBridgeOpenRequest, section_handle),
+            32
+        );
+        assert_eq!(
+            std::mem::offset_of!(NativeBridgeOpenRequest, mapping_bytes),
+            40
+        );
+        assert_eq!(std::mem::offset_of!(NativeBridgeOpenRequest, bus_id), 48);
+        assert_eq!(std::mem::size_of::<NativeBridgeDriverInfoRaw>(), 104);
+        assert_eq!(
+            std::mem::offset_of!(NativeBridgeDriverInfoRaw, driver_version),
+            4
+        );
+        assert_eq!(
+            std::mem::offset_of!(NativeBridgeDriverInfoRaw, cable_count),
+            12
+        );
+        assert_eq!(
+            std::mem::offset_of!(NativeBridgeDriverInfoRaw, capabilities),
+            24
+        );
+        assert_eq!(
+            std::mem::offset_of!(NativeBridgeDriverInfoRaw, default_period_frames),
+            36
+        );
+
+        let hello = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: "cable-h".to_owned(),
+            direction: audiorouter_protocol::AudioBridgeDirection::RenderSource,
+            generation: 3,
+            sample_rate_hz: 96_000,
+            channels: 2,
+            frames_per_quantum: 128,
+            lease_ms: 1_000,
+        };
+        let request = native_bridge_open_request_ex(&hello, 7, 128 + 2 * 128 * 8).unwrap();
+        assert_eq!(request.extension.extension_bytes, 64);
+        assert_eq!(request.extension.flags, NATIVE_DRIVER_OPEN_FLAG_FLOAT64);
+        assert_eq!(request.extension.reserved, [0; 14]);
+        assert_eq!(request.request.mapping_bytes, 128 + 2 * 128 * 8);
+    }
+
+    #[test]
+    fn native_driver_bridge_carries_eight_channels_while_internal_bridge_keeps_two() {
+        // AR_BRIDGE_MAX_CHANNELS / AR_BRIDGE_MAX_PAYLOAD_BYTES in bridgeio.h.
+        assert_eq!(NATIVE_DRIVER_MAX_CHANNELS, 8);
+        assert_eq!(NATIVE_DRIVER_MAX_PAYLOAD_BYTES, 262_144);
+        let hello = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: "cable-b".to_owned(),
+            direction: audiorouter_protocol::AudioBridgeDirection::CaptureSink,
+            generation: 5,
+            sample_rate_hz: 96_000,
+            channels: 8,
+            frames_per_quantum: audiorouter_protocol::MAX_AUDIO_BRIDGE_FRAMES,
+            lease_ms: 1_000,
+        };
+        assert_eq!(
+            hello.validate(),
+            Err(audiorouter_protocol::AudioBridgeContractError::InvalidChannels),
+            "the internal AudioBridge protocol stays at 2 channels"
+        );
+        assert!(hello
+            .validate_with_max_channels(NATIVE_DRIVER_MAX_CHANNELS)
+            .is_ok());
+        let nine = audiorouter_protocol::AudioBridgeHello {
+            channels: 9,
+            ..hello.clone()
+        };
+        assert!(nine
+            .validate_with_max_channels(NATIVE_DRIVER_MAX_CHANNELS)
+            .is_err());
+
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-8ch-{}-{}.slot",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut session = NativeBridgeSession::create(&path, hello.clone()).unwrap();
+        assert_eq!(
+            session.mapping_bytes(),
+            128 + NATIVE_DRIVER_MAX_PAYLOAD_BYTES
+        );
+        let samples: Vec<f64> = (0..8 * 4096_i32)
+            .map(|index| f64::from(index - 16_384) / 2_147_483_648.0)
+            .collect();
+        session.write_f64(&samples).unwrap();
+        let reader = NativeBridgeRegion::open(&path, 8, 4096).unwrap();
+        let mut output = vec![0.0_f64; samples.len()];
+        let header = reader.read_into_f64(5, &mut output).unwrap();
+        assert_eq!(header.channels, 8);
+        assert_eq!(
+            header.payload_bytes as usize,
+            NATIVE_DRIVER_MAX_PAYLOAD_BYTES
+        );
+        assert_eq!(
+            output, samples,
+            "a full 7.1 quantum round-trips bit-exactly"
+        );
+        drop(reader);
+        drop(session);
+        let _ = std::fs::remove_file(&path);
+        assert!(NativeBridgeRegion::create(&path, 9, 128).is_err());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_driver_open_request_accepts_eight_channels() {
+        let hello = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: "cable-a".to_owned(),
+            direction: audiorouter_protocol::AudioBridgeDirection::RenderSource,
+            generation: 2,
+            sample_rate_hz: 48_000,
+            channels: 8,
+            frames_per_quantum: 128,
+            lease_ms: 1_000,
+        };
+        let request = native_bridge_open_request_ex(&hello, 1, 128 + 8 * 128 * 8).unwrap();
+        assert_eq!(request.request.channels, 8);
+        let nine = audiorouter_protocol::AudioBridgeHello {
+            channels: 9,
+            ..hello
+        };
+        assert!(native_bridge_open_request_ex(&nine, 1, 128 + 9 * 128 * 8).is_err());
+    }
+
+    #[test]
+    fn native_bridge_driver_info_requires_float64_and_protocol_1_1() {
+        let info = NativeBridgeDriverInfo {
+            protocol_major: 1,
+            protocol_minor: 1,
+            driver_version: [0, 2, 0, 0],
+            cable_count: 2,
+            max_cables: 8,
+            max_channels: 8,
+            capabilities: NATIVE_DRIVER_CAP_SAMPLE_FLOAT64 | NATIVE_DRIVER_CAP_STREAM_COUNTERS,
+            supported_rates: 7,
+            min_period_frames: 0,
+            default_period_frames: 0,
+        };
+        assert_eq!(info.check_compatible(), Ok(()));
+        assert!(info.has(NATIVE_DRIVER_CAP_STREAM_COUNTERS));
+        assert!(!info.has(NATIVE_DRIVER_CAP_LOW_LATENCY_PERIODS));
+        let no_float64 = NativeBridgeDriverInfo {
+            capabilities: NATIVE_DRIVER_CAP_STREAM_COUNTERS,
+            ..info
+        };
+        assert_eq!(
+            no_float64.check_compatible(),
+            Err(NativeBridgeDriverError::MissingCapability),
+            "no silent float32 fallback"
+        );
+        for (major, minor) in [(2, 0), (0, 9), (1, 0)] {
+            let other = NativeBridgeDriverInfo {
+                protocol_major: major,
+                protocol_minor: minor,
+                ..info
+            };
+            assert_eq!(
+                other.check_compatible(),
+                Err(NativeBridgeDriverError::VersionMismatch)
+            );
+        }
+        assert!(NativeBridgeDriverError::VersionMismatch
+            .user_message()
+            .contains("repair it from Setup"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_bridge_driver_statuses_classify_through_the_real_ntstatus_mapping() {
+        // The I/O manager converts the driver's NTSTATUS with this routine;
+        // use it rather than a hand-copied table so a wrong code fails here.
+        #[link(name = "ntdll")]
+        extern "system" {
+            fn RtlNtStatusToDosError(status: i32) -> u32;
+        }
+        let cases = [
+            (0xC000_0059_u32, NativeBridgeDriverError::VersionMismatch),
+            (0xC000_00BB, NativeBridgeDriverError::NotSupported),
+            (0xC000_0043, NativeBridgeDriverError::LeaseHeld),
+            (0xC000_0022, NativeBridgeDriverError::AccessDenied),
+            (0xC000_009D, NativeBridgeDriverError::CableNotEnabled),
+            (0xC000_0184, NativeBridgeDriverError::LeaseNotActive),
+            (0xC000_000D, NativeBridgeDriverError::Other),
+        ];
+        for (status, expected) in cases {
+            // SAFETY: a pure ntdll lookup with no pointers or side effects.
+            let win32 = unsafe { RtlNtStatusToDosError(status as i32) };
+            let error = windows::core::Error::from(windows::core::HRESULT::from_win32(win32));
+            assert_eq!(
+                classify_native_bridge_error(&error),
+                expected,
+                "NTSTATUS {status:#x}"
+            );
+        }
+        let missing = windows::core::Error::from(windows::core::HRESULT::from_win32(2));
+        assert_eq!(
+            classify_native_bridge_error(&missing),
+            NativeBridgeDriverError::DriverUnavailable
+        );
+    }
+
+    #[test]
     fn native_bridge_float64_session_round_trips_pcm32_without_narrowing() {
         let path = std::env::temp_dir().join(format!(
             "audiorouter-float64-session-{}-{}.slot",
@@ -11710,7 +12345,7 @@ mod tests {
         let path =
             std::env::temp_dir().join(format!("audiorouter-invalid-bridge-{}", std::process::id()));
         assert!(matches!(
-            NativeBridgeRegion::create(&path, 3, 128),
+            NativeBridgeRegion::create(&path, NATIVE_DRIVER_MAX_CHANNELS + 1, 128),
             Err(NativeBridgeRegionError::InvalidFrame)
         ));
         assert!(matches!(
@@ -11989,8 +12624,8 @@ mod tests {
             0,
         )
         .is_err());
-        assert!(native_bridge_open_request(&hello, 1, 31).is_err());
-        assert!(native_bridge_open_request(&hello, 1, 32).is_ok());
+        assert!(native_bridge_open_request(&hello, 1, 127).is_err());
+        assert!(native_bridge_open_request(&hello, 1, 128).is_ok());
     }
 
     #[cfg(windows)]

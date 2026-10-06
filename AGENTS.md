@@ -87,6 +87,17 @@ Report the result, affected requirement IDs/files, checks performed and limitati
   expected native failure must `exit 0`, and hosted runners have no audio
   endpoints.
 
+- **2026-10-05 — Pin cross-language ABI constants as literal values on both sides.**
+  Evidence: [WP-06 evidence](docs/plans/active/evidence/2026-10-05-virtual-cable-wp06.md),
+  `native_bridge_protocol_1_1_abi_matches_driver_header`. Scope: the kernel
+  bridge (IOCTL codes, struct sizes/offsets, NTSTATUS mappings) and any
+  other C/Rust boundary. Consequence: the Rust client hand-built its IOCTL
+  codes with `METHOD_NEITHER` while the driver used `METHOD_BUFFERED`; each
+  side's own tests passed and every OPEN would have failed only in the VM.
+  Assert the exact hex values and offsets in the C header (`C_ASSERT`) and
+  in a Rust test, and check status mappings with the real
+  `RtlNtStatusToDosError` rather than a copied table.
+
 - **2026-10-05 — A supervised backend thread must survive panics, and leave a trace of them.**
   Evidence: [active plan, backend dead after resume](docs/plans/active/current.md),
   `stopped_control_plane_releases_the_pipe_for_a_restarted_server`. Scope:

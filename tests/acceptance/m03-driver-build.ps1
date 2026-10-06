@@ -494,7 +494,7 @@ if (-not $timerSource.Contains('_this->UpdatePosition(qpc);')) {
     throw 'WaveRT timer callback does not reach the position-update bridge path'
 }
 $readBytesStart = $stream.IndexOf('VOID CMiniportWaveRTStream::ReadBytes')
-$readBytesEnd = $stream.IndexOf('VOID CMiniportWaveRTStream::RefreshBridgePublishShape', $readBytesStart)
+$readBytesEnd = $stream.IndexOf('BOOLEAN CMiniportWaveRTStream::RefreshBridgePublishShape', $readBytesStart)
 if ($readBytesStart -lt 0 -or $readBytesEnd -le $readBytesStart) {
     throw 'WaveRT capture callback boundary is missing'
 }
@@ -517,6 +517,30 @@ if (-not $writeBytesSource.Contains('m_BridgeReadSequence = 0;')) {
 }
 if (-not $writeBytesSource.Contains('header.Channels != bridgeChannels')) {
     throw 'WaveRT render callback must reject a bridge channel-shape mismatch'
+}
+# A lease at another rate/channel count must produce silence, never a
+# wrong-speed stream (17 §5.2), and the mismatch must be counted.
+foreach ($required in @(
+        'readSampleRate == m_pWfExt->Format.nSamplesPerSec &&',
+        'if (!captureLeaseUsable ||',
+        'activity.FormatMismatches',
+        'activity.UnderrunFrames += frames - writtenFrames',
+        'AudioRouterSequenceGap(',
+        'RecordBridgeActivity(AR_BRIDGE_DIRECTION_CAPTURE_SINK')) {
+    if (-not $writeBytesSource.Contains($required)) {
+        throw "WaveRT capture callback is missing a format/counter invariant: $required"
+    }
+}
+foreach ($required in @(
+        'IOCTL_AUDIOROUTER_BRIDGE_QUERY',
+        'AudioRouterValidateBridgeQueryLength(',
+        'AudioRouterValidateBridgeRequestLength(',
+        'AudioRouterValidateBridgeOpenExtension(',
+        'InitializeBridgeViewHeader(mappedView);',
+        'AudioRouterRenderBlockWasOverrun(')) {
+    if (-not $source.Contains($required)) {
+        throw "bridge protocol 1.1 negotiation/counter invariant is missing: $required"
+    }
 }
 if (-not $writeBytesSource.Contains('while (writtenFrames < frames)')) {
     throw 'WaveRT capture callback must drain successive bridge quanta within one DMA segment'
@@ -548,7 +572,7 @@ if (-not $readBytesSource.Contains('AudioRouterPublishLeaseBlockForDirection')) 
 if (-not $readBytesSource.Contains('AR_BRIDGE_DIRECTION_RENDER_SOURCE')) {
     throw 'WaveRT render callback must publish the render-source lease direction'
 }
-if (-not $stream.Substring($stream.IndexOf('VOID CMiniportWaveRTStream::RefreshBridgePublishShape')).Contains('AR_BRIDGE_DIRECTION_RENDER_SOURCE')) {
+if (-not $stream.Substring($stream.IndexOf('BOOLEAN CMiniportWaveRTStream::RefreshBridgePublishShape')).Contains('AR_BRIDGE_DIRECTION_RENDER_SOURCE')) {
     throw 'WaveRT render callback must negotiate the render-source lease shape'
 }
 if (-not $stream.Substring($stream.IndexOf('VOID CMiniportWaveRTStream::WriteBytes')).Contains('RtlZeroMemory')) {

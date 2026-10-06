@@ -9,6 +9,7 @@ using SHORT = std::int16_t;
 using ULONG = std::uint32_t;
 using LONG = std::int32_t;
 using ULONGLONG = std::uint64_t;
+using LONG64 = std::int64_t;
 using SIZE_T = std::size_t;
 using WCHAR = wchar_t;
 using FLOAT = float;
@@ -29,6 +30,7 @@ using DOUBLE = double;
 #define STATUS_ACCESS_DENIED NTSTATUS(0xC0000022)
 #define STATUS_OBJECT_NAME_NOT_FOUND NTSTATUS(0xC0000034)
 #define STATUS_DEVICE_NOT_CONNECTED NTSTATUS(0xC000009D)
+#define STATUS_NOT_SUPPORTED NTSTATUS(0xC00000BB)
 #define FIELD_OFFSET(type, member) offsetof(type, member)
 #define C_ASSERT(expression) static_assert(expression, #expression)
 #define ARRAYSIZE(array) (sizeof(array) / sizeof(array[0]))

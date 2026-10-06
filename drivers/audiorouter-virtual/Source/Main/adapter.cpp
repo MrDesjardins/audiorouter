@@ -158,6 +158,39 @@ static void PublishBridgeRequest(
         static_cast<LONG64>(Request->Generation));
 }
 
+// Driver-owned counters live in the pinned, 8-byte aligned shared header.
+// The caller holds rundown protection on the lease that owns `View`.
+static __forceinline volatile LONG64* BridgeCounter(
+    _In_ PVOID View,
+    _In_ SIZE_T FieldOffset)
+{
+    return reinterpret_cast<volatile LONG64*>(
+        static_cast<UCHAR*>(View) + AR_BRIDGE_COUNTERS_OFFSET + FieldOffset);
+}
+
+static __forceinline void AddBridgeCounter(
+    _In_ PVOID View,
+    _In_ SIZE_T FieldOffset,
+    _In_ ULONGLONG Delta)
+{
+    if (Delta != 0) {
+        InterlockedAdd64(BridgeCounter(View, FieldOffset), static_cast<LONG64>(Delta));
+    }
+}
+
+// Runs at OPEN after the view is pinned and before any callback can see it:
+// reset the counters/acknowledgement of a reused file and announce the
+// negotiated sample size. The block header and payload are left untouched.
+static void InitializeBridgeViewHeader(_In_ PVOID View)
+{
+    RtlZeroMemory(static_cast<UCHAR*>(View) + AR_BRIDGE_COUNTERS_OFFSET,
+                  AR_BRIDGE_HEADER_BYTES - AR_BRIDGE_COUNTERS_OFFSET);
+    *reinterpret_cast<volatile ULONG*>(
+        static_cast<UCHAR*>(View) + AR_BRIDGE_SAMPLE_BYTES_OFFSET) =
+        AR_BRIDGE_SAMPLE_BYTES_FLOAT64;
+    KeMemoryBarrier();
+}
+
 // This helper is intentionally independent of the sample's timer callback.
 // It is safe for a future PortCls callback: rundown protects the mapped view
 // from CLOSE/expiry/unload, and the callback takes no lease spin lock.
@@ -166,9 +199,14 @@ NTSTATUS AudioRouterCopyLeaseBlock(
     _In_ ULONGLONG MinimumSequence,
     _Out_writes_(DestinationCapacitySamples) DOUBLE* Destination,
     _In_ SIZE_T DestinationCapacitySamples,
-    _Out_ AR_BRIDGE_BLOCK_HEADER* Header)
+    _Out_ AR_BRIDGE_BLOCK_HEADER* Header,
+    _Out_ ULONG* NonFiniteSamples)
 {
+    if (NonFiniteSamples != NULL) {
+        *NonFiniteSamples = 0;
+    }
     if (Lease == NULL || Destination == NULL || Header == NULL ||
+        NonFiniteSamples == NULL ||
         !ExAcquireRundownProtection(&Lease->Rundown)) {
         return STATUS_DEVICE_NOT_READY;
     }
@@ -196,7 +234,8 @@ NTSTATUS AudioRouterCopyLeaseBlock(
         }
         status = AudioRouterCopyBridgeBlock(
             static_cast<const UCHAR*>(view), mappedBytes, generation,
-            MinimumSequence, Destination, DestinationCapacitySamples, Header);
+            MinimumSequence, Destination, DestinationCapacitySamples, Header,
+            NonFiniteSamples);
         KeMemoryBarrier();
         if (NT_SUCCESS(status) && static_cast<ULONGLONG>(
                 InterlockedCompareExchange64(state, 0, 0)) != stateBefore) {
@@ -280,6 +319,14 @@ NTSTATUS AudioRouterPublishLeaseBlock(
             static_cast<LONG64>(current)) != static_cast<LONG64>(current)) {
         ExReleaseRundownProtection(&Lease->Rundown);
         return STATUS_DEVICE_BUSY;
+    }
+    // The consumer acknowledges each block it read in ReaderSequence. Read
+    // that user-writable value exactly once; it only feeds a diagnostic
+    // counter and never sizes or addresses memory.
+    ULONGLONG readerSequence = static_cast<ULONGLONG>(*reinterpret_cast<volatile LONG64*>(
+        static_cast<UCHAR*>(view) + AR_BRIDGE_READER_SEQUENCE_OFFSET));
+    if (AudioRouterRenderBlockWasOverrun(nextSequence, readerSequence)) {
+        AddBridgeCounter(view, FIELD_OFFSET(AR_BRIDGE_STREAM_COUNTERS, OverrunFrames), Frames);
     }
     ULONGLONG sequence = static_cast<ULONGLONG>(
         InterlockedIncrement64(&Lease->NextSequence));
@@ -412,14 +459,56 @@ NTSTATUS AudioRouterCopyLeaseBlockForDirection(
     _In_ ULONGLONG MinimumSequence,
     _Out_writes_(DestinationCapacitySamples) DOUBLE* Destination,
     _In_ SIZE_T DestinationCapacitySamples,
-    _Out_ AR_BRIDGE_BLOCK_HEADER* Header)
+    _Out_ AR_BRIDGE_BLOCK_HEADER* Header,
+    _Out_ ULONG* NonFiniteSamples)
 {
     AR_BRIDGE_LEASE_STATE* lease = BridgeLeaseForBusDirection(BusIndex, Direction);
-    return lease == NULL
-        ? STATUS_INVALID_PARAMETER
-        : AudioRouterCopyLeaseBlock(
-            lease, MinimumSequence, Destination, DestinationCapacitySamples,
-            Header);
+    if (lease == NULL) {
+        if (NonFiniteSamples != NULL) { *NonFiniteSamples = 0; }
+        return STATUS_INVALID_PARAMETER;
+    }
+    return AudioRouterCopyLeaseBlock(
+        lease, MinimumSequence, Destination, DestinationCapacitySamples,
+        Header, NonFiniteSamples);
+}
+
+// Callback-side counter update: rundown-protected, no lease spin lock, no
+// allocation. A missing or retiring lease simply drops the sample of activity.
+NTSTATUS AudioRouterRecordLeaseActivityForDirection(
+    _In_ USHORT BusIndex,
+    _In_ USHORT Direction,
+    _In_ const AR_BRIDGE_STREAM_ACTIVITY* Activity)
+{
+    AR_BRIDGE_LEASE_STATE* lease = BridgeLeaseForBusDirection(BusIndex, Direction);
+    if (lease == NULL || Activity == NULL ||
+        !ExAcquireRundownProtection(&lease->Rundown)) {
+        return STATUS_DEVICE_NOT_READY;
+    }
+    PVOID view = InterlockedCompareExchangePointer(&lease->MappedView, NULL, NULL);
+    ULONG mappedBytes = static_cast<ULONG>(
+        InterlockedCompareExchange(
+            reinterpret_cast<volatile LONG*>(&lease->MappedBytes), 0, 0));
+    if (view == NULL || mappedBytes < AR_BRIDGE_HEADER_BYTES ||
+        LoadBridgeUshort(&lease->Request.Direction) != Direction) {
+        ExReleaseRundownProtection(&lease->Rundown);
+        return STATUS_DEVICE_NOT_READY;
+    }
+    AddBridgeCounter(view, FIELD_OFFSET(AR_BRIDGE_STREAM_COUNTERS, UnderrunFrames),
+                     Activity->UnderrunFrames);
+    AddBridgeCounter(view, FIELD_OFFSET(AR_BRIDGE_STREAM_COUNTERS, SequenceGaps),
+                     Activity->SequenceGaps);
+    AddBridgeCounter(view, FIELD_OFFSET(AR_BRIDGE_STREAM_COUNTERS, NonFiniteSamples),
+                     Activity->NonFiniteSamples);
+    AddBridgeCounter(view, FIELD_OFFSET(AR_BRIDGE_STREAM_COUNTERS, FormatMismatches),
+                     Activity->FormatMismatches);
+    InterlockedExchange64(
+        BridgeCounter(view, FIELD_OFFSET(AR_BRIDGE_STREAM_COUNTERS, LastDevicePosition)),
+        static_cast<LONG64>(Activity->DevicePositionFrames));
+    InterlockedExchange64(
+        BridgeCounter(view, FIELD_OFFSET(AR_BRIDGE_STREAM_COUNTERS, LastQpcTime)),
+        static_cast<LONG64>(Activity->QpcTime));
+    ExReleaseRundownProtection(&lease->Rundown);
+    return STATUS_SUCCESS;
 }
 
 NTSTATUS AudioRouterPublishLeaseBlockForDirection(
@@ -499,10 +588,13 @@ UNICODE_STRING g_RegistryPath;      // This is used to store the registry settin
 // Functions
 //-----------------------------------------------------------------------------
 
-static NTSTATUS CompleteBridgeIrp(_In_ PIRP Irp, _In_ NTSTATUS Status)
+static NTSTATUS CompleteBridgeIrp(
+    _In_ PIRP Irp,
+    _In_ NTSTATUS Status,
+    _In_ ULONG_PTR Information = 0)
 {
     Irp->IoStatus.Status = Status;
-    Irp->IoStatus.Information = 0;
+    Irp->IoStatus.Information = NT_SUCCESS(Status) ? Information : 0;
     IoCompleteRequest(Irp, IO_NO_INCREMENT);
     return Status;
 }
@@ -528,8 +620,14 @@ NTSTATUS BridgeControlCreateClose(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
     return CompleteBridgeIrp(Irp, STATUS_SUCCESS);
 }
 
-static NTSTATUS HandleBridgeControlRequest(_In_ PIRP Irp)
+static NTSTATUS HandleBridgeControlRequest(
+    _In_ PIRP Irp,
+    _Out_ ULONG_PTR* Information)
 {
+    if (Information == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    *Information = 0;
     if (Irp == NULL) {
         return STATUS_INVALID_PARAMETER;
     }
@@ -540,19 +638,47 @@ static NTSTATUS HandleBridgeControlRequest(_In_ PIRP Irp)
     ULONG code = stack->Parameters.DeviceIoControl.IoControlCode;
     NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
 
+    if (code == IOCTL_AUDIOROUTER_BRIDGE_QUERY) {
+        // Read-only capability report for status/repair. METHOD_BUFFERED:
+        // the I/O manager copies exactly the validated output length back.
+        status = AudioRouterValidateBridgeQueryLength(
+            stack->Parameters.DeviceIoControl.InputBufferLength,
+            stack->Parameters.DeviceIoControl.OutputBufferLength);
+        if (!NT_SUCCESS(status) || Irp->AssociatedIrp.SystemBuffer == NULL ||
+            Irp->RequestorMode != UserMode) {
+            return STATUS_INVALID_PARAMETER;
+        }
+        AudioRouterFillDriverInfo(
+            static_cast<PAR_BRIDGE_DRIVER_INFO>(Irp->AssociatedIrp.SystemBuffer),
+            g_EnabledCableCount);
+        *Information = sizeof(AR_BRIDGE_DRIVER_INFO);
+        return STATUS_SUCCESS;
+    }
+
     if (code == IOCTL_AUDIOROUTER_BRIDGE_OPEN ||
         code == IOCTL_AUDIOROUTER_BRIDGE_CLOSE ||
         code == IOCTL_AUDIOROUTER_BRIDGE_HEARTBEAT) {
-        if (stack->Parameters.DeviceIoControl.InputBufferLength !=
-            sizeof(AR_BRIDGE_OPEN_REQUEST) ||
-            stack->Parameters.DeviceIoControl.OutputBufferLength != 0 ||
-            Irp->AssociatedIrp.SystemBuffer == NULL || Irp->RequestorMode != UserMode) {
+        ULONG inputBytes = stack->Parameters.DeviceIoControl.InputBufferLength;
+        if (Irp->AssociatedIrp.SystemBuffer == NULL || Irp->RequestorMode != UserMode) {
             return STATUS_INVALID_PARAMETER;
+        }
+        status = AudioRouterValidateBridgeRequestLength(
+            inputBytes, stack->Parameters.DeviceIoControl.OutputBufferLength,
+            code == IOCTL_AUDIOROUTER_BRIDGE_OPEN);
+        if (!NT_SUCCESS(status)) {
+            return status;
         }
 
         PAR_BRIDGE_OPEN_REQUEST request =
             static_cast<PAR_BRIDGE_OPEN_REQUEST>(Irp->AssociatedIrp.SystemBuffer);
         status = AudioRouterValidateBridgeOpenRequest(request);
+        if (NT_SUCCESS(status) && inputBytes == sizeof(AR_BRIDGE_OPEN_REQUEST_EX)) {
+            // The extension is never part of the lease identity; it only
+            // negotiates transport options and must be fully understood.
+            status = AudioRouterValidateBridgeOpenExtension(
+                &static_cast<PAR_BRIDGE_OPEN_REQUEST_EX>(
+                    Irp->AssociatedIrp.SystemBuffer)->Extension);
+        }
         USHORT busIndex = 0;
         if (NT_SUCCESS(status)) {
             status = AudioRouterParseCableBusId(
@@ -699,6 +825,9 @@ static NTSTATUS HandleBridgeControlRequest(_In_ PIRP Irp)
                             ExReInitializeRundownProtection(&lease->Rundown);
                             lease->RundownStarted = FALSE;
                         }
+                        // Ownership checks passed and no callback can see this
+                        // view yet: reset counters, announce float64 samples.
+                        InitializeBridgeViewHeader(mappedView);
                         PublishBridgeRequest(lease, request);
                         lease->LastGeneration = request->Generation;
                         lease->OwnerFileObject = stack->FileObject;
@@ -782,6 +911,7 @@ static NTSTATUS HandleBridgeControlRequest(_In_ PIRP Irp)
                     lease->RundownStarted == oldRundownStarted) {
                     ExReInitializeRundownProtection(&lease->Rundown);
                     lease->RundownStarted = FALSE;
+                    InitializeBridgeViewHeader(mappedView);
                     PublishBridgeRequest(lease, request);
                     lease->LastGeneration = request->Generation;
                     lease->OwnerFileObject = stack->FileObject;
@@ -836,11 +966,12 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
 {
     if (Irp == NULL) { return STATUS_INVALID_PARAMETER; }
     NTSTATUS status;
+    ULONG_PTR information = 0;
     {
         BridgeControlGuard controlGuard;
-        status = HandleBridgeControlRequest(Irp);
+        status = HandleBridgeControlRequest(Irp, &information);
     }
-    return CompleteBridgeIrp(Irp, status);
+    return CompleteBridgeIrp(Irp, status, information);
 }
 
 NTSTATUS CreateBridgeControlDevice(_In_ PDRIVER_OBJECT DriverObject)
