@@ -8,28 +8,44 @@ result to Discord, monitor it in your headphones and record it, all at once.
 Stream game audio from your gaming PC to your streaming PC over your home
 network. Every route is a picture you can read, and every setting is live.
 
+**[Website](https://audiorouter.org)** ·
+**[Download](https://github.com/MrDesjardins/audiorouter/releases/latest)** ·
+[Manual](https://audiorouter.org/manual.html) ·
+[Audio tools](https://audiorouter.org/tools.html) ·
+[Videos](#videos) ·
+[For developers](#for-developers)
+
 ![A streamer voice chain: microphone through a noise gate, denoise, a four-point EQ, a compressor and a limiter, sent to Discord, the headphones and a recorder at the same time](docs/images/streamer-voice-chain.png)
 
-## Install on Windows
+## Get started
 
-**[Download AudioRouter 0.0.14 for Windows 11 x64](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.14)**
+1. **Download** `AudioRouter_<version>_x64-setup.exe` from the
+   [latest release](https://github.com/MrDesjardins/audiorouter/releases/latest).
+   It is the only file you need: the app, its audio engine, the command-line
+   tool and the Stream Deck plugin are all inside.
+2. **Install** it. It installs for your Windows account only and needs no
+   administrator rights. Windows may warn that the installer is unsigned;
+   choose **More info**, then **Run anyway**.
+3. **Open AudioRouter** and allow it to use your audio devices when you first
+   press **Play**.
 
-1. Download `AudioRouter_0.0.14_x64-setup.exe` from the release assets. It
-   is the only file you need: the app, its audio backend, the command-line
-   tool and the Stream Deck plugin are all inside it. The other
-   assets are checksums, SBOMs and license notices.
-2. Run it to install for your Windows account (no administrator rights).
-3. Open AudioRouter and allow audio device access when you first press Play.
-4. Stream Deck users: on the **API** tab, start the API and choose
-   **Install Stream Deck plugin** (0.0.14 and later).
+Requirements: Windows 11 x64. To send AudioRouter's sound into another app
+(Discord, OBS, a game's voice chat), install a virtual cable such as
+[VB-Cable](https://vb-audio.com/Cable/). You don't need one to route to your
+speakers or headphones.
 
-This is an **unsigned preview**: Windows may show a security warning.
-Clean-machine, upgrade and uninstall qualification remain open; see
-[distribution status](docs/operations/distribution.md). A virtual cable such
-as VB-Cable is needed only when routing into another app.
+### Your first route in one minute
 
-[Build from source](#install) · [First route](#your-first-route-in-one-minute) ·
-[User guide](docs/operations/quickstart.md)
+1. In **Tools**, add an **Input device** and an **Output device**.
+2. Select each one and choose the real device (your microphone, your
+   headphones) in **Properties**.
+3. Drag from the input's orange connector to the output's blue connector.
+   Add a **Noise gate** or **Advanced EQ** in between if you like.
+4. Press **Play**. Speak, watch the line light up, and adjust settings live.
+5. Press **Save** to keep the route. **Session → Save to file…** backs it up.
+
+The [manual](https://audiorouter.org/manual.html) walks through plugins,
+recording, application capture and two-PC streaming.
 
 ## Videos
 
@@ -37,44 +53,41 @@ as VB-Cable is needed only when routing into another app.
 | --- | --- |
 | AudioRouter overview (2 minutes) | [Watch on YouTube](https://youtu.be/IHitHqpi87s) |
 | Your first route | [Watch on YouTube](https://youtu.be/3--AnDZZXzA) |
-| Streaming audio between two PCs | Coming soon — video placeholder |
+| Streaming audio between two PCs | Coming soon |
 
-<!-- Replace the placeholders above with the user-provided video links. -->
-
-## Why AudioRouter
+## What it does
 
 - **One canvas instead of five control panels.** Sources on the left, outputs
   on the right, processing in between. The lines show where sound flows and
   pulse with its level while it plays.
-- **Studio processing for your voice.** Noise gate, denoise, speech denoise,
-  de-hum, de-click, a 16-point parametric EQ, graphic EQ, compressor,
-  limiter, delay, pitch, bass/treble and more: 30+ built-in tools.
-- **Your VST plugins, safely.** Load x64 VST2 effects (for example the
-  free ReaPlugs) and qualified VST3 effects, and open a plugin's own editor
-  while audio plays. Each plugin runs in an isolated worker process, so a
-  crashing plugin cannot take your route down with it.
-- **One source, many destinations.** Split a processed microphone to Discord,
-  to OBS, to your headphones and to a recorder in a single route. Mix several
-  sources into one with the Mixer and per-input levels.
+- **Studio processing for your voice.** Noise gate, denoise, de-hum,
+  de-click, a 16-point parametric EQ, compressor, limiter, delay, pitch and
+  more: 30+ built-in [audio tools](https://audiorouter.org/tools.html).
+- **Your VST plugins, safely.** Load x64 VST2 effects (for example the free
+  ReaPlugs) and qualified VST3 effects, and open a plugin's own editor while
+  audio plays. Each plugin runs in its own process, so a crashing plugin
+  cannot take your route down with it.
+- **One source, many destinations.** Send a processed microphone to Discord,
+  OBS, your headphones and a recorder at the same time. Mix several sources
+  into one with the Mixer.
 - **Two-PC streaming built in.** Network Send and Network Receive carry audio
-  between computers on your local network, with no extra software.
+  between computers on your home network, with no extra software.
 - **Capture one application.** Route just the game, just the browser or just
   Spotify instead of the whole desktop.
-- **Record while you route.** Record any branch to a file, with a recording
-  library.
-- **Save it, back it up, move it.** Keep several sessions ("Streaming",
-  "Podcast", "Late-night gaming") and switch between them. Save a whole
-  session, including its imported audio and plugin settings, to one
-  `.audiorouter` file and open it on another PC.
-- **Built for glitch-free audio.** The audio path never waits on the screen,
-  disk or network. Audio changes are qualified with a sine-wave continuity
-  test that requires zero glitches.
+- **Record while you route**, with a recording library.
+- **Sessions you can switch and move.** Keep several setups ("Streaming",
+  "Podcast", "Late-night gaming"), switch between them, and save one to a
+  single `.audiorouter` file to open on another PC.
+- **Stream Deck keys** for toggles, privacy mute, Play/Stop, session switching
+  and recording. Install the plugin from the app's **API** tab; see
+  [Stream Deck controls](https://audiorouter.org/stream-deck.html).
 - **Private by design.** No cloud, no account, no telemetry. AudioRouter never
-  changes your Windows default devices or volumes. It never switches to
-  another microphone behind your back, and a failed effect on your voice path
-  goes silent rather than leaking unprocessed audio.
-- **Scriptable.** Everything in the UI is also available from a command line
-  and from an AI assistant through a local, permission-controlled MCP server.
+  changes your Windows default devices or volumes, never switches to another
+  microphone behind your back, and a failed effect on your voice path goes
+  silent instead of leaking unprocessed audio.
+- **Scriptable.** A local [HTTP API](https://audiorouter.org/api.html), a
+  command line, and an [MCP server](https://audiorouter.org/mcp.html) for AI
+  assistants, all permission-controlled.
 
 ## See it in action
 
@@ -85,18 +98,17 @@ your headphones.
 ![Gaming PC session: game audio and a denoised, EQ'd microphone mixed and sent to 192.168.1.50 with Network Send, plus a headphone monitor](docs/images/gaming-pc-network-send.png)
 
 **The streaming PC receives it**, trims the level, feeds OBS through a virtual
-cable, and keeps a backup recording. The light theme is shown here; a
-high-contrast theme is also available.
+cable, and keeps a backup recording. Light and high-contrast themes are
+available too.
 
 ![Streaming PC session in the light theme: Network Receive, a trim gain, a level meter, an output to OBS and a backup recorder, with the Session file panel](docs/images/streaming-pc-light.png)
 
 **Shape your voice precisely.** The Advanced EQ has up to 16 points you drag
-on a live frequency-response curve, or type exactly: high/low pass, shelves,
-peaking and notch filters.
+on a live frequency-response curve, or type exactly.
 
 ![Advanced EQ properties: a high-pass at 90 Hz, a cut at 250 Hz, a presence boost at 3.2 kHz and a high shelf, on a frequency-response graph](docs/images/advanced-eq.png)
 
-## What you can build
+## Ideas to try
 
 | Goal | Route |
 | --- | --- |
@@ -105,30 +117,61 @@ peaking and notch filters.
 | Podcast with a safety copy | Add a Recorder branch next to the live output |
 | Game audio to a second PC | Gaming PC: Game → Network Send · Streaming PC: Network Receive → Output to OBS |
 | Stream only the game | Application source (the game) → Volume → Output |
-| Try an effect without risk | Toggle Bypass or Enabled on any node while it plays |
+| Clear Rainbow Six Siege footsteps | See the [Siege guide](https://audiorouter.org/siege.html) |
+| Try an effect without risk | Toggle Bypass or Enabled on any tool while it plays |
 
-## Install
+## Help and status
 
-For a source build, follow the steps below. The ready-to-install preview is
-linked under [Install on Windows](#install-on-windows).
+- **Website and manual:** [audiorouter.org](https://audiorouter.org), the
+  [basic manual](https://audiorouter.org/manual.html) and the in-depth
+  [user guide](docs/operations/quickstart.md).
+- **Release notes:** [Releases page](https://audiorouter.org/releases.html)
+  or [GitHub Releases](https://github.com/MrDesjardins/audiorouter/releases).
+- **Problems:** open an [issue](https://github.com/MrDesjardins/audiorouter/issues).
+  In the app, the **Logs** tab has **Open logs folder** for the files to
+  attach.
 
-### 1. Install the prerequisites
+AudioRouter is an **early preview**. Known limits: the app and installer are
+not signed yet; clock drift between two different devices is not corrected
+(rare, regular clicks on very long sessions); clean-machine, upgrade and
+uninstall testing is still open. Releases use existing virtual cables such as
+VB-Cable. AudioRouter's own virtual cable is in development and not shipped
+yet. See [distribution status](docs/operations/distribution.md) for details.
 
-On a Windows 11 x64 PC, install:
+---
+
+## For developers
+
+AudioRouter is a Rust workspace (control plane, real-time engine, WASAPI
+audio, plugin host, storage, transport, CLI) plus a React/TypeScript
+interface in a [Tauri](https://tauri.app) desktop shell. It builds and runs
+on Windows 11 x64 only.
+
+| Folder | What is in it |
+| --- | --- |
+| `crates/` | Rust workspace: `domain`, `control`, `engine`, `dsp`, `windows-audio`, `plugin-host`, `storage`, `transport`, `recording`, `protocol`, `cli`, `driver-helper` |
+| `src-tauri/` | Desktop shell (window, tray, embedded backend, local HTTP API) |
+| `ui/` | React/TypeScript interface, unit tests (Vitest) and browser tests (Playwright) |
+| `contracts/` | Generated TypeScript API contracts and drift checks |
+| `tools/streamdeck/` | Stream Deck plugin |
+| `drivers/` | AudioRouter virtual cable driver (in development) |
+| `site/` | The [audiorouter.org](https://audiorouter.org) website, deployed by `.github/workflows/pages.yml` |
+| `tools/release/` | Release build, verification and draft-publication scripts |
+| `docs/` | Specifications, plans, evidence and operations guides |
+
+### Build from source
+
+Install on a Windows 11 x64 PC:
 
 | Tool | Where | Notes |
 | --- | --- | --- |
-| Visual Studio 2022 Build Tools | [visualstudio.microsoft.com](https://visualstudio.microsoft.com/downloads/) | Select **Desktop development with C++** (includes the MSVC compiler and Windows SDK) |
-| Rust | [rustup.rs](https://rustup.rs) | Default stable toolchain, 1.80 or newer |
-| Node.js | [nodejs.org](https://nodejs.org) | Version 22 LTS or newer |
+| Visual Studio 2022 Build Tools | [visualstudio.microsoft.com](https://visualstudio.microsoft.com/downloads/) | Select **Desktop development with C++** (MSVC and the Windows SDK) |
+| Rust (rustup) | [rustup.rs](https://rustup.rs) | `rust-toolchain.toml` pins 1.96.0; rustup installs it on the first build |
+| Node.js | [nodejs.org](https://nodejs.org) | 22 LTS or newer |
 | Git | [git-scm.com](https://git-scm.com) | |
-| VB-Cable *(optional)* | [vb-audio.com/Cable](https://vb-audio.com/Cable/) | Needed only to send AudioRouter's sound into other apps such as Discord or OBS |
 
-WebView2, which draws the interface, is already part of Windows 11.
-
-### 2. Build AudioRouter
-
-Open **PowerShell** and run:
+WebView2, which draws the interface, is already part of Windows 11. Then, in
+PowerShell:
 
 ```powershell
 git clone https://github.com/MrDesjardins/audiorouter.git
@@ -147,86 +190,63 @@ cargo build --release -p audiorouter-cli
 ```
 
 The first build takes several minutes. The three programs end up in
-`target\app\release`.
-
-### 3. Put it in place and allow it to use your audio devices
-
-Still in the same PowerShell window:
+`target\app\release`. To run them like an installed copy:
 
 ```powershell
 $app = "$env:LOCALAPPDATA\Programs\AudioRouter"
 New-Item -ItemType Directory -Force $app | Out-Null
 Copy-Item target\app\release\audiorouter-shell.exe, target\app\release\audiorouter-plugin-worker.exe, target\app\release\audiorouter-cli.exe $app
-
 ```
 
-On first launch, AudioRouter enrolls your Windows account locally. On first
-Play, it asks permission to use audio devices. Your sessions are stored in
-`%LOCALAPPDATA%\AudioRouter`.
+Start `audiorouter-shell.exe` from that folder. Run one copy of AudioRouter
+at a time; close it before copying a new build over it. Sessions are stored
+in `%LOCALAPPDATA%\AudioRouter`.
 
-### 4. Start it
+To build the installer exactly as a release does, use
+`tools\release\prepare-artifacts.ps1`; see
+[release qualification](docs/operations/release-qualification.md).
 
-Double-click `audiorouter-shell.exe` in `%LOCALAPPDATA%\Programs\AudioRouter`
-(right-click → *Send to* → *Desktop (create shortcut)* to keep it handy).
-Run one copy of AudioRouter at a time.
+### Checks before you commit
 
-To update later, run `git pull` in the `audiorouter` folder, repeat step 2,
-then copy the three programs again (step 3's `Copy-Item` line) while
-AudioRouter is closed.
-
-## Your first route in one minute
-
-1. In **Tools**, add an **Input device** and an **Output device**.
-2. Select each one and choose the real device (your microphone, your
-   headphones) in **Properties**.
-3. Drag from the input's orange connector to the output's blue connector.
-   Add a **Noise gate** or **Advanced EQ** in between if you like.
-4. Press **Play**. Speak, watch the line light up, and tweak settings live.
-5. Press **Save** to keep the route. **Session → Save to file…** backs it up.
-
-**Setup** shows what AudioRouter sees on this PC. The
-[quickstart](docs/operations/quickstart.md) covers plugins, recording,
-application capture and networking in depth.
-
-## Documentation
-
-- [Quickstart and user guide](docs/operations/quickstart.md)
-- [What is done and what is not](docs/plans/active/current.md#where-things-stand)
-- [Plugin compatibility](docs/operations/plugin-compatibility.md)
-- [API reference](docs/operations/api-reference.md) for the command line and MCP
-- [Documentation index](docs/README.md), [product scope](docs/spec/01-product.md) and [reference workflows](docs/spec/02-workflows.md)
-
-Known limits of the preview: no signed installer;
-clock drift between two different devices is not corrected yet (rare,
-regular clicks on very long sessions); and clean-machine qualification is
-still open. The
-[M08 release evidence](docs/plans/active/evidence/M08-release.md) records the
-exact release boundaries. AudioRouter uses existing virtual devices such as
-VB-Cable; it will not install its own audio driver.
-
-## For contributors
-
-The code is a Rust workspace (control plane, real-time engine, WASAPI audio,
-plugin host, storage, transport, CLI) plus a React/TypeScript interface in a
-Tauri desktop shell. Development agents must read [AGENTS.md](AGENTS.md) and
-the [active plan](docs/plans/active/current.md). `AGENTS.md` is the canonical
-agent instruction file; do not create a case-only `agent.md` duplicate on
-Windows.
-
-Only VST3 fixture and validator work needs the Steinberg VST3 SDK (building
-the app does not). It is source-distributed; the pinned checkout lives under
-the ignored `third_party/vst3sdk` directory:
+CI (`.github/workflows/ci.yml`) runs on Windows for every push to `main` and
+every pull request, and fails on any of these:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\m06-vst3-sdk\install.ps1
+cargo fmt --all -- --check
+cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
+cargo test --workspace --locked --exclude audiorouter-windows-audio
+npm.cmd --prefix ui test
 ```
 
-See [SDK setup](docs/operations/sdk-setup.md) for the pinned revision and
-verification commands. The README images are regenerated with
-`AUDIOROUTER_README_SHOTS=1` and `npx playwright test e2e/readme-screenshots.pw.ts`
-in `ui` (after `cargo build --example e2e_backend -p audiorouter-control`).
-Setup does not install drivers, register plugins, or change audio devices or
-other machine audio settings.
+Format with `cargo fmt --all` and
+`cargo fmt --manifest-path src-tauri/Cargo.toml`. To format staged Rust files
+automatically at commit time, run once per clone:
+`git config core.hooksPath .githooks`. More in
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
+### Working on the project
+
+- **Start here:** the [documentation index](docs/README.md), the
+  [active plan](docs/plans/active/current.md) and the
+  [specifications](docs/spec/01-product.md).
+- **AI agents:** read [AGENTS.md](AGENTS.md), the canonical agent
+  instructions (do not add a case-only `agent.md` copy on Windows). Claude
+  Code sessions format each edited Rust file automatically
+  (`.claude/settings.json`).
+- **API:** [API reference](docs/operations/api-reference.md) for the command
+  line, JSON-RPC and MCP, and the [local HTTP API](docs/operations/local-http-api.md).
+- **Plugins:** [plugin compatibility](docs/operations/plugin-compatibility.md).
+  Only VST3 fixture and validator work needs the Steinberg VST3 SDK (building
+  the app does not):
+  `powershell -ExecutionPolicy Bypass -File .\tools\m06-vst3-sdk\install.ps1`
+  (see [SDK setup](docs/operations/sdk-setup.md)).
+- **README screenshots:** regenerate with `AUDIOROUTER_README_SHOTS=1` and
+  `npx playwright test e2e/readme-screenshots.pw.ts` in `ui`, after
+  `cargo build --example e2e_backend -p audiorouter-control`.
+- **Website:** edit `site/`; changes deploy to audiorouter.org when they
+  reach `main` (see [site/README.md](site/README.md)).
 
 ## License
 
