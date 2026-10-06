@@ -241,6 +241,15 @@ NTSTATUS AudioRouterCopyLeaseBlock(
                 InterlockedCompareExchange64(state, 0, 0)) != stateBefore) {
             status = STATUS_RETRY;
         }
+        if (NT_SUCCESS(status)) {
+            // Flow control for the single-block slot: acknowledge the block
+            // just consumed so the user-mode producer can publish the next
+            // one immediately, paced by this stream's clock rather than its
+            // own timer. Diagnostic/pacing value only; never read back here.
+            InterlockedExchange64(reinterpret_cast<volatile LONG64*>(
+                static_cast<UCHAR*>(view) + AR_BRIDGE_READER_SEQUENCE_OFFSET),
+                static_cast<LONG64>(Header->Sequence));
+        }
     }
     ExReleaseRundownProtection(&Lease->Rundown);
     return status;

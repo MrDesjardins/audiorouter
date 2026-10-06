@@ -1382,6 +1382,14 @@ impl NativeBridgeController {
             .counters()
     }
 
+    /// Last block sequence the driver consumed (capture-sink flow control).
+    pub fn consumer_sequence(&self) -> u64 {
+        self.session
+            .as_ref()
+            .expect("native bridge session remains owned until close")
+            .consumer_sequence()
+    }
+
     /// The driver's capability report, read over this controller's handle.
     pub fn query_driver(&self) -> Result<NativeBridgeDriverInfo, NativeBridgeControllerError> {
         self.client.query().map_err(NativeBridgeControllerError::Windows)
@@ -8629,6 +8637,13 @@ impl NativeBridgeRegion {
         }
     }
 
+    /// The consumer's last acknowledged sequence: the driver writes it for a
+    /// capture-sink lease when it takes a block, so a producer can publish
+    /// the next block right away (flow control on the stream's clock).
+    pub fn consumer_sequence(&self) -> u64 {
+        self.reader_sequence().load(std::sync::atomic::Ordering::Acquire)
+    }
+
     fn sample_bytes(&self) -> u32 {
         // SAFETY: offset 88 is inside the header and 4-byte aligned.
         unsafe {
@@ -8919,6 +8934,11 @@ impl NativeBridgeSession {
     /// Driver-written stream counters from this session's mapped header.
     pub fn counters(&self) -> NativeBridgeStreamCounters {
         self.region.counters()
+    }
+
+    /// See [`NativeBridgeRegion::consumer_sequence`].
+    pub fn consumer_sequence(&self) -> u64 {
+        self.region.consumer_sequence()
     }
 
     pub fn hello(&self) -> &audiorouter_protocol::AudioBridgeHello {
@@ -11730,6 +11750,7 @@ mod tests {
             3,
             "the consumer acknowledges the block it read"
         );
+        assert_eq!(region.consumer_sequence(), 3, "producers see the same acknowledgement");
         // Simulate the driver-written counters and check each field offset.
         let raw = unsafe {
             std::slice::from_raw_parts_mut(region.map.as_ptr() as *mut u8, region.map.len())

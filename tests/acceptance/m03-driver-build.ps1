@@ -557,7 +557,8 @@ foreach ($required in @(
         'AudioRouterValidateBridgeRequestLength(',
         'AudioRouterValidateBridgeOpenExtension(',
         'InitializeBridgeViewHeader(mappedView);',
-        'AudioRouterRenderBlockWasOverrun(')) {
+        'AudioRouterRenderBlockWasOverrun(',
+        'static_cast<UCHAR*>(view) + AR_BRIDGE_READER_SEQUENCE_OFFSET),')) {
     if (-not $source.Contains($required)) {
         throw "bridge protocol 1.1 negotiation/counter invariant is missing: $required"
     }

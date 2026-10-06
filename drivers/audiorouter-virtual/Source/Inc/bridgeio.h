@@ -221,7 +221,8 @@ typedef struct _AR_BRIDGE_SHARED_HEADER {
     AR_BRIDGE_STREAM_COUNTERS Counters;
     ULONG SampleBytes;          // driver-written at OPEN; readers require 8
     ULONG Reserved0;
-    ULONGLONG ReaderSequence;   // render-source consumer acknowledgement (user mode)
+    ULONGLONG ReaderSequence;   // consumer acknowledgement: user mode for RENDER_SOURCE,
+                                // the driver for CAPTURE_SINK (producer flow control)
     UCHAR Reserved[24];
 } AR_BRIDGE_SHARED_HEADER, *PAR_BRIDGE_SHARED_HEADER;
 

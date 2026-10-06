@@ -258,10 +258,16 @@ device in `Source/Main/adapter.cpp` and bridge helpers in
   CLOSE may use either form; the extension is never part of the lease
   identity). A later driver may add other transports through new flag bits.
   Shared header offsets: state 0, block header 8, counters 32–87,
-  `SampleBytes` 88 (driver-written at OPEN, 8), `ReaderSequence` 96
-  (written by the user-mode consumer of a `RENDER_SOURCE` lease after each
-  read; the driver counts `OverrunFrames` when it replaces a block whose
-  sequence was not acknowledged; the value only feeds that counter), reserved
+  `SampleBytes` 88 (driver-written at OPEN, 8), `ReaderSequence` 96 (the
+  consumer's acknowledgement of the last block it took: user mode writes it
+  for a `RENDER_SOURCE` lease, and the driver counts `OverrunFrames` when it
+  replaces a block that was not acknowledged; **the driver writes it for a
+  `CAPTURE_SINK` lease** when its capture callback takes a block, so the
+  user-mode producer publishes the next block right after the
+  acknowledgement and runs on the endpoint's QPC clock instead of its own
+  timer: flow control for the single-block slot, added 2026-10-06 after
+  analysing wall-clock pacing against VCAB-24; the driver never reads the
+  value back for a capture sink), reserved
   to 128. OPEN zeroes bytes 32–127 before the lease becomes visible. Counter
   units: `UnderrunFrames` frames of silence while a usable capture-sink lease
   had no newer block; `SequenceGaps` skipped block sequences;
