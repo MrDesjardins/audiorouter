@@ -1,0 +1,197 @@
+{
+  "nodeKinds": 32,
+  "tools": [
+    {
+      "name": "Physical input",
+      "category": "Sources",
+      "description": "Bring in a selected microphone or other Windows capture endpoint.",
+      "icon": "◉"
+    },
+    {
+      "name": "Application capture",
+      "category": "Sources",
+      "description": "Capture audio from a selected running application process tree.",
+      "icon": "application"
+    },
+    {
+      "name": "Endpoint loopback",
+      "category": "Sources",
+      "description": "Capture the sound being rendered by a selected output endpoint.",
+      "icon": "↶"
+    },
+    {
+      "name": "Test signal",
+      "category": "Sources",
+      "description": "Generate a controlled tone to check a route and its levels.",
+      "icon": "∿"
+    },
+    {
+      "name": "Audio file",
+      "category": "Sources",
+      "description": "Play imported WAV or MP3 audio into a session, with optional looping.",
+      "icon": "♫"
+    },
+    {
+      "name": "Network receive",
+      "category": "Sources",
+      "description": "Receive an AudioRouter audio stream from another computer on your network.",
+      "icon": "⇣"
+    },
+    {
+      "name": "Physical output",
+      "category": "Destinations",
+      "description": "Render a route to a selected Windows audio output.",
+      "icon": "◎"
+    },
+    {
+      "name": "Recorder",
+      "category": "Destinations",
+      "description": "Record one route branch to WAV, FLAC, or MP3.",
+      "icon": "●"
+    },
+    {
+      "name": "Network send",
+      "category": "Destinations",
+      "description": "Send audio from a branch to another AudioRouter computer over UDP.",
+      "icon": "⇡"
+    },
+    {
+      "name": "Mixer",
+      "category": "Routing",
+      "description": "Combine explicit upstream sources and set each input's level.",
+      "icon": "⋈"
+    },
+    {
+      "name": "Input switch",
+      "category": "Routing",
+      "description": "Choose between input A and B with a crossfade.",
+      "icon": "⇄"
+    },
+    {
+      "name": "Gain",
+      "category": "Level",
+      "description": "Set a precise gain in decibels.",
+      "icon": "◢"
+    },
+    {
+      "name": "Volume",
+      "category": "Level",
+      "description": "Set a simple level from 0 to 200 percent.",
+      "icon": "◖"
+    },
+    {
+      "name": "Mute",
+      "category": "Level",
+      "description": "Silence or restore a branch while retaining its route.",
+      "icon": "⊘"
+    },
+    {
+      "name": "Meter",
+      "category": "Level",
+      "description": "Inspect peak, RMS, clipping, and reduction telemetry.",
+      "icon": "▥"
+    },
+    {
+      "name": "Parametric EQ",
+      "category": "Tone",
+      "description": "Shape up to sixteen enabled bands with shelf, pass, and notch filters.",
+      "icon": "⌁"
+    },
+    {
+      "name": "Graphic EQ",
+      "category": "Tone",
+      "description": "Adjust ten familiar graphic equalizer bands.",
+      "icon": "▤"
+    },
+    {
+      "name": "Bass & Treble",
+      "category": "Tone",
+      "description": "Adjust low and high shelves with straightforward controls.",
+      "icon": "♮"
+    },
+    {
+      "name": "FIR Filter",
+      "category": "Tone",
+      "description": "Apply a supplied impulse response using convolution.",
+      "icon": "⧉"
+    },
+    {
+      "name": "Compressor",
+      "category": "Dynamics",
+      "description": "Control peaks and even out the level with threshold, ratio, timing, and makeup.",
+      "icon": "⤓"
+    },
+    {
+      "name": "Gate / Expander",
+      "category": "Dynamics",
+      "description": "Turn down audio below a threshold while preserving deliberate signal flow.",
+      "icon": "⊐"
+    },
+    {
+      "name": "Limiter",
+      "category": "Dynamics",
+      "description": "Set a sample-peak ceiling with lookahead.",
+      "icon": "⊤"
+    },
+    {
+      "name": "Duck",
+      "category": "Dynamics",
+      "description": "Lower a target source in response to another node's level or supported game phase.",
+      "icon": "duck"
+    },
+    {
+      "name": "Delay",
+      "category": "Time & pitch",
+      "description": "Add a controlled delay from 0 to 1,000 ms.",
+      "icon": "◷"
+    },
+    {
+      "name": "Time Shift",
+      "category": "Time & pitch",
+      "description": "Pause, jump back or forward, and return to live audio with a bounded buffer.",
+      "icon": "↺"
+    },
+    {
+      "name": "Pitch",
+      "category": "Time & pitch",
+      "description": "Shift pitch by semitones and cents in a streaming processor.",
+      "icon": "↟"
+    },
+    {
+      "name": "Dehum",
+      "category": "Cleanup",
+      "description": "Reduce mains hum and harmonics at 50 or 60 Hz.",
+      "icon": "≁"
+    },
+    {
+      "name": "Declick",
+      "category": "Cleanup",
+      "description": "Repair click and crackle transients.",
+      "icon": "⌇"
+    },
+    {
+      "name": "Denoise",
+      "category": "Cleanup",
+      "description": "Learn a noise profile and reduce steady background noise.",
+      "icon": "░"
+    },
+    {
+      "name": "Speech Denoise",
+      "category": "Cleanup",
+      "description": "Reduce noise with spectral processing tuned for speech.",
+      "icon": "☊"
+    },
+    {
+      "name": "Spectral Gate",
+      "category": "Cleanup",
+      "description": "Learn a per-frequency noise floor and turn down bands beneath it.",
+      "icon": "▥"
+    },
+    {
+      "name": "VST Plugin",
+      "category": "Plugins",
+      "description": "Host a compatible installed x64 VST3 effect or a qualified x64 VST2 effect in an isolated worker.",
+      "icon": "plugin"
+    }
+  ]
+}

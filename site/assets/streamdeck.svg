@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" role="img" aria-labelledby="title desc">
+  <title id="title">AudioRouter Stream Deck integration</title>
+  <desc id="desc">A Stream Deck grid with keys for playback, recording, microphone privacy, level, meters, and sessions connected to AudioRouter.</desc>
+  <defs><linearGradient id="case" x2="0" y2="1"><stop stop-color="#263342"/><stop offset="1" stop-color="#151c26"/></linearGradient><filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="14" stdDeviation="15" flood-color="#000" flood-opacity=".45"/></filter></defs>
+  <rect x="24" y="20" width="592" height="320" rx="28" fill="url(#case)" stroke="#46576c" stroke-width="2" filter="url(#shadow)"/>
+  <g font-family="Arial,sans-serif" text-anchor="middle">
+    <g fill="#111821" stroke="#405066"><rect x="53" y="49" width="158" height="112" rx="15"/><rect x="241" y="49" width="158" height="112" rx="15"/><rect x="429" y="49" width="158" height="112" rx="15"/><rect x="53" y="185" width="158" height="112" rx="15"/><rect x="241" y="185" width="158" height="112" rx="15"/><rect x="429" y="185" width="158" height="112" rx="15"/></g>
+    <g fill="#7ae0c1" font-size="22" font-weight="700"><text x="132" y="105">▶</text><text x="320" y="105">●</text><text x="508" y="105">◉</text><text x="132" y="241">▥</text><text x="320" y="241">↻</text><text x="508" y="241">− dB +</text></g>
+    <g fill="#c9d5e3" font-size="12"><text x="132" y="140">PLAY / STOP</text><text x="320" y="140">RECORD</text><text x="508" y="140">PRIVACY MUTE</text><text x="132" y="276">LEVEL METER</text><text x="320" y="276">SESSIONS</text><text x="508" y="276">LEVEL</text></g>
+  </g>
+  <path d="M320 340v14m-56 0h112" stroke="#65758a" stroke-width="4" stroke-linecap="round"/>
+</svg>

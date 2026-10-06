@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 270" role="img" aria-labelledby="title desc">
+  <title id="title">Audio tools connected in a live signal flow</title>
+  <desc id="desc">Audio moves from an input through effects and a mixer to an output, with separate recorder and monitor branches.</desc>
+  <defs>
+    <linearGradient id="signal" x1="0" x2="1"><stop stop-color="#57bfa2"/><stop offset="1" stop-color="#88efd0"/></linearGradient>
+    <filter id="glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="900" height="270" rx="18" fill="#111720"/>
+  <g fill="none" stroke="#3f665f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M170 125H245M355 125H435M535 125H670M485 125V52H490M485 125V198H490"/>
+  </g>
+  <g fill="none" stroke="url(#signal)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M170 125H245M355 125H435M535 125H670M485 125V52H490M485 125V198H490" opacity=".78"/>
+  </g>
+  <g fill="#17212c" stroke="#43566c" stroke-width="1.5">
+    <rect x="25" y="91" width="145" height="68" rx="12"/><rect x="245" y="91" width="110" height="68" rx="12"/>
+    <rect x="435" y="91" width="100" height="68" rx="12"/><rect x="670" y="91" width="195" height="68" rx="12"/>
+    <rect x="490" y="25" width="120" height="54" rx="12"/><rect x="490" y="171" width="120" height="54" rx="12"/>
+  </g>
+  <g font-family="Arial,sans-serif" fill="#e4ebf4" font-size="14" text-anchor="middle">
+    <text x="97" y="130">Input</text><text x="300" y="130">EQ / VST</text><text x="485" y="130">Mixer</text><text x="767" y="130">Output</text>
+    <text x="550" y="57">Recorder</text><text x="550" y="203">Monitor</text>
+  </g>
+  <g fill="#8cebd0" filter="url(#glow)">
+    <circle class="comet" r="4"><animateMotion dur="1.3s" repeatCount="indefinite" path="M170 125H245"/></circle>
+    <circle class="comet" r="4"><animateMotion dur="1.3s" begin=".32s" repeatCount="indefinite" path="M355 125H435"/></circle>
+    <circle class="comet" r="4"><animateMotion dur="1.7s" begin=".57s" repeatCount="indefinite" path="M535 125H670"/></circle>
+    <circle class="comet" r="3.5"><animateMotion dur="1.4s" begin=".6s" repeatCount="indefinite" path="M485 125V52H490"/></circle>
+    <circle class="comet" r="3.5"><animateMotion dur="1.4s" begin=".75s" repeatCount="indefinite" path="M485 125V198H490"/></circle>
+  </g>
+  <style>@media(prefers-reduced-motion:reduce){.comet{display:none}}</style>
+</svg>

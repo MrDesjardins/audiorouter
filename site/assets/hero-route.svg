@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 470" role="img" aria-labelledby="title desc">
+  <title id="title">Microphone and desktop audio flow through processing to connected destinations</title>
+  <desc id="desc">Animated signal dots leave a microphone and desktop-audio source, pass through an EQ, then branch to voice chat, headphones, and a recorder.</desc>
+  <defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#1b2735"/><stop offset="1" stop-color="#111720"/></linearGradient><filter id="b" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="8"/></filter></defs>
+  <rect x="4" y="4" width="752" height="462" rx="24" fill="url(#g)" stroke="#344155"/>
+  <g opacity=".16" stroke="#8190a4"><path d="M30 60h700M30 110h700M30 160h700M30 210h700M30 260h700M30 310h700M30 360h700M30 410h700M80 25v420M130 25v420M180 25v420M230 25v420M280 25v420M330 25v420M380 25v420M430 25v420M480 25v420M530 25v420M580 25v420M630 25v420M680 25v420"/></g>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke="#67d5b3" stroke-width="3"><path d="M182 170h83q30 0 30 30v35h46M341 235h35q30 0 30-30v-80q0-25 30-25h42M406 235h45q22 0 22 22v60q0 24 27 24h28M406 235h90q28 0 28-28v-12q0-25 25-25h9"/></g>
+    <path d="M198 332h105q30 0 30-30v-30" stroke="#78a9ff" stroke-width="2" stroke-dasharray="4 5"/>
+  </g>
+  <g font-family="Arial,sans-serif" fill="#e7edf5">
+    <g><rect x="53" y="132" width="130" height="76" rx="12" fill="#202b3b" stroke="#56718b"/><circle cx="73" cy="153" r="5" fill="#78a9ff"/><text x="68" y="179" font-size="14" font-weight="bold">Microphone</text><text x="68" y="195" fill="#92a1b4" font-size="10">Physical input</text></g>
+    <g><rect x="264" y="198" width="78" height="74" rx="12" fill="#203630" stroke="#478a77"/><path d="M281 237h10l8-19 8 36 8-26 8 9" fill="none" stroke="#67d5b3" stroke-width="2"/><text x="279" y="263" font-size="10">EQ</text></g>
+    <g><rect x="478" y="65" width="112" height="70" rx="12" fill="#282239" stroke="#74679d"/><text x="497" y="96" font-size="13" font-weight="bold">Voice chat</text><text x="497" y="115" fill="#a8a0c5" font-size="10">Virtual endpoint</text></g>
+    <g><rect x="528" y="302" width="122" height="70" rx="12" fill="#202b3b" stroke="#56718b"/><text x="548" y="333" font-size="13" font-weight="bold">Headphones</text><text x="548" y="352" fill="#92a1b4" font-size="10">Monitor mix</text></g>
+    <g><rect x="558" y="143" width="120" height="70" rx="12" fill="#322c20" stroke="#927342"/><text x="579" y="174" font-size="13" font-weight="bold">Recorder</text><text x="579" y="193" fill="#bca67e" font-size="10">WAV · FLAC</text></g>
+    <g><rect x="68" y="297" width="130" height="70" rx="12" fill="#202b3b" stroke="#56718b"/><text x="91" y="327" font-size="13" font-weight="bold">Desktop audio</text><text x="91" y="346" fill="#92a1b4" font-size="10">App capture</text></g>
+  </g>
+  <g filter="url(#b)" opacity=".42"><circle cx="280" cy="170" r="5" fill="#67d5b3"/><circle cx="432" cy="100" r="5" fill="#67d5b3"/><circle cx="531" cy="333" r="5" fill="#67d5b3"/></g>
+  <g fill="#8cebd0" filter="url(#b)"><circle class="signal-comet" r="7" opacity=".6"><animateMotion dur="3.2s" repeatCount="indefinite" path="M182 170H265Q295 170 295 200V235H341"/></circle><circle class="signal-comet" r="4"><animateMotion dur="3.2s" repeatCount="indefinite" path="M182 170H265Q295 170 295 200V235H341"/></circle><circle class="signal-comet" r="5"><animateMotion dur="3.6s" begin=".3s" repeatCount="indefinite" path="M341 235H376Q406 235 406 205V125Q406 100 436 100H478"/></circle><circle class="signal-comet" r="5"><animateMotion dur="3.4s" begin=".8s" repeatCount="indefinite" path="M406 235H451Q473 235 473 257V317Q473 341 500 341H528"/></circle><circle class="signal-comet" r="5"><animateMotion dur="3.2s" begin=".5s" repeatCount="indefinite" path="M406 235H496Q524 235 524 207V195Q524 170 549 170H558"/></circle></g>
+  <g fill="#91bbff" filter="url(#b)"><circle class="signal-comet" r="6" opacity=".6"><animateMotion dur="2.2s" repeatCount="indefinite" path="M198 332H303Q333 332 333 302V272"/></circle><circle class="signal-comet" r="3.5"><animateMotion dur="2.2s" repeatCount="indefinite" path="M198 332H303Q333 332 333 302V272"/></circle><circle class="signal-comet" r="4"><animateMotion dur="3.3s" begin=".5s" repeatCount="indefinite" path="M341 235H376Q406 235 406 205V125Q406 100 436 100H478"/></circle><circle class="signal-comet" r="4"><animateMotion dur="3.6s" begin=".9s" repeatCount="indefinite" path="M406 235H451Q473 235 473 257V317Q473 341 500 341H528"/></circle></g>
+  <text x="36" y="440" fill="#8391a5" font-family="monospace" font-size="10">MIC + DESKTOP AUDIO → PROCESSING → YOUR ROUTES</text>
+  <style>@media(prefers-reduced-motion:reduce){.signal-comet{display:none}}</style>
+</svg>

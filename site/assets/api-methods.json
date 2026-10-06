@@ -1,0 +1,782 @@
+{
+  "backendMethods": 106,
+  "operations": [
+    {
+      "method": "POST",
+      "path": "/api/v1/meters/reset",
+      "operation": "meters.reset",
+      "permission": "SessionControl",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sessions/play",
+      "operation": "sessions.play",
+      "permission": "DeviceAdministration",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sessions/togglePlay",
+      "operation": "sessions.togglePlay",
+      "permission": "DeviceAdministration",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sessions/summary",
+      "operation": "sessions.summary",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/safety/togglePrivacyMute",
+      "operation": "safety.togglePrivacyMute",
+      "permission": "SessionControl",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/nodes/catalog",
+      "operation": "nodes.catalog",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/nodes/set",
+      "operation": "nodes.set",
+      "permission": "GraphWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/nodes/toggle",
+      "operation": "nodes.toggle",
+      "permission": "GraphWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/nodes/add",
+      "operation": "nodes.add",
+      "permission": "GraphWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/nodes/remove",
+      "operation": "nodes.remove",
+      "permission": "GraphWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/connections/add",
+      "operation": "connections.add",
+      "permission": "GraphWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/connections/remove",
+      "operation": "connections.remove",
+      "permission": "GraphWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/meters/levels",
+      "operation": "meters.levels",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/system/describe",
+      "operation": "system.describe",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/system/handshake",
+      "operation": "system.handshake",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/status/get",
+      "operation": "status.get",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/system/osTransition",
+      "operation": "system.osTransition",
+      "permission": "SessionControl",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/system/diagnostics",
+      "operation": "system.diagnostics",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/system/quit",
+      "operation": "system.quit",
+      "permission": "SessionControl",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/clients/list",
+      "operation": "clients.list",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/clients/authorize",
+      "operation": "clients.authorize",
+      "permission": "DeviceAdministration",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/clients/revoke",
+      "operation": "clients.revoke",
+      "permission": "DeviceAdministration",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/operations/get",
+      "operation": "operations.get",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/operations/cancel",
+      "operation": "operations.cancel",
+      "permission": "SessionControl",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/recordings/list",
+      "operation": "recordings.list",
+      "permission": "Record",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/audioMedia/beginUpload",
+      "operation": "audioMedia.beginUpload",
+      "permission": "GraphWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/audioMedia/uploadChunk",
+      "operation": "audioMedia.uploadChunk",
+      "permission": "GraphWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/audioMedia/finishUpload",
+      "operation": "audioMedia.finishUpload",
+      "permission": "GraphWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/audioMedia/importTemporaryRecording",
+      "operation": "audioMedia.importTemporaryRecording",
+      "permission": "Record",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/audioMedia/delete",
+      "operation": "audioMedia.delete",
+      "permission": "GraphWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/audioSources/transport",
+      "operation": "audioSources.transport",
+      "permission": "SessionControl",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/timeShift/transport",
+      "operation": "timeShift.transport",
+      "permission": "SessionControl",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/recorders/list",
+      "operation": "recorders.list",
+      "permission": "Record",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/recorders/create",
+      "operation": "recorders.create",
+      "permission": "Record",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/recorders/arm",
+      "operation": "recorders.arm",
+      "permission": "Record",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/recorders/start",
+      "operation": "recorders.start",
+      "permission": "Record",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/recorders/pause",
+      "operation": "recorders.pause",
+      "permission": "Record",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/recorders/resume",
+      "operation": "recorders.resume",
+      "permission": "Record",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/recorders/split",
+      "operation": "recorders.split",
+      "permission": "Record",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/recorders/stop",
+      "operation": "recorders.stop",
+      "permission": "Record",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/recorders/startRecording",
+      "operation": "recorders.startRecording",
+      "permission": "Record",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/recorders/stopRecording",
+      "operation": "recorders.stopRecording",
+      "permission": "Record",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/devices/getAccess",
+      "operation": "devices.getAccess",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/recordings/getRoot",
+      "operation": "recordings.getRoot",
+      "permission": "Record",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/recordings/get",
+      "operation": "recordings.get",
+      "permission": "Record",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/recordings/recovery",
+      "operation": "recordings.recovery",
+      "permission": "Record",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/recordings/reveal",
+      "operation": "recordings.reveal",
+      "permission": "Record",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/recordings/preview",
+      "operation": "recordings.preview",
+      "permission": "Record",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/recordings/setMetadata",
+      "operation": "recordings.setMetadata",
+      "permission": "Record",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/recordings/rename",
+      "operation": "recordings.rename",
+      "permission": "Record",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/safety/setPrivacyMute",
+      "operation": "safety.setPrivacyMute",
+      "permission": "SessionControl",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/recovery/clearSafeMode",
+      "operation": "recovery.clearSafeMode",
+      "permission": "SessionControl",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/startup/get",
+      "operation": "startup.get",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/startup/plan",
+      "operation": "startup.plan",
+      "permission": "StartupWrite",
+      "effect": "PlanOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/startup/apply",
+      "operation": "startup.apply",
+      "permission": "StartupWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/recordings/removeEntry",
+      "operation": "recordings.removeEntry",
+      "permission": "Record",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/recordings/recycle",
+      "operation": "recordings.recycle",
+      "permission": "Record",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/devices/list",
+      "operation": "devices.list",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/nativeEndpoints/prepare",
+      "operation": "nativeEndpoints.prepare",
+      "permission": "DeviceAdministration",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/nativeOutputs/prepare",
+      "operation": "nativeOutputs.prepare",
+      "permission": "DeviceAdministration",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/nativeMultiInputs/prepare",
+      "operation": "nativeMultiInputs.prepare",
+      "permission": "DeviceAdministration",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/nativePaths/prepare",
+      "operation": "nativePaths.prepare",
+      "permission": "DeviceAdministration",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/nativeEndpoints/rebind",
+      "operation": "nativeEndpoints.rebind",
+      "permission": "DeviceAdministration",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/nativeEndpoints/detach",
+      "operation": "nativeEndpoints.detach",
+      "permission": "DeviceAdministration",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/nativeApplications/prepare",
+      "operation": "nativeApplications.prepare",
+      "permission": "DeviceAdministration",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/nativeEndpoints/pump",
+      "operation": "nativeEndpoints.pump",
+      "permission": "SessionControl",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/nativeMultiInputs/pump",
+      "operation": "nativeMultiInputs.pump",
+      "permission": "SessionControl",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/nativeMultiInputs/bindBranches",
+      "operation": "nativeMultiInputs.bindBranches",
+      "permission": "SessionControl",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/plugins/scan",
+      "operation": "plugins.scan",
+      "permission": "PluginScan",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/plugins/list",
+      "operation": "plugins.list",
+      "permission": "PluginScan",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/plugins/inventory",
+      "operation": "plugins.inventory",
+      "permission": "PluginScan",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/plugins/retry",
+      "operation": "plugins.retry",
+      "permission": "PluginScan",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/plugins/inspect",
+      "operation": "plugins.inspect",
+      "permission": "PluginScan",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/plugins/parameters",
+      "operation": "plugins.parameters",
+      "permission": "PluginScan",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/plugins/saveState",
+      "operation": "plugins.saveState",
+      "permission": "PluginScan",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/plugins/openEditor",
+      "operation": "plugins.openEditor",
+      "permission": "PluginScan",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/plugins/closeEditor",
+      "operation": "plugins.closeEditor",
+      "permission": "PluginScan",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/apps/list",
+      "operation": "apps.list",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/applications/list",
+      "operation": "applications.list",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/nodes/types",
+      "operation": "nodes.types",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/routes/inspect",
+      "operation": "routes.inspect",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/graph/history",
+      "operation": "graph.history",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/graph/undoPlan",
+      "operation": "graph.undoPlan",
+      "permission": "GraphWrite",
+      "effect": "PlanOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/events/subscribe",
+      "operation": "events.subscribe",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/nodes/describe",
+      "operation": "nodes.describe",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/presets/list",
+      "operation": "presets.list",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/processors/list",
+      "operation": "processors.list",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/processors/response",
+      "operation": "processors.response",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sessions/get",
+      "operation": "sessions.get",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sessions/export",
+      "operation": "sessions.export",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sessions/exportFile",
+      "operation": "sessions.exportFile",
+      "permission": "GraphWrite",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sessions/importFile",
+      "operation": "sessions.importFile",
+      "permission": "GraphWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sessions/importPlan",
+      "operation": "sessions.importPlan",
+      "permission": "GraphWrite",
+      "effect": "PlanOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sessions/importCommit",
+      "operation": "sessions.importCommit",
+      "permission": "GraphWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sessions/list",
+      "operation": "sessions.list",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sessions/active/get",
+      "operation": "sessions.active.get",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sessions/active/set",
+      "operation": "sessions.active.set",
+      "permission": "SessionControl",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sessions/create",
+      "operation": "sessions.create",
+      "permission": "GraphWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sessions/duplicate",
+      "operation": "sessions.duplicate",
+      "permission": "GraphWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sessions/delete",
+      "operation": "sessions.delete",
+      "permission": "GraphWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/graph/plan",
+      "operation": "graph.plan",
+      "permission": "GraphWrite",
+      "effect": "PlanOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/graph/commit",
+      "operation": "graph.commit",
+      "permission": "GraphWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/session/start",
+      "operation": "session.start",
+      "permission": "SessionControl",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sessions/start",
+      "operation": "sessions.start",
+      "permission": "SessionControl",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/session/stop",
+      "operation": "session.stop",
+      "permission": "SessionControl",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sessions/stop",
+      "operation": "sessions.stop",
+      "permission": "SessionControl",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/capabilities",
+      "operation": "http.capabilities",
+      "permission": "Read",
+      "effect": "HTTP convenience route"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/sessions",
+      "operation": "http.sessions",
+      "permission": "Read",
+      "effect": "HTTP convenience route"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/status",
+      "operation": "http.status",
+      "permission": "Read",
+      "effect": "HTTP convenience route"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/sessions/active",
+      "operation": "http.sessions.active",
+      "permission": "Read",
+      "effect": "HTTP convenience route"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/sessions/active",
+      "operation": "http.sessions.activate",
+      "permission": "SessionControl",
+      "effect": "HTTP convenience route"
+    }
+  ]
+}
