@@ -5,7 +5,7 @@ param(
     [switch] $KeepInstalled,
     [switch] $CreateRootDevice,
     [string] $Devcon,
-    [ValidateSet('Prototype', 'Cables')] [string] $EndpointProfile = 'Prototype',
+    [ValidateSet('Prototype', 'Cables')] [string] $EndpointProfile = 'Cables',
     [string] $Cli
 )
 $ErrorActionPreference = 'Stop'
