@@ -413,7 +413,27 @@ fn bounded_backend_command_interoperates_with_authenticated_pipe_client() {
         params: None,
     };
     let frame = encode_frame(&request).unwrap();
-    let response = audiorouter_transport::round_trip(&pipe_name, &frame).unwrap();
+    // `round_trip` retries for only ~100 ms, which suits a backend that is
+    // already running. This one was just spawned: on a busy CI runner its
+    // process start, database open and pipe creation can take longer, so
+    // keep retrying until it listens, failing early if it exits.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let response = loop {
+        match audiorouter_transport::round_trip(&pipe_name, &frame) {
+            Ok(response) => break response,
+            Err(error) => {
+                assert!(
+                    child.try_wait().unwrap().is_none(),
+                    "backend exited before serving: {error:?}"
+                );
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "backend never listened: {error:?}"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+        }
+    };
     let response: JsonRpcResponse = decode_frame(&response).unwrap();
     assert!(response.error.is_none());
     assert_eq!(response.result.unwrap()["protocolVersion"]["major"], 1);
