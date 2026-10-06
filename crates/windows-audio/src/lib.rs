@@ -1351,6 +1351,41 @@ impl NativeBridgeController {
             .map_err(NativeBridgeControllerError::Session)
     }
 
+    /// Publish float64 samples without narrowing (capture-sink leases).
+    pub fn write_f64(&mut self, samples: &[f64]) -> Result<u64, NativeBridgeControllerError> {
+        self.session
+            .as_mut()
+            .expect("native bridge session remains owned until close")
+            .write_f64(samples)
+            .map_err(NativeBridgeControllerError::Session)
+    }
+
+    /// Read a float64 block newer than `minimum_sequence` (render-source leases).
+    pub fn read_into_f64_after(
+        &self,
+        minimum_sequence: u64,
+        samples: &mut [f64],
+    ) -> Result<NativeBridgeFloat64BlockHeader, NativeBridgeControllerError> {
+        self.session
+            .as_ref()
+            .expect("native bridge session remains owned until close")
+            .read_into_f64_after(minimum_sequence, samples)
+            .map_err(NativeBridgeControllerError::Session)
+    }
+
+    /// Driver-written stream counters for this lease (17 §5.2).
+    pub fn counters(&self) -> NativeBridgeStreamCounters {
+        self.session
+            .as_ref()
+            .expect("native bridge session remains owned until close")
+            .counters()
+    }
+
+    /// The driver's capability report, read over this controller's handle.
+    pub fn query_driver(&self) -> Result<NativeBridgeDriverInfo, NativeBridgeControllerError> {
+        self.client.query().map_err(NativeBridgeControllerError::Windows)
+    }
+
     /// Create the realtime producer view for this negotiated bridge. The
     /// returned writer owns an independent file mapping and may be shared as
     /// an `AudioTap`; lease heartbeat and close remain owned by this
@@ -8878,6 +8913,11 @@ impl NativeBridgeSession {
             next_sequence: 0,
             last_heartbeat: std::time::Instant::now(),
         })
+    }
+
+    /// Driver-written stream counters from this session's mapped header.
+    pub fn counters(&self) -> NativeBridgeStreamCounters {
+        self.region.counters()
     }
 
     pub fn hello(&self) -> &audiorouter_protocol::AudioBridgeHello {

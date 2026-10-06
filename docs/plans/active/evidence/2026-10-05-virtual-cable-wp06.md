@@ -112,3 +112,33 @@ directions on two cables, bit-exact float32→float64→float32, crosstalk,
 counters zero in a clean 10-minute run and rising under a deliberate stall,
 8-channel and 96 kHz leases, version-mismatch and unknown-flag paths against
 the loaded driver).
+
+## Eight-channel driver path and VM tone tool (2026-10-05)
+
+Host-only. The Rust request builder, session, float64 region and block
+header reused the internal AudioBridge protocol's 2-channel bound, so an
+8-channel lease (accepted by the driver) could not be requested. They now use
+`NATIVE_DRIVER_MAX_CHANNELS = 8` and a 256 KiB payload bound via
+`AudioBridgeHello::validate_with_max_channels`; `validate()` keeps the
+internal bridge at 2 channels. New regressions: a full 8 × 4096 float64
+quantum round-trips bit-exactly through a session and region; 9 channels are
+rejected; the internal bound is unchanged.
+
+`crates/windows-audio/examples/m03_bridge_tone.rs` (VM tool): QUERY plus
+`check_compatible` (exit 2 on an incompatible driver), 997 Hz / 47 Hz into a
+capture-sink lease, render-source lease to an IEEE-float WAV, paced to the
+audio clock, heartbeats every 250 ms, optional deliberate stall, counters of
+both leases printed. `NativeBridgeController` gained `write_f64`,
+`read_into_f64_after`, `counters` and `query_driver`.
+
+Checks:
+
+- `cargo test -p audiorouter-windows-audio -p audiorouter-protocol` — 118 + 8 passed, 0 failed (`target/wp06-8ch-tests.log`).
+- `cargo test -p audiorouter-windows-audio --example m03_bridge_tone` — 4 passed (option bounds, seamless tone blocks, WAV header, exact float32 WAV samples).
+- `cargo build --release -p audiorouter-windows-audio --example m03_bridge_tone` — built.
+- Host run `m03_bridge_tone.exe --seconds 1` — exit 1, `DriverUnavailable: The AudioRouter cable driver is not installed or not running.` (expected; no driver on the host, no lease or file created).
+- `cargo check --workspace --all-targets` — passed.
+
+VM acceptance (two cables both ways, bit-exact float32, crosstalk, clean
+10-minute counters, stall counters, 8-channel and 96 kHz leases, version and
+unknown-flag paths against the loaded driver) is still pending.

@@ -476,7 +476,7 @@ closed. Endpoint, one-hour drift and audio-quality VM gates remain pending.
   the tool deliberately stalls; 8-channel and 96 kHz leases work; version
   mismatch and unknown-flag paths tested.
 - **Rollback:** revert; protocol 1.0 users do not exist outside the repo.
-- **Status:** in progress 2026-10-05 (host side of protocol 1.1 done: stable bus slots, float64 transport, OPEN extension, QUERY, 128-byte header with stream counters, Rust client/query/error mapping. Open: 8-channel leases in the Rust client, `tools/m03-bridge-tone`, all VM acceptance; VM integration remains gated by WP-03/04).
+- **Status:** host work complete 2026-10-05 (stable bus slots, float64 transport, OPEN extension, QUERY, 128-byte header with stream counters, Rust client/query/error mapping, 8-channel driver path, VM tone tool). Open: all VM acceptance below; VM integration remains gated by WP-03/04. The tone tool lives at `crates/windows-audio/examples/m03_bridge_tone.rs` instead of `tools/m03-bridge-tone` (an example of the client crate needs no new workspace crate or lockfile entry).
 
 WP-06 execution record (2026-10-05): objective is one safe, versioned 16-lease
 bridge contract with float64 payload support and a Rust client that preserves
@@ -732,11 +732,13 @@ published app keeps the VB-Cable workflow. Reverting DEC-18 restores DEC-16.
 
 ## Next action
 
-WP-06 host work: raise the Rust driver-bridge path to 8 channels (a driver
-specific bound, separate from the internal 2-channel AudioBridge protocol),
-then write `tools/m03-bridge-tone` (QUERY + `check_compatible`, 997/47 Hz
-into `cable-b` capture sink, `cable-a` render source to WAV, counters printed)
-for the VM. Also open on the host: WP-05 registry names and period limits
-(then report `CONFIG_FROM_REGISTRY`/`LOW_LATENCY_PERIODS` in QUERY). WP-03/04/05
-VM endpoint, Verifier and audio-quality evidence remain pending. Do not load
-the intermediate package or call a host build a runtime or quality pass.
+WP-06 host work is complete; its VM checks run with the `m03_bridge_tone`
+example ([testing procedure](../../operations/virtual-cable-testing.md#stage-a-checks-inside-the-vm)).
+Next host work: finish WP-05 step 1b/3a (registry `Cables\<n>\Name`, period,
+lease and silence limits; low-latency packet constraints), then report
+`CONFIG_FROM_REGISTRY` and `LOW_LATENCY_PERIODS` with real period values in
+QUERY. After that, WP-07 (elevated helper). The user's next VM session can
+already run WP-01 checkpoints, the WP-03 runner, WP-04 Verifier/fuzz/
+second-user, and the WP-06 tone tool on one package. Do not load the
+intermediate package on the host or call a host build a runtime or quality
+pass.

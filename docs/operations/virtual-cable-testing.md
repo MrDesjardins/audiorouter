@@ -132,6 +132,33 @@ Failures retain `summary.json` and raw logs; redact IDs/paths before sharing.
 `-KeepInstalled` skips A14 only after successful A1–A3 and is not a full smoke
 pass. Restore the checkpoint after every run, including failures.
 
+WP-06 bridge tone tool (A4 tool precursor, A5, A6; before the engine
+integration). Build on the host, copy the exe into the VM with the package:
+
+```powershell
+# Host:
+cargo build --release -p audiorouter-windows-audio --example m03_bridge_tone
+# -> target\release\examples\m03_bridge_tone.exe
+# VM, driver installed (WP-03 runner with -KeepInstalled), normal user:
+.\m03_bridge_tone.exe --seconds 600 --out C:\ar\evidence\render-source.wav
+.\m03_bridge_tone.exe --seconds 60 --channels 8 --rate 96000 --out C:\ar\evidence\render-8ch-96k.wav
+.\m03_bridge_tone.exe --seconds 30 --stall-ms 500 --out C:\ar\evidence\render-stall.wav
+```
+
+The tool first prints the driver's QUERY report and refuses an incompatible
+driver (exit 2). It then writes 997 Hz (even channels) and 47 Hz (odd
+channels) at −12 dBFS into the `cable-b` capture sink and records the
+`cable-a` render source to an IEEE-float WAV (`--wav64` for float64). While
+it runs, record **AudioRouter Cable B Output** with a recorder (for example
+Audacity or `ffmpeg -f dshow`) and play a known file into **AudioRouter Cable
+A Input**. At the end it prints both leases' stream counters: a clean run
+must end with zero underrun, overrun, gap, non-finite and format-mismatch
+counts; the `--stall-ms` run must show them rising. Setting a cable's
+Windows format (Sound settings → Advanced) to another rate than `--rate`
+must give silence and a rising `format_mismatches`, never wrong-speed audio.
+Run `--capture-bus cable-a --render-bus cable-b` too, for both directions on
+both cables. It never opens a microphone.
+
 Host-safe checks: `tests/acceptance/m03-driver-vm-guards.ps1` tests only the pure
 guard/comparison functions and read-only default enumeration. The real runner
 refuses an unidentified host before querying even its boot configuration.
@@ -150,7 +177,7 @@ qualifies all 8 cables (`… Cable C …` to `… Cable H …`). Before WP-05 th
 | Check | From WP |
 | --- | --- |
 | A1–A3, A14 | WP-03 (prototype), WP-05 (final names) |
-| A4 (tool), A5, A6 | WP-06 with `tools/m03-bridge-tone`; through AudioRouter after WP-09 |
+| A4 (tool), A5, A6 | WP-06 with the `m03_bridge_tone` example (above); through AudioRouter after WP-09 |
 | A7 | WP-09 |
 | A8, A9 | WP-05 |
 | A10, A11 | WP-04 |
