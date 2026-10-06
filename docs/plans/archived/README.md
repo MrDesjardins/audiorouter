@@ -16,6 +16,7 @@ Keep an index below with date, milestone/task, outcome, and path. Do not move st
 
 | Date | Milestone / task | Outcome | Path |
 | --- | --- | --- | --- |
+| 2026-10-05 | Release 0.0.13 (backend panic recovery) | Published unsigned prerelease; exact-package first run and public assets verified; panic site and sleep/resume qualification open | [Execution record](2026-10-05-release-0.0.13.md) |
 | 2026-10-04 | Release 0.0.12 | Published unsigned prerelease, plugin and installer assets verified; broader M08 gates open | [Execution record](2026-10-04-release-0.0.12.md) |
 | 2026-10-03 | 0.0.6 and 0.0.7 fixes and releases | Completed for this scope: both unsigned prereleases published with exact-package first-run and asset verification. Attended confirmations and full M08 remain open in the active plan. | [2026-10-03-releases-0.0.6-0.0.7.md](2026-10-03-releases-0.0.6-0.0.7.md) |
 | 2026-10-03 | Windows distribution and manual GitHub release plan | Implementation completed (installer, release scripts, draft workflow, published prereleases). Clean-machine install/upgrade/uninstall, WebView2 and signing gates remain open. | [2026-10-03-windows-distribution.md](2026-10-03-windows-distribution.md) |
