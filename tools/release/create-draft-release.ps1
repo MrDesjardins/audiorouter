@@ -76,12 +76,27 @@ try {
     }
 
     $assets = @($manifest.artifacts | ForEach-Object { Join-Path $output $_.file }) + @($manifestPath)
+    # Every release page opens with the same download guide, so testers know
+    # the installer is the only file they need.
+    $version = $manifest.version
+    $downloadGuide = @"
+## Which file do I download?
+
+**Download ``AudioRouter_${version}_x64-setup.exe`` and run it.** That is all you need: it installs the app (window, tray and audio backend), the command-line tool, the plugin worker and the Stream Deck plugin for your Windows account, without administrator rights. Windows may warn that the installer is unsigned; choose **More info**, then **Run anyway**.
+
+- **Stream Deck:** after installing, open AudioRouter, go to **API**, start the API and choose **Install Stream Deck plugin**. ``com.mrdesjardins.audiorouter.streamDeckPlugin`` is the same plugin, for a Stream Deck on another PC that controls AudioRouter over your network.
+- **Everything else** (``SHA256SUMS.txt``, ``release-manifest.json``, ``sbom.*``, ``THIRD-PARTY-NOTICES.txt``) is for verifying the download and for license review. You do not need it to use AudioRouter.
+
+"@
+    $releaseNotes = Join-Path ([IO.Path]::GetTempPath()) "audiorouter-release-notes-$PID.md"
+    if (Test-Path -LiteralPath $releaseNotes) { throw "temporary release notes file already exists: $releaseNotes" }
+    Set-Content -LiteralPath $releaseNotes -Value ($downloadGuide + (Get-Content -LiteralPath $notes -Raw)) -Encoding utf8
     $ghArguments = @(
         "release", "create", $Tag,
         "--repo", $repository,
         "--verify-tag", "--draft",
         "--title", "AudioRouter $Tag",
-        "--notes-file", $notes
+        "--notes-file", $releaseNotes
     ) + $assets
     if ($PSCmdlet.ShouldProcess("GitHub release $Tag in $repository", "Create draft and upload verified artifacts")) {
         & gh @ghArguments
@@ -91,5 +106,6 @@ try {
     Write-Output "Verified release artifacts: $output"
 }
 finally {
+    if ($releaseNotes -and (Test-Path -LiteralPath $releaseNotes)) { Remove-Item -LiteralPath $releaseNotes -Force }
     Pop-Location
 }

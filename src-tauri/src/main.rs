@@ -790,6 +790,45 @@ fn open_logs_folder() -> Result<(), String> {
     Ok(())
 }
 
+/// File name of the Stream Deck plugin the release installer bundles as a
+/// resource (`tauri.release.conf.json`).
+const STREAMDECK_PLUGIN_FILE: &str = "com.mrdesjardins.audiorouter.streamDeckPlugin";
+
+/// Hand the bundled Stream Deck plugin to the Stream Deck app, which registers
+/// the `.streamDeckPlugin` extension and asks the user to confirm the install.
+#[tauri::command]
+fn install_streamdeck_plugin(app: tauri::AppHandle) -> Result<(), String> {
+    let plugin = app
+        .path()
+        .resource_dir()
+        .map(|directory| directory.join(STREAMDECK_PLUGIN_FILE))
+        .ok()
+        .filter(|path| path.is_file())
+        .ok_or("This copy of AudioRouter does not include the Stream Deck plugin. Download it from the release page.")?;
+    #[cfg(windows)]
+    {
+        use windows::core::{w, PCWSTR};
+        use windows::Win32::UI::Shell::ShellExecuteW;
+        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+        use std::os::windows::ffi::OsStrExt;
+        let wide = plugin.as_os_str().encode_wide().chain(Some(0)).collect::<Vec<_>>();
+        // The path is the app's own fixed resource file, not caller input.
+        // Both strings are NUL-terminated and stay alive throughout
+        // ShellExecuteW; the default handler (Stream Deck) opens it.
+        let result = unsafe { ShellExecuteW(None, w!("open"), PCWSTR(wide.as_ptr()), None, None, SW_SHOWNORMAL) };
+        // SE_ERR_NOASSOC (31): nothing handles .streamDeckPlugin files.
+        if result.0 as isize == 31 {
+            return Err("Install the Stream Deck app (version 7.1 or newer) first, then try again.".into());
+        }
+        if result.0 as isize <= 32 {
+            return Err("Could not open the Stream Deck plugin. Is the Stream Deck app installed?".into());
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = plugin;
+    Ok(())
+}
+
 #[tauri::command]
 fn mcp_setup_info(app: tauri::AppHandle, state: State<'_, ShellState>) -> Result<serde_json::Value, String> {
     let executable = std::env::current_exe()
@@ -1405,6 +1444,7 @@ fn main() {
             backend_diagnostics_list,
             log_folder_path,
             open_logs_folder,
+            install_streamdeck_plugin,
             mcp_setup_info,
             startup_register,
             startup_status

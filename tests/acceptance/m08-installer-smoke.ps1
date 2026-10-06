@@ -19,6 +19,11 @@ try {
         if ($LASTEXITCODE -ne 0) {
             throw "CLI and plugin-worker release build failed with exit code $LASTEXITCODE"
         }
+        # tauri.release.conf.json bundles the packed Stream Deck plugin.
+        & npm.cmd ci --prefix tools/streamdeck
+        if ($LASTEXITCODE -ne 0) { throw "Stream Deck locked dependency installation failed" }
+        & npm.cmd run pack --prefix tools/streamdeck
+        if ($LASTEXITCODE -ne 0) { throw "Stream Deck plugin packing failed" }
         $tauriCli = Join-Path $repositoryRoot 'ui/node_modules/.bin/tauri.cmd'
         if (-not (Test-Path -LiteralPath $tauriCli -PathType Leaf)) {
             throw "Tauri CLI is missing; install locked UI dependencies with npm ci --prefix ui: $tauriCli"

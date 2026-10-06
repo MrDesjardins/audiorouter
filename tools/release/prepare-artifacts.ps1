@@ -30,7 +30,6 @@ while (-not [string]::IsNullOrWhiteSpace($parentPath)) {
 . (Join-Path $PSScriptRoot "pe-validation.ps1")
 
 Push-Location $workspace
-$uiBuild = Join-Path ([IO.Path]::GetTempPath()) "audiorouter-ui-release-$PID"
 $bundleRoot = Join-Path $workspace "src-tauri/target/release/bundle/nsis"
 $cleanupNsis = $false
 try {
@@ -54,24 +53,22 @@ try {
         throw "native shell release build failed with exit code $LASTEXITCODE"
     }
 
-    if (Test-Path -LiteralPath $uiBuild) {
-        throw "temporary UI build directory already exists; refusing to reuse it: $uiBuild"
-    }
-    Push-Location (Join-Path $workspace "ui")
-    try {
-        & npm.cmd run build -- --outDir $uiBuild
-        if ($LASTEXITCODE -ne 0) {
-            throw "UI release build failed with exit code $LASTEXITCODE"
-        }
-    }
-    finally {
-        Pop-Location
-    }
-    if (-not (Test-Path -LiteralPath (Join-Path $uiBuild "index.html") -PathType Leaf)) {
-        throw "UI release build did not produce index.html: $uiBuild"
-    }
     if (Test-Path -LiteralPath $bundleRoot) {
         throw "NSIS output directory already exists; refusing to overwrite it: $bundleRoot"
+    }
+    # The installer bundles the Stream Deck plugin (tauri.release.conf.json
+    # resources), so pack it before the NSIS build.
+    & npm.cmd ci --prefix tools/streamdeck
+    if ($LASTEXITCODE -ne 0) { throw "Stream Deck locked dependency installation failed" }
+    & npm.cmd run typecheck --prefix tools/streamdeck
+    if ($LASTEXITCODE -ne 0) { throw "Stream Deck typecheck failed" }
+    & npm.cmd test --prefix tools/streamdeck
+    if ($LASTEXITCODE -ne 0) { throw "Stream Deck tests failed" }
+    & npm.cmd run pack --prefix tools/streamdeck
+    if ($LASTEXITCODE -ne 0) { throw "Stream Deck validation and packing failed" }
+    $pluginPackage = Join-Path $workspace "tools/streamdeck/dist/com.mrdesjardins.audiorouter.streamDeckPlugin"
+    if (-not (Test-Path -LiteralPath $pluginPackage -PathType Leaf)) {
+        throw "Stream Deck package is missing: $pluginPackage"
     }
     $cleanupNsis = $true
     $tauriCli = Join-Path $workspace "ui/node_modules/.bin/tauri.cmd"
@@ -131,8 +128,8 @@ try {
         if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
             throw "Expected release binary was not produced: $source"
         }
+        # These ship inside the installer; they are not separate release assets.
         Assert-X64PortableExecutable $source
-        Copy-Item -LiteralPath $source -Destination (Join-Path $output $binary.Name)
     }
     $installerName = "AudioRouter_${appVersion}_x64-setup.exe"
     $installerSource = Join-Path $workspace "src-tauri/target/release/bundle/nsis/$installerName"
@@ -143,8 +140,6 @@ try {
         throw "Tauri produced an empty NSIS installer: $installerSource"
     }
     Copy-Item -LiteralPath $installerSource -Destination (Join-Path $output $installerName)
-    Copy-Item -LiteralPath (Join-Path $workspace "tools/run-vb-cable-desktop.ps1") -Destination (Join-Path $output "run-vb-cable-desktop.ps1")
-    Compress-Archive -Path (Join-Path $uiBuild "*") -DestinationPath (Join-Path $output "audiorouter-ui.zip") -CompressionLevel Optimal
     Copy-Item -LiteralPath $uiLock -Destination (Join-Path $output "sbom.npm.package-lock.json")
     $npmSbom = Join-Path $output "sbom.npm.json"
     & node.exe (Join-Path $workspace "tools/release/generate-npm-sbom.mjs") $uiLock $npmSbom
@@ -180,23 +175,6 @@ try {
     )
     $noticeLines | Set-Content -LiteralPath (Join-Path $output "THIRD-PARTY-NOTICES.txt") -Encoding utf8
 
-    # Archive only committed example sources: private local configuration and
-    # installed dependencies are ignored and must never enter release assets.
-    & git archive --format=zip "--output=$(Join-Path $output 'audiorouter-examples.zip')" HEAD examples
-    if ($LASTEXITCODE -ne 0) { throw "tracked examples archive failed" }
-
-    & npm.cmd ci --prefix tools/streamdeck
-    if ($LASTEXITCODE -ne 0) { throw "Stream Deck locked dependency installation failed" }
-    & npm.cmd run typecheck --prefix tools/streamdeck
-    if ($LASTEXITCODE -ne 0) { throw "Stream Deck typecheck failed" }
-    & npm.cmd test --prefix tools/streamdeck
-    if ($LASTEXITCODE -ne 0) { throw "Stream Deck tests failed" }
-    & npm.cmd run pack --prefix tools/streamdeck
-    if ($LASTEXITCODE -ne 0) { throw "Stream Deck validation and packing failed" }
-    $pluginPackage = Join-Path $workspace "tools/streamdeck/dist/com.mrdesjardins.audiorouter.streamDeckPlugin"
-    if (-not (Test-Path -LiteralPath $pluginPackage -PathType Leaf)) {
-        throw "Stream Deck package is missing: $pluginPackage"
-    }
     Copy-Item -LiteralPath $pluginPackage -Destination $output
     Copy-Item -LiteralPath (Join-Path $workspace "tools/streamdeck/package-lock.json") -Destination (Join-Path $output "sbom.streamdeck.package-lock.json")
     & node.exe (Join-Path $workspace "tools/release/generate-npm-sbom.mjs") (Join-Path $workspace "tools/streamdeck/package-lock.json") (Join-Path $output "sbom.streamdeck.json")
@@ -251,9 +229,6 @@ try {
     $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $output "release-manifest.json") -Encoding utf8
 }
 finally {
-    if (Test-Path -LiteralPath $uiBuild) {
-        Remove-Item -LiteralPath $uiBuild -Recurse -Force
-    }
     if ($cleanupNsis -and (Test-Path -LiteralPath $bundleRoot)) {
         $bundleItem = Get-Item -LiteralPath $bundleRoot -Force
         if (-not $bundleItem.PSIsContainer -or (($bundleItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {

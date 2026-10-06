@@ -102,6 +102,37 @@ costs and phases in the [driver track](../future/M03-driver-signing.md).
 
 ## Open work
 
+### Release packaging: one download (2026-10-06, user request)
+
+User found the 0.0.13 release page confusing (16 assets) and asked for one
+package containing the app, backend, frontend and Stream Deck plugin.
+Finding: the installer already held the shell (UI embedded, backend in
+process), CLI and plugin worker; the loose `.exe`s, `audiorouter-ui.zip`,
+`run-vb-cable-desktop.ps1` and examples ZIP were duplicates or developer
+files. Changes (requirement area M08 distribution, HTTP/Stream Deck):
+
+1. `tauri.release.conf.json` bundles the packed Stream Deck plugin;
+   `prepare-artifacts.ps1` and `m08-installer-smoke.ps1` pack it before NSIS.
+2. Shell command `install_streamdeck_plugin` opens the bundled file with
+   `ShellExecuteW` (Stream Deck asks to confirm); API tab gains
+   `StreamDeckPluginPanel` with a reserved status line (UI-17).
+3. Published assets: installer, `.streamDeckPlugin`, `SHA256SUMS.txt`,
+   `release-manifest.json`, SBOMs, notices. `verify-artifacts.ps1`, its test
+   (which still lacked the 0.0.12 Stream Deck entries) and `m08-release.ps1`
+   updated; `m08-release.ps1` now rejects loose copies of bundled files.
+4. `create-draft-release.ps1` prepends a "Which file do I download?" section.
+
+Checks run (Linux container, 2026-10-06): `vitest` for
+`StreamDeckPluginPanel`/`ApiPanel` pass; UI typecheck clean;
+`npm run pack` in `tools/streamdeck` produced a package with
+`com.mrdesjardins.audiorouter.sdPlugin/manifest.json`.
+Not run (need Windows): shell compile, PowerShell release scripts and
+tests, NSIS build, installing the plugin from the installed app, three-theme
+screenshots of the API tab. Next: on Windows run `test-verify-artifacts.ps1`,
+`m08-installer-smoke.ps1`, `m08-release.ps1`, then install the 0.0.14
+candidate and press **Install Stream Deck plugin** with and without the
+Stream Deck app. Rollback: revert the commit; earlier releases are unchanged.
+
 ### Defect 2026-10-05: backend dead after resume ("Backend refresh failed")
 
 Reproduction (v0.0.12 release shell, PID 17188): sign-in start at
