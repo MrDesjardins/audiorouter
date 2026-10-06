@@ -113,6 +113,7 @@ fn write_shell_rpc_log(
                 let summary = match request.method.as_str() {
                     "graph.commit" => result.map(audiorouter_transport::graph_activation_log_summary),
                     "devices.list" => result.map(audiorouter_transport::device_inventory_log_summary),
+                    "shell.panic" => result.cloned(),
                     "sessions.get" => result.map(|value| serde_json::json!({
                         "revision": value.get("revision"),
                         "nodes": value.get("nodes").and_then(serde_json::Value::as_array).map(Vec::len),
@@ -1023,7 +1024,9 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                     eprintln!("AudioRouter control backend starting in durable safe mode; routes remain stopped");
                 }
                 loop {
-                    let result = (|| -> Result<(), String> {
+                    // A panic is a backend failure like any other: count it and
+                    // restart, never leave the tray running with no backend.
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<(), String> {
                     // ControlPlane contains COM-backed endpoint state and is
                     // deliberately constructed on the serving thread.
                     let storage = Storage::open(&database)
@@ -1106,7 +1109,8 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                             &pipe_name, plane, grant,
                         )
                         .map_err(|error| format!("control backend stopped: {error:?}"))
-                    })();
+                    }))
+                    .unwrap_or_else(|_| Err("control backend panicked".into()));
                     match result {
                         Ok(()) => break,
                         Err(error) => {
@@ -1320,7 +1324,30 @@ fn log_instance_check(state: &'static str) {
     log_shell_rpc(&request, &Ok(JsonRpcResponse::success(request.id.clone(), serde_json::json!({"state": state}))));
 }
 
+/// Bounded record of where a panic happened. The panic message is omitted
+/// (it may carry runtime text); thread name and source location suffice to
+/// find the defect. Release builds have no console, so without this a
+/// backend panic left no trace at all.
+fn panic_log_detail(thread: Option<&str>, location: Option<&std::panic::Location<'_>>) -> serde_json::Value {
+    serde_json::json!({
+        "thread": thread.map(|name| name.chars().take(64).collect::<String>()),
+        "file": location.map(|location| location.file().chars().take(160).collect::<String>()),
+        "line": location.map(std::panic::Location::line),
+    })
+}
+
+fn install_panic_log() {
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let request = JsonRpcRequest { jsonrpc: "2.0".into(), id: None, method: "shell.panic".into(), params: None };
+        let detail = panic_log_detail(std::thread::current().name(), info.location());
+        log_shell_rpc(&request, &Ok(JsonRpcResponse::success(None, detail)));
+        default_hook(info);
+    }));
+}
+
 fn main() {
+    install_panic_log();
     // Claim the desktop before opening storage, enrolling, forwarding RPCs or
     // starting recovery supervision. Test/external-pipe clients own no backend.
     #[cfg(windows)]
@@ -2152,6 +2179,22 @@ mod tests {
         assert_eq!(entry["version"], env!("CARGO_PKG_VERSION"));
         assert!(entry["buildId"].is_string());
         assert!(!log.contains("private"));
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn shell_panic_log_keeps_location_and_thread_but_no_message() {
+        let directory = std::env::temp_dir().join(format!("audiorouter-shell-panic-log-{}", std::process::id()));
+        let location = std::panic::Location::caller();
+        let detail = panic_log_detail(Some("audiorouter-control"), Some(location));
+        let request = JsonRpcRequest { jsonrpc: "2.0".into(), id: None, method: "shell.panic".into(), params: None };
+        write_shell_rpc_log(&directory, &request, &Ok(JsonRpcResponse::success(None, detail)));
+        let log = std::fs::read_to_string(directory.join("shell.jsonl")).unwrap();
+        let record: serde_json::Value = serde_json::from_str(log.trim()).unwrap();
+        assert_eq!(record["method"], "shell.panic");
+        assert_eq!(record["detail"]["thread"], "audiorouter-control");
+        assert_eq!(record["detail"]["line"], location.line());
+        assert!(record["detail"]["file"].as_str().unwrap().ends_with("main.rs"));
         std::fs::remove_dir_all(directory).unwrap();
     }
 

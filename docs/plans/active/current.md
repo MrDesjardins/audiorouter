@@ -143,6 +143,38 @@ Agent work (no hardware or credentials needed):
 
 4d. Done 2026-10-03 (user request): version in the window title and header,
    and an optional daily new-version check (UI-18; PROD-06 amended with this
+### Defect 2026-10-05: backend dead after resume ("Backend refresh failed")
+
+Reproduction (v0.0.12 release shell, PID 17188): sign-in start at
+2026-10-04 19:05 with `patrick-main-native` running; lock + sleep at 19:20
+(only `lock` was journaled); resume 2026-10-05 16:30:01, when the backend
+still ran endpoint inventory (`discovery.jsonl`, `getDevicePeriod`
+0x88890008). Opening the window at 19:39 showed "Unable to load your saved
+session: Backend refresh failed", and every shell RPC was `transportError`.
+The `\\.\pipe\audiorouter-control` pipe no longer existed, the process's live
+threads totalled ~1.5 min CPU of 2 h 23 min (the 1 ms service thread had
+exited), and `recovery_crashes` was empty, so the supervisor's error path
+never ran: the control thread **panicked**. A panic bypassed the
+`BackendSupervisor` loop, and release builds have no console, so the panic
+location was lost.
+
+Fix: `serve_control_connections_forever_observed` catches a control-plane
+panic, wakes and joins its I/O thread (which otherwise keeps the only pipe
+instance; max instances is 1), and returns an error. The shell supervisor
+also wraps each attempt in `catch_unwind`, so a panic is counted and
+restarted like any other failure (safe mode after repeated failures). A
+panic hook writes a `shell.panic` record (thread name, file and line; no
+message text) to `shell.jsonl`. Regressions:
+`stopped_control_plane_releases_the_pipe_for_a_restarted_server` (fails with
+the wake disabled) and `shell_panic_log_keeps_location_and_thread_but_no_message`.
+Checks 2026-10-05: `cargo test -p audiorouter-transport --lib` 26/26,
+`cargo test --manifest-path src-tauri/Cargo.toml` 61 passed, 1 ignored.
+
+Still open: the panic site itself is unknown. After the next occurrence,
+read the `shell.panic` record, fix the owning code and qualify a
+sleep/resume with a native route running. A restarted backend leaves routes
+stopped until Play.
+
    one user-authorized network read). UI reads the public GitHub releases list
    (CSP `connect-src` adds only `https://api.github.com`), caches it a day,
    compares `vX.Y.Z` tags including prereleases, and shows "<version>

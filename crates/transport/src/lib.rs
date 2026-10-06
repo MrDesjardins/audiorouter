@@ -1060,6 +1060,40 @@ pub fn serve_control_connections_forever_observed(
     observer: Option<std::sync::mpsc::SyncSender<AudioServicePassTiming>>,
 ) -> Result<(), TransportError> {
     let _singleton = acquire_server_singleton(name)?;
+    let (io, received) = spawn_control_io(name)?;
+    let (_scheduling, _capabilities) = audiorouter_windows_audio::AudioServiceThreadGuard::enter();
+    plane.mark_audio_service_started();
+    // A panic in dispatch or in an audio service pass must end this serve call
+    // with an error the caller's supervisor can restart, never leave the
+    // process alive with no control backend (2026-10-05 resume defect).
+    let served = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        serve_control_plane_frames(&mut plane, &grant, &received, observer.as_ref())
+    }));
+    match served {
+        Ok(()) => match io.join() {
+            Ok(result) => result,
+            Err(_) => Err(TransportError::Protocol("control I/O thread panicked".into())),
+        },
+        Err(_) => {
+            drop(received);
+            stop_control_io(name, io);
+            Err(TransportError::Protocol("control plane panicked".into()))
+        }
+    }
+}
+
+/// Start the pipe I/O thread that accepts clients and forwards each frame to
+/// the returned receiver, waiting for the control plane's reply.
+#[cfg(windows)]
+fn spawn_control_io(
+    name: &str,
+) -> Result<
+    (
+        std::thread::JoinHandle<Result<(), TransportError>>,
+        std::sync::mpsc::Receiver<ControlFrame>,
+    ),
+    TransportError,
+> {
     let (frames, received) = std::sync::mpsc::sync_channel::<ControlFrame>(0);
     let io_name = name.to_owned();
     let io = std::thread::Builder::new()
@@ -1082,8 +1116,39 @@ pub fn serve_control_connections_forever_observed(
             }
         })
         .map_err(|error| TransportError::Windows(format!("control I/O thread: {error}")))?;
-    let (_scheduling, _capabilities) = audiorouter_windows_audio::AudioServiceThreadGuard::enter();
-    plane.mark_audio_service_started();
+    Ok((io, received))
+}
+
+/// Wake the I/O thread after the control plane stopped, so it releases the
+/// single pipe instance before a restarted server creates a new one. The
+/// thread is usually blocked accepting a client; one connection of our own
+/// reaches its stopped-plane error. Bounded: an unresponsive thread is left
+/// detached rather than hanging the supervisor.
+#[cfg(windows)]
+fn stop_control_io(
+    name: &str,
+    io: std::thread::JoinHandle<Result<(), TransportError>>,
+) {
+    for _ in 0..50 {
+        if io.is_finished() {
+            let _ = io.join();
+            return;
+        }
+        let _ = send_oneway(name, &0_u32.to_le_bytes());
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
+/// The control-plane side of [`serve_control_connections_forever_observed`]:
+/// dispatch received frames and pump native audio between them. Returns when
+/// the I/O thread has stopped.
+#[cfg(windows)]
+fn serve_control_plane_frames(
+    plane: &mut audiorouter_control::ControlPlane,
+    grant: &audiorouter_control::ClientGrant,
+    received: &std::sync::mpsc::Receiver<ControlFrame>,
+    observer: Option<&std::sync::mpsc::SyncSender<AudioServicePassTiming>>,
+) {
     let origin = std::time::Instant::now();
     loop {
         let wait_start = observer.as_ref().map(|_| std::time::Instant::now());
@@ -1093,21 +1158,16 @@ pub fn serve_control_connections_forever_observed(
             Ok(request) => {
                 wait = wait_start.map(|start| start.elapsed()).unwrap_or_default();
                 let dispatch_start = observer.as_ref().map(|_| std::time::Instant::now());
-                let result = dispatch_control_frame(&mut plane, &grant, request.client_pid, &request.frame);
+                let result = dispatch_control_frame(plane, grant, request.client_pid, &request.frame);
                 let _ = request.reply.send(result);
                 dispatch = dispatch_start.map(|start| start.elapsed()).unwrap_or_default();
             }
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => { wait = wait_start.map(|start| start.elapsed()).unwrap_or_default(); }
-            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                return match io.join() {
-                    Ok(result) => result,
-                    Err(_) => Err(TransportError::Protocol("control I/O thread panicked".into())),
-                };
-            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return,
         }
         let service_start = std::time::Instant::now();
         let running = plane.service_running_native_audio(service_start) != 0;
-        if let Some(observer) = &observer {
+        if let Some(observer) = observer {
             let _ = observer.try_send(AudioServicePassTiming {
                 elapsed: service_start.saturating_duration_since(origin),
                 wait,
@@ -1335,6 +1395,27 @@ mod tests {
             .recv_timeout(std::time::Duration::from_secs(2))
             .expect("second writer enters after first releases");
         worker.join().unwrap();
+    }
+
+    /// 2026-10-05: a panicking control plane left the I/O thread holding the
+    /// only pipe instance, so no restarted server could ever accept again.
+    #[cfg(windows)]
+    #[test]
+    fn stopped_control_plane_releases_the_pipe_for_a_restarted_server() {
+        let name = format!(r"\\.\pipe\audiorouter-test-io-release-{}", std::process::id());
+        let (io, received) = spawn_control_io(&name).unwrap();
+        // Let the I/O thread block in ConnectNamedPipe, as in production.
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        drop(received);
+        stop_control_io(&name, io);
+        let server_name = name.clone();
+        let server = std::thread::spawn(move || {
+            serve_once_with_client_optional(&server_name, |_, frame| Ok(Some(frame.to_vec())))
+        });
+        let request = encode_frame(&serde_json::json!({"ping": true})).unwrap();
+        let response = round_trip(&name, &request).expect("restarted server accepts");
+        assert_eq!(response, request);
+        server.join().unwrap().unwrap();
     }
 
     #[test]

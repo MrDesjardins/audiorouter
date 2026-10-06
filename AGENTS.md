@@ -55,6 +55,16 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-05 — A supervised backend thread must survive panics, and leave a trace of them.**
+  Evidence: [active plan, backend dead after resume](docs/plans/active/current.md),
+  `stopped_control_plane_releases_the_pipe_for_a_restarted_server`. Scope:
+  long-lived shell threads (control backend, its pipe I/O thread). Consequence:
+  a panic after sleep/resume skipped the `Err`-only restart loop, so the tray
+  stayed up with no backend and no log. Catch the unwind, release the
+  single-instance pipe before restarting, and log thread plus location. To
+  diagnose a silent backend, compare the live threads' CPU with the process
+  total, and check `recovery_crashes`: empty means a panic, not an error.
+
 - **2026-10-04 — Stage files by name when another session shares the working tree.**
   Evidence: commit `962ed8a1` and its explanation in `d2b703b4`. Scope: git
   commits while another agent session edits this repository. Consequence: a

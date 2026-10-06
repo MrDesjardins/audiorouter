@@ -1,5 +1,25 @@
 # AudioRouter release notes
 
+## 0.0.13 — 2026-10-05 (unsigned experimental preview)
+
+- **Fixed: the window could not load after the PC woke from sleep.** If
+  AudioRouter's background service failed while audio was running (seen
+  after a long sleep with a route playing), the tray stayed open but the
+  window only showed "Unable to load your saved session: Backend refresh
+  failed" until AudioRouter was quit and reopened. The service now restarts
+  by itself and the window loads again; press Play to resume audio. Repeated
+  failures still enter safe mode with routes stopped.
+- When this happens, `shell.jsonl` in the logs folder records where the
+  failure occurred (source location only, no audio or session content), so
+  the underlying cause can be fixed.
+
+Windows 11 x64; app and installer unsigned. No data migration or driver
+installation. Close AudioRouter before upgrading; retain 0.0.12 and compatible
+configuration/recording backups for rollback. The original failure's cause
+is not yet identified, and a sleep/resume with a route playing has not been
+re-qualified. Full M08 install/hardware/accessibility/signing gates remain
+open.
+
 ## 0.0.12 — 2026-10-04 (unsigned experimental preview)
 
 - **Stream Deck plugin:** Toggle, Level meter, Privacy mute, Play/Stop,
