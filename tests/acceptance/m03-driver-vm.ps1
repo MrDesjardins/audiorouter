@@ -6,7 +6,10 @@ param(
     [switch] $CreateRootDevice,
     [string] $Devcon,
     [ValidateSet('Prototype', 'Cables')] [string] $EndpointProfile = 'Cables',
-    [string] $Cli
+    [string] $Cli,
+    # WP-07: install/remove through a DEBUG audiorouter-driver-helper.exe
+    # (creates the root device itself; no devcon). Same end state as manage.ps1.
+    [string] $Helper
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'm03-driver-vm-support.ps1')
@@ -31,6 +34,14 @@ foreach ($name in @('audioroutervirtual.sys', 'audioroutervirtual.cat')) {
     if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Thumbprint -ne $verification.certificateThumbprint) {
         throw 'Trust the exported test CER inside this VM before running stage A.'
     }
+}
+if ($Helper) {
+    if ($CreateRootDevice) { throw '-Helper creates the root device itself; do not combine it with -CreateRootDevice.' }
+    $Helper = Assert-DriverPackagePath $Helper
+    if (-not (Test-Path -LiteralPath $Helper -PathType Leaf)) { throw '-Helper must be the debug audiorouter-driver-helper.exe.' }
+    # Test-signed packages are accepted only by a debug helper with this
+    # process-scoped opt-in (17 §9.1); never set it machine-wide.
+    $env:AUDIOROUTER_ALLOW_TEST_DRIVER = '1'
 }
 if ($CreateRootDevice) {
     if (-not $Devcon -or -not (Test-Path -LiteralPath $Devcon -PathType Leaf)) { throw '-CreateRootDevice requires an explicit WDK -Devcon path.' }
@@ -88,11 +99,17 @@ try {
     }
     $inf = Join-Path $staged 'audioroutervirtual.inf'
     $state = Join-Path $staged 'audiorouter-driver-state.json'
-    $preview = Invoke-DriverTool $powershellExe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $manage, '-Install', '-Preview', '-Inf', $inf, '-State', $state) (Join-Path $Evidence 'install-preview.json')
-    if (-not ($preview.Output | ConvertFrom-Json).ready) { throw 'Install preview is not ready.' }
-    $null = Invoke-DriverTool $powershellExe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $manage, '-Install', '-AllowDriverInstall', '-Inf', $inf, '-State', $state) (Join-Path $Evidence 'install.txt')
-    $installed = $true
-    if ($CreateRootDevice) { $null = Invoke-DriverTool $Devcon @('install', $inf, 'ROOT\AudioRouterVirtual') (Join-Path $Evidence 'create-root.txt') }
+    if ($Helper) {
+        Copy-Item -LiteralPath (Join-Path $Package 'package.json') -Destination $staged
+        $installed = $true
+        $null = Invoke-DriverTool $Helper @('install', '--package', $staged, '--result', (Join-Path $Evidence 'helper-install.json')) (Join-Path $Evidence 'helper-install.txt')
+    } else {
+        $preview = Invoke-DriverTool $powershellExe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $manage, '-Install', '-Preview', '-Inf', $inf, '-State', $state) (Join-Path $Evidence 'install-preview.json')
+        if (-not ($preview.Output | ConvertFrom-Json).ready) { throw 'Install preview is not ready.' }
+        $null = Invoke-DriverTool $powershellExe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $manage, '-Install', '-AllowDriverInstall', '-Inf', $inf, '-State', $state) (Join-Path $Evidence 'install.txt')
+        $installed = $true
+        if ($CreateRootDevice) { $null = Invoke-DriverTool $Devcon @('install', $inf, 'ROOT\AudioRouterVirtual') (Join-Path $Evidence 'create-root.txt') }
+    }
     $roots = @(Get-RootDevices)
     if ($roots.Count -ne 1) { throw 'A2 needs exactly one root device; retry from the checkpoint with -CreateRootDevice and -Devcon.' }
     Record-Check 'A2' $true 'Owned package and one AudioRouter root device present.'
@@ -111,7 +128,8 @@ try {
     } while ([DateTime]::UtcNow -lt $deadline)
     # Record the exact names Windows composed; this settles VCAB-02's format.
     $endpoints | Select-Object FriendlyName, Status, InstanceId | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $Evidence 'endpoint-names.json')
-    if (-not $healthy -or $endpoints.Count -ne $expected.Count) { throw "Expected healthy endpoints did not appear within 30 seconds. Seen: $(@($endpoints | ForEach-Object { "$($_.FriendlyName) [$($_.Status)]" }) -join '; ')" }    $installedSnapshot = Snapshot 'installed'
+    if (-not $healthy -or $endpoints.Count -ne $expected.Count) { throw "Expected healthy endpoints did not appear within 30 seconds. Seen: $(@($endpoints | ForEach-Object { "$($_.FriendlyName) [$($_.Status)]" }) -join '; ')" }
+    $installedSnapshot = Snapshot 'installed'
     $allowedIds = @($roots | ForEach-Object { $_.InstanceId }) + @($endpoints | ForEach-Object { $_.InstanceId })
     $unrelated = [pscustomobject]@{
         drivers = @($installedSnapshot.drivers | Where-Object { $_ -notmatch '\|AudioRouter Project\|' })
@@ -131,10 +149,15 @@ try {
         if ($KeepInstalled -and -not $failure) { Record-Check 'A14' $false 'Skipped by explicit KeepInstalled; checkpoint restore required.' }
         else {
             try {
-                foreach ($root in @(Get-RootDevices)) {
-                    $null = Invoke-DriverTool $pnputil @('/remove-device', $root.InstanceId) (Join-Path $Evidence 'remove-device.txt')
+                if ($Helper) {
+                    # The helper removes its own device and exact oem*.inf from its state.
+                    $null = Invoke-DriverTool $Helper @('remove', '--result', (Join-Path $Evidence 'helper-remove.json')) (Join-Path $Evidence 'helper-remove.txt')
+                } else {
+                    foreach ($root in @(Get-RootDevices)) {
+                        $null = Invoke-DriverTool $pnputil @('/remove-device', $root.InstanceId) (Join-Path $Evidence 'remove-device.txt')
+                    }
+                    $null = Invoke-DriverTool $powershellExe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $manage, '-Uninstall', '-AllowDriverInstall', '-Inf', $inf, '-State', $state) (Join-Path $Evidence 'uninstall.txt')
                 }
-                $null = Invoke-DriverTool $powershellExe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $manage, '-Uninstall', '-AllowDriverInstall', '-Inf', $inf, '-State', $state) (Join-Path $Evidence 'uninstall.txt')
                 $deadline = [DateTime]::UtcNow.AddSeconds(30)
                 do {
                     $after = Snapshot 'after'

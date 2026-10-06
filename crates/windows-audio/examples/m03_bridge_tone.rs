@@ -54,7 +54,11 @@ fn parse_options(arguments: &[String]) -> Result<Options, String> {
     let mut options = Options::default();
     let mut iter = arguments.iter();
     while let Some(flag) = iter.next() {
-        let mut value = || iter.next().cloned().ok_or_else(|| format!("{flag} needs a value"));
+        let mut value = || {
+            iter.next()
+                .cloned()
+                .ok_or_else(|| format!("{flag} needs a value"))
+        };
         match flag.as_str() {
             "--device" => options.device = value()?,
             "--seconds" => options.seconds = number(&value()?, 1, 3_600)?,
@@ -124,11 +128,24 @@ struct WavWriter {
 }
 
 impl WavWriter {
-    fn create(path: &std::path::Path, channels: u16, rate: u32, wav64: bool) -> std::io::Result<Self> {
-        let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;
+    fn create(
+        path: &std::path::Path,
+        channels: u16,
+        rate: u32,
+        wav64: bool,
+    ) -> std::io::Result<Self> {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)?;
         let bytes_per_sample: u16 = if wav64 { 8 } else { 4 };
         file.write_all(&wav_header(channels, rate, bytes_per_sample, 0))?;
-        Ok(Self { file, channels, bytes_per_sample, data_bytes: 0 })
+        Ok(Self {
+            file,
+            channels,
+            bytes_per_sample,
+            data_bytes: 0,
+        })
     }
 
     fn append(&mut self, samples: &[f64]) -> std::io::Result<()> {
@@ -148,7 +165,12 @@ impl WavWriter {
     fn finish(mut self, rate: u32) -> std::io::Result<u64> {
         let data = u32::try_from(self.data_bytes).unwrap_or(u32::MAX);
         self.file.seek(SeekFrom::Start(0))?;
-        self.file.write_all(&wav_header(self.channels, rate, self.bytes_per_sample, data))?;
+        self.file.write_all(&wav_header(
+            self.channels,
+            rate,
+            self.bytes_per_sample,
+            data,
+        ))?;
         self.file.flush()?;
         Ok(self.data_bytes / u64::from(self.bytes_per_sample) / u64::from(self.channels))
     }
@@ -195,8 +217,8 @@ fn main() {
 #[cfg(windows)]
 fn run(options: &Options) -> Result<(), (i32, String)> {
     use audiorouter_windows_audio::{
-        classify_native_bridge_error, NativeBridgeController, NativeBridgeControllerError,
-        NativeBridgeControlClient,
+        classify_native_bridge_error, NativeBridgeControlClient, NativeBridgeController,
+        NativeBridgeControllerError,
     };
     let explain = |error: NativeBridgeControllerError| -> (i32, String) {
         match error {
@@ -213,7 +235,9 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
         let kind = classify_native_bridge_error(&error);
         (1, format!("{kind:?}: {} ({error})", kind.user_message()))
     })?;
-    let info = client.query().map_err(|error| (1, format!("QUERY failed: {error}")))?;
+    let info = client
+        .query()
+        .map_err(|error| (1, format!("QUERY failed: {error}")))?;
     println!("driver: {info:?}");
     info.check_compatible()
         .map_err(|error| (2, format!("{error:?}: {}", error.user_message())))?;
@@ -238,28 +262,47 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
         lease_ms: 2_000,
     };
     let temp = std::env::temp_dir();
-    let capture_path = temp.join(format!("audiorouter-bridge-tone-{}-capture.slot", std::process::id()));
-    let render_path = temp.join(format!("audiorouter-bridge-tone-{}-render.slot", std::process::id()));
+    let capture_path = temp.join(format!(
+        "audiorouter-bridge-tone-{}-capture.slot",
+        std::process::id()
+    ));
+    let render_path = temp.join(format!(
+        "audiorouter-bridge-tone-{}-render.slot",
+        std::process::id()
+    ));
     let mut capture = NativeBridgeController::create_with_section(
         &options.device,
         &capture_path,
-        hello(&options.capture_bus, audiorouter_protocol::AudioBridgeDirection::CaptureSink),
+        hello(
+            &options.capture_bus,
+            audiorouter_protocol::AudioBridgeDirection::CaptureSink,
+        ),
     )
     .map_err(explain)?;
     let mut render = NativeBridgeController::create_with_section(
         &options.device,
         &render_path,
-        hello(&options.render_bus, audiorouter_protocol::AudioBridgeDirection::RenderSource),
+        hello(
+            &options.render_bus,
+            audiorouter_protocol::AudioBridgeDirection::RenderSource,
+        ),
     )
     .map_err(explain)?;
     let mut wav = WavWriter::create(&options.out, options.channels, options.rate, options.wav64)
-        .map_err(|error| (1, format!("cannot create {}: {error}", options.out.display())))?;
+        .map_err(|error| {
+            (
+                1,
+                format!("cannot create {}: {error}", options.out.display()),
+            )
+        })?;
 
     let samples_per_block = usize::from(options.frames) * usize::from(options.channels);
     let mut tone = vec![0.0_f64; samples_per_block];
     let mut received = vec![0.0_f64; samples_per_block];
-    let block_period = std::time::Duration::from_secs_f64(f64::from(options.frames) / f64::from(options.rate));
-    let total_blocks = u64::from(options.seconds) * u64::from(options.rate) / u64::from(options.frames);
+    let block_period =
+        std::time::Duration::from_secs_f64(f64::from(options.frames) / f64::from(options.rate));
+    let total_blocks =
+        u64::from(options.seconds) * u64::from(options.rate) / u64::from(options.frames);
     let stall_at = total_blocks / 2;
     let start = std::time::Instant::now();
     let mut last_heartbeat = start;
@@ -281,7 +324,12 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
             std::thread::sleep(stall);
             stall_offset += stall;
         }
-        fill_tone_block(&mut tone, options.channels, block * u64::from(options.frames), options.rate);
+        fill_tone_block(
+            &mut tone,
+            options.channels,
+            block * u64::from(options.frames),
+            options.rate,
+        );
         capture.write_f64(&tone).map_err(explain)?;
         written_blocks += 1;
         // The lease holds one block (the newest). A block replaced before we
@@ -310,9 +358,18 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
         .finish(options.rate)
         .map_err(|error| (1, format!("WAV finish failed: {error}")))?;
     println!("capture-sink blocks written: {written_blocks}");
-    println!("render-source blocks read: {read_blocks}; WAV frames: {recorded_frames} -> {}", options.out.display());
-    println!("capture-sink counters ({}): {capture_counters:?}", options.capture_bus);
-    println!("render-source counters ({}): {render_counters:?}", options.render_bus);
+    println!(
+        "render-source blocks read: {read_blocks}; WAV frames: {recorded_frames} -> {}",
+        options.out.display()
+    );
+    println!(
+        "capture-sink counters ({}): {capture_counters:?}",
+        options.capture_bus
+    );
+    println!(
+        "render-source counters ({}): {render_counters:?}",
+        options.render_bus
+    );
     capture.close().map_err(explain)?;
     render.close().map_err(explain)?;
     Ok(())
@@ -336,11 +393,25 @@ mod tests {
     fn options_default_and_bounds() {
         assert_eq!(parse_options(&[]).unwrap(), Options::default());
         let parsed = parse_options(&args("--channels 8 --rate 96000 --frames 128 --capture-bus cable-h --render-bus cable-c --stall-ms 500 --wav64")).unwrap();
-        assert_eq!((parsed.channels, parsed.rate, parsed.frames), (8, 96_000, 128));
-        assert_eq!((parsed.capture_bus.as_str(), parsed.render_bus.as_str()), ("cable-h", "cable-c"));
+        assert_eq!(
+            (parsed.channels, parsed.rate, parsed.frames),
+            (8, 96_000, 128)
+        );
+        assert_eq!(
+            (parsed.capture_bus.as_str(), parsed.render_bus.as_str()),
+            ("cable-h", "cable-c")
+        );
         assert!(parsed.wav64 && parsed.stall_ms == 500);
-        for bad in ["--channels 9", "--rate 22050", "--frames 4097", "--capture-bus cable-i",
-                    "--render-bus Cable-A", "--capture-bus cable-a", "--bogus", "--seconds"] {
+        for bad in [
+            "--channels 9",
+            "--rate 22050",
+            "--frames 4097",
+            "--capture-bus cable-i",
+            "--render-bus Cable-A",
+            "--capture-bus cable-a",
+            "--bogus",
+            "--seconds",
+        ] {
             assert!(parse_options(&args(bad)).is_err(), "{bad}");
         }
     }
@@ -366,10 +437,16 @@ mod tests {
         assert_eq!(&header[0..4], b"RIFF");
         assert_eq!(u16::from_le_bytes([header[20], header[21]]), 3);
         assert_eq!(u16::from_le_bytes([header[22], header[23]]), 8);
-        assert_eq!(u32::from_le_bytes(header[24..28].try_into().unwrap()), 96_000);
+        assert_eq!(
+            u32::from_le_bytes(header[24..28].try_into().unwrap()),
+            96_000
+        );
         assert_eq!(u16::from_le_bytes([header[32], header[33]]), 64);
         assert_eq!(u16::from_le_bytes([header[34], header[35]]), 64);
-        assert_eq!(u32::from_le_bytes(header[40..44].try_into().unwrap()), 1_000);
+        assert_eq!(
+            u32::from_le_bytes(header[40..44].try_into().unwrap()),
+            1_000
+        );
     }
 
     #[test]
@@ -384,7 +461,10 @@ mod tests {
         assert_eq!(bytes.len(), 44 + 16);
         assert_eq!(u32::from_le_bytes(bytes[40..44].try_into().unwrap()), 16);
         assert_eq!(u32::from_le_bytes(bytes[4..8].try_into().unwrap()), 36 + 16);
-        assert_eq!(f32::from_le_bytes(bytes[52..56].try_into().unwrap()), 0.1_f32);
+        assert_eq!(
+            f32::from_le_bytes(bytes[52..56].try_into().unwrap()),
+            0.1_f32
+        );
         std::fs::remove_file(&path).unwrap();
     }
 }

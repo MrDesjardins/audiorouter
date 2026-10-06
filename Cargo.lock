@@ -105,6 +105,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "audiorouter-driver-helper"
+version = "0.0.14"
+dependencies = [
+ "audiorouter-windows-audio",
+ "serde",
+ "serde_json",
+ "windows",
+ "windows-core",
+]
+
+[[package]]
 name = "audiorouter-dsp"
 version = "0.0.14"
 dependencies = [

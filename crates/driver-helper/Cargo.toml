@@ -1,0 +1,42 @@
+[package]
+name = "audiorouter-driver-helper"
+version = "0.0.14"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+# The elevated install/update/repair/remove tool for the AudioRouter cable
+# driver (spec 17 §6). The binary embeds a requireAdministrator manifest
+# (build.rs); the library holds the testable command logic.
+
+[[bin]]
+name = "audiorouter-driver-helper"
+path = "src/main.rs"
+# The bin's test harness would carry the requireAdministrator manifest and
+# could not start unelevated; all tests live in the library.
+test = false
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+audiorouter-windows-audio = { path = "../windows-audio" }
+windows-core = "0.62.2"
+windows = { version = "0.62.2", features = [
+  "Win32_Foundation",
+  "Win32_Devices_DeviceAndDriverInstallation",
+  "Win32_Devices_Properties",
+  "Win32_Media_Audio",
+  "Win32_Security",
+  "Win32_Security_Cryptography",
+  "Win32_Security_Cryptography_Catalog",
+  "Win32_Security_Cryptography_Sip",
+  "Win32_Security_WinTrust",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_Registry",
+  "Win32_System_Variant",
+  "Win32_UI_Shell_PropertiesSystem",
+] }
