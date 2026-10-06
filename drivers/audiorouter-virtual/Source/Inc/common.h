@@ -122,9 +122,26 @@ Abstract:
 
 typedef enum
 {
-    eSpeakerDevice = 0,
-    eMicArrayDevice1,
+    eCableARender = 0,
+    eCableACapture,
+    eCableBRender,
+    eCableBCapture,
+    eCableCRender,
+    eCableCCapture,
+    eCableDRender,
+    eCableDCapture,
+    eCableERender,
+    eCableECapture,
+    eCableFRender,
+    eCableFCapture,
+    eCableGRender,
+    eCableGCapture,
+    eCableHRender,
+    eCableHCapture,
     eMaxDeviceType,
+    // Kept as aliases while the sample-only topology sources are removed.
+    eSpeakerDevice = eCableARender,
+    eMicArrayDevice1 = eCableACapture,
 } eDeviceType;
 
 //

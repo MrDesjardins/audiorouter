@@ -14,164 +14,64 @@ Abstract:
 #ifndef _AUDIOROUTERVIRTUAL_MINIPAIRS_H_
 #define _AUDIOROUTERVIRTUAL_MINIPAIRS_H_
 
-#include "speakertopo.h"
-#include "speakertoptable.h"
-#include "speakerwavtable.h"
+#include "cablewavtable.h"
+#include "cabletopotable.h"
 
-#include "micarraytopo.h"
-#include "micarray1toptable.h"
-#include "micarraywavtable.h"
+NTSTATUS CreateMiniportWaveRTAudioRouterVirtual(
+    _Out_ PUNKNOWN *, _In_ REFCLSID, _In_opt_ PUNKNOWN, _In_ POOL_FLAGS,
+    _In_ PUNKNOWN, _In_opt_ PVOID, _In_ PENDPOINT_MINIPAIR);
+NTSTATUS CreateMiniportTopologyAudioRouterVirtual(
+    _Out_ PUNKNOWN *, _In_ REFCLSID, _In_opt_ PUNKNOWN, _In_ POOL_FLAGS,
+    _In_ PUNKNOWN, _In_opt_ PVOID, _In_ PENDPOINT_MINIPAIR);
 
-
-NTSTATUS
-CreateMiniportWaveRTAudioRouterVirtual
-(
-    _Out_       PUNKNOWN *,
-    _In_        REFCLSID,
-    _In_opt_    PUNKNOWN,
-    _In_        POOL_FLAGS,
-    _In_        PUNKNOWN,
-    _In_opt_    PVOID,
-    _In_        PENDPOINT_MINIPAIR
-);
-
-NTSTATUS
-CreateMiniportTopologyAudioRouterVirtual
-(
-    _Out_       PUNKNOWN *,
-    _In_        REFCLSID,
-    _In_opt_    PUNKNOWN,
-    _In_        POOL_FLAGS,
-    _In_        PUNKNOWN,
-    _In_opt_    PVOID,
-    _In_        PENDPOINT_MINIPAIR
-);
-
-//
-// Render miniports.
-//
-
-/*********************************************************************
-* Topology/Wave bridge connection for speaker (internal)             *
-*                                                                    *
-*              +------+                +------+                      *
-*              | Wave |                | Topo |                      *
-*              |      |                |      |                      *
-* System   --->|0    1|--------------->|0    1|---> Line Out         *
-*              |      |                |      |                      *
-*              +------+                +------+                      *
-*********************************************************************/
-static
-PHYSICALCONNECTIONTABLE SpeakerTopologyPhysicalConnections[] =
-{
-    {
-        KSPIN_TOPO_WAVEOUT_SOURCE,  // TopologyIn
-        KSPIN_WAVE_RENDER3_SOURCE,   // WaveOut
-        CONNECTIONTYPE_WAVE_OUTPUT
-    }
+static PHYSICALCONNECTIONTABLE CableRenderPhysicalConnections[] = {
+    { KSPIN_TOPO_WAVEOUT_SOURCE, KSPIN_WAVE_RENDER3_SOURCE, CONNECTIONTYPE_WAVE_OUTPUT }
+};
+static PHYSICALCONNECTIONTABLE CableCapturePhysicalConnections[] = {
+    { KSPIN_TOPO_BRIDGE, KSPIN_WAVE_BRIDGE, CONNECTIONTYPE_TOPOLOGY_OUTPUT }
 };
 
-static
-ENDPOINT_MINIPAIR SpeakerMiniports =
-{
-    eSpeakerDevice,
-    L"TopologySpeaker",                                     // make sure this or the template name matches with KSNAME_TopologySpeaker in the inf's [Strings] section
-    NULL,                                                   // optional template name
-    CreateMiniportTopologyAudioRouterVirtual,
-    &SpeakerTopoMiniportFilterDescriptor,
-    0, NULL,                                                // Interface properties
-    L"WaveSpeaker",                                         // make sure this or the template name matches with KSNAME_WaveSpeaker in the inf's [Strings] section
-    NULL,                                                   // optional template name
-    CreateMiniportWaveRTAudioRouterVirtual,
-    &SpeakerWaveMiniportFilterDescriptor,
-    0,                                                      // Interface properties
-    NULL,
-    SPEAKER_DEVICE_MAX_CHANNELS,
-    SpeakerPinDeviceFormatsAndModes,
-    SIZEOF_ARRAY(SpeakerPinDeviceFormatsAndModes),
-    SpeakerTopologyPhysicalConnections,
-    SIZEOF_ARRAY(SpeakerTopologyPhysicalConnections),
-    ENDPOINT_NO_FLAGS,
+// The bus index is implicit in the stable endpoint ordinal: render/capture
+// pairs occupy adjacent enum values, so endpoint / 2 is the cable bus.
+#define DEFINE_CABLE_PAIR(letter, displayLetter, renderType, captureType) \
+static ENDPOINT_MINIPAIR Cable##letter##RenderMiniports = { \
+    renderType, L"TopologyCable" displayLetter L"Render", NULL, CreateMiniportTopologyAudioRouterVirtual, \
+    &CableRenderTopologyFilterDescriptor, 0, NULL, L"WaveCable" displayLetter L"Render", NULL, \
+    CreateMiniportWaveRTAudioRouterVirtual, &CableRenderWaveFilterDescriptor, \
+    0, NULL, CABLE_DEVICE_MAX_CHANNELS, CableRenderPinFormats, \
+    SIZEOF_ARRAY(CableRenderPinFormats), CableRenderPhysicalConnections, \
+    SIZEOF_ARRAY(CableRenderPhysicalConnections), ENDPOINT_NO_FLAGS }; \
+static ENDPOINT_MINIPAIR Cable##letter##CaptureMiniports = { \
+    captureType, L"TopologyCable" displayLetter L"Capture", NULL, CreateMiniportTopologyAudioRouterVirtual, \
+    &CableCaptureTopologyFilterDescriptor, 0, NULL, L"WaveCable" displayLetter L"Capture", NULL, \
+    CreateMiniportWaveRTAudioRouterVirtual, &CableCaptureWaveFilterDescriptor, \
+    0, NULL, CABLE_DEVICE_MAX_CHANNELS, CableCapturePinFormats, \
+    SIZEOF_ARRAY(CableCapturePinFormats), CableCapturePhysicalConnections, \
+    SIZEOF_ARRAY(CableCapturePhysicalConnections), ENDPOINT_NO_FLAGS };
+
+DEFINE_CABLE_PAIR(A, L"A", eCableARender, eCableACapture)
+DEFINE_CABLE_PAIR(B, L"B", eCableBRender, eCableBCapture)
+DEFINE_CABLE_PAIR(C, L"C", eCableCRender, eCableCCapture)
+DEFINE_CABLE_PAIR(D, L"D", eCableDRender, eCableDCapture)
+DEFINE_CABLE_PAIR(E, L"E", eCableERender, eCableECapture)
+DEFINE_CABLE_PAIR(F, L"F", eCableFRender, eCableFCapture)
+DEFINE_CABLE_PAIR(G, L"G", eCableGRender, eCableGCapture)
+DEFINE_CABLE_PAIR(H, L"H", eCableHRender, eCableHCapture)
+#undef DEFINE_CABLE_PAIR
+
+static PENDPOINT_MINIPAIR g_RenderEndpoints[] = {
+    &CableARenderMiniports, &CableBRenderMiniports, &CableCRenderMiniports,
+    &CableDRenderMiniports, &CableERenderMiniports, &CableFRenderMiniports,
+    &CableGRenderMiniports, &CableHRenderMiniports,
 };
-
-//
-// Capture miniports.
-//
-
-/*********************************************************************
-* Topology/Wave bridge connection for mic array  1 (front)           *
-*                                                                    *
-*              +------+    +------+                                  *
-*              | Topo |    | Wave |                                  *
-*              |      |    |      |                                  *
-*  Mic in  --->|0    1|===>|0    1|---> Capture Host Pin             *
-*              |      |    |      |                                  *
-*              +------+    +------+                                  *
-*********************************************************************/
-static
-PHYSICALCONNECTIONTABLE MicArray1TopologyPhysicalConnections[] =
-{
-    {
-        KSPIN_TOPO_BRIDGE,          // TopologyOut
-        KSPIN_WAVE_BRIDGE,          // WaveIn
-        CONNECTIONTYPE_TOPOLOGY_OUTPUT
-    }
+static PENDPOINT_MINIPAIR g_CaptureEndpoints[] = {
+    &CableACaptureMiniports, &CableBCaptureMiniports, &CableCCaptureMiniports,
+    &CableDCaptureMiniports, &CableECaptureMiniports, &CableFCaptureMiniports,
+    &CableGCaptureMiniports, &CableHCaptureMiniports,
 };
-
-static
-ENDPOINT_MINIPAIR MicArray1Miniports =
-{
-    eMicArrayDevice1,
-    L"TopologyMicArray1",                   // make sure this or the template name matches with KSNAME_TopologyMicArray1 in the inf's [Strings] section
-    NULL,                                   // optional template name
-    CreateMicArrayMiniportTopology,
-    &MicArray1TopoMiniportFilterDescriptor,
-    0, NULL,                                // Interface properties
-    L"WaveMicArray1",                       // make sure this or the tempalte name matches with KSNAME_WaveMicArray1 in the inf's [Strings] section
-    NULL,                                   // optional template name
-    CreateMiniportWaveRTAudioRouterVirtual,
-    &MicArrayWaveMiniportFilterDescriptor,
-    0,                                      // Interface properties
-    NULL,
-    MICARRAY_DEVICE_MAX_CHANNELS,
-    MicArrayPinDeviceFormatsAndModes,
-    SIZEOF_ARRAY(MicArrayPinDeviceFormatsAndModes),
-    MicArray1TopologyPhysicalConnections,
-    SIZEOF_ARRAY(MicArray1TopologyPhysicalConnections),
-    ENDPOINT_NO_FLAGS,
-};
-
-
-//=============================================================================
-//
-// Render miniport pairs. NOTE: the split of render and capture is arbitrary and
-// unnessary, this array could contain capture endpoints.
-//
-static
-PENDPOINT_MINIPAIR  g_RenderEndpoints[] =
-{
-    &SpeakerMiniports,
-};
-
-#define g_cRenderEndpoints  (SIZEOF_ARRAY(g_RenderEndpoints))
-
-//=============================================================================
-//
-// Capture miniport pairs. NOTE: the split of render and capture is arbitrary and
-// unnessary, this array could contain render endpoints.
-//
-static
-PENDPOINT_MINIPAIR  g_CaptureEndpoints[] =
-{
-    &MicArray1Miniports,
-};
-
+static ULONG g_EnabledCableCount = 2;
+#define g_cRenderEndpoints (SIZEOF_ARRAY(g_RenderEndpoints))
 #define g_cCaptureEndpoints (SIZEOF_ARRAY(g_CaptureEndpoints))
-
-//=============================================================================
-//
-// Total miniports = # endpoints * 2 (topology + wave).
-//
-#define g_MaxMiniports  ((g_cRenderEndpoints + g_cCaptureEndpoints) * 2)
+#define g_MaxMiniports ((g_cRenderEndpoints + g_cCaptureEndpoints) * 2)
 
 #endif // _AUDIOROUTERVIRTUAL_MINIPAIRS_H_

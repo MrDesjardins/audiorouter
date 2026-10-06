@@ -159,7 +159,7 @@ static void PublishBridgeRequest(
 NTSTATUS AudioRouterCopyLeaseBlock(
     _In_ AR_BRIDGE_LEASE_STATE* Lease,
     _In_ ULONGLONG MinimumSequence,
-    _Out_writes_(DestinationCapacitySamples) FLOAT* Destination,
+    _Out_writes_(DestinationCapacitySamples) DOUBLE* Destination,
     _In_ SIZE_T DestinationCapacitySamples,
     _Out_ AR_BRIDGE_BLOCK_HEADER* Header)
 {
@@ -203,13 +203,13 @@ NTSTATUS AudioRouterCopyLeaseBlock(
 }
 
 // Publish one render-source quantum into the mapped lease. The caller
-// supplies an already-interleaved float32 buffer; this routine performs no
+// supplies an already-interleaved float64 buffer; this routine performs no
 // allocation, waits, logging, endpoint access, or control I/O.
 NTSTATUS AudioRouterPublishLeaseBlock(
     _In_ AR_BRIDGE_LEASE_STATE* Lease,
     _In_ USHORT Frames,
     _In_ USHORT Channels,
-    _In_reads_(SampleCapacity) const FLOAT* Samples,
+    _In_reads_(SampleCapacity) const DOUBLE* Samples,
     _In_ SIZE_T SampleCapacity)
 {
     if (Lease == NULL || Samples == NULL || Frames == 0 ||
@@ -240,7 +240,7 @@ NTSTATUS AudioRouterPublishLeaseBlock(
     if (direction != AR_BRIDGE_DIRECTION_RENDER_SOURCE || view == NULL ||
         framesPerQuantum != Frames ||
         channels != Channels ||
-        mappedBytes < AR_BRIDGE_PAYLOAD_OFFSET + sampleCount * sizeof(FLOAT) ||
+        mappedBytes < AR_BRIDGE_PAYLOAD_OFFSET + sampleCount * sizeof(DOUBLE) ||
         generation == 0) {
         ExReleaseRundownProtection(&Lease->Rundown);
         return status;
@@ -256,8 +256,8 @@ NTSTATUS AudioRouterPublishLeaseBlock(
     }
     for (SIZE_T index = 0; index < sampleCount; ++index) {
         if (Samples[index] != Samples[index] ||
-            Samples[index] > 3.402823466e+38F ||
-            Samples[index] < -3.402823466e+38F) {
+            Samples[index] > 1.7976931348623157e+308 ||
+            Samples[index] < -1.7976931348623157e+308) {
             ExReleaseRundownProtection(&Lease->Rundown);
             return STATUS_DATA_ERROR;
         }
@@ -284,11 +284,11 @@ NTSTATUS AudioRouterPublishLeaseBlock(
         return STATUS_INTEGER_OVERFLOW;
     }
     AR_BRIDGE_BLOCK_HEADER header = { generation, sequence, Frames, Channels,
-        static_cast<ULONG>(sampleCount * sizeof(FLOAT)) };
+        static_cast<ULONG>(sampleCount * sizeof(DOUBLE)) };
     RtlCopyMemory(static_cast<UCHAR*>(view) + AR_BRIDGE_HEADER_OFFSET,
                   &header, sizeof(header));
     RtlCopyMemory(static_cast<UCHAR*>(view) + AR_BRIDGE_PAYLOAD_OFFSET,
-                  Samples, sampleCount * sizeof(FLOAT));
+                  Samples, sampleCount * sizeof(DOUBLE));
     KeMemoryBarrier();
     InterlockedExchange64(state, static_cast<LONG64>(current + 2));
     ExReleaseRundownProtection(&Lease->Rundown);
@@ -404,7 +404,7 @@ static BOOLEAN BridgeRequestsHaveSameLeaseIdentity(
 NTSTATUS AudioRouterCopyLeaseBlockForDirection(
     _In_ USHORT Direction,
     _In_ ULONGLONG MinimumSequence,
-    _Out_writes_(DestinationCapacitySamples) FLOAT* Destination,
+    _Out_writes_(DestinationCapacitySamples) DOUBLE* Destination,
     _In_ SIZE_T DestinationCapacitySamples,
     _Out_ AR_BRIDGE_BLOCK_HEADER* Header)
 {
@@ -420,7 +420,7 @@ NTSTATUS AudioRouterPublishLeaseBlockForDirection(
     _In_ USHORT Direction,
     _In_ USHORT Frames,
     _In_ USHORT Channels,
-    _In_reads_(SampleCapacity) const FLOAT* Samples,
+    _In_reads_(SampleCapacity) const DOUBLE* Samples,
     _In_ SIZE_T SampleCapacity)
 {
     AR_BRIDGE_LEASE_STATE* lease = BridgeLeaseForDirection(Direction);
@@ -578,7 +578,7 @@ static NTSTATUS HandleBridgeControlRequest(_In_ PIRP Irp)
                 request->SectionHandle != 0) {
                 SIZE_T requiredBytes = AR_BRIDGE_HEADER_BYTES +
                     static_cast<SIZE_T>(request->Channels) *
-                    static_cast<SIZE_T>(request->FramesPerQuantum) * sizeof(float);
+                    static_cast<SIZE_T>(request->FramesPerQuantum) * sizeof(DOUBLE);
                 status = AudioRouterValidateMappingBytes(request);
                 if (!NT_SUCCESS(status)) {
                     // Rejected before referencing a caller-provided handle.
@@ -1469,7 +1469,7 @@ InstallAllRenderFilters(
 
     PAGED_CODE();
 
-    for(ULONG i = 0; i < g_cRenderEndpoints; ++i, ++ppAeMiniports)
+    for(ULONG i = 0; i < g_EnabledCableCount; ++i, ++ppAeMiniports)
     {
         ntStatus = InstallEndpointRenderFilters(_pDeviceObject, _pIrp, _pAdapterCommon, *ppAeMiniports);
         IF_FAILED_JUMP(ntStatus, Exit);
@@ -1520,7 +1520,7 @@ InstallAllCaptureFilters(
 
     PAGED_CODE();
 
-    for (ULONG i = 0; i < g_cCaptureEndpoints; ++i, ++ppAeMiniports)
+    for (ULONG i = 0; i < g_EnabledCableCount; ++i, ++ppAeMiniports)
     {
         ntStatus = InstallEndpointCaptureFilters(_pDeviceObject, _pIrp, _pAdapterCommon, *ppAeMiniports);
         IF_FAILED_JUMP(ntStatus, Exit);
@@ -1530,6 +1530,40 @@ InstallAllCaptureFilters(
 
 Exit:
     return ntStatus;
+}
+
+// CableCount is stored by the INF in this adapter's hardware key. Treat a
+// missing, malformed, or out-of-range value as the compiled default (two).
+static ULONG ReadConfiguredCableCount(_In_ PDEVICE_OBJECT DeviceObject)
+{
+    PAGED_CODE();
+
+    PDEVICE_OBJECT pdo = NULL;
+    HANDLE key = NULL;
+    ULONG count = 2;
+    if (!NT_SUCCESS(PcGetPhysicalDeviceObject(DeviceObject, &pdo)) || pdo == NULL ||
+        !NT_SUCCESS(IoOpenDeviceRegistryKey(pdo, PLUGPLAY_REGKEY_DEVICE,
+            KEY_QUERY_VALUE, &key))) {
+        return count;
+    }
+
+    UNICODE_STRING valueName;
+    RtlInitUnicodeString(&valueName, L"CableCount");
+    UCHAR storage[FIELD_OFFSET(KEY_VALUE_PARTIAL_INFORMATION, Data) + sizeof(ULONG)] = {};
+    ULONG resultBytes = 0;
+    NTSTATUS status = ZwQueryValueKey(key, &valueName, KeyValuePartialInformation,
+        storage, sizeof(storage), &resultBytes);
+    ZwClose(key);
+    if (NT_SUCCESS(status)) {
+        auto value = reinterpret_cast<PKEY_VALUE_PARTIAL_INFORMATION>(storage);
+        if (value->Type == REG_DWORD && value->DataLength == sizeof(ULONG)) {
+            ULONG configured = *reinterpret_cast<PULONG>(value->Data);
+            if (configured >= 1 && configured <= ARRAYSIZE(g_RenderEndpoints)) {
+                count = configured;
+            }
+        }
+    }
+    return count;
 }
 
 //=============================================================================
@@ -1597,6 +1631,8 @@ Return Value:
 
     ntStatus = pAdapterCommon->Init(DeviceObject);
     IF_FAILED_JUMP(ntStatus, Exit);
+
+    g_EnabledCableCount = ReadConfiguredCableCount(DeviceObject);
 
     //
     // register with PortCls for power-management services

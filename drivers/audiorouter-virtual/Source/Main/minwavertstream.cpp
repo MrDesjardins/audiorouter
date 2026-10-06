@@ -4,60 +4,76 @@
 #include "endpoints.h"
 #include "minwavert.h"
 #include "minwavertstream.h"
+#include "sampleconv.h"
 #define MINWAVERTSTREAM_POOLTAG 'SRWM'
 
 #pragma warning (disable : 4127)
 
-// The project bridge carries bounded interleaved float32 quanta.  The
-// WaveRT endpoint formats intentionally remain the PCM formats advertised by
-// the endpoint tables (16-bit render and 32-bit capture), so conversion must
-// happen in the callback without allocation, waiting, logging, or control I/O.
-static __forceinline FLOAT ClampBridgeSample(_In_ FLOAT Sample)
-{
-    if (Sample != Sample || Sample <= -1.0F) {
-        return Sample != Sample ? 0.0F : -1.0F;
-    }
-    return Sample >= 1.0F ? 1.0F : Sample;
-}
-
-static __forceinline FLOAT ReadBridgePcmSample(
+// Convert negotiated endpoint samples to/from the double-precision bridge.
+// PCM24 is left-aligned in its 32-bit container; PCM32 remains exact because
+// every signed 32-bit integer and its 2^-31 scale are exactly representable.
+static __forceinline DOUBLE ReadBridgeSample(
     _In_reads_bytes_(sizeof(LONG)) const UCHAR* Source,
-    _In_ USHORT BitsPerSample)
+    _In_ const WAVEFORMATEXTENSIBLE* Format)
 {
-    if (Source == NULL) {
-        return 0.0F;
+    if (Source == NULL || Format == NULL) {
+        return 0.0;
     }
-    if (BitsPerSample == 16) {
+    if (IsEqualGUIDAligned(Format->SubFormat, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT) &&
+        Format->Format.wBitsPerSample == 32) {
+        FLOAT value = 0.0F;
+        RtlCopyMemory(&value, Source, sizeof(value));
+        return AudioRouterFloat32ToDouble(value);
+    }
+    if (!IsEqualGUIDAligned(Format->SubFormat, KSDATAFORMAT_SUBTYPE_PCM)) {
+        return 0.0;
+    }
+    if (Format->Format.wBitsPerSample == 16 && Format->Samples.wValidBitsPerSample == 16) {
         SHORT value = 0;
         RtlCopyMemory(&value, Source, sizeof(value));
-        return static_cast<FLOAT>(value) / 32768.0F;
+        return AudioRouterPcm16ToDouble(value);
     }
-    if (BitsPerSample == 32) {
+    if (Format->Format.wBitsPerSample == 32 &&
+        Format->Samples.wValidBitsPerSample == 24) {
         LONG value = 0;
         RtlCopyMemory(&value, Source, sizeof(value));
-        return static_cast<FLOAT>(value) / 2147483648.0F;
+        return AudioRouterPcm24In32ToDouble(value);
     }
-    return 0.0F;
+    if (Format->Format.wBitsPerSample == 32 &&
+        Format->Samples.wValidBitsPerSample == 32) {
+        LONG value = 0;
+        RtlCopyMemory(&value, Source, sizeof(value));
+        return AudioRouterPcm32ToDouble(value);
+    }
+    return 0.0;
 }
 
-static __forceinline void WriteBridgePcmSample(
+static __forceinline void WriteBridgeSample(
     _Out_writes_bytes_(sizeof(LONG)) UCHAR* Destination,
-    _In_ USHORT BitsPerSample,
-    _In_ FLOAT Sample)
+    _In_ const WAVEFORMATEXTENSIBLE* Format,
+    _In_ DOUBLE Sample)
 {
-    if (Destination == NULL) {
+    if (Destination == NULL || Format == NULL) {
         return;
     }
-    Sample = ClampBridgeSample(Sample);
-    if (BitsPerSample == 16) {
-        SHORT value = Sample <= -1.0F
-            ? static_cast<SHORT>(-32768)
-            : static_cast<SHORT>(Sample >= 1.0F ? 32767 : Sample * 32768.0F);
+    if (IsEqualGUIDAligned(Format->SubFormat, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT) &&
+        Format->Format.wBitsPerSample == 32) {
+        FLOAT value = AudioRouterDoubleToFloat32(Sample);
         RtlCopyMemory(Destination, &value, sizeof(value));
-    } else if (BitsPerSample == 32) {
-        LONG value = Sample <= -1.0F
-            ? static_cast<LONG>(-2147483647L - 1L)
-            : static_cast<LONG>(Sample >= 1.0F ? 2147483647L : Sample * 2147483648.0F);
+    } else if (IsEqualGUIDAligned(Format->SubFormat, KSDATAFORMAT_SUBTYPE_PCM) &&
+               Format->Format.wBitsPerSample == 16 &&
+               Format->Samples.wValidBitsPerSample == 16) {
+        SHORT value = AudioRouterDoubleToPcm16(Sample);
+        RtlCopyMemory(Destination, &value, sizeof(value));
+    } else if (IsEqualGUIDAligned(Format->SubFormat, KSDATAFORMAT_SUBTYPE_PCM) &&
+               Format->Format.wBitsPerSample == 32 &&
+               Format->Samples.wValidBitsPerSample == 24) {
+        LONG value = AudioRouterDoubleToPcm24In32(Sample);
+        RtlCopyMemory(Destination, &value, sizeof(value));
+    } else if (IsEqualGUIDAligned(Format->SubFormat, KSDATAFORMAT_SUBTYPE_PCM) &&
+               Format->Format.wBitsPerSample == 32 &&
+               Format->Samples.wValidBitsPerSample == 32) {
+        LONG value = AudioRouterDoubleToPcm32(Sample);
         RtlCopyMemory(Destination, &value, sizeof(value));
     }
 }
@@ -66,11 +82,16 @@ static __forceinline BOOLEAN IsBridgePcmFormat(
     _In_opt_ const WAVEFORMATEXTENSIBLE* Format)
 {
     return Format != NULL &&
-        IsEqualGUIDAligned(Format->SubFormat, KSDATAFORMAT_SUBTYPE_PCM) &&
+        (IsEqualGUIDAligned(Format->SubFormat, KSDATAFORMAT_SUBTYPE_PCM) ||
+         IsEqualGUIDAligned(Format->SubFormat, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT)) &&
         Format->Format.nChannels != 0 &&
         Format->Format.nChannels <= AR_BRIDGE_MAX_CHANNELS &&
-        (Format->Format.wBitsPerSample == 16 ||
-         Format->Format.wBitsPerSample == 32) &&
+        ((IsEqualGUIDAligned(Format->SubFormat, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT) &&
+          Format->Format.wBitsPerSample == 32) ||
+         (IsEqualGUIDAligned(Format->SubFormat, KSDATAFORMAT_SUBTYPE_PCM) &&
+          ((Format->Format.wBitsPerSample == 16 && Format->Samples.wValidBitsPerSample == 16) ||
+           (Format->Format.wBitsPerSample == 32 &&
+            (Format->Samples.wValidBitsPerSample == 24 || Format->Samples.wValidBitsPerSample == 32))))) &&
         Format->Format.nBlockAlign ==
             Format->Format.nChannels * (Format->Format.wBitsPerSample / 8);
 }
@@ -1734,10 +1755,9 @@ ByteDisplacement - # of bytes to process.
     ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
 
     const BOOLEAN bridgeFormat = IsBridgePcmFormat(m_pWfExt);
-    // The capture endpoint is the virtual sink for processed audio. The
-    // bridge remains float32, while this endpoint's advertised PCM shape is
-    // converted at the callback boundary; an unavailable or incoherent block
-    // is rendered as silence.
+    // The capture endpoint is the virtual sink for processed audio. Its
+    // advertised integer/float format is converted at the callback boundary;
+    // unavailable or incoherent bridge blocks are rendered as silence.
     const ULONG bridgeChannels = bridgeFormat ? m_pWfExt->Format.nChannels : 0;
     const ULONG deviceFrameBytes = bridgeFormat
         ? m_pWfExt->Format.nBlockAlign : 0;
@@ -1779,11 +1799,11 @@ ByteDisplacement - # of bytes to process.
                 ULONG copyFrames = min(frames - writtenFrames, available);
                 for (ULONG frame = 0; frame < copyFrames; ++frame) {
                     for (ULONG channel = 0; channel < bridgeChannels; ++channel) {
-                        WriteBridgePcmSample(
+                        WriteBridgeSample(
                             m_pDmaBuffer + bufferOffset +
                                 (writtenFrames + frame) * deviceFrameBytes +
                                 channel * deviceBytesPerSample,
-                            static_cast<USHORT>(m_pWfExt->Format.wBitsPerSample),
+                            m_pWfExt,
                             m_BridgeScratch[
                                 (m_BridgeScratchFrameOffset + frame) * bridgeChannels +
                                 channel]);
@@ -1862,12 +1882,11 @@ ByteDisplacement - # of bytes to process.
                         m_BridgeScratch[
                             (m_BridgeScratchFrames + frame) *
                                 m_BridgePublishChannels + channel] =
-                            ReadBridgePcmSample(
+                            ReadBridgeSample(
                                 m_pDmaBuffer + bufferOffset +
                                     (consumedFrames + frame) * frameBytes +
                                     channel * bytesPerSample,
-                                static_cast<USHORT>(
-                                    m_pWfExt->Format.wBitsPerSample));
+                                m_pWfExt);
                     }
                 }
                 m_BridgeScratchFrames += copyFrames;

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "cables": [
+    { "index": 0, "letter": "A" },
+    { "index": 1, "letter": "B" },
+    { "index": 2, "letter": "C" },
+    { "index": 3, "letter": "D" },
+    { "index": 4, "letter": "E" },
+    { "index": 5, "letter": "F" },
+    { "index": 6, "letter": "G" },
+    { "index": 7, "letter": "H" }
+  ]
+}

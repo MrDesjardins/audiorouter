@@ -331,6 +331,41 @@ VM Verifier/fuzz/second-user checks remain pending and block WP completion.
 
 ## WP-05 — Eight cables, registry configuration, formats, timing, sample cleanup (17 §5.1, §5.4, §5.5, VCAB-01/02/10–12)
 
+WP-05 execution record (2026-10-05): objective is 16 stable Cable A–H
+render/capture endpoints with a registry-selected first N enabled, exact
+format conversion, bounded timing and sample-state cleanup. Requirements:
+VCAB-01/02/10/11/12, VDEV-01/03/04/05, NFR-16. Use WP-00 proposed D2/D3/D4/D6
+defaults unless the user changes them; D5 format family is recorded, with the
+user's PCM32 ≤1 LSB decision requiring a float64 bridge/internal representation
+and no silent narrowing. Prerequisites/evidence: Windows x64 and ARM64 WDK
+build acceptance available; WP-03/04 VM load, endpoint, Verifier and audio
+evidence remain pending and are not inferred from builds. Steps: (1) add pure
+host-tested format/conversion and cable-list/registry-bound helpers; (2) define
+the stable endpoint/bus/direction map and generate INF names/interfaces from
+one canonical list; (3) add CableCount registry read with default/range clamp
+and install only first N pairs; (4) replace sample topologies/formats and
+remove sample-only paths; (5) integrate double-precision bridge conversion,
+QPC position and period constraints where supported; (6) run unit tests, INF
+validation and x64/ARM64 builds; fresh-review diff and preserve VM/audio gates.
+Validation matrix: host helper tests cover all format edges and counts 1/2/8,
+INF generator determinism and InfVerif, WDK builds both architectures; VM A3/
+A9, 2→8→2 stable IDs, all rate/channel/format inventory, 1-hour QPC drift,
+and sound-quality harness remain pending. Rollback: revert only WP-05 paths;
+never install/load on the host. Evidence path:
+`docs/plans/active/evidence/2026-10-05-virtual-cable-wp05.md`.
+
+Host progress update (2026-10-05): canonical cable list/INF generation,
+CableCount default/range read, first-N installation loops, 8-pair enum and
+double bridge conversion helpers are implemented. The cable pairs now use
+direct render/capture WaveRT tables for all 60 rate/channel/encoding
+combinations and minimal speaker/line-in topologies without microphone-array
+properties or inserted volume/mute processing. INF generator, 132 host
+bridge/conversion/format checks, x64 and ARM64 WDK acceptance, and VM-only
+fuzzer build pass. This is not a driver-ready state: QPC/timer and remaining
+sample-code cleanup, WP-06 16-lease Rust compatibility, and VM gates are still
+outstanding. The intermediate package remains prohibited from loading. See
+the evidence record for exact commands and limitations.
+
 - **Who:** agent on the host; user runs VM checks.
 - **Files:** `Source/Filters/minipairs.h`, new
   `Source/Filters/cablewavtable.h` and `cabletopo*.{h,cpp}` (replacing
@@ -376,7 +411,7 @@ VM Verifier/fuzz/second-user checks remain pending and block WP completion.
   registry; IDs stable across count changes and renames; all formats open in
   shared mode; low-latency period available; uninstall clean.
 - **Rollback:** revert.
-- **Status:** not started.
+- **Status:** in progress 2026-10-05 (host implementation; VM remains gated by WP-03/04).
 
 ## WP-06 — Bridge protocol 1.1, counters, Rust client (17 §5.2)
 
@@ -623,7 +658,9 @@ published app keeps the VB-Cable workflow. Reverting DEC-18 restores DEC-16.
 
 ## Next action
 
-Finish fresh-context WP-04 review, then run its VM gates (30-minute Driver
-Verifier fuzzer and A11 second-user denial) after VM/checkpoint setup. WP-03
-A1/A2/A3/A14 checkpoint runs are also pending. WP-00 D2–D4/D6 remain open;
-apply any changed answers before dependent implementation.
+Finish WP-05 QPC-derived position, period/notification timer constraints, and
+stream scratch-state cleanup; then remove the unused sample tone/file-writing
+path and registry settings with regression/build checks. Continue WP-06 host
+work for the 16-directional-lease protocol and Rust float64 client before any
+VM load. WP-03 install/remove and WP-04 Driver Verifier/fuzz/second-user VM
+gates remain pending; do not call a host build a runtime or quality pass.

@@ -19,15 +19,66 @@ $build = Join-Path $workspace 'drivers/audiorouter-virtual/build.ps1'
 $manage = Join-Path $workspace 'drivers/audiorouter-virtual/manage.ps1'
 $powershellExe = Join-Path $env:WINDIR 'System32/WindowsPowerShell/v1.0/powershell.exe'
 $adapter = Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/adapter.cpp'
+$miniPairs = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Filters/minipairs.h') -Raw
+$waveTable = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Filters/cablewavtable.h') -Raw
+$topologyTable = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Filters/cabletopotable.h') -Raw
 $infSource = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/AudioRouterVirtual.inx') -Raw
 foreach ($required in @(
-        'AUDIOROUTERVIRTUAL.WaveSpeaker.szPname="AudioRouter - Desktop In"',
-        'AUDIOROUTERVIRTUAL.WaveMicArray1.szPname="AudioRouter - Voice Chat"',
-        'SWD\AudioRouterVirtual')) {
+        'AUDIOROUTERVIRTUAL.WaveCableARender.szPname="AudioRouter Cable A Input"',
+        'AUDIOROUTERVIRTUAL.WaveCableACapture.szPname="AudioRouter Cable A Output"',
+        'AUDIOROUTERVIRTUAL.WaveCableHCapture.szPname="AudioRouter Cable H Output"',
+        'HKR,,CableCount,0x00010001,2',
+        'ROOT\AudioRouterVirtual')) {
     if (-not $infSource.Contains($required)) {
         throw "driver endpoint identity contract is missing: $required"
     }
 }
+if ($infSource.Contains('SWD\AudioRouterVirtual') -or
+    ([regex]::Matches($infSource, '(?m)^AddInterface=')).Count -ne 80) {
+    throw 'driver INF must contain only the root device and all 80 interfaces for eight cable pairs'
+}
+foreach ($required in @(
+        'CableRenderWaveFilterDescriptor',
+        'CableCaptureWaveFilterDescriptor',
+        'CableRenderTopologyFilterDescriptor',
+        'CableCaptureTopologyFilterDescriptor',
+        'eCableHRender, eCableHCapture',
+        '&CableHRenderMiniports',
+        '&CableHCaptureMiniports')) {
+    if (-not $miniPairs.Contains($required)) {
+        throw "cable-specific endpoint pair wiring is missing: $required"
+    }
+}
+if ($miniPairs.Contains('SpeakerWaveMiniportFilterDescriptor') -or
+    $miniPairs.Contains('MicArrayWaveMiniportFilterDescriptor') -or
+    $miniPairs.Contains('MicArray1TopoMiniportFilterDescriptor')) {
+    throw 'cable pairs must not retain the sample wave/microphone-array descriptors'
+}
+foreach ($required in @(
+        'AR_CHANNEL_FORMATS(1, KSAUDIO_SPEAKER_MONO)',
+        'AR_CHANNEL_FORMATS(2, KSAUDIO_SPEAKER_STEREO)',
+        'AR_CHANNEL_FORMATS(4, KSAUDIO_SPEAKER_QUAD)',
+        'AR_CHANNEL_FORMATS(6, KSAUDIO_SPEAKER_5POINT1)',
+        'AR_CHANNEL_FORMATS(8, KSAUDIO_SPEAKER_7POINT1)',
+        'AR_RATE_FORMATS(ch, mask, 44100)',
+        'AR_RATE_FORMATS(ch, mask, 48000)',
+        'AR_RATE_FORMATS(ch, mask, 96000)',
+        'AR_WFX_PCM(ch, rate, 16, 16, mask)',
+        'AR_WFX_PCM(ch, rate, 32, 24, mask)',
+        'AR_WFX_PCM(ch, rate, 32, 32, mask)',
+        'AR_WFX_FLOAT(ch, rate, mask)',
+        '&CableSupportedFormats[19].DataFormat')) {
+    if (-not $waveTable.Contains($required)) {
+        throw "required cable format inventory is missing: $required"
+    }
+}
+if ($topologyTable.Contains('KSNODETYPE_MICROPHONE_ARRAY') -or
+    $topologyTable.Contains('KSNODETYPE_VOLUME') -or
+    $topologyTable.Contains('KSNODETYPE_MUTE')) {
+    throw 'cable topologies must have no microphone-array or inserted processing nodes'
+}
+$infGenerator = Join-Path $workspace 'tools/m03-inf-gen/generate.ps1'
+& $infGenerator -Check
 $buildScript = Get-Content -LiteralPath $build -Raw
 $manageScript = Get-Content -LiteralPath $manage -Raw
 foreach ($required in @(
@@ -379,13 +430,14 @@ if ($publishHelper.Contains('KeAcquireSpinLock')) {
 $stream = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/minwavertstream.cpp') -Raw
 foreach ($required in @(
         'IsBridgePcmFormat',
-        'ReadBridgePcmSample',
-        'WriteBridgePcmSample',
+        'ReadBridgeSample',
+        'WriteBridgeSample',
         'KSDATAFORMAT_SUBTYPE_PCM',
-        'Format->Format.wBitsPerSample == 16',
-        'Format->Format.wBitsPerSample == 32',
-        'WriteBridgePcmSample(',
-        'ReadBridgePcmSample(')) {
+        'KSDATAFORMAT_SUBTYPE_IEEE_FLOAT',
+        'Format->Samples.wValidBitsPerSample == 24',
+        'AudioRouterDoubleToPcm32',
+        'WriteBridgeSample(',
+        'ReadBridgeSample(')) {
     if (-not $stream.Contains($required)) {
         throw "WaveRT bridge PCM conversion guard is missing: $required"
     }

@@ -18,7 +18,7 @@ namespace {
 constexpr DWORD kOpen = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA);
 constexpr DWORD kClose = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x801, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA);
 constexpr DWORD kHeartbeat = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x802, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA);
-constexpr DWORD kBytes = 32 + 128 * 2 * sizeof(float);
+constexpr DWORD kBytes = 32 + 128 * 2 * sizeof(double);
 constexpr DWORD kShortSectionBytes = 64;
 
 #pragma pack(push, 8)

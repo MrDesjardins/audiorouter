@@ -36,9 +36,9 @@ extern "C" NTKERNELAPI NTSTATUS IoGetRequestorSessionId(_In_ PIRP Irp, _Out_ PUL
 
 
 #define AR_BRIDGE_PROTOCOL_MAJOR 1
-#define AR_BRIDGE_PROTOCOL_MINOR 0
+#define AR_BRIDGE_PROTOCOL_MINOR 1
 #define AR_BRIDGE_MAX_BUS_ID_BYTES 128
-#define AR_BRIDGE_MAX_CHANNELS 2
+#define AR_BRIDGE_MAX_CHANNELS 8
 #define AR_BRIDGE_MAX_FRAMES 4096
 #define AR_BRIDGE_MAX_LEASE_MS 60000
 #define AR_BRIDGE_DIRECTION_RENDER_SOURCE 1
@@ -48,12 +48,12 @@ extern "C" NTKERNELAPI NTSTATUS IoGetRequestorSessionId(_In_ PIRP Irp, _Out_ PUL
 #define AR_BRIDGE_HEADER_OFFSET 8
 #define AR_BRIDGE_PAYLOAD_OFFSET 32
 #define AR_BRIDGE_MAX_PAYLOAD_BYTES \
-    (AR_BRIDGE_MAX_CHANNELS * AR_BRIDGE_MAX_FRAMES * sizeof(float))
+    (AR_BRIDGE_MAX_CHANNELS * AR_BRIDGE_MAX_FRAMES * sizeof(DOUBLE))
 
 NTSTATUS AudioRouterCopyLeaseBlockForDirection(
     _In_ USHORT Direction,
     _In_ ULONGLONG MinimumSequence,
-    _Out_writes_(DestinationCapacitySamples) FLOAT* Destination,
+    _Out_writes_(DestinationCapacitySamples) DOUBLE* Destination,
     _In_ SIZE_T DestinationCapacitySamples,
     _Out_ struct _AR_BRIDGE_BLOCK_HEADER* Header);
 
@@ -61,7 +61,7 @@ NTSTATUS AudioRouterPublishLeaseBlockForDirection(
     _In_ USHORT Direction,
     _In_ USHORT Frames,
     _In_ USHORT Channels,
-    _In_reads_(SampleCapacity) const FLOAT* Samples,
+    _In_reads_(SampleCapacity) const DOUBLE* Samples,
     _In_ SIZE_T SampleCapacity);
 
 NTSTATUS AudioRouterGetLeaseShapeForDirection(
@@ -131,7 +131,7 @@ C_ASSERT(sizeof(AR_BRIDGE_BLOCK_HEADER) == 24);
 __forceinline NTSTATUS AudioRouterValidateMappingBytes(const AR_BRIDGE_OPEN_REQUEST* Request)
 {
     SIZE_T required = AR_BRIDGE_HEADER_BYTES + static_cast<SIZE_T>(Request->Channels) *
-        Request->FramesPerQuantum * sizeof(FLOAT);
+        Request->FramesPerQuantum * sizeof(DOUBLE);
     return Request->MappingBytes == required ? STATUS_SUCCESS : STATUS_BUFFER_TOO_SMALL;
 }
 
@@ -181,7 +181,7 @@ AudioRouterValidateBridgeBlock(
         return STATUS_INVALID_PARAMETER;
     }
     SIZE_T payloadBytes = static_cast<SIZE_T>(Header->Frames) *
-        static_cast<SIZE_T>(Header->Channels) * sizeof(float);
+        static_cast<SIZE_T>(Header->Channels) * sizeof(DOUBLE);
     if (payloadBytes > AR_BRIDGE_MAX_PAYLOAD_BYTES ||
         Header->PayloadBytes != payloadBytes ||
         ViewBytes < AR_BRIDGE_PAYLOAD_OFFSET + payloadBytes) {
@@ -201,7 +201,7 @@ AudioRouterCopyBridgeBlock(
     _In_ SIZE_T ViewBytes,
     _In_ ULONGLONG ExpectedGeneration,
     _In_ ULONGLONG MinimumSequence,
-    _Out_writes_(DestinationCapacitySamples) FLOAT* Destination,
+    _Out_writes_(DestinationCapacitySamples) DOUBLE* Destination,
     _In_ SIZE_T DestinationCapacitySamples,
     _Out_ AR_BRIDGE_BLOCK_HEADER* Header
 )
@@ -237,13 +237,13 @@ AudioRouterCopyBridgeBlock(
     // a hostile writer to swap in NaN/Inf before the later copy. On rejection
     // wipe this bounded quantum so partially refreshed private audio is not used.
     for (SIZE_T index = 0; index < sampleCount; ++index) {
-        FLOAT sample = *reinterpret_cast<const volatile FLOAT*>(
-            View + AR_BRIDGE_PAYLOAD_OFFSET + index * sizeof(FLOAT));
+        DOUBLE sample = *reinterpret_cast<const volatile DOUBLE*>(
+            View + AR_BRIDGE_PAYLOAD_OFFSET + index * sizeof(DOUBLE));
         // NaN is unequal to itself; the finite bounds reject both infinities
         // without depending on CRT floating-point helpers in kernel mode.
-        if (sample != sample || sample > 3.402823466e+38F ||
-            sample < -3.402823466e+38F) {
-            RtlZeroMemory(Destination, sampleCount * sizeof(FLOAT));
+        if (sample != sample || sample > 1.7976931348623157e+308 ||
+            sample < -1.7976931348623157e+308) {
+            RtlZeroMemory(Destination, sampleCount * sizeof(DOUBLE));
             return STATUS_DATA_ERROR;
         }
         Destination[index] = sample;
@@ -263,7 +263,10 @@ AudioRouterValidateBridgeOpenRequest(
     if (Request == NULL) {
         return STATUS_INVALID_PARAMETER;
     }
-    if (Request->ProtocolMajor != AR_BRIDGE_PROTOCOL_MAJOR || Request->ProtocolMinor > AR_BRIDGE_PROTOCOL_MINOR) {
+    // The float64 payload changes the mapping interpretation, so a 1.0
+    // client cannot safely use this layout despite sharing the major number.
+    if (Request->ProtocolMajor != AR_BRIDGE_PROTOCOL_MAJOR ||
+        Request->ProtocolMinor != AR_BRIDGE_PROTOCOL_MINOR) {
         return STATUS_REVISION_MISMATCH;
     }
     if (Request->BusIdBytes == 0 ||

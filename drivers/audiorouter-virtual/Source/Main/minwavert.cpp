@@ -18,7 +18,6 @@ Abstract:
 #include "endpoints.h"
 #include "minwavert.h"
 #include "minwavertstream.h"
-#include "micarraywavtable.h"
 
 #define EFFECTS_LIST_COUNT 2
 
@@ -211,6 +210,7 @@ Arguments:
 --*/
 {
     UNREFERENCED_PARAMETER(PinId);
+    UNREFERENCED_PARAMETER(ResultantFormat);
 
     ULONG                   requiredSize;
 
@@ -221,11 +221,7 @@ Arguments:
         return STATUS_NOT_IMPLEMENTED;
     }
 
-    //If called for the mic array pin, set ResultantFormat to be the endpoint's only supported format.
-    //Otherwise, allow the class handler to set ResultantFormat.
-    if ((this->m_DeviceType) == eMicArrayDevice1)
-    {
-        requiredSize = sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE);
+    requiredSize = sizeof(KSDATAFORMAT_WAVEFORMATEX);
 
         //
         // Validate return buffer size, if the request is only for the
@@ -242,36 +238,10 @@ Arguments:
             return STATUS_BUFFER_TOO_SMALL;
         }
 
-        //Set ResultantFormat to be the only supported format for the MicArray endpoint.
-        PKSDATAFORMAT_WAVEFORMATEXTENSIBLE resultantFormat;
-        resultantFormat = (PKSDATAFORMAT_WAVEFORMATEXTENSIBLE)ResultantFormat;
-        *resultantFormat = *MicArrayPinSupportedDeviceFormats;
-        *ResultantFormatLength = requiredSize;
-
-        return STATUS_SUCCESS;
-    }
-    else
-    {
-        requiredSize = sizeof(KSDATAFORMAT_WAVEFORMATEX);
-
-        //
-        // Validate return buffer size, if the request is only for the
-        // size of the resultant structure, return it now before
-        // returning other types of errors.
-        //
-        if (!OutputBufferLength)
-        {
-            *ResultantFormatLength = requiredSize;
-            return STATUS_BUFFER_OVERFLOW;
-        }
-        else if (OutputBufferLength < requiredSize)
-        {
-            return STATUS_BUFFER_TOO_SMALL;
-        }
-
-        // Verify channel count is supported. This routine assumes a separate data
-        // range for each supported channel count.
-        if (((PKSDATARANGE_AUDIO)MyDataRange)->MaximumChannels != ((PKSDATARANGE_AUDIO)ClientDataRange)->MaximumChannels)
+        // Every supported channel count has an explicit range entry. The
+        // generic PortCls intersection handles the exact rate/subformat.
+        if (((PKSDATARANGE_AUDIO)MyDataRange)->MaximumChannels !=
+            ((PKSDATARANGE_AUDIO)ClientDataRange)->MaximumChannels)
         {
             return STATUS_NO_MATCH;
         }
@@ -280,7 +250,6 @@ Arguments:
         // Ok, let the class handler do the rest.
         //
         return STATUS_NOT_IMPLEMENTED;
-    }
 
 } // DataRangeIntersection
 
@@ -310,7 +279,6 @@ Return Value:
 --*/
 {
     PAGED_CODE();
-
     ASSERT(OutFilterDescriptor);
 
     *OutFilterDescriptor = &m_FilterDesc;

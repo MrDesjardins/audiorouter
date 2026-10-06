@@ -1,0 +1,86 @@
+[CmdletBinding()]
+param(
+    [string] $InputInf,
+    [string] $CableList,
+    [string] $OutputInf,
+    [switch] $Check
+)
+$ErrorActionPreference = 'Stop'
+$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+if (-not $InputInf) { $InputInf = Join-Path $scriptRoot '../../drivers/audiorouter-virtual/Source/Main/AudioRouterVirtual.inx' }
+if (-not $CableList) { $CableList = Join-Path $scriptRoot 'cables.json' }
+
+$cableData = Get-Content -LiteralPath $CableList -Raw | ConvertFrom-Json
+if ($cableData.schemaVersion -ne 1 -or $cableData.cables.Count -ne 8) {
+    throw 'Cable list must contain exactly eight entries and schemaVersion 1.'
+}
+for ($index = 0; $index -lt 8; $index++) {
+    if ($cableData.cables[$index].index -ne $index -or
+        $cableData.cables[$index].letter -cne [string][char](65 + $index)) {
+        throw "Cable list must be contiguous A-H at index $index."
+    }
+}
+
+$inf = Get-Content -LiteralPath $InputInf -Raw
+$interfaceLines = [System.Collections.Generic.List[string]]::new()
+$registrySections = [System.Collections.Generic.List[string]]::new()
+$stringLines = [System.Collections.Generic.List[string]]::new()
+foreach ($cable in $cableData.cables) {
+    $letter = $cable.letter
+    foreach ($role in @('Render', 'Capture')) {
+        $suffix = if ($role -eq 'Render') { 'Input' } else { 'Output' }
+        $wave = "WaveCable${letter}${role}"
+        $topology = "TopologyCable${letter}${role}"
+        $waveSection = "AUDIOROUTERVIRTUAL.I.$wave"
+        $topologySection = "AUDIOROUTERVIRTUAL.I.$topology"
+        $friendly = "AudioRouter Cable $letter $suffix"
+        $waveString = "AUDIOROUTERVIRTUAL.$wave.szPname"
+        $topologyString = "AUDIOROUTERVIRTUAL.$topology.szPname"
+        $interfaceLines.Add("AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_$wave%, $waveSection")
+        $interfaceLines.Add("AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_$wave%, $waveSection")
+        $category = if ($role -eq 'Render') { 'KSCATEGORY_RENDER' } else { 'KSCATEGORY_CAPTURE' }
+        $interfaceLines.Add("AddInterface=%$category%, %KSNAME_$wave%, $waveSection")
+        $interfaceLines.Add("AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_$topology%, $topologySection")
+        $interfaceLines.Add("AddInterface=%KSCATEGORY_TOPOLOGY%, %KSNAME_$topology%, $topologySection")
+        foreach ($entry in @(@($wave, $waveSection, $waveString), @($topology, $topologySection, $topologyString))) {
+            $nameString = $entry[2]
+            $section = $entry[1]
+            $name = $entry[0]
+            $registrySections.Add("[$section]")
+            $registrySections.Add("AddReg=$section.AddReg")
+            $registrySections.Add("[$section.AddReg]")
+            $registrySections.Add('HKR,,CLSID,,%Proxy.CLSID%')
+            $registrySections.Add("HKR,,FriendlyName,,%$nameString%")
+            $registrySections.Add('HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%')
+            $registrySections.Add('HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1')
+            $stringLines.Add("KSNAME_$name=`"$name`"")
+            $stringLines.Add("$nameString=`"$friendly`"")
+        }
+    }
+}
+
+function Replace-MarkedRegion([string] $Source, [string] $Start, [string] $End, [string[]] $Body) {
+    $startAt = $Source.IndexOf($Start, [StringComparison]::Ordinal)
+    $endAt = $Source.IndexOf($End, [StringComparison]::Ordinal)
+    if ($startAt -lt 0 -or $endAt -le $startAt) { throw "Missing or reversed generated region markers: $Start / $End" }
+    $bodyStart = $startAt + $Start.Length
+    $replacement = "`r`n" + ($Body -join "`r`n") + "`r`n"
+    return $Source.Substring(0, $bodyStart) + $replacement + $Source.Substring($endAt)
+}
+
+$inf = Replace-MarkedRegion $inf '; BEGIN GENERATED CABLE REGISTRY SECTIONS' '; END GENERATED CABLE REGISTRY SECTIONS' $registrySections.ToArray()
+$inf = Replace-MarkedRegion $inf '; BEGIN GENERATED CABLE INTERFACES' '; END GENERATED CABLE INTERFACES' $interfaceLines.ToArray()
+$inf = Replace-MarkedRegion $inf '; BEGIN GENERATED CABLE STRINGS' '; END GENERATED CABLE STRINGS' $stringLines.ToArray()
+
+if ($Check) {
+    $actual = [IO.File]::ReadAllText((Resolve-Path $InputInf).Path)
+    if ($actual -cne $inf) { throw 'INF is stale. Regenerate a preview, inspect it, then update the source.' }
+    Write-Output 'Cable INF sections are current and deterministic.'
+} elseif ($OutputInf) {
+    $directory = Split-Path -Parent $OutputInf
+    if ($directory) { New-Item -ItemType Directory -Path $directory -Force | Out-Null }
+    [IO.File]::WriteAllText($OutputInf, $inf, [Text.UTF8Encoding]::new($false))
+    Write-Output "Generated INF preview: $OutputInf"
+} else {
+    throw 'Specify -OutputInf for a preview or -Check to verify the checked-in INF.'
+}

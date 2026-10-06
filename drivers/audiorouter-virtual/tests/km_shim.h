@@ -5,11 +5,14 @@
 using NTSTATUS = std::int32_t;
 using UCHAR = unsigned char;
 using USHORT = std::uint16_t;
+using SHORT = std::int16_t;
 using ULONG = std::uint32_t;
+using LONG = std::int32_t;
 using ULONGLONG = std::uint64_t;
 using SIZE_T = std::size_t;
 using WCHAR = wchar_t;
 using FLOAT = float;
+using DOUBLE = double;
 #ifndef _In_
 #define _In_
 #define _Out_

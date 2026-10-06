@@ -85,10 +85,13 @@ function Assert-AudioRouterInf {
         throw "The driver INF exceeds the 256 KiB lifecycle validation limit: $($item.FullName)"
     }
     $content = [IO.File]::ReadAllText($item.FullName)
-    foreach ($required in @('SWD\AudioRouterVirtual', 'AudioRouterVirtual.sys')) {
+    foreach ($required in @('ROOT\AudioRouterVirtual', 'AudioRouterVirtual.sys')) {
         if ($content.IndexOf($required, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
             throw "The driver INF is not an AudioRouter package: missing $required"
         }
+    }
+    if ($content -match 'SWD\\AudioRouterVirtual') {
+        throw 'The driver INF must use only the owned ROOT device, not a software-device instance.'
     }
 }
 
