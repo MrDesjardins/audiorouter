@@ -7965,6 +7965,37 @@ pub enum NativeBridgeRegionError {
     Contract(audiorouter_protocol::AudioBridgeContractError),
 }
 
+/// The 24-byte v1.1 block header used by the kernel bridge. Payload length is
+/// measured in 64-bit samples; the older internal AudioBridge header remains
+/// a separate 32-bit contract.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct NativeBridgeFloat64BlockHeader {
+    pub generation: u64,
+    pub sequence: u64,
+    pub frames: u16,
+    pub channels: u16,
+    pub payload_bytes: u32,
+}
+
+impl NativeBridgeFloat64BlockHeader {
+    fn validate(&self) -> Result<(), NativeBridgeRegionError> {
+        if self.generation == 0 || self.sequence == 0 ||
+            !(1..=audiorouter_protocol::MAX_AUDIO_BRIDGE_CHANNELS).contains(&self.channels) ||
+            !(1..=audiorouter_protocol::MAX_AUDIO_BRIDGE_FRAMES).contains(&self.frames) {
+            return Err(NativeBridgeRegionError::InvalidFrame);
+        }
+        let expected = usize::from(self.frames)
+            .checked_mul(usize::from(self.channels))
+            .and_then(|samples| samples.checked_mul(std::mem::size_of::<f64>()))
+            .ok_or(NativeBridgeRegionError::InvalidFrame)?;
+        if expected > audiorouter_protocol::MAX_AUDIO_BRIDGE_PAYLOAD_BYTES * 2 ||
+            usize::try_from(self.payload_bytes).ok() != Some(expected) {
+            return Err(NativeBridgeRegionError::BufferTooSmall);
+        }
+        Ok(())
+    }
+}
+
 #[cfg(windows)]
 fn bridge_path_is_reparse_point(metadata: &std::fs::Metadata) -> bool {
     use std::os::windows::fs::MetadataExt;
@@ -7978,7 +8009,7 @@ fn bridge_path_is_reparse_point(metadata: &std::fs::Metadata) -> bool {
     metadata.file_type().is_symlink()
 }
 
-/// One bounded, file-backed shared-memory slot for the future driver broker.
+/// One bounded, file-backed float64 shared-memory slot for the driver broker.
 /// The file path is supplied by the authorized broker and is never chosen from
 /// a display label. The mapping is control/broker-side; realtime callers should
 /// receive a prevalidated handle and use only nonblocking slot operations.
@@ -8076,28 +8107,51 @@ impl NativeBridgeRegion {
         sequence: u64,
         samples: &[f32],
     ) -> Result<(), NativeBridgeRegionError> {
-        if samples.is_empty() || samples.len() % usize::from(self.channels) != 0 {
+        self.write_with(generation, sequence, samples.len(), |index| {
+            f64::from(samples[index])
+        })
+    }
+
+    /// Publish float64 samples without narrowing them through the legacy
+    /// engine's float32 block type.
+    pub fn write_f64(
+        &self,
+        generation: u64,
+        sequence: u64,
+        samples: &[f64],
+    ) -> Result<(), NativeBridgeRegionError> {
+        self.write_with(generation, sequence, samples.len(), |index| samples[index])
+    }
+
+    fn write_with(
+        &self,
+        generation: u64,
+        sequence: u64,
+        sample_count: usize,
+        sample_at: impl Fn(usize) -> f64,
+    ) -> Result<(), NativeBridgeRegionError> {
+        if sample_count == 0 || sample_count % usize::from(self.channels) != 0 {
             return Err(NativeBridgeRegionError::InvalidFrame);
         }
-        let frames = samples.len() / usize::from(self.channels);
+        let frames = sample_count / usize::from(self.channels);
         if frames > usize::from(self.max_frames) {
             return Err(NativeBridgeRegionError::InvalidFrame);
         }
-        let payload_bytes = samples
-            .len()
-            .checked_mul(std::mem::size_of::<f32>())
+        let payload_bytes = sample_count
+            .checked_mul(std::mem::size_of::<f64>())
             .and_then(|length| u32::try_from(length).ok())
             .ok_or(NativeBridgeRegionError::InvalidFrame)?;
-        let header = audiorouter_protocol::AudioBridgeBlockHeader {
+        let header = NativeBridgeFloat64BlockHeader {
             generation,
             sequence,
             frames: frames as u16,
             channels: self.channels,
             payload_bytes,
         };
-        header
-            .validate()
-            .map_err(NativeBridgeRegionError::Contract)?;
+        header.validate()?;
+        if (0..sample_count).any(|index| !sample_at(index).is_finite()) {
+            return Err(NativeBridgeRegionError::InvalidFrame);
+        }
         let state = self.state() as *const std::sync::atomic::AtomicU64;
         // SAFETY: `state` points into this region's live, aligned mapping and
         // remains valid for the duration of the write operation.
@@ -8148,9 +8202,9 @@ impl NativeBridgeRegion {
             .copy_from_slice(&header.channels.to_le_bytes());
         map[BRIDGE_HEADER_OFFSET + 20..BRIDGE_HEADER_OFFSET + 24]
             .copy_from_slice(&header.payload_bytes.to_le_bytes());
-        for (index, sample) in samples.iter().enumerate() {
-            let offset = BRIDGE_PAYLOAD_OFFSET + index * 4;
-            map[offset..offset + 4].copy_from_slice(&sample.to_le_bytes());
+        for index in 0..sample_count {
+            let offset = BRIDGE_PAYLOAD_OFFSET + index * 8;
+            map[offset..offset + 8].copy_from_slice(&sample_at(index).to_le_bytes());
         }
         // SAFETY: the mapping remains owned by `self` until after this store.
         unsafe {
@@ -8178,6 +8232,45 @@ impl NativeBridgeRegion {
         minimum_sequence: u64,
         samples: &mut [f32],
     ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeRegionError> {
+        let header = self.read_into_after_with(expected_generation, minimum_sequence, samples, |v| {
+            let narrowed = v as f32;
+            narrowed.is_finite().then_some(narrowed)
+        })?;
+        Ok(audiorouter_protocol::AudioBridgeBlockHeader {
+            generation: header.generation,
+            sequence: header.sequence,
+            frames: header.frames,
+            channels: header.channels,
+            payload_bytes: u32::from(header.frames)
+                * u32::from(header.channels)
+                * std::mem::size_of::<f32>() as u32,
+        })
+    }
+
+    pub fn read_into_f64(
+        &self,
+        expected_generation: u64,
+        samples: &mut [f64],
+    ) -> Result<NativeBridgeFloat64BlockHeader, NativeBridgeRegionError> {
+        self.read_into_f64_after(expected_generation, 0, samples)
+    }
+
+    pub fn read_into_f64_after(
+        &self,
+        expected_generation: u64,
+        minimum_sequence: u64,
+        samples: &mut [f64],
+    ) -> Result<NativeBridgeFloat64BlockHeader, NativeBridgeRegionError> {
+        self.read_into_after_with(expected_generation, minimum_sequence, samples, Some)
+    }
+
+    fn read_into_after_with<T: Copy + Default>(
+        &self,
+        expected_generation: u64,
+        minimum_sequence: u64,
+        samples: &mut [T],
+        convert: impl Fn(f64) -> Option<T>,
+    ) -> Result<NativeBridgeFloat64BlockHeader, NativeBridgeRegionError> {
         let state = self.state();
         let before = state.load(std::sync::atomic::Ordering::Acquire);
         if before == 0 {
@@ -8187,9 +8280,7 @@ impl NativeBridgeRegion {
             return Err(NativeBridgeRegionError::Busy);
         }
         let header = self.header();
-        header
-            .validate()
-            .map_err(NativeBridgeRegionError::Contract)?;
+        header.validate()?;
         if header.generation != expected_generation {
             return Err(NativeBridgeRegionError::StaleGeneration);
         }
@@ -8200,21 +8291,19 @@ impl NativeBridgeRegion {
         if samples.len() < sample_count {
             return Err(NativeBridgeRegionError::BufferTooSmall);
         }
-        // Validate every sample before mutating the caller-owned destination.
-        // A malformed block must fail closed as a whole, rather than leaving
-        // a partially refreshed quantum for a caller that handles the error
-        // without first clearing its buffer.
+        // Copy each shared sample once. On malformed or torn input, clear the
+        // destination slice so callers cannot accidentally retain a prefix.
         for index in 0..sample_count {
-            let offset = BRIDGE_PAYLOAD_OFFSET + index * 4;
-            if !f32::from_le_bytes(self.map[offset..offset + 4].try_into().unwrap()).is_finite() {
+            let offset = BRIDGE_PAYLOAD_OFFSET + index * 8;
+            let value = f64::from_le_bytes(self.map[offset..offset + 8].try_into().unwrap());
+            let Some(converted) = value.is_finite().then(|| convert(value)).flatten() else {
+                samples[..sample_count].fill(T::default());
                 return Err(NativeBridgeRegionError::InvalidFrame);
-            }
-        }
-        for (index, destination) in samples[..sample_count].iter_mut().enumerate() {
-            let offset = BRIDGE_PAYLOAD_OFFSET + index * 4;
-            *destination = f32::from_le_bytes(self.map[offset..offset + 4].try_into().unwrap());
+            };
+            samples[index] = converted;
         }
         if state.load(std::sync::atomic::Ordering::Acquire) != before {
+            samples[..sample_count].fill(T::default());
             return Err(NativeBridgeRegionError::TornRead);
         }
         Ok(header)
@@ -8255,7 +8344,7 @@ impl NativeBridgeRegion {
 
     fn buffer_len(channels: u16, max_frames: u16) -> usize {
         BRIDGE_PAYLOAD_OFFSET
-            + usize::from(channels) * usize::from(max_frames) * std::mem::size_of::<f32>()
+            + usize::from(channels) * usize::from(max_frames) * std::mem::size_of::<f64>()
     }
 
     fn state(&self) -> &std::sync::atomic::AtomicU64 {
@@ -8266,8 +8355,8 @@ impl NativeBridgeRegion {
         }
     }
 
-    fn header(&self) -> audiorouter_protocol::AudioBridgeBlockHeader {
-        audiorouter_protocol::AudioBridgeBlockHeader {
+    fn header(&self) -> NativeBridgeFloat64BlockHeader {
+        NativeBridgeFloat64BlockHeader {
             generation: u64::from_le_bytes(
                 self.map[BRIDGE_HEADER_OFFSET..BRIDGE_HEADER_OFFSET + 8]
                     .try_into()
@@ -8310,9 +8399,7 @@ impl NativeBridgeRegion {
             return Err(NativeBridgeRegionError::Busy);
         }
         let header = self.header();
-        header
-            .validate()
-            .map_err(NativeBridgeRegionError::Contract)?;
+        header.validate()?;
         if header.generation != expected_generation {
             return Err(NativeBridgeRegionError::StaleGeneration);
         }
@@ -8431,7 +8518,9 @@ pub enum NativeBridgeSessionError {
     WrongDirection,
 }
 
-/// Negotiated owner of one native bridge slot.
+/// Negotiated owner of one native bridge slot. The driver mapping carries
+/// float64 samples; the legacy f32 methods widen/narrow at this API boundary.
+/// Precision-sensitive routes should use the f64 methods and float64 engine.
 ///
 /// The session keeps the protocol identity next to the mapped region so a
 /// caller cannot accidentally write a valid block for another bus or graph
@@ -8518,6 +8607,19 @@ impl NativeBridgeSession {
         self.write_at(std::time::Instant::now(), samples)
     }
 
+    pub fn write_f64(&mut self, samples: &[f64]) -> Result<u64, NativeBridgeSessionError> {
+        if self.hello.direction != audiorouter_protocol::AudioBridgeDirection::CaptureSink {
+            return Err(NativeBridgeSessionError::WrongDirection);
+        }
+        self.ensure_lease_at(std::time::Instant::now())?;
+        let sequence = self.next_sequence.checked_add(1)
+            .ok_or(NativeBridgeSessionError::SequenceExhausted)?;
+        self.region.write_f64(self.hello.generation, sequence, samples)
+            .map_err(NativeBridgeSessionError::Region)?;
+        self.next_sequence = sequence;
+        Ok(sequence)
+    }
+
     fn write_at(
         &mut self,
         now: std::time::Instant,
@@ -8553,6 +8655,26 @@ impl NativeBridgeSession {
         samples: &mut [f32],
     ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeSessionError> {
         self.read_into_at(std::time::Instant::now(), minimum_sequence, samples)
+    }
+
+    pub fn read_into_f64(
+        &self,
+        samples: &mut [f64],
+    ) -> Result<NativeBridgeFloat64BlockHeader, NativeBridgeSessionError> {
+        self.read_into_f64_after(0, samples)
+    }
+
+    pub fn read_into_f64_after(
+        &self,
+        minimum_sequence: u64,
+        samples: &mut [f64],
+    ) -> Result<NativeBridgeFloat64BlockHeader, NativeBridgeSessionError> {
+        if self.hello.direction != audiorouter_protocol::AudioBridgeDirection::RenderSource {
+            return Err(NativeBridgeSessionError::WrongDirection);
+        }
+        self.ensure_lease_at(std::time::Instant::now())?;
+        self.region.read_into_f64_after(self.hello.generation, minimum_sequence, samples)
+            .map_err(NativeBridgeSessionError::Region)
     }
 
     fn read_into_at(
@@ -11183,7 +11305,7 @@ mod tests {
     }
 
     #[test]
-    fn native_bridge_region_does_not_partially_copy_nonfinite_payloads() {
+    fn native_bridge_region_silences_destination_on_nonfinite_payloads() {
         let path = std::env::temp_dir().join(format!(
             "audiorouter-nonfinite-{}-{}.slot",
             std::process::id(),
@@ -11194,16 +11316,86 @@ mod tests {
         ));
         let mut region = NativeBridgeRegion::create(&path, 1, 2).unwrap();
         region.write(9, 1, &[0.25, 0.5]).unwrap();
-        region.map[BRIDGE_PAYLOAD_OFFSET + std::mem::size_of::<f32>()
-            ..BRIDGE_PAYLOAD_OFFSET + 2 * std::mem::size_of::<f32>()]
-            .copy_from_slice(&f32::NAN.to_le_bytes());
+        region.map[BRIDGE_PAYLOAD_OFFSET + std::mem::size_of::<f64>()
+            ..BRIDGE_PAYLOAD_OFFSET + 2 * std::mem::size_of::<f64>()]
+            .copy_from_slice(&f64::NAN.to_le_bytes());
         let mut output = [9.0, 9.0];
         assert!(matches!(
             region.read_into(9, &mut output),
             Err(NativeBridgeRegionError::InvalidFrame)
         ));
-        assert_eq!(output, [9.0, 9.0]);
+        assert_eq!(output, [0.0, 0.0]);
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn native_bridge_float64_mapping_preserves_pcm32_precision() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-float64-{}-{}.slot",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let region = NativeBridgeRegion::create(&path, 2, 128).unwrap();
+        assert_eq!(region.mapping_bytes(), BRIDGE_PAYLOAD_OFFSET + 2 * 128 * 8);
+        let pcm = [1_073_741_889_i32, -1_234_567_891_i32];
+        let input = pcm.map(|sample| f64::from(sample) / 2_147_483_648.0);
+        region.write_f64(4, 1, &input).unwrap();
+        let payload = &region.map[BRIDGE_PAYLOAD_OFFSET..BRIDGE_PAYLOAD_OFFSET + 16];
+        assert_eq!(f64::from_le_bytes(payload[..8].try_into().unwrap()), input[0]);
+        let mut output = [0.0_f64; 2];
+        let header = region.read_into_f64(4, &mut output).unwrap();
+        assert_eq!(output, input);
+        assert_eq!(header.payload_bytes, 16);
+        let recovered = output.map(|sample| (sample * 2_147_483_648.0).round() as i32);
+        assert_eq!(recovered, pcm);
+        region.write(4, 2, &[0.25_f32, 0.5_f32]).unwrap();
+        let widened = f64::from_le_bytes(
+            region.map[BRIDGE_PAYLOAD_OFFSET..BRIDGE_PAYLOAD_OFFSET + 8]
+                .try_into().unwrap(),
+        );
+        assert_eq!(widened, f64::from(0.25_f32));
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn native_bridge_float64_session_round_trips_pcm32_without_narrowing() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-float64-session-{}-{}.slot",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let capture = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: "cable-a".into(),
+            direction: audiorouter_protocol::AudioBridgeDirection::CaptureSink,
+            generation: 5,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            frames_per_quantum: 128,
+            lease_ms: 1_000,
+        };
+        let mut writer = NativeBridgeSession::create(&path, capture.clone()).unwrap();
+        assert_eq!(writer.mapping_bytes(), BRIDGE_PAYLOAD_OFFSET + 2 * 128 * 8);
+        let pcm = [1_073_741_889_i32, -1_234_567_891_i32];
+        let samples = pcm.map(|sample| f64::from(sample) / 2_147_483_648.0);
+        assert_eq!(writer.write_f64(&samples).unwrap(), 1);
+        let mut render = capture;
+        render.direction = audiorouter_protocol::AudioBridgeDirection::RenderSource;
+        let reader = NativeBridgeSession::open(&path, render).unwrap();
+        let mut output = [0.0_f64; 2];
+        let header = reader.read_into_f64(&mut output).unwrap();
+        assert_eq!(header.payload_bytes, 16);
+        assert_eq!(output, samples);
+        assert_eq!(output.map(|sample| (sample * 2_147_483_648.0).round() as i32), pcm);
+        drop(reader);
+        writer.remove_owned_mapping().unwrap();
     }
 
     #[test]

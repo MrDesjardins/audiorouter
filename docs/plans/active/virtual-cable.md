@@ -476,7 +476,7 @@ closed. Endpoint, one-hour drift and audio-quality VM gates remain pending.
   the tool deliberately stalls; 8-channel and 96 kHz leases work; version
   mismatch and unknown-flag paths tested.
 - **Rollback:** revert; protocol 1.0 users do not exist outside the repo.
-- **Status:** in progress 2026-10-05 (stable bus-slot and Rust driver-version slice implemented; float64 mapping, QUERY/counters and remaining ABI/Rust work open; VM integration remains gated by WP-03/04).
+- **Status:** in progress 2026-10-05 (stable bus slots, driver version 1.1 requests, and float64 mapping APIs implemented; OPEN extension, QUERY/counters, float64 engine path and remaining ABI/Rust work open; VM integration remains gated by WP-03/04).
 
 WP-06 execution record (2026-10-05): objective is one safe, versioned 16-lease
 bridge contract with float64 payload support and a Rust client that preserves
@@ -506,9 +506,12 @@ lease sample-rate mismatch. The Windows Rust control encoder now emits driver
 protocol 1.1 independently of the internal AudioBridge protocol 1.0 and
 rejects non-cable IDs. C host tests cover all buses/slots; Rust ABI test checks
 version, bus bytes and direction. x64/ARM64 WDK builds pass. Remaining WP-06:
-float64 mapped-region/session support, negotiated open extension and QUERY/
-capability/counter contracts; no claim of end-to-end PCM32 precision until
-those layers and WP-09 engine changes are completed.
+float64 mapped-region/session support now carries double payloads and exposes
+`write_f64`/`read_into_f64`; the legacy f32 adapter widens values in the wire
+mapping. The Rust regression round-trips PCM32 value 1,073,741,889 exactly.
+Remaining WP-06: negotiated open extension and QUERY/capability/counter
+contracts. No claim of end-to-end PCM32 precision until the WP-09 float64
+engine path is complete.
 
 ## WP-07 — Elevated driver helper (17 §6)
 
