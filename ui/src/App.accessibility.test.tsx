@@ -834,11 +834,17 @@ describe("committed history and client authorization", () => {
   });
 
   it("reports a failed undo without crashing", async () => {
-    const listGraphHistory = vi.fn(async () => ({ items: [demoSession, demoSession], nextCursor: null }));
+    const listGraphHistory = vi.fn(async () => ({
+      items: [demoSession, { ...demoSession, revision: demoSession.revision - 1 }],
+      nextCursor: null,
+    }));
     const undoGraphPlan = vi.fn(async () => { throw new Error("no undo available"); });
     await renderReady(<App backend={{ ...connectedPreviewBackend(), listGraphHistory, undoGraphPlan }} />);
     openTab("Advanced");
-    fireEvent.click(await screen.findByRole("button", { name: "Undo last committed change" }));
+    // Undo stays disabled until two committed revisions have loaded.
+    const undoButton = await screen.findByRole("button", { name: "Undo last committed change" });
+    await waitFor(() => expect((undoButton as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(undoButton);
     expect(await screen.findByText(/no undo available/)).toBeTruthy();
   });
 
