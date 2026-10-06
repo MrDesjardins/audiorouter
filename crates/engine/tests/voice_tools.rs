@@ -2,9 +2,9 @@
 use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
 use audiorouter_engine::DecodedAudio;
 use audiorouter_engine::{
-    AudioBlock, RuntimeGeneration, compile_session_at_sample_rate_with_plugins_and_audio,
+    compile_session_at_sample_rate_with_plugins_and_audio, AudioBlock, RuntimeGeneration,
 };
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::{collections::HashMap, sync::Arc};
 
 fn session(kind: NodeKind, parameters: Value) -> Session {

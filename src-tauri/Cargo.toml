@@ -5,7 +5,7 @@ description = "AudioRouter native desktop shell"
 authors = ["AudioRouter contributors"]
 license = "GPL-3.0-only"
 edition = "2021"
-rust-version = "1.80"
+rust-version = "1.85"
 
 [build-dependencies]
 # Keep the feature table explicit so `cargo tauri build` does not rewrite the

@@ -41,7 +41,8 @@ pub fn receive_hint(record: &ReceiveSummary) -> Option<String> {
             expected = record.expected_sender
         ));
     }
-    if record.received_packets == 0 && record.rejected_datagrams == 0 && record.seconds_playing >= 5 {
+    if record.received_packets == 0 && record.rejected_datagrams == 0 && record.seconds_playing >= 5
+    {
         return Some(format!(
             "nothing arrived on UDP port {port}: on the sending computer, the Network Send must target {target}:{port} and be playing; Windows Firewall on this computer must allow AudioRouter (private networks); both computers must be on the same network",
             port = record.port,
@@ -152,18 +153,27 @@ impl Sampler {
         if now < next {
             return false;
         }
-        let interval = if now.saturating_duration_since(started) < STEADY_AFTER { SUMMARY_INTERVAL } else { STEADY_SUMMARY_INTERVAL };
+        let interval = if now.saturating_duration_since(started) < STEADY_AFTER {
+            SUMMARY_INTERVAL
+        } else {
+            STEADY_SUMMARY_INTERVAL
+        };
         self.next = Some(now + interval);
         true
     }
 
     pub fn seconds_playing(&self, now: Instant) -> u64 {
-        self.started.map_or(0, |started| now.saturating_duration_since(started).as_secs())
+        self.started.map_or(0, |started| {
+            now.saturating_duration_since(started).as_secs()
+        })
     }
 
     /// Underruns since this node's previous summary.
     pub fn underruns_since_last(&mut self, node_id: &str, total: u64) -> u64 {
-        let previous = self.previous_underruns.insert(node_id.to_owned(), total).unwrap_or(0);
+        let previous = self
+            .previous_underruns
+            .insert(node_id.to_owned(), total)
+            .unwrap_or(0);
         total.saturating_sub(previous)
     }
 
@@ -226,7 +236,11 @@ pub fn write_to(directory: &Path, mut record: Value) {
         fields.insert("processId".into(), json!(std::process::id()));
         fields.insert("version".into(), json!(env!("CARGO_PKG_VERSION")));
     }
-    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
         if serde_json::to_writer(&mut file, &record).is_ok() {
             let _ = file.write_all(b"\n");
         }
@@ -238,37 +252,85 @@ mod tests {
     use super::*;
 
     fn receive() -> ReceiveSummary {
-        ReceiveSummary { node_id: "rx".into(), expected_sender: "192.168.1.20".into(), port: 50_600, local_address_toward_sender: Some("192.168.1.30".into()), seconds_playing: 10, ..Default::default() }
+        ReceiveSummary {
+            node_id: "rx".into(),
+            expected_sender: "192.168.1.20".into(),
+            port: 50_600,
+            local_address_toward_sender: Some("192.168.1.30".into()),
+            seconds_playing: 10,
+            ..Default::default()
+        }
     }
 
     #[test]
     fn receive_hints_name_the_likely_cause() {
         let silent = receive();
         let hint = receive_hint(&silent).unwrap();
-        assert!(hint.contains("nothing arrived on UDP port 50600") && hint.contains("192.168.1.30:50600") && hint.contains("Firewall"), "{hint}");
-        let wrong_adapter = ReceiveSummary { rejected_datagrams: 40, last_rejected_sender: Some("10.0.0.7".into()), ..receive() };
-        assert!(receive_hint(&wrong_adapter).unwrap().contains("set its sending computer address to 10.0.0.7"));
-        let fine = ReceiveSummary { received_packets: 500, ..receive() };
+        assert!(
+            hint.contains("nothing arrived on UDP port 50600")
+                && hint.contains("192.168.1.30:50600")
+                && hint.contains("Firewall"),
+            "{hint}"
+        );
+        let wrong_adapter = ReceiveSummary {
+            rejected_datagrams: 40,
+            last_rejected_sender: Some("10.0.0.7".into()),
+            ..receive()
+        };
+        assert!(receive_hint(&wrong_adapter)
+            .unwrap()
+            .contains("set its sending computer address to 10.0.0.7"));
+        let fine = ReceiveSummary {
+            received_packets: 500,
+            ..receive()
+        };
         assert_eq!(receive_hint(&fine), None);
-        let choppy = ReceiveSummary { received_packets: 500, underruns_since_last: 3, ..receive() };
+        let choppy = ReceiveSummary {
+            received_packets: 500,
+            underruns_since_last: 3,
+            ..receive()
+        };
         assert!(receive_hint(&choppy).unwrap().contains("raise the buffer"));
-        let starting = ReceiveSummary { seconds_playing: 2, ..receive() };
-        assert_eq!(receive_hint(&starting), None, "no verdict in the first seconds");
+        let starting = ReceiveSummary {
+            seconds_playing: 2,
+            ..receive()
+        };
+        assert_eq!(
+            receive_hint(&starting),
+            None,
+            "no verdict in the first seconds"
+        );
     }
 
     #[test]
     fn send_hints_explain_socket_errors_and_name_the_source_address() {
-        let closed = SendSummary { node_id: "tx".into(), destination: "192.168.1.30:50600".into(), local_address: Some("192.168.1.20:61000".into()), send_errors: 3, last_error_code: Some(10054), ..Default::default() };
+        let closed = SendSummary {
+            node_id: "tx".into(),
+            destination: "192.168.1.30:50600".into(),
+            local_address: Some("192.168.1.20:61000".into()),
+            send_errors: 3,
+            last_error_code: Some(10054),
+            ..Default::default()
+        };
         assert!(send_hint(&closed).unwrap().contains("port closed"));
-        let sending = SendSummary { last_error_code: None, send_errors: 0, sent_packets: 900, ..closed.clone() };
+        let sending = SendSummary {
+            last_error_code: None,
+            send_errors: 0,
+            sent_packets: 900,
+            ..closed.clone()
+        };
         let hint = send_hint(&sending).unwrap();
-        assert!(hint.contains("expect sender 192.168.1.20 on port 50600"), "{hint}");
+        assert!(
+            hint.contains("expect sender 192.168.1.20 on port 50600"),
+            "{hint}"
+        );
         assert_eq!(socket_error_hint(12345), None);
     }
 
     #[test]
     fn records_are_bounded_rotated_and_finished_on_stop() {
-        let directory = std::env::temp_dir().join(format!("audiorouter-network-log-{}", std::process::id()));
+        let directory =
+            std::env::temp_dir().join(format!("audiorouter-network-log-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&directory);
         write_to(&directory, receive().to_record("summary"));
         let text = std::fs::read_to_string(directory.join("network.jsonl")).unwrap();
@@ -278,10 +340,19 @@ mod tests {
         assert!(record["hint"].as_str().unwrap().contains("nothing arrived"));
         assert!(record["timeUnixMs"].as_u64().is_some() && record["version"].is_string());
         // Rotation keeps one previous file.
-        std::fs::write(directory.join("network.jsonl"), vec![b'x'; LIMIT_BYTES as usize]).unwrap();
+        std::fs::write(
+            directory.join("network.jsonl"),
+            vec![b'x'; LIMIT_BYTES as usize],
+        )
+        .unwrap();
         write_to(&directory, receive().to_record("summary"));
         assert!(directory.join("network.previous.jsonl").exists());
-        assert!(std::fs::metadata(directory.join("network.jsonl")).unwrap().len() < 4096);
+        assert!(
+            std::fs::metadata(directory.join("network.jsonl"))
+                .unwrap()
+                .len()
+                < 4096
+        );
         let _ = std::fs::remove_dir_all(&directory);
 
         let mut sampler = Sampler::default();
@@ -290,7 +361,10 @@ mod tests {
         assert!(sampler.due(start + SUMMARY_INTERVAL));
         assert!(!sampler.due(start + SUMMARY_INTERVAL + Duration::from_secs(1)));
         assert!(sampler.due(start + STEADY_AFTER + Duration::from_secs(1)));
-        assert!(!sampler.due(start + STEADY_AFTER + Duration::from_secs(20)), "every 30 s after the first minute");
+        assert!(
+            !sampler.due(start + STEADY_AFTER + Duration::from_secs(20)),
+            "every 30 s after the first minute"
+        );
         assert!(sampler.due(start + STEADY_AFTER + Duration::from_secs(31)));
         assert_eq!(sampler.underruns_since_last("rx", 4), 4);
         assert_eq!(sampler.underruns_since_last("rx", 6), 2);

@@ -1749,7 +1749,7 @@ impl SupervisedBusWorkerLoop {
     /// operation; it may wait for the worker's bounded IPC deadline.
     pub fn stop(mut self) -> bool {
         self.stop.store(true, Ordering::Release);
-        self.join.take().map_or(true, |join| join.join().is_ok())
+        self.join.take().is_none_or(|join| join.join().is_ok())
     }
 }
 
@@ -3933,7 +3933,10 @@ pub struct PluginRuntimeBridge {
 /// (it owns the worker process). Never used from the audio callback.
 enum BridgeRequest {
     SaveState(std::sync::mpsc::Sender<Result<PluginStateAsset, String>>),
-    OpenEditor(EditorParentAuthorization, std::sync::mpsc::Sender<Result<(), String>>),
+    OpenEditor(
+        EditorParentAuthorization,
+        std::sync::mpsc::Sender<Result<(), String>>,
+    ),
     CloseEditor(std::sync::mpsc::Sender<Result<(), String>>),
 }
 
@@ -4123,13 +4126,23 @@ impl PluginRuntimeBridge {
                         }
                         match request {
                             BridgeRequest::SaveState(reply) => {
-                                let _ = reply.send(worker.save_state(now).map_err(|error| format!("{error:?}")));
+                                let _ = reply.send(
+                                    worker.save_state(now).map_err(|error| format!("{error:?}")),
+                                );
                             }
                             BridgeRequest::OpenEditor(authorization, reply) => {
-                                let _ = reply.send(worker.open_editor(&authorization, now).map_err(|error| format!("{error:?}")));
+                                let _ = reply.send(
+                                    worker
+                                        .open_editor(&authorization, now)
+                                        .map_err(|error| format!("{error:?}")),
+                                );
                             }
                             BridgeRequest::CloseEditor(reply) => {
-                                let _ = reply.send(worker.close_editor(now).map_err(|error| format!("{error:?}")));
+                                let _ = reply.send(
+                                    worker
+                                        .close_editor(now)
+                                        .map_err(|error| format!("{error:?}")),
+                                );
                             }
                         }
                         thread_health_state
@@ -4790,6 +4803,33 @@ impl WorkerProcess {
         _: &str,
         _: u16,
         _: SharedAudioTransport,
+    ) -> Result<Self, WorkerProcessError> {
+        Err(WorkerProcessError::Protocol(
+            "VST2 loading requires Windows".into(),
+        ))
+    }
+
+    #[cfg(not(windows))]
+    pub fn spawn_shared_for_plugin_with_sample_rate(
+        _: impl AsRef<Path>,
+        _: impl AsRef<Path>,
+        _: &str,
+        _: u16,
+        _: SharedAudioTransport,
+        _: u32,
+    ) -> Result<Self, WorkerProcessError> {
+        Err(WorkerProcessError::Protocol(
+            "VST2 loading requires Windows".into(),
+        ))
+    }
+
+    #[cfg(not(windows))]
+    pub fn spawn_multi_bus_for_plugin_with_sample_rate(
+        _: impl AsRef<Path>,
+        _: impl AsRef<Path>,
+        _: &str,
+        _: &WorkerAudioBusLayout,
+        _: u32,
     ) -> Result<Self, WorkerProcessError> {
         Err(WorkerProcessError::Protocol(
             "VST2 loading requires Windows".into(),
@@ -6695,6 +6735,15 @@ mod tests {
         }
     }
 
+    /// Remove a directory symlink made by a test: Windows removes it as a
+    /// directory, Unix as a file.
+    fn remove_directory_link(link: &Path) {
+        #[cfg(windows)]
+        fs::remove_dir(link).unwrap();
+        #[cfg(not(windows))]
+        fs::remove_file(link).unwrap();
+    }
+
     fn temp_root() -> PathBuf {
         static COUNTER: AtomicU64 = AtomicU64::new(0);
         let timestamp = SystemTime::now()
@@ -7030,7 +7079,7 @@ mod tests {
 
         if link_result.is_ok() {
             assert_eq!(scan_directory(&link), Err(ScanError::InvalidRoot));
-            fs::remove_dir(&link).unwrap();
+            remove_directory_link(&link);
         }
         fs::remove_dir_all(root).unwrap();
     }
@@ -7052,7 +7101,7 @@ mod tests {
                 inspect_binary(&candidate, std::slice::from_ref(&link)),
                 Err(InspectionError::OutsideConfiguredRoot)
             );
-            fs::remove_dir(&link).unwrap();
+            remove_directory_link(&link);
         }
 
         fs::remove_dir_all(root).unwrap();
@@ -7485,7 +7534,7 @@ mod tests {
                 read_state_asset(&root, &nested_path, 4, &asset.sha256),
                 Err(StateFileError::OutsideRoot)
             );
-            fs::remove_dir(&nested_link).unwrap();
+            remove_directory_link(&nested_link);
         }
         fs::remove_dir_all(root).unwrap();
     }
@@ -7522,7 +7571,7 @@ mod tests {
             assert!(validate_worker_executable(&redirected_executable)
                 .unwrap_err()
                 .contains("reparse-point ancestor"));
-            fs::remove_dir(&link).unwrap();
+            remove_directory_link(&link);
         }
         fs::remove_dir_all(root).unwrap();
     }
@@ -8174,7 +8223,7 @@ mod tests {
                 SharedAudioRegion::create(&path, layout),
                 Err(SharedAudioError::InvalidPath)
             ));
-            fs::remove_dir(&link).unwrap();
+            remove_directory_link(&link);
         }
         fs::remove_dir_all(root).unwrap();
     }

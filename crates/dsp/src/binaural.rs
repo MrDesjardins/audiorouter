@@ -51,7 +51,10 @@ pub enum BinauralError {
 enum Placement {
     /// Index into the response table and whether the source is on the left
     /// (mirrored: the ears swap).
-    Directional { azimuth_index: usize, left_side: bool },
+    Directional {
+        azimuth_index: usize,
+        left_side: bool,
+    },
     LowFrequency,
 }
 
@@ -105,7 +108,11 @@ impl BinauralRenderer {
         channel_mask: u32,
         options: SpatialOptions,
     ) -> Result<Self, BinauralError> {
-        let room_amount = if options.room_percent.is_finite() { (options.room_percent / 100.0).clamp(0.0, 1.0) } else { 0.0 };
+        let room_amount = if options.room_percent.is_finite() {
+            (options.room_percent / 100.0).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
         let mask = match (channels, channel_mask) {
             (6, 0) => CHANNEL_MASK_5POINT1,
             (8, 0) => CHANNEL_MASK_7POINT1_SURROUND,
@@ -117,9 +124,12 @@ impl BinauralRenderer {
         }
         let mut placements = [Placement::LowFrequency; MAX_BINAURAL_INPUT_CHANNELS];
         let mut reversed = Vec::with_capacity(channels);
-        let mut channel = 0;
         // Interleaved channels appear in ascending speaker-bit order.
-        for bit in (0..32).map(|shift| 1u32 << shift).filter(|bit| mask & bit != 0) {
+        for (channel, bit) in (0..32)
+            .map(|shift| 1u32 << shift)
+            .filter(|bit| mask & bit != 0)
+            .enumerate()
+        {
             let placement = match bit {
                 SPEAKER_FRONT_LEFT => directional(30, true),
                 SPEAKER_FRONT_RIGHT => directional(30, false),
@@ -133,7 +143,11 @@ impl BinauralRenderer {
             };
             placements[channel] = placement;
             let mut pair = [[0.0; KEMAR_TAPS]; 2];
-            if let Placement::Directional { azimuth_index, left_side } = placement {
+            if let Placement::Directional {
+                azimuth_index,
+                left_side,
+            } = placement
+            {
                 let measured = &KEMAR_HRIR_48K[azimuth_index];
                 for (ear, taps) in pair.iter_mut().enumerate() {
                     // The table holds a source on the right; a left source
@@ -145,7 +159,6 @@ impl BinauralRenderer {
                 }
             }
             reversed.push(pair);
-            channel += 1;
         }
         Ok(Self {
             room: (room_amount > 0.0).then(|| Room::new(room_amount)),
@@ -175,13 +188,17 @@ impl BinauralRenderer {
         {
             return Err(BinauralError::FrameMismatch);
         }
-        for (frame, out) in input.chunks_exact(self.channels).zip(output.chunks_exact_mut(2)) {
+        for (frame, out) in input
+            .chunks_exact(self.channels)
+            .zip(output.chunks_exact_mut(2))
+        {
             let write = self.position;
             let mut left = 0.0f32;
             let mut right = 0.0f32;
             for (channel, &sample) in frame.iter().enumerate() {
                 let sample = if sample.is_finite() { sample } else { 0.0 };
-                let ring = &mut self.history[channel * 2 * KEMAR_TAPS..(channel + 1) * 2 * KEMAR_TAPS];
+                let ring =
+                    &mut self.history[channel * 2 * KEMAR_TAPS..(channel + 1) * 2 * KEMAR_TAPS];
                 ring[write] = sample;
                 ring[write + KEMAR_TAPS] = sample;
                 match self.placements[channel] {
@@ -206,7 +223,11 @@ impl BinauralRenderer {
             }
             out[0] = left;
             out[1] = right;
-            self.position = if write + 1 == KEMAR_TAPS { 0 } else { write + 1 };
+            self.position = if write + 1 == KEMAR_TAPS {
+                0
+            } else {
+                write + 1
+            };
         }
         Ok(())
     }
@@ -248,7 +269,8 @@ impl Room {
             lines: ROOM_LINE_SAMPLES.map(|length| vec![0.0; length]),
             positions: [0; 4],
             // -60 dB after ROOM_DECAY_SECONDS for each line's round trip.
-            feedback: ROOM_LINE_SAMPLES.map(|length| 10f32.powf(-3.0 * length as f32 / (ROOM_DECAY_SECONDS * rate))),
+            feedback: ROOM_LINE_SAMPLES
+                .map(|length| 10f32.powf(-3.0 * length as f32 / (ROOM_DECAY_SECONDS * rate))),
             damping_state: [0.0; 4],
             wet: 0.6 * amount,
             direct: 1.0 - 0.25 * amount,
@@ -263,14 +285,19 @@ impl Room {
         let input = 0.5 * (left + right);
         for line in 0..4 {
             let mixed = (outputs[line] - mean) * self.feedback[line];
-            self.damping_state[line] = (1.0 - ROOM_DAMPING) * mixed + ROOM_DAMPING * self.damping_state[line];
+            self.damping_state[line] =
+                (1.0 - ROOM_DAMPING) * mixed + ROOM_DAMPING * self.damping_state[line];
             let value = input + self.damping_state[line];
-            self.lines[line][self.positions[line]] = if value.abs() < 1.0e-20 { 0.0 } else { value };
+            self.lines[line][self.positions[line]] =
+                if value.abs() < 1.0e-20 { 0.0 } else { value };
             self.positions[line] = (self.positions[line] + 1) % ROOM_LINE_SAMPLES[line];
         }
         let wet_left = 0.35 * (outputs[0] + outputs[2]);
         let wet_right = 0.35 * (outputs[1] + outputs[3]);
-        (self.direct * left + self.wet * wet_left, self.direct * right + self.wet * wet_right)
+        (
+            self.direct * left + self.wet * wet_left,
+            self.direct * right + self.wet * wet_right,
+        )
     }
 
     fn reset(&mut self) {
@@ -302,7 +329,12 @@ const CROSSTALK_TRIM: f32 = 0.8;
 
 impl Crosstalk {
     fn new() -> Self {
-        Self { delayed: [[0.0; CROSSTALK_DELAY_SAMPLES]; 2], position: 0, high_pass: [(0.0, 0.0); 2], low_pass: [0.0; 2] }
+        Self {
+            delayed: [[0.0; CROSSTALK_DELAY_SAMPLES]; 2],
+            position: 0,
+            high_pass: [(0.0, 0.0); 2],
+            low_pass: [0.0; 2],
+        }
     }
 
     /// One-pole coefficient for `cutoff_hz` at the renderer rate.
@@ -322,7 +354,10 @@ impl Crosstalk {
     }
 
     fn process(&mut self, left: f32, right: f32) -> (f32, f32) {
-        let [from_right, from_left] = [self.delayed[1][self.position], self.delayed[0][self.position]];
+        let [from_right, from_left] = [
+            self.delayed[1][self.position],
+            self.delayed[0][self.position],
+        ];
         let cancel_left = self.band(0, from_right);
         let cancel_right = self.band(1, from_left);
         let out_left = left - CROSSTALK_GAIN * cancel_left;
@@ -345,7 +380,10 @@ fn directional(azimuth: u16, left_side: bool) -> Placement {
         .iter()
         .position(|candidate| *candidate == azimuth)
         .expect("speaker azimuth is in the embedded table");
-    Placement::Directional { azimuth_index, left_side }
+    Placement::Directional {
+        azimuth_index,
+        left_side,
+    }
 }
 
 fn dot(window: &[f32], taps: &[f32; KEMAR_TAPS]) -> f32 {
@@ -393,7 +431,14 @@ mod tests {
         }
         let mut output = vec![0.0; FRAMES * 2];
         renderer.render_interleaved(&input, &mut output).unwrap();
-        let energy = |ear: usize| output.iter().skip(ear).step_by(2).map(|v| f64::from(*v).powi(2)).sum::<f64>();
+        let energy = |ear: usize| {
+            output
+                .iter()
+                .skip(ear)
+                .step_by(2)
+                .map(|v| f64::from(*v).powi(2))
+                .sum::<f64>()
+        };
         (energy(0), energy(1), output)
     }
 
@@ -402,7 +447,8 @@ mod tests {
     }
 
     fn render_with(options: SpatialOptions, input: &[f32]) -> Vec<f32> {
-        let mut renderer = BinauralRenderer::with_options(8, CHANNEL_MASK_7POINT1_SURROUND, options).unwrap();
+        let mut renderer =
+            BinauralRenderer::with_options(8, CHANNEL_MASK_7POINT1_SURROUND, options).unwrap();
         let mut output = vec![0.0; input.len() / 8 * 2];
         renderer.render_interleaved(input, &mut output).unwrap();
         output
@@ -418,8 +464,26 @@ mod tests {
             output
         };
         assert_eq!(render_with(SpatialOptions::default(), &input), plain);
-        assert_eq!(render_with(SpatialOptions { output: SpatialOutput::Headphones, room_percent: 0.0 }, &input), plain);
-        assert_eq!(render_with(SpatialOptions { output: SpatialOutput::Headphones, room_percent: f32::NAN }, &input), plain);
+        assert_eq!(
+            render_with(
+                SpatialOptions {
+                    output: SpatialOutput::Headphones,
+                    room_percent: 0.0
+                },
+                &input
+            ),
+            plain
+        );
+        assert_eq!(
+            render_with(
+                SpatialOptions {
+                    output: SpatialOutput::Headphones,
+                    room_percent: f32::NAN
+                },
+                &input
+            ),
+            plain
+        );
     }
 
     /// Two speakers heard by two ears: each ear also hears the far speaker,
@@ -427,8 +491,13 @@ mod tests {
     fn ears_from_speakers(speakers: &[(f32, f32)]) -> Vec<(f32, f32)> {
         (0..speakers.len())
             .map(|n| {
-                let far = n.checked_sub(CROSSTALK_DELAY_SAMPLES).map_or((0.0, 0.0), |m| speakers[m]);
-                (speakers[n].0 + CROSSTALK_GAIN * far.1, speakers[n].1 + CROSSTALK_GAIN * far.0)
+                let far = n
+                    .checked_sub(CROSSTALK_DELAY_SAMPLES)
+                    .map_or((0.0, 0.0), |m| speakers[m]);
+                (
+                    speakers[n].0 + CROSSTALK_GAIN * far.1,
+                    speakers[n].1 + CROSSTALK_GAIN * far.0,
+                )
             })
             .collect()
     }
@@ -437,7 +506,9 @@ mod tests {
     fn speaker_mode_cancels_crosstalk_in_its_band() {
         // A 1 kHz signal meant for the left ear only.
         let frames = 48_000;
-        let left: Vec<f32> = (0..frames).map(|n| (2.0 * std::f32::consts::PI * 1_000.0 * n as f32 / 48_000.0).sin()).collect();
+        let left: Vec<f32> = (0..frames)
+            .map(|n| (2.0 * std::f32::consts::PI * 1_000.0 * n as f32 / 48_000.0).sin())
+            .collect();
         let separation = |speakers: Vec<(f32, f32)>| {
             let ears = ears_from_speakers(&speakers);
             let (mut near, mut far) = (0.0f64, 0.0f64);
@@ -451,7 +522,10 @@ mod tests {
         let mut crosstalk = Crosstalk::new();
         let with = separation(left.iter().map(|l| crosstalk.process(*l, 0.0)).collect());
         println!("left/right ear separation at 1 kHz: {without:.1} dB without, {with:.1} dB with cancellation");
-        assert!(with > without + 10.0, "cancellation should add at least 10 dB of separation ({without:.1} -> {with:.1})");
+        assert!(
+            with > without + 10.0,
+            "cancellation should add at least 10 dB of separation ({without:.1} -> {with:.1})"
+        );
     }
 
     #[test]
@@ -459,12 +533,30 @@ mod tests {
         let mut impulse = vec![0.0; 48_000 * 8];
         impulse[0] = 1.0; // front left
         let dry = render_with(SpatialOptions::default(), &impulse);
-        let wet = render_with(SpatialOptions { output: SpatialOutput::Headphones, room_percent: 100.0 }, &impulse);
-        let energy = |output: &[f32], from_ms: usize, to_ms: usize| output[from_ms * 96..to_ms * 96].iter().map(|v| f64::from(*v).powi(2)).sum::<f64>();
-        assert_eq!(energy(&dry, 50, 150), 0.0, "the plain renderer has no tail after its 4 ms responses");
+        let wet = render_with(
+            SpatialOptions {
+                output: SpatialOutput::Headphones,
+                room_percent: 100.0,
+            },
+            &impulse,
+        );
+        let energy = |output: &[f32], from_ms: usize, to_ms: usize| {
+            output[from_ms * 96..to_ms * 96]
+                .iter()
+                .map(|v| f64::from(*v).powi(2))
+                .sum::<f64>()
+        };
+        assert_eq!(
+            energy(&dry, 50, 150),
+            0.0,
+            "the plain renderer has no tail after its 4 ms responses"
+        );
         let early = energy(&wet, 50, 150);
         let late = energy(&wet, 400, 500);
-        println!("room tail energy: 50-150 ms {early:.3e}, 400-500 ms {late:.3e} ({:.1} dB)", db(late / early));
+        println!(
+            "room tail energy: 50-150 ms {early:.3e}, 400-500 ms {late:.3e} ({:.1} dB)",
+            db(late / early)
+        );
         assert!(early > 1.0e-4, "the room adds a tail");
         assert!(late < early * 0.1, "the tail decays");
         assert!(wet.iter().all(|v| v.is_finite() && v.abs() < 1.5));
@@ -473,7 +565,13 @@ mod tests {
     #[test]
     fn speakers_and_room_stay_finite_and_bounded_on_noise() {
         let input = noise(48_000 * 8);
-        let output = render_with(SpatialOptions { output: SpatialOutput::Speakers, room_percent: 100.0 }, &input);
+        let output = render_with(
+            SpatialOptions {
+                output: SpatialOutput::Speakers,
+                room_percent: 100.0,
+            },
+            &input,
+        );
         let peak = output.iter().fold(0.0f32, |m, v| m.max(v.abs()));
         println!("speakers + room peak on full-scale 7.1 noise: {peak:.2}");
         assert!(output.iter().all(|v| v.is_finite()) && peak < 8.0);
@@ -484,15 +582,35 @@ mod tests {
         let mask = CHANNEL_MASK_7POINT1_SURROUND;
         // FL FR FC LFE BL BR SL SR
         let (l, r, _) = render_one(mask, 8, 0);
-        assert!(db(l / r) > 3.0, "front left louder in left ear: {}", db(l / r));
+        assert!(
+            db(l / r) > 3.0,
+            "front left louder in left ear: {}",
+            db(l / r)
+        );
         let (l, r, _) = render_one(mask, 8, 1);
-        assert!(db(r / l) > 3.0, "front right louder in right ear: {}", db(r / l));
+        assert!(
+            db(r / l) > 3.0,
+            "front right louder in right ear: {}",
+            db(r / l)
+        );
         let (l, r, _) = render_one(mask, 8, 6);
-        assert!(db(l / r) > 8.0, "side left strongly in left ear: {}", db(l / r));
+        assert!(
+            db(l / r) > 8.0,
+            "side left strongly in left ear: {}",
+            db(l / r)
+        );
         let (l, r, _) = render_one(mask, 8, 7);
-        assert!(db(r / l) > 8.0, "side right strongly in right ear: {}", db(r / l));
+        assert!(
+            db(r / l) > 8.0,
+            "side right strongly in right ear: {}",
+            db(r / l)
+        );
         let (l, r, _) = render_one(mask, 8, 4);
-        assert!(db(l / r) > 3.0, "back left louder in left ear: {}", db(l / r));
+        assert!(
+            db(l / r) > 3.0,
+            "back left louder in left ear: {}",
+            db(l / r)
+        );
         let (l, r, _) = render_one(mask, 8, 2);
         assert!(db(l / r).abs() < 0.5, "center balanced: {}", db(l / r));
     }
@@ -501,16 +619,27 @@ mod tests {
     fn front_and_back_speakers_on_one_side_sound_different() {
         let (_, _, front) = render_one(CHANNEL_MASK_7POINT1_SURROUND, 8, 0);
         let (_, _, back) = render_one(CHANNEL_MASK_7POINT1_SURROUND, 8, 4);
-        let difference: f64 = front.iter().zip(&back).map(|(a, b)| f64::from(a - b).powi(2)).sum();
+        let difference: f64 = front
+            .iter()
+            .zip(&back)
+            .map(|(a, b)| f64::from(a - b).powi(2))
+            .sum();
         let reference: f64 = front.iter().map(|v| f64::from(*v).powi(2)).sum();
-        assert!(db(difference / reference) > -6.0, "front/back responses must differ");
+        assert!(
+            db(difference / reference) > -6.0,
+            "front/back responses must differ"
+        );
     }
 
     #[test]
     fn frontal_center_keeps_unit_level_and_lfe_is_centered() {
         let (l, r, _) = render_one(CHANNEL_MASK_7POINT1_SURROUND, 8, 2);
         let source: f64 = noise(FRAMES).iter().map(|v| f64::from(*v).powi(2)).sum();
-        assert!(db(l / source).abs() < 1.0, "center level {}", db(l / source));
+        assert!(
+            db(l / source).abs() < 1.0,
+            "center level {}",
+            db(l / source)
+        );
         assert!(db(r / source).abs() < 1.0);
         let (l, r, output) = render_one(CHANNEL_MASK_7POINT1_SURROUND, 8, 3);
         assert_eq!(l, r);
@@ -533,7 +662,9 @@ mod tests {
         assert_eq!(expected, actual);
         chunked.reset();
         let mut silent = vec![1.0; 64 * 2];
-        chunked.render_interleaved(&vec![0.0; 64 * channels], &mut silent).unwrap();
+        chunked
+            .render_interleaved(&vec![0.0; 64 * channels], &mut silent)
+            .unwrap();
         assert!(silent.iter().all(|v| *v == 0.0));
     }
 
@@ -549,21 +680,39 @@ mod tests {
             renderer.render_interleaved(&input, &mut output).unwrap();
         }
         let per_second = started.elapsed().as_secs_f64() / 10.0;
-        eprintln!("7.1 binaural: {:.2} ms of CPU per second of audio ({:.2}% of one core)", per_second * 1e3, per_second * 100.0);
+        eprintln!(
+            "7.1 binaural: {:.2} ms of CPU per second of audio ({:.2}% of one core)",
+            per_second * 1e3,
+            per_second * 100.0
+        );
         assert!(output.iter().all(|value| value.is_finite()));
     }
 
     #[test]
     fn rejects_unsupported_layouts_and_mismatched_frames() {
-        assert_eq!(BinauralRenderer::new(2, 0).err(), Some(BinauralError::UnsupportedChannelCount(2)));
+        assert_eq!(
+            BinauralRenderer::new(2, 0).err(),
+            Some(BinauralError::UnsupportedChannelCount(2))
+        );
         // 7.1 wide uses front-of-center speakers without a measured position.
-        assert_eq!(BinauralRenderer::new(8, 0xff).err(), Some(BinauralError::UnsupportedChannelMask(0xff)));
-        assert_eq!(BinauralRenderer::new(8, CHANNEL_MASK_5POINT1).err(), Some(BinauralError::UnsupportedChannelMask(CHANNEL_MASK_5POINT1)));
+        assert_eq!(
+            BinauralRenderer::new(8, 0xff).err(),
+            Some(BinauralError::UnsupportedChannelMask(0xff))
+        );
+        assert_eq!(
+            BinauralRenderer::new(8, CHANNEL_MASK_5POINT1).err(),
+            Some(BinauralError::UnsupportedChannelMask(CHANNEL_MASK_5POINT1))
+        );
         assert!(BinauralRenderer::new(6, CHANNEL_MASK_5POINT1_SURROUND).is_ok());
         let mut renderer = BinauralRenderer::new(8, 0).unwrap();
-        assert_eq!(renderer.render_interleaved(&[0.0; 16], &mut [0.0; 2]), Err(BinauralError::FrameMismatch));
+        assert_eq!(
+            renderer.render_interleaved(&[0.0; 16], &mut [0.0; 2]),
+            Err(BinauralError::FrameMismatch)
+        );
         let mut output = [0.0; 2];
-        renderer.render_interleaved(&[f32::NAN; 8], &mut output).unwrap();
+        renderer
+            .render_interleaved(&[f32::NAN; 8], &mut output)
+            .unwrap();
         assert_eq!(output, [0.0, 0.0]);
     }
 }

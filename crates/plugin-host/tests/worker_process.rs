@@ -1,3 +1,5 @@
+#[cfg(windows)]
+use audiorouter_plugin_host::inspect_binary;
 #[cfg(feature = "test-fixtures")]
 use audiorouter_plugin_host::stage_engine_worker_result;
 #[cfg(all(windows, feature = "test-fixtures"))]
@@ -9,7 +11,7 @@ use audiorouter_plugin_host::SupervisedBusWorkerLoop;
 #[cfg(all(windows, feature = "test-fixtures"))]
 use audiorouter_plugin_host::WorkerProcessError;
 use audiorouter_plugin_host::{
-    decode_worker_message, encode_worker_message, inspect_binary, worker_clock_tick,
+    decode_worker_message, encode_worker_message, worker_clock_tick,
     EditorParentAuthorizationIssuer, PeArchitecture, PluginFormat, PluginIdentity,
     PluginStateAsset, SharedAudioLayout, SharedAudioTransport, SupervisedWorkerProcess,
     WorkerFrame, WorkerLatency, WorkerMessage, WorkerProcess,
@@ -2010,7 +2012,10 @@ fn supervised_vst2_worker_keeps_processing_while_an_editor_hangs() {
     worker
         .process(frame, Vec::new(), Instant::now())
         .expect("audio keeps processing while the editor hangs");
-    assert_eq!(worker.state(), audiorouter_plugin_host::WorkerState::Running);
+    assert_eq!(
+        worker.state(),
+        audiorouter_plugin_host::WorkerState::Running
+    );
     drop(worker);
     // SAFETY: The handle was returned by CreateWindowExW and the worker is
     // gone before the parent is destroyed.
@@ -2054,6 +2059,9 @@ fn disposable_worker_process_exercises_dynamic_latency_updates() {
         .success());
 }
 
+// Inspection accepts only x64 PE binaries, and this test uses the built
+// worker executable as the plugin file, so it needs a Windows build.
+#[cfg(windows)]
 #[test]
 fn verified_supervised_launch_rechecks_the_scanned_plugin_identity() {
     let worker_path =
@@ -2816,7 +2824,13 @@ fn supervised_worker_contains_a_real_hang_fixture() {
 #[cfg(all(windows, feature = "test-fixtures"))]
 #[link(name = "user32")]
 unsafe extern "system" {
-    fn PeekMessageW(message: *mut [usize; 6], window: *mut std::ffi::c_void, min: u32, max: u32, remove: u32) -> i32;
+    fn PeekMessageW(
+        message: *mut [usize; 6],
+        window: *mut std::ffi::c_void,
+        min: u32,
+        max: u32,
+        remove: u32,
+    ) -> i32;
     fn TranslateMessage(message: *const [usize; 6]) -> i32;
     fn DispatchMessageW(message: *const [usize; 6]) -> isize;
 }
@@ -2894,7 +2908,20 @@ fn runtime_bridge_saves_state_and_opens_the_editor_in_a_pumping_parent() {
         let title: Vec<u16> = "AudioRouter editor host test\0".encode_utf16().collect();
         // SAFETY: NUL-terminated buffers outlive the synchronous call; style 0 keeps it hidden.
         let parent = unsafe {
-            CreateWindowExW(0, class.as_ptr(), title.as_ptr(), 0, 0, 0, 800, 600, std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut())
+            CreateWindowExW(
+                0,
+                class.as_ptr(),
+                title.as_ptr(),
+                0,
+                0,
+                0,
+                800,
+                600,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            )
         };
         window_sender.send(parent as usize).expect("send parent");
         let mut message = [0usize; 6];
@@ -2909,7 +2936,7 @@ fn runtime_bridge_saves_state_and_opens_the_editor_in_a_pumping_parent() {
             std::thread::sleep(Duration::from_millis(5));
         }
         // SAFETY: the window was created on this thread and the editor is closed.
-        unsafe { DestroyWindow(parent as *mut std::ffi::c_void) };
+        unsafe { DestroyWindow(parent) };
     });
     let parent = window_receiver.recv().expect("parent window");
     assert_ne!(parent, 0, "editor parent creation failed");

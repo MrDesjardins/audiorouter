@@ -61,7 +61,13 @@ enum Layout {
     TwoPaths,
 }
 
-const LAYOUTS: [Layout; 5] = [Layout::Single, Layout::FanOut, Layout::Mixer, Layout::ConnectedMixers, Layout::TwoPaths];
+const LAYOUTS: [Layout; 5] = [
+    Layout::Single,
+    Layout::FanOut,
+    Layout::Mixer,
+    Layout::ConnectedMixers,
+    Layout::TwoPaths,
+];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Flags {
@@ -74,7 +80,14 @@ enum Flags {
     Mixed,
 }
 
-const FLAGS: [Flags; 6] = [Flags::AllActive, Flags::AllBypassed, Flags::AllOff, Flags::AlternateBypass, Flags::AlternateOff, Flags::Mixed];
+const FLAGS: [Flags; 6] = [
+    Flags::AllActive,
+    Flags::AllBypassed,
+    Flags::AllOff,
+    Flags::AlternateBypass,
+    Flags::AlternateOff,
+    Flags::Mixed,
+];
 
 impl Flags {
     /// (enabled, bypass) for the tool at `index` in a chain.
@@ -104,7 +117,11 @@ fn chains() -> Vec<Vec<NodeKind>> {
     for &length in &LENGTHS {
         for &stride in &STRIDES {
             for start in 0..TOOLS.len() {
-                chains.push((0..length).map(|step| TOOLS[(start + step * stride) % TOOLS.len()]).collect());
+                chains.push(
+                    (0..length)
+                        .map(|step| TOOLS[(start + step * stride) % TOOLS.len()])
+                        .collect(),
+                );
             }
         }
     }
@@ -112,16 +129,32 @@ fn chains() -> Vec<Vec<NodeKind>> {
 }
 
 fn port(name: &str, direction: PortDirection) -> Port {
-    Port { name: name.into(), direction, channels: 2 }
+    Port {
+        name: name.into(),
+        direction,
+        channels: 2,
+    }
 }
 
 fn node(id: &str, kind: NodeKind) -> Node {
     let ports = match kind {
         NodeKind::PhysicalInput => vec![port("out", PortDirection::Output)],
         NodeKind::PhysicalOutput => vec![port("in", PortDirection::Input)],
-        _ => vec![port("in", PortDirection::Input), port("out", PortDirection::Output)],
+        _ => vec![
+            port("in", PortDirection::Input),
+            port("out", PortDirection::Output),
+        ],
     };
-    Node { id: EntityId::new(id), kind, type_version: 1, name: id.into(), enabled: true, bypass: false, parameters: Default::default(), ports }
+    Node {
+        id: EntityId::new(id),
+        kind,
+        type_version: 1,
+        name: id.into(),
+        enabled: true,
+        bypass: false,
+        parameters: Default::default(),
+        ports,
+    }
 }
 
 fn tool(id: String, kind: NodeKind, (enabled, bypass): (bool, bool), chain_index: usize) -> Node {
@@ -132,7 +165,9 @@ fn tool(id: String, kind: NodeKind, (enabled, bypass): (bool, bool), chain_index
         NodeKind::TimeShift => json!({ "bufferSeconds": 10 }),
         NodeKind::Mute => json!({ "muted": false }),
         // Both trigger modes; nothing publishes a level or round, so it stays released.
-        NodeKind::Duck if chain_index % 2 == 0 => json!({ "trigger": "siegeRound", "amountDb": 20.0 }),
+        NodeKind::Duck if chain_index % 2 == 0 => {
+            json!({ "trigger": "siegeRound", "amountDb": 20.0 })
+        }
         NodeKind::Duck => json!({ "trigger": "level", "keyNodeId": "src-b", "amountDb": 12.0 }),
         NodeKind::Gain => json!({ "gainDb": -3.0 }),
         _ => json!({}),
@@ -163,7 +198,10 @@ fn route(chain: &[NodeKind], layout: Layout, flags: Flags, chain_index: usize) -
         .enumerate()
         .map(|(index, &kind)| tool(format!("t{index}"), kind, flags.at(index), chain_index))
         .collect::<Vec<_>>();
-    let ids = tools.iter().map(|tool| tool.id.as_str().to_owned()).collect::<Vec<_>>();
+    let ids = tools
+        .iter()
+        .map(|tool| tool.id.as_str().to_owned())
+        .collect::<Vec<_>>();
     let half = ids.len() / 2;
     let mut nodes = vec![node("src-a", NodeKind::PhysicalInput)];
     let mut edges = Vec::new();
@@ -181,12 +219,19 @@ fn route(chain: &[NodeKind], layout: Layout, flags: Flags, chain_index: usize) -
             link(&mut edges, "src-a", &ids, "out-1");
         }
         Layout::FanOut => {
-            nodes.extend([node("out-1", NodeKind::PhysicalOutput), node("out-2", NodeKind::PhysicalOutput)]);
+            nodes.extend([
+                node("out-1", NodeKind::PhysicalOutput),
+                node("out-2", NodeKind::PhysicalOutput),
+            ]);
             link(&mut edges, "src-a", &ids, "out-1");
             edges.push(edge(ids.last().unwrap(), "out-2"));
         }
         Layout::Mixer => {
-            nodes.extend([node("src-b", NodeKind::PhysicalInput), node("mix-1", NodeKind::Mixer), node("out-1", NodeKind::PhysicalOutput)]);
+            nodes.extend([
+                node("src-b", NodeKind::PhysicalInput),
+                node("mix-1", NodeKind::Mixer),
+                node("out-1", NodeKind::PhysicalOutput),
+            ]);
             link(&mut edges, "src-a", &ids, "mix-1");
             edges.extend([edge("src-b", "mix-1"), edge("mix-1", "out-1")]);
         }
@@ -204,14 +249,21 @@ fn route(chain: &[NodeKind], layout: Layout, flags: Flags, chain_index: usize) -
             edges.extend([edge("src-c", "mix-2"), edge("mix-2", "out-1")]);
         }
         Layout::TwoPaths => {
-            nodes.extend([node("src-b", NodeKind::PhysicalInput), node("out-1", NodeKind::PhysicalOutput), node("out-2", NodeKind::PhysicalOutput)]);
+            nodes.extend([
+                node("src-b", NodeKind::PhysicalInput),
+                node("out-1", NodeKind::PhysicalOutput),
+                node("out-2", NodeKind::PhysicalOutput),
+            ]);
             link(&mut edges, "src-a", &ids[..half], "out-1");
             link(&mut edges, "src-b", &ids[half..], "out-2");
         }
     }
     nodes.extend(tools);
     Session {
-        id: EntityId::new(format!("combo-{}", SESSION_SERIAL.fetch_add(1, Ordering::Relaxed))),
+        id: EntityId::new(format!(
+            "combo-{}",
+            SESSION_SERIAL.fetch_add(1, Ordering::Relaxed)
+        )),
         name: "Tool combination".into(),
         schema_version: 1,
         revision: 1,
@@ -222,12 +274,18 @@ fn route(chain: &[NodeKind], layout: Layout, flags: Flags, chain_index: usize) -
 
 /// A different tone per source and channel, offset by the quantum.
 fn source_block(source: &str, quantum: usize) -> AudioBlock {
-    let frequency = match source { "src-a" => 220.0, "src-b" => 330.0, _ => 495.0 };
+    let frequency = match source {
+        "src-a" => 220.0,
+        "src-b" => 330.0,
+        _ => 495.0,
+    };
     let mut block = AudioBlock::new(2, FRAMES).unwrap();
     for channel in 0..2 {
         for (frame, sample) in block.channel_mut(channel).unwrap().iter_mut().enumerate() {
             let t = (quantum * FRAMES + frame) as f64 / 48_000.0;
-            *sample = (0.2 * (std::f64::consts::TAU * frequency * (1.0 + 0.5 * channel as f64) * t).sin()) as f32;
+            *sample = (0.2
+                * (std::f64::consts::TAU * frequency * (1.0 + 0.5 * channel as f64) * t).sin())
+                as f32;
         }
     }
     block
@@ -238,13 +296,33 @@ fn run(set: &CompiledPathSet, quanta: usize) -> HashMap<String, AudioBlock> {
     let mut last = HashMap::new();
     for quantum in 0..quanta {
         for path in set.paths() {
-            let inputs = path.input_node_ids().iter().map(|id| source_block(id.as_str(), quantum)).collect::<Vec<_>>();
+            let inputs = path
+                .input_node_ids()
+                .iter()
+                .map(|id| source_block(id.as_str(), quantum))
+                .collect::<Vec<_>>();
             let mut scratch = AudioBlock::new(path.mixer_channels(), FRAMES).unwrap();
-            let mut outputs = path.output_node_ids().iter().map(|_| AudioBlock::new(2, FRAMES).unwrap()).collect::<Vec<_>>();
-            path.process(&inputs, &mut scratch, &mut outputs.iter_mut().collect::<Vec<_>>()).unwrap();
+            let mut outputs = path
+                .output_node_ids()
+                .iter()
+                .map(|_| AudioBlock::new(2, FRAMES).unwrap())
+                .collect::<Vec<_>>();
+            path.process(
+                &inputs,
+                &mut scratch,
+                &mut outputs.iter_mut().collect::<Vec<_>>(),
+            )
+            .unwrap();
             for (id, block) in path.output_node_ids().iter().zip(outputs) {
                 for channel in 0..2 {
-                    assert!(block.channel(channel).unwrap().iter().all(|sample| sample.is_finite()), "non-finite output at {id:?}");
+                    assert!(
+                        block
+                            .channel(channel)
+                            .unwrap()
+                            .iter()
+                            .all(|sample| sample.is_finite()),
+                        "non-finite output at {id:?}"
+                    );
                 }
                 last.insert(id.as_str().to_owned(), block);
             }
@@ -264,11 +342,26 @@ fn dry_sources(layout: Layout, output: &str) -> &'static [&'static str] {
 }
 
 fn compile(session: &Session) -> CompiledPathSet {
-    compile_native_paths_with_plugins_and_audio(session, RuntimeGeneration::new(1), &Default::default(), &Default::default())
-        .unwrap_or_else(|error| {
-            let tools = session.nodes.iter().filter(|node| TOOLS.contains(&node.kind)).map(|node| format!("{:?}(on={},bypass={})", node.kind, node.enabled, node.bypass)).collect::<Vec<_>>();
-            panic!("rejected {error:?}: {tools:?}")
-        })
+    compile_native_paths_with_plugins_and_audio(
+        session,
+        RuntimeGeneration::new(1),
+        &Default::default(),
+        &Default::default(),
+    )
+    .unwrap_or_else(|error| {
+        let tools = session
+            .nodes
+            .iter()
+            .filter(|node| TOOLS.contains(&node.kind))
+            .map(|node| {
+                format!(
+                    "{:?}(on={},bypass={})",
+                    node.kind, node.enabled, node.bypass
+                )
+            })
+            .collect::<Vec<_>>();
+        panic!("rejected {error:?}: {tools:?}")
+    })
 }
 
 #[test]
@@ -278,10 +371,19 @@ fn every_tool_appears_in_many_chains_and_positions() {
         let chains_with = chains.iter().filter(|chain| chain.contains(&kind)).count();
         let positions = chains
             .iter()
-            .flat_map(|chain| chain.iter().enumerate().filter(move |(_, tool)| **tool == kind).map(|(position, _)| position))
+            .flat_map(|chain| {
+                chain
+                    .iter()
+                    .enumerate()
+                    .filter(move |(_, tool)| **tool == kind)
+                    .map(|(position, _)| position)
+            })
             .collect::<std::collections::BTreeSet<_>>();
         assert!(chains_with >= 6, "{kind:?} in only {chains_with} chains");
-        assert!(positions.contains(&0) && positions.len() >= 4, "{kind:?} positions {positions:?}");
+        assert!(
+            positions.contains(&0) && positions.len() >= 4,
+            "{kind:?} positions {positions:?}"
+        );
     }
 }
 
@@ -293,14 +395,30 @@ fn tool_chains_compile_process_and_apply_flags_live_in_every_layout() {
         for layout in LAYOUTS {
             let base = compile(&route(chain, layout, Flags::AllActive, chain_index));
             let channels = base.input_node_ids().iter().map(|_| 2).collect::<Vec<_>>();
-            let mut live = RealtimeMixerFanout::from_paths(compile(&route(chain, layout, Flags::AllActive, chain_index)), 4, &channels, FRAMES).unwrap();
+            let mut live = RealtimeMixerFanout::from_paths(
+                compile(&route(chain, layout, Flags::AllActive, chain_index)),
+                4,
+                &channels,
+                FRAMES,
+            )
+            .unwrap();
             for flags in FLAGS {
                 let session = route(chain, layout, flags, chain_index);
                 let set = compile(&session);
                 // Same sources and outputs as the active route: the toggle applies while playing.
-                assert_eq!(set.input_node_ids(), base.input_node_ids(), "{chain:?} {layout:?} {flags:?}");
-                assert_eq!(set.output_node_ids(), base.output_node_ids(), "{chain:?} {layout:?} {flags:?}");
-                live.replace_paths(set).unwrap_or_else(|error| panic!("live replace refused {error:?}: {chain:?} {layout:?} {flags:?}"));
+                assert_eq!(
+                    set.input_node_ids(),
+                    base.input_node_ids(),
+                    "{chain:?} {layout:?} {flags:?}"
+                );
+                assert_eq!(
+                    set.output_node_ids(),
+                    base.output_node_ids(),
+                    "{chain:?} {layout:?} {flags:?}"
+                );
+                live.replace_paths(set).unwrap_or_else(|error| {
+                    panic!("live replace refused {error:?}: {chain:?} {layout:?} {flags:?}")
+                });
                 let outputs = run(&compile(&session), if flags.dry() { 6 } else { 12 });
                 if flags.dry() {
                     for (output, block) in &outputs {
@@ -308,13 +426,24 @@ fn tool_chains_compile_process_and_apply_flags_live_in_every_layout() {
                         for source in dry_sources(layout, output) {
                             let dry = source_block(source, 5);
                             for channel in 0..2 {
-                                for (sum, sample) in expected.channel_mut(channel).unwrap().iter_mut().zip(dry.channel(channel).unwrap()) {
+                                for (sum, sample) in expected
+                                    .channel_mut(channel)
+                                    .unwrap()
+                                    .iter_mut()
+                                    .zip(dry.channel(channel).unwrap())
+                                {
                                     *sum += sample;
                                 }
                             }
                         }
                         for channel in 0..2 {
-                            for (frame, (actual, wanted)) in block.channel(channel).unwrap().iter().zip(expected.channel(channel).unwrap()).enumerate() {
+                            for (frame, (actual, wanted)) in block
+                                .channel(channel)
+                                .unwrap()
+                                .iter()
+                                .zip(expected.channel(channel).unwrap())
+                                .enumerate()
+                            {
                                 assert!((actual - wanted).abs() <= 1e-5, "{chain:?} {layout:?} {flags:?} {output} ch{channel} frame {frame}: {actual} vs {wanted}");
                             }
                         }
@@ -337,7 +466,11 @@ fn recompiling_the_same_combination_gives_identical_audio() {
                 let second = run(&compile(&route(chain, layout, flags, chain_index)), 10);
                 for (output, block) in &first {
                     for channel in 0..2 {
-                        assert_eq!(block.channel(channel), second[output].channel(channel), "{chain:?} {layout:?} {flags:?} {output}");
+                        assert_eq!(
+                            block.channel(channel),
+                            second[output].channel(channel),
+                            "{chain:?} {layout:?} {flags:?} {output}"
+                        );
                     }
                 }
             }

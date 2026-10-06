@@ -1,83 +1,109 @@
 name: AudioRouter CI
 
+# AudioRouter is a Windows 11 x64 product: the audio backend, shell and most
+# crates build only for Windows, so CI runs on Windows alone. The toolchain
+# matches the manual release workflow so lints do not change underneath us.
 on:
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
-jobs:
-  portable:
-    name: Portable Rust and UI
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-      - name: Validate documentation
-        run: node tools/docs/validate.mjs
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-      - name: Test workspace
-        run: cargo test --workspace --locked
-      - name: Strict Clippy
-        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-      - name: Install contract dependencies
-        working-directory: contracts
-        run: npm ci
-      - name: Check contracts
-        working-directory: contracts
-        run: npm run typecheck && npm run check:drift
-      - name: Install UI dependencies
-        working-directory: ui
-        run: npm ci
-      - name: Test and build UI
-        working-directory: ui
-        run: npm test && npm run build
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
+jobs:
   windows:
-    name: Windows Rust validation
+    name: Windows build, tests and release preparation
     runs-on: windows-latest
+    timeout-minutes: 150
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Check out
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install pinned Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
+          node-version: 22.14.0
+          package-manager-cache: false
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # 2026-07-16 action revision
+        with:
+          toolchain: 1.96.0
           components: rustfmt, clippy
+
+      - name: Validate documentation
+        shell: pwsh
+        run: ./tests/acceptance/docs.ps1
+
       - name: Check formatting
-        run: cargo fmt --all -- --check
-      - name: Test non-hardware workspace
+        shell: pwsh
+        run: |
+          cargo fmt --all -- --check
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+
+      - name: Strict Clippy (workspace)
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+      - name: Strict Clippy (desktop shell)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
+
+      - name: Test workspace (no audio hardware)
         run: cargo test --workspace --locked --exclude audiorouter-windows-audio
+
       - name: Check Windows audio adapter
         run: cargo check -p audiorouter-windows-audio --locked
+
+      - name: Test desktop shell
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+
       - name: Check native Rust WASAPI probe
         run: cargo check --manifest-path tools/m00-wasapi-probe/Cargo.toml --locked
+
       - name: Compile native WASAPI probe
         shell: pwsh
         run: ./tests/acceptance/m00-native-build.ps1
-      - name: Validate documentation acceptance wrapper
+
+      - name: CLI parity acceptance
         shell: pwsh
-        run: ./tests/acceptance/docs.ps1
-      - name: Run M04 DSP and recording acceptance
+        run: ./tests/acceptance/m01-cli.ps1
+
+      - name: Install contract dependencies and check API drift
         shell: pwsh
-        run: ./tests/acceptance/m04-dsp-recording.ps1
-      - name: Run M05 UI acceptance
+        run: |
+          npm ci --prefix contracts
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          npm --prefix contracts run typecheck
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          npm --prefix contracts run check:drift
+
+      - name: Install UI dependencies
+        run: npm ci --prefix ui
+
+      - name: Test and build UI
         shell: pwsh
-        run: ./tests/acceptance/m05-ui.ps1
-      - name: Run M07 headless acceptance
-        shell: pwsh
-        run: ./tests/acceptance/m07-headless.ps1
+        run: |
+          npm --prefix ui test
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          npm --prefix ui run build
+
       - name: Verify SDK installer provenance
         shell: pwsh
         run: ./tests/acceptance/m06-sdk-installer.ps1
-      - name: Run M08 unsigned per-user installer acceptance
-        shell: pwsh
-        run: ./tests/acceptance/m08-release.ps1
-      - name: Test release verifier and runbook
+
+      - name: Test release tooling
         shell: pwsh
         run: |
           ./tools/release/test-prepare-artifacts.ps1
           ./tools/release/test-verify-artifacts.ps1
           ./tools/release/test-runbook-command.ps1
-      - name: Strict Clippy
-        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+      - name: Build and verify the unsigned installer and release assets
+        shell: pwsh
+        run: ./tests/acceptance/m08-release.ps1

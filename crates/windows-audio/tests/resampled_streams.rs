@@ -7,7 +7,9 @@
 
 #![cfg(windows)]
 
-use audiorouter_windows_audio::{enumerate_active_endpoints, EndpointDirection, SharedCapture, SharedRender};
+use audiorouter_windows_audio::{
+    enumerate_active_endpoints, EndpointDirection, SharedCapture, SharedRender,
+};
 use std::time::{Duration, Instant};
 
 #[test]
@@ -20,11 +22,21 @@ fn non_48k_endpoint_renders_and_loopback_captures_at_48k() {
         .into_iter()
         .find(|e| e.id == endpoint_id && e.direction == EndpointDirection::Render)
         .expect("active render endpoint");
-    println!("endpoint mix format: {} Hz, {} channel(s), float32 {}", endpoint.sample_rate_hz, endpoint.channels, endpoint.is_ieee_float32());
-    assert_ne!(endpoint.sample_rate_hz, 48_000, "choose an endpoint whose mix rate is not 48 kHz");
+    println!(
+        "endpoint mix format: {} Hz, {} channel(s), float32 {}",
+        endpoint.sample_rate_hz,
+        endpoint.channels,
+        endpoint.is_ieee_float32()
+    );
+    assert_ne!(
+        endpoint.sample_rate_hz, 48_000,
+        "choose an endpoint whose mix rate is not 48 kHz"
+    );
 
-    let mut render = SharedRender::open_with_headroom_at_rate(&endpoint_id, 500_000, 48_000).expect("render at 48 kHz");
-    let mut capture = SharedCapture::open_loopback_at_rate(&endpoint_id, 48_000).expect("loopback at 48 kHz");
+    let mut render = SharedRender::open_with_headroom_at_rate(&endpoint_id, 500_000, 48_000)
+        .expect("render at 48 kHz");
+    let mut capture =
+        SharedCapture::open_loopback_at_rate(&endpoint_id, 48_000).expect("loopback at 48 kHz");
     render.submit_silence().expect("prefill silence");
     render.start().expect("start render");
     capture.start().expect("start loopback");
@@ -43,16 +55,23 @@ fn non_48k_endpoint_renders_and_loopback_captures_at_48k() {
         }
         std::thread::sleep(Duration::from_millis(5));
     }
-    let seconds = counting_since.expect("loopback delivered packets").elapsed().as_secs_f64();
+    let seconds = counting_since
+        .expect("loopback delivered packets")
+        .elapsed()
+        .as_secs_f64();
     let rate = counted as f64 / seconds;
     println!("delivered {counted} frames in {seconds:.3} s = {rate:.0} frames/s");
     capture.stop().expect("stop loopback");
     render.stop().expect("stop render");
-    assert!((rate - 48_000.0).abs() < 48_000.0 * 0.03, "expected about 48000 frames/s, got {rate:.0}");
+    assert!(
+        (rate - 48_000.0).abs() < 48_000.0 * 0.03,
+        "expected about 48000 frames/s, got {rate:.0}"
+    );
 
     // The existing constructors keep the endpoint's own rate (the single-path
     // bridge runs its graph at that rate).
-    let mut render = SharedRender::open_with_headroom(&endpoint_id, 500_000).expect("render at mix rate");
+    let mut render =
+        SharedRender::open_with_headroom(&endpoint_id, 500_000).expect("render at mix rate");
     let mut capture = SharedCapture::open_loopback(&endpoint_id).expect("loopback at mix rate");
     render.submit_silence().expect("prefill silence");
     render.start().expect("start render");
@@ -75,5 +94,8 @@ fn non_48k_endpoint_renders_and_loopback_captures_at_48k() {
     capture.stop().expect("stop loopback");
     render.stop().expect("stop render");
     let expected = f64::from(endpoint.sample_rate_hz);
-    assert!((native - expected).abs() < expected * 0.03, "expected about {expected} frames/s, got {native:.0}");
+    assert!(
+        (native - expected).abs() < expected * 0.03,
+        "expected about {expected} frames/s, got {native:.0}"
+    );
 }

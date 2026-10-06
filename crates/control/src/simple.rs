@@ -32,7 +32,11 @@ pub(crate) const SIMPLE_METHODS: &[(&str, bool)] = &[
 /// can be added by kind alone. Kinds that need an identity chosen in the UI
 /// (plugins, application capture, endpoint loopback, virtual buses) are absent.
 pub(crate) fn node_template(kind: NodeKind) -> Option<(&'static str, Vec<Port>, &'static str)> {
-    let port = |name: &str, direction| Port { name: name.into(), direction, channels: 2 };
+    let port = |name: &str, direction| Port {
+        name: name.into(),
+        direction,
+        channels: 2,
+    };
     let input = || port("in", PortDirection::Input);
     let output = || port("out", PortDirection::Output);
     let tool = |name, description| Some((name, vec![input(), output()], description));
@@ -76,7 +80,10 @@ pub(crate) fn node_template(kind: NodeKind) -> Option<(&'static str, Vec<Port>, 
 
 /// The camelCase wire name of a node kind ("parametricEq").
 fn kind_name(kind: NodeKind) -> String {
-    serde_json::to_value(kind).ok().and_then(|value| value.as_str().map(str::to_owned)).unwrap_or_default()
+    serde_json::to_value(kind)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .unwrap_or_default()
 }
 
 /// Default parameter values of a kind, from the node catalog.
@@ -87,7 +94,11 @@ fn default_parameters(kind: NodeKind) -> serde_json::Map<String, Value> {
         .flatten()
         .filter_map(|parameter| {
             let name = parameter["name"].as_str()?;
-            if name.ends_with(':') { None } else { Some((name.to_owned(), parameter.get("default")?.clone())) }
+            if name.ends_with(':') {
+                None
+            } else {
+                Some((name.to_owned(), parameter.get("default")?.clone()))
+            }
         })
         .collect()
 }
@@ -98,7 +109,13 @@ fn channel_matrix(source: u8, destination: u8) -> Vec<f32> {
         (1, 2) => vec![1.0, 1.0],
         (2, 1) => vec![0.5, 0.5],
         (from, to) => (0..usize::from(to) * usize::from(from))
-            .map(|index| if index / usize::from(from) == index % usize::from(from) { 1.0 } else { 0.0 })
+            .map(|index| {
+                if index / usize::from(from) == index % usize::from(from) {
+                    1.0
+                } else {
+                    0.0
+                }
+            })
             .collect(),
     }
 }
@@ -112,34 +129,81 @@ fn text_param<'v>(params: &'v Value, name: &str) -> Result<&'v str, ControlError
 }
 
 /// Find a node by ID, then by exact name ignoring case.
-pub(crate) fn resolve_node<'s>(session: &'s Session, reference: &str) -> Result<&'s Node, ControlError> {
-    if let Some(node) = session.nodes.iter().find(|node| node.id.as_str() == reference) {
+pub(crate) fn resolve_node<'s>(
+    session: &'s Session,
+    reference: &str,
+) -> Result<&'s Node, ControlError> {
+    if let Some(node) = session
+        .nodes
+        .iter()
+        .find(|node| node.id.as_str() == reference)
+    {
         return Ok(node);
     }
-    let matches = session.nodes.iter().filter(|node| node.name.eq_ignore_ascii_case(reference)).collect::<Vec<_>>();
+    let matches = session
+        .nodes
+        .iter()
+        .filter(|node| node.name.eq_ignore_ascii_case(reference))
+        .collect::<Vec<_>>();
     match matches.as_slice() {
         [node] => Ok(node),
         [] => Err(ControlError::InvalidRequest(format!(
             "no node named \"{reference}\" in this session; nodes: {}",
-            session.nodes.iter().map(|node| format!("\"{}\"", node.name)).collect::<Vec<_>>().join(", ")
+            session
+                .nodes
+                .iter()
+                .map(|node| format!("\"{}\"", node.name))
+                .collect::<Vec<_>>()
+                .join(", ")
         ))),
         many => Err(ControlError::InvalidRequest(format!(
             "several nodes are named \"{reference}\"; use one of these IDs: {}",
-            many.iter().map(|node| node.id.as_str()).collect::<Vec<_>>().join(", ")
+            many.iter()
+                .map(|node| node.id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
         ))),
     }
 }
 
 /// Connect `from` to the first free input of `to`, refusing an occupied
 /// single input (a Mixer input accepts several).
-fn connect(session: &mut Session, from: &EntityId, to: &EntityId) -> Result<EntityId, ControlError> {
-    let source = session.nodes.iter().find(|node| node.id == *from).cloned().ok_or_else(|| ControlError::InvalidRequest("source node is missing".into()))?;
-    let target = session.nodes.iter().find(|node| node.id == *to).cloned().ok_or_else(|| ControlError::InvalidRequest("target node is missing".into()))?;
-    let output = source.ports.iter().find(|port| port.direction == PortDirection::Output).ok_or_else(|| {
-        ControlError::InvalidRequest(format!("\"{}\" has no output to connect from", source.name))
-    })?;
-    if session.edges.iter().any(|edge| edge.source_node == *from && edge.destination_node == *to) {
-        return Err(ControlError::InvalidRequest(format!("\"{}\" is already connected to \"{}\"", source.name, target.name)));
+fn connect(
+    session: &mut Session,
+    from: &EntityId,
+    to: &EntityId,
+) -> Result<EntityId, ControlError> {
+    let source = session
+        .nodes
+        .iter()
+        .find(|node| node.id == *from)
+        .cloned()
+        .ok_or_else(|| ControlError::InvalidRequest("source node is missing".into()))?;
+    let target = session
+        .nodes
+        .iter()
+        .find(|node| node.id == *to)
+        .cloned()
+        .ok_or_else(|| ControlError::InvalidRequest("target node is missing".into()))?;
+    let output = source
+        .ports
+        .iter()
+        .find(|port| port.direction == PortDirection::Output)
+        .ok_or_else(|| {
+            ControlError::InvalidRequest(format!(
+                "\"{}\" has no output to connect from",
+                source.name
+            ))
+        })?;
+    if session
+        .edges
+        .iter()
+        .any(|edge| edge.source_node == *from && edge.destination_node == *to)
+    {
+        return Err(ControlError::InvalidRequest(format!(
+            "\"{}\" is already connected to \"{}\"",
+            source.name, target.name
+        )));
     }
     let input = target
         .ports
@@ -174,22 +238,44 @@ fn connect(session: &mut Session, from: &EntityId, to: &EntityId) -> Result<Enti
 fn display_value(value: &Value, unit: Option<&str>) -> String {
     let text = match value {
         Value::String(text) => text.clone(),
-        Value::Bool(flag) => if *flag { "on".into() } else { "off".into() },
-        Value::Number(number) => number.as_f64().map_or_else(|| number.to_string(), |number| {
-            if number.fract() == 0.0 { format!("{number:.0}") } else { format!("{number:.2}").trim_end_matches('0').to_owned() }
-        }),
+        Value::Bool(flag) => {
+            if *flag {
+                "on".into()
+            } else {
+                "off".into()
+            }
+        }
+        Value::Number(number) => number.as_f64().map_or_else(
+            || number.to_string(),
+            |number| {
+                if number.fract() == 0.0 {
+                    format!("{number:.0}")
+                } else {
+                    format!("{number:.2}").trim_end_matches('0').to_owned()
+                }
+            },
+        ),
         other => other.to_string(),
     };
     match unit {
-        Some(unit) if !unit.is_empty() && !matches!(value, Value::String(_) | Value::Bool(_)) => format!("{text} {unit}"),
+        Some(unit) if !unit.is_empty() && !matches!(value, Value::String(_) | Value::Bool(_)) => {
+            format!("{text} {unit}")
+        }
         _ => text,
     }
 }
 
 impl ControlPlane {
-    pub(crate) fn dispatch_simple(&mut self, method: &str, params: Option<Value>) -> Result<Value, ControlError> {
+    pub(crate) fn dispatch_simple(
+        &mut self,
+        method: &str,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
         let params = params.unwrap_or_else(|| json!({}));
-        let mutating = SIMPLE_METHODS.iter().find(|(name, _)| *name == method).is_some_and(|(_, mutating)| *mutating);
+        let mutating = SIMPLE_METHODS
+            .iter()
+            .find(|(name, _)| *name == method)
+            .is_some_and(|(_, mutating)| *mutating);
         let operation = if mutating {
             let key = text_param(&params, "idempotencyKey")?.to_owned();
             let scoped = self.scoped_idempotency_key(method, &key);
@@ -212,11 +298,20 @@ impl ControlPlane {
                 match method {
                     "sessions.play" => self.simple_play(&session_id),
                     "sessions.togglePlay" => {
-                        if self.simple_running(&session_id) { self.session_stop(&session_id) } else { self.simple_play(&session_id) }
+                        if self.simple_running(&session_id) {
+                            self.session_stop(&session_id)
+                        } else {
+                            self.simple_play(&session_id)
+                        }
                     }
                     "sessions.summary" => self.simple_summary(&session_id),
                     "meters.levels" => self.simple_levels(&session_id),
-                    _ => self.simple_edit(method, &session_id, &params, &operation.as_ref().expect("mutating").2),
+                    _ => self.simple_edit(
+                        method,
+                        &session_id,
+                        &params,
+                        &operation.as_ref().expect("mutating").2,
+                    ),
                 }
             }
         }?;
@@ -227,22 +322,32 @@ impl ControlPlane {
     }
 
     pub(crate) fn simple_session_id(&self, params: &Value) -> Result<EntityId, ControlError> {
-        if let Some(id) = params.get("sessionId").and_then(Value::as_str).filter(|id| !id.is_empty()) {
+        if let Some(id) = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .filter(|id| !id.is_empty())
+        {
             let id = EntityId::new(id);
             self.get_session(&id)?;
             return Ok(id);
         }
-        self.active_session_id.clone().ok_or_else(|| ControlError::InvalidRequest("sessionId is required: no session is active".into()))
+        self.active_session_id.clone().ok_or_else(|| {
+            ControlError::InvalidRequest("sessionId is required: no session is active".into())
+        })
     }
 
     fn simple_running(&self, session_id: &EntityId) -> bool {
-        self.runtimes.get(session_id).is_some_and(|runtime| runtime.state() == RuntimeState::Running)
+        self.runtimes
+            .get(session_id)
+            .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
     }
 
     /// Prepare the saved route's devices (every path) and start, as Play does.
     fn simple_play(&mut self, session_id: &EntityId) -> Result<Value, ControlError> {
         if self.simple_running(session_id) {
-            return Ok(json!({ "sessionId": session_id, "state": "running", "alreadyPlaying": true }));
+            return Ok(
+                json!({ "sessionId": session_id, "state": "running", "alreadyPlaying": true }),
+            );
         }
         self.dispatch_native_paths_prepare(Some(json!({ "sessionId": session_id })))?;
         let mut result = self.session_start(session_id)?;
@@ -269,7 +374,13 @@ impl ControlPlane {
 
     fn simple_summary(&self, session_id: &EntityId) -> Result<Value, ControlError> {
         let session = self.get_session(session_id)?;
-        let name_of = |id: &EntityId| session.nodes.iter().find(|node| node.id == *id).map_or_else(|| id.as_str().to_owned(), |node| node.name.clone());
+        let name_of = |id: &EntityId| {
+            session
+                .nodes
+                .iter()
+                .find(|node| node.id == *id)
+                .map_or_else(|| id.as_str().to_owned(), |node| node.name.clone())
+        };
         let nodes = session
             .nodes
             .iter()
@@ -309,8 +420,17 @@ impl ControlPlane {
 
     fn simple_levels(&self, session_id: &EntityId) -> Result<Value, ControlError> {
         let session = self.get_session(session_id)?;
-        let mut telemetry = self.native_node_telemetry().as_array().cloned().unwrap_or_default();
-        telemetry.extend(self.native_multi_input_node_telemetry().as_array().cloned().unwrap_or_default());
+        let mut telemetry = self
+            .native_node_telemetry()
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        telemetry.extend(
+            self.native_multi_input_node_telemetry()
+                .as_array()
+                .cloned()
+                .unwrap_or_default(),
+        );
         let levels = session
             .nodes
             .iter()
@@ -329,21 +449,37 @@ impl ControlPlane {
                 }))
             })
             .collect::<Vec<_>>();
-        Ok(json!({ "sessionId": session_id, "playing": self.simple_running(session_id), "levels": levels }))
+        Ok(
+            json!({ "sessionId": session_id, "playing": self.simple_running(session_id), "levels": levels }),
+        )
     }
 
     /// Apply one small edit through plan/commit, as the UI's autosave does.
-    fn simple_edit(&mut self, method: &str, session_id: &EntityId, params: &Value, key: &str) -> Result<Value, ControlError> {
+    fn simple_edit(
+        &mut self,
+        method: &str,
+        session_id: &EntityId,
+        params: &Value,
+        key: &str,
+    ) -> Result<Value, ControlError> {
         let current = self.get_session(session_id)?.clone();
         let mut candidate = current.clone();
         let mut detail = json!({});
         match method {
             "nodes.set" => {
-                let node_id = resolve_node(&current, text_param(params, "node")?)?.id.clone();
-                let node = candidate.nodes.iter_mut().find(|node| node.id == node_id).expect("resolved");
+                let node_id = resolve_node(&current, text_param(params, "node")?)?
+                    .id
+                    .clone();
+                let node = candidate
+                    .nodes
+                    .iter_mut()
+                    .find(|node| node.id == node_id)
+                    .expect("resolved");
                 let mut changed = false;
                 if let Some(parameters) = params.get("parameters") {
-                    let parameters = parameters.as_object().ok_or_else(|| ControlError::InvalidRequest("parameters must be an object".into()))?;
+                    let parameters = parameters.as_object().ok_or_else(|| {
+                        ControlError::InvalidRequest("parameters must be an object".into())
+                    })?;
                     for (name, value) in parameters {
                         node.parameters.insert(name.clone(), value.clone());
                         changed = true;
@@ -351,31 +487,67 @@ impl ControlPlane {
                 }
                 for flag in ["enabled", "bypass"] {
                     if let Some(value) = params.get(flag) {
-                        let value = value.as_bool().ok_or_else(|| ControlError::InvalidRequest(format!("{flag} must be true or false")))?;
-                        if flag == "enabled" { node.enabled = value } else { node.bypass = value }
+                        let value = value.as_bool().ok_or_else(|| {
+                            ControlError::InvalidRequest(format!("{flag} must be true or false"))
+                        })?;
+                        if flag == "enabled" {
+                            node.enabled = value
+                        } else {
+                            node.bypass = value
+                        }
                         changed = true;
                     }
                 }
                 if let Some(name) = params.get("name") {
-                    node.name = name.as_str().filter(|name| !name.trim().is_empty()).ok_or_else(|| ControlError::InvalidRequest("name must be non-empty text".into()))?.trim().to_owned();
+                    node.name = name
+                        .as_str()
+                        .filter(|name| !name.trim().is_empty())
+                        .ok_or_else(|| {
+                            ControlError::InvalidRequest("name must be non-empty text".into())
+                        })?
+                        .trim()
+                        .to_owned();
                     changed = true;
                 }
                 if !changed {
-                    return Err(ControlError::InvalidRequest("nothing to change: give parameters, enabled, bypass or name".into()));
+                    return Err(ControlError::InvalidRequest(
+                        "nothing to change: give parameters, enabled, bypass or name".into(),
+                    ));
                 }
                 detail = json!({ "nodeId": node_id, "name": node.name, "enabled": node.enabled, "bypass": node.bypass, "parameters": node.parameters });
             }
             "nodes.toggle" => {
-                let node_id = resolve_node(&current, text_param(params, "node")?)?.id.clone();
+                let node_id = resolve_node(&current, text_param(params, "node")?)?
+                    .id
+                    .clone();
                 let target = text_param(params, "target")?;
-                let node = candidate.nodes.iter_mut().find(|node| node.id == node_id).expect("resolved");
+                let node = candidate
+                    .nodes
+                    .iter_mut()
+                    .find(|node| node.id == node_id)
+                    .expect("resolved");
                 let value = match target {
-                    "enabled" => { node.enabled = !node.enabled; json!(node.enabled) }
-                    "bypass" => { node.bypass = !node.bypass; json!(node.bypass) }
+                    "enabled" => {
+                        node.enabled = !node.enabled;
+                        json!(node.enabled)
+                    }
+                    "bypass" => {
+                        node.bypass = !node.bypass;
+                        json!(node.bypass)
+                    }
                     name => {
                         let schema = Self::node_parameter_schema(node.kind);
-                        let spec = schema.as_array().and_then(|items| items.iter().find(|item| item["name"] == name)).cloned().unwrap_or(Value::Null);
-                        let current_value = node.parameters.get(name).cloned().or_else(|| spec.get("default").cloned()).unwrap_or(Value::Null);
+                        let spec = schema
+                            .as_array()
+                            .and_then(|items| items.iter().find(|item| item["name"] == name))
+                            .cloned()
+                            .unwrap_or(Value::Null);
+                        let current_value = node
+                            .parameters
+                            .get(name)
+                            .cloned()
+                            .or_else(|| spec.get("default").cloned())
+                            .unwrap_or(Value::Null);
                         let next = match (&current_value, spec["enum"].as_array()) {
                             (Value::Bool(flag), _) => json!(!flag),
                             (_, Some(options)) if options.len() == 2 => if options[0] == current_value { options[1].clone() } else { options[0].clone() },
@@ -391,39 +563,79 @@ impl ControlPlane {
             }
             "nodes.add" => {
                 let kind_text = text_param(params, "kind")?;
-                let kind: NodeKind = serde_json::from_value(json!(kind_text)).map_err(|_| ControlError::InvalidRequest(format!("unknown node kind \"{kind_text}\"; see nodes.catalog")))?;
+                let kind: NodeKind = serde_json::from_value(json!(kind_text)).map_err(|_| {
+                    ControlError::InvalidRequest(format!(
+                        "unknown node kind \"{kind_text}\"; see nodes.catalog"
+                    ))
+                })?;
                 let (display, ports, _) = node_template(kind).ok_or_else(|| ControlError::InvalidRequest(format!(
                     "\"{kind_text}\" needs an identity chosen in the AudioRouter window (plugin file, application or device bus)"
                 )))?;
                 let mut suffix = 1;
-                while candidate.nodes.iter().any(|node| node.id.as_str() == format!("{kind_text}-{suffix}")) {
+                while candidate
+                    .nodes
+                    .iter()
+                    .any(|node| node.id.as_str() == format!("{kind_text}-{suffix}"))
+                {
                     suffix += 1;
                 }
                 let id = EntityId::new(format!("{kind_text}-{suffix}"));
                 let mut parameters = default_parameters(kind);
                 if let Some(extra) = params.get("parameters") {
-                    for (name, value) in extra.as_object().ok_or_else(|| ControlError::InvalidRequest("parameters must be an object".into()))? {
+                    for (name, value) in extra.as_object().ok_or_else(|| {
+                        ControlError::InvalidRequest("parameters must be an object".into())
+                    })? {
                         parameters.insert(name.clone(), value.clone());
                     }
                 }
-                let name = params.get("name").and_then(Value::as_str).map(str::trim).filter(|name| !name.is_empty()).map_or_else(|| format!("{display} {suffix}"), str::to_owned);
-                candidate.nodes.push(Node { id: id.clone(), kind, type_version: 1, name: name.clone(), enabled: true, bypass: false, parameters, ports });
+                let name = params
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|name| !name.is_empty())
+                    .map_or_else(|| format!("{display} {suffix}"), str::to_owned);
+                candidate.nodes.push(Node {
+                    id: id.clone(),
+                    kind,
+                    type_version: 1,
+                    name: name.clone(),
+                    enabled: true,
+                    bypass: false,
+                    parameters,
+                    ports,
+                });
                 if let Some(between) = params.get("between") {
-                    let from = resolve_node(&current, text_param(between, "from")?)?.id.clone();
-                    let to = resolve_node(&current, text_param(between, "to")?)?.id.clone();
+                    let from = resolve_node(&current, text_param(between, "from")?)?
+                        .id
+                        .clone();
+                    let to = resolve_node(&current, text_param(between, "to")?)?
+                        .id
+                        .clone();
                     let before = candidate.edges.len();
-                    candidate.edges.retain(|edge| !(edge.source_node == from && edge.destination_node == to));
+                    candidate
+                        .edges
+                        .retain(|edge| !(edge.source_node == from && edge.destination_node == to));
                     if candidate.edges.len() == before {
-                        return Err(ControlError::InvalidRequest("those two nodes are not connected; use after, or connect them first".into()));
+                        return Err(ControlError::InvalidRequest(
+                            "those two nodes are not connected; use after, or connect them first"
+                                .into(),
+                        ));
                     }
                     connect(&mut candidate, &from, &id)?;
                     connect(&mut candidate, &id, &to)?;
                 } else if let Some(after) = params.get("after").and_then(Value::as_str) {
                     let from = resolve_node(&current, after)?.id.clone();
-                    let outgoing = candidate.edges.iter().filter(|edge| edge.source_node == from).map(|edge| edge.destination_node.clone()).collect::<Vec<_>>();
+                    let outgoing = candidate
+                        .edges
+                        .iter()
+                        .filter(|edge| edge.source_node == from)
+                        .map(|edge| edge.destination_node.clone())
+                        .collect::<Vec<_>>();
                     if let [to] = outgoing.as_slice() {
                         let to = to.clone();
-                        candidate.edges.retain(|edge| !(edge.source_node == from && edge.destination_node == to));
+                        candidate.edges.retain(|edge| {
+                            !(edge.source_node == from && edge.destination_node == to)
+                        });
                         connect(&mut candidate, &from, &id)?;
                         connect(&mut candidate, &id, &to)?;
                     } else {
@@ -434,11 +646,28 @@ impl ControlPlane {
             }
             "nodes.remove" => {
                 let node = resolve_node(&current, text_param(params, "node")?)?.clone();
-                let incoming = current.edges.iter().filter(|edge| edge.destination_node == node.id && edge.enabled).map(|edge| edge.source_node.clone()).collect::<Vec<_>>();
-                let outgoing = current.edges.iter().filter(|edge| edge.source_node == node.id && edge.enabled).map(|edge| edge.destination_node.clone()).collect::<Vec<_>>();
-                candidate.nodes.retain(|candidate_node| candidate_node.id != node.id);
-                candidate.edges.retain(|edge| edge.source_node != node.id && edge.destination_node != node.id);
-                let bridge = params.get("bridge").and_then(Value::as_bool).unwrap_or(true);
+                let incoming = current
+                    .edges
+                    .iter()
+                    .filter(|edge| edge.destination_node == node.id && edge.enabled)
+                    .map(|edge| edge.source_node.clone())
+                    .collect::<Vec<_>>();
+                let outgoing = current
+                    .edges
+                    .iter()
+                    .filter(|edge| edge.source_node == node.id && edge.enabled)
+                    .map(|edge| edge.destination_node.clone())
+                    .collect::<Vec<_>>();
+                candidate
+                    .nodes
+                    .retain(|candidate_node| candidate_node.id != node.id);
+                candidate
+                    .edges
+                    .retain(|edge| edge.source_node != node.id && edge.destination_node != node.id);
+                let bridge = params
+                    .get("bridge")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(true);
                 let mut bridged = false;
                 if let ([from], [to], true) = (incoming.as_slice(), outgoing.as_slice(), bridge) {
                     bridged = connect(&mut candidate, from, to).is_ok();
@@ -446,30 +675,49 @@ impl ControlPlane {
                 detail = json!({ "nodeId": node.id, "name": node.name, "bridged": bridged });
             }
             "connections.add" => {
-                let from = resolve_node(&current, text_param(params, "from")?)?.id.clone();
-                let to = resolve_node(&current, text_param(params, "to")?)?.id.clone();
+                let from = resolve_node(&current, text_param(params, "from")?)?
+                    .id
+                    .clone();
+                let to = resolve_node(&current, text_param(params, "to")?)?
+                    .id
+                    .clone();
                 let edge = connect(&mut candidate, &from, &to)?;
                 detail = json!({ "connectionId": edge });
             }
             "connections.remove" => {
-                let from = resolve_node(&current, text_param(params, "from")?)?.id.clone();
-                let to = resolve_node(&current, text_param(params, "to")?)?.id.clone();
+                let from = resolve_node(&current, text_param(params, "from")?)?
+                    .id
+                    .clone();
+                let to = resolve_node(&current, text_param(params, "to")?)?
+                    .id
+                    .clone();
                 let before = candidate.edges.len();
-                candidate.edges.retain(|edge| !(edge.source_node == from && edge.destination_node == to));
+                candidate
+                    .edges
+                    .retain(|edge| !(edge.source_node == from && edge.destination_node == to));
                 if candidate.edges.len() == before {
-                    return Err(ControlError::InvalidRequest("those two nodes are not connected".into()));
+                    return Err(ControlError::InvalidRequest(
+                        "those two nodes are not connected".into(),
+                    ));
                 }
                 detail = json!({ "removed": before - candidate.edges.len() });
             }
             _ => return Err(ControlError::InvalidRequest("method not found".into())),
         }
         let plan = self.plan_graph(session_id, current.revision, candidate)?;
-        let commit = self.commit_graph_scoped(&plan, current.revision, &format!("{method}:{key}"), key)?;
+        let commit =
+            self.commit_graph_scoped(&plan, current.revision, &format!("{method}:{key}"), key)?;
         let mut result = detail;
         if let Some(object) = result.as_object_mut() {
             object.insert("sessionId".into(), json!(session_id));
-            object.insert("revision".into(), commit.get("revision").cloned().unwrap_or(Value::Null));
-            object.insert("activation".into(), commit.get("activation").cloned().unwrap_or(Value::Null));
+            object.insert(
+                "revision".into(),
+                commit.get("revision").cloned().unwrap_or(Value::Null),
+            );
+            object.insert(
+                "activation".into(),
+                commit.get("activation").cloned().unwrap_or(Value::Null),
+            );
         }
         Ok(result)
     }

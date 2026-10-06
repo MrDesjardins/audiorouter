@@ -36,9 +36,18 @@ impl Fft {
         let reverse = (0..size)
             .map(|index| index.reverse_bits() >> (usize::BITS - bits))
             .collect();
-        let cos = (0..size / 2).map(|k| (2.0 * PI * k as f32 / size as f32).cos()).collect();
-        let sin = (0..size / 2).map(|k| (2.0 * PI * k as f32 / size as f32).sin()).collect();
-        Self { size, cos, sin, reverse }
+        let cos = (0..size / 2)
+            .map(|k| (2.0 * PI * k as f32 / size as f32).cos())
+            .collect();
+        let sin = (0..size / 2)
+            .map(|k| (2.0 * PI * k as f32 / size as f32).sin())
+            .collect();
+        Self {
+            size,
+            cos,
+            sin,
+            reverse,
+        }
     }
 
     /// Forward transform when `inverse` is false; unnormalized inverse otherwise.
@@ -155,7 +164,11 @@ impl Stft {
         }
         rule.gains(&self.power, &mut self.gains);
         for bin in 0..SPECTRAL_BINS {
-            let gain = if self.gains[bin].is_finite() { self.gains[bin].clamp(0.0, 1.0) } else { 0.0 };
+            let gain = if self.gains[bin].is_finite() {
+                self.gains[bin].clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
             self.real[bin] *= gain;
             self.imag[bin] *= gain;
             if bin != 0 && bin != SPECTRAL_FRAME / 2 {
@@ -207,7 +220,9 @@ impl SpectralGain for LearnedRule {
             self.smoothed[bin] = 0.5 * self.smoothed[bin] + 0.5 * power[bin];
             let estimate = self.smoothed[bin].max(power[bin] * 0.5);
             let snr_gain = if estimate > 0.0 {
-                (1.0 - self.over_subtraction * self.noise[bin] / estimate).max(0.0).sqrt()
+                (1.0 - self.over_subtraction * self.noise[bin] / estimate)
+                    .max(0.0)
+                    .sqrt()
             } else {
                 0.0
             };
@@ -231,8 +246,19 @@ impl Denoiser {
     /// `floor_percent` 0–100 is the remaining noise floor as linear gain
     /// (0 % removes everything the profile describes, 100 % leaves it).
     /// `profile` is a serialized [`NOISE_PROFILE_BANDS`] profile or `None`.
-    pub fn new(reduction_percent: f32, floor_percent: f32, profile: Option<&str>, learning: bool) -> Self {
-        let clamp = |value: f32| if value.is_finite() { value.clamp(0.0, 100.0) } else { 50.0 };
+    pub fn new(
+        reduction_percent: f32,
+        floor_percent: f32,
+        profile: Option<&str>,
+        learning: bool,
+    ) -> Self {
+        let clamp = |value: f32| {
+            if value.is_finite() {
+                value.clamp(0.0, 100.0)
+            } else {
+                50.0
+            }
+        };
         let mut noise = vec![0.0; SPECTRAL_BINS];
         if let Some(encoded) = profile {
             decode_noise_profile(encoded, &mut noise);
@@ -297,7 +323,11 @@ impl SpectrumTap {
     /// Newest band levels as power in dB (10·log10 of the band's mean bin
     /// power); `None` before the first analysed frame.
     pub fn levels_db(&self) -> Option<[f32; NOISE_PROFILE_BANDS]> {
-        (self.frames.load(Ordering::Acquire) > 0).then(|| std::array::from_fn(|band| power_db(f32::from_bits(self.levels[band].load(Ordering::Relaxed)))))
+        (self.frames.load(Ordering::Acquire) > 0).then(|| {
+            std::array::from_fn(|band| {
+                power_db(f32::from_bits(self.levels[band].load(Ordering::Relaxed)))
+            })
+        })
     }
 
     /// Whether the gate is learning now.
@@ -310,9 +340,9 @@ impl SpectrumTap {
     /// been analysed (an empty profile would store silence as the noise).
     pub fn learned_profile(&self) -> Option<String> {
         (self.is_learning() && self.frames.load(Ordering::Acquire) > 0).then(|| {
-            encode_band_powers(&std::array::from_fn::<f32, NOISE_PROFILE_BANDS, _>(|band| {
-                f32::from_bits(self.learned[band].load(Ordering::Relaxed))
-            }))
+            encode_band_powers(&std::array::from_fn::<f32, NOISE_PROFILE_BANDS, _>(
+                |band| f32::from_bits(self.learned[band].load(Ordering::Relaxed)),
+            ))
         })
     }
 }
@@ -382,7 +412,8 @@ impl SpectrumAnalyzer {
     fn frame(&mut self) {
         // Oldest sample first: the ring's write position is the oldest.
         for index in 0..SPECTRAL_FRAME {
-            self.real[index] = self.history[(self.write + index) % SPECTRAL_FRAME] * self.window[index];
+            self.real[index] =
+                self.history[(self.write + index) % SPECTRAL_FRAME] * self.window[index];
         }
         self.imag.fill(0.0);
         self.fft.transform(&mut self.real, &mut self.imag, false);
@@ -476,12 +507,19 @@ impl SpectralGate {
         learning: bool,
         tap: Option<std::sync::Arc<SpectrumTap>>,
     ) -> Self {
-        let bounded = |value: f32, low: f32, high: f32, fallback: f32| if value.is_finite() { value.clamp(low, high) } else { fallback };
+        let bounded = |value: f32, low: f32, high: f32, fallback: f32| {
+            if value.is_finite() {
+                value.clamp(low, high)
+            } else {
+                fallback
+            }
+        };
         // A profile that learned nothing (every band at the −160 dB floor)
         // is treated as no profile, so the gate passes audio.
         // Learning extends an explicitly supplied profile. Callers requesting
         // replacement learning supply the floor profile instead.
-        let learned = profile.and_then(decode_band_powers)
+        let learned = profile
+            .and_then(decode_band_powers)
             .filter(|powers| powers.iter().any(|power| power_db(*power) > -150.0));
         if let Some(tap) = &tap {
             tap.learning.store(learning, Ordering::Release);
@@ -526,8 +564,16 @@ impl SpectralGain for GateRule {
                 self.threshold[band] = self.threshold[band].max(self.level[band]);
                 1.0
             } else if self.has_threshold {
-                let target = if self.level[band] > self.threshold[band] * self.margin { 1.0 } else { self.floor };
-                if target >= self.gain[band] { target } else { (self.gain[band] * 0.6).max(target) }
+                let target = if self.level[band] > self.threshold[band] * self.margin {
+                    1.0
+                } else {
+                    self.floor
+                };
+                if target >= self.gain[band] {
+                    target
+                } else {
+                    (self.gain[band] * 0.6).max(target)
+                }
             } else {
                 1.0
             };
@@ -580,10 +626,16 @@ impl SpectralGain for SpeechRule {
             // compensate before using it as the noise level.
             let noise = (self.noise[bin] * MINIMUM_BIAS).max(1.0e-12);
             let posterior = current / noise;
-            let prior = (0.98 * self.previous_clean[bin] / noise + 0.02 * (posterior - 1.0).max(0.0)).max(1.0e-3);
+            let prior = (0.98 * self.previous_clean[bin] / noise
+                + 0.02 * (posterior - 1.0).max(0.0))
+            .max(1.0e-3);
             let wiener = prior / (1.0 + prior);
             self.previous_clean[bin] = wiener * wiener * current;
-            let floor = if (self.speech_low..=self.speech_high).contains(&bin) { self.floor } else { self.band_floor };
+            let floor = if (self.speech_low..=self.speech_high).contains(&bin) {
+                self.floor
+            } else {
+                self.band_floor
+            };
             gains[bin] = wiener.sqrt().max(floor);
         }
     }
@@ -602,8 +654,16 @@ impl SpeechDenoiser {
     /// `strength_percent` 0–100: 0 leaves audio unchanged, 100 suppresses
     /// noise down to about −30 dB inside and −40 dB outside the speech band.
     pub fn new(strength_percent: f32, sample_rate: f32) -> Self {
-        let strength = if strength_percent.is_finite() { strength_percent.clamp(0.0, 100.0) / 100.0 } else { 0.5 };
-        let sample_rate = if sample_rate.is_finite() && sample_rate > 0.0 { sample_rate } else { 48_000.0 };
+        let strength = if strength_percent.is_finite() {
+            strength_percent.clamp(0.0, 100.0) / 100.0
+        } else {
+            0.5
+        };
+        let sample_rate = if sample_rate.is_finite() && sample_rate > 0.0 {
+            sample_rate
+        } else {
+            48_000.0
+        };
         let bin_of = |hz: f32| ((hz / sample_rate) * SPECTRAL_FRAME as f32).round() as usize;
         Self {
             stft: Stft::new(),
@@ -671,8 +731,15 @@ impl Convolver {
     /// filtered signal with the (equally delayed) dry signal.
     pub fn new(response: &[f32], gain: f32, wet_percent: f32) -> Self {
         let length = response.len().clamp(1, MAX_IMPULSE_RESPONSE);
-        let energy: f32 = response[..response.len().min(length)].iter().map(|sample| sample * sample).sum();
-        let scale = if energy.is_finite() && energy > 1.0e-12 { gain / energy.sqrt() } else { 0.0 };
+        let energy: f32 = response[..response.len().min(length)]
+            .iter()
+            .map(|sample| sample * sample)
+            .sum();
+        let scale = if energy.is_finite() && energy > 1.0e-12 {
+            gain / energy.sqrt()
+        } else {
+            0.0
+        };
         let partitions = length.div_ceil(CONVOLUTION_BLOCK);
         let fft = Fft::new(CONVOLUTION_FFT);
         let mut response_real = vec![0.0; partitions * CONVOLUTION_BINS];
@@ -683,15 +750,28 @@ impl Convolver {
             real.fill(0.0);
             imag.fill(0.0);
             let start = partition * CONVOLUTION_BLOCK;
-            for (offset, sample) in response.iter().skip(start).take(CONVOLUTION_BLOCK.min(length - start)).enumerate() {
-                real[offset] = if sample.is_finite() { sample * scale } else { 0.0 };
+            for (offset, sample) in response
+                .iter()
+                .skip(start)
+                .take(CONVOLUTION_BLOCK.min(length - start))
+                .enumerate()
+            {
+                real[offset] = if sample.is_finite() {
+                    sample * scale
+                } else {
+                    0.0
+                };
             }
             fft.transform(&mut real, &mut imag, false);
             let base = partition * CONVOLUTION_BINS;
             response_real[base..base + CONVOLUTION_BINS].copy_from_slice(&real[..CONVOLUTION_BINS]);
             response_imag[base..base + CONVOLUTION_BINS].copy_from_slice(&imag[..CONVOLUTION_BINS]);
         }
-        let wet = if wet_percent.is_finite() { wet_percent.clamp(0.0, 100.0) / 100.0 } else { 1.0 };
+        let wet = if wet_percent.is_finite() {
+            wet_percent.clamp(0.0, 100.0) / 100.0
+        } else {
+            1.0
+        };
         Self {
             fft,
             partitions,
@@ -743,8 +823,10 @@ impl Convolver {
         self.fft.transform(&mut self.real, &mut self.imag, false);
         self.newest = (self.newest + self.partitions - 1) % self.partitions;
         let base = self.newest * CONVOLUTION_BINS;
-        self.history_real[base..base + CONVOLUTION_BINS].copy_from_slice(&self.real[..CONVOLUTION_BINS]);
-        self.history_imag[base..base + CONVOLUTION_BINS].copy_from_slice(&self.imag[..CONVOLUTION_BINS]);
+        self.history_real[base..base + CONVOLUTION_BINS]
+            .copy_from_slice(&self.real[..CONVOLUTION_BINS]);
+        self.history_imag[base..base + CONVOLUTION_BINS]
+            .copy_from_slice(&self.imag[..CONVOLUTION_BINS]);
         // Y = Σ X(newest + k) · H(k): partition k meets the input from k blocks ago.
         self.real[..CONVOLUTION_BINS].fill(0.0);
         self.imag[..CONVOLUTION_BINS].fill(0.0);
@@ -752,8 +834,14 @@ impl Convolver {
             let input_base = ((self.newest + partition) % self.partitions) * CONVOLUTION_BINS;
             let response_base = partition * CONVOLUTION_BINS;
             for bin in 0..CONVOLUTION_BINS {
-                let (xr, xi) = (self.history_real[input_base + bin], self.history_imag[input_base + bin]);
-                let (hr, hi) = (self.response_real[response_base + bin], self.response_imag[response_base + bin]);
+                let (xr, xi) = (
+                    self.history_real[input_base + bin],
+                    self.history_imag[input_base + bin],
+                );
+                let (hr, hi) = (
+                    self.response_real[response_base + bin],
+                    self.response_imag[response_base + bin],
+                );
                 self.real[bin] += xr * hr - xi * hi;
                 self.imag[bin] += xr * hi + xi * hr;
             }
@@ -805,7 +893,11 @@ pub fn encode_noise_profile(noise: &[f32]) -> String {
     let mut encoded = String::with_capacity(NOISE_PROFILE_BANDS * 2);
     for band in 0..NOISE_PROFILE_BANDS {
         let bins = &noise[edges[band].min(noise.len())..edges[band + 1].min(noise.len())];
-        let mean = if bins.is_empty() { 0.0 } else { bins.iter().sum::<f32>() / bins.len() as f32 };
+        let mean = if bins.is_empty() {
+            0.0
+        } else {
+            bins.iter().sum::<f32>() / bins.len() as f32
+        };
         let db = 10.0 * mean.max(1.0e-30).log10();
         let step = (db + 160.0).round().clamp(0.0, 255.0) as u8;
         encoded.push_str(&format!("{step:02x}"));
@@ -829,9 +921,7 @@ pub fn decode_noise_profile(encoded: &str, noise: &mut [f32]) -> bool {
     let edges = band_edges();
     for band in 0..NOISE_PROFILE_BANDS {
         let power = 10.0_f32.powf((f32::from(steps[band]) - 160.0) / 10.0);
-        for bin in edges[band]..edges[band + 1] {
-            noise[bin] = power;
-        }
+        noise[edges[band]..edges[band + 1]].fill(power);
     }
     true
 }
@@ -851,7 +941,10 @@ mod analyzer_tests {
         assert!(tap.levels_db().is_none(), "nothing before the first frame");
         for block in 0..200 {
             let samples = (0..128)
-                .map(|frame| amplitude * (2.0 * PI * frequency * (block * 128 + frame) as f32 / 48_000.0).sin())
+                .map(|frame| {
+                    amplitude
+                        * (2.0 * PI * frequency * (block * 128 + frame) as f32 / 48_000.0).sin()
+                })
                 .collect::<Vec<_>>();
             analyzer.analyze(&samples, Some(&samples));
         }
@@ -864,16 +957,30 @@ mod analyzer_tests {
         // 1024-sample frames give ~47 Hz bins: below ~150 Hz the display is coarse.
         for frequency in [250.0, 1_000.0, 6_000.0] {
             let levels = tone_levels(frequency, 0.5);
-            let loudest = (0..NOISE_PROFILE_BANDS).max_by(|a, b| levels[*a].total_cmp(&levels[*b])).unwrap();
+            let loudest = (0..NOISE_PROFILE_BANDS)
+                .max_by(|a, b| levels[*a].total_cmp(&levels[*b]))
+                .unwrap();
             let ratio = centers[loudest] / frequency;
-            assert!((0.8..1.25).contains(&ratio), "{frequency} Hz peaked at {} Hz", centers[loudest]);
-            assert!(levels[loudest] > -20.0 && levels[loudest] < 0.0, "{frequency} Hz level {}", levels[loudest]);
+            assert!(
+                (0.8..1.25).contains(&ratio),
+                "{frequency} Hz peaked at {} Hz",
+                centers[loudest]
+            );
+            assert!(
+                levels[loudest] > -20.0 && levels[loudest] < 0.0,
+                "{frequency} Hz level {}",
+                levels[loudest]
+            );
             let far = (0..NOISE_PROFILE_BANDS).filter(|band| {
                 let r = centers[*band] / frequency;
                 !(0.25..4.0).contains(&r)
             });
             for band in far {
-                assert!(levels[band] < levels[loudest] - 40.0, "{frequency} Hz leaked into {} Hz", centers[band]);
+                assert!(
+                    levels[band] < levels[loudest] - 40.0,
+                    "{frequency} Hz leaked into {} Hz",
+                    centers[band]
+                );
             }
         }
     }
@@ -918,7 +1025,11 @@ mod tests {
         let mut input = original.clone();
         learner.process(&mut input);
         let combined = tap.learned_profile().unwrap();
-        let bytes = |text: &str| (0..64).map(|i| u8::from_str_radix(&text[i*2..i*2+2], 16).unwrap()).collect::<Vec<_>>();
+        let bytes = |text: &str| {
+            (0..64)
+                .map(|i| u8::from_str_radix(&text[i * 2..i * 2 + 2], 16).unwrap())
+                .collect::<Vec<_>>()
+        };
         let (before, after) = (bytes(&old), bytes(&combined));
         assert!(after.iter().zip(&before).all(|(new, old)| new >= old));
         assert!(after.iter().zip(&before).any(|(new, old)| new > old));
@@ -926,9 +1037,13 @@ mod tests {
         assert!((rms(&input[SPECTRAL_LATENCY..]) - wanted).abs() < wanted * 0.05);
         // A new learner seeded with the combined curve keeps it through silence.
         let resumed_tap = std::sync::Arc::new(SpectrumTap::default());
-        let mut resumed = SpectralGate::new(3.0, 60.0, Some(&combined), true, Some(resumed_tap.clone()));
+        let mut resumed =
+            SpectralGate::new(3.0, 60.0, Some(&combined), true, Some(resumed_tap.clone()));
         resumed.process(&mut vec![0.0; 4096]);
-        assert_eq!(resumed_tap.learned_profile().as_deref(), Some(combined.as_str()));
+        assert_eq!(
+            resumed_tap.learned_profile().as_deref(),
+            Some(combined.as_str())
+        );
     }
 
     #[test]
@@ -939,8 +1054,14 @@ mod tests {
         let original = noise(48_000, 7, 0.02);
         let mut hiss = original.clone();
         learner.process(&mut hiss);
-        let (input, output) = (rms(&original[..48_000 - SPECTRAL_LATENCY]), rms(&hiss[SPECTRAL_LATENCY..]));
-        assert!((output - input).abs() < input * 0.05, "learning passes audio: {input} vs {output}");
+        let (input, output) = (
+            rms(&original[..48_000 - SPECTRAL_LATENCY]),
+            rms(&hiss[SPECTRAL_LATENCY..]),
+        );
+        assert!(
+            (output - input).abs() < input * 0.05,
+            "learning passes audio: {input} vs {output}"
+        );
         assert!(tap.is_learning());
         assert!(tap.levels_db().is_some());
         let profile = tap.learned_profile().expect("a profile while learning");
@@ -951,14 +1072,24 @@ mod tests {
         let before = rms(&quiet);
         gate.process(&mut quiet);
         let gated = rms(&quiet[24_000..]);
-        assert!(gated < before * 0.1, "learned noise is turned down: {before} -> {gated}");
+        assert!(
+            gated < before * 0.1,
+            "learned noise is turned down: {before} -> {gated}"
+        );
 
         let mut gate = SpectralGate::new(3.0, 60.0, Some(&profile), false, None);
         let tone = sine(48_000, 1_000.0, 0.3);
-        let mut mixed: Vec<f32> = tone.iter().zip(noise(48_000, 13, 0.02)).map(|(a, b)| a + b).collect();
+        let mut mixed: Vec<f32> = tone
+            .iter()
+            .zip(noise(48_000, 13, 0.02))
+            .map(|(a, b)| a + b)
+            .collect();
         gate.process(&mut mixed);
         let passed = rms(&mixed[24_000..]);
-        assert!(passed > rms(&tone) * 0.8, "a sound louder than the noise passes: {passed}");
+        assert!(
+            passed > rms(&tone) * 0.8,
+            "a sound louder than the noise passes: {passed}"
+        );
     }
 
     #[test]
@@ -968,7 +1099,13 @@ mod tests {
         assert!(tap.is_learning());
         assert_eq!(tap.learned_profile(), None, "nothing analysed yet");
         // An all-floor profile stored by an older build passes audio.
-        let mut gate = SpectralGate::new(3.0, 60.0, Some(&"00".repeat(NOISE_PROFILE_BANDS)), false, None);
+        let mut gate = SpectralGate::new(
+            3.0,
+            60.0,
+            Some(&"00".repeat(NOISE_PROFILE_BANDS)),
+            false,
+            None,
+        );
         let mut hiss = noise(24_000, 5, 0.1);
         let before = rms(&hiss[..24_000 - SPECTRAL_LATENCY]);
         gate.process(&mut hiss);
@@ -982,12 +1119,16 @@ mod tests {
         let before = rms(&hiss[..24_000 - SPECTRAL_LATENCY]);
         gate.process(&mut hiss);
         let after = rms(&hiss[SPECTRAL_LATENCY..]);
-        assert!((after - before).abs() < before * 0.05, "{before} vs {after}");
+        assert!(
+            (after - before).abs() < before * 0.05,
+            "{before} vs {after}"
+        );
     }
 
     #[test]
     fn band_powers_round_trip_through_the_profile_format() {
-        let powers: [f32; NOISE_PROFILE_BANDS] = std::array::from_fn(|band| 10.0_f32.powf(band as f32 / 10.0 - 3.0));
+        let powers: [f32; NOISE_PROFILE_BANDS] =
+            std::array::from_fn(|band| 10.0_f32.powf(band as f32 / 10.0 - 3.0));
         let decoded = decode_band_powers(&encode_band_powers(&powers)).unwrap();
         for (a, b) in powers.iter().zip(decoded) {
             assert!((power_db(*a) - power_db(b)).abs() <= 0.5);
@@ -1023,7 +1164,10 @@ mod tests {
             stft.process(chunk, &mut Unity);
         }
         for frame in 2_048..input.len() - SPECTRAL_LATENCY {
-            assert!((output[frame + SPECTRAL_LATENCY] - input[frame]).abs() < 1e-3, "frame {frame}");
+            assert!(
+                (output[frame + SPECTRAL_LATENCY] - input[frame]).abs() < 1e-3,
+                "frame {frame}"
+            );
         }
     }
 
@@ -1038,13 +1182,20 @@ mod tests {
         let mut applied = Denoiser::new(100.0, 0.0, Some(&profile), false);
         assert!(!applied.is_learning());
         let tone = sine(48_000, 1_000.0, 0.3);
-        let mut mixed: Vec<f32> = tone.iter().zip(&hiss[48_000..]).map(|(t, n)| t + n).collect();
+        let mut mixed: Vec<f32> = tone
+            .iter()
+            .zip(&hiss[48_000..])
+            .map(|(t, n)| t + n)
+            .collect();
         applied.process(&mut mixed);
         let mut noise_only = hiss[48_000..].to_vec();
         let mut again = Denoiser::new(100.0, 0.0, Some(&profile), false);
         again.process(&mut noise_only);
         let tail = 24_000..48_000;
-        assert!(rms(&noise_only[tail.clone()]) < 0.05 / 3.0_f32.sqrt() * 0.3, "noise reduced");
+        assert!(
+            rms(&noise_only[tail.clone()]) < 0.05 / 3.0_f32.sqrt() * 0.3,
+            "noise reduced"
+        );
         assert!(rms(&mixed[tail]) > 0.3 / 2.0_f32.sqrt() * 0.8, "tone kept");
     }
 
@@ -1060,7 +1211,9 @@ mod tests {
         let hiss = noise(96_000, 11, 0.05);
         let tone = sine(96_000, 500.0, 0.3);
         let gate = |frame: usize| (frame / 6_000) % 2 == 0;
-        let mut speech: Vec<f32> = (0..96_000).map(|frame| if gate(frame) { tone[frame] } else { 0.0 } + hiss[frame]).collect();
+        let mut speech: Vec<f32> = (0..96_000)
+            .map(|frame| if gate(frame) { tone[frame] } else { 0.0 } + hiss[frame])
+            .collect();
         denoiser.process(&mut speech);
         let voiced: Vec<f32> = (72_000..96_000 - SPECTRAL_LATENCY)
             .filter(|frame| gate(*frame) && frame % 6_000 > 1_500 && frame % 6_000 < 4_500)
@@ -1078,7 +1231,10 @@ mod tests {
     fn convolver_matches_direct_convolution_after_one_block() {
         let response: Vec<f32> = noise(1_500, 21, 0.3);
         let energy: f32 = response.iter().map(|sample| sample * sample).sum();
-        let normalized: Vec<f32> = response.iter().map(|sample| sample / energy.sqrt()).collect();
+        let normalized: Vec<f32> = response
+            .iter()
+            .map(|sample| sample / energy.sqrt())
+            .collect();
         let input = noise(6_000, 9, 0.5);
         let mut output = input.clone();
         let mut convolver = Convolver::new(&response, 1.0, 100.0);
@@ -1086,9 +1242,14 @@ mod tests {
             convolver.process(chunk);
         }
         for frame in [1_600, 2_345, 4_000, 5_000] {
-            let direct: f32 = (0..normalized.len().min(frame + 1)).map(|tap| normalized[tap] * input[frame - tap]).sum();
+            let direct: f32 = (0..normalized.len().min(frame + 1))
+                .map(|tap| normalized[tap] * input[frame - tap])
+                .sum();
             let actual = output[frame + CONVOLUTION_BLOCK];
-            assert!((actual - direct).abs() < 1e-3, "frame {frame}: {actual} vs {direct}");
+            assert!(
+                (actual - direct).abs() < 1e-3,
+                "frame {frame}: {actual} vs {direct}"
+            );
         }
     }
 

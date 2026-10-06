@@ -79,17 +79,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Synthetic audio through a Recorder node's playback inlet, as the
             // native graph delivers it after Play.
             use audiorouter_engine::AudioTap;
-            let params = request.params.as_ref().ok_or("fixture parameters required")?;
-            let id = audiorouter_domain::EntityId::new(params["sessionId"].as_str().ok_or("fixture session required")?);
-            let node = audiorouter_domain::EntityId::new(params["nodeId"].as_str().ok_or("fixture node required")?);
-            let frame = params["frame"].as_u64().filter(|frame| *frame <= 10_000_000).ok_or("bounded fixture frame required")?;
-            let taps = plane.recorder_tap_set_for_node(&id, &node).map_err(|error| format!("{error:?}"))?;
-            let mut block = audiorouter_engine::AudioBlock::new(2, 128).map_err(|error| format!("{error:?}"))?;
+            let params = request
+                .params
+                .as_ref()
+                .ok_or("fixture parameters required")?;
+            let id = audiorouter_domain::EntityId::new(
+                params["sessionId"]
+                    .as_str()
+                    .ok_or("fixture session required")?,
+            );
+            let node = audiorouter_domain::EntityId::new(
+                params["nodeId"].as_str().ok_or("fixture node required")?,
+            );
+            let frame = params["frame"]
+                .as_u64()
+                .filter(|frame| *frame <= 10_000_000)
+                .ok_or("bounded fixture frame required")?;
+            let taps = plane
+                .recorder_tap_set_for_node(&id, &node)
+                .map_err(|error| format!("{error:?}"))?;
+            let mut block = audiorouter_engine::AudioBlock::new(2, 128)
+                .map_err(|error| format!("{error:?}"))?;
             for channel in 0..2 {
-                block.channel_mut(channel).unwrap().fill(if channel == 0 { 0.1 } else { -0.1 });
+                block
+                    .channel_mut(channel)
+                    .unwrap()
+                    .fill(if channel == 0 { 0.1 } else { -0.1 });
             }
             taps.on_processed_block(frame, &block);
-            serde_json::to_writer(&mut output, &json!({"jsonrpc":"2.0", "id": request.id, "result": {"frames":128,"synthetic":true}}))?;
+            serde_json::to_writer(
+                &mut output,
+                &json!({"jsonrpc":"2.0", "id": request.id, "result": {"frames":128,"synthetic":true}}),
+            )?;
             output.write_all(b"\n")?;
             output.flush()?;
             continue;

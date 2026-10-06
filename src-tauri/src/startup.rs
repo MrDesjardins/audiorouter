@@ -257,8 +257,14 @@ mod windows_registry {
         fn ownership_accepts_the_tray_start_value_and_older_ones() {
             let exe = r#"C:\Program Files\AudioRouter\shell.exe"#;
             assert!(registration_matches(&super::super::run_value(exe), exe));
-            assert!(registration_matches(exe, exe), "0.0.9 and earlier wrote the bare path");
-            assert!(!registration_matches(&format!("{exe} --tray"), exe), "--tray needs the quoted path");
+            assert!(
+                registration_matches(exe, exe),
+                "0.0.9 and earlier wrote the bare path"
+            );
+            assert!(
+                !registration_matches(&format!("{exe} --tray"), exe),
+                "--tray needs the quoted path"
+            );
             assert!(!registration_matches(r#""C:\Other\shell.exe" --tray"#, exe));
         }
 

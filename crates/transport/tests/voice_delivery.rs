@@ -1,7 +1,7 @@
 //! Explicit local-only reuse of an approved voice sample.
 use audiorouter_engine::{AudioBlock, AudioTap};
 use audiorouter_recording::{Mp3Writer, WavFormat, WavWriter};
-use audiorouter_windows_audio::{NetworkSender, decode_network_packet};
+use audiorouter_windows_audio::{decode_network_packet, NetworkSender};
 
 #[test]
 #[ignore = "private voice sample and localhost UDP; explicit opt-in"]

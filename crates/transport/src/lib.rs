@@ -125,9 +125,13 @@ fn log_backend_rpc(frame: &[u8], responses: &[Vec<u8>]) {
 /// Privacy-safe commit outcome shared by backend and shell diagnostics. Never
 /// include runtime reason strings, which may contain node names or file paths.
 pub fn graph_activation_log_summary(result: &serde_json::Value) -> serde_json::Value {
-    let state = result.pointer("/activation/state").and_then(serde_json::Value::as_str)
+    let state = result
+        .pointer("/activation/state")
+        .and_then(serde_json::Value::as_str)
         .filter(|state| matches!(*state, "running" | "pending"));
-    let native = result.pointer("/activation/native/state").and_then(serde_json::Value::as_str)
+    let native = result
+        .pointer("/activation/native/state")
+        .and_then(serde_json::Value::as_str)
         .filter(|state| matches!(*state, "applied" | "restarted" | "restartRequired"));
     serde_json::json!({
         "revision": result.get("revision").and_then(serde_json::Value::as_u64),
@@ -140,23 +144,92 @@ pub fn graph_activation_log_summary(result: &serde_json::Value) -> serde_json::V
 /// Fixed safe diagnostic fields shared by shell and backend. Raw messages,
 /// request values, paths and arbitrary error data must never enter the log.
 pub fn rpc_failure_log_summary(error: &serde_json::Value) -> serde_json::Value {
-    let kind = error.pointer("/data/code").and_then(serde_json::Value::as_str).filter(|kind| matches!(*kind,
-        "permissionDenied" | "revisionConflict" | "rateLimited" | "invalidParams" | "notFound" | "unavailable" | "unsupported" | "internalError" |
-        "invalidArgument" | "accessDenied" | "deviceInUse" | "exclusiveModeOnly" | "deviceInvalidated" | "unsupportedFormat" | "serviceUnavailable" | "bufferConstraint" | "other" |
-        "invalidRequest" | "invalidGraph" | "storageFailure" | "corruptDatabase" | "idempotencyConflict" | "deviceUnavailable" | "ambiguousBinding" | "feedbackCycle" | "pluginUnavailable" | "resourceConflict" | "budgetExceeded" | "diskFull" | "resyncRequired" | "restartRequired" | "planExpired" | "planLimitReached"));
-    let operation = error.pointer("/data/operation").and_then(serde_json::Value::as_str).filter(|op| matches!(*op,
-        "inventory.createEnumerator" | "inventory.enumerateActiveEndpoints" | "inventory.enumerateAllEndpoints" | "inventory.getEndpointCount" | "inventory.getEndpoint" | "inventory.getEndpointId" |
-        "inventory.activateAudioClient" | "inventory.getDevicePeriod" | "inventory.getMixFormat" | "inventory.openPropertyStore" | "inventory.getFriendlyName" | "inventory.getEndpointState" |
-        "IAudioClient::Initialize(render)" | "IAudioClient::Initialize(capture,event-callback)" | "IAudioClient::Initialize(capture,polling)" |
-        "IAudioClient::Initialize(process-loopback)" | "ActivateAudioInterfaceAsync(process-loopback)" | "ActivateAudioInterfaceAsync(process-loopback)/QueryInterface"));
-    let hresult = error.pointer("/data/hresult").and_then(serde_json::Value::as_u64).and_then(|value| u32::try_from(value).ok());
+    let kind = error
+        .pointer("/data/code")
+        .and_then(serde_json::Value::as_str)
+        .filter(|kind| {
+            matches!(
+                *kind,
+                "permissionDenied"
+                    | "revisionConflict"
+                    | "rateLimited"
+                    | "invalidParams"
+                    | "notFound"
+                    | "unavailable"
+                    | "unsupported"
+                    | "internalError"
+                    | "invalidArgument"
+                    | "accessDenied"
+                    | "deviceInUse"
+                    | "exclusiveModeOnly"
+                    | "deviceInvalidated"
+                    | "unsupportedFormat"
+                    | "serviceUnavailable"
+                    | "bufferConstraint"
+                    | "other"
+                    | "invalidRequest"
+                    | "invalidGraph"
+                    | "storageFailure"
+                    | "corruptDatabase"
+                    | "idempotencyConflict"
+                    | "deviceUnavailable"
+                    | "ambiguousBinding"
+                    | "feedbackCycle"
+                    | "pluginUnavailable"
+                    | "resourceConflict"
+                    | "budgetExceeded"
+                    | "diskFull"
+                    | "resyncRequired"
+                    | "restartRequired"
+                    | "planExpired"
+                    | "planLimitReached"
+            )
+        });
+    let operation = error
+        .pointer("/data/operation")
+        .and_then(serde_json::Value::as_str)
+        .filter(|op| {
+            matches!(
+                *op,
+                "inventory.createEnumerator"
+                    | "inventory.enumerateActiveEndpoints"
+                    | "inventory.enumerateAllEndpoints"
+                    | "inventory.getEndpointCount"
+                    | "inventory.getEndpoint"
+                    | "inventory.getEndpointId"
+                    | "inventory.activateAudioClient"
+                    | "inventory.getDevicePeriod"
+                    | "inventory.getMixFormat"
+                    | "inventory.openPropertyStore"
+                    | "inventory.getFriendlyName"
+                    | "inventory.getEndpointState"
+                    | "IAudioClient::Initialize(render)"
+                    | "IAudioClient::Initialize(capture,event-callback)"
+                    | "IAudioClient::Initialize(capture,polling)"
+                    | "IAudioClient::Initialize(process-loopback)"
+                    | "ActivateAudioInterfaceAsync(process-loopback)"
+                    | "ActivateAudioInterfaceAsync(process-loopback)/QueryInterface"
+            )
+        });
+    let hresult = error
+        .pointer("/data/hresult")
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|value| u32::try_from(value).ok());
     let guidance = match kind {
-        Some("deviceInvalidated" | "deviceUnavailable") => Some("Refresh devices and retry the selected endpoint."),
-        Some("accessDenied" | "permissionDenied") => Some("Check the required permission and Windows audio privacy settings."),
-        Some("deviceInUse") => Some("Check which application owns this endpoint, or choose another endpoint."),
+        Some("deviceInvalidated" | "deviceUnavailable") => {
+            Some("Refresh devices and retry the selected endpoint.")
+        }
+        Some("accessDenied" | "permissionDenied") => {
+            Some("Check the required permission and Windows audio privacy settings.")
+        }
+        Some("deviceInUse") => {
+            Some("Check which application owns this endpoint, or choose another endpoint.")
+        }
         Some("serviceUnavailable") => Some("Check Windows Audio service availability and retry."),
         Some("unsupportedFormat") => Some("Choose a supported endpoint format."),
-        Some("revisionConflict") => Some("Refresh the session and review the retained draft before retrying."),
+        Some("revisionConflict") => {
+            Some("Refresh the session and review the retained draft before retrying.")
+        }
         Some("restartRequired") => Some("Stop, prepare the route, and Play again."),
         _ => None,
     };
@@ -175,9 +248,17 @@ pub fn rpc_failure_log_summary(error: &serde_json::Value) -> serde_json::Value {
 fn commit_log_distinguishes_saved_from_live_applied_without_exposing_reason() {
     let result = serde_json::json!({"revision":123,"activation":{"state":"running","generation":7,"native":{"state":"restartRequired","reason":"private node and plugin path"}}});
     let summary = graph_activation_log_summary(&result);
-    assert_eq!(summary, serde_json::json!({"revision":123,"state":"running","generation":7,"nativeState":"restartRequired"}));
+    assert_eq!(
+        summary,
+        serde_json::json!({"revision":123,"state":"running","generation":7,"nativeState":"restartRequired"})
+    );
     assert!(!summary.to_string().contains("private"));
-    assert_eq!(graph_activation_log_summary(&serde_json::json!({"activation":{"native":{"state":"private"}}}))["nativeState"], serde_json::Value::Null);
+    assert_eq!(
+        graph_activation_log_summary(
+            &serde_json::json!({"activation":{"native":{"state":"private"}}})
+        )["nativeState"],
+        serde_json::Value::Null
+    );
 }
 
 fn backend_rpc_log_records(
@@ -224,7 +305,9 @@ fn backend_rpc_log_records(
 }
 
 pub fn device_inventory_log_summary(result: &serde_json::Value) -> serde_json::Value {
-    let items = result.as_array().or_else(|| result.get("items").and_then(serde_json::Value::as_array));
+    let items = result
+        .as_array()
+        .or_else(|| result.get("items").and_then(serde_json::Value::as_array));
     serde_json::json!({
         "deviceCount": items.map(Vec::len),
         "captureCount": items.map(|items| items.iter().filter(|item| item["direction"] == "capture").count()),
@@ -236,12 +319,16 @@ pub fn device_inventory_log_summary(result: &serde_json::Value) -> serde_json::V
 
 #[test]
 fn failure_logs_preserve_audio_context_and_reject_unbounded_private_fields() {
-    let summary = rpc_failure_log_summary(&serde_json::json!({"code":-32000,"message":"private device path","data":{"code":"deviceInvalidated","operation":"inventory.openPropertyStore","hresult":3758096907_u32,"retryable":true,"remediation":"private token"}}));
+    let summary = rpc_failure_log_summary(
+        &serde_json::json!({"code":-32000,"message":"private device path","data":{"code":"deviceInvalidated","operation":"inventory.openPropertyStore","hresult":3758096907_u32,"retryable":true,"remediation":"private token"}}),
+    );
     assert_eq!(summary["operation"], "inventory.openPropertyStore");
     assert_eq!(summary["hresultHex"], "0xE000020B");
     assert_eq!(summary["kind"], "deviceInvalidated");
     assert!(!summary.to_string().contains("private"));
-    let hostile = rpc_failure_log_summary(&serde_json::json!({"code":{},"data":{"code":"private".repeat(50000),"operation":"private path","hresult":{"audio":"secret"},"retryable":"token"}}));
+    let hostile = rpc_failure_log_summary(
+        &serde_json::json!({"code":{},"data":{"code":"private".repeat(50000),"operation":"private path","hresult":{"audio":"secret"},"retryable":"token"}}),
+    );
     assert_eq!(hostile["kind"], serde_json::Value::Null);
     assert_eq!(hostile["operation"], serde_json::Value::Null);
     assert_eq!(hostile["hresult"], serde_json::Value::Null);
@@ -250,17 +337,28 @@ fn failure_logs_preserve_audio_context_and_reject_unbounded_private_fields() {
 
 #[test]
 fn device_logs_show_counts_without_names_and_event_errors_remain_visible() {
-    let summary = device_inventory_log_summary(&serde_json::json!({"items":[{"direction":"capture","state":"active","name":"private mic"},{"direction":"render","state":"unplugged","id":"private id"}],"nextCursor":"private cursor"}));
+    let summary = device_inventory_log_summary(
+        &serde_json::json!({"items":[{"direction":"capture","state":"active","name":"private mic"},{"direction":"render","state":"unplugged","id":"private id"}],"nextCursor":"private cursor"}),
+    );
     assert_eq!(summary["deviceCount"], 2);
     assert_eq!(summary["captureCount"], 1);
     assert_eq!(summary["inactiveCount"], 1);
     assert_eq!(summary["hasMore"], true);
     assert!(!summary.to_string().contains("private"));
-    let request = audiorouter_protocol::encode_frame(&serde_json::json!({"jsonrpc":"2.0","id":4,"method":"events.subscribe","params":{}})).unwrap();
-    let ok = audiorouter_protocol::encode_frame(&serde_json::json!({"jsonrpc":"2.0","id":4,"result":{}})).unwrap();
+    let request = audiorouter_protocol::encode_frame(
+        &serde_json::json!({"jsonrpc":"2.0","id":4,"method":"events.subscribe","params":{}}),
+    )
+    .unwrap();
+    let ok = audiorouter_protocol::encode_frame(
+        &serde_json::json!({"jsonrpc":"2.0","id":4,"result":{}}),
+    )
+    .unwrap();
     assert!(backend_rpc_log_records(&request, &[ok], 1).is_empty());
     let error = audiorouter_protocol::encode_frame(&serde_json::json!({"jsonrpc":"2.0","id":4,"error":{"code":-32000,"data":{"code":"resyncRequired"}}})).unwrap();
-    assert_eq!(backend_rpc_log_records(&request, &[error], 1)[0]["errorKind"], "resyncRequired");
+    assert_eq!(
+        backend_rpc_log_records(&request, &[error], 1)[0]["errorKind"],
+        "resyncRequired"
+    );
 }
 
 fn is_high_frequency_rpc(method: &str) -> bool {
@@ -1072,7 +1170,9 @@ pub fn serve_control_connections_forever_observed(
     match served {
         Ok(()) => match io.join() {
             Ok(result) => result,
-            Err(_) => Err(TransportError::Protocol("control I/O thread panicked".into())),
+            Err(_) => Err(TransportError::Protocol(
+                "control I/O thread panicked".into(),
+            )),
         },
         Err(_) => {
             drop(received);
@@ -1082,18 +1182,17 @@ pub fn serve_control_connections_forever_observed(
     }
 }
 
+/// The pipe I/O thread and the frames it forwards to the control plane.
+#[cfg(windows)]
+type ControlIo = (
+    std::thread::JoinHandle<Result<(), TransportError>>,
+    std::sync::mpsc::Receiver<ControlFrame>,
+);
+
 /// Start the pipe I/O thread that accepts clients and forwards each frame to
 /// the returned receiver, waiting for the control plane's reply.
 #[cfg(windows)]
-fn spawn_control_io(
-    name: &str,
-) -> Result<
-    (
-        std::thread::JoinHandle<Result<(), TransportError>>,
-        std::sync::mpsc::Receiver<ControlFrame>,
-    ),
-    TransportError,
-> {
+fn spawn_control_io(name: &str) -> Result<ControlIo, TransportError> {
     let (frames, received) = std::sync::mpsc::sync_channel::<ControlFrame>(0);
     let io_name = name.to_owned();
     let io = std::thread::Builder::new()
@@ -1125,10 +1224,7 @@ fn spawn_control_io(
 /// reaches its stopped-plane error. Bounded: an unresponsive thread is left
 /// detached rather than hanging the supervisor.
 #[cfg(windows)]
-fn stop_control_io(
-    name: &str,
-    io: std::thread::JoinHandle<Result<(), TransportError>>,
-) {
+fn stop_control_io(name: &str, io: std::thread::JoinHandle<Result<(), TransportError>>) {
     for _ in 0..50 {
         if io.is_finished() {
             let _ = io.join();
@@ -1158,11 +1254,16 @@ fn serve_control_plane_frames(
             Ok(request) => {
                 wait = wait_start.map(|start| start.elapsed()).unwrap_or_default();
                 let dispatch_start = observer.as_ref().map(|_| std::time::Instant::now());
-                let result = dispatch_control_frame(plane, grant, request.client_pid, &request.frame);
+                let result =
+                    dispatch_control_frame(plane, grant, request.client_pid, &request.frame);
                 let _ = request.reply.send(result);
-                dispatch = dispatch_start.map(|start| start.elapsed()).unwrap_or_default();
+                dispatch = dispatch_start
+                    .map(|start| start.elapsed())
+                    .unwrap_or_default();
             }
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => { wait = wait_start.map(|start| start.elapsed()).unwrap_or_default(); }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                wait = wait_start.map(|start| start.elapsed()).unwrap_or_default();
+            }
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return,
         }
         let service_start = std::time::Instant::now();
@@ -1402,7 +1503,10 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn stopped_control_plane_releases_the_pipe_for_a_restarted_server() {
-        let name = format!(r"\\.\pipe\audiorouter-test-io-release-{}", std::process::id());
+        let name = format!(
+            r"\\.\pipe\audiorouter-test-io-release-{}",
+            std::process::id()
+        );
         let (io, received) = spawn_control_io(&name).unwrap();
         // Let the I/O thread block in ConnectNamedPipe, as in production.
         std::thread::sleep(std::time::Duration::from_millis(100));

@@ -145,7 +145,7 @@ pub fn decode_audio<R: Read + Seek + MediaSource + 'static>(
             .ok_or(AudioFileDecodeError::TooLarge)?;
         if new_len
             .checked_mul(std::mem::size_of::<f32>())
-            .map_or(true, |bytes| bytes > MAX_DECODED_SAMPLE_BYTES)
+            .is_none_or(|bytes| bytes > MAX_DECODED_SAMPLE_BYTES)
         {
             return Err(AudioFileDecodeError::TooLong);
         }

@@ -33,16 +33,32 @@ impl HttpApi {
     pub fn start(port: u16, forward: Arc<Forward>) -> Result<Self, String> {
         let mut bytes = [0u8; 32];
         getrandom::fill(&mut bytes).map_err(|_| "Cannot securely generate API token")?;
-        Self::start_with_token(port, bytes.iter().map(|b| format!("{b:02x}")).collect(), forward)
+        Self::start_with_token(
+            port,
+            bytes.iter().map(|b| format!("{b:02x}")).collect(),
+            forward,
+        )
     }
-    pub fn start_with_token(port: u16, token: String, forward: Arc<Forward>) -> Result<Self, String> {
+    #[cfg(test)]
+    pub fn start_with_token(
+        port: u16,
+        token: String,
+        forward: Arc<Forward>,
+    ) -> Result<Self, String> {
         Self::start_on(port, token, None, forward)
     }
     /// Loopback is always served. `lan` adds one listener on that exact
     /// private or link-local address of this PC (HTTP-09); peers on it must
     /// themselves be private or link-local. Never binds every interface.
-    pub fn start_on(port: u16, token: String, lan: Option<Ipv4Addr>, forward: Arc<Forward>) -> Result<Self, String> {
-        if token.len() != 64 || !token.bytes().all(|b| b.is_ascii_hexdigit()) { return Err("Invalid API token".into()); }
+    pub fn start_on(
+        port: u16,
+        token: String,
+        lan: Option<Ipv4Addr>,
+        forward: Arc<Forward>,
+    ) -> Result<Self, String> {
+        if token.len() != 64 || !token.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err("Invalid API token".into());
+        }
         if let Some(address) = lan {
             if !lan_address_allowed(address) {
                 return Err(format!("{address} is not a private local-network address. Choose this PC's home or office network address."));
@@ -226,11 +242,21 @@ pub fn openapi(describe: &Value, port: u16, lan: Option<Ipv4Addr>) -> Value {
             .unwrap_or(json!({}));
         paths.insert(format!("/api/v1/{path}"), json!({"get": {"operationId": format!("http.{path}"), "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Backend result", "content": {"application/json": {"schema": schema}}}}}}));
     }
-    let active_get = describe["methods"].as_array().into_iter().flatten()
-        .find(|method| method["name"] == "sessions.active.get").map(|method| method["outputSchema"].clone()).unwrap_or(json!({}));
-    let active_set = describe["methods"].as_array().into_iter().flatten()
+    let active_get = describe["methods"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|method| method["name"] == "sessions.active.get")
+        .map(|method| method["outputSchema"].clone())
+        .unwrap_or(json!({}));
+    let active_set = describe["methods"]
+        .as_array()
+        .into_iter()
+        .flatten()
         .find(|method| method["name"] == "sessions.active.set");
-    let active_path = paths.entry("/api/v1/sessions/active").or_insert_with(|| json!({}));
+    let active_path = paths
+        .entry("/api/v1/sessions/active")
+        .or_insert_with(|| json!({}));
     active_path["get"] = json!({ "operationId": "http.sessions.active", "responses": { "200": { "description": "Currently selected editing session; audio is not started", "content": { "application/json": { "schema": active_get } } } }, "security": [{"bearerAuth": []}] });
     active_path["put"] = json!({ "operationId": "http.sessions.activate", "summary": "Select the editing session without starting audio", "requestBody": { "required": true, "content": { "application/json": { "schema": active_set.map(|method| method["inputSchema"].clone()).unwrap_or(json!({})) } } }, "responses": { "200": { "description": "Selected session", "content": { "application/json": { "schema": active_set.map(|method| method["outputSchema"].clone()).unwrap_or(json!({})) } } }, "400": { "description": "Unknown session"}, "403": { "description": "Permission denied"} }, "security": [{"bearerAuth": []}] });
     json!({"openapi": "3.1.0", "info": {"title": "AudioRouter local API", "version": "1.0.0"}, "servers": std::iter::once(format!("http://127.0.0.1:{port}")).chain(lan.map(|address| format!("http://{address}:{port}"))).map(|url| json!({"url": url})).collect::<Vec<_>>(), "paths": paths, "components": {"securitySchemes": {"bearerAuth": {"type": "http", "scheme": "bearer"}}}})
@@ -331,7 +357,11 @@ fn handle(
             return fail(stream, 400, "Duplicate or invalid header");
         }
     }
-    if !host_allowed(fields.get("host").copied(), fields.get("origin").copied(), hosts) {
+    if !host_allowed(
+        fields.get("host").copied(),
+        fields.get("origin").copied(),
+        hosts,
+    ) {
         return fail(
             stream,
             403,
@@ -386,7 +416,11 @@ fn handle(
                 return fail(stream, 404, "Unknown API operation");
             }
             if DESKTOP_ONLY_METHODS.contains(&method.as_str()) {
-                return fail(stream, 403, "Choose the recording folder in the AudioRouter window");
+                return fail(
+                    stream,
+                    403,
+                    "Choose the recording folder in the AudioRouter window",
+                );
             }
             method
         }
@@ -403,9 +437,9 @@ fn handle(
         return fail(stream, 413, "JSON body exceeds 4 MiB");
     }
     let params = if verb == "POST" || verb == "PUT" {
-        if !fields
+        if fields
             .get("content-type")
-            .is_some_and(|value| value.split(';').next() == Some("application/json"))
+            .is_none_or(|value| value.split(';').next() != Some("application/json"))
         {
             return fail(stream, 400, "Content-Type must be application/json");
         }
@@ -586,11 +620,29 @@ mod tests {
     fn streamdeck_style_requests_work_by_name_in_one_call() {
         let (api, plane) = fixture();
         // A key press: toggle a node by its name, no IDs or revisions.
-        let (status, toggled) = call(&api, "/api/v1/nodes/toggle", Some(json!({"node":"neutral GAIN","target":"bypass","idempotencyKey":"deck-1"})));
+        let (status, toggled) = call(
+            &api,
+            "/api/v1/nodes/toggle",
+            Some(json!({"node":"neutral GAIN","target":"bypass","idempotencyKey":"deck-1"})),
+        );
         assert_eq!(status, 200, "{toggled}");
         assert_eq!(toggled["value"], true);
-        let session = plane(&rpc("sessions.get", Some(json!({"sessionId":"desktop-session"})))).unwrap().result.unwrap();
-        assert_eq!(session["nodes"].as_array().unwrap().iter().find(|node| node["name"] == "Neutral gain").unwrap()["bypass"], true);
+        let session = plane(&rpc(
+            "sessions.get",
+            Some(json!({"sessionId":"desktop-session"})),
+        ))
+        .unwrap()
+        .result
+        .unwrap();
+        assert_eq!(
+            session["nodes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|node| node["name"] == "Neutral gain")
+                .unwrap()["bypass"],
+            true
+        );
         // Displays read a plain summary and compact levels.
         let (status, summary) = call(&api, "/api/v1/sessions/summary", Some(json!({})));
         assert_eq!(status, 200, "{summary}");
@@ -601,15 +653,27 @@ mod tests {
         // The recording folder is read-only here; only the window approves one.
         let (status, root) = call(&api, "/api/v1/recordings/getRoot", Some(json!({})));
         assert_eq!(status, 200, "{root}");
-        let (status, refused) = call(&api, "/api/v1/recordings/setRoot", Some(json!({"root":"C:\\Temp","create":true,"idempotencyKey":"deck-root"})));
+        let (status, refused) = call(
+            &api,
+            "/api/v1/recordings/setRoot",
+            Some(json!({"root":"C:\\Temp","create":true,"idempotencyKey":"deck-root"})),
+        );
         assert_eq!(status, 403, "{refused}");
         // A token holder cannot allow itself to open audio devices.
-        let (status, refused) = call(&api, "/api/v1/devices/setAccess", Some(json!({"allowed":true,"idempotencyKey":"deck-devices"})));
+        let (status, refused) = call(
+            &api,
+            "/api/v1/devices/setAccess",
+            Some(json!({"allowed":true,"idempotencyKey":"deck-devices"})),
+        );
         assert_eq!(status, 403, "{refused}");
         let (status, access) = call(&api, "/api/v1/devices/getAccess", Some(json!({})));
         assert_eq!(status, 200, "{access}");
         // Mistakes come back as 400 with a readable reason.
-        let (status, error) = call(&api, "/api/v1/nodes/toggle", Some(json!({"node":"Guitar","target":"bypass","idempotencyKey":"deck-2"})));
+        let (status, error) = call(
+            &api,
+            "/api/v1/nodes/toggle",
+            Some(json!({"node":"Guitar","target":"bypass","idempotencyKey":"deck-2"})),
+        );
         assert_eq!(status, 400, "{error}");
         assert!(error.to_string().contains("no node named"), "{error}");
     }
@@ -683,22 +747,42 @@ mod tests {
             ("0.0.0.0", false),
             ("127.0.0.1", false),
         ] {
-            assert_eq!(lan_address_allowed(address.parse().unwrap()), allowed, "{address}");
+            assert_eq!(
+                lan_address_allowed(address.parse().unwrap()),
+                allowed,
+                "{address}"
+            );
         }
-        assert!(HttpApi::start_on(0, "a".repeat(64), Some("8.8.8.8".parse().unwrap()), Arc::new(|_| unreachable!()))
-            .err()
-            .unwrap()
-            .contains("not a private"));
+        assert!(HttpApi::start_on(
+            0,
+            "a".repeat(64),
+            Some("8.8.8.8".parse().unwrap()),
+            Arc::new(|_| unreachable!())
+        )
+        .err()
+        .unwrap()
+        .contains("not a private"));
         assert!(peer_allowed("127.0.0.1".parse().unwrap(), false));
         assert!(!peer_allowed("192.168.1.30".parse().unwrap(), false));
         assert!(peer_allowed("192.168.1.30".parse().unwrap(), true));
         assert!(!peer_allowed("203.0.113.9".parse().unwrap(), true));
         assert!(peer_allowed("::ffff:192.168.1.30".parse().unwrap(), true));
         assert!(!peer_allowed("fe80::1".parse().unwrap(), true));
-        let hosts = ["127.0.0.1:17891".to_string(), "192.168.1.20:17891".to_string()];
+        let hosts = [
+            "127.0.0.1:17891".to_string(),
+            "192.168.1.20:17891".to_string(),
+        ];
         assert!(host_allowed(Some("192.168.1.20:17891"), None, &hosts));
-        assert!(host_allowed(Some("192.168.1.20:17891"), Some("http://192.168.1.20:17891"), &hosts));
-        assert!(!host_allowed(Some("192.168.1.20:17891"), Some("http://127.0.0.1:17891"), &hosts));
+        assert!(host_allowed(
+            Some("192.168.1.20:17891"),
+            Some("http://192.168.1.20:17891"),
+            &hosts
+        ));
+        assert!(!host_allowed(
+            Some("192.168.1.20:17891"),
+            Some("http://127.0.0.1:17891"),
+            &hosts
+        ));
         assert!(!host_allowed(Some("192.168.1.21:17891"), None, &hosts));
         assert!(!host_allowed(Some("audiorouter.local:17891"), None, &hosts));
         assert!(!host_allowed(None, None, &hosts));
@@ -708,7 +792,11 @@ mod tests {
     /// connected private network has nothing to bind and skips.
     #[test]
     fn network_listener_serves_its_address_beside_loopback() {
-        let Some(lan) = crate::lan_addresses::list().unwrap().first().map(|entry| entry.address) else {
+        let Some(lan) = crate::lan_addresses::list()
+            .unwrap()
+            .first()
+            .map(|entry| entry.address)
+        else {
             eprintln!("no private IPv4 address on this PC; skipped");
             return;
         };
@@ -730,8 +818,15 @@ mod tests {
         let port = api.port;
         let over_network = |host: String| {
             let mut stream = TcpStream::connect((lan, port)).unwrap();
-            stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
-            write!(stream, "GET /api/v1/status HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {}\r\n\r\n", api.token).unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            write!(
+                stream,
+                "GET /api/v1/status HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {}\r\n\r\n",
+                api.token
+            )
+            .unwrap();
             let mut result = String::new();
             stream.read_to_string(&mut result).unwrap();
             result
@@ -832,7 +927,12 @@ mod tests {
         assert_eq!(token, restarted.token);
         assert!(exchange(port, &format!("GET /api/v1/status HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\n\r\n")).starts_with("HTTP/1.1 200"));
         drop(restarted);
-        let rotated = HttpApi::start_with_token(port, crate::api_token::generate().unwrap(), Arc::new(move |request| Ok(ControlPlane::new("rotation").dispatch(request.clone())))).unwrap();
+        let rotated = HttpApi::start_with_token(
+            port,
+            crate::api_token::generate().unwrap(),
+            Arc::new(move |request| Ok(ControlPlane::new("rotation").dispatch(request.clone()))),
+        )
+        .unwrap();
         assert_ne!(token, rotated.token);
         assert!(exchange(port, &format!("GET /api/v1/status HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\n\r\n")).starts_with("HTTP/1.1 401"));
         assert_eq!(call(&rotated, "/api/v1/status", None).0, 200);
