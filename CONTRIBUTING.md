@@ -38,6 +38,8 @@ cargo fmt --all
 cargo fmt --manifest-path src-tauri/Cargo.toml
 ```
 
-To have Git refuse unformatted commits, enable the checked-in hook once per
-clone: `git config core.hooksPath .githooks`. Claude Code sessions format
-each Rust file they edit automatically (`.claude/settings.json`).
+To format automatically at commit time, enable the checked-in hook once per
+clone: `git config core.hooksPath .githooks`. It runs `rustfmt` only on the
+`.rs` files you staged and re-stages them; a file with unstaged edits is
+checked instead, and the commit stops until you format and stage it. Claude
+Code sessions also format each Rust file they edit (`.claude/settings.json`).

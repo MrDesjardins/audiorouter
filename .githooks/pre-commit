@@ -1,13 +1,36 @@
 #!/bin/sh
-# Refuse a commit whose Rust code is not formatted (CI runs the same check).
+# Format the staged Rust files, and only those, before each commit (CI runs
+# `cargo fmt --check`). A fully staged file is formatted and re-staged. A file
+# that also has unstaged edits is only checked, so the hook never stages work
+# you left out of the commit.
 # Enable once per clone: git config core.hooksPath .githooks
-if ! git diff --cached --name-only --diff-filter=ACM | grep -q '\.rs$'; then
-    exit 0
-fi
-if ! cargo fmt --all -- --check >/dev/null 2>&1 \
-    || ! cargo fmt --manifest-path src-tauri/Cargo.toml -- --check >/dev/null 2>&1; then
-    echo "Rust code is not formatted. Run:" >&2
-    echo "  cargo fmt --all && cargo fmt --manifest-path src-tauri/Cargo.toml" >&2
-    echo "then stage the changes and commit again." >&2
-    exit 1
-fi
+#
+# rustfmt reads each file on stdin so it formats exactly that file; given a
+# path, it would also rewrite every submodule the file declares.
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR -- '*.rs')
+[ -z "$staged" ] && exit 0
+
+unstaged=$(git diff --name-only -- '*.rs')
+formatted=$(mktemp) || exit 1
+trap 'rm -f "$formatted"' EXIT
+status=0
+# Rust paths in this repository contain no spaces or newlines.
+for file in $staged; do
+    if ! rustfmt --edition 2021 < "$file" > "$formatted"; then
+        echo "rustfmt could not parse $file." >&2
+        status=1
+        continue
+    fi
+    cmp -s "$formatted" "$file" && continue
+    if printf '%s\n' "$unstaged" | grep -qxF "$file"; then
+        echo "$file is not formatted and has unstaged changes; format it and stage it:" >&2
+        echo "  rustfmt --edition 2021 $file" >&2
+        status=1
+    else
+        cat "$formatted" > "$file"
+        git add -- "$file"
+        echo "Formatted $file"
+    fi
+done
+exit $status
