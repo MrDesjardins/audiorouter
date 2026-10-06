@@ -617,11 +617,11 @@ if (-not $stream.Contains('ullPresentationPosition > MAXULONGLONG / sampleRate')
 if (-not $stream.Contains('m_pPortStream == NULL')) {
     throw 'WaveRT DMA allocation must reject a missing PortCls stream owner'
 }
-if (-not $stream.Contains('RequestedSize_ > (MAXULONG / 4)')) {
-    throw 'WaveRT notification allocation must bound diagnostic-size multiplication'
+if ($stream.Contains('m_SaveData') -or $stream.Contains('SetMaxWriteSize')) {
+    throw 'WaveRT stream must not retain sample file-writer state or allocation'
 }
-if (-not $stream.Contains('static_cast<ULONGLONG>(RequestedSize_) * 1000')) {
-    throw 'WaveRT notification timing arithmetic must widen before multiplication'
+if (-not $stream.Contains('static_cast<ULONGLONG>(RequestedSize_) * 10000000')) {
+    throw 'WaveRT notification interval must be calculated in 100 ns units'
 }
 if (-not $stream.Contains('m_pDmaBuffer != NULL && m_pPortStream != NULL')) {
     throw 'WaveRT buffer teardown must not dereference a missing PortCls stream owner'

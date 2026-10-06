@@ -376,6 +376,15 @@ tone-continuity measurements remain pending. Remaining immediate WP-05 task:
 remove sample tone/file-writing state and dependencies without disturbing the
 driver's unrelated worker/device lifecycle, then retest and document.
 
+Sample-path cleanup follow-up (2026-10-05): removed the synthetic capture tone,
+its tone-generation utility and registry controls, and all per-stream SaveData
+initialization, allocation, stop-wait, and DRM hooks. Shared SaveData worker
+pool setup/teardown remains in common-device lifecycle code, which carries the
+adapter's existing shared-state and Bluetooth HFP constraints; WaveRT streams
+no longer reference or call it. x64/ARM64 WDK acceptance, 132 portable bridge
+checks, source-reference scan, and docs link validation pass. VM period/drift
+and audio-quality gates remain pending.
+
 - **Who:** agent on the host; user runs VM checks.
 - **Files:** `Source/Filters/minipairs.h`, new
   `Source/Filters/cablewavtable.h` and `cabletopo*.{h,cpp}` (replacing
@@ -668,8 +677,8 @@ published app keeps the VB-Cable workflow. Reverting DEC-18 restores DEC-16.
 
 ## Next action
 
-Finish WP-05 stream scratch-state and sample tone/file-writing cleanup, verify
-formats/INF, and commit the exact WP-05 paths. Continue WP-06 host
+Finish WP-05 stream scratch-state cleanup and validate/commit the complete WP-05
+delta. Continue WP-06 host
 work for the 16-directional-lease protocol and Rust float64 client before any
 VM load. WP-03 install/remove and WP-04 Driver Verifier/fuzz/second-user VM
 gates remain pending; do not call a host build a runtime or quality pass.

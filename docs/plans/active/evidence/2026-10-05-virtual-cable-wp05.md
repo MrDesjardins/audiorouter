@@ -69,5 +69,26 @@ Checks run on the Windows host:
 No driver was installed or loaded. This change has not been measured on the
 VM: period accuracy, one-hour QPC drift, DPC timing under load, and sound
 continuity remain open. The host copy timing from the portable bridge test is
-not kernel-DPC or endpoint performance evidence. Sample tone/file-writing
-cleanup remains the next WP-05 code task.
+not kernel-DPC or endpoint performance evidence.
+
+## Sample audio-path cleanup follow-up (2026-10-05)
+
+Removed the generated capture tone, per-stream file output setup and buffer
+allocation, stop-time save-worker wait, DRM save-disable hook, and the related
+tone/file-output registry settings. Removed the unused ToneGenerator utility
+from the project and source tree. Shared `CSaveData` work-item pool lifecycle
+remains in `common.cpp` due the adapter's pre-existing shared-state and
+Bluetooth HFP lifecycle constraints; the WaveRT stream no longer includes,
+owns, or calls `CSaveData`.
+
+Checks run on the Windows host:
+
+- `powershell -NoProfile -ExecutionPolicy Bypass -File tests/acceptance/m03-driver-build.ps1 -Platform x64` — passed; WDK build and package static checks.
+- `powershell -NoProfile -ExecutionPolicy Bypass -File tests/acceptance/m03-driver-build.ps1 -Platform ARM64` — passed; WDK build and package static checks.
+- `powershell -NoProfile -ExecutionPolicy Bypass -File drivers/audiorouter-virtual/tests/build-tests.ps1` — passed; 132 portable bridge/conversion checks.
+- `rg -n "g_DoNotCreateDataFiles|m_SaveData|HostCaptureTone|ToneGenerator|DisableToneGenerator|DoNotCreateDataFiles" drivers/audiorouter-virtual/Source` — passed; no obsolete stream/control references.
+
+No driver was installed or loaded. This is not runtime or sound-quality
+evidence; VM endpoint, format negotiation, QPC drift, DPC load and continuity
+gates remain open. The shared save-worker infrastructure is still built and
+initialized pending a separate review of its cross-component dependencies.

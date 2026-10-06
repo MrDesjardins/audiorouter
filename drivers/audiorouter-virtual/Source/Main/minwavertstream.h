@@ -14,8 +14,6 @@ Abstract:
 #ifndef _AUDIOROUTERVIRTUAL_MINWAVERTSTREAM_H_
 #define _AUDIOROUTERVIRTUAL_MINWAVERTSTREAM_H_
 
-#include "savedata.h"
-#include "ToneGenerator.h"
 #include "bridgeio.h"
 
 //
@@ -112,8 +110,6 @@ protected:
     PLONG                       m_plPeakMeter;
     PWAVEFORMATEXTENSIBLE       m_pWfExt;
     ULONG                       m_ulContentId;
-    CSaveData                   m_SaveData;
-    ToneGenerator               m_ToneGenerator;
     GUID                        m_SignalProcessingMode;
     BOOLEAN                     m_bEoSReceived;
     BOOLEAN                     m_bLastBufferRendered;
@@ -126,15 +122,6 @@ protected:
     ULONGLONG                  m_BridgeReadGeneration;
     ULONG                       m_BridgePublishFrames;
     ULONG                       m_BridgePublishChannels;
-    // Member variable as config params for tone generator
-    ULONG                       m_ulHostCaptureToneFrequency;
-    DWORD                       m_dwHostCaptureToneAmplitude;
-    DWORD                       m_dwLoopbackCaptureToneAmplitude;
-    DWORD                       m_dwHostCaptureToneDCOffset;
-    DWORD                       m_dwLoopbackCaptureToneDCOffset;
-    DWORD                       m_dwHostCaptureToneInitialPhase;
-    DWORD                       m_dwLoopbackCaptureToneInitialPhase;
-    // Member variable as config params for tone generator
 
 public:
 
@@ -160,7 +147,6 @@ public:
         return m_SignalProcessingMode;
     }
 
-    NTSTATUS ReadRegistrySettings();
 
 private:
 

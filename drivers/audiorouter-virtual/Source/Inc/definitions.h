@@ -165,7 +165,6 @@ typedef struct _PortClassDeviceContext              // 32       64      Byte off
 //
 // Global settings.
 //
-extern DWORD g_DoNotCreateDataFiles;
 extern DWORD g_DisableBthScoBypass;
 extern UNICODE_STRING g_RegistryPath;
 
