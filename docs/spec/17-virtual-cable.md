@@ -371,7 +371,40 @@ takes effect when the helper restarts the device (about 1 s pause).
 | `MaxLeaseMs` | DWORD | 500–60 000 | 60 000 | Upper bound for lease requests |
 | `SilenceOnStaleMs` | DWORD | 20–500 | 100 | Capture side outputs silence when no new block arrived for this long (VDEV-12 budget 500 ms) |
 
-Renaming mechanism (verify in WP-05 on Windows): before
+**As implemented (2026-10-06, host-built; VM verification pending):**
+
+- `CableCount`, `MinPeriodFrames`, `DefaultPeriodFrames` and `MaxLeaseMs`
+  are read at `StartDevice` (REG_DWORD only; anything else uses the
+  default) and reported by QUERY with `CONFIG_FROM_REGISTRY`. A default
+  period below the minimum is raised to the minimum.
+- `MinPeriodFrames` becomes `KSAUDIO_PACKETSIZE_CONSTRAINTS2.
+  MinPacketPeriodInHns` (frames at 48 kHz → 100 ns units, 128 → 26 666) on
+  every cable wave filter's `KSCATEGORY_AUDIO` interface through
+  `DEVPKEY_KsAudio_PacketSize_Constraints2`, set before the interface is
+  enabled (QUERY reports `LOW_LATENCY_PERIODS`). Whether Windows then offers
+  128-frame periods is measured in the VM with
+  `IAudioClient3::GetSharedModeEnginePeriod` (A-check in the testing
+  procedure); it is not claimed from the build.
+- `DefaultPeriodFrames` is **reported only**: Windows, not the driver, owns
+  the default shared-mode engine period (10 ms). AudioRouter uses the value
+  as its own preferred period when it opens a cable.
+- `MaxLeaseMs` caps OPEN/HEARTBEAT/CLOSE `LeaseMs`
+  (`STATUS_INVALID_PARAMETER` above it).
+- `SilenceOnStaleMs` is **not read**: the requirement holds by construction.
+  Every bridge block is consumed at most once and never replayed; with no
+  newer block the capture endpoint writes silence in the same callback (and
+  counts `UnderrunFrames`). After the producer stops, at most the one
+  unread quantum (≤ 4096 frames, ≤ 93 ms at 44.1 kHz) can still play, well
+  inside VDEV-12's 500 ms.
+- **Names (decision):** the driver does not read `Cables\<n>\Name`. Default
+  names come from the INF; custom names are written by the elevated helper
+  as the endpoint's `PKEY_Device_DeviceDesc` (the Sound settings rename
+  path), which keeps the endpoint ID and needs no driver change. The first
+  VM run records the exact names Windows composes (for example
+  `AudioRouter Cable A Input` or `Speakers (AudioRouter Cable A Input)`);
+  the helper sets the description to the VCAB-02 name either way.
+
+Renaming mechanism (original plan, superseded by the decision above): before
 `PcRegisterSubdevice` the driver sets the interface friendly name with
 `IoSetDeviceInterfacePropertyData(DEVPKEY_DeviceInterface_FriendlyName)` or
 the interface `FriendlyName` registry value read by the audio endpoint

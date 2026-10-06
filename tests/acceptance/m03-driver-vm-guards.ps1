@@ -34,6 +34,23 @@ $tokens = $null
 [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'm03-driver-vm.ps1'), [ref]$tokens, [ref]$parseErrors) | Out-Null
 if ($parseErrors.Count) { throw ($parseErrors -join "`n") }
 $script:count++
+foreach ($accepted in @('AudioRouter Cable A Input', 'Speakers (AudioRouter Cable A Input)',
+        'AudioRouter Cable A Input (AudioRouter Virtual Cable)')) {
+    if (-not (Test-CableEndpointName $accepted 'AudioRouter Cable A Input')) { throw "Cable endpoint name rejected: $accepted" }
+    $script:count++
+}
+foreach ($rejected in @('AudioRouter Cable A Output', 'Speakers (AudioRouter Cable A Output)',
+        'AudioRouter Cable A Input 2', 'audiorouter cable a input', 'Speakers (Realtek)', '', 'X (Y) (AudioRouter Cable A Input)')) {
+    if (Test-CableEndpointName $rejected 'AudioRouter Cable A Input') { throw "Unrelated endpoint name accepted: $rejected" }
+    $script:count++
+}
+$sample = @(
+    [pscustomobject]@{ FriendlyName = 'Speakers (AudioRouter Cable A Input)'; InstanceId = 'a-in' },
+    [pscustomobject]@{ FriendlyName = 'Line (AudioRouter Cable A Output)'; InstanceId = 'a-out' })
+$selected = Select-CableEndpoints $sample @('AudioRouter Cable A Input', 'AudioRouter Cable A Output')
+if ($null -eq $selected -or $selected[0].InstanceId -ne 'a-in' -or $selected[1].InstanceId -ne 'a-out') { throw 'Cable endpoints not selected in order.' }
+if ($null -ne (Select-CableEndpoints $sample @('AudioRouter Cable B Input'))) { throw 'Missing cable endpoint was not reported.' }
+$script:count += 2
 Add-Type -Path (Join-Path $PSScriptRoot 'm03-default-endpoints.cs')
 # A host-safe read-only COM check. Store only count, never private endpoint IDs.
 if ([AudioRouterVmEvidence.DefaultEndpoints]::Read().Length -ne 6) { throw 'Default endpoint role snapshot is incomplete.' }

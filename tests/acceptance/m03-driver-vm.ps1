@@ -101,13 +101,17 @@ try {
     }
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
     do {
-        $endpoints = @(Get-PnpDevice -Class AudioEndpoint -PresentOnly | Where-Object { $_.FriendlyName -like 'AudioRouter*' })
-        $matches = @($endpoints | Where-Object { $_.FriendlyName -in $expected -and $_.Status -eq 'OK' })
-        if ($matches.Count -eq $expected.Count -and $endpoints.Count -eq $expected.Count) { break }
+        # Ours = any endpoint whose name mentions AudioRouter; Windows may
+        # prefix the jack description ("Speakers (AudioRouter Cable A Input)").
+        $endpoints = @(Get-PnpDevice -Class AudioEndpoint -PresentOnly | Where-Object { $_.FriendlyName -like '*AudioRouter*' })
+        $selected = Select-CableEndpoints $endpoints $expected
+        $healthy = $null -ne $selected -and @($selected | Where-Object { $_.Status -ne 'OK' }).Count -eq 0
+        if ($healthy -and $endpoints.Count -eq $expected.Count) { break }
         Start-Sleep -Milliseconds 250
     } while ([DateTime]::UtcNow -lt $deadline)
-    if ($matches.Count -ne $expected.Count -or $endpoints.Count -ne $expected.Count) { throw 'Expected healthy endpoints did not appear within 30 seconds.' }
-    $installedSnapshot = Snapshot 'installed'
+    # Record the exact names Windows composed; this settles VCAB-02's format.
+    $endpoints | Select-Object FriendlyName, Status, InstanceId | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $Evidence 'endpoint-names.json')
+    if (-not $healthy -or $endpoints.Count -ne $expected.Count) { throw "Expected healthy endpoints did not appear within 30 seconds. Seen: $(@($endpoints | ForEach-Object { "$($_.FriendlyName) [$($_.Status)]" }) -join '; ')" }    $installedSnapshot = Snapshot 'installed'
     $allowedIds = @($roots | ForEach-Object { $_.InstanceId }) + @($endpoints | ForEach-Object { $_.InstanceId })
     $unrelated = [pscustomobject]@{
         drivers = @($installedSnapshot.drivers | Where-Object { $_ -notmatch '\|AudioRouter Project\|' })

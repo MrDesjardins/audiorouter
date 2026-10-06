@@ -206,18 +206,45 @@ int main() {
         !NT_SUCCESS(AudioRouterValidateBridgeQueryLength(0, sizeof(AR_BRIDGE_DRIVER_INFO) - 1)) &&
         !NT_SUCCESS(AudioRouterValidateBridgeQueryLength(0, sizeof(AR_BRIDGE_DRIVER_INFO) + 1)),
         "QUERY inexact lengths rejected");
+    // Registry configuration (17 §5.5): defaults, ranges, normalization.
+    AR_BRIDGE_CONFIG config;
+    AudioRouterDefaultConfig(&config);
+    require(config.CableCount == 2 && config.MinPeriodFrames == 128 &&
+        config.DefaultPeriodFrames == 480 && config.MaxLeaseMs == 60000,
+        "compiled configuration defaults");
+    require(AudioRouterConfigValue(false, 300, 64, 480, 128) == 128, "missing value uses default");
+    require(AudioRouterConfigValue(true, 300, 64, 480, 128) == 300, "in-range value used");
+    require(AudioRouterConfigValue(true, 64, 64, 480, 128) == 64 &&
+        AudioRouterConfigValue(true, 480, 64, 480, 128) == 480, "range bounds are inclusive");
+    require(AudioRouterConfigValue(true, 63, 64, 480, 128) == 128 &&
+        AudioRouterConfigValue(true, 481, 64, 480, 128) == 128 &&
+        AudioRouterConfigValue(true, 0xffffffff, 64, 480, 128) == 128,
+        "out-of-range value falls back to the default");
+    AR_BRIDGE_CONFIG inverted = config;
+    inverted.MinPeriodFrames = 400; inverted.DefaultPeriodFrames = 128;
+    AudioRouterNormalizeConfig(&inverted);
+    require(inverted.DefaultPeriodFrames == 400, "default period never below the minimum");
+    require(AudioRouterMinPacketPeriodHns(128) == 26666 && AudioRouterMinPacketPeriodHns(480) == 100000 &&
+        AudioRouterMinPacketPeriodHns(64) == 13333, "packet period in 100 ns units at 48 kHz");
+    require(AudioRouterLeaseWithinConfig(2000, &config) && AudioRouterLeaseWithinConfig(60000, &config),
+        "lease within the cap accepted");
+    AR_BRIDGE_CONFIG tightLease = config; tightLease.MaxLeaseMs = 500;
+    require(!AudioRouterLeaseWithinConfig(501, &tightLease) && AudioRouterLeaseWithinConfig(500, &tightLease) &&
+        !AudioRouterLeaseWithinConfig(0, &tightLease), "configured lease cap enforced");
+
     AR_BRIDGE_DRIVER_INFO info;
     std::memset(&info, 0xcd, sizeof(info));
-    AudioRouterFillDriverInfo(&info, 3);
+    AR_BRIDGE_CONFIG reported = config; reported.CableCount = 3; reported.MinPeriodFrames = 256;
+    AudioRouterFillDriverInfo(&info, &reported);
     require(info.ProtocolMajor == 1 && info.ProtocolMinor == 1 && info.CableCount == 3 &&
         info.MaxCables == 8 && info.MaxChannels == 8, "QUERY reports protocol and limits");
     require((info.Capabilities & AR_BRIDGE_CAP_SAMPLE_FLOAT64) &&
         (info.Capabilities & AR_BRIDGE_CAP_STREAM_COUNTERS) &&
-        !(info.Capabilities & AR_BRIDGE_CAP_LOW_LATENCY_PERIODS) &&
-        !(info.Capabilities & AR_BRIDGE_CAP_CONFIG_FROM_REGISTRY),
-        "QUERY reports only implemented capabilities");
-    require(info.SupportedRates == 7 && info.MinPeriodFrames == 0 && info.DefaultPeriodFrames == 0,
-        "QUERY rates and unreported period limits");
+        (info.Capabilities & AR_BRIDGE_CAP_LOW_LATENCY_PERIODS) &&
+        (info.Capabilities & AR_BRIDGE_CAP_CONFIG_FROM_REGISTRY),
+        "QUERY reports the implemented capabilities");
+    require(info.SupportedRates == 7 && info.MinPeriodFrames == 256 && info.DefaultPeriodFrames == 480,
+        "QUERY rates and configured period limits");
     bool reservedClear = true;
     for (ULONG word : info.Reserved) { reservedClear = reservedClear && word == 0; }
     require(reservedClear, "QUERY never leaks stale reserved bytes");

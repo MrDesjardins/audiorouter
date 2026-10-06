@@ -183,7 +183,8 @@ pub struct NativeBridgeDriverInfo {
     pub max_channels: u32,
     pub capabilities: u32,
     pub supported_rates: u32,
-    /// 0 while the driver does not report `LOW_LATENCY_PERIODS`.
+    /// Configured minimum / default shared-mode period, frames at 48 kHz
+    /// (registry `MinPeriodFrames` / `DefaultPeriodFrames`, 17 §5.5).
     pub min_period_frames: u32,
     pub default_period_frames: u32,
 }

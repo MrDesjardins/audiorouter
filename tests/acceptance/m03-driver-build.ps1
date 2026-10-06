@@ -531,6 +531,26 @@ foreach ($required in @(
         throw "WaveRT capture callback is missing a format/counter invariant: $required"
     }
 }
+$minipairs = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Filters/minipairs.h') -Raw
+foreach ($required in @(
+        'DEVPKEY_KsAudio_PacketSize_Constraints2',
+        'SIZEOF_ARRAY(g_CableWaveInterfaceProperties), g_CableWaveInterfaceProperties')) {
+    if (-not $minipairs.Contains($required)) {
+        throw "cable wave interfaces must advertise low-latency packet constraints: $required"
+    }
+}
+foreach ($required in @(
+        'ReadBridgeConfig(DeviceObject)',
+        'AudioRouterMinPacketPeriodHns(g_BridgeConfig.MinPeriodFrames)',
+        'AudioRouterLeaseWithinConfig(request->LeaseMs, &g_BridgeConfig)')) {
+    if (-not $source.Contains($required)) {
+        throw "registry configuration (17 §5.5) is not applied: $required"
+    }
+}
+# The packet constraint must be set before any filter registers its interface.
+if ($source.IndexOf('g_CablePacketSizeConstraints.MinPacketPeriodInHns') -gt $source.IndexOf('InstallAllRenderFilters(DeviceObject')) {
+    throw 'packet constraints must be configured before the cable filters are installed'
+}
 foreach ($required in @(
         'IOCTL_AUDIOROUTER_BRIDGE_QUERY',
         'AudioRouterValidateBridgeQueryLength(',
