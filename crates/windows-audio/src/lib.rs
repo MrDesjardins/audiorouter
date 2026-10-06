@@ -145,6 +145,20 @@ const IOCTL_AUDIOROUTER_BRIDGE_OPEN: u32 = (0x22 << 16) | (0x800 << 2) | (3 << 1
 const IOCTL_AUDIOROUTER_BRIDGE_CLOSE: u32 = (0x22 << 16) | (0x801 << 2) | (3 << 14) | 0x3;
 #[cfg(windows)]
 const IOCTL_AUDIOROUTER_BRIDGE_HEARTBEAT: u32 = (0x22 << 16) | (0x802 << 2) | (3 << 14) | 0x3;
+#[cfg(windows)]
+const NATIVE_DRIVER_BRIDGE_PROTOCOL_MAJOR: u16 = 1;
+#[cfg(windows)]
+const NATIVE_DRIVER_BRIDGE_PROTOCOL_MINOR: u16 = 1;
+
+#[cfg(windows)]
+fn native_bridge_cable_index(bus_id: &str) -> Option<u16> {
+    let suffix = bus_id.strip_prefix("cable-")?;
+    let bytes = suffix.as_bytes();
+    if bytes.len() != 1 || !(b'a'..=b'h').contains(&bytes[0]) {
+        return None;
+    }
+    Some(u16::from(bytes[0] - b'a'))
+}
 
 #[cfg(windows)]
 #[repr(C)]
@@ -1570,6 +1584,7 @@ fn native_bridge_open_request(
     mapping_bytes: u32,
 ) -> Result<NativeBridgeOpenRequest, ()> {
     hello.validate().map_err(|_| ())?;
+    native_bridge_cable_index(&hello.bus_id).ok_or(())?;
     let encoded: Vec<u16> = hello.bus_id.encode_utf16().collect();
     if encoded.len() > 64 || encoded.len() * std::mem::size_of::<u16>() > 128 {
         return Err(());
@@ -1581,8 +1596,8 @@ fn native_bridge_open_request(
         return Err(());
     }
     Ok(NativeBridgeOpenRequest {
-        protocol_major: hello.protocol_major,
-        protocol_minor: hello.protocol_minor,
+        protocol_major: NATIVE_DRIVER_BRIDGE_PROTOCOL_MAJOR,
+        protocol_minor: NATIVE_DRIVER_BRIDGE_PROTOCOL_MINOR,
         bus_id_bytes: (encoded.len() * 2) as u16,
         channels: hello.channels,
         frames_per_quantum: hello.frames_per_quantum,
@@ -11439,7 +11454,7 @@ mod tests {
         let hello = audiorouter_protocol::AudioBridgeHello {
             protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
             protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
-            bus_id: "bus-main".to_owned(),
+            bus_id: "cable-a".to_owned(),
             direction: audiorouter_protocol::AudioBridgeDirection::CaptureSink,
             generation: 11,
             sample_rate_hz: 48_000,
@@ -11449,10 +11464,12 @@ mod tests {
         };
         let request = native_bridge_open_request(&hello, 0, 0).unwrap();
         assert_eq!(std::mem::size_of::<NativeBridgeOpenRequest>(), 176);
-        assert_eq!(request.bus_id_bytes, 16);
+        assert_eq!(request.protocol_major, NATIVE_DRIVER_BRIDGE_PROTOCOL_MAJOR);
+        assert_eq!(request.protocol_minor, NATIVE_DRIVER_BRIDGE_PROTOCOL_MINOR);
+        assert_eq!(request.bus_id_bytes, 14);
         assert_eq!(
-            &request.bus_id[..8],
-            "bus-main".encode_utf16().collect::<Vec<_>>()
+            &request.bus_id[..7],
+            "cable-a".encode_utf16().collect::<Vec<_>>()
         );
         assert_eq!(request.generation, 11);
         assert_eq!(request.direction, 2);
@@ -11466,7 +11483,7 @@ mod tests {
         );
         assert!(native_bridge_open_request(
             &audiorouter_protocol::AudioBridgeHello {
-                bus_id: "x".repeat(65),
+                bus_id: "cable-i".to_owned(),
                 ..hello.clone()
             },
             0,

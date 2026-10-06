@@ -39,6 +39,32 @@ static AR_BRIDGE_OPEN_REQUEST validRequest() {
     return request;
 }
 int main() {
+    bool occupiedLeaseSlots[AR_BRIDGE_LEASE_SLOTS] = {};
+    for (USHORT bus = 0; bus < AR_BRIDGE_MAX_CABLES; ++bus) {
+        WCHAR busId[] = L"cable-a";
+        busId[6] = static_cast<WCHAR>(L'a' + bus);
+        USHORT parsedBus = 0xffff;
+        require(NT_SUCCESS(AudioRouterParseCableBusId(
+            busId, sizeof(busId) - sizeof(WCHAR), &parsedBus)) && parsedBus == bus,
+            "each canonical cable bus id maps to its stable bus index");
+        const USHORT directions[] = { AR_BRIDGE_DIRECTION_RENDER_SOURCE,
+                                       AR_BRIDGE_DIRECTION_CAPTURE_SINK };
+        for (USHORT direction : directions) {
+            ULONG slot = AR_BRIDGE_LEASE_SLOTS;
+            require(NT_SUCCESS(AudioRouterGetLeaseSlotIndex(bus, direction, &slot)) &&
+                slot < AR_BRIDGE_LEASE_SLOTS && !occupiedLeaseSlots[slot],
+                "each cable direction maps to a unique bounded lease slot");
+            occupiedLeaseSlots[slot] = true;
+        }
+    }
+    WCHAR unknownBus[] = L"cable-i";
+    USHORT ignoredBus = 0;
+    require(AudioRouterParseCableBusId(unknownBus, sizeof(unknownBus) - sizeof(WCHAR),
+        &ignoredBus) == STATUS_OBJECT_NAME_NOT_FOUND, "unknown cable id rejected");
+    ULONG ignoredSlot = 0;
+    require(!NT_SUCCESS(AudioRouterGetLeaseSlotIndex(AR_BRIDGE_MAX_CABLES,
+        AR_BRIDGE_DIRECTION_RENDER_SOURCE, &ignoredSlot)), "out-of-range bus rejected");
+
     const ULONG cableRates[] = { 44100, 48000, 96000 };
     const USHORT cableChannels[] = { 1, 2, 4, 6, 8 };
     unsigned supportedFormats = 0;

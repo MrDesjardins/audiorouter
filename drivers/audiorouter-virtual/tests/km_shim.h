@@ -27,6 +27,8 @@ using DOUBLE = double;
 #define STATUS_REVISION_MISMATCH NTSTATUS(0xC0000059)
 #define STATUS_SHARING_VIOLATION NTSTATUS(0xC0000043)
 #define STATUS_ACCESS_DENIED NTSTATUS(0xC0000022)
+#define STATUS_OBJECT_NAME_NOT_FOUND NTSTATUS(0xC0000034)
+#define STATUS_DEVICE_NOT_CONNECTED NTSTATUS(0xC000009D)
 #define FIELD_OFFSET(type, member) offsetof(type, member)
 #define C_ASSERT(expression) static_assert(expression, #expression)
 #define ARRAYSIZE(array) (sizeof(array) / sizeof(array[0]))

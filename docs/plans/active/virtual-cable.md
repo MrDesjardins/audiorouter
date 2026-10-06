@@ -387,9 +387,9 @@ scratch through frame/offset/sequence bounds only. Removed the full 256 KiB
 scratch zero from audio callbacks; each successful block read overwrites every
 sample consumed, and each published block is completely rewritten before send.
 Acceptance rejects callback-wide scratch clears. x64/ARM64 WDK acceptance,
-132 portable bridge checks, and docs validation pass. Host WP-05 implementation
-is ready for downstream host preparation; endpoint, one-hour drift and audio
-quality VM gates remain explicitly pending under WP-03/04.
+132 portable bridge checks, and docs validation pass. Registry-controlled
+friendly names and Min/DefaultPeriodFrames remain unimplemented; WP-05 is not
+closed. Endpoint, one-hour drift and audio-quality VM gates remain pending.
 
 - **Who:** agent on the host; user runs VM checks.
 - **Files:** `Source/Filters/minipairs.h`, new
@@ -476,13 +476,15 @@ quality VM gates remain explicitly pending under WP-03/04.
   the tool deliberately stalls; 8-channel and 96 kHz leases work; version
   mismatch and unknown-flag paths tested.
 - **Rollback:** revert; protocol 1.0 users do not exist outside the repo.
-- **Status:** in progress 2026-10-05 (host ABI/Rust work; VM integration remains gated by WP-03/04).
+- **Status:** in progress 2026-10-05 (stable bus-slot and Rust driver-version slice implemented; float64 mapping, QUERY/counters and remaining ABI/Rust work open; VM integration remains gated by WP-03/04).
 
 WP-06 execution record (2026-10-05): objective is one safe, versioned 16-lease
 bridge contract with float64 payload support and a Rust client that preserves
 VCAB-21 PCM32 precision. Requirements: VCAB-10/12/20/21/26, SEC-08, NFR-16.
-Prerequisites: WP-05 host work complete; WP-03/04 VM evidence remains pending.
-This authorizes portable and WDK host preparation only; no driver load or
+Prerequisites: WP-05 core tables, conversion, timing and scratch-state host
+work are implemented; registry name/period configuration and WP-03/04 VM
+evidence remain pending. This downstream protocol slice is being prepared
+while those explicit WP-05 gaps stay open; no driver load or
 quality gate is inferred. Tasks: (1) inspect the current C ABI, slot selection,
 per-lease sample-rate and generation rules; (2) extend protocol to 16 stable
 slots with cable identity, precision negotiation, counters and exact QUERY/
@@ -495,6 +497,18 @@ malformed/racing bridge payload regression, Cargo package tests and both WDK
 builds; VM multi-cable/format/crosstalk/audio tests remain pending. Risks:
 protocol header-size drift, sample-rate mismatch, and callback contention.
 Rollback: revert only WP-06 paths; keep the intermediate package unloaded.
+
+WP-06 host progress update (2026-10-05): introduced testable exact `cable-a`
+through `cable-h` parsing and pure `(bus, direction) -> slot` mapping across
+16 unique slots; OPEN rejects unknown and disabled IDs. WaveRT reads/publishes
+using the endpoint's stable cable index and clears stale capture state on a
+lease sample-rate mismatch. The Windows Rust control encoder now emits driver
+protocol 1.1 independently of the internal AudioBridge protocol 1.0 and
+rejects non-cable IDs. C host tests cover all buses/slots; Rust ABI test checks
+version, bus bytes and direction. x64/ARM64 WDK builds pass. Remaining WP-06:
+float64 mapped-region/session support, negotiated open extension and QUERY/
+capability/counter contracts; no claim of end-to-end PCM32 precision until
+those layers and WP-09 engine changes are completed.
 
 ## WP-07 — Elevated driver helper (17 §6)
 

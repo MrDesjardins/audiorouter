@@ -19,6 +19,7 @@ $build = Join-Path $workspace 'drivers/audiorouter-virtual/build.ps1'
 $manage = Join-Path $workspace 'drivers/audiorouter-virtual/manage.ps1'
 $powershellExe = Join-Path $env:WINDIR 'System32/WindowsPowerShell/v1.0/powershell.exe'
 $adapter = Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/adapter.cpp'
+$bridgeHeader = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Inc/bridgeio.h') -Raw
 $miniPairs = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Filters/minipairs.h') -Raw
 $waveTable = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Filters/cablewavtable.h') -Raw
 $topologyTable = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Filters/cabletopotable.h') -Raw
@@ -53,6 +54,9 @@ if ($miniPairs.Contains('SpeakerWaveMiniportFilterDescriptor') -or
     $miniPairs.Contains('MicArrayWaveMiniportFilterDescriptor') -or
     $miniPairs.Contains('MicArray1TopoMiniportFilterDescriptor')) {
     throw 'cable pairs must not retain the sample wave/microphone-array descriptors'
+}
+if (-not $bridgeHeader.Contains('#define AR_BRIDGE_LEASE_SLOTS (AR_BRIDGE_MAX_CABLES * 2)')) {
+    throw 'bridge lease table must reserve one slot per cable and direction'
 }
 foreach ($required in @(
         'AR_CHANNEL_FORMATS(1, KSAUDIO_SPEAKER_MONO)',
@@ -373,6 +377,12 @@ if (-not $source.Contains('AudioRouterValidateNextGeneration(') -or
     throw 'bridge OPEN must reject reused generations and retain the last published generation'
 }
 $streamSource = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/minwavertstream.cpp') -Raw
+if (-not $source.Contains('AudioRouterParseCableBusId(') -or
+    -not $source.Contains('busIndex >= g_EnabledCableCount') -or
+    -not $streamSource.Contains('GetCableBusIndex()') -or
+    -not $streamSource.Contains('sampleRate == m_pWfExt->Format.nSamplesPerSec')) {
+    throw 'driver bridge must bind cable IDs to stable enabled buses and reject rate mismatches'
+}
 $readBytesStart = $streamSource.IndexOf('VOID CMiniportWaveRTStream::ReadBytes')
 $readBytesEnd = $streamSource.IndexOf('#pragma code_seg("PAGE")', $readBytesStart)
 if ($readBytesStart -lt 0 -or $readBytesEnd -le $readBytesStart) {
@@ -652,7 +662,7 @@ if (-not $stream.Contains('m_pPortStream->FreePagesFromMdl(pBufferMdl)')) {
 }
 
 $retireStart = $source.IndexOf('static void RetireBridgeResources(')
-$retireEnd = $source.IndexOf('static AR_BRIDGE_LEASE_STATE* BridgeLeaseForDirection(', $retireStart)
+$retireEnd = $source.IndexOf('static AR_BRIDGE_LEASE_STATE* BridgeLeaseForBusDirection(', $retireStart)
 if ($retireStart -lt 0 -or $retireEnd -le $retireStart) {
     throw 'driver resource-retirement helper boundary is missing'
 }

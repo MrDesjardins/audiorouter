@@ -37,6 +37,8 @@ extern "C" NTKERNELAPI NTSTATUS IoGetRequestorSessionId(_In_ PIRP Irp, _Out_ PUL
 
 #define AR_BRIDGE_PROTOCOL_MAJOR 1
 #define AR_BRIDGE_PROTOCOL_MINOR 1
+#define AR_BRIDGE_MAX_CABLES 8
+#define AR_BRIDGE_LEASE_SLOTS (AR_BRIDGE_MAX_CABLES * 2)
 #define AR_BRIDGE_MAX_BUS_ID_BYTES 128
 #define AR_BRIDGE_MAX_CHANNELS 8
 #define AR_BRIDGE_MAX_FRAMES 4096
@@ -51,6 +53,7 @@ extern "C" NTKERNELAPI NTSTATUS IoGetRequestorSessionId(_In_ PIRP Irp, _Out_ PUL
     (AR_BRIDGE_MAX_CHANNELS * AR_BRIDGE_MAX_FRAMES * sizeof(DOUBLE))
 
 NTSTATUS AudioRouterCopyLeaseBlockForDirection(
+    _In_ USHORT BusIndex,
     _In_ USHORT Direction,
     _In_ ULONGLONG MinimumSequence,
     _Out_writes_(DestinationCapacitySamples) DOUBLE* Destination,
@@ -58,6 +61,7 @@ NTSTATUS AudioRouterCopyLeaseBlockForDirection(
     _Out_ struct _AR_BRIDGE_BLOCK_HEADER* Header);
 
 NTSTATUS AudioRouterPublishLeaseBlockForDirection(
+    _In_ USHORT BusIndex,
     _In_ USHORT Direction,
     _In_ USHORT Frames,
     _In_ USHORT Channels,
@@ -65,9 +69,11 @@ NTSTATUS AudioRouterPublishLeaseBlockForDirection(
     _In_ SIZE_T SampleCapacity);
 
 NTSTATUS AudioRouterGetLeaseShapeForDirection(
+    _In_ USHORT BusIndex,
     _In_ USHORT Direction,
     _Out_ USHORT* Frames,
     _Out_ USHORT* Channels,
+    _Out_ ULONG* SampleRateHz,
     _Out_ ULONGLONG* Generation);
 
 #define IOCTL_AUDIOROUTER_BRIDGE_OPEN \
@@ -110,6 +116,50 @@ typedef struct _AR_BRIDGE_BLOCK_HEADER {
     USHORT Channels;
     ULONG PayloadBytes;
 } AR_BRIDGE_BLOCK_HEADER, *PAR_BRIDGE_BLOCK_HEADER;
+
+// Bus IDs are protocol identities, not display names. Accept only the exact
+// seven-character lowercase form and keep parsing bounded for IOCTL callers.
+__forceinline NTSTATUS AudioRouterParseCableBusId(
+    _In_reads_bytes_(BusIdBytes) const WCHAR* BusId,
+    _In_ USHORT BusIdBytes,
+    _Out_ USHORT* BusIndex)
+{
+    static const WCHAR prefix[] = L"cable-";
+    if (BusId == NULL || BusIndex == NULL || BusIdBytes != 7 * sizeof(WCHAR)) {
+        return STATUS_OBJECT_NAME_NOT_FOUND;
+    }
+    for (USHORT index = 0; index < 6; ++index) {
+        if (BusId[index] != prefix[index]) {
+            return STATUS_OBJECT_NAME_NOT_FOUND;
+        }
+    }
+    WCHAR suffix = BusId[6];
+    if (suffix < L'a' || suffix >= L'a' + AR_BRIDGE_MAX_CABLES) {
+        return STATUS_OBJECT_NAME_NOT_FOUND;
+    }
+    *BusIndex = static_cast<USHORT>(suffix - L'a');
+    return STATUS_SUCCESS;
+}
+
+__forceinline NTSTATUS AudioRouterGetLeaseSlotIndex(
+    _In_ USHORT BusIndex,
+    _In_ USHORT Direction,
+    _Out_ ULONG* SlotIndex)
+{
+    if (SlotIndex == NULL || BusIndex >= AR_BRIDGE_MAX_CABLES) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    ULONG directionIndex;
+    if (Direction == AR_BRIDGE_DIRECTION_RENDER_SOURCE) {
+        directionIndex = 0;
+    } else if (Direction == AR_BRIDGE_DIRECTION_CAPTURE_SINK) {
+        directionIndex = 1;
+    } else {
+        return STATUS_INVALID_PARAMETER;
+    }
+    *SlotIndex = static_cast<ULONG>(BusIndex) * 2 + directionIndex;
+    return STATUS_SUCCESS;
+}
 
 // Keep the fixed ABI fail-fast at compile time. The Rust encoder mirrors these
 // offsets; changing either layout requires an explicit protocol revision.

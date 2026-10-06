@@ -222,6 +222,12 @@ private:
     _Success_(return != 0)
     ULONG GetPinSupportedDeviceModes(_In_ ULONG PinId, _Outptr_opt_result_buffer_(return) _On_failure_(_Deref_post_null_) MODE_AND_DEFAULT_FORMAT **ppModes);
 
+    // Cable minipairs use stable adjacent render/capture enum values A-H.
+    ULONG GetCableBusIndex() const
+    {
+        return static_cast<ULONG>(m_DeviceType) / 2;
+    }
+
 #pragma code_seg()
 
 protected:

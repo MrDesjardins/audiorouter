@@ -1571,11 +1571,15 @@ ByteDisplacement - # of bytes to process.
     RefreshBridgePublishShape();
     USHORT readFrames = 0;
     USHORT readChannels = 0;
+    ULONG readSampleRate = 0;
     ULONGLONG readGeneration = 0;
     const NTSTATUS readShapeStatus = AudioRouterGetLeaseShapeForDirection(
+        static_cast<USHORT>(m_pMiniport->GetCableBusIndex()),
         AR_BRIDGE_DIRECTION_CAPTURE_SINK, &readFrames, &readChannels,
+        &readSampleRate,
         &readGeneration);
     if (NT_SUCCESS(readShapeStatus) && readFrames != 0 && readChannels != 0 &&
+        readSampleRate == m_pWfExt->Format.nSamplesPerSec &&
         AudioRouterStreamGenerationChanged(m_BridgeReadGeneration, readGeneration)) {
         // Reset valid length/sequence only. The block copy overwrites every
         // sample consumed before output; never clear the full DPC scratch array.
@@ -1583,7 +1587,8 @@ ByteDisplacement - # of bytes to process.
         m_BridgeScratchFrameOffset = 0;
         m_BridgeReadSequence = 0;
         m_BridgeReadGeneration = readGeneration;
-    } else if (!NT_SUCCESS(readShapeStatus) || readFrames == 0 || readChannels == 0) {
+    } else if (!NT_SUCCESS(readShapeStatus) || readFrames == 0 || readChannels == 0 ||
+        readSampleRate != m_pWfExt->Format.nSamplesPerSec) {
         if (m_BridgeReadGeneration != 0) {
             m_BridgeScratchFrames = 0;
             m_BridgeScratchFrameOffset = 0;
@@ -1620,6 +1625,7 @@ ByteDisplacement - # of bytes to process.
                 if (m_BridgeScratchFrameOffset >= m_BridgeScratchFrames) {
                     AR_BRIDGE_BLOCK_HEADER header = {};
                     NTSTATUS status = AudioRouterCopyLeaseBlockForDirection(
+                        static_cast<USHORT>(m_pMiniport->GetCableBusIndex()),
                         AR_BRIDGE_DIRECTION_CAPTURE_SINK,
                         m_BridgeReadSequence,
                         m_BridgeScratch,
@@ -1732,6 +1738,7 @@ ByteDisplacement - # of bytes to process.
                 consumedFrames += copyFrames;
                 if (m_BridgeScratchFrames == m_BridgePublishFrames) {
                     (void)AudioRouterPublishLeaseBlockForDirection(
+                        static_cast<USHORT>(m_pMiniport->GetCableBusIndex()),
                         AR_BRIDGE_DIRECTION_RENDER_SOURCE,
                         static_cast<USHORT>(m_BridgePublishFrames),
                         static_cast<USHORT>(m_BridgePublishChannels),
@@ -1754,11 +1761,15 @@ VOID CMiniportWaveRTStream::RefreshBridgePublishShape()
     ULONG previousChannels = m_BridgePublishChannels;
     USHORT frames = 0;
     USHORT channels = 0;
+    ULONG sampleRate = 0;
     ULONGLONG generation = 0;
     const BOOLEAN bridgeFormat = !m_bCapture && IsBridgePcmFormat(m_pWfExt);
     if (bridgeFormat && NT_SUCCESS(AudioRouterGetLeaseShapeForDirection(
-            AR_BRIDGE_DIRECTION_RENDER_SOURCE, &frames, &channels, &generation)) &&
-        channels == m_pWfExt->Format.nChannels) {
+            static_cast<USHORT>(m_pMiniport->GetCableBusIndex()),
+            AR_BRIDGE_DIRECTION_RENDER_SOURCE, &frames, &channels, &sampleRate,
+            &generation)) &&
+        channels == m_pWfExt->Format.nChannels &&
+        sampleRate == m_pWfExt->Format.nSamplesPerSec) {
         m_BridgePublishFrames = frames;
         m_BridgePublishChannels = channels;
     } else {
