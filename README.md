@@ -222,3 +222,25 @@ verification commands. The README images are regenerated with
 in `ui` (after `cargo build --example e2e_backend -p audiorouter-control`).
 Setup does not install drivers, register plugins, or change audio devices or
 other machine audio settings.
+
+## License
+
+Copyright (C) 2026 Patrick Desjardins.
+
+AudioRouter is free and open-source software under the
+[GNU General Public License v3.0 only](LICENSE) (`GPL-3.0-only`). You may use,
+study, share and modify it. If you distribute AudioRouter or a modified
+version, you must publish its complete source code under the same license.
+
+Commercial licenses that allow use outside the GPL (for example, in a
+closed-source product) are available from the copyright holder; contact the
+maintainer through [GitHub](https://github.com/MrDesjardins).
+
+Releases up to and including 0.0.13 were published under the MIT License, and
+those copies remain available under MIT. Third-party components keep their own
+licenses: see `THIRD-PARTY-NOTICES.txt` in each release. The virtual audio
+driver in `drivers/audiorouter-virtual` is derived from Microsoft sample code
+and is a separate program under the Microsoft Public License
+(`drivers/audiorouter-virtual/LICENSE-MS-PL.txt`).
+
+Contributions are welcome under the terms in [CONTRIBUTING.md](CONTRIBUTING.md).

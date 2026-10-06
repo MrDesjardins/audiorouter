@@ -3,6 +3,7 @@ name = "audiorouter-shell"
 version = "0.0.13"
 description = "AudioRouter native desktop shell"
 authors = ["AudioRouter contributors"]
+license = "GPL-3.0-only"
 edition = "2021"
 rust-version = "1.80"
 

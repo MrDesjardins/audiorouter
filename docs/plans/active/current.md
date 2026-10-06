@@ -21,6 +21,28 @@ ARCH-04, SEC-01/10 and DIST-01–08 stay traceable through the release evidence.
 - Other active plan: [app/installer signing](release-signing-and-publication.md),
   blocked on the user's provider choice and enrollment.
 
+## Decision (2026-10-05, user): GPL-3.0-only with commercial licensing (DEC-19)
+
+The user asked to stop others from profiting from AudioRouter while staying
+open source and keeping the option to earn money later. CC BY-NC was
+considered and rejected: it is not an open-source license and Creative Commons
+advises against it for software. Chosen: `GPL-3.0-only` for versions after
+0.0.13, with commercial licenses offered by the sole copyright holder
+(Patrick Desjardins, author of every commit). Releases up to 0.0.13 stay MIT.
+
+- Changed: `LICENSE` (standard GPL-3.0 text from GitHub's license API, since
+  gnu.org was unreachable), workspace and shell `Cargo.toml` license fields,
+  README License section, new `CONTRIBUTING.md` (contributors grant the
+  copyright holder a right to relicense, which dual licensing needs), and
+  website wording ("GPL-3.0 open source", footer).
+- Compatibility checked: shipped Rust dependencies are MIT/Apache-2.0/BSD/
+  ISC/Zlib/Unicode/MPL-2.0 or LGPL-3.0 (LAME), all GPL-3.0 compatible; VST2
+  uses AudioRouter's own ABI declarations, not Steinberg's VST2 SDK; the VST3
+  SDK is MIT. The MS-PL driver stays a separate program under its own license.
+- Not legal advice; a lawyer should review the commercial-license terms
+  before any are sold. Rollback: restore the MIT `LICENSE` and fields.
+- Next: the next release ships under GPL-3.0; no code change is needed.
+
 ## Decision (2026-10-05, user): ship AudioRouter's own virtual cable (DEC-18)
 
 AudioRouter will ship its own signed virtual cable so users do not need
