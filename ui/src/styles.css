@@ -201,7 +201,7 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
 .session-save-button { width: 100%; min-height: 2.5rem; margin-top: .1rem; }
 .workbench-tabs button.active { color: var(--text-strong); background: color-mix(in srgb, var(--cyan) 20%, var(--ambient-surface)); border-color: var(--cyan); box-shadow: inset 0 -2px var(--cyan); }
 .workbench-page { padding: .9rem; }
-.log-files-panel { display: grid; gap: .65rem; min-width: 0; margin: .75rem 0 1rem; padding: .75rem; border: 1px solid var(--ambient-edge); border-radius: 10px; }
+.log-files-panel, .streamdeck-panel { display: grid; gap: .65rem; min-width: 0; margin: .75rem 0 1rem; padding: .75rem; border: 1px solid var(--ambient-edge); border-radius: 10px; }
 .log-files-panel > label { display: grid; gap: .35rem; min-width: 0; font-size: .82rem; }
 .workbench-page .recorder-actions { display: grid; gap: .7rem; min-width: 0; margin: .55rem 0; padding: .8rem; }
 .workbench-page .recorder-actions > label,

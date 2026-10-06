@@ -110,11 +110,6 @@ if (-not $names.Contains("THIRD-PARTY-NOTICES.txt")) {
 }
 $requiredArtifacts = @(
     "AudioRouter_$($manifest.version)_x64-setup.exe",
-    "audiorouter-cli.exe",
-    "audiorouter-plugin-worker.exe",
-    "audiorouter-shell.exe",
-    "run-vb-cable-desktop.ps1",
-    "audiorouter-ui.zip",
     "sbom.cargo.json",
     "sbom.npm.json",
     "sbom.npm.package-lock.json",

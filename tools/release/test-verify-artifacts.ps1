@@ -11,13 +11,11 @@ try {
         $entries = @()
         foreach ($name in @(
             "AudioRouter_0.1.0_x64-setup.exe",
-            "audiorouter-cli.exe",
-            "audiorouter-plugin-worker.exe",
-            "audiorouter-shell.exe",
-            "run-vb-cable-desktop.ps1",
-            "audiorouter-ui.zip",
             "sbom.npm.json",
-            "sbom.npm.package-lock.json"
+            "sbom.npm.package-lock.json",
+            "com.mrdesjardins.audiorouter.streamDeckPlugin",
+            "sbom.streamdeck.package-lock.json",
+            "sbom.streamdeck.json"
         )) {
             $path = Join-Path $Directory $name
             [IO.File]::WriteAllBytes($path, [byte[]](9, 8, 7))

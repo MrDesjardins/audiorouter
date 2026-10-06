@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { NumberField } from "./NumberField";
+import { StreamDeckPluginPanel } from "./StreamDeckPluginPanel";
 
 type ApiStatus = { running: boolean; port: number; url: string | null; network?: string | null; networkUrl?: string | null; token: string | null };
 type LanAddress = { address: string; adapter: string };
@@ -68,6 +69,7 @@ export function ApiPanel({ builder }: { builder?: (baseUrl: string) => ReactNode
     <p className="muted">Generate a new token only when you want to replace it. Existing integrations will need the new token.</p>
     {!regenerateConfirm ? <button type="button" className="secondary" disabled={!invoke || busy} onClick={() => setRegenerateConfirm(true)}>Generate new token</button> : <div className="api-token-confirm"><p>Replace the saved token? This disconnects integrations using the old token.</p><div className="actions"><button type="button" disabled={busy} onClick={() => void control("regenerate")}>Replace API token</button><button type="button" className="secondary" disabled={busy} onClick={() => setRegenerateConfirm(false)}>Cancel</button></div></div>}
     {message && <p role="status">{message}</p>}
+    <StreamDeckPluginPanel />
     {builder?.(status.url ?? `http://127.0.0.1:${port}`)}
   </section>;
 }

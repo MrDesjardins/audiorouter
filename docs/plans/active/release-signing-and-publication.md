@@ -162,8 +162,15 @@ install without an "unknown publisher" warning:
     manually dispatched workflow on `windows-latest`.
 - **Bundle:**
   - `src-tauri/tauri.release.conf.json` bundles
-    `target/release/audiorouter-cli.exe` and `audiorouter-plugin-worker.exe`
-    as resources;
+    `target/release/audiorouter-cli.exe`, `audiorouter-plugin-worker.exe`
+    and (from 0.0.14) the packed Stream Deck plugin
+    `tools/streamdeck/dist/com.mrdesjardins.audiorouter.streamDeckPlugin`
+    as resources, so `npm run pack --prefix tools/streamdeck` must run
+    before the NSIS build (`prepare-artifacts.ps1` and the installer smoke
+    do);
+  - published assets (0.0.14 on): installer, Stream Deck plugin, checksums,
+    manifest, SBOMs and notices only; see
+    [distribution](../../operations/distribution.md#what-a-release-contains-from-0014);
   - `currentUser` NSIS install;
   - WebView2 via the download bootstrapper.
   - `src-tauri/tauri.conf.json` has `"windows": []`: no signing

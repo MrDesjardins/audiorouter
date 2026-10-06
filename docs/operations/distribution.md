@@ -1,15 +1,46 @@
-# Distribution status and intended release path
-
-The latest release is [0.0.12](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.12),
-an unsigned experimental prerelease. Download `AudioRouter_0.0.12_x64-setup.exe`
-from its assets. Every release from 0.0.3 to 0.0.7 was built from a clean tag
+The latest release is [0.0.13](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.13),
+an unsigned experimental prerelease. Download `AudioRouter_0.0.13_x64-setup.exe`
+from its assets. Every release from 0.0.3 on was built from a clean tag
 with `tools/release/`, passed the exact-package fresh-install check, and had
 its published assets downloaded and verified; see the
 [release notes](release-notes.md) and the evidence files under
 `docs/plans/active/evidence/` (for example
 [0.0.7](../plans/active/evidence/2026-10-03-release-0.0.7.md)). Signing,
 clean-machine install/upgrade/uninstall and missing-WebView2 checks remain
-open. The paragraphs below are kept as history.
+open.
+
+## What a release contains (from 0.0.14)
+
+One download installs everything. `AudioRouter_<version>_x64-setup.exe` is a
+per-user NSIS installer containing:
+
+| Part | Where it lives after install |
+| --- | --- |
+| Desktop app: window, tray, embedded UI and the audio/control backend (one process, `audiorouter-shell.exe`) | install folder |
+| `audiorouter-cli.exe` (CLI and MCP server) | install folder (resource) |
+| `audiorouter-plugin-worker.exe` (isolated VST host) | install folder (resource) |
+| Stream Deck plugin (`com.mrdesjardins.audiorouter.streamDeckPlugin`) | install folder (resource); **API → Install Stream Deck plugin** hands it to the Stream Deck app |
+
+The release page carries only:
+
+| Asset | Who needs it |
+| --- | --- |
+| `AudioRouter_<version>_x64-setup.exe` | everyone |
+| `com.mrdesjardins.audiorouter.streamDeckPlugin` | a Stream Deck on another PC that controls AudioRouter over the network (the same file is inside the installer) |
+| `SHA256SUMS.txt`, `release-manifest.json` | verifying downloads and provenance |
+| `sbom.cargo.json`, `sbom.npm.json`, `sbom.npm.package-lock.json`, `sbom.streamdeck.json`, `sbom.streamdeck.package-lock.json`, `THIRD-PARTY-NOTICES.txt` | license and supply-chain review |
+
+Up to 0.0.13 the page also listed `audiorouter-shell.exe`,
+`audiorouter-cli.exe`, `audiorouter-plugin-worker.exe`, `audiorouter-ui.zip`,
+`run-vb-cable-desktop.ps1` and `audiorouter-examples.zip`. They were copies
+of what the installer already holds (the UI is embedded in the shell), a
+developer launch script, and sources available in the repository, and they
+made testers unsure which file to take. `tools/release/create-draft-release.ps1`
+now opens every release's notes with a "Which file do I download?" section.
+No portable (no-install) package is published; the installer is per-user
+and needs no administrator rights.
+
+The paragraphs below are kept as history.
 
 [0.0.3](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.3) is published
 as an unsigned test prerelease for Joe's device-discovery

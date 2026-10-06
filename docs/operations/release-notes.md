@@ -1,5 +1,19 @@
 # AudioRouter release notes
 
+## Unreleased (next: 0.0.14)
+
+- **One download.** The installer now also contains the Stream Deck plugin.
+  On the **API** tab, start the API and choose **Install Stream Deck plugin**;
+  Stream Deck asks you to confirm.
+- The release page lists only the installer, the Stream Deck plugin (for a
+  Stream Deck on another PC), checksums, the provenance manifest, SBOMs and
+  notices. The separate `audiorouter-shell.exe`, `audiorouter-cli.exe`,
+  `audiorouter-plugin-worker.exe`, `audiorouter-ui.zip`,
+  `run-vb-cable-desktop.ps1` and `audiorouter-examples.zip` assets are gone:
+  the first four were already inside the installer, and the script and
+  examples remain in the repository. Release notes open with a
+  "Which file do I download?" section.
+
 ## 0.0.13 — 2026-10-05 (unsigned experimental preview)
 
 - **Fixed: the window could not load after the PC woke from sleep.** If

@@ -33,11 +33,7 @@ try {
     }
     foreach ($required in @(
         "AudioRouter_$($manifest.version)_x64-setup.exe",
-        "audiorouter-cli.exe",
-        "audiorouter-plugin-worker.exe",
-        "audiorouter-shell.exe",
-        "run-vb-cable-desktop.ps1",
-        "audiorouter-ui.zip",
+        "com.mrdesjardins.audiorouter.streamDeckPlugin",
         "sbom.cargo.json",
         "sbom.npm.json",
         "sbom.npm.package-lock.json",
@@ -48,16 +44,19 @@ try {
             throw "release manifest must include exactly one $required artifact"
         }
     }
-    $uiArtifact = @($manifest.artifacts | Where-Object { $_.file -eq "audiorouter-ui.zip" })
-    if ($uiArtifact.Count -ne 1) {
-        throw "release manifest must include exactly one audiorouter-ui.zip artifact"
+    # The installer is the only download users need; the app, CLI, plugin
+    # worker and Stream Deck plugin ship inside it, not as separate assets.
+    foreach ($bundled in @("audiorouter-cli.exe", "audiorouter-plugin-worker.exe", "audiorouter-shell.exe", "audiorouter-ui.zip")) {
+        if (@($manifest.artifacts | Where-Object { $_.file -eq $bundled }).Count -ne 0) {
+            throw "release must not publish $bundled separately from the installer"
+        }
     }
-    $uiZip = Join-Path $output "audiorouter-ui.zip"
+    $streamDeckPackage = Join-Path $output "com.mrdesjardins.audiorouter.streamDeckPlugin"
     Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $archive = [IO.Compression.ZipFile]::OpenRead($uiZip)
+    $archive = [IO.Compression.ZipFile]::OpenRead($streamDeckPackage)
     try {
-        if ($null -eq $archive.GetEntry("index.html")) {
-            throw "UI release archive is missing index.html"
+        if ($null -eq $archive.GetEntry("com.mrdesjardins.audiorouter.sdPlugin/manifest.json")) {
+            throw "Stream Deck plugin package is missing its manifest"
         }
     }
     finally {

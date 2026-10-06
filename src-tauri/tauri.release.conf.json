@@ -4,7 +4,8 @@
     "targets": ["nsis"],
     "resources": {
       "../target/release/audiorouter-cli.exe": "audiorouter-cli.exe",
-      "../target/release/audiorouter-plugin-worker.exe": "audiorouter-plugin-worker.exe"
+      "../target/release/audiorouter-plugin-worker.exe": "audiorouter-plugin-worker.exe",
+      "../tools/streamdeck/dist/com.mrdesjardins.audiorouter.streamDeckPlugin": "com.mrdesjardins.audiorouter.streamDeckPlugin"
     },
     "windows": {
       "nsis": {
