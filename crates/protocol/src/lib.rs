@@ -56,6 +56,15 @@ pub struct AudioBridgeHello {
 
 impl AudioBridgeHello {
     pub fn validate(&self) -> Result<(), AudioBridgeContractError> {
+        self.validate_with_max_channels(MAX_AUDIO_BRIDGE_CHANNELS)
+    }
+
+    /// Same contract with a caller-chosen channel ceiling. The kernel cable
+    /// bridge carries up to 8 channels; the internal bridge keeps 2.
+    pub fn validate_with_max_channels(
+        &self,
+        max_channels: u16,
+    ) -> Result<(), AudioBridgeContractError> {
         if self.protocol_major != AUDIO_BRIDGE_PROTOCOL_MAJOR {
             return Err(AudioBridgeContractError::UnsupportedMajor(
                 self.protocol_major,
@@ -87,7 +96,7 @@ impl AudioBridgeHello {
         if !(8_000..=192_000).contains(&self.sample_rate_hz) {
             return Err(AudioBridgeContractError::InvalidSampleRate);
         }
-        if !(1..=MAX_AUDIO_BRIDGE_CHANNELS).contains(&self.channels) {
+        if !(1..=max_channels).contains(&self.channels) {
             return Err(AudioBridgeContractError::InvalidChannels);
         }
         if !(1..=MAX_AUDIO_BRIDGE_FRAMES).contains(&self.frames_per_quantum) {

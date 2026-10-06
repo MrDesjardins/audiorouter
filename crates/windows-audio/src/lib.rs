@@ -1787,7 +1787,7 @@ fn native_bridge_open_request(
     section_handle: u64,
     mapping_bytes: u32,
 ) -> Result<NativeBridgeOpenRequest, ()> {
-    hello.validate().map_err(|_| ())?;
+    hello.validate_with_max_channels(NATIVE_DRIVER_MAX_CHANNELS).map_err(|_| ())?;
     native_bridge_cable_index(&hello.bus_id).ok_or(())?;
     let encoded: Vec<u16> = hello.bus_id.encode_utf16().collect();
     if encoded.len() > 64 || encoded.len() * std::mem::size_of::<u16>() > 128 {
@@ -8174,6 +8174,13 @@ const BRIDGE_SAMPLE_BYTES_OFFSET: usize = 88;
 const BRIDGE_READER_SEQUENCE_OFFSET: usize = 96;
 const BRIDGE_PAYLOAD_OFFSET: usize = 128;
 const BRIDGE_SAMPLE_BYTES_FLOAT64: u32 = 8;
+/// `AR_BRIDGE_MAX_CHANNELS`: the kernel cable bridge carries up to 7.1. This
+/// is separate from the internal 2-channel AudioBridge protocol bound.
+pub const NATIVE_DRIVER_MAX_CHANNELS: u16 = 8;
+/// `AR_BRIDGE_MAX_PAYLOAD_BYTES`: 8 channels × 4096 frames × 8-byte samples.
+pub const NATIVE_DRIVER_MAX_PAYLOAD_BYTES: usize = NATIVE_DRIVER_MAX_CHANNELS as usize
+    * audiorouter_protocol::MAX_AUDIO_BRIDGE_FRAMES as usize
+    * std::mem::size_of::<f64>();
 
 /// Driver-written stream counters from the shared header (17 §5.2). User
 /// mode only reads them; all values are monotonic within one lease.
@@ -8222,7 +8229,7 @@ pub struct NativeBridgeFloat64BlockHeader {
 impl NativeBridgeFloat64BlockHeader {
     fn validate(&self) -> Result<(), NativeBridgeRegionError> {
         if self.generation == 0 || self.sequence == 0 ||
-            !(1..=audiorouter_protocol::MAX_AUDIO_BRIDGE_CHANNELS).contains(&self.channels) ||
+            !(1..=NATIVE_DRIVER_MAX_CHANNELS).contains(&self.channels) ||
             !(1..=audiorouter_protocol::MAX_AUDIO_BRIDGE_FRAMES).contains(&self.frames) {
             return Err(NativeBridgeRegionError::InvalidFrame);
         }
@@ -8230,7 +8237,7 @@ impl NativeBridgeFloat64BlockHeader {
             .checked_mul(usize::from(self.channels))
             .and_then(|samples| samples.checked_mul(std::mem::size_of::<f64>()))
             .ok_or(NativeBridgeRegionError::InvalidFrame)?;
-        if expected > audiorouter_protocol::MAX_AUDIO_BRIDGE_PAYLOAD_BYTES * 2 ||
+        if expected > NATIVE_DRIVER_MAX_PAYLOAD_BYTES ||
             usize::try_from(self.payload_bytes).ok() != Some(expected) {
             return Err(NativeBridgeRegionError::BufferTooSmall);
         }
@@ -8629,7 +8636,7 @@ impl NativeBridgeRegion {
             }
             current = parent.parent();
         }
-        if !(1..=audiorouter_protocol::MAX_AUDIO_BRIDGE_CHANNELS).contains(&channels)
+        if !(1..=NATIVE_DRIVER_MAX_CHANNELS).contains(&channels)
             || !(1..=audiorouter_protocol::MAX_AUDIO_BRIDGE_FRAMES).contains(&max_frames)
         {
             return Err(NativeBridgeRegionError::InvalidFrame);
@@ -8836,7 +8843,7 @@ impl NativeBridgeSession {
         hello: audiorouter_protocol::AudioBridgeHello,
     ) -> Result<Self, NativeBridgeSessionError> {
         hello
-            .validate()
+            .validate_with_max_channels(NATIVE_DRIVER_MAX_CHANNELS)
             .map_err(NativeBridgeSessionError::InvalidHello)?;
         let mapping_path = path.as_ref().to_path_buf();
         let region =
@@ -8857,7 +8864,7 @@ impl NativeBridgeSession {
         hello: audiorouter_protocol::AudioBridgeHello,
     ) -> Result<Self, NativeBridgeSessionError> {
         hello
-            .validate()
+            .validate_with_max_channels(NATIVE_DRIVER_MAX_CHANNELS)
             .map_err(NativeBridgeSessionError::InvalidHello)?;
         let mapping_path = path.as_ref().to_path_buf();
         let region =
@@ -11752,6 +11759,78 @@ mod tests {
     }
 
     #[test]
+    fn native_driver_bridge_carries_eight_channels_while_internal_bridge_keeps_two() {
+        // AR_BRIDGE_MAX_CHANNELS / AR_BRIDGE_MAX_PAYLOAD_BYTES in bridgeio.h.
+        assert_eq!(NATIVE_DRIVER_MAX_CHANNELS, 8);
+        assert_eq!(NATIVE_DRIVER_MAX_PAYLOAD_BYTES, 262_144);
+        let hello = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: "cable-b".to_owned(),
+            direction: audiorouter_protocol::AudioBridgeDirection::CaptureSink,
+            generation: 5,
+            sample_rate_hz: 96_000,
+            channels: 8,
+            frames_per_quantum: audiorouter_protocol::MAX_AUDIO_BRIDGE_FRAMES,
+            lease_ms: 1_000,
+        };
+        assert_eq!(
+            hello.validate(),
+            Err(audiorouter_protocol::AudioBridgeContractError::InvalidChannels),
+            "the internal AudioBridge protocol stays at 2 channels"
+        );
+        assert!(hello.validate_with_max_channels(NATIVE_DRIVER_MAX_CHANNELS).is_ok());
+        let nine = audiorouter_protocol::AudioBridgeHello { channels: 9, ..hello.clone() };
+        assert!(nine.validate_with_max_channels(NATIVE_DRIVER_MAX_CHANNELS).is_err());
+
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-8ch-{}-{}.slot",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut session = NativeBridgeSession::create(&path, hello.clone()).unwrap();
+        assert_eq!(session.mapping_bytes(), 128 + NATIVE_DRIVER_MAX_PAYLOAD_BYTES);
+        let samples: Vec<f64> = (0..8 * 4096)
+            .map(|index| f64::from(index as i32 - 16_384) / 2_147_483_648.0)
+            .collect();
+        session.write_f64(&samples).unwrap();
+        let reader = NativeBridgeRegion::open(&path, 8, 4096).unwrap();
+        let mut output = vec![0.0_f64; samples.len()];
+        let header = reader.read_into_f64(5, &mut output).unwrap();
+        assert_eq!(header.channels, 8);
+        assert_eq!(header.payload_bytes as usize, NATIVE_DRIVER_MAX_PAYLOAD_BYTES);
+        assert_eq!(output, samples, "a full 7.1 quantum round-trips bit-exactly");
+        drop(reader);
+        drop(session);
+        let _ = std::fs::remove_file(&path);
+        assert!(NativeBridgeRegion::create(&path, 9, 128).is_err());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_driver_open_request_accepts_eight_channels() {
+        let hello = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: "cable-a".to_owned(),
+            direction: audiorouter_protocol::AudioBridgeDirection::RenderSource,
+            generation: 2,
+            sample_rate_hz: 48_000,
+            channels: 8,
+            frames_per_quantum: 128,
+            lease_ms: 1_000,
+        };
+        let request = native_bridge_open_request_ex(&hello, 1, 128 + 8 * 128 * 8).unwrap();
+        assert_eq!(request.request.channels, 8);
+        let nine = audiorouter_protocol::AudioBridgeHello { channels: 9, ..hello };
+        assert!(native_bridge_open_request_ex(&nine, 1, 128 + 9 * 128 * 8).is_err());
+    }
+
+    #[test]
     fn native_bridge_driver_info_requires_float64_and_protocol_1_1() {
         let info = NativeBridgeDriverInfo {
             protocol_major: 1,
@@ -11864,7 +11943,7 @@ mod tests {
         let path =
             std::env::temp_dir().join(format!("audiorouter-invalid-bridge-{}", std::process::id()));
         assert!(matches!(
-            NativeBridgeRegion::create(&path, 3, 128),
+            NativeBridgeRegion::create(&path, NATIVE_DRIVER_MAX_CHANNELS + 1, 128),
             Err(NativeBridgeRegionError::InvalidFrame)
         ));
         assert!(matches!(
