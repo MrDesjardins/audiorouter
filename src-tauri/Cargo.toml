@@ -1,6 +1,6 @@
 [package]
 name = "audiorouter-shell"
-version = "0.0.13"
+version = "0.0.14"
 description = "AudioRouter native desktop shell"
 authors = ["AudioRouter contributors"]
 license = "GPL-3.0-only"

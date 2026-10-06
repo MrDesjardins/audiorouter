@@ -12,11 +12,11 @@ network. Every route is a picture you can read, and every setting is live.
 
 ## Install on Windows
 
-**[Download AudioRouter 0.0.13 for Windows 11 x64](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.13)**
+**[Download AudioRouter 0.0.14 for Windows 11 x64](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.14)**
 
-1. Download `AudioRouter_0.0.13_x64-setup.exe` from the release assets. It
+1. Download `AudioRouter_0.0.14_x64-setup.exe` from the release assets. It
    is the only file you need: the app, its audio backend, the command-line
-   tool and, from 0.0.14, the Stream Deck plugin are all inside it. The other
+   tool and the Stream Deck plugin are all inside it. The other
    assets are checksums, SBOMs and license notices.
 2. Run it to install for your Windows account (no administrator rights).
 3. Open AudioRouter and allow audio device access when you first press Play.

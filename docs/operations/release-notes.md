@@ -1,6 +1,6 @@
 # AudioRouter release notes
 
-## Unreleased (next: 0.0.14)
+## 0.0.14 — 2026-10-05 (unsigned experimental preview)
 
 - **One download.** The installer now also contains the Stream Deck plugin.
   On the **API** tab, start the API and choose **Install Stream Deck plugin**;
@@ -13,6 +13,16 @@
   the first four were already inside the installer, and the script and
   examples remain in the repository. Release notes open with a
   "Which file do I download?" section.
+- **License:** 0.0.14 is the first release under GPL-3.0-only (commercial
+  licensing available on request). Releases up to 0.0.13 remain under MIT.
+
+Windows 11 x64; app and installer unsigned. No data migration or driver
+installation; the AudioRouter virtual cable is still in development and is
+not part of this installer. Close AudioRouter before upgrading; retain 0.0.13
+and compatible configuration/recording backups for rollback. Installing the
+plugin from the API tab hands the bundled file to the Stream Deck app; this
+was not exercised with a Stream Deck attached for this release. Full M08
+install/hardware/accessibility/signing gates remain open.
 
 ## 0.0.13 — 2026-10-05 (unsigned experimental preview)
 
