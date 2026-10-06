@@ -49,3 +49,25 @@ Do not install or load this intermediate package, even in the VM, until
 WP-06 bridge ABI integration is ready and the VM gate is deliberately resumed.
 WP-03/04 VM ownership, Verifier, fuzz, endpoint, audio-continuity and signing
 gates remain open. Host evidence does not satisfy them.
+
+## Timing follow-up (2026-10-05)
+
+Changed WaveRT packet notification interval storage and comparison from whole
+milliseconds to 100 ns units. The interval is derived from requested DMA bytes,
+the DMA movement rate, and notification count; DPC elapsed time is compared
+without dropping fractional milliseconds, and timer overshoot continues to be
+carried into the next interval. Updated the driver-build acceptance assertions
+to require this precision and to require fail-closed RUN behavior when the
+notification timer is unavailable.
+
+Checks run on the Windows host:
+
+- `powershell -NoProfile -ExecutionPolicy Bypass -File tests/acceptance/m03-driver-build.ps1 -Platform x64` — passed; WDK build and package static checks.
+- `powershell -NoProfile -ExecutionPolicy Bypass -File tests/acceptance/m03-driver-build.ps1 -Platform ARM64` — passed; WDK build and package static checks.
+- `powershell -NoProfile -ExecutionPolicy Bypass -File drivers/audiorouter-virtual/tests/build-tests.ps1` — passed; 132 portable bridge/conversion checks.
+
+No driver was installed or loaded. This change has not been measured on the
+VM: period accuracy, one-hour QPC drift, DPC timing under load, and sound
+continuity remain open. The host copy timing from the portable bridge test is
+not kernel-DPC or endpoint performance evidence. Sample tone/file-writing
+cleanup remains the next WP-05 code task.

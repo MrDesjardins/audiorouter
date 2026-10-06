@@ -366,6 +366,16 @@ sample-code cleanup, WP-06 16-lease Rust compatibility, and VM gates are still
 outstanding. The intermediate package remains prohibited from loading. See
 the evidence record for exact commands and limitations.
 
+Timing follow-up (2026-10-05): WaveRT notification cadence now stores and
+compares packet intervals in 100 ns units derived from DMA bytes per second,
+avoiding millisecond truncation for short periods while retaining timer
+overshoot across ticks. The static acceptance guard now checks the high
+resolution interval path. x64/ARM64 WDK acceptance and 132 portable bridge
+checks passed; this is compile/host evidence only. The 1-hour VM QPC drift and
+tone-continuity measurements remain pending. Remaining immediate WP-05 task:
+remove sample tone/file-writing state and dependencies without disturbing the
+driver's unrelated worker/device lifecycle, then retest and document.
+
 - **Who:** agent on the host; user runs VM checks.
 - **Files:** `Source/Filters/minipairs.h`, new
   `Source/Filters/cablewavtable.h` and `cabletopo*.{h,cpp}` (replacing
@@ -658,9 +668,8 @@ published app keeps the VB-Cable workflow. Reverting DEC-18 restores DEC-16.
 
 ## Next action
 
-Finish WP-05 QPC-derived position, period/notification timer constraints, and
-stream scratch-state cleanup; then remove the unused sample tone/file-writing
-path and registry settings with regression/build checks. Continue WP-06 host
+Finish WP-05 stream scratch-state and sample tone/file-writing cleanup, verify
+formats/INF, and commit the exact WP-05 paths. Continue WP-06 host
 work for the 16-directional-lease protocol and Rust float64 client before any
 VM load. WP-03 install/remove and WP-04 Driver Verifier/fuzz/second-user VM
 gates remain pending; do not call a host build a runtime or quality pass.

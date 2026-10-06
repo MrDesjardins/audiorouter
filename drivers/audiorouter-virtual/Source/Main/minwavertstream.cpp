@@ -331,7 +331,7 @@ Return Value:
 
     m_pPortStream = PortStream_;
     InitializeListHead(&m_NotificationList);
-    m_ulNotificationIntervalMs = 0;
+    m_hnsNotificationInterval = 0;
 
     // Initialize the spinlock to synchronize position updates
     KeInitializeSpinLock(&m_PositionSpinLock);
@@ -565,8 +565,6 @@ NTSTATUS CMiniportWaveRTStream::AllocateBufferWithNotification
 {
     PAGED_CODE();
 
-    ULONG ulBufferDurationMs = 0;
-
     if (AudioBufferMdl_ == NULL || ActualSize_ == NULL ||
         OffsetFromFirstPage_ == NULL || CacheType_ == NULL ||
         m_pPortStream == NULL || m_pWfExt == NULL ||
@@ -636,17 +634,17 @@ NTSTATUS CMiniportWaveRTStream::AllocateBufferWithNotification
     }
     m_ulNotificationsPerBuffer = NotificationCount_;
     m_ulDmaBufferSize = RequestedSize_;
-    ULONGLONG bufferDurationMs =
-        (static_cast<ULONGLONG>(RequestedSize_) * 1000) / m_ulDmaMovementRate;
-    if (bufferDurationMs > MAXULONG)
+    ULONGLONG notificationIntervalHns =
+        (static_cast<ULONGLONG>(RequestedSize_) * 10000000) /
+        m_ulDmaMovementRate / NotificationCount_;
+    if (notificationIntervalHns == 0)
     {
         m_pPortStream->UnmapAllocatedPages(m_pDmaBuffer, pBufferMdl);
         m_pDmaBuffer = NULL;
         m_pPortStream->FreePagesFromMdl(pBufferMdl);
         return STATUS_INVALID_PARAMETER;
     }
-    ulBufferDurationMs = static_cast<ULONG>(bufferDurationMs);
-    m_ulNotificationIntervalMs = ulBufferDurationMs / NotificationCount_;
+    m_hnsNotificationInterval = notificationIntervalHns;
 
     *AudioBufferMdl_ = pBufferMdl;
     *ActualSize_ = RequestedSize_;
@@ -1369,7 +1367,7 @@ NTSTATUS CMiniportWaveRTStream::SetCurrentWritePositionInternal(_In_  ULONG _ulC
 //
 // Check for eMINIPORT_GLITCH_REPORT - Same WaveRT buffer write during event driven mode.
 //
-    if (m_ulNotificationIntervalMs > 0)
+    if (m_hnsNotificationInterval > 0)
     {
         if (m_ulCurrentWritePosition == _ulCurrentWritePosition)
         {
@@ -1451,7 +1449,7 @@ NTSTATUS CMiniportWaveRTStream::SetState
                 //
 
                 // Pause DMA
-                if (m_ulNotificationIntervalMs > 0 && m_pNotificationTimer != NULL)
+                if (m_hnsNotificationInterval > 0 && m_pNotificationTimer != NULL)
                 {
                     ExCancelTimer(m_pNotificationTimer, NULL);
                     KeFlushQueuedDpcs();
@@ -1477,7 +1475,7 @@ NTSTATUS CMiniportWaveRTStream::SetState
             break;
 
         case KSSTATE_RUN:
-            if (m_ulNotificationIntervalMs > 0 && m_pNotificationTimer == NULL)
+            if (m_hnsNotificationInterval > 0 && m_pNotificationTimer == NULL)
             {
                 ntStatus = STATUS_INSUFFICIENT_RESOURCES;
                 break;
@@ -1487,7 +1485,7 @@ NTSTATUS CMiniportWaveRTStream::SetState
             ullPerfCounterTemp = KeQueryPerformanceCounter(&m_ullPerformanceCounterFrequency);
             m_ullLastDPCTimeStamp = m_ullDmaTimeStamp = KSCONVERT_PERFORMANCE_TIME(m_ullPerformanceCounterFrequency.QuadPart, ullPerfCounterTemp);
 
-            if (m_ulNotificationIntervalMs > 0)
+            if (m_hnsNotificationInterval > 0)
             {
                 // Set timer for 1 ms. This will cause DPC to run every 1 ms but driver will send out
                 // notification events only after notification interval. This timer is used by AudioRouter Virtual to
@@ -2070,7 +2068,7 @@ TimerNotifyRT
     if (_this->m_ullPerformanceCounterFrequency.QuadPart == 0 ||
         qpc.QuadPart < 0 ||
         static_cast<ULONGLONG>(qpc.QuadPart) < _this->m_ullLastDPCTimeStamp ||
-        _this->m_ulNotificationIntervalMs == 0)
+        _this->m_hnsNotificationInterval == 0)
     {
         goto End;
     }
@@ -2084,8 +2082,8 @@ TimerNotifyRT
         goto End;
     }
 
-    // Calculate the time elapsed since the last we ran DPC that matched Notification interval. Note that the division by 10000
-    // to convert to milliseconds may cause us to lose some of the time, so we will carry the remainder forward.
+    // Compare in 100 ns units so short packets do not collapse to zero
+    // milliseconds. Carry any timer overshoot into the next notification.
 
     ULONGLONG elapsedHns = static_cast<ULONGLONG>(hnsCurrentTime) -
         _this->m_ullLastDPCTimeStamp;
@@ -2096,20 +2094,11 @@ TimerNotifyRT
         goto End;
     }
     elapsedHns += _this->m_hnsDPCTimeCarryForward;
-    ULONGLONG elapsedMilliseconds = elapsedHns / 10000;
-    if (elapsedMilliseconds > MAXULONG)
+    if (elapsedHns >= _this->m_hnsNotificationInterval)
     {
-        _this->m_ullLastDPCTimeStamp = static_cast<ULONGLONG>(hnsCurrentTime);
-        _this->m_hnsDPCTimeCarryForward = elapsedHns % 10000;
-        goto End;
-    }
-    ULONG TimeElapsedInMS = static_cast<ULONG>(elapsedMilliseconds);
-
-    if (TimeElapsedInMS >= _this->m_ulNotificationIntervalMs)
-    {
-        // Carry forward the time greater than notification interval to adjust time to signal next buffer completion event accordingly.
-        ULONGLONG intervalHns = static_cast<ULONGLONG>(_this->m_ulNotificationIntervalMs) * 10000;
-        _this->m_hnsDPCTimeCarryForward = elapsedHns - intervalHns;
+        // Preserve timer overshoot so the periodic 1 ms DPC does not add
+        // cumulative drift to the requested packet cadence.
+        _this->m_hnsDPCTimeCarryForward = elapsedHns - _this->m_hnsNotificationInterval;
         // Save the last time DPC ran at notification interval
         _this->m_ullLastDPCTimeStamp = hnsCurrentTime;
         bufferCompleted = TRUE;

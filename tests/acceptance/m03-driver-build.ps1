@@ -589,8 +589,9 @@ foreach ($required in @(
         throw "WaveRT packet counter overflow guard is missing: $required"
     }
 }
-if (-not $stream.Contains('ULONGLONG intervalHns = static_cast<ULONGLONG>(_this->m_ulNotificationIntervalMs) * 10000')) {
-    throw 'WaveRT timer notification arithmetic must widen before interval multiplication'
+if (-not $stream.Contains('static_cast<ULONGLONG>(RequestedSize_) * 10000000') -or
+    -not $stream.Contains('elapsedHns >= _this->m_hnsNotificationInterval')) {
+    throw 'WaveRT notification cadence must use 100 ns precision without millisecond truncation'
 }
 if (-not $stream.Contains('if (_this->m_pMiniport == NULL)')) {
     throw 'WaveRT timer callback must guard its miniport owner'
@@ -637,7 +638,7 @@ if (-not $stream.Contains('if (drmRights == NULL || m_pMiniport == NULL)')) {
 if (-not $stream.Contains('m_pNotificationTimer = NULL;')) {
     throw 'WaveRT constructor must initialize the notification timer owner before allocation'
 }
-if (-not $stream.Contains('m_ulNotificationIntervalMs > 0 && m_pNotificationTimer == NULL')) {
+if (-not $stream.Contains('m_hnsNotificationInterval > 0 && m_pNotificationTimer == NULL')) {
     throw 'WaveRT RUN transition must fail closed without its notification timer owner'
 }
 if (-not $stream.Contains('if (!NT_SUCCESS(ntStatus))')) {

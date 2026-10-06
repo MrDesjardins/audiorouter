@@ -52,7 +52,7 @@ protected:
     PPORTWAVERTSTREAM           m_pPortStream;
     LIST_ENTRY                  m_NotificationList;
     PEX_TIMER                   m_pNotificationTimer;
-    ULONG                       m_ulNotificationIntervalMs;
+    ULONGLONG                   m_hnsNotificationInterval;
     ULONG                       m_ulCurrentWritePosition;
     LONG                        m_IsCurrentWritePositionUpdated;
 
