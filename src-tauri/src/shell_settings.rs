@@ -33,7 +33,9 @@ pub fn path_beside(database_path: &Path) -> PathBuf {
 }
 
 pub fn load(path: &Path) -> ShellSettings {
-    let Ok(metadata) = std::fs::metadata(path) else { return ShellSettings::default() };
+    let Ok(metadata) = std::fs::metadata(path) else {
+        return ShellSettings::default();
+    };
     if !metadata.is_file() || metadata.len() > MAX_SETTINGS_BYTES {
         return ShellSettings::default();
     }
@@ -47,8 +49,10 @@ pub fn load(path: &Path) -> ShellSettings {
 pub fn save(path: &Path, settings: &ShellSettings) -> Result<(), String> {
     let text = serde_json::to_string_pretty(settings).map_err(|error| error.to_string())?;
     let temporary = path.with_extension("json.tmp");
-    std::fs::write(&temporary, text).map_err(|error| format!("settings could not be written: {error}"))?;
-    std::fs::rename(&temporary, path).map_err(|error| format!("settings could not be saved: {error}"))
+    std::fs::write(&temporary, text)
+        .map_err(|error| format!("settings could not be written: {error}"))?;
+    std::fs::rename(&temporary, path)
+        .map_err(|error| format!("settings could not be saved: {error}"))
 }
 
 #[cfg(test)]
@@ -57,33 +61,63 @@ mod tests {
 
     #[test]
     fn autoplay_round_trips_and_bad_files_mean_off() {
-        let folder = std::env::temp_dir().join(format!("audiorouter-shell-settings-{}", std::process::id()));
+        let folder =
+            std::env::temp_dir().join(format!("audiorouter-shell-settings-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&folder);
         std::fs::create_dir_all(&folder).unwrap();
         let path = path_beside(&folder.join("state.sqlite"));
         assert_eq!(path.file_name().unwrap(), "shell-settings.json");
-        assert_eq!(load(&path), ShellSettings::default(), "missing file: autoplay off");
-        save(&path, &ShellSettings { auto_play: true, ..ShellSettings::default() }).unwrap();
+        assert_eq!(
+            load(&path),
+            ShellSettings::default(),
+            "missing file: autoplay off"
+        );
+        save(
+            &path,
+            &ShellSettings {
+                auto_play: true,
+                ..ShellSettings::default()
+            },
+        )
+        .unwrap();
         assert!(load(&path).auto_play);
         std::fs::write(&path, "{ not json").unwrap();
         assert!(!load(&path).auto_play, "corrupt file: off");
-        std::fs::write(&path, format!("{{\"autoPlay\": true, \"pad\": \"{}\"}}", "x".repeat(5000))).unwrap();
+        std::fs::write(
+            &path,
+            format!("{{\"autoPlay\": true, \"pad\": \"{}\"}}", "x".repeat(5000)),
+        )
+        .unwrap();
         assert!(!load(&path).auto_play, "oversized file: off");
         std::fs::write(&path, "{\"autoPlay\": true, \"future\": 1}").unwrap();
-        assert!(load(&path).auto_play, "unknown keys from a newer version are ignored");
+        assert!(
+            load(&path).auto_play,
+            "unknown keys from a newer version are ignored"
+        );
         let _ = std::fs::remove_dir_all(&folder);
     }
 
     #[test]
     fn the_api_choice_round_trips_and_older_files_mean_off() {
-        let folder = std::env::temp_dir().join(format!("audiorouter-shell-api-{}", std::process::id()));
+        let folder =
+            std::env::temp_dir().join(format!("audiorouter-shell-api-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&folder);
         std::fs::create_dir_all(&folder).unwrap();
         let path = path_beside(&folder.join("state.sqlite"));
         std::fs::write(&path, "{\"autoPlay\": true}").unwrap();
-        assert!(!load(&path).api_auto_start, "files from before this setting: no API auto-start");
+        assert!(
+            !load(&path).api_auto_start,
+            "files from before this setting: no API auto-start"
+        );
         assert_eq!(load(&path).api, None);
-        let on = ShellSettings { auto_play: false, api_auto_start: true, api: Some(ApiListener { port: 17891, network: Some("192.168.1.20".into()) }) };
+        let on = ShellSettings {
+            auto_play: false,
+            api_auto_start: true,
+            api: Some(ApiListener {
+                port: 17891,
+                network: Some("192.168.1.20".into()),
+            }),
+        };
         save(&path, &on).unwrap();
         assert_eq!(load(&path), on);
         let _ = std::fs::remove_dir_all(&folder);

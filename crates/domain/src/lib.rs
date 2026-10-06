@@ -239,7 +239,14 @@ fn valid_parametric_band_parameter(name: &str, value: &serde_json::Value) -> boo
         "Type" => value.as_str().is_some_and(|kind| {
             matches!(
                 kind,
-                "peaking" | "lowShelf" | "highShelf" | "lowPass" | "highPass" | "bandPass" | "allPass" | "notch"
+                "peaking"
+                    | "lowShelf"
+                    | "highShelf"
+                    | "lowPass"
+                    | "highPass"
+                    | "bandPass"
+                    | "allPass"
+                    | "notch"
             )
         }),
         "FrequencyHz" => value.as_f64().is_some_and(|frequency| {
@@ -315,9 +322,7 @@ pub fn node_registry() -> [NodeTypeSpec; 34] {
             | NodeKind::SpeechDenoise
             | NodeKind::FirFilter
             | NodeKind::SpectralGate
-            | NodeKind::TimeShift => {
-                CapabilityAvailability::Available
-            }
+            | NodeKind::TimeShift => CapabilityAvailability::Available,
             NodeKind::GraphicEq => CapabilityAvailability::Available,
             NodeKind::Pitch => CapabilityAvailability::Available,
             NodeKind::NetworkSend | NodeKind::NetworkReceive => CapabilityAvailability::Available,
@@ -352,7 +357,9 @@ pub fn node_registry() -> [NodeTypeSpec; 34] {
             NodeKind::Gate => "medium",
             NodeKind::Limiter => "low",
             NodeKind::Delay => "medium",
-            NodeKind::BassTreble | NodeKind::Dehum | NodeKind::Declick | NodeKind::TimeShift => "medium",
+            NodeKind::BassTreble | NodeKind::Dehum | NodeKind::Declick | NodeKind::TimeShift => {
+                "medium"
+            }
             NodeKind::GraphicEq => "medium",
             NodeKind::Pitch
             | NodeKind::Denoise
@@ -760,21 +767,73 @@ pub struct ApiMethodSpec {
 }
 
 pub const API_METHODS: [ApiMethodSpec; 121] = [
-    ApiMethodSpec { name: "meters.reset", permission: PermissionScope::SessionControl, side_effect: SideEffectClass::Mutating },
+    ApiMethodSpec {
+        name: "meters.reset",
+        permission: PermissionScope::SessionControl,
+        side_effect: SideEffectClass::Mutating,
+    },
     // Task-shaped methods for StreamDeck, scripts and LLM assistants.
     // Play prepares devices, so it needs the same grant as nativePaths.prepare.
-    ApiMethodSpec { name: "sessions.play", permission: PermissionScope::DeviceAdministration, side_effect: SideEffectClass::ExternalOperation },
-    ApiMethodSpec { name: "sessions.togglePlay", permission: PermissionScope::DeviceAdministration, side_effect: SideEffectClass::ExternalOperation },
-    ApiMethodSpec { name: "sessions.summary", permission: PermissionScope::Read, side_effect: SideEffectClass::ReadOnly },
-    ApiMethodSpec { name: "safety.togglePrivacyMute", permission: PermissionScope::SessionControl, side_effect: SideEffectClass::Mutating },
-    ApiMethodSpec { name: "nodes.catalog", permission: PermissionScope::Read, side_effect: SideEffectClass::ReadOnly },
-    ApiMethodSpec { name: "nodes.set", permission: PermissionScope::GraphWrite, side_effect: SideEffectClass::Mutating },
-    ApiMethodSpec { name: "nodes.toggle", permission: PermissionScope::GraphWrite, side_effect: SideEffectClass::Mutating },
-    ApiMethodSpec { name: "nodes.add", permission: PermissionScope::GraphWrite, side_effect: SideEffectClass::Mutating },
-    ApiMethodSpec { name: "nodes.remove", permission: PermissionScope::GraphWrite, side_effect: SideEffectClass::Mutating },
-    ApiMethodSpec { name: "connections.add", permission: PermissionScope::GraphWrite, side_effect: SideEffectClass::Mutating },
-    ApiMethodSpec { name: "connections.remove", permission: PermissionScope::GraphWrite, side_effect: SideEffectClass::Mutating },
-    ApiMethodSpec { name: "meters.levels", permission: PermissionScope::Read, side_effect: SideEffectClass::ReadOnly },
+    ApiMethodSpec {
+        name: "sessions.play",
+        permission: PermissionScope::DeviceAdministration,
+        side_effect: SideEffectClass::ExternalOperation,
+    },
+    ApiMethodSpec {
+        name: "sessions.togglePlay",
+        permission: PermissionScope::DeviceAdministration,
+        side_effect: SideEffectClass::ExternalOperation,
+    },
+    ApiMethodSpec {
+        name: "sessions.summary",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "safety.togglePrivacyMute",
+        permission: PermissionScope::SessionControl,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "nodes.catalog",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "nodes.set",
+        permission: PermissionScope::GraphWrite,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "nodes.toggle",
+        permission: PermissionScope::GraphWrite,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "nodes.add",
+        permission: PermissionScope::GraphWrite,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "nodes.remove",
+        permission: PermissionScope::GraphWrite,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "connections.add",
+        permission: PermissionScope::GraphWrite,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "connections.remove",
+        permission: PermissionScope::GraphWrite,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "meters.levels",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
     ApiMethodSpec {
         name: "system.describe",
         permission: PermissionScope::Read,
@@ -1707,8 +1766,16 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::BassTreble, "bassDb" | "trebleDb") => value
                     .as_f64()
                     .is_some_and(|gain| gain.is_finite() && (-12.0..=12.0).contains(&gain)),
-                (NodeKind::BassTreble, "bassFrequencyHz") => value.as_f64().is_some_and(|frequency| frequency.is_finite() && (80.0..=1_000.0).contains(&frequency)),
-                (NodeKind::BassTreble, "trebleFrequencyHz") => value.as_f64().is_some_and(|frequency| frequency.is_finite() && (800.0..=12_000.0).contains(&frequency)),
+                (NodeKind::BassTreble, "bassFrequencyHz") => {
+                    value.as_f64().is_some_and(|frequency| {
+                        frequency.is_finite() && (80.0..=1_000.0).contains(&frequency)
+                    })
+                }
+                (NodeKind::BassTreble, "trebleFrequencyHz") => {
+                    value.as_f64().is_some_and(|frequency| {
+                        frequency.is_finite() && (800.0..=12_000.0).contains(&frequency)
+                    })
+                }
                 (NodeKind::Dehum, "frequencyHz") => value.as_f64().is_some_and(|frequency| {
                     frequency.is_finite() && (45.0..=65.0).contains(&frequency)
                 }),
@@ -1726,7 +1793,9 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::TimeShift, "bufferSeconds") => value
                     .as_u64()
                     .is_some_and(|seconds| (10..=120).contains(&seconds)),
-                (NodeKind::FirFilter, "mediaId") => valid_bounded_string(value, MAX_ENTITY_ID_BYTES),
+                (NodeKind::FirFilter, "mediaId") => {
+                    valid_bounded_string(value, MAX_ENTITY_ID_BYTES)
+                }
                 (NodeKind::FirFilter, "fileName") => value.as_str().is_some_and(|name| {
                     !name.is_empty() && name.len() <= 255 && !name.chars().any(char::is_control)
                 }),
@@ -1744,19 +1813,24 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                     .is_some_and(|db| db.is_finite() && (0.0..=80.0).contains(&db)),
                 (NodeKind::SpectralGate, "learning") => value.is_boolean(),
                 // 64 bands, two hex digits each (see the DSP noise profile).
-                (NodeKind::Denoise | NodeKind::SpectralGate, "noiseProfile") => value.as_str().is_some_and(|profile| {
-                    profile.len() == 128 && profile.bytes().all(|byte| byte.is_ascii_hexdigit())
-                }),
+                (NodeKind::Denoise | NodeKind::SpectralGate, "noiseProfile") => {
+                    value.as_str().is_some_and(|profile| {
+                        profile.len() == 128 && profile.bytes().all(|byte| byte.is_ascii_hexdigit())
+                    })
+                }
                 (NodeKind::InputSwitch, "selected") => {
                     value.as_str().is_some_and(|side| matches!(side, "a" | "b"))
                 }
-                (NodeKind::InputSwitch, "fade") => {
-                    value.as_str().is_some_and(|fade| matches!(fade, "normal" | "slow"))
-                }
+                (NodeKind::InputSwitch, "fade") => value
+                    .as_str()
+                    .is_some_and(|fade| matches!(fade, "normal" | "slow")),
                 // The trigger node; empty means none (the audio passes unchanged).
                 // One-click recording settings of a Recorder node.
                 (NodeKind::Recorder, "format") => value.as_str().is_some_and(|format| {
-                    matches!(format, "wavPcm16" | "wavPcm24" | "wavFloat32" | "flac16" | "flac24" | "mp3")
+                    matches!(
+                        format,
+                        "wavPcm16" | "wavPcm24" | "wavFloat32" | "flac16" | "flac24" | "mp3"
+                    )
                 }),
                 (NodeKind::Recorder, "autoRecord") => value.is_boolean(),
                 (NodeKind::Recorder, "splitMinutes") => value
@@ -1769,7 +1843,9 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::Duck, "trigger") => value
                     .as_str()
                     .is_some_and(|trigger| matches!(trigger, "level" | "siegeRound")),
-                (NodeKind::Duck, "duckMenu" | "duckPrep" | "duckBetweenRounds") => value.is_boolean(),
+                (NodeKind::Duck, "duckMenu" | "duckPrep" | "duckBetweenRounds") => {
+                    value.is_boolean()
+                }
                 (NodeKind::Duck, name) => {
                     let range = match name {
                         "thresholdDb" => Some(-80.0..=0.0),
@@ -1779,11 +1855,17 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                         "releaseMs" => Some(20.0..=5_000.0),
                         _ => None,
                     };
-                    range.is_some_and(|range| value.as_f64().is_some_and(|number| number.is_finite() && range.contains(&number)))
+                    range.is_some_and(|range| {
+                        value
+                            .as_f64()
+                            .is_some_and(|number| number.is_finite() && range.contains(&number))
+                    })
                 }
-                (NodeKind::Declick, "thresholdPercent") => value.as_f64().is_some_and(|threshold| {
-                    threshold.is_finite() && (0.0..=100.0).contains(&threshold)
-                }),
+                (NodeKind::Declick, "thresholdPercent") => {
+                    value.as_f64().is_some_and(|threshold| {
+                        threshold.is_finite() && (0.0..=100.0).contains(&threshold)
+                    })
+                }
                 (NodeKind::Volume, "percent") => value
                     .as_f64()
                     .is_some_and(|percent| percent.is_finite() && (0.0..=200.0).contains(&percent)),
@@ -1889,7 +1971,8 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                     .as_u64()
                     .is_some_and(|port| (1..=u64::from(u16::MAX)).contains(&port)),
                 (NodeKind::NetworkReceive, "bufferMs") => value.as_f64().is_some_and(|buffer| {
-                    buffer.is_finite() && (MIN_NETWORK_BUFFER_MS..=MAX_NETWORK_BUFFER_MS).contains(&buffer)
+                    buffer.is_finite()
+                        && (MIN_NETWORK_BUFFER_MS..=MAX_NETWORK_BUFFER_MS).contains(&buffer)
                 }),
                 (NodeKind::TestSignal, "frequencyHz") => value.as_f64().is_some_and(|frequency| {
                     frequency.is_finite() && (20.0..=20_000.0).contains(&frequency)
@@ -3224,16 +3307,26 @@ mod tests {
     #[test]
     fn validates_volume_percent_and_mixer_input_volume() {
         let mut volume = node("volume", NodeKind::Volume, PortDirection::Input);
-        volume.parameters.insert("percent".into(), serde_json::json!(110.0));
+        volume
+            .parameters
+            .insert("percent".into(), serde_json::json!(110.0));
         assert!(validate_session(&session(vec![volume.clone()], vec![])).is_ok());
-        for invalid in [serde_json::json!(-1.0), serde_json::json!(200.5), serde_json::json!("50")] {
+        for invalid in [
+            serde_json::json!(-1.0),
+            serde_json::json!(200.5),
+            serde_json::json!("50"),
+        ] {
             volume.parameters.insert("percent".into(), invalid);
             assert!(validate_session(&session(vec![volume.clone()], vec![])).is_err());
         }
 
         let mut mixer = node("mixer", NodeKind::Mixer, PortDirection::Input);
-        mixer.parameters.insert("inputVolume:discord".into(), serde_json::json!(50.0));
-        mixer.parameters.insert("inputVolume:mic".into(), serde_json::json!(80.0));
+        mixer
+            .parameters
+            .insert("inputVolume:discord".into(), serde_json::json!(50.0));
+        mixer
+            .parameters
+            .insert("inputVolume:mic".into(), serde_json::json!(80.0));
         assert!(validate_session(&session(vec![mixer.clone()], vec![])).is_ok());
         assert_eq!(mixer_input_volume(&mixer, &EntityId::new("discord")), 0.5);
         assert_eq!(mixer_input_volume(&mixer, &EntityId::new("unset")), 1.0);
@@ -3245,7 +3338,10 @@ mod tests {
         ] {
             let mut invalid = mixer.clone();
             invalid.parameters.insert(name.into(), value);
-            assert!(validate_session(&session(vec![invalid], vec![])).is_err(), "{name}");
+            assert!(
+                validate_session(&session(vec![invalid], vec![])).is_err(),
+                "{name}"
+            );
         }
     }
 
@@ -3338,7 +3434,8 @@ mod tests {
             validate_session(&session(vec![eq.clone()], vec![]))
         );
         for kind in ["bandPass", "allPass"] {
-            eq.parameters.insert("band15Type".into(), serde_json::json!(kind));
+            eq.parameters
+                .insert("band15Type".into(), serde_json::json!(kind));
             assert!(validate_session(&session(vec![eq.clone()], vec![])).is_ok());
             let encoded = serde_json::to_string(&eq).unwrap();
             let decoded: Node = serde_json::from_str(&encoded).unwrap();
@@ -3444,11 +3541,14 @@ mod tests {
             serde_json::json!("{0.0.0.00000000}.{829bab15-21b8-47d1-964a-f843aa3b37d6}"),
         );
         assert!(validate_session(&session(vec![input.clone(), output.clone()], vec![])).is_ok());
-        input.parameters.insert("endpointId".into(), serde_json::json!(""));
-        assert!(validate_session(&session(vec![input.clone()], vec![])).is_err());
         input
             .parameters
-            .insert("endpointId".into(), serde_json::json!("x".repeat(MAX_ENTITY_ID_BYTES + 1)));
+            .insert("endpointId".into(), serde_json::json!(""));
+        assert!(validate_session(&session(vec![input.clone()], vec![])).is_err());
+        input.parameters.insert(
+            "endpointId".into(),
+            serde_json::json!("x".repeat(MAX_ENTITY_ID_BYTES + 1)),
+        );
         assert!(validate_session(&session(vec![input], vec![])).is_err());
     }
 
@@ -3456,18 +3556,32 @@ mod tests {
     fn physical_inputs_accept_only_known_spatial_modes() {
         let mut input = node("in", NodeKind::PhysicalInput, PortDirection::Output);
         for mode in ["off", "headphones", "speakers"] {
-            input.parameters.insert("spatialMode".into(), serde_json::json!(mode));
+            input
+                .parameters
+                .insert("spatialMode".into(), serde_json::json!(mode));
             assert!(validate_session(&session(vec![input.clone()], vec![])).is_ok());
         }
-        input.parameters.insert("spatialMode".into(), serde_json::json!("ambisonic"));
+        input
+            .parameters
+            .insert("spatialMode".into(), serde_json::json!("ambisonic"));
         assert!(validate_session(&session(vec![input.clone()], vec![])).is_err());
-        input.parameters.insert("spatialMode".into(), serde_json::json!("speakers"));
+        input
+            .parameters
+            .insert("spatialMode".into(), serde_json::json!("speakers"));
         for (room, valid) in [(0.0, true), (100.0, true), (100.5, false), (-1.0, false)] {
-            input.parameters.insert("spatialRoomPercent".into(), serde_json::json!(room));
-            assert_eq!(validate_session(&session(vec![input.clone()], vec![])).is_ok(), valid, "room {room}");
+            input
+                .parameters
+                .insert("spatialRoomPercent".into(), serde_json::json!(room));
+            assert_eq!(
+                validate_session(&session(vec![input.clone()], vec![])).is_ok(),
+                valid,
+                "room {room}"
+            );
         }
         let mut output = node("out", NodeKind::PhysicalOutput, PortDirection::Input);
-        output.parameters.insert("spatialMode".into(), serde_json::json!("headphones"));
+        output
+            .parameters
+            .insert("spatialMode".into(), serde_json::json!("headphones"));
         assert!(validate_session(&session(vec![output], vec![])).is_err());
     }
 
@@ -3475,15 +3589,22 @@ mod tests {
     fn physical_inputs_accept_only_known_channel_modes() {
         let mut input = node("in", NodeKind::PhysicalInput, PortDirection::Output);
         for mode in ["stereo", "mono", "left", "right"] {
-            input.parameters.insert("channelMode".into(), serde_json::json!(mode));
-            assert!(validate_session(&session(vec![input.clone()], vec![])).is_ok(), "{mode}");
+            input
+                .parameters
+                .insert("channelMode".into(), serde_json::json!(mode));
+            assert!(
+                validate_session(&session(vec![input.clone()], vec![])).is_ok(),
+                "{mode}"
+            );
         }
         for invalid in [serde_json::json!("swap"), serde_json::json!(1)] {
             input.parameters.insert("channelMode".into(), invalid);
             assert!(validate_session(&session(vec![input.clone()], vec![])).is_err());
         }
         let mut output = node("out", NodeKind::PhysicalOutput, PortDirection::Input);
-        output.parameters.insert("channelMode".into(), serde_json::json!("mono"));
+        output
+            .parameters
+            .insert("channelMode".into(), serde_json::json!("mono"));
         assert!(validate_session(&session(vec![output], vec![])).is_err());
     }
 
@@ -3951,22 +4072,70 @@ mod tests {
             network.parameters.insert(name.into(), value);
             validate_session(&session(vec![network], vec![])).is_ok()
         };
-        assert!(valid(NodeKind::NetworkSend, "host", serde_json::json!("192.168.1.20")));
-        assert!(valid(NodeKind::NetworkSend, "host", serde_json::json!("fe80::1")));
+        assert!(valid(
+            NodeKind::NetworkSend,
+            "host",
+            serde_json::json!("192.168.1.20")
+        ));
+        assert!(valid(
+            NodeKind::NetworkSend,
+            "host",
+            serde_json::json!("fe80::1")
+        ));
         // Names are never resolved; whitespace and garbage are rejected.
-        assert!(!valid(NodeKind::NetworkSend, "host", serde_json::json!("streaming-pc")));
-        assert!(!valid(NodeKind::NetworkSend, "host", serde_json::json!(" 192.168.1.20")));
+        assert!(!valid(
+            NodeKind::NetworkSend,
+            "host",
+            serde_json::json!("streaming-pc")
+        ));
+        assert!(!valid(
+            NodeKind::NetworkSend,
+            "host",
+            serde_json::json!(" 192.168.1.20")
+        ));
         assert!(!valid(NodeKind::NetworkSend, "host", serde_json::json!("")));
-        assert!(valid(NodeKind::NetworkSend, "port", serde_json::json!(47_800)));
+        assert!(valid(
+            NodeKind::NetworkSend,
+            "port",
+            serde_json::json!(47_800)
+        ));
         assert!(!valid(NodeKind::NetworkSend, "port", serde_json::json!(0)));
-        assert!(!valid(NodeKind::NetworkSend, "port", serde_json::json!(70_000)));
-        assert!(valid(NodeKind::NetworkReceive, "sender", serde_json::json!("10.0.0.5")));
-        assert!(!valid(NodeKind::NetworkReceive, "sender", serde_json::json!("any")));
-        assert!(valid(NodeKind::NetworkReceive, "bufferMs", serde_json::json!(40.0)));
-        assert!(!valid(NodeKind::NetworkReceive, "bufferMs", serde_json::json!(5.0)));
-        assert!(!valid(NodeKind::NetworkReceive, "bufferMs", serde_json::json!(900.0)));
+        assert!(!valid(
+            NodeKind::NetworkSend,
+            "port",
+            serde_json::json!(70_000)
+        ));
+        assert!(valid(
+            NodeKind::NetworkReceive,
+            "sender",
+            serde_json::json!("10.0.0.5")
+        ));
+        assert!(!valid(
+            NodeKind::NetworkReceive,
+            "sender",
+            serde_json::json!("any")
+        ));
+        assert!(valid(
+            NodeKind::NetworkReceive,
+            "bufferMs",
+            serde_json::json!(40.0)
+        ));
+        assert!(!valid(
+            NodeKind::NetworkReceive,
+            "bufferMs",
+            serde_json::json!(5.0)
+        ));
+        assert!(!valid(
+            NodeKind::NetworkReceive,
+            "bufferMs",
+            serde_json::json!(900.0)
+        ));
         // A receive-only parameter is not accepted on a send node.
-        assert!(!valid(NodeKind::NetworkSend, "sender", serde_json::json!("10.0.0.5")));
+        assert!(!valid(
+            NodeKind::NetworkSend,
+            "sender",
+            serde_json::json!("10.0.0.5")
+        ));
     }
 
     #[test]
@@ -4321,14 +4490,10 @@ mod tests {
         for index in 0..16 {
             eq.parameters
                 .insert(format!("band{index}Enabled"), serde_json::json!(true));
-            eq.parameters.insert(
-                format!("band{index}Type"),
-                serde_json::json!("peaking"),
-            );
-            eq.parameters.insert(
-                format!("band{index}FrequencyHz"),
-                serde_json::json!(1000),
-            );
+            eq.parameters
+                .insert(format!("band{index}Type"), serde_json::json!("peaking"));
+            eq.parameters
+                .insert(format!("band{index}FrequencyHz"), serde_json::json!(1000));
             eq.parameters
                 .insert(format!("band{index}Q"), serde_json::json!(1));
             eq.parameters

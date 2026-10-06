@@ -165,6 +165,36 @@ costs and phases in the [driver track](../future/M03-driver-signing.md).
 
 ## Open work
 
+### CI back to green on Windows (2026-10-06, user request)
+
+All 500+ `AudioRouter CI` runs through 2026-09-07 failed; the workflow was
+later made manual-only. Causes: (1) the Linux job built the whole workspace,
+but `windows` 0.62 (`windows-future`) does not compile on Linux and
+`windows-audio`, `control`, `transport` and `cli` depend on it; (2)
+`cargo fmt --check` and strict Clippy had never passed (1,019 findings were
+the generated KEMAR table); (3) the Windows job's
+`backup_never_overwrites_an_existing_recovery_copy` failure (2026-09-07).
+Decision: CI runs on Windows only (the product is Windows-only), with Rust
+1.96.0 and Node 22.14.0 pinned like `manual-release.yml`, on push to
+`main`, pull requests and manual dispatch. It adds shell fmt/Clippy/tests
+and drops the m04/m05/m07 wrappers, whose steps it already runs once.
+Code changes: rustfmt (workspace and shell), Clippy fixes and documented
+allows, `rust-version` 1.85, non-Windows worker-spawn stubs, Unix-safe test
+cleanup, and a quoted vitest exclude (sh expanded `e2e/**`).
+Local evidence: Clippy `-D warnings` clean for the workspace and shell
+with `--target x86_64-pc-windows-gnu` (mingw cross-check, Linux); portable
+crate tests and 480 UI tests pass on Linux. Windows evidence: CI
+[run 37417530916](https://github.com/MrDesjardins/audiorouter/actions/runs/37417530916)
+(2026-10-06, `474ddcb`) passed every step, including workspace and shell
+tests, and the unsigned installer build with the bundled Stream Deck plugin
+plus verification. Three more fixes came from earlier runs: the M00 probe's
+stale `Cargo.lock` (re-seeded from the workspace lock), `m01-cli.ps1
+-AllowNoAudioEndpoints` for runners without audio devices (attended runs
+stay strict), and an explicit `exit 0` in `m06-sdk-installer.ps1`, whose
+last check is an expected native failure. Next: open a pull request so CI
+runs on `main`; the release-packaging items above still need attended
+Windows checks (install, Stream Deck button, three themes).
+
 ### Release packaging: one download (2026-10-06, user request)
 
 User found the 0.0.13 release page confusing (16 assets) and asked for one

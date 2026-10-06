@@ -84,7 +84,13 @@ pub fn known_virtual_cable_key(description: &str, inf_section: &str) -> Option<S
         return None;
     }
     let description = description.to_ascii_uppercase();
-    for (prefix, key) in [("CABLE-A ", "a"), ("CABLE-B ", "b"), ("CABLE-C ", "c"), ("CABLE-D ", "d"), ("CABLE ", "base")] {
+    for (prefix, key) in [
+        ("CABLE-A ", "a"),
+        ("CABLE-B ", "b"),
+        ("CABLE-C ", "c"),
+        ("CABLE-D ", "d"),
+        ("CABLE ", "base"),
+    ] {
         if let Some(port) = description.strip_prefix(prefix) {
             if matches!(port, "INPUT" | "OUTPUT" | "IN 16CH" | "OUT 16CH") {
                 return Some(key.into());
@@ -96,11 +102,26 @@ pub fn known_virtual_cable_key(description: &str, inf_section: &str) -> Option<S
 
 #[test]
 fn cable_classification_requires_driver_evidence_and_distinguishes_buses() {
-    assert_eq!(known_virtual_cable_key("CABLE-B Input", "VBCableInst.NTamd64"), Some("b".into()));
-    assert_eq!(known_virtual_cable_key("CABLE-B Out 16ch", "VBCableInst.NTamd64"), Some("b".into()));
-    assert_eq!(known_virtual_cable_key("CABLE-A Output", "VBCableInst.NTamd64"), Some("a".into()));
-    assert_eq!(known_virtual_cable_key("CABLE-B Input", "PhysicalDriver.NTamd64"), None);
-    assert_eq!(known_virtual_cable_key("Speakers", "VBCableInst.NTamd64"), None);
+    assert_eq!(
+        known_virtual_cable_key("CABLE-B Input", "VBCableInst.NTamd64"),
+        Some("b".into())
+    );
+    assert_eq!(
+        known_virtual_cable_key("CABLE-B Out 16ch", "VBCableInst.NTamd64"),
+        Some("b".into())
+    );
+    assert_eq!(
+        known_virtual_cable_key("CABLE-A Output", "VBCableInst.NTamd64"),
+        Some("a".into())
+    );
+    assert_eq!(
+        known_virtual_cable_key("CABLE-B Input", "PhysicalDriver.NTamd64"),
+        None
+    );
+    assert_eq!(
+        known_virtual_cable_key("Speakers", "VBCableInst.NTamd64"),
+        None
+    );
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1392,7 +1413,9 @@ impl NativeBridgeController {
 
     /// The driver's capability report, read over this controller's handle.
     pub fn query_driver(&self) -> Result<NativeBridgeDriverInfo, NativeBridgeControllerError> {
-        self.client.query().map_err(NativeBridgeControllerError::Windows)
+        self.client
+            .query()
+            .map_err(NativeBridgeControllerError::Windows)
     }
 
     /// Create the realtime producer view for this negotiated bridge. The
@@ -1831,7 +1854,9 @@ fn native_bridge_open_request(
     section_handle: u64,
     mapping_bytes: u32,
 ) -> Result<NativeBridgeOpenRequest, ()> {
-    hello.validate_with_max_channels(NATIVE_DRIVER_MAX_CHANNELS).map_err(|_| ())?;
+    hello
+        .validate_with_max_channels(NATIVE_DRIVER_MAX_CHANNELS)
+        .map_err(|_| ())?;
     native_bridge_cable_index(&hello.bus_id).ok_or(())?;
     let encoded: Vec<u16> = hello.bus_id.encode_utf16().collect();
     if encoded.len() > 64 || encoded.len() * std::mem::size_of::<u16>() > 128 {
@@ -1839,7 +1864,8 @@ fn native_bridge_open_request(
     }
     let mut bus_id = [0; 64];
     bus_id[..encoded.len()].copy_from_slice(&encoded);
-    if (section_handle == 0) != (mapping_bytes == 0) || (section_handle != 0 && (mapping_bytes as usize) < BRIDGE_PAYLOAD_OFFSET)
+    if (section_handle == 0) != (mapping_bytes == 0)
+        || (section_handle != 0 && (mapping_bytes as usize) < BRIDGE_PAYLOAD_OFFSET)
     {
         return Err(());
     }
@@ -3555,10 +3581,7 @@ impl ProcessLoopbackWorker {
     /// application restart without recompiling or restarting unrelated graph
     /// state. The replacement client is already identity-checked by the
     /// control plane and must be stopped when supplied.
-    pub fn replace_capture(
-        &mut self,
-        capture: ProcessLoopbackCapture,
-    ) -> Result<(), AudioError> {
+    pub fn replace_capture(&mut self, capture: ProcessLoopbackCapture) -> Result<(), AudioError> {
         let was_running = self.running;
         self.stop()?;
         self.capture = capture;
@@ -4821,7 +4844,13 @@ impl SharedCapture {
                 // permission failures, and endpoint disappearance must remain
                 // visible to the caller instead of being relabeled as a mode
                 // compatibility issue.
-                Self::open_internal(endpoint_id, false, DEFAULT_CAPTURE_POLLING_BUFFER_100NS, false, None)
+                Self::open_internal(
+                    endpoint_id,
+                    false,
+                    DEFAULT_CAPTURE_POLLING_BUFFER_100NS,
+                    false,
+                    None,
+                )
             }
             result => result,
         }
@@ -4848,7 +4877,13 @@ impl SharedCapture {
     /// mix format (for example 8 channels when it is configured as 7.1).
     /// Delivery is polled; the worker services sources every millisecond.
     pub fn open_loopback(render_endpoint_id: &str) -> Result<Self, AudioError> {
-        Self::open_internal(render_endpoint_id, false, DEFAULT_CAPTURE_POLLING_BUFFER_100NS, true, None)
+        Self::open_internal(
+            render_endpoint_id,
+            false,
+            DEFAULT_CAPTURE_POLLING_BUFFER_100NS,
+            true,
+            None,
+        )
     }
 
     /// Loopback-capture a render endpoint, delivering `sample_rate_hz` frames
@@ -4961,8 +4996,15 @@ impl SharedCapture {
                 | AUDCLNT_STREAMFLAGS_NOPERSIST
         } else {
             AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST
-        } | if loopback { AUDCLNT_STREAMFLAGS_LOOPBACK } else { 0 }
-            | if resampled { AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY } else { 0 };
+        } | if loopback {
+            AUDCLNT_STREAMFLAGS_LOOPBACK
+        } else {
+            0
+        } | if resampled {
+            AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY
+        } else {
+            0
+        };
         let initialized = unsafe {
             client.Initialize(
                 AUDCLNT_SHAREMODE_SHARED,
@@ -5363,7 +5405,11 @@ impl SharedRender {
                 AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
                     | AUDCLNT_STREAMFLAGS_EVENTCALLBACK
                     | AUDCLNT_STREAMFLAGS_NOPERSIST
-                    | if resampled { AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY } else { 0 },
+                    | if resampled {
+                        AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY
+                    } else {
+                        0
+                    },
                 buffer_duration_100ns,
                 0,
                 format,
@@ -6075,7 +6121,10 @@ impl WasapiOutputFanout {
     /// Smoothed frames queued ahead of each physical output (render ring,
     /// partial block and device buffer), in physical output order.
     pub fn output_queue_frames(&self) -> Vec<Option<f64>> {
-        self.output_delays.iter().map(DelayEstimate::average).collect()
+        self.output_delays
+            .iter()
+            .map(DelayEstimate::average)
+            .collect()
     }
 }
 
@@ -6248,7 +6297,8 @@ impl WasapiMultiInputFanout {
                 }
                 if packet.qpc_position != 0 {
                     if let Some(now) = qpc_now_100ns() {
-                        self.input_waits[index].observe(now.saturating_sub(packet.qpc_position) as f64);
+                        self.input_waits[index]
+                            .observe(now.saturating_sub(packet.qpc_position) as f64);
                     }
                 }
                 self.pending_packet_bytes[index] = packet_bytes;
@@ -6409,6 +6459,9 @@ pub enum NativeMultiInputWorkerError {
 /// wrapper only unifies their lifecycle so `NativeMultiInputWorker` can mix
 /// microphone and application sources in one generation-bound feeder without
 /// giving either variant special-cased realtime handling.
+// Few sources exist per route and the capture pump reads them every quantum,
+// so the variants stay inline rather than behind a Box.
+#[allow(clippy::large_enum_variant)]
 pub enum MultiInputCaptureSource {
     Physical(SharedCapture),
     /// A 5.1/7.1 capture endpoint rendered to two ears ("surround to
@@ -6440,7 +6493,11 @@ impl BinauralPacketConverter {
         max_packet_frames: usize,
         options: audiorouter_dsp::binaural::SpatialOptions,
     ) -> Result<Self, audiorouter_dsp::binaural::BinauralError> {
-        let renderer = audiorouter_dsp::binaural::BinauralRenderer::with_options(channels, channel_mask, options)?;
+        let renderer = audiorouter_dsp::binaural::BinauralRenderer::with_options(
+            channels,
+            channel_mask,
+            options,
+        )?;
         let frames = max_packet_frames.clamp(1, MAX_FLOAT32_ACCUMULATOR_FRAMES);
         Ok(Self {
             renderer,
@@ -6483,7 +6540,10 @@ impl BinauralPacketConverter {
             *sample = f32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
         }
         self.renderer
-            .render_interleaved(&self.speakers[..frames * channels], &mut self.ears[..frames * 2])
+            .render_interleaved(
+                &self.speakers[..frames * channels],
+                &mut self.ears[..frames * 2],
+            )
             .map_err(|_| AudioError::InvalidFrameSize)?;
         for (bytes, sample) in destination[..frames * STEREO_BYTES]
             .chunks_exact_mut(4)
@@ -7011,7 +7071,9 @@ impl NativeMultiInputWorker {
             return Err(NativeMultiInputWorkerError::Capacity);
         }
         if self.running {
-            capture.start().map_err(NativeMultiInputWorkerError::Audio)?;
+            capture
+                .start()
+                .map_err(NativeMultiInputWorkerError::Audio)?;
         }
         let mut previous = std::mem::replace(&mut self.captures[index], capture);
         let _ = previous.stop();
@@ -7055,12 +7117,18 @@ impl NativeMultiInputWorker {
 
     /// Whether an input currently carries the silent stand-in.
     pub fn capture_is_silent(&self, index: usize) -> bool {
-        matches!(self.captures.get(index), Some(MultiInputCaptureSource::Silence(_)))
+        matches!(
+            self.captures.get(index),
+            Some(MultiInputCaptureSource::Silence(_))
+        )
     }
 
     /// Whether an input renders a surround capture to headphones.
     /// The surround options of the capture at `index`, when it renders surround.
-    pub fn capture_spatial_options(&self, index: usize) -> Option<audiorouter_dsp::binaural::SpatialOptions> {
+    pub fn capture_spatial_options(
+        &self,
+        index: usize,
+    ) -> Option<audiorouter_dsp::binaural::SpatialOptions> {
         match self.captures.get(index) {
             Some(MultiInputCaptureSource::Binaural(capture)) => Some(capture.options),
             _ => None,
@@ -7068,7 +7136,10 @@ impl NativeMultiInputWorker {
     }
 
     pub fn capture_is_binaural(&self, index: usize) -> bool {
-        matches!(self.captures.get(index), Some(MultiInputCaptureSource::Binaural(_)))
+        matches!(
+            self.captures.get(index),
+            Some(MultiInputCaptureSource::Binaural(_))
+        )
     }
 
     pub fn stop(&mut self) -> Result<(), NativeMultiInputWorkerError> {
@@ -7663,7 +7734,10 @@ pub fn application_identity_is_current(
     expected_executable_path: &str,
 ) -> Result<bool, AudioError> {
     use windows::Win32::Foundation::{CloseHandle, FILETIME};
-    use windows::Win32::System::Threading::{GetProcessTimes, OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT, PROCESS_QUERY_LIMITED_INFORMATION};
+    use windows::Win32::System::Threading::{
+        GetProcessTimes, OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT,
+        PROCESS_QUERY_LIMITED_INFORMATION,
+    };
     use windows_core::PWSTR;
     // SAFETY: OpenProcess requests query-only access to this explicit PID.
     // The owned handle stays live through synchronous queries and is closed
@@ -7678,12 +7752,28 @@ pub fn application_identity_is_current(
             let mut kernel = FILETIME::default();
             let mut user = FILETIME::default();
             GetProcessTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user)?;
-            let created = (u64::from(creation.dwHighDateTime) << 32) | u64::from(creation.dwLowDateTime);
-            if created != expected_creation_time_100ns || exit.dwHighDateTime != 0 || exit.dwLowDateTime != 0 { return Ok(false); }
+            let created =
+                (u64::from(creation.dwHighDateTime) << 32) | u64::from(creation.dwLowDateTime);
+            if created != expected_creation_time_100ns
+                || exit.dwHighDateTime != 0
+                || exit.dwLowDateTime != 0
+            {
+                return Ok(false);
+            }
             let mut buffer = [0u16; 32_768];
             let mut length = buffer.len() as u32;
-            QueryFullProcessImageNameW(handle, PROCESS_NAME_FORMAT(0), PWSTR(buffer.as_mut_ptr()), &mut length)?;
-            let path = String::from_utf16(buffer.get(..length as usize).ok_or(AudioError::InvalidUtf16)?).map_err(|_| AudioError::InvalidUtf16)?;
+            QueryFullProcessImageNameW(
+                handle,
+                PROCESS_NAME_FORMAT(0),
+                PWSTR(buffer.as_mut_ptr()),
+                &mut length,
+            )?;
+            let path = String::from_utf16(
+                buffer
+                    .get(..length as usize)
+                    .ok_or(AudioError::InvalidUtf16)?,
+            )
+            .map_err(|_| AudioError::InvalidUtf16)?;
             Ok(path.eq_ignore_ascii_case(expected_executable_path))
         })();
         let _ = CloseHandle(handle);
@@ -7707,7 +7797,7 @@ pub fn bind_application_with_path(
         .into_iter()
         .find(|application| application.process_id == process_id)
         .ok_or(AudioError::ApplicationNotFound { process_id })?;
-    let path_matches = expected_executable_path.map_or(true, |expected| {
+    let path_matches = expected_executable_path.is_none_or(|expected| {
         application
             .executable_path
             .as_deref()
@@ -7750,7 +7840,11 @@ pub fn resolve_application_restart_with_path(
     };
     let name_matches = applications
         .iter()
-        .filter(|application| application.executable.eq_ignore_ascii_case(expected_executable))
+        .filter(|application| {
+            application
+                .executable
+                .eq_ignore_ascii_case(expected_executable)
+        })
         .collect::<Vec<_>>();
     let path_matches = |same_path: fn(&str, &str) -> bool| {
         applications
@@ -7830,7 +7924,9 @@ pub fn bind_application_or_restarted(
         expected_executable_path,
         Some(expected_creation_time_100ns),
     ) {
-        Err(AudioError::ApplicationNotFound { .. } | AudioError::ApplicationIdentityChanged { .. }) => {
+        Err(
+            AudioError::ApplicationNotFound { .. } | AudioError::ApplicationIdentityChanged { .. },
+        ) => {
             let replacement = resolve_application_restart_with_path(
                 &enumerate_applications()?,
                 expected_executable,
@@ -7861,7 +7957,9 @@ fn same_versioned_install(expected: &str, actual: &str) -> bool {
             return false;
         };
         !version.is_empty()
-            && version.split('.').all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+            && version
+                .split('.')
+                .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
     }
     let expected = expected.split(['\\', '/']).collect::<Vec<_>>();
     let actual = actual.split(['\\', '/']).collect::<Vec<_>>();
@@ -7895,7 +7993,10 @@ fn is_process_ancestor(
         if parent_id == possible_ancestor.process_id {
             return true;
         }
-        let Some(parent) = processes.iter().find(|process| process.process_id == parent_id) else {
+        let Some(parent) = processes
+            .iter()
+            .find(|process| process.process_id == parent_id)
+        else {
             return false;
         };
         parent_id = parent.parent_process_id;
@@ -7938,10 +8039,18 @@ fn write_inventory_failure(direction: EndpointDirection, index: u32, error: &Aud
     use std::io::Write;
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let Ok(_guard) = LOCK.lock() else { return };
-    let Some(_process_guard) = acquire_inventory_log_mutex() else { return };
-    let Some(root) = std::env::var_os("LOCALAPPDATA").or_else(|| std::env::var_os("TEMP")) else { return };
-    let directory = std::path::PathBuf::from(root).join("AudioRouter").join("logs");
-    if std::fs::create_dir_all(&directory).is_err() { return; }
+    let Some(_process_guard) = acquire_inventory_log_mutex() else {
+        return;
+    };
+    let Some(root) = std::env::var_os("LOCALAPPDATA").or_else(|| std::env::var_os("TEMP")) else {
+        return;
+    };
+    let directory = std::path::PathBuf::from(root)
+        .join("AudioRouter")
+        .join("logs");
+    if std::fs::create_dir_all(&directory).is_err() {
+        return;
+    }
     let path = directory.join("discovery.jsonl");
     if std::fs::metadata(&path).is_ok_and(|metadata| metadata.len() >= 5 * 1024 * 1024) {
         let previous = directory.join("discovery.previous.jsonl");
@@ -7949,7 +8058,11 @@ fn write_inventory_failure(direction: EndpointDirection, index: u32, error: &Aud
         let _ = std::fs::rename(&path, previous);
     }
     let entry = inventory_failure_summary(direction, index, error);
-    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
         let _ = serde_json::to_writer(&mut file, &entry);
         let _ = file.write_all(b"\n");
     }
@@ -7973,7 +8086,14 @@ fn acquire_inventory_log_mutex() -> Option<InventoryLogMutex> {
     use windows::Win32::System::Threading::{CreateMutexW, WaitForSingleObject};
     // SAFETY: the fixed literal is NUL terminated; default security inherits
     // the current user's ACL. This function runs only on a control thread.
-    let handle = unsafe { CreateMutexW(None, false, windows::core::w!("Local\\AudioRouter.DiscoveryDiagnostics")) }.ok()?;
+    let handle = unsafe {
+        CreateMutexW(
+            None,
+            false,
+            windows::core::w!("Local\\AudioRouter.DiscoveryDiagnostics"),
+        )
+    }
+    .ok()?;
     // SAFETY: handle is valid and owned. A bounded wait prevents logging from
     // indefinitely delaying discovery; abandoned ownership can be released.
     let result = unsafe { WaitForSingleObject(handle, 1000) };
@@ -7981,12 +8101,18 @@ fn acquire_inventory_log_mutex() -> Option<InventoryLogMutex> {
         Some(InventoryLogMutex(handle))
     } else {
         // SAFETY: no ownership was acquired; close the valid owned handle.
-        unsafe { let _ = windows::Win32::Foundation::CloseHandle(handle); }
+        unsafe {
+            let _ = windows::Win32::Foundation::CloseHandle(handle);
+        }
         None
     }
 }
 
-fn inventory_failure_summary(direction: EndpointDirection, index: u32, error: &AudioError) -> serde_json::Value {
+fn inventory_failure_summary(
+    direction: EndpointDirection,
+    index: u32,
+    error: &AudioError,
+) -> serde_json::Value {
     serde_json::json!({
         "timeUnixMs": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|time| time.as_millis()).unwrap_or_default(),
         "processId": std::process::id(),
@@ -8010,27 +8136,41 @@ unsafe fn enumerate_after_com_init() -> Result<Vec<EndpointInfo>, AudioError> {
     };
     use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
-    let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(inventory_operation("inventory.createEnumerator"))?;
+    let enumerator: IMMDeviceEnumerator =
+        CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
+            .map_err(inventory_operation("inventory.createEnumerator"))?;
     let mut endpoints = Vec::new();
     for (direction, flow) in [
         (EndpointDirection::Capture, eCapture),
         (EndpointDirection::Render, eRender),
     ] {
-        let devices = enumerator.EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE).map_err(inventory_operation("inventory.enumerateActiveEndpoints"))?;
-        let count = devices.GetCount().map_err(inventory_operation("inventory.getEndpointCount"))?;
+        let devices = enumerator
+            .EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE)
+            .map_err(inventory_operation("inventory.enumerateActiveEndpoints"))?;
+        let count = devices
+            .GetCount()
+            .map_err(inventory_operation("inventory.getEndpointCount"))?;
         for index in 0..count {
             if let Some(endpoint) = read_inventory_endpoint_logged(direction, index, || {
-                let device = devices.Item(index).map_err(inventory_operation("inventory.getEndpoint"))?;
+                let device = devices
+                    .Item(index)
+                    .map_err(inventory_operation("inventory.getEndpoint"))?;
                 let id = device
                     .GetId()
                     .map_err(inventory_operation("inventory.getEndpointId"))?
                     .to_string()
                     .map_err(|_| AudioError::InvalidUtf16)?;
-                let client: IAudioClient = device.Activate(CLSCTX_ALL, None).map_err(inventory_operation("inventory.activateAudioClient"))?;
+                let client: IAudioClient = device
+                    .Activate(CLSCTX_ALL, None)
+                    .map_err(inventory_operation("inventory.activateAudioClient"))?;
                 let mut default_period = 0;
                 let mut minimum_period = 0;
-                client.GetDevicePeriod(Some(&mut default_period), Some(&mut minimum_period)).map_err(inventory_operation("inventory.getDevicePeriod"))?;
-                let format = client.GetMixFormat().map_err(inventory_operation("inventory.getMixFormat"))?;
+                client
+                    .GetDevicePeriod(Some(&mut default_period), Some(&mut minimum_period))
+                    .map_err(inventory_operation("inventory.getDevicePeriod"))?;
+                let format = client
+                    .GetMixFormat()
+                    .map_err(inventory_operation("inventory.getMixFormat"))?;
                 let format_value = *format;
                 let (channel_mask, subformat_guid) = if format_value.wFormatTag == 0xfffe
                     && format_value.cbSize >= 22
@@ -8071,7 +8211,9 @@ unsafe fn enumerate_defaults_after_com_init() -> Result<Vec<DefaultEndpointBindi
     };
     use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
-    let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(inventory_operation("inventory.createEnumerator"))?;
+    let enumerator: IMMDeviceEnumerator =
+        CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
+            .map_err(inventory_operation("inventory.createEnumerator"))?;
     let mut bindings = Vec::new();
     for (direction, flow) in [
         (EndpointDirection::Capture, eCapture),
@@ -8110,25 +8252,39 @@ unsafe fn enumerate_display_info_after_com_init() -> Result<Vec<EndpointDisplayI
     use windows::Win32::System::Com::StructuredStorage::{PropVariantClear, PropVariantToString};
     use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL, STGM_READ};
 
-    let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(inventory_operation("inventory.createEnumerator"))?;
+    let enumerator: IMMDeviceEnumerator =
+        CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
+            .map_err(inventory_operation("inventory.createEnumerator"))?;
     let mut result = Vec::new();
     for (direction, flow) in [
         (EndpointDirection::Capture, eCapture),
         (EndpointDirection::Render, eRender),
     ] {
-        let devices = enumerator.EnumAudioEndpoints(
-            flow,
-            windows::Win32::Media::Audio::DEVICE_STATE(DEVICE_STATEMASK_ALL),
-        ).map_err(inventory_operation("inventory.enumerateAllEndpoints"))?;
-        for index in 0..devices.GetCount().map_err(inventory_operation("inventory.getEndpointCount"))? {
+        let devices = enumerator
+            .EnumAudioEndpoints(
+                flow,
+                windows::Win32::Media::Audio::DEVICE_STATE(DEVICE_STATEMASK_ALL),
+            )
+            .map_err(inventory_operation("inventory.enumerateAllEndpoints"))?;
+        for index in 0..devices
+            .GetCount()
+            .map_err(inventory_operation("inventory.getEndpointCount"))?
+        {
             if let Some(info) = read_inventory_endpoint_logged(direction, index, || {
-                let device = devices.Item(index).map_err(inventory_operation("inventory.getEndpoint"))?;
+                let device = devices
+                    .Item(index)
+                    .map_err(inventory_operation("inventory.getEndpoint"))?;
                 let id = device
-                    .GetId().map_err(inventory_operation("inventory.getEndpointId"))?
+                    .GetId()
+                    .map_err(inventory_operation("inventory.getEndpointId"))?
                     .to_string()
                     .map_err(|_| AudioError::InvalidUtf16)?;
-                let store = device.OpenPropertyStore(STGM_READ).map_err(inventory_operation("inventory.openPropertyStore"))?;
-                let mut value = store.GetValue(&PKEY_Device_FriendlyName).map_err(inventory_operation("inventory.getFriendlyName"))?;
+                let store = device
+                    .OpenPropertyStore(STGM_READ)
+                    .map_err(inventory_operation("inventory.openPropertyStore"))?;
+                let mut value = store
+                    .GetValue(&PKEY_Device_FriendlyName)
+                    .map_err(inventory_operation("inventory.getFriendlyName"))?;
                 let mut buffer = [0_u16; 512];
                 let name = PropVariantToString(&value, &mut buffer)
                     .ok()
@@ -8176,24 +8332,37 @@ unsafe fn enumerate_states_after_com_init() -> Result<Vec<EndpointStateInfo>, Au
     };
     use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
-    let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(inventory_operation("inventory.createEnumerator"))?;
+    let enumerator: IMMDeviceEnumerator =
+        CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
+            .map_err(inventory_operation("inventory.createEnumerator"))?;
     let mut result = Vec::new();
     for (direction, flow) in [
         (EndpointDirection::Capture, eCapture),
         (EndpointDirection::Render, eRender),
     ] {
-        let devices = enumerator.EnumAudioEndpoints(
-            flow,
-            windows::Win32::Media::Audio::DEVICE_STATE(DEVICE_STATEMASK_ALL),
-        ).map_err(inventory_operation("inventory.enumerateAllEndpoints"))?;
-        for index in 0..devices.GetCount().map_err(inventory_operation("inventory.getEndpointCount"))? {
+        let devices = enumerator
+            .EnumAudioEndpoints(
+                flow,
+                windows::Win32::Media::Audio::DEVICE_STATE(DEVICE_STATEMASK_ALL),
+            )
+            .map_err(inventory_operation("inventory.enumerateAllEndpoints"))?;
+        for index in 0..devices
+            .GetCount()
+            .map_err(inventory_operation("inventory.getEndpointCount"))?
+        {
             if let Some(info) = read_inventory_endpoint_logged(direction, index, || {
-                let device = devices.Item(index).map_err(inventory_operation("inventory.getEndpoint"))?;
+                let device = devices
+                    .Item(index)
+                    .map_err(inventory_operation("inventory.getEndpoint"))?;
                 let id = device
-                    .GetId().map_err(inventory_operation("inventory.getEndpointId"))?
+                    .GetId()
+                    .map_err(inventory_operation("inventory.getEndpointId"))?
                     .to_string()
                     .map_err(|_| AudioError::InvalidUtf16)?;
-                let raw_state = device.GetState().map_err(inventory_operation("inventory.getEndpointState"))?.0;
+                let raw_state = device
+                    .GetState()
+                    .map_err(inventory_operation("inventory.getEndpointState"))?
+                    .0;
                 let state = endpoint_state_from_raw(raw_state);
                 Ok(EndpointStateInfo {
                     id,
@@ -8272,17 +8441,20 @@ pub struct NativeBridgeFloat64BlockHeader {
 
 impl NativeBridgeFloat64BlockHeader {
     fn validate(&self) -> Result<(), NativeBridgeRegionError> {
-        if self.generation == 0 || self.sequence == 0 ||
-            !(1..=NATIVE_DRIVER_MAX_CHANNELS).contains(&self.channels) ||
-            !(1..=audiorouter_protocol::MAX_AUDIO_BRIDGE_FRAMES).contains(&self.frames) {
+        if self.generation == 0
+            || self.sequence == 0
+            || !(1..=NATIVE_DRIVER_MAX_CHANNELS).contains(&self.channels)
+            || !(1..=audiorouter_protocol::MAX_AUDIO_BRIDGE_FRAMES).contains(&self.frames)
+        {
             return Err(NativeBridgeRegionError::InvalidFrame);
         }
         let expected = usize::from(self.frames)
             .checked_mul(usize::from(self.channels))
             .and_then(|samples| samples.checked_mul(std::mem::size_of::<f64>()))
             .ok_or(NativeBridgeRegionError::InvalidFrame)?;
-        if expected > NATIVE_DRIVER_MAX_PAYLOAD_BYTES ||
-            usize::try_from(self.payload_bytes).ok() != Some(expected) {
+        if expected > NATIVE_DRIVER_MAX_PAYLOAD_BYTES
+            || usize::try_from(self.payload_bytes).ok() != Some(expected)
+        {
             return Err(NativeBridgeRegionError::BufferTooSmall);
         }
         Ok(())
@@ -8529,10 +8701,11 @@ impl NativeBridgeRegion {
         minimum_sequence: u64,
         samples: &mut [f32],
     ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeRegionError> {
-        let header = self.read_into_after_with(expected_generation, minimum_sequence, samples, |v| {
-            let narrowed = v as f32;
-            narrowed.is_finite().then_some(narrowed)
-        })?;
+        let header =
+            self.read_into_after_with(expected_generation, minimum_sequence, samples, |v| {
+                let narrowed = v as f32;
+                narrowed.is_finite().then_some(narrowed)
+            })?;
         Ok(audiorouter_protocol::AudioBridgeBlockHeader {
             generation: header.generation,
             sequence: header.sequence,
@@ -8641,7 +8814,8 @@ impl NativeBridgeRegion {
     /// capture-sink lease when it takes a block, so a producer can publish
     /// the next block right away (flow control on the stream's clock).
     pub fn consumer_sequence(&self) -> u64 {
-        self.reader_sequence().load(std::sync::atomic::Ordering::Acquire)
+        self.reader_sequence()
+            .load(std::sync::atomic::Ordering::Acquire)
     }
 
     fn sample_bytes(&self) -> u32 {
@@ -8975,9 +9149,12 @@ impl NativeBridgeSession {
             return Err(NativeBridgeSessionError::WrongDirection);
         }
         self.ensure_lease_at(std::time::Instant::now())?;
-        let sequence = self.next_sequence.checked_add(1)
+        let sequence = self
+            .next_sequence
+            .checked_add(1)
             .ok_or(NativeBridgeSessionError::SequenceExhausted)?;
-        self.region.write_f64(self.hello.generation, sequence, samples)
+        self.region
+            .write_f64(self.hello.generation, sequence, samples)
             .map_err(NativeBridgeSessionError::Region)?;
         self.next_sequence = sequence;
         Ok(sequence)
@@ -9036,7 +9213,8 @@ impl NativeBridgeSession {
             return Err(NativeBridgeSessionError::WrongDirection);
         }
         self.ensure_lease_at(std::time::Instant::now())?;
-        self.region.read_into_f64_after(self.hello.generation, minimum_sequence, samples)
+        self.region
+            .read_into_f64_after(self.hello.generation, minimum_sequence, samples)
             .map_err(NativeBridgeSessionError::Region)
     }
 
@@ -9134,7 +9312,12 @@ mod tests {
         // A 96 kHz 7.1 float mix is asked for at 48 kHz: only the rate changes.
         let mut format = mix(96_000);
         assert!(unsafe { request_sample_rate(&mut format, Some(48_000)) });
-        let (rate, bytes, channels, align) = (format.nSamplesPerSec, format.nAvgBytesPerSec, format.nChannels, format.nBlockAlign);
+        let (rate, bytes, channels, align) = (
+            format.nSamplesPerSec,
+            format.nAvgBytesPerSec,
+            format.nChannels,
+            format.nBlockAlign,
+        );
         assert_eq!((rate, bytes, channels, align), (48_000, 48_000 * 32, 8, 32));
         // Already at the rate, no request, or an implausible rate: unchanged, no SRC flag.
         for request in [Some(48_000), None, Some(7_999), Some(192_001)] {
@@ -9395,16 +9578,31 @@ mod tests {
             ) -> Result<Option<(CapturePacket, usize)>, AudioError> {
                 assert_eq!(bytes_per_frame, 8 * std::mem::size_of::<f32>());
                 let bytes = self.frames * bytes_per_frame;
-                assert!(destination.len() >= bytes, "converter limits reads to its destination");
-                for (frame, chunk) in destination[..bytes].chunks_exact_mut(bytes_per_frame).enumerate() {
+                assert!(
+                    destination.len() >= bytes,
+                    "converter limits reads to its destination"
+                );
+                for (frame, chunk) in destination[..bytes]
+                    .chunks_exact_mut(bytes_per_frame)
+                    .enumerate()
+                {
                     // Side-right speaker (channel 7) only: a sparse (broadband) impulse train.
                     for (channel, sample) in chunk.chunks_exact_mut(4).enumerate() {
-                        let value = if channel == 7 && frame % 37 == 0 { 0.5f32 } else { 0.0 };
+                        let value = if channel == 7 && frame % 37 == 0 {
+                            0.5f32
+                        } else {
+                            0.0
+                        };
                         sample.copy_from_slice(&value.to_ne_bytes());
                     }
                 }
                 Ok(Some((
-                    CapturePacket { frames: self.frames as u32, flags: 0, device_position: 0, qpc_position: 0 },
+                    CapturePacket {
+                        frames: self.frames as u32,
+                        flags: 0,
+                        device_position: 0,
+                        qpc_position: 0,
+                    },
                     bytes,
                 )))
             }
@@ -9420,8 +9618,18 @@ mod tests {
             .chunks_exact(4)
             .map(|bytes| f32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
             .collect::<Vec<_>>();
-        let energy = |ear: usize| samples.iter().skip(ear).step_by(2).map(|v| v * v).sum::<f32>();
-        assert!(energy(1) > 4.0 * energy(0), "side-right source lands in the right ear");
+        let energy = |ear: usize| {
+            samples
+                .iter()
+                .skip(ear)
+                .step_by(2)
+                .map(|v| v * v)
+                .sum::<f32>()
+        };
+        assert!(
+            energy(1) > 4.0 * energy(0),
+            "side-right source lands in the right ear"
+        );
         assert!(matches!(
             converter.next_packet_into(&Speakers { frames: 4 }, &mut destination, 4),
             Err(AudioError::InvalidFrameSize)
@@ -9431,11 +9639,14 @@ mod tests {
     #[test]
     #[ignore = "opens a live loopback capture of AUDIOROUTER_BINAURAL_LOOPBACK_ENDPOINT; renders nothing"]
     fn live_binaural_loopback_reads_a_surround_render_endpoint() {
-        let endpoint_id = std::env::var("AUDIOROUTER_BINAURAL_LOOPBACK_ENDPOINT").expect("explicit render endpoint id");
+        let endpoint_id = std::env::var("AUDIOROUTER_BINAURAL_LOOPBACK_ENDPOINT")
+            .expect("explicit render endpoint id");
         let endpoint = enumerate_active_endpoints()
             .unwrap()
             .into_iter()
-            .find(|endpoint| endpoint.id == endpoint_id && endpoint.direction == EndpointDirection::Render)
+            .find(|endpoint| {
+                endpoint.id == endpoint_id && endpoint.direction == EndpointDirection::Render
+            })
             .expect("active render endpoint");
         // Opening and packet delivery only; production also requires 48 kHz.
         assert!(endpoint.is_ieee_float32(), "{endpoint:?}");
@@ -9449,7 +9660,9 @@ mod tests {
             let (mut packets, mut frames) = (0usize, 0usize);
             let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
             while std::time::Instant::now() < deadline {
-                while let Some((packet, _)) = capture.next_packet_into(&mut raw, channels * 4).unwrap() {
+                while let Some((packet, _)) =
+                    capture.next_packet_into(&mut raw, channels * 4).unwrap()
+                {
                     packets += 1;
                     frames += packet.frames as usize;
                 }
@@ -9459,17 +9672,23 @@ mod tests {
             eprintln!("loopback {channels} ch (no rendering): {packets} packets, {frames} frames in 500 ms");
             return;
         }
-        let mut binaural = BinauralCapture::new(capture, channels, endpoint.channel_mask, Default::default()).unwrap();
+        let mut binaural =
+            BinauralCapture::new(capture, channels, endpoint.channel_mask, Default::default())
+                .unwrap();
         binaural.start().unwrap();
         let mut destination = vec![0u8; MAX_FLOAT32_ACCUMULATOR_FRAMES * 8];
         let (mut packets, mut frames, mut peak) = (0usize, 0usize, 0.0f32);
         let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
         while std::time::Instant::now() < deadline {
-            while let Some((packet, bytes)) = binaural.next_packet_into(&mut destination, 8).unwrap() {
+            while let Some((packet, bytes)) =
+                binaural.next_packet_into(&mut destination, 8).unwrap()
+            {
                 packets += 1;
                 frames += packet.frames as usize;
                 for sample in destination[..bytes].chunks_exact(4) {
-                    peak = peak.max(f32::from_ne_bytes([sample[0], sample[1], sample[2], sample[3]]).abs());
+                    peak = peak.max(
+                        f32::from_ne_bytes([sample[0], sample[1], sample[2], sample[3]]).abs(),
+                    );
                 }
             }
             std::thread::sleep(std::time::Duration::from_millis(2));
@@ -9942,13 +10161,21 @@ mod tests {
             submitted_frames: std::sync::Mutex<Vec<u32>>,
         }
         impl RenderSink for Device {
-            fn submit_bytes(&self, source: &[u8], bytes_per_frame: usize) -> Result<u32, AudioError> {
+            fn submit_bytes(
+                &self,
+                source: &[u8],
+                bytes_per_frame: usize,
+            ) -> Result<u32, AudioError> {
                 let frames = (source.len() / bytes_per_frame) as u32;
                 self.submitted_frames.lock().unwrap().push(frames);
                 Ok(frames)
             }
             fn queued_frames(&self) -> Option<u32> {
-                Some(if self.empty.load(Ordering::Relaxed) { 0 } else { 960 })
+                Some(if self.empty.load(Ordering::Relaxed) {
+                    0
+                } else {
+                    960
+                })
             }
         }
         let quantum = 128;
@@ -9961,35 +10188,55 @@ mod tests {
         // Blocks reach the ring stamped with generation 5, as in the engine.
         let scheduler = audiorouter_engine::RealtimeScheduler::new(2, 2, quantum).unwrap();
         let generation = audiorouter_engine::RuntimeGeneration::new(5);
-        scheduler.publish(audiorouter_engine::RuntimeGraph::prepare(generation, Vec::new()));
+        scheduler.publish(audiorouter_engine::RuntimeGraph::prepare(
+            generation,
+            Vec::new(),
+        ));
         let tap = audiorouter_engine::AudioBlockRingTap::new(Arc::clone(&ring));
         let feed = |_ring: &audiorouter_engine::AudioBlockRing| {
-            scheduler.submit_input(scheduler.acquire_input().unwrap()).unwrap();
-            assert_eq!(scheduler.process_once_with_tap(0, &tap).unwrap(), Some(generation));
+            scheduler
+                .submit_input(scheduler.acquire_input().unwrap())
+                .unwrap();
+            assert_eq!(
+                scheduler.process_once_with_tap(0, &tap).unwrap(),
+                Some(generation)
+            );
             let output = scheduler.receive_output().unwrap();
             let _ = scheduler.output().try_recycle(output);
         };
-        let mut next = |pump: &mut RingOutputPump<Device>, empty: bool| {
+        let next = |pump: &mut RingOutputPump<Device>, empty: bool| {
             pump.sink.empty.store(empty, Ordering::Relaxed);
             feed(&ring);
             pump.pump_available(1).unwrap();
             pump.sink.submitted_frames.lock().unwrap().pop().unwrap()
         };
         // Startup: default cushion ahead of the first block, not an underrun.
-        assert_eq!(next(&mut pump, true), (RENDER_JITTER_CUSHION_FRAMES + quantum) as u32);
+        assert_eq!(
+            next(&mut pump, true),
+            (RENDER_JITTER_CUSHION_FRAMES + quantum) as u32
+        );
         assert_eq!(pump.underruns, 0);
         // Device still holds audio: blocks pass without extra silence.
         assert_eq!(next(&mut pump, false), quantum as u32);
         // Each underrun is counted and re-primes 5 ms deeper.
         let step = RENDER_JITTER_CUSHION_STEP_FRAMES;
-        assert_eq!(next(&mut pump, true), (RENDER_JITTER_CUSHION_FRAMES + step + quantum) as u32);
-        assert_eq!(next(&mut pump, true), (RENDER_JITTER_CUSHION_FRAMES + 2 * step + quantum) as u32);
+        assert_eq!(
+            next(&mut pump, true),
+            (RENDER_JITTER_CUSHION_FRAMES + step + quantum) as u32
+        );
+        assert_eq!(
+            next(&mut pump, true),
+            (RENDER_JITTER_CUSHION_FRAMES + 2 * step + quantum) as u32
+        );
         assert_eq!(pump.underruns, 2);
         // ...up to the bound.
         for _ in 0..16 {
             next(&mut pump, true);
         }
-        assert_eq!(next(&mut pump, true), (MAX_RENDER_JITTER_CUSHION_FRAMES + quantum) as u32);
+        assert_eq!(
+            next(&mut pump, true),
+            (MAX_RENDER_JITTER_CUSHION_FRAMES + quantum) as u32
+        );
     }
 
     #[test]
@@ -10737,7 +10984,10 @@ mod tests {
     fn discovery_diagnostics_identify_operation_direction_and_skipped_error_without_message() {
         let error = AudioError::WindowsOperation {
             operation: "inventory.openPropertyStore",
-            error: windows::core::Error::new(windows::core::HRESULT(0xE000020B_u32 as i32), "private device name"),
+            error: windows::core::Error::new(
+                windows::core::HRESULT(0xE000020B_u32 as i32),
+                "private device name",
+            ),
         };
         let summary = inventory_failure_summary(EndpointDirection::Render, 7, &error);
         assert_eq!(summary["operation"], "inventory.openPropertyStore");
@@ -10746,8 +10996,14 @@ mod tests {
         assert_eq!(summary["outcome"], "skippedDisappearedEndpoint");
         assert_eq!(summary["hresultHex"], "0xE000020B");
         assert!(!summary.to_string().contains("private"));
-        let failed = AudioError::Windows(windows::core::Error::new(windows::core::HRESULT(0x80070005_u32 as i32), "private permission"));
-        assert_eq!(inventory_failure_summary(EndpointDirection::Capture, 0, &failed)["outcome"], "error");
+        let failed = AudioError::Windows(windows::core::Error::new(
+            windows::core::HRESULT(0x80070005_u32 as i32),
+            "private permission",
+        ));
+        assert_eq!(
+            inventory_failure_summary(EndpointDirection::Capture, 0, &failed)["outcome"],
+            "error"
+        );
     }
 
     #[test]
@@ -10926,16 +11182,25 @@ mod tests {
     fn silent_capture_offers_bounded_zeroed_packets() {
         let silence = SilentCapture::new(128);
         let mut destination = vec![0xAA_u8; 2 * 4 * 200];
-        let (packet, bytes) = silence.next_packet_into(&mut destination, 8).unwrap().unwrap();
+        let (packet, bytes) = silence
+            .next_packet_into(&mut destination, 8)
+            .unwrap()
+            .unwrap();
         assert_eq!(packet.frames, 128);
         assert_eq!(bytes, 128 * 8);
         assert!(destination[..bytes].iter().all(|byte| *byte == 0));
         assert!(destination[bytes..].iter().all(|byte| *byte == 0xAA));
         // Paced like a device: the next packet is due only after its
         // 128 frames of real time (2.7 ms at 48 kHz) have elapsed.
-        assert!(silence.next_packet_into(&mut destination, 8).unwrap().is_none());
+        assert!(silence
+            .next_packet_into(&mut destination, 8)
+            .unwrap()
+            .is_none());
         std::thread::sleep(std::time::Duration::from_millis(6));
-        assert!(silence.next_packet_into(&mut destination, 8).unwrap().is_some());
+        assert!(silence
+            .next_packet_into(&mut destination, 8)
+            .unwrap()
+            .is_some());
         // A smaller caller buffer bounds the packet instead of overflowing.
         let silence = SilentCapture::new(128);
         let mut small = vec![1_u8; 8 * 10];
@@ -10960,17 +11225,25 @@ mod tests {
         let root = process(36808, 1, updated, 100);
         let helper = process(26164, 36808, updated, 101);
         assert_eq!(
-            resolve_application_restart_with_path(&[helper.clone(), root.clone()], "discord.exe", Some(saved))
-                .unwrap()
-                .process_id,
+            resolve_application_restart_with_path(
+                &[helper.clone(), root.clone()],
+                "discord.exe",
+                Some(saved)
+            )
+            .unwrap()
+            .process_id,
             36808
         );
         // An exact path match is preferred over a version-directory match.
         let exact = process(9, 1, saved, 50);
         assert_eq!(
-            resolve_application_restart_with_path(&[root.clone(), exact.clone()], "Discord.exe", Some(saved))
-                .unwrap()
-                .process_id,
+            resolve_application_restart_with_path(
+                &[root.clone(), exact.clone()],
+                "Discord.exe",
+                Some(saved)
+            )
+            .unwrap()
+            .process_id,
             9
         );
         // Another install root, a different executable directory, or a
@@ -10985,7 +11258,11 @@ mod tests {
         ] {
             assert!(
                 matches!(
-                    resolve_application_restart_with_path(&[process(5, 1, other, 1)], "Discord.exe", Some(saved)),
+                    resolve_application_restart_with_path(
+                        &[process(5, 1, other, 1)],
+                        "Discord.exe",
+                        Some(saved)
+                    ),
                     Err(AudioError::ApplicationRestartNotFound { .. })
                 ),
                 "{other}"
@@ -11182,14 +11459,33 @@ mod tests {
         assert_eq!(bound, application);
         let identity_start = std::time::Instant::now();
         for _ in 0..10 {
-            assert!(application_identity_is_current(process_id, application.creation_time_100ns.unwrap(), application.executable_path.as_deref().unwrap()).unwrap());
+            assert!(application_identity_is_current(
+                process_id,
+                application.creation_time_100ns.unwrap(),
+                application.executable_path.as_deref().unwrap()
+            )
+            .unwrap());
         }
         let identity_elapsed = identity_start.elapsed();
         let inventory_start = std::time::Instant::now();
         let _ = enumerate_applications().unwrap();
-        println!("application liveness: 10 direct probes {:?}; one full inventory {:?}", identity_elapsed, inventory_start.elapsed());
-        assert!(!application_identity_is_current(process_id, application.creation_time_100ns.unwrap().wrapping_add(1), application.executable_path.as_deref().unwrap()).unwrap());
-        assert!(!application_identity_is_current(process_id, application.creation_time_100ns.unwrap(), "different-path.exe").unwrap());
+        println!(
+            "application liveness: 10 direct probes {:?}; one full inventory {:?}",
+            identity_elapsed,
+            inventory_start.elapsed()
+        );
+        assert!(!application_identity_is_current(
+            process_id,
+            application.creation_time_100ns.unwrap().wrapping_add(1),
+            application.executable_path.as_deref().unwrap()
+        )
+        .unwrap());
+        assert!(!application_identity_is_current(
+            process_id,
+            application.creation_time_100ns.unwrap(),
+            "different-path.exe"
+        )
+        .unwrap());
         assert!(matches!(
             bind_application(process_id, "different.exe", application.creation_time_100ns),
             Err(AudioError::ApplicationIdentityChanged { .. })
@@ -11237,10 +11533,20 @@ mod tests {
         )
         .expect("fresh process identity should bind");
         assert_eq!(first_bound, first);
-        assert!(application_identity_is_current(first.process_id, first.creation_time_100ns.unwrap(), first.executable_path.as_deref().unwrap()).unwrap());
+        assert!(application_identity_is_current(
+            first.process_id,
+            first.creation_time_100ns.unwrap(),
+            first.executable_path.as_deref().unwrap()
+        )
+        .unwrap());
         first_child.kill().expect("stop first helper");
         first_child.wait().expect("reap first helper");
-        assert!(!application_identity_is_current(first.process_id, first.creation_time_100ns.unwrap(), first.executable_path.as_deref().unwrap()).unwrap_or(false));
+        assert!(!application_identity_is_current(
+            first.process_id,
+            first.creation_time_100ns.unwrap(),
+            first.executable_path.as_deref().unwrap()
+        )
+        .unwrap_or(false));
 
         let stale = bind_application(
             first.process_id,
@@ -11707,7 +12013,10 @@ mod tests {
         let input = pcm.map(|sample| f64::from(sample) / 2_147_483_648.0);
         region.write_f64(4, 1, &input).unwrap();
         let payload = &region.map[BRIDGE_PAYLOAD_OFFSET..BRIDGE_PAYLOAD_OFFSET + 16];
-        assert_eq!(f64::from_le_bytes(payload[..8].try_into().unwrap()), input[0]);
+        assert_eq!(
+            f64::from_le_bytes(payload[..8].try_into().unwrap()),
+            input[0]
+        );
         let mut output = [0.0_f64; 2];
         let header = region.read_into_f64(4, &mut output).unwrap();
         assert_eq!(output, input);
@@ -11717,7 +12026,8 @@ mod tests {
         region.write(4, 2, &[0.25_f32, 0.5_f32]).unwrap();
         let widened = f64::from_le_bytes(
             region.map[BRIDGE_PAYLOAD_OFFSET..BRIDGE_PAYLOAD_OFFSET + 8]
-                .try_into().unwrap(),
+                .try_into()
+                .unwrap(),
         );
         assert_eq!(widened, f64::from(0.25_f32));
         std::fs::remove_file(path).unwrap();
@@ -11750,7 +12060,11 @@ mod tests {
             3,
             "the consumer acknowledges the block it read"
         );
-        assert_eq!(region.consumer_sequence(), 3, "producers see the same acknowledgement");
+        assert_eq!(
+            region.consumer_sequence(),
+            3,
+            "producers see the same acknowledgement"
+        );
         // Simulate the driver-written counters and check each field offset.
         let raw = unsafe {
             std::slice::from_raw_parts_mut(region.map.as_ptr() as *mut u8, region.map.len())
@@ -11791,16 +12105,40 @@ mod tests {
         assert_eq!(std::mem::size_of::<NativeBridgeOpenExtension>(), 64);
         assert_eq!(std::mem::offset_of!(NativeBridgeOpenExtension, flags), 4);
         assert_eq!(std::mem::size_of::<NativeBridgeOpenRequestEx>(), 240);
-        assert_eq!(std::mem::offset_of!(NativeBridgeOpenRequestEx, extension), 176);
-        assert_eq!(std::mem::offset_of!(NativeBridgeOpenRequest, generation), 24);
-        assert_eq!(std::mem::offset_of!(NativeBridgeOpenRequest, section_handle), 32);
-        assert_eq!(std::mem::offset_of!(NativeBridgeOpenRequest, mapping_bytes), 40);
+        assert_eq!(
+            std::mem::offset_of!(NativeBridgeOpenRequestEx, extension),
+            176
+        );
+        assert_eq!(
+            std::mem::offset_of!(NativeBridgeOpenRequest, generation),
+            24
+        );
+        assert_eq!(
+            std::mem::offset_of!(NativeBridgeOpenRequest, section_handle),
+            32
+        );
+        assert_eq!(
+            std::mem::offset_of!(NativeBridgeOpenRequest, mapping_bytes),
+            40
+        );
         assert_eq!(std::mem::offset_of!(NativeBridgeOpenRequest, bus_id), 48);
         assert_eq!(std::mem::size_of::<NativeBridgeDriverInfoRaw>(), 104);
-        assert_eq!(std::mem::offset_of!(NativeBridgeDriverInfoRaw, driver_version), 4);
-        assert_eq!(std::mem::offset_of!(NativeBridgeDriverInfoRaw, cable_count), 12);
-        assert_eq!(std::mem::offset_of!(NativeBridgeDriverInfoRaw, capabilities), 24);
-        assert_eq!(std::mem::offset_of!(NativeBridgeDriverInfoRaw, default_period_frames), 36);
+        assert_eq!(
+            std::mem::offset_of!(NativeBridgeDriverInfoRaw, driver_version),
+            4
+        );
+        assert_eq!(
+            std::mem::offset_of!(NativeBridgeDriverInfoRaw, cable_count),
+            12
+        );
+        assert_eq!(
+            std::mem::offset_of!(NativeBridgeDriverInfoRaw, capabilities),
+            24
+        );
+        assert_eq!(
+            std::mem::offset_of!(NativeBridgeDriverInfoRaw, default_period_frames),
+            36
+        );
 
         let hello = audiorouter_protocol::AudioBridgeHello {
             protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
@@ -11841,9 +12179,16 @@ mod tests {
             Err(audiorouter_protocol::AudioBridgeContractError::InvalidChannels),
             "the internal AudioBridge protocol stays at 2 channels"
         );
-        assert!(hello.validate_with_max_channels(NATIVE_DRIVER_MAX_CHANNELS).is_ok());
-        let nine = audiorouter_protocol::AudioBridgeHello { channels: 9, ..hello.clone() };
-        assert!(nine.validate_with_max_channels(NATIVE_DRIVER_MAX_CHANNELS).is_err());
+        assert!(hello
+            .validate_with_max_channels(NATIVE_DRIVER_MAX_CHANNELS)
+            .is_ok());
+        let nine = audiorouter_protocol::AudioBridgeHello {
+            channels: 9,
+            ..hello.clone()
+        };
+        assert!(nine
+            .validate_with_max_channels(NATIVE_DRIVER_MAX_CHANNELS)
+            .is_err());
 
         let path = std::env::temp_dir().join(format!(
             "audiorouter-8ch-{}-{}.slot",
@@ -11854,17 +12199,26 @@ mod tests {
                 .as_nanos()
         ));
         let mut session = NativeBridgeSession::create(&path, hello.clone()).unwrap();
-        assert_eq!(session.mapping_bytes(), 128 + NATIVE_DRIVER_MAX_PAYLOAD_BYTES);
-        let samples: Vec<f64> = (0..8 * 4096)
-            .map(|index| f64::from(index as i32 - 16_384) / 2_147_483_648.0)
+        assert_eq!(
+            session.mapping_bytes(),
+            128 + NATIVE_DRIVER_MAX_PAYLOAD_BYTES
+        );
+        let samples: Vec<f64> = (0..8 * 4096_i32)
+            .map(|index| f64::from(index - 16_384) / 2_147_483_648.0)
             .collect();
         session.write_f64(&samples).unwrap();
         let reader = NativeBridgeRegion::open(&path, 8, 4096).unwrap();
         let mut output = vec![0.0_f64; samples.len()];
         let header = reader.read_into_f64(5, &mut output).unwrap();
         assert_eq!(header.channels, 8);
-        assert_eq!(header.payload_bytes as usize, NATIVE_DRIVER_MAX_PAYLOAD_BYTES);
-        assert_eq!(output, samples, "a full 7.1 quantum round-trips bit-exactly");
+        assert_eq!(
+            header.payload_bytes as usize,
+            NATIVE_DRIVER_MAX_PAYLOAD_BYTES
+        );
+        assert_eq!(
+            output, samples,
+            "a full 7.1 quantum round-trips bit-exactly"
+        );
         drop(reader);
         drop(session);
         let _ = std::fs::remove_file(&path);
@@ -11888,7 +12242,10 @@ mod tests {
         };
         let request = native_bridge_open_request_ex(&hello, 1, 128 + 8 * 128 * 8).unwrap();
         assert_eq!(request.request.channels, 8);
-        let nine = audiorouter_protocol::AudioBridgeHello { channels: 9, ..hello };
+        let nine = audiorouter_protocol::AudioBridgeHello {
+            channels: 9,
+            ..hello
+        };
         assert!(native_bridge_open_request_ex(&nine, 1, 128 + 9 * 128 * 8).is_err());
     }
 
@@ -11924,7 +12281,10 @@ mod tests {
                 protocol_minor: minor,
                 ..info
             };
-            assert_eq!(other.check_compatible(), Err(NativeBridgeDriverError::VersionMismatch));
+            assert_eq!(
+                other.check_compatible(),
+                Err(NativeBridgeDriverError::VersionMismatch)
+            );
         }
         assert!(NativeBridgeDriverError::VersionMismatch
             .user_message()
@@ -11953,7 +12313,11 @@ mod tests {
             // SAFETY: a pure ntdll lookup with no pointers or side effects.
             let win32 = unsafe { RtlNtStatusToDosError(status as i32) };
             let error = windows::core::Error::from(windows::core::HRESULT::from_win32(win32));
-            assert_eq!(classify_native_bridge_error(&error), expected, "NTSTATUS {status:#x}");
+            assert_eq!(
+                classify_native_bridge_error(&error),
+                expected,
+                "NTSTATUS {status:#x}"
+            );
         }
         let missing = windows::core::Error::from(windows::core::HRESULT::from_win32(2));
         assert_eq!(
@@ -11995,7 +12359,10 @@ mod tests {
         let header = reader.read_into_f64(&mut output).unwrap();
         assert_eq!(header.payload_bytes, 16);
         assert_eq!(output, samples);
-        assert_eq!(output.map(|sample| (sample * 2_147_483_648.0).round() as i32), pcm);
+        assert_eq!(
+            output.map(|sample| (sample * 2_147_483_648.0).round() as i32),
+            pcm
+        );
         drop(reader);
         writer.remove_owned_mapping().unwrap();
     }

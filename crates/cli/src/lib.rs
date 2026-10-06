@@ -2499,8 +2499,17 @@ fn mcp_tool_call(
     // Assistant-first tools: one intention each; a missing idempotency key is
     // generated so a forgotten technical argument never fails the request.
     if let Some((method, mutating)) = mcp_simple_tool(name) {
-        let mut params = if arguments.is_object() { arguments.clone() } else { json!({}) };
-        if mutating && params.get("idempotencyKey").and_then(Value::as_str).is_none_or(str::is_empty) {
+        let mut params = if arguments.is_object() {
+            arguments.clone()
+        } else {
+            json!({})
+        };
+        if mutating
+            && params
+                .get("idempotencyKey")
+                .and_then(Value::as_str)
+                .is_none_or(str::is_empty)
+        {
             params["idempotencyKey"] = json!(mcp_generated_key(name));
         }
         return mcp_dispatch_tool(plane, client_id, grant, pipe_name, id, method, Some(params));
@@ -2625,15 +2634,41 @@ fn mcp_tool_call(
             );
         }
         "create_session" => {
-            let name = arguments["name"].as_str().map(str::trim).filter(|name| !name.is_empty()).unwrap_or("New session");
-            let session_id = format!("session-{}", mcp_generated_key("create").trim_start_matches("mcp-create-"));
-            let key = arguments["idempotencyKey"].as_str().filter(|key| !key.is_empty()).map_or_else(|| mcp_generated_key("create_session"), str::to_owned);
+            let name = arguments["name"]
+                .as_str()
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .unwrap_or("New session");
+            let session_id = format!(
+                "session-{}",
+                mcp_generated_key("create").trim_start_matches("mcp-create-")
+            );
+            let key = arguments["idempotencyKey"]
+                .as_str()
+                .filter(|key| !key.is_empty())
+                .map_or_else(|| mcp_generated_key("create_session"), str::to_owned);
             let params = json!({ "session": { "id": session_id, "name": name, "schemaVersion": 1, "revision": 0, "nodes": [], "edges": [] }, "idempotencyKey": key });
-            let created = mcp_dispatch_tool(plane, client_id, grant, pipe_name, id.clone(), "sessions.create", Some(params));
+            let created = mcp_dispatch_tool(
+                plane,
+                client_id,
+                grant,
+                pipe_name,
+                id.clone(),
+                "sessions.create",
+                Some(params),
+            );
             if created["result"]["isError"] == true {
                 return created;
             }
-            return mcp_dispatch_tool(plane, client_id, grant, pipe_name, id, "sessions.active.set", Some(json!({ "sessionId": session_id, "idempotencyKey": format!("{key}-open") })));
+            return mcp_dispatch_tool(
+                plane,
+                client_id,
+                grant,
+                pipe_name,
+                id,
+                "sessions.active.set",
+                Some(json!({ "sessionId": session_id, "idempotencyKey": format!("{key}-open") })),
+            );
         }
         "get_recipes" => {
             return json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": MCP_RECIPES }], "isError": false } });
@@ -2779,8 +2814,13 @@ fn mcp_simple_tool(name: &str) -> Option<(&'static str, bool)> {
 /// A unique idempotency key for an assistant call that did not supply one.
 fn mcp_generated_key(tool: &str) -> String {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_nanos());
-    format!("mcp-{tool}-{stamp}-{}", NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_nanos());
+    format!(
+        "mcp-{tool}-{stamp}-{}",
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    )
 }
 
 const MCP_RECIPES: &str = "AudioRouter recipes (use the names shown by get_session_summary).\n1. Clean up a microphone: add_tool kind=gate after the microphone; add_tool kind=compressor after the gate; add_tool kind=limiter after the compressor. Then play, ask the user to talk, read get_levels: the gate threshold sits between room noise and voice (change_settings thresholdDb), the compressor should reduce 3-6 dB on loud words.\n2. Lower game or music while the user talks: add_tool kind=duck between the game source and its output with parameters {keyNodeId: <microphone node ID>, amountDb: 10}. Raise amountDb for more ducking; thresholdDb sets how loud the voice must be.\n3. Record a podcast or stream: add_tool kind=recorder after the node to record (often a Mixer or the voice chain). change_settings parameters {autoRecord: true} to record on every Play, {splitMinutes: 30} for a new file every 30 minutes. start_recording / stop_recording control it.\n4. Use AudioRouter as a Discord or OBS microphone: connect the processed voice chain to a Physical output whose device is a virtual cable input (e.g. CABLE Input; list_devices shows IDs; change_settings parameters {endpointId: ...}). In Discord choose the matching cable output as the microphone.\n5. Switch between two sources live (host and guest, or two scenes): add_tool kind=inputSwitch, connect_nodes each source to it (first to A, second to B), then toggle_setting target=selected to switch.\n6. Quick safety: toggle_mic_mute mutes all capture immediately; play / toggle_play start and stop audio.\nAlways describe what you changed to the user. Settings are validated: if a call fails, read its message (it names the problem and the allowed choices).";
@@ -4232,16 +4272,34 @@ mod tests {
     fn assistant_tools_configure_a_route_by_name_without_technical_arguments() {
         let mut plane = ControlPlane::default();
         let session: audiorouter_domain::Session =
-            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json")).unwrap();
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
         plane.insert_session(session).unwrap();
         use audiorouter_domain::PermissionScope;
-        let grant = audiorouter_control::ClientGrant::with_scopes([PermissionScope::Read, PermissionScope::GraphWrite, PermissionScope::SessionControl]);
+        let grant = audiorouter_control::ClientGrant::with_scopes([
+            PermissionScope::Read,
+            PermissionScope::GraphWrite,
+            PermissionScope::SessionControl,
+        ]);
         let mut next_id = 100;
         let mut tool = |plane: &mut ControlPlane, name: &str, arguments: Value| {
             next_id += 1;
-            let response = mcp_tool_call(plane, "assistant", &grant, None, &json!({ "id": next_id, "params": { "name": name, "arguments": arguments } }));
-            let text = response["result"]["content"][0]["text"].as_str().unwrap_or_default().to_owned();
-            (response["result"]["isError"] == true, response["result"]["structuredContent"]["result"].clone(), text)
+            let response = mcp_tool_call(
+                plane,
+                "assistant",
+                &grant,
+                None,
+                &json!({ "id": next_id, "params": { "name": name, "arguments": arguments } }),
+            );
+            let text = response["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap_or_default()
+                .to_owned();
+            (
+                response["result"]["isError"] == true,
+                response["result"]["structuredContent"]["result"].clone(),
+                text,
+            )
         };
         // Discovery: recipes, plain summary, catalog.
         let (error, _, recipes) = tool(&mut plane, "get_recipes", json!({}));
@@ -4250,30 +4308,69 @@ mod tests {
         assert!(!error, "{summary}");
         assert_eq!(summary["sessionId"], "session-fixture");
         let (_, kinds, _) = tool(&mut plane, "list_tool_kinds", json!({}));
-        assert!(kinds.as_array().unwrap().iter().any(|kind| kind["kind"] == "gate"));
+        assert!(kinds
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|kind| kind["kind"] == "gate"));
         // Build: no idempotency keys, names instead of IDs.
-        let (error, added, text) = tool(&mut plane, "add_tool", json!({ "kind": "gate", "between": { "from": "Input", "to": "Output" }, "name": "Noise gate" }));
+        let (error, added, text) = tool(
+            &mut plane,
+            "add_tool",
+            json!({ "kind": "gate", "between": { "from": "Input", "to": "Output" }, "name": "Noise gate" }),
+        );
         assert!(!error, "{text}");
         assert_eq!(added["name"], "Noise gate");
-        let (error, _, text) = tool(&mut plane, "change_settings", json!({ "node": "noise gate", "parameters": { "thresholdDb": -40.0 } }));
+        let (error, _, text) = tool(
+            &mut plane,
+            "change_settings",
+            json!({ "node": "noise gate", "parameters": { "thresholdDb": -40.0 } }),
+        );
         assert!(!error, "{text}");
-        let (error, toggled, _) = tool(&mut plane, "toggle_setting", json!({ "node": "Noise gate", "target": "bypass" }));
+        let (error, toggled, _) = tool(
+            &mut plane,
+            "toggle_setting",
+            json!({ "node": "Noise gate", "target": "bypass" }),
+        );
         assert!(!error && toggled["value"] == true);
-        let (error, _, text) = tool(&mut plane, "disconnect_nodes", json!({ "from": "Noise gate", "to": "Output" }));
+        let (error, _, text) = tool(
+            &mut plane,
+            "disconnect_nodes",
+            json!({ "from": "Noise gate", "to": "Output" }),
+        );
         assert!(!error, "{text}");
-        let (error, _, text) = tool(&mut plane, "connect_nodes", json!({ "from": "Noise gate", "to": "Output" }));
+        let (error, _, text) = tool(
+            &mut plane,
+            "connect_nodes",
+            json!({ "from": "Noise gate", "to": "Output" }),
+        );
         assert!(!error, "{text}");
         let (error, levels, _) = tool(&mut plane, "get_levels", json!({}));
         assert!(!error && levels["playing"] == false);
         let (error, muted, _) = tool(&mut plane, "toggle_mic_mute", json!({}));
         assert!(!error && muted["muted"].is_boolean());
-        let gate = plane.get_session(&audiorouter_domain::EntityId::new("session-fixture")).unwrap().nodes.iter().find(|node| node.name == "Noise gate").cloned().unwrap();
+        let gate = plane
+            .get_session(&audiorouter_domain::EntityId::new("session-fixture"))
+            .unwrap()
+            .nodes
+            .iter()
+            .find(|node| node.name == "Noise gate")
+            .cloned()
+            .unwrap();
         assert_eq!(gate.parameters["thresholdDb"], json!(-40.0));
         assert!(gate.bypass);
         // Problems come back as readable tool errors, not protocol failures.
-        let (error, _, text) = tool(&mut plane, "change_settings", json!({ "node": "Noise gate", "parameters": { "thresholdDb": 50.0 } }));
+        let (error, _, text) = tool(
+            &mut plane,
+            "change_settings",
+            json!({ "node": "Noise gate", "parameters": { "thresholdDb": 50.0 } }),
+        );
         assert!(error, "out-of-range value must be refused: {text}");
-        let (error, _, text) = tool(&mut plane, "change_settings", json!({ "node": "Guitar", "parameters": {} }));
+        let (error, _, text) = tool(
+            &mut plane,
+            "change_settings",
+            json!({ "node": "Guitar", "parameters": {} }),
+        );
         assert!(error && text.contains("no node named"), "{text}");
         // Play opens devices: refused without the device-administration grant.
         let (error, _, _) = tool(&mut plane, "play", json!({}));
@@ -4285,21 +4382,57 @@ mod tests {
         assert_eq!(summary["name"], "Podcast");
         let podcast = summary["sessionId"].as_str().unwrap().to_owned();
         for (kind, name) in [("testSignal", "Host"), ("recorder", "Podcast recorder")] {
-            let (error, _, text) = tool(&mut plane, "add_tool", json!({ "kind": kind, "name": name }));
+            let (error, _, text) = tool(
+                &mut plane,
+                "add_tool",
+                json!({ "kind": kind, "name": name }),
+            );
             assert!(!error, "{text}");
         }
-        let (error, _, text) = tool(&mut plane, "connect_nodes", json!({ "from": "Host", "to": "Podcast recorder" }));
+        let (error, _, text) = tool(
+            &mut plane,
+            "connect_nodes",
+            json!({ "from": "Host", "to": "Podcast recorder" }),
+        );
         assert!(!error, "{text}");
         let (_, sessions, _) = tool(&mut plane, "list_sessions", json!({}));
         assert!(sessions.to_string().contains(&podcast));
-        let (error, _, text) = tool(&mut plane, "open_session", json!({ "sessionId": "session-fixture" }));
+        let (error, _, text) = tool(
+            &mut plane,
+            "open_session",
+            json!({ "sessionId": "session-fixture" }),
+        );
         assert!(!error, "{text}");
         let (_, summary, _) = tool(&mut plane, "get_session_summary", json!({}));
         assert_eq!(summary["sessionId"], "session-fixture");
         // Every assistant tool is listed with a description.
-        let names = mcp_tools().as_array().unwrap().iter().map(|tool| tool["name"].as_str().unwrap().to_owned()).collect::<Vec<_>>();
-        for name in ["get_recipes", "get_session_summary", "list_tool_kinds", "add_tool", "remove_tool", "connect_nodes", "disconnect_nodes", "change_settings", "toggle_setting", "play", "toggle_play", "toggle_mic_mute", "get_levels", "start_recording", "stop_recording"] {
-            assert!(names.iter().any(|candidate| candidate == name), "{name} is listed");
+        let names = mcp_tools()
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|tool| tool["name"].as_str().unwrap().to_owned())
+            .collect::<Vec<_>>();
+        for name in [
+            "get_recipes",
+            "get_session_summary",
+            "list_tool_kinds",
+            "add_tool",
+            "remove_tool",
+            "connect_nodes",
+            "disconnect_nodes",
+            "change_settings",
+            "toggle_setting",
+            "play",
+            "toggle_play",
+            "toggle_mic_mute",
+            "get_levels",
+            "start_recording",
+            "stop_recording",
+        ] {
+            assert!(
+                names.iter().any(|candidate| candidate == name),
+                "{name} is listed"
+            );
         }
     }
 

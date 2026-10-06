@@ -37,8 +37,8 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-pub mod os_transition;
 mod network_log;
+pub mod os_transition;
 mod siege_round;
 mod simple;
 mod threaded_recorder;
@@ -384,6 +384,8 @@ fn finalized_wav_recording(
     })
 }
 
+// Each argument is a distinct field of the finalized recording record.
+#[allow(clippy::too_many_arguments)]
 fn finalized_mp3_recording(
     identity: &FileRecordingIdentity,
     run_id: &str,
@@ -439,7 +441,9 @@ fn finalized_mp3_recording(
 /// file. The frame is the last committed control-plane boundary.
 pub trait RecorderWorker: Send {
     /// Shared frame/admission state for off-thread file encoders.
-    fn shared_recording_queue(&self) -> Option<Arc<RecordingQueue>> { None }
+    fn shared_recording_queue(&self) -> Option<Arc<RecordingQueue>> {
+        None
+    }
     /// Exposes the worker's preallocated queue observer for a prepared engine
     /// tap set. The control plane never invokes it from the audio callback.
     fn shared_audio_tap(&self) -> Option<Arc<dyn AudioTap>> {
@@ -620,7 +624,9 @@ impl WavRecorderWorker {
 }
 
 impl RecorderWorker for WavRecorderWorker {
-    fn shared_recording_queue(&self) -> Option<Arc<RecordingQueue>> { Some(self.queue.clone()) }
+    fn shared_recording_queue(&self) -> Option<Arc<RecordingQueue>> {
+        Some(self.queue.clone())
+    }
     fn committed_end_frame(&self) -> Option<u64> {
         self.queue.committed_end_frame()
     }
@@ -919,7 +925,8 @@ pub fn create_file_recorder_with_config(
             (path, Box::new(worker))
         }
     };
-    let worker = threaded_recorder::ThreadedRecorderWorker::new(worker, config.maximum_chunks_per_pass)?;
+    let worker =
+        threaded_recorder::ThreadedRecorderWorker::new(worker, config.maximum_chunks_per_pass)?;
     Ok((path, Box::new(worker)))
 }
 
@@ -1143,7 +1150,9 @@ impl SegmentedWavRecorderWorker {
 }
 
 impl RecorderWorker for SegmentedWavRecorderWorker {
-    fn shared_recording_queue(&self) -> Option<Arc<RecordingQueue>> { Some(self.queue.clone()) }
+    fn shared_recording_queue(&self) -> Option<Arc<RecordingQueue>> {
+        Some(self.queue.clone())
+    }
     fn committed_end_frame(&self) -> Option<u64> {
         self.queue.committed_end_frame()
     }
@@ -1241,9 +1250,9 @@ impl RecorderWorker for SegmentedWavRecorderWorker {
             }
             if recorder.state() == RecorderState::Failed {
                 failed = true;
-                recorder
-                    .finish_failed()
-                    .map_err(|error| format!("segmented WAV prefix finalization failed: {error:?}"))?
+                recorder.finish_failed().map_err(|error| {
+                    format!("segmented WAV prefix finalization failed: {error:?}")
+                })?
             } else {
                 recorder
                     .finish()
@@ -1684,7 +1693,9 @@ impl StreamingFlacRecorderWorker {
 }
 
 impl RecorderWorker for StreamingFlacRecorderWorker {
-    fn shared_recording_queue(&self) -> Option<Arc<RecordingQueue>> { Some(self.queue.clone()) }
+    fn shared_recording_queue(&self) -> Option<Arc<RecordingQueue>> {
+        Some(self.queue.clone())
+    }
     fn committed_end_frame(&self) -> Option<u64> {
         self.queue.committed_end_frame()
     }
@@ -1798,13 +1809,13 @@ impl RecorderWorker for StreamingFlacRecorderWorker {
             }
             if recorder.state() == RecorderState::Failed {
                 failed = true;
-                recorder
-                    .finish_failed()
-                    .map_err(|error| format!("streaming FLAC prefix finalization failed: {error:?}"))?
+                recorder.finish_failed().map_err(|error| {
+                    format!("streaming FLAC prefix finalization failed: {error:?}")
+                })?
             } else {
-                recorder
-                    .finish()
-                    .map_err(|error| format!("streaming FLAC file finalization failed: {error:?}"))?
+                recorder.finish().map_err(|error| {
+                    format!("streaming FLAC file finalization failed: {error:?}")
+                })?
             }
         };
         let final_state = if failed { "failed" } else { "completed" };
@@ -1913,7 +1924,9 @@ impl Mp3RecorderWorker {
 }
 
 impl RecorderWorker for Mp3RecorderWorker {
-    fn shared_recording_queue(&self) -> Option<Arc<RecordingQueue>> { Some(self.queue.clone()) }
+    fn shared_recording_queue(&self) -> Option<Arc<RecordingQueue>> {
+        Some(self.queue.clone())
+    }
     fn committed_end_frame(&self) -> Option<u64> {
         self.queue.committed_end_frame()
     }
@@ -2602,7 +2615,10 @@ fn method_input_schema(name: &str) -> Value {
             }),
             &["sessionId", "nodeId", "action"],
         ),
-        "meters.reset" => object_schema(json!({"sessionId": {"type":"string", "minLength":1}, "nodeId":{"type":"string", "minLength":1}}), &["sessionId", "nodeId"]),
+        "meters.reset" => object_schema(
+            json!({"sessionId": {"type":"string", "minLength":1}, "nodeId":{"type":"string", "minLength":1}}),
+            &["sessionId", "nodeId"],
+        ),
         "recorders.list" => object_schema(json!({}), &[]),
         "recorders.create" => object_schema(
             json!({
@@ -3128,18 +3144,51 @@ fn method_input_schema(name: &str) -> Value {
             }),
             &["sampleRateHz", "bands", "frequenciesHz"],
         ),
-        "sessions.play" => object_schema(json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }), &["idempotencyKey"]),
-        "sessions.togglePlay" => object_schema(json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }), &["idempotencyKey"]),
-        "sessions.summary" => object_schema(json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." } }), &[]),
-        "meters.levels" => object_schema(json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." } }), &[]),
-        "nodes.catalog" => object_schema(json!({  }), &[]),
-        "safety.togglePrivacyMute" => object_schema(json!({ "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }), &["idempotencyKey"]),
-        "nodes.set" => object_schema(json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "node": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Node ID or exact name." }, "parameters": { "type": "object", "description": "Settings to change, by name (see nodes.catalog)." }, "enabled": { "type": "boolean" }, "bypass": { "type": "boolean" }, "name": { "type": "string", "minLength": 1, "maxLength": 120 }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }), &["node", "idempotencyKey"]),
-        "nodes.toggle" => object_schema(json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "node": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Node ID or exact name." }, "target": { "type": "string", "minLength": 1, "maxLength": 128, "description": "enabled, bypass, or an on/off or two-choice setting name." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }), &["node", "target", "idempotencyKey"]),
-        "nodes.add" => object_schema(json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "kind": { "type": "string", "minLength": 1, "maxLength": 64, "description": "Node kind from nodes.catalog, for example compressor." }, "name": { "type": "string", "minLength": 1, "maxLength": 120 }, "parameters": { "type": "object" }, "between": { "type": "object", "properties": { "from": { "type": "string" }, "to": { "type": "string" } }, "required": ["from", "to"] }, "after": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Node to place the new one after." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }), &["kind", "idempotencyKey"]),
-        "nodes.remove" => object_schema(json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "node": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Node ID or exact name." }, "bridge": { "type": "boolean", "description": "Reconnect its neighbours (default true)." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }), &["node", "idempotencyKey"]),
-        "connections.add" => object_schema(json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "from": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Source node ID or name." }, "to": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Destination node ID or name." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }), &["from", "to", "idempotencyKey"]),
-        "connections.remove" => object_schema(json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "from": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Source node ID or name." }, "to": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Destination node ID or name." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }), &["from", "to", "idempotencyKey"]),
+        "sessions.play" => object_schema(
+            json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }),
+            &["idempotencyKey"],
+        ),
+        "sessions.togglePlay" => object_schema(
+            json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }),
+            &["idempotencyKey"],
+        ),
+        "sessions.summary" => object_schema(
+            json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." } }),
+            &[],
+        ),
+        "meters.levels" => object_schema(
+            json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." } }),
+            &[],
+        ),
+        "nodes.catalog" => object_schema(json!({}), &[]),
+        "safety.togglePrivacyMute" => object_schema(
+            json!({ "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }),
+            &["idempotencyKey"],
+        ),
+        "nodes.set" => object_schema(
+            json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "node": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Node ID or exact name." }, "parameters": { "type": "object", "description": "Settings to change, by name (see nodes.catalog)." }, "enabled": { "type": "boolean" }, "bypass": { "type": "boolean" }, "name": { "type": "string", "minLength": 1, "maxLength": 120 }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }),
+            &["node", "idempotencyKey"],
+        ),
+        "nodes.toggle" => object_schema(
+            json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "node": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Node ID or exact name." }, "target": { "type": "string", "minLength": 1, "maxLength": 128, "description": "enabled, bypass, or an on/off or two-choice setting name." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }),
+            &["node", "target", "idempotencyKey"],
+        ),
+        "nodes.add" => object_schema(
+            json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "kind": { "type": "string", "minLength": 1, "maxLength": 64, "description": "Node kind from nodes.catalog, for example compressor." }, "name": { "type": "string", "minLength": 1, "maxLength": 120 }, "parameters": { "type": "object" }, "between": { "type": "object", "properties": { "from": { "type": "string" }, "to": { "type": "string" } }, "required": ["from", "to"] }, "after": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Node to place the new one after." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }),
+            &["kind", "idempotencyKey"],
+        ),
+        "nodes.remove" => object_schema(
+            json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "node": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Node ID or exact name." }, "bridge": { "type": "boolean", "description": "Reconnect its neighbours (default true)." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }),
+            &["node", "idempotencyKey"],
+        ),
+        "connections.add" => object_schema(
+            json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "from": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Source node ID or name." }, "to": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Destination node ID or name." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }),
+            &["from", "to", "idempotencyKey"],
+        ),
+        "connections.remove" => object_schema(
+            json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "from": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Source node ID or name." }, "to": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Destination node ID or name." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }),
+            &["from", "to", "idempotencyKey"],
+        ),
         _ => object_schema(json!({}), &[]),
     }
 }
@@ -4376,7 +4425,9 @@ fn method_output_schema(name: &str) -> Value {
                 "capacitySeconds": { "type": "number", "minimum": 0 }
             }, "required": ["sessionId", "nodeId", "state", "delaySeconds", "bufferedSeconds", "capacitySeconds"], "additionalProperties": false
         }),
-        "meters.reset" => json!({"type":"object", "properties":{"sessionId":{"type":"string"},"nodeId":{"type":"string"},"reset":{"type":"boolean"}},"required":["sessionId","nodeId","reset"],"additionalProperties":false}),
+        "meters.reset" => {
+            json!({"type":"object", "properties":{"sessionId":{"type":"string"},"nodeId":{"type":"string"},"reset":{"type":"boolean"}},"required":["sessionId","nodeId","reset"],"additionalProperties":false})
+        }
         "audioSources.transport" => json!({
             "type": "object", "properties": {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
@@ -5395,19 +5446,24 @@ enum MultiInputBindings<'s, 'a> {
 fn start_network_sender(
     node: &audiorouter_domain::Node,
 ) -> Result<audiorouter_windows_audio::NetworkSender, ControlError> {
-    let host = node.parameters.get("host").and_then(Value::as_str).unwrap_or("");
+    let host = node
+        .parameters
+        .get("host")
+        .and_then(Value::as_str)
+        .unwrap_or("");
     let port = node
         .parameters
         .get("port")
         .and_then(Value::as_u64)
         .and_then(|port| u16::try_from(port).ok())
         .unwrap_or(audiorouter_domain::DEFAULT_NETWORK_AUDIO_PORT);
-    let destination = audiorouter_windows_audio::network_socket_address(host, port).ok_or_else(|| {
-        ControlError::InvalidRequest(format!(
-            "enter the IP address of the receiving computer for {} in its Properties",
-            node.name
-        ))
-    })?;
+    let destination =
+        audiorouter_windows_audio::network_socket_address(host, port).ok_or_else(|| {
+            ControlError::InvalidRequest(format!(
+                "enter the IP address of the receiving computer for {} in its Properties",
+                node.name
+            ))
+        })?;
     match audiorouter_windows_audio::NetworkSender::start(destination) {
         Ok(sender) => {
             network_log::write(json!({
@@ -5424,7 +5480,10 @@ fn start_network_sender(
                 "destination": destination.to_string(), "errorCode": code,
                 "hint": code.and_then(network_log::socket_error_hint),
             }));
-            Err(ControlError::InvalidRequest(format!("{} could not open its network socket: {error}", node.name)))
+            Err(ControlError::InvalidRequest(format!(
+                "{} could not open its network socket: {error}",
+                node.name
+            )))
         }
     }
 }
@@ -5433,7 +5492,9 @@ fn start_network_sender(
 /// ("… (os error 10048)"), for the network log; never the text itself.
 fn os_error_code(message: &str) -> Option<i32> {
     let start = message.rfind("(os error ")? + "(os error ".len();
-    message[start..].strip_suffix(')').and_then(|code| code.parse().ok())
+    message[start..]
+        .strip_suffix(')')
+        .and_then(|code| code.parse().ok())
 }
 
 /// Open the UDP receiver of a Network Receive node from its validated
@@ -5468,7 +5529,8 @@ fn start_network_receiver(
         .and_then(Value::as_f64)
         .unwrap_or(audiorouter_domain::DEFAULT_NETWORK_BUFFER_MS);
     // The address the sending computer must target, as routed from here.
-    let local_toward_sender = audiorouter_windows_audio::local_address_toward(sender).map(|address| address.to_string());
+    let local_toward_sender =
+        audiorouter_windows_audio::local_address_toward(sender).map(|address| address.to_string());
     match audiorouter_windows_audio::NetworkReceiver::start(sender, port, buffer_ms) {
         Ok(receiver) => {
             network_log::write(json!({
@@ -5565,11 +5627,26 @@ struct RecorderNodeSettings {
 }
 
 fn recorder_node_settings(node: &audiorouter_domain::Node) -> RecorderNodeSettings {
-    let (format, format_name) = match node.parameters.get("format").and_then(Value::as_str).unwrap_or("wavPcm24") {
+    let (format, format_name) = match node
+        .parameters
+        .get("format")
+        .and_then(Value::as_str)
+        .unwrap_or("wavPcm24")
+    {
         "wavPcm16" => (FileRecorderFormat::Wav(WavFormat::Pcm16), "wavPcm16"),
         "wavFloat32" => (FileRecorderFormat::Wav(WavFormat::Float32), "wavFloat32"),
-        "flac16" => (FileRecorderFormat::Flac { bits_per_sample: 16 }, "flac16"),
-        "flac24" => (FileRecorderFormat::Flac { bits_per_sample: 24 }, "flac24"),
+        "flac16" => (
+            FileRecorderFormat::Flac {
+                bits_per_sample: 16,
+            },
+            "flac16",
+        ),
+        "flac24" => (
+            FileRecorderFormat::Flac {
+                bits_per_sample: 24,
+            },
+            "flac24",
+        ),
         "mp3" => (FileRecorderFormat::Mp3, "mp3"),
         _ => (FileRecorderFormat::Wav(WavFormat::Pcm24), "wavPcm24"),
     };
@@ -5581,8 +5658,17 @@ fn recorder_node_settings(node: &audiorouter_domain::Node) -> RecorderNodeSettin
     RecorderNodeSettings {
         format,
         format_name,
-        auto_record: node.parameters.get("autoRecord").and_then(Value::as_bool).unwrap_or(false),
-        split_minutes: node.parameters.get("splitMinutes").and_then(Value::as_f64).filter(|minutes| minutes.is_finite()).map_or(0, |minutes| minutes.clamp(0.0, 240.0) as u64),
+        auto_record: node
+            .parameters
+            .get("autoRecord")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        split_minutes: node
+            .parameters
+            .get("splitMinutes")
+            .and_then(Value::as_f64)
+            .filter(|minutes| minutes.is_finite())
+            .map_or(0, |minutes| minutes.clamp(0.0, 240.0) as u64),
         channels,
     }
 }
@@ -5598,7 +5684,8 @@ pub struct ControlPlane {
     /// Stable realtime inlet per Recorder node. Playback binds the inlet, so
     /// a route with a Recorder always plays; Record attaches a file worker
     /// behind it at any time. Control thread only (never the audio callback).
-    recorder_inlets: std::sync::Mutex<HashMap<EntityId, Arc<audiorouter_engine::SwitchableAudioTap>>>,
+    recorder_inlets:
+        std::sync::Mutex<HashMap<EntityId, Arc<audiorouter_engine::SwitchableAudioTap>>>,
     recorder_node_states: HashMap<EntityId, RecorderController>,
     recorder_node_sessions: HashMap<EntityId, EntityId>,
     /// One-click recordings: per Recorder node, the automatic split interval
@@ -5630,7 +5717,12 @@ pub struct ControlPlane {
     plugin_inventories: HashMap<String, Value>,
     /// Live plugin runtime bridges by (session, node), for state capture and
     /// the native editor. Weak: a bridge lives only as long as its graph.
-    plugin_bridges: std::sync::Mutex<HashMap<(EntityId, EntityId), std::sync::Weak<audiorouter_plugin_host::PluginRuntimeBridge>>>,
+    plugin_bridges: std::sync::Mutex<
+        HashMap<
+            (EntityId, EntityId),
+            std::sync::Weak<audiorouter_plugin_host::PluginRuntimeBridge>,
+        >,
+    >,
     plugin_inventory_order: VecDeque<String>,
     privacy_muted: bool,
     startup_enabled: bool,
@@ -5782,8 +5874,10 @@ impl Default for ControlPlane {
 
 /// Issuer of native-editor parent capabilities. The key never leaves this
 /// process; it is derived once per backend run from process-local entropy.
-fn editor_authorization_issuer() -> &'static audiorouter_plugin_host::EditorParentAuthorizationIssuer {
-    static ISSUER: std::sync::OnceLock<audiorouter_plugin_host::EditorParentAuthorizationIssuer> = std::sync::OnceLock::new();
+fn editor_authorization_issuer() -> &'static audiorouter_plugin_host::EditorParentAuthorizationIssuer
+{
+    static ISSUER: std::sync::OnceLock<audiorouter_plugin_host::EditorParentAuthorizationIssuer> =
+        std::sync::OnceLock::new();
     ISSUER.get_or_init(|| {
         use sha2::Digest;
         let mut digest = sha2::Sha256::new();
@@ -6017,7 +6111,9 @@ mod plugin_chain_group_tests {
 /// fingerprint is still checked by the caller.
 fn scan_entry_matches_path(entry: &Value, path: &str) -> bool {
     fn normalized(path: &str) -> String {
-        path.strip_prefix(r"\\?\").unwrap_or(path).to_ascii_lowercase()
+        path.strip_prefix(r"\\?\")
+            .unwrap_or(path)
+            .to_ascii_lowercase()
     }
     let wanted = normalized(path);
     [
@@ -6064,7 +6160,9 @@ fn node_spatial_headphones(node: &audiorouter_domain::Node) -> bool {
 
 /// The surround rendering a Physical Input asks for, when it renders one:
 /// headphones or speakers (crosstalk cancellation) and the room blend.
-fn node_spatial_options(node: &audiorouter_domain::Node) -> Option<audiorouter_dsp::binaural::SpatialOptions> {
+fn node_spatial_options(
+    node: &audiorouter_domain::Node,
+) -> Option<audiorouter_dsp::binaural::SpatialOptions> {
     use audiorouter_dsp::binaural::{SpatialOptions, SpatialOutput};
     if node.kind != NodeKind::PhysicalInput {
         return None;
@@ -6074,15 +6172,29 @@ fn node_spatial_options(node: &audiorouter_domain::Node) -> Option<audiorouter_d
         Some("speakers") => SpatialOutput::Speakers,
         _ => return None,
     };
-    let room_percent = node.parameters.get("spatialRoomPercent").and_then(Value::as_f64).unwrap_or(0.0) as f32;
-    Some(SpatialOptions { output, room_percent })
+    let room_percent = node
+        .parameters
+        .get("spatialRoomPercent")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.0) as f32;
+    Some(SpatialOptions {
+        output,
+        room_percent,
+    })
 }
 
 /// Preserve prepared transport identities during live flag changes. Silent
 /// sources/sinks keep draining; matrices silence every outgoing branch.
 fn normalize_live_path_flags(session: &mut Session, inputs: &[EntityId], outputs: &[EntityId]) {
     for node in &mut session.nodes {
-        if !matches!(node.kind, NodeKind::PhysicalInput | NodeKind::ApplicationCapture | NodeKind::PhysicalOutput | NodeKind::Mixer | NodeKind::InputSwitch) {
+        if !matches!(
+            node.kind,
+            NodeKind::PhysicalInput
+                | NodeKind::ApplicationCapture
+                | NodeKind::PhysicalOutput
+                | NodeKind::Mixer
+                | NodeKind::InputSwitch
+        ) {
             continue;
         }
         let unprepared = match node.kind {
@@ -6090,10 +6202,14 @@ fn normalize_live_path_flags(session: &mut Session, inputs: &[EntityId], outputs
             NodeKind::PhysicalOutput => !outputs.contains(&node.id),
             _ => false,
         };
-        if unprepared && !node.enabled { continue; }
+        if unprepared && !node.enabled {
+            continue;
+        }
         if !node.enabled || node.bypass {
             for edge in &mut session.edges {
-                if edge.source_node == node.id || (node.kind == NodeKind::PhysicalOutput && edge.destination_node == node.id) {
+                if edge.source_node == node.id
+                    || (node.kind == NodeKind::PhysicalOutput && edge.destination_node == node.id)
+                {
                     edge.matrix.fill(0.0);
                 }
             }
@@ -6105,18 +6221,44 @@ fn normalize_live_path_flags(session: &mut Session, inputs: &[EntityId], outputs
 
 /// Reject a return path through an established endpoint transport. Exact IDs
 /// establish the pairing; node names only explain the error.
-fn reject_endpoint_feedback(session: &Session, returns: &[(String, String)]) -> Result<(), ControlError> {
-    for source in session.nodes.iter().filter(|node| node.enabled && matches!(node.kind, NodeKind::PhysicalInput | NodeKind::EndpointLoopback)) {
-        let Some(capture) = source.parameters.get("endpointId").and_then(Value::as_str) else { continue };
+fn reject_endpoint_feedback(
+    session: &Session,
+    returns: &[(String, String)],
+) -> Result<(), ControlError> {
+    for source in session.nodes.iter().filter(|node| {
+        node.enabled
+            && matches!(
+                node.kind,
+                NodeKind::PhysicalInput | NodeKind::EndpointLoopback
+            )
+    }) {
+        let Some(capture) = source.parameters.get("endpointId").and_then(Value::as_str) else {
+            continue;
+        };
         let mut pending = vec![source.id.clone()];
         let mut visited = std::collections::HashSet::new();
         while let Some(id) = pending.pop() {
-            if !visited.insert(id.clone()) { continue; }
-            for edge in session.edges.iter().filter(|edge| edge.enabled && edge.source_node == id) {
-                let Some(node) = session.nodes.iter().find(|node| node.id == edge.destination_node) else { continue };
+            if !visited.insert(id.clone()) {
+                continue;
+            }
+            for edge in session
+                .edges
+                .iter()
+                .filter(|edge| edge.enabled && edge.source_node == id)
+            {
+                let Some(node) = session
+                    .nodes
+                    .iter()
+                    .find(|node| node.id == edge.destination_node)
+                else {
+                    continue;
+                };
                 if node.kind == NodeKind::PhysicalOutput && node.enabled && !node.bypass {
-                    if let Some(render) = node.parameters.get("endpointId").and_then(Value::as_str) {
-                        if ((source.kind == NodeKind::EndpointLoopback || node_spatial_headphones(source)) && render == capture)
+                    if let Some(render) = node.parameters.get("endpointId").and_then(Value::as_str)
+                    {
+                        if ((source.kind == NodeKind::EndpointLoopback
+                            || node_spatial_headphones(source))
+                            && render == capture)
                             || returns.iter().any(|(r, c)| r == render && c == capture)
                         {
                             return Err(ControlError::InvalidRequest(format!(
@@ -6125,9 +6267,16 @@ fn reject_endpoint_feedback(session: &Session, returns: &[(String, String)]) -> 
                         }
                     }
                 }
-                if node.enabled || node.ports.iter().any(|port| port.direction == PortDirection::Input)
-                    && node.ports.iter().any(|port| port.direction == PortDirection::Output)
-                    && !matches!(node.kind, NodeKind::Mixer | NodeKind::InputSwitch)
+                if node.enabled
+                    || node
+                        .ports
+                        .iter()
+                        .any(|port| port.direction == PortDirection::Input)
+                        && node
+                            .ports
+                            .iter()
+                            .any(|port| port.direction == PortDirection::Output)
+                        && !matches!(node.kind, NodeKind::Mixer | NodeKind::InputSwitch)
                 {
                     pending.push(node.id.clone());
                 }
@@ -6141,22 +6290,46 @@ impl ControlPlane {
     fn endpoint_feedback_warnings(&self, session: &Session) -> Result<Vec<String>, ControlError> {
         match self.validate_endpoint_feedback(session) {
             Ok(()) => Ok(Vec::new()),
-            Err(ControlError::InvalidRequest(message)) if message.starts_with("Audio feedback loop:") => Ok(vec![message]),
+            Err(ControlError::InvalidRequest(message))
+                if message.starts_with("Audio feedback loop:") =>
+            {
+                Ok(vec![message])
+            }
             Err(error) => Err(error),
         }
     }
 
     fn validate_endpoint_feedback(&self, session: &Session) -> Result<(), ControlError> {
-        validate_session(session).map_err(|errors| ControlError::InvalidRequest(format_validation_errors(&errors)))?;
+        validate_session(session)
+            .map_err(|errors| ControlError::InvalidRequest(format_validation_errors(&errors)))?;
         #[cfg(windows)]
         {
             let endpoints = audiorouter_windows_audio::enumerate_active_endpoint_display_info()
-                .map_err(|error| ControlError::InvalidRequest(format!("Cannot check output feedback: {error:?}. Refresh devices and retry.")))?;
+                .map_err(|error| {
+                    ControlError::InvalidRequest(format!(
+                        "Cannot check output feedback: {error:?}. Refresh devices and retry."
+                    ))
+                })?;
             let mut returns = Vec::new();
-            for render in endpoints.iter().filter(|endpoint| endpoint.direction == audiorouter_windows_audio::EndpointDirection::Render) {
-                let Some(key) = audiorouter_windows_audio::known_virtual_cable_key(&render.device_description, &render.driver_inf_section) else { continue };
-                for capture in endpoints.iter().filter(|endpoint| endpoint.direction == audiorouter_windows_audio::EndpointDirection::Capture) {
-                    if audiorouter_windows_audio::known_virtual_cable_key(&capture.device_description, &capture.driver_inf_section).as_ref() == Some(&key) {
+            for render in endpoints.iter().filter(|endpoint| {
+                endpoint.direction == audiorouter_windows_audio::EndpointDirection::Render
+            }) {
+                let Some(key) = audiorouter_windows_audio::known_virtual_cable_key(
+                    &render.device_description,
+                    &render.driver_inf_section,
+                ) else {
+                    continue;
+                };
+                for capture in endpoints.iter().filter(|endpoint| {
+                    endpoint.direction == audiorouter_windows_audio::EndpointDirection::Capture
+                }) {
+                    if audiorouter_windows_audio::known_virtual_cable_key(
+                        &capture.device_description,
+                        &capture.driver_inf_section,
+                    )
+                    .as_ref()
+                        == Some(&key)
+                    {
                         returns.push((render.id.clone(), capture.id.clone()));
                     }
                 }
@@ -6175,15 +6348,12 @@ impl ControlPlane {
         sample_rate_hz: u32,
     ) -> Result<HashMap<String, Arc<DecodedAudio>>, ControlError> {
         let mut media = HashMap::<String, Arc<DecodedAudio>>::new();
-        for node in session
-            .nodes
-            .iter()
-            .filter(|node| {
-                node.enabled
-                    && (node.kind == NodeKind::AudioFile
-                        || (node.kind == NodeKind::FirFilter && node.parameters.contains_key("mediaId")))
-            })
-        {
+        for node in session.nodes.iter().filter(|node| {
+            node.enabled
+                && (node.kind == NodeKind::AudioFile
+                    || (node.kind == NodeKind::FirFilter
+                        && node.parameters.contains_key("mediaId")))
+        }) {
             let media_id = node
                 .parameters
                 .get("mediaId")
@@ -6398,15 +6568,15 @@ impl ControlPlane {
         self.native_endpoint_worker.is_some()
             || self.native_endpoint_worker_secondary.is_some()
             || {
-            #[cfg(windows)]
-            {
-                self.native_duplex_worker.is_some() || self.native_multi_input_worker.is_some()
+                #[cfg(windows)]
+                {
+                    self.native_duplex_worker.is_some() || self.native_multi_input_worker.is_some()
+                }
+                #[cfg(not(windows))]
+                {
+                    false
+                }
             }
-            #[cfg(not(windows))]
-            {
-                false
-            }
-        }
     }
 
     fn native_endpoint_worker_for_session(
@@ -6436,7 +6606,8 @@ impl ControlPlane {
     }
 
     fn native_endpoint_session_is_attached(&self, session_id: &EntityId) -> bool {
-        self.native_endpoint_worker_for_session(session_id).is_some()
+        self.native_endpoint_worker_for_session(session_id)
+            .is_some()
     }
 
     fn native_endpoint_worker_slot_for_session_mut(
@@ -6470,8 +6641,7 @@ impl ControlPlane {
             && {
                 #[cfg(windows)]
                 {
-                    self.native_multi_input_worker.is_none()
-                        && self.native_duplex_worker.is_none()
+                    self.native_multi_input_worker.is_none() && self.native_duplex_worker.is_none()
                 }
                 #[cfg(not(windows))]
                 {
@@ -6484,17 +6654,17 @@ impl ControlPlane {
         self.native_endpoint_session.as_ref() == Some(session_id)
             || self.native_endpoint_session_secondary.as_ref() == Some(session_id)
             || {
-            #[cfg(windows)]
-            {
-                self.native_duplex_worker_session.as_ref() == Some(session_id)
-                    || self.native_multi_input_worker_session.as_ref() == Some(session_id)
-                    || self.native_render_source_worker_session.as_ref() == Some(session_id)
+                #[cfg(windows)]
+                {
+                    self.native_duplex_worker_session.as_ref() == Some(session_id)
+                        || self.native_multi_input_worker_session.as_ref() == Some(session_id)
+                        || self.native_render_source_worker_session.as_ref() == Some(session_id)
+                }
+                #[cfg(not(windows))]
+                {
+                    false
+                }
             }
-            #[cfg(not(windows))]
-            {
-                false
-            }
-        }
     }
 
     /// Attach an already-opened, exact-binding endpoint worker to one known
@@ -6678,7 +6848,8 @@ impl ControlPlane {
                 node.bypass = false;
             }
         }
-        let media = self.session_audio_media(&session, audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ)?;
+        let media =
+            self.session_audio_media(&session, audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ)?;
         let compiled = audiorouter_engine::compile_native_paths_with_plugins_and_audio(
             &session,
             RuntimeGeneration::new(generation),
@@ -6696,7 +6867,8 @@ impl ControlPlane {
             MultiInputBindings::Ordered(list) => {
                 if source_node_ids.len() != list.len() {
                     return Err(ControlError::InvalidRequest(
-                        "source binding count does not match the prepared graph source count".into(),
+                        "source binding count does not match the prepared graph source count"
+                            .into(),
                     ));
                 }
                 list.iter().collect::<Vec<_>>()
@@ -6710,7 +6882,9 @@ impl ControlPlane {
                             .iter()
                             .find(|node| node.id == *node_id)
                             .map_or(node_id.as_str(), |node| node.name.as_str());
-                        ControlError::InvalidRequest(format!("no device or application is chosen for {name}"))
+                        ControlError::InvalidRequest(format!(
+                            "no device or application is chosen for {name}"
+                        ))
                     })
                 })
                 .collect::<Result<Vec<_>, _>>()?,
@@ -6740,7 +6914,10 @@ impl ControlPlane {
                     ControlError::InvalidRequest("source node output port is missing".into())
                 })?;
             match (node.kind, binding) {
-                (NodeKind::TestSignal | NodeKind::AudioFile, NativeMultiInputSourceBinding::Generated) => {}
+                (
+                    NodeKind::TestSignal | NodeKind::AudioFile,
+                    NativeMultiInputSourceBinding::Generated,
+                ) => {}
                 (NodeKind::NetworkReceive, NativeMultiInputSourceBinding::Network(_)) => {
                     if !(1..=audiorouter_windows_audio::MAX_NETWORK_CHANNELS).contains(&channels) {
                         return Err(ControlError::InvalidRequest(
@@ -6844,7 +7021,11 @@ impl ControlPlane {
         }
         let mut capture_clients = Vec::with_capacity(bindings.len());
         let mut application_sources = Vec::new();
-        for (binding, binaural) in bindings.iter().copied().zip(binaural_sources.iter().copied()) {
+        for (binding, binaural) in bindings
+            .iter()
+            .copied()
+            .zip(binaural_sources.iter().copied())
+        {
             match binding {
                 NativeMultiInputSourceBinding::Network(node) => capture_clients.push(
                     audiorouter_windows_audio::MultiInputCaptureSource::Network(
@@ -6853,7 +7034,9 @@ impl ControlPlane {
                 ),
                 NativeMultiInputSourceBinding::Generated => capture_clients.push(
                     audiorouter_windows_audio::MultiInputCaptureSource::Silence(
-                        audiorouter_windows_audio::SilentCapture::new(audiorouter_engine::PROCESSING_QUANTUM_FRAMES),
+                        audiorouter_windows_audio::SilentCapture::new(
+                            audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+                        ),
                     ),
                 ),
                 NativeMultiInputSourceBinding::Physical(endpoint) => {
@@ -6864,7 +7047,9 @@ impl ControlPlane {
                     // The multi-path graph runs at 48 kHz; a 44.1/96 kHz device
                     // is resampled by the Windows audio engine as it opens.
                     let _ = buffer_duration_100ns;
-                    let opened = if endpoint.direction == audiorouter_windows_audio::EndpointDirection::Render {
+                    let opened = if endpoint.direction
+                        == audiorouter_windows_audio::EndpointDirection::Render
+                    {
                         audiorouter_windows_audio::SharedCapture::open_loopback_at_rate(
                             &endpoint.id,
                             audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ,
@@ -6918,8 +7103,12 @@ impl ControlPlane {
                         Ok(application) => Some(application),
                         Err(
                             audiorouter_windows_audio::AudioError::ApplicationNotFound { .. }
-                            | audiorouter_windows_audio::AudioError::ApplicationIdentityChanged { .. }
-                            | audiorouter_windows_audio::AudioError::ApplicationRestartNotFound { .. },
+                            | audiorouter_windows_audio::AudioError::ApplicationIdentityChanged {
+                                ..
+                            }
+                            | audiorouter_windows_audio::AudioError::ApplicationRestartNotFound {
+                                ..
+                            },
                         ) if expected_executable_path.is_some() => None,
                         Err(error) => return Err(audio_control_error(error)),
                     };
@@ -6952,7 +7141,9 @@ impl ControlPlane {
                         current_executable_path: application
                             .as_ref()
                             .and_then(|application| application.executable_path.clone()),
-                        process_id: application.as_ref().map_or(0, |application| application.process_id),
+                        process_id: application
+                            .as_ref()
+                            .map_or(0, |application| application.process_id),
                         creation_time_100ns: application
                             .as_ref()
                             .and_then(|application| application.creation_time_100ns)
@@ -7094,22 +7285,47 @@ impl ControlPlane {
     }
 
     #[cfg(windows)]
-    fn write_network_summaries(&self, session_id: &EntityId, sampler: &mut network_log::Sampler, now: std::time::Instant) -> Vec<Value> {
-        let Some(worker) = self.native_multi_input_worker.as_ref() else { return Vec::new() };
-        let Ok(session) = self.get_session(session_id) else { return Vec::new() };
+    fn write_network_summaries(
+        &self,
+        session_id: &EntityId,
+        sampler: &mut network_log::Sampler,
+        now: std::time::Instant,
+    ) -> Vec<Value> {
+        let Some(worker) = self.native_multi_input_worker.as_ref() else {
+            return Vec::new();
+        };
+        let Ok(session) = self.get_session(session_id) else {
+            return Vec::new();
+        };
         let seconds_playing = sampler.seconds_playing(now);
         let parameter = |node_id: &EntityId, name: &str| {
-            session.nodes.iter().find(|node| node.id == *node_id).and_then(|node| node.parameters.get(name).cloned())
+            session
+                .nodes
+                .iter()
+                .find(|node| node.id == *node_id)
+                .and_then(|node| node.parameters.get(name).cloned())
         };
         let mut records = Vec::new();
         for (index, node_id) in worker.input_node_ids().iter().enumerate() {
-            let Some(stats) = worker.network_receive_stats(index) else { continue };
-            let expected = parameter(node_id, "sender").and_then(|value| value.as_str().map(str::to_owned)).unwrap_or_default();
-            let port = parameter(node_id, "port").and_then(|value| value.as_u64()).and_then(|port| u16::try_from(port).ok()).unwrap_or(audiorouter_domain::DEFAULT_NETWORK_AUDIO_PORT);
-            let underruns_since_last = sampler.underruns_since_last(node_id.as_str(), stats.underruns);
+            let Some(stats) = worker.network_receive_stats(index) else {
+                continue;
+            };
+            let expected = parameter(node_id, "sender")
+                .and_then(|value| value.as_str().map(str::to_owned))
+                .unwrap_or_default();
+            let port = parameter(node_id, "port")
+                .and_then(|value| value.as_u64())
+                .and_then(|port| u16::try_from(port).ok())
+                .unwrap_or(audiorouter_domain::DEFAULT_NETWORK_AUDIO_PORT);
+            let underruns_since_last =
+                sampler.underruns_since_last(node_id.as_str(), stats.underruns);
             let summary = network_log::ReceiveSummary {
                 node_id: node_id.as_str().to_owned(),
-                local_address_toward_sender: expected.parse().ok().and_then(audiorouter_windows_audio::local_address_toward).map(|address| address.to_string()),
+                local_address_toward_sender: expected
+                    .parse()
+                    .ok()
+                    .and_then(audiorouter_windows_audio::local_address_toward)
+                    .map(|address| address.to_string()),
                 expected_sender: expected,
                 port,
                 seconds_playing,
@@ -7117,7 +7333,9 @@ impl ControlPlane {
                 lost_packets: stats.lost_packets,
                 late_packets: stats.late_packets,
                 rejected_datagrams: stats.rejected_datagrams,
-                last_rejected_sender: stats.last_rejected_sender.map(|address| address.to_string()),
+                last_rejected_sender: stats
+                    .last_rejected_sender
+                    .map(|address| address.to_string()),
                 underruns: stats.underruns,
                 underruns_since_last,
                 overflow_packets: stats.overflow_packets,
@@ -7127,7 +7345,12 @@ impl ControlPlane {
             records.push((node_id.as_str().to_owned(), summary.to_record("summary")));
         }
         for (index, node_id) in worker.output_node_ids().iter().enumerate() {
-            let (Some(stats), Some(sender)) = (worker.network_send_stats(index), worker.network_sender(index)) else { continue };
+            let (Some(stats), Some(sender)) = (
+                worker.network_send_stats(index),
+                worker.network_sender(index),
+            ) else {
+                continue;
+            };
             let summary = network_log::SendSummary {
                 node_id: node_id.as_str().to_owned(),
                 destination: sender.destination().to_string(),
@@ -7179,8 +7402,8 @@ impl ControlPlane {
                 self.native_endpoint_session_secondary.clone(),
             ] {
                 if let Some((session, generation)) = running(self, &slot) {
-                    let _ =
-                        self.pump_native_endpoint_worker_with_bound_taps(&session, generation, budget);
+                    let _ = self
+                        .pump_native_endpoint_worker_with_bound_taps(&session, generation, budget);
                     serviced += 1;
                 }
             }
@@ -7270,7 +7493,9 @@ impl ControlPlane {
         }
         // Callers may know either the prepared or the live-applied
         // generation; the worker itself runs its prepared one.
-        let generation = self.native_multi_input_worker_generation.unwrap_or(generation);
+        let generation = self
+            .native_multi_input_worker_generation
+            .unwrap_or(generation);
         if self.poll_native_endpoint_lifecycle()? {
             return Err(ControlError::InvalidRequest(
                 "native multi-input worker binding was invalidated; rebind before pumping".into(),
@@ -7652,10 +7877,7 @@ impl ControlPlane {
         let matching_capture_node = session.nodes.iter().find(|node| {
             node.enabled
                 && node.kind == NodeKind::ApplicationCapture
-                && node
-                    .parameters
-                    .get("processPolicy")
-                    .and_then(Value::as_str)
+                && node.parameters.get("processPolicy").and_then(Value::as_str)
                     == Some("selectedInstance")
                 && node
                     .parameters
@@ -7815,44 +8037,41 @@ impl ControlPlane {
     }
 
     #[cfg(windows)]
-    fn application_capture_runtime_is_current(
-        &self,
-        binding: &ApplicationCaptureRuntime,
-    ) -> bool {
-        self.store.session(&binding.session_id).is_some_and(|session| {
-            session.nodes.iter().any(|node| {
-                node.id == binding.node_id
-                    && node.kind == NodeKind::ApplicationCapture
-                    && node.enabled
-                    && node.parameters.get("processPolicy").and_then(Value::as_str)
-                        == Some("selectedInstance")
-                    && node
-                        .parameters
-                        .get("executable")
-                        .and_then(Value::as_str)
-                        .is_some_and(|value| value.eq_ignore_ascii_case(&binding.executable))
-                    && node
-                        .parameters
-                        .get("executablePath")
-                        .and_then(Value::as_str)
-                        .is_some_and(|value| {
-                            binding.executable_path.as_deref().is_some_and(|expected| {
-                                value.eq_ignore_ascii_case(expected)
+    fn application_capture_runtime_is_current(&self, binding: &ApplicationCaptureRuntime) -> bool {
+        self.store
+            .session(&binding.session_id)
+            .is_some_and(|session| {
+                session.nodes.iter().any(|node| {
+                    node.id == binding.node_id
+                        && node.kind == NodeKind::ApplicationCapture
+                        && node.enabled
+                        && node.parameters.get("processPolicy").and_then(Value::as_str)
+                            == Some("selectedInstance")
+                        && node
+                            .parameters
+                            .get("executable")
+                            .and_then(Value::as_str)
+                            .is_some_and(|value| value.eq_ignore_ascii_case(&binding.executable))
+                        && node
+                            .parameters
+                            .get("executablePath")
+                            .and_then(Value::as_str)
+                            .is_some_and(|value| {
+                                binding
+                                    .executable_path
+                                    .as_deref()
+                                    .is_some_and(|expected| value.eq_ignore_ascii_case(expected))
                             })
-                        })
-                    && node
-                        .parameters
-                        .get("processId")
-                        .and_then(Value::as_u64)
-                        == Some(u64::from(binding.selected_process_id))
-                    && node
-                        .parameters
-                        .get("creationTime100ns")
-                        .and_then(Value::as_str)
-                        .and_then(|value| value.parse::<u64>().ok())
-                        == Some(binding.selected_creation_time_100ns)
+                        && node.parameters.get("processId").and_then(Value::as_u64)
+                            == Some(u64::from(binding.selected_process_id))
+                        && node
+                            .parameters
+                            .get("creationTime100ns")
+                            .and_then(Value::as_str)
+                            .and_then(|value| value.parse::<u64>().ok())
+                            == Some(binding.selected_creation_time_100ns)
+                })
             })
-        })
     }
 
     /// Observe process exit and reconnect only to a unique full-path match.
@@ -7887,12 +8106,28 @@ impl ControlPlane {
             return Ok(binding.state != "connected");
         }
         binding.next_probe_at = now + APPLICATION_CAPTURE_LIVENESS_POLL;
-        if !force_probe && matches!(binding.state, "connected" | "configured-stopped") && self.application_capture_runtime_is_current(&binding)
-            && binding.current_executable_path.as_deref().is_some_and(|path|
-                audiorouter_windows_audio::application_identity_is_current(binding.process_id, binding.creation_time_100ns, path).unwrap_or(false))
+        if !force_probe
+            && matches!(binding.state, "connected" | "configured-stopped")
+            && self.application_capture_runtime_is_current(&binding)
+            && binding
+                .current_executable_path
+                .as_deref()
+                .is_some_and(|path| {
+                    audiorouter_windows_audio::application_identity_is_current(
+                        binding.process_id,
+                        binding.creation_time_100ns,
+                        path,
+                    )
+                    .unwrap_or(false)
+                })
         {
-            self.set_application_capture_state("connected", "Connected to this application. Audio flow appears when the app produces sound.");
-            if let Some(current) = self.application_capture_runtime.as_mut() { current.next_probe_at = binding.next_probe_at; }
+            self.set_application_capture_state(
+                "connected",
+                "Connected to this application. Audio flow appears when the app produces sound.",
+            );
+            if let Some(current) = self.application_capture_runtime.as_mut() {
+                current.next_probe_at = binding.next_probe_at;
+            }
             return Ok(false);
         }
         let applications = match audiorouter_windows_audio::enumerate_applications() {
@@ -7907,7 +8142,8 @@ impl ControlPlane {
                 );
                 if let Some(current) = self.application_capture_runtime.as_mut() {
                     current.next_probe_at = now + binding.retry_delay;
-                    current.retry_delay = (binding.retry_delay * 2).min(APPLICATION_CAPTURE_RETRY_MAX);
+                    current.retry_delay =
+                        (binding.retry_delay * 2).min(APPLICATION_CAPTURE_RETRY_MAX);
                 }
                 return Ok(true);
             }
@@ -7931,12 +8167,15 @@ impl ControlPlane {
                 && application
                     .executable
                     .eq_ignore_ascii_case(&binding.executable)
-                && binding.current_executable_path.as_deref().is_some_and(|expected| {
-                    application
-                        .executable_path
-                        .as_deref()
-                        .is_some_and(|actual| actual.eq_ignore_ascii_case(expected))
-                })
+                && binding
+                    .current_executable_path
+                    .as_deref()
+                    .is_some_and(|expected| {
+                        application
+                            .executable_path
+                            .as_deref()
+                            .is_some_and(|actual| actual.eq_ignore_ascii_case(expected))
+                    })
         });
         if current_is_alive {
             self.set_application_capture_state(
@@ -7995,7 +8234,9 @@ impl ControlPlane {
                 }
                 Ok(true)
             }
-            Err(audiorouter_windows_audio::AudioError::ApplicationRestartIdentityUnavailable { .. }) => {
+            Err(audiorouter_windows_audio::AudioError::ApplicationRestartIdentityUnavailable {
+                ..
+            }) => {
                 self.set_application_capture_state(
                     "unsupported",
                     "Windows cannot verify this app identity. Choose it again from the application picker.",
@@ -8012,7 +8253,8 @@ impl ControlPlane {
                 );
                 if let Some(current) = self.application_capture_runtime.as_mut() {
                     current.next_probe_at = now + binding.retry_delay;
-                    current.retry_delay = (binding.retry_delay * 2).min(APPLICATION_CAPTURE_RETRY_MAX);
+                    current.retry_delay =
+                        (binding.retry_delay * 2).min(APPLICATION_CAPTURE_RETRY_MAX);
                 }
                 Ok(true)
             }
@@ -8049,13 +8291,13 @@ impl ControlPlane {
                             .native_endpoint_worker_for_session_mut(session_id)
                             .ok_or_else(|| "application worker is no longer attached".to_owned())
                             .and_then(|worker| {
-                                worker
-                                    .replace_process_capture(capture)
-                                    .map_err(|_| "could not replace the process capture".to_owned())?;
+                                worker.replace_process_capture(capture).map_err(|_| {
+                                    "could not replace the process capture".to_owned()
+                                })?;
                                 if !worker.is_running() {
-                                    worker
-                                        .start()
-                                        .map_err(|_| "could not restart the audio worker".to_owned())?;
+                                    worker.start().map_err(|_| {
+                                        "could not restart the audio worker".to_owned()
+                                    })?;
                                 }
                                 Ok(())
                             });
@@ -8082,7 +8324,8 @@ impl ControlPlane {
                                 );
                                 if let Some(current) = self.application_capture_runtime.as_mut() {
                                     current.next_probe_at = now + binding.retry_delay;
-                                    current.retry_delay = (binding.retry_delay * 2).min(APPLICATION_CAPTURE_RETRY_MAX);
+                                    current.retry_delay = (binding.retry_delay * 2)
+                                        .min(APPLICATION_CAPTURE_RETRY_MAX);
                                 }
                                 Ok(true)
                             }
@@ -8095,7 +8338,8 @@ impl ControlPlane {
                         );
                         if let Some(current) = self.application_capture_runtime.as_mut() {
                             current.next_probe_at = now + binding.retry_delay;
-                            current.retry_delay = (binding.retry_delay * 2).min(APPLICATION_CAPTURE_RETRY_MAX);
+                            current.retry_delay =
+                                (binding.retry_delay * 2).min(APPLICATION_CAPTURE_RETRY_MAX);
                         }
                         Ok(true)
                     }
@@ -9679,8 +9923,8 @@ impl ControlPlane {
             let worker = self
                 .native_endpoint_worker_for_session_mut(session_id)
                 .ok_or_else(|| {
-                ControlError::InvalidRequest("native endpoint worker is not attached".into())
-            })?;
+                    ControlError::InvalidRequest("native endpoint worker is not attached".into())
+                })?;
             if worker.bridge().scheduler().telemetry().active_generation
                 != Some(RuntimeGeneration::new(generation))
             {
@@ -9733,7 +9977,9 @@ impl ControlPlane {
                 }
             }
         }
-        self.audio_service.recorder_drain_micros = self.audio_service.recorder_drain_micros
+        self.audio_service.recorder_drain_micros = self
+            .audio_service
+            .recorder_drain_micros
             .saturating_add(u64::try_from(begin.elapsed().as_micros()).unwrap_or(u64::MAX));
         Ok(drained)
     }
@@ -10309,10 +10555,22 @@ impl ControlPlane {
         // output queues audio ahead of the device.
         let timing_for = |node: &audiorouter_domain::Node| -> Option<Value> {
             if let Some(index) = worker.input_node_ids().iter().position(|id| *id == node.id) {
-                return input_waits.get(index).copied().flatten().map(|wait| json!({ "delayMs": wait }));
+                return input_waits
+                    .get(index)
+                    .copied()
+                    .flatten()
+                    .map(|wait| json!({ "delayMs": wait }));
             }
-            if let Some(index) = worker.output_node_ids().iter().position(|id| *id == node.id) {
-                return output_queues.get(index).copied().flatten().map(|queue| json!({ "delayMs": queue }));
+            if let Some(index) = worker
+                .output_node_ids()
+                .iter()
+                .position(|id| *id == node.id)
+            {
+                return output_queues
+                    .get(index)
+                    .copied()
+                    .flatten()
+                    .map(|queue| json!({ "delayMs": queue }));
             }
             let timing = worker.stage_timing_for_node(&node.id)?;
             let fixed = registry
@@ -10320,7 +10578,10 @@ impl ControlPlane {
                 .find(|spec| spec.kind == node.kind)
                 .map_or(0.0, |spec| f64::from(spec.latency_samples) / rate_ms);
             let setting = if node.kind == NodeKind::Delay {
-                node.parameters.get("delayMs").and_then(Value::as_f64).unwrap_or(0.0)
+                node.parameters
+                    .get("delayMs")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(0.0)
             } else {
                 0.0
             };
@@ -10483,7 +10744,10 @@ impl ControlPlane {
                 "detach the native output fan-out before detaching the endpoint worker".into(),
             ));
         }
-        if self.runtimes.get(session_id).is_some_and(|runtime| runtime.state() == RuntimeState::Running)
+        if self
+            .runtimes
+            .get(session_id)
+            .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
         {
             return Err(ControlError::InvalidRequest(
                 "stop the session before detaching its native endpoint worker".into(),
@@ -10623,7 +10887,12 @@ impl ControlPlane {
         let active_session_id = storage
             .load_active_session_id()?
             .filter(|id| store.session(id).is_some())
-            .or_else(|| store.sessions_after(None, 1).first().map(|session| session.id.clone()));
+            .or_else(|| {
+                store
+                    .sessions_after(None, 1)
+                    .first()
+                    .map(|session| session.id.clone())
+            });
         let mut plane = Self {
             store,
             active_session_id,
@@ -10787,7 +11056,9 @@ impl ControlPlane {
             return Ok(previous);
         }
         if let Some(storage) = &self.storage {
-            storage.save_device_access_allowed(allowed).map_err(storage_error)?;
+            storage
+                .save_device_access_allowed(allowed)
+                .map_err(storage_error)?;
         }
         self.device_access_allowed = allowed;
         let result = json!({ "allowed": allowed });
@@ -10806,7 +11077,10 @@ impl ControlPlane {
     /// Approve a local folder for recordings. With `create`, a missing
     /// folder is created first; the same path policy as every recording
     /// (absolute, local, no reparse point) is enforced before it is saved.
-    fn dispatch_recording_root_set(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+    fn dispatch_recording_root_set(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
         let params = params.ok_or_else(|| {
             ControlError::InvalidRequest("root and idempotencyKey are required".into())
         })?;
@@ -10817,7 +11091,10 @@ impl ControlPlane {
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ControlError::InvalidRequest("root is required".into()))?
             .to_owned();
-        let create = params.get("create").and_then(Value::as_bool).unwrap_or(false);
+        let create = params
+            .get("create")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let idempotency_key = params
             .get("idempotencyKey")
             .and_then(Value::as_str)
@@ -10913,7 +11190,9 @@ impl ControlPlane {
     /// loaded or executed, and each add still re-verifies the binary hash).
     fn restore_plugin_inventories(&mut self) {
         let Some(storage) = &self.storage else { return };
-        let Ok(inventories) = storage.load_plugin_inventories() else { return };
+        let Ok(inventories) = storage.load_plugin_inventories() else {
+            return;
+        };
         for inventory in inventories.into_iter().take(MAX_PLUGIN_INVENTORY_ROOTS) {
             let Some(directory) = inventory
                 .get("directory")
@@ -11680,7 +11959,12 @@ impl ControlPlane {
 
     /// The stable inlet of a Recorder node, pointed at its current worker (or
     /// at nothing, in which case audio is dropped until Record is pressed).
-    fn recorder_inlet(&self, session_id: &EntityId, node_id: &EntityId, single_recorder: bool) -> Arc<dyn audiorouter_engine::AudioTap> {
+    fn recorder_inlet(
+        &self,
+        session_id: &EntityId,
+        node_id: &EntityId,
+        single_recorder: bool,
+    ) -> Arc<dyn audiorouter_engine::AudioTap> {
         let inlet = self
             .recorder_inlets
             .lock()
@@ -11688,17 +11972,36 @@ impl ControlPlane {
             .entry(node_id.clone())
             .or_default()
             .clone();
-        let target = self.recorder_node_workers.get(node_id).and_then(|worker| worker.shared_audio_tap()).or_else(|| {
-            single_recorder.then(|| self.recorder_workers.get(session_id).and_then(|worker| worker.shared_audio_tap())).flatten()
-        });
+        let target = self
+            .recorder_node_workers
+            .get(node_id)
+            .and_then(|worker| worker.shared_audio_tap())
+            .or_else(|| {
+                single_recorder
+                    .then(|| {
+                        self.recorder_workers
+                            .get(session_id)
+                            .and_then(|worker| worker.shared_audio_tap())
+                    })
+                    .flatten()
+            });
         inlet.set(target);
         inlet
     }
 
     /// Point a bound inlet at the node's current worker after attach/remove.
     fn sync_recorder_inlet(&self, node_id: &EntityId) {
-        if let Some(inlet) = self.recorder_inlets.lock().unwrap_or_else(std::sync::PoisonError::into_inner).get(node_id) {
-            inlet.set(self.recorder_node_workers.get(node_id).and_then(|worker| worker.shared_audio_tap()));
+        if let Some(inlet) = self
+            .recorder_inlets
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(node_id)
+        {
+            inlet.set(
+                self.recorder_node_workers
+                    .get(node_id)
+                    .and_then(|worker| worker.shared_audio_tap()),
+            );
         }
     }
 
@@ -11796,18 +12099,32 @@ impl ControlPlane {
     /// Start recording a Recorder node now, using its own settings (format,
     /// split). Plays and records are independent: the node's inlet is already
     /// bound, so this works while the route plays. Returns the new file path.
-    pub fn start_node_recording(&mut self, session_id: &EntityId, node_id: &EntityId) -> Result<Value, ControlError> {
+    pub fn start_node_recording(
+        &mut self,
+        session_id: &EntityId,
+        node_id: &EntityId,
+    ) -> Result<Value, ControlError> {
         let node = self
             .get_session(session_id)?
             .nodes
             .iter()
             .find(|node| node.id == *node_id && node.kind == NodeKind::Recorder && node.enabled)
             .cloned()
-            .ok_or_else(|| ControlError::InvalidRequest("enabled recorder node is not in the session".into()))?;
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("enabled recorder node is not in the session".into())
+            })?;
         let settings = recorder_node_settings(&node);
-        let state = self.recorder_node_states.get(node_id).map(RecorderController::state);
-        if matches!(state, Some(RecorderState::Recording | RecorderState::Paused)) {
-            return Ok(json!({ "sessionId": session_id, "nodeId": node_id, "state": "recording", "path": Value::Null, "alreadyRecording": true }));
+        let state = self
+            .recorder_node_states
+            .get(node_id)
+            .map(RecorderController::state);
+        if matches!(
+            state,
+            Some(RecorderState::Recording | RecorderState::Paused)
+        ) {
+            return Ok(
+                json!({ "sessionId": session_id, "nodeId": node_id, "state": "recording", "path": Value::Null, "alreadyRecording": true }),
+            );
         }
         let mut path = Value::Null;
         if !matches!(state, Some(RecorderState::Idle | RecorderState::Armed)) {
@@ -11817,7 +12134,9 @@ impl ControlPlane {
             self.recorder_node_states.remove(node_id);
             self.recorder_node_sessions.remove(node_id);
             self.recording_sequence += 1;
-            let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_millis() as u64);
+            let stamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |elapsed| elapsed.as_millis() as u64);
             let mut recorder_id = format!("{}-{stamp}", node_id.as_str());
             recorder_id.truncate(audiorouter_domain::MAX_ENTITY_ID_BYTES);
             let config = FileRecorderConfig {
@@ -11834,35 +12153,57 @@ impl ControlPlane {
                 queue_capacity: ONE_CLICK_RECORDER_QUEUE_CHUNKS,
                 maximum_chunks_per_pass: 8,
             };
-            path = json!(self.create_and_attach_configured_file_recorder_to_node(session_id.clone(), node_id.clone(), &config)?);
+            path = json!(self.create_and_attach_configured_file_recorder_to_node(
+                session_id.clone(),
+                node_id.clone(),
+                &config
+            )?);
         }
-        if self.recorder_node_states.get(node_id).map(RecorderController::state) == Some(RecorderState::Idle) {
+        if self
+            .recorder_node_states
+            .get(node_id)
+            .map(RecorderController::state)
+            == Some(RecorderState::Idle)
+        {
             self.control_recorder_node(node_id, "recorders.arm", None)?;
         }
         // Only blocks that arrive after attaching reach the file, so frame 0
         // means "from now".
         self.control_recorder_node(node_id, "recorders.start", Some(0))?;
         if settings.split_minutes > 0 {
-            self.recording_splits.insert(node_id.clone(), RecordingSplit {
-                every_frames: settings.split_minutes * 60 * 48_000,
-                started_at: None,
-                in_place: matches!(settings.format, FileRecorderFormat::Wav(_)),
-            });
+            self.recording_splits.insert(
+                node_id.clone(),
+                RecordingSplit {
+                    every_frames: settings.split_minutes * 60 * 48_000,
+                    started_at: None,
+                    in_place: matches!(settings.format, FileRecorderFormat::Wav(_)),
+                },
+            );
         } else {
             self.recording_splits.remove(node_id);
         }
-        Ok(json!({ "sessionId": session_id, "nodeId": node_id, "state": "recording", "format": settings.format_name, "path": path, "splitMinutes": settings.split_minutes }))
+        Ok(
+            json!({ "sessionId": session_id, "nodeId": node_id, "state": "recording", "format": settings.format_name, "path": path, "splitMinutes": settings.split_minutes }),
+        )
     }
 
     /// Recorders set to record automatically start with playback. A failure
     /// (no recording folder, limit reached) never blocks Play; it is reported
     /// in the start result's `autoRecording`.
-    pub(crate) fn start_auto_recordings(&mut self, session_id: &EntityId, result: &mut Value) -> Result<(), ControlError> {
+    pub(crate) fn start_auto_recordings(
+        &mut self,
+        session_id: &EntityId,
+        result: &mut Value,
+    ) -> Result<(), ControlError> {
         let automatic = self
             .get_session(session_id)?
             .nodes
             .iter()
-            .filter(|node| node.kind == NodeKind::Recorder && node.enabled && recorder_node_settings(node).auto_record)
+            .filter(|node| {
+                node.kind == NodeKind::Recorder
+                    && node.enabled
+                    && recorder_node_settings(node).auto_record
+            })
             .map(|node| node.id.clone())
             .collect::<Vec<_>>();
         if automatic.is_empty() {
@@ -11886,15 +12227,24 @@ impl ControlPlane {
     pub fn stop_node_recording(&mut self, node_id: &EntityId) -> Result<Value, ControlError> {
         self.recording_splits.remove(node_id);
         let session_id = self.recorder_node_sessions.get(node_id).cloned();
-        let state = self.recorder_node_states.get(node_id).map(RecorderController::state);
+        let state = self
+            .recorder_node_states
+            .get(node_id)
+            .map(RecorderController::state);
         match state {
             Some(RecorderState::Recording | RecorderState::Paused) => {
-                let frame = self.recorder_node_workers.get(node_id).and_then(|worker| worker.committed_end_frame()).unwrap_or(0);
+                let frame = self
+                    .recorder_node_workers
+                    .get(node_id)
+                    .and_then(|worker| worker.committed_end_frame())
+                    .unwrap_or(0);
                 self.control_recorder_node(node_id, "recorders.stop", Some(frame))
             }
-            Some(RecorderState::Stopping | RecorderState::Failed) => Err(ControlError::InvalidRequest(
-                "recorder needs recovery in the Recording tab before it can stop".into(),
-            )),
+            Some(RecorderState::Stopping | RecorderState::Failed) => {
+                Err(ControlError::InvalidRequest(
+                    "recorder needs recovery in the Recording tab before it can stop".into(),
+                ))
+            }
             _ => {
                 self.recorder_node_workers.remove(node_id);
                 self.sync_recorder_inlet(node_id);
@@ -11909,7 +12259,9 @@ impl ControlPlane {
     /// throttled; called from the backend audio service loop).
     fn maintain_node_recordings(&mut self, now: std::time::Instant) {
         if self.recording_splits.is_empty()
-            || self.recording_maintained_at.is_some_and(|at| now.saturating_duration_since(at) < std::time::Duration::from_millis(250))
+            || self.recording_maintained_at.is_some_and(|at| {
+                now.saturating_duration_since(at) < std::time::Duration::from_millis(250)
+            })
         {
             return;
         }
@@ -11921,15 +12273,20 @@ impl ControlPlane {
             .filter_map(|(node_id, split)| {
                 let end = workers.get(node_id)?.committed_end_frame()?;
                 let started = *split.started_at.get_or_insert(end);
-                (end.saturating_sub(started) >= split.every_frames).then(|| (node_id.clone(), end, split.in_place))
+                (end.saturating_sub(started) >= split.every_frames)
+                    .then(|| (node_id.clone(), end, split.in_place))
             })
             .collect::<Vec<_>>();
         for (node_id, frame, in_place) in due {
             let split = if in_place {
-                self.control_recorder_node(&node_id, "recorders.split", Some(frame)).map(|_| ())
+                self.control_recorder_node(&node_id, "recorders.split", Some(frame))
+                    .map(|_| ())
             } else {
                 match self.recorder_node_sessions.get(&node_id).cloned() {
-                    Some(session_id) => self.stop_node_recording(&node_id).and_then(|_| self.start_node_recording(&session_id, &node_id)).map(|_| ()),
+                    Some(session_id) => self
+                        .stop_node_recording(&node_id)
+                        .and_then(|_| self.start_node_recording(&session_id, &node_id))
+                        .map(|_| ()),
                     None => Ok(()),
                 }
             };
@@ -12101,7 +12458,10 @@ impl ControlPlane {
                 .iter()
                 .map(|recording| recording.frames / u64::from(recording.sample_rate.max(1)))
                 .sum::<u64>();
-            let cause = self.recorder_node_failures.remove(node_id).unwrap_or_default();
+            let cause = self
+                .recorder_node_failures
+                .remove(node_id)
+                .unwrap_or_default();
             // Without an I/O error the only way to fail mid-take is a gap in
             // the audio (found while playing or in Stop's final drain).
             let reason = if cause.contains("Io(") {
@@ -12114,7 +12474,10 @@ impl ControlPlane {
                 seconds / 60,
                 seconds % 60
             ));
-            result["paths"] = json!(finalized_recordings.iter().map(|recording| recording.path.clone()).collect::<Vec<_>>());
+            result["paths"] = json!(finalized_recordings
+                .iter()
+                .map(|recording| recording.path.clone())
+                .collect::<Vec<_>>());
         }
         self.events
             .append(session_revision, None, "recorder.changed", Some(session_id));
@@ -12217,9 +12580,10 @@ impl ControlPlane {
             ));
         }
         let (path, worker) = {
-            let policy = self.recording_policy.as_ref().ok_or_else(|| {
-                ControlError::InvalidRequest(RECORDING_ROOT_MISSING.into())
-            })?;
+            let policy = self
+                .recording_policy
+                .as_ref()
+                .ok_or_else(|| ControlError::InvalidRequest(RECORDING_ROOT_MISSING.into()))?;
             create_file_recorder_with_config(policy, config)
                 .map_err(ControlError::InvalidRequest)?
         };
@@ -12254,9 +12618,10 @@ impl ControlPlane {
             ));
         }
         let (path, worker) = {
-            let policy = self.recording_policy.as_ref().ok_or_else(|| {
-                ControlError::InvalidRequest(RECORDING_ROOT_MISSING.into())
-            })?;
+            let policy = self
+                .recording_policy
+                .as_ref()
+                .ok_or_else(|| ControlError::InvalidRequest(RECORDING_ROOT_MISSING.into()))?;
             create_file_recorder_with_config(policy, config)
                 .map_err(ControlError::InvalidRequest)?
         };
@@ -12324,7 +12689,10 @@ impl ControlPlane {
         // The copy keeps the plugins' latest settings. Shared captures are
         // never deleted while any node still restores them.
         if let Some(storage) = &self.storage {
-            for (node_id, state_id) in storage.plugin_node_states(source_id.as_str()).map_err(storage_error)? {
+            for (node_id, state_id) in storage
+                .plugin_node_states(source_id.as_str())
+                .map_err(storage_error)?
+            {
                 storage
                     .set_plugin_node_state(duplicate_id.as_str(), &node_id, &state_id)
                     .map_err(storage_error)?;
@@ -12405,8 +12773,8 @@ impl ControlPlane {
                 worker_slot.take();
             }
             if self.native_endpoint_session.as_ref() == Some(id) {
-            self.native_endpoint_session = None;
-            self.native_endpoint_taps = None;
+                self.native_endpoint_session = None;
+                self.native_endpoint_taps = None;
             } else {
                 self.native_endpoint_session_secondary = None;
                 self.native_endpoint_taps_secondary = None;
@@ -12878,9 +13246,9 @@ impl ControlPlane {
         for session_id in crashed_session_ids.clone() {
             if self.native_endpoint_session_is_attached(&session_id) {
                 if let Some(worker) = self.native_endpoint_worker_for_session_mut(&session_id) {
-                if let Err(error) = worker.stop() {
-                    native_recovery_error = Some(audio_control_error(error));
-                }
+                    if let Err(error) = worker.stop() {
+                        native_recovery_error = Some(audio_control_error(error));
+                    }
                 }
                 let _ = self.detach_native_endpoint_worker_for_session(&session_id);
             }
@@ -13171,7 +13539,8 @@ impl ControlPlane {
         {
             return "running";
         }
-        if self.native_endpoint_worker.is_some() || self.native_endpoint_worker_secondary.is_some() {
+        if self.native_endpoint_worker.is_some() || self.native_endpoint_worker_secondary.is_some()
+        {
             return "configured-stopped";
         }
         #[cfg(windows)]
@@ -13190,7 +13559,8 @@ impl ControlPlane {
     }
 
     fn native_session_id(&self) -> Option<&EntityId> {
-        if self.native_endpoint_worker.is_some() || self.native_endpoint_worker_secondary.is_some() {
+        if self.native_endpoint_worker.is_some() || self.native_endpoint_worker_secondary.is_some()
+        {
             return self
                 .native_endpoint_session
                 .as_ref()
@@ -13229,14 +13599,35 @@ impl ControlPlane {
         }
         // Routine liveness must not enumerate every process on the thread
         // that services WASAPI. Scan only when a bound source needs recovery.
-        let all_current = !force && self.multi_input_application_sources.iter().filter(|source| due(source)).all(|source| {
-            matches!(source.state, "connected" | "configured-stopped")
-                && self.native_multi_input_worker.as_ref().is_some_and(|worker| !worker.capture_is_silent(source.input_index))
-                && source.current_executable_path.as_deref().is_some_and(|path|
-                    audiorouter_windows_audio::application_identity_is_current(source.process_id, source.creation_time_100ns, path).unwrap_or(false))
-        });
+        let all_current = !force
+            && self
+                .multi_input_application_sources
+                .iter()
+                .filter(|source| due(source))
+                .all(|source| {
+                    matches!(source.state, "connected" | "configured-stopped")
+                        && self
+                            .native_multi_input_worker
+                            .as_ref()
+                            .is_some_and(|worker| !worker.capture_is_silent(source.input_index))
+                        && source
+                            .current_executable_path
+                            .as_deref()
+                            .is_some_and(|path| {
+                                audiorouter_windows_audio::application_identity_is_current(
+                                    source.process_id,
+                                    source.creation_time_100ns,
+                                    path,
+                                )
+                                .unwrap_or(false)
+                            })
+                });
         if all_current {
-            for source in self.multi_input_application_sources.iter_mut().filter(|source| due(source)) {
+            for source in self
+                .multi_input_application_sources
+                .iter_mut()
+                .filter(|source| due(source))
+            {
                 source.state = "connected";
                 source.detail = "Connected to this application. Audio flow appears when the app produces sound.";
                 source.next_probe_at = now + APPLICATION_CAPTURE_LIVENESS_POLL;
@@ -13247,11 +13638,17 @@ impl ControlPlane {
         let applications = match audiorouter_windows_audio::enumerate_applications() {
             Ok(applications) => applications,
             Err(_) => {
-                for source in self.multi_input_application_sources.iter_mut().filter(|source| due(source)) {
+                for source in self
+                    .multi_input_application_sources
+                    .iter_mut()
+                    .filter(|source| due(source))
+                {
                     source.state = "failed";
-                    source.detail = "Windows could not check this application. AudioRouter will retry.";
+                    source.detail =
+                        "Windows could not check this application. AudioRouter will retry.";
                     source.next_probe_at = now + source.retry_delay;
-                    source.retry_delay = (source.retry_delay * 2).min(APPLICATION_CAPTURE_RETRY_MAX);
+                    source.retry_delay =
+                        (source.retry_delay * 2).min(APPLICATION_CAPTURE_RETRY_MAX);
                 }
                 return false;
             }
@@ -13261,7 +13658,15 @@ impl ControlPlane {
             if !due(&self.multi_input_application_sources[index]) {
                 continue;
             }
-            let (input_index, executable, executable_path, current_path, process_id, creation_time, mode) = {
+            let (
+                input_index,
+                executable,
+                executable_path,
+                current_path,
+                process_id,
+                creation_time,
+                mode,
+            ) = {
                 let source = &self.multi_input_application_sources[index];
                 (
                     source.input_index,
@@ -13288,12 +13693,13 @@ impl ControlPlane {
                             .is_some_and(|actual| actual.eq_ignore_ascii_case(expected))
                     })
             });
-            let update = |sources: &mut Vec<MultiInputApplicationSource>, state, detail, delay: Duration| {
-                let source = &mut sources[index];
-                source.state = state;
-                source.detail = detail;
-                source.next_probe_at = now + delay;
-            };
+            let update =
+                |sources: &mut Vec<MultiInputApplicationSource>, state, detail, delay: Duration| {
+                    let source = &mut sources[index];
+                    source.state = state;
+                    source.detail = detail;
+                    source.next_probe_at = now + delay;
+                };
             if alive && !silent {
                 update(
                     &mut self.multi_input_application_sources,
@@ -13301,12 +13707,15 @@ impl ControlPlane {
                     "Connected to this application. Audio flow appears when the app produces sound.",
                     APPLICATION_CAPTURE_LIVENESS_POLL,
                 );
-                self.multi_input_application_sources[index].retry_delay = APPLICATION_CAPTURE_RETRY_MIN;
+                self.multi_input_application_sources[index].retry_delay =
+                    APPLICATION_CAPTURE_RETRY_MIN;
                 continue;
             }
             if !silent {
                 let silence = audiorouter_windows_audio::MultiInputCaptureSource::Silence(
-                    audiorouter_windows_audio::SilentCapture::new(audiorouter_engine::PROCESSING_QUANTUM_FRAMES),
+                    audiorouter_windows_audio::SilentCapture::new(
+                        audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+                    ),
                 );
                 if worker.replace_capture(input_index, silence).is_ok() {
                     changed = true;
@@ -13422,16 +13831,39 @@ impl ControlPlane {
         }
         let session = self.get_session(session_id)?.clone();
         let mut changed = 0;
-        for node in session.nodes.iter().filter(|node| matches!(node.kind, NodeKind::NetworkSend | NodeKind::NetworkReceive)) {
-            let Some(old) = previous.nodes.iter().find(|old| old.id == node.id) else { continue };
+        for node in session
+            .nodes
+            .iter()
+            .filter(|node| matches!(node.kind, NodeKind::NetworkSend | NodeKind::NetworkReceive))
+        {
+            let Some(old) = previous.nodes.iter().find(|old| old.id == node.id) else {
+                continue;
+            };
             if old.parameters == node.parameters {
                 continue;
             }
-            let Some(worker) = self.native_multi_input_worker.as_mut() else { break };
+            let Some(worker) = self.native_multi_input_worker.as_mut() else {
+                break;
+            };
             if node.kind == NodeKind::NetworkSend {
-                let Some(index) = worker.output_node_ids().iter().position(|id| *id == node.id) else { continue };
-                let host = node.parameters.get("host").and_then(Value::as_str).unwrap_or("");
-                let port = node.parameters.get("port").and_then(Value::as_u64).and_then(|port| u16::try_from(port).ok()).unwrap_or(audiorouter_domain::DEFAULT_NETWORK_AUDIO_PORT);
+                let Some(index) = worker
+                    .output_node_ids()
+                    .iter()
+                    .position(|id| *id == node.id)
+                else {
+                    continue;
+                };
+                let host = node
+                    .parameters
+                    .get("host")
+                    .and_then(Value::as_str)
+                    .unwrap_or("");
+                let port = node
+                    .parameters
+                    .get("port")
+                    .and_then(Value::as_u64)
+                    .and_then(|port| u16::try_from(port).ok())
+                    .unwrap_or(audiorouter_domain::DEFAULT_NETWORK_AUDIO_PORT);
                 let destination = audiorouter_windows_audio::network_socket_address(host, port).ok_or_else(|| {
                     ControlError::InvalidRequest(format!("enter the IP address of the receiving computer for {} in its Properties", node.name))
                 })?;
@@ -13441,17 +13873,39 @@ impl ControlPlane {
                 }
                 continue;
             }
-            let Some(index) = worker.input_node_ids().iter().position(|id| *id == node.id) else { continue };
-            let sender = node.parameters.get("sender").and_then(Value::as_str).and_then(|address| address.parse::<std::net::IpAddr>().ok());
-            let buffer_ms = node.parameters.get("bufferMs").and_then(Value::as_f64).unwrap_or(audiorouter_domain::DEFAULT_NETWORK_BUFFER_MS);
+            let Some(index) = worker.input_node_ids().iter().position(|id| *id == node.id) else {
+                continue;
+            };
+            let sender = node
+                .parameters
+                .get("sender")
+                .and_then(Value::as_str)
+                .and_then(|address| address.parse::<std::net::IpAddr>().ok());
+            let buffer_ms = node
+                .parameters
+                .get("bufferMs")
+                .and_then(Value::as_f64)
+                .unwrap_or(audiorouter_domain::DEFAULT_NETWORK_BUFFER_MS);
             let port_changed = old.parameters.get("port") != node.parameters.get("port");
             let in_place = !port_changed
-                && sender.is_some_and(|sender| worker.network_receiver(index).is_some_and(|receiver| receiver.reconfigure(sender, buffer_ms)));
+                && sender.is_some_and(|sender| {
+                    worker
+                        .network_receiver(index)
+                        .is_some_and(|receiver| receiver.reconfigure(sender, buffer_ms))
+                });
             if !in_place {
                 let receiver = start_network_receiver(node)?;
                 worker
-                    .replace_capture(index, audiorouter_windows_audio::MultiInputCaptureSource::Network(receiver))
-                    .map_err(|error| ControlError::InvalidRequest(format!("{} could not switch to its new settings: {error:?}", node.name)))?;
+                    .replace_capture(
+                        index,
+                        audiorouter_windows_audio::MultiInputCaptureSource::Network(receiver),
+                    )
+                    .map_err(|error| {
+                        ControlError::InvalidRequest(format!(
+                            "{} could not switch to its new settings: {error:?}",
+                            node.name
+                        ))
+                    })?;
             }
             changed += 1;
         }
@@ -13484,7 +13938,10 @@ impl ControlPlane {
             && self.native_multi_input_worker.is_some()
         {
             // The surround renderer is chosen when the capture opens.
-            let worker = self.native_multi_input_worker.as_ref().expect("attached above");
+            let worker = self
+                .native_multi_input_worker
+                .as_ref()
+                .expect("attached above");
             let current = self.get_session(session_id)?;
             for (index, node_id) in worker.input_node_ids().iter().enumerate() {
                 if current.nodes.iter().any(|node| {
@@ -13506,8 +13963,15 @@ impl ControlPlane {
             let plugin_stages = if flags_only {
                 let mut stages: HashMap<EntityId, Arc<dyn RealtimePluginProcessor>> =
                     HashMap::new();
-                let worker = self.native_multi_input_worker.as_ref().expect("attached above");
-                normalize_live_path_flags(&mut session, worker.input_node_ids(), worker.output_node_ids());
+                let worker = self
+                    .native_multi_input_worker
+                    .as_ref()
+                    .expect("attached above");
+                normalize_live_path_flags(
+                    &mut session,
+                    worker.input_node_ids(),
+                    worker.output_node_ids(),
+                );
                 session = audiorouter_engine::prune_inactive_upstream(&session).into_owned();
                 for node in session
                     .nodes
@@ -13539,14 +14003,17 @@ impl ControlPlane {
                 &plugin_stages,
                 &media,
             )
-            .map_err(|error| ControlError::InvalidRequest(format!("multi-input graph rejected: {error:?}")))?;
+            .map_err(|error| {
+                ControlError::InvalidRequest(format!("multi-input graph rejected: {error:?}"))
+            })?;
             self.native_multi_input_worker
                 .as_mut()
                 .expect("attached above")
                 .replace_path_set(compiled)
                 .map_err(|_| {
                     ControlError::InvalidRequest(
-                        "the route's sources or outputs changed; stop and press Play to apply".into(),
+                        "the route's sources or outputs changed; stop and press Play to apply"
+                            .into(),
                     )
                 })?;
             for (bridge, active) in bridge_flags {
@@ -13591,7 +14058,10 @@ impl ControlPlane {
             self.detach_native_multi_input_worker()?;
             self.dispatch_native_paths_prepare(Some(json!({ "sessionId": session_id.as_str() })))?;
             let started = self.session_start(session_id)?;
-            Ok(started.get("generation").and_then(Value::as_u64).unwrap_or(generation))
+            Ok(started
+                .get("generation")
+                .and_then(Value::as_u64)
+                .unwrap_or(generation))
         })())
     }
 
@@ -13609,7 +14079,10 @@ impl ControlPlane {
     fn refresh_siege_round_feed(&mut self) {
         let wanted = self.runtimes.iter().any(|(session_id, runtime)| {
             runtime.state() == RuntimeState::Running
-                && self.store.session(session_id).is_some_and(audiorouter_engine::session_follows_game_round)
+                && self
+                    .store
+                    .session(session_id)
+                    .is_some_and(audiorouter_engine::session_follows_game_round)
         });
         self.siege_round_feed.set_wanted(wanted);
     }
@@ -13634,8 +14107,12 @@ impl ControlPlane {
     /// multi-input Mixer, exactly as the single-route compiler does.
     #[cfg(windows)]
     fn register_multi_input_generators(&mut self, session_id: &EntityId) {
-        let Some(session) = self.store.session(session_id).cloned() else { return };
-        let Some(worker) = self.native_multi_input_worker.as_ref() else { return };
+        let Some(session) = self.store.session(session_id).cloned() else {
+            return;
+        };
+        let Some(worker) = self.native_multi_input_worker.as_ref() else {
+            return;
+        };
         let mut test_signals = Vec::new();
         let mut audio_files = Vec::new();
         for node in &session.nodes {
@@ -13649,13 +14126,17 @@ impl ControlPlane {
                 }
             }
         }
-        self.test_signal_sources.retain(|(owner, _), _| owner != session_id);
-        self.audio_file_sources.retain(|(owner, _), _| owner != session_id);
+        self.test_signal_sources
+            .retain(|(owner, _), _| owner != session_id);
+        self.audio_file_sources
+            .retain(|(owner, _), _| owner != session_id);
         for (node_id, source) in test_signals {
-            self.test_signal_sources.insert((session_id.clone(), node_id), source);
+            self.test_signal_sources
+                .insert((session_id.clone(), node_id), source);
         }
         for (node_id, source) in audio_files {
-            self.audio_file_sources.insert((session_id.clone(), node_id), source);
+            self.audio_file_sources
+                .insert((session_id.clone(), node_id), source);
         }
     }
 
@@ -13669,14 +14150,15 @@ impl ControlPlane {
         session_id: &EntityId,
     ) -> Result<u64, ControlError> {
         match params.get("generation") {
-            Some(value) => value
-                .as_u64()
-                .filter(|value| *value > 0)
-                .ok_or_else(|| ControlError::InvalidRequest("generation must be a positive integer".into())),
+            Some(value) => value.as_u64().filter(|value| *value > 0).ok_or_else(|| {
+                ControlError::InvalidRequest("generation must be a positive integer".into())
+            }),
             None => match self.runtimes.get(session_id) {
-                Some(runtime) if runtime.state() == RuntimeState::Running => Err(ControlError::InvalidRequest(
-                    "stop the session before preparing native audio for its next start".into(),
-                )),
+                Some(runtime) if runtime.state() == RuntimeState::Running => {
+                    Err(ControlError::InvalidRequest(
+                        "stop the session before preparing native audio for its next start".into(),
+                    ))
+                }
                 Some(runtime) => Ok(runtime.generation().saturating_add(1)),
                 None => Ok(1),
             },
@@ -13691,7 +14173,8 @@ impl ControlPlane {
         {
             return Some("process-loopback");
         }
-        if self.native_endpoint_worker.is_some() || self.native_endpoint_worker_secondary.is_some() {
+        if self.native_endpoint_worker.is_some() || self.native_endpoint_worker_secondary.is_some()
+        {
             return Some("endpoint");
         }
         #[cfg(windows)]
@@ -13883,7 +14366,11 @@ impl ControlPlane {
         }
         let sessions = by_id.into_values().take(limit).collect::<Vec<_>>();
         let next_cursor = (sessions.len() == limit)
-            .then(|| sessions.last().map(|session| session.id.as_str().to_owned()))
+            .then(|| {
+                sessions
+                    .last()
+                    .map(|session| session.id.as_str().to_owned())
+            })
             .flatten();
         Ok(json!({ "items": sessions, "nextCursor": next_cursor }))
     }
@@ -14065,7 +14552,12 @@ impl ControlPlane {
             let latest = self
                 .storage
                 .as_ref()
-                .and_then(|storage| storage.plugin_node_state(session.id.as_str(), node.id.as_str()).ok().flatten())
+                .and_then(|storage| {
+                    storage
+                        .plugin_node_state(session.id.as_str(), node.id.as_str())
+                        .ok()
+                        .flatten()
+                })
                 .and_then(|id| self.load_plugin_state_asset(&id, fingerprint).ok());
             let state = match latest {
                 Some(state) => Some(state),
@@ -14215,8 +14707,16 @@ impl ControlPlane {
         self.plugin_bridges
             .lock()
             .ok()
-            .and_then(|bridges| bridges.get(&(session_id.clone(), node_id.clone())).and_then(std::sync::Weak::upgrade))
-            .ok_or_else(|| ControlError::InvalidRequest("the plugin is available while its route is playing".into()))
+            .and_then(|bridges| {
+                bridges
+                    .get(&(session_id.clone(), node_id.clone()))
+                    .and_then(std::sync::Weak::upgrade)
+            })
+            .ok_or_else(|| {
+                ControlError::InvalidRequest(
+                    "the plugin is available while its route is playing".into(),
+                )
+            })
     }
 
     /// Read and verify a stored plugin state for the plugin binary it was
@@ -14226,20 +14726,22 @@ impl ControlPlane {
         state_id: &str,
         plugin_sha256: &str,
     ) -> Result<audiorouter_plugin_host::PluginStateAsset, ControlError> {
-        let storage = self
-            .storage
-            .as_ref()
-            .ok_or_else(|| ControlError::InvalidRequest("plugin state storage is unavailable".into()))?;
-        let root = storage
-            .plugin_state_directory()
-            .ok_or_else(|| ControlError::InvalidRequest("plugin state storage is unavailable".into()))?;
+        let storage = self.storage.as_ref().ok_or_else(|| {
+            ControlError::InvalidRequest("plugin state storage is unavailable".into())
+        })?;
+        let root = storage.plugin_state_directory().ok_or_else(|| {
+            ControlError::InvalidRequest("plugin state storage is unavailable".into())
+        })?;
         let record = storage
             .list_plugin_states(Some(plugin_sha256))
             .map_err(storage_error)?
             .into_iter()
             .find(|record| record.id == state_id)
             .ok_or_else(|| {
-                ControlError::InvalidRequest("the saved plugin state is missing or belongs to a different plugin binary".into())
+                ControlError::InvalidRequest(
+                    "the saved plugin state is missing or belongs to a different plugin binary"
+                        .into(),
+                )
             })?;
         audiorouter_plugin_host::read_state_asset(
             &root,
@@ -14247,7 +14749,9 @@ impl ControlPlane {
             record.version,
             &record.state_sha256,
         )
-        .map_err(|error| ControlError::InvalidRequest(format!("saved plugin state is unreadable: {error:?}")))
+        .map_err(|error| {
+            ControlError::InvalidRequest(format!("saved plugin state is unreadable: {error:?}"))
+        })
     }
 
     pub fn commit_graph(
@@ -14416,17 +14920,17 @@ impl ControlPlane {
             // not be reported as applied.
             #[cfg(windows)]
             let network = match checkpoint.session(&result.session_id).cloned() {
-                Some(previous) => self.reconfigure_running_network_nodes(&result.session_id, &previous).map(|_| ()),
+                Some(previous) => self
+                    .reconfigure_running_network_nodes(&result.session_id, &previous)
+                    .map(|_| ()),
                 None => Ok(()),
             };
             #[cfg(not(windows))]
             let network: Result<(), ControlError> = Ok(());
             let mut generation = generation;
-            let native = match network.and_then(|()| self.republish_running_native_graph(
-                &result.session_id,
-                generation,
-                flags_only,
-            )) {
+            let native = match network.and_then(|()| {
+                self.republish_running_native_graph(&result.session_id, generation, flags_only)
+            }) {
                 Ok(Some(adapter)) => json!({ "state": "applied", "adapter": adapter }),
                 Ok(None) => Value::Null,
                 Err(error) => {
@@ -14444,7 +14948,9 @@ impl ControlPlane {
                     }
                 }
             };
-            let still_running = self.runtimes.get(&result.session_id)
+            let still_running = self
+                .runtimes
+                .get(&result.session_id)
                 .is_some_and(|runtime| runtime.state() == RuntimeState::Running);
             response["activation"] = json!({
                 "state": if still_running { "running" } else { "stopped" },
@@ -14773,7 +15279,9 @@ impl ControlPlane {
             .get_session(id)?
             .nodes
             .iter()
-            .filter(|node| node.kind == NodeKind::Recorder && self.recorder_node_workers.contains_key(&node.id))
+            .filter(|node| {
+                node.kind == NodeKind::Recorder && self.recorder_node_workers.contains_key(&node.id)
+            })
             .map(|node| node.id.clone())
             .collect::<Vec<_>>();
         for node_id in recorder_node_ids {
@@ -14877,18 +15385,17 @@ impl ControlPlane {
         // the exact bound worker before retiring the runtime generation; even
         // a worker stop error must not leave an audio client running against
         // a session that is reported stopped.
-        let native_attached = self.native_endpoint_session_is_attached(id)
-            || {
-                #[cfg(windows)]
-                {
-                    self.native_multi_input_worker_session.as_ref() == Some(id)
-                        && self.native_multi_input_worker.is_some()
-                }
-                #[cfg(not(windows))]
-                {
-                    false
-                }
-            };
+        let native_attached = self.native_endpoint_session_is_attached(id) || {
+            #[cfg(windows)]
+            {
+                self.native_multi_input_worker_session.as_ref() == Some(id)
+                    && self.native_multi_input_worker.is_some()
+            }
+            #[cfg(not(windows))]
+            {
+                false
+            }
+        };
         let native_stop_error = if self.native_endpoint_session_is_attached(id) {
             self.native_endpoint_worker_for_session_mut(id)
                 .map(audiorouter_windows_audio::NativeAudioWorker::stop)
@@ -15111,7 +15618,11 @@ impl ControlPlane {
                     "recorders.startRecording" | "recorders.stopRecording" => {
                         self.dispatch_one_click_recording(request.method.as_str(), request.params)
                     }
-                    method if simple::SIMPLE_METHODS.iter().any(|(name, _)| *name == method) => {
+                    method
+                        if simple::SIMPLE_METHODS
+                            .iter()
+                            .any(|(name, _)| *name == method) =>
+                    {
                         self.dispatch_simple(method, request.params)
                     }
                     "devices.getAccess" => Ok(json!({ "allowed": self.device_access_allowed })),
@@ -15172,7 +15683,9 @@ impl ControlPlane {
                     }
                     "plugins.scan" => self.dispatch_plugins_scan(request.params),
                     "plugins.list" => self.dispatch_plugins_list(request.params),
-                    "plugins.inventory" => Ok(json!({ "inventories": self.remembered_plugin_inventories() })),
+                    "plugins.inventory" => {
+                        Ok(json!({ "inventories": self.remembered_plugin_inventories() }))
+                    }
                     "plugins.retry" => self.dispatch_plugins_retry(request.params),
                     "plugins.inspect" => self.dispatch_plugins_inspect(request.params),
                     "plugins.parameters" => self.dispatch_plugins_parameters(request.params),
@@ -15329,9 +15842,12 @@ impl ControlPlane {
                 .filter(|client| !client.is_empty())
                 .map(str::to_owned),
         );
-        let previous_restart = self.active_device_restart_allowed.replace(
-            caller_can_restart_devices(grant, self.device_access_allowed),
-        );
+        let previous_restart =
+            self.active_device_restart_allowed
+                .replace(caller_can_restart_devices(
+                    grant,
+                    self.device_access_allowed,
+                ));
         let response = self.dispatch(request);
         self.active_device_restart_allowed = previous_restart;
         self.active_idempotency_scope = previous_scope;
@@ -15543,34 +16059,56 @@ impl ControlPlane {
         let params = params.ok_or_else(|| {
             ControlError::InvalidRequest("graph.commit params are required".into())
         })?;
-        let warning_plan_id: EntityId = serde_json::from_value(params.get("planId").cloned().unwrap_or(Value::Null))
-            .map_err(|_| ControlError::InvalidRequest("invalid planId".into()))?;
+        let warning_plan_id: EntityId =
+            serde_json::from_value(params.get("planId").cloned().unwrap_or(Value::Null))
+                .map_err(|_| ControlError::InvalidRequest("invalid planId".into()))?;
         let candidate = match self.store.plan_candidate(&warning_plan_id) {
             Some(candidate) => Some(candidate.clone()),
             None => match self.storage.as_ref() {
-                Some(storage) => storage.load_graph_plan(warning_plan_id.as_str()).map_err(storage_error)?.map(|plan| plan.candidate),
+                Some(storage) => storage
+                    .load_graph_plan(warning_plan_id.as_str())
+                    .map_err(storage_error)?
+                    .map(|plan| plan.candidate),
                 None => None,
             },
         };
-        let expected_warnings = candidate.as_ref().map(|candidate| self.endpoint_feedback_warnings(candidate)).transpose()?.unwrap_or_default();
+        let expected_warnings = candidate
+            .as_ref()
+            .map(|candidate| self.endpoint_feedback_warnings(candidate))
+            .transpose()?
+            .unwrap_or_default();
         let supplied = params.get("acknowledgments").and_then(Value::as_array);
-        if expected_warnings.iter().any(|warning| !supplied.is_some_and(|items| items.iter().any(|item| item.as_str() == Some(warning)))) {
+        if expected_warnings.iter().any(|warning| {
+            !supplied.is_some_and(|items| items.iter().any(|item| item.as_str() == Some(warning)))
+        }) {
             return Err(ControlError::InvalidRequest("Review and acknowledge this plan's audio feedback warning before saving. Playback will remain blocked.".into()));
         }
-        if let Some(acknowledgments) = params.get("acknowledgments").filter(|value| !value.is_null()) {
+        if let Some(acknowledgments) = params
+            .get("acknowledgments")
+            .filter(|value| !value.is_null())
+        {
             let acknowledgments = acknowledgments.as_array().ok_or_else(|| {
                 ControlError::InvalidRequest("acknowledgments must be an array or null".into())
             })?;
-            if acknowledgments.len() > 100 || acknowledgments.iter().any(|value| match value.as_str() {
-                Some(value) => value.is_empty() || value.len() > 2048,
-                None => true,
-            }) {
+            if acknowledgments.len() > 100
+                || acknowledgments.iter().any(|value| match value.as_str() {
+                    Some(value) => value.is_empty() || value.len() > 2048,
+                    None => true,
+                })
+            {
                 return Err(ControlError::InvalidRequest(
                     "acknowledgments must contain non-empty warning IDs".into(),
                 ));
             }
-            if acknowledgments.iter().any(|value| !expected_warnings.iter().any(|warning| value.as_str() == Some(warning))
-                && !(candidate.is_none() && value.as_str().is_some_and(|warning| warning.starts_with("Audio feedback loop:")))) {
+            if acknowledgments.iter().any(|value| {
+                !expected_warnings
+                    .iter()
+                    .any(|warning| value.as_str() == Some(warning))
+                    && (candidate.is_some()
+                        || !value
+                            .as_str()
+                            .is_some_and(|warning| warning.starts_with("Audio feedback loop:")))
+            }) {
                 return Err(ControlError::InvalidRequest(
                     "no warnings on this plan require acknowledgment".into(),
                 ));
@@ -15597,17 +16135,31 @@ impl ControlPlane {
 
     fn dispatch_meter_reset(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let id = session_id_from_params(params.clone())?;
-        let node_id = params.as_ref()
+        let node_id = params
+            .as_ref()
             .and_then(|p| p["nodeId"].as_str())
             .filter(|s| !s.is_empty())
             .map(EntityId::new)
             .ok_or_else(|| ControlError::InvalidRequest("nodeId is required".into()))?;
         self.ensure_session_loaded(&id)?;
-        if !self.get_session(&id)?.nodes.iter().any(|n| n.id == node_id && n.kind == NodeKind::Meter) {
-            return Err(ControlError::InvalidRequest("Choose an existing Meter node in this session".into()));
+        if !self
+            .get_session(&id)?
+            .nodes
+            .iter()
+            .any(|n| n.id == node_id && n.kind == NodeKind::Meter)
+        {
+            return Err(ControlError::InvalidRequest(
+                "Choose an existing Meter node in this session".into(),
+            ));
         }
-        let mut reset = self.native_endpoint_worker_for_session(&id)
-            .is_some_and(|w| w.bridge().scheduler().processor().reset_meter_for_node(&node_id));
+        let mut reset = self
+            .native_endpoint_worker_for_session(&id)
+            .is_some_and(|w| {
+                w.bridge()
+                    .scheduler()
+                    .processor()
+                    .reset_meter_for_node(&node_id)
+            });
         #[cfg(windows)]
         if self.native_multi_input_worker_session.as_ref() == Some(&id) {
             if let Some(worker) = self.native_multi_input_worker.as_ref() {
@@ -15615,7 +16167,9 @@ impl ControlPlane {
             }
         }
         if !reset {
-            return Err(ControlError::InvalidRequest("Meter is not prepared; press Play before resetting readings".into()));
+            return Err(ControlError::InvalidRequest(
+                "Meter is not prepared; press Play before resetting readings".into(),
+            ));
         }
         Ok(json!({"sessionId":id,"nodeId":node_id,"reset":true}))
     }
@@ -15635,10 +16189,14 @@ impl ControlPlane {
             .cloned()
             .map(serde_json::from_value::<Session>)
             .transpose()
-            .map_err(|error| ControlError::InvalidRequest(format!("invalid preview candidate: {error}")))?;
+            .map_err(|error| {
+                ControlError::InvalidRequest(format!("invalid preview candidate: {error}"))
+            })?;
         let operation = (
             self.scoped_idempotency_key("sessions.start", idempotency_key),
-            Self::request_hash(&json!({ "sessionId": id, "action": "start", "candidate": candidate })),
+            Self::request_hash(
+                &json!({ "sessionId": id, "action": "start", "candidate": candidate }),
+            ),
         );
         if let Some(previous) = self.lookup_idempotent_result(&operation.0, &operation.1)? {
             return Ok(previous);
@@ -15671,7 +16229,10 @@ impl ControlPlane {
 
     /// Write the saved session, with the imported audio and plugin states it
     /// references, to one `.audiorouter` file (never overwriting).
-    fn dispatch_session_export_file(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+    fn dispatch_session_export_file(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
         let id = session_id_from_params(params.clone())?;
         let path = session_file_path(params.as_ref())?;
         self.ensure_session_loaded(&id)?;
@@ -15711,16 +16272,23 @@ impl ControlPlane {
             storage.export_bundle(&id, &path).map_err(storage_error)?;
         }
         let bytes = std::fs::metadata(&path).map(|meta| meta.len()).unwrap_or(0);
-        Ok(json!({ "sessionId": id, "path": path.to_string_lossy(), "revision": revision, "bytes": bytes }))
+        Ok(
+            json!({ "sessionId": id, "path": path.to_string_lossy(), "revision": revision, "bytes": bytes }),
+        )
     }
 
     /// Read a `.audiorouter` file into a new stopped session. A session ID
     /// already used here gets a fresh ID and an "(imported)" name, so an
     /// import never replaces an existing session.
-    fn dispatch_session_import_file(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+    fn dispatch_session_import_file(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
         let path = session_file_path(params.as_ref())?;
         if !path.is_file() {
-            return Err(ControlError::InvalidRequest("the session file does not exist".into()));
+            return Err(ControlError::InvalidRequest(
+                "the session file does not exist".into(),
+            ));
         }
         let staging = std::env::temp_dir().join("audiorouter-session-import");
         let (mut session, report) = self
@@ -15745,7 +16313,9 @@ impl ControlPlane {
                 }
                 suffix += 1;
                 if suffix > 999 {
-                    return Err(ControlError::InvalidRequest("too many imported copies of this session".into()));
+                    return Err(ControlError::InvalidRequest(
+                        "too many imported copies of this session".into(),
+                    ));
                 }
             };
             session.id = fresh;
@@ -16006,15 +16576,20 @@ impl ControlPlane {
         json!({ "sessionId": session_id })
     }
 
-    fn dispatch_active_session_set(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
-        let params = params.ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+    fn dispatch_active_session_set(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params =
+            params.ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
         let key = params
             .get("idempotencyKey")
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
-        let session_id: EntityId = serde_json::from_value(params.get("sessionId").cloned().unwrap_or(Value::Null))
-            .map_err(|_| ControlError::InvalidRequest("invalid sessionId".into()))?;
+        let session_id: EntityId =
+            serde_json::from_value(params.get("sessionId").cloned().unwrap_or(Value::Null))
+                .map_err(|_| ControlError::InvalidRequest("invalid sessionId".into()))?;
         let request = json!({ "sessionId": session_id });
         let key = self.scoped_idempotency_key("sessions.active.set", key);
         let hash = Self::request_hash(&request);
@@ -16027,10 +16602,13 @@ impl ControlPlane {
             .ok_or_else(|| ControlError::from(audiorouter_domain::StoreError::SessionNotFound))?;
         if self.active_session_id.as_ref() != Some(&session_id) {
             if let Some(storage) = self.storage.as_ref() {
-                storage.save_active_session_id(&session_id).map_err(storage_error)?;
+                storage
+                    .save_active_session_id(&session_id)
+                    .map_err(storage_error)?;
             }
             self.active_session_id = Some(session_id.clone());
-            self.events.append(session.revision, None, "session.selectionChanged", None);
+            self.events
+                .append(session.revision, None, "session.selectionChanged", None);
         }
         let result = json!({ "sessionId": session_id.as_str() });
         self.journal_idempotent_result(&key, "sessions.active.set", &hash, &result)?;
@@ -16349,8 +16927,14 @@ impl ControlPlane {
 
     /// One-click Record / Stop for a Recorder node (UI button, StreamDeck,
     /// MCP). Idempotent per key; Stop without a recording is a no-op.
-    fn dispatch_one_click_recording(&mut self, method: &str, params: Option<Value>) -> Result<Value, ControlError> {
-        let params = params.ok_or_else(|| ControlError::InvalidRequest("sessionId, nodeId and idempotencyKey are required".into()))?;
+    fn dispatch_one_click_recording(
+        &mut self,
+        method: &str,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("sessionId, nodeId and idempotencyKey are required".into())
+        })?;
         let field = |name: &str| {
             params
                 .get(name)
@@ -16361,9 +16945,13 @@ impl ControlPlane {
         };
         // sessionId defaults to the active session; nodeId may be a node name.
         let session_id = self.simple_session_id(&params)?;
-        let node_id = simple::resolve_node(self.get_session(&session_id)?, &field("nodeId")?)?.id.clone();
+        let node_id = simple::resolve_node(self.get_session(&session_id)?, &field("nodeId")?)?
+            .id
+            .clone();
         let idempotency = field("idempotencyKey")?;
-        let request_hash = Self::request_hash(&json!({ "method": method, "sessionId": session_id, "nodeId": node_id }));
+        let request_hash = Self::request_hash(
+            &json!({ "method": method, "sessionId": session_id, "nodeId": node_id }),
+        );
         let scoped_key = self.scoped_idempotency_key(method, &idempotency);
         if let Some(result) = self.lookup_idempotent_result(&scoped_key, &request_hash)? {
             return Ok(result);
@@ -16372,8 +16960,14 @@ impl ControlPlane {
         let result = if method == "recorders.startRecording" {
             self.start_node_recording(&session_id, &node_id)?
         } else {
-            if self.recorder_node_sessions.get(&node_id).is_some_and(|owner| *owner != session_id) {
-                return Err(ControlError::InvalidRequest("recorder node belongs to another session".into()));
+            if self
+                .recorder_node_sessions
+                .get(&node_id)
+                .is_some_and(|owner| *owner != session_id)
+            {
+                return Err(ControlError::InvalidRequest(
+                    "recorder node belongs to another session".into(),
+                ));
             }
             self.stop_node_recording(&node_id)?
         };
@@ -16676,7 +17270,7 @@ impl ControlPlane {
                 .bytes
                 .len()
                 .checked_add(chunk.len())
-                .map_or(true, |length| length > upload.expected_bytes)
+                .is_none_or(|length| length > upload.expected_bytes)
         {
             return Err(ControlError::InvalidRequest(
                 "audio upload chunks must be nonempty, ordered, and within the declared file size"
@@ -18291,7 +18885,8 @@ impl ControlPlane {
                             "capture endpoint is not an active exact inventory match".into(),
                         )
                     }),
-                DecodedMultiInputSource::Application { .. } | DecodedMultiInputSource::Generated => Ok(None),
+                DecodedMultiInputSource::Application { .. }
+                | DecodedMultiInputSource::Generated => Ok(None),
             })
             .collect::<Result<Vec<_>, ControlError>>()?;
         let bindings = decoded
@@ -18349,8 +18944,8 @@ impl ControlPlane {
             .map(EntityId::new)
             .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
         let generation = self.requested_or_next_generation(&params, &session_id)?;
-        let session =
-            audiorouter_engine::prune_inactive_upstream(self.get_session(&session_id)?).into_owned();
+        let session = audiorouter_engine::prune_inactive_upstream(self.get_session(&session_id)?)
+            .into_owned();
         let endpoints =
             audiorouter_windows_audio::enumerate_active_endpoints().map_err(audio_control_error)?;
         let endpoint_for = |node: &audiorouter_domain::Node, direction| {
@@ -18387,10 +18982,14 @@ impl ControlPlane {
                 NodeKind::PhysicalInput => {
                     // Surround to headphones may loopback-capture a 5.1/7.1
                     // playback device, such as a virtual cable set to 7.1.
-                    let endpoint = match endpoint_for(node, audiorouter_windows_audio::EndpointDirection::Capture) {
-                        Err(_) if node_spatial_headphones(node) => {
-                            endpoint_for(node, audiorouter_windows_audio::EndpointDirection::Render)?
-                        }
+                    let endpoint = match endpoint_for(
+                        node,
+                        audiorouter_windows_audio::EndpointDirection::Capture,
+                    ) {
+                        Err(_) if node_spatial_headphones(node) => endpoint_for(
+                            node,
+                            audiorouter_windows_audio::EndpointDirection::Render,
+                        )?,
                         result => result?,
                     };
                     let node_channels = node
@@ -18398,12 +18997,17 @@ impl ControlPlane {
                         .iter()
                         .find(|port| port.direction == PortDirection::Output)
                         .map(|port| port.channels);
-                    if endpoint.channels == 1 && node_channels == Some(2) && !node_spatial_headphones(node) {
+                    if endpoint.channels == 1
+                        && node_channels == Some(2)
+                        && !node_spatial_headphones(node)
+                    {
                         mono_nodes.push(node.id.clone());
                     }
                     NativeMultiInputSourceBinding::Physical(endpoint)
                 }
-                NodeKind::TestSignal | NodeKind::AudioFile => NativeMultiInputSourceBinding::Generated,
+                NodeKind::TestSignal | NodeKind::AudioFile => {
+                    NativeMultiInputSourceBinding::Generated
+                }
                 NodeKind::NetworkReceive => NativeMultiInputSourceBinding::Network(node),
                 NodeKind::ApplicationCapture => {
                     let process_id = node
@@ -18681,7 +19285,11 @@ impl ControlPlane {
             // The multi-input Mixer worker (and the outputs it owns) is
             // released the same way, so Play can switch a stopped session to
             // another adapter.
-            if self.runtimes.get(&session_id).is_some_and(|runtime| runtime.state() == RuntimeState::Running) {
+            if self
+                .runtimes
+                .get(&session_id)
+                .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
+            {
                 return Err(ControlError::InvalidRequest(
                     "stop the session before detaching its native multi-input worker".into(),
                 ));
@@ -19283,7 +19891,9 @@ impl ControlPlane {
                 .as_ref()
                 .and_then(|params| params.get(name))
                 .and_then(Value::as_str)
-                .filter(|value| !value.is_empty() && value.len() <= audiorouter_domain::MAX_ENTITY_ID_BYTES)
+                .filter(|value| {
+                    !value.is_empty() && value.len() <= audiorouter_domain::MAX_ENTITY_ID_BYTES
+                })
                 .map(EntityId::new)
                 .ok_or_else(|| ControlError::InvalidRequest(format!("{name} is required")))
         };
@@ -19293,10 +19903,15 @@ impl ControlPlane {
     /// Capture a playing plugin's state from its processing instance and
     /// store it (PLUG-04: versioned, size-limited, hashed). The caller sets
     /// the returned `stateId` on the node so the next start restores it.
-    fn dispatch_plugins_save_state(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+    fn dispatch_plugins_save_state(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
         let (session_id, node_id) = Self::plugin_node_request(&params)?;
         let (state_id, size_bytes) = self.capture_plugin_state(&session_id, &node_id, false)?;
-        Ok(json!({ "sessionId": session_id, "nodeId": node_id, "stateId": state_id, "sizeBytes": size_bytes }))
+        Ok(
+            json!({ "sessionId": session_id, "nodeId": node_id, "stateId": state_id, "sizeBytes": size_bytes }),
+        )
     }
 
     /// Capture every playing plugin of a session (before Stop) so the next
@@ -19309,14 +19924,19 @@ impl ControlPlane {
             .map(|bridges| {
                 bridges
                     .iter()
-                    .filter(|((session, _), bridge)| session == session_id && bridge.strong_count() > 0)
+                    .filter(|((session, _), bridge)| {
+                        session == session_id && bridge.strong_count() > 0
+                    })
                     .map(|((_, node), _)| node.clone())
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
         for node_id in nodes {
             if let Err(error) = self.capture_plugin_state(session_id, &node_id, true) {
-                eprintln!("AudioRouter plugin state capture skipped for {}: {error:?}", node_id.as_str());
+                eprintln!(
+                    "AudioRouter plugin state capture skipped for {}: {error:?}",
+                    node_id.as_str()
+                );
             }
         }
     }
@@ -19338,26 +19958,39 @@ impl ControlPlane {
             .nodes
             .iter()
             .find(|node| node.id == node_id && node.kind == NodeKind::Plugin)
-            .and_then(|node| node.parameters.get("fingerprint").and_then(Value::as_str).map(str::to_owned))
-            .ok_or_else(|| ControlError::InvalidRequest("nodeId is not a plugin node in this session".into()))?;
+            .and_then(|node| {
+                node.parameters
+                    .get("fingerprint")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+            })
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("nodeId is not a plugin node in this session".into())
+            })?;
         let asset = self
             .plugin_bridge(&session_id, &node_id)?
             .save_state()
-            .map_err(|error| ControlError::InvalidRequest(format!("plugin state capture failed: {error}")))?;
-        let storage = self
-            .storage
-            .as_ref()
-            .ok_or_else(|| ControlError::InvalidRequest("plugin state storage is unavailable".into()))?;
-        let root = storage
-            .plugin_state_directory()
-            .ok_or_else(|| ControlError::InvalidRequest("plugin state storage is unavailable".into()))?;
+            .map_err(|error| {
+                ControlError::InvalidRequest(format!("plugin state capture failed: {error}"))
+            })?;
+        let storage = self.storage.as_ref().ok_or_else(|| {
+            ControlError::InvalidRequest("plugin state storage is unavailable".into())
+        })?;
+        let root = storage.plugin_state_directory().ok_or_else(|| {
+            ControlError::InvalidRequest("plugin state storage is unavailable".into())
+        })?;
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |elapsed| elapsed.as_nanos());
-        let prefix = if automatic { AUTOMATIC_PLUGIN_STATE_PREFIX } else { "plugin-state-" };
+        let prefix = if automatic {
+            AUTOMATIC_PLUGIN_STATE_PREFIX
+        } else {
+            "plugin-state-"
+        };
         let state_id = format!("{prefix}{}-{nanos}", &asset.sha256[..16]);
-        let path = audiorouter_plugin_host::write_state_asset(&root, &state_id, &asset)
-            .map_err(|error| ControlError::InvalidRequest(format!("plugin state write failed: {error:?}")))?;
+        let path = audiorouter_plugin_host::write_state_asset(&root, &state_id, &asset).map_err(
+            |error| ControlError::InvalidRequest(format!("plugin state write failed: {error:?}")),
+        )?;
         storage
             .save_plugin_state(&audiorouter_storage::PluginStateRecord {
                 id: state_id.clone(),
@@ -19374,8 +20007,13 @@ impl ControlPlane {
             .map_err(storage_error)?;
         // Drop the automatic capture this one replaces, unless another node
         // (for example a duplicated session) still restores it.
-        if let Some(previous) = replaced.filter(|previous| previous.starts_with(AUTOMATIC_PLUGIN_STATE_PREFIX)) {
-            if !storage.plugin_node_state_in_use(&previous).map_err(storage_error)? {
+        if let Some(previous) =
+            replaced.filter(|previous| previous.starts_with(AUTOMATIC_PLUGIN_STATE_PREFIX))
+        {
+            if !storage
+                .plugin_node_state_in_use(&previous)
+                .map_err(storage_error)?
+            {
                 let _ = storage.remove_plugin_state(&previous);
                 let _ = std::fs::remove_file(root.join(format!("{previous}.bin")));
             }
@@ -19385,7 +20023,11 @@ impl ControlPlane {
 
     /// Open or close a playing plugin's native editor. The parent window must
     /// exist and belong to `ownerProcessId` (the worker checks it again).
-    fn dispatch_plugins_editor(&mut self, params: Option<Value>, open: bool) -> Result<Value, ControlError> {
+    fn dispatch_plugins_editor(
+        &mut self,
+        params: Option<Value>,
+        open: bool,
+    ) -> Result<Value, ControlError> {
         let (session_id, node_id) = Self::plugin_node_request(&params)?;
         let bridge = self.plugin_bridge(&session_id, &node_id)?;
         if open {
@@ -19403,7 +20045,9 @@ impl ControlPlane {
                 .ok_or_else(|| ControlError::InvalidRequest("ownerProcessId is required".into()))?;
             let authorization = editor_authorization_issuer()
                 .issue(parent_window, owner_process_id)
-                .map_err(|error| ControlError::InvalidRequest(format!("editor authorization failed: {error:?}")))?;
+                .map_err(|error| {
+                    ControlError::InvalidRequest(format!("editor authorization failed: {error:?}"))
+                })?;
             bridge.open_editor(authorization).map_err(|error| {
                 ControlError::InvalidRequest(if error.contains("editorUnavailable") || error.contains("UnsupportedFeature") {
                     "this plugin has no editor window AudioRouter can open (VST3 editors are not supported yet); use its parameters in Properties".into()
@@ -19412,16 +20056,18 @@ impl ControlPlane {
                 })
             })?;
         } else {
-            bridge
-                .close_editor()
-                .map_err(|error| ControlError::InvalidRequest(format!("plugin editor failed to close: {error}")))?;
+            bridge.close_editor().map_err(|error| {
+                ControlError::InvalidRequest(format!("plugin editor failed to close: {error}"))
+            })?;
             drop(bridge);
             // Keep what the user set in the editor for the next Play.
             if let Err(error) = self.capture_plugin_state(&session_id, &node_id, true) {
                 eprintln!("AudioRouter plugin state capture after editor close failed: {error:?}");
             }
         }
-        Ok(json!({ "sessionId": session_id, "nodeId": node_id, "state": if open { "open" } else { "closed" } }))
+        Ok(
+            json!({ "sessionId": session_id, "nodeId": node_id, "state": if open { "open" } else { "closed" } }),
+        )
     }
 
     fn dispatch_plugins_parameters(&self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -20062,13 +20708,20 @@ impl ControlPlane {
     /// Drive the shared Time Shift buffer of a running node. Commands are
     /// queued lock-free and applied by the audio thread at the next block;
     /// the returned status therefore reflects the previous block.
-    fn dispatch_time_shift_transport(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
-        let params = params.ok_or_else(|| ControlError::InvalidRequest("sessionId, nodeId, and action are required".into()))?;
+    fn dispatch_time_shift_transport(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("sessionId, nodeId, and action are required".into())
+        })?;
         let text = |name: &str| {
             params
                 .get(name)
                 .and_then(Value::as_str)
-                .filter(|value| !value.is_empty() && value.len() <= audiorouter_domain::MAX_ENTITY_ID_BYTES)
+                .filter(|value| {
+                    !value.is_empty() && value.len() <= audiorouter_domain::MAX_ENTITY_ID_BYTES
+                })
                 .ok_or_else(|| ControlError::InvalidRequest(format!("{name} is required")))
         };
         let session_id = text("sessionId")?;
@@ -20080,10 +20733,16 @@ impl ControlPlane {
             "forward" => Some(audiorouter_dsp::timeshift::TimeShiftCommand::Forward),
             "live" => Some(audiorouter_dsp::timeshift::TimeShiftCommand::Live),
             "status" => None,
-            _ => return Err(ControlError::InvalidRequest("action must be pause, resume, back, forward, live, or status".into())),
+            _ => {
+                return Err(ControlError::InvalidRequest(
+                    "action must be pause, resume, back, forward, live, or status".into(),
+                ))
+            }
         };
         let state = audiorouter_engine::time_shift_state(session_id, node_id).ok_or_else(|| {
-            ControlError::InvalidRequest("Time Shift is available while its route is playing".into())
+            ControlError::InvalidRequest(
+                "Time Shift is available while its route is playing".into(),
+            )
         })?;
         if let Some(command) = command {
             state.post(command);
@@ -20240,7 +20899,8 @@ fn spectrum_telemetry(levels: &audiorouter_engine::SpectrumLevels) -> Value {
 }
 
 fn spectrum_telemetry_schema() -> Value {
-    let bands = json!({ "type": "array", "items": { "type": "number" }, "minItems": 64, "maxItems": 64 });
+    let bands =
+        json!({ "type": "array", "items": { "type": "number" }, "minItems": 64, "maxItems": 64 });
     json!({
         "type": "object",
         "properties": { "levelsDb": bands.clone(), "bandFrequenciesHz": bands },
@@ -20254,7 +20914,9 @@ fn session_file_path(params: Option<&Value>) -> Result<std::path::PathBuf, Contr
     let path = params
         .and_then(|params| params.get("path"))
         .and_then(Value::as_str)
-        .filter(|path| !path.is_empty() && path.len() <= 1024 && !path.chars().any(char::is_control))
+        .filter(|path| {
+            !path.is_empty() && path.len() <= 1024 && !path.chars().any(char::is_control)
+        })
         .map(std::path::PathBuf::from)
         .ok_or_else(|| ControlError::InvalidRequest("path is required".into()))?;
     let extension_ok = path
@@ -20405,12 +21067,8 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "sessions.delete" => &["sessionId", "idempotencyKey"],
         "sessions.active.get" => &[],
         "sessions.active.set" => &["sessionId", "idempotencyKey"],
-        "session.start" | "sessions.start" => {
-            &["sessionId", "idempotencyKey", "candidate"]
-        }
-        "session.stop" | "sessions.stop" => {
-            &["sessionId", "idempotencyKey"]
-        }
+        "session.start" | "sessions.start" => &["sessionId", "idempotencyKey", "candidate"],
+        "session.stop" | "sessions.stop" => &["sessionId", "idempotencyKey"],
         "sessions.list" => &["cursor", "limit"],
         "sessions.create" => &["session", "idempotencyKey"],
         "sessions.duplicate" => &["sourceSessionId", "sessionId", "name", "idempotencyKey"],
@@ -20463,7 +21121,9 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "recorders.arm" => &["sessionId", "nodeId", "idempotencyKey"],
         "recorders.start" | "recorders.pause" | "recorders.resume" | "recorders.split"
         | "recorders.stop" => &["sessionId", "nodeId", "frame", "idempotencyKey"],
-        "recorders.startRecording" | "recorders.stopRecording" => &["sessionId", "nodeId", "idempotencyKey"],
+        "recorders.startRecording" | "recorders.stopRecording" => {
+            &["sessionId", "nodeId", "idempotencyKey"]
+        }
         "devices.getAccess" => &[],
         "devices.setAccess" => &["allowed", "idempotencyKey"],
         "recordings.getRoot" => &[],
@@ -20495,9 +21155,25 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "meters.levels" => &["sessionId"],
         "nodes.catalog" => &[],
         "safety.togglePrivacyMute" => &["idempotencyKey"],
-        "nodes.set" => &["sessionId", "node", "parameters", "enabled", "bypass", "name", "idempotencyKey"],
+        "nodes.set" => &[
+            "sessionId",
+            "node",
+            "parameters",
+            "enabled",
+            "bypass",
+            "name",
+            "idempotencyKey",
+        ],
         "nodes.toggle" => &["sessionId", "node", "target", "idempotencyKey"],
-        "nodes.add" => &["sessionId", "kind", "name", "parameters", "between", "after", "idempotencyKey"],
+        "nodes.add" => &[
+            "sessionId",
+            "kind",
+            "name",
+            "parameters",
+            "between",
+            "after",
+            "idempotencyKey",
+        ],
         "nodes.remove" => &["sessionId", "node", "bridge", "idempotencyKey"],
         "connections.add" => &["sessionId", "from", "to", "idempotencyKey"],
         "connections.remove" => &["sessionId", "from", "to", "idempotencyKey"],
@@ -20652,7 +21328,11 @@ fn display_path(path: &std::path::Path) -> String {
 /// applied) until the user approves a recording folder.
 fn suggested_recording_root() -> Option<std::path::PathBuf> {
     let profile = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME"))?;
-    Some(std::path::PathBuf::from(profile).join("Music").join("AudioRouter Recordings"))
+    Some(
+        std::path::PathBuf::from(profile)
+            .join("Music")
+            .join("AudioRouter Recordings"),
+    )
 }
 
 fn storage_error(error: StorageError) -> ControlError {
@@ -20776,7 +21456,13 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
             operation,
             resource_ids,
             ..
-        } => Some((*hresult, *retryable, *remediation, *operation, resource_ids.clone())),
+        } => Some((
+            *hresult,
+            *retryable,
+            *remediation,
+            *operation,
+            resource_ids.clone(),
+        )),
         _ => None,
     };
     let mut response = JsonRpcResponse::failure(id, -32000, message);
@@ -20853,21 +21539,56 @@ mod tests {
     use audiorouter_engine::{RuntimeGeneration, RuntimeGraph, RuntimeProcessor};
 
     fn feedback_fixture() -> Session {
-        let port = |name: &str, direction| Port { name: name.into(), direction, channels: 2 };
+        let port = |name: &str, direction| Port {
+            name: name.into(),
+            direction,
+            channels: 2,
+        };
         let node = |id: &str, kind, endpoint: &str| Node {
-            id: EntityId::new(id), kind, type_version: 1, name: id.into(), enabled: true, bypass: false,
-            parameters: if matches!(kind, NodeKind::PhysicalInput | NodeKind::PhysicalOutput) { serde_json::from_value(json!({"endpointId": endpoint})).unwrap() } else { Default::default() },
+            id: EntityId::new(id),
+            kind,
+            type_version: 1,
+            name: id.into(),
+            enabled: true,
+            bypass: false,
+            parameters: if matches!(kind, NodeKind::PhysicalInput | NodeKind::PhysicalOutput) {
+                serde_json::from_value(json!({"endpointId": endpoint})).unwrap()
+            } else {
+                Default::default()
+            },
             ports: match kind {
                 NodeKind::PhysicalInput => vec![port("out", PortDirection::Output)],
                 NodeKind::PhysicalOutput => vec![port("in", PortDirection::Input)],
-                _ => vec![port("in", PortDirection::Input), port("out", PortDirection::Output)],
+                _ => vec![
+                    port("in", PortDirection::Input),
+                    port("out", PortDirection::Output),
+                ],
             },
         };
-        Session { id: EntityId::new("feedback"), name: "feedback".into(), schema_version: 1, revision: 0,
-            nodes: vec![node("game", NodeKind::PhysicalInput, "cable-b-output"), node("eq", NodeKind::Gain, ""), node("mix", NodeKind::Mixer, ""), node("recording", NodeKind::PhysicalOutput, "cable-b-input")],
-            edges: [("game", "eq"), ("eq", "mix"), ("mix", "recording")].into_iter().enumerate().map(|(index, (source, destination))| Edge {
-                id: EntityId::new(format!("e{index}")), source_node: EntityId::new(source), source_port: "out".into(), destination_node: EntityId::new(destination), destination_port: "in".into(), matrix: vec![1.0, 0.0, 0.0, 1.0], enabled: true,
-            }).collect(),
+        Session {
+            id: EntityId::new("feedback"),
+            name: "feedback".into(),
+            schema_version: 1,
+            revision: 0,
+            nodes: vec![
+                node("game", NodeKind::PhysicalInput, "cable-b-output"),
+                node("eq", NodeKind::Gain, ""),
+                node("mix", NodeKind::Mixer, ""),
+                node("recording", NodeKind::PhysicalOutput, "cable-b-input"),
+            ],
+            edges: [("game", "eq"), ("eq", "mix"), ("mix", "recording")]
+                .into_iter()
+                .enumerate()
+                .map(|(index, (source, destination))| Edge {
+                    id: EntityId::new(format!("e{index}")),
+                    source_node: EntityId::new(source),
+                    source_port: "out".into(),
+                    destination_node: EntityId::new(destination),
+                    destination_port: "in".into(),
+                    matrix: vec![1.0, 0.0, 0.0, 1.0],
+                    enabled: true,
+                })
+                .collect(),
         }
     }
 
@@ -20879,11 +21600,19 @@ mod tests {
             session.nodes[1].bypass = bypass;
             let error = reject_endpoint_feedback(&session, &returns).unwrap_err();
             let message = control_error_message(&error);
-            assert!(message.contains("game") && message.contains("recording") && message.contains("different output cable"));
+            assert!(
+                message.contains("game")
+                    && message.contains("recording")
+                    && message.contains("different output cable")
+            );
         }
-        session.nodes[3].parameters.insert("endpointId".into(), json!("cable-c-input"));
+        session.nodes[3]
+            .parameters
+            .insert("endpointId".into(), json!("cable-c-input"));
         reject_endpoint_feedback(&session, &returns).unwrap();
-        session.nodes[3].parameters.insert("endpointId".into(), json!("cable-b-input"));
+        session.nodes[3]
+            .parameters
+            .insert("endpointId".into(), json!("cable-b-input"));
         session.edges[1].enabled = false;
         reject_endpoint_feedback(&session, &returns).unwrap();
     }
@@ -20892,36 +21621,63 @@ mod tests {
     fn surround_loopback_input_cannot_play_back_into_its_own_device() {
         let mut session = feedback_fixture();
         // A 7.1 playback device captured by loopback and rendered for headphones.
-        session.nodes[0].parameters.insert("endpointId".into(), json!("cable-b-input"));
-        session.nodes[0].parameters.insert("spatialMode".into(), json!("headphones"));
+        session.nodes[0]
+            .parameters
+            .insert("endpointId".into(), json!("cable-b-input"));
+        session.nodes[0]
+            .parameters
+            .insert("spatialMode".into(), json!("headphones"));
         assert!(reject_endpoint_feedback(&session, &[]).is_err());
-        session.nodes[3].parameters.insert("endpointId".into(), json!("headphones"));
+        session.nodes[3]
+            .parameters
+            .insert("endpointId".into(), json!("headphones"));
         reject_endpoint_feedback(&session, &[]).unwrap();
         // An ordinary input naming the same ID is a recording device, not a loop.
-        session.nodes[0].parameters.insert("spatialMode".into(), json!("off"));
-        session.nodes[3].parameters.insert("endpointId".into(), json!("cable-b-input"));
+        session.nodes[0]
+            .parameters
+            .insert("spatialMode".into(), json!("off"));
+        session.nodes[3]
+            .parameters
+            .insert("endpointId".into(), json!("cable-b-input"));
         reject_endpoint_feedback(&session, &[]).unwrap();
     }
 
     #[test]
     fn automatic_route_restart_requires_device_and_lifecycle_authority() {
-        assert!(!caller_can_restart_devices(&ClientGrant::with_scopes([
-            PermissionScope::GraphWrite, PermissionScope::SessionControl,
-        ]), true));
-        assert!(!caller_can_restart_devices(&ClientGrant::with_scopes([
-            PermissionScope::DeviceAdministration,
-        ]), false));
-        assert!(caller_can_restart_devices(&ClientGrant::with_scopes([
-            PermissionScope::DeviceAdministration, PermissionScope::SessionControl,
-        ]), false));
+        assert!(!caller_can_restart_devices(
+            &ClientGrant::with_scopes([
+                PermissionScope::GraphWrite,
+                PermissionScope::SessionControl,
+            ]),
+            true
+        ));
+        assert!(!caller_can_restart_devices(
+            &ClientGrant::with_scopes([PermissionScope::DeviceAdministration,]),
+            false
+        ));
+        assert!(caller_can_restart_devices(
+            &ClientGrant::with_scopes([
+                PermissionScope::DeviceAdministration,
+                PermissionScope::SessionControl,
+            ]),
+            false
+        ));
         let desktop = ClientGrant::for_desktop_shell();
         assert!(!caller_can_restart_devices(&desktop, false));
         assert!(caller_can_restart_devices(&desktop, true));
-        let mut plane = ControlPlane::default();
-        plane.active_device_restart_allowed = Some(false);
-        let response = plane.dispatch_authorized(JsonRpcRequest {
-            jsonrpc: "2.0".into(), id: Some(json!(1)), method: "system.diagnostics".into(), params: None,
-        }, &ClientGrant::with_scopes([PermissionScope::Read]));
+        let mut plane = ControlPlane {
+            active_device_restart_allowed: Some(false),
+            ..Default::default()
+        };
+        let response = plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: "system.diagnostics".into(),
+                params: None,
+            },
+            &ClientGrant::with_scopes([PermissionScope::Read]),
+        );
         assert!(response.error.is_none(), "{:?}", response.error);
         assert_eq!(plane.active_device_restart_allowed, Some(false));
     }
@@ -20930,43 +21686,100 @@ mod tests {
     fn feedback_selection_can_be_saved_only_after_review_but_not_prepared() {
         let mut candidate = feedback_fixture();
         candidate.nodes[0].kind = NodeKind::EndpointLoopback;
-        candidate.nodes[0].parameters.insert("endpointId".into(), json!("same-render-endpoint"));
-        candidate.nodes[3].parameters.insert("endpointId".into(), json!("same-render-endpoint"));
+        candidate.nodes[0]
+            .parameters
+            .insert("endpointId".into(), json!("same-render-endpoint"));
+        candidate.nodes[3]
+            .parameters
+            .insert("endpointId".into(), json!("same-render-endpoint"));
         let mut original = candidate.clone();
         original.edges[2].enabled = false;
         let mut plane = ControlPlane::new("feedback-review");
         plane.insert_session(original).unwrap();
-        let request = |method: &str, params| JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(json!(1)), method: method.into(), params: Some(params) };
-        let result = plane.dispatch(request("graph.plan", json!({"sessionId":"feedback","baseRevision":0,"candidate":candidate}))).result.unwrap();
+        let request = |method: &str, params| JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: method.into(),
+            params: Some(params),
+        };
+        let result = plane
+            .dispatch(request(
+                "graph.plan",
+                json!({"sessionId":"feedback","baseRevision":0,"candidate":candidate}),
+            ))
+            .result
+            .unwrap();
         let warning = result["warnings"][0].as_str().unwrap();
-        assert!(warning.contains("game") && warning.contains("recording") && warning.contains("playback is blocked"));
-        let mut commit = json!({"planId":result["planId"],"baseRevision":0,"idempotencyKey":"review-feedback"});
-        assert!(plane.dispatch(request("graph.commit", commit.clone())).error.unwrap().message.contains("acknowledge"));
+        assert!(
+            warning.contains("game")
+                && warning.contains("recording")
+                && warning.contains("playback is blocked")
+        );
+        let mut commit =
+            json!({"planId":result["planId"],"baseRevision":0,"idempotencyKey":"review-feedback"});
+        assert!(plane
+            .dispatch(request("graph.commit", commit.clone()))
+            .error
+            .unwrap()
+            .message
+            .contains("acknowledge"));
         commit["acknowledgments"] = result["warnings"].clone();
         let saved = plane.dispatch(request("graph.commit", commit));
         assert!(saved.error.is_none(), "{saved:?}");
-        assert_eq!(plane.get_session(&EntityId::new("feedback")).unwrap().revision, 1);
-        assert!(plane.validate_endpoint_feedback(plane.get_session(&EntityId::new("feedback")).unwrap()).is_err());
+        assert_eq!(
+            plane
+                .get_session(&EntityId::new("feedback"))
+                .unwrap()
+                .revision,
+            1
+        );
+        assert!(plane
+            .validate_endpoint_feedback(plane.get_session(&EntityId::new("feedback")).unwrap())
+            .is_err());
     }
 
     #[test]
     #[cfg(windows)]
     #[ignore = "requires installed VB-Cable B; reads endpoint metadata only"]
     fn installed_cable_feedback_is_rejected_before_opening_audio() {
-        let endpoints = audiorouter_windows_audio::enumerate_active_endpoint_display_info().unwrap();
-        let cable = |direction| endpoints.iter().find(|endpoint| endpoint.direction == direction
-            && audiorouter_windows_audio::known_virtual_cable_key(&endpoint.device_description, &endpoint.driver_inf_section).as_deref() == Some("b")).expect("VB-Cable B endpoint");
+        let endpoints =
+            audiorouter_windows_audio::enumerate_active_endpoint_display_info().unwrap();
+        let cable = |direction| {
+            endpoints
+                .iter()
+                .find(|endpoint| {
+                    endpoint.direction == direction
+                        && audiorouter_windows_audio::known_virtual_cable_key(
+                            &endpoint.device_description,
+                            &endpoint.driver_inf_section,
+                        )
+                        .as_deref()
+                            == Some("b")
+                })
+                .expect("VB-Cable B endpoint")
+        };
         let mut candidate = feedback_fixture();
-        candidate.nodes[0].parameters.insert("endpointId".into(), json!(cable(audiorouter_windows_audio::EndpointDirection::Capture).id));
-        candidate.nodes[3].parameters.insert("endpointId".into(), json!(cable(audiorouter_windows_audio::EndpointDirection::Render).id));
+        candidate.nodes[0].parameters.insert(
+            "endpointId".into(),
+            json!(cable(audiorouter_windows_audio::EndpointDirection::Capture).id),
+        );
+        candidate.nodes[3].parameters.insert(
+            "endpointId".into(),
+            json!(cable(audiorouter_windows_audio::EndpointDirection::Render).id),
+        );
         let plane = ControlPlane::default();
-        assert!(control_error_message(&plane.validate_endpoint_feedback(&candidate).unwrap_err()).contains("Audio feedback loop"));
+        assert!(
+            control_error_message(&plane.validate_endpoint_feedback(&candidate).unwrap_err())
+                .contains("Audio feedback loop")
+        );
     }
 
     #[test]
     fn live_source_bypass_retains_shape_and_silences_every_output() {
         let mut session = feedback_fixture();
-        session.nodes[3].parameters.insert("endpointId".into(), json!("other-output"));
+        session.nodes[3]
+            .parameters
+            .insert("endpointId".into(), json!("other-output"));
         let mut direct = session.nodes[3].clone();
         direct.id = EntityId::new("direct");
         session.nodes.push(direct);
@@ -20980,21 +21793,50 @@ mod tests {
             let mut candidate = session.clone();
             candidate.nodes[0].bypass = bypass;
             normalize_live_path_flags(&mut candidate, &inputs, &outputs);
-            let set = audiorouter_engine::compile_native_paths_with_plugins_and_audio(&candidate, RuntimeGeneration::new(1), &Default::default(), &Default::default()).unwrap();
+            let set = audiorouter_engine::compile_native_paths_with_plugins_and_audio(
+                &candidate,
+                RuntimeGeneration::new(1),
+                &Default::default(),
+                &Default::default(),
+            )
+            .unwrap();
             assert_eq!(set.input_node_ids(), inputs);
             assert_eq!(set.output_node_ids(), outputs);
             assert!(candidate.nodes[0].enabled && !candidate.nodes[0].bypass);
-            assert_eq!(candidate.edges[0].matrix, if bypass { vec![0.0; 4] } else { vec![1.0, 0.0, 0.0, 1.0] });
+            assert_eq!(
+                candidate.edges[0].matrix,
+                if bypass {
+                    vec![0.0; 4]
+                } else {
+                    vec![1.0, 0.0, 0.0, 1.0]
+                }
+            );
             let frames = audiorouter_engine::PROCESSING_QUANTUM_FRAMES;
-            let mut runtime = audiorouter_engine::RealtimeMixerFanout::from_paths(set, 4, &[2], frames).unwrap();
+            let mut runtime =
+                audiorouter_engine::RealtimeMixerFanout::from_paths(set, 4, &[2], frames).unwrap();
             let mut block = audiorouter_engine::AudioBlock::new(2, frames).unwrap();
-            for channel in 0..2 { block.channel_mut(channel).unwrap().fill(0.5); }
-            let rings = (0..2).map(|_| audiorouter_engine::AudioBlockRing::new(4, 2, frames).unwrap()).collect::<Vec<_>>();
-            runtime.try_submit_input(0, RuntimeGeneration::new(1), &block).unwrap();
-            assert_eq!(runtime.process_once(&rings.iter().collect::<Vec<_>>()).unwrap(), 2);
+            for channel in 0..2 {
+                block.channel_mut(channel).unwrap().fill(0.5);
+            }
+            let rings = (0..2)
+                .map(|_| audiorouter_engine::AudioBlockRing::new(4, 2, frames).unwrap())
+                .collect::<Vec<_>>();
+            runtime
+                .try_submit_input(0, RuntimeGeneration::new(1), &block)
+                .unwrap();
+            assert_eq!(
+                runtime
+                    .process_once(&rings.iter().collect::<Vec<_>>())
+                    .unwrap(),
+                2
+            );
             for ring in &rings {
                 let output = ring.try_receive().unwrap();
-                assert!(output.channel(0).unwrap().iter().all(|sample| *sample == if bypass { 0.0 } else { 0.5 }));
+                assert!(output
+                    .channel(0)
+                    .unwrap()
+                    .iter()
+                    .all(|sample| *sample == if bypass { 0.0 } else { 0.5 }));
             }
         }
     }
@@ -21045,9 +21887,7 @@ mod tests {
             "audiorouter-plugin-worker"
         };
         assert!(message.contains(&root.join(worker).display().to_string()));
-        assert!(message.contains(
-            &root.join("resources").join(worker).display().to_string()
-        ));
+        assert!(message.contains(&root.join("resources").join(worker).display().to_string()));
         assert!(message.contains("rebuild the complete AudioRouter package"));
         assert!(message.contains("AUDIOROUTER_PLUGIN_WORKER_PATH"));
     }
@@ -21122,22 +21962,45 @@ mod tests {
         plane.insert_session(graph).unwrap();
         // Play binds the branch before anyone pressed Record: no error, and
         // the audio has nowhere to go yet.
-        let bound = plane.recorder_tap_set_for_node(&session_id, &node_id).expect("recorder branch binds without a file");
+        let bound = plane
+            .recorder_tap_set_for_node(&session_id, &node_id)
+            .expect("recorder branch binds without a file");
         let block = AudioBlock::new(1, 128).unwrap();
         bound.on_processed_block(0, &block);
         // Record attaches a file worker behind the same, already bound tap.
         let counter = Arc::new(CountingTap::default());
-        plane.attach_recorder_worker_to_node(&session_id, node_id.clone(), Box::new(SuccessfulTapRecorderWorker { tap: counter.clone() })).unwrap();
+        plane
+            .attach_recorder_worker_to_node(
+                &session_id,
+                node_id.clone(),
+                Box::new(SuccessfulTapRecorderWorker {
+                    tap: counter.clone(),
+                }),
+            )
+            .unwrap();
         bound.on_processed_block(128, &block);
         bound.on_processed_block(256, &block);
-        assert_eq!(counter.0.load(std::sync::atomic::Ordering::Relaxed), 2, "blocks after Record reach the file");
+        assert_eq!(
+            counter.0.load(std::sync::atomic::Ordering::Relaxed),
+            2,
+            "blocks after Record reach the file"
+        );
         // The endpoint-scheduler binding path also succeeds.
-        assert!(plane.recorder_tap_bindings(&session_id, RuntimeGeneration::new(3)).is_ok());
+        assert!(plane
+            .recorder_tap_bindings(&session_id, RuntimeGeneration::new(3))
+            .is_ok());
     }
 
     #[test]
     fn recording_folder_is_chosen_in_the_app_and_unlocks_one_click_recording() {
-        let base = std::env::temp_dir().join(format!("audiorouter-root-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let base = std::env::temp_dir().join(format!(
+            "audiorouter-root-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         let mut graph = session();
         graph.nodes.push(Node {
             id: EntityId::new("rec"),
@@ -21147,62 +22010,138 @@ mod tests {
             enabled: true,
             bypass: false,
             parameters: serde_json::from_value(json!({ "format": "wavPcm16" })).unwrap(),
-            ports: vec![Port { name: "in".into(), direction: PortDirection::Input, channels: 2 }],
+            ports: vec![Port {
+                name: "in".into(),
+                direction: PortDirection::Input,
+                channels: 2,
+            }],
         });
         let session_id = graph.id.clone();
         let mut plane = ControlPlane::default();
         plane.insert_session(graph).unwrap();
         let request = |plane: &mut ControlPlane, method: &str, params: Value| {
-            plane.dispatch(JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(json!(1)), method: method.into(), params: Some(params) })
+            plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: method.into(),
+                params: Some(params),
+            })
         };
         // Nothing approved yet: a suggestion is offered, never applied.
-        let root = request(&mut plane, "recordings.getRoot", json!({})).result.unwrap();
+        let root = request(&mut plane, "recordings.getRoot", json!({}))
+            .result
+            .unwrap();
         assert!(root["root"].is_null());
-        assert!(root["suggestedRoot"].as_str().is_some_and(|path| path.ends_with("AudioRouter Recordings")));
+        assert!(root["suggestedRoot"]
+            .as_str()
+            .is_some_and(|path| path.ends_with("AudioRouter Recordings")));
         // Record explains where to choose the folder.
-        let refused = request(&mut plane, "recorders.startRecording", json!({ "sessionId": session_id, "nodeId": "rec", "idempotencyKey": "early" }));
+        let refused = request(
+            &mut plane,
+            "recorders.startRecording",
+            json!({ "sessionId": session_id, "nodeId": "rec", "idempotencyKey": "early" }),
+        );
         assert!(refused.error.unwrap().message.contains("Recording folder"));
         // Unusable folders are refused with plain reasons and change nothing.
         for (path, reason) in [
             ("relative\\folder", "full folder path"),
             ("\\\\server\\share\\rec", "network share"),
         ] {
-            let error = request(&mut plane, "recordings.setRoot", json!({ "root": path, "create": true, "idempotencyKey": path })).error.unwrap();
+            let error = request(
+                &mut plane,
+                "recordings.setRoot",
+                json!({ "root": path, "create": true, "idempotencyKey": path }),
+            )
+            .error
+            .unwrap();
             assert!(error.message.contains(reason), "{path}: {}", error.message);
         }
         let missing = base.join("missing");
-        let error = request(&mut plane, "recordings.setRoot", json!({ "root": missing, "idempotencyKey": "no-create" })).error.unwrap();
-        assert!(error.message.contains("does not exist"), "{}", error.message);
+        let error = request(
+            &mut plane,
+            "recordings.setRoot",
+            json!({ "root": missing, "idempotencyKey": "no-create" }),
+        )
+        .error
+        .unwrap();
+        assert!(
+            error.message.contains("does not exist"),
+            "{}",
+            error.message
+        );
         assert!(!missing.exists());
         std::fs::create_dir_all(&base).unwrap();
         let file = base.join("file.txt");
         std::fs::write(&file, b"x").unwrap();
-        let error = request(&mut plane, "recordings.setRoot", json!({ "root": file, "idempotencyKey": "file" })).error.unwrap();
+        let error = request(
+            &mut plane,
+            "recordings.setRoot",
+            json!({ "root": file, "idempotencyKey": "file" }),
+        )
+        .error
+        .unwrap();
         assert!(error.message.contains("not a folder"), "{}", error.message);
-        assert!(request(&mut plane, "recordings.getRoot", json!({})).result.unwrap()["root"].is_null());
+        assert!(request(&mut plane, "recordings.getRoot", json!({}))
+            .result
+            .unwrap()["root"]
+            .is_null());
         // Approve (and create) a folder; a retry with the same key replays.
         let chosen = base.join("My Recordings");
-        let set = request(&mut plane, "recordings.setRoot", json!({ "root": chosen, "create": true, "idempotencyKey": "choose" })).result.unwrap();
+        let set = request(
+            &mut plane,
+            "recordings.setRoot",
+            json!({ "root": chosen, "create": true, "idempotencyKey": "choose" }),
+        )
+        .result
+        .unwrap();
         assert_eq!(set["created"], true);
         assert!(chosen.is_dir());
-        let again = request(&mut plane, "recordings.setRoot", json!({ "root": chosen, "create": true, "idempotencyKey": "choose" })).result.unwrap();
+        let again = request(
+            &mut plane,
+            "recordings.setRoot",
+            json!({ "root": chosen, "create": true, "idempotencyKey": "choose" }),
+        )
+        .result
+        .unwrap();
         assert_eq!(again, set);
-        let shown = request(&mut plane, "recordings.getRoot", json!({})).result.unwrap();
+        let shown = request(&mut plane, "recordings.getRoot", json!({}))
+            .result
+            .unwrap();
         assert_eq!(shown["root"], set["root"]);
         assert!(!shown["root"].as_str().unwrap().starts_with("\\\\?\\"));
         // Record now writes into the chosen folder.
-        let started = request(&mut plane, "recorders.startRecording", json!({ "sessionId": session_id, "nodeId": "rec", "idempotencyKey": "now" })).result.unwrap();
+        let started = request(
+            &mut plane,
+            "recorders.startRecording",
+            json!({ "sessionId": session_id, "nodeId": "rec", "idempotencyKey": "now" }),
+        )
+        .result
+        .unwrap();
         assert_eq!(started["state"], "recording");
         let path = std::path::PathBuf::from(started["path"].as_str().unwrap());
-        assert_eq!(path.parent().unwrap().canonicalize().unwrap(), chosen.canonicalize().unwrap());
-        request(&mut plane, "recorders.stopRecording", json!({ "sessionId": session_id, "nodeId": "rec", "idempotencyKey": "stop" }));
+        assert_eq!(
+            path.parent().unwrap().canonicalize().unwrap(),
+            chosen.canonicalize().unwrap()
+        );
+        request(
+            &mut plane,
+            "recorders.stopRecording",
+            json!({ "sessionId": session_id, "nodeId": "rec", "idempotencyKey": "stop" }),
+        );
         drop(plane);
         let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn one_click_recording_writes_splits_stops_and_never_blocks_stopping_playback() {
-        let root = std::env::temp_dir().join(format!("audiorouter-one-click-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let root = std::env::temp_dir().join(format!(
+            "audiorouter-one-click-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         std::fs::create_dir_all(&root).unwrap();
         let mut graph = session();
         graph.nodes.push(Node {
@@ -21212,8 +22151,13 @@ mod tests {
             name: "Recorder".into(),
             enabled: true,
             bypass: false,
-            parameters: serde_json::from_value(json!({ "format": "wavPcm16", "splitMinutes": 10 })).unwrap(),
-            ports: vec![Port { name: "in".into(), direction: PortDirection::Input, channels: 2 }],
+            parameters: serde_json::from_value(json!({ "format": "wavPcm16", "splitMinutes": 10 }))
+                .unwrap(),
+            ports: vec![Port {
+                name: "in".into(),
+                direction: PortDirection::Input,
+                channels: 2,
+            }],
         });
         let session_id = graph.id.clone();
         let node_id = EntityId::new("rec");
@@ -21221,18 +22165,33 @@ mod tests {
         plane.insert_session(graph).unwrap();
         plane.configure_recording_root(&root).unwrap();
         let call = |plane: &mut ControlPlane, method: &str, key: &str| {
-            let response = plane.dispatch(JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(json!(1)), method: method.into(), params: Some(json!({ "sessionId": session_id, "nodeId": "rec", "idempotencyKey": key })) });
+            let response = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: method.into(),
+                params: Some(
+                    json!({ "sessionId": session_id, "nodeId": "rec", "idempotencyKey": key }),
+                ),
+            });
             assert!(response.error.is_none(), "{method}: {:?}", response.error);
             response.result.unwrap()
         };
         // Stop with nothing recording is a harmless no-op (StreamDeck safe).
-        assert_eq!(call(&mut plane, "recorders.stopRecording", "stop-0")["state"], "idle");
-        let tap = plane.recorder_tap_set_for_node(&session_id, &node_id).unwrap();
+        assert_eq!(
+            call(&mut plane, "recorders.stopRecording", "stop-0")["state"],
+            "idle"
+        );
+        let tap = plane
+            .recorder_tap_set_for_node(&session_id, &node_id)
+            .unwrap();
         let started = call(&mut plane, "recorders.startRecording", "start-1");
         assert_eq!(started["state"], "recording");
         assert_eq!(started["splitMinutes"], 10);
         // A second Record press while recording keeps the same take.
-        assert_eq!(call(&mut plane, "recorders.startRecording", "start-again")["alreadyRecording"], true);
+        assert_eq!(
+            call(&mut plane, "recorders.startRecording", "start-again")["alreadyRecording"],
+            true
+        );
         let mut block = AudioBlock::new(2, 128).unwrap();
         block.channel_mut(0).unwrap().fill(0.25);
         block.channel_mut(1).unwrap().fill(-0.25);
@@ -21246,7 +22205,11 @@ mod tests {
         };
         feed(&mut plane, 20);
         // Automatic split (shortened for the test): the WAV splits in place.
-        plane.recording_splits.get_mut(&node_id).unwrap().every_frames = 128 * 10;
+        plane
+            .recording_splits
+            .get_mut(&node_id)
+            .unwrap()
+            .every_frames = 128 * 10;
         plane.maintain_node_recordings(std::time::Instant::now());
         feed(&mut plane, 20);
         plane.recording_maintained_at = None;
@@ -21254,7 +22217,10 @@ mod tests {
         feed(&mut plane, 5);
         let stopped = call(&mut plane, "recorders.stopRecording", "stop-1");
         assert_eq!(stopped["state"], "completed");
-        assert!(stopped["parts"].as_array().unwrap().len() >= 2, "split produced parts: {stopped}");
+        assert!(
+            stopped["parts"].as_array().unwrap().len() >= 2,
+            "split produced parts: {stopped}"
+        );
         // Every split part must open in a player, not just be non-empty.
         for entry in std::fs::read_dir(&root).unwrap() {
             assert_playable_wav(&entry.unwrap().path());
@@ -21264,9 +22230,21 @@ mod tests {
         let second = call(&mut plane, "recorders.startRecording", "start-2");
         assert_ne!(second["path"], started["path"]);
         feed(&mut plane, 4);
-        let stop_error = plane.session_stop(&session_id).err().map(|error| format!("{error:?}"));
-        assert!(!stop_error.as_deref().unwrap_or("").contains("must be finalized"), "{stop_error:?}");
-        assert!(!plane.recorder_node_workers.contains_key(&node_id), "recording finalized by Stop");
+        let stop_error = plane
+            .session_stop(&session_id)
+            .err()
+            .map(|error| format!("{error:?}"));
+        assert!(
+            !stop_error
+                .as_deref()
+                .unwrap_or("")
+                .contains("must be finalized"),
+            "{stop_error:?}"
+        );
+        assert!(
+            !plane.recorder_node_workers.contains_key(&node_id),
+            "recording finalized by Stop"
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -21274,16 +22252,23 @@ mod tests {
     /// chunk with audio ends inside the file. Returns the data byte count.
     fn assert_playable_wav(path: &std::path::Path) -> u64 {
         let bytes = std::fs::read(path).unwrap();
-        assert!(bytes.len() > 44 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WAVE", "{path:?} is not a WAV");
+        assert!(
+            bytes.len() > 44 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WAVE",
+            "{path:?} is not a WAV"
+        );
         let riff = u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize;
         assert_eq!(riff, bytes.len() - 8, "{path:?}: RIFF size not finalized");
         let mut offset = 12;
         while offset + 8 <= bytes.len() {
             let id = &bytes[offset..offset + 4];
-            let size = u32::from_le_bytes(bytes[offset + 4..offset + 8].try_into().unwrap()) as usize;
+            let size =
+                u32::from_le_bytes(bytes[offset + 4..offset + 8].try_into().unwrap()) as usize;
             if id == b"data" {
                 assert!(size > 0, "{path:?}: empty data chunk");
-                assert!(offset + 8 + size <= bytes.len(), "{path:?}: data chunk overruns the file");
+                assert!(
+                    offset + 8 + size <= bytes.len(),
+                    "{path:?}: data chunk overruns the file"
+                );
                 return size as u64;
             }
             offset += 8 + size + (size & 1);
@@ -21300,7 +22285,14 @@ mod tests {
         // Stalling the control thread no longer stalls the encoder. Deliberate
         // blocked-storage overflow is qualified in threaded_recorder tests.
         for case in ["short stall", "dropped block", "repeated block"] {
-            let root = std::env::temp_dir().join(format!("audiorouter-gap-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+            let root = std::env::temp_dir().join(format!(
+                "audiorouter-gap-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ));
             std::fs::create_dir_all(&root).unwrap();
             let mut graph = session();
             graph.nodes.push(Node {
@@ -21311,18 +22303,33 @@ mod tests {
                 enabled: true,
                 bypass: false,
                 parameters: serde_json::from_value(json!({ "format": "wavPcm16" })).unwrap(),
-                ports: vec![Port { name: "in".into(), direction: PortDirection::Input, channels: 2 }],
+                ports: vec![Port {
+                    name: "in".into(),
+                    direction: PortDirection::Input,
+                    channels: 2,
+                }],
             });
             let session_id = graph.id.clone();
             let node_id = EntityId::new("rec");
             let mut plane = ControlPlane::default();
             plane.insert_session(graph).unwrap();
             plane.configure_recording_root(&root).unwrap();
-            let tap = plane.recorder_tap_set_for_node(&session_id, &node_id).unwrap();
+            let tap = plane
+                .recorder_tap_set_for_node(&session_id, &node_id)
+                .unwrap();
             let request = |plane: &mut ControlPlane, method: &str, key: &str| {
-                plane.dispatch(JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(json!(1)), method: method.into(), params: Some(json!({ "sessionId": session_id, "nodeId": "rec", "idempotencyKey": key })) })
+                plane.dispatch(JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(1)),
+                    method: method.into(),
+                    params: Some(
+                        json!({ "sessionId": session_id, "nodeId": "rec", "idempotencyKey": key }),
+                    ),
+                })
             };
-            let started = request(&mut plane, "recorders.startRecording", "start").result.unwrap();
+            let started = request(&mut plane, "recorders.startRecording", "start")
+                .result
+                .unwrap();
             let path = std::path::PathBuf::from(started["path"].as_str().unwrap());
             let mut block = AudioBlock::new(2, 128).unwrap();
             block.channel_mut(0).unwrap().fill(0.25);
@@ -21349,7 +22356,11 @@ mod tests {
             }
             send(&mut plane, &mut frame, 10, true);
             let stopped = request(&mut plane, "recorders.stopRecording", "stop");
-            assert!(stopped.error.is_none(), "{case}: Stop failed: {:?}", stopped.error);
+            assert!(
+                stopped.error.is_none(),
+                "{case}: Stop failed: {:?}",
+                stopped.error
+            );
             let stopped = stopped.result.unwrap();
             let data = assert_playable_wav(&path);
             if case == "short stall" {
@@ -21358,13 +22369,21 @@ mod tests {
                 assert_eq!(data, 395 * 128 * 4, "{case}");
             } else {
                 assert_eq!(stopped["state"], "failed", "{case}: {stopped}");
-                assert!(stopped["reason"].as_str().is_some_and(|reason| reason.contains("audio was lost") && reason.contains("keeps everything")), "{case}: {stopped}");
+                assert!(
+                    stopped["reason"]
+                        .as_str()
+                        .is_some_and(|reason| reason.contains("audio was lost")
+                            && reason.contains("keeps everything")),
+                    "{case}: {stopped}"
+                );
                 assert_eq!(stopped["paths"][0], json!(path.to_str().unwrap()), "{case}");
                 // The ten blocks before the problem are kept and playable.
                 assert!(data >= 10 * 128 * 4, "{case}: only {data} bytes of audio");
             }
             // The node is free for a fresh take.
-            let again = request(&mut plane, "recorders.startRecording", "again").result.unwrap();
+            let again = request(&mut plane, "recorders.startRecording", "again")
+                .result
+                .unwrap();
             assert_eq!(again["state"], "recording", "{case}");
             request(&mut plane, "recorders.stopRecording", "again-stop");
             drop(plane);
@@ -21375,7 +22394,14 @@ mod tests {
     #[test]
     fn one_click_flac_and_mp3_keep_a_finished_file_after_lost_audio() {
         for format in ["flac24", "mp3"] {
-            let root = std::env::temp_dir().join(format!("audiorouter-gap-{format}-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+            let root = std::env::temp_dir().join(format!(
+                "audiorouter-gap-{format}-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ));
             std::fs::create_dir_all(&root).unwrap();
             let mut graph = session();
             graph.nodes.push(Node {
@@ -21386,18 +22412,33 @@ mod tests {
                 enabled: true,
                 bypass: false,
                 parameters: serde_json::from_value(json!({ "format": format })).unwrap(),
-                ports: vec![Port { name: "in".into(), direction: PortDirection::Input, channels: 2 }],
+                ports: vec![Port {
+                    name: "in".into(),
+                    direction: PortDirection::Input,
+                    channels: 2,
+                }],
             });
             let session_id = graph.id.clone();
             let node_id = EntityId::new("rec");
             let mut plane = ControlPlane::default();
             plane.insert_session(graph).unwrap();
             plane.configure_recording_root(&root).unwrap();
-            let tap = plane.recorder_tap_set_for_node(&session_id, &node_id).unwrap();
+            let tap = plane
+                .recorder_tap_set_for_node(&session_id, &node_id)
+                .unwrap();
             let request = |plane: &mut ControlPlane, method: &str, key: &str| {
-                plane.dispatch(JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(json!(1)), method: method.into(), params: Some(json!({ "sessionId": session_id, "nodeId": "rec", "idempotencyKey": key })) })
+                plane.dispatch(JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(1)),
+                    method: method.into(),
+                    params: Some(
+                        json!({ "sessionId": session_id, "nodeId": "rec", "idempotencyKey": key }),
+                    ),
+                })
             };
-            let started = request(&mut plane, "recorders.startRecording", "start").result.unwrap();
+            let started = request(&mut plane, "recorders.startRecording", "start")
+                .result
+                .unwrap();
             let path = std::path::PathBuf::from(started["path"].as_str().unwrap());
             let mut block = AudioBlock::new(2, 128).unwrap();
             block.channel_mut(0).unwrap().fill(0.25);
@@ -21412,10 +22453,17 @@ mod tests {
                 plane.drain_attached_recorders().unwrap();
             }
             let stopped = request(&mut plane, "recorders.stopRecording", "stop");
-            assert!(stopped.error.is_none(), "{format}: Stop failed: {:?}", stopped.error);
+            assert!(
+                stopped.error.is_none(),
+                "{format}: Stop failed: {:?}",
+                stopped.error
+            );
             let stopped = stopped.result.unwrap();
             assert_eq!(stopped["state"], "failed", "{format}: {stopped}");
-            assert!(std::fs::metadata(&path).unwrap().len() > 1_000, "{format}: file too small");
+            assert!(
+                std::fs::metadata(&path).unwrap().len() > 1_000,
+                "{format}: file too small"
+            );
             if format == "flac24" {
                 let info = audiorouter_recording::inspect_flac_file(&path).unwrap();
                 assert_eq!(info.frames, 150 * 128, "{format}: STREAMINFO frames");
@@ -21944,7 +22992,8 @@ mod tests {
 
     #[test]
     fn session_file_export_imports_on_another_database_without_replacing_sessions() {
-        let root = std::env::temp_dir().join(format!("audiorouter-session-rpc-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("audiorouter-session-rpc-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("a")).unwrap();
         std::fs::create_dir_all(root.join("b")).unwrap();
@@ -21957,26 +23006,69 @@ mod tests {
             })
         };
         let file = root.join("setup.audiorouter");
-        let mut source = ControlPlane::with_storage("export", Storage::open(root.join("a/db.sqlite")).unwrap());
+        let mut source =
+            ControlPlane::with_storage("export", Storage::open(root.join("a/db.sqlite")).unwrap());
         source.create_session(session()).unwrap();
-        let exported = call(&mut source, "sessions.exportFile", json!({ "sessionId": "session", "path": file }));
+        let exported = call(
+            &mut source,
+            "sessions.exportFile",
+            json!({ "sessionId": "session", "path": file }),
+        );
         assert_eq!(exported.result.unwrap()["sessionId"], "session");
-        let refused = call(&mut source, "sessions.exportFile", json!({ "sessionId": "session", "path": file }));
-        assert!(refused.error.unwrap().message.contains("already exists"), "never overwrites unasked");
+        let refused = call(
+            &mut source,
+            "sessions.exportFile",
+            json!({ "sessionId": "session", "path": file }),
+        );
+        assert!(
+            refused.error.unwrap().message.contains("already exists"),
+            "never overwrites unasked"
+        );
         let before = std::fs::metadata(&file).unwrap().len();
-        let replaced = call(&mut source, "sessions.exportFile", json!({ "sessionId": "session", "path": file, "replace": true }));
+        let replaced = call(
+            &mut source,
+            "sessions.exportFile",
+            json!({ "sessionId": "session", "path": file, "replace": true }),
+        );
         assert!(replaced.error.is_none(), "{:?}", replaced.error);
         assert_eq!(std::fs::metadata(&file).unwrap().len(), before);
-        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 3, "no staged file left behind");
-        assert!(call(&mut source, "sessions.exportFile", json!({ "sessionId": "session", "path": root.join("a"), "replace": true })).error.is_some());
-        assert!(call(&mut source, "sessions.exportFile", json!({ "sessionId": "session", "path": root.join("x.txt") })).error.is_some());
-        assert!(call(&mut source, "sessions.exportFile", json!({ "sessionId": "session", "path": "relative.audiorouter" })).error.is_some());
+        assert_eq!(
+            std::fs::read_dir(&root).unwrap().count(),
+            3,
+            "no staged file left behind"
+        );
+        assert!(call(
+            &mut source,
+            "sessions.exportFile",
+            json!({ "sessionId": "session", "path": root.join("a"), "replace": true })
+        )
+        .error
+        .is_some());
+        assert!(call(
+            &mut source,
+            "sessions.exportFile",
+            json!({ "sessionId": "session", "path": root.join("x.txt") })
+        )
+        .error
+        .is_some());
+        assert!(call(
+            &mut source,
+            "sessions.exportFile",
+            json!({ "sessionId": "session", "path": "relative.audiorouter" })
+        )
+        .error
+        .is_some());
 
-        let mut target = ControlPlane::with_storage("import", Storage::open(root.join("b/db.sqlite")).unwrap());
-        let first = call(&mut target, "sessions.importFile", json!({ "path": file })).result.unwrap();
+        let mut target =
+            ControlPlane::with_storage("import", Storage::open(root.join("b/db.sqlite")).unwrap());
+        let first = call(&mut target, "sessions.importFile", json!({ "path": file }))
+            .result
+            .unwrap();
         assert_eq!(first["session"]["id"], "session");
         assert_eq!(first["renamed"], false);
-        let second = call(&mut target, "sessions.importFile", json!({ "path": file })).result.unwrap();
+        let second = call(&mut target, "sessions.importFile", json!({ "path": file }))
+            .result
+            .unwrap();
         assert_eq!(second["session"]["id"], "session-imported-1");
         assert_eq!(second["session"]["name"], "test (imported)");
         assert_eq!(second["renamed"], true);
@@ -21991,47 +23083,113 @@ mod tests {
     /// can be withdrawn. The release 0.0.1 shipped without this path.
     #[test]
     fn desktop_consent_lets_a_fresh_install_open_devices_and_persists() {
-        let path = std::env::temp_dir().join(format!("audiorouter-device-consent-{}.sqlite", std::process::id()));
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-device-consent-{}.sqlite",
+            std::process::id()
+        ));
         let _ = std::fs::remove_file(&path);
         let shell = ClientGrant::for_desktop_shell();
         let cli = ClientGrant::for_role(ClientRole::Operator);
         let call = |plane: &mut ControlPlane, grant: &ClientGrant, method: &str, params: Value| {
             plane.dispatch_authorized_for_client(
-                JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(json!(1)), method: method.into(), params: Some(params) },
+                JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(1)),
+                    method: method.into(),
+                    params: Some(params),
+                },
                 "consent-test",
                 grant,
             )
         };
         let denied = |response: &JsonRpcResponse| {
-            response.error.as_ref().is_some_and(|error| error.message.contains("permission denied"))
+            response
+                .error
+                .as_ref()
+                .is_some_and(|error| error.message.contains("permission denied"))
         };
         {
-            let mut plane = ControlPlane::with_storage("consent-first", Storage::open(&path).unwrap());
+            let mut plane =
+                ControlPlane::with_storage("consent-first", Storage::open(&path).unwrap());
             // Before consent: Play's device preparation is refused.
-            assert_eq!(call(&mut plane, &shell, "devices.getAccess", json!({})).result.unwrap()["allowed"], false);
-            let prepare = call(&mut plane, &shell, "nativePaths.prepare", json!({ "sessionId": "missing" }));
+            assert_eq!(
+                call(&mut plane, &shell, "devices.getAccess", json!({}))
+                    .result
+                    .unwrap()["allowed"],
+                false
+            );
+            let prepare = call(
+                &mut plane,
+                &shell,
+                "nativePaths.prepare",
+                json!({ "sessionId": "missing" }),
+            );
             assert!(denied(&prepare), "{prepare:?}");
             // A CLI/MCP operator cannot give consent, even for itself.
-            let refused = call(&mut plane, &cli, "devices.setAccess", json!({ "allowed": true, "idempotencyKey": "cli" }));
+            let refused = call(
+                &mut plane,
+                &cli,
+                "devices.setAccess",
+                json!({ "allowed": true, "idempotencyKey": "cli" }),
+            );
             assert!(denied(&refused), "{refused:?}");
             // The desktop window gives it.
-            let allowed = call(&mut plane, &shell, "devices.setAccess", json!({ "allowed": true, "idempotencyKey": "allow" }));
+            let allowed = call(
+                &mut plane,
+                &shell,
+                "devices.setAccess",
+                json!({ "allowed": true, "idempotencyKey": "allow" }),
+            );
             assert_eq!(allowed.result.unwrap()["allowed"], true);
-            let prepare = call(&mut plane, &shell, "nativePaths.prepare", json!({ "sessionId": "missing" }));
-            assert!(!denied(&prepare), "now authorized; fails only on the missing session: {prepare:?}");
+            let prepare = call(
+                &mut plane,
+                &shell,
+                "nativePaths.prepare",
+                json!({ "sessionId": "missing" }),
+            );
+            assert!(
+                !denied(&prepare),
+                "now authorized; fails only on the missing session: {prepare:?}"
+            );
             // Consent never widens other grants.
-            let cli_prepare = call(&mut plane, &cli, "nativePaths.prepare", json!({ "sessionId": "missing" }));
+            let cli_prepare = call(
+                &mut plane,
+                &cli,
+                "nativePaths.prepare",
+                json!({ "sessionId": "missing" }),
+            );
             assert!(denied(&cli_prepare), "{cli_prepare:?}");
         }
         {
             // After a restart (and a fresh grant object) the consent holds.
-            let mut plane = ControlPlane::with_storage("consent-second", Storage::open(&path).unwrap());
-            assert_eq!(call(&mut plane, &shell, "devices.getAccess", json!({})).result.unwrap()["allowed"], true);
-            let prepare = call(&mut plane, &shell, "nativePaths.prepare", json!({ "sessionId": "missing" }));
+            let mut plane =
+                ControlPlane::with_storage("consent-second", Storage::open(&path).unwrap());
+            assert_eq!(
+                call(&mut plane, &shell, "devices.getAccess", json!({}))
+                    .result
+                    .unwrap()["allowed"],
+                true
+            );
+            let prepare = call(
+                &mut plane,
+                &shell,
+                "nativePaths.prepare",
+                json!({ "sessionId": "missing" }),
+            );
             assert!(!denied(&prepare), "{prepare:?}");
             // Withdrawing it refuses device preparation again.
-            call(&mut plane, &shell, "devices.setAccess", json!({ "allowed": false, "idempotencyKey": "withdraw" }));
-            let prepare = call(&mut plane, &shell, "nativePaths.prepare", json!({ "sessionId": "missing" }));
+            call(
+                &mut plane,
+                &shell,
+                "devices.setAccess",
+                json!({ "allowed": false, "idempotencyKey": "withdraw" }),
+            );
+            let prepare = call(
+                &mut plane,
+                &shell,
+                "nativePaths.prepare",
+                json!({ "sessionId": "missing" }),
+            );
             assert!(denied(&prepare), "{prepare:?}");
         }
         let _ = std::fs::remove_file(&path);
@@ -22047,30 +23205,53 @@ mod tests {
 
     #[test]
     fn the_selected_session_survives_a_backend_restart() {
-        let path = std::env::temp_dir().join(format!("audiorouter-active-session-{}.sqlite", std::process::id()));
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-active-session-{}.sqlite",
+            std::process::id()
+        ));
         let _ = std::fs::remove_file(&path);
         let shell = ClientGrant::for_desktop_shell();
         let call = |plane: &mut ControlPlane, method: &str, params: Value| {
             plane.dispatch_authorized_for_client(
-                JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(json!(1)), method: method.into(), params: Some(params) },
+                JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(1)),
+                    method: method.into(),
+                    params: Some(params),
+                },
                 "active-session-test",
                 &shell,
             )
         };
         let session = |id: &str| json!({ "id": id, "name": id, "schemaVersion": 1, "revision": 0, "nodes": [], "edges": [] });
         {
-            let mut plane = ControlPlane::with_storage("active-first", Storage::open(&path).unwrap());
+            let mut plane =
+                ControlPlane::with_storage("active-first", Storage::open(&path).unwrap());
             for id in ["a-first", "z-mine"] {
-                let created = call(&mut plane, "sessions.create", json!({ "session": session(id), "idempotencyKey": format!("create-{id}") }));
+                let created = call(
+                    &mut plane,
+                    "sessions.create",
+                    json!({ "session": session(id), "idempotencyKey": format!("create-{id}") }),
+                );
                 assert!(created.error.is_none(), "{created:?}");
             }
-            let selected = call(&mut plane, "sessions.active.set", json!({ "sessionId": "z-mine", "idempotencyKey": "select" }));
+            let selected = call(
+                &mut plane,
+                "sessions.active.set",
+                json!({ "sessionId": "z-mine", "idempotencyKey": "select" }),
+            );
             assert!(selected.error.is_none(), "{selected:?}");
         }
         {
             // Tray Play and autoplay at sign-in play this session, not the first one.
-            let mut plane = ControlPlane::with_storage("active-second", Storage::open(&path).unwrap());
-            assert_eq!(call(&mut plane, "sessions.active.get", json!({})).result.unwrap()["sessionId"], "z-mine");
+            let mut plane =
+                ControlPlane::with_storage("active-second", Storage::open(&path).unwrap());
+            assert_eq!(
+                call(&mut plane, "sessions.active.get", json!({}))
+                    .result
+                    .unwrap()["sessionId"],
+                "z-mine"
+            );
         }
         let _ = std::fs::remove_file(&path);
     }
@@ -23324,10 +24505,25 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn network_send_and_receive_carry_a_continuous_tone_through_the_backend() {
-        let root = std::env::temp_dir().join(format!("audiorouter-net-route-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let root = std::env::temp_dir().join(format!(
+            "audiorouter-net-route-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         std::fs::create_dir_all(&root).unwrap();
-        let port_number = std::net::UdpSocket::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
-        let port = |name: &str, direction| Port { name: name.into(), direction, channels: 2 };
+        let port_number = std::net::UdpSocket::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let port = |name: &str, direction| Port {
+            name: name.into(),
+            direction,
+            channels: 2,
+        };
         let node = |id: &str, kind, ports, parameters: Value| Node {
             id: EntityId::new(id),
             kind,
@@ -23347,10 +24543,30 @@ mod tests {
             matrix: vec![1.0, 0.0, 0.0, 1.0],
             enabled: true,
         };
-        let tone = node("tone", NodeKind::TestSignal, vec![port("out", PortDirection::Output)], json!({ "frequencyHz": 997.0, "levelDb": -12.0, "durationMs": 600000.0 }));
-        let send = node("net-send", NodeKind::NetworkSend, vec![port("in", PortDirection::Input)], json!({ "host": "127.0.0.1", "port": port_number }));
-        let receive = node("net-receive", NodeKind::NetworkReceive, vec![port("out", PortDirection::Output)], json!({ "sender": "127.0.0.1", "port": port_number, "bufferMs": 40.0 }));
-        let rec = node("rec", NodeKind::Recorder, vec![port("in", PortDirection::Input)], json!({ "format": "wavFloat32" }));
+        let tone = node(
+            "tone",
+            NodeKind::TestSignal,
+            vec![port("out", PortDirection::Output)],
+            json!({ "frequencyHz": 997.0, "levelDb": -12.0, "durationMs": 600000.0 }),
+        );
+        let send = node(
+            "net-send",
+            NodeKind::NetworkSend,
+            vec![port("in", PortDirection::Input)],
+            json!({ "host": "127.0.0.1", "port": port_number }),
+        );
+        let receive = node(
+            "net-receive",
+            NodeKind::NetworkReceive,
+            vec![port("out", PortDirection::Output)],
+            json!({ "sender": "127.0.0.1", "port": port_number, "bufferMs": 40.0 }),
+        );
+        let rec = node(
+            "rec",
+            NodeKind::Recorder,
+            vec![port("in", PortDirection::Input)],
+            json!({ "format": "wavFloat32" }),
+        );
         let session = |id: &str, nodes: Vec<Node>, edges| Session {
             id: EntityId::new(id),
             name: id.into(),
@@ -23364,11 +24580,23 @@ mod tests {
         for two_computers in [false, true] {
             let sessions = if two_computers {
                 vec![
-                    session("sending-pc", vec![tone.clone(), send.clone()], vec![edge("tone", "net-send")]),
-                    session("receiving-pc", vec![receive.clone(), rec.clone()], vec![edge("net-receive", "rec")]),
+                    session(
+                        "sending-pc",
+                        vec![tone.clone(), send.clone()],
+                        vec![edge("tone", "net-send")],
+                    ),
+                    session(
+                        "receiving-pc",
+                        vec![receive.clone(), rec.clone()],
+                        vec![edge("net-receive", "rec")],
+                    ),
                 ]
             } else {
-                vec![session("network-route", vec![tone.clone(), send.clone(), receive.clone(), rec.clone()], vec![edge("tone", "net-send"), edge("net-receive", "rec")])]
+                vec![session(
+                    "network-route",
+                    vec![tone.clone(), send.clone(), receive.clone(), rec.clone()],
+                    vec![edge("tone", "net-send"), edge("net-receive", "rec")],
+                )]
             };
             let mut planes = sessions
                 .into_iter()
@@ -23381,14 +24609,23 @@ mod tests {
                 })
                 .collect::<Vec<_>>();
             let call = |plane: &mut ControlPlane, method: &str, params: Value| {
-                let response = plane.dispatch(JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(json!(1)), method: method.into(), params: Some(params) });
+                let response = plane.dispatch(JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(1)),
+                    method: method.into(),
+                    params: Some(params),
+                });
                 assert!(response.error.is_none(), "{method}: {:?}", response.error);
                 response.result.unwrap()
             };
             // Receiver first, as on two computers it is usually already playing.
             for (plane, id) in planes.iter_mut().rev() {
                 call(plane, "nativePaths.prepare", json!({ "sessionId": id }));
-                call(plane, "session.start", json!({ "sessionId": id, "idempotencyKey": "net-start" }));
+                call(
+                    plane,
+                    "session.start",
+                    json!({ "sessionId": id, "idempotencyKey": "net-start" }),
+                );
             }
             let service = |planes: &mut Vec<(ControlPlane, EntityId)>, seconds: f64| {
                 let until = Instant::now() + Duration::from_secs_f64(seconds);
@@ -23404,15 +24641,29 @@ mod tests {
             let sender = 0;
             let receiver = planes.len() - 1;
             let (plane, id) = &mut planes[sender];
-            call(plane, "audioSources.transport", json!({ "sessionId": id, "nodeId": "tone", "action": "play" }));
+            call(
+                plane,
+                "audioSources.transport",
+                json!({ "sessionId": id, "nodeId": "tone", "action": "play" }),
+            );
             service(&mut planes, 0.5);
             let (plane, id) = &mut planes[receiver];
-            let started = call(plane, "recorders.startRecording", json!({ "sessionId": id, "nodeId": "rec", "idempotencyKey": "net-rec" }));
+            let started = call(
+                plane,
+                "recorders.startRecording",
+                json!({ "sessionId": id, "nodeId": "rec", "idempotencyKey": "net-rec" }),
+            );
             let path = std::path::PathBuf::from(started["path"].as_str().unwrap());
             service(&mut planes, 3.0);
             let telemetry = |plane: &mut ControlPlane, node_id: &str| {
                 let diagnostics = call(plane, "system.diagnostics", json!({}));
-                diagnostics["nodeTelemetry"].as_array().unwrap().iter().find(|item| item["nodeId"] == node_id).map(|item| item["network"].clone()).unwrap_or(Value::Null)
+                diagnostics["nodeTelemetry"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|item| item["nodeId"] == node_id)
+                    .map(|item| item["network"].clone())
+                    .unwrap_or(Value::Null)
             };
             let send = telemetry(&mut planes[sender].0, "net-send");
             let receive = telemetry(&mut planes[receiver].0, "net-receive");
@@ -23421,43 +24672,109 @@ mod tests {
             assert_eq!(send["localAddress"], "127.0.0.1", "{send}");
             assert!(send.get("lastErrorCode").is_none(), "{send}");
             // The network log summarizes both sides from the same counters.
-            let summaries = planes.iter()
-                .flat_map(|(plane, id)| plane.write_network_summaries(id, &mut network_log::Sampler::default(), Instant::now()))
+            let summaries = planes
+                .iter()
+                .flat_map(|(plane, id)| {
+                    plane.write_network_summaries(
+                        id,
+                        &mut network_log::Sampler::default(),
+                        Instant::now(),
+                    )
+                })
                 .collect::<Vec<_>>();
-            let summary = |role: &str| summaries.iter().find(|record| record["role"] == role).cloned().unwrap_or(Value::Null);
+            let summary = |role: &str| {
+                summaries
+                    .iter()
+                    .find(|record| record["role"] == role)
+                    .cloned()
+                    .unwrap_or(Value::Null)
+            };
             let (send_summary, receive_summary) = (summary("send"), summary("receive"));
-            assert!(send_summary["sentPackets"].as_u64().unwrap_or(0) > 100, "{send_summary}");
+            assert!(
+                send_summary["sentPackets"].as_u64().unwrap_or(0) > 100,
+                "{send_summary}"
+            );
             assert_eq!(send_summary["sendErrors"], 0, "{send_summary}");
-            assert!(send_summary["localAddress"].as_str().is_some_and(|address| address.contains(':')), "{send_summary}");
-            assert!(receive_summary["receivedPackets"].as_u64().unwrap_or(0) > 100, "{receive_summary}");
+            assert!(
+                send_summary["localAddress"]
+                    .as_str()
+                    .is_some_and(|address| address.contains(':')),
+                "{send_summary}"
+            );
+            assert!(
+                receive_summary["receivedPackets"].as_u64().unwrap_or(0) > 100,
+                "{receive_summary}"
+            );
             assert_eq!(receive_summary["rejectedDatagrams"], 0, "{receive_summary}");
-            assert!(receive_summary["hint"].is_null(), "a healthy stream has no hint: {receive_summary}");
+            assert!(
+                receive_summary["hint"].is_null(),
+                "a healthy stream has no hint: {receive_summary}"
+            );
             let (plane, id) = &mut planes[receiver];
-            let stopped = call(plane, "recorders.stopRecording", json!({ "sessionId": id, "nodeId": "rec", "idempotencyKey": "net-rec-stop" }));
+            let stopped = call(
+                plane,
+                "recorders.stopRecording",
+                json!({ "sessionId": id, "nodeId": "rec", "idempotencyKey": "net-rec-stop" }),
+            );
             for (plane, id) in planes.iter_mut() {
-                call(plane, "session.stop", json!({ "sessionId": id, "idempotencyKey": "net-stop" }));
+                call(
+                    plane,
+                    "session.stop",
+                    json!({ "sessionId": id, "idempotencyKey": "net-stop" }),
+                );
             }
-            let layout = if two_computers { "two backends" } else { "one session" };
+            let layout = if two_computers {
+                "two backends"
+            } else {
+                "one session"
+            };
             eprintln!("{layout}: send {send}\nreceive {receive}\nstopped {stopped}");
             assert_eq!(stopped["state"], "completed", "{layout}: {stopped}");
-            assert!(send["sentPackets"].as_u64().unwrap_or(0) > 1_000, "{layout}: sender telemetry: {send}");
+            assert!(
+                send["sentPackets"].as_u64().unwrap_or(0) > 1_000,
+                "{layout}: sender telemetry: {send}"
+            );
             assert_eq!(send["droppedPackets"], 0, "{layout}: {send}");
-            assert!(receive["receivedPackets"].as_u64().unwrap_or(0) > 1_000, "{layout}: receiver telemetry: {receive}");
+            assert!(
+                receive["receivedPackets"].as_u64().unwrap_or(0) > 1_000,
+                "{layout}: receiver telemetry: {receive}"
+            );
             assert_eq!(receive["rejectedDatagrams"], 0, "{layout}: {receive}");
             assert_eq!(receive["lostPackets"], 0, "{layout}: {receive}");
             // The recorded tone: ~3 s, continuous (no gap, no repeat, no step).
             assert_playable_wav(&path);
             let bytes = std::fs::read(&path).unwrap();
-            let data = bytes.windows(4).position(|window| window == b"data").unwrap() + 8;
-            let left = bytes[data..].chunks_exact(8).map(|frame| f32::from_le_bytes(frame[..4].try_into().unwrap())).collect::<Vec<_>>();
-            assert!(left.len() > 48_000 * 2, "{layout}: recorded {} frames", left.len());
-            let peak = left.iter().fold(0.0_f32, |peak, sample| peak.max(sample.abs()));
-            assert!((peak - 10_f32.powf(-12.0 / 20.0)).abs() < 0.02, "{layout}: level preserved over the network: {peak}");
-            let start = left.iter().position(|sample| sample.abs() > peak / 2.0).unwrap();
+            let data = bytes
+                .windows(4)
+                .position(|window| window == b"data")
+                .unwrap()
+                + 8;
+            let left = bytes[data..]
+                .chunks_exact(8)
+                .map(|frame| f32::from_le_bytes(frame[..4].try_into().unwrap()))
+                .collect::<Vec<_>>();
+            assert!(
+                left.len() > 48_000 * 2,
+                "{layout}: recorded {} frames",
+                left.len()
+            );
+            let peak = left
+                .iter()
+                .fold(0.0_f32, |peak, sample| peak.max(sample.abs()));
+            assert!(
+                (peak - 10_f32.powf(-12.0 / 20.0)).abs() < 0.02,
+                "{layout}: level preserved over the network: {peak}"
+            );
+            let start = left
+                .iter()
+                .position(|sample| sample.abs() > peak / 2.0)
+                .unwrap();
             let coefficient = (2.0 * (2.0 * std::f64::consts::PI * 997.0 / 48_000.0).cos()) as f32;
             let steps = left[start..]
                 .windows(3)
-                .filter(|window| (window[2] - (coefficient * window[1] - window[0])).abs() > peak * 0.05)
+                .filter(|window| {
+                    (window[2] - (coefficient * window[1] - window[0])).abs() > peak * 0.05
+                })
                 .count();
             assert_eq!(steps, 0, "{layout}: the received tone is continuous");
         }
@@ -23472,9 +24789,21 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn network_settings_corrected_while_playing_take_effect_without_restart() {
-        let send_port = std::net::UdpSocket::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
-        let wrong_port = std::net::UdpSocket::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
-        let port = |name: &str, direction| Port { name: name.into(), direction, channels: 2 };
+        let send_port = std::net::UdpSocket::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let wrong_port = std::net::UdpSocket::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let port = |name: &str, direction| Port {
+            name: name.into(),
+            direction,
+            channels: 2,
+        };
         let node = |id: &str, kind, ports, parameters: Value| Node {
             id: EntityId::new(id),
             kind,
@@ -23494,17 +24823,52 @@ mod tests {
             matrix: vec![1.0, 0.0, 0.0, 1.0],
             enabled: true,
         };
-        let session = |id: &str, nodes, edges| Session { id: EntityId::new(id), name: id.into(), schema_version: 1, revision: 0, nodes, edges };
-        let sending = session("sending-pc", vec![
-            node("tone", NodeKind::TestSignal, vec![port("out", PortDirection::Output)], json!({ "frequencyHz": 997.0, "levelDb": -12.0, "durationMs": 600000.0 })),
-            // Mistake 1: the receiving computer listens on another port.
-            node("net-send", NodeKind::NetworkSend, vec![port("in", PortDirection::Input)], json!({ "host": "127.0.0.1", "port": wrong_port })),
-        ], vec![edge("tone", "net-send")]);
-        let receiving = session("receiving-pc", vec![
-            // Mistake 2: the wrong sending computer's address.
-            node("net-receive", NodeKind::NetworkReceive, vec![port("out", PortDirection::Output)], json!({ "sender": "127.0.0.2", "port": send_port, "bufferMs": 40.0 })),
-            node("rec", NodeKind::Recorder, vec![port("in", PortDirection::Input)], json!({ "format": "wavFloat32" })),
-        ], vec![edge("net-receive", "rec")]);
+        let session = |id: &str, nodes, edges| Session {
+            id: EntityId::new(id),
+            name: id.into(),
+            schema_version: 1,
+            revision: 0,
+            nodes,
+            edges,
+        };
+        let sending = session(
+            "sending-pc",
+            vec![
+                node(
+                    "tone",
+                    NodeKind::TestSignal,
+                    vec![port("out", PortDirection::Output)],
+                    json!({ "frequencyHz": 997.0, "levelDb": -12.0, "durationMs": 600000.0 }),
+                ),
+                // Mistake 1: the receiving computer listens on another port.
+                node(
+                    "net-send",
+                    NodeKind::NetworkSend,
+                    vec![port("in", PortDirection::Input)],
+                    json!({ "host": "127.0.0.1", "port": wrong_port }),
+                ),
+            ],
+            vec![edge("tone", "net-send")],
+        );
+        let receiving = session(
+            "receiving-pc",
+            vec![
+                // Mistake 2: the wrong sending computer's address.
+                node(
+                    "net-receive",
+                    NodeKind::NetworkReceive,
+                    vec![port("out", PortDirection::Output)],
+                    json!({ "sender": "127.0.0.2", "port": send_port, "bufferMs": 40.0 }),
+                ),
+                node(
+                    "rec",
+                    NodeKind::Recorder,
+                    vec![port("in", PortDirection::Input)],
+                    json!({ "format": "wavFloat32" }),
+                ),
+            ],
+            vec![edge("net-receive", "rec")],
+        );
         let mut planes = [sending, receiving].map(|session| {
             let id = session.id.clone();
             let mut plane = ControlPlane::default();
@@ -23512,17 +24876,34 @@ mod tests {
             (plane, id)
         });
         let call = |plane: &mut ControlPlane, method: &str, params: Value| {
-            let response = plane.dispatch(JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(json!(1)), method: method.into(), params: Some(params) });
+            let response = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: method.into(),
+                params: Some(params),
+            });
             assert!(response.error.is_none(), "{method}: {:?}", response.error);
             response.result.unwrap()
         };
         for (plane, id) in planes.iter_mut() {
             call(plane, "nativePaths.prepare", json!({ "sessionId": id }));
-            call(plane, "session.start", json!({ "sessionId": id, "idempotencyKey": "start" }));
-            call(plane, "sessions.active.set", json!({ "sessionId": id, "idempotencyKey": "active" }));
+            call(
+                plane,
+                "session.start",
+                json!({ "sessionId": id, "idempotencyKey": "start" }),
+            );
+            call(
+                plane,
+                "sessions.active.set",
+                json!({ "sessionId": id, "idempotencyKey": "active" }),
+            );
         }
         let (plane, id) = &mut planes[0];
-        call(plane, "audioSources.transport", json!({ "sessionId": id, "nodeId": "tone", "action": "play" }));
+        call(
+            plane,
+            "audioSources.transport",
+            json!({ "sessionId": id, "nodeId": "tone", "action": "play" }),
+        );
         let service = |planes: &mut [(ControlPlane, EntityId); 2], seconds: f64| {
             let until = Instant::now() + Duration::from_secs_f64(seconds);
             while Instant::now() < until {
@@ -23534,39 +24915,97 @@ mod tests {
         };
         let receive_telemetry = |planes: &mut [(ControlPlane, EntityId); 2]| {
             let diagnostics = call(&mut planes[1].0, "system.diagnostics", json!({}));
-            diagnostics["nodeTelemetry"].as_array().unwrap().iter().find(|item| item["nodeId"] == "net-receive").unwrap()["network"].clone()
+            diagnostics["nodeTelemetry"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|item| item["nodeId"] == "net-receive")
+                .unwrap()["network"]
+                .clone()
         };
         service(&mut planes, 0.5);
-        assert_eq!(receive_telemetry(&mut planes)["receivedPackets"], 0, "nothing reaches the wrong port");
+        assert_eq!(
+            receive_telemetry(&mut planes)["receivedPackets"],
+            0,
+            "nothing reaches the wrong port"
+        );
         // Fix the sender's port while playing.
         let (plane, _) = &mut planes[0];
-        let fixed = call(plane, "nodes.set", json!({ "node": "net-send", "parameters": { "port": send_port }, "idempotencyKey": "fix-port" }));
-        assert_ne!(fixed["activation"]["native"]["state"], "restartRequired", "{fixed}");
+        let fixed = call(
+            plane,
+            "nodes.set",
+            json!({ "node": "net-send", "parameters": { "port": send_port }, "idempotencyKey": "fix-port" }),
+        );
+        assert_ne!(
+            fixed["activation"]["native"]["state"], "restartRequired",
+            "{fixed}"
+        );
         service(&mut planes, 0.5);
         let waiting = receive_telemetry(&mut planes);
-        assert_eq!(waiting["receivedPackets"], 0, "still the wrong sender address: {waiting}");
-        assert!(waiting["rejectedDatagrams"].as_u64().unwrap_or(0) > 50, "{waiting}");
-        assert_eq!(waiting["rejectedFrom"], "127.0.0.1", "the real sender is named: {waiting}");
+        assert_eq!(
+            waiting["receivedPackets"], 0,
+            "still the wrong sender address: {waiting}"
+        );
+        assert!(
+            waiting["rejectedDatagrams"].as_u64().unwrap_or(0) > 50,
+            "{waiting}"
+        );
+        assert_eq!(
+            waiting["rejectedFrom"], "127.0.0.1",
+            "the real sender is named: {waiting}"
+        );
         // Use the named address while playing (the UI's one-click fix).
         let (plane, _) = &mut planes[1];
-        let fixed = call(plane, "nodes.set", json!({ "node": "net-receive", "parameters": { "sender": "127.0.0.1" }, "idempotencyKey": "fix-sender" }));
-        assert_ne!(fixed["activation"]["native"]["state"], "restartRequired", "{fixed}");
+        let fixed = call(
+            plane,
+            "nodes.set",
+            json!({ "node": "net-receive", "parameters": { "sender": "127.0.0.1" }, "idempotencyKey": "fix-sender" }),
+        );
+        assert_ne!(
+            fixed["activation"]["native"]["state"], "restartRequired",
+            "{fixed}"
+        );
         service(&mut planes, 1.0);
         let receiving = receive_telemetry(&mut planes);
         eprintln!("after both fixes: {receiving}");
-        assert!(receiving["receivedPackets"].as_u64().unwrap_or(0) > 200, "audio flows after the live fix: {receiving}");
-        assert!(receiving.get("rejectedFrom").is_none(), "the old hint is cleared: {receiving}");
+        assert!(
+            receiving["receivedPackets"].as_u64().unwrap_or(0) > 200,
+            "audio flows after the live fix: {receiving}"
+        );
+        assert!(
+            receiving.get("rejectedFrom").is_none(),
+            "the old hint is cleared: {receiving}"
+        );
         // A port change on the receiver opens a new socket, also live.
-        let new_port = std::net::UdpSocket::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let new_port = std::net::UdpSocket::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
         let (plane, _) = &mut planes[1];
-        call(plane, "nodes.set", json!({ "node": "net-receive", "parameters": { "port": new_port }, "idempotencyKey": "move-port" }));
+        call(
+            plane,
+            "nodes.set",
+            json!({ "node": "net-receive", "parameters": { "port": new_port }, "idempotencyKey": "move-port" }),
+        );
         let (plane, _) = &mut planes[0];
-        call(plane, "nodes.set", json!({ "node": "net-send", "parameters": { "port": new_port }, "idempotencyKey": "follow-port" }));
+        call(
+            plane,
+            "nodes.set",
+            json!({ "node": "net-send", "parameters": { "port": new_port }, "idempotencyKey": "follow-port" }),
+        );
         service(&mut planes, 1.0);
         let moved = receive_telemetry(&mut planes);
-        assert!(moved["receivedPackets"].as_u64().unwrap_or(0) > 200, "audio follows the new port: {moved}");
+        assert!(
+            moved["receivedPackets"].as_u64().unwrap_or(0) > 200,
+            "audio follows the new port: {moved}"
+        );
         for (plane, id) in planes.iter_mut() {
-            call(plane, "session.stop", json!({ "sessionId": id, "idempotencyKey": "stop" }));
+            call(
+                plane,
+                "session.stop",
+                json!({ "sessionId": id, "idempotencyKey": "stop" }),
+            );
         }
     }
 
@@ -23630,9 +25069,17 @@ mod tests {
             std::fs::write(path, serde_json::to_vec_pretty(&diagnostics).unwrap()).unwrap();
         }
         for item in diagnostics["nodeTelemetry"].as_array().unwrap() {
-            eprintln!("{} timing={} plugin={}", item["nodeId"], item["timing"], item["plugin"]);
+            eprintln!(
+                "{} timing={} plugin={}",
+                item["nodeId"], item["timing"], item["plugin"]
+            );
             if let Some(levels) = item["spectrum"]["levelsDb"].as_array() {
-                eprintln!("{} spectrum (first 8 of {} bands, dB): {:?}", item["nodeId"], levels.len(), &levels[..8.min(levels.len())]);
+                eprintln!(
+                    "{} spectrum (first 8 of {} bands, dB): {:?}",
+                    item["nodeId"],
+                    levels.len(),
+                    &levels[..8.min(levels.len())]
+                );
             }
         }
         eprintln!("delivered branch blocks: {delivered}");
@@ -23646,7 +25093,10 @@ mod tests {
             .iter()
             .filter(|item| item["timing"]["delayMs"].is_number())
             .count();
-        assert!(timed > 0, "signal timing is reported while the session runs");
+        assert!(
+            timed > 0,
+            "signal timing is reported while the session runs"
+        );
         let failed_plugins = diagnostics["nodeTelemetry"]
             .as_array()
             .unwrap()
@@ -23675,12 +25125,18 @@ mod tests {
                 .map(|id| plane.plugin_bridge(&session, id).unwrap())
                 .collect::<Vec<_>>();
             assert!(
-                members.iter().all(|member| member.shares_worker_with(&members[0])),
+                members
+                    .iter()
+                    .all(|member| member.shares_worker_with(&members[0])),
                 "Patrick's ReaPlugs must share one worker"
             );
             eprintln!(
                 "verified shared plugin worker: {}",
-                plugin_ids.iter().map(EntityId::as_str).collect::<Vec<_>>().join(" -> ")
+                plugin_ids
+                    .iter()
+                    .map(EntityId::as_str)
+                    .collect::<Vec<_>>()
+                    .join(" -> ")
             );
         }
     }
@@ -23692,43 +25148,106 @@ mod tests {
     #[test]
     #[ignore = "live exact Windows endpoints; privacy-muted isolated session"]
     fn live_native_meter_saved_route_starts_pumps_and_resets() {
-        let Some(path) = std::env::var_os("AUDIOROUTER_LIVE_METER_SESSION_JSON") else { return; };
+        let Some(path) = std::env::var_os("AUDIOROUTER_LIVE_METER_SESSION_JSON") else {
+            return;
+        };
         let text = std::fs::read_to_string(path).unwrap();
         let session: Session = serde_json::from_str(text.trim_start_matches('\u{feff}')).unwrap();
-        assert!(session.nodes.iter().all(|node| node.kind != NodeKind::Plugin), "this fixture is native-only");
+        assert!(
+            session
+                .nodes
+                .iter()
+                .all(|node| node.kind != NodeKind::Plugin),
+            "this fixture is native-only"
+        );
         let session_id = session.id.clone();
-        let meter_id = session.nodes.iter().find(|node| node.kind == NodeKind::Meter).expect("fixture contains a Meter").id.clone();
+        let meter_id = session
+            .nodes
+            .iter()
+            .find(|node| node.kind == NodeKind::Meter)
+            .expect("fixture contains a Meter")
+            .id
+            .clone();
         let mut plane = ControlPlane::default();
         plane.insert_session(session.clone()).unwrap();
         let key = format!("meter-{}", std::process::id());
         let request = |method: &str, params: Value| JsonRpcRequest {
-            jsonrpc: "2.0".into(), id: Some(json!(1)), method: method.into(), params: Some(params),
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: method.into(),
+            params: Some(params),
         };
-        assert!(plane.dispatch(request("safety.setPrivacyMute", json!({"muted":true,"idempotencyKey":format!("{key}-mute")}))).error.is_none());
-        let prepared = plane.dispatch(request("nativePaths.prepare", json!({"sessionId":session_id})));
+        assert!(plane
+            .dispatch(request(
+                "safety.setPrivacyMute",
+                json!({"muted":true,"idempotencyKey":format!("{key}-mute")})
+            ))
+            .error
+            .is_none());
+        let prepared = plane.dispatch(request(
+            "nativePaths.prepare",
+            json!({"sessionId":session_id}),
+        ));
         assert!(prepared.error.is_none(), "prepare: {:?}", prepared.error);
-        let started = plane.dispatch(request("session.start", json!({"sessionId":session_id,"idempotencyKey":format!("{key}-start")})));
+        let started = plane.dispatch(request(
+            "session.start",
+            json!({"sessionId":session_id,"idempotencyKey":format!("{key}-start")}),
+        ));
         assert!(started.error.is_none(), "start: {:?}", started.error);
         let generation = started.result.unwrap()["generation"].as_u64().unwrap();
         let deadline = Instant::now() + Duration::from_secs(4);
         let mut delivered = 0;
         while Instant::now() < deadline {
-            let pump = plane.dispatch(request("nativeMultiInputs.pump", json!({"sessionId":session_id,"generation":generation,"maxPackets":64})));
+            let pump = plane.dispatch(request(
+                "nativeMultiInputs.pump",
+                json!({"sessionId":session_id,"generation":generation,"maxPackets":64}),
+            ));
             assert!(pump.error.is_none(), "pump: {:?}", pump.error);
-            delivered += pump.result.unwrap()["deliveredQuanta"].as_u64().unwrap_or(0);
+            delivered += pump.result.unwrap()["deliveredQuanta"]
+                .as_u64()
+                .unwrap_or(0);
             std::thread::sleep(Duration::from_millis(2));
         }
-        let diagnostics = plane.dispatch(request("system.diagnostics", json!({}))).result.unwrap();
-        let meter = diagnostics["nodeTelemetry"].as_array().unwrap().iter().find(|item| item["nodeId"] == json!(meter_id)).expect("native Meter telemetry");
+        let diagnostics = plane
+            .dispatch(request("system.diagnostics", json!({})))
+            .result
+            .unwrap();
+        let meter = diagnostics["nodeTelemetry"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["nodeId"] == json!(meter_id))
+            .expect("native Meter telemetry");
         assert!(meter["meter"]["observedFrames"].as_u64().unwrap() > 0);
-        let reset = plane.dispatch(request("meters.reset", json!({"sessionId":session_id,"nodeId":meter_id})));
+        let reset = plane.dispatch(request(
+            "meters.reset",
+            json!({"sessionId":session_id,"nodeId":meter_id}),
+        ));
         assert!(reset.error.is_none(), "reset: {:?}", reset.error);
         assert_eq!(reset.result.unwrap()["reset"], true);
-        let after = plane.dispatch(request("system.diagnostics", json!({}))).result.unwrap();
-        let meter = after["nodeTelemetry"].as_array().unwrap().iter().find(|item| item["nodeId"] == json!(meter_id)).unwrap();
+        let after = plane
+            .dispatch(request("system.diagnostics", json!({})))
+            .result
+            .unwrap();
+        let meter = after["nodeTelemetry"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["nodeId"] == json!(meter_id))
+            .unwrap();
         assert_eq!(meter["meter"]["observedFrames"], 0);
-        assert_eq!(plane.get_session(&session_id).unwrap(), &session, "runtime reset does not save or alter graph");
-        assert!(plane.dispatch(request("session.stop", json!({"sessionId":session_id,"idempotencyKey":format!("{key}-stop")}))).error.is_none());
+        assert_eq!(
+            plane.get_session(&session_id).unwrap(),
+            &session,
+            "runtime reset does not save or alter graph"
+        );
+        assert!(plane
+            .dispatch(request(
+                "session.stop",
+                json!({"sessionId":session_id,"idempotencyKey":format!("{key}-stop")})
+            ))
+            .error
+            .is_none());
         assert!(delivered > 0);
         eprintln!("native Meter route prepared, started, delivered {delivered} branch blocks, exposed frames, reset and stopped; saved graph unchanged");
     }
@@ -23746,13 +25265,18 @@ mod tests {
         };
         let session_id = std::env::var("AUDIOROUTER_LIVE_PATHS_SESSION")
             .unwrap_or_else(|_| "patrick-main-session".into());
-        let node_id = EntityId::new(std::env::var("AUDIOROUTER_LIVE_PLUGIN_NODE").unwrap_or_else(|_| "reaeq".into()));
+        let node_id = EntityId::new(
+            std::env::var("AUDIOROUTER_LIVE_PLUGIN_NODE").unwrap_or_else(|_| "reaeq".into()),
+        );
         let storage = audiorouter_storage::Storage::open(std::path::Path::new(&database)).unwrap();
         let mut plane = ControlPlane::with_storage("live-plugin-state", storage);
         let run_id = format!(
             "live-plugin-state-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
         );
         let call = |plane: &mut ControlPlane, method: &str, params: Value| {
             let response = plane.dispatch(JsonRpcRequest {
@@ -23765,17 +25289,33 @@ mod tests {
             response.result.unwrap()
         };
         let play = |plane: &mut ControlPlane, run: &str| {
-            call(plane, "nativePaths.prepare", json!({ "sessionId": session_id }));
-            let started = call(plane, "session.start", json!({ "sessionId": session_id, "idempotencyKey": format!("{run_id}-{run}-start") }));
+            call(
+                plane,
+                "nativePaths.prepare",
+                json!({ "sessionId": session_id }),
+            );
+            let started = call(
+                plane,
+                "session.start",
+                json!({ "sessionId": session_id, "idempotencyKey": format!("{run_id}-{run}-start") }),
+            );
             let generation = started["generation"].as_u64().unwrap();
             let until = Instant::now() + Duration::from_millis(800);
             while Instant::now() < until {
-                call(plane, "nativeMultiInputs.pump", json!({ "sessionId": session_id, "generation": generation, "maxPackets": 64 }));
+                call(
+                    plane,
+                    "nativeMultiInputs.pump",
+                    json!({ "sessionId": session_id, "generation": generation, "maxPackets": 64 }),
+                );
                 std::thread::sleep(Duration::from_millis(10));
             }
             generation
         };
-        call(&mut plane, "safety.setPrivacyMute", json!({ "muted": true, "idempotencyKey": format!("{run_id}-mute") }));
+        call(
+            &mut plane,
+            "safety.setPrivacyMute",
+            json!({ "muted": true, "idempotencyKey": format!("{run_id}-mute") }),
+        );
         let generation = play(&mut plane, "first");
         let session = EntityId::new(&session_id);
         let bridge = plane.plugin_bridge(&session, &node_id).unwrap();
@@ -23783,47 +25323,90 @@ mod tests {
         // Change settings the way an editor does: on the running instance only.
         // The values differ on every run, so a restored earlier run's values
         // never turn the change into a no-op.
-        let seed = 0.1 + std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().subsec_millis() as f32 / 1000.0 * 0.6;
+        let seed = 0.1
+            + std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_millis() as f32
+                / 1000.0
+                * 0.6;
         bridge
-            .set_parameters((0..4).map(|parameter_id| audiorouter_plugin_host::ParameterEvent {
-                parameter_id,
-                normalized_value: (seed + parameter_id as f32 * 0.05).min(0.95),
-                sample_offset: 0,
-            }).collect())
+            .set_parameters(
+                (0..4)
+                    .map(|parameter_id| audiorouter_plugin_host::ParameterEvent {
+                        parameter_id,
+                        normalized_value: (seed + parameter_id as f32 * 0.05).min(0.95),
+                        sample_offset: 0,
+                    })
+                    .collect(),
+            )
             .unwrap();
         let until = Instant::now() + Duration::from_millis(500);
         while Instant::now() < until {
             std::thread::sleep(Duration::from_millis(10));
-            call(&mut plane, "nativeMultiInputs.pump", json!({ "sessionId": session_id, "generation": generation, "maxPackets": 64 }));
+            call(
+                &mut plane,
+                "nativeMultiInputs.pump",
+                json!({ "sessionId": session_id, "generation": generation, "maxPackets": 64 }),
+            );
         }
         let changed = bridge.save_state().unwrap();
-        assert_ne!(changed.bytes, before.bytes, "the test must actually change the plugin's state");
+        assert_ne!(
+            changed.bytes, before.bytes,
+            "the test must actually change the plugin's state"
+        );
         drop(bridge);
-        call(&mut plane, "session.stop", json!({ "sessionId": session_id, "idempotencyKey": format!("{run_id}-first-stop") }));
-        call(&mut plane, "nativeEndpoints.detach", json!({ "sessionId": session_id }));
+        call(
+            &mut plane,
+            "session.stop",
+            json!({ "sessionId": session_id, "idempotencyKey": format!("{run_id}-first-stop") }),
+        );
+        call(
+            &mut plane,
+            "nativeEndpoints.detach",
+            json!({ "sessionId": session_id }),
+        );
         play(&mut plane, "second");
-        let restored = plane.plugin_bridge(&session, &node_id).unwrap().save_state().unwrap();
-        call(&mut plane, "session.stop", json!({ "sessionId": session_id, "idempotencyKey": format!("{run_id}-second-stop") }));
+        let restored = plane
+            .plugin_bridge(&session, &node_id)
+            .unwrap()
+            .save_state()
+            .unwrap();
+        call(
+            &mut plane,
+            "session.stop",
+            json!({ "sessionId": session_id, "idempotencyKey": format!("{run_id}-second-stop") }),
+        );
         // Some plugins re-round a stored double when reloading (ReaEQ moves
         // one frequency by its last bit), so allow a byte or two of drift but
         // require the restore to match the change, not the original state.
         let differing = |left: &[u8], right: &[u8]| {
-            left.iter().zip(right).filter(|(a, b)| a != b).count() + left.len().abs_diff(right.len())
+            left.iter().zip(right).filter(|(a, b)| a != b).count()
+                + left.len().abs_diff(right.len())
         };
         assert!(
             differing(&restored.bytes, &changed.bytes) <= 2
-                && differing(&restored.bytes, &before.bytes) > differing(&restored.bytes, &changed.bytes),
+                && differing(&restored.bytes, &before.bytes)
+                    > differing(&restored.bytes, &changed.bytes),
             "Stop then Play must restore the plugin's settings: restored {:?}, changed {:?}",
             restored.bytes,
             changed.bytes
         );
-        eprintln!("verified {} settings survive Stop and Play ({} state bytes)", node_id.as_str(), restored.bytes.len());
+        eprintln!(
+            "verified {} settings survive Stop and Play ({} state bytes)",
+            node_id.as_str(),
+            restored.bytes.len()
+        );
     }
 
     #[cfg(windows)]
     #[test]
     fn native_paths_read_a_mono_endpoint_through_a_stereo_device_node() {
-        let stereo = |name: &str, direction| Port { name: name.into(), direction, channels: 2 };
+        let stereo = |name: &str, direction| Port {
+            name: name.into(),
+            direction,
+            channels: 2,
+        };
         let node = |id: &str, kind, ports: Vec<Port>| Node {
             id: EntityId::new(id),
             kind,
@@ -23843,8 +25426,16 @@ mod tests {
                 schema_version: 1,
                 revision: 0,
                 nodes: vec![
-                    node("mic", NodeKind::PhysicalInput, vec![stereo("out", PortDirection::Output)]),
-                    node("cable-a", NodeKind::PhysicalOutput, vec![stereo("in", PortDirection::Input)]),
+                    node(
+                        "mic",
+                        NodeKind::PhysicalInput,
+                        vec![stereo("out", PortDirection::Output)],
+                    ),
+                    node(
+                        "cable-a",
+                        NodeKind::PhysicalOutput,
+                        vec![stereo("in", PortDirection::Input)],
+                    ),
                 ],
                 edges: vec![Edge {
                     id: EntityId::new("mic-cable-a"),
@@ -23863,7 +25454,10 @@ mod tests {
         assert_eq!(adapted.edges[0].matrix, vec![1.0, 1.0]);
         assert!(audiorouter_domain::validate_session(&adapted).is_ok());
         // The saved session keeps its stereo device node.
-        assert_eq!(plane.get_session(&session_id).unwrap().nodes[0].ports[0].channels, 2);
+        assert_eq!(
+            plane.get_session(&session_id).unwrap().nodes[0].ports[0].channels,
+            2
+        );
     }
 
     #[cfg(windows)]
@@ -24500,12 +26094,33 @@ mod tests {
             (owned.id.clone(), node_id.clone()),
             std::sync::Arc::clone(&source),
         );
-        let request = |action| json!({ "sessionId": owned.id, "nodeId": node_id, "action": action });
-        assert_eq!(plane.dispatch_audio_source_transport(Some(request("status"))).unwrap()["state"], "stopped");
-        assert_eq!(plane.dispatch_audio_source_transport(Some(request("play"))).unwrap()["state"], "playing");
-        assert_eq!(plane.dispatch_audio_source_transport(Some(request("stop"))).unwrap()["state"], "stopped");
-        assert!(plane.dispatch_audio_source_transport(Some(request("pause"))).is_err());
-        assert_eq!(plane.status_snapshot().unwrap()["activeSessionIds"][0], owned.id.as_str());
+        let request =
+            |action| json!({ "sessionId": owned.id, "nodeId": node_id, "action": action });
+        assert_eq!(
+            plane
+                .dispatch_audio_source_transport(Some(request("status")))
+                .unwrap()["state"],
+            "stopped"
+        );
+        assert_eq!(
+            plane
+                .dispatch_audio_source_transport(Some(request("play")))
+                .unwrap()["state"],
+            "playing"
+        );
+        assert_eq!(
+            plane
+                .dispatch_audio_source_transport(Some(request("stop")))
+                .unwrap()["state"],
+            "stopped"
+        );
+        assert!(plane
+            .dispatch_audio_source_transport(Some(request("pause")))
+            .is_err());
+        assert_eq!(
+            plane.status_snapshot().unwrap()["activeSessionIds"][0],
+            owned.id.as_str()
+        );
     }
 
     #[test]
@@ -25958,10 +27573,7 @@ mod tests {
     fn audio_status_names_the_attached_worker_kind() {
         assert_eq!(
             ControlPlane::audio_status_for("running", Some("endpoint")),
-            (
-                "available",
-                "native endpoint audio is running"
-            )
+            ("available", "native endpoint audio is running")
         );
         assert_eq!(
             ControlPlane::audio_status_for("configured-stopped", Some("duplex")),
@@ -25972,10 +27584,7 @@ mod tests {
         );
         assert_eq!(
             ControlPlane::audio_status_for("running", Some("multi-input")),
-            (
-                "available",
-                "native multi-input audio is running"
-            )
+            ("available", "native multi-input audio is running")
         );
         assert_eq!(
             ControlPlane::audio_status_for("unknown", None),
@@ -28139,7 +29748,9 @@ mod tests {
         taps.on_processed_block(0, &first_block);
 
         // Idle audio is not retained. Start is the admission boundary.
-        let queue = plane.recorder_workers[&original.id].shared_recording_queue().unwrap();
+        let queue = plane.recorder_workers[&original.id]
+            .shared_recording_queue()
+            .unwrap();
         assert_eq!(queue.len(), 0);
         assert_eq!(queue.overruns(), 0);
 
@@ -28166,7 +29777,9 @@ mod tests {
                 params: Some(params),
             });
             assert!(response.result.is_some(), "{method}: {response:?}");
-            if method == "recorders.start" { taps.on_processed_block(0, &first_block); }
+            if method == "recorders.start" {
+                taps.on_processed_block(0, &first_block);
+            }
         }
         let mut second_block = AudioBlock::new(1, 2).unwrap();
         second_block
@@ -29391,12 +31004,33 @@ mod tests {
         let node_id = saved.nodes[1].id.clone();
         let id = saved.id.clone();
         plane.insert_session(saved.clone()).unwrap();
-        let request = || JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(json!(1)), method: "meters.reset".into(), params: Some(json!({"sessionId":id,"nodeId":node_id})) };
+        let request = || JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "meters.reset".into(),
+            params: Some(json!({"sessionId":id,"nodeId":node_id})),
+        };
         let read_only = ClientGrant::read_only();
-        assert_eq!(plane.dispatch_authorized(request(), &read_only).error.unwrap().code, -32001);
-        assert!(plane.dispatch(request()).error.unwrap().message.contains("not prepared"));
+        assert_eq!(
+            plane
+                .dispatch_authorized(request(), &read_only)
+                .error
+                .unwrap()
+                .code,
+            -32001
+        );
+        assert!(plane
+            .dispatch(request())
+            .error
+            .unwrap()
+            .message
+            .contains("not prepared"));
         assert_eq!(plane.get_session(&id).unwrap(), &saved);
-        assert!(validate_method_params("meters.reset", Some(&json!({"sessionId":id,"nodeId":node_id,"unexpected":true}))).is_err());
+        assert!(validate_method_params(
+            "meters.reset",
+            Some(&json!({"sessionId":id,"nodeId":node_id,"unexpected":true}))
+        )
+        .is_err());
     }
 
     #[test]
@@ -29419,7 +31053,10 @@ mod tests {
             assert!(error.message.contains("POST /api/v1/nativePaths/prepare"));
             assert!(error.message.contains("DeviceAdministration"));
             assert_eq!(plane.get_session(&id).unwrap(), &saved);
-            assert!(!plane.runtimes.get(&id).is_some_and(|runtime| runtime.state() == RuntimeState::Running));
+            assert!(!plane
+                .runtimes
+                .get(&id)
+                .is_some_and(|runtime| runtime.state() == RuntimeState::Running));
         }
     }
 
@@ -30544,10 +32181,19 @@ mod tests {
             audiorouter_windows_audio::AudioError::InvalidUtf16,
             "{0.0.0.00000000}.{cable-input}",
         );
-        let data = |error| application_error_response(Some(json!(1)), error).error.unwrap().data.unwrap();
+        let data = |error| {
+            application_error_response(Some(json!(1)), error)
+                .error
+                .unwrap()
+                .data
+                .unwrap()
+        };
         let (plain, named) = (data(plain), data(named));
         assert_eq!(plain["resourceIds"], json!([]));
-        assert_eq!(named["resourceIds"], json!(["{0.0.0.00000000}.{cable-input}"]));
+        assert_eq!(
+            named["resourceIds"],
+            json!(["{0.0.0.00000000}.{cable-input}"])
+        );
         assert_eq!(named["code"], plain["code"]);
         assert_eq!(named["hresult"], plain["hresult"]);
     }
@@ -30571,7 +32217,10 @@ mod tests {
         assert_eq!(error.message, "audio endpoint is busy");
         let data = error.data.unwrap();
         assert_eq!(data["code"], "deviceInUse");
-        assert_eq!(data["resourceIds"], json!(["{0.0.0.00000000}.{busy-render}"]));
+        assert_eq!(
+            data["resourceIds"],
+            json!(["{0.0.0.00000000}.{busy-render}"])
+        );
         assert_eq!(data["hresult"], 0x8889_000A_u32);
         assert_eq!(data["operation"], "IAudioClient::Initialize(render)");
         assert_eq!(data["retryable"], true);
@@ -30801,7 +32450,11 @@ mod tests {
                 assert!(result["magnitudeDb"][0].as_f64().unwrap() < -10.0);
                 assert!(result["magnitudeDb"][2].as_f64().unwrap() < -10.0);
             } else {
-                assert!(result["magnitudeDb"].as_array().unwrap().iter().all(|value| value.as_f64().unwrap().abs() < 0.02));
+                assert!(result["magnitudeDb"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|value| value.as_f64().unwrap().abs() < 0.02));
             }
         }
         let flat_band = json!({"enabled": false, "type": "peaking", "frequencyHz": 1000.0, "q": 1.0, "gainDb": 0.0});
@@ -31027,14 +32680,27 @@ mod next_generation_tests {
         let mut plane = ControlPlane::new("next-generation");
         let id = session().id;
         plane.insert_session(session()).unwrap();
-        assert_eq!(plane.requested_or_next_generation(&json!({}), &id).unwrap(), 1);
-        assert_eq!(plane.requested_or_next_generation(&json!({ "generation": 5 }), &id).unwrap(), 5);
-        assert!(plane.requested_or_next_generation(&json!({ "generation": 0 }), &id).is_err());
+        assert_eq!(
+            plane.requested_or_next_generation(&json!({}), &id).unwrap(),
+            1
+        );
+        assert_eq!(
+            plane
+                .requested_or_next_generation(&json!({ "generation": 5 }), &id)
+                .unwrap(),
+            5
+        );
+        assert!(plane
+            .requested_or_next_generation(&json!({ "generation": 0 }), &id)
+            .is_err());
         plane.session_start(&id).unwrap();
         // A running session has no next generation for a new worker.
         assert!(plane.requested_or_next_generation(&json!({}), &id).is_err());
         plane.session_stop(&id).unwrap();
-        assert_eq!(plane.requested_or_next_generation(&json!({}), &id).unwrap(), 2);
+        assert_eq!(
+            plane.requested_or_next_generation(&json!({}), &id).unwrap(),
+            2
+        );
     }
 }
 
@@ -31044,9 +32710,12 @@ mod plugin_inventory_tests {
 
     #[test]
     fn remembered_plugin_scans_survive_a_backend_restart() {
-        let unique = format!("{}-{:?}", std::process::id(), std::thread::current().id()).replace(['(', ')'], "");
-        let database = std::env::temp_dir().join(format!("audiorouter-plugin-inventory-{unique}.sqlite"));
-        let folder = std::env::temp_dir().join(format!("audiorouter-plugin-inventory-folder-{unique}"));
+        let unique = format!("{}-{:?}", std::process::id(), std::thread::current().id())
+            .replace(['(', ')'], "");
+        let database =
+            std::env::temp_dir().join(format!("audiorouter-plugin-inventory-{unique}.sqlite"));
+        let folder =
+            std::env::temp_dir().join(format!("audiorouter-plugin-inventory-folder-{unique}"));
         let _ = std::fs::remove_file(&database);
         std::fs::create_dir_all(&folder).unwrap();
         let directory = folder.to_string_lossy().into_owned();
@@ -31079,9 +32748,21 @@ mod scan_entry_path_tests {
         });
         // The scanned path, the canonical binary path a node may carry, and a
         // different letter case all identify the same plugin.
-        assert!(scan_entry_matches_path(&entry, r"C:\Program Files\VSTPlugins\ReaPlugs\reaeq-standalone.dll"));
-        assert!(scan_entry_matches_path(&entry, r"\\?\C:\Program Files\VSTPlugins\ReaPlugs\reaeq-standalone.dll"));
-        assert!(scan_entry_matches_path(&entry, r"c:\program files\vstplugins\reaplugs\REAEQ-STANDALONE.dll"));
-        assert!(!scan_entry_matches_path(&entry, r"C:\Program Files\VSTPlugins\ReaPlugs\reacomp-standalone.dll"));
+        assert!(scan_entry_matches_path(
+            &entry,
+            r"C:\Program Files\VSTPlugins\ReaPlugs\reaeq-standalone.dll"
+        ));
+        assert!(scan_entry_matches_path(
+            &entry,
+            r"\\?\C:\Program Files\VSTPlugins\ReaPlugs\reaeq-standalone.dll"
+        ));
+        assert!(scan_entry_matches_path(
+            &entry,
+            r"c:\program files\vstplugins\reaplugs\REAEQ-STANDALONE.dll"
+        ));
+        assert!(!scan_entry_matches_path(
+            &entry,
+            r"C:\Program Files\VSTPlugins\ReaPlugs\reacomp-standalone.dll"
+        ));
     }
 }

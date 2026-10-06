@@ -98,7 +98,8 @@ impl TimeShift {
     /// Audio that can be rewound into: recorded frames minus one block of
     /// headroom so the read position never overtakes the write position.
     fn available(&self, frames: usize) -> u64 {
-        self.written.min(self.capacity.saturating_sub(frames) as u64)
+        self.written
+            .min(self.capacity.saturating_sub(frames) as u64)
     }
 
     /// Apply any posted command, then record this block. Call once per block
@@ -114,7 +115,9 @@ impl TimeShift {
             code if code == TimeShiftCommand::Back as u8 => {
                 self.delay = (self.delay + jump).min(self.available(frames));
             }
-            code if code == TimeShiftCommand::Forward as u8 => self.delay = self.delay.saturating_sub(jump),
+            code if code == TimeShiftCommand::Forward as u8 => {
+                self.delay = self.delay.saturating_sub(jump)
+            }
             code if code == TimeShiftCommand::Live as u8 => {
                 self.delay = 0;
                 self.paused = false;
@@ -128,7 +131,8 @@ impl TimeShift {
             let Some(input) = input else { continue };
             for (offset, sample) in input.iter().enumerate() {
                 let position = ((self.written + offset as u64) % self.capacity as u64) as usize;
-                self.ring[channel * self.capacity + position] = if sample.is_finite() { *sample } else { 0.0 };
+                self.ring[channel * self.capacity + position] =
+                    if sample.is_finite() { *sample } else { 0.0 };
             }
         }
     }
@@ -140,7 +144,8 @@ impl TimeShift {
             return;
         }
         for (offset, sample) in output.iter_mut().enumerate() {
-            let position = ((self.written + offset as u64 - self.delay) % self.capacity as u64) as usize;
+            let position =
+                ((self.written + offset as u64 - self.delay) % self.capacity as u64) as usize;
             let fade = if offset < self.fade_remaining {
                 (JUMP_FADE_FRAMES - self.fade_remaining + offset) as f32 / JUMP_FADE_FRAMES as f32
             } else {
@@ -159,7 +164,9 @@ impl TimeShift {
             self.delay = (self.delay + frames).min(self.available(self.block_frames));
         }
         self.fade_remaining = self.fade_remaining.saturating_sub(self.block_frames);
-        transport.paused.store(u8::from(self.paused), Ordering::Relaxed);
+        transport
+            .paused
+            .store(u8::from(self.paused), Ordering::Relaxed);
         transport.delay_frames.store(self.delay, Ordering::Relaxed);
         transport
             .buffered_frames
@@ -191,7 +198,12 @@ mod tests {
 
     /// Run `blocks` blocks of 100 frames where each sample's value is its
     /// absolute input frame index, returning the last output block.
-    fn run(shift: &mut TimeShift, transport: &TimeShiftTransport, start: &mut u64, blocks: usize) -> Vec<f32> {
+    fn run(
+        shift: &mut TimeShift,
+        transport: &TimeShiftTransport,
+        start: &mut u64,
+        blocks: usize,
+    ) -> Vec<f32> {
         let mut output = vec![0.0; 100];
         for _ in 0..blocks {
             let input: Vec<f32> = (0..100).map(|offset| (*start + offset) as f32).collect();

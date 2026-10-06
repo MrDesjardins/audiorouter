@@ -13,22 +13,22 @@ use tauri::{
     Manager, Runtime, State, WebviewUrl, WebviewWindowBuilder,
 };
 
-mod backend_supervisor;
-mod shell_settings;
-mod tray_playback;
-#[cfg(windows)]
-mod instance_windows;
-mod http_api;
-mod lan_addresses;
 #[cfg(windows)]
 mod api_token;
+mod backend_supervisor;
+mod http_api;
+#[cfg(windows)]
+mod instance_windows;
+mod lan_addresses;
 #[cfg(windows)]
 mod os_transition_windows;
 #[cfg(windows)]
 mod plugin_editor_windows;
 #[cfg(windows)]
 mod session_file_dialog;
+mod shell_settings;
 mod startup;
+mod tray_playback;
 
 use backend_supervisor::{BackendRestartDecision, BackendSupervisor};
 
@@ -84,7 +84,11 @@ fn write_shell_rpc_log(
     response: &Result<JsonRpcResponse, String>,
 ) {
     use std::io::Write;
-    if request.method == "events.subscribe" && matches!(response, Ok(value) if value.error.is_none()) { return; }
+    if request.method == "events.subscribe"
+        && matches!(response, Ok(value) if value.error.is_none())
+    {
+        return;
+    }
     let path = directory.join("shell.jsonl");
     if std::fs::create_dir_all(directory).is_err() {
         return;
@@ -100,14 +104,23 @@ fn write_shell_rpc_log(
     let (outcome, detail) = match response {
         Ok(response) => {
             if let Some(error) = response.error.as_ref() {
-                (
-                    "error",
+                ("error", {
+                    let mut detail = audiorouter_transport::rpc_failure_log_summary(
+                        &serde_json::to_value(error).unwrap_or_default(),
+                    );
+                    detail["reason"] = serde_json::json!(if matches!(
+                        request.method.as_str(),
+                        "session.start" | "sessions.start" | "sessions.play"
+                    ) && error
+                        .message
+                        .contains("native graph rejected: UnsupportedTopology")
                     {
-                        let mut detail = audiorouter_transport::rpc_failure_log_summary(&serde_json::to_value(error).unwrap_or_default());
-                        detail["reason"] = serde_json::json!(if matches!(request.method.as_str(), "session.start" | "sessions.start" | "sessions.play") && error.message.contains("native graph rejected: UnsupportedTopology") { Some("UnsupportedTopology") } else { None });
-                        detail
-                    },
-                )
+                        Some("UnsupportedTopology")
+                    } else {
+                        None
+                    });
+                    detail
+                })
             } else {
                 let result = response.result.as_ref();
                 let summary = match request.method.as_str() {
@@ -235,7 +248,9 @@ fn select_shell_grant(
     let operator = enrollment.is_some_and(|(role, revoked)| role == "operator" && !revoked);
     if device_admin_opt_in {
         if !operator {
-            return Err("device-administration opt-in requires a non-revoked operator enrollment".into());
+            return Err(
+                "device-administration opt-in requires a non-revoked operator enrollment".into(),
+            );
         }
         return Ok(Some(ClientGrant::with_scopes([
             PermissionScope::Read,
@@ -269,8 +284,11 @@ struct HttpApiState(std::sync::Mutex<Option<http_api::HttpApi>>);
 /// browser. Only `vMAJOR.MINOR.PATCH` tags of this repository are accepted.
 fn release_page_url(tag: &str) -> Option<String> {
     let mut parts = tag.strip_prefix('v')?.split('.');
-    let valid = (0..3).all(|_| parts.next().is_some_and(|part| !part.is_empty() && part.len() <= 6 && part.bytes().all(|byte| byte.is_ascii_digit())))
-        && parts.next().is_none();
+    let valid = (0..3).all(|_| {
+        parts.next().is_some_and(|part| {
+            !part.is_empty() && part.len() <= 6 && part.bytes().all(|byte| byte.is_ascii_digit())
+        })
+    }) && parts.next().is_none();
     valid.then(|| format!("https://github.com/MrDesjardins/audiorouter/releases/tag/{tag}"))
 }
 
@@ -286,7 +304,16 @@ fn open_release_page(tag: String) -> Result<(), String> {
         // Only this repository's release URL for a validated numeric tag is
         // opened. Both strings are NUL-terminated and stay alive throughout
         // ShellExecuteW; no user-controlled command, path or argument is passed.
-        let result = unsafe { ShellExecuteW(None, w!("open"), PCWSTR(wide.as_ptr()), None, None, SW_SHOWNORMAL) };
+        let result = unsafe {
+            ShellExecuteW(
+                None,
+                w!("open"),
+                PCWSTR(wide.as_ptr()),
+                None,
+                None,
+                SW_SHOWNORMAL,
+            )
+        };
         if result.0 as isize <= 32 {
             return Err(format!("Cannot open the browser. Visit {url}"));
         }
@@ -305,22 +332,43 @@ fn http_api_addresses() -> Result<Vec<lan_addresses::LanAddress>, String> {
 /// `network` is one of this PC's private addresses for local-network access,
 /// or absent for this PC only. It must be listed by `http_api_addresses`.
 fn http_api_network(network: Option<&str>) -> Result<Option<std::net::Ipv4Addr>, String> {
-    let Some(network) = network.filter(|value| !value.is_empty()) else { return Ok(None) };
-    let address = network.parse::<std::net::Ipv4Addr>().map_err(|_| "Choose a network address from the list")?;
-    if !lan_addresses::list()?.iter().any(|entry| entry.address == address) {
-        return Err(format!("This PC no longer has the address {address}. Choose another network."));
+    let Some(network) = network.filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    let address = network
+        .parse::<std::net::Ipv4Addr>()
+        .map_err(|_| "Choose a network address from the list")?;
+    if !lan_addresses::list()?
+        .iter()
+        .any(|entry| entry.address == address)
+    {
+        return Err(format!(
+            "This PC no longer has the address {address}. Choose another network."
+        ));
     }
     Ok(Some(address))
 }
 
-fn start_http_api(port: u16, lan: Option<std::net::Ipv4Addr>, pipe: &str) -> Result<http_api::HttpApi, String> {
+fn start_http_api(
+    port: u16,
+    lan: Option<std::net::Ipv4Addr>,
+    pipe: &str,
+) -> Result<http_api::HttpApi, String> {
     let token = api_token::load_or_create(&api_token::default_path()?)?;
     let pipe = pipe.to_owned();
-    http_api::HttpApi::start_on(port, token, lan, std::sync::Arc::new(move |request| forward_rpc_request(request, &pipe)))
+    http_api::HttpApi::start_on(
+        port,
+        token,
+        lan,
+        std::sync::Arc::new(move |request| forward_rpc_request(request, &pipe)),
+    )
 }
 
 /// Remember the port and network the API started with, for auto-start.
-fn remember_http_api(database_path: &std::path::Path, api: shell_settings::ApiListener) -> Result<(), String> {
+fn remember_http_api(
+    database_path: &std::path::Path,
+    api: shell_settings::ApiListener,
+) -> Result<(), String> {
     let path = shell_settings::path_beside(database_path);
     let mut settings = shell_settings::load(&path);
     settings.api = Some(api);
@@ -331,10 +379,18 @@ fn remember_http_api(database_path: &std::path::Path, api: shell_settings::ApiLi
 /// otherwise go offline after every restart until the user presses Start in
 /// the API panel. Uses the last port and network; local-network access
 /// resumes only on an address this PC still has, otherwise this PC only.
-fn auto_start_http_api(database_path: &std::path::Path, pipe: &str) -> Result<Option<http_api::HttpApi>, String> {
+fn auto_start_http_api(
+    database_path: &std::path::Path,
+    pipe: &str,
+) -> Result<Option<http_api::HttpApi>, String> {
     let settings = shell_settings::load(&shell_settings::path_beside(database_path));
-    if !settings.api_auto_start { return Ok(None) }
-    let api = settings.api.unwrap_or(shell_settings::ApiListener { port: 17891, network: None });
+    if !settings.api_auto_start {
+        return Ok(None);
+    }
+    let api = settings.api.unwrap_or(shell_settings::ApiListener {
+        port: 17891,
+        network: None,
+    });
     let lan = http_api_network(api.network.as_deref()).unwrap_or(None);
     start_http_api(api.port, lan, pipe).map(Some)
 }
@@ -355,18 +411,32 @@ fn api_autostart_set(enabled: bool, state: State<'_, ShellState>) -> Result<bool
 }
 
 #[tauri::command]
-fn http_api_control(action: String, port: Option<u16>, network: Option<String>, state: State<'_, ShellState>, api: State<'_, HttpApiState>) -> Result<serde_json::Value, String> {
+fn http_api_control(
+    action: String,
+    port: Option<u16>,
+    network: Option<String>,
+    state: State<'_, ShellState>,
+    api: State<'_, HttpApiState>,
+) -> Result<serde_json::Value, String> {
     let mut listener = api.0.lock().map_err(|_| "API state unavailable")?;
     match action.as_str() {
         "start" => {
             if listener.is_none() {
                 let lan = http_api_network(network.as_deref())?;
                 let started = start_http_api(port.unwrap_or(17891), lan, &state.pipe_name)?;
-                remember_http_api(&state.database_path, shell_settings::ApiListener { port: started.port, network: started.lan.map(|address| address.to_string()) })?;
+                remember_http_api(
+                    &state.database_path,
+                    shell_settings::ApiListener {
+                        port: started.port,
+                        network: started.lan.map(|address| address.to_string()),
+                    },
+                )?;
                 *listener = Some(started);
             }
         }
-        "stop" => { *listener = None; }
+        "stop" => {
+            *listener = None;
+        }
         "regenerate" => {
             let token = api_token::generate()?;
             api_token::save(&api_token::default_path()?, &token)?;
@@ -374,22 +444,45 @@ fn http_api_control(action: String, port: Option<u16>, network: Option<String>, 
                 let (active_port, lan) = (previous.port, previous.lan);
                 drop(previous);
                 let pipe = state.pipe_name.clone();
-                *listener = Some(http_api::HttpApi::start_on(active_port, token, lan, std::sync::Arc::new(move |request| forward_rpc_request(request, &pipe)))?);
+                *listener = Some(http_api::HttpApi::start_on(
+                    active_port,
+                    token,
+                    lan,
+                    std::sync::Arc::new(move |request| forward_rpc_request(request, &pipe)),
+                )?);
             }
         }
         "openDocs" => {
-            let listener = listener.as_ref().ok_or("Start the API before opening documentation")?;
+            let listener = listener
+                .as_ref()
+                .ok_or("Start the API before opening documentation")?;
             #[cfg(windows)]
             {
                 use windows::core::{w, PCWSTR};
                 use windows::Win32::UI::Shell::ShellExecuteW;
                 use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-                let url = format!("http://127.0.0.1:{}/docs", listener.port).encode_utf16().chain(Some(0)).collect::<Vec<_>>();
+                let url = format!("http://127.0.0.1:{}/docs", listener.port)
+                    .encode_utf16()
+                    .chain(Some(0))
+                    .collect::<Vec<_>>();
                 // Only our active loopback URL is opened. Both strings are
                 // NUL-terminated and remain owned/alive throughout ShellExecuteW;
                 // no user-controlled command, path or argument is passed.
-                let result = unsafe { ShellExecuteW(None, w!("open"), PCWSTR(url.as_ptr()), None, None, SW_SHOWNORMAL) };
-                if result.0 as isize <= 32 { return Err("Cannot open the browser. Copy the API URL and append /docs.".into()); }
+                let result = unsafe {
+                    ShellExecuteW(
+                        None,
+                        w!("open"),
+                        PCWSTR(url.as_ptr()),
+                        None,
+                        None,
+                        SW_SHOWNORMAL,
+                    )
+                };
+                if result.0 as isize <= 32 {
+                    return Err(
+                        "Cannot open the browser. Copy the API URL and append /docs.".into(),
+                    );
+                }
             }
         }
         "status" | "reveal" => {}
@@ -400,10 +493,16 @@ fn http_api_control(action: String, port: Option<u16>, network: Option<String>, 
             Some(listener) => listener.token.clone(),
             None => api_token::load_or_create(&api_token::default_path()?)?,
         })
-    } else { None };
+    } else {
+        None
+    };
     Ok(match listener.as_ref() {
-        Some(listener) => serde_json::json!({ "running": true, "port": listener.port, "url": format!("http://127.0.0.1:{}", listener.port), "network": listener.lan.map(|address| address.to_string()), "networkUrl": listener.lan.map(|address| format!("http://{address}:{}", listener.port)), "token": revealed_token }),
-        None => serde_json::json!({ "running": false, "port": port.unwrap_or(17891), "url": null, "network": null, "networkUrl": null, "token": revealed_token }),
+        Some(listener) => {
+            serde_json::json!({ "running": true, "port": listener.port, "url": format!("http://127.0.0.1:{}", listener.port), "network": listener.lan.map(|address| address.to_string()), "networkUrl": listener.lan.map(|address| format!("http://{address}:{}", listener.port)), "token": revealed_token })
+        }
+        None => {
+            serde_json::json!({ "running": false, "port": port.unwrap_or(17891), "url": null, "network": null, "networkUrl": null, "token": revealed_token })
+        }
     })
 }
 
@@ -457,7 +556,11 @@ fn quit_app(app: tauri::AppHandle, state: State<'_, ShellState>) -> Result<(), S
     let response = forward_rpc_request(&request, &state.pipe_name);
     log_shell_rpc(&request, &response);
     let response = response?;
-    if response.result.as_ref().and_then(|result| result.get("state")).and_then(serde_json::Value::as_str)
+    if response
+        .result
+        .as_ref()
+        .and_then(|result| result.get("state"))
+        .and_then(serde_json::Value::as_str)
         == Some("stopped")
     {
         app.exit(0);
@@ -484,9 +587,16 @@ struct MainWindowScript(String);
 
 /// One backend call through the shell's own pipe connection, for the tray
 /// and autoplay (no window needed): the `result`, or the error message.
-fn backend_call(pipe_name: &str) -> impl FnMut(&str, serde_json::Value) -> Result<serde_json::Value, String> + '_ {
+fn backend_call(
+    pipe_name: &str,
+) -> impl FnMut(&str, serde_json::Value) -> Result<serde_json::Value, String> + '_ {
     move |method, params| {
-        let request = JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(serde_json::json!(format!("tray-{method}"))), method: method.into(), params: Some(params) };
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(serde_json::json!(format!("tray-{method}"))),
+            method: method.into(),
+            params: Some(params),
+        };
         let response = forward_rpc_request(&request, pipe_name);
         log_shell_rpc(&request, &response);
         let response = response?;
@@ -515,7 +625,10 @@ fn autoplay_set(enabled: bool, state: State<'_, ShellState>) -> Result<bool, Str
 
 /// `--tray`: started at sign-in; stay in the tray without building a window.
 fn starts_in_tray(arguments: impl IntoIterator<Item = String>) -> bool {
-    arguments.into_iter().skip(1).any(|argument| argument == startup::TRAY_ARGUMENT)
+    arguments
+        .into_iter()
+        .skip(1)
+        .any(|argument| argument == startup::TRAY_ARGUMENT)
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -600,7 +713,11 @@ fn open_plugin_editor(
         let close_request = request("plugins.closeEditor", serde_json::json!({}));
         let close_pipe = state.pipe_name.clone();
         let close_opened = std::sync::Arc::clone(&opened);
-        let title = if title.trim().is_empty() { "Plugin editor".to_owned() } else { title.chars().take(120).collect() };
+        let title = if title.trim().is_empty() {
+            "Plugin editor".to_owned()
+        } else {
+            title.chars().take(120).collect()
+        };
         let window = plugin_editor_windows::open_host_window(
             &format!("{title} — AudioRouter"),
             800,
@@ -619,7 +736,9 @@ fn open_plugin_editor(
         let response = forward_rpc_request(&open_request, &state.pipe_name);
         log_shell_rpc(&open_request, &response);
         match &response {
-            Ok(result) if result.error.is_none() => opened.store(true, std::sync::atomic::Ordering::Release),
+            Ok(result) if result.error.is_none() => {
+                opened.store(true, std::sync::atomic::Ordering::Release)
+            }
             _ => plugin_editor_windows::close_host_window(window),
         }
         response
@@ -646,10 +765,17 @@ async fn choose_session_file(
         let suggested: String = suggested_name
             .unwrap_or_default()
             .chars()
-            .filter(|c| !matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') && !c.is_control())
+            .filter(|c| {
+                !matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*')
+                    && !c.is_control()
+            })
             .take(120)
             .collect();
-        let suggested = if suggested.trim().is_empty() { "AudioRouter session".to_owned() } else { suggested };
+        let suggested = if suggested.trim().is_empty() {
+            "AudioRouter session".to_owned()
+        } else {
+            suggested
+        };
         session_file_dialog::choose(mode == "save", &format!("{suggested}.audiorouter"), owner)
             .map(|path| path.map(|path| path.to_string_lossy().into_owned()))
     }
@@ -763,10 +889,14 @@ fn backend_diagnostics_list() -> Result<Vec<serde_json::Value>, String> {
     Ok(records.into_iter().rev().take(100).collect())
 }
 
-
 fn log_directory() -> Result<std::path::PathBuf, String> {
-    std::env::var_os("LOCALAPPDATA").or_else(|| std::env::var_os("TEMP"))
-        .map(|root| std::path::PathBuf::from(root).join(DEFAULT_DATABASE_DIRECTORY).join("logs"))
+    std::env::var_os("LOCALAPPDATA")
+        .or_else(|| std::env::var_os("TEMP"))
+        .map(|root| {
+            std::path::PathBuf::from(root)
+                .join(DEFAULT_DATABASE_DIRECTORY)
+                .join("logs")
+        })
         .filter(|path| path.is_absolute())
         .ok_or_else(|| "The logs folder is unavailable on this PC.".into())
 }
@@ -779,14 +909,21 @@ fn log_folder_path() -> Result<String, String> {
 #[tauri::command]
 fn open_logs_folder() -> Result<(), String> {
     let directory = log_directory()?;
-    std::fs::create_dir_all(&directory).map_err(|_| "Could not create the logs folder. Check access to your local app data.")?;
+    std::fs::create_dir_all(&directory)
+        .map_err(|_| "Could not create the logs folder. Check access to your local app data.")?;
     // Fixed executable and one fixed app-owned directory; no shell expansion or
     // caller-supplied path. Explorer is deliberately visible at the user's click.
-    let explorer = std::env::var_os("WINDIR").map(std::path::PathBuf::from)
-        .filter(|root| root.is_absolute()).ok_or("Windows Explorer is unavailable.")?
+    let explorer = std::env::var_os("WINDIR")
+        .map(std::path::PathBuf::from)
+        .filter(|root| root.is_absolute())
+        .ok_or("Windows Explorer is unavailable.")?
         .join("explorer.exe");
-    std::process::Command::new(explorer).arg(directory).spawn()
-        .map_err(|_| "Could not open the logs folder. Use Copy folder path and paste it into File Explorer.")?;
+    std::process::Command::new(explorer)
+        .arg(directory)
+        .spawn()
+        .map_err(|_| {
+            "Could not open the logs folder. Use Copy folder path and paste it into File Explorer."
+        })?;
     Ok(())
 }
 
@@ -807,21 +944,38 @@ fn install_streamdeck_plugin(app: tauri::AppHandle) -> Result<(), String> {
         .ok_or("This copy of AudioRouter does not include the Stream Deck plugin. Download it from the release page.")?;
     #[cfg(windows)]
     {
+        use std::os::windows::ffi::OsStrExt;
         use windows::core::{w, PCWSTR};
         use windows::Win32::UI::Shell::ShellExecuteW;
         use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-        use std::os::windows::ffi::OsStrExt;
-        let wide = plugin.as_os_str().encode_wide().chain(Some(0)).collect::<Vec<_>>();
+        let wide = plugin
+            .as_os_str()
+            .encode_wide()
+            .chain(Some(0))
+            .collect::<Vec<_>>();
         // The path is the app's own fixed resource file, not caller input.
         // Both strings are NUL-terminated and stay alive throughout
         // ShellExecuteW; the default handler (Stream Deck) opens it.
-        let result = unsafe { ShellExecuteW(None, w!("open"), PCWSTR(wide.as_ptr()), None, None, SW_SHOWNORMAL) };
+        let result = unsafe {
+            ShellExecuteW(
+                None,
+                w!("open"),
+                PCWSTR(wide.as_ptr()),
+                None,
+                None,
+                SW_SHOWNORMAL,
+            )
+        };
         // SE_ERR_NOASSOC (31): nothing handles .streamDeckPlugin files.
         if result.0 as isize == 31 {
-            return Err("Install the Stream Deck app (version 7.1 or newer) first, then try again.".into());
+            return Err(
+                "Install the Stream Deck app (version 7.1 or newer) first, then try again.".into(),
+            );
         }
         if result.0 as isize <= 32 {
-            return Err("Could not open the Stream Deck plugin. Is the Stream Deck app installed?".into());
+            return Err(
+                "Could not open the Stream Deck plugin. Is the Stream Deck app installed?".into(),
+            );
         }
     }
     #[cfg(not(windows))]
@@ -830,7 +984,10 @@ fn install_streamdeck_plugin(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn mcp_setup_info(app: tauri::AppHandle, state: State<'_, ShellState>) -> Result<serde_json::Value, String> {
+fn mcp_setup_info(
+    app: tauri::AppHandle,
+    state: State<'_, ShellState>,
+) -> Result<serde_json::Value, String> {
     let executable = std::env::current_exe()
         .map_err(|error| format!("shell executable lookup failed: {error}"))?;
     let sibling_cli = executable.with_file_name("audiorouter-cli.exe");
@@ -1359,15 +1516,29 @@ fn refresh_tray_status<R: Runtime>(
 
 #[cfg(windows)]
 fn log_instance_check(state: &'static str) {
-    let request = JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(serde_json::json!("instance-check")), method: "shell.instanceCheck".into(), params: None };
-    log_shell_rpc(&request, &Ok(JsonRpcResponse::success(request.id.clone(), serde_json::json!({"state": state}))));
+    let request = JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(serde_json::json!("instance-check")),
+        method: "shell.instanceCheck".into(),
+        params: None,
+    };
+    log_shell_rpc(
+        &request,
+        &Ok(JsonRpcResponse::success(
+            request.id.clone(),
+            serde_json::json!({"state": state}),
+        )),
+    );
 }
 
 /// Bounded record of where a panic happened. The panic message is omitted
 /// (it may carry runtime text); thread name and source location suffice to
 /// find the defect. Release builds have no console, so without this a
 /// backend panic left no trace at all.
-fn panic_log_detail(thread: Option<&str>, location: Option<&std::panic::Location<'_>>) -> serde_json::Value {
+fn panic_log_detail(
+    thread: Option<&str>,
+    location: Option<&std::panic::Location<'_>>,
+) -> serde_json::Value {
     serde_json::json!({
         "thread": thread.map(|name| name.chars().take(64).collect::<String>()),
         "file": location.map(|location| location.file().chars().take(160).collect::<String>()),
@@ -1378,7 +1549,12 @@ fn panic_log_detail(thread: Option<&str>, location: Option<&std::panic::Location
 fn install_panic_log() {
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        let request = JsonRpcRequest { jsonrpc: "2.0".into(), id: None, method: "shell.panic".into(), params: None };
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: None,
+            method: "shell.panic".into(),
+            params: None,
+        };
         let detail = panic_log_detail(std::thread::current().name(), info.location());
         log_shell_rpc(&request, &Ok(JsonRpcResponse::success(None, detail)));
         default_hook(info);
@@ -1397,11 +1573,23 @@ fn main() {
             return;
         }
         match instance_windows::claim_or_recover() {
-            Ok(Some(guard)) => { log_instance_check("ready"); Some(guard) },
-            Ok(None) => { log_instance_check("cancelled"); return; },
-            Err(message) => { log_instance_check("unavailable"); instance_windows::show_error(&message); return; }
+            Ok(Some(guard)) => {
+                log_instance_check("ready");
+                Some(guard)
+            }
+            Ok(None) => {
+                log_instance_check("cancelled");
+                return;
+            }
+            Err(message) => {
+                log_instance_check("unavailable");
+                instance_windows::show_error(&message);
+                return;
+            }
         }
-    } else { None };
+    } else {
+        None
+    };
     let pipe_name =
         std::env::var("AUDIOROUTER_CONTROL_PIPE").unwrap_or_else(|_| DEFAULT_PIPE_NAME.to_owned());
     let database_path = std::env::var_os("AUDIOROUTER_DATABASE")
@@ -1766,9 +1954,26 @@ mod tests {
 
     #[test]
     fn release_page_opens_only_this_repository_for_numeric_tags() {
-        assert_eq!(release_page_url("v0.0.9").as_deref(), Some("https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.9"));
-        assert_eq!(release_page_url("v12.0.100").as_deref(), Some("https://github.com/MrDesjardins/audiorouter/releases/tag/v12.0.100"));
-        for bad in ["0.0.9", "v0.0", "v0.0.9.1", "v0.0.9-beta", "v0.0.9/../../evil", "v0.0.x", "v.0.9", "v0.0.1234567", "https://evil.example/v1.2.3", ""] {
+        assert_eq!(
+            release_page_url("v0.0.9").as_deref(),
+            Some("https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.9")
+        );
+        assert_eq!(
+            release_page_url("v12.0.100").as_deref(),
+            Some("https://github.com/MrDesjardins/audiorouter/releases/tag/v12.0.100")
+        );
+        for bad in [
+            "0.0.9",
+            "v0.0",
+            "v0.0.9.1",
+            "v0.0.9-beta",
+            "v0.0.9/../../evil",
+            "v0.0.x",
+            "v.0.9",
+            "v0.0.1234567",
+            "https://evil.example/v1.2.3",
+            "",
+        ] {
             assert_eq!(release_page_url(bad), None, "{bad}");
         }
     }
@@ -1777,7 +1982,11 @@ mod tests {
     /// the program name itself never counts.
     #[test]
     fn only_the_tray_argument_starts_without_a_window() {
-        let args = |list: &[&str]| list.iter().map(|item| (*item).to_owned()).collect::<Vec<_>>();
+        let args = |list: &[&str]| {
+            list.iter()
+                .map(|item| (*item).to_owned())
+                .collect::<Vec<_>>()
+        };
         assert!(starts_in_tray(args(&["shell.exe", "--tray"])));
         assert!(!starts_in_tray(args(&["shell.exe"])));
         assert!(!starts_in_tray(args(&["--tray"])), "argv[0] is the program");
@@ -1790,9 +1999,17 @@ mod tests {
     fn closing_the_editor_frees_the_webview_unless_edits_are_unsaved() {
         assert_eq!(close_action(false), CloseAction::Release);
         assert_eq!(close_action(true), CloseAction::Hide);
-        assert!(!allow_exit(None), "the last window closing keeps the backend in the tray");
+        assert!(
+            !allow_exit(None),
+            "the last window closing keeps the backend in the tray"
+        );
         assert!(allow_exit(Some(0)), "Quit exits after finalizing");
-        assert!(!UiUnsaved::default().0.load(std::sync::atomic::Ordering::Relaxed), "a fresh page starts clean");
+        assert!(
+            !UiUnsaved::default()
+                .0
+                .load(std::sync::atomic::Ordering::Relaxed),
+            "a fresh page starts clean"
+        );
     }
 
     /// Setting WebView2 arguments replaces wry's defaults, so they must be
@@ -1800,7 +2017,13 @@ mod tests {
     #[test]
     fn webview_arguments_keep_wry_defaults_and_cap_the_js_heap() {
         let arguments = WEBVIEW_BROWSER_ARGS.split_whitespace().collect::<Vec<_>>();
-        assert_eq!(arguments, ["--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection", "--js-flags=--max-old-space-size=256"]);
+        assert_eq!(
+            arguments,
+            [
+                "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection",
+                "--js-flags=--max-old-space-size=256"
+            ]
+        );
     }
 
     /// The grant of the first launch of a fresh install (enrolled just now)
@@ -1814,7 +2037,10 @@ mod tests {
         assert_eq!(first_launch, ClientGrant::for_desktop_shell());
         assert!(first_launch.accepts_device_consent());
         let opted_in = select_shell_grant(true, Some(&operator)).unwrap().unwrap();
-        assert_ne!(opted_in, first_launch, "the opt-in adds device administration");
+        assert_ne!(
+            opted_in, first_launch,
+            "the opt-in adds device administration"
+        );
         // Other roles keep their enrolled grant; the opt-in needs an operator.
         let editor = ("editor".to_owned(), false);
         assert!(select_shell_grant(false, Some(&editor)).unwrap().is_none());
@@ -2208,9 +2434,28 @@ mod tests {
 
     #[test]
     fn shell_logs_audio_operation_build_and_hex_hresult_without_private_payload() {
-        let directory = std::env::temp_dir().join(format!("audiorouter-shell-audio-log-{}", std::process::id()));
-        let request = JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(serde_json::json!(9)), method: "devices.list".into(), params: Some(serde_json::json!({"sessionId":{"secret":"private"}})) };
-        let response = Ok(JsonRpcResponse { jsonrpc: "2.0".into(), id: request.id.clone(), result: None, error: Some(audiorouter_protocol::JsonRpcError { code: -32000, message: "private device name".into(), data: Some(serde_json::json!({"code":"deviceInvalidated","hresult":3758096907_u32,"operation":"inventory.openPropertyStore","retryable":true})) }) });
+        let directory = std::env::temp_dir().join(format!(
+            "audiorouter-shell-audio-log-{}",
+            std::process::id()
+        ));
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(serde_json::json!(9)),
+            method: "devices.list".into(),
+            params: Some(serde_json::json!({"sessionId":{"secret":"private"}})),
+        };
+        let response = Ok(JsonRpcResponse {
+            jsonrpc: "2.0".into(),
+            id: request.id.clone(),
+            result: None,
+            error: Some(audiorouter_protocol::JsonRpcError {
+                code: -32000,
+                message: "private device name".into(),
+                data: Some(
+                    serde_json::json!({"code":"deviceInvalidated","hresult":3758096907_u32,"operation":"inventory.openPropertyStore","retryable":true}),
+                ),
+            }),
+        });
         write_shell_rpc_log(&directory, &request, &response);
         let log = std::fs::read_to_string(directory.join("shell.jsonl")).unwrap();
         let entry: serde_json::Value = serde_json::from_str(log.trim()).unwrap();
@@ -2224,25 +2469,51 @@ mod tests {
 
     #[test]
     fn shell_panic_log_keeps_location_and_thread_but_no_message() {
-        let directory = std::env::temp_dir().join(format!("audiorouter-shell-panic-log-{}", std::process::id()));
+        let directory = std::env::temp_dir().join(format!(
+            "audiorouter-shell-panic-log-{}",
+            std::process::id()
+        ));
         let location = std::panic::Location::caller();
         let detail = panic_log_detail(Some("audiorouter-control"), Some(location));
-        let request = JsonRpcRequest { jsonrpc: "2.0".into(), id: None, method: "shell.panic".into(), params: None };
-        write_shell_rpc_log(&directory, &request, &Ok(JsonRpcResponse::success(None, detail)));
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: None,
+            method: "shell.panic".into(),
+            params: None,
+        };
+        write_shell_rpc_log(
+            &directory,
+            &request,
+            &Ok(JsonRpcResponse::success(None, detail)),
+        );
         let log = std::fs::read_to_string(directory.join("shell.jsonl")).unwrap();
         let record: serde_json::Value = serde_json::from_str(log.trim()).unwrap();
         assert_eq!(record["method"], "shell.panic");
         assert_eq!(record["detail"]["thread"], "audiorouter-control");
         assert_eq!(record["detail"]["line"], location.line());
-        assert!(record["detail"]["file"].as_str().unwrap().ends_with("main.rs"));
+        assert!(record["detail"]["file"]
+            .as_str()
+            .unwrap()
+            .ends_with("main.rs"));
         std::fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]
     fn shell_does_not_log_successful_event_polls_but_keeps_poll_failures() {
-        let directory = std::env::temp_dir().join(format!("audiorouter-shell-poll-log-{}", std::process::id()));
-        let request = JsonRpcRequest { jsonrpc: "2.0".into(), id: Some(serde_json::json!(10)), method: "events.subscribe".into(), params: None };
-        let ok = Ok(JsonRpcResponse { jsonrpc: "2.0".into(), id: request.id.clone(), result: Some(serde_json::json!({})), error: None });
+        let directory =
+            std::env::temp_dir().join(format!("audiorouter-shell-poll-log-{}", std::process::id()));
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(serde_json::json!(10)),
+            method: "events.subscribe".into(),
+            params: None,
+        };
+        let ok = Ok(JsonRpcResponse {
+            jsonrpc: "2.0".into(),
+            id: request.id.clone(),
+            result: Some(serde_json::json!({})),
+            error: None,
+        });
         write_shell_rpc_log(&directory, &request, &ok);
         assert!(!directory.join("shell.jsonl").exists());
         write_shell_rpc_log(&directory, &request, &Err("private transport path".into()));

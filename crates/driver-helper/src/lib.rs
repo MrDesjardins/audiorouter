@@ -1246,13 +1246,12 @@ fn apply_to_existing(
     context.state.save(&state)?;
     // The superseded package is no longer bound to the device; remove only
     // that exact oem*.inf. Failure is reported, never fatal.
-    let superseded = match previous_oem.filter(|previous| !previous.eq_ignore_ascii_case(&oem)) {
-        Some(previous) => Some(match platform.unstage_package(&previous) {
+    let superseded = previous_oem
+        .filter(|previous| !previous.eq_ignore_ascii_case(&oem))
+        .map(|previous| match platform.unstage_package(&previous) {
             Ok(()) => format!("{previous} removed"),
             Err(failure) => format!("{previous} kept: {}", failure.message),
-        }),
-        None => None,
-    };
+        });
     if reboot {
         return Ok(success(
             command,

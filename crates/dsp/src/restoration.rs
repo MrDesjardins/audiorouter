@@ -158,7 +158,8 @@ impl Declicker {
                 }
                 self.repaired += region.end + 1 - region.start;
             }
-            self.regions.copy_within(index + 1..self.region_count, index);
+            self.regions
+                .copy_within(index + 1..self.region_count, index);
             self.region_count -= 1;
         }
     }
@@ -170,7 +171,9 @@ mod tests {
 
     fn sine(frames: usize, frequency: f32, amplitude: f32) -> Vec<f32> {
         (0..frames)
-            .map(|frame| amplitude * (std::f32::consts::TAU * frequency * frame as f32 / 48_000.0).sin())
+            .map(|frame| {
+                amplitude * (std::f32::consts::TAU * frequency * frame as f32 / 48_000.0).sin()
+            })
             .collect()
     }
 

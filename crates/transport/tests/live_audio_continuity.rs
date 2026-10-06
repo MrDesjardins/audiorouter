@@ -67,14 +67,17 @@ fn find_glitches(samples: &[f32], tone_hz: f64, sample_rate: f64, amplitude: f32
 /// The analysed recording, from where the tone is present, minus a few
 /// samples at each edge.
 fn steady_region(samples: &[f32], amplitude: f32) -> Option<&[f32]> {
-    let first = samples.iter().position(|sample| sample.abs() > amplitude / 4.0)?;
+    let first = samples
+        .iter()
+        .position(|sample| sample.abs() > amplitude / 4.0)?;
     let start = first + 64;
     let end = samples.len().checked_sub(64)?;
     (start + (SAMPLE_RATE as usize) < end).then(|| &samples[start..end])
 }
 
 fn tone(index: u64) -> f32 {
-    (AMPLITUDE as f64 * (2.0 * std::f64::consts::PI * live_tone_hz() * index as f64 / SAMPLE_RATE).sin())
+    (AMPLITUDE as f64
+        * (2.0 * std::f64::consts::PI * live_tone_hz() * index as f64 / SAMPLE_RATE).sin())
         as f32
 }
 
@@ -84,13 +87,20 @@ fn glitch_detector_is_silent_on_a_clean_tone_and_finds_dropped_blocks() {
     assert!(find_glitches(&clean, TONE_HZ, SAMPLE_RATE, AMPLITUDE).is_empty());
 
     // Drop one 480-frame block (a missed 10 ms quantum) and zero another.
-    let mut damaged: Vec<f32> = (0..10_000).map(tone).chain((10_480..30_000).map(tone)).collect();
+    let mut damaged: Vec<f32> = (0..10_000)
+        .map(tone)
+        .chain((10_480..30_000).map(tone))
+        .collect();
     for sample in &mut damaged[20_000..20_480] {
         *sample = 0.0;
     }
     let glitches = find_glitches(&damaged, TONE_HZ, SAMPLE_RATE, AMPLITUDE);
     let positions: Vec<usize> = glitches.iter().map(|glitch| glitch.index).collect();
-    assert_eq!(positions.len(), 3, "drop, zero start and zero end: {glitches:?}");
+    assert_eq!(
+        positions.len(),
+        3,
+        "drop, zero start and zero end: {glitches:?}"
+    );
     assert!(positions[0].abs_diff(10_000) < 4);
     assert!(positions[1].abs_diff(20_000) < 4);
     assert!(positions[2].abs_diff(20_480) < 4);
@@ -121,7 +131,9 @@ mod live {
     }
 
     fn record_mode() -> bool {
-        std::env::var("AUDIOROUTER_CONTINUITY_RECORD").as_deref() == Ok("1") || pre_mixer_mode() || branch_meter_mode()
+        std::env::var("AUDIOROUTER_CONTINUITY_RECORD").as_deref() == Ok("1")
+            || pre_mixer_mode()
+            || branch_meter_mode()
     }
 
     fn branch_meter_mode() -> bool {
@@ -142,7 +154,8 @@ mod live {
         let mut offset = 12;
         while offset + 8 <= bytes.len() {
             let id = &bytes[offset..offset + 4];
-            let size = u32::from_le_bytes(bytes[offset + 4..offset + 8].try_into().unwrap()) as usize;
+            let size =
+                u32::from_le_bytes(bytes[offset + 4..offset + 8].try_into().unwrap()) as usize;
             if id == b"data" {
                 let end = (offset + 8 + size).min(bytes.len());
                 return bytes[offset + 8..end]
@@ -216,7 +229,11 @@ mod live {
                 endpoint_parameters(source),
             )
         };
-        if spatial_mode() { source_node.parameters.insert("spatialMode".into(), json!("headphones")); }
+        if spatial_mode() {
+            source_node
+                .parameters
+                .insert("spatialMode".into(), json!("headphones"));
+        }
         let mut nodes = vec![source_node];
         for (index, kind) in chain.iter().enumerate() {
             let mut parameters = serde_json::Map::new();
@@ -244,7 +261,10 @@ mod live {
             nodes.push(node(
                 format!("tool-{index}"),
                 *kind,
-                vec![port("in", PortDirection::Input), port("out", PortDirection::Output)],
+                vec![
+                    port("in", PortDirection::Input),
+                    port("out", PortDirection::Output),
+                ],
                 parameters,
             ));
         }
@@ -265,13 +285,23 @@ mod live {
             let mut send = serde_json::Map::new();
             send.insert("host".into(), json!("127.0.0.1"));
             send.insert("port".into(), json!(port_number));
-            nodes.push(node("net-send".into(), NodeKind::NetworkSend, vec![port("in", PortDirection::Input)], send));
+            nodes.push(node(
+                "net-send".into(),
+                NodeKind::NetworkSend,
+                vec![port("in", PortDirection::Input)],
+                send,
+            ));
             break_after = Some(nodes.len() - 1);
             let mut receive = serde_json::Map::new();
             receive.insert("sender".into(), json!("127.0.0.1"));
             receive.insert("port".into(), json!(port_number));
             receive.insert("bufferMs".into(), json!(40.0));
-            nodes.push(node("net-receive".into(), NodeKind::NetworkReceive, vec![port("out", PortDirection::Output)], receive));
+            nodes.push(node(
+                "net-receive".into(),
+                NodeKind::NetworkReceive,
+                vec![port("out", PortDirection::Output)],
+                receive,
+            ));
         }
         nodes.push(node(
             "destination".into(),
@@ -298,28 +328,66 @@ mod live {
         // same node that feeds the destination.
         let mut edges = edges;
         let pre_mixer_feeder = if pre_mixer_mode() {
-            let output_edge = edges.iter_mut().find(|edge| edge.destination_node.as_str() == "destination").expect("destination is fed");
-            let feeder = (output_edge.source_node.clone(), output_edge.source_port.clone());
+            let output_edge = edges
+                .iter_mut()
+                .find(|edge| edge.destination_node.as_str() == "destination")
+                .expect("destination is fed");
+            let feeder = (
+                output_edge.source_node.clone(),
+                output_edge.source_port.clone(),
+            );
             output_edge.source_node = EntityId::new("mix");
             output_edge.source_port = "out".into();
-            nodes.push(node("mix".into(), NodeKind::Mixer, vec![port("in", PortDirection::Input), port("out", PortDirection::Output)], serde_json::Map::new()));
+            nodes.push(node(
+                "mix".into(),
+                NodeKind::Mixer,
+                vec![
+                    port("in", PortDirection::Input),
+                    port("out", PortDirection::Output),
+                ],
+                serde_json::Map::new(),
+            ));
             // A stopped generated input contributes silence without opening
             // a second capture device or using the user's microphone.
-            nodes.push(node("silent-source".into(), NodeKind::TestSignal, vec![port("out", PortDirection::Output)], serde_json::Map::new()));
+            nodes.push(node(
+                "silent-source".into(),
+                NodeKind::TestSignal,
+                vec![port("out", PortDirection::Output)],
+                serde_json::Map::new(),
+            ));
             if std::env::var("AUDIOROUTER_CONTINUITY_DISABLED_MIX_INPUT").as_deref() == Ok("1") {
                 nodes.last_mut().unwrap().enabled = false;
             }
-            for (id, source, source_port) in [("processed-to-mix", feeder.0.clone(), feeder.1.clone()), ("silent-to-mix", EntityId::new("silent-source"), "out".into())] {
-                edges.push(Edge { id: EntityId::new(id), source_node: source, source_port, destination_node: EntityId::new("mix"), destination_port: "in".into(), matrix: vec![1.0, 0.0, 0.0, 1.0], enabled: true });
+            for (id, source, source_port) in [
+                ("processed-to-mix", feeder.0.clone(), feeder.1.clone()),
+                (
+                    "silent-to-mix",
+                    EntityId::new("silent-source"),
+                    "out".into(),
+                ),
+            ] {
+                edges.push(Edge {
+                    id: EntityId::new(id),
+                    source_node: source,
+                    source_port,
+                    destination_node: EntityId::new("mix"),
+                    destination_port: "in".into(),
+                    matrix: vec![1.0, 0.0, 0.0, 1.0],
+                    enabled: true,
+                });
             }
             Some(feeder)
-        } else { None };
+        } else {
+            None
+        };
         if record_mode() {
-            let feeder = pre_mixer_feeder.unwrap_or_else(|| edges
-                .iter()
-                .find(|edge| edge.destination_node.as_str() == "destination")
-                .map(|edge| (edge.source_node.clone(), edge.source_port.clone()))
-                .expect("destination is fed"));
+            let feeder = pre_mixer_feeder.unwrap_or_else(|| {
+                edges
+                    .iter()
+                    .find(|edge| edge.destination_node.as_str() == "destination")
+                    .map(|edge| (edge.source_node.clone(), edge.source_port.clone()))
+                    .expect("destination is fed")
+            });
             nodes.push(node(
                 "recorder".into(),
                 NodeKind::Recorder,
@@ -340,10 +408,21 @@ mod live {
         // output branch beside the Recorder branch, so the analysed tone
         // passes through a prepared output-branch processor.
         if branch_meter_mode() {
-            let output_edge = edges.iter_mut().find(|edge| edge.destination_node.as_str() == "destination").expect("destination is fed");
+            let output_edge = edges
+                .iter_mut()
+                .find(|edge| edge.destination_node.as_str() == "destination")
+                .expect("destination is fed");
             output_edge.destination_node = EntityId::new("branch-meter");
             output_edge.destination_port = "in".into();
-            nodes.push(node("branch-meter".into(), NodeKind::Meter, vec![port("in", PortDirection::Input), port("out", PortDirection::Output)], serde_json::Map::new()));
+            nodes.push(node(
+                "branch-meter".into(),
+                NodeKind::Meter,
+                vec![
+                    port("in", PortDirection::Input),
+                    port("out", PortDirection::Output),
+                ],
+                serde_json::Map::new(),
+            ));
             edges.push(Edge {
                 id: EntityId::new("branch-meter-destination"),
                 source_node: EntityId::new("branch-meter"),
@@ -370,7 +449,11 @@ mod live {
         let response = audiorouter_transport::round_trip(pipe, &frame)
             .unwrap_or_else(|error| panic!("{method}: {error:?}"));
         let response: Value = audiorouter_protocol::decode_frame(&response).unwrap();
-        assert!(response["error"].is_null(), "{method}: {}", response["error"]);
+        assert!(
+            response["error"].is_null(),
+            "{method}: {}",
+            response["error"]
+        );
         response["result"].clone()
     }
 
@@ -378,7 +461,11 @@ mod live {
     fn generator(endpoint_id: String, stop: Arc<AtomicBool>) -> std::thread::JoinHandle<()> {
         std::thread::spawn(move || {
             let (_scheduling, _) = AudioServiceThreadGuard::enter();
-            let endpoint = enumerate_active_endpoints().unwrap().into_iter().find(|endpoint| endpoint.id == endpoint_id).unwrap();
+            let endpoint = enumerate_active_endpoints()
+                .unwrap()
+                .into_iter()
+                .find(|endpoint| endpoint.id == endpoint_id)
+                .unwrap();
             assert!(endpoint.is_ieee_float32() && endpoint.sample_rate_hz == 48_000);
             let channels = usize::from(endpoint.channels);
             let spatial = spatial_mode();
@@ -391,7 +478,11 @@ mod live {
                 for index in *next..*next + 4096 {
                     let bytes = tone(index).to_le_bytes();
                     for channel in 0..channels {
-                        chunk.extend_from_slice(if spatial && channel != 0 { &[0; 4] } else { &bytes });
+                        chunk.extend_from_slice(if spatial && channel != 0 {
+                            &[0; 4]
+                        } else {
+                            &bytes
+                        });
                     }
                 }
                 *next += u64::from(render.submit_bytes(&chunk, channels * 4).unwrap());
@@ -420,11 +511,17 @@ mod live {
     ) -> std::thread::JoinHandle<Recording> {
         std::thread::spawn(move || {
             let (_scheduling, _) = AudioServiceThreadGuard::enter();
-            let endpoint = enumerate_active_endpoints().unwrap().into_iter().find(|endpoint| endpoint.id == endpoint_id).unwrap();
+            let endpoint = enumerate_active_endpoints()
+                .unwrap()
+                .into_iter()
+                .find(|endpoint| endpoint.id == endpoint_id)
+                .unwrap();
             let bytes_per_frame = usize::from(endpoint.channels) * 4;
             let mut capture = if endpoint.direction == EndpointDirection::Render {
                 SharedCapture::open_loopback(&endpoint_id).unwrap()
-            } else { SharedCapture::open(&endpoint_id, 0).unwrap() };
+            } else {
+                SharedCapture::open(&endpoint_id, 0).unwrap()
+            };
             let mut buffer = vec![0_u8; 48_000 * bytes_per_frame];
             let mut recording = Recording {
                 left: Vec::with_capacity(48_000 * 120),
@@ -433,7 +530,10 @@ mod live {
             capture.start().unwrap();
             while !stop.load(Ordering::Acquire) {
                 capture.wait_for_data(20).unwrap();
-                while let Some((packet, bytes)) = capture.next_packet_into(&mut buffer, bytes_per_frame).unwrap() {
+                while let Some((packet, bytes)) = capture
+                    .next_packet_into(&mut buffer, bytes_per_frame)
+                    .unwrap()
+                {
                     if !measuring.load(Ordering::Acquire) {
                         continue;
                     }
@@ -454,9 +554,14 @@ mod live {
 
     fn report(label: &str, recording: &Recording) -> usize {
         let Some(steady) = steady_region(&recording.left, AMPLITUDE / 4.0) else {
-            panic!("{label}: no steady tone recorded ({} samples)", recording.left.len());
+            panic!(
+                "{label}: no steady tone recorded ({} samples)",
+                recording.left.len()
+            );
         };
-        let peak = steady.iter().fold(0.0_f32, |peak, sample| peak.max(sample.abs()));
+        let peak = steady
+            .iter()
+            .fold(0.0_f32, |peak, sample| peak.max(sample.abs()));
         let glitches = find_glitches(steady, live_tone_hz(), SAMPLE_RATE, peak);
         // Underruns render exact digital silence; a run of zeros longer than
         // two samples cannot occur inside the sine.
@@ -488,7 +593,10 @@ mod live {
                 "{}.f32",
                 label.split_whitespace().next().unwrap_or("recording")
             ));
-            let bytes: Vec<u8> = steady.iter().flat_map(|sample| sample.to_le_bytes()).collect();
+            let bytes: Vec<u8> = steady
+                .iter()
+                .flat_map(|sample| sample.to_le_bytes())
+                .collect();
             std::fs::write(file, bytes).unwrap();
         }
         for glitch in glitches.iter().take(20) {
@@ -525,7 +633,11 @@ mod live {
         let route_capture = endpoint(
             "AUDIOROUTER_CONTINUITY_ROUTE_CAPTURE_ID",
             "{0.0.1.00000000}.{06268191-5f8c-42ed-827e-d3c7a19637ed}",
-            if spatial_mode() { EndpointDirection::Render } else { EndpointDirection::Capture },
+            if spatial_mode() {
+                EndpointDirection::Render
+            } else {
+                EndpointDirection::Capture
+            },
         );
         let route_render = endpoint(
             "AUDIOROUTER_CONTINUITY_ROUTE_RENDER_ID",
@@ -554,12 +666,31 @@ mod live {
         // liveness on the audio service thread. Only our own bounded helper
         // is captured; no user application's audio is read or recorded.
         struct Helper(std::process::Child);
-        impl Drop for Helper { fn drop(&mut self) { let _ = self.0.kill(); let _ = self.0.wait(); } }
-        let helper = (std::env::var("AUDIOROUTER_CONTINUITY_APPLICATION_LIVENESS").as_deref() == Ok("1")).then(|| {
+        impl Drop for Helper {
+            fn drop(&mut self) {
+                let _ = self.0.kill();
+                let _ = self.0.wait();
+            }
+        }
+        let helper = (std::env::var("AUDIOROUTER_CONTINUITY_APPLICATION_LIVENESS").as_deref()
+            == Ok("1"))
+        .then(|| {
             use std::os::windows::process::CommandExt;
-            Helper(std::process::Command::new("cmd.exe").args(["/C", &format!("ping -n {} 127.0.0.1 > nul", seconds + 15)]).creation_flags(0x08000000).spawn().unwrap())
+            Helper(
+                std::process::Command::new("cmd.exe")
+                    .args(["/C", &format!("ping -n {} 127.0.0.1 > nul", seconds + 15)])
+                    .creation_flags(0x08000000)
+                    .spawn()
+                    .unwrap(),
+            )
         });
-        let application = helper.as_ref().map(|helper| audiorouter_windows_audio::enumerate_applications().unwrap().into_iter().find(|app| app.process_id == helper.0.id()).expect("own helper identity"));
+        let application = helper.as_ref().map(|helper| {
+            audiorouter_windows_audio::enumerate_applications()
+                .unwrap()
+                .into_iter()
+                .find(|app| app.process_id == helper.0.id())
+                .expect("own helper identity")
+        });
         let server_pipe = pipe.clone();
         let (route_capture_id, route_render_id) = (route_capture.clone(), route_render.clone());
         let server_chain = chain.clone();
@@ -570,13 +701,23 @@ mod live {
             let mut maxima = [Duration::ZERO; 3];
             let mut slow = Vec::new();
             while !collector_stop.load(Ordering::Acquire) {
-                let Ok(sample) = timing_samples.recv_timeout(Duration::from_millis(100)) else { continue; };
+                let Ok(sample) = timing_samples.recv_timeout(Duration::from_millis(100)) else {
+                    continue;
+                };
                 let sample: audiorouter_transport::AudioServicePassTiming = sample;
-                if !sample.running { continue; }
-                for (maximum, value) in maxima.iter_mut().zip([sample.wait, sample.dispatch, sample.service]) {
+                if !sample.running {
+                    continue;
+                }
+                for (maximum, value) in
+                    maxima
+                        .iter_mut()
+                        .zip([sample.wait, sample.dispatch, sample.service])
+                {
                     *maximum = (*maximum).max(value);
                 }
-                if sample.wait + sample.dispatch + sample.service > Duration::from_millis(5) && slow.len() < 256 {
+                if sample.wait + sample.dispatch + sample.service > Duration::from_millis(5)
+                    && slow.len() < 256
+                {
                     slow.push(sample);
                 }
             }
@@ -590,7 +731,9 @@ mod live {
                 ),
                 None => audiorouter_control::ControlPlane::default(),
             };
-            let extra = if plane.get_session(&EntityId::new("patrick-main-session")).is_ok()
+            let extra = if plane
+                .get_session(&EntityId::new("patrick-main-session"))
+                .is_ok()
                 && std::env::var_os("AUDIOROUTER_CONTINUITY_PLUGIN_DB").is_some()
             {
                 let saved = plane
@@ -624,7 +767,11 @@ mod live {
             }
             let mut candidate = route(&route_capture_id, &route_render_id, &server_chain, extra);
             if let Some(application) = application {
-                let output_edge = candidate.edges.iter_mut().find(|edge| edge.destination_node.as_str() == "destination").unwrap();
+                let output_edge = candidate
+                    .edges
+                    .iter_mut()
+                    .find(|edge| edge.destination_node.as_str() == "destination")
+                    .unwrap();
                 let feeder = output_edge.source_node.clone();
                 output_edge.destination_node = EntityId::new("liveness-mix");
                 candidate.nodes.push(Node {
@@ -637,8 +784,19 @@ mod live {
                     ports: vec![Port { name: "in".into(), direction: PortDirection::Input, channels: 2 }, Port { name: "out".into(), direction: PortDirection::Output, channels: 2 }],
                     parameters: serde_json::from_value(json!({format!("inputVolume:{}",feeder.as_str()):100,"inputVolume:liveness-app":0})).unwrap(),
                 });
-                for (id, from, to) in [("helper-to-mix","liveness-app","liveness-mix"),("mix-to-output","liveness-mix","destination")] {
-                    candidate.edges.push(Edge { id: EntityId::new(id), source_node: EntityId::new(from), source_port: "out".into(), destination_node: EntityId::new(to), destination_port: "in".into(), matrix: vec![1.0,0.0,0.0,1.0], enabled: true });
+                for (id, from, to) in [
+                    ("helper-to-mix", "liveness-app", "liveness-mix"),
+                    ("mix-to-output", "liveness-mix", "destination"),
+                ] {
+                    candidate.edges.push(Edge {
+                        id: EntityId::new(id),
+                        source_node: EntityId::new(from),
+                        source_port: "out".into(),
+                        destination_node: EntityId::new(to),
+                        destination_port: "in".into(),
+                        matrix: vec![1.0, 0.0, 0.0, 1.0],
+                        enabled: true,
+                    });
                 }
             }
             plane.insert_session(candidate).unwrap();
@@ -666,14 +824,19 @@ mod live {
         let stop = Arc::new(AtomicBool::new(false));
         let tone = generator(tone_render, Arc::clone(&stop));
         let measuring = Arc::new(AtomicBool::new(false));
-        let reference = recorder(route_capture.clone(), Arc::clone(&stop), Arc::clone(&measuring));
+        let reference = recorder(
+            route_capture.clone(),
+            Arc::clone(&stop),
+            Arc::clone(&measuring),
+        );
         let result = recorder(result_capture, Arc::clone(&stop), Arc::clone(&measuring));
         std::thread::sleep(Duration::from_millis(300));
 
         // `paths` (default) is the multi-input worker used by multi-device
         // sessions; `endpoint` is the single capture/render worker the UI
         // uses for a simple one-input, one-output route.
-        let endpoint_mode = std::env::var("AUDIOROUTER_CONTINUITY_MODE").as_deref() == Ok("endpoint");
+        let endpoint_mode =
+            std::env::var("AUDIOROUTER_CONTINUITY_MODE").as_deref() == Ok("endpoint");
         let prepared = if endpoint_mode {
             rpc(
                 &pipe,
@@ -681,7 +844,11 @@ mod live {
                 json!({ "sessionId": session_id, "captureEndpointId": route_capture, "renderEndpointId": route_render }),
             )
         } else {
-            rpc(&pipe, "nativePaths.prepare", json!({ "sessionId": session_id }))
+            rpc(
+                &pipe,
+                "nativePaths.prepare",
+                json!({ "sessionId": session_id }),
+            )
         };
         eprintln!("prepared: {prepared}");
         // A Recorder node's worker must exist before the session starts.
@@ -716,7 +883,7 @@ mod live {
         }
         std::thread::sleep(Duration::from_secs(1));
         measuring.store(true, Ordering::Release);
-        let recording_path = recording_path.map(|path: String| {
+        let recording_path = recording_path.inspect(|_| {
             let run = std::process::id();
             let frame = rpc(&pipe, "recorders.list", Value::Null)
                 .as_array()
@@ -724,7 +891,6 @@ mod live {
                 .and_then(|row| row["lastFrame"].as_u64())
                 .unwrap_or(0);
             rpc(&pipe, "recorders.start", json!({ "sessionId": session_id, "nodeId": "recorder", "frame": frame, "idempotencyKey": format!("continuity-rec-start-{run}") }));
-            path
         });
         // UI-like control load: 20 Hz diagnostics and a 10 Hz counter pump.
         let until = Instant::now() + Duration::from_secs(seconds);
@@ -736,7 +902,11 @@ mod live {
             if tick % 2 == 0 {
                 let pump = rpc(
                     &pipe,
-                    if endpoint_mode { "nativeEndpoints.pump" } else { "nativeMultiInputs.pump" },
+                    if endpoint_mode {
+                        "nativeEndpoints.pump"
+                    } else {
+                        "nativeMultiInputs.pump"
+                    },
                     json!({ "sessionId": session_id, "generation": generation, "maxPackets": 64 }),
                 );
                 last_service = pump["audioService"].clone();
@@ -744,9 +914,13 @@ mod live {
             }
             // `AUDIOROUTER_CONTINUITY_TOGGLE=<nodeId>` flips that node's Bypass
             // every 3 s while playing, exactly as the UI saves it.
-            if let Some(toggle) = std::env::var("AUDIOROUTER_CONTINUITY_TOGGLE").ok().filter(|id| !id.is_empty()) {
+            if let Some(toggle) = std::env::var("AUDIOROUTER_CONTINUITY_TOGGLE")
+                .ok()
+                .filter(|id| !id.is_empty())
+            {
                 if tick > 0 && tick % 60 == 0 {
-                    let mut current = rpc(&pipe, "sessions.get", json!({ "sessionId": session_id }));
+                    let mut current =
+                        rpc(&pipe, "sessions.get", json!({ "sessionId": session_id }));
                     let node = current["nodes"]
                         .as_array_mut()
                         .unwrap()
@@ -756,11 +930,26 @@ mod live {
                     let bypass = !node["bypass"].as_bool().unwrap_or(false);
                     node["bypass"] = json!(bypass);
                     let timer = Instant::now();
-                    let plan = rpc(&pipe, "graph.plan", json!({ "sessionId": session_id, "baseRevision": current["revision"], "candidate": current }));
+                    let plan = rpc(
+                        &pipe,
+                        "graph.plan",
+                        json!({ "sessionId": session_id, "baseRevision": current["revision"], "candidate": current }),
+                    );
                     let planned_ms = timer.elapsed().as_secs_f64() * 1_000.0;
-                    let committed = rpc(&pipe, "graph.commit", json!({ "planId": plan["planId"], "baseRevision": plan["baseRevision"], "idempotencyKey": format!("toggle-{}-{tick}", std::process::id()) }));
-                    eprintln!("plan {planned_ms:.1} ms, commit {:.1} ms", timer.elapsed().as_secs_f64() * 1_000.0 - planned_ms);
-                    eprintln!("t={:.1}s {toggle} bypass={bypass}: {}", tick as f64 * 0.05, committed["activation"]["native"]);
+                    let committed = rpc(
+                        &pipe,
+                        "graph.commit",
+                        json!({ "planId": plan["planId"], "baseRevision": plan["baseRevision"], "idempotencyKey": format!("toggle-{}-{tick}", std::process::id()) }),
+                    );
+                    eprintln!(
+                        "plan {planned_ms:.1} ms, commit {:.1} ms",
+                        timer.elapsed().as_secs_f64() * 1_000.0 - planned_ms
+                    );
+                    eprintln!(
+                        "t={:.1}s {toggle} bypass={bypass}: {}",
+                        tick as f64 * 0.05,
+                        committed["activation"]["native"]
+                    );
                     // Adopt the committed runtime generation, as the UI does.
                     if let Some(next) = committed["activation"]["generation"].as_u64() {
                         generation = next;
@@ -772,13 +961,20 @@ mod live {
         }
         measuring.store(false, Ordering::Release);
         if record_mode() {
-            eprintln!("recorders before stop: {}", rpc(&pipe, "recorders.list", Value::Null));
+            eprintln!(
+                "recorders before stop: {}",
+                rpc(&pipe, "recorders.list", Value::Null)
+            );
             let frame = rpc(&pipe, "recorders.list", Value::Null)
                 .as_array()
                 .and_then(|rows| rows.iter().find(|row| row["nodeId"] == "recorder"))
                 .and_then(|row| row["lastFrame"].as_u64())
                 .unwrap_or(0);
-            let stopped = rpc(&pipe, "recorders.stop", json!({ "sessionId": session_id, "nodeId": "recorder", "frame": frame, "idempotencyKey": format!("continuity-rec-stop-{}", std::process::id()) }));
+            let stopped = rpc(
+                &pipe,
+                "recorders.stop",
+                json!({ "sessionId": session_id, "nodeId": "recorder", "frame": frame, "idempotencyKey": format!("continuity-rec-stop-{}", std::process::id()) }),
+            );
             eprintln!("recorder stopped: {stopped}");
         }
         let diagnostics = rpc(&pipe, "system.diagnostics", Value::Null);
@@ -796,18 +992,31 @@ mod live {
         timing_stop.store(true, Ordering::Release);
         let (phase_maxima, slow_passes) = timing_collector.join().unwrap();
         eprintln!("service phase maxima (wait, dispatch, pump): {phase_maxima:?}");
-        for sample in slow_passes { eprintln!("slow service pass: {sample:?}"); }
+        for sample in slow_passes {
+            eprintln!("slow service pass: {sample:?}");
+        }
 
-        eprintln!("chain: {chain:?}; audio service: {last_service}; output underruns: {last_underruns}");
-        for item in diagnostics["nodeTelemetry"].as_array().into_iter().flatten() {
-            eprintln!("  {} timing={} plugin={} network={} processor={}", item["nodeId"], item["timing"], item["plugin"], item["network"], item["processor"]);
+        eprintln!(
+            "chain: {chain:?}; audio service: {last_service}; output underruns: {last_underruns}"
+        );
+        for item in diagnostics["nodeTelemetry"]
+            .as_array()
+            .into_iter()
+            .flatten()
+        {
+            eprintln!(
+                "  {} timing={} plugin={} network={} processor={}",
+                item["nodeId"], item["timing"], item["plugin"], item["network"], item["processor"]
+            );
         }
         if std::env::var_os("AUDIOROUTER_CONTINUITY_TOGGLE").is_some() {
             let levels: Vec<String> = result
                 .left
                 .chunks(48_000)
                 .map(|second| {
-                    let rms = (second.iter().map(|sample| sample * sample).sum::<f32>() / second.len() as f32).sqrt();
+                    let rms = (second.iter().map(|sample| sample * sample).sum::<f32>()
+                        / second.len() as f32)
+                        .sqrt();
                     format!("{:.1}", 20.0 * rms.max(1e-9).log10())
                 })
                 .collect();
@@ -819,16 +1028,29 @@ mod live {
             eprintln!("recording: {path}");
             report(
                 "recording (Recorder branch)",
-                &Recording { left: wav_float32_left(path), discontinuity_flags: 0 },
+                &Recording {
+                    left: wav_float32_left(path),
+                    discontinuity_flags: 0,
+                },
             )
         });
-        assert_eq!(last_service["active"], true, "backend must own audio service");
+        assert_eq!(
+            last_service["active"], true,
+            "backend must own audio service"
+        );
         assert!(
             test_signal_source() || reference_glitches == 0,
             "the harness tone itself was discontinuous; the result is inconclusive"
         );
-        assert_eq!(result_glitches, 0, "the routed tone has audible discontinuities");
-        assert_eq!(recording_glitches.unwrap_or(0), 0, "the recording has discontinuities");
+        assert_eq!(
+            result_glitches, 0,
+            "the routed tone has audible discontinuities"
+        );
+        assert_eq!(
+            recording_glitches.unwrap_or(0),
+            0,
+            "the recording has discontinuities"
+        );
     }
 
     /// Attended, opt-in synthetic comparison on one explicitly selected output.
@@ -836,16 +1058,27 @@ mod live {
     #[test]
     #[ignore = "audible synthetic tones on an explicitly authorized physical output"]
     fn live_physical_output_bass_treble_comparison() {
-        if std::env::var("AUDIOROUTER_TONE_COMPARISON").as_deref() != Ok("1") { return; }
-        let output = endpoint("AUDIOROUTER_TONE_COMPARISON_OUTPUT", "", EndpointDirection::Render);
+        if std::env::var("AUDIOROUTER_TONE_COMPARISON").as_deref() != Ok("1") {
+            return;
+        }
+        let output = endpoint(
+            "AUDIOROUTER_TONE_COMPARISON_OUTPUT",
+            "",
+            EndpointDirection::Render,
+        );
         let mut session = route("unused", &output, &[NodeKind::BassTreble], vec![]);
         session.id = EntityId::new("tone-comparison");
         session.nodes[0].kind = NodeKind::TestSignal;
         session.nodes[0].parameters = serde_json::from_value(json!({
             "frequencyHz": 60.0, "levelDb": -40.0, "durationMs": 2400.0,
-        })).unwrap();
-        session.nodes[1].parameters = serde_json::from_value(json!({"bassDb": -12.0, "trebleDb": 0.0})).unwrap();
-        let pipe = format!(r"\\.\pipe\audiorouter-tone-comparison-{}", std::process::id());
+        }))
+        .unwrap();
+        session.nodes[1].parameters =
+            serde_json::from_value(json!({"bassDb": -12.0, "trebleDb": 0.0})).unwrap();
+        let pipe = format!(
+            r"\\.\pipe\audiorouter-tone-comparison-{}",
+            std::process::id()
+        );
         let server_pipe = pipe.clone();
         std::thread::spawn(move || {
             let mut plane = audiorouter_control::ControlPlane::default();
@@ -856,34 +1089,89 @@ mod live {
                 audiorouter_domain::PermissionScope::SessionControl,
                 audiorouter_domain::PermissionScope::DeviceAdministration,
             ]);
-            let _ = audiorouter_transport::serve_control_connections_forever_with_grant(&server_pipe, plane, grant);
+            let _ = audiorouter_transport::serve_control_connections_forever_with_grant(
+                &server_pipe,
+                plane,
+                grant,
+            );
         });
         std::thread::sleep(Duration::from_millis(300));
         let session_id = "tone-comparison";
-        rpc(&pipe, "nativePaths.prepare", json!({"sessionId": session_id}));
-        rpc(&pipe, "session.start", json!({"sessionId": session_id, "idempotencyKey": "tone-start"}));
+        rpc(
+            &pipe,
+            "nativePaths.prepare",
+            json!({"sessionId": session_id}),
+        );
+        rpc(
+            &pipe,
+            "session.start",
+            json!({"sessionId": session_id, "idempotencyKey": "tone-start"}),
+        );
         let mut measured = Vec::new();
-        for (index, (frequency, bass, treble)) in [(60.0, -12.0, 0.0), (60.0, 12.0, 0.0), (8000.0, 0.0, -12.0), (8000.0, 0.0, 12.0)].into_iter().enumerate() {
+        for (index, (frequency, bass, treble)) in [
+            (60.0, -12.0, 0.0),
+            (60.0, 12.0, 0.0),
+            (8000.0, 0.0, -12.0),
+            (8000.0, 0.0, 12.0),
+        ]
+        .into_iter()
+        .enumerate()
+        {
             let mut current = rpc(&pipe, "sessions.get", json!({"sessionId": session_id}));
             current["nodes"][0]["parameters"]["frequencyHz"] = json!(frequency);
             current["nodes"][1]["parameters"]["bassDb"] = json!(bass);
             current["nodes"][1]["parameters"]["trebleDb"] = json!(treble);
-            let plan = rpc(&pipe, "graph.plan", json!({"sessionId": session_id, "baseRevision": current["revision"], "candidate": current}));
-            rpc(&pipe, "graph.commit", json!({"planId": plan["planId"], "baseRevision": plan["baseRevision"], "idempotencyKey": format!("tone-phase-{index}")}));
-            eprintln!("phase {}: {frequency} Hz; Bass {bass:+} / Treble {treble:+} dB", index + 1);
-            rpc(&pipe, "audioSources.transport", json!({"sessionId": session_id, "nodeId": "source", "action": "play"}));
+            let plan = rpc(
+                &pipe,
+                "graph.plan",
+                json!({"sessionId": session_id, "baseRevision": current["revision"], "candidate": current}),
+            );
+            rpc(
+                &pipe,
+                "graph.commit",
+                json!({"planId": plan["planId"], "baseRevision": plan["baseRevision"], "idempotencyKey": format!("tone-phase-{index}")}),
+            );
+            eprintln!(
+                "phase {}: {frequency} Hz; Bass {bass:+} / Treble {treble:+} dB",
+                index + 1
+            );
+            rpc(
+                &pipe,
+                "audioSources.transport",
+                json!({"sessionId": session_id, "nodeId": "source", "action": "play"}),
+            );
             std::thread::sleep(Duration::from_millis(1800));
             let diagnostics = rpc(&pipe, "system.diagnostics", Value::Null);
-            let meter = diagnostics["nodeTelemetry"].as_array().unwrap().iter().find(|node| node["nodeId"] == "destination").unwrap()["meter"].clone();
+            let meter = diagnostics["nodeTelemetry"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|node| node["nodeId"] == "destination")
+                .unwrap()["meter"]
+                .clone();
             eprintln!("output: {meter}");
             measured.push(meter["rmsDb"].as_f64().unwrap());
-            rpc(&pipe, "audioSources.transport", json!({"sessionId": session_id, "nodeId": "source", "action": "stop"}));
+            rpc(
+                &pipe,
+                "audioSources.transport",
+                json!({"sessionId": session_id, "nodeId": "source", "action": "stop"}),
+            );
             std::thread::sleep(Duration::from_millis(300));
         }
-        rpc(&pipe, "session.stop", json!({"sessionId": session_id, "idempotencyKey": "tone-stop"}));
+        rpc(
+            &pipe,
+            "session.stop",
+            json!({"sessionId": session_id, "idempotencyKey": "tone-stop"}),
+        );
         eprintln!("measured output RMS dBFS: {measured:?}");
-        assert!(measured[1] - measured[0] > 18.0, "bass cut/boost must reach the native output branch");
-        assert!(measured[3] - measured[2] > 14.0, "treble cut/boost must reach the native output branch");
+        assert!(
+            measured[1] - measured[0] > 18.0,
+            "bass cut/boost must reach the native output branch"
+        );
+        assert!(
+            measured[3] - measured[2] > 14.0,
+            "treble cut/boost must reach the native output branch"
+        );
     }
 
     /// Explicitly consented, bounded local voice comparison. Private WAVs stay
@@ -891,11 +1179,20 @@ mod live {
     #[test]
     #[ignore = "requires explicit consent for a five-second microphone sample"]
     fn live_local_voice_tone_comparison() {
-        if std::env::var("AUDIOROUTER_VOICE_COMPARISON").as_deref() != Ok("1") { return; }
-        let id = std::env::var("AUDIOROUTER_VOICE_COMPARISON_INPUT").expect("exact approved microphone");
-        let metadata = enumerate_active_endpoints().unwrap().into_iter()
-            .find(|endpoint| endpoint.id == id && endpoint.direction == EndpointDirection::Capture).unwrap();
-        assert!(metadata.is_ieee_float32(), "voice comparison requires verified float32 capture");
+        if std::env::var("AUDIOROUTER_VOICE_COMPARISON").as_deref() != Ok("1") {
+            return;
+        }
+        let id =
+            std::env::var("AUDIOROUTER_VOICE_COMPARISON_INPUT").expect("exact approved microphone");
+        let metadata = enumerate_active_endpoints()
+            .unwrap()
+            .into_iter()
+            .find(|endpoint| endpoint.id == id && endpoint.direction == EndpointDirection::Capture)
+            .unwrap();
+        assert!(
+            metadata.is_ieee_float32(),
+            "voice comparison requires verified float32 capture"
+        );
         let rate = metadata.sample_rate_hz;
         let stride = usize::from(metadata.channels) * 4;
         let frames = rate as usize * 5;
@@ -909,24 +1206,56 @@ mod live {
             capture.wait_for_data(20).unwrap();
             while let Some((_, length)) = capture.next_packet_into(&mut bytes, stride).unwrap() {
                 for frame in bytes[..length].chunks_exact(stride) {
-                    if voice.len() == frames { break; }
+                    if voice.len() == frames {
+                        break;
+                    }
                     let sample = f32::from_le_bytes(frame[..4].try_into().unwrap());
                     voice.push(if sample.is_finite() { sample } else { 0.0 });
                 }
             }
         }
         capture.stop().unwrap();
-        assert_eq!(voice.len(), frames, "bounded capture did not supply five seconds");
+        assert_eq!(
+            voice.len(),
+            frames,
+            "bounded capture did not supply five seconds"
+        );
         let process = |gain: f64| {
             let session = Session {
-                id: EntityId::new("voice-comparison"), name: "Local comparison".into(), schema_version: 1, revision: 0,
+                id: EntityId::new("voice-comparison"),
+                name: "Local comparison".into(),
+                schema_version: 1,
+                revision: 0,
                 nodes: vec![Node {
-                    id: EntityId::new("tone"), kind: NodeKind::BassTreble, type_version: 1, name: "Tone".into(), enabled: true, bypass: false,
-                    parameters: serde_json::from_value(json!({"bassDb": gain, "trebleDb": gain})).unwrap(),
-                    ports: vec![Port {name: "in".into(), direction: PortDirection::Input, channels: 1}, Port {name: "out".into(), direction: PortDirection::Output, channels: 1}],
-                }], edges: vec![],
+                    id: EntityId::new("tone"),
+                    kind: NodeKind::BassTreble,
+                    type_version: 1,
+                    name: "Tone".into(),
+                    enabled: true,
+                    bypass: false,
+                    parameters: serde_json::from_value(json!({"bassDb": gain, "trebleDb": gain}))
+                        .unwrap(),
+                    ports: vec![
+                        Port {
+                            name: "in".into(),
+                            direction: PortDirection::Input,
+                            channels: 1,
+                        },
+                        Port {
+                            name: "out".into(),
+                            direction: PortDirection::Output,
+                            channels: 1,
+                        },
+                    ],
+                }],
+                edges: vec![],
             };
-            let graph = audiorouter_engine::compile_session_at_sample_rate(&session, audiorouter_engine::RuntimeGeneration::new(1), rate).unwrap();
+            let graph = audiorouter_engine::compile_session_at_sample_rate(
+                &session,
+                audiorouter_engine::RuntimeGeneration::new(1),
+                rate,
+            )
+            .unwrap();
             let mut output = Vec::with_capacity(frames);
             for chunk in voice.chunks(128) {
                 let mut block = audiorouter_engine::AudioBlock::new(1, chunk.len()).unwrap();
@@ -938,22 +1267,50 @@ mod live {
         };
         let boost = process(12.0);
         let cut = process(-12.0);
-        let rms = |samples: &[f32]| (samples.iter().map(|sample| f64::from(*sample).powi(2)).sum::<f64>() / samples.len() as f64).sqrt();
+        let rms = |samples: &[f32]| {
+            (samples
+                .iter()
+                .map(|sample| f64::from(*sample).powi(2))
+                .sum::<f64>()
+                / samples.len() as f64)
+                .sqrt()
+        };
         let flat_rms = rms(&voice);
         assert!(flat_rms > 1e-6, "sample is too quiet for comparison");
-        eprintln!("Same voice: boost {:.2} dB; cut {:.2} dB relative to flat", 20.0 * (rms(&boost) / flat_rms).log10(), 20.0 * (rms(&cut) / flat_rms).log10());
-        let peak = voice.iter().chain(&boost).chain(&cut).fold(0.0_f32, |peak, sample| peak.max(sample.abs()));
+        eprintln!(
+            "Same voice: boost {:.2} dB; cut {:.2} dB relative to flat",
+            20.0 * (rms(&boost) / flat_rms).log10(),
+            20.0 * (rms(&cut) / flat_rms).log10()
+        );
+        let peak = voice
+            .iter()
+            .chain(&boost)
+            .chain(&cut)
+            .fold(0.0_f32, |peak, sample| peak.max(sample.abs()));
         let scale = (0.8 / peak).min(1.0);
-        let folder = std::env::temp_dir().join(format!("audiorouter-voice-comparison-{}", std::process::id()));
+        let folder = std::env::temp_dir().join(format!(
+            "audiorouter-voice-comparison-{}",
+            std::process::id()
+        ));
         std::fs::create_dir(&folder).unwrap();
         for (name, samples) in [("flat", &voice), ("boost", &boost), ("cut", &cut)] {
             let data_bytes = (samples.len() * 2) as u32;
             let mut wav = Vec::with_capacity(44 + data_bytes as usize);
-            wav.extend_from_slice(b"RIFF"); wav.extend_from_slice(&(36 + data_bytes).to_le_bytes()); wav.extend_from_slice(b"WAVEfmt ");
-            wav.extend_from_slice(&16_u32.to_le_bytes()); wav.extend_from_slice(&1_u16.to_le_bytes()); wav.extend_from_slice(&1_u16.to_le_bytes());
-            wav.extend_from_slice(&rate.to_le_bytes()); wav.extend_from_slice(&(rate * 2).to_le_bytes()); wav.extend_from_slice(&2_u16.to_le_bytes()); wav.extend_from_slice(&16_u16.to_le_bytes());
-            wav.extend_from_slice(b"data"); wav.extend_from_slice(&data_bytes.to_le_bytes());
-            for sample in samples { wav.extend_from_slice(&((*sample * scale * 32767.0).round() as i16).to_le_bytes()); }
+            wav.extend_from_slice(b"RIFF");
+            wav.extend_from_slice(&(36 + data_bytes).to_le_bytes());
+            wav.extend_from_slice(b"WAVEfmt ");
+            wav.extend_from_slice(&16_u32.to_le_bytes());
+            wav.extend_from_slice(&1_u16.to_le_bytes());
+            wav.extend_from_slice(&1_u16.to_le_bytes());
+            wav.extend_from_slice(&rate.to_le_bytes());
+            wav.extend_from_slice(&(rate * 2).to_le_bytes());
+            wav.extend_from_slice(&2_u16.to_le_bytes());
+            wav.extend_from_slice(&16_u16.to_le_bytes());
+            wav.extend_from_slice(b"data");
+            wav.extend_from_slice(&data_bytes.to_le_bytes());
+            for sample in samples {
+                wav.extend_from_slice(&((*sample * scale * 32767.0).round() as i16).to_le_bytes());
+            }
             let path = folder.join(format!("{name}.wav"));
             std::fs::write(&path, wav).unwrap();
             eprintln!("private local comparison: {}", path.display());
@@ -965,30 +1322,61 @@ mod live {
     #[test]
     #[ignore = "attended playback of consented private comparison WAVs"]
     fn live_local_voice_comparison_playback() {
-        let Some(folder) = std::env::var_os("AUDIOROUTER_VOICE_PLAYBACK_FOLDER") else { return; };
+        let Some(folder) = std::env::var_os("AUDIOROUTER_VOICE_PLAYBACK_FOLDER") else {
+            return;
+        };
         let folder = std::path::PathBuf::from(folder).canonicalize().unwrap();
-        assert_eq!(folder.parent().unwrap(), std::env::temp_dir().canonicalize().unwrap());
+        assert_eq!(
+            folder.parent().unwrap(),
+            std::env::temp_dir().canonicalize().unwrap()
+        );
         let folder_name = folder.file_name().unwrap().to_string_lossy();
         let broad = folder_name.starts_with("audiorouter-tool-voice-");
         assert!(broad || folder_name.starts_with("audiorouter-voice-comparison-"));
-        let output = endpoint("AUDIOROUTER_TONE_COMPARISON_OUTPUT", "", EndpointDirection::Render);
-        let metadata = enumerate_active_endpoints().unwrap().into_iter().find(|endpoint| endpoint.id == output).unwrap();
+        let output = endpoint(
+            "AUDIOROUTER_TONE_COMPARISON_OUTPUT",
+            "",
+            EndpointDirection::Render,
+        );
+        let metadata = enumerate_active_endpoints()
+            .unwrap()
+            .into_iter()
+            .find(|endpoint| endpoint.id == output)
+            .unwrap();
         assert!(metadata.is_ieee_float32() && metadata.channels == 2);
-        let names = if broad { ["flat", "warm-radio", "thin-bright"] } else { ["flat", "boost", "cut"] };
+        let names = if broad {
+            ["flat", "warm-radio", "thin-bright"]
+        } else {
+            ["flat", "boost", "cut"]
+        };
         let versions = names.map(|name| {
             let bytes = std::fs::read(folder.join(format!("{name}.wav"))).unwrap();
             assert!(bytes.len() <= 1_000_000 && bytes.len() >= 44);
-            assert_eq!(&bytes[..4], b"RIFF"); assert_eq!(&bytes[36..40], b"data");
-            assert_eq!(u32::from_le_bytes(bytes[24..28].try_into().unwrap()), metadata.sample_rate_hz);
-            bytes[44..].chunks_exact(2).map(|sample| f32::from(i16::from_le_bytes(sample.try_into().unwrap())) / 32768.0).collect::<Vec<_>>()
+            assert_eq!(&bytes[..4], b"RIFF");
+            assert_eq!(&bytes[36..40], b"data");
+            assert_eq!(
+                u32::from_le_bytes(bytes[24..28].try_into().unwrap()),
+                metadata.sample_rate_hz
+            );
+            bytes[44..]
+                .chunks_exact(2)
+                .map(|sample| f32::from(i16::from_le_bytes(sample.try_into().unwrap())) / 32768.0)
+                .collect::<Vec<_>>()
         });
-        let peak = versions.iter().flatten().fold(0.0_f32, |peak, sample| peak.max(sample.abs()));
+        let peak = versions
+            .iter()
+            .flatten()
+            .fold(0.0_f32, |peak, sample| peak.max(sample.abs()));
         let scale = (0.05 / peak.max(1e-6)).min(1.0);
         for (name, samples) in names.into_iter().zip(versions) {
             eprintln!("Playing {name}; same quiet playback scaling for each version");
             let mut render = SharedRender::open_with_headroom(&output, 500_000).unwrap();
             let mut bytes = Vec::with_capacity(samples.len() * 8);
-            for sample in samples { let sample = (sample * scale).to_le_bytes(); bytes.extend_from_slice(&sample); bytes.extend_from_slice(&sample); }
+            for sample in samples {
+                let sample = (sample * scale).to_le_bytes();
+                bytes.extend_from_slice(&sample);
+                bytes.extend_from_slice(&sample);
+            }
             let mut offset = render.submit_bytes(&bytes, 8).unwrap() as usize * 8;
             render.start().unwrap();
             while offset < bytes.len() {
@@ -1045,7 +1433,11 @@ mod live {
             "safety.setPrivacyMute",
             json!({ "muted": true, "idempotencyKey": format!("drift-mute-{run}") }),
         );
-        let prepared = rpc(&pipe, "nativePaths.prepare", json!({ "sessionId": session_id }));
+        let prepared = rpc(
+            &pipe,
+            "nativePaths.prepare",
+            json!({ "sessionId": session_id }),
+        );
         eprintln!("prepared: {prepared}");
         let started = rpc(
             &pipe,
@@ -1114,7 +1506,10 @@ mod live {
             } else {
                 f64::NAN
             };
-            eprintln!("{id}: slope {slope:+.3} ms/min (≈{:+.1} ppm); queue ms: {trace}", slope / 60.0 * 1000.0);
+            eprintln!(
+                "{id}: slope {slope:+.3} ms/min (≈{:+.1} ppm); queue ms: {trace}",
+                slope / 60.0 * 1000.0
+            );
         }
     }
 
@@ -1152,12 +1547,25 @@ mod live {
         });
         std::thread::sleep(Duration::from_millis(300));
         let run = std::process::id();
-        rpc(&pipe, "safety.setPrivacyMute", json!({ "muted": true, "idempotencyKey": format!("toggle-mute-{run}") }));
-        let prepared = rpc(&pipe, "nativePaths.prepare", json!({ "sessionId": session_id }));
+        rpc(
+            &pipe,
+            "safety.setPrivacyMute",
+            json!({ "muted": true, "idempotencyKey": format!("toggle-mute-{run}") }),
+        );
+        let prepared = rpc(
+            &pipe,
+            "nativePaths.prepare",
+            json!({ "sessionId": session_id }),
+        );
         let prepared_generation = prepared["generation"].as_u64().unwrap();
-        rpc(&pipe, "session.start", json!({ "sessionId": session_id, "idempotencyKey": format!("toggle-start-{run}") }));
+        rpc(
+            &pipe,
+            "session.start",
+            json!({ "sessionId": session_id, "idempotencyKey": format!("toggle-start-{run}") }),
+        );
         std::thread::sleep(Duration::from_secs(1));
-        let effects: Vec<String> = rpc(&pipe, "sessions.get", json!({ "sessionId": session_id }))["nodes"]
+        let effects: Vec<String> = rpc(&pipe, "sessions.get", json!({ "sessionId": session_id }))
+            ["nodes"]
             .as_array()
             .unwrap()
             .iter()
@@ -1197,13 +1605,27 @@ mod live {
             }
             // The worker keeps serving after a live change, whether the caller
             // knows the prepared or the newly committed generation.
-            for generation in [prepared_generation, committed["activation"]["generation"].as_u64().unwrap()] {
-                let pump = rpc(&pipe, "nativeMultiInputs.pump", json!({ "sessionId": session_id, "generation": generation, "maxPackets": 64 }));
+            for generation in [
+                prepared_generation,
+                committed["activation"]["generation"].as_u64().unwrap(),
+            ] {
+                let pump = rpc(
+                    &pipe,
+                    "nativeMultiInputs.pump",
+                    json!({ "sessionId": session_id, "generation": generation, "maxPackets": 64 }),
+                );
                 assert!(pump["audioService"]["active"] == true, "{pump}");
             }
             std::thread::sleep(Duration::from_millis(300));
         }
-        rpc(&pipe, "session.stop", json!({ "sessionId": session_id, "idempotencyKey": format!("toggle-stop-{run}") }));
-        assert!(failures.is_empty(), "bypass changes not applied while playing: {failures:?}");
+        rpc(
+            &pipe,
+            "session.stop",
+            json!({ "sessionId": session_id, "idempotencyKey": format!("toggle-stop-{run}") }),
+        );
+        assert!(
+            failures.is_empty(),
+            "bypass changes not applied while playing: {failures:?}"
+        );
     }
 }

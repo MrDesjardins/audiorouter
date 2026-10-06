@@ -550,7 +550,8 @@ impl RecordingQueue {
 
     /// Record that audio up to `end_frame` (exclusive) was committed.
     pub fn note_committed_end_frame(&self, end_frame: u64) {
-        self.latest_end_frame.fetch_max(end_frame, Ordering::Relaxed);
+        self.latest_end_frame
+            .fetch_max(end_frame, Ordering::Relaxed);
     }
 
     /// The frame just past the newest committed audio (the frame at which a
@@ -574,7 +575,7 @@ impl RecordingQueue {
             || frames_per_chunk == 0
             || frames_per_chunk
                 .checked_mul(channels)
-                .map_or(true, |samples| samples > MAX_RECORDING_CHUNK_SAMPLES)
+                .is_none_or(|samples| samples > MAX_RECORDING_CHUNK_SAMPLES)
         {
             return Err(RecordingError::InvalidSampleCount);
         }
@@ -665,7 +666,9 @@ impl RecordingQueue {
     pub fn try_acquire(&self) -> Option<RecordingChunk> {
         let free = self.free_chunks.as_ref()?;
         let chunk = free.pop();
-        if chunk.is_none() { self.overruns.fetch_add(1, Ordering::Relaxed); }
+        if chunk.is_none() {
+            self.overruns.fetch_add(1, Ordering::Relaxed);
+        }
         chunk
     }
 
@@ -1734,7 +1737,7 @@ impl RecordingLibrary {
     pub fn list(&self, session: Option<&str>) -> Vec<&RecordingEntry> {
         self.entries
             .iter()
-            .filter(|entry| session.map_or(true, |session| entry.session == session))
+            .filter(|entry| session.is_none_or(|session| entry.session == session))
             .collect()
     }
 
@@ -2155,7 +2158,7 @@ impl<W: Write + Seek> WavWriter<W> {
         if self
             .data_bytes
             .checked_add(added_bytes)
-            .map_or(true, |bytes| bytes > u64::from(u32::MAX) - 36)
+            .is_none_or(|bytes| bytes > u64::from(u32::MAX) - 36)
         {
             return Err(RecordingError::TooManyFrames);
         }
@@ -3773,14 +3776,23 @@ mod tests {
         recorder.start(0).unwrap();
         let queue = RecordingQueue::new(4).unwrap();
         for start_frame in [0_u64, 128, 256] {
-            queue.try_push(RecordingChunk { start_frame, samples: vec![0.25; 128] }).unwrap();
+            queue
+                .try_push(RecordingChunk {
+                    start_frame,
+                    samples: vec![0.25; 128],
+                })
+                .unwrap();
         }
         recorder.drain_queue(&queue, 4).unwrap();
         // The client asks to stop at frame 128, read before the last block.
         recorder.stop_and_drain(&queue, 128, 4).unwrap();
         let outputs = recorder.finish().unwrap();
         let bytes = outputs[0].get_ref();
-        assert_eq!(u32::from_le_bytes(bytes[40..44].try_into().unwrap()), 384 * 2, "all written audio kept");
+        assert_eq!(
+            u32::from_le_bytes(bytes[40..44].try_into().unwrap()),
+            384 * 2,
+            "all written audio kept"
+        );
         // A stop frame in the future is still honoured as given.
         let mut controller = RecorderController::new();
         controller.arm().unwrap();
@@ -4151,13 +4163,22 @@ mod tests {
 
     #[test]
     fn start_and_resume_align_to_the_live_stream_instead_of_demanding_an_exact_frame() {
-        let writer =
-            WavWriter::new(Cursor::new(Vec::new()), WavFormat::Float32, 1, 48_000, false).unwrap();
+        let writer = WavWriter::new(
+            Cursor::new(Vec::new()),
+            WavFormat::Float32,
+            1,
+            48_000,
+            false,
+        )
+        .unwrap();
         let mut recorder = WavRecorder::new(writer);
         let queue = RecordingQueue::new(8).unwrap();
         let push = |start_frame: u64, value: f32| {
             queue
-                .try_push(RecordingChunk { start_frame, samples: vec![value; 4] })
+                .try_push(RecordingChunk {
+                    start_frame,
+                    samples: vec![value; 4],
+                })
                 .unwrap();
         };
         // Audio queued before the requested frame is skipped; a client that
@@ -4178,7 +4199,10 @@ mod tests {
         push(108, 0.5);
         assert!(matches!(
             recorder.drain_queue(&queue, 8),
-            Err(RecordingError::FrameDiscontinuity { expected: 104, actual: 108 })
+            Err(RecordingError::FrameDiscontinuity {
+                expected: 104,
+                actual: 108
+            })
         ));
     }
 

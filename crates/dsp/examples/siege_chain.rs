@@ -69,7 +69,13 @@ fn read_wav(path: &Path) -> Result<Vec<f32>, String> {
 /// The Siege Footstep EQ v2 bands as saved in the user's session.
 fn footstep_eq() -> ParametricEq {
     let band = |kind, frequency_hz, q, gain_db| {
-        Some(BiquadParams { kind, frequency_hz, q, gain_db, sample_rate: RATE })
+        Some(BiquadParams {
+            kind,
+            frequency_hz,
+            q,
+            gain_db,
+            sample_rate: RATE,
+        })
     };
     let mut bands: [Option<BiquadParams>; PARAMETRIC_EQ_BANDS] = [None; PARAMETRIC_EQ_BANDS];
     let v2 = [
@@ -95,7 +101,13 @@ struct Dynamics {
     makeup_db: f32,
 }
 
-const CURRENT: Dynamics = Dynamics { threshold_db: -42.0, ratio: 3.0, attack_ms: 15.0, release_ms: 120.0, makeup_db: 6.0 };
+const CURRENT: Dynamics = Dynamics {
+    threshold_db: -42.0,
+    ratio: 3.0,
+    attack_ms: 15.0,
+    release_ms: 120.0,
+    makeup_db: 6.0,
+};
 
 /// Process a take; returns output samples and the compressor's gain reduction per window.
 fn process(take: &Take, eq: bool, dynamics: Option<Dynamics>) -> (Vec<f32>, Vec<f32>) {
@@ -117,8 +129,16 @@ fn process(take: &Take, eq: bool, dynamics: Option<Dynamics>) -> (Vec<f32>, Vec<
         .expect("valid compressor")
     });
     let mut limiter = dynamics.map(|_| {
-        PeakLimiter::new_at_sample_rate(LimiterParams { ceiling_db: -1.0, lookahead_ms: 5.0, release_ms: 100.0 }, RATE, 2)
-            .expect("valid limiter")
+        PeakLimiter::new_at_sample_rate(
+            LimiterParams {
+                ceiling_db: -1.0,
+                lookahead_ms: 5.0,
+                release_ms: 100.0,
+            },
+            RATE,
+            2,
+        )
+        .expect("valid limiter")
     });
     let mut reduction = Vec::new();
     let (mut window_sum, mut window_frames) = (0.0f32, 0usize);
@@ -145,7 +165,11 @@ fn process(take: &Take, eq: bool, dynamics: Option<Dynamics>) -> (Vec<f32>, Vec<
 fn window_levels(samples: &[f32]) -> Vec<f32> {
     samples
         .chunks_exact(WINDOW * 2)
-        .map(|w| 10.0 * (w.iter().map(|v| v * v).sum::<f32>() / w.len() as f32).max(1e-12).log10())
+        .map(|w| {
+            10.0 * (w.iter().map(|v| v * v).sum::<f32>() / w.len() as f32)
+                .max(1e-12)
+                .log10()
+        })
         .collect()
 }
 
@@ -156,7 +180,8 @@ fn percentile(values: &[f32], fraction: f32) -> f32 {
 }
 
 fn power_mean(values: &[f32]) -> f32 {
-    10.0 * (values.iter().map(|db| 10f32.powf(db / 10.0)).sum::<f32>() / values.len().max(1) as f32).log10()
+    10.0 * (values.iter().map(|db| 10f32.powf(db / 10.0)).sum::<f32>() / values.len().max(1) as f32)
+        .log10()
 }
 
 /// Distant events: windows at least 6 dB above the take's quiet floor, quieter half.
@@ -169,7 +194,12 @@ struct Measure {
 
 fn measure(levels: &[f32]) -> Measure {
     let floor_db = percentile(levels, 0.2);
-    let mut events: Vec<(usize, f32)> = levels.iter().copied().enumerate().filter(|(_, l)| *l >= floor_db + 6.0).collect();
+    let mut events: Vec<(usize, f32)> = levels
+        .iter()
+        .copied()
+        .enumerate()
+        .filter(|(_, l)| *l >= floor_db + 6.0)
+        .collect();
     events.sort_by(|a, b| a.1.total_cmp(&b.1));
     let far = &events[..(events.len() / 2).max(events.len().min(1))];
     Measure {
@@ -188,17 +218,35 @@ struct Scenario {
     output_peak_db: f32,
 }
 
-fn evaluate(takes: &[Take], eq: bool, dynamics: Option<Dynamics>) -> (Scenario, Vec<(String, f32)>) {
-    let results: Vec<_> = takes.iter().map(|t| (t, process(t, eq, dynamics))).collect();
-    let find = |prefix: &str| results.iter().find(|(t, _)| t.name.starts_with(prefix)).expect("labelled take present");
+fn evaluate(
+    takes: &[Take],
+    eq: bool,
+    dynamics: Option<Dynamics>,
+) -> (Scenario, Vec<(String, f32)>) {
+    let results: Vec<_> = takes
+        .iter()
+        .map(|t| (t, process(t, eq, dynamics)))
+        .collect();
+    let find = |prefix: &str| {
+        results
+            .iter()
+            .find(|(t, _)| t.name.starts_with(prefix))
+            .expect("labelled take present")
+    };
     let gun = measure(&window_levels(&find("12-").1 .0));
     let ambience_raw = percentile(&window_levels(&find("13-").0.samples), 0.5);
     let ambience = percentile(&window_levels(&find("13-").1 .0), 0.5);
-    let (mut steps, mut drones, mut squeeze, mut per_take) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let (mut steps, mut drones, mut squeeze, mut per_take) =
+        (Vec::new(), Vec::new(), Vec::new(), Vec::new());
     let mut peak = f32::MIN;
     for (take, (out, reduction)) in &results {
         peak = peak.max(out.iter().fold(0.0f32, |m, v| m.max(v.abs())));
-        let number: u32 = take.name.split('-').next().and_then(|n| n.parse().ok()).unwrap_or(0);
+        let number: u32 = take
+            .name
+            .split('-')
+            .next()
+            .and_then(|n| n.parse().ok())
+            .unwrap_or(0);
         if !(1..=11).contains(&number) && !(15..=16).contains(&number) {
             continue;
         }
@@ -207,21 +255,34 @@ fn evaluate(takes: &[Take], eq: bool, dynamics: Option<Dynamics>) -> (Scenario, 
         per_take.push((take.name.clone(), relative));
         if number <= 11 {
             steps.push(relative);
-            squeeze.extend(m.event_windows.iter().filter_map(|i| reduction.get(*i)).copied());
+            squeeze.extend(
+                m.event_windows
+                    .iter()
+                    .filter_map(|i| reduction.get(*i))
+                    .copied(),
+            );
         } else {
             drones.push(relative);
         }
     }
     let gun_reduction = {
         let (_, reduction) = &find("12-").1;
-        if reduction.is_empty() { 0.0 } else { percentile(reduction, 0.95) }
+        if reduction.is_empty() {
+            0.0
+        } else {
+            percentile(reduction, 0.95)
+        }
     };
     let mean = |v: &[f32]| v.iter().sum::<f32>() / v.len().max(1) as f32;
     (
         Scenario {
             steps_vs_gun: mean(&steps),
             drones_vs_gun: mean(&drones),
-            step_squeeze_db: if squeeze.is_empty() { 0.0 } else { percentile(&squeeze, 0.5) },
+            step_squeeze_db: if squeeze.is_empty() {
+                0.0
+            } else {
+                percentile(&squeeze, 0.5)
+            },
             gun_reduction_db: gun_reduction,
             ambience_lift_db: ambience - ambience_raw,
             output_peak_db: 20.0 * peak.max(1e-9).log10(),
@@ -239,7 +300,9 @@ fn row(label: &str, s: &Scenario) {
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let folder = args.next().expect("usage: siege_chain <folder> [--grid] [--try thr,ratio,attack,release,makeup ...]");
+    let folder = args
+        .next()
+        .expect("usage: siege_chain <folder> [--grid] [--try thr,ratio,attack,release,makeup ...]");
     let rest: Vec<String> = args.collect();
     let grid = rest.iter().any(|a| a == "--grid");
     let tries: Vec<Dynamics> = rest
@@ -247,9 +310,18 @@ fn main() {
         .skip_while(|a| *a != "--try")
         .skip(1)
         .map(|spec| {
-            let v: Vec<f32> = spec.split(',').map(|n| n.parse().expect("number")).collect();
+            let v: Vec<f32> = spec
+                .split(',')
+                .map(|n| n.parse().expect("number"))
+                .collect();
             assert_eq!(v.len(), 5, "--try needs thr,ratio,attack,release,makeup");
-            Dynamics { threshold_db: v[0], ratio: v[1], attack_ms: v[2], release_ms: v[3], makeup_db: v[4] }
+            Dynamics {
+                threshold_db: v[0],
+                ratio: v[1],
+                attack_ms: v[2],
+                release_ms: v[3],
+                makeup_db: v[4],
+            }
         })
         .collect();
     let mut entries: Vec<_> = std::fs::read_dir(&folder)
@@ -258,7 +330,11 @@ fn main() {
         .map(|e| e.path())
         .filter(|p| {
             let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            name.ends_with(".wav") && name.split('-').next().is_some_and(|n| n.parse::<u32>().is_ok())
+            name.ends_with(".wav")
+                && name
+                    .split('-')
+                    .next()
+                    .is_some_and(|n| n.parse::<u32>().is_ok())
         })
         .collect();
     entries.sort();
@@ -278,14 +354,20 @@ fn main() {
     row("EQ v2 + current compressor + limiter", &current);
     println!("\nPer take, distant level minus gunfire (raw -> current chain):");
     for ((name, before), (_, after)) in raw_takes.iter().zip(&current_takes) {
-        println!("  {name:<44} {before:>6.1} -> {after:>6.1}  ({:+.1})", after - before);
+        println!(
+            "  {name:<44} {before:>6.1} -> {after:>6.1}  ({:+.1})",
+            after - before
+        );
     }
     if !tries.is_empty() {
         println!("\nRequested settings (EQ v2 + compressor + limiter):");
         for d in &tries {
             let (s, _) = evaluate(&takes, true, Some(*d));
             row(
-                &format!("thr {:.0} {:.0}:1 att {:.0} rel {:.0} makeup {:.0}", d.threshold_db, d.ratio, d.attack_ms, d.release_ms, d.makeup_db),
+                &format!(
+                    "thr {:.0} {:.0}:1 att {:.0} rel {:.0} makeup {:.0}",
+                    d.threshold_db, d.ratio, d.attack_ms, d.release_ms, d.makeup_db
+                ),
                 &s,
             );
         }
@@ -298,7 +380,13 @@ fn main() {
                 for attack_ms in [5.0, 15.0, 30.0] {
                     for release_ms in [80.0, 120.0, 200.0] {
                         for makeup_db in [4.0, 6.0, 8.0, 10.0] {
-                            let d = Dynamics { threshold_db, ratio, attack_ms, release_ms, makeup_db };
+                            let d = Dynamics {
+                                threshold_db,
+                                ratio,
+                                attack_ms,
+                                release_ms,
+                                makeup_db,
+                            };
                             let (s, _) = evaluate(&takes, true, Some(d));
                             if s.step_squeeze_db <= 2.0 && s.output_peak_db <= -0.9 {
                                 candidates.push((d, s));
@@ -311,7 +399,10 @@ fn main() {
         candidates.sort_by(|a, b| b.1.steps_vs_gun.total_cmp(&a.1.steps_vs_gun));
         for (d, s) in candidates.iter().take(8) {
             row(
-                &format!("thr {:.0} {:.0}:1 att {:.0} rel {:.0} makeup {:.0}", d.threshold_db, d.ratio, d.attack_ms, d.release_ms, d.makeup_db),
+                &format!(
+                    "thr {:.0} {:.0}:1 att {:.0} rel {:.0} makeup {:.0}",
+                    d.threshold_db, d.ratio, d.attack_ms, d.release_ms, d.makeup_db
+                ),
                 s,
             );
         }

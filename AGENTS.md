@@ -31,6 +31,27 @@ Use this canonical uppercase filename on Windows. Do not add `agent.md`, `agents
 - **No layout shift (UX rule, spec UI-17).** Live data, suggestions, status text and pills must never make the UI move up and down. Always render such slots at a reserved size, swap their contents (placeholder plus disabled action while waiting), keep the last good value through brief gaps, and fix the width of changing labels. Only a deliberate user action may change layout.
 - Verify new or changed UI visually in the dark, light, and high-contrast themes (for example with the Edge/Playwright screenshot approach recorded in the active plan). jsdom tests do not check styling.
 
+## Formatting and change size
+
+- **Every commit is formatted.** Before committing Rust changes, run
+  `cargo fmt --all` and `cargo fmt --manifest-path src-tauri/Cargo.toml`, then
+  confirm both `-- --check` runs are clean; CI rejects anything else. Claude
+  Code sessions also format each edited `.rs` file through the
+  `.claude/settings.json` hook, but edits made through the shell (`sed`,
+  scripts) bypass it, so still run the commands above.
+- **Use the pinned toolchain.** `rust-toolchain.toml` pins Rust 1.96.0, the
+  version CI and the release workflow use. Do not change it in a feature
+  change; a toolchain bump is its own change with its own formatting and
+  Clippy fixes.
+- **Never mix mass reformatting with behavior.** Formatting is already
+  clean, so `cargo fmt` should only touch lines you changed. If it rewrites
+  unrelated code (new rustfmt version, drift from another session), stop and
+  commit that formatting alone, with a message that says it is mechanical,
+  before or after your change.
+- Keep Clippy (`cargo clippy --workspace --all-targets --all-features -- -D
+  warnings`, plus the same for `src-tauri`) clean in the same commit as the
+  code that would trip it.
+
 ## Work and documentation lifecycle
 
 An active plan records: objective, requirement IDs, prerequisites, decisions, ordered tasks, validation matrix, evidence links, risks, rollback, and next action. Update it after meaningful decisions, failed experiments, implementation changes, and verification. Record reproducible outcomes, not private reasoning or every terminal keystroke.
@@ -54,6 +75,17 @@ Do not modify user authorization, relax acceptance criteria, or turn external co
 Report the result, affected requirement IDs/files, checks performed and limitations, unresolved blockers, and the exact next milestone/task. Keep the active plan sufficient for a new agent to resume without chat history. Never invent commit hashes, test results, driver capabilities, or installed dependencies.
 
 ## Validated lessons
+
+- **2026-10-06 — CI is Windows-only; cross-check Windows code from Linux with the GNU target.**
+  Evidence: [active plan, CI back to green](docs/plans/active/current.md),
+  CI run 37417530916. Scope: CI and any agent working in a Linux container.
+  Consequence: `windows` 0.62 does not compile on Linux, so a Linux CI job
+  can never build the workspace (500+ red runs). On Linux, run Clippy with
+  `rustup target add x86_64-pc-windows-gnu` plus `gcc-mingw-w64-x86-64`
+  and `--target x86_64-pc-windows-gnu`, using the pinned 1.96.0 toolchain;
+  that matched the Windows CI result. Acceptance scripts that end on an
+  expected native failure must `exit 0`, and hosted runners have no audio
+  endpoints.
 
 - **2026-10-05 — Pin cross-language ABI constants as literal values on both sides.**
   Evidence: [WP-06 evidence](docs/plans/active/evidence/2026-10-05-virtual-cable-wp06.md),

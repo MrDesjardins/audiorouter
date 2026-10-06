@@ -7,10 +7,9 @@ use windows::Win32::System::Diagnostics::ToolHelp::{
 };
 use windows::Win32::System::RemoteDesktop::ProcessIdToSessionId;
 use windows::Win32::System::Threading::{
-    CreateEventW, OpenEventW, SetEvent, EVENT_MODIFY_STATE, INFINITE,
-    CreateMutexW, OpenProcess, QueryFullProcessImageNameW, ReleaseMutex, TerminateProcess,
-    WaitForSingleObject, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
-    PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
+    CreateEventW, CreateMutexW, OpenEventW, OpenProcess, QueryFullProcessImageNameW, ReleaseMutex,
+    SetEvent, TerminateProcess, WaitForSingleObject, EVENT_MODIFY_STATE, INFINITE,
+    PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
 };
 use windows::Win32::UI::Controls::{
     TaskDialogIndirect, TASKDIALOGCONFIG, TASKDIALOG_BUTTON, TDCBF_CANCEL_BUTTON,
@@ -171,15 +170,25 @@ fn recovery_dialog() -> Result<bool, String> {
 /// show its window (it may be in the tray with no window at all).
 fn show_event_name() -> Option<Vec<u16>> {
     let sid = audiorouter_transport::current_user_sid().ok()?;
-    Some(format!("Local\\AudioRouter.ShowWindow.{sid}").encode_utf16().chain(Some(0)).collect())
+    Some(
+        format!("Local\\AudioRouter.ShowWindow.{sid}")
+            .encode_utf16()
+            .chain(Some(0))
+            .collect(),
+    )
 }
 
 /// Whether a running instance is the same program as this launch: then this
 /// launch only brings it forward. Another build or install (an upgrade over
 /// a running old version) keeps the close-it dialog.
 fn same_program(running: &str, own: &std::path::Path) -> bool {
-    let normalize = |path: &str| path.strip_prefix(r"\\?\").unwrap_or(path).to_ascii_lowercase();
-    own.to_str().is_some_and(|own| normalize(running) == normalize(own))
+    let normalize = |path: &str| {
+        path.strip_prefix(r"\\?\")
+            .unwrap_or(path)
+            .to_ascii_lowercase()
+    };
+    own.to_str()
+        .is_some_and(|own| normalize(running) == normalize(own))
 }
 
 /// Started again while running (for example from the Start menu while it
@@ -187,16 +196,24 @@ fn same_program(running: &str, own: &std::path::Path) -> bool {
 /// false when there is none, it is another build, or it does not listen
 /// (older versions); the caller then continues with `claim_or_recover`.
 pub fn show_running_instance() -> bool {
-    let Ok(own) = std::env::current_exe() else { return false };
-    let Ok(existing) = existing_instances() else { return false };
+    let Ok(own) = std::env::current_exe() else {
+        return false;
+    };
+    let Ok(existing) = existing_instances() else {
+        return false;
+    };
     if existing.is_empty() || !existing.iter().all(|(_, image)| same_program(image, &own)) {
         return false;
     }
-    let Some(name) = show_event_name() else { return false };
+    let Some(name) = show_event_name() else {
+        return false;
+    };
     // SAFETY: name is NUL terminated and alive for the call; the opened
     // handle is owned below and only used to signal the event.
     unsafe {
-        let Ok(event) = OpenEventW(EVENT_MODIFY_STATE, false, PCWSTR(name.as_ptr())) else { return false };
+        let Ok(event) = OpenEventW(EVENT_MODIFY_STATE, false, PCWSTR(name.as_ptr())) else {
+            return false;
+        };
         let event = OwnedHandle(event);
         SetEvent(event.0).is_ok()
     }
@@ -212,22 +229,28 @@ unsafe impl Send for ShowEvent {}
 /// Run `on_show` whenever another launch asks this instance to show its
 /// window. The waiting thread lives as long as the process.
 pub fn listen_for_show_requests(on_show: impl Fn() + Send + 'static) {
-    let Some(name) = show_event_name() else { return };
+    let Some(name) = show_event_name() else {
+        return;
+    };
     // SAFETY: name is NUL terminated and alive for the call. The auto-reset
     // event handle is moved into the thread, which owns it until exit.
-    let Ok(event) = (unsafe { CreateEventW(None, false, false, PCWSTR(name.as_ptr())) }) else { return };
+    let Ok(event) = (unsafe { CreateEventW(None, false, false, PCWSTR(name.as_ptr())) }) else {
+        return;
+    };
     let event = ShowEvent(OwnedHandle(event));
-    let _ = std::thread::Builder::new().name("audiorouter-show-window".into()).spawn(move || {
-        // Move the whole wrapper (not just its raw handle field) into the thread.
-        let event = event;
-        loop {
-            // SAFETY: the owned event handle stays valid for this thread's life.
-            if unsafe { WaitForSingleObject(event.0 .0, INFINITE) } != WAIT_OBJECT_0 {
-                return;
+    let _ = std::thread::Builder::new()
+        .name("audiorouter-show-window".into())
+        .spawn(move || {
+            // Move the whole wrapper (not just its raw handle field) into the thread.
+            let event = event;
+            loop {
+                // SAFETY: the owned event handle stays valid for this thread's life.
+                if unsafe { WaitForSingleObject(event.0 .0, INFINITE) } != WAIT_OBJECT_0 {
+                    return;
+                }
+                on_show();
             }
-            on_show();
-        }
-    });
+        });
 }
 
 /// None means the user canceled: exit without touching database/backend.
@@ -306,10 +329,22 @@ mod tests {
     #[test]
     fn a_second_launch_of_the_same_program_only_brings_it_forward() {
         let own = std::path::Path::new(r"C:\Program Files\AudioRouter\audiorouter-shell.exe");
-        assert!(same_program(r"C:\Program Files\AudioRouter\audiorouter-shell.exe", own));
-        assert!(same_program(r"\\?\C:\PROGRAM FILES\AudioRouter\AUDIOROUTER-SHELL.EXE", own), "verbatim prefix and case");
+        assert!(same_program(
+            r"C:\Program Files\AudioRouter\audiorouter-shell.exe",
+            own
+        ));
+        assert!(
+            same_program(
+                r"\\?\C:\PROGRAM FILES\AudioRouter\AUDIOROUTER-SHELL.EXE",
+                own
+            ),
+            "verbatim prefix and case"
+        );
         // An upgrade over a running old build, or a development build, keeps the dialog.
-        assert!(!same_program(r"C:\code\audiorouter\src-tauri\target\release\audiorouter-shell.exe", own));
+        assert!(!same_program(
+            r"C:\code\audiorouter\src-tauri\target\release\audiorouter-shell.exe",
+            own
+        ));
     }
 
     #[test]

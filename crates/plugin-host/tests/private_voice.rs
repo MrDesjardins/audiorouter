@@ -4,7 +4,7 @@
 #[ignore = "installed approved plugins and private voice sample; explicit opt-in"]
 fn installed_plugins_process_private_voice_and_parameter_edits() {
     use audiorouter_plugin_host::{
-        ParameterEvent, SupervisedWorkerProcess, WorkerFrame, inspect_binary, worker_clock_tick,
+        inspect_binary, worker_clock_tick, ParameterEvent, SupervisedWorkerProcess, WorkerFrame,
     };
     use std::time::Instant;
     let voice_path = std::env::var("AUDIOROUTER_VOICE_SAMPLE").expect("approved sample");
@@ -74,14 +74,12 @@ fn installed_plugins_process_private_voice_and_parameter_edits() {
                 let events = if edits && index == 0 {
                     parameter
                         .map(|p| {
-                            vec![
-                                ParameterEvent::new(
-                                    p.parameter_id,
-                                    if p.default_value < 0.5 { 0.9 } else { 0.1 },
-                                    0,
-                                )
-                                .unwrap(),
-                            ]
+                            vec![ParameterEvent::new(
+                                p.parameter_id,
+                                if p.default_value < 0.5 { 0.9 } else { 0.1 },
+                                0,
+                            )
+                            .unwrap()]
                         })
                         .unwrap_or_default()
                 } else {

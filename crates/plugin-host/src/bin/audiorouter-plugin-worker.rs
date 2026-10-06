@@ -458,12 +458,10 @@ fn run() -> Result<(), String> {
             }
             WorkerMessage::EditorClose => {
                 #[cfg(windows)]
-                let result = vst2_editors
-                    .get(selected_instance)
-                    .map_or_else(
-                        || Err("editorUnavailable".to_string()),
-                        Vst2EditorThread::close,
-                    );
+                let result = vst2_editors.get(selected_instance).map_or_else(
+                    || Err("editorUnavailable".to_string()),
+                    Vst2EditorThread::close,
+                );
                 #[cfg(not(windows))]
                 let result: Result<(), String> = Err("editorUnavailable".into());
                 match result {
@@ -917,14 +915,20 @@ mod channel_mapping_tests {
         assert_eq!(inputs, vec![vec![0.1, 0.2, 0.3]; 2]);
         let mut mono = vec![0.0; 3];
         fold_plugin_outputs_to_graph(&[vec![0.2, 0.4, 0.6], vec![0.4, 0.4, 0.2]], 1, &mut mono);
-        assert!(mono.iter().zip([0.3, 0.4, 0.4]).all(|(a, b)| (a - b).abs() < 1e-6));
+        assert!(mono
+            .iter()
+            .zip([0.3, 0.4, 0.4])
+            .all(|(a, b)| (a - b).abs() < 1e-6));
     }
 
     #[test]
     fn a_stereo_route_uses_a_mono_plugin_and_equal_layouts_pass_through() {
         let mut inputs = vec![vec![0.0; 2]];
         spread_graph_to_plugin_inputs(&[0.2, 0.4, 1.0, 0.0], 2, &mut inputs);
-        assert!(inputs[0].iter().zip([0.3, 0.5]).all(|(a, b)| (a - b).abs() < 1e-6));
+        assert!(inputs[0]
+            .iter()
+            .zip([0.3, 0.5])
+            .all(|(a, b)| (a - b).abs() < 1e-6));
         let mut stereo = vec![0.0; 4];
         fold_plugin_outputs_to_graph(&[vec![0.7, 0.9]], 2, &mut stereo);
         assert_eq!(stereo, vec![0.7, 0.7, 0.9, 0.9]);

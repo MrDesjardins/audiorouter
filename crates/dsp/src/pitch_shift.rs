@@ -175,6 +175,8 @@ impl<C: AsMut<RawState>> Shifter<C> {
     }
 }
 
+// Scratch buffers are passed separately so the caller owns every allocation.
+#[allow(clippy::too_many_arguments)]
 fn shift_frame<'a>(
     hammed: &mut Full<f32>,
     arg_ibuf: &mut Half<f32>,

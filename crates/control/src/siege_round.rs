@@ -34,20 +34,32 @@ const MAX_BACKOFF: Duration = Duration::from_secs(15);
 /// Map one Stats.cc snapshot to a round phase. Mirrors `phaseState` in the
 /// example's `core.mjs`: no reliable state is `Unknown` (Ducks release).
 pub(crate) fn round_phase(snapshot: &Value) -> RoundPhase {
-    let Some(object) = snapshot.as_object() else { return RoundPhase::Unknown };
+    let Some(object) = snapshot.as_object() else {
+        return RoundPhase::Unknown;
+    };
     match object.get("status").and_then(Value::as_str) {
         Some("connected") => {}
-        // The game is not running or Stats.cc is not attached to it.
-        Some("disconnected" | "loading" | "error") | _ => return RoundPhase::Unknown,
+        // The game is not running ("disconnected", "loading", "error") or
+        // Stats.cc is not attached to it.
+        _ => return RoundPhase::Unknown,
     }
-    let Some(game_match) = object.get("match") else { return RoundPhase::Unknown };
+    let Some(game_match) = object.get("match") else {
+        return RoundPhase::Unknown;
+    };
     if game_match.is_null() {
         // Main menu or matchmaking queue.
         return RoundPhase::Menu;
     }
-    let Some(game_match) = game_match.as_object() else { return RoundPhase::Unknown };
-    let Some(phase) = game_match.get("phase") else { return RoundPhase::Unknown };
-    if game_match.get("ended_at").is_some_and(|ended| !ended.is_null()) {
+    let Some(game_match) = game_match.as_object() else {
+        return RoundPhase::Unknown;
+    };
+    let Some(phase) = game_match.get("phase") else {
+        return RoundPhase::Unknown;
+    };
+    if game_match
+        .get("ended_at")
+        .is_some_and(|ended| !ended.is_null())
+    {
         return RoundPhase::BetweenRounds;
     }
     match phase {
@@ -125,7 +137,10 @@ impl SiegeRoundFeed {
         Self {
             port,
             wanted: Arc::new(AtomicBool::new(false)),
-            status: Arc::new(Mutex::new(Status { state: FeedState::Off, phase: RoundPhase::Unknown })),
+            status: Arc::new(Mutex::new(Status {
+                state: FeedState::Off,
+                phase: RoundPhase::Unknown,
+            })),
             started: false,
         }
     }
@@ -134,7 +149,11 @@ impl SiegeRoundFeed {
     pub(crate) fn set_wanted(&mut self, wanted: bool) {
         self.wanted.store(wanted, Ordering::Relaxed);
         if wanted && !self.started {
-            let (port, wanted, status) = (self.port, Arc::clone(&self.wanted), Arc::clone(&self.status));
+            let (port, wanted, status) = (
+                self.port,
+                Arc::clone(&self.wanted),
+                Arc::clone(&self.status),
+            );
             let spawned = std::thread::Builder::new()
                 .name("audiorouter-siege-round".into())
                 .spawn(move || run_feed(port, &wanted, &status));
@@ -143,7 +162,10 @@ impl SiegeRoundFeed {
     }
 
     pub(crate) fn status_json(&self) -> Value {
-        let status = self.status.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let status = self
+            .status
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         json!({
             "source": "statsCc",
             "state": status.state.name(),
@@ -156,11 +178,18 @@ impl SiegeRoundFeed {
 /// Whether Stats.cc's feed file exists (its feed is enabled at Stats.cc start).
 pub(crate) fn feed_file_present() -> Option<bool> {
     let folder = std::env::var_os("APPDATA")?;
-    Some(std::path::Path::new(&folder).join("stats.cc").join(STATS_CC_FEED_FILE).is_file())
+    Some(
+        std::path::Path::new(&folder)
+            .join("stats.cc")
+            .join(STATS_CC_FEED_FILE)
+            .is_file(),
+    )
 }
 
 fn set_status(status: &Mutex<Status>, state: FeedState, phase: RoundPhase) {
-    let mut current = status.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut current = status
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     current.state = state;
     current.phase = phase;
 }
@@ -184,7 +213,9 @@ fn run_feed(port: u16, wanted: &AtomicBool, status: &Mutex<Status>) {
                 set_status(status, FeedState::Unavailable, RoundPhase::Unknown);
                 let until = Instant::now() + backoff;
                 while Instant::now() < until && wanted.load(Ordering::Relaxed) {
-                    std::thread::sleep(IDLE_POLL.min(until.saturating_duration_since(Instant::now())));
+                    std::thread::sleep(
+                        IDLE_POLL.min(until.saturating_duration_since(Instant::now())),
+                    );
                 }
                 backoff = (backoff * 2).min(MAX_BACKOFF);
             }
@@ -199,14 +230,25 @@ fn follow_feed(port: u16, wanted: &AtomicBool, status: &Mutex<Status>) -> Result
     let signal = siege_round_signal();
     let address = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
     let stream = TcpStream::connect_timeout(&address, CONNECT_TIMEOUT).map_err(|_| ())?;
-    stream.set_read_timeout(Some(CONNECT_TIMEOUT)).map_err(|_| ())?;
-    stream.set_write_timeout(Some(CONNECT_TIMEOUT)).map_err(|_| ())?;
+    stream
+        .set_read_timeout(Some(CONNECT_TIMEOUT))
+        .map_err(|_| ())?;
+    stream
+        .set_write_timeout(Some(CONNECT_TIMEOUT))
+        .map_err(|_| ())?;
     let config = WebSocketConfig::default()
         .max_message_size(Some(MAX_SNAPSHOT_BYTES))
         .max_frame_size(Some(MAX_SNAPSHOT_BYTES));
-    let (mut socket, _) = tungstenite::client::client_with_config(format!("ws://127.0.0.1:{port}/"), stream, Some(config))
+    let (mut socket, _) = tungstenite::client::client_with_config(
+        format!("ws://127.0.0.1:{port}/"),
+        stream,
+        Some(config),
+    )
+    .map_err(|_| ())?;
+    socket
+        .get_ref()
+        .set_read_timeout(Some(READ_TIMEOUT))
         .map_err(|_| ())?;
-    socket.get_ref().set_read_timeout(Some(READ_TIMEOUT)).map_err(|_| ())?;
     // Stats.cc sends no snapshot on connect, only on the next state change.
     let mut phase = RoundPhase::Unknown;
     set_status(status, FeedState::WaitingForUpdate, phase);
@@ -221,12 +263,14 @@ fn follow_feed(port: u16, wanted: &AtomicBool, status: &Mutex<Status>) -> Result
         match socket.read() {
             Ok(Message::Text(text)) => {
                 last_heard = Instant::now();
-                phase = serde_json::from_str::<Value>(text.as_str()).map_or(RoundPhase::Unknown, |snapshot| round_phase(&snapshot));
+                phase = serde_json::from_str::<Value>(text.as_str())
+                    .map_or(RoundPhase::Unknown, |snapshot| round_phase(&snapshot));
                 set_status(status, FeedState::Connected, phase);
             }
             Ok(Message::Close(_)) => return Ok(()),
             Ok(_) => last_heard = Instant::now(),
-            Err(Error::Io(error)) if matches!(error.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {}
+            Err(Error::Io(error))
+                if matches!(error.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {}
             Err(Error::ConnectionClosed) => return Ok(()),
             Err(_) => return Err(()),
         }
@@ -257,14 +301,33 @@ mod tests {
 
     #[test]
     fn snapshots_map_to_the_example_service_phases() {
-        assert_eq!(phase(json!({ "status": "connected", "match": null })), RoundPhase::Menu);
-        assert_eq!(phase(json!({ "status": "connected", "match": null, "startedQueuingAt": 5 })), RoundPhase::Menu);
-        assert_eq!(phase(json!({ "status": "connected", "match": { "phase": null } })), RoundPhase::Prep);
+        assert_eq!(
+            phase(json!({ "status": "connected", "match": null })),
+            RoundPhase::Menu
+        );
+        assert_eq!(
+            phase(json!({ "status": "connected", "match": null, "startedQueuingAt": 5 })),
+            RoundPhase::Menu
+        );
+        assert_eq!(
+            phase(json!({ "status": "connected", "match": { "phase": null } })),
+            RoundPhase::Prep
+        );
         for quiet in ["planning", "prep", "ban"] {
-            assert_eq!(phase(json!({ "status": "connected", "match": { "phase": quiet } })), RoundPhase::Prep, "{quiet}");
+            assert_eq!(
+                phase(json!({ "status": "connected", "match": { "phase": quiet } })),
+                RoundPhase::Prep,
+                "{quiet}"
+            );
         }
-        assert_eq!(phase(json!({ "status": "connected", "match": { "phase": "action" } })), RoundPhase::Action);
-        assert_eq!(phase(json!({ "status": "connected", "match": { "phase": "results" } })), RoundPhase::BetweenRounds);
+        assert_eq!(
+            phase(json!({ "status": "connected", "match": { "phase": "action" } })),
+            RoundPhase::Action
+        );
+        assert_eq!(
+            phase(json!({ "status": "connected", "match": { "phase": "results" } })),
+            RoundPhase::BetweenRounds
+        );
         assert_eq!(
             phase(json!({ "status": "connected", "match": { "phase": "action", "ended_at": 12 } })),
             RoundPhase::BetweenRounds,
@@ -299,7 +362,10 @@ mod tests {
         feed.set_wanted(true);
         let deadline = Instant::now() + Duration::from_secs(5);
         while Instant::now() < deadline
-            && !matches!(feed.status_json()["state"].as_str(), Some("waitingForUpdate" | "connected"))
+            && !matches!(
+                feed.status_json()["state"].as_str(),
+                Some("waitingForUpdate" | "connected")
+            )
         {
             std::thread::sleep(Duration::from_millis(50));
         }
@@ -309,7 +375,10 @@ mod tests {
         }
         // State and phase only: snapshots contain player data.
         eprintln!("Stats.cc feed: {}", feed.status_json());
-        assert!(matches!(feed.status_json()["state"].as_str(), Some("waitingForUpdate" | "connected")));
+        assert!(matches!(
+            feed.status_json()["state"].as_str(),
+            Some("waitingForUpdate" | "connected")
+        ));
         feed.set_wanted(false);
     }
 
@@ -322,8 +391,11 @@ mod tests {
             let mut socket = tungstenite::accept(stream).unwrap();
             for phase in ["prep", "action"] {
                 std::thread::sleep(Duration::from_millis(300));
-                let snapshot = json!({ "status": "connected", "match": { "phase": phase } }).to_string();
-                socket.send(tungstenite::Message::Text(snapshot.into())).unwrap();
+                let snapshot =
+                    json!({ "status": "connected", "match": { "phase": phase } }).to_string();
+                socket
+                    .send(tungstenite::Message::Text(snapshot.into()))
+                    .unwrap();
             }
             std::thread::sleep(Duration::from_millis(300));
             let _ = socket.close(None);

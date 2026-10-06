@@ -54,10 +54,18 @@ pub fn list() -> Result<Vec<LanAddress>, String> {
                     {
                         // AF_INET with a full SOCKADDR_IN length; the union's
                         // S_addr holds the address in network byte order.
-                        let raw = unsafe { (*socket.lpSockaddr.cast::<SOCKADDR_IN>()).sin_addr.S_un.S_addr };
+                        let raw = unsafe {
+                            (*socket.lpSockaddr.cast::<SOCKADDR_IN>())
+                                .sin_addr
+                                .S_un
+                                .S_addr
+                        };
                         let address = Ipv4Addr::from(raw.to_ne_bytes());
                         if crate::http_api::lan_address_allowed(address) {
-                            found.push(LanAddress { address, adapter: name.clone() });
+                            found.push(LanAddress {
+                                address,
+                                adapter: name.clone(),
+                            });
                         }
                     }
                     unicast = entry.Next.cast_const();

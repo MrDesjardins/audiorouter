@@ -781,9 +781,17 @@ impl Vst2Library {
             // SAFETY: The getter was validated at load and receives a bounded
             // parameter index from the plugin's own count.
             let value = unsafe {
-                ((*self.effect).get_parameter.expect("validated parameter getter"))(self.effect, parameter_id as i32)
+                ((*self.effect)
+                    .get_parameter
+                    .expect("validated parameter getter"))(
+                    self.effect, parameter_id as i32
+                )
             };
-            let value = if value.is_finite() { value.clamp(0.0, 1.0) } else { 0.0 };
+            let value = if value.is_finite() {
+                value.clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
             bytes.extend_from_slice(&value.to_le_bytes());
         }
         bytes
@@ -800,7 +808,11 @@ impl Vst2Library {
             return Err(Vst2LibraryError::InvalidState);
         }
         // A plugin update may add or remove parameters; restore the overlap.
-        for (parameter_id, raw) in values.chunks_exact(4).take(self.parameter_count()).enumerate() {
+        for (parameter_id, raw) in values
+            .chunks_exact(4)
+            .take(self.parameter_count())
+            .enumerate()
+        {
             let value = f32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]);
             if value.is_finite() {
                 self.set_parameter(parameter_id as u32, value.clamp(0.0, 1.0))?;

@@ -1369,7 +1369,9 @@ impl Storage {
                 |row| row.get::<_, String>(0),
             )
             .optional()?;
-        Ok(value.filter(|id| !id.is_empty() && id.len() <= audiorouter_domain::MAX_ENTITY_ID_BYTES).map(EntityId::new))
+        Ok(value
+            .filter(|id| !id.is_empty() && id.len() <= audiorouter_domain::MAX_ENTITY_ID_BYTES)
+            .map(EntityId::new))
     }
 
     /// Runtime leases and driver handles are intentionally not serialized.
@@ -1410,10 +1412,15 @@ impl Storage {
     /// Persist the most recent plugin scan results (metadata only, keyed by
     /// scanned directory) so the plugin list survives a restart without
     /// rescanning. Bounded by `MAX_PLUGIN_INVENTORY_BYTES`.
-    pub fn save_plugin_inventories(&self, inventories: &serde_json::Value) -> Result<(), StorageError> {
+    pub fn save_plugin_inventories(
+        &self,
+        inventories: &serde_json::Value,
+    ) -> Result<(), StorageError> {
         let value = serde_json::to_string(inventories)?;
         if value.len() > MAX_PLUGIN_INVENTORY_BYTES {
-            return Err(StorageError::InvalidSession("plugin inventory is too large to persist".into()));
+            return Err(StorageError::InvalidSession(
+                "plugin inventory is too large to persist".into(),
+            ));
         }
         self.connection.execute(
             "INSERT INTO control_settings(key, value) VALUES ('pluginInventories', ?1)
@@ -2286,7 +2293,9 @@ impl Storage {
     ) -> Result<Option<String>, StorageError> {
         for value in [session_id, node_id, state_id] {
             if value.is_empty() || value.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES {
-                return Err(StorageError::InvalidPluginState("invalid plugin node state key".into()));
+                return Err(StorageError::InvalidPluginState(
+                    "invalid plugin node state key".into(),
+                ));
             }
         }
         let previous = self.plugin_node_state(session_id, node_id)?;
@@ -2299,7 +2308,11 @@ impl Storage {
     }
 
     /// The latest captured state of a plugin node, if any.
-    pub fn plugin_node_state(&self, session_id: &str, node_id: &str) -> Result<Option<String>, StorageError> {
+    pub fn plugin_node_state(
+        &self,
+        session_id: &str,
+        node_id: &str,
+    ) -> Result<Option<String>, StorageError> {
         Ok(self
             .connection
             .query_row(
@@ -2311,7 +2324,10 @@ impl Storage {
     }
 
     /// Latest captured plugin states of every node in a session.
-    pub fn plugin_node_states(&self, session_id: &str) -> Result<Vec<(String, String)>, StorageError> {
+    pub fn plugin_node_states(
+        &self,
+        session_id: &str,
+    ) -> Result<Vec<(String, String)>, StorageError> {
         let mut statement = self
             .connection
             .prepare("SELECT node_id, state_id FROM plugin_node_states WHERE session_id = ?1 ORDER BY node_id LIMIT 1000")?;
@@ -2538,16 +2554,19 @@ impl Storage {
         // is what the user last heard, so the file carries that one.
         let mut latest_applied = false;
         for (node_id, state_id) in self.plugin_node_states(id.as_str())? {
-            if let Some(node) = exported_session
-                .nodes
-                .iter_mut()
-                .find(|node| node.id.as_str() == node_id && node.kind == audiorouter_domain::NodeKind::Plugin)
-            {
-                node.parameters.insert("stateId".into(), serde_json::Value::String(state_id));
+            if let Some(node) = exported_session.nodes.iter_mut().find(|node| {
+                node.id.as_str() == node_id && node.kind == audiorouter_domain::NodeKind::Plugin
+            }) {
+                node.parameters
+                    .insert("stateId".into(), serde_json::Value::String(state_id));
                 latest_applied = true;
             }
         }
-        let document = if latest_applied { serde_json::to_string(&exported_session)? } else { document };
+        let document = if latest_applied {
+            serde_json::to_string(&exported_session)?
+        } else {
+            document
+        };
         // Carry what the nodes reference so the file restores the session on
         // another computer: imported audio (Audio File, FIR Filter) and saved
         // plugin states. A missing asset is left out; the import reports it.
@@ -2557,22 +2576,41 @@ impl Storage {
         let safe_id = |id: &str| {
             !id.is_empty()
                 && id.len() <= audiorouter_domain::MAX_ENTITY_ID_BYTES
-                && id.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+                && id
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
                 && !id.starts_with('.')
         };
         let state_records = self.list_plugin_states(None)?;
         for node in &exported_session.nodes {
-            if let Some(id) = node.parameters.get("mediaId").and_then(|value| value.as_str()) {
+            if let Some(id) = node
+                .parameters
+                .get("mediaId")
+                .and_then(|value| value.as_str())
+            {
                 if safe_id(id) && !media.iter().any(|entry: &BundleMedia| entry.id == id) {
                     if let Some((file_name, format, bytes)) = self.load_audio_media(id)? {
                         let path = format!("media/{id}");
                         files.push((path.clone(), bytes));
-                        media.push(BundleMedia { id: id.into(), file_name, format, path });
+                        media.push(BundleMedia {
+                            id: id.into(),
+                            file_name,
+                            format,
+                            path,
+                        });
                     }
                 }
             }
-            if let Some(id) = node.parameters.get("stateId").and_then(|value| value.as_str()) {
-                if safe_id(id) && !plugin_states.iter().any(|entry: &BundlePluginState| entry.id == id) {
+            if let Some(id) = node
+                .parameters
+                .get("stateId")
+                .and_then(|value| value.as_str())
+            {
+                if safe_id(id)
+                    && !plugin_states
+                        .iter()
+                        .any(|entry: &BundlePluginState| entry.id == id)
+                {
                     if let Some(record) = state_records.iter().find(|record| record.id == id) {
                         if let Ok(bytes) = std::fs::read(&record.path) {
                             let path = format!("plugin-states/{id}.bin");
@@ -2775,7 +2813,9 @@ impl Storage {
         let mut archive = ZipArchive::new(File::open(bundle)?)
             .map_err(|error| StorageError::InvalidBundle(format!("invalid ZIP: {error}")))?;
         if archive.len() > MAX_BUNDLE_ENTRIES {
-            return Err(StorageError::InvalidBundle("too many bundle entries".into()));
+            return Err(StorageError::InvalidBundle(
+                "too many bundle entries".into(),
+            ));
         }
         let staging = staging_root.join(format!(
             "audiorouter-import-{}-{}",
@@ -2796,24 +2836,37 @@ impl Storage {
                 });
             }
             let session: Session = serde_json::from_str(&graph)?;
-            validate_session(&session)
-                .map_err(|errors| StorageError::InvalidSession(format_validation_errors(&errors)))?;
+            validate_session(&session).map_err(|errors| {
+                StorageError::InvalidSession(format_validation_errors(&errors))
+            })?;
             let listed = |path: &str| manifest.assets.iter().any(|asset| asset.path() == path);
             let mut report = BundleImportReport::default();
             for media in &manifest.media {
                 if !listed(&media.path) {
-                    return Err(StorageError::InvalidBundle(format!("unlisted media: {}", media.path)));
+                    return Err(StorageError::InvalidBundle(format!(
+                        "unlisted media: {}",
+                        media.path
+                    )));
                 }
                 if self.load_audio_media(&media.id)?.is_none() {
                     let bytes = std::fs::read(staging.join(&media.path))?;
-                    self.store_audio_media(&media.id, &media.file_name, &media.format, &bytes, None)?;
+                    self.store_audio_media(
+                        &media.id,
+                        &media.file_name,
+                        &media.format,
+                        &bytes,
+                        None,
+                    )?;
                     report.media_restored += 1;
                 }
             }
             let existing_states = self.list_plugin_states(None)?;
             for state in &manifest.plugin_states {
                 if !listed(&state.path) {
-                    return Err(StorageError::InvalidBundle(format!("unlisted plugin state: {}", state.path)));
+                    return Err(StorageError::InvalidBundle(format!(
+                        "unlisted plugin state: {}",
+                        state.path
+                    )));
                 }
                 if existing_states.iter().any(|record| record.id == state.id) {
                     continue;
@@ -2830,7 +2883,9 @@ impl Storage {
                         .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
                 let destination = directory.join(format!("{}.bin", state.id));
                 if !safe_name || !destination.starts_with(&directory) {
-                    return Err(StorageError::InvalidBundle("plugin state escapes its directory".into()));
+                    return Err(StorageError::InvalidBundle(
+                        "plugin state escapes its directory".into(),
+                    ));
                 }
                 {
                     use std::io::Write;
@@ -2855,13 +2910,21 @@ impl Storage {
                 .nodes
                 .iter()
                 .filter(|node| {
-                    node.parameters.get("mediaId").and_then(|value| value.as_str()).is_some_and(|id| {
-                        !manifest.media.iter().any(|media| media.id == id)
-                            && self.load_audio_media(id).ok().flatten().is_none()
-                    }) || node.parameters.get("stateId").and_then(|value| value.as_str()).is_some_and(|id| {
-                        !manifest.plugin_states.iter().any(|state| state.id == id)
-                            && !existing_states.iter().any(|record| record.id == id)
-                    })
+                    node.parameters
+                        .get("mediaId")
+                        .and_then(|value| value.as_str())
+                        .is_some_and(|id| {
+                            !manifest.media.iter().any(|media| media.id == id)
+                                && self.load_audio_media(id).ok().flatten().is_none()
+                        })
+                        || node
+                            .parameters
+                            .get("stateId")
+                            .and_then(|value| value.as_str())
+                            .is_some_and(|id| {
+                                !manifest.plugin_states.iter().any(|state| state.id == id)
+                                    && !existing_states.iter().any(|record| record.id == id)
+                            })
                 })
                 .count();
             report.missing_assets += referenced;
@@ -2978,7 +3041,7 @@ impl Storage {
             let supported = registry
                 .iter()
                 .find(|spec| spec.kind.type_name() == required.type_name);
-            if supported.map_or(true, |spec| spec.version != required.version) {
+            if supported.is_none_or(|spec| spec.version != required.version) {
                 return Err(StorageError::InvalidBundle(format!(
                     "unsupported required node type: {} v{}",
                     required.type_name, required.version
@@ -5402,7 +5465,8 @@ mod tests {
 
     #[test]
     fn session_file_carries_imported_audio_and_plugin_state_to_another_database() {
-        let root = std::env::temp_dir().join(format!("audiorouter-session-file-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("audiorouter-session-file-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let (source_dir, target_dir) = (root.join("source"), root.join("target"));
         std::fs::create_dir_all(&source_dir).unwrap();
@@ -5423,7 +5487,10 @@ mod tests {
             parameters: [
                 ("stateId".to_string(), Value::String("state-1".into())),
                 ("format".to_string(), Value::String("vst2".into())),
-                ("path".to_string(), Value::String("C:\\Plugins\\reafir.dll".into())),
+                (
+                    "path".to_string(),
+                    Value::String("C:\\Plugins\\reafir.dll".into()),
+                ),
             ]
             .into_iter()
             .collect(),
@@ -5451,11 +5518,17 @@ mod tests {
         source.export_bundle(&original.id, &bundle).unwrap();
 
         let target = Storage::open(target_dir.join("audiorouter.db")).unwrap();
-        let (imported, report) = target.read_session_bundle(&bundle, root.join("staging")).unwrap();
+        let (imported, report) = target
+            .read_session_bundle(&bundle, root.join("staging"))
+            .unwrap();
         assert_eq!(imported, original);
         assert_eq!(
             report,
-            BundleImportReport { media_restored: 1, plugin_states_restored: 1, missing_assets: 0 }
+            BundleImportReport {
+                media_restored: 1,
+                plugin_states_restored: 1,
+                missing_assets: 0
+            }
         );
         assert_eq!(
             target.load_audio_media("media-1").unwrap(),
@@ -5466,7 +5539,9 @@ mod tests {
         assert_eq!(std::fs::read(&restored[0].path).unwrap(), state_bytes);
         assert!(restored[0].path.starts_with(&*target_dir.to_string_lossy()));
         // A second import keeps what is already there and still returns the session.
-        let (_, again) = target.read_session_bundle(&bundle, root.join("staging")).unwrap();
+        let (_, again) = target
+            .read_session_bundle(&bundle, root.join("staging"))
+            .unwrap();
         assert_eq!(again, BundleImportReport::default());
         drop((source, target));
         let _ = std::fs::remove_dir_all(root);
@@ -5474,19 +5549,38 @@ mod tests {
 
     #[test]
     fn plugin_node_states_record_the_latest_capture_and_travel_in_session_files() {
-        let root = std::env::temp_dir().join(format!("audiorouter-node-states-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("audiorouter-node-states-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         let storage = Storage::open(root.join("db.sqlite")).unwrap();
         assert_eq!(storage.plugin_node_state("s", "fx").unwrap(), None);
-        assert_eq!(storage.set_plugin_node_state("s", "fx", "auto-1").unwrap(), None);
-        assert_eq!(storage.set_plugin_node_state("s", "fx", "auto-1").unwrap(), None, "same state is not a replacement");
-        assert_eq!(storage.set_plugin_node_state("s", "fx", "auto-2").unwrap(), Some("auto-1".into()));
-        assert_eq!(storage.plugin_node_state("s", "fx").unwrap(), Some("auto-2".into()));
+        assert_eq!(
+            storage.set_plugin_node_state("s", "fx", "auto-1").unwrap(),
+            None
+        );
+        assert_eq!(
+            storage.set_plugin_node_state("s", "fx", "auto-1").unwrap(),
+            None,
+            "same state is not a replacement"
+        );
+        assert_eq!(
+            storage.set_plugin_node_state("s", "fx", "auto-2").unwrap(),
+            Some("auto-1".into())
+        );
+        assert_eq!(
+            storage.plugin_node_state("s", "fx").unwrap(),
+            Some("auto-2".into())
+        );
         assert!(!storage.plugin_node_state_in_use("auto-1").unwrap());
-        storage.set_plugin_node_state("copy", "fx", "auto-2").unwrap();
+        storage
+            .set_plugin_node_state("copy", "fx", "auto-2")
+            .unwrap();
         assert!(storage.plugin_node_state_in_use("auto-2").unwrap());
-        assert_eq!(storage.plugin_node_states("s").unwrap(), vec![("fx".to_string(), "auto-2".to_string())]);
+        assert_eq!(
+            storage.plugin_node_states("s").unwrap(),
+            vec![("fx".to_string(), "auto-2".to_string())]
+        );
 
         // A session file carries the latest capture as the node's stateId.
         let mut original = session();
@@ -5497,18 +5591,40 @@ mod tests {
             name: "ReaComp".into(),
             enabled: true,
             bypass: false,
-            parameters: [("format".to_string(), Value::String("vst2".into()))].into_iter().collect(),
+            parameters: [("format".to_string(), Value::String("vst2".into()))]
+                .into_iter()
+                .collect(),
             ports: vec![],
         });
         storage.save_session(&original).unwrap();
-        storage.set_plugin_node_state(original.id.as_str(), "fx", "auto-3").unwrap();
+        storage
+            .set_plugin_node_state(original.id.as_str(), "fx", "auto-3")
+            .unwrap();
         let bundle = root.join("setup.audiorouter");
         storage.export_bundle(&original.id, &bundle).unwrap();
         let target = Storage::open(root.join("other.sqlite")).unwrap();
-        let (imported, _) = target.read_session_bundle(&bundle, root.join("staging")).unwrap();
-        let fx = imported.nodes.iter().find(|node| node.id.as_str() == "fx").unwrap();
-        assert_eq!(fx.parameters.get("stateId"), Some(&Value::String("auto-3".into())));
-        assert!(storage.load_session(&original.id).unwrap().unwrap().nodes.iter().all(|node| !node.parameters.contains_key("stateId")), "the saved session is unchanged");
+        let (imported, _) = target
+            .read_session_bundle(&bundle, root.join("staging"))
+            .unwrap();
+        let fx = imported
+            .nodes
+            .iter()
+            .find(|node| node.id.as_str() == "fx")
+            .unwrap();
+        assert_eq!(
+            fx.parameters.get("stateId"),
+            Some(&Value::String("auto-3".into()))
+        );
+        assert!(
+            storage
+                .load_session(&original.id)
+                .unwrap()
+                .unwrap()
+                .nodes
+                .iter()
+                .all(|node| !node.parameters.contains_key("stateId")),
+            "the saved session is unchanged"
+        );
         drop((storage, target));
         let _ = std::fs::remove_dir_all(root);
     }
@@ -6543,10 +6659,24 @@ mod tests {
         let link_result = std::os::unix::fs::symlink(&target, &link);
         if link_result.is_ok() {
             assert!(path_has_reparse_ancestor(&link.join("take.wav")));
+            // A directory symlink is removed as a directory on Windows and
+            // as a file on Unix.
+            #[cfg(windows)]
             std::fs::remove_dir(&link).unwrap();
+            #[cfg(not(windows))]
+            std::fs::remove_file(&link).unwrap();
         }
         assert!(!path_has_reparse_ancestor(&target.join("take.wav")));
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// An absolute plugin-state path on the platform running the tests.
+    fn absolute_state_path(name: &str) -> String {
+        if cfg!(windows) {
+            format!("C:\\AudioRouter\\state\\{name}")
+        } else {
+            format!("/AudioRouter/state/{name}")
+        }
     }
 
     #[test]
@@ -6557,7 +6687,7 @@ mod tests {
             plugin_id: "plugin-1".into(),
             plugin_sha256: "a".repeat(64),
             version: 1,
-            path: "C:\\AudioRouter\\state\\state-1.bin".into(),
+            path: absolute_state_path("state-1.bin"),
             state_sha256: "b".repeat(64),
             size_bytes: 128,
         };
@@ -6649,7 +6779,7 @@ mod tests {
                     plugin_id: "plugin-1".into(),
                     plugin_sha256: "a".repeat(64),
                     version: 1,
-                    path: format!("C:\\AudioRouter\\state\\state-{index:03}.bin"),
+                    path: absolute_state_path(&format!("state-{index:03}.bin")),
                     state_sha256: "b".repeat(64),
                     size_bytes: 1,
                 })

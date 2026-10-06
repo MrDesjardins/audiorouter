@@ -25,7 +25,12 @@ type CloseHook = Box<dyn FnOnce() + Send>;
 /// Open an editor host window and return its handle as an integer (window
 /// handles are not `Send`). The window starts at `width` × `height` client
 /// pixels and can be resized; the plugin draws inside it.
-pub fn open_host_window(title: &str, width: i32, height: i32, on_close: CloseHook) -> Result<isize, String> {
+pub fn open_host_window(
+    title: &str,
+    width: i32,
+    height: i32,
+    on_close: CloseHook,
+) -> Result<isize, String> {
     let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
     let title = title.to_owned();
     thread::Builder::new()
@@ -71,8 +76,14 @@ fn run_window(
     }
 }
 
-unsafe fn create_window(title: &str, width: i32, height: i32, on_close: CloseHook) -> Result<HWND, String> {
-    let instance = GetModuleHandleW(None).map_err(|error| format!("GetModuleHandleW failed: {error}"))?;
+unsafe fn create_window(
+    title: &str,
+    width: i32,
+    height: i32,
+    on_close: CloseHook,
+) -> Result<HWND, String> {
+    let instance =
+        GetModuleHandleW(None).map_err(|error| format!("GetModuleHandleW failed: {error}"))?;
     let class = WNDCLASSW {
         lpfnWndProc: Some(window_proc),
         hInstance: instance.into(),
@@ -106,7 +117,12 @@ unsafe fn create_window(title: &str, width: i32, height: i32, on_close: CloseHoo
     })
 }
 
-unsafe extern "system" fn window_proc(window: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+unsafe extern "system" fn window_proc(
+    window: HWND,
+    message: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+) -> LRESULT {
     match message {
         WM_NCCREATE => {
             // SAFETY: lparam is the CREATESTRUCTW for this window; its

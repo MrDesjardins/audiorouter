@@ -141,7 +141,10 @@ pub fn network_socket_address(address: &str, port: u16) -> Option<SocketAddr> {
     if port == 0 || !audiorouter_domain::valid_network_address(address) {
         return None;
     }
-    address.parse::<IpAddr>().ok().map(|ip| SocketAddr::new(ip, port))
+    address
+        .parse::<IpAddr>()
+        .ok()
+        .map(|ip| SocketAddr::new(ip, port))
 }
 
 fn stream_id() -> u32 {
@@ -198,7 +201,8 @@ struct SenderShared {
 impl SenderShared {
     fn record_error(&self, error: &std::io::Error) {
         self.errors.fetch_add(1, Ordering::Relaxed);
-        self.last_error.store(error.raw_os_error().unwrap_or(-1), Ordering::Relaxed);
+        self.last_error
+            .store(error.raw_os_error().unwrap_or(-1), Ordering::Relaxed);
     }
 
     fn record_local(&self, socket: &UdpSocket) {
@@ -263,9 +267,16 @@ impl NetworkSender {
             .name("audiorouter-network-send".into())
             .spawn(move || {
                 while thread_shared.running.load(Ordering::Acquire) {
-                    let retarget = thread_shared.retarget.lock().ok().and_then(|mut next| next.take());
+                    let retarget = thread_shared
+                        .retarget
+                        .lock()
+                        .ok()
+                        .and_then(|mut next| next.take());
                     if let Some(next) = retarget {
-                        let reconnected = if socket.local_addr().is_ok_and(|local| local.is_ipv4() == next.is_ipv4()) {
+                        let reconnected = if socket
+                            .local_addr()
+                            .is_ok_and(|local| local.is_ipv4() == next.is_ipv4())
+                        {
                             socket.connect(next).map(|()| None)
                         } else {
                             connected_socket(next).map(Some)
@@ -299,7 +310,10 @@ impl NetworkSender {
     }
 
     pub fn destination(&self) -> SocketAddr {
-        self.destination.lock().map_or_else(|poisoned| *poisoned.into_inner(), |destination| *destination)
+        self.destination.lock().map_or_else(
+            |poisoned| *poisoned.into_inner(),
+            |destination| *destination,
+        )
     }
 
     /// Send to another address from now on, without interrupting the
@@ -328,7 +342,8 @@ impl NetworkSender {
             sent_packets: self.shared.sent.load(Ordering::Relaxed),
             dropped_packets: self.shared.dropped.load(Ordering::Relaxed),
             send_errors: self.shared.errors.load(Ordering::Relaxed),
-            last_error_code: Some(self.shared.last_error.load(Ordering::Relaxed)).filter(|code| *code != 0),
+            last_error_code: Some(self.shared.last_error.load(Ordering::Relaxed))
+                .filter(|code| *code != 0),
             local_address: self.shared.local.lock().ok().and_then(|local| *local),
         }
     }
@@ -383,9 +398,7 @@ impl audiorouter_engine::AudioTap for NetworkSendTap {
         let mut offset = NETWORK_AUDIO_HEADER_BYTES;
         for frame in 0..frames {
             for channel in 0..channels {
-                let sample = block
-                    .channel(channel)
-                    .map_or(0.0, |samples| samples[frame]);
+                let sample = block.channel(channel).map_or(0.0, |samples| samples[frame]);
                 let sample = if sample.is_finite() { sample } else { 0.0 };
                 bytes[offset..offset + 4].copy_from_slice(&sample.to_le_bytes());
                 offset += 4;
@@ -598,7 +611,12 @@ impl NetworkReceiver {
 
     pub fn stats(&self) -> NetworkReceiveStats {
         NetworkReceiveStats {
-            last_rejected_sender: self.shared.last_rejected_sender.lock().ok().and_then(|sender| *sender),
+            last_rejected_sender: self
+                .shared
+                .last_rejected_sender
+                .lock()
+                .ok()
+                .and_then(|sender| *sender),
             received_packets: self.shared.received.load(Ordering::Relaxed),
             lost_packets: self.shared.lost.load(Ordering::Relaxed),
             late_packets: self.shared.late.load(Ordering::Relaxed),
@@ -607,8 +625,14 @@ impl NetworkReceiver {
             overflow_packets: self.shared.overflows.load(Ordering::Relaxed),
             buffered_frames: self.shared.queued_frames.load(Ordering::Acquire) as u64,
             receive_errors: self.shared.receive_errors.load(Ordering::Relaxed),
-            last_error_code: Some(self.shared.last_error.load(Ordering::Relaxed)).filter(|code| *code != 0),
-            local_address_toward_sender: self.shared.local_toward_sender.lock().ok().and_then(|local| *local),
+            last_error_code: Some(self.shared.last_error.load(Ordering::Relaxed))
+                .filter(|code| *code != 0),
+            local_address_toward_sender: self
+                .shared
+                .local_toward_sender
+                .lock()
+                .ok()
+                .and_then(|local| *local),
         }
     }
 
@@ -647,10 +671,19 @@ fn receive_loop(socket: &UdpSocket, shared: &ReceiverShared) {
         let (length, from) = match socket.recv_from(&mut datagram) {
             Ok(received) => received,
             // The 100 ms read timeout only re-checks `running`.
-            Err(error) if matches!(error.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => continue,
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ) =>
+            {
+                continue
+            }
             Err(error) => {
                 shared.receive_errors.fetch_add(1, Ordering::Relaxed);
-                shared.last_error.store(error.raw_os_error().unwrap_or(-1), Ordering::Relaxed);
+                shared
+                    .last_error
+                    .store(error.raw_os_error().unwrap_or(-1), Ordering::Relaxed);
                 continue;
             }
         };
@@ -658,7 +691,10 @@ fn receive_loop(socket: &UdpSocket, shared: &ReceiverShared) {
             shared.rejected.fetch_add(1, Ordering::Relaxed);
             continue;
         }
-        let sender = shared.sender.lock().map_or_else(|poisoned| *poisoned.into_inner(), |sender| *sender);
+        let sender = shared
+            .sender
+            .lock()
+            .map_or_else(|poisoned| *poisoned.into_inner(), |sender| *sender);
         if !same_host(from.ip(), sender) {
             shared.rejected.fetch_add(1, Ordering::Relaxed);
             // Remember only real AudioRouter audio, never arbitrary traffic,
@@ -712,7 +748,11 @@ fn receive_loop(socket: &UdpSocket, shared: &ReceiverShared) {
             .zip(payload.chunks_exact(4))
         {
             let value = f32::from_le_bytes(bytes.try_into().expect("4 bytes"));
-            *sample = if value.is_finite() { value.clamp(-4.0, 4.0) } else { 0.0 };
+            *sample = if value.is_finite() {
+                value.clamp(-4.0, 4.0)
+            } else {
+                0.0
+            };
         }
         packet.channels = channels;
         packet.frames = frames;
@@ -739,8 +779,13 @@ impl Playout {
             for frame in 0..take {
                 let source = (self.offset + frame) * packet.channels;
                 for channel in 0..channels {
-                    let from = if packet.channels == 1 { 0 } else { channel.min(packet.channels - 1) };
-                    self.scratch[(read + frame) * channels + channel] = packet.samples[source + from];
+                    let from = if packet.channels == 1 {
+                        0
+                    } else {
+                        channel.min(packet.channels - 1)
+                    };
+                    self.scratch[(read + frame) * channels + channel] =
+                        packet.samples[source + from];
                 }
             }
             self.offset += take;
@@ -775,8 +820,8 @@ impl AudioCaptureSource for NetworkReceiver {
         {
             return Err(AudioError::InvalidFrameSize);
         }
-        let quantum = audiorouter_engine::PROCESSING_QUANTUM_FRAMES
-            .min(destination.len() / bytes_per_frame);
+        let quantum =
+            audiorouter_engine::PROCESSING_QUANTUM_FRAMES.min(destination.len() / bytes_per_frame);
         if quantum == 0 {
             return Ok(None);
         }
@@ -802,14 +847,21 @@ impl AudioCaptureSource for NetworkReceiver {
         }
         // Far too deep (sender burst after a network stall): skip ahead to
         // the target instead of keeping seconds of delay.
-        if playout.playing && buffered > self.shared.target_frames.load(Ordering::Acquire) * 4 + 4_800 {
-            while self.shared.queued_frames.load(Ordering::Acquire) > self.shared.target_frames.load(Ordering::Acquire) {
-                let Some(packet) = playout.current.take().or_else(|| self.shared.ready.pop()) else {
+        if playout.playing
+            && buffered > self.shared.target_frames.load(Ordering::Acquire) * 4 + 4_800
+        {
+            while self.shared.queued_frames.load(Ordering::Acquire)
+                > self.shared.target_frames.load(Ordering::Acquire)
+            {
+                let Some(packet) = playout.current.take().or_else(|| self.shared.ready.pop())
+                else {
                     break;
                 };
                 let remaining = packet.frames - playout.offset.min(packet.frames);
                 playout.offset = 0;
-                self.shared.queued_frames.fetch_sub(remaining, Ordering::AcqRel);
+                self.shared
+                    .queued_frames
+                    .fetch_sub(remaining, Ordering::AcqRel);
                 self.shared.overflows.fetch_add(1, Ordering::Relaxed);
                 let _ = self.shared.free.push(packet);
             }
@@ -819,13 +871,14 @@ impl AudioCaptureSource for NetworkReceiver {
             destination[..bytes].fill(0);
         } else {
             let margin = audiorouter_engine::PROCESSING_QUANTUM_FRAMES * 2;
-            let input_frames = if buffered > self.shared.target_frames.load(Ordering::Acquire) + margin {
-                quantum + 1
-            } else if buffered + margin < self.shared.target_frames.load(Ordering::Acquire) {
-                quantum - 1
-            } else {
-                quantum
-            };
+            let input_frames =
+                if buffered > self.shared.target_frames.load(Ordering::Acquire) + margin {
+                    quantum + 1
+                } else if buffered + margin < self.shared.target_frames.load(Ordering::Acquire) {
+                    quantum - 1
+                } else {
+                    quantum
+                };
             let read = playout.read(&self.shared, input_frames, channels);
             if read < input_frames {
                 self.shared.underruns.fetch_add(1, Ordering::Relaxed);
@@ -833,7 +886,8 @@ impl AudioCaptureSource for NetworkReceiver {
             }
             for frame in 0..quantum {
                 // Linear interpolation from `input_frames` onto `quantum`.
-                let position = frame as f64 * (input_frames - 1) as f64 / (quantum - 1).max(1) as f64;
+                let position =
+                    frame as f64 * (input_frames - 1) as f64 / (quantum - 1).max(1) as f64;
                 let index = position as usize;
                 let next = (index + 1).min(input_frames - 1);
                 let fraction = (position - index as f64) as f32;
@@ -885,27 +939,52 @@ mod tests {
         assert_eq!(length, 20 + 256 * 4);
         let (decoded, payload) = decode_network_packet(&buffer[..length]).unwrap();
         assert_eq!(decoded, header(9));
-        assert_eq!(f32::from_le_bytes(payload[4..8].try_into().unwrap()), 1.0 / 256.0);
+        assert_eq!(
+            f32::from_le_bytes(payload[4..8].try_into().unwrap()),
+            1.0 / 256.0
+        );
 
-        assert_eq!(decode_network_packet(&buffer[..length - 1]), Err(NetworkAudioError::Malformed));
-        assert_eq!(decode_network_packet(&buffer[..10]), Err(NetworkAudioError::Malformed));
+        assert_eq!(
+            decode_network_packet(&buffer[..length - 1]),
+            Err(NetworkAudioError::Malformed)
+        );
+        assert_eq!(
+            decode_network_packet(&buffer[..10]),
+            Err(NetworkAudioError::Malformed)
+        );
         let mut wrong = buffer;
         wrong[0] = b'X';
-        assert_eq!(decode_network_packet(&wrong[..length]), Err(NetworkAudioError::Malformed));
+        assert_eq!(
+            decode_network_packet(&wrong[..length]),
+            Err(NetworkAudioError::Malformed)
+        );
         let mut rate = buffer;
         rate[8..12].copy_from_slice(&44_100_u32.to_le_bytes());
-        assert_eq!(decode_network_packet(&rate[..length]), Err(NetworkAudioError::Unsupported));
+        assert_eq!(
+            decode_network_packet(&rate[..length]),
+            Err(NetworkAudioError::Unsupported)
+        );
         let mut channels = buffer;
         channels[5] = 8;
-        assert_eq!(decode_network_packet(&channels[..length]), Err(NetworkAudioError::Unsupported));
+        assert_eq!(
+            decode_network_packet(&channels[..length]),
+            Err(NetworkAudioError::Unsupported)
+        );
         assert!(encode_network_packet(header(1), &samples[..10], &mut buffer).is_err());
-        assert_eq!(network_socket_address("192.168.1.20", 47_800), Some("192.168.1.20:47800".parse().unwrap()));
+        assert_eq!(
+            network_socket_address("192.168.1.20", 47_800),
+            Some("192.168.1.20:47800".parse().unwrap())
+        );
         assert_eq!(network_socket_address("streaming-pc", 47_800), None);
         assert_eq!(network_socket_address("192.168.1.20", 0), None);
     }
 
     fn free_port() -> u16 {
-        UdpSocket::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
+        UdpSocket::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port()
     }
 
     fn play_quanta(receiver: &NetworkReceiver, quanta: usize) -> Vec<f32> {
@@ -935,13 +1014,17 @@ mod tests {
         let sender = NetworkSender::start(SocketAddr::from(([127, 0, 0, 1], port))).unwrap();
         let tap = sender.tap();
         let mut block = AudioBlock::new(2, 128).unwrap();
-        let tone = |index: usize| (0.25 * (2.0 * std::f64::consts::PI * 997.0 * index as f64 / 48_000.0).sin()) as f32;
+        let tone = |index: usize| {
+            (0.25 * (2.0 * std::f64::consts::PI * 997.0 * index as f64 / 48_000.0).sin()) as f32
+        };
         // Feed 1 s of tone at real time from a separate thread.
         let feeder = std::thread::spawn(move || {
             let start = Instant::now();
             for quantum in 0..375 {
                 for channel in 0..2 {
-                    for (frame, sample) in block.channel_mut(channel).unwrap().iter_mut().enumerate() {
+                    for (frame, sample) in
+                        block.channel_mut(channel).unwrap().iter_mut().enumerate()
+                    {
                         *sample = tone(quantum * 128 + frame);
                     }
                 }
@@ -956,7 +1039,10 @@ mod tests {
         let played = play_quanta(&receiver, 300);
         let sender = feeder.join().unwrap();
         assert_eq!(sender.stats().dropped_packets, 0);
-        let first = played.iter().position(|sample| sample.abs() > 0.05).expect("tone arrives");
+        let first = played
+            .iter()
+            .position(|sample| sample.abs() > 0.05)
+            .expect("tone arrives");
         let steady = &played[first + 64..];
         let coefficient = (2.0 * (2.0 * std::f64::consts::PI * 997.0 / 48_000.0).cos()) as f32;
         let jumps = steady
@@ -964,7 +1050,10 @@ mod tests {
             .filter(|window| (window[2] - (coefficient * window[1] - window[0])).abs() > 0.02)
             .count();
         let stats = receiver.stats();
-        eprintln!("loopback tone: {jumps} discontinuities in {} samples; {stats:?}", steady.len());
+        eprintln!(
+            "loopback tone: {jumps} discontinuities in {} samples; {stats:?}",
+            steady.len()
+        );
         assert_eq!(stats.rejected_datagrams, 0);
         assert!(stats.received_packets > 250, "{stats:?}");
         // Loopback UDP on an idle machine loses nothing; allow scheduling
@@ -990,11 +1079,23 @@ mod tests {
         assert_eq!(stats.rejected_datagrams, 20);
         assert_eq!(stats.received_packets, 0);
         // The UI can name the address audio really comes from.
-        assert_eq!(stats.last_rejected_sender, Some("127.0.0.1".parse().unwrap()));
+        assert_eq!(
+            stats.last_rejected_sender,
+            Some("127.0.0.1".parse().unwrap())
+        );
         // Arbitrary traffic from a stranger never becomes that hint.
-        let other = NetworkReceiver::start("127.0.0.2".parse().unwrap(), free_port(), 20.0).unwrap();
+        let other =
+            NetworkReceiver::start("127.0.0.2".parse().unwrap(), free_port(), 20.0).unwrap();
         let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-        socket.send_to(b"not audio", other.listen_address().to_string().replace("0.0.0.0", "127.0.0.1")).unwrap();
+        socket
+            .send_to(
+                b"not audio",
+                other
+                    .listen_address()
+                    .to_string()
+                    .replace("0.0.0.0", "127.0.0.1"),
+            )
+            .unwrap();
         let deadline = Instant::now() + Duration::from_secs(5);
         while other.stats().rejected_datagrams < 1 && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(5));
@@ -1027,7 +1128,12 @@ mod tests {
 
     /// Feed `quanta` blocks of a 997 Hz tone (left) and its negation (right)
     /// through `tap` at `speed` times real time from a separate thread.
-    fn feed_tone(tap: NetworkSendTap, quanta: usize, speed: f64, channels: usize) -> std::thread::JoinHandle<()> {
+    fn feed_tone(
+        tap: NetworkSendTap,
+        quanta: usize,
+        speed: f64,
+        channels: usize,
+    ) -> std::thread::JoinHandle<()> {
         std::thread::spawn(move || {
             let mut block = AudioBlock::new(channels, 128).unwrap();
             let start = Instant::now();
@@ -1035,13 +1141,20 @@ mod tests {
             for index in 0..quanta {
                 for channel in 0..channels {
                     let sign = if channel == 0 { 1.0 } else { -1.0 };
-                    for (frame, sample) in block.channel_mut(channel).unwrap().iter_mut().enumerate() {
+                    for (frame, sample) in
+                        block.channel_mut(channel).unwrap().iter_mut().enumerate()
+                    {
                         let n = (index * 128 + frame) as f64;
-                        *sample = (sign * 0.25 * (2.0 * std::f64::consts::PI * 997.0 * n / 48_000.0).sin()) as f32;
+                        *sample = (sign
+                            * 0.25
+                            * (2.0 * std::f64::consts::PI * 997.0 * n / 48_000.0).sin())
+                            as f32;
                     }
                 }
                 tap.on_processed_block(0, &block);
-                if let Some(wait) = (start + quantum * (index as u32 + 1)).checked_duration_since(Instant::now()) {
+                if let Some(wait) =
+                    (start + quantum * (index as u32 + 1)).checked_duration_since(Instant::now())
+                {
                     std::thread::sleep(wait);
                 }
             }
@@ -1052,16 +1165,27 @@ mod tests {
     fn stereo_stays_separate_and_a_mono_sender_plays_on_both_channels() {
         for channels in [2_usize, 1] {
             let port = free_port();
-            let receiver = NetworkReceiver::start("127.0.0.1".parse().unwrap(), port, 20.0).unwrap();
+            let receiver =
+                NetworkReceiver::start("127.0.0.1".parse().unwrap(), port, 20.0).unwrap();
             let sender = NetworkSender::start(SocketAddr::from(([127, 0, 0, 1], port))).unwrap();
             let feeder = feed_tone(sender.tap(), 200, 1.0, channels);
             let frames = play_stereo(&receiver, 150);
             feeder.join().unwrap();
-            let loud = frames.iter().filter(|(left, _)| left.abs() > 0.1).collect::<Vec<_>>();
-            assert!(loud.len() > 5_000, "{channels} ch: tone arrives ({})", loud.len());
+            let loud = frames
+                .iter()
+                .filter(|(left, _)| left.abs() > 0.1)
+                .collect::<Vec<_>>();
+            assert!(
+                loud.len() > 5_000,
+                "{channels} ch: tone arrives ({})",
+                loud.len()
+            );
             for (left, right) in loud {
                 if channels == 2 {
-                    assert!((left + right).abs() < 1e-6, "right is the negated left: {left} {right}");
+                    assert!(
+                        (left + right).abs() < 1e-6,
+                        "right is the negated left: {left} {right}"
+                    );
                 } else {
                     assert_eq!(left, right, "mono plays identically on both channels");
                 }
@@ -1077,8 +1201,10 @@ mod tests {
         let runs = [1.003_f64, 0.997].map(|speed| {
             std::thread::spawn(move || {
                 let port = free_port();
-                let receiver = NetworkReceiver::start("127.0.0.1".parse().unwrap(), port, 40.0).unwrap();
-                let sender = NetworkSender::start(SocketAddr::from(([127, 0, 0, 1], port))).unwrap();
+                let receiver =
+                    NetworkReceiver::start("127.0.0.1".parse().unwrap(), port, 40.0).unwrap();
+                let sender =
+                    NetworkSender::start(SocketAddr::from(([127, 0, 0, 1], port))).unwrap();
                 // 6 s of audio: 18 ms of drift each way without correction.
                 let feeder = feed_tone(sender.tap(), 2_250, speed, 2);
                 // Sample the delay (buffer depth) between 1 s and 5 s.
@@ -1097,16 +1223,25 @@ mod tests {
                     (frames, monitor.join().unwrap())
                 });
                 feeder.join().unwrap();
-                assert!(depth.0 >= 20.0 && depth.1 <= 60.0, "{speed}: delay stayed near 40 ms: {depth:?}");
+                assert!(
+                    depth.0 >= 20.0 && depth.1 <= 60.0,
+                    "{speed}: delay stayed near 40 ms: {depth:?}"
+                );
                 let stats = receiver.stats();
-                let first = frames.iter().position(|(left, _)| left.abs() > 0.05).expect("tone arrives");
+                let first = frames
+                    .iter()
+                    .position(|(left, _)| left.abs() > 0.05)
+                    .expect("tone arrives");
                 let steady = &frames[first + 256..frames.len().saturating_sub(4_800)];
-                let coefficient = (2.0 * (2.0 * std::f64::consts::PI * 997.0 / 48_000.0).cos()) as f32;
+                let coefficient =
+                    (2.0 * (2.0 * std::f64::consts::PI * 997.0 / 48_000.0).cos()) as f32;
                 // Drift correction moves one frame per quantum: a 0.8 %
                 // pitch nudge, never a step. Gaps or skips would be steps.
                 let steps = steady
                     .windows(3)
-                    .filter(|window| (window[2].0 - (coefficient * window[1].0 - window[0].0)).abs() > 0.05)
+                    .filter(|window| {
+                        (window[2].0 - (coefficient * window[1].0 - window[0].0)).abs() > 0.05
+                    })
                     .count();
                 (speed, steps, stats)
             })
@@ -1115,8 +1250,14 @@ mod tests {
             let (speed, steps, stats) = run.join().unwrap();
             eprintln!("drift {speed}: {steps} steps; {stats:?}");
             assert_eq!(stats.lost_packets, 0, "{speed}: {stats:?}");
-            assert_eq!(stats.overflow_packets, 0, "{speed}: no skip-ahead: {stats:?}");
-            assert!(stats.underruns <= 1, "{speed}: at most the final drain: {stats:?}");
+            assert_eq!(
+                stats.overflow_packets, 0,
+                "{speed}: no skip-ahead: {stats:?}"
+            );
+            assert!(
+                stats.underruns <= 1,
+                "{speed}: at most the final drain: {stats:?}"
+            );
             assert!(steps <= 2, "{speed}: {steps} audible steps");
         }
     }
@@ -1159,7 +1300,9 @@ mod tests {
         let mut buffer = [0_u8; MAX_NETWORK_PACKET_BYTES];
         let mut send = |sequence: u32| {
             let length = encode_network_packet(header(sequence), &samples, &mut buffer).unwrap();
-            socket.send_to(&buffer[..length], ("127.0.0.1", port)).unwrap();
+            socket
+                .send_to(&buffer[..length], ("127.0.0.1", port))
+                .unwrap();
         };
         for sequence in 0..30 {
             send(sequence);
@@ -1176,8 +1319,14 @@ mod tests {
         let _ = play_stereo(&receiver, 4);
         let stats = receiver.stats();
         let buffered_ms = stats.buffered_frames as f64 * 1_000.0 / 48_000.0;
-        assert!(stats.overflow_packets > 0, "the excess was dropped: {stats:?}");
-        assert!(buffered_ms <= 40.0 + 10.0, "delay back near the 40 ms target, not {buffered_ms} ms");
+        assert!(
+            stats.overflow_packets > 0,
+            "the excess was dropped: {stats:?}"
+        );
+        assert!(
+            buffered_ms <= 40.0 + 10.0,
+            "delay back near the 40 ms target, not {buffered_ms} ms"
+        );
     }
 
     /// The real two-computer path: audio addressed to this computer's LAN
@@ -1206,7 +1355,10 @@ mod tests {
             eprintln!("{address}: {stats:?}");
             assert_eq!(stats.rejected_datagrams, 0, "{address}: {stats:?}");
             assert!(stats.received_packets >= 100, "{address}: {stats:?}");
-            assert!(frames.iter().any(|(left, _)| left.abs() > 0.2), "{address}: tone plays");
+            assert!(
+                frames.iter().any(|(left, _)| left.abs() > 0.2),
+                "{address}: tone plays"
+            );
         }
     }
 
@@ -1219,7 +1371,9 @@ mod tests {
         let mut buffer = [0_u8; MAX_NETWORK_PACKET_BYTES];
         for sequence in [0_u32, 1, 4, 3, 5] {
             let length = encode_network_packet(header(sequence), &samples, &mut buffer).unwrap();
-            socket.send_to(&buffer[..length], ("127.0.0.1", port)).unwrap();
+            socket
+                .send_to(&buffer[..length], ("127.0.0.1", port))
+                .unwrap();
         }
         let deadline = Instant::now() + Duration::from_secs(5);
         while receiver.stats().received_packets + receiver.stats().late_packets < 5

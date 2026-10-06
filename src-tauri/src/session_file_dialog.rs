@@ -14,8 +14,9 @@ use windows::Win32::System::Com::{
 };
 use windows::Win32::UI::Shell::Common::COMDLG_FILTERSPEC;
 use windows::Win32::UI::Shell::{
-    FileOpenDialog, FileSaveDialog, IFileDialog, IFileOpenDialog, IFileSaveDialog, FOS_FILEMUSTEXIST,
-    FOS_FORCEFILESYSTEM, FOS_OVERWRITEPROMPT, FOS_PATHMUSTEXIST, SIGDN_FILESYSPATH,
+    FileOpenDialog, FileSaveDialog, IFileDialog, IFileOpenDialog, IFileSaveDialog,
+    FOS_FILEMUSTEXIST, FOS_FORCEFILESYSTEM, FOS_OVERWRITEPROMPT, FOS_PATHMUSTEXIST,
+    SIGDN_FILESYSPATH,
 };
 
 /// Ask for a session file. `save` shows a Save dialog prefilled with
@@ -28,7 +29,9 @@ pub fn choose(save: bool, suggested_name: &str, owner: isize) -> Result<Option<P
             // SAFETY: this thread owns its COM apartment; every successful
             // CoInitializeEx is paired with CoUninitialize below, after all
             // COM interface values created here have been dropped.
-            let initialized = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) }.is_ok();
+            let initialized =
+                unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) }
+                    .is_ok();
             // SAFETY: `owner` is a window handle from this process (or 0);
             // the dialog only uses it as the modal owner while it is shown.
             let result = unsafe { show(save, &suggested_name, owner) };
@@ -53,23 +56,36 @@ unsafe fn show(save: bool, suggested_name: &str, owner: isize) -> Result<Option<
             .map_err(|error| format!("Open dialog unavailable: {error}"))?;
         dialog.into()
     };
-    let filters = [
-        COMDLG_FILTERSPEC { pszName: w!("AudioRouter session (*.audiorouter)"), pszSpec: w!("*.audiorouter") },
-    ];
+    let filters = [COMDLG_FILTERSPEC {
+        pszName: w!("AudioRouter session (*.audiorouter)"),
+        pszSpec: w!("*.audiorouter"),
+    }];
     let options = dialog.GetOptions().map_err(|error| error.to_string())?;
     let extra = if save {
         FOS_OVERWRITEPROMPT | FOS_PATHMUSTEXIST
     } else {
         FOS_FILEMUSTEXIST | FOS_PATHMUSTEXIST
     };
-    dialog.SetOptions(options | extra | FOS_FORCEFILESYSTEM).map_err(|error| error.to_string())?;
-    dialog.SetFileTypes(&filters).map_err(|error| error.to_string())?;
-    dialog.SetDefaultExtension(w!("audiorouter")).map_err(|error| error.to_string())?;
+    dialog
+        .SetOptions(options | extra | FOS_FORCEFILESYSTEM)
+        .map_err(|error| error.to_string())?;
+    dialog
+        .SetFileTypes(&filters)
+        .map_err(|error| error.to_string())?;
+    dialog
+        .SetDefaultExtension(w!("audiorouter"))
+        .map_err(|error| error.to_string())?;
     if save {
-        dialog.SetTitle(w!("Save session to a file")).map_err(|error| error.to_string())?;
-        dialog.SetFileName(&HSTRING::from(suggested_name)).map_err(|error| error.to_string())?;
+        dialog
+            .SetTitle(w!("Save session to a file"))
+            .map_err(|error| error.to_string())?;
+        dialog
+            .SetFileName(&HSTRING::from(suggested_name))
+            .map_err(|error| error.to_string())?;
     } else {
-        dialog.SetTitle(w!("Open a session file")).map_err(|error| error.to_string())?;
+        dialog
+            .SetTitle(w!("Open a session file"))
+            .map_err(|error| error.to_string())?;
     }
     let owner = (owner != 0).then_some(HWND(owner as *mut _));
     if let Err(error) = dialog.Show(owner) {
@@ -79,7 +95,9 @@ unsafe fn show(save: bool, suggested_name: &str, owner: isize) -> Result<Option<
         return Err(format!("file dialog failed: {error}"));
     }
     let item = dialog.GetResult().map_err(|error| error.to_string())?;
-    let name: PWSTR = item.GetDisplayName(SIGDN_FILESYSPATH).map_err(|error| error.to_string())?;
+    let name: PWSTR = item
+        .GetDisplayName(SIGDN_FILESYSPATH)
+        .map_err(|error| error.to_string())?;
     // SAFETY: GetDisplayName returns a NUL-terminated string allocated with
     // CoTaskMemAlloc; it is copied before being freed exactly once.
     let path = name.to_string().map_err(|error| error.to_string());

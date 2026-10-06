@@ -16,13 +16,17 @@ fn a_fresh_install_asks_once_for_device_access_then_plays() {
     let exe = std::env::var("AUDIOROUTER_SHELL_EXE").expect("AUDIOROUTER_SHELL_EXE");
     let pipe = r"\\.\pipe\audiorouter-control";
     let request = |method: &str, params: Value| {
-        audiorouter_protocol::encode_frame(&json!({ "jsonrpc": "2.0", "id": 1, "method": method, "params": params })).unwrap()
+        audiorouter_protocol::encode_frame(
+            &json!({ "jsonrpc": "2.0", "id": 1, "method": method, "params": params }),
+        )
+        .unwrap()
     };
     assert!(
         audiorouter_transport::round_trip(pipe, &request("status.get", json!({}))).is_err(),
         "another AudioRouter is running; close it first"
     );
-    let folder = std::env::temp_dir().join(format!("audiorouter-fresh-install-{}", std::process::id()));
+    let folder =
+        std::env::temp_dir().join(format!("audiorouter-fresh-install-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&folder);
     std::fs::create_dir_all(&folder).unwrap();
     struct Kill(std::process::Child);
@@ -52,7 +56,9 @@ fn a_fresh_install_asks_once_for_device_access_then_plays() {
         std::thread::sleep(Duration::from_millis(200));
     }
     let denied = |response: &Value| {
-        response["error"]["message"].as_str().is_some_and(|message| message.contains("permission denied"))
+        response["error"]["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("permission denied"))
     };
 
     // First launch: not yet allowed; preparing devices for Play is refused.
@@ -60,17 +66,35 @@ fn a_fresh_install_asks_once_for_device_access_then_plays() {
     assert_eq!(access["result"]["allowed"], false, "{access}");
     let session = "desktop-session";
     let refused = call("nativePaths.prepare", json!({ "sessionId": session }));
-    assert!(denied(&refused), "fresh install refuses before consent: {refused}");
+    assert!(
+        denied(&refused),
+        "fresh install refuses before consent: {refused}"
+    );
     // The first launch already has the full desktop grant (Record).
     let root = folder.join("Recordings");
-    let set_root = call("recordings.setRoot", json!({ "root": root, "create": true, "idempotencyKey": "fresh-root" }));
-    assert!(set_root["error"].is_null(), "first launch can choose a recording folder: {set_root}");
+    let set_root = call(
+        "recordings.setRoot",
+        json!({ "root": root, "create": true, "idempotencyKey": "fresh-root" }),
+    );
+    assert!(
+        set_root["error"].is_null(),
+        "first launch can choose a recording folder: {set_root}"
+    );
     // The user allows once in the window; Play's device step is authorized.
-    let allowed = call("devices.setAccess", json!({ "allowed": true, "idempotencyKey": "fresh-allow" }));
+    let allowed = call(
+        "devices.setAccess",
+        json!({ "allowed": true, "idempotencyKey": "fresh-allow" }),
+    );
     assert_eq!(allowed["result"]["allowed"], true, "{allowed}");
     let authorized = call("nativePaths.prepare", json!({ "sessionId": session }));
-    assert!(!denied(&authorized), "authorized after consent (any remaining error is about devices): {authorized}");
-    eprintln!("after consent, prepare answered: {}", authorized["error"]["message"]);
+    assert!(
+        !denied(&authorized),
+        "authorized after consent (any remaining error is about devices): {authorized}"
+    );
+    eprintln!(
+        "after consent, prepare answered: {}",
+        authorized["error"]["message"]
+    );
     drop(app);
     let _ = std::fs::remove_dir_all(&folder);
 }

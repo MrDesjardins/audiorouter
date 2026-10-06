@@ -1,5 +1,10 @@
 [CmdletBinding()]
-param()
+param(
+    # Hosted CI runners have no audio endpoints. With this switch an empty
+    # device list is accepted (the command must still succeed and return
+    # JSON); attended runs keep the default and require an active endpoint.
+    [switch]$AllowNoAudioEndpoints
+)
 
 $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
@@ -12,9 +17,16 @@ try {
     $status = cargo run --quiet -p audiorouter-cli -- --json status | ConvertFrom-Json
     if ($status.audio -ne "unavailable") { throw "M01 status must identify real audio as unavailable" }
 
-    $devices = cargo run --quiet -p audiorouter-cli -- --json devices list | ConvertFrom-Json
-    if ($devices.Count -eq 0) { throw "Windows device discovery returned no active endpoints" }
-    if ($null -eq ($devices | Where-Object { $_.state -eq "active" -and $_.id })) { throw "Active endpoint metadata missing" }
+    $devicesJson = cargo run --quiet -p audiorouter-cli -- --json devices list
+    if ($LASTEXITCODE -ne 0) { throw "Windows device discovery failed with exit code $LASTEXITCODE" }
+    # Enumerate through the pipeline so an empty JSON array counts as zero
+    # items in both Windows PowerShell 5.1 and PowerShell 7.
+    $devices = @(($devicesJson | ConvertFrom-Json) | ForEach-Object { $_ })
+    if ($devices.Count -eq 0) {
+        if (-not $AllowNoAudioEndpoints) { throw "Windows device discovery returned no active endpoints" }
+        Write-Output "No audio endpoints on this machine; endpoint metadata checks skipped (-AllowNoAudioEndpoints)"
+    }
+    elseif ($null -eq ($devices | Where-Object { $_.state -eq "active" -and $_.id })) { throw "Active endpoint metadata missing" }
 
     $apps = cargo run --quiet -p audiorouter-cli -- --json apps list | ConvertFrom-Json
     if ($apps.Count -eq 0) { throw "Windows process discovery returned no applications" }
