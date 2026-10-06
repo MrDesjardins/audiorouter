@@ -120,8 +120,17 @@ allows, `rust-version` 1.85, non-Windows worker-spawn stubs, Unix-safe test
 cleanup, and a quoted vitest exclude (sh expanded `e2e/**`).
 Local evidence: Clippy `-D warnings` clean for the workspace and shell
 with `--target x86_64-pc-windows-gnu` (mingw cross-check, Linux); portable
-crate tests and 480 UI tests pass on Linux. Windows evidence: see the CI
-run on branch `claude/zealous-archimedes-fz1lbv`.
+crate tests and 480 UI tests pass on Linux. Windows evidence: CI
+[run 37417530916](https://github.com/MrDesjardins/audiorouter/actions/runs/37417530916)
+(2026-10-06, `474ddcb`) passed every step, including workspace and shell
+tests, and the unsigned installer build with the bundled Stream Deck plugin
+plus verification. Three more fixes came from earlier runs: the M00 probe's
+stale `Cargo.lock` (re-seeded from the workspace lock), `m01-cli.ps1
+-AllowNoAudioEndpoints` for runners without audio devices (attended runs
+stay strict), and an explicit `exit 0` in `m06-sdk-installer.ps1`, whose
+last check is an expected native failure. Next: open a pull request so CI
+runs on `main`; the release-packaging items above still need attended
+Windows checks (install, Stream Deck button, three themes).
 
 ### Release packaging: one download (2026-10-06, user request)
 

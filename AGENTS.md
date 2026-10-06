@@ -55,6 +55,17 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-06 — CI is Windows-only; cross-check Windows code from Linux with the GNU target.**
+  Evidence: [active plan, CI back to green](docs/plans/active/current.md),
+  CI run 37417530916. Scope: CI and any agent working in a Linux container.
+  Consequence: `windows` 0.62 does not compile on Linux, so a Linux CI job
+  can never build the workspace (500+ red runs). On Linux, run Clippy with
+  `rustup target add x86_64-pc-windows-gnu` plus `gcc-mingw-w64-x86-64`
+  and `--target x86_64-pc-windows-gnu`, using the pinned 1.96.0 toolchain;
+  that matched the Windows CI result. Acceptance scripts that end on an
+  expected native failure must `exit 0`, and hosted runners have no audio
+  endpoints.
+
 - **2026-10-05 — A supervised backend thread must survive panics, and leave a trace of them.**
   Evidence: [active plan, backend dead after resume](docs/plans/active/current.md),
   `stopped_control_plane_releases_the_pipe_for_a_restarted_server`. Scope:
