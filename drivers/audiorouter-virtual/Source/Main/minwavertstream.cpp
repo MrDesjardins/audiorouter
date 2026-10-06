@@ -1607,6 +1607,17 @@ ByteDisplacement - # of bytes to process.
         ? m_pWfExt->Format.nBlockAlign : 0;
     const ULONG deviceBytesPerSample = bridgeFormat
         ? m_pWfExt->Format.wBitsPerSample / 8 : 0;
+    const BOOLEAN captureLeaseActive = NT_SUCCESS(readShapeStatus) &&
+        readFrames != 0 && readChannels != 0;
+    // A lease at another rate or channel count must never play: wrong-speed
+    // audio is worse than silence (17 §5.2). Count it and output silence.
+    const BOOLEAN captureLeaseUsable = captureLeaseActive && bridgeFormat &&
+        readSampleRate == m_pWfExt->Format.nSamplesPerSec &&
+        readChannels == bridgeChannels;
+    AR_BRIDGE_STREAM_ACTIVITY activity = {};
+    if (captureLeaseActive && !captureLeaseUsable) {
+        activity.FormatMismatches = 1;
+    }
 
     // Normally this will loop no more than once for a single wrap, but if
     // many bytes have been displaced then this may loops many times.
@@ -1614,7 +1625,7 @@ ByteDisplacement - # of bytes to process.
     {
         ULONG runWrite = min(ByteDisplacement, m_ulDmaBufferSize - bufferOffset);
 
-        if (!bridgeFormat || bridgeChannels > AR_BRIDGE_MAX_CHANNELS ||
+        if (!captureLeaseUsable || bridgeChannels > AR_BRIDGE_MAX_CHANNELS ||
             deviceFrameBytes == 0 || runWrite < deviceFrameBytes) {
             RtlZeroMemory(m_pDmaBuffer + bufferOffset, runWrite);
         } else {
@@ -1624,18 +1635,26 @@ ByteDisplacement - # of bytes to process.
             while (writtenFrames < frames) {
                 if (m_BridgeScratchFrameOffset >= m_BridgeScratchFrames) {
                     AR_BRIDGE_BLOCK_HEADER header = {};
+                    ULONG nonFinite = 0;
                     NTSTATUS status = AudioRouterCopyLeaseBlockForDirection(
                         static_cast<USHORT>(m_pMiniport->GetCableBusIndex()),
                         AR_BRIDGE_DIRECTION_CAPTURE_SINK,
                         m_BridgeReadSequence,
                         m_BridgeScratch,
                         ARRAYSIZE(m_BridgeScratch),
-                        &header);
+                        &header,
+                        &nonFinite);
+                    activity.NonFiniteSamples += nonFinite;
+                    if (NT_SUCCESS(status) && header.Channels != bridgeChannels) {
+                        activity.FormatMismatches += 1;
+                    }
                     if (!NT_SUCCESS(status) || header.Channels != bridgeChannels) {
                         m_BridgeScratchFrames = 0;
                         m_BridgeScratchFrameOffset = 0;
                         break;
                     }
+                    activity.SequenceGaps += AudioRouterSequenceGap(
+                        m_BridgeReadSequence, header.Sequence);
                     m_BridgeScratchFrames = header.Frames;
                     m_BridgeScratchFrameOffset = 0;
                     m_BridgeReadSequence = header.Sequence;
@@ -1661,6 +1680,8 @@ ByteDisplacement - # of bytes to process.
                 }
             }
             if (writtenFrames < frames) {
+                // The producer had no newer block: silence, counted (§5.4).
+                activity.UnderrunFrames += frames - writtenFrames;
                 RtlZeroMemory(m_pDmaBuffer + bufferOffset +
                                   writtenFrames * deviceFrameBytes,
                               (frames - writtenFrames) * deviceFrameBytes);
@@ -1673,6 +1694,9 @@ ByteDisplacement - # of bytes to process.
 
         bufferOffset = (bufferOffset + runWrite) % m_ulDmaBufferSize;
         ByteDisplacement -= runWrite;
+    }
+    if (captureLeaseActive) {
+        RecordBridgeActivity(AR_BRIDGE_DIRECTION_CAPTURE_SINK, &activity);
     }
 }
 
@@ -1697,7 +1721,7 @@ ByteDisplacement - # of bytes to process.
     if (m_pDmaBuffer == NULL || m_ulDmaBufferSize == 0) {
         return;
     }
-    RefreshBridgePublishShape();
+    const BOOLEAN renderFormatMismatch = RefreshBridgePublishShape();
     ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
     const BOOLEAN bridgeFormat = IsBridgePcmFormat(m_pWfExt);
 
@@ -1751,28 +1775,55 @@ ByteDisplacement - # of bytes to process.
         bufferOffset = (bufferOffset + runWrite) % m_ulDmaBufferSize;
         ByteDisplacement -= runWrite;
     }
+    if (m_BridgePublishFrames != 0 || renderFormatMismatch) {
+        // Overruns are counted by the publisher; this records format
+        // mismatches plus the device position/QPC pair for the lease.
+        AR_BRIDGE_STREAM_ACTIVITY activity = {};
+        activity.FormatMismatches = renderFormatMismatch ? 1 : 0;
+        RecordBridgeActivity(AR_BRIDGE_DIRECTION_RENDER_SOURCE, &activity);
+    }
 }
 
 //=============================================================================
 #pragma code_seg()
-VOID CMiniportWaveRTStream::RefreshBridgePublishShape()
+VOID CMiniportWaveRTStream::RecordBridgeActivity(
+    _In_ USHORT Direction,
+    _Inout_ AR_BRIDGE_STREAM_ACTIVITY* Activity)
 {
+    // DISPATCH_LEVEL safe: QPC read, integer division and a lock-free,
+    // rundown-protected counter update. No allocation or logging.
+    const ULONG blockAlign = m_pWfExt != NULL ? m_pWfExt->Format.nBlockAlign : 0;
+    Activity->DevicePositionFrames = blockAlign != 0 ? m_ullLinearPosition / blockAlign : 0;
+    Activity->QpcTime = static_cast<ULONGLONG>(KeQueryPerformanceCounter(NULL).QuadPart);
+    (void)AudioRouterRecordLeaseActivityForDirection(
+        static_cast<USHORT>(m_pMiniport->GetCableBusIndex()), Direction, Activity);
+}
+
+//=============================================================================
+#pragma code_seg()
+BOOLEAN CMiniportWaveRTStream::RefreshBridgePublishShape()
+{
+    BOOLEAN formatMismatch = FALSE;
     ULONG previousFrames = m_BridgePublishFrames;
     ULONG previousChannels = m_BridgePublishChannels;
     USHORT frames = 0;
     USHORT channels = 0;
     ULONG sampleRate = 0;
     ULONGLONG generation = 0;
-    const BOOLEAN bridgeFormat = !m_bCapture && IsBridgePcmFormat(m_pWfExt);
-    if (bridgeFormat && NT_SUCCESS(AudioRouterGetLeaseShapeForDirection(
+    const BOOLEAN leaseActive = !m_bCapture && NT_SUCCESS(AudioRouterGetLeaseShapeForDirection(
             static_cast<USHORT>(m_pMiniport->GetCableBusIndex()),
             AR_BRIDGE_DIRECTION_RENDER_SOURCE, &frames, &channels, &sampleRate,
-            &generation)) &&
+            &generation)) && frames != 0 && channels != 0;
+    const BOOLEAN bridgeFormat = !m_bCapture && IsBridgePcmFormat(m_pWfExt);
+    if (bridgeFormat && leaseActive &&
         channels == m_pWfExt->Format.nChannels &&
         sampleRate == m_pWfExt->Format.nSamplesPerSec) {
         m_BridgePublishFrames = frames;
         m_BridgePublishChannels = channels;
     } else {
+        // An active lease with another shape receives nothing (never a
+        // wrong-speed stream); the caller counts it as a format mismatch.
+        formatMismatch = leaseActive;
         m_BridgePublishFrames = 0;
         m_BridgePublishChannels = 0;
     }
@@ -1792,6 +1843,7 @@ VOID CMiniportWaveRTStream::RefreshBridgePublishShape()
         m_BridgeReadSequence = 0;
         m_BridgeGeneration = generation;
     }
+    return formatMismatch;
 }
 
 //=============================================================================

@@ -45,12 +45,55 @@ extern "C" NTKERNELAPI NTSTATUS IoGetRequestorSessionId(_In_ PIRP Irp, _Out_ PUL
 #define AR_BRIDGE_MAX_LEASE_MS 60000
 #define AR_BRIDGE_DIRECTION_RENDER_SOURCE 1
 #define AR_BRIDGE_DIRECTION_CAPTURE_SINK 2
-#define AR_BRIDGE_HEADER_BYTES 32
+// Shared section layout (17 §5.2): seqlock state, block header, driver-owned
+// stream counters, negotiated sample size, render-consumer acknowledgement,
+// reserved bytes, then the payload at offset 128.
+#define AR_BRIDGE_HEADER_BYTES 128
 #define AR_BRIDGE_STATE_OFFSET 0
 #define AR_BRIDGE_HEADER_OFFSET 8
-#define AR_BRIDGE_PAYLOAD_OFFSET 32
+#define AR_BRIDGE_COUNTERS_OFFSET 32
+#define AR_BRIDGE_SAMPLE_BYTES_OFFSET 88
+#define AR_BRIDGE_READER_SEQUENCE_OFFSET 96
+#define AR_BRIDGE_PAYLOAD_OFFSET 128
+#define AR_BRIDGE_SAMPLE_BYTES_FLOAT64 8
 #define AR_BRIDGE_MAX_PAYLOAD_BYTES \
     (AR_BRIDGE_MAX_CHANNELS * AR_BRIDGE_MAX_FRAMES * sizeof(DOUBLE))
+
+// Optional OPEN extension. This driver implements only float64 transport, so
+// OPEN must carry the extension with FLOAT64; unknown bits are refused so a
+// newer client can detect an older driver instead of being silently ignored.
+#define AR_BRIDGE_OPEN_EXTENSION_BYTES 64
+#define AR_BRIDGE_OPEN_FLAG_FLOAT64 0x00000001UL
+#define AR_BRIDGE_OPEN_KNOWN_FLAGS AR_BRIDGE_OPEN_FLAG_FLOAT64
+
+// QUERY capability bits. Report only what this build implements.
+#define AR_BRIDGE_CAP_MULTICHANNEL 0x00000001UL
+#define AR_BRIDGE_CAP_RATES_44_48_96 0x00000002UL
+#define AR_BRIDGE_CAP_LOW_LATENCY_PERIODS 0x00000004UL
+#define AR_BRIDGE_CAP_STREAM_COUNTERS 0x00000008UL
+#define AR_BRIDGE_CAP_CONFIG_FROM_REGISTRY 0x00000010UL
+#define AR_BRIDGE_CAP_SAMPLE_FLOAT64 0x00000020UL
+#define AR_BRIDGE_IMPLEMENTED_CAPS \
+    (AR_BRIDGE_CAP_MULTICHANNEL | AR_BRIDGE_CAP_RATES_44_48_96 | \
+     AR_BRIDGE_CAP_STREAM_COUNTERS | AR_BRIDGE_CAP_SAMPLE_FLOAT64)
+#define AR_BRIDGE_RATE_44100 0x00000001UL
+#define AR_BRIDGE_RATE_48000 0x00000002UL
+#define AR_BRIDGE_RATE_96000 0x00000004UL
+
+// Stamped by build.ps1 -Version through MSBuild; 0.0.0.0 for unversioned
+// developer builds so QUERY never reports an invented version.
+#ifndef AR_DRIVER_VERSION_MAJOR
+#define AR_DRIVER_VERSION_MAJOR 0
+#endif
+#ifndef AR_DRIVER_VERSION_MINOR
+#define AR_DRIVER_VERSION_MINOR 0
+#endif
+#ifndef AR_DRIVER_VERSION_PATCH
+#define AR_DRIVER_VERSION_PATCH 0
+#endif
+#ifndef AR_DRIVER_VERSION_BUILD
+#define AR_DRIVER_VERSION_BUILD 0
+#endif
 
 NTSTATUS AudioRouterCopyLeaseBlockForDirection(
     _In_ USHORT BusIndex,
@@ -58,7 +101,24 @@ NTSTATUS AudioRouterCopyLeaseBlockForDirection(
     _In_ ULONGLONG MinimumSequence,
     _Out_writes_(DestinationCapacitySamples) DOUBLE* Destination,
     _In_ SIZE_T DestinationCapacitySamples,
-    _Out_ struct _AR_BRIDGE_BLOCK_HEADER* Header);
+    _Out_ struct _AR_BRIDGE_BLOCK_HEADER* Header,
+    _Out_ ULONG* NonFiniteSamples);
+
+// Per-callback counter deltas from a WaveRT stream. Adding them is bounded,
+// lock-free and touches only the pinned mapped view of an active lease.
+typedef struct _AR_BRIDGE_STREAM_ACTIVITY {
+    ULONGLONG UnderrunFrames;
+    ULONGLONG SequenceGaps;
+    ULONGLONG NonFiniteSamples;
+    ULONGLONG FormatMismatches;
+    ULONGLONG DevicePositionFrames;
+    ULONGLONG QpcTime;
+} AR_BRIDGE_STREAM_ACTIVITY, *PAR_BRIDGE_STREAM_ACTIVITY;
+
+NTSTATUS AudioRouterRecordLeaseActivityForDirection(
+    _In_ USHORT BusIndex,
+    _In_ USHORT Direction,
+    _In_ const AR_BRIDGE_STREAM_ACTIVITY* Activity);
 
 NTSTATUS AudioRouterPublishLeaseBlockForDirection(
     _In_ USHORT BusIndex,
@@ -82,6 +142,13 @@ NTSTATUS AudioRouterGetLeaseShapeForDirection(
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x801, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA)
 #define IOCTL_AUDIOROUTER_BRIDGE_HEARTBEAT \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x802, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA)
+#define IOCTL_AUDIOROUTER_BRIDGE_QUERY \
+    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x803, METHOD_BUFFERED, FILE_READ_DATA)
+// The Rust client pins these exact values; METHOD_BUFFERED is part of the ABI.
+C_ASSERT(IOCTL_AUDIOROUTER_BRIDGE_OPEN == 0x0022E000);
+C_ASSERT(IOCTL_AUDIOROUTER_BRIDGE_CLOSE == 0x0022E004);
+C_ASSERT(IOCTL_AUDIOROUTER_BRIDGE_HEARTBEAT == 0x0022E008);
+C_ASSERT(IOCTL_AUDIOROUTER_BRIDGE_QUERY == 0x0022600C);
 
 #define AUDIOROUTER_BRIDGE_DEVICE_NAME L"\\Device\\AudioRouterVirtualBridge"
 #define AUDIOROUTER_BRIDGE_DOS_NAME L"\\DosDevices\\AudioRouterVirtualBridge"
@@ -109,6 +176,19 @@ typedef struct _AR_BRIDGE_OPEN_REQUEST {
     WCHAR BusId[AR_BRIDGE_MAX_BUS_ID_BYTES / sizeof(WCHAR)];
 } AR_BRIDGE_OPEN_REQUEST, *PAR_BRIDGE_OPEN_REQUEST;
 
+typedef struct _AR_BRIDGE_OPEN_EXTENSION {
+    ULONG ExtensionBytes;
+    ULONG Flags;
+    ULONG Reserved[14];
+} AR_BRIDGE_OPEN_EXTENSION, *PAR_BRIDGE_OPEN_EXTENSION;
+
+// OPEN/HEARTBEAT/CLOSE input is the fixed prefix, optionally followed by the
+// extension. OPEN requires the extension (float64 negotiation).
+typedef struct _AR_BRIDGE_OPEN_REQUEST_EX {
+    AR_BRIDGE_OPEN_REQUEST Request;
+    AR_BRIDGE_OPEN_EXTENSION Extension;
+} AR_BRIDGE_OPEN_REQUEST_EX, *PAR_BRIDGE_OPEN_REQUEST_EX;
+
 typedef struct _AR_BRIDGE_BLOCK_HEADER {
     ULONGLONG Generation;
     ULONGLONG Sequence;
@@ -116,6 +196,42 @@ typedef struct _AR_BRIDGE_BLOCK_HEADER {
     USHORT Channels;
     ULONG PayloadBytes;
 } AR_BRIDGE_BLOCK_HEADER, *PAR_BRIDGE_BLOCK_HEADER;
+
+// Written only by the driver; user mode reads them from the mapped view
+// without an IOCTL. All values are monotonic within one lease.
+typedef struct _AR_BRIDGE_STREAM_COUNTERS {
+    ULONGLONG UnderrunFrames;
+    ULONGLONG OverrunFrames;
+    ULONGLONG SequenceGaps;
+    ULONGLONG NonFiniteSamples;
+    ULONGLONG FormatMismatches;
+    ULONGLONG LastDevicePosition;
+    ULONGLONG LastQpcTime;
+} AR_BRIDGE_STREAM_COUNTERS, *PAR_BRIDGE_STREAM_COUNTERS;
+
+typedef struct _AR_BRIDGE_SHARED_HEADER {
+    LONG64 State;
+    AR_BRIDGE_BLOCK_HEADER Block;
+    AR_BRIDGE_STREAM_COUNTERS Counters;
+    ULONG SampleBytes;          // driver-written at OPEN; readers require 8
+    ULONG Reserved0;
+    ULONGLONG ReaderSequence;   // render-source consumer acknowledgement (user mode)
+    UCHAR Reserved[24];
+} AR_BRIDGE_SHARED_HEADER, *PAR_BRIDGE_SHARED_HEADER;
+
+typedef struct _AR_BRIDGE_DRIVER_INFO {
+    USHORT ProtocolMajor;
+    USHORT ProtocolMinor;
+    USHORT DriverVersion[4];
+    ULONG CableCount;
+    ULONG MaxCables;
+    ULONG MaxChannels;
+    ULONG Capabilities;
+    ULONG SupportedRates;
+    ULONG MinPeriodFrames;      // 0 while LOW_LATENCY_PERIODS is not reported
+    ULONG DefaultPeriodFrames;  // 0 while LOW_LATENCY_PERIODS is not reported
+    ULONG Reserved[16];
+} AR_BRIDGE_DRIVER_INFO, *PAR_BRIDGE_DRIVER_INFO;
 
 // Bus IDs are protocol identities, not display names. Accept only the exact
 // seven-character lowercase form and keep parsing bounded for IOCTL callers.
@@ -175,6 +291,108 @@ C_ASSERT(FIELD_OFFSET(AR_BRIDGE_BLOCK_HEADER, Frames) == 16);
 C_ASSERT(FIELD_OFFSET(AR_BRIDGE_BLOCK_HEADER, Channels) == 18);
 C_ASSERT(FIELD_OFFSET(AR_BRIDGE_BLOCK_HEADER, PayloadBytes) == 20);
 C_ASSERT(sizeof(AR_BRIDGE_BLOCK_HEADER) == 24);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_OPEN_EXTENSION, Flags) == 4);
+C_ASSERT(sizeof(AR_BRIDGE_OPEN_EXTENSION) == AR_BRIDGE_OPEN_EXTENSION_BYTES);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_OPEN_REQUEST_EX, Extension) == 176);
+C_ASSERT(sizeof(AR_BRIDGE_OPEN_REQUEST_EX) == 240);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_SHARED_HEADER, State) == AR_BRIDGE_STATE_OFFSET);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_SHARED_HEADER, Block) == AR_BRIDGE_HEADER_OFFSET);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_SHARED_HEADER, Counters) == AR_BRIDGE_COUNTERS_OFFSET);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_SHARED_HEADER, Counters.OverrunFrames) == 40);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_SHARED_HEADER, Counters.FormatMismatches) == 64);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_SHARED_HEADER, Counters.LastQpcTime) == 80);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_SHARED_HEADER, SampleBytes) == AR_BRIDGE_SAMPLE_BYTES_OFFSET);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_SHARED_HEADER, ReaderSequence) == AR_BRIDGE_READER_SEQUENCE_OFFSET);
+C_ASSERT(sizeof(AR_BRIDGE_SHARED_HEADER) == AR_BRIDGE_PAYLOAD_OFFSET);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_DRIVER_INFO, DriverVersion) == 4);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_DRIVER_INFO, CableCount) == 12);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_DRIVER_INFO, Capabilities) == 24);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_DRIVER_INFO, DefaultPeriodFrames) == 36);
+C_ASSERT(sizeof(AR_BRIDGE_DRIVER_INFO) == 104);
+
+// Classify OPEN/HEARTBEAT/CLOSE input before any field is read. The caller
+// has already checked that the system buffer is present. Exact lengths only.
+__forceinline NTSTATUS AudioRouterValidateBridgeRequestLength(
+    _In_ ULONG InputBytes,
+    _In_ ULONG OutputBytes,
+    _In_ bool IsOpen)
+{
+    if (OutputBytes != 0) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    if (InputBytes == sizeof(AR_BRIDGE_OPEN_REQUEST_EX)) {
+        return STATUS_SUCCESS;
+    }
+    if (InputBytes == sizeof(AR_BRIDGE_OPEN_REQUEST)) {
+        // A prefix-only OPEN cannot negotiate float64; this driver has no
+        // other transport. Maintenance requests may omit the extension.
+        return IsOpen ? STATUS_NOT_SUPPORTED : STATUS_SUCCESS;
+    }
+    return STATUS_INVALID_PARAMETER;
+}
+
+__forceinline NTSTATUS AudioRouterValidateBridgeOpenExtension(
+    _In_ const AR_BRIDGE_OPEN_EXTENSION* Extension)
+{
+    if (Extension == NULL || Extension->ExtensionBytes != AR_BRIDGE_OPEN_EXTENSION_BYTES) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    if ((Extension->Flags & ~AR_BRIDGE_OPEN_KNOWN_FLAGS) != 0 ||
+        (Extension->Flags & AR_BRIDGE_OPEN_FLAG_FLOAT64) == 0) {
+        return STATUS_NOT_SUPPORTED;
+    }
+    for (ULONG index = 0; index < ARRAYSIZE(Extension->Reserved); ++index) {
+        if (Extension->Reserved[index] != 0) {
+            return STATUS_NOT_SUPPORTED;
+        }
+    }
+    return STATUS_SUCCESS;
+}
+
+__forceinline NTSTATUS AudioRouterValidateBridgeQueryLength(
+    _In_ ULONG InputBytes,
+    _In_ ULONG OutputBytes)
+{
+    return InputBytes == 0 && OutputBytes == sizeof(AR_BRIDGE_DRIVER_INFO)
+        ? STATUS_SUCCESS : STATUS_INVALID_PARAMETER;
+}
+
+__forceinline void AudioRouterFillDriverInfo(
+    _Out_ AR_BRIDGE_DRIVER_INFO* Info,
+    _In_ ULONG EnabledCableCount)
+{
+    RtlZeroMemory(Info, sizeof(*Info));
+    Info->ProtocolMajor = AR_BRIDGE_PROTOCOL_MAJOR;
+    Info->ProtocolMinor = AR_BRIDGE_PROTOCOL_MINOR;
+    Info->DriverVersion[0] = AR_DRIVER_VERSION_MAJOR;
+    Info->DriverVersion[1] = AR_DRIVER_VERSION_MINOR;
+    Info->DriverVersion[2] = AR_DRIVER_VERSION_PATCH;
+    Info->DriverVersion[3] = AR_DRIVER_VERSION_BUILD;
+    Info->CableCount = EnabledCableCount;
+    Info->MaxCables = AR_BRIDGE_MAX_CABLES;
+    Info->MaxChannels = AR_BRIDGE_MAX_CHANNELS;
+    Info->Capabilities = AR_BRIDGE_IMPLEMENTED_CAPS;
+    Info->SupportedRates = AR_BRIDGE_RATE_44100 | AR_BRIDGE_RATE_48000 | AR_BRIDGE_RATE_96000;
+}
+
+// Overrun rule for a render-source lease: the previously published block was
+// lost when the consumer has not acknowledged it before the next publish.
+__forceinline bool AudioRouterRenderBlockWasOverrun(
+    _In_ ULONGLONG LastPublishedSequence,
+    _In_ ULONGLONG ReaderSequence)
+{
+    return LastPublishedSequence != 0 && ReaderSequence < LastPublishedSequence;
+}
+
+// Number of blocks skipped between two consecutively consumed sequences.
+__forceinline ULONGLONG AudioRouterSequenceGap(
+    _In_ ULONGLONG PreviousSequence,
+    _In_ ULONGLONG CurrentSequence)
+{
+    return PreviousSequence != 0 && CurrentSequence > PreviousSequence &&
+        CurrentSequence - PreviousSequence > 1
+        ? CurrentSequence - PreviousSequence - 1 : 0;
+}
 
 // Control-plane length checks are shared with user-mode regression tests.
 // The request shape must already have passed the bounded OPEN validator.
@@ -253,13 +471,15 @@ AudioRouterCopyBridgeBlock(
     _In_ ULONGLONG MinimumSequence,
     _Out_writes_(DestinationCapacitySamples) DOUBLE* Destination,
     _In_ SIZE_T DestinationCapacitySamples,
-    _Out_ AR_BRIDGE_BLOCK_HEADER* Header
+    _Out_ AR_BRIDGE_BLOCK_HEADER* Header,
+    _Out_ ULONG* NonFiniteSamples
 )
 {
     if (View == NULL || Header == NULL || Destination == NULL ||
-        ViewBytes < AR_BRIDGE_PAYLOAD_OFFSET) {
+        NonFiniteSamples == NULL || ViewBytes < AR_BRIDGE_PAYLOAD_OFFSET) {
         return STATUS_INVALID_PARAMETER;
     }
+    *NonFiniteSamples = 0;
     const volatile AR_BRIDGE_BLOCK_HEADER* sourceHeader =
         reinterpret_cast<const volatile AR_BRIDGE_BLOCK_HEADER*>(
             View + AR_BRIDGE_HEADER_OFFSET);
@@ -284,8 +504,11 @@ AudioRouterCopyBridgeBlock(
         return STATUS_BUFFER_TOO_SMALL;
     }
     // Single payload fetch per sample: a separate validation pass would allow
-    // a hostile writer to swap in NaN/Inf before the later copy. On rejection
-    // wipe this bounded quantum so partially refreshed private audio is not used.
+    // a hostile writer to swap in NaN/Inf before the later copy. A block with
+    // any non-finite sample is rejected whole and wiped so partially refreshed
+    // private audio is not used; the bounded loop still finishes so the
+    // NonFiniteSamples counter reports how many samples were refused.
+    ULONG nonFinite = 0;
     for (SIZE_T index = 0; index < sampleCount; ++index) {
         DOUBLE sample = *reinterpret_cast<const volatile DOUBLE*>(
             View + AR_BRIDGE_PAYLOAD_OFFSET + index * sizeof(DOUBLE));
@@ -293,10 +516,15 @@ AudioRouterCopyBridgeBlock(
         // without depending on CRT floating-point helpers in kernel mode.
         if (sample != sample || sample > 1.7976931348623157e+308 ||
             sample < -1.7976931348623157e+308) {
-            RtlZeroMemory(Destination, sampleCount * sizeof(DOUBLE));
-            return STATUS_DATA_ERROR;
+            ++nonFinite;
+            sample = 0.0;
         }
         Destination[index] = sample;
+    }
+    if (nonFinite != 0) {
+        RtlZeroMemory(Destination, sampleCount * sizeof(DOUBLE));
+        *NonFiniteSamples = nonFinite;
+        return STATUS_DATA_ERROR;
     }
     *Header = snapshot;
     return STATUS_SUCCESS;

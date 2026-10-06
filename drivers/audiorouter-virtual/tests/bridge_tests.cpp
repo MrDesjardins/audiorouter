@@ -167,6 +167,72 @@ int main() {
     require(!NT_SUCCESS(AudioRouterValidateBridgeOpenRequest(&bad)), "frame bound");
     bad = request; bad.SectionHandle = 0;
     require(!NT_SUCCESS(AudioRouterValidateBridgeOpenRequest(&bad)), "incomplete mapping pair");
+    // Protocol 1.1 OPEN extension, request lengths and QUERY (17 §5.2).
+    require(AudioRouterValidateBridgeRequestLength(240, 0, true) == STATUS_SUCCESS,
+        "OPEN with extension has the exact accepted length");
+    require(AudioRouterValidateBridgeRequestLength(176, 0, true) == STATUS_NOT_SUPPORTED,
+        "prefix-only OPEN cannot negotiate float64 and is refused distinctly");
+    require(AudioRouterValidateBridgeRequestLength(176, 0, false) == STATUS_SUCCESS,
+        "maintenance request may omit the extension");
+    for (ULONG length : { 0u, 175u, 177u, 239u, 241u, 4096u }) {
+        require(AudioRouterValidateBridgeRequestLength(length, 0, true) == STATUS_INVALID_PARAMETER &&
+            AudioRouterValidateBridgeRequestLength(length, 0, false) == STATUS_INVALID_PARAMETER,
+            "inexact bridge request length rejected before field access");
+    }
+    require(AudioRouterValidateBridgeRequestLength(240, 8, true) == STATUS_INVALID_PARAMETER,
+        "OPEN output buffer rejected");
+    AR_BRIDGE_OPEN_EXTENSION extension = {};
+    extension.ExtensionBytes = AR_BRIDGE_OPEN_EXTENSION_BYTES;
+    extension.Flags = AR_BRIDGE_OPEN_FLAG_FLOAT64;
+    require(NT_SUCCESS(AudioRouterValidateBridgeOpenExtension(&extension)), "FLOAT64 extension accepted");
+    auto badExtension = extension; badExtension.Flags = 0;
+    require(AudioRouterValidateBridgeOpenExtension(&badExtension) == STATUS_NOT_SUPPORTED,
+        "extension without FLOAT64 refused: no silent float32 transport");
+    badExtension = extension; badExtension.Flags |= 0x2;
+    require(AudioRouterValidateBridgeOpenExtension(&badExtension) == STATUS_NOT_SUPPORTED,
+        "unknown extension flag refused, never ignored");
+    for (ULONG word = 0; word < ARRAYSIZE(extension.Reserved); ++word) {
+        badExtension = extension; badExtension.Reserved[word] = 1;
+        require(AudioRouterValidateBridgeOpenExtension(&badExtension) == STATUS_NOT_SUPPORTED,
+            "nonzero reserved extension word refused");
+    }
+    badExtension = extension; badExtension.ExtensionBytes = 60;
+    require(AudioRouterValidateBridgeOpenExtension(&badExtension) == STATUS_INVALID_PARAMETER,
+        "extension size field must match");
+    require(!NT_SUCCESS(AudioRouterValidateBridgeOpenExtension(nullptr)), "null extension");
+    require(NT_SUCCESS(AudioRouterValidateBridgeQueryLength(0, sizeof(AR_BRIDGE_DRIVER_INFO))),
+        "QUERY exact output length");
+    require(!NT_SUCCESS(AudioRouterValidateBridgeQueryLength(4, sizeof(AR_BRIDGE_DRIVER_INFO))) &&
+        !NT_SUCCESS(AudioRouterValidateBridgeQueryLength(0, sizeof(AR_BRIDGE_DRIVER_INFO) - 1)) &&
+        !NT_SUCCESS(AudioRouterValidateBridgeQueryLength(0, sizeof(AR_BRIDGE_DRIVER_INFO) + 1)),
+        "QUERY inexact lengths rejected");
+    AR_BRIDGE_DRIVER_INFO info;
+    std::memset(&info, 0xcd, sizeof(info));
+    AudioRouterFillDriverInfo(&info, 3);
+    require(info.ProtocolMajor == 1 && info.ProtocolMinor == 1 && info.CableCount == 3 &&
+        info.MaxCables == 8 && info.MaxChannels == 8, "QUERY reports protocol and limits");
+    require((info.Capabilities & AR_BRIDGE_CAP_SAMPLE_FLOAT64) &&
+        (info.Capabilities & AR_BRIDGE_CAP_STREAM_COUNTERS) &&
+        !(info.Capabilities & AR_BRIDGE_CAP_LOW_LATENCY_PERIODS) &&
+        !(info.Capabilities & AR_BRIDGE_CAP_CONFIG_FROM_REGISTRY),
+        "QUERY reports only implemented capabilities");
+    require(info.SupportedRates == 7 && info.MinPeriodFrames == 0 && info.DefaultPeriodFrames == 0,
+        "QUERY rates and unreported period limits");
+    bool reservedClear = true;
+    for (ULONG word : info.Reserved) { reservedClear = reservedClear && word == 0; }
+    require(reservedClear, "QUERY never leaks stale reserved bytes");
+    require(IOCTL_AUDIOROUTER_BRIDGE_OPEN == 0x0022E000 && IOCTL_AUDIOROUTER_BRIDGE_QUERY == 0x0022600C,
+        "IOCTL codes are METHOD_BUFFERED and match the Rust client");
+    require(!AudioRouterRenderBlockWasOverrun(0, 0), "first render block is never an overrun");
+    require(!AudioRouterRenderBlockWasOverrun(5, 5), "acknowledged block is not an overrun");
+    require(AudioRouterRenderBlockWasOverrun(5, 4), "unread block replaced is an overrun");
+    require(AudioRouterSequenceGap(0, 9) == 0, "first consumed block has no gap");
+    require(AudioRouterSequenceGap(4, 5) == 0, "consecutive blocks have no gap");
+    require(AudioRouterSequenceGap(4, 8) == 3, "skipped blocks counted");
+    require(AudioRouterSequenceGap(8, 4) == 0, "regression is not a gap");
+
+    constexpr SIZE_T kSmallView = AR_BRIDGE_PAYLOAD_OFFSET + 32;
+    ULONG nonFinite = 0;
     std::vector<ULONGLONG> aligned((AR_BRIDGE_PAYLOAD_OFFSET + AR_BRIDGE_MAX_PAYLOAD_BYTES + 7) / 8);
     auto view = reinterpret_cast<UCHAR*>(aligned.data());
     auto sharedHeader = reinterpret_cast<AR_BRIDGE_BLOCK_HEADER*>(view + AR_BRIDGE_HEADER_OFFSET);
@@ -175,11 +241,11 @@ int main() {
     samples[0] = -0.0; samples[1] = std::numeric_limits<DOUBLE>::denorm_min(); samples[2] = 0.5; samples[3] = -0.75;
     DOUBLE destination[5] = { 7, 7, 7, 7, 123 };
     AR_BRIDGE_BLOCK_HEADER copied = {};
-    require(NT_SUCCESS(AudioRouterCopyBridgeBlock(view, 64, 1, 1, destination, 4, &copied)), "valid copy");
+    require(NT_SUCCESS(AudioRouterCopyBridgeBlock(view, kSmallView, 1, 1, destination, 4, &copied, &nonFinite)), "valid copy");
     require(std::memcmp(destination, samples, 32) == 0 && destination[4] == 123, "bit exact and canary");
     require(copied.Frames == 2 && copied.Generation == 1, "returned snapshot");
     mutateHeader = true;
-    require(NT_SUCCESS(AudioRouterCopyBridgeBlock(view, 64, 1, 1, destination, 4, &copied)), "header mutation uses local snapshot");
+    require(NT_SUCCESS(AudioRouterCopyBridgeBlock(view, kSmallView, 1, 1, destination, 4, &copied, &nonFinite)), "header mutation uses local snapshot");
     require(copied.Frames == 2 && copied.Generation == 1 && destination[4] == 123, "hostile dimensions cannot resize copy");
     mutateHeader = false;
     // Two-page allocation with an inaccessible following page. The valid
@@ -187,35 +253,43 @@ int main() {
     // would fault the old double-fetch copy, independently of sanitizer support.
     auto guarded = static_cast<UCHAR*>(VirtualAlloc(nullptr, 8192, 0x2000, 0x01));
     require(guarded != nullptr && VirtualAlloc(guarded, 4096, 0x1000, 0x04) != nullptr, "guard-page allocation");
-    UCHAR* boundedView = guarded + 4096 - 64;
+    UCHAR* boundedView = guarded + 4096 - kSmallView;
     *reinterpret_cast<AR_BRIDGE_BLOCK_HEADER*>(boundedView + AR_BRIDGE_HEADER_OFFSET) = { 1, 2, 2, 2, 32 };
     std::memcpy(boundedView + AR_BRIDGE_PAYLOAD_OFFSET, samples, 32);
     mutateHeader = true;
-    require(NT_SUCCESS(AudioRouterCopyBridgeBlock(boundedView, 64, 1, 1, destination, 4, &copied)), "mutation at inaccessible page boundary");
+    require(NT_SUCCESS(AudioRouterCopyBridgeBlock(boundedView, kSmallView, 1, 1, destination, 4, &copied, &nonFinite)), "mutation at inaccessible page boundary");
     require(destination[4] == 123 && copied.Frames == 2, "guarded snapshot and destination bound");
     mutateHeader = false;
     require(VirtualFree(guarded, 0, 0x8000) != 0, "guard-page release");
     *sharedHeader = { 1, 2, 2, 2, 32 };
-    require(AudioRouterCopyBridgeBlock(view, 63, 1, 1, destination, 4, &copied) == STATUS_BUFFER_TOO_SMALL, "short view");
-    require(AudioRouterCopyBridgeBlock(view, 64, 1, 1, destination, 3, &copied) == STATUS_BUFFER_TOO_SMALL, "short destination");
-    require(!NT_SUCCESS(AudioRouterCopyBridgeBlock(view, 64, 1, 2, destination, 4, &copied)), "repeated sequence");
+    require(AudioRouterCopyBridgeBlock(view, kSmallView - 1, 1, 1, destination, 4, &copied, &nonFinite) == STATUS_BUFFER_TOO_SMALL, "short view");
+    require(AudioRouterCopyBridgeBlock(view, kSmallView, 1, 1, destination, 3, &copied, &nonFinite) == STATUS_BUFFER_TOO_SMALL, "short destination");
+    require(!NT_SUCCESS(AudioRouterCopyBridgeBlock(view, kSmallView, 1, 2, destination, 4, &copied, &nonFinite)), "repeated sequence");
     sharedHeader->PayloadBytes = 31;
-    require(!NT_SUCCESS(AudioRouterCopyBridgeBlock(view, 64, 1, 1, destination, 4, &copied)), "payload mismatch");
+    require(!NT_SUCCESS(AudioRouterCopyBridgeBlock(view, kSmallView, 1, 1, destination, 4, &copied, &nonFinite)), "payload mismatch");
     sharedHeader->PayloadBytes = 32;
     for (DOUBLE nonfinite : { std::numeric_limits<DOUBLE>::quiet_NaN(), std::numeric_limits<DOUBLE>::infinity(), -std::numeric_limits<DOUBLE>::infinity() }) {
         samples[3] = nonfinite;
-        require(AudioRouterCopyBridgeBlock(view, 64, 1, 1, destination, 4, &copied) == STATUS_DATA_ERROR, "nonfinite rejection");
+        require(AudioRouterCopyBridgeBlock(view, kSmallView, 1, 1, destination, 4, &copied, &nonFinite) == STATUS_DATA_ERROR, "nonfinite rejection");
         require(destination[0] == 0 && destination[1] == 0 && destination[2] == 0 && destination[3] == 0 && destination[4] == 123, "failed quantum scrubbed");
+        require(nonFinite == 1, "rejected sample counted");
     }
+    samples[0] = std::numeric_limits<DOUBLE>::quiet_NaN();
+    samples[3] = std::numeric_limits<DOUBLE>::infinity();
+    require(AudioRouterCopyBridgeBlock(view, kSmallView, 1, 1, destination, 4, &copied, &nonFinite) == STATUS_DATA_ERROR &&
+        nonFinite == 2, "every non-finite sample in a rejected block is counted");
+    samples[0] = 0.0; samples[3] = -0.75;
+    require(NT_SUCCESS(AudioRouterCopyBridgeBlock(view, kSmallView, 1, 1, destination, 4, &copied, &nonFinite)) &&
+        nonFinite == 0, "clean block reports no non-finite samples");
     *sharedHeader = { 1, 2, AR_BRIDGE_MAX_FRAMES, AR_BRIDGE_MAX_CHANNELS, AR_BRIDGE_MAX_PAYLOAD_BYTES };
     std::vector<DOUBLE> full(AR_BRIDGE_MAX_FRAMES * AR_BRIDGE_MAX_CHANNELS, 0.25);
     std::memcpy(samples, full.data(), AR_BRIDGE_MAX_PAYLOAD_BYTES);
-    require(NT_SUCCESS(AudioRouterCopyBridgeBlock(view, aligned.size() * 8, 1, 1, full.data(), full.size(), &copied)), "maximum shape");
+    require(NT_SUCCESS(AudioRouterCopyBridgeBlock(view, aligned.size() * 8, 1, 1, full.data(), full.size(), &copied, &nonFinite)), "maximum shape");
     *sharedHeader = { 1, 2, 128, 2, 128 * 2 * sizeof(DOUBLE) };
     constexpr unsigned iterations = 200000;
     auto start = std::chrono::steady_clock::now();
     for (unsigned i = 0; i < iterations; ++i) {
-        if (!NT_SUCCESS(AudioRouterCopyBridgeBlock(view, aligned.size() * 8, 1, 1, full.data(), full.size(), &copied))) return 2;
+        if (!NT_SUCCESS(AudioRouterCopyBridgeBlock(view, aligned.size() * 8, 1, 1, full.data(), full.size(), &copied, &nonFinite))) return 2;
     }
     auto elapsed = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count();
     std::printf("bridge checks passed: %u; host copy 128x2 float64: %.3f us/block (%u iterations); not kernel DPC evidence\n", checks, elapsed / iterations, iterations);

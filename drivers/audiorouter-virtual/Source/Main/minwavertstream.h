@@ -169,7 +169,8 @@ private:
     // Refresh the capture-sink bridge shape on the control-independent
     // callback path. This is deliberately bounded and nonblocking; a changed
     // lease shape discards only the stream's partial scratch quantum.
-    VOID RefreshBridgePublishShape();
+    BOOLEAN RefreshBridgePublishShape();
+    VOID RecordBridgeActivity(_In_ USHORT Direction, _Inout_ AR_BRIDGE_STREAM_ACTIVITY* Activity);
 
     VOID UpdatePosition
     (

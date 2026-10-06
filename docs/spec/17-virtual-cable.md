@@ -232,8 +232,9 @@ device in `Source/Main/adapter.cpp` and bridge helpers in
   mode, no IOCTL): `UnderrunFrames`, `OverrunFrames`, `SequenceGaps`,
   `NonFiniteSamples`, `FormatMismatches`, `LastDevicePosition`,
   `LastQpcTime` (all `ULONGLONG`, monotonic), then reserved bytes to 128.
-  Payload offset becomes 128. Max payload: 8 ch × 4096 frames × 4 bytes =
-  128 KiB per lease, in the user-mode section (never kernel pool). The
+  Payload offset becomes 128. Max payload: 8 ch × 4096 frames × 8 bytes
+  (float64, see the precision extension) = 256 KiB per lease, in the
+  user-mode section (never kernel pool). The
   header change is allowed in a minor version only because protocol 1.0 was
   never released; after the first release, layout changes need a new major
   version. Version rule: user mode sends its major/minor; the driver
@@ -251,6 +252,30 @@ device in `Source/Main/adapter.cpp` and bridge helpers in
   length validation uses negotiated sample size and overflow-safe arithmetic.
   These changes are before the first published protocol; no public 1.0 client
   compatibility is claimed. The old 32-byte header is not accepted as a 1.1 view.
+- **As implemented (2026-10-05, host-built, not yet VM-qualified).** The first
+  driver implements only float64 transport: OPEN must be the 240-byte form with
+  `FLOAT64` set; a 176-byte OPEN returns `STATUS_NOT_SUPPORTED` (HEARTBEAT and
+  CLOSE may use either form; the extension is never part of the lease
+  identity). A later driver may add other transports through new flag bits.
+  Shared header offsets: state 0, block header 8, counters 32–87,
+  `SampleBytes` 88 (driver-written at OPEN, 8), `ReaderSequence` 96
+  (written by the user-mode consumer of a `RENDER_SOURCE` lease after each
+  read; the driver counts `OverrunFrames` when it replaces a block whose
+  sequence was not acknowledged; the value only feeds that counter), reserved
+  to 128. OPEN zeroes bytes 32–127 before the lease becomes visible. Counter
+  units: `UnderrunFrames` frames of silence while a usable capture-sink lease
+  had no newer block; `SequenceGaps` skipped block sequences;
+  `NonFiniteSamples` every NaN/Inf sample in a rejected block (the whole block
+  is refused and replaced by silence); `FormatMismatches` callbacks in which an
+  active lease's rate or channel count differed from the endpoint stream (that
+  lease receives or produces silence, never wrong-speed audio);
+  `LastDevicePosition` in frames and `LastQpcTime` in QPC ticks. QUERY reports
+  only implemented capabilities; `MinPeriodFrames`/`DefaultPeriodFrames` are 0
+  until `LOW_LATENCY_PERIODS` is implemented, and `DriverVersion` is the
+  four-part version `build.ps1 -Version` stamps (0.0.0.0 for unversioned
+  developer builds). IOCTL codes are `METHOD_BUFFERED`: OPEN `0x0022E000`,
+  CLOSE `0x0022E004`, HEARTBEAT `0x0022E008`, QUERY `0x0022600C`; both the C
+  header and the Rust client pin these literal values in tests.
 - New IOCTL `IOCTL_AUDIOROUTER_BRIDGE_QUERY` (function 0x803, METHOD_BUFFERED,
   read access) returns `AR_BRIDGE_DRIVER_INFO { ProtocolMajor, ProtocolMinor,
   DriverVersion (4×USHORT), CableCount (enabled), MaxCables, MaxChannels,

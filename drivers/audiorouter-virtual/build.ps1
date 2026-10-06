@@ -78,6 +78,11 @@ $buildArguments = @(
     '/p:SkipPackageVerification=true',
     '/p:ApiValidator_Enable=false',
     '/p:SignMode=Off',
+    # QUERY reports the same four-part version StampInf writes into the INF.
+    "/p:ArDriverVersionMajor=$($driverVersion.Split('.')[0])",
+    "/p:ArDriverVersionMinor=$($driverVersion.Split('.')[1])",
+    "/p:ArDriverVersionPatch=$($driverVersion.Split('.')[2])",
+    "/p:ArDriverVersionBuild=$($driverVersion.Split('.')[3])",
     '/p:TrackFileAccess=false',
     '/v:minimal',
     "/flp:LogFile=$log;Verbosity=normal"

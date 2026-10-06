@@ -436,7 +436,7 @@ closed. Endpoint, one-hour drift and audio-quality VM gates remain pending.
   registry; IDs stable across count changes and renames; all formats open in
   shared mode; low-latency period available; uninstall clean.
 - **Rollback:** revert.
-- **Status:** host implementation and checks complete 2026-10-05; VM qualification pending under WP-03/04.
+- **Status:** host core complete 2026-10-05 (endpoints, CableCount, formats, conversion, timing, cleanup); step 1b registry names and period/lease/silence limits and the low-latency packet constraints (3a) are not implemented yet; VM qualification pending under WP-03/04.
 
 ## WP-06 — Bridge protocol 1.1, counters, Rust client (17 §5.2)
 
@@ -476,7 +476,7 @@ closed. Endpoint, one-hour drift and audio-quality VM gates remain pending.
   the tool deliberately stalls; 8-channel and 96 kHz leases work; version
   mismatch and unknown-flag paths tested.
 - **Rollback:** revert; protocol 1.0 users do not exist outside the repo.
-- **Status:** in progress 2026-10-05 (stable bus slots, driver version 1.1 requests, and float64 mapping APIs implemented; OPEN extension, QUERY/counters, float64 engine path and remaining ABI/Rust work open; VM integration remains gated by WP-03/04).
+- **Status:** in progress 2026-10-05 (host side of protocol 1.1 done: stable bus slots, float64 transport, OPEN extension, QUERY, 128-byte header with stream counters, Rust client/query/error mapping. Open: 8-channel leases in the Rust client, `tools/m03-bridge-tone`, all VM acceptance; VM integration remains gated by WP-03/04).
 
 WP-06 execution record (2026-10-05): objective is one safe, versioned 16-lease
 bridge contract with float64 payload support and a Rust client that preserves
@@ -512,6 +512,20 @@ mapping. The Rust regression round-trips PCM32 value 1,073,741,889 exactly.
 Remaining WP-06: negotiated open extension and QUERY/capability/counter
 contracts. No claim of end-to-end PCM32 precision until the WP-09 float64
 engine path is complete.
+
+WP-06 negotiation/counters update (2026-10-05, host-only): OPEN now requires
+the 64-byte extension with `FLOAT64` (prefix-only OPEN, unknown flags and
+reserved words → `STATUS_NOT_SUPPORTED`); QUERY returns `AR_BRIDGE_DRIVER_INFO`
+with only implemented capabilities and the build-stamped version; the shared
+header is 128 bytes with driver-written counters, `SampleBytes` and the
+consumer's `ReaderSequence`. Decision recorded in 17 §5.2 "As implemented":
+the first driver has float64 transport only, so no float32 path exists in the
+kernel. Two defects fixed: Rust sent `METHOD_NEITHER` IOCTL codes the driver
+never dispatches, and a rate-mismatched capture-sink lease would still have
+played at the wrong speed. Checks: 206 host bridge checks, x64/ARM64 WDK
+acceptance, `cargo test -p audiorouter-windows-audio` 116 passed. Details:
+[WP-06 evidence](evidence/2026-10-05-virtual-cable-wp06.md). Not VM, endpoint
+or audio evidence.
 
 ## WP-07 — Elevated driver helper (17 §6)
 
@@ -718,7 +732,11 @@ published app keeps the VB-Cable workflow. Reverting DEC-18 restores DEC-16.
 
 ## Next action
 
-WP-06 host work: implement the 16-directional-lease protocol and Rust float64
-client; WP-05 and WP-03/04 VM endpoint, verifier and audio-quality evidence
-remain pending. Do not load the intermediate package or call a host build a
-runtime or quality pass.
+WP-06 host work: raise the Rust driver-bridge path to 8 channels (a driver
+specific bound, separate from the internal 2-channel AudioBridge protocol),
+then write `tools/m03-bridge-tone` (QUERY + `check_compatible`, 997/47 Hz
+into `cable-b` capture sink, `cable-a` render source to WAV, counters printed)
+for the VM. Also open on the host: WP-05 registry names and period limits
+(then report `CONFIG_FROM_REGISTRY`/`LOW_LATENCY_PERIODS` in QUERY). WP-03/04/05
+VM endpoint, Verifier and audio-quality evidence remain pending. Do not load
+the intermediate package or call a host build a runtime or quality pass.

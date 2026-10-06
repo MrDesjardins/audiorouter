@@ -332,5 +332,18 @@
   <ItemGroup>
     <ClInclude Exclude="@(ClInclude)" Include="*.h;*.hpp;*.hxx;*.hm;*.inl;*.xsd" />
   </ItemGroup>
+  <!-- build.ps1 -Version passes these as global properties; the bridge QUERY
+       IOCTL reports them. Unversioned developer builds report 0.0.0.0. -->
+  <PropertyGroup>
+    <ArDriverVersionMajor Condition="'$(ArDriverVersionMajor)'==''">0</ArDriverVersionMajor>
+    <ArDriverVersionMinor Condition="'$(ArDriverVersionMinor)'==''">0</ArDriverVersionMinor>
+    <ArDriverVersionPatch Condition="'$(ArDriverVersionPatch)'==''">0</ArDriverVersionPatch>
+    <ArDriverVersionBuild Condition="'$(ArDriverVersionBuild)'==''">0</ArDriverVersionBuild>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);AR_DRIVER_VERSION_MAJOR=$(ArDriverVersionMajor);AR_DRIVER_VERSION_MINOR=$(ArDriverVersionMinor);AR_DRIVER_VERSION_PATCH=$(ArDriverVersionPatch);AR_DRIVER_VERSION_BUILD=$(ArDriverVersionBuild)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
