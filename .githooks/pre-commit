@@ -1,0 +1,13 @@
+#!/bin/sh
+# Refuse a commit whose Rust code is not formatted (CI runs the same check).
+# Enable once per clone: git config core.hooksPath .githooks
+if ! git diff --cached --name-only --diff-filter=ACM | grep -q '\.rs$'; then
+    exit 0
+fi
+if ! cargo fmt --all -- --check >/dev/null 2>&1 \
+    || ! cargo fmt --manifest-path src-tauri/Cargo.toml -- --check >/dev/null 2>&1; then
+    echo "Rust code is not formatted. Run:" >&2
+    echo "  cargo fmt --all && cargo fmt --manifest-path src-tauri/Cargo.toml" >&2
+    echo "then stage the changes and commit again." >&2
+    exit 1
+fi

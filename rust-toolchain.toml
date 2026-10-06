@@ -1,0 +1,5 @@
+# Same toolchain as CI and the release workflow, so local rustfmt and Clippy
+# give the results CI gives. rustup installs it on first use.
+[toolchain]
+channel = "1.96.0"
+components = ["rustfmt", "clippy"]

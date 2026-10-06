@@ -27,3 +27,17 @@ instead of submitting it.
 Development agents and contributors read [AGENTS.md](AGENTS.md) and the
 [active plan](docs/plans/active/current.md) first. Keep changes focused, add
 tests for behavior changes, and run the relevant checks before submitting.
+
+## Formatting
+
+CI fails on unformatted Rust code. `rust-toolchain.toml` pins the toolchain
+CI uses, so your local `rustfmt` gives the same result. Before committing:
+
+```powershell
+cargo fmt --all
+cargo fmt --manifest-path src-tauri/Cargo.toml
+```
+
+To have Git refuse unformatted commits, enable the checked-in hook once per
+clone: `git config core.hooksPath .githooks`. Claude Code sessions format
+each Rust file they edit automatically (`.claude/settings.json`).

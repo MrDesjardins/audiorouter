@@ -31,6 +31,27 @@ Use this canonical uppercase filename on Windows. Do not add `agent.md`, `agents
 - **No layout shift (UX rule, spec UI-17).** Live data, suggestions, status text and pills must never make the UI move up and down. Always render such slots at a reserved size, swap their contents (placeholder plus disabled action while waiting), keep the last good value through brief gaps, and fix the width of changing labels. Only a deliberate user action may change layout.
 - Verify new or changed UI visually in the dark, light, and high-contrast themes (for example with the Edge/Playwright screenshot approach recorded in the active plan). jsdom tests do not check styling.
 
+## Formatting and change size
+
+- **Every commit is formatted.** Before committing Rust changes, run
+  `cargo fmt --all` and `cargo fmt --manifest-path src-tauri/Cargo.toml`, then
+  confirm both `-- --check` runs are clean; CI rejects anything else. Claude
+  Code sessions also format each edited `.rs` file through the
+  `.claude/settings.json` hook, but edits made through the shell (`sed`,
+  scripts) bypass it, so still run the commands above.
+- **Use the pinned toolchain.** `rust-toolchain.toml` pins Rust 1.96.0, the
+  version CI and the release workflow use. Do not change it in a feature
+  change; a toolchain bump is its own change with its own formatting and
+  Clippy fixes.
+- **Never mix mass reformatting with behavior.** Formatting is already
+  clean, so `cargo fmt` should only touch lines you changed. If it rewrites
+  unrelated code (new rustfmt version, drift from another session), stop and
+  commit that formatting alone, with a message that says it is mechanical,
+  before or after your change.
+- Keep Clippy (`cargo clippy --workspace --all-targets --all-features -- -D
+  warnings`, plus the same for `src-tauri`) clean in the same commit as the
+  code that would trip it.
+
 ## Work and documentation lifecycle
 
 An active plan records: objective, requirement IDs, prerequisites, decisions, ordered tasks, validation matrix, evidence links, risks, rollback, and next action. Update it after meaningful decisions, failed experiments, implementation changes, and verification. Record reproducible outcomes, not private reasoning or every terminal keystroke.
