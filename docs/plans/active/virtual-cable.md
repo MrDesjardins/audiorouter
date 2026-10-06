@@ -361,10 +361,9 @@ direct render/capture WaveRT tables for all 60 rate/channel/encoding
 combinations and minimal speaker/line-in topologies without microphone-array
 properties or inserted volume/mute processing. INF generator, 132 host
 bridge/conversion/format checks, x64 and ARM64 WDK acceptance, and VM-only
-fuzzer build pass. This is not a driver-ready state: QPC/timer and remaining
-sample-code cleanup, WP-06 16-lease Rust compatibility, and VM gates are still
-outstanding. The intermediate package remains prohibited from loading. See
-the evidence record for exact commands and limitations.
+fuzzer build pass. Host implementation remains non-releasable: VM gates are
+still outstanding. The intermediate package remains prohibited from loading.
+See the evidence record for exact commands and limitations.
 
 Timing follow-up (2026-10-05): WaveRT notification cadence now stores and
 compares packet intervals in 100 ns units derived from DMA bytes per second,
@@ -372,9 +371,7 @@ avoiding millisecond truncation for short periods while retaining timer
 overshoot across ticks. The static acceptance guard now checks the high
 resolution interval path. x64/ARM64 WDK acceptance and 132 portable bridge
 checks passed; this is compile/host evidence only. The 1-hour VM QPC drift and
-tone-continuity measurements remain pending. Remaining immediate WP-05 task:
-remove sample tone/file-writing state and dependencies without disturbing the
-driver's unrelated worker/device lifecycle, then retest and document.
+tone-continuity measurements remain pending.
 
 Sample-path cleanup follow-up (2026-10-05): removed the synthetic capture tone,
 its tone-generation utility and registry controls, and all per-stream SaveData
@@ -384,6 +381,15 @@ adapter's existing shared-state and Bluetooth HFP constraints; WaveRT streams
 no longer reference or call it. x64/ARM64 WDK acceptance, 132 portable bridge
 checks, source-reference scan, and docs link validation pass. VM period/drift
 and audio-quality gates remain pending.
+
+Scratch-state follow-up (2026-10-05): generation and shape changes invalidate
+scratch through frame/offset/sequence bounds only. Removed the full 256 KiB
+scratch zero from audio callbacks; each successful block read overwrites every
+sample consumed, and each published block is completely rewritten before send.
+Acceptance rejects callback-wide scratch clears. x64/ARM64 WDK acceptance,
+132 portable bridge checks, and docs validation pass. Host WP-05 implementation
+is ready for downstream host preparation; endpoint, one-hour drift and audio
+quality VM gates remain explicitly pending under WP-03/04.
 
 - **Who:** agent on the host; user runs VM checks.
 - **Files:** `Source/Filters/minipairs.h`, new
@@ -430,7 +436,7 @@ and audio-quality gates remain pending.
   registry; IDs stable across count changes and renames; all formats open in
   shared mode; low-latency period available; uninstall clean.
 - **Rollback:** revert.
-- **Status:** in progress 2026-10-05 (host implementation; VM remains gated by WP-03/04).
+- **Status:** host implementation and checks complete 2026-10-05; VM qualification pending under WP-03/04.
 
 ## WP-06 — Bridge protocol 1.1, counters, Rust client (17 §5.2)
 
@@ -470,7 +476,25 @@ and audio-quality gates remain pending.
   the tool deliberately stalls; 8-channel and 96 kHz leases work; version
   mismatch and unknown-flag paths tested.
 - **Rollback:** revert; protocol 1.0 users do not exist outside the repo.
-- **Status:** not started.
+- **Status:** in progress 2026-10-05 (host ABI/Rust work; VM integration remains gated by WP-03/04).
+
+WP-06 execution record (2026-10-05): objective is one safe, versioned 16-lease
+bridge contract with float64 payload support and a Rust client that preserves
+VCAB-21 PCM32 precision. Requirements: VCAB-10/12/20/21/26, SEC-08, NFR-16.
+Prerequisites: WP-05 host work complete; WP-03/04 VM evidence remains pending.
+This authorizes portable and WDK host preparation only; no driver load or
+quality gate is inferred. Tasks: (1) inspect the current C ABI, slot selection,
+per-lease sample-rate and generation rules; (2) extend protocol to 16 stable
+slots with cable identity, precision negotiation, counters and exact QUERY/
+open IOCTL validation; (3) mirror layout/capabilities/errors in Rust, with
+portable offset, negotiation, bounds and conversion tests; (4) run Rust tests,
+x64/ARM64 WDK acceptance and security/static checks, update evidence, inspect
+the exact diff and commit named paths. Validation matrix: header/layout parity,
+unknown/old protocol rejection, all 16 slot identities, PCM32 precision,
+malformed/racing bridge payload regression, Cargo package tests and both WDK
+builds; VM multi-cable/format/crosstalk/audio tests remain pending. Risks:
+protocol header-size drift, sample-rate mismatch, and callback contention.
+Rollback: revert only WP-06 paths; keep the intermediate package unloaded.
 
 ## WP-07 — Elevated driver helper (17 §6)
 
@@ -677,8 +701,7 @@ published app keeps the VB-Cable workflow. Reverting DEC-18 restores DEC-16.
 
 ## Next action
 
-Finish WP-05 stream scratch-state cleanup and validate/commit the complete WP-05
-delta. Continue WP-06 host
-work for the 16-directional-lease protocol and Rust float64 client before any
-VM load. WP-03 install/remove and WP-04 Driver Verifier/fuzz/second-user VM
-gates remain pending; do not call a host build a runtime or quality pass.
+WP-06 host work: implement the 16-directional-lease protocol and Rust float64
+client; WP-05 and WP-03/04 VM endpoint, verifier and audio-quality evidence
+remain pending. Do not load the intermediate package or call a host build a
+runtime or quality pass.

@@ -1577,14 +1577,14 @@ ByteDisplacement - # of bytes to process.
         &readGeneration);
     if (NT_SUCCESS(readShapeStatus) && readFrames != 0 && readChannels != 0 &&
         AudioRouterStreamGenerationChanged(m_BridgeReadGeneration, readGeneration)) {
-        RtlZeroMemory(m_BridgeScratch, sizeof(m_BridgeScratch));
+        // Reset valid length/sequence only. The block copy overwrites every
+        // sample consumed before output; never clear the full DPC scratch array.
         m_BridgeScratchFrames = 0;
         m_BridgeScratchFrameOffset = 0;
         m_BridgeReadSequence = 0;
         m_BridgeReadGeneration = readGeneration;
     } else if (!NT_SUCCESS(readShapeStatus) || readFrames == 0 || readChannels == 0) {
         if (m_BridgeReadGeneration != 0) {
-            RtlZeroMemory(m_BridgeScratch, sizeof(m_BridgeScratch));
             m_BridgeScratchFrames = 0;
             m_BridgeScratchFrameOffset = 0;
             m_BridgeReadSequence = 0;
@@ -1774,7 +1774,8 @@ VOID CMiniportWaveRTStream::RefreshBridgePublishShape()
         m_BridgeScratchFrameOffset = 0;
     }
     if (AudioRouterStreamGenerationChanged(m_BridgeGeneration, generation)) {
-        RtlZeroMemory(m_BridgeScratch, sizeof(m_BridgeScratch));
+        // Partial samples are unreachable after the index reset and are fully
+        // overwritten before publication; keep generation changes bounded.
         m_BridgeScratchFrames = 0;
         m_BridgeScratchFrameOffset = 0;
         m_BridgeReadSequence = 0;

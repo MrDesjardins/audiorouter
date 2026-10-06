@@ -92,3 +92,18 @@ No driver was installed or loaded. This is not runtime or sound-quality
 evidence; VM endpoint, format negotiation, QPC drift, DPC load and continuity
 gates remain open. The shared save-worker infrastructure is still built and
 initialized pending a separate review of its cross-component dependencies.
+
+## Scratch-state performance follow-up (2026-10-05)
+
+Generation transitions now invalidate render and capture scratch using bounded
+frame/offset/sequence state only. Removed `RtlZeroMemory` over the stream's
+maximum 8 x 4096 double scratch array from audio callbacks; the next validated
+read overwrites every sample consumed, and the publisher fills a whole quantum
+before publishing. The acceptance script rejects callback-wide scratch clears.
+
+Checks run on the Windows host: x64 and ARM64 `m03-driver-build.ps1` passed;
+`drivers/audiorouter-virtual/tests/build-tests.ps1` passed (132 portable
+checks); `tests/acceptance/docs.ps1` passed (123 Markdown files, 649 local
+links); `git diff --check` passed. The host test's copy benchmark is not DPC
+evidence. VM QPC drift, DPC latency under load, and tone-continuity remain
+unmeasured; no driver was installed or loaded.

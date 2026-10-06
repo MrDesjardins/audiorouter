@@ -397,6 +397,9 @@ foreach ($required in @(
         throw "WaveRT bridge scratch-shape guard is missing: $required"
     }
 }
+if ($streamSource.Contains('RtlZeroMemory(m_BridgeScratch')) {
+    throw 'WaveRT audio callbacks must invalidate scratch by bounds without clearing the maximum 256 KiB buffer'
+}
 
 $publishStart = $source.IndexOf('NTSTATUS AudioRouterPublishLeaseBlock(')
 $publishEnd = $source.IndexOf('static void RetireBridgeResources(', $publishStart)
