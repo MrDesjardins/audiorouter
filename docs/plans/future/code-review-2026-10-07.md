@@ -529,8 +529,19 @@ P2 and P3 remain a backlog.
   playing, even when the backend pumps audio itself
   (`ui/src/App.tsx:1795`). Read the counters from `system.diagnostics`, and
   remove the legacy 5 ms path once older backends are no longer supported.
+  *Status 2026-10-07: done (`e9ca815e`).* The legacy 5 ms path is gone;
+  the UI reads the counters once a second from the pump result, since the
+  shell always ships its own backend. The three polling loops record one
+  Logs-tab row per failure run. React now has its own chunk (main chunk
+  635 → 460 kB); the rarely used panels total ~10 kB, so lazy-loading them
+  was not worth it.
 - **Release profile.** Consider `lto = "thin"` and `codegen-units = 1` for
   release, measured against build time and binary size.
+  *Status 2026-10-07: measured, not adopted.* `cargo bench -p
+  audiorouter-engine --bench realtime` with both settings (Linux container)
+  was within ±2.6 % of the default for every tool and +0.4 % for the
+  32-tool route, which is noise. The audio cost is in the DSP code, not in
+  cross-crate calls, so the longer release builds would buy nothing.
 - **Unsafe audit.** `windows-audio` has 115 `unsafe` blocks. Check that each
   one has the invariant comment `AGENTS.md` requires, and add a
   `clippy::undocumented_unsafe_blocks` lint.
