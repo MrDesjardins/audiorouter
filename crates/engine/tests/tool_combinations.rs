@@ -502,17 +502,24 @@ fn note_allocation() {
 unsafe impl std::alloc::GlobalAlloc for CountingAllocator {
     unsafe fn alloc(&self, layout: std::alloc::Layout) -> *mut u8 {
         note_allocation();
+        // SAFETY: forwards this method's own caller contract (a valid, non-zero-size
+        // `layout`) unchanged to the system allocator.
         unsafe { std::alloc::System.alloc(layout) }
     }
     unsafe fn alloc_zeroed(&self, layout: std::alloc::Layout) -> *mut u8 {
         note_allocation();
+        // SAFETY: forwards this method's own caller contract unchanged.
         unsafe { std::alloc::System.alloc_zeroed(layout) }
     }
     unsafe fn realloc(&self, ptr: *mut u8, layout: std::alloc::Layout, size: usize) -> *mut u8 {
         note_allocation();
+        // SAFETY: the caller guarantees `ptr` was allocated by this allocator with
+        // `layout`; every block came from `System`, so the contract carries over.
         unsafe { std::alloc::System.realloc(ptr, layout, size) }
     }
     unsafe fn dealloc(&self, ptr: *mut u8, layout: std::alloc::Layout) {
+        // SAFETY: as for `realloc`: `ptr` and `layout` describe a block that this
+        // allocator obtained from `System`.
         unsafe { std::alloc::System.dealloc(ptr, layout) }
     }
 }

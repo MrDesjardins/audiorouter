@@ -322,7 +322,7 @@ fn open_release_page(tag: String) -> Result<(), String> {
         use windows::Win32::UI::Shell::ShellExecuteW;
         use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
         let wide = url.encode_utf16().chain(Some(0)).collect::<Vec<_>>();
-        // Only this repository's release URL for a validated numeric tag is
+        // SAFETY: only this repository's release URL for a validated numeric tag is
         // opened. Both strings are NUL-terminated and stay alive throughout
         // ShellExecuteW; no user-controlled command, path or argument is passed.
         let result = unsafe {
@@ -486,7 +486,7 @@ fn http_api_control(
                     .encode_utf16()
                     .chain(Some(0))
                     .collect::<Vec<_>>();
-                // Only our active loopback URL is opened. Both strings are
+                // SAFETY: only our active loopback URL is opened. Both strings are
                 // NUL-terminated and remain owned/alive throughout ShellExecuteW;
                 // no user-controlled command, path or argument is passed.
                 let result = unsafe {
@@ -974,7 +974,7 @@ fn install_streamdeck_plugin(app: tauri::AppHandle) -> Result<(), String> {
             .encode_wide()
             .chain(Some(0))
             .collect::<Vec<_>>();
-        // The path is the app's own fixed resource file, not caller input.
+        // SAFETY: the path is the app's own fixed resource file, not caller input.
         // Both strings are NUL-terminated and stay alive throughout
         // ShellExecuteW; the default handler (Stream Deck) opens it.
         let result = unsafe {

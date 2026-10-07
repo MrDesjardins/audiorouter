@@ -16,3 +16,11 @@ zip = "2.2.2"
 sha2 = "0.10.9"
 memmap2 = "0.9.9"
 trash = "5.2.2"
+
+[workspace.lints.clippy]
+# Every `unsafe` block and impl states its invariants in a `// SAFETY:`
+# comment (AGENTS.md, architecture rules); public unsafe fns document
+# their contract under `# Safety`. CI's `-D warnings` Clippy enforces it
+# for every target, tests and examples included.
+undocumented_unsafe_blocks = "deny"
+missing_safety_doc = "deny"

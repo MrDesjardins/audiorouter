@@ -8,6 +8,9 @@ rust-version.workspace = true
 [features]
 test-fixtures = []
 
+[lints]
+workspace = true
+
 [dependencies]
 audiorouter-engine = { path = "../engine" }
 serde = { workspace = true }

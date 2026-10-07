@@ -16,6 +16,9 @@ path = "src/main.rs"
 # could not start unelevated; all tests live in the library.
 test = false
 
+[lints]
+workspace = true
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }

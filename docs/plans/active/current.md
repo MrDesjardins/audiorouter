@@ -180,6 +180,37 @@ costs and phases in the [driver track](../future/M03-driver-signing.md).
   Gain 23.4 → 3.5 µs/quantum, ParametricEq 24.3 → 3.7, Denoise 66.3 → 46.4,
   route-32-tools 680.0 → 507.6. Continuity harness on Windows not run.
 
+**P3-1 unsafe audit.** Every `unsafe` block and impl now has a
+`// SAFETY:` comment with its invariants (pointer and handle validity,
+owner and lifetime, buffer lengths, COM thread). Before: 188 missing
+(windows-audio 98, transport 27, plugin-host 19, engine allocator test 4,
+shell 26, `tools/m00-wasapi-probe` 14); after: 0. The lints
+`clippy::undocumented_unsafe_blocks` and `clippy::missing_safety_doc` are
+`deny` in `[workspace.lints.clippy]` (each crate has
+`[lints] workspace = true`) and in `[lints.clippy]` of `src-tauri` and the
+probe, so all targets, tests and examples included, are covered.
+Soundness fixes: `SharedCapture::next_packet_into` and
+`SharedRender::submit_bytes` reject `bytes_per_frame` above the stream's
+`nBlockAlign` (a larger value read or wrote past the WASAPI buffer);
+`created_callback` clones its sender before sending, so `create` may free
+the context while `send` runs; `token_user_sid_string` reads `TOKEN_USER`
+with `read_unaligned` from its byte buffer; the OS-transition and plug-in
+editor windows no longer free their boxed context in `WM_NCDESTROY`, which
+could double-free when `CreateWindowExW` fails after `WM_NCCREATE`; the
+probe's `raw_capture_initialize` no longer calls `CoUninitialize` before
+its interfaces are released.
+Open: `NativeBridgeRegion` and `SharedAudioRegion` write through pointers
+taken from `MmapMut`'s shared slice (`map.as_ptr()`), which Rust's aliasing
+model does not allow; move them to `memmap2::MmapRaw`. The `enumerate_*`
+helpers return a `windows::core::Error` (which may hold COM error info)
+after `CoUninitialize`.
+Local evidence (Linux container, pinned 1.96.0, `x86_64-pc-windows-gnu`):
+workspace and shell Clippy with `-D warnings` clean; probe Clippy clean;
+`cargo fmt` checks clean; engine, storage, domain, dsp, recording,
+protocol and plugin-host tests pass. Windows CI and hardware runs not done
+here; the Jev rule check was not run (no tool checkout or key).
+Rollback: revert the commit.
+
 ### Code review P0 and P1 fixes (2026-10-07, user request)
 
 The user asked to fix every P0 and P1 item in the

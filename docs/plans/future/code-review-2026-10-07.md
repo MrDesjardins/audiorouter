@@ -478,6 +478,25 @@ P2 and P3 remain a backlog.
 - **Unsafe audit.** `windows-audio` has 115 `unsafe` blocks. Check that each
   one has the invariant comment `AGENTS.md` requires, and add a
   `clippy::undocumented_unsafe_blocks` lint.
+  **Status (2026-10-07): done.** 188 undocumented `unsafe` blocks/impls had
+  no `// SAFETY:` comment: windows-audio 98, transport 27, plugin-host 19,
+  the engine allocator test 4, the desktop shell 26 and
+  `tools/m00-wasapi-probe` 14. Each now states its invariants.
+  `undocumented_unsafe_blocks` and `missing_safety_doc` are `deny` through
+  `[workspace.lints.clippy]` (every member opts in with
+  `[lints] workspace = true`) and `[lints.clippy]` in `src-tauri` and the
+  probe, so CI's Clippy covers every target, tests included. Soundness
+  fixes made on the way: WASAPI packet copies now reject a stride larger
+  than the stream's block size (a safe API could read or write past the
+  device buffer); the software-device callback no longer uses its context
+  after sending; the SID lookup reads `TOKEN_USER` unaligned; the shell's
+  listener and editor windows free their boxed context once, after the
+  window is gone; the probe no longer releases COM objects after
+  `CoUninitialize`. Open: the bridge and plug-in shared-memory regions
+  write through pointers taken from `MmapMut`'s `&[u8]` view
+  (`map.as_ptr()`), which Rust's aliasing rules do not allow; switching to
+  `memmap2::MmapRaw` is a follow-up. Details are in the
+  [active plan](../active/current.md#code-review-p2p3-follow-ups-2026-10-07-user-request).
 - **UI bundle.** The main chunk is 632 kB. Split the rarely used panels (API,
   MCP, Advanced) with dynamic imports.
 - **Active plan size.** The active plan is long. Archive completed sections

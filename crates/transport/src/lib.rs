@@ -570,8 +570,14 @@ mod windows_pipe {
 
     fn acquire_singleton(pipe_name: &str) -> Result<Handle, TransportError> {
         let name = singleton_name(pipe_name, &current_user_sid()?);
+        // SAFETY: `name` is a NUL-terminated UTF-16 buffer alive for the call; no
+        // security attributes are passed, so the mutex gets the caller's default
+        // ACL. The returned handle is owned by `Handle`.
         let handle =
             unsafe { CreateMutexW(None, true, PCWSTR(name.as_ptr())) }.map_err(win_error)?;
+        // SAFETY: GetLastError only reads this thread's last-error value, which the
+        // successful CreateMutexW above set (ERROR_ALREADY_EXISTS for an existing
+        // mutex) and nothing has overwritten since.
         if unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
             drop(Handle(handle));
             return Err(TransportError::Windows(
@@ -608,6 +614,9 @@ mod windows_pipe {
 
     fn token_user_sid_string(token: HANDLE) -> Result<String, TransportError> {
         let mut required = 0;
+        // SAFETY: a size query: no buffer is passed, so the call only writes the
+        // required length into the live local `required`. `token` is a valid
+        // TOKEN_QUERY handle owned by the caller.
         let _ = unsafe { GetTokenInformation(token, TokenUser, None, 0, &mut required) };
         if required == 0 {
             return Err(TransportError::Windows(
@@ -615,6 +624,8 @@ mod windows_pipe {
             ));
         }
         let mut buffer = vec![0u8; required as usize];
+        // SAFETY: `buffer` is a live allocation of exactly `buffer.len()` bytes, the
+        // length passed, so Windows writes within it; `required` is a live local.
         unsafe {
             GetTokenInformation(
                 token,
@@ -625,14 +636,28 @@ mod windows_pipe {
             )
         }
         .map_err(win_error)?;
-        let user = unsafe { &*(buffer.as_ptr().cast::<TOKEN_USER>()) };
+        if buffer.len() < std::mem::size_of::<TOKEN_USER>() {
+            return Err(TransportError::Windows(
+                "token user information was truncated".into(),
+            ));
+        }
+        // SAFETY: the successful call above wrote a TOKEN_USER at the start of
+        // `buffer`, which is at least that large. A Vec<u8> is only 1-byte aligned,
+        // so the header is copied out unaligned instead of referenced in place. Its
+        // SID pointer points into `buffer`, which outlives every use below.
+        let user = unsafe { std::ptr::read_unaligned(buffer.as_ptr().cast::<TOKEN_USER>()) };
         let mut string_sid = windows::core::PWSTR::null();
+        // SAFETY: `user.User.Sid` points into the live `buffer`; the call writes a
+        // LocalAlloc string pointer into the live local `string_sid`, freed below.
         unsafe { ConvertSidToStringSidW(user.User.Sid, &mut string_sid) }.map_err(win_error)?;
         if string_sid.is_null() {
             return Err(TransportError::Windows(
                 "Windows returned a null SID string".into(),
             ));
         }
+        // SAFETY: `string_sid` is the non-null, NUL-terminated string the successful
+        // conversion returned; the scan stops at that terminator and the slice
+        // covers only the characters before it. It is freed only after this copy.
         let text = unsafe {
             let mut length = 0;
             while *string_sid.0.add(length) != 0 {
@@ -640,16 +665,22 @@ mod windows_pipe {
             }
             String::from_utf16_lossy(std::slice::from_raw_parts(string_sid.0, length))
         };
+        // SAFETY: `string_sid` was allocated by ConvertSidToStringSidW with
+        // LocalAlloc, is no longer referenced, and is freed exactly once.
         unsafe { LocalFree(Some(HLOCAL(string_sid.0.cast()))) };
         Ok(text)
     }
 
     pub fn client_user_sid(client_process_id: u32) -> Result<String, TransportError> {
+        // SAFETY: OpenProcess takes only integer arguments; the returned handle is
+        // owned by `Handle` and closed by its `Drop`.
         let process =
             unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, client_process_id) }
                 .map_err(win_error)?;
         let process = Handle(process);
         let mut token = INVALID_HANDLE_VALUE;
+        // SAFETY: `process.0` is the valid handle opened above; `token` is a live
+        // local that receives a new handle, owned by `Handle` below.
         unsafe { OpenProcessToken(process.0, TOKEN_QUERY, &mut token) }.map_err(win_error)?;
         let token = Handle(token);
         token_user_sid_string(token.0)
@@ -663,6 +694,9 @@ mod windows_pipe {
     impl Drop for SecurityDescriptor {
         fn drop(&mut self) {
             if !self.0 .0.is_null() {
+                // SAFETY: the descriptor was allocated with LocalAlloc by
+                // ConvertStringSecurityDescriptorToSecurityDescriptorW, is owned only by
+                // this wrapper, and is freed exactly once.
                 unsafe { LocalFree(Some(HLOCAL(self.0 .0))) };
             }
         }
@@ -670,6 +704,9 @@ mod windows_pipe {
 
     fn owner_only_security() -> Result<SecurityDescriptor, TransportError> {
         let mut descriptor = windows::Win32::Security::PSECURITY_DESCRIPTOR(std::ptr::null_mut());
+        // SAFETY: the SDDL literal is a static NUL-terminated wide string and
+        // `descriptor` is a live local; the allocated descriptor it receives is
+        // owned by `SecurityDescriptor` below.
         unsafe {
             ConvertStringSecurityDescriptorToSecurityDescriptorW(
                 windows::core::w!("D:P(A;;GA;;;OW)"),
@@ -685,20 +722,28 @@ mod windows_pipe {
     /// Compare the connected client process token's user SID with this process.
     /// This is a same-user check, not a replacement for a restrictive pipe ACL.
     pub fn client_is_same_user(client_process_id: u32) -> Result<bool, TransportError> {
+        // SAFETY: OpenProcess takes only integer arguments; the returned handle is
+        // owned by `Handle` and closed by its `Drop`.
         let process =
             unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, client_process_id) }
                 .map_err(win_error)?;
         let process = Handle(process);
         let mut client_token = INVALID_HANDLE_VALUE;
+        // SAFETY: `process.0` is the valid handle opened above; `client_token` is a
+        // live local that receives a new handle, owned by `Handle` below.
         unsafe { OpenProcessToken(process.0, TOKEN_QUERY, &mut client_token) }
             .map_err(win_error)?;
         let client_token = Handle(client_token);
 
+        // SAFETY: OpenProcess takes only integer arguments; the returned handle is
+        // owned by `Handle` and closed by its `Drop`.
         let current_process =
             unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, std::process::id()) }
                 .map_err(win_error)?;
         let current_process = Handle(current_process);
         let mut current_token = INVALID_HANDLE_VALUE;
+        // SAFETY: `current_process.0` is the valid handle opened above;
+        // `current_token` is a live local that receives a new handle, owned below.
         unsafe { OpenProcessToken(current_process.0, TOKEN_QUERY, &mut current_token) }
             .map_err(win_error)?;
         let current_token = Handle(current_token);
@@ -707,10 +752,15 @@ mod windows_pipe {
     }
 
     struct Handle(HANDLE);
+    // SAFETY: a kernel handle is a process-wide value, valid on any thread. The
+    // wrapper owns it exclusively and closes it once, so moving it to another
+    // thread (the pipe I/O thread) cannot create shared or double ownership.
     unsafe impl Send for Handle {}
     impl Drop for Handle {
         fn drop(&mut self) {
             if self.0 != INVALID_HANDLE_VALUE && !self.0.is_invalid() {
+                // SAFETY: the handle is valid (checked just above) and owned only by this
+                // wrapper; it is closed exactly once.
                 let _ = unsafe { CloseHandle(self.0) };
             }
         }
@@ -719,6 +769,9 @@ mod windows_pipe {
     fn read_exact(handle: HANDLE, mut output: &mut [u8]) -> Result<(), TransportError> {
         while !output.is_empty() {
             let mut count = 0;
+            // SAFETY: `handle` is a valid, synchronous (non-overlapped) pipe handle owned
+            // by the caller; `output` is a live writable slice whose length bounds the
+            // read, and `count` is a live local.
             unsafe { ReadFile(handle, Some(output), Some(&mut count), None) }.map_err(win_error)?;
             let count = super::checked_io_count(count, output.len())?;
             output = &mut output[count..];
@@ -729,6 +782,9 @@ mod windows_pipe {
     fn write_all(handle: HANDLE, mut input: &[u8]) -> Result<(), TransportError> {
         while !input.is_empty() {
             let mut count = 0;
+            // SAFETY: `handle` is a valid, synchronous (non-overlapped) pipe handle owned
+            // by the caller; `input` is a live slice whose length bounds the write, and
+            // `count` is a live local.
             unsafe { WriteFile(handle, Some(input), Some(&mut count), None) }.map_err(win_error)?;
             let count = super::checked_io_count(count, input.len())?;
             input = &input[count..];
@@ -766,6 +822,9 @@ mod windows_pipe {
             lpSecurityDescriptor: security.0 .0,
             bInheritHandle: false.into(),
         };
+        // SAFETY: `name` is a NUL-terminated UTF-16 buffer and `attributes` points to
+        // the live owner-only descriptor in `security`; both outlive this call. The
+        // returned handle is checked below and then owned by `Handle`.
         let handle = unsafe {
             CreateNamedPipeW(
                 PCWSTR(name.as_ptr()),
@@ -782,12 +841,16 @@ mod windows_pipe {
             return Err(win_error(windows::core::Error::from_thread()));
         }
         let handle = Handle(handle);
+        // SAFETY: `handle.0` is the valid pipe handle created above in synchronous
+        // mode, so no OVERLAPPED structure is needed.
         if let Err(error) = unsafe { ConnectNamedPipe(handle.0, None) } {
             if error.code().0 != 0x8007_0217u32 as i32 {
                 return Err(win_error(error));
             }
         }
         let mut client_process_id = 0;
+        // SAFETY: `handle.0` is the connected pipe handle; the call writes one u32
+        // into the live local `client_process_id`.
         unsafe { GetNamedPipeClientProcessId(handle.0, &mut client_process_id) }
             .map_err(win_error)?;
         if client_process_id == 0 {
@@ -835,8 +898,10 @@ mod windows_pipe {
         let request = read_frame(handle.0)?;
         if let Some(response) = handler(client_process_id, &request)? {
             write_all(handle.0, &response)?;
+            // SAFETY: `handle.0` is the valid connected pipe handle owned by `handle`.
             unsafe { FlushFileBuffers(handle.0) }.map_err(win_error)?;
         }
+        // SAFETY: `handle.0` is still owned by `handle`, which closes it afterwards.
         let _ = unsafe { DisconnectNamedPipe(handle.0) };
         Ok(())
     }
@@ -858,9 +923,11 @@ mod windows_pipe {
             let request = read_frame(handle.0)?;
             if let Some(response) = handler(client_process_id, &request)? {
                 write_all(handle.0, &response)?;
+                // SAFETY: `handle.0` is the valid connected pipe handle owned by `handle`.
                 unsafe { FlushFileBuffers(handle.0) }.map_err(win_error)?;
             }
         }
+        // SAFETY: `handle.0` is still owned by `handle`, which closes it afterwards.
         let _ = unsafe { DisconnectNamedPipe(handle.0) };
         Ok(())
     }

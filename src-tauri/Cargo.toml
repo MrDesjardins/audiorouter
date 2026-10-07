@@ -12,6 +12,14 @@ rust-version = "1.85"
 # manifest during the disposable installer smoke.
 tauri-build = { version = "2.6.3", features = [] }
 
+[lints.clippy]
+# Every `unsafe` block and impl states its invariants in a `// SAFETY:`
+# comment (AGENTS.md, architecture rules); public unsafe fns document
+# their contract under `# Safety`. CI's `-D warnings` Clippy enforces it
+# for every target, tests and examples included.
+undocumented_unsafe_blocks = "deny"
+missing_safety_doc = "deny"
+
 [dependencies]
 audiorouter-control = { path = "../crates/control" }
 audiorouter-domain = { path = "../crates/domain" }
