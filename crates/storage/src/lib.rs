@@ -415,6 +415,146 @@ impl From<std::io::Error> for StorageError {
     }
 }
 
+/// Check a session-file destination: absolute, new, in an existing regular
+/// (non-reparse) directory, and not a link.
+fn validate_bundle_destination(destination: &std::path::Path) -> Result<(), StorageError> {
+    if !destination.is_absolute() {
+        return Err(StorageError::InvalidBackupPath(
+            "bundle destination must be absolute".into(),
+        ));
+    }
+    let parent = destination.parent().ok_or_else(|| {
+        StorageError::InvalidBackupPath("bundle destination must have a parent".into())
+    })?;
+    if !parent.is_dir() {
+        return Err(StorageError::InvalidBackupPath(
+            "bundle destination parent must exist and destination must be new".into(),
+        ));
+    }
+    let parent_metadata = std::fs::symlink_metadata(parent)?;
+    if !parent_metadata.is_dir()
+        || is_reparse_point(&parent_metadata)
+        || path_has_reparse_ancestor(destination)
+    {
+        return Err(StorageError::InvalidBackupPath(
+            "bundle destination parent must be a regular non-reparse directory".into(),
+        ));
+    }
+    if std::fs::symlink_metadata(destination).is_ok() {
+        return Err(StorageError::InvalidBackupPath(
+            "bundle destination must be new".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// One file of a session file being exported, in node order.
+enum PendingBundleFile {
+    /// Imported audio, already read from the database.
+    Bytes(String, Vec<u8>),
+    /// A saved plugin state, read from its file when the bundle is written;
+    /// left out (with its manifest entry) if that file cannot be read.
+    PluginState {
+        source: std::path::PathBuf,
+        entry: BundlePluginState,
+    },
+}
+
+/// A session file gathered from the database by
+/// [`Storage::prepare_bundle_export`]. Writing it needs no connection, so the
+/// slow part (state files, hashing, ZIP) can run off the thread that owns
+/// the storage.
+pub struct PreparedBundleExport {
+    document: String,
+    files: Vec<PendingBundleFile>,
+    media: Vec<BundleMedia>,
+    required_node_types: Vec<RequiredNodeType>,
+}
+
+impl PreparedBundleExport {
+    /// Write the `.audiorouter` ZIP to a new file. The destination rules are
+    /// those of [`Storage::export_bundle`]; a failed write removes the file.
+    pub fn write(self, destination: impl AsRef<std::path::Path>) -> Result<(), StorageError> {
+        let destination = destination.as_ref();
+        validate_bundle_destination(destination)?;
+        let Self {
+            document,
+            files: pending,
+            media,
+            required_node_types,
+        } = self;
+        let mut files: Vec<(String, Vec<u8>)> = Vec::with_capacity(pending.len());
+        let mut plugin_states = Vec::new();
+        for file in pending {
+            match file {
+                PendingBundleFile::Bytes(path, bytes) => files.push((path, bytes)),
+                PendingBundleFile::PluginState { source, entry } => {
+                    if let Ok(bytes) = std::fs::read(&source) {
+                        files.push((entry.path.clone(), bytes));
+                        plugin_states.push(entry);
+                    }
+                }
+            }
+        }
+        let assets = files
+            .iter()
+            .map(|(path, bytes)| ExportBundleAsset {
+                path: path.clone(),
+                sha256: format!("{:x}", Sha256::digest(bytes)),
+                size: bytes.len() as u64,
+            })
+            .collect();
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(destination)?;
+        let mut archive = zip::ZipWriter::new(file);
+        let manifest = ExportBundleManifest {
+            format: "audiorouter.session",
+            schema_version: 1,
+            created_with: env!("CARGO_PKG_VERSION"),
+            graph_path: "session.json",
+            assets,
+            media,
+            plugin_states,
+            required_node_types,
+        };
+        let result = (|| -> Result<(), StorageError> {
+            archive
+                .start_file("manifest.json", zip::write::SimpleFileOptions::default())
+                .map_err(|error| StorageError::InvalidBundle(error.to_string()))?;
+            archive.write_all(&serde_json::to_vec(&manifest)?)?;
+            archive
+                .start_file("session.json", zip::write::SimpleFileOptions::default())
+                .map_err(|error| StorageError::InvalidBundle(error.to_string()))?;
+            archive.write_all(document.as_bytes())?;
+            for (path, bytes) in &files {
+                archive
+                    .start_file(path.as_str(), zip::write::SimpleFileOptions::default())
+                    .map_err(|error| StorageError::InvalidBundle(error.to_string()))?;
+                archive.write_all(bytes)?;
+            }
+            archive
+                .finish()
+                .map_err(|error| StorageError::InvalidBundle(error.to_string()))?;
+            Ok(())
+        })();
+        if result.is_err() {
+            let _ = std::fs::remove_file(destination);
+        }
+        result
+    }
+}
+
+/// A session file unpacked and verified by
+/// [`Storage::stage_session_bundle`], with the assets it carries read into
+/// memory, ready for [`Storage::restore_session_bundle`].
+pub struct StagedSessionBundle {
+    session: Session,
+    media: Vec<(BundleMedia, Vec<u8>)>,
+    plugin_states: Vec<(BundlePluginState, Vec<u8>)>,
+}
+
 pub struct Storage {
     connection: Connection,
     database_path: Option<std::path::PathBuf>,
@@ -2565,33 +2705,19 @@ impl Storage {
     ) -> Result<(), StorageError> {
         validate_session_id(id)?;
         let destination = destination.as_ref();
-        if !destination.is_absolute() {
-            return Err(StorageError::InvalidBackupPath(
-                "bundle destination must be absolute".into(),
-            ));
-        }
-        let parent = destination.parent().ok_or_else(|| {
-            StorageError::InvalidBackupPath("bundle destination must have a parent".into())
-        })?;
-        if !parent.is_dir() {
-            return Err(StorageError::InvalidBackupPath(
-                "bundle destination parent must exist and destination must be new".into(),
-            ));
-        }
-        let parent_metadata = std::fs::symlink_metadata(parent)?;
-        if !parent_metadata.is_dir()
-            || is_reparse_point(&parent_metadata)
-            || path_has_reparse_ancestor(destination)
-        {
-            return Err(StorageError::InvalidBackupPath(
-                "bundle destination parent must be a regular non-reparse directory".into(),
-            ));
-        }
-        if std::fs::symlink_metadata(destination).is_ok() {
-            return Err(StorageError::InvalidBackupPath(
-                "bundle destination must be new".into(),
-            ));
-        }
+        validate_bundle_destination(destination)?;
+        self.prepare_bundle_export(id)?.write(destination)
+    }
+
+    /// The database part of [`Storage::export_bundle`]: read the session and
+    /// the imported audio it references. Reading plugin state files, hashing
+    /// and writing the ZIP are left to [`PreparedBundleExport::write`], which
+    /// needs no connection, so a caller can run it on another thread.
+    pub fn prepare_bundle_export(
+        &self,
+        id: &EntityId,
+    ) -> Result<PreparedBundleExport, StorageError> {
+        validate_session_id(id)?;
         let document = self
             .export_session(id)?
             .ok_or_else(|| StorageError::InvalidBundle("session not found".into()))?;
@@ -2616,9 +2742,9 @@ impl Storage {
         // Carry what the nodes reference so the file restores the session on
         // another computer: imported audio (Audio File, FIR Filter) and saved
         // plugin states. A missing asset is left out; the import reports it.
-        let mut files: Vec<(String, Vec<u8>)> = Vec::new();
+        let mut files = Vec::new();
         let mut media = Vec::new();
-        let mut plugin_states = Vec::new();
+        let mut state_ids: Vec<&str> = Vec::new();
         let safe_id = |id: &str| {
             !id.is_empty()
                 && id.len() <= audiorouter_domain::MAX_ENTITY_ID_BYTES
@@ -2637,7 +2763,7 @@ impl Storage {
                 if safe_id(id) && !media.iter().any(|entry: &BundleMedia| entry.id == id) {
                     if let Some((file_name, format, bytes)) = self.load_audio_media(id)? {
                         let path = format!("media/{id}");
-                        files.push((path.clone(), bytes));
+                        files.push(PendingBundleFile::Bytes(path.clone(), bytes));
                         media.push(BundleMedia {
                             id: id.into(),
                             file_name,
@@ -2652,87 +2778,43 @@ impl Storage {
                 .get("stateId")
                 .and_then(|value| value.as_str())
             {
-                if safe_id(id)
-                    && !plugin_states
-                        .iter()
-                        .any(|entry: &BundlePluginState| entry.id == id)
-                {
+                if safe_id(id) && !state_ids.contains(&id) {
                     if let Some(record) = state_records.iter().find(|record| record.id == id) {
-                        if let Ok(bytes) = std::fs::read(&record.path) {
-                            let path = format!("plugin-states/{id}.bin");
-                            files.push((path.clone(), bytes));
-                            plugin_states.push(BundlePluginState {
+                        state_ids.push(id);
+                        files.push(PendingBundleFile::PluginState {
+                            source: std::path::PathBuf::from(&record.path),
+                            entry: BundlePluginState {
                                 id: id.into(),
                                 plugin_id: record.plugin_id.clone(),
                                 plugin_sha256: record.plugin_sha256.clone(),
                                 version: record.version,
                                 state_sha256: record.state_sha256.clone(),
-                                path,
-                            });
-                        }
+                                path: format!("plugin-states/{id}.bin"),
+                            },
+                        });
                     }
                 }
             }
         }
-        let assets = files
+        let required_node_types = node_registry()
             .iter()
-            .map(|(path, bytes)| ExportBundleAsset {
-                path: path.clone(),
-                sha256: format!("{:x}", Sha256::digest(bytes)),
-                size: bytes.len() as u64,
+            .filter(|spec| {
+                exported_session
+                    .nodes
+                    .iter()
+                    .any(|node| node.kind.type_name() == spec.kind.type_name())
+            })
+            .map(|spec| RequiredNodeType {
+                type_name: spec.kind.type_name().into(),
+                version: spec.version,
             })
             .collect();
-        let file = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(destination)?;
-        let mut archive = zip::ZipWriter::new(file);
-        let manifest = ExportBundleManifest {
-            format: "audiorouter.session",
-            schema_version: 1,
-            created_with: env!("CARGO_PKG_VERSION"),
-            graph_path: "session.json",
-            assets,
+        Ok(PreparedBundleExport {
+            document,
+            files,
             media,
-            plugin_states,
-            required_node_types: node_registry()
-                .iter()
-                .filter(|spec| {
-                    exported_session
-                        .nodes
-                        .iter()
-                        .any(|node| node.kind.type_name() == spec.kind.type_name())
-                })
-                .map(|spec| RequiredNodeType {
-                    type_name: spec.kind.type_name().into(),
-                    version: spec.version,
-                })
-                .collect(),
-        };
-        let result = (|| -> Result<(), StorageError> {
-            archive
-                .start_file("manifest.json", zip::write::SimpleFileOptions::default())
-                .map_err(|error| StorageError::InvalidBundle(error.to_string()))?;
-            archive.write_all(&serde_json::to_vec(&manifest)?)?;
-            archive
-                .start_file("session.json", zip::write::SimpleFileOptions::default())
-                .map_err(|error| StorageError::InvalidBundle(error.to_string()))?;
-            archive.write_all(document.as_bytes())?;
-            for (path, bytes) in &files {
-                archive
-                    .start_file(path.as_str(), zip::write::SimpleFileOptions::default())
-                    .map_err(|error| StorageError::InvalidBundle(error.to_string()))?;
-                archive.write_all(bytes)?;
-            }
-            archive
-                .finish()
-                .map_err(|error| StorageError::InvalidBundle(error.to_string()))?;
-            Ok(())
-        })();
-        if result.is_err() {
-            let _ = std::fs::remove_file(destination);
-        }
-        result
+            required_node_types,
+        })
     }
 
     /// Validate and persist an imported session document. Validation happens
@@ -2826,6 +2908,19 @@ impl Storage {
         bundle: impl AsRef<std::path::Path>,
         staging_root: impl AsRef<std::path::Path>,
     ) -> Result<(Session, BundleImportReport), StorageError> {
+        let staged = Self::stage_session_bundle(bundle, staging_root)?;
+        self.restore_session_bundle(staged)
+    }
+
+    /// The file part of [`Storage::read_session_bundle`]: check, unpack and
+    /// hash-verify the bundle, validate its session and read the assets it
+    /// carries into memory. It needs no connection, so a caller can run it on
+    /// another thread; [`Storage::restore_session_bundle`] then applies it.
+    /// The staging copy is removed before this returns.
+    pub fn stage_session_bundle(
+        bundle: impl AsRef<std::path::Path>,
+        staging_root: impl AsRef<std::path::Path>,
+    ) -> Result<StagedSessionBundle, StorageError> {
         let bundle = bundle.as_ref();
         let staging_root = staging_root.as_ref();
         if !bundle.is_absolute() || !staging_root.is_absolute() {
@@ -2872,7 +2967,7 @@ impl Storage {
                 .as_nanos()
         ));
         std::fs::create_dir(&staging)?;
-        let result = (|| -> Result<(Session, BundleImportReport), StorageError> {
+        let result = (|| -> Result<StagedSessionBundle, StorageError> {
             let manifest = Self::stage_bundle(&mut archive, &staging)?;
             let graph = std::fs::read_to_string(staging.join(&manifest.graph_path))?;
             if graph.len() > MAX_SESSION_DOCUMENT_BYTES {
@@ -2886,98 +2981,119 @@ impl Storage {
                 StorageError::InvalidSession(format_validation_errors(&errors))
             })?;
             let listed = |path: &str| manifest.assets.iter().any(|asset| asset.path() == path);
-            let mut report = BundleImportReport::default();
-            for media in &manifest.media {
-                if !listed(&media.path) {
+            let mut media = Vec::with_capacity(manifest.media.len());
+            for entry in manifest.media {
+                if !listed(&entry.path) {
                     return Err(StorageError::InvalidBundle(format!(
                         "unlisted media: {}",
-                        media.path
+                        entry.path
                     )));
                 }
-                if self.load_audio_media(&media.id)?.is_none() {
-                    let bytes = std::fs::read(staging.join(&media.path))?;
-                    self.store_audio_media(
-                        &media.id,
-                        &media.file_name,
-                        &media.format,
-                        &bytes,
-                        None,
-                    )?;
-                    report.media_restored += 1;
-                }
+                let bytes = std::fs::read(staging.join(&entry.path))?;
+                media.push((entry, bytes));
             }
-            let existing_states = self.list_plugin_states(None)?;
-            for state in &manifest.plugin_states {
-                if !listed(&state.path) {
+            let mut plugin_states = Vec::with_capacity(manifest.plugin_states.len());
+            for entry in manifest.plugin_states {
+                if !listed(&entry.path) {
                     return Err(StorageError::InvalidBundle(format!(
                         "unlisted plugin state: {}",
-                        state.path
+                        entry.path
                     )));
                 }
-                if existing_states.iter().any(|record| record.id == state.id) {
-                    continue;
-                }
-                let Some(directory) = self.plugin_state_directory() else {
-                    report.missing_assets += 1;
-                    continue;
-                };
-                let bytes = std::fs::read(staging.join(&state.path))?;
-                let safe_name = !state.id.starts_with('.')
-                    && state
-                        .id
-                        .chars()
-                        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
-                let destination = directory.join(format!("{}.bin", state.id));
-                if !safe_name || !destination.starts_with(&directory) {
-                    return Err(StorageError::InvalidBundle(
-                        "plugin state escapes its directory".into(),
-                    ));
-                }
-                {
-                    use std::io::Write;
-                    let mut file = std::fs::OpenOptions::new()
-                        .write(true)
-                        .create_new(true)
-                        .open(&destination)?;
-                    file.write_all(&bytes)?;
-                }
-                self.save_plugin_state(&PluginStateRecord {
-                    id: state.id.clone(),
-                    plugin_id: state.plugin_id.clone(),
-                    plugin_sha256: state.plugin_sha256.clone(),
-                    version: state.version,
-                    path: destination.to_string_lossy().into_owned(),
-                    state_sha256: state.state_sha256.clone(),
-                    size_bytes: bytes.len() as u64,
-                })?;
-                report.plugin_states_restored += 1;
+                let bytes = std::fs::read(staging.join(&entry.path))?;
+                plugin_states.push((entry, bytes));
             }
-            let referenced = session
-                .nodes
-                .iter()
-                .filter(|node| {
-                    node.parameters
-                        .get("mediaId")
-                        .and_then(|value| value.as_str())
-                        .is_some_and(|id| {
-                            !manifest.media.iter().any(|media| media.id == id)
-                                && self.load_audio_media(id).ok().flatten().is_none()
-                        })
-                        || node
-                            .parameters
-                            .get("stateId")
-                            .and_then(|value| value.as_str())
-                            .is_some_and(|id| {
-                                !manifest.plugin_states.iter().any(|state| state.id == id)
-                                    && !existing_states.iter().any(|record| record.id == id)
-                            })
-                })
-                .count();
-            report.missing_assets += referenced;
-            Ok((session, report))
+            Ok(StagedSessionBundle {
+                session,
+                media,
+                plugin_states,
+            })
         })();
         let _ = std::fs::remove_dir_all(&staging);
         result
+    }
+
+    /// The database part of [`Storage::read_session_bundle`]: restore the
+    /// staged audio and plugin states that are not here yet, and count the
+    /// assets the session references but neither the file nor this database
+    /// holds. Returns the session unsaved.
+    pub fn restore_session_bundle(
+        &self,
+        staged: StagedSessionBundle,
+    ) -> Result<(Session, BundleImportReport), StorageError> {
+        let StagedSessionBundle {
+            session,
+            media,
+            plugin_states,
+        } = staged;
+        let mut report = BundleImportReport::default();
+        for (entry, bytes) in &media {
+            if self.load_audio_media(&entry.id)?.is_none() {
+                self.store_audio_media(&entry.id, &entry.file_name, &entry.format, bytes, None)?;
+                report.media_restored += 1;
+            }
+        }
+        let existing_states = self.list_plugin_states(None)?;
+        for (state, bytes) in &plugin_states {
+            if existing_states.iter().any(|record| record.id == state.id) {
+                continue;
+            }
+            let Some(directory) = self.plugin_state_directory() else {
+                report.missing_assets += 1;
+                continue;
+            };
+            let safe_name = !state.id.starts_with('.')
+                && state
+                    .id
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
+            let destination = directory.join(format!("{}.bin", state.id));
+            if !safe_name || !destination.starts_with(&directory) {
+                return Err(StorageError::InvalidBundle(
+                    "plugin state escapes its directory".into(),
+                ));
+            }
+            {
+                let mut file = std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&destination)?;
+                file.write_all(bytes)?;
+            }
+            self.save_plugin_state(&PluginStateRecord {
+                id: state.id.clone(),
+                plugin_id: state.plugin_id.clone(),
+                plugin_sha256: state.plugin_sha256.clone(),
+                version: state.version,
+                path: destination.to_string_lossy().into_owned(),
+                state_sha256: state.state_sha256.clone(),
+                size_bytes: bytes.len() as u64,
+            })?;
+            report.plugin_states_restored += 1;
+        }
+        let referenced = session
+            .nodes
+            .iter()
+            .filter(|node| {
+                node.parameters
+                    .get("mediaId")
+                    .and_then(|value| value.as_str())
+                    .is_some_and(|id| {
+                        !media.iter().any(|(entry, _)| entry.id == id)
+                            && self.load_audio_media(id).ok().flatten().is_none()
+                    })
+                    || node
+                        .parameters
+                        .get("stateId")
+                        .and_then(|value| value.as_str())
+                        .is_some_and(|id| {
+                            !plugin_states.iter().any(|(state, _)| state.id == id)
+                                && !existing_states.iter().any(|record| record.id == id)
+                        })
+            })
+            .count();
+        report.missing_assets += referenced;
+        Ok((session, report))
     }
 
     fn stage_bundle(
@@ -5674,6 +5790,71 @@ mod tests {
             "the saved session is unchanged"
         );
         drop((storage, target));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn bundle_file_work_runs_without_the_connection() {
+        // The control thread also pumps audio, so it hands the slow part of a
+        // session-file export or import (ZIP, hashing, asset files) to another
+        // thread. That part must not need the (non-Sync) connection.
+        fn assert_send<T: Send + 'static>() {}
+        assert_send::<PreparedBundleExport>();
+        assert_send::<StagedSessionBundle>();
+        let root =
+            std::env::temp_dir().join(format!("audiorouter-bundle-split-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let source = Storage::open(root.join("source.db")).unwrap();
+        let mut original = session();
+        original.nodes[0].kind = NodeKind::AudioFile;
+        original.nodes[0]
+            .parameters
+            .insert("mediaId".into(), Value::String("media-1".into()));
+        source.save_session(&original).unwrap();
+        source
+            .store_audio_media("media-1", "voice.wav", "wav", b"RIFF-voice", None)
+            .unwrap();
+        let bundle = root.join("setup.audiorouter");
+        let prepared = source.prepare_bundle_export(&original.id).unwrap();
+        let written = {
+            let bundle = bundle.clone();
+            std::thread::spawn(move || prepared.write(bundle))
+                .join()
+                .unwrap()
+        };
+        written.unwrap();
+        assert!(matches!(
+            source
+                .prepare_bundle_export(&original.id)
+                .unwrap()
+                .write(&bundle),
+            Err(StorageError::InvalidBackupPath(_))
+        ));
+
+        let staging = root.join("staging");
+        let staged = {
+            let (bundle, staging) = (bundle.clone(), staging.clone());
+            std::thread::spawn(move || Storage::stage_session_bundle(bundle, staging))
+                .join()
+                .unwrap()
+                .unwrap()
+        };
+        assert_eq!(
+            std::fs::read_dir(&staging).unwrap().count(),
+            0,
+            "staging copy removed before the database step"
+        );
+        let target = Storage::open(root.join("target.db")).unwrap();
+        let (imported, report) = target.restore_session_bundle(staged).unwrap();
+        assert_eq!(imported, original);
+        assert_eq!(report.media_restored, 1);
+        assert_eq!(report.missing_assets, 0);
+        assert_eq!(
+            target.load_audio_media("media-1").unwrap(),
+            Some(("voice.wav".into(), "wav".into(), b"RIFF-voice".to_vec()))
+        );
+        drop((source, target));
         let _ = std::fs::remove_dir_all(root);
     }
 

@@ -5915,6 +5915,159 @@ fn editor_authorization_issuer() -> &'static audiorouter_plugin_host::EditorPare
     })
 }
 
+/// What `ControlPlane::prepare_plugin_stages` gathers for one enabled plugin
+/// node before the slow part runs off the control thread.
+struct PluginStageRequest {
+    node_id: EntityId,
+    /// The binary path exactly as scanned under `configured_root`.
+    scanned_path: std::path::PathBuf,
+    configured_root: std::path::PathBuf,
+    fingerprint: String,
+    channels: usize,
+    state: Option<audiorouter_plugin_host::PluginStateAsset>,
+    parameters: Vec<audiorouter_plugin_host::ParameterEvent>,
+}
+
+/// Re-hash each plugin binary, start its worker process (one per exclusive
+/// VST2 chain), restore saved state and start the runtime bridges. Needs no
+/// control-plane state, so it can run while audio keeps being serviced. On
+/// error the bridges started so far are dropped, which stops their workers.
+fn start_plugin_bridges(
+    session: &Session,
+    worker_executable: &std::path::Path,
+    requests: Vec<PluginStageRequest>,
+    sample_rate_hz: u32,
+) -> Result<Vec<(EntityId, Arc<audiorouter_plugin_host::PluginRuntimeBridge>)>, ControlError> {
+    let mut prepared = HashMap::new();
+    for request in requests {
+        let verified = audiorouter_plugin_host::inspect_binary(
+            &request.scanned_path,
+            std::slice::from_ref(&request.configured_root),
+        )
+        .map_err(|error| {
+            ControlError::InvalidRequest(format!("plugin revalidation failed: {error:?}"))
+        })?;
+        if verified.sha256 != request.fingerprint {
+            return Err(ControlError::InvalidRequest(
+                "plugin fingerprint changed since scan".into(),
+            ));
+        }
+        prepared.insert(
+            request.node_id,
+            (
+                verified,
+                request.configured_root,
+                request.channels,
+                request.state,
+                request.parameters,
+            ),
+        );
+    }
+    let eligible = prepared
+        .iter()
+        .filter(|(id, (identity, _, _, _, _))| {
+            identity.format == audiorouter_plugin_host::PluginFormat::Vst2
+                && session
+                    .nodes
+                    .iter()
+                    .any(|node| &node.id == *id && !node.bypass)
+        })
+        .map(|(id, (_, _, channels, _, _))| (id.clone(), *channels))
+        .collect();
+    let mut started = Vec::new();
+    for group in plugin_chain_groups(session, &eligible) {
+        let members = group
+            .iter()
+            .map(|id| prepared.get(id).expect("prepared plugin group"))
+            .collect::<Vec<_>>();
+        let (verified, configured_root, channels, _, _) = members[0];
+        let mut worker = if members.len() > 1 {
+            let plugins = members.iter().map(|(identity, root, _, _, _)| audiorouter_plugin_host::WorkerChainPlugin {
+                path: identity.path.clone(), sha256: identity.sha256.clone(), configured_roots: vec![root.clone()],
+            }).collect::<Vec<_>>();
+            audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_chain(
+                worker_executable, &plugins, *channels as u16, sample_rate_hz, Instant::now())
+        } else if verified.format == audiorouter_plugin_host::PluginFormat::Vst3 {
+            #[cfg(windows)]
+            {
+                audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
+                    worker_executable,
+                    verified,
+                    std::slice::from_ref(configured_root),
+                    *channels as u16,
+                    sample_rate_hz,
+                    Instant::now(),
+                )
+            }
+            #[cfg(not(windows))]
+            {
+                return Err(ControlError::InvalidRequest(
+                    "VST3 worker activation requires Windows".into(),
+                ));
+            }
+        } else {
+            audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_with_sample_rate(
+                worker_executable,
+                verified,
+                std::slice::from_ref(configured_root),
+                *channels as u16,
+                sample_rate_hz,
+                Instant::now(),
+            )
+        }
+        .map_err(|error| ControlError::InvalidRequest(format!("plugin worker launch failed: {error:?}")))?;
+        for (index, (_, _, _, state, _)) in members.iter().enumerate() {
+            if let Some(asset) = state {
+                if members.len() > 1 {
+                    worker
+                        .select_instance(index, Instant::now())
+                        .map_err(|error| {
+                            ControlError::InvalidRequest(format!(
+                                "plugin state instance selection failed: {error:?}"
+                            ))
+                        })?;
+                }
+                worker
+                    .restore_state(asset.clone(), Instant::now())
+                    .map_err(|error| {
+                        ControlError::InvalidRequest(format!(
+                            "plugin state restore failed: {error:?}"
+                        ))
+                    })?;
+            }
+        }
+        let bridges = if members.len() > 1 {
+            audiorouter_plugin_host::PluginRuntimeBridge::start_chain(
+                worker,
+                *channels,
+                audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+                8,
+                members.len(),
+            )
+        } else {
+            audiorouter_plugin_host::PluginRuntimeBridge::start(
+                worker,
+                *channels,
+                audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+                8,
+            )
+            .map(|bridge| vec![bridge])
+        }
+        .map_err(|error| {
+            ControlError::InvalidRequest(format!("plugin runtime bridge failed: {error:?}"))
+        })?;
+        for ((id, member), bridge) in group.iter().zip(members).zip(bridges) {
+            bridge.set_parameters(member.4.clone()).map_err(|error| {
+                ControlError::InvalidRequest(format!(
+                    "plugin parameter template rejected: {error:?}"
+                ))
+            })?;
+            started.push((id.clone(), bridge));
+        }
+    }
+    Ok(started)
+}
+
 /// Group only exclusive identity edges; absorbing a branch or matrix would
 /// change which signal an intermediate graph node receives.
 fn plugin_chain_groups(
@@ -14501,30 +14654,32 @@ impl ControlPlane {
     }
 
     /// Resolve and launch only plugin identities present in the current scan
-    /// inventory. Worker creation is control-thread work; the returned stages
-    /// perform only the bounded callback handoff once the graph is published.
+    /// inventory. The scan lookup and saved state are read here; re-hashing
+    /// each binary, starting its worker process and its runtime bridge run on
+    /// a helper thread while routes that are already running keep being
+    /// serviced (the route being prepared is not published until the caller
+    /// compiles it from the returned stages). The bridges are published for
+    /// node controls only once every group started.
     fn prepare_plugin_stages(
-        &self,
+        &mut self,
         session: &Session,
         sample_rate_hz: u32,
     ) -> Result<HashMap<EntityId, Arc<dyn RealtimePluginProcessor>>, ControlError> {
         let session = audiorouter_engine::prune_unfed_upstream(session);
         let session = session.as_ref();
-        let mut stages = HashMap::new();
-        let mut prepared_bridges = Vec::new();
         if !session
             .nodes
             .iter()
             .any(|node| node.enabled && node.kind == NodeKind::Plugin)
         {
-            return Ok(stages);
+            return Ok(HashMap::new());
         }
         let worker_executable = plugin_worker_path().ok_or_else(|| {
             ControlError::InvalidRequest(plugin_worker_unavailable_message(
                 std::env::current_exe().ok().as_deref(),
             ))
         })?;
-        let mut prepared = HashMap::new();
+        let mut requests = Vec::new();
         for node in session
             .nodes
             .iter()
@@ -14563,21 +14718,8 @@ impl ControlPlane {
                         "plugin worker requires a current matching scan identity".into(),
                     )
                 })?;
-            let configured_root = std::path::PathBuf::from(root);
             // Re-inspect using the path exactly as scanned under its root.
             let scanned_path = entry.get("path").and_then(Value::as_str).unwrap_or(path);
-            let verified = audiorouter_plugin_host::inspect_binary(
-                std::path::Path::new(scanned_path),
-                std::slice::from_ref(&configured_root),
-            )
-            .map_err(|error| {
-                ControlError::InvalidRequest(format!("plugin revalidation failed: {error:?}"))
-            })?;
-            if verified.sha256 != fingerprint {
-                return Err(ControlError::InvalidRequest(
-                    "plugin fingerprint changed since scan".into(),
-                ));
-            }
             let channels = node
                 .ports
                 .iter()
@@ -14618,122 +14760,31 @@ impl ControlPlane {
                 })
                 .collect::<Vec<_>>();
             parameters.sort_by_key(|event| event.parameter_id);
-            prepared.insert(
-                node.id.clone(),
-                (verified, configured_root, channels, state, parameters),
-            );
+            requests.push(PluginStageRequest {
+                node_id: node.id.clone(),
+                scanned_path: std::path::PathBuf::from(scanned_path),
+                configured_root: std::path::PathBuf::from(root),
+                fingerprint: fingerprint.to_owned(),
+                channels,
+                state,
+                parameters,
+            });
         }
-        let eligible = prepared
-            .iter()
-            .filter(|(id, (identity, _, _, _, _))| {
-                identity.format == audiorouter_plugin_host::PluginFormat::Vst2
-                    && session
-                        .nodes
-                        .iter()
-                        .any(|node| &node.id == *id && !node.bypass)
-            })
-            .map(|(id, (_, _, channels, _, _))| (id.clone(), *channels))
-            .collect();
-        for group in plugin_chain_groups(session, &eligible) {
-            let members = group
-                .iter()
-                .map(|id| prepared.get(id).expect("prepared plugin group"))
-                .collect::<Vec<_>>();
-            let (verified, configured_root, channels, _, _) = members[0];
-            let mut worker = if members.len() > 1 {
-                let plugins = members.iter().map(|(identity, root, _, _, _)| audiorouter_plugin_host::WorkerChainPlugin {
-                    path: identity.path.clone(), sha256: identity.sha256.clone(), configured_roots: vec![root.clone()],
-                }).collect::<Vec<_>>();
-                audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_chain(
-                    &worker_executable, &plugins, *channels as u16, sample_rate_hz, Instant::now())
-            } else if verified.format == audiorouter_plugin_host::PluginFormat::Vst3 {
-                #[cfg(windows)]
-                {
-                    audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
-                        &worker_executable,
-                        verified,
-                        std::slice::from_ref(configured_root),
-                        *channels as u16,
-                        sample_rate_hz,
-                        Instant::now(),
-                    )
-                }
-                #[cfg(not(windows))]
-                {
-                    return Err(ControlError::InvalidRequest(
-                        "VST3 worker activation requires Windows".into(),
-                    ));
-                }
-            } else {
-                audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_with_sample_rate(
-                    &worker_executable,
-                    verified,
-                    std::slice::from_ref(configured_root),
-                    *channels as u16,
-                    sample_rate_hz,
-                    Instant::now(),
-                )
-            }
-            .map_err(|error| ControlError::InvalidRequest(format!("plugin worker launch failed: {error:?}")))?;
-            for (index, (_, _, _, state, _)) in members.iter().enumerate() {
-                if let Some(asset) = state {
-                    if members.len() > 1 {
-                        worker
-                            .select_instance(index, Instant::now())
-                            .map_err(|error| {
-                                ControlError::InvalidRequest(format!(
-                                    "plugin state instance selection failed: {error:?}"
-                                ))
-                            })?;
-                    }
-                    worker
-                        .restore_state(asset.clone(), Instant::now())
-                        .map_err(|error| {
-                            ControlError::InvalidRequest(format!(
-                                "plugin state restore failed: {error:?}"
-                            ))
-                        })?;
-                }
-            }
-            let bridges = if members.len() > 1 {
-                audiorouter_plugin_host::PluginRuntimeBridge::start_chain(
-                    worker,
-                    *channels,
-                    audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
-                    8,
-                    members.len(),
-                )
-            } else {
-                audiorouter_plugin_host::PluginRuntimeBridge::start(
-                    worker,
-                    *channels,
-                    audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
-                    8,
-                )
-                .map(|bridge| vec![bridge])
-            }
-            .map_err(|error| {
-                ControlError::InvalidRequest(format!("plugin runtime bridge failed: {error:?}"))
-            })?;
-            for ((id, member), bridge) in group.iter().zip(members).zip(bridges) {
-                bridge.set_parameters(member.4.clone()).map_err(|error| {
-                    ControlError::InvalidRequest(format!(
-                        "plugin parameter template rejected: {error:?}"
-                    ))
-                })?;
-                prepared_bridges.push((id.clone(), Arc::downgrade(&bridge)));
-                stages.insert(id.clone(), bridge as Arc<dyn RealtimePluginProcessor>);
-            }
-        }
+        let started = self.while_servicing_audio(|| {
+            start_plugin_bridges(session, &worker_executable, requests, sample_rate_hz)
+        })?;
         // Keep controls for the existing graph intact if any new group fails
         // preparation. Publish per-node handles only once all groups exist.
         if let Ok(mut bridges) = self.plugin_bridges.lock() {
             bridges.retain(|_, bridge| bridge.strong_count() > 0);
-            for (id, bridge) in prepared_bridges {
-                bridges.insert((session.id.clone(), id), bridge);
+            for (id, bridge) in &started {
+                bridges.insert((session.id.clone(), id.clone()), Arc::downgrade(bridge));
             }
         }
-        Ok(stages)
+        Ok(started
+            .into_iter()
+            .map(|(id, bridge)| (id, bridge as Arc<dyn RealtimePluginProcessor>))
+            .collect())
     }
 
     /// The live runtime bridge of a plugin node in a playing route.
@@ -16297,19 +16348,27 @@ impl ControlPlane {
             .storage
             .as_ref()
             .ok_or_else(|| ControlError::InvalidRequest("session storage is unavailable".into()))?;
-        if existing.is_some() {
-            // Write beside the file first so a failed export keeps the old one.
-            let staged = path.with_extension(format!("audiorouter.{}.tmp", std::process::id()));
-            let _ = std::fs::remove_file(&staged);
-            storage.export_bundle(&id, &staged).map_err(storage_error)?;
-            std::fs::rename(&staged, &path).map_err(|error| {
+        // Database reads stay here; reading plugin state files, hashing and
+        // writing the ZIP run while running routes keep being serviced.
+        let prepared = storage.prepare_bundle_export(&id).map_err(storage_error)?;
+        let replacing = existing.is_some();
+        let bytes = self.while_servicing_audio(|| -> Result<u64, ControlError> {
+            if replacing {
+                // Write beside the file first so a failed export keeps the old one.
+                let staged = path.with_extension(format!("audiorouter.{}.tmp", std::process::id()));
                 let _ = std::fs::remove_file(&staged);
-                ControlError::InvalidRequest(format!("unable to replace the session file: {error}"))
-            })?;
-        } else {
-            storage.export_bundle(&id, &path).map_err(storage_error)?;
-        }
-        let bytes = std::fs::metadata(&path).map(|meta| meta.len()).unwrap_or(0);
+                prepared.write(&staged).map_err(storage_error)?;
+                std::fs::rename(&staged, &path).map_err(|error| {
+                    let _ = std::fs::remove_file(&staged);
+                    ControlError::InvalidRequest(format!(
+                        "unable to replace the session file: {error}"
+                    ))
+                })?;
+            } else {
+                prepared.write(&path).map_err(storage_error)?;
+            }
+            Ok(std::fs::metadata(&path).map(|meta| meta.len()).unwrap_or(0))
+        })?;
         Ok(
             json!({ "sessionId": id, "path": path.to_string_lossy(), "revision": revision, "bytes": bytes }),
         )
@@ -16328,12 +16387,22 @@ impl ControlPlane {
                 "the session file does not exist".into(),
             ));
         }
+        if self.storage.is_none() {
+            return Err(ControlError::InvalidRequest(
+                "session storage is unavailable".into(),
+            ));
+        }
         let staging = std::env::temp_dir().join("audiorouter-session-import");
+        // Unpacking, hash checks and asset reads run while running routes
+        // keep being serviced; the database step stays on this thread.
+        let staged = self
+            .while_servicing_audio(|| Storage::stage_session_bundle(&path, &staging))
+            .map_err(storage_error)?;
         let (mut session, report) = self
             .storage
             .as_ref()
             .ok_or_else(|| ControlError::InvalidRequest("session storage is unavailable".into()))?
-            .read_session_bundle(&path, &staging)
+            .restore_session_bundle(staged)
             .map_err(storage_error)?;
         let mut renamed = false;
         let taken = |plane: &mut Self, id: &EntityId| {
