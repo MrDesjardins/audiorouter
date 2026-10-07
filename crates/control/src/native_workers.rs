@@ -1347,3 +1347,7 @@ impl ControlPlane {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "native_workers_tests.rs"]
+mod tests;

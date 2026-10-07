@@ -664,3 +664,7 @@ impl ControlPlane {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "recording_library_tests.rs"]
+mod tests;

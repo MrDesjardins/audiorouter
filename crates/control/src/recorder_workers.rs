@@ -1889,3 +1889,7 @@ pub(crate) fn drain_before_recorder_pause(
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "recorder_workers_tests.rs"]
+mod tests;

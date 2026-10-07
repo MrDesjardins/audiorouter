@@ -1354,3 +1354,7 @@ impl ControlPlane {
         Ok(result)
     }
 }
+
+#[cfg(test)]
+#[path = "sessions_tests.rs"]
+mod tests;

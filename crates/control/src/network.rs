@@ -386,3 +386,7 @@ impl ControlPlane {
         Ok(changed)
     }
 }
+
+#[cfg(test)]
+#[path = "network_tests.rs"]
+mod tests;

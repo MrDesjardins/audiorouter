@@ -454,3 +454,7 @@ impl ControlPlane {
         Ok(json!({ "frequenciesHz": frequencies, "magnitudeDb": magnitude_db }))
     }
 }
+
+#[cfg(test)]
+#[path = "catalog_tests.rs"]
+mod tests;

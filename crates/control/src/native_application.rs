@@ -813,3 +813,7 @@ impl ControlPlane {
         changed
     }
 }
+
+#[cfg(test)]
+#[path = "native_application_tests.rs"]
+mod tests;

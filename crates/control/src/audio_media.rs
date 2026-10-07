@@ -597,3 +597,7 @@ impl ControlPlane {
             "loop": source.is_looping() }))
     }
 }
+
+#[cfg(test)]
+#[path = "audio_media_tests.rs"]
+mod tests;

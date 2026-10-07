@@ -693,3 +693,7 @@ impl ControlPlane {
         Ok(result)
     }
 }
+
+#[cfg(test)]
+#[path = "safety_tests.rs"]
+mod tests;

@@ -444,3 +444,7 @@ impl ControlPlane {
         }))
     }
 }
+
+#[cfg(test)]
+#[path = "audio_service_tests.rs"]
+mod tests;

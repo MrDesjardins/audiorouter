@@ -1289,3 +1289,7 @@ impl ControlPlane {
         }))
     }
 }
+
+#[cfg(test)]
+#[path = "recording_tests.rs"]
+mod tests;

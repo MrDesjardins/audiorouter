@@ -922,3 +922,7 @@ impl ControlPlane {
         Ok(result)
     }
 }
+
+#[cfg(test)]
+#[path = "virtual_devices_tests.rs"]
+mod tests;

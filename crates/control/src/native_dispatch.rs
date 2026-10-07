@@ -1368,3 +1368,7 @@ impl ControlPlane {
         Ok(affected)
     }
 }
+
+#[cfg(test)]
+#[path = "native_dispatch_tests.rs"]
+mod tests;

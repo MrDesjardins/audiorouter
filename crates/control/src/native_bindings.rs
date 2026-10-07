@@ -897,3 +897,7 @@ impl ControlPlane {
             .into_controller())
     }
 }
+
+#[cfg(test)]
+#[path = "native_bindings_tests.rs"]
+mod tests;

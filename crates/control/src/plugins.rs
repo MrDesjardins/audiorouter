@@ -1317,3 +1317,7 @@ impl ControlPlane {
         }))
     }
 }
+
+#[cfg(test)]
+#[path = "plugins_tests.rs"]
+mod tests;

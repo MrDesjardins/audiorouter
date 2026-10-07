@@ -586,3 +586,7 @@ impl ControlPlane {
         Ok(result)
     }
 }
+
+#[cfg(test)]
+#[path = "authorization_tests.rs"]
+mod tests;

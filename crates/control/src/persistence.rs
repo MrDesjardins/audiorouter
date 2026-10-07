@@ -687,3 +687,7 @@ impl ControlPlane {
         Ok(result)
     }
 }
+
+#[cfg(test)]
+#[path = "persistence_tests.rs"]
+mod tests;

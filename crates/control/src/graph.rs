@@ -783,3 +783,7 @@ impl ControlPlane {
         Ok(json!({ "planId": plan_id, "baseRevision": base_revision, "expiresInMs": 300000 }))
     }
 }
+
+#[cfg(test)]
+#[path = "graph_tests.rs"]
+mod tests;
