@@ -10,3 +10,6 @@
 *.cat
 /ui/dist-review-*/
 /.env
+
+# Agent worktrees (Claude Code)
+.claude/worktrees/
