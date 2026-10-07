@@ -65,6 +65,24 @@ and a place in the [active plan](../active/current.md).
 | [P2-8](#p2-8-no-coverage-or-soak-automation) | P2 | Tests | No coverage reports; soak and startup NFRs are manual |
 | [P3-1](#p3-1-smaller-items) | P3 | Mixed | Smaller cleanups |
 
+## Status: P0 and P1 fixed (2026-10-07, user request "Fix all P0 and P1")
+
+All P0 and P1 items were fixed on branch `claude/zealous-archimedes-fz1lbv`.
+The details are in the [active plan](../active/current.md#code-review-p0-and-p1-fixes-2026-10-07-user-request).
+P2 and P3 remain a backlog.
+
+| ID | Fix | Commit | What remains |
+| --- | --- | --- | --- |
+| P0-1 | Plug-in scan/inspect and audio decoding run on a worker while the control thread keeps servicing audio every 1 ms | `2cae3569` | Plug-in worker start and re-hash at Play, and bundle export/import, still run inline |
+| P0-2 | Four pipe instances; I/O threads survive bad connections; clients wait up to 2 s on a busy pipe | `72aa0731` | — |
+| P0-3 | The production loop logs RPCs through a bounded queue to a writer thread | `f8440b20` | — |
+| P1-1 | Successful 20 Hz polls are not logged; the log mutex wait is bounded (250 ms); panic hook uses `try_lock` | `f8440b20` | — |
+| P1-2 | Counting-allocator test: zero allocations for every tool and layout; `benches/realtime.rs` | `9b1ac2ea` | A bare route costs ~23 µs per quantum whatever the tool (see P2-7) |
+| P1-3 | WAL, `synchronous=NORMAL`, 2 s busy timeout, `BEGIN IMMEDIATE` writes | `69ab047c` | — |
+| P1-4 | `windows-audio` tests run in CI (device tests ignored); new Playwright job in Edge | `e3621dcc` | Backend-fixture browser tests are first run by that job |
+| P1-5 | 38 task-level MCP tools by default, `--advanced-tools` for the rest; bad lines get -32700; refusal without `--pipe` while the app runs | `0fa970f0` | — |
+| P1-6 | Error boundaries around the canvas, inspector and side panel, plus a root recovery panel with privacy mute | `8477b97a` | — |
+
 ## P0 — fix first
 
 ### P0-1 Blocking work runs on the audio service thread
