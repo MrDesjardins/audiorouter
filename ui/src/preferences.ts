@@ -9,12 +9,18 @@ export function readLastSession(storage: Pick<Storage, "getItem"> | null): strin
   try {
     const value = storage?.getItem(LAST_SESSION_KEY);
     return value && value.length <= 256 && value.trim() === value ? value : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 export function writeLastSession(storage: Pick<Storage, "setItem"> | null, sessionId: string): void {
   if (!sessionId || sessionId.length > 256 || sessionId.trim() !== sessionId) return;
-  try { storage?.setItem(LAST_SESSION_KEY, sessionId); } catch { /* Optional workspace preference. */ }
+  try {
+    storage?.setItem(LAST_SESSION_KEY, sessionId);
+  } catch {
+    /* Optional workspace preference. */
+  }
 }
 
 /** Moving lights on live connections: always, only while AudioRouter is the
@@ -26,11 +32,17 @@ export function readFlowAnimation(storage: Pick<Storage, "getItem"> | null): Flo
   try {
     const value = storage?.getItem(FLOW_ANIMATION_KEY);
     return value === "focus" || value === "off" ? value : "on";
-  } catch { return "on"; }
+  } catch {
+    return "on";
+  }
 }
 
 export function writeFlowAnimation(storage: Pick<Storage, "setItem"> | null, mode: FlowAnimationMode): void {
-  try { storage?.setItem(FLOW_ANIMATION_KEY, mode); } catch { /* Optional presentation preference. */ }
+  try {
+    storage?.setItem(FLOW_ANIMATION_KEY, mode);
+  } catch {
+    /* Optional presentation preference. */
+  }
 }
 
 export function readTheme(storage: Pick<Storage, "getItem"> | null): ThemeMode {
@@ -60,7 +72,11 @@ export function readShortcuts(storage: Pick<Storage, "getItem"> | null, fallback
 }
 
 export function writeShortcuts(storage: Pick<Storage, "setItem"> | null, binding: ShortcutBinding): void {
-  try { storage?.setItem(SHORTCUT_KEY, JSON.stringify(binding)); } catch { /* Optional presentation preference. */ }
+  try {
+    storage?.setItem(SHORTCUT_KEY, JSON.stringify(binding));
+  } catch {
+    /* Optional presentation preference. */
+  }
 }
 
 const SIDEBAR_WIDTH_KEY = "audiorouter.ui.sidebar-width";
@@ -77,9 +93,15 @@ export function readSidebarWidth(storage: Pick<Storage, "getItem"> | null): numb
   try {
     const value = storage?.getItem(SIDEBAR_WIDTH_KEY);
     return value ? clampSidebarWidth(Number(value)) : DEFAULT_SIDEBAR_WIDTH;
-  } catch { return DEFAULT_SIDEBAR_WIDTH; }
+  } catch {
+    return DEFAULT_SIDEBAR_WIDTH;
+  }
 }
 
 export function writeSidebarWidth(storage: Pick<Storage, "setItem"> | null, width: number): void {
-  try { storage?.setItem(SIDEBAR_WIDTH_KEY, String(clampSidebarWidth(width))); } catch { /* Optional layout preference. */ }
+  try {
+    storage?.setItem(SIDEBAR_WIDTH_KEY, String(clampSidebarWidth(width)));
+  } catch {
+    /* Optional layout preference. */
+  }
 }

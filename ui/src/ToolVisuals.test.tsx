@@ -4,21 +4,47 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { Node } from "@audiorouter/contracts";
 import { createDisconnectedBackend } from "./backend";
-import { BassTrebleEditor, DehumEditor, DelayEditor, GraphicEqEditor, InputSwitchEditor, LevelEditor, PitchEditor, StrengthEditor, dehumMagnitudeDb } from "./ToolVisuals";
+import {
+  BassTrebleEditor,
+  DehumEditor,
+  DelayEditor,
+  GraphicEqEditor,
+  InputSwitchEditor,
+  LevelEditor,
+  PitchEditor,
+  StrengthEditor,
+  dehumMagnitudeDb,
+} from "./ToolVisuals";
 import { formatParameterValue } from "./parameterText";
 
 afterEach(cleanup);
 
 const node = (kind: Node["kind"], parameters: Node["parameters"] = {}): Node => ({
-  id: `${kind}-1`, kind, typeVersion: 1, name: `${kind} 1`, enabled: true, bypass: false, parameters,
-  ports: [{ name: "in", direction: "input", channels: 2 }, { name: "out", direction: "output", channels: 2 }],
+  id: `${kind}-1`,
+  kind,
+  typeVersion: 1,
+  name: `${kind} 1`,
+  enabled: true,
+  bypass: false,
+  parameters,
+  ports: [
+    { name: "in", direction: "input", channels: 2 },
+    { name: "out", direction: "output", channels: 2 },
+  ],
 });
 
 describe("tool visual editors", () => {
   it("Graphic EQ: faders, exact band entry and presets change only differing bands", async () => {
     const onChange = vi.fn();
     const processorResponse = vi.fn(async () => ({ frequenciesHz: [20, 20000], magnitudeDb: [0, 0] }));
-    render(<GraphicEqEditor node={node("graphicEq", { band5Db: 3 })} backend={{ ...createDisconnectedBackend(), connected: true, processorResponse } as never} disabled={false} onChange={onChange} />);
+    render(
+      <GraphicEqEditor
+        node={node("graphicEq", { band5Db: 3 })}
+        backend={{ ...createDisconnectedBackend(), connected: true, processorResponse } as never}
+        disabled={false}
+        onChange={onChange}
+      />,
+    );
     expect(screen.getAllByRole("slider")).toHaveLength(10);
     fireEvent.change(screen.getByRole("slider", { name: "4 kHz band" }), { target: { value: "-4.5" } });
     expect(onChange).toHaveBeenLastCalledWith("band7Db", -4.5);
@@ -26,15 +52,29 @@ describe("tool visual editors", () => {
     expect(onChange).toHaveBeenLastCalledWith("band5Db", 0);
     onChange.mockClear();
     fireEvent.click(screen.getByRole("button", { name: "Cut rumble" }));
-    expect(onChange.mock.calls).toEqual([["band0Db", -12], ["band1Db", -8], ["band2Db", -3], ["band5Db", 0]]);
+    expect(onChange.mock.calls).toEqual([
+      ["band0Db", -12],
+      ["band1Db", -8],
+      ["band2Db", -3],
+      ["band5Db", 0],
+    ]);
     await waitFor(() => expect(processorResponse).toHaveBeenCalled());
-    const request = (processorResponse.mock.calls[0] as unknown as [{ bands: Array<{ type: string; q: number; frequencyHz: number }> }])[0];
+    const request = (
+      processorResponse.mock.calls[0] as unknown as [{ bands: Array<{ type: string; q: number; frequencyHz: number }> }]
+    )[0];
     expect(request.bands[5]).toMatchObject({ type: "peaking", q: 1.4, frequencyHz: 1000 });
   });
 
   it("Bass & Treble: keyboard handles move level and frequency within range", () => {
     const onChange = vi.fn();
-    render(<BassTrebleEditor node={node("bassTreble", { bassDb: 0, trebleDb: 11.5, bassFrequencyHz: 500, trebleFrequencyHz: 1500 })} backend={null} disabled={false} onChange={onChange} />);
+    render(
+      <BassTrebleEditor
+        node={node("bassTreble", { bassDb: 0, trebleDb: 11.5, bassFrequencyHz: 500, trebleFrequencyHz: 1500 })}
+        backend={null}
+        disabled={false}
+        onChange={onChange}
+      />,
+    );
     fireEvent.keyDown(screen.getByRole("slider", { name: "Bass shelf" }), { key: "ArrowUp" });
     expect(onChange).toHaveBeenLastCalledWith("bassDb", 0.5);
     fireEvent.keyDown(screen.getByRole("slider", { name: "Bass shelf" }), { key: "ArrowRight", shiftKey: true });
@@ -54,7 +94,13 @@ describe("tool visual editors", () => {
     expect(dehumMagnitudeDb(300, 60, 100, 4)).toBeGreaterThan(-0.5); // 5th harmonic not cut
     expect(dehumMagnitudeDb(60, 60, 0, 4)).toBe(0);
     const onChange = vi.fn();
-    render(<DehumEditor node={node("dehum", { frequencyHz: 60, amountPercent: 50, harmonics: 4 })} disabled={false} onChange={onChange} />);
+    render(
+      <DehumEditor
+        node={node("dehum", { frequencyHz: 60, amountPercent: 50, harmonics: 4 })}
+        disabled={false}
+        onChange={onChange}
+      />,
+    );
     expect(screen.getByText("18 dB")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "50 Hz" }));
     expect(onChange).toHaveBeenLastCalledWith("frequencyHz", 50);
@@ -65,7 +111,10 @@ describe("tool visual editors", () => {
     render(<PitchEditor node={node("pitch", { semitones: 0, cents: 20 })} disabled={false} onChange={onChange} />);
     expect(screen.getByText(/×1\.012/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "−12" }));
-    expect(onChange.mock.calls).toEqual([["semitones", -12], ["cents", 0]]);
+    expect(onChange.mock.calls).toEqual([
+      ["semitones", -12],
+      ["cents", 0],
+    ]);
   });
 
   it("Delay, Volume and Gain explain the value in other units", () => {
@@ -87,9 +136,26 @@ describe("tool visual editors", () => {
 
   it("Input Switch names its sources and Strength editors offer named strengths", () => {
     const onChange = vi.fn();
-    const switchNode = { ...node("inputSwitch", { selected: "a", fade: "normal" }), ports: [{ name: "a", direction: "input" as const, channels: 2 as const }, { name: "b", direction: "input" as const, channels: 2 as const }, { name: "out", direction: "output" as const, channels: 2 as const }] };
+    const switchNode = {
+      ...node("inputSwitch", { selected: "a", fade: "normal" }),
+      ports: [
+        { name: "a", direction: "input" as const, channels: 2 as const },
+        { name: "b", direction: "input" as const, channels: 2 as const },
+        { name: "out", direction: "output" as const, channels: 2 as const },
+      ],
+    };
     const game = { ...node("physicalInput"), id: "game", name: "Game capture" };
-    render(<InputSwitchEditor node={switchNode} session={{ nodes: [switchNode, game], edges: [{ sourceNode: "game", destinationNode: switchNode.id, destinationPort: "b", enabled: true }] }} disabled={false} onChange={onChange} />);
+    render(
+      <InputSwitchEditor
+        node={switchNode}
+        session={{
+          nodes: [switchNode, game],
+          edges: [{ sourceNode: "game", destinationNode: switchNode.id, destinationPort: "b", enabled: true }],
+        }}
+        disabled={false}
+        onChange={onChange}
+      />,
+    );
     const b = screen.getByRole("radio", { name: /B\s*Game capture/ });
     expect(b.getAttribute("aria-checked")).toBe("false");
     fireEvent.click(b);

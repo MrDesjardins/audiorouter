@@ -434,6 +434,10 @@ impl NativeBridgeSectionHandle {
         }
         let path = path_ref.to_string_lossy();
         let mut wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+        // SAFETY: `wide` is a NUL-terminated UTF-16 copy of the path that outlives
+        // this synchronous call; no security attributes or template handle are
+        // passed. On success the returned file handle is owned here and is closed
+        // on every error path below or by `Drop` once moved into `Self`.
         let file = unsafe {
             CreateFileW(
                 PCWSTR(wide.as_mut_ptr()),
@@ -446,14 +450,19 @@ impl NativeBridgeSectionHandle {
             )?
         };
         let mut file_size = 0_i64;
+        // SAFETY: `file` is the valid handle opened above and `file_size` is a live
+        // local the call writes exactly one i64 into.
         let size_result = unsafe { GetFileSizeEx(file, &mut file_size) };
         if let Err(error) = size_result {
+            // SAFETY: `file` is owned by this function and not yet stored anywhere;
+            // closing it once on this error path ends that ownership.
             unsafe {
                 let _ = windows::Win32::Foundation::CloseHandle(file);
             }
             return Err(error);
         }
         if file_size < 0 || (file_size as u64) < u64::from(mapping_bytes) {
+            // SAFETY: as above, the owned `file` is closed exactly once before returning.
             unsafe {
                 let _ = windows::Win32::Foundation::CloseHandle(file);
             }
@@ -463,6 +472,10 @@ impl NativeBridgeSectionHandle {
             ));
         }
         let size_high = 0;
+        // SAFETY: `file` is a valid read/write handle and was checked above to be at
+        // least `mapping_bytes` long, so the section never extends the file; no
+        // security attributes or name are passed. On failure the owned `file` is
+        // closed once; on success both handles move into `Self` and `Drop`.
         let section = unsafe {
             match CreateFileMappingW(
                 file,
@@ -508,6 +521,9 @@ impl NativeBridgeSectionHandle {
                 "mapping range outside section",
             ));
         }
+        // SAFETY: `self.section` is the live section handle owned by `self` and was
+        // created for exactly `mapping_bytes`; the read-only view of that length is
+        // unmapped below before this function returns.
         let view = unsafe {
             MapViewOfFile(
                 self.section,
@@ -538,6 +554,9 @@ impl NativeBridgeSectionHandle {
 #[cfg(windows)]
 impl Drop for NativeBridgeSectionHandle {
     fn drop(&mut self) {
+        // SAFETY: both handles were created by `create`/`open` and are owned only by
+        // this value; each is closed exactly once here. Unmapped views never outlive
+        // `read_bytes`, so no view still references the section.
         unsafe {
             let _ = windows::Win32::Foundation::CloseHandle(self.section);
             let _ = windows::Win32::Foundation::CloseHandle(self.file);
@@ -1690,6 +1709,9 @@ impl NativeBridgeControlClient {
             CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_NONE, OPEN_EXISTING,
         };
         let mut wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+        // SAFETY: `wide` is a NUL-terminated UTF-16 copy of `path` alive for the
+        // call; no security attributes or template are passed. The returned handle
+        // is owned by `Self` and closed exactly once by `Drop`.
         let handle = unsafe {
             CreateFileW(
                 PCWSTR(wide.as_mut_ptr()),
@@ -1823,6 +1845,12 @@ impl NativeBridgeControlClient {
     fn ioctl<T>(&self, code: u32, request: &T) -> Result<(), windows::core::Error> {
         use windows::Win32::System::IO::DeviceIoControl;
         let mut returned = 0;
+        // SAFETY: `self.handle` is the device handle owned by this client. Every
+        // caller passes a `#[repr(C)]` request struct (`NativeBridgeOpenRequest` or
+        // `NativeBridgeOpenRequestEx`) by reference, so the input pointer is valid
+        // for `size_of::<T>()` readable bytes during this synchronous
+        // (non-overlapped) call; no output buffer is supplied and `returned` is a
+        // live local.
         unsafe {
             DeviceIoControl(
                 self.handle,
@@ -1842,6 +1870,8 @@ impl NativeBridgeControlClient {
 #[cfg(windows)]
 impl Drop for NativeBridgeControlClient {
     fn drop(&mut self) {
+        // SAFETY: `self.handle` was returned by `CreateFileW` in `open`, is owned only
+        // by this client, and is closed exactly once here.
         unsafe {
             let _ = windows::Win32::Foundation::CloseHandle(self.handle);
         }
@@ -4155,6 +4185,8 @@ fn capture_initialize_operation(event_driven: bool) -> &'static str {
 
 impl Drop for EventHandle {
     fn drop(&mut self) {
+        // SAFETY: the event handle was returned by a successful `CreateEventW` and is
+        // owned only by this wrapper; it is closed exactly once here.
         unsafe {
             let _ = windows::Win32::Foundation::CloseHandle(self.0);
         }
@@ -4163,6 +4195,9 @@ impl Drop for EventHandle {
 
 impl ComApartment {
     fn initialize() -> Result<Self, AudioError> {
+        // SAFETY: CoInitializeEx takes no pointers (the reserved argument is None).
+        // `Self` is constructed only when it succeeds (S_OK or S_FALSE), so every
+        // `ComApartment` owes exactly one balancing `CoUninitialize` on this thread.
         unsafe {
             windows::Win32::System::Com::CoInitializeEx(
                 None,
@@ -4176,6 +4211,10 @@ impl ComApartment {
 
 impl Drop for ComApartment {
     fn drop(&mut self) {
+        // SAFETY: this value exists only after a successful `CoInitializeEx` on this
+        // thread. It is always the last field of a `!Send` owner (COM interface
+        // wrappers are `!Send`), so it drops on the initializing thread after the
+        // owner's interfaces have been released.
         unsafe { windows::Win32::System::Com::CoUninitialize() }
     }
 }
@@ -4188,6 +4227,9 @@ pub struct SharedCapture {
     client: windows::Win32::Media::Audio::IAudioClient,
     capture: windows::Win32::Media::Audio::IAudioCaptureClient,
     endpoint_id: String,
+    /// `nBlockAlign` of the format the stream was initialized with: the
+    /// largest per-frame stride a packet copy may read from WASAPI memory.
+    stream_bytes_per_frame: usize,
     started: bool,
     event: Option<EventHandle>,
     _com: ComApartment,
@@ -4201,6 +4243,9 @@ pub struct SharedRender {
     render: windows::Win32::Media::Audio::IAudioRenderClient,
     endpoint_id: String,
     buffer_size: u32,
+    /// `nBlockAlign` of the format the stream was initialized with: the
+    /// largest per-frame stride a submit may write into WASAPI memory.
+    stream_bytes_per_frame: usize,
     started: bool,
     event: EventHandle,
     _com: ComApartment,
@@ -4278,6 +4323,12 @@ impl windows::Win32::Media::Audio::IActivateAudioInterfaceCompletionHandler_Impl
     ) -> windows::core::Result<()> {
         let mut activation_result = windows::core::HRESULT(0);
         let mut activated_interface = None;
+        // SAFETY: `operation` is the async operation Windows passes for the duration
+        // of this callback; `activation_result` and `activated_interface` are live
+        // locals it writes. On success `into_raw` transfers the single owned
+        // reference to the waiting thread, which rebuilds it with `from_raw` exactly
+        // once. The handler is agile (`#[implement]` objects are free-threaded), so
+        // running on a Windows MTA worker thread is permitted.
         let result = unsafe {
             match operation.ok().and_then(|operation| {
                 operation.GetActivateResult(&mut activation_result, &mut activated_interface)
@@ -4381,6 +4432,8 @@ impl ProcessLoopbackCapture {
             },
         };
         let blob_size = std::mem::size_of::<AUDIOCLIENT_ACTIVATION_PARAMS>();
+        // SAFETY: CoTaskMemAlloc has no preconditions; a null result is checked
+        // before use and a non-null block is owned by `CoTaskMemBlob` below.
         let blob_data = unsafe { CoTaskMemAlloc(blob_size) };
         if blob_data.is_null() {
             return Err(AudioError::Windows(windows::core::Error::new(
@@ -4389,6 +4442,9 @@ impl ProcessLoopbackCapture {
             )));
         }
         let blob_owner = CoTaskMemBlob(blob_data);
+        // SAFETY: `blob_data` is a non-null CoTaskMemAlloc block of exactly
+        // `blob_size` bytes, the source is the live local `activation_params` of the
+        // same size, and the fresh allocation cannot overlap a stack value.
         unsafe {
             std::ptr::copy_nonoverlapping(
                 std::ptr::addr_of!(activation_params).cast::<u8>(),
@@ -4431,6 +4487,11 @@ impl ProcessLoopbackCapture {
             _property: property,
             _blob: blob_owner,
         };
+        // SAFETY: the PROPVARIANT, its blob, the handler and (after this call) the
+        // operation all live in `activation_lifetime`, whose address is stable here.
+        // Every exit before the completion callback has run leaks that owner with
+        // `mem::forget`, so Windows can still read the activation parameters and
+        // call the handler. COM is initialized for this thread by `com`.
         let operation = unsafe {
             ActivateAudioInterfaceAsync(
                 VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK,
@@ -4494,6 +4555,9 @@ impl ProcessLoopbackCapture {
                 error,
             })?;
         drop(state);
+        // SAFETY: `client_address` is the non-null pointer the completion callback
+        // obtained with `into_raw`; it carries one owned reference that is taken over
+        // here exactly once (the callback stores it only once and `take` removed it).
         let client_unknown =
             unsafe { windows::core::IUnknown::from_raw(client_address as *mut std::ffi::c_void) };
         let client: IAudioClient =
@@ -4510,9 +4574,14 @@ impl ProcessLoopbackCapture {
         // request here starves a 48 kHz Mixer even with silent app audio.
         let format = process_loopback_format();
         let bytes_per_frame = usize::from(format.nBlockAlign);
+        // SAFETY: no security attributes or name are passed; the returned handle is
+        // owned by `EventHandle` and closed by its `Drop`.
         let event = EventHandle(unsafe {
             windows::Win32::System::Threading::CreateEventW(None, false, false, None)?
         });
+        // SAFETY: `client` is the activated, not yet initialized audio client and
+        // `format` is a live local PCM `WAVEFORMATEX` (cbSize 0) that the call only
+        // reads; no session GUID is passed. COM is initialized on this thread.
         let initialized = unsafe {
             client.Initialize(
                 AUDCLNT_SHAREMODE_SHARED,
@@ -4529,7 +4598,11 @@ impl ProcessLoopbackCapture {
             operation: "IAudioClient::Initialize(process-loopback)",
             error,
         })?;
+        // SAFETY: `event.0` is a live event handle owned by `event`, which is stored
+        // in `Self` and therefore outlives the client that signals it.
         unsafe { client.SetEventHandle(event.0)? };
+        // SAFETY: the client was initialized above; GetService returns a new owned
+        // interface reference.
         let capture: windows::Win32::Media::Audio::IAudioCaptureClient =
             unsafe { client.GetService()? };
         let ProcessLoopbackActivationLifetime {
@@ -4539,6 +4612,10 @@ impl ProcessLoopbackCapture {
             _blob: blob,
         } = activation_lifetime;
         std::mem::forget(blob);
+        // SAFETY: the completion callback has run, so Windows no longer reads the
+        // PROPVARIANT. PropVariantClear frees the VT_BLOB data with CoTaskMemFree,
+        // which is why `blob` was forgotten first (one free, not two). `property` is
+        // a live local the call may write.
         unsafe {
             windows::Win32::System::Com::StructuredStorage::PropVariantClear(
                 std::ptr::addr_of_mut!(property),
@@ -4559,6 +4636,8 @@ impl ProcessLoopbackCapture {
     }
 
     pub fn start(&mut self) -> Result<(), AudioError> {
+        // SAFETY: `self.client` is the initialized client owned by `self`; this
+        // `!Send` value is used on the thread whose MTA `_com` keeps initialized.
         unsafe { self.client.Start()? };
         self.started = true;
         Ok(())
@@ -4576,6 +4655,8 @@ impl ProcessLoopbackCapture {
     /// does not inspect or alter endpoint state.
     pub fn wait_for_data(&self, timeout_ms: u32) -> Result<bool, AudioError> {
         saturating_increment(&self.telemetry.wait_calls);
+        // SAFETY: `self.event.0` is the live event handle owned by `self`; the wait
+        // is bounded by the caller's timeout and touches no memory.
         let result = unsafe {
             windows::Win32::System::Threading::WaitForSingleObject(self.event.0, timeout_ms)
         };
@@ -4613,6 +4694,9 @@ impl ProcessLoopbackCapture {
     /// WASAPI pointer escapes this method, and silent packets are represented
     /// by zero-filled caller storage.
     pub fn read_packet(&self, destination: &mut [u8]) -> Result<Option<CapturePacket>, AudioError> {
+        // SAFETY: `self.capture` is the capture service of the initialized client
+        // owned by `self`, used on its COM-initialized thread; the call only writes
+        // the returned packet size.
         let frames = unsafe { self.capture.GetNextPacketSize()? };
         if frames == 0 {
             return Ok(None);
@@ -4622,6 +4706,8 @@ impl ProcessLoopbackCapture {
         let mut flags = 0;
         let mut device_position = 0;
         let mut qpc_position = 0;
+        // SAFETY: every out pointer refers to a live local. On success Windows lends
+        // `data` until the matching ReleaseBuffer, which every path below issues.
         unsafe {
             self.capture.GetBuffer(
                 &mut data,
@@ -4632,6 +4718,7 @@ impl ProcessLoopbackCapture {
             )?;
         }
         if validate_process_loopback_packet_frames(packet_frames).is_err() {
+            // SAFETY: returns the packet acquired by the successful GetBuffer above.
             unsafe { self.capture.ReleaseBuffer(packet_frames)? };
             saturating_increment(&self.telemetry.rejected_packets);
             return Err(AudioError::InvalidFrameSize);
@@ -4640,6 +4727,7 @@ impl ProcessLoopbackCapture {
             .checked_mul(self.bytes_per_frame)
             .ok_or(AudioError::InvalidFrameSize)?;
         if required > destination.len() {
+            // SAFETY: returns the packet acquired by the successful GetBuffer above.
             unsafe { self.capture.ReleaseBuffer(packet_frames)? };
             return Err(AudioError::BufferTooSmall {
                 required,
@@ -4649,6 +4737,11 @@ impl ProcessLoopbackCapture {
         if flags & windows::Win32::Media::Audio::AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 {
             destination[..required].fill(0);
         } else {
+            // SAFETY: `data` is the borrowed packet from GetBuffer, holding
+            // `packet_frames` frames of the requested PCM format, whose block size is
+            // `self.bytes_per_frame`, so it has `required` readable bytes. `required`
+            // was checked against `destination.len()` above, and device memory cannot
+            // overlap the caller's slice.
             unsafe {
                 std::ptr::copy_nonoverlapping(
                     data.cast::<u8>(),
@@ -4657,6 +4750,8 @@ impl ProcessLoopbackCapture {
                 );
             }
         }
+        // SAFETY: returns the packet acquired by GetBuffer; `data` is not used after
+        // this call.
         unsafe { self.capture.ReleaseBuffer(packet_frames)? };
         saturating_increment(&self.telemetry.packets);
         let _ = self
@@ -4715,10 +4810,13 @@ impl ProcessLoopbackCapture {
         // caller's retry cannot issue a second Stop against a lost client.
         let stop_result = if self.started {
             self.started = false;
+            // SAFETY: `self.client` is the initialized client owned by `self`, used on
+            // its COM-initialized thread.
             unsafe { self.client.Stop() }.map_err(AudioError::from)
         } else {
             Ok(())
         };
+        // SAFETY: as above; Reset is valid on a stopped (or never started) client.
         let reset_result = unsafe { self.client.Reset() }.map_err(AudioError::from);
         stop_result.and(reset_result)
     }
@@ -4951,14 +5049,22 @@ impl SharedCapture {
         use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
         let com = ComApartment::initialize()?;
+        // SAFETY: COM is initialized on this thread by `com`, which outlives every
+        // interface created below because it is stored last in `Self` (or dropped
+        // last on an error path). The call writes a new owned interface reference.
         let enumerator: IMMDeviceEnumerator =
             unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)? };
         let flow = if loopback { eRender } else { eCapture };
+        // SAFETY: `enumerator` is a live interface on this COM-initialized thread.
         let devices = unsafe { enumerator.EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE)? };
+        // SAFETY: `devices` is the live collection returned above.
         let count = unsafe { devices.GetCount()? };
         let mut selected = None;
         for index in 0..count {
+            // SAFETY: `index` is below the collection's own count.
             let device = unsafe { devices.Item(index)? };
+            // SAFETY: `device` is a live endpoint; `GetId` returns an owned PWSTR that
+            // the windows crate wrapper copies and frees.
             let id = unsafe {
                 device
                     .GetId()?
@@ -4976,8 +5082,12 @@ impl SharedCapture {
                 "capture endpoint not found",
             ))
         })?;
+        // SAFETY: `device` is a live endpoint on this COM-initialized thread; no
+        // activation parameters are passed.
         let client: IAudioClient = unsafe { device.Activate(CLSCTX_ALL, None)? };
         let event = if event_driven {
+            // SAFETY: no security attributes or name are passed; the handle is owned by
+            // `EventHandle`.
             Some(EventHandle(unsafe {
                 windows::Win32::System::Threading::CreateEventW(None, false, false, None)?
             }))
@@ -4986,10 +5096,16 @@ impl SharedCapture {
         };
         // Create the event before requesting the COM-allocated format so an
         // event-creation failure cannot leak the format buffer.
+        // SAFETY: the client is activated; on success the returned WAVEFORMATEX is a
+        // CoTaskMem allocation owned here and freed once below.
         let format = unsafe { client.GetMixFormat()? };
         // SAFETY: `format` is the non-null COM allocation GetMixFormat just
         // returned; it is exclusively ours until the CoTaskMemFree below.
         let resampled = unsafe { request_sample_rate(format, sample_rate_hz) };
+        // SAFETY: `format` is the same live, non-null mix-format allocation;
+        // reading one field does not retain it. The stream is initialized with
+        // this format, so its block size bounds every packet copy.
+        let stream_bytes_per_frame = usize::from(unsafe { (*format).nBlockAlign });
         let stream_flags = if event_driven {
             AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
                 | AUDCLNT_STREAMFLAGS_EVENTCALLBACK
@@ -5005,6 +5121,9 @@ impl SharedCapture {
         } else {
             0
         };
+        // SAFETY: `format` is the live mix-format allocation (possibly with its rate
+        // changed in place) and is freed only after both Initialize attempts; no
+        // session GUID is passed.
         let initialized = unsafe {
             client.Initialize(
                 AUDCLNT_SHAREMODE_SHARED,
@@ -5030,23 +5149,31 @@ impl SharedCapture {
                 .err()
                 .is_some_and(|error| error.code().0 == 0x80070057u32 as i32)
         {
+            // SAFETY: same client and live `format` allocation as the first attempt.
             unsafe { client.Initialize(AUDCLNT_SHAREMODE_SHARED, stream_flags, 0, 0, format, None) }
         } else {
             initialized
         };
+        // SAFETY: `format` came from GetMixFormat, is not used after this point, and
+        // is freed exactly once here.
         unsafe { windows::Win32::System::Com::CoTaskMemFree(Some(format.cast())) };
         initialized.map_err(|error| AudioError::WindowsOperation {
             operation: capture_initialize_operation(event_driven),
             error,
         })?;
         if let Some(event) = &event {
+            // SAFETY: the event handle is owned by `event`, which is stored in `Self`
+            // alongside the client and so outlives every signal.
             unsafe { client.SetEventHandle(event.0)? };
         }
+        // SAFETY: the client was initialized above; the call returns a new owned
+        // interface reference.
         let capture: IAudioCaptureClient = unsafe { client.GetService()? };
         Ok(Self {
             client,
             capture,
             endpoint_id: endpoint_id.to_owned(),
+            stream_bytes_per_frame,
             started: false,
             event,
             _com: com,
@@ -5054,12 +5181,15 @@ impl SharedCapture {
     }
 
     pub fn start(&mut self) -> Result<(), AudioError> {
+        // SAFETY: `self.client` is the initialized client owned by `self`, used on
+        // its COM-initialized thread.
         unsafe { self.client.Start()? };
         self.started = true;
         Ok(())
     }
 
     pub fn next_packet(&self) -> Result<Option<CapturePacket>, AudioError> {
+        // SAFETY: `self.capture` is the live capture service owned by `self`.
         let frames = unsafe { self.capture.GetNextPacketSize()? };
         if frames == 0 {
             return Ok(None);
@@ -5069,6 +5199,8 @@ impl SharedCapture {
         let mut flags = 0;
         let mut device_position = 0;
         let mut qpc_position = 0;
+        // SAFETY: every out pointer refers to a live local; the packet is returned at
+        // once without reading `data`.
         unsafe {
             self.capture.GetBuffer(
                 &mut data,
@@ -5098,9 +5230,12 @@ impl SharedCapture {
     ) -> Result<Option<(CapturePacket, usize)>, AudioError> {
         use windows::Win32::Media::Audio::AUDCLNT_BUFFERFLAGS_SILENT;
 
-        if bytes_per_frame == 0 {
+        // A stride above the stream's own block size would copy past the end
+        // of the borrowed WASAPI packet.
+        if bytes_per_frame == 0 || bytes_per_frame > self.stream_bytes_per_frame {
             return Err(AudioError::InvalidFrameSize);
         }
+        // SAFETY: `self.capture` is the live capture service owned by `self`.
         let frames = unsafe { self.capture.GetNextPacketSize()? } as usize;
         if frames == 0 {
             return Ok(None);
@@ -5119,6 +5254,12 @@ impl SharedCapture {
         let mut flags = 0;
         let mut device_position = 0;
         let mut qpc_position = 0;
+        // SAFETY: the out pointers refer to live locals. The borrowed packet is
+        // released on every path. The copy reads `packet_bytes` from `data`, which
+        // holds `packet_frames` frames of the stream format: `bytes_per_frame` was
+        // checked above to be at most that format's block size, and `packet_bytes`
+        // was checked against `destination.len()`. Device memory cannot overlap the
+        // caller's slice.
         unsafe {
             self.capture.GetBuffer(
                 &mut data,
@@ -5179,6 +5320,7 @@ impl SharedCapture {
                 .checked_add(std::time::Duration::from_millis(u64::from(timeout_ms)))
                 .unwrap_or_else(std::time::Instant::now);
             loop {
+                // SAFETY: `self.capture` is the live capture service owned by `self`.
                 if unsafe { self.capture.GetNextPacketSize()? } != 0 {
                     return Ok(true);
                 }
@@ -5188,6 +5330,8 @@ impl SharedCapture {
                 std::thread::sleep(std::time::Duration::from_millis(1));
             }
         };
+        // SAFETY: `event.0` is the live event handle owned by `self`; the wait is
+        // bounded by the caller's timeout.
         let result =
             unsafe { windows::Win32::System::Threading::WaitForSingleObject(event.0, timeout_ms) };
         if result == windows::Win32::Foundation::WAIT_OBJECT_0 {
@@ -5205,10 +5349,13 @@ impl SharedCapture {
         // unreleased. The local flag is cleared before the COM call.
         let stop_result = if self.started {
             self.started = false;
+            // SAFETY: `self.client` is the initialized client owned by `self`, used on
+            // its COM-initialized thread.
             unsafe { self.client.Stop() }.map_err(AudioError::from)
         } else {
             Ok(())
         };
+        // SAFETY: as above; Reset is valid on a stopped (or never started) client.
         let reset_result = unsafe { self.client.Reset() }.map_err(AudioError::from);
         stop_result.and(reset_result)
     }
@@ -5365,13 +5512,21 @@ impl SharedRender {
         use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
         let com = ComApartment::initialize()?;
+        // SAFETY: COM is initialized on this thread by `com`, which outlives every
+        // interface created below because it is stored last in `Self` (or dropped
+        // last on an error path). The call writes a new owned interface reference.
         let enumerator: IMMDeviceEnumerator =
             unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)? };
+        // SAFETY: `enumerator` is a live interface on this COM-initialized thread.
         let devices = unsafe { enumerator.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE)? };
+        // SAFETY: `devices` is the live collection returned above.
         let count = unsafe { devices.GetCount()? };
         let mut selected = None;
         for index in 0..count {
+            // SAFETY: `index` is below the collection's own count.
             let device = unsafe { devices.Item(index)? };
+            // SAFETY: `device` is a live endpoint; `GetId` returns an owned PWSTR that
+            // the windows crate wrapper copies and frees.
             let id = unsafe {
                 device
                     .GetId()?
@@ -5389,16 +5544,29 @@ impl SharedRender {
                 "render endpoint not found",
             ))
         })?;
+        // SAFETY: `device` is a live endpoint on this COM-initialized thread; no
+        // activation parameters are passed.
         let client: IAudioClient = unsafe { device.Activate(CLSCTX_ALL, None)? };
+        // SAFETY: no security attributes or name are passed; the handle is owned by
+        // `EventHandle`.
         let event = EventHandle(unsafe {
             windows::Win32::System::Threading::CreateEventW(None, false, false, None)?
         });
         // Create the event before requesting the COM-allocated format so an
         // event-creation failure cannot leak the format buffer.
+        // SAFETY: the client is activated; on success the returned WAVEFORMATEX is a
+        // CoTaskMem allocation owned here and freed once below.
         let format = unsafe { client.GetMixFormat()? };
         // SAFETY: `format` is the non-null COM allocation GetMixFormat just
         // returned; it is exclusively ours until the CoTaskMemFree below.
         let resampled = unsafe { request_sample_rate(format, sample_rate_hz) };
+        // SAFETY: `format` is the same live, non-null mix-format allocation;
+        // reading one field does not retain it. The stream is initialized with
+        // this format, so its block size bounds every packet copy.
+        let stream_bytes_per_frame = usize::from(unsafe { (*format).nBlockAlign });
+        // SAFETY: `format` is the live mix-format allocation (possibly with its rate
+        // changed in place) and is freed only after this call; no session GUID is
+        // passed.
         let initialized = unsafe {
             client.Initialize(
                 AUDCLNT_SHAREMODE_SHARED,
@@ -5416,19 +5584,27 @@ impl SharedRender {
                 None,
             )
         };
+        // SAFETY: `format` came from GetMixFormat, is not used after this point, and
+        // is freed exactly once here.
         unsafe { windows::Win32::System::Com::CoTaskMemFree(Some(format.cast())) };
         initialized.map_err(|error| AudioError::WindowsOperation {
             operation: "IAudioClient::Initialize(render)",
             error,
         })?;
+        // SAFETY: the event handle is owned by `event`, which is stored in `Self`
+        // alongside the client and so outlives every signal.
         unsafe { client.SetEventHandle(event.0)? };
+        // SAFETY: the client was initialized above; the call only returns a count.
         let buffer_size = unsafe { client.GetBufferSize()? };
+        // SAFETY: the client was initialized above; the call returns a new owned
+        // interface reference.
         let render: IAudioRenderClient = unsafe { client.GetService()? };
         Ok(Self {
             client,
             render,
             endpoint_id: endpoint_id.to_owned(),
             buffer_size,
+            stream_bytes_per_frame,
             started: false,
             event,
             _com: com,
@@ -5441,6 +5617,8 @@ impl SharedRender {
     }
 
     pub fn start(&mut self) -> Result<(), AudioError> {
+        // SAFETY: `self.client` is the initialized client owned by `self`, used on
+        // its COM-initialized thread.
         unsafe { self.client.Start()? };
         self.started = true;
         Ok(())
@@ -5448,11 +5626,15 @@ impl SharedRender {
 
     /// Submit all currently available frames as silence and return that count.
     pub fn submit_silence(&self) -> Result<u32, AudioError> {
+        // SAFETY: `self.client` is the initialized client owned by `self`.
         let padding = unsafe { self.client.GetCurrentPadding()? };
         let available = self.buffer_size.saturating_sub(padding);
         if available == 0 {
             return Ok(0);
         }
+        // SAFETY: `available` frames fit in the device buffer (capacity minus
+        // padding). The borrowed buffer is not touched and is released at once with
+        // the SILENT flag, so no uninitialized memory is ever played.
         unsafe {
             let _data = self.render.GetBuffer(available)?;
             self.render.ReleaseBuffer(
@@ -5469,9 +5651,15 @@ impl SharedRender {
     /// This method never allocates and never submits more than the available
     /// device capacity.
     pub fn submit_bytes(&self, source: &[u8], bytes_per_frame: usize) -> Result<u32, AudioError> {
-        if bytes_per_frame == 0 || source.len() % bytes_per_frame != 0 {
+        // A stride above the stream's own block size would write past the
+        // end of the borrowed WASAPI buffer.
+        if bytes_per_frame == 0
+            || bytes_per_frame > self.stream_bytes_per_frame
+            || source.len() % bytes_per_frame != 0
+        {
             return Err(AudioError::InvalidFrameSize);
         }
+        // SAFETY: `self.client` is the initialized client owned by `self`.
         let padding = unsafe { self.client.GetCurrentPadding()? };
         let available = self.buffer_size.saturating_sub(padding);
         let source_frames = u32::try_from(source.len() / bytes_per_frame)
@@ -5481,6 +5669,11 @@ impl SharedRender {
             return Ok(0);
         }
         let bytes = frames as usize * bytes_per_frame;
+        // SAFETY: GetBuffer lends `frames` frames of the stream format, where
+        // `frames` is at most the free capacity. `bytes_per_frame` was checked above
+        // to be at most the stream's block size and `source` holds at least `bytes`
+        // bytes, so the copy stays inside both buffers, which cannot overlap. The
+        // buffer is released before returning.
         unsafe {
             let data = self.render.GetBuffer(frames)?;
             std::ptr::copy_nonoverlapping(source.as_ptr(), data.cast::<u8>(), bytes);
@@ -5490,6 +5683,8 @@ impl SharedRender {
     }
 
     pub fn wait_for_data(&self, timeout_ms: u32) -> Result<bool, AudioError> {
+        // SAFETY: `self.event.0` is the live event handle owned by `self`; the wait
+        // is bounded by the caller's timeout.
         let result = unsafe {
             windows::Win32::System::Threading::WaitForSingleObject(self.event.0, timeout_ms)
         };
@@ -5507,10 +5702,13 @@ impl SharedRender {
         // retaining a stale started flag after any Stop failure.
         let stop_result = if self.started {
             self.started = false;
+            // SAFETY: `self.client` is the initialized client owned by `self`, used on
+            // its COM-initialized thread.
             unsafe { self.client.Stop() }.map_err(AudioError::from)
         } else {
             Ok(())
         };
+        // SAFETY: as above; Reset is valid on a stopped (or never started) client.
         let reset_result = unsafe { self.client.Reset() }.map_err(AudioError::from);
         stop_result.and(reset_result)
     }
@@ -7363,6 +7561,9 @@ impl EndpointNotificationSubscription {
         use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
         let com = ComApartment::initialize()?;
+        // SAFETY: COM is initialized on this thread by `com`, which is stored last in
+        // `Self` and so outlives the enumerator and callback. The call writes a new
+        // owned interface reference.
         let enumerator: IMMDeviceEnumerator =
             unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)? };
         let dirty = Arc::new(AtomicBool::new(false));
@@ -7370,6 +7571,8 @@ impl EndpointNotificationSubscription {
             dirty: Arc::clone(&dirty),
         })
         .into();
+        // SAFETY: `callback` is a live COM object; `Self` keeps both it and the
+        // enumerator alive until `Drop` unregisters it.
         unsafe { enumerator.RegisterEndpointNotificationCallback(&callback)? };
         Ok(Self {
             enumerator,
@@ -7387,6 +7590,9 @@ impl EndpointNotificationSubscription {
 
 impl Drop for EndpointNotificationSubscription {
     fn drop(&mut self) {
+        // SAFETY: the callback was registered on this enumerator in `start`, and both
+        // references are still owned by `self`; `_com` has not been dropped yet
+        // because fields drop only after this body runs.
         unsafe {
             let _ = self
                 .enumerator
@@ -7460,6 +7666,9 @@ impl EndpointMonitor {
 
 /// Enumerate active capture and render endpoints without opening streams.
 pub fn enumerate_active_endpoints() -> Result<Vec<EndpointInfo>, AudioError> {
+    // SAFETY: CoInitializeEx takes no pointers. CoUninitialize runs only after it
+    // succeeded, and only after `enumerate_after_com_init` has returned, so every
+    // COM interface it created has been released; the result holds Rust data.
     unsafe {
         let initialized = windows::Win32::System::Com::CoInitializeEx(
             None,
@@ -7477,6 +7686,9 @@ pub fn enumerate_active_endpoints() -> Result<Vec<EndpointInfo>, AudioError> {
 /// stream, change defaults, or reserve an endpoint. A role with no assigned
 /// device is omitted while the remaining roles are still reported.
 pub fn enumerate_default_endpoint_bindings() -> Result<Vec<DefaultEndpointBinding>, AudioError> {
+    // SAFETY: CoInitializeEx takes no pointers. CoUninitialize runs only after it
+    // succeeded, and only after the helper has returned and released every COM
+    // interface it created.
     unsafe {
         let initialized = windows::Win32::System::Com::CoInitializeEx(
             None,
@@ -7492,6 +7704,9 @@ pub fn enumerate_default_endpoint_bindings() -> Result<Vec<DefaultEndpointBindin
 /// Read bounded friendly names for the active endpoint snapshot. Names are
 /// presentation only and never participate in endpoint identity or binding.
 pub fn enumerate_active_endpoint_display_info() -> Result<Vec<EndpointDisplayInfo>, AudioError> {
+    // SAFETY: CoInitializeEx takes no pointers. CoUninitialize runs only after it
+    // succeeded, and only after the helper has returned and released every COM
+    // interface it created.
     unsafe {
         let initialized = windows::Win32::System::Com::CoInitializeEx(
             None,
@@ -7508,6 +7723,9 @@ pub fn enumerate_active_endpoint_display_info() -> Result<Vec<EndpointDisplayInf
 /// This metadata-only inventory deliberately does not activate clients or
 /// query mix formats, because disabled and unplugged devices may reject both.
 pub fn enumerate_endpoint_states() -> Result<Vec<EndpointStateInfo>, AudioError> {
+    // SAFETY: CoInitializeEx takes no pointers. CoUninitialize runs only after it
+    // succeeded, and only after the helper has returned and released every COM
+    // interface it created.
     unsafe {
         let initialized = windows::Win32::System::Com::CoInitializeEx(
             None,
@@ -7536,6 +7754,13 @@ pub fn enumerate_applications() -> Result<Vec<ApplicationInfo>, AudioError> {
     };
     use windows_core::PWSTR;
 
+    // SAFETY: `snapshot` is a valid ToolHelp handle owned here and closed below.
+    // `entry` has `dwSize` set as Process32FirstW/NextW require and is a live
+    // local. Each process handle comes from a successful OpenProcess and is
+    // closed in the same closure. `path_buffer` is a live allocation of
+    // `path_length` u16 elements, and the call writes at most that many and
+    // updates the count, which bounds the slice. The FILETIME out values are
+    // live locals.
     unsafe {
         let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)?;
         let mut entry = PROCESSENTRY32W {
@@ -7627,6 +7852,10 @@ pub fn enumerate_application_audio() -> Result<Vec<ApplicationAudioInfo>, AudioE
     };
     use windows_core::Interface;
 
+    // SAFETY: CoInitializeEx takes no pointers, and CoUninitialize runs only after
+    // the closure has returned, so every interface it created has been dropped.
+    // Each COM call uses a live interface on this thread. GetDisplayName returns
+    // a CoTaskMem string that is read and then freed exactly once.
     unsafe {
         let initialized = CoInitializeEx(None, COINIT_MULTITHREADED);
         initialized.ok()?;
@@ -8957,7 +9186,15 @@ pub struct NativeBridgeRealtimeWriter {
 // The writer's Rust mapping and scratch are exclusively owned by the writer;
 // `in_use` admits only one callback at a time. The other mapping participant
 // is the external kernel reader, coordinated by the bridge seqlock protocol.
+// SAFETY: the region mapping and scratch buffer are owned by the writer and
+// reached only through `UnsafeCell`s; every access happens inside the
+// `in_use` compare-exchange guard, so at most one thread touches them at a
+// time. The mapping stays alive as long as the writer. The other party
+// (the kernel reader) coordinates through the bridge seqlock, not through
+// Rust references.
 unsafe impl Send for NativeBridgeRealtimeWriter {}
+// SAFETY: see `Send` above: shared `&self` access is serialized by `in_use`,
+// and every other field is atomic or immutable after construction.
 unsafe impl Sync for NativeBridgeRealtimeWriter {}
 
 impl NativeBridgeRealtimeWriter {
@@ -9311,6 +9548,7 @@ mod tests {
         };
         // A 96 kHz 7.1 float mix is asked for at 48 kHz: only the rate changes.
         let mut format = mix(96_000);
+        // SAFETY: `format` is a live, exclusively borrowed local WAVEFORMATEX.
         assert!(unsafe { request_sample_rate(&mut format, Some(48_000)) });
         let (rate, bytes, channels, align) = (
             format.nSamplesPerSec,
@@ -9322,11 +9560,13 @@ mod tests {
         // Already at the rate, no request, or an implausible rate: unchanged, no SRC flag.
         for request in [Some(48_000), None, Some(7_999), Some(192_001)] {
             let mut format = mix(48_000);
+            // SAFETY: `format` is a live, exclusively borrowed local WAVEFORMATEX.
             assert!(!unsafe { request_sample_rate(&mut format, request) });
             let rate = format.nSamplesPerSec;
             assert_eq!(rate, 48_000);
         }
         let mut format = mix(44_100);
+        // SAFETY: `format` is a live, exclusively borrowed local WAVEFORMATEX.
         assert!(unsafe { request_sample_rate(&mut format, Some(48_000)) });
     }
 
@@ -12066,6 +12306,10 @@ mod tests {
             "producers see the same acknowledgement"
         );
         // Simulate the driver-written counters and check each field offset.
+        // SAFETY: the mapping is `region.map.len()` bytes and stays alive with
+        // `region`; no other reference into it is live while `raw` is used (the
+        // temporary header slices above have ended, and `counters` runs after the
+        // loop), and the test is single-threaded with no driver attached.
         let raw = unsafe {
             std::slice::from_raw_parts_mut(region.map.as_ptr() as *mut u8, region.map.len())
         };

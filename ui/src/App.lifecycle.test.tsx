@@ -7,10 +7,25 @@ import { createDisconnectedBackend } from "./backend";
 import { demoSession } from "./fixtures";
 
 beforeAll(() => {
-  Object.defineProperty(window, "DOMMatrixReadOnly", { configurable: true, value: class { m22 = 1; } });
-  Object.defineProperty(globalThis, "ResizeObserver", { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } });
+  Object.defineProperty(window, "DOMMatrixReadOnly", {
+    configurable: true,
+    value: class {
+      m22 = 1;
+    },
+  });
+  Object.defineProperty(globalThis, "ResizeObserver", {
+    configurable: true,
+    value: class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  });
 });
-afterEach(() => { cleanup(); window.localStorage.clear(); });
+afterEach(() => {
+  cleanup();
+  window.localStorage.clear();
+});
 
 async function fixture(savedSession = demoSession) {
   const disconnected = createDisconnectedBackend();
@@ -18,64 +33,162 @@ async function fixture(savedSession = demoSession) {
   let committed = structuredClone(savedSession);
   let planned = committed;
   let wake: (result: EventsSubscribeResult) => void = () => {};
-  const pending = new Promise<EventsSubscribeResult>((resolve) => { wake = resolve; });
+  const pending = new Promise<EventsSubscribeResult>((resolve) => {
+    wake = resolve;
+  });
   const backend = {
-    ...disconnected, connected: true,
+    ...disconnected,
+    connected: true,
     snapshot: vi.fn(async () => structuredClone({ ...initial, session: committed })),
     listSessions: vi.fn(async () => [structuredClone(committed)]),
     subscribe: vi.fn(() => pending),
-    refreshDiagnostics: vi.fn(async (): Promise<DiagnosticsSnapshot> => ({ ...initial.diagnostics, nativeSessionId: demoSession.id, nativeAdapter: "configured-stopped", nativeAdapterKind: "endpoint" })),
+    refreshDiagnostics: vi.fn(async (): Promise<DiagnosticsSnapshot> => ({
+      ...initial.diagnostics,
+      nativeSessionId: demoSession.id,
+      nativeAdapter: "configured-stopped",
+      nativeAdapterKind: "endpoint",
+    })),
     planGraph: vi.fn(async (candidate: typeof demoSession) => {
       planned = structuredClone(candidate);
-      return { planId: "reviewed-plan", baseRevision: candidate.revision, expiresInMs: 60000, diff: [], affectedDestinations: [], warnings: [], requiredScopes: [] };
+      return {
+        planId: "reviewed-plan",
+        baseRevision: candidate.revision,
+        expiresInMs: 60000,
+        diff: [],
+        affectedDestinations: [],
+        warnings: [],
+        requiredScopes: [],
+      };
     }),
-    commitGraph: vi.fn(async () => { committed = { ...planned, revision: planned.revision + 1 }; return { sessionId: committed.id, revision: committed.revision }; }),
-    startSession: vi.fn(async () => ({ sessionId: demoSession.id, state: "running" as const, generation: 1, runtime: "native" as const })),
-    rebindNativeEndpoint: vi.fn(async (sessionId: string, captureEndpointId: string, renderEndpointId: string) => ({ sessionId, state: "configured-stopped" as const, captureEndpointId, renderEndpointId })),
-    stopSession: vi.fn(async () => ({ sessionId: demoSession.id, state: "stopped" as const, runtime: "native" as const, recorders: [] })),
+    commitGraph: vi.fn(async () => {
+      committed = { ...planned, revision: planned.revision + 1 };
+      return { sessionId: committed.id, revision: committed.revision };
+    }),
+    startSession: vi.fn(async () => ({
+      sessionId: demoSession.id,
+      state: "running" as const,
+      generation: 1,
+      runtime: "native" as const,
+    })),
+    rebindNativeEndpoint: vi.fn(async (sessionId: string, captureEndpointId: string, renderEndpointId: string) => ({
+      sessionId,
+      state: "configured-stopped" as const,
+      captureEndpointId,
+      renderEndpointId,
+    })),
+    stopSession: vi.fn(async () => ({
+      sessionId: demoSession.id,
+      state: "stopped" as const,
+      runtime: "native" as const,
+      recorders: [],
+    })),
   };
-  return { backend, changeSaved: () => { committed = { ...committed, name: "Changed externally", revision: committed.revision + 1 }; }, refresh: () => wake({ backendEpoch: 1, events: [], nextSequence: 1, resyncRequired: true }) };
+  return {
+    backend,
+    changeSaved: () => {
+      committed = { ...committed, name: "Changed externally", revision: committed.revision + 1 };
+    },
+    refresh: () => wake({ backendEpoch: 1, events: [], nextSequence: 1, resyncRequired: true }),
+  };
 }
 
 const sessionPanel = () => within(document.querySelector<HTMLElement>(".right-workbench")!);
 const messageBar = () => within(document.querySelector<HTMLElement>(".global-action-message")!);
-function addGain() { fireEvent.click(screen.getByRole("tab", { name: "Tools" })); fireEvent.click(sessionPanel().getByRole("button", { name: /^Gain / })); }
+function addGain() {
+  fireEvent.click(screen.getByRole("tab", { name: "Tools" }));
+  fireEvent.click(sessionPanel().getByRole("button", { name: /^Gain / }));
+}
 // The top bar's Play (the removed hidden lifecycle panel had the same handler).
-function start() { fireEvent.click(within(document.querySelector(".topbar") as HTMLElement).getByRole("button", { name: /^Play$/ })); }
+function start() {
+  fireEvent.click(within(document.querySelector(".topbar") as HTMLElement).getByRole("button", { name: /^Play$/ }));
+}
 
 async function renderReady(element: Parameters<typeof render>[0]) {
   let view!: ReturnType<typeof render>;
-  await act(async () => { view = render(element); });
+  await act(async () => {
+    view = render(element);
+  });
   return view;
 }
 
 describe("session refresh and playback regressions", () => {
   it("rebinds a stopped native worker to the selected endpoints before Play", async () => {
     const { backend } = await fixture();
-    window.localStorage.setItem(`audiorouter.ui.endpoint-binding.${demoSession.id}`, JSON.stringify({ captureEndpointId: "voicemeeter-b1", renderEndpointId: "focusrite" }));
+    window.localStorage.setItem(
+      `audiorouter.ui.endpoint-binding.${demoSession.id}`,
+      JSON.stringify({ captureEndpointId: "voicemeeter-b1", renderEndpointId: "focusrite" }),
+    );
     await renderReady(<App backend={backend} />);
     await waitFor(() => expect(backend.listSessions).toHaveBeenCalled());
     start();
     await waitFor(() => expect(backend.startSession).toHaveBeenCalled());
     expect(backend.rebindNativeEndpoint).toHaveBeenCalledWith(demoSession.id, "voicemeeter-b1", "focusrite");
-    expect(backend.rebindNativeEndpoint.mock.invocationCallOrder[0]).toBeLessThan(backend.startSession.mock.invocationCallOrder[0]);
+    expect(backend.rebindNativeEndpoint.mock.invocationCallOrder[0]).toBeLessThan(
+      backend.startSession.mock.invocationCallOrder[0],
+    );
   });
 
-  const pathNode = (id: string, kind: "physicalInput" | "physicalOutput" | "gain", endpointId?: string): typeof demoSession.nodes[number] => ({
-    id, kind, typeVersion: 1, name: id, enabled: true, bypass: false, parameters: endpointId ? { endpointId } : kind === "gain" ? { gainDb: 0 } : {},
-    ports: kind === "physicalInput" ? [{ name: "out", direction: "output", channels: 2 }] : kind === "physicalOutput" ? [{ name: "in", direction: "input", channels: 2 }] : [{ name: "in", direction: "input", channels: 2 }, { name: "out", direction: "output", channels: 2 }],
+  const pathNode = (
+    id: string,
+    kind: "physicalInput" | "physicalOutput" | "gain",
+    endpointId?: string,
+  ): (typeof demoSession.nodes)[number] => ({
+    id,
+    kind,
+    typeVersion: 1,
+    name: id,
+    enabled: true,
+    bypass: false,
+    parameters: endpointId ? { endpointId } : kind === "gain" ? { gainDb: 0 } : {},
+    ports:
+      kind === "physicalInput"
+        ? [{ name: "out", direction: "output", channels: 2 }]
+        : kind === "physicalOutput"
+          ? [{ name: "in", direction: "input", channels: 2 }]
+          : [
+              { name: "in", direction: "input", channels: 2 },
+              { name: "out", direction: "output", channels: 2 },
+            ],
   });
-  const pathEdge = (id: string, sourceNode: string, destinationNode: string) => ({ id, sourceNode, sourcePort: "out", destinationNode, destinationPort: "in", matrix: [1, 0, 0, 1], enabled: true });
+  const pathEdge = (id: string, sourceNode: string, destinationNode: string) => ({
+    id,
+    sourceNode,
+    sourcePort: "out",
+    destinationNode,
+    destinationPort: "in",
+    matrix: [1, 0, 0, 1],
+    enabled: true,
+  });
   const voiceAndGame = (scarlett?: string): typeof demoSession => ({
     ...demoSession,
     name: "Patrick Main Session",
-    nodes: [pathNode("mic", "physicalInput", "pd200x"), pathNode("voice", "gain"), pathNode("cable-a", "physicalOutput", "cable-a-input"), pathNode("cable-b", "physicalInput", "cable-b-output"), pathNode("game-eq", "gain"), pathNode("scarlett", "physicalOutput", scarlett)],
-    edges: [pathEdge("e1", "mic", "voice"), pathEdge("e2", "voice", "cable-a"), pathEdge("e3", "cable-b", "game-eq"), pathEdge("e4", "game-eq", "scarlett")],
+    nodes: [
+      pathNode("mic", "physicalInput", "pd200x"),
+      pathNode("voice", "gain"),
+      pathNode("cable-a", "physicalOutput", "cable-a-input"),
+      pathNode("cable-b", "physicalInput", "cable-b-output"),
+      pathNode("game-eq", "gain"),
+      pathNode("scarlett", "physicalOutput", scarlett),
+    ],
+    edges: [
+      pathEdge("e1", "mic", "voice"),
+      pathEdge("e2", "voice", "cable-a"),
+      pathEdge("e3", "cable-b", "game-eq"),
+      pathEdge("e4", "game-eq", "scarlett"),
+    ],
   });
 
   it("plays a saved session with independent paths through one multi-path preparation", async () => {
     const { backend } = await fixture(voiceAndGame("focusrite"));
-    const prepareNativePaths = vi.fn(async (sessionId: string) => ({ sessionId, generation: 1, state: "configured-stopped" as const, pathCount: 2, sourceNodeIds: ["mic", "cable-b"], branchNodeIds: ["cable-a", "scarlett"], renderEndpointIds: ["cable-a-input", "focusrite"] }));
+    const prepareNativePaths = vi.fn(async (sessionId: string) => ({
+      sessionId,
+      generation: 1,
+      state: "configured-stopped" as const,
+      pathCount: 2,
+      sourceNodeIds: ["mic", "cable-b"],
+      branchNodeIds: ["cable-a", "scarlett"],
+      renderEndpointIds: ["cable-a-input", "focusrite"],
+    }));
     const prepareNativeEndpoint = vi.fn();
     await renderReady(<App backend={{ ...backend, prepareNativePaths, prepareNativeEndpoint }} />);
     await waitFor(() => expect(backend.listSessions).toHaveBeenCalled());
@@ -83,15 +196,35 @@ describe("session refresh and playback regressions", () => {
     start();
     await waitFor(() => expect(backend.startSession).toHaveBeenCalledWith(demoSession.id, expect.any(String)));
     expect(prepareNativePaths).toHaveBeenCalledWith(demoSession.id);
-    expect(prepareNativePaths.mock.invocationCallOrder[0]).toBeLessThan(backend.startSession.mock.invocationCallOrder[0]);
+    expect(prepareNativePaths.mock.invocationCallOrder[0]).toBeLessThan(
+      backend.startSession.mock.invocationCallOrder[0],
+    );
     expect(prepareNativeEndpoint).not.toHaveBeenCalled();
     expect(backend.rebindNativeEndpoint).not.toHaveBeenCalled();
   });
 
   it("plays a saved Test Signal route to its chosen output without any input device", async () => {
-    const tone = { ...pathNode("tone", "physicalInput"), kind: "testSignal" as const, name: "Tone", parameters: { frequencyHz: 440 } };
-    const { backend } = await fixture({ ...demoSession, name: "Tone check", nodes: [tone, pathNode("speakers", "physicalOutput", "focusrite")], edges: [pathEdge("e1", "tone", "speakers")] });
-    const prepareNativePaths = vi.fn(async (sessionId: string) => ({ sessionId, generation: 1, state: "configured-stopped" as const, pathCount: 1, sourceNodeIds: ["tone"], branchNodeIds: ["speakers"], renderEndpointIds: ["focusrite"] }));
+    const tone = {
+      ...pathNode("tone", "physicalInput"),
+      kind: "testSignal" as const,
+      name: "Tone",
+      parameters: { frequencyHz: 440 },
+    };
+    const { backend } = await fixture({
+      ...demoSession,
+      name: "Tone check",
+      nodes: [tone, pathNode("speakers", "physicalOutput", "focusrite")],
+      edges: [pathEdge("e1", "tone", "speakers")],
+    });
+    const prepareNativePaths = vi.fn(async (sessionId: string) => ({
+      sessionId,
+      generation: 1,
+      state: "configured-stopped" as const,
+      pathCount: 1,
+      sourceNodeIds: ["tone"],
+      branchNodeIds: ["speakers"],
+      renderEndpointIds: ["focusrite"],
+    }));
     const prepareNativeEndpoint = vi.fn();
     await renderReady(<App backend={{ ...backend, prepareNativePaths, prepareNativeEndpoint }} />);
     await screen.findByRole("heading", { name: "Tone check" });
@@ -118,12 +251,34 @@ describe("session refresh and playback regressions", () => {
     const { backend } = await fixture(saved);
     let running = false;
     const snapshot = backend.snapshot;
-    backend.snapshot = vi.fn(async () => { const value = await snapshot(); return { ...value, status: { ...value.status, activeSessionIds: running ? [saved.id] : [] } }; });
+    backend.snapshot = vi.fn(async () => {
+      const value = await snapshot();
+      return { ...value, status: { ...value.status, activeSessionIds: running ? [saved.id] : [] } };
+    });
     const startSession = backend.startSession;
-    backend.startSession = vi.fn(async () => { running = true; return startSession(); });
+    backend.startSession = vi.fn(async () => {
+      running = true;
+      return startSession();
+    });
     const commit = backend.commitGraph;
-    backend.commitGraph = vi.fn(async () => ({ ...(await commit()), activation: { state: "running" as const, generation: 2, runtime: "native" as const, native: { state: "applied" as const, adapter: "multi-input" } } }));
-    const prepareNativePaths = vi.fn(async (sessionId: string) => ({ sessionId, generation: 1, state: "configured-stopped" as const, pathCount: 2, sourceNodeIds: ["mic", "cable-b"], branchNodeIds: ["cable-a", "scarlett"], renderEndpointIds: ["cable-a-input", "focusrite"] }));
+    backend.commitGraph = vi.fn(async () => ({
+      ...(await commit()),
+      activation: {
+        state: "running" as const,
+        generation: 2,
+        runtime: "native" as const,
+        native: { state: "applied" as const, adapter: "multi-input" },
+      },
+    }));
+    const prepareNativePaths = vi.fn(async (sessionId: string) => ({
+      sessionId,
+      generation: 1,
+      state: "configured-stopped" as const,
+      pathCount: 2,
+      sourceNodeIds: ["mic", "cable-b"],
+      branchNodeIds: ["cable-a", "scarlett"],
+      renderEndpointIds: ["cable-a-input", "focusrite"],
+    }));
     const view = await renderReady(<App backend={{ ...backend, prepareNativePaths }} />);
     await screen.findByRole("heading", { name: "Patrick Main Session" });
     start();
@@ -134,7 +289,11 @@ describe("session refresh and playback regressions", () => {
     fireEvent.change(name, { target: { value: "Unsaved name" } });
     fireEvent.blur(name);
     fireEvent.click(screen.getByLabelText("Bypass"));
-    await waitFor(() => expect(backend.commitGraph, document.querySelector(".global-action-message")?.textContent).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(backend.commitGraph, document.querySelector(".global-action-message")?.textContent).toHaveBeenCalledTimes(
+        1,
+      ),
+    );
     const submitted = backend.planGraph.mock.calls[0][0];
     expect(submitted.nodes.find((node) => node.id === "game-eq")).toMatchObject({ name: "game-eq", bypass: true });
     await messageBar().findByText(/applied to the playing audio/);
@@ -151,7 +310,11 @@ describe("session refresh and playback regressions", () => {
     const { backend } = await fixture({ ...demoSession, revision: 0, name: "Real saved session" });
     await renderReady(<App backend={backend} />);
     fireEvent.click(screen.getByRole("tab", { name: "Session" }));
-    await waitFor(() => expect((sessionPanel().getByLabelText("Choose session") as HTMLSelectElement).selectedOptions[0].text).toBe("Real saved session"));
+    await waitFor(() =>
+      expect((sessionPanel().getByLabelText("Choose session") as HTMLSelectElement).selectedOptions[0].text).toBe(
+        "Real saved session",
+      ),
+    );
     expect(screen.getByRole("heading", { name: "Real saved session" })).toBeTruthy();
   });
 
@@ -177,7 +340,13 @@ describe("session refresh and playback regressions", () => {
     addGain();
     const count = view.container.querySelectorAll(".react-flow__node").length;
     start();
-    await waitFor(() => expect(backend.startSession).toHaveBeenCalledWith(demoSession.id, expect.any(String), expect.objectContaining({ nodes: expect.arrayContaining([expect.objectContaining({ kind: "gain" })]) })));
+    await waitFor(() =>
+      expect(backend.startSession).toHaveBeenCalledWith(
+        demoSession.id,
+        expect.any(String),
+        expect.objectContaining({ nodes: expect.arrayContaining([expect.objectContaining({ kind: "gain" })]) }),
+      ),
+    );
     await messageBar().findByText(/Temporary preview is running.*saved session is unchanged/);
     await act(async () => refresh());
     await waitFor(() => expect(backend.snapshot.mock.calls.length).toBeGreaterThan(1));
@@ -217,7 +386,14 @@ describe("session refresh and playback regressions", () => {
 
   it("stops an unexpected simulated runtime and never calls it audio success", async () => {
     const { backend } = await fixture();
-    await renderReady(<App backend={{ ...backend, startSession: async () => ({ sessionId: demoSession.id, state: "running", generation: 1, runtime: "fake" }) }} />);
+    await renderReady(
+      <App
+        backend={{
+          ...backend,
+          startSession: async () => ({ sessionId: demoSession.id, state: "running", generation: 1, runtime: "fake" }),
+        }}
+      />,
+    );
     await waitFor(() => expect(backend.listSessions).toHaveBeenCalled());
     start();
     await messageBar().findByText(/No audio played/);

@@ -213,6 +213,9 @@ fn main() -> Result<()> {
         }
         return Ok(());
     }
+    // SAFETY: CoInitializeEx takes no pointers. CoUninitialize runs only after it
+    // succeeded and after `enumerate` has returned, so every COM interface that
+    // function created has already been released.
     unsafe {
         CoInitializeEx(None, COINIT_MULTITHREADED).ok()?;
         let result = enumerate();
@@ -766,6 +769,7 @@ fn process_loopback_smoke(
         return Err(AudioError::InvalidFrameSize);
     }
     let mut capture = ProcessLoopbackCapture::open(
+        // SAFETY: GetCurrentProcessId has no preconditions and takes no pointers.
         unsafe { windows::Win32::System::Threading::GetCurrentProcessId() },
         mode,
     )?;
@@ -1481,13 +1485,22 @@ fn raw_capture_initialize(endpoint_id: &str) -> std::result::Result<(), AudioErr
     };
     use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
-    let com = ComApartmentProbe::initialize()?;
+    // Declared first so it drops last: every interface below must be released
+    // before CoUninitialize (an explicit early `drop(com)` used to run first).
+    let _com = ComApartmentProbe::initialize()?;
+    // SAFETY: COM is initialized on this thread by `_com`, which is declared
+    // first and therefore dropped after every interface below. The call
+    // writes a new owned interface reference.
     let enumerator: IMMDeviceEnumerator = unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)? };
+    // SAFETY: `enumerator` is a live interface on this COM-initialized thread.
     let devices = unsafe { enumerator.EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE)? };
+    // SAFETY: `devices` is the live collection returned above.
     let count = unsafe { devices.GetCount()? };
     let mut selected = None;
     for index in 0..count {
+        // SAFETY: `index` is below the collection's own count.
         let device = unsafe { devices.Item(index)? };
+        // SAFETY: `device` is a live endpoint; the wrapper copies and frees the ID.
         let id = unsafe { device.GetId()?.to_string().map_err(|_| AudioError::InvalidUtf16)? };
         if id == endpoint_id {
             selected = Some(device);
@@ -1498,8 +1511,13 @@ fn raw_capture_initialize(endpoint_id: &str) -> std::result::Result<(), AudioErr
         windows::core::HRESULT(0x80070490u32 as i32),
         "capture endpoint not found",
     )))?;
+    // SAFETY: `device` is a live endpoint; no activation parameters are passed.
     let client: IAudioClient = unsafe { device.Activate(CLSCTX_ALL, None)? };
+    // SAFETY: on success the WAVEFORMATEX is a CoTaskMem allocation owned here
+    // and freed once below.
     let format = unsafe { client.GetMixFormat()? };
+    // SAFETY: `format` is the live mix-format allocation, freed only after this
+    // call; no session GUID is passed.
     let initialized = unsafe {
         client.Initialize(
             AUDCLNT_SHAREMODE_SHARED,
@@ -1510,13 +1528,14 @@ fn raw_capture_initialize(endpoint_id: &str) -> std::result::Result<(), AudioErr
             None,
         )
     };
+    // SAFETY: `format` came from GetMixFormat, is not used after this point, and
+    // is freed exactly once here.
     unsafe { windows::Win32::System::Com::CoTaskMemFree(Some(format.cast())) };
     initialized.map_err(|error| AudioError::WindowsOperation {
         operation: "raw IAudioClient::Initialize(capture)",
         error,
     })?;
     println!("raw_capture_init endpoint={} initialized=true", endpoint_id);
-    drop(com);
     Ok(())
 }
 
@@ -1524,6 +1543,8 @@ struct ComApartmentProbe;
 
 impl ComApartmentProbe {
     fn initialize() -> std::result::Result<Self, AudioError> {
+        // SAFETY: CoInitializeEx takes no pointers; `Self` exists only after it
+        // succeeds, so each value owes exactly one CoUninitialize on this thread.
         unsafe {
             windows::Win32::System::Com::CoInitializeEx(
                 None,
@@ -1537,6 +1558,8 @@ impl ComApartmentProbe {
 
 impl Drop for ComApartmentProbe {
     fn drop(&mut self) {
+        // SAFETY: balances the successful CoInitializeEx in `initialize`. The probe
+        // keeps this value alive (declared first) until its interfaces are released.
         unsafe { windows::Win32::System::Com::CoUninitialize() }
     }
 }
@@ -1639,6 +1662,9 @@ impl windows::Win32::Media::Audio::IActivateAudioInterfaceCompletionHandler_Impl
     ) -> windows::core::Result<()> {
         let mut activation_result = windows::core::HRESULT(0);
         let mut activated_interface = None;
+        // SAFETY: `operation` is the async operation Windows passes for the duration
+        // of this callback, and both out pointers refer to live locals. The
+        // activated interface, if any, is an owned reference dropped normally.
         let final_hresult = unsafe {
             match operation.ok().and_then(|operation| {
                 operation.GetActivateResult(&mut activation_result, &mut activated_interface)

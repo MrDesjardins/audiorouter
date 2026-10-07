@@ -1,5 +1,5 @@
 {
-  "backendMethods": 106,
+  "backendMethods": 108,
   "operations": [
     {
       "method": "POST",
@@ -126,6 +126,20 @@
       "operation": "system.diagnostics",
       "permission": "Read",
       "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/diagnostics/getVerbose",
+      "operation": "diagnostics.getVerbose",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/diagnostics/setVerbose",
+      "operation": "diagnostics.setVerbose",
+      "permission": "SessionControl",
+      "effect": "Mutating"
     },
     {
       "method": "POST",

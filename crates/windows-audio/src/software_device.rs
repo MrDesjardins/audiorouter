@@ -49,7 +49,11 @@ unsafe extern "system" fn created_callback(
     // The context is an mpsc Sender allocated by create(). It remains alive
     // until the bounded callback result is received. The callback is allowed
     // to run before SwDeviceCreate returns, so no stack pointer is passed.
-    let sender = &*(context as *const mpsc::Sender<Completion>);
+    // Clone it before sending: create() frees the boxed sender as soon as the
+    // message arrives, which may be while `send` is still running here, so
+    // the send must not borrow the box (or rely on it to keep the channel
+    // alive).
+    let sender = (*(context as *const mpsc::Sender<Completion>)).clone();
     // SAFETY: the Windows callback supplies a readable null-terminated UTF-16
     // instance ID for a non-null pointer; the decoder enforces our local
     // maximum before inspecting another element.
@@ -168,6 +172,8 @@ impl SoftwareDeviceProvisioner {
         if result.is_err() {
             // No successful device exists on a failed API call. Reclaim the
             // callback context; Windows did not accept the callback contract.
+            // SAFETY: `context` came from `Box::into_raw` above and, because the call
+            // failed, Windows holds no copy of it and will never invoke the callback.
             unsafe { drop(Box::from_raw(context)) };
             return Err(SoftwareDeviceError::Windows(result));
         }
@@ -179,7 +185,11 @@ impl SoftwareDeviceProvisioner {
                     // waits for an in-flight callback and that no callback
                     // runs after it returns. Reclaim the callback context
                     // only after that guarantee is established.
+                    // SAFETY: `returned_handle` is the non-null handle SwDeviceCreate returned and
+                    // is owned only here; closing it once waits for any in-flight callback.
                     unsafe { SwDeviceClose(returned_handle) };
+                    // SAFETY: after SwDeviceClose no callback can run, so this is the only
+                    // remaining owner of the `Box::into_raw` context; it is reclaimed once.
                     unsafe { drop(Box::from_raw(context)) };
                 } else {
                     // A successful call is expected to return a handle, but
@@ -190,13 +200,21 @@ impl SoftwareDeviceProvisioner {
                 return Err(SoftwareDeviceError::CallbackTimeout);
             }
             Err(RecvTimeoutError::Disconnected) => {
+                // SAFETY: a disconnected receiver means no message will arrive; reclaim the
+                // `Box::into_raw` context once. (The boxed sender keeps the channel open, so
+                // this branch is unreachable while the callback can still run.)
                 unsafe { drop(Box::from_raw(context)) };
                 return Err(SoftwareDeviceError::Callback(E_FAIL));
             }
         };
+        // SAFETY: the callback's only access to `context` is cloning the sender
+        // before it sends; the message has been received, so that access is over and
+        // no further callback follows for this device. The box is reclaimed once.
         unsafe { drop(Box::from_raw(context)) };
         if completion.result.is_err() {
             if !completion.handle.is_null() {
+                // SAFETY: the callback reported a non-null device handle that nothing else
+                // owns on this failure path; it is closed exactly once.
                 unsafe { SwDeviceClose(completion.handle) };
             }
             return Err(SoftwareDeviceError::Callback(completion.result));
@@ -360,6 +378,8 @@ mod tests {
         // no terminator is required to exercise the cap.
         let decoded = unsafe { decode_instance_id(instance_id.as_ptr()) };
         assert_eq!(decoded.chars().count(), MAX_INSTANCE_ID_CHARS);
+        // SAFETY: a null pointer is the documented "no instance ID" input and is
+        // checked before any read.
         assert!(unsafe { decode_instance_id(std::ptr::null()) }.is_empty());
     }
 }

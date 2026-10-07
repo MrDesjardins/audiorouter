@@ -276,6 +276,23 @@ pub fn valid_network_address(text: &str) -> bool {
     text.len() <= 64 && text.trim() == text && text.parse::<std::net::IpAddr>().is_ok()
 }
 
+/// Shortest and longest pairing key of a Network Send/Receive node, in
+/// characters. A blank key means the node is not paired.
+pub const MIN_NETWORK_PAIRING_KEY_CHARS: usize = 16;
+pub const MAX_NETWORK_PAIRING_KEY_CHARS: usize = 128;
+
+/// A network pairing key is blank (not paired) or 16-128 printable ASCII
+/// characters without leading or trailing spaces, so it can be typed or
+/// pasted identically on both computers (SEC-13).
+pub fn valid_network_pairing_key(text: &str) -> bool {
+    text.is_empty()
+        || ((MIN_NETWORK_PAIRING_KEY_CHARS..=MAX_NETWORK_PAIRING_KEY_CHARS).contains(&text.len())
+            && text
+                .bytes()
+                .all(|byte| byte == b' ' || byte.is_ascii_graphic())
+            && text.trim() == text)
+}
+
 fn valid_bounded_string(value: &serde_json::Value, maximum: usize) -> bool {
     value
         .as_str()
@@ -766,7 +783,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 121] = [
+pub const API_METHODS: [ApiMethodSpec; 123] = [
     ApiMethodSpec {
         name: "meters.reset",
         permission: PermissionScope::SessionControl,
@@ -858,6 +875,19 @@ pub const API_METHODS: [ApiMethodSpec; 121] = [
         name: "system.diagnostics",
         permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
+    },
+    // Opt-in verbose logging for a support case (P2-3): one hour at most,
+    // still without parameters, paths or audio. Changing it is a session
+    // control, not a read, so observers cannot fill the user's logs.
+    ApiMethodSpec {
+        name: "diagnostics.getVerbose",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "diagnostics.setVerbose",
+        permission: PermissionScope::SessionControl,
+        side_effect: SideEffectClass::Mutating,
     },
     ApiMethodSpec {
         name: "system.quit",
@@ -1970,6 +2000,9 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::NetworkSend | NodeKind::NetworkReceive, "port") => value
                     .as_u64()
                     .is_some_and(|port| (1..=u64::from(u16::MAX)).contains(&port)),
+                (NodeKind::NetworkSend | NodeKind::NetworkReceive, "pairingKey") => {
+                    value.as_str().is_some_and(valid_network_pairing_key)
+                }
                 (NodeKind::NetworkReceive, "bufferMs") => value.as_f64().is_some_and(|buffer| {
                     buffer.is_finite()
                         && (MIN_NETWORK_BUFFER_MS..=MAX_NETWORK_BUFFER_MS).contains(&buffer)
@@ -4130,6 +4163,42 @@ mod tests {
             "bufferMs",
             serde_json::json!(900.0)
         ));
+        // Pairing keys: blank (not paired) or 16-128 printable characters.
+        for kind in [NodeKind::NetworkSend, NodeKind::NetworkReceive] {
+            assert!(valid(kind, "pairingKey", serde_json::json!("")));
+            assert!(valid(
+                kind,
+                "pairingKey",
+                serde_json::json!("K7QW-PAIR-2X9M-STUDIO")
+            ));
+            assert!(valid(
+                kind,
+                "pairingKey",
+                serde_json::json!("k".repeat(128))
+            ));
+            assert!(!valid(kind, "pairingKey", serde_json::json!("too short")));
+            assert!(!valid(
+                kind,
+                "pairingKey",
+                serde_json::json!("k".repeat(129))
+            ));
+            assert!(!valid(
+                kind,
+                "pairingKey",
+                serde_json::json!(" padded pairing key ")
+            ));
+            assert!(!valid(
+                kind,
+                "pairingKey",
+                serde_json::json!("line\nbreak in the key")
+            ));
+            assert!(!valid(
+                kind,
+                "pairingKey",
+                serde_json::json!("clé réseau du studio")
+            ));
+            assert!(!valid(kind, "pairingKey", serde_json::json!(1234)));
+        }
         // A receive-only parameter is not accepted on a send node.
         assert!(!valid(
             NodeKind::NetworkSend,

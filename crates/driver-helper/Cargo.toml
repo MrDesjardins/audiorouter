@@ -3,6 +3,7 @@ name = "audiorouter-driver-helper"
 version = "0.0.14"
 edition.workspace = true
 license.workspace = true
+publish = false
 rust-version.workspace = true
 
 # The elevated install/update/repair/remove tool for the AudioRouter cable
@@ -15,6 +16,9 @@ path = "src/main.rs"
 # The bin's test harness would carry the requireAdministrator manifest and
 # could not start unelevated; all tests live in the library.
 test = false
+
+[lints]
+workspace = true
 
 [dependencies]
 serde = { workspace = true }

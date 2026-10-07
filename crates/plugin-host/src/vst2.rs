@@ -329,6 +329,9 @@ mod opcode_tests {
         let effect = &mut effect as *mut Vst2Effect;
 
         assert_eq!(
+            // SAFETY: `effect` points to the live local AEffect above, whose `user`
+            // field points to the boxed `context` that outlives both calls; the opcode
+            // ignores the remaining arguments, including the null pointer.
             unsafe {
                 host_callback(
                     effect,
@@ -342,6 +345,7 @@ mod opcode_tests {
             44_100
         );
         assert_eq!(
+            // SAFETY: same live effect and context as the call above.
             unsafe {
                 host_callback(
                     effect,
@@ -579,6 +583,8 @@ impl Vst2Library {
         let entry_address = unsafe { get_proc_address(module, c"VSTPluginMain".as_ptr()) }
             .or_else(|| unsafe { get_proc_address(module, c"main".as_ptr()) });
         let Some(entry) = entry_address
+            // SAFETY: same contract as the first lookup: `module` is the live handle and
+            // the name is a static NUL-terminated C string.
             .map(|address| unsafe { std::mem::transmute::<*mut c_void, Vst2PluginMain>(address) })
         else {
             // SAFETY: `module` is the valid handle returned above and has not
@@ -1359,7 +1365,12 @@ fn editor_thread_main(access: Vst2EditorAccess, receiver: Receiver<EditorThreadC
 #[cfg(windows)]
 fn pump_editor_messages() {
     let mut message = NativeMessage::default();
+    // SAFETY: `message` is a live, writable `#[repr(C)]` MSG; a null window
+    // filter reads messages for this (the editor) thread, and PM_REMOVE (1)
+    // takes each one off the queue.
     while unsafe { PeekMessageW(&mut message, ptr::null_mut(), 0, 0, 1) } != 0 {
+        // SAFETY: `message` was just filled by PeekMessageW; both calls only read it
+        // and dispatch to window procedures owned by this thread.
         unsafe {
             TranslateMessage(&message);
             DispatchMessageW(&message);

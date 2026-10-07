@@ -6,8 +6,14 @@ const MAX_COORDINATE = 100_000;
 function validPosition(value: unknown): value is LayoutPosition {
   if (!value || typeof value !== "object") return false;
   const position = value as Record<string, unknown>;
-  return typeof position.x === "number" && Number.isFinite(position.x) && Math.abs(position.x) <= MAX_COORDINATE
-    && typeof position.y === "number" && Number.isFinite(position.y) && Math.abs(position.y) <= MAX_COORDINATE;
+  return (
+    typeof position.x === "number" &&
+    Number.isFinite(position.x) &&
+    Math.abs(position.x) <= MAX_COORDINATE &&
+    typeof position.y === "number" &&
+    Number.isFinite(position.y) &&
+    Math.abs(position.y) <= MAX_COORDINATE
+  );
 }
 
 export function readLayout(storage: Pick<Storage, "getItem"> | null, key: string): LayoutPositions {

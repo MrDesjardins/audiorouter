@@ -7,7 +7,9 @@ export const defaultShortcutBinding: ShortcutBinding = {
   privacyMute: "Control+Alt+M",
 };
 
-export function shortcutFromKeyboardEvent(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey">): string | null {
+export function shortcutFromKeyboardEvent(
+  event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey">,
+): string | null {
   if (!(event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)) return null;
   const key = event.key.length === 1 ? event.key.toUpperCase() : event.key;
   if (["Control", "Meta", "Alt", "Shift"].includes(key)) return null;
@@ -16,7 +18,9 @@ export function shortcutFromKeyboardEvent(event: Pick<KeyboardEvent, "key" | "ct
 
 export function shortcutConflicts(binding: ShortcutBinding): ShortcutAction[] {
   const actions = Object.keys(binding) as ShortcutAction[];
-  return actions.filter((action, index) => actions.some((other, otherIndex) => otherIndex < index && binding[other] === binding[action]));
+  return actions.filter((action, index) =>
+    actions.some((other, otherIndex) => otherIndex < index && binding[other] === binding[action]),
+  );
 }
 
 export function isEditableShortcutTarget(target: EventTarget | null): boolean {

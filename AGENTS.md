@@ -39,6 +39,12 @@ Use this canonical uppercase filename on Windows. Do not add `agent.md`, `agents
   Code sessions also format each edited `.rs` file through the
   `.claude/settings.json` hook, but edits made through the shell (`sed`,
   scripts) bypass it, so still run the commands above.
+- **The UI is formatted and linted too.** Before committing `ui/` changes,
+  run `npm --prefix ui run format` and `npm --prefix ui run lint`; CI fails
+  on `format:check` differences and on ESLint errors (the pre-commit hook
+  formats staged `ui/src` and `ui/e2e` files). Fix an `exhaustive-deps`
+  warning only for a proven stale closure, never by adding dependencies
+  blindly (20 Hz telemetry render loops).
 - **Use the pinned toolchain.** `rust-toolchain.toml` pins Rust 1.96.0, the
   version CI and the release workflow use. Do not change it in a feature
   change; a toolchain bump is its own change with its own formatting and
@@ -99,7 +105,7 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 ## Validated lessons
 
 - **2026-10-06 — CI is Windows-only; cross-check Windows code from Linux with the GNU target.**
-  Evidence: [active plan, CI back to green](docs/plans/active/current.md),
+  Evidence: [execution record, CI back to green](docs/plans/archived/2026-10-07-maintenance-0.0.12-to-code-review.md#ci-back-to-green-on-windows-2026-10-06-user-request),
   CI run 37417530916. Scope: CI and any agent working in a Linux container.
   Consequence: `windows` 0.62 does not compile on Linux, so a Linux CI job
   can never build the workspace (500+ red runs). On Linux, run Clippy with

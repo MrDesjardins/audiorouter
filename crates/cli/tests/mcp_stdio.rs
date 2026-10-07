@@ -284,6 +284,15 @@ fn mcp_stdio_client_interoperates_with_cli_process() {
         json!(["method", "params"])
     );
     assert!(!activity_text.contains("private-audio-fixture"));
+    // Every tool call gets its own correlation ID (P2-3).
+    let ids = activity
+        .iter()
+        .map(|entry| entry["requestId"].as_str().expect("requestId").to_owned())
+        .collect::<std::collections::HashSet<_>>();
+    assert_eq!(ids.len(), activity.len());
+    assert!(ids
+        .iter()
+        .all(|id| audiorouter_protocol::diagnostics::is_valid_correlation_id(id)));
     std::fs::remove_file(database).unwrap();
     let _ = std::fs::remove_file(std::env::temp_dir().join(format!(
         "audiorouter-mcp-stdio-{}-{stamp}.sqlite-wal",

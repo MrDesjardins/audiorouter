@@ -7,7 +7,13 @@ import { TextField } from "./TextField";
 
 function Harness({ initial = "Mic" }: { initial?: string }) {
   const [name, setName] = useState(initial);
-  return <><TextField aria-label="Name" value={name} onValue={setName} /><output>{name}</output><button onClick={() => setName("Reverted")}>revert</button></>;
+  return (
+    <>
+      <TextField aria-label="Name" value={name} onValue={setName} />
+      <output>{name}</output>
+      <button onClick={() => setName("Reverted")}>revert</button>
+    </>
+  );
 }
 
 afterEach(cleanup);

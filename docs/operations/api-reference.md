@@ -16,7 +16,7 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
-The current catalog contains 103 methods, including backend-owned quit/finalize,
+The current catalog contains 123 methods, including backend-owned quit/finalize,
 session portability, bounded WAV/MP3 media import, source transport, recorder
 lifecycle, plugin inventory/retry, and startup plan/apply methods.
 
@@ -26,6 +26,8 @@ lifecycle, plugin inventory/retry, and startup plan/apply methods.
 | `system.handshake` | `read` | read-only |
 | `status.get` | `read` | read-only |
 | `system.diagnostics` | `read` | read-only |
+| `diagnostics.getVerbose` | `read` | read-only; whether opt-in verbose logging is on and the seconds left |
+| `diagnostics.setVerbose` | `sessionControl` | mutating; `{enabled}` turns verbose logging on for one hour (it expires by itself) or off; logs only, never audio or the saved graph |
 | `system.quit` | `sessionControl` | external operation; requires an idempotency key; finalizes active recorders before stopping running sessions |
 | `system.osTransition` | `sessionControl` | mutating; requires an idempotency key; reports routes requiring explicit resume validation |
 | `clients.list` | `read` | read-only |
@@ -233,6 +235,14 @@ and the response reports processed and rendered frames separately. This path
 can coexist with the primary capture/graph worker but does not make a render-
 only worker graph-capable for plugin authorization.
 
+Any request may carry an optional top-level `requestId` correlation ID
+(1–32 characters from `A-Z a-z 0-9 -`), for example
+`{"jsonrpc":"2.0","id":7,"method":"graph.commit","params":{…},"requestId":"K7Q2M9XD"}`.
+The backend writes it to `backend.jsonl`; it never affects dispatch. An
+invalid value is dropped. Over HTTP use the `X-Request-Id` header instead.
+With verbose logging on (`diagnostics.setVerbose`), backend records also
+include routine reads and `durationMs`.
+
 The singular and plural session lifecycle names are compatibility aliases with
 the same authorization and behavior. Mutating graph and virtual-device calls
 require an idempotency key where the discovered input schema says so. For an
@@ -253,8 +263,8 @@ The current node catalog is available through `nodes.describe` and contains:
 | `virtual-capture-sink@1` | unavailable | AudioRouter-owned virtual devices are out of scope; use an installed virtual cable through `physical-output` |
 | `test-signal@1` | available | `frequencyHz` 20–20,000, `levelDb` -60–0, `durationMs` 1–600,000; paced in real time |
 | `audio-file@1` | available | Imported WAV/MP3 media (`mediaId`), optional `loop`; paced in real time |
-| `network-send@1` | available | Streams its input over UDP to `host` (IPv4/IPv6 literal) and `port` (default 47800); see GRAPH-16/SEC-13 |
-| `network-receive@1` | available | Plays the stream from `sender` (IP literal) on `port`, with a `bufferMs` jitter buffer of 10–500 ms (default 40) |
+| `network-send@1` | available | Streams its input over UDP to `host` (IPv4/IPv6 literal) and `port` (default 47800); optional `pairingKey` (blank or 16–128 printable characters) tags every packet; see GRAPH-16/SEC-13 |
+| `network-receive@1` | available | Plays the stream from `sender` (IP literal) on `port`, with a `bufferMs` jitter buffer of 10–500 ms (default 40); with `pairingKey`, plays only packets tagged with the same key and drops replays (telemetry `authFailures`, `authProblem`, `replayedPackets`) |
 | `recorder@1` | available | Recording sink branch; the runtime tap is attached by the control plane |
 | `mixer@1` | available | Bounded graph mixer with per-input volume |
 | `input-switch@1` | available | Passes input A or B with a crossfade |

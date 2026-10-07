@@ -11,8 +11,42 @@ export type DraftChange = {
 export const GAIN_MIN_DB = -60;
 export const GAIN_MAX_DB = 24;
 
-export type LibraryNodeKind = Extract<NodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "audioFile" | "mixer" | "gain" | "volume" | "bassTreble" | "dehum" | "declick" | "inputSwitch" | "denoise" | "speechDenoise" | "spectralGate" | "firFilter" | "timeShift" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch" | "recorder" | "networkSend" | "networkReceive" | "duck">;
-export type InsertableProcessorKind = Exclude<LibraryNodeKind, "physicalInput" | "physicalOutput" | "testSignal" | "mixer" | "inputSwitch" | "networkSend" | "networkReceive">;
+export type LibraryNodeKind = Extract<
+  NodeKind,
+  | "physicalInput"
+  | "physicalOutput"
+  | "testSignal"
+  | "audioFile"
+  | "mixer"
+  | "gain"
+  | "volume"
+  | "bassTreble"
+  | "dehum"
+  | "declick"
+  | "inputSwitch"
+  | "denoise"
+  | "speechDenoise"
+  | "spectralGate"
+  | "firFilter"
+  | "timeShift"
+  | "mute"
+  | "meter"
+  | "parametricEq"
+  | "compressor"
+  | "gate"
+  | "limiter"
+  | "delay"
+  | "graphicEq"
+  | "pitch"
+  | "recorder"
+  | "networkSend"
+  | "networkReceive"
+  | "duck"
+>;
+export type InsertableProcessorKind = Exclude<
+  LibraryNodeKind,
+  "physicalInput" | "physicalOutput" | "testSignal" | "mixer" | "inputSwitch" | "networkSend" | "networkReceive"
+>;
 
 /** Default UDP port of the Network Send/Receive tools (mirrors the domain). */
 export const DEFAULT_NETWORK_AUDIO_PORT = 47800;
@@ -32,11 +66,14 @@ for (let index = 0; index < 16; index += 1) {
   parametricEqDefaults[`band${index}GainDb`] = 0;
 }
 
-const libraryNodeDefinitions: Record<LibraryNodeKind, {
-  name: string;
-  parameters: Record<string, boolean | number | string>;
-  ports: Session["nodes"][number]["ports"];
-}> = {
+const libraryNodeDefinitions: Record<
+  LibraryNodeKind,
+  {
+    name: string;
+    parameters: Record<string, boolean | number | string>;
+    ports: Session["nodes"][number]["ports"];
+  }
+> = {
   physicalInput: {
     name: "Physical input",
     parameters: {},
@@ -186,7 +223,10 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
   meter: {
     name: "Meter",
     parameters: {},
-    ports: [{ name: "in", direction: "input", channels: 2 }, { name: "out", direction: "output", channels: 2 }],
+    ports: [
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
+    ],
   },
   recorder: {
     name: "Recorder",
@@ -238,7 +278,18 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
   },
   graphicEq: {
     name: "Graphic EQ",
-    parameters: { band0Db: 0, band1Db: 0, band2Db: 0, band3Db: 0, band4Db: 0, band5Db: 0, band6Db: 0, band7Db: 0, band8Db: 0, band9Db: 0 },
+    parameters: {
+      band0Db: 0,
+      band1Db: 0,
+      band2Db: 0,
+      band3Db: 0,
+      band4Db: 0,
+      band5Db: 0,
+      band6Db: 0,
+      band7Db: 0,
+      band8Db: 0,
+      band9Db: 0,
+    },
     ports: [
       { name: "in", direction: "input", channels: 2 },
       { name: "out", direction: "output", channels: 2 },
@@ -266,7 +317,15 @@ export function isParameterOnlyChange(saved: Session, draft: Session): boolean {
   for (let index = 0; index < saved.nodes.length; index += 1) {
     const before = saved.nodes[index];
     const after = draft.nodes[index];
-    if (before.id !== after.id || before.kind !== after.kind || before.name !== after.name || before.enabled !== after.enabled || before.bypass !== after.bypass || !sameJsonValue(before.ports, after.ports)) return false;
+    if (
+      before.id !== after.id ||
+      before.kind !== after.kind ||
+      before.name !== after.name ||
+      before.enabled !== after.enabled ||
+      before.bypass !== after.bypass ||
+      !sameJsonValue(before.ports, after.ports)
+    )
+      return false;
     // Key order is not a change: the backend returns parameters sorted.
     if (!sameJsonValue(before.parameters, after.parameters)) parameterChanged = true;
   }
@@ -281,7 +340,10 @@ export function mixerInputVolumeKey(upstreamNodeId: EntityId): string {
 }
 
 /** Connected Mixer inputs in connection order, with each input's volume percent (default 100). */
-export function mixerInputs(session: Session, mixerId: EntityId): Array<{ edgeId: EntityId; upstream: Session["nodes"][number]; percent: number; enabled: boolean }> {
+export function mixerInputs(
+  session: Session,
+  mixerId: EntityId,
+): Array<{ edgeId: EntityId; upstream: Session["nodes"][number]; percent: number; enabled: boolean }> {
   const mixer = session.nodes.find((node) => node.id === mixerId);
   if (!mixer || mixer.kind !== "mixer") return [];
   return session.edges
@@ -296,10 +358,7 @@ export function mixerInputs(session: Session, mixerId: EntityId): Array<{ edgeId
 }
 
 /** Adds one supported built-in processor to a draft without mutating its revision or edges. */
-export function appendLibraryNode(
-  session: Session,
-  kind: LibraryNodeKind,
-): Session {
+export function appendLibraryNode(session: Session, kind: LibraryNodeKind): Session {
   const definition = libraryNodeDefinitions[kind];
   let suffix = 1;
   let id = `${kind}-${suffix}`;
@@ -353,10 +412,16 @@ export function applicationChoiceKey(application: ApplicationInfo): string {
  * valid source. Processes with audio sessions are listed individually; others
  * fold same-path helpers (Electron/Chromium trees) into their earliest instance.
  */
-export function applicationCaptureChoices(applications: readonly ApplicationInfo[]): { withAudio: ApplicationInfo[]; other: ApplicationInfo[] } {
+export function applicationCaptureChoices(applications: readonly ApplicationInfo[]): {
+  withAudio: ApplicationInfo[];
+  other: ApplicationInfo[];
+} {
   const eligible = applications.filter((application) => application.executable && application.processId > 0);
-  const byLabel = (left: ApplicationInfo, right: ApplicationInfo) => left.executable.localeCompare(right.executable, undefined, { sensitivity: "base" }) || left.processId - right.processId;
-  const pathKey = (application: ApplicationInfo) => (application.executablePath ?? application.executable).toLowerCase();
+  const byLabel = (left: ApplicationInfo, right: ApplicationInfo) =>
+    left.executable.localeCompare(right.executable, undefined, { sensitivity: "base" }) ||
+    left.processId - right.processId;
+  const pathKey = (application: ApplicationInfo) =>
+    (application.executablePath ?? application.executable).toLowerCase();
   const audioPaths = new Set(eligible.filter((application) => application.audioSessionCount > 0).map(pathKey));
   // Capture includes the selected process tree, so one entry per executable
   // path is enough: the earliest-created instance is normally the tree root.
@@ -366,10 +431,14 @@ export function applicationCaptureChoices(applications: readonly ApplicationInfo
     const current = earliest.get(key);
     const created = application.creationTime100ns === null ? null : BigInt(application.creationTime100ns);
     const currentCreated = current?.creationTime100ns == null ? null : BigInt(current.creationTime100ns);
-    if (!current || (created !== null && (currentCreated === null || created < currentCreated))) earliest.set(key, application);
+    if (!current || (created !== null && (currentCreated === null || created < currentCreated)))
+      earliest.set(key, application);
   }
   const roots = [...earliest.values()].sort(byLabel);
-  return { withAudio: roots.filter((application) => audioPaths.has(pathKey(application))), other: roots.filter((application) => !audioPaths.has(pathKey(application))) };
+  return {
+    withAudio: roots.filter((application) => audioPaths.has(pathKey(application))),
+    other: roots.filter((application) => !audioPaths.has(pathKey(application))),
+  };
 }
 
 /**
@@ -377,10 +446,39 @@ export function applicationCaptureChoices(applications: readonly ApplicationInfo
  * is that application, or null. Such a route runs on the application worker
  * (process loopback to one output) instead of the physical endpoint pair.
  */
-const ROUTE_SOURCE_KINDS = new Set(["physicalInput", "applicationCapture", "endpointLoopback", "virtualRenderSource", "testSignal", "audioFile", "networkReceive"]);
+const ROUTE_SOURCE_KINDS = new Set([
+  "physicalInput",
+  "applicationCapture",
+  "endpointLoopback",
+  "virtualRenderSource",
+  "testSignal",
+  "audioFile",
+  "networkReceive",
+]);
 
 /** Processor kinds the engine accepts in a linear chain before a Mixer input (mirrors `is_chain_processor`). */
-const CHAIN_PROCESSOR_KINDS = new Set<NodeKind>(["gain", "volume", "bassTreble", "dehum", "declick", "denoise", "speechDenoise", "spectralGate", "firFilter", "timeShift", "mute", "meter", "parametricEq", "compressor", "gate", "limiter", "delay", "graphicEq", "pitch", "plugin"]);
+const CHAIN_PROCESSOR_KINDS = new Set<NodeKind>([
+  "gain",
+  "volume",
+  "bassTreble",
+  "dehum",
+  "declick",
+  "denoise",
+  "speechDenoise",
+  "spectralGate",
+  "firFilter",
+  "timeShift",
+  "mute",
+  "meter",
+  "parametricEq",
+  "compressor",
+  "gate",
+  "limiter",
+  "delay",
+  "graphicEq",
+  "pitch",
+  "plugin",
+]);
 
 /** Exclude silent sources and source-less input chains from runtime only. */
 export function pruneInactiveUpstream(session: Session): Session {
@@ -389,14 +487,25 @@ export function pruneInactiveUpstream(session: Session): Session {
     changed = false;
     for (const node of session.nodes) {
       if (removed.has(node.id)) continue;
-      const fed = session.edges.some((edge) => edge.enabled && edge.destinationNode === node.id && !removed.has(edge.sourceNode));
-      const lostFeed = session.edges.some((edge) => edge.enabled && edge.destinationNode === node.id && removed.has(edge.sourceNode));
+      const fed = session.edges.some(
+        (edge) => edge.enabled && edge.destinationNode === node.id && !removed.has(edge.sourceNode),
+      );
+      const lostFeed = session.edges.some(
+        (edge) => edge.enabled && edge.destinationNode === node.id && removed.has(edge.sourceNode),
+      );
       const needsInput = node.ports.some((port) => port.direction === "input");
-      if (!fed && (!node.enabled || lostFeed || needsInput)) { removed.add(node.id); changed = true; }
+      if (!fed && (!node.enabled || lostFeed || needsInput)) {
+        removed.add(node.id);
+        changed = true;
+      }
     }
   }
   if (removed.size === 0 || removed.size === session.nodes.length) return session;
-  return { ...session, nodes: session.nodes.filter((node) => !removed.has(node.id)), edges: session.edges.filter((edge) => !removed.has(edge.sourceNode) && !removed.has(edge.destinationNode)) };
+  return {
+    ...session,
+    nodes: session.nodes.filter((node) => !removed.has(node.id)),
+    edges: session.edges.filter((edge) => !removed.has(edge.sourceNode) && !removed.has(edge.destinationNode)),
+  };
 }
 
 /** Enabled nodes excluded from playback because their chain has no input. */
@@ -413,11 +522,15 @@ export function unfedRouteNodes(session: Session): Session["nodes"] {
  */
 export function mixerRouteSources(session: Session): Session["nodes"] | null {
   const pruned = pruneInactiveUpstream(session);
-  const mixers = pruned.nodes.filter((node) => (node.kind === "mixer" || node.kind === "inputSwitch") && node.enabled && !node.bypass);
+  const mixers = pruned.nodes.filter(
+    (node) => (node.kind === "mixer" || node.kind === "inputSwitch") && node.enabled && !node.bypass,
+  );
   if (mixers.length !== 1) return null;
   const byId = new Map(pruned.nodes.map((node) => [node.id, node]));
   const sources: Session["nodes"] = [];
-  for (const edge of pruned.edges.filter((candidate) => candidate.enabled && candidate.destinationNode === mixers[0].id)) {
+  for (const edge of pruned.edges.filter(
+    (candidate) => candidate.enabled && candidate.destinationNode === mixers[0].id,
+  )) {
     let current = byId.get(edge.sourceNode);
     for (let depth = 0; current && CHAIN_PROCESSOR_KINDS.has(current.kind); depth += 1) {
       const node: Session["nodes"][number] = current;
@@ -454,7 +567,10 @@ export function independentPaths(session: Session): Session["nodes"][] {
       group.set(edge.sourceNode, index);
       group.set(edge.destinationNode, index);
     } else {
-      for (const id of groups[b]) { groups[a].add(id); group.set(id, a); }
+      for (const id of groups[b]) {
+        groups[a].add(id);
+        group.set(id, a);
+      }
       groups[b].clear();
     }
   }
@@ -471,19 +587,35 @@ export function independentPaths(session: Session): Session["nodes"][] {
  */
 export function needsNativePaths(session: Session): boolean {
   // Network Send/Receive run only on the multi-path worker.
-  if (session.nodes.some((node) => node.enabled && (node.kind === "networkSend" || node.kind === "networkReceive"))) return true;
+  if (session.nodes.some((node) => node.enabled && (node.kind === "networkSend" || node.kind === "networkReceive")))
+    return true;
   // A Recorder is a fan-out branch; the single-endpoint worker compiles only
   // a linear chain and rejects it, while the multi-path worker records it.
-  if (session.nodes.some((node) => node.enabled && node.kind === "recorder" && session.edges.some((edge) => edge.enabled && edge.destinationNode === node.id))) return true;
+  if (
+    session.nodes.some(
+      (node) =>
+        node.enabled &&
+        node.kind === "recorder" &&
+        session.edges.some((edge) => edge.enabled && edge.destinationNode === node.id),
+    )
+  )
+    return true;
   // Preserve per-node endpoint ownership when a source or branch is off.
-  const connectedDevices = session.nodes.filter((node) => session.edges.some((edge) => edge.enabled && (edge.sourceNode === node.id || edge.destinationNode === node.id)));
-  if (connectedDevices.filter((node) => node.kind === "physicalInput").length > 1
-    || connectedDevices.filter((node) => node.kind === "physicalOutput").length > 1) return true;
+  const connectedDevices = session.nodes.filter((node) =>
+    session.edges.some((edge) => edge.enabled && (edge.sourceNode === node.id || edge.destinationNode === node.id)),
+  );
+  if (
+    connectedDevices.filter((node) => node.kind === "physicalInput").length > 1 ||
+    connectedDevices.filter((node) => node.kind === "physicalOutput").length > 1
+  )
+    return true;
   const paths = independentPaths(session);
   if (paths.length > 1) return true;
-  return paths.some((nodes) =>
-    nodes.filter((node) => node.enabled && node.kind === "physicalOutput").length > 1
-    || nodes.filter((node) => node.enabled && node.kind === "physicalInput").length > 1);
+  return paths.some(
+    (nodes) =>
+      nodes.filter((node) => node.enabled && node.kind === "physicalOutput").length > 1 ||
+      nodes.filter((node) => node.enabled && node.kind === "physicalInput").length > 1,
+  );
 }
 
 /**
@@ -493,44 +625,73 @@ export function needsNativePaths(session: Session): boolean {
  */
 export function generatedOnlyRoute(session: Session): boolean {
   const paths = independentPaths(session);
-  return paths.length === 1 && (() => {
-    const sources = paths[0].filter((node) => node.enabled && ROUTE_SOURCE_KINDS.has(node.kind));
-    return sources.length > 0
-      && sources.every((node) => node.kind === "testSignal" || node.kind === "audioFile")
-      && paths[0].some((node) => node.enabled && node.kind === "physicalOutput");
-  })();
+  return (
+    paths.length === 1 &&
+    (() => {
+      const sources = paths[0].filter((node) => node.enabled && ROUTE_SOURCE_KINDS.has(node.kind));
+      return (
+        sources.length > 0 &&
+        sources.every((node) => node.kind === "testSignal" || node.kind === "audioFile") &&
+        paths[0].some((node) => node.enabled && node.kind === "physicalOutput")
+      );
+    })()
+  );
 }
 
 /** Enabled device nodes of a route that have no saved endpoint yet. */
 export function unboundDeviceNodes(session: Session): Session["nodes"] {
   return independentPaths(session)
     .flat()
-    .filter((node) => node.enabled && (node.kind === "physicalInput" || node.kind === "physicalOutput") && typeof node.parameters.endpointId !== "string");
+    .filter(
+      (node) =>
+        node.enabled &&
+        (node.kind === "physicalInput" || node.kind === "physicalOutput") &&
+        typeof node.parameters.endpointId !== "string",
+    );
 }
 
 /** Enabled sources other than the given application node that keep an application route from running on Play. */
 export function mixedApplicationRouteOtherSources(session: Session, applicationNodeId: string): Session["nodes"] {
-  return session.nodes.filter((node) => node.enabled && node.id !== applicationNodeId && ROUTE_SOURCE_KINDS.has(node.kind));
+  return session.nodes.filter(
+    (node) => node.enabled && node.id !== applicationNodeId && ROUTE_SOURCE_KINDS.has(node.kind),
+  );
 }
 
 export function applicationOnlyRouteSource(session: Session): Session["nodes"][number] | null {
   const sources = session.nodes.filter((node) => node.enabled && ROUTE_SOURCE_KINDS.has(node.kind));
   const [source] = sources;
   if (sources.length !== 1 || source.kind !== "applicationCapture") return null;
-  if (source.parameters.processPolicy !== "selectedInstance" || typeof source.parameters.processId !== "number" || typeof source.parameters.creationTime100ns !== "string" || typeof source.parameters.executable !== "string") return null;
+  if (
+    source.parameters.processPolicy !== "selectedInstance" ||
+    typeof source.parameters.processId !== "number" ||
+    typeof source.parameters.creationTime100ns !== "string" ||
+    typeof source.parameters.executable !== "string"
+  )
+    return null;
   return source;
 }
 
 /** Rebinds an application-capture node to another running process, keeping the node and its connections. */
-export function rebindApplicationCaptureNode(session: Session, nodeId: EntityId, application: ApplicationInfo): Session {
+export function rebindApplicationCaptureNode(
+  session: Session,
+  nodeId: EntityId,
+  application: ApplicationInfo,
+): Session {
   const nodeIndex = session.nodes.findIndex((node) => node.id === nodeId);
   if (nodeIndex < 0) throw new Error(`Unknown node: ${nodeId}`);
   const node = session.nodes[nodeIndex];
   if (node.kind !== "applicationCapture") throw new Error("Only an application capture node can select an application");
   const identity = applicationIdentityParameters(application);
-  const rest = Object.fromEntries(Object.entries(node.parameters).filter(([name]) => !["executable", "executablePath", "processPolicy", "processId", "creationTime100ns"].includes(name)));
+  const rest = Object.fromEntries(
+    Object.entries(node.parameters).filter(
+      ([name]) => !["executable", "executablePath", "processPolicy", "processId", "creationTime100ns"].includes(name),
+    ),
+  );
   const previousExecutable = typeof node.parameters.executable === "string" ? node.parameters.executable : null;
-  const generatedName = previousExecutable !== null && node.name.startsWith(`${previousExecutable} capture `) && /^\d+$/.test(node.name.slice(previousExecutable.length + " capture ".length));
+  const generatedName =
+    previousExecutable !== null &&
+    node.name.startsWith(`${previousExecutable} capture `) &&
+    /^\d+$/.test(node.name.slice(previousExecutable.length + " capture ".length));
   const name = generatedName ? `${application.executable}${node.name.slice(previousExecutable!.length)}` : node.name;
   const nodes = [...session.nodes];
   nodes[nodeIndex] = { ...node, name, parameters: { ...rest, ...identity } };
@@ -548,16 +709,19 @@ export function appendApplicationCaptureNode(session: Session, application: Appl
   }
   return {
     ...session,
-    nodes: [...session.nodes, {
-      id,
-      kind: "applicationCapture",
-      typeVersion: 1,
-      name: `${application.executable} capture ${suffix}`,
-      enabled: true,
-      bypass: false,
-      parameters,
-      ports: [{ name: "out", direction: "output", channels: 2 }],
-    }],
+    nodes: [
+      ...session.nodes,
+      {
+        id,
+        kind: "applicationCapture",
+        typeVersion: 1,
+        name: `${application.executable} capture ${suffix}`,
+        enabled: true,
+        bypass: false,
+        parameters,
+        ports: [{ name: "out", direction: "output", channels: 2 }],
+      },
+    ],
   };
 }
 
@@ -573,21 +737,28 @@ export function appendEndpointLoopbackNode(session: Session, endpointId: string)
   }
   return {
     ...session,
-    nodes: [...session.nodes, {
-      id,
-      kind: "endpointLoopback",
-      typeVersion: 1,
-      name: `Endpoint loopback ${suffix}`,
-      enabled: false,
-      bypass: false,
-      parameters: { endpointId: normalizedEndpointId },
-      ports: [{ name: "out", direction: "output", channels: 2 }],
-    }],
+    nodes: [
+      ...session.nodes,
+      {
+        id,
+        kind: "endpointLoopback",
+        typeVersion: 1,
+        name: `Endpoint loopback ${suffix}`,
+        enabled: false,
+        bypass: false,
+        parameters: { endpointId: normalizedEndpointId },
+        ports: [{ name: "out", direction: "output", channels: 2 }],
+      },
+    ],
   };
 }
 
 /** Adds a stopped virtual-bus source or sink bound to an existing bus identity. */
-export function appendVirtualBusNode(session: Session, busId: string, direction: "renderSource" | "captureSink"): Session {
+export function appendVirtualBusNode(
+  session: Session,
+  busId: string,
+  direction: "renderSource" | "captureSink",
+): Session {
   const normalizedBusId = busId.trim();
   if (!normalizedBusId) throw new Error("An existing virtual bus identity is required");
   const kind = direction === "renderSource" ? "virtualRenderSource" : "virtualCaptureSink";
@@ -600,18 +771,22 @@ export function appendVirtualBusNode(session: Session, busId: string, direction:
   }
   return {
     ...session,
-    nodes: [...session.nodes, {
-      id,
-      kind,
-      typeVersion: 1,
-      name: `${direction === "renderSource" ? "Virtual render source" : "Virtual capture sink"} ${suffix}`,
-      enabled: false,
-      bypass: false,
-      parameters: { busId: normalizedBusId },
-      ports: direction === "renderSource"
-        ? [{ name: "out", direction: "output", channels: 2 }]
-        : [{ name: "in", direction: "input", channels: 2 }],
-    }],
+    nodes: [
+      ...session.nodes,
+      {
+        id,
+        kind,
+        typeVersion: 1,
+        name: `${direction === "renderSource" ? "Virtual render source" : "Virtual capture sink"} ${suffix}`,
+        enabled: false,
+        bypass: false,
+        parameters: { busId: normalizedBusId },
+        ports:
+          direction === "renderSource"
+            ? [{ name: "out", direction: "output", channels: 2 }]
+            : [{ name: "in", direction: "input", channels: 2 }],
+      },
+    ],
   };
 }
 
@@ -635,24 +810,27 @@ export function appendPluginPlaceholderNode(session: Session, entry: PluginScanE
   const fileName = (entry.path.split(/[\\/]/).pop() ?? "").replace(/\.(vst3|dll)$/i, "");
   return {
     ...session,
-    nodes: [...session.nodes, {
-      id,
-      kind: "plugin",
-      typeVersion: 1,
-      name: fileName ? `${fileName} ${suffix}` : `${identity.vendor ?? "Plugin"} ${suffix}`,
-      enabled: true,
-      bypass: false,
-      parameters: {
-        path: entry.path,
-        format: identity.format,
-        fingerprint: identity.sha256,
-        classId: identity.classIds[0] ?? "default",
+    nodes: [
+      ...session.nodes,
+      {
+        id,
+        kind: "plugin",
+        typeVersion: 1,
+        name: fileName ? `${fileName} ${suffix}` : `${identity.vendor ?? "Plugin"} ${suffix}`,
+        enabled: true,
+        bypass: false,
+        parameters: {
+          path: entry.path,
+          format: identity.format,
+          fingerprint: identity.sha256,
+          classId: identity.classIds[0] ?? "default",
+        },
+        ports: [
+          { name: "in", direction: "input", channels: 1 },
+          { name: "out", direction: "output", channels: 1 },
+        ],
       },
-      ports: [
-        { name: "in", direction: "input", channels: 1 },
-        { name: "out", direction: "output", channels: 1 },
-      ],
-    }],
+    ],
   };
 }
 
@@ -664,27 +842,28 @@ export function appendEqPresetNode(session: Session, presetId: EqPresetId): Sess
   const frequencyHz = presetId === "hum50Hz" ? 50 : presetId === "hum60Hz" ? 60 : 1000;
   return {
     ...next,
-    nodes: next.nodes.map((candidate) => candidate.id === node.id
-      ? {
-        ...candidate,
-        parameters: {
-          ...candidate.parameters,
-          band0Enabled: presetId !== "voiceNeutral",
-          band0Type: presetId === "voiceNeutral" ? "peaking" : "notch",
-          band0FrequencyHz: frequencyHz,
-          band0Q: presetId === "voiceNeutral" ? 1 : 8,
-          band0GainDb: 0,
-        },
-      }
-      : candidate),
+    nodes: next.nodes.map((candidate) =>
+      candidate.id === node.id
+        ? {
+            ...candidate,
+            parameters: {
+              ...candidate.parameters,
+              band0Enabled: presetId !== "voiceNeutral",
+              band0Type: presetId === "voiceNeutral" ? "peaking" : "notch",
+              band0FrequencyHz: frequencyHz,
+              band0Q: presetId === "voiceNeutral" ? 1 : 8,
+              band0GainDb: 0,
+            },
+          }
+        : candidate,
+    ),
   };
 }
 
 /** Expands a voice preset without inventing a route when the draft is disconnected. */
 export function appendVoiceChainPreset(session: Session, presetId: VoiceChainPresetId): Session {
-  const kinds: InsertableProcessorKind[] = presetId === "voiceGateAndCompression"
-    ? ["gate", "compressor", "limiter"]
-    : ["limiter"];
+  const kinds: InsertableProcessorKind[] =
+    presetId === "voiceGateAndCompression" ? ["gate", "compressor", "limiter"] : ["limiter"];
   let next = session;
   let edgeId = next.edges.find((edge) => {
     const destination = next.nodes.find((node) => node.id === edge.destinationNode);
@@ -700,7 +879,12 @@ export function appendVoiceChainPreset(session: Session, presetId: VoiceChainPre
     next = insertDraftProcessor(next, edgeId, kind);
     const processor = next.nodes.at(-1);
     edgeId = processor
-      ? next.edges.find((edge) => edge.sourceNode === processor.id && edge.destinationNode === destination && edge.destinationPort === destinationPort)?.id
+      ? next.edges.find(
+          (edge) =>
+            edge.sourceNode === processor.id &&
+            edge.destinationNode === destination &&
+            edge.destinationPort === destinationPort,
+        )?.id
       : undefined;
   }
   return next;
@@ -748,10 +932,23 @@ export function appendDraftConnection(
   const destinationPort = destinationNode.ports.find((port) => port.name === destinationPortName);
   if (!sourcePort || sourcePort.direction !== "output") throw new Error("Choose an output source port");
   if (!destinationPort || destinationPort.direction !== "input") throw new Error("Choose an input destination port");
-  if (session.edges.some((edge) => edge.sourceNode === sourceNodeId && edge.sourcePort === sourcePortName && edge.destinationNode === destinationNodeId && edge.destinationPort === destinationPortName)) {
+  if (
+    session.edges.some(
+      (edge) =>
+        edge.sourceNode === sourceNodeId &&
+        edge.sourcePort === sourcePortName &&
+        edge.destinationNode === destinationNodeId &&
+        edge.destinationPort === destinationPortName,
+    )
+  ) {
     throw new Error("That connection is already in the draft");
   }
-  if (destinationNode.kind !== "mixer" && session.edges.some((edge) => edge.destinationNode === destinationNodeId && edge.destinationPort === destinationPortName)) {
+  if (
+    destinationNode.kind !== "mixer" &&
+    session.edges.some(
+      (edge) => edge.destinationNode === destinationNodeId && edge.destinationPort === destinationPortName,
+    )
+  ) {
     throw new Error("That input already has a connection");
   }
   const matrix = defaultChannelMatrix(sourcePort.channels, destinationPort.channels);
@@ -763,15 +960,18 @@ export function appendDraftConnection(
   }
   return {
     ...session,
-    edges: [...session.edges, {
-      id,
-      sourceNode: sourceNodeId,
-      sourcePort: sourcePortName,
-      destinationNode: destinationNodeId,
-      destinationPort: destinationPortName,
-      matrix,
-      enabled: true,
-    }],
+    edges: [
+      ...session.edges,
+      {
+        id,
+        sourceNode: sourceNodeId,
+        sourcePort: sourcePortName,
+        destinationNode: destinationNodeId,
+        destinationPort: destinationPortName,
+        matrix,
+        enabled: true,
+      },
+    ],
   };
 }
 
@@ -781,15 +981,30 @@ export function insertDraftMixer(session: Session, edgeId: EntityId): Session {
   if (!edge) throw new Error(`Unknown draft connection: ${edgeId}`);
   const sourceNode = session.nodes.find((node) => node.id === edge.sourceNode);
   const sourcePort = sourceNode?.ports.find((port) => port.name === edge.sourcePort);
-  if (!sourcePort || sourcePort.direction !== "output") throw new Error("Inserted mixer requires an output source port");
+  if (!sourcePort || sourcePort.direction !== "output")
+    throw new Error("Inserted mixer requires an output source port");
   const withoutEdge = removeDraftConnection(session, edgeId);
   const withMixer = appendLibraryNode(withoutEdge, "mixer");
   const mixer = withMixer.nodes.at(-1);
   if (!mixer) throw new Error("Unable to create an inserted mixer");
-  const widthMatched = { ...withMixer, nodes: withMixer.nodes.map((node) => node.id === mixer.id ? { ...node, ports: node.ports.map((port) => ({ ...port, channels: sourcePort.channels })) } : node) };
+  const widthMatched = {
+    ...withMixer,
+    nodes: withMixer.nodes.map((node) =>
+      node.id === mixer.id
+        ? { ...node, ports: node.ports.map((port) => ({ ...port, channels: sourcePort.channels })) }
+        : node,
+    ),
+  };
   const upstream = appendDraftConnection(widthMatched, edge.sourceNode, edge.sourcePort, mixer.id, "in");
   const split = appendDraftConnection(upstream, mixer.id, "out", edge.destinationNode, edge.destinationPort);
-  return { ...split, edges: split.edges.map((candidate) => candidate.sourceNode === mixer.id && candidate.destinationNode === edge.destinationNode ? { ...candidate, matrix: [...edge.matrix] } : candidate) };
+  return {
+    ...split,
+    edges: split.edges.map((candidate) =>
+      candidate.sourceNode === mixer.id && candidate.destinationNode === edge.destinationNode
+        ? { ...candidate, matrix: [...edge.matrix] }
+        : candidate,
+    ),
+  };
 }
 
 /** Turns a second direct source-to-output connection into a visible mixer. */
@@ -820,18 +1035,25 @@ export function routeFedMixerToOccupiedOutput(
   const occupied = session.edges.find((edge) => edge.id === occupiedEdgeId);
   const mixer = session.nodes.find((node) => node.id === mixerNodeId);
   if (!occupied || mixer?.kind !== "mixer") return null;
-  const existingInput = session.edges.some((edge) => edge.destinationNode === mixerNodeId && edge.sourceNode === occupied.sourceNode && edge.sourcePort === occupied.sourcePort);
+  const existingInput = session.edges.some(
+    (edge) =>
+      edge.destinationNode === mixerNodeId &&
+      edge.sourceNode === occupied.sourceNode &&
+      edge.sourcePort === occupied.sourcePort,
+  );
   if (!existingInput) return null;
   const withoutDirectBranch = removeDraftConnection(session, occupiedEdgeId);
-  return appendDraftConnection(withoutDirectBranch, mixerNodeId, mixerOutputPort, occupied.destinationNode, occupied.destinationPort);
+  return appendDraftConnection(
+    withoutDirectBranch,
+    mixerNodeId,
+    mixerOutputPort,
+    occupied.destinationNode,
+    occupied.destinationPort,
+  );
 }
 
 /** Inserts a built-in processor directly into one draft connection. */
-export function insertDraftProcessor(
-  session: Session,
-  edgeId: EntityId,
-  kind: InsertableProcessorKind,
-): Session {
+export function insertDraftProcessor(session: Session, edgeId: EntityId, kind: InsertableProcessorKind): Session {
   const edge = session.edges.find((candidate) => candidate.id === edgeId);
   if (!edge) throw new Error(`Unknown draft connection: ${edgeId}`);
   const sourceNode = session.nodes.find((node) => node.id === edge.sourceNode);
@@ -847,17 +1069,21 @@ export function insertDraftProcessor(
   if (!processor) throw new Error("Unable to create an inserted processor");
   const resized = {
     ...withProcessor,
-    nodes: withProcessor.nodes.map((node) => node.id === processor.id
-      ? { ...node, ports: node.ports.map((port) => ({ ...port, channels: sourcePort.channels })) }
-      : node),
+    nodes: withProcessor.nodes.map((node) =>
+      node.id === processor.id
+        ? { ...node, ports: node.ports.map((port) => ({ ...port, channels: sourcePort.channels })) }
+        : node,
+    ),
   };
   const upstream = appendDraftConnection(resized, edge.sourceNode, edge.sourcePort, processor.id, "in");
   const downstream = appendDraftConnection(upstream, processor.id, "out", edge.destinationNode, edge.destinationPort);
   return {
     ...downstream,
-    edges: downstream.edges.map((candidate) => candidate.sourceNode === processor.id && candidate.destinationNode === edge.destinationNode
-      ? { ...candidate, matrix: [...edge.matrix] }
-      : candidate),
+    edges: downstream.edges.map((candidate) =>
+      candidate.sourceNode === processor.id && candidate.destinationNode === edge.destinationNode
+        ? { ...candidate, matrix: [...edge.matrix] }
+        : candidate,
+    ),
   };
 }
 
@@ -866,11 +1092,7 @@ export function insertDraftProcessor(
  * processors. The plugin is added disabled, matching `appendPluginPlaceholderNode`'s
  * fail-closed default; the dry signal passes through unaffected until it is
  * bound to an isolated worker and explicitly enabled. */
-export function insertDraftPluginProcessor(
-  session: Session,
-  edgeId: EntityId,
-  entry: PluginScanEntry,
-): Session {
+export function insertDraftPluginProcessor(session: Session, edgeId: EntityId, entry: PluginScanEntry): Session {
   const edge = session.edges.find((candidate) => candidate.id === edgeId);
   if (!edge) throw new Error(`Unknown draft connection: ${edgeId}`);
   const sourceNode = session.nodes.find((node) => node.id === edge.sourceNode);
@@ -886,17 +1108,21 @@ export function insertDraftPluginProcessor(
   if (!plugin) throw new Error("Unable to create an inserted plugin");
   const resized = {
     ...withPlugin,
-    nodes: withPlugin.nodes.map((node) => node.id === plugin.id
-      ? { ...node, ports: node.ports.map((port) => ({ ...port, channels: sourcePort.channels })) }
-      : node),
+    nodes: withPlugin.nodes.map((node) =>
+      node.id === plugin.id
+        ? { ...node, ports: node.ports.map((port) => ({ ...port, channels: sourcePort.channels })) }
+        : node,
+    ),
   };
   const upstream = appendDraftConnection(resized, edge.sourceNode, edge.sourcePort, plugin.id, "in");
   const downstream = appendDraftConnection(upstream, plugin.id, "out", edge.destinationNode, edge.destinationPort);
   return {
     ...downstream,
-    edges: downstream.edges.map((candidate) => candidate.sourceNode === plugin.id && candidate.destinationNode === edge.destinationNode
-      ? { ...candidate, matrix: [...edge.matrix] }
-      : candidate),
+    edges: downstream.edges.map((candidate) =>
+      candidate.sourceNode === plugin.id && candidate.destinationNode === edge.destinationNode
+        ? { ...candidate, matrix: [...edge.matrix] }
+        : candidate,
+    ),
   };
 }
 
@@ -906,15 +1132,20 @@ export function removeSinglePathDraftMixer(session: Session, mixerId: EntityId):
   if (!mixer || mixer.kind !== "mixer") throw new Error("Choose a mixer node");
   const incoming = session.edges.filter((edge) => edge.destinationNode === mixerId);
   const outgoing = session.edges.filter((edge) => edge.sourceNode === mixerId);
-  if (incoming.length !== 1 || outgoing.length !== 1) throw new Error("Mixer removal requires exactly one incoming and one outgoing connection");
+  if (incoming.length !== 1 || outgoing.length !== 1)
+    throw new Error("Mixer removal requires exactly one incoming and one outgoing connection");
   const sourceNode = session.nodes.find((node) => node.id === incoming[0].sourceNode);
   const mixerInput = mixer.ports.find((port) => port.name === incoming[0].destinationPort);
   const mixerOutput = mixer.ports.find((port) => port.name === outgoing[0].sourcePort);
   const destinationNode = session.nodes.find((node) => node.id === outgoing[0].destinationNode);
   const sourcePort = sourceNode?.ports.find((port) => port.name === incoming[0].sourcePort);
   const destinationPort = destinationNode?.ports.find((port) => port.name === outgoing[0].destinationPort);
-  if (!sourcePort || !mixerInput || !mixerOutput || !destinationPort) throw new Error("Mixer connections reference unknown ports");
-  if (incoming[0].matrix.length !== mixerInput.channels * sourcePort.channels || outgoing[0].matrix.length !== destinationPort.channels * mixerOutput.channels) {
+  if (!sourcePort || !mixerInput || !mixerOutput || !destinationPort)
+    throw new Error("Mixer connections reference unknown ports");
+  if (
+    incoming[0].matrix.length !== mixerInput.channels * sourcePort.channels ||
+    outgoing[0].matrix.length !== destinationPort.channels * mixerOutput.channels
+  ) {
     throw new Error("Mixer removal requires valid channel matrices");
   }
   const composedMatrix = Array.from({ length: destinationPort.channels * sourcePort.channels }, (_, index) => {
@@ -922,13 +1153,28 @@ export function removeSinglePathDraftMixer(session: Session, mixerId: EntityId):
     const sourceChannel = index % sourcePort.channels;
     let value = 0;
     for (let mixerChannel = 0; mixerChannel < mixerInput.channels; mixerChannel += 1) {
-      value += (outgoing[0].matrix[destinationChannel * mixerOutput.channels + mixerChannel] ?? 0) * (incoming[0].matrix[mixerChannel * sourcePort.channels + sourceChannel] ?? 0);
+      value +=
+        (outgoing[0].matrix[destinationChannel * mixerOutput.channels + mixerChannel] ?? 0) *
+        (incoming[0].matrix[mixerChannel * sourcePort.channels + sourceChannel] ?? 0);
     }
     return value;
   });
   const reduced = removeDraftNode(session, mixerId);
-  const reconnected = appendDraftConnection(reduced, incoming[0].sourceNode, incoming[0].sourcePort, outgoing[0].destinationNode, outgoing[0].destinationPort);
-  return { ...reconnected, edges: reconnected.edges.map((edge) => edge.sourceNode === incoming[0].sourceNode && edge.destinationNode === outgoing[0].destinationNode ? { ...edge, matrix: composedMatrix } : edge) };
+  const reconnected = appendDraftConnection(
+    reduced,
+    incoming[0].sourceNode,
+    incoming[0].sourcePort,
+    outgoing[0].destinationNode,
+    outgoing[0].destinationPort,
+  );
+  return {
+    ...reconnected,
+    edges: reconnected.edges.map((edge) =>
+      edge.sourceNode === incoming[0].sourceNode && edge.destinationNode === outgoing[0].destinationNode
+        ? { ...edge, matrix: composedMatrix }
+        : edge,
+    ),
+  };
 }
 
 /** Removes one draft edge while leaving the authoritative graph untouched. */
@@ -960,20 +1206,23 @@ export function duplicateDraftNode(session: Session, nodeId: EntityId): Session 
   }
   return {
     ...session,
-    nodes: [...session.nodes, {
-      ...original,
-      id,
-      name: `${original.name} copy ${suffix}`,
-      parameters: { ...original.parameters },
-      ports: original.ports.map((port) => ({ ...port })),
-    }],
+    nodes: [
+      ...session.nodes,
+      {
+        ...original,
+        id,
+        name: `${original.name} copy ${suffix}`,
+        parameters: { ...original.parameters },
+        ports: original.ports.map((port) => ({ ...port })),
+      },
+    ],
   };
 }
 
 /** Changes only a draft edge's enabled state; topology and revision are preserved. */
 export function setDraftConnectionEnabled(session: Session, edgeId: EntityId, enabled: boolean): Session {
   if (!session.edges.some((edge) => edge.id === edgeId)) throw new Error(`Unknown draft connection: ${edgeId}`);
-  return { ...session, edges: session.edges.map((edge) => edge.id === edgeId ? { ...edge, enabled } : edge) };
+  return { ...session, edges: session.edges.map((edge) => (edge.id === edgeId ? { ...edge, enabled } : edge)) };
 }
 
 /**
@@ -990,7 +1239,7 @@ export function setNodeDraftFlag(
   if (nodeIndex < 0) throw new Error(`Unknown node: ${nodeId}`);
   return {
     ...session,
-    nodes: session.nodes.map((node, index) => index === nodeIndex ? { ...node, [flag]: value } : node),
+    nodes: session.nodes.map((node, index) => (index === nodeIndex ? { ...node, [flag]: value } : node)),
   };
 }
 
@@ -1000,7 +1249,7 @@ export function setNodeDraftName(session: Session, nodeId: EntityId, name: strin
   if (trimmed.length === 0) throw new Error("Node name cannot be empty");
   if (trimmed.length > 120) throw new Error("Node name cannot exceed 120 characters");
   if (!session.nodes.some((node) => node.id === nodeId)) throw new Error(`Unknown node: ${nodeId}`);
-  return { ...session, nodes: session.nodes.map((node) => node.id === nodeId ? { ...node, name: trimmed } : node) };
+  return { ...session, nodes: session.nodes.map((node) => (node.id === nodeId ? { ...node, name: trimmed } : node)) };
 }
 
 /** Normalizes and validates a session name in the local candidate. */
@@ -1020,21 +1269,34 @@ export function setNodeDraftParameter(
   const nodeIndex = session.nodes.findIndex((node) => node.id === nodeId);
   if (nodeIndex < 0) throw new Error(`Unknown node: ${nodeId}`);
   const node = session.nodes[nodeIndex];
-  if (node.kind === "volume" && parameter === "percent" && (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 200)) {
+  if (
+    node.kind === "volume" &&
+    parameter === "percent" &&
+    (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 200)
+  ) {
     throw new Error("Volume must be between 0 and 200 %");
   }
-  if (node.kind === "mixer" && parameter.startsWith(MIXER_INPUT_VOLUME_PREFIX) && (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 100)) {
+  if (
+    node.kind === "mixer" &&
+    parameter.startsWith(MIXER_INPUT_VOLUME_PREFIX) &&
+    (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 100)
+  ) {
     throw new Error("Mixer input volume must be between 0 and 100 %");
   }
-  if (node.kind === "gain" && parameter === "gainDb" && (typeof value !== "number" || !Number.isFinite(value) || value < GAIN_MIN_DB || value > GAIN_MAX_DB)) {
+  if (
+    node.kind === "gain" &&
+    parameter === "gainDb" &&
+    (typeof value !== "number" || !Number.isFinite(value) || value < GAIN_MIN_DB || value > GAIN_MAX_DB)
+  ) {
     throw new Error(`Gain must be between ${GAIN_MIN_DB} and ${GAIN_MAX_DB} dB`);
   }
-  if (node.kind === "parametricEq" && typeof value === "number" && !Number.isFinite(value)) throw new Error("Parametric EQ values must be finite");
+  if (node.kind === "parametricEq" && typeof value === "number" && !Number.isFinite(value))
+    throw new Error("Parametric EQ values must be finite");
   return {
     ...session,
-    nodes: session.nodes.map((node, index) => index === nodeIndex
-      ? { ...node, parameters: { ...node.parameters, [parameter]: value } }
-      : node),
+    nodes: session.nodes.map((node, index) =>
+      index === nodeIndex ? { ...node, parameters: { ...node.parameters, [parameter]: value } } : node,
+    ),
   };
 }
 
@@ -1044,7 +1306,7 @@ export function resetNodeDraftParameters(session: Session, nodeId: EntityId): Se
   if (!node) throw new Error(`Unknown node: ${nodeId}`);
   const definition = libraryNodeDefinitions[node.kind as LibraryNodeKind];
   const parameters = definition ? { ...definition.parameters } : { ...node.parameters };
-  return { ...session, nodes: session.nodes.map((item) => item.id === nodeId ? { ...item, parameters } : item) };
+  return { ...session, nodes: session.nodes.map((item) => (item.id === nodeId ? { ...item, parameters } : item)) };
 }
 
 /** Produces deterministic plan inputs for changed node boolean flags. */
@@ -1097,7 +1359,9 @@ export type PluginCatalogEntry = { entry: PluginScanEntry; name: string; format:
  * Supported x64 plugins from all remembered scans, one per binary (the same
  * plugin found through two folders is listed once), sorted by name.
  */
-export function pluginCatalog(inventories: ReadonlyArray<{ directory: string; entries: PluginScanEntry[] }>): PluginCatalogEntry[] {
+export function pluginCatalog(
+  inventories: ReadonlyArray<{ directory: string; entries: PluginScanEntry[] }>,
+): PluginCatalogEntry[] {
   const seen = new Set<string>();
   const catalog: PluginCatalogEntry[] = [];
   for (const inventory of inventories) {
@@ -1108,7 +1372,12 @@ export function pluginCatalog(inventories: ReadonlyArray<{ directory: string; en
       if (seen.has(key)) continue;
       seen.add(key);
       const file = identity.path.split(/[\\/]/).pop() ?? identity.path;
-      catalog.push({ entry, name: file.replace(/\.(vst3|dll)$/i, ""), format: identity.format === "vst3" ? "VST3" : "VST2", folder: inventory.directory });
+      catalog.push({
+        entry,
+        name: file.replace(/\.(vst3|dll)$/i, ""),
+        format: identity.format === "vst3" ? "VST3" : "VST2",
+        folder: inventory.directory,
+      });
     }
   }
   return catalog.sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));

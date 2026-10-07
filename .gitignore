@@ -1,6 +1,9 @@
 /contracts/node_modules/
 /ui/node_modules/
 /ui/dist/
+/ui/coverage/
+# cargo llvm-cov output from child processes (plug-in worker tests).
+*.profraw
 /target/
 **/target/
 /third_party/
@@ -10,3 +13,6 @@
 *.cat
 /ui/dist-review-*/
 /.env
+
+# Agent worktrees (Claude Code)
+.claude/worktrees/

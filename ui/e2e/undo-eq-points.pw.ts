@@ -11,7 +11,10 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(undo).toBeDisabled();
     await expect(redo).toBeDisabled();
     await page.getByRole("tab", { name: "Tools", exact: true }).click();
-    await page.locator(".tool-card").filter({ has: page.getByText("Advanced EQ", { exact: true }) }).click();
+    await page
+      .locator(".tool-card")
+      .filter({ has: page.getByText("Advanced EQ", { exact: true }) })
+      .click();
     await page.getByTestId("rf__node-parametricEq-1").locator(".flow-node-title").click();
     const editor = page.getByRole("region", { name: "Advanced EQ editor" });
     await editor.getByRole("button", { name: "Add point", exact: true }).click();

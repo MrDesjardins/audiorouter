@@ -1,7 +1,10 @@
 import { test, expect } from "./real-backend";
 import { readFile } from "node:fs/promises";
 
-test("Recorder UI creates real WAV, arms, pauses, resumes and finalizes synthetic frames", async ({ page, backend }) => {
+test("Recorder UI creates real WAV, arms, pauses, resumes and finalizes synthetic frames", async ({
+  page,
+  backend,
+}) => {
   await page.goto("/backend-harness.html");
   await expect(page.getByRole("heading", { name: "Offline qualification", exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Recording", exact: true }).click();
@@ -15,8 +18,11 @@ test("Recorder UI creates real WAV, arms, pauses, resumes and finalizes syntheti
   const run = async (action: string, frame: number, state: string) => {
     await panel.getByLabel("Recorder engine frame", { exact: true }).fill(String(frame));
     await panel.getByRole("button", { name: action, exact: true }).click();
-    try { await expect(panel.locator(".badge")).toHaveText(state); }
-    catch (error) { throw new Error(`${action}: ${await panel.innerText()}\n${error}`); }
+    try {
+      await expect(panel.locator(".badge")).toHaveText(state);
+    } catch (error) {
+      throw new Error(`${action}: ${await panel.innerText()}\n${error}`, { cause: error });
+    }
   };
   await run("Arm", 0, "armed");
   await run("Start", 0, "recording");
@@ -38,11 +44,17 @@ test("Recorder UI creates real WAV, arms, pauses, resumes and finalizes syntheti
   expect((await backend.call("status.get")).activeSessionCount).toBe(0);
 });
 
-test("Recorder node settings save through the real backend and one-click recording writes a real file", async ({ page, backend }) => {
+test("Recorder node settings save through the real backend and one-click recording writes a real file", async ({
+  page,
+  backend,
+}) => {
   await page.goto("/backend-harness.html");
   await expect(page.getByRole("heading", { name: "Offline qualification", exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Tools", exact: true }).click();
-  await page.locator(".tool-card").filter({ has: page.getByText("Recorder", { exact: true }) }).click();
+  await page
+    .locator(".tool-card")
+    .filter({ has: page.getByText("Recorder", { exact: true }) })
+    .click();
   await page.getByTestId("rf__node-recorder-1").locator(".flow-node-title").click();
   const inspector = page.locator(".main-content > .inspector");
   await inspector.getByLabel("File format", { exact: true }).selectOption("wavPcm16");
@@ -51,13 +63,34 @@ test("Recorder node settings save through the real backend and one-click recordi
   await page.locator(".topbar").getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.locator(".global-action-message")).toContainText(/saved.*revision/i);
   const saved = await backend.call("sessions.get", { sessionId: "e2e-session" });
-  expect(saved.nodes.find((node: { id: string }) => node.id === "recorder-1").parameters).toMatchObject({ format: "wavPcm16", autoRecord: true, splitMinutes: 15 });
+  expect(saved.nodes.find((node: { id: string }) => node.id === "recorder-1").parameters).toMatchObject({
+    format: "wavPcm16",
+    autoRecord: true,
+    splitMinutes: 15,
+  });
   // Stop without a recording is safe; Record, audio, Stop writes a WAV.
-  expect((await backend.call("recorders.stopRecording", { sessionId: "e2e-session", nodeId: "recorder-1", idempotencyKey: "stop-idle" })).state).toBe("idle");
-  const started = await backend.call("recorders.startRecording", { sessionId: "e2e-session", nodeId: "recorder-1", idempotencyKey: "record-1" });
+  expect(
+    (
+      await backend.call("recorders.stopRecording", {
+        sessionId: "e2e-session",
+        nodeId: "recorder-1",
+        idempotencyKey: "stop-idle",
+      })
+    ).state,
+  ).toBe("idle");
+  const started = await backend.call("recorders.startRecording", {
+    sessionId: "e2e-session",
+    nodeId: "recorder-1",
+    idempotencyKey: "record-1",
+  });
   expect(started).toMatchObject({ state: "recording", format: "wavPcm16", splitMinutes: 15 });
-  for (let frame = 0; frame < 128 * 6; frame += 128) await backend.call("fixture.recordNodeQuantum", { sessionId: "e2e-session", nodeId: "recorder-1", frame });
-  const stopped = await backend.call("recorders.stopRecording", { sessionId: "e2e-session", nodeId: "recorder-1", idempotencyKey: "stop-1" });
+  for (let frame = 0; frame < 128 * 6; frame += 128)
+    await backend.call("fixture.recordNodeQuantum", { sessionId: "e2e-session", nodeId: "recorder-1", frame });
+  const stopped = await backend.call("recorders.stopRecording", {
+    sessionId: "e2e-session",
+    nodeId: "recorder-1",
+    idempotencyKey: "stop-1",
+  });
   expect(stopped.state).toBe("completed");
   const bytes = await readFile(started.path);
   expect(bytes.subarray(0, 4).toString()).toBe("RIFF");

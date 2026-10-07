@@ -48,13 +48,17 @@ test("Duck inspector shows no raw trigger fields from the catalog", async ({ pag
   await page.goto("/backend-harness.html");
   await expect(page.getByRole("heading", { name: "Offline qualification", exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Tools", exact: true }).click();
-  await page.locator(".tool-card").filter({ has: page.getByText("Duck", { exact: true }) }).click();
+  await page
+    .locator(".tool-card")
+    .filter({ has: page.getByText("Duck", { exact: true }) })
+    .click();
   await page.getByTestId("rf__node-duck-1").locator(".flow-node-title").click();
   const inspector = page.locator(".main-content > .inspector");
   await expect(inspector.getByRole("slider", { name: "Duck amount" })).toBeVisible();
   // Without the filter the generic editor adds a second Trigger select and
   // "Duck menu/prep/between rounds" checkboxes under the Duck editor.
-  for (const raw of ["Duck menu", "Duck prep", "Duck between rounds"]) await expect(inspector.getByText(raw, { exact: true })).toHaveCount(0);
+  for (const raw of ["Duck menu", "Duck prep", "Duck between rounds"])
+    await expect(inspector.getByText(raw, { exact: true })).toHaveCount(0);
   await expect(inspector.locator("label", { hasText: /^Trigger\s*Level\s*Siege round$/ })).toHaveCount(0);
   await expect(inspector.getByRole("textbox", { name: /keyNodeId/i })).toHaveCount(0);
 });

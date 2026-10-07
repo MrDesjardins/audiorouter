@@ -55,6 +55,9 @@ mod windows_registry {
     fn value_text(key: HKEY, name: PCWSTR) -> Result<Option<String>, String> {
         let mut value_type = REG_VALUE_TYPE(0);
         let mut byte_len = 0u32;
+        // SAFETY: a size query: `key` is an open key owned by the caller, `name` is
+        // a NUL-terminated wide string alive for the call, no data buffer is
+        // passed, and the type and length out pointers refer to live locals.
         let status = unsafe {
             RegQueryValueExW(
                 key,
@@ -81,6 +84,9 @@ mod windows_registry {
             return Err("startup registry value exceeds the bounded size".into());
         }
         let mut bytes = vec![0u8; byte_len as usize];
+        // SAFETY: `bytes` is a live buffer of exactly `byte_len` bytes, the length
+        // passed in, so the call writes within it and reports the written length;
+        // the other pointers are as in the size query.
         let status = unsafe {
             RegQueryValueExW(
                 key,
@@ -111,8 +117,9 @@ mod windows_registry {
 
     impl Drop for Key {
         fn drop(&mut self) {
-            // Closing a successfully created/opened HKCU key is infallible
-            // for ownership purposes; the operation result is already known.
+            // SAFETY: `self.0` is the key opened or created by a successful
+            // registry call and owned only by this wrapper; it is closed once.
+            // The close result does not affect ownership, so it is ignored.
             unsafe {
                 let _ = RegCloseKey(self.0);
             }
@@ -125,6 +132,9 @@ mod windows_registry {
         let name = wide(VALUE_NAME);
         let mut raw = HKEY::default();
         let status = if enabled {
+            // SAFETY: `subkey` is a NUL-terminated wide string alive for the call, no
+            // class or security attributes are passed, and `raw` is a live local that
+            // receives the key, owned by `Key` below on success.
             unsafe {
                 RegCreateKeyExW(
                     HKEY_CURRENT_USER,
@@ -139,6 +149,8 @@ mod windows_registry {
                 )
             }
         } else {
+            // SAFETY: `subkey` is a NUL-terminated wide string alive for the call and
+            // `raw` is a live local that receives the key, owned by `Key` on success.
             unsafe {
                 RegOpenKeyExW(
                     HKEY_CURRENT_USER,
@@ -171,7 +183,7 @@ mod windows_registry {
             }
             // Start in the tray at sign-in: quoted path plus `--tray`.
             let value = wide(&super::run_value(&executable_text));
-            // `value` is a live Vec<u16>; its nul terminator is excluded and
+            // SAFETY: `value` is a live Vec<u16>; its nul terminator is excluded and
             // the byte view preserves the UTF-16LE representation expected by
             // REG_SZ. The view is consumed before the Vec can move.
             let bytes = unsafe {
@@ -180,6 +192,8 @@ mod windows_registry {
                     (value.len() - 1) * std::mem::size_of::<u16>(),
                 )
             };
+            // SAFETY: `raw` is the open key owned by `_key`, `name` is NUL-terminated,
+            // and `bytes` is a live view of the REG_SZ data built above.
             unsafe { RegSetValueExW(raw, PCWSTR(name.as_ptr()), Some(0), REG_SZ, Some(bytes)) }
         } else {
             let Some(existing) = value_text(raw, PCWSTR(name.as_ptr()))? else {
@@ -190,6 +204,8 @@ mod windows_registry {
             if !registration_matches(&existing, &executable_text) {
                 return Err("startup registration is owned by another command".into());
             }
+            // SAFETY: `raw` is the open key owned by `_key` and `name` is a
+            // NUL-terminated wide string alive for the call.
             unsafe { RegDeleteValueW(raw, PCWSTR(name.as_ptr())) }
         };
         if !enabled && status == ERROR_FILE_NOT_FOUND {
@@ -208,6 +224,8 @@ mod windows_registry {
         let subkey = wide(RUN_SUBKEY);
         let name = wide(VALUE_NAME);
         let mut raw = HKEY::default();
+        // SAFETY: `subkey` is a NUL-terminated wide string alive for the call and
+        // `raw` is a live local that receives the key, owned by `Key` on success.
         let status = unsafe {
             RegOpenKeyExW(
                 HKEY_CURRENT_USER,

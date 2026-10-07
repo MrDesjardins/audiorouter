@@ -4,7 +4,10 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { useState } from "react";
 import { ErrorBoundary, RootRecoveryPanel, renderErrorDiagnostic } from "./ErrorBoundary";
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 let shouldThrow = true;
 function Fragile() {
@@ -16,7 +19,14 @@ it("contains a render failure to its area, records a diagnostic and recovers on 
   vi.spyOn(console, "error").mockImplementation(() => {});
   shouldThrow = true;
   const onError = vi.fn();
-  render(<><button type="button">Stop</button><ErrorBoundary area="Signal flow" onError={onError}><Fragile /></ErrorBoundary></>);
+  render(
+    <>
+      <button type="button">Stop</button>
+      <ErrorBoundary area="Signal flow" onError={onError}>
+        <Fragile />
+      </ErrorBoundary>
+    </>,
+  );
 
   expect(screen.getByRole("alert", { name: "Signal flow stopped" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Stop" })).toBeTruthy();
@@ -31,8 +41,24 @@ it("contains a render failure to its area, records a diagnostic and recovers on 
 it("keeps sibling areas working when one area fails", () => {
   vi.spyOn(console, "error").mockImplementation(() => {});
   shouldThrow = true;
-  function Counter() { const [count, setCount] = useState(0); return <button type="button" onClick={() => setCount(count + 1)}>Clicked {count}</button>; }
-  render(<><ErrorBoundary area="Properties"><Fragile /></ErrorBoundary><ErrorBoundary area="Side panel"><Counter /></ErrorBoundary></>);
+  function Counter() {
+    const [count, setCount] = useState(0);
+    return (
+      <button type="button" onClick={() => setCount(count + 1)}>
+        Clicked {count}
+      </button>
+    );
+  }
+  render(
+    <>
+      <ErrorBoundary area="Properties">
+        <Fragile />
+      </ErrorBoundary>
+      <ErrorBoundary area="Side panel">
+        <Counter />
+      </ErrorBoundary>
+    </>,
+  );
   fireEvent.click(screen.getByRole("button", { name: "Clicked 0" }));
   expect(screen.getByRole("button", { name: "Clicked 1" })).toBeTruthy();
   expect(screen.queryByRole("alert", { name: "Side panel stopped" })).toBeNull();

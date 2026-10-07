@@ -10,14 +10,27 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await page.getByLabel("Color theme").selectOption(theme);
     // Node cards follow the theme: strong card text is light on the dark
     // themes and dark on the light theme.
-    const strongText = { dark: "rgb(246, 248, 251)", light: "rgb(20, 32, 51)", "high-contrast": "rgb(255, 255, 255)" }[theme]!;
-    await expect(page.getByTestId("rf__node-voice").locator(".node-fader-readout strong")).toHaveCSS("color", strongText);
+    const strongText = { dark: "rgb(246, 248, 251)", light: "rgb(20, 32, 51)", "high-contrast": "rgb(255, 255, 255)" }[
+      theme
+    ]!;
+    await expect(page.getByTestId("rf__node-voice").locator(".node-fader-readout strong")).toHaveCSS(
+      "color",
+      strongText,
+    );
     await expect(page.getByTestId("rf__node-voice").locator(".flow-node-title strong")).toHaveCSS("color", strongText);
     const directory = path.resolve("../target/feature-confidence-visual");
     await mkdir(directory, { recursive: true });
-    for (const [name, kind, control] of [["Dehum", "dehum", "Harmonics precise value"], ["Input Switch", "inputSwitch", "Active input"], ["Network Send", "networkSend", "Receiving computer's IP address"], ["Network Receive", "networkReceive", "Sending computer's IP address"]]) {
+    for (const [name, kind, control] of [
+      ["Dehum", "dehum", "Harmonics precise value"],
+      ["Input Switch", "inputSwitch", "Active input"],
+      ["Network Send", "networkSend", "Receiving computer's IP address"],
+      ["Network Receive", "networkReceive", "Sending computer's IP address"],
+    ]) {
       await page.getByRole("tab", { name: "Tools", exact: true }).click();
-      await page.locator(".tool-card").filter({ has: page.getByText(name, { exact: true }) }).click();
+      await page
+        .locator(".tool-card")
+        .filter({ has: page.getByText(name, { exact: true }) })
+        .click();
       await page.getByTestId(`rf__node-${kind}-1`).locator(".flow-node-title").click();
       const field = page.locator(".main-content > .inspector").getByLabel(control, { exact: true });
       await expect(field).toBeVisible();
@@ -25,25 +38,34 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       const box = await field.boundingBox();
       expect(box!.x).toBeGreaterThanOrEqual(0);
       expect(box!.x + box!.width).toBeLessThanOrEqual(1280);
-      const style = await field.evaluate(element => {
+      const style = await field.evaluate((element) => {
         const style = getComputedStyle(element);
         return { radius: style.borderRadius, shadow: style.boxShadow, background: style.backgroundImage };
       });
       // Form fields use the app field style; Input Switch is a pair of choice buttons.
-      if (await field.evaluate((element) => ["INPUT", "SELECT", "TEXTAREA"].includes(element.tagName))) expect(style).toEqual({ radius: "9px", shadow: "none", background: "none" });
+      if (await field.evaluate((element) => ["INPUT", "SELECT", "TEXTAREA"].includes(element.tagName)))
+        expect(style).toEqual({ radius: "9px", shadow: "none", background: "none" });
       if (kind === "networkSend" || kind === "networkReceive") {
         await field.fill("192.168.1.20");
-        await expect(page.getByTestId(`rf__node-${kind}-1`)).toContainText(`${kind === "networkSend" ? "To" : "From"} 192.168.1.20:47800`);
+        await expect(page.getByTestId(`rf__node-${kind}-1`)).toContainText(
+          `${kind === "networkSend" ? "To" : "From"} 192.168.1.20:47800`,
+        );
       }
       await page.screenshot({ path: path.join(directory, `${theme}-${kind}.png`) });
     }
   });
 }
 
-test("integer processor bounds reject invalid edits and arrow keys use the advertised step", async ({ page, backend }) => {
+test("integer processor bounds reject invalid edits and arrow keys use the advertised step", async ({
+  page,
+  backend,
+}) => {
   await page.goto("/backend-harness.html");
   await page.getByRole("tab", { name: "Tools", exact: true }).click();
-  await page.locator(".tool-card").filter({ has: page.getByText("Dehum", { exact: true }) }).click();
+  await page
+    .locator(".tool-card")
+    .filter({ has: page.getByText("Dehum", { exact: true }) })
+    .click();
   await page.getByTestId("rf__node-dehum-1").locator(".flow-node-title").click();
   const field = page.locator(".main-content > .inspector").getByLabel("Harmonics precise value", { exact: true });
   await expect(field).toHaveAttribute("step", "1");

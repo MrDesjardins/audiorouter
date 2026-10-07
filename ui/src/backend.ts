@@ -1,7 +1,9 @@
 import { AudioRouterRpcError, createAudioRouterClient } from "@audiorouter/contracts";
 import { uiIdempotencyKey } from "./idempotency";
+import { reportRpcFailure } from "./clientDiagnostics";
 import type {
   AudioRouterClient,
+  VerboseDiagnosticsStatus,
   ApplicationInfo,
   DeviceListItem,
   VirtualDeviceInfo,
@@ -27,7 +29,6 @@ import type {
   RecordingMetadataResult,
   RecordingRenameResult,
   RecordingPreviewResult,
-  RecordingRecoveryResult,
   RecordingRecoverySingleResult,
   RecordingRecoveryList,
   RecordingRevealResult,
@@ -78,14 +79,16 @@ const deviceNames = new Map<string, { name: string; direction: string }>();
 
 export function rememberDeviceNames(devices: readonly DeviceListItem[]) {
   deviceNames.clear();
-  for (const device of devices) if ("name" in device && typeof device.name === "string") deviceNames.set(device.id, { name: device.name, direction: device.direction });
+  for (const device of devices)
+    if ("name" in device && typeof device.name === "string")
+      deviceNames.set(device.id, { name: device.name, direction: device.direction });
 }
 
 /** The device a failed audio operation reports in `resourceIds`, when it is known. */
 function failedDevice(error: unknown) {
   const ids = error instanceof AudioRouterRpcError ? error.data?.resourceIds : undefined;
   const id = Array.isArray(ids) && typeof ids[0] === "string" ? ids[0] : null;
-  return id ? deviceNames.get(id) ?? null : null;
+  return id ? (deviceNames.get(id) ?? null) : null;
 }
 
 /**
@@ -97,7 +100,13 @@ function sameCableTwin(device: { name: string; direction: string }) {
   const cable = /\((VB-Audio[^)]*)\)\s*$/.exec(device.name)?.[1];
   if (!cable) return null;
   for (const other of deviceNames.values()) {
-    if (other.name !== device.name && other.direction === device.direction && other.name.endsWith(`(${cable})`) && /16ch/i.test(other.name) !== /16ch/i.test(device.name)) return other.name;
+    if (
+      other.name !== device.name &&
+      other.direction === device.direction &&
+      other.name.endsWith(`(${cable})`) &&
+      /16ch/i.test(other.name) !== /16ch/i.test(device.name)
+    )
+      return other.name;
   }
   return null;
 }
@@ -110,16 +119,28 @@ export function formatUiError(error: unknown, fallback: string): string {
 
 function formatUiErrorText(error: unknown, fallback: string): string {
   if (!(error instanceof Error)) return fallback;
-  if (/native (?:worker|render-source worker|output fan-out) (?:is )?already (?:attached|connected)/i.test(error.message)) {
+  if (
+    /native (?:worker|render-source worker|output fan-out) (?:is )?already (?:attached|connected)/i.test(error.message)
+  ) {
     return "Audio is already prepared in this app. Stop playback, then try Play again. If it still cannot start, close AudioRouter and reopen it.";
   }
   if (isRevisionConflict(error)) {
     return "Another save changed this route, so your save was not applied. Your draft is preserved. Review it against the latest saved route, then plan and save again.";
   }
-  if (/0x88890004/i.test(error.message) || (error instanceof AudioRouterRpcError && (error.data?.code === "deviceInvalidated" || (typeof error.data?.hresult === "number" && (error.data.hresult >>> 0) === 0x88890004)))) {
+  if (
+    /0x88890004/i.test(error.message) ||
+    (error instanceof AudioRouterRpcError &&
+      (error.data?.code === "deviceInvalidated" ||
+        (typeof error.data?.hresult === "number" && error.data.hresult >>> 0 === 0x88890004)))
+  ) {
     return "The selected audio device changed or disconnected. Stop audio, refresh the device list, then select the exact input and output again. Play will reopen those devices. If one is missing, reconnect it before retrying.";
   }
-  if (/0x8889000a/i.test(error.message) || (error instanceof AudioRouterRpcError && typeof error.data?.hresult === "number" && (error.data.hresult >>> 0) === 0x8889000A)) {
+  if (
+    /0x8889000a/i.test(error.message) ||
+    (error instanceof AudioRouterRpcError &&
+      typeof error.data?.hresult === "number" &&
+      error.data.hresult >>> 0 === 0x8889000a)
+  ) {
     const device = failedDevice(error);
     if (device) {
       const tab = device.direction === "capture" ? "Recording" : "Playback";
@@ -141,9 +162,8 @@ function formatUiErrorText(error: unknown, fallback: string): string {
   }
   if (!(error instanceof AudioRouterRpcError) || !error.data) return error.message;
   const { code, hresult, remediation, retryable } = error.data;
-  const hresultText = typeof hresult === "number"
-    ? `, HRESULT 0x${(hresult >>> 0).toString(16).padStart(8, "0").toUpperCase()}`
-    : "";
+  const hresultText =
+    typeof hresult === "number" ? `, HRESULT 0x${(hresult >>> 0).toString(16).padStart(8, "0").toUpperCase()}` : "";
   const retryText = retryable ? " Retry may succeed." : "";
   return `${error.message} [${code}${hresultText}] ${remediation}${retryText}`;
 }
@@ -165,18 +185,40 @@ export interface UiBackend {
   readonly connected: boolean;
   snapshot(sessionId?: string): Promise<UiBackendSnapshot>;
   refreshDiagnostics(): Promise<DiagnosticsSnapshot>;
-  subscribe(afterSequence?: number, sessionId?: string, backendEpoch?: number, categories?: StateEventCategory[]): Promise<EventsSubscribeResult>;
+  subscribe(
+    afterSequence?: number,
+    sessionId?: string,
+    backendEpoch?: number,
+    categories?: StateEventCategory[],
+  ): Promise<EventsSubscribeResult>;
   inspectRoute(destinationNode: string, sessionId?: string): Promise<RouteInspection | null>;
   planGraph(candidate: Session): Promise<GraphPlanResult>;
-  commitGraph(planId: string, baseRevision: number, idempotencyKey: string, acknowledgments?: string[]): Promise<GraphCommitResult>;
+  commitGraph(
+    planId: string,
+    baseRevision: number,
+    idempotencyKey: string,
+    acknowledgments?: string[],
+  ): Promise<GraphCommitResult>;
   listGraphHistory(sessionId: string, cursor?: string, limit?: number): Promise<GraphHistoryPage>;
   undoGraphPlan(sessionId: string, baseRevision: number): Promise<GraphUndoPlanResult>;
   beginAudioUpload(fileName: string, sizeBytes: number): Promise<MethodResult["audioMedia.beginUpload"]>;
-  uploadAudioChunk(uploadId: string, chunkIndex: number, dataBase64: string): Promise<MethodResult["audioMedia.uploadChunk"]>;
+  uploadAudioChunk(
+    uploadId: string,
+    chunkIndex: number,
+    dataBase64: string,
+  ): Promise<MethodResult["audioMedia.uploadChunk"]>;
   finishAudioUpload(uploadId: string): Promise<MethodResult["audioMedia.finishUpload"]>;
   importTemporaryRecording(recordingId: string): Promise<MethodResult["audioMedia.importTemporaryRecording"]>;
-  transportAudioSource(sessionId: string, nodeId: string, action: "play" | "pause" | "stop" | "status"): Promise<MethodResult["audioSources.transport"]>;
-  transportTimeShift?(sessionId: string, nodeId: string, action: MethodParams["timeShift.transport"]["action"]): Promise<MethodResult["timeShift.transport"]>;
+  transportAudioSource(
+    sessionId: string,
+    nodeId: string,
+    action: "play" | "pause" | "stop" | "status",
+  ): Promise<MethodResult["audioSources.transport"]>;
+  transportTimeShift?(
+    sessionId: string,
+    nodeId: string,
+    action: MethodParams["timeShift.transport"]["action"],
+  ): Promise<MethodResult["timeShift.transport"]>;
   listRecordings(sessionId?: string): Promise<RecordingRow[]>;
   listRecorders(): Promise<RecorderStatus[]>;
   listSessions(): Promise<Session[]>;
@@ -186,20 +228,61 @@ export interface UiBackend {
   setNode?(params: MethodParams["nodes.set"]): Promise<MethodResult["nodes.set"]>;
   listApplications(): Promise<ApplicationRow[]>;
   listDevices(): Promise<DeviceListItem[]>;
-  prepareNativeEndpoint?(sessionId: string, captureEndpointId: string, renderEndpointId: string): Promise<import("@audiorouter/contracts").NativeEndpointPrepareResult>;
-  prepareNativeOutputs?(sessionId: string, generation: number | undefined, renderEndpointIds: string[]): Promise<NativeOutputFanoutPrepareResult>;
-  prepareNativeMultiInputs?(sessionId: string, generation: number | undefined, sources: import("@audiorouter/contracts").NativeMultiInputSourceBinding[]): Promise<NativeMultiInputPrepareResult>;
+  prepareNativeEndpoint?(
+    sessionId: string,
+    captureEndpointId: string,
+    renderEndpointId: string,
+  ): Promise<import("@audiorouter/contracts").NativeEndpointPrepareResult>;
+  prepareNativeOutputs?(
+    sessionId: string,
+    generation: number | undefined,
+    renderEndpointIds: string[],
+  ): Promise<NativeOutputFanoutPrepareResult>;
+  prepareNativeMultiInputs?(
+    sessionId: string,
+    generation: number | undefined,
+    sources: import("@audiorouter/contracts").NativeMultiInputSourceBinding[],
+  ): Promise<NativeMultiInputPrepareResult>;
   /** Prepare every independent path of the saved session from the devices stored on its nodes. */
   prepareNativePaths?(sessionId: string): Promise<import("@audiorouter/contracts").NativePathsPrepareResult>;
-  rebindNativeEndpoint?(sessionId: string, captureEndpointId: string, renderEndpointId: string): Promise<import("@audiorouter/contracts").NativeEndpointRebindResult>;
+  rebindNativeEndpoint?(
+    sessionId: string,
+    captureEndpointId: string,
+    renderEndpointId: string,
+  ): Promise<import("@audiorouter/contracts").NativeEndpointRebindResult>;
   detachNativeEndpoint?(sessionId: string): Promise<import("@audiorouter/contracts").NativeEndpointDetachResult>;
   detachNativeDuplex?(sessionId: string): Promise<import("@audiorouter/contracts").NativeDuplexDetachResult>;
-  prepareNativeApplication?(params: Omit<import("@audiorouter/contracts").MethodParams["nativeApplications.prepare"], "creationTime100ns"> & { creationTime100ns: string | null }): Promise<import("@audiorouter/contracts").NativeApplicationPrepareResult>;
-  pumpNativeEndpoint?(sessionId: string, generation: number, maxPackets?: number): Promise<import("@audiorouter/contracts").NativeEndpointPumpResult>;
-  pumpNativeDuplex?(sessionId: string, generation: number, maxInputQuanta?: number, maxOutputPackets?: number): Promise<import("@audiorouter/contracts").NativeDuplexPumpResult>;
-  pumpNativeRenderSource?(sessionId: string, generation: number, maxQuanta?: number): Promise<NativeRenderSourcePumpResult>;
-  pumpNativeMultiInputs?(sessionId: string, generation: number, maxPackets?: number): Promise<NativeMultiInputPumpResult>;
-  bindNativeMultiInputBranches?(sessionId: string, generation: number, branchNodeIds: string[]): Promise<NativeMultiInputBranchBindingResult>;
+  prepareNativeApplication?(
+    params: Omit<import("@audiorouter/contracts").MethodParams["nativeApplications.prepare"], "creationTime100ns"> & {
+      creationTime100ns: string | null;
+    },
+  ): Promise<import("@audiorouter/contracts").NativeApplicationPrepareResult>;
+  pumpNativeEndpoint?(
+    sessionId: string,
+    generation: number,
+    maxPackets?: number,
+  ): Promise<import("@audiorouter/contracts").NativeEndpointPumpResult>;
+  pumpNativeDuplex?(
+    sessionId: string,
+    generation: number,
+    maxInputQuanta?: number,
+    maxOutputPackets?: number,
+  ): Promise<import("@audiorouter/contracts").NativeDuplexPumpResult>;
+  pumpNativeRenderSource?(
+    sessionId: string,
+    generation: number,
+    maxQuanta?: number,
+  ): Promise<NativeRenderSourcePumpResult>;
+  pumpNativeMultiInputs?(
+    sessionId: string,
+    generation: number,
+    maxPackets?: number,
+  ): Promise<NativeMultiInputPumpResult>;
+  bindNativeMultiInputBranches?(
+    sessionId: string,
+    generation: number,
+    branchNodeIds: string[],
+  ): Promise<NativeMultiInputBranchBindingResult>;
   listProcessors(): Promise<DiscoveryDocument["processors"]>;
   processorResponse(params: ProcessorResponseParams): Promise<ProcessorResponse>;
   listPresets(): Promise<DiscoveryDocument["presets"]>;
@@ -215,15 +298,26 @@ export interface UiBackend {
   listVirtualDevices(): Promise<VirtualDeviceInfo[]>;
   planVirtualDevice(operation: VirtualDeviceOperation): Promise<VirtualDevicePlanResult>;
   applyVirtualDevice(planId: string, idempotencyKey: string): Promise<VirtualDeviceApplyResult>;
-  provisionVirtualDevice(busId: string, instanceId: string, idempotencyKey: string): Promise<VirtualDeviceProvisionResult>;
+  provisionVirtualDevice(
+    busId: string,
+    instanceId: string,
+    idempotencyKey: string,
+  ): Promise<VirtualDeviceProvisionResult>;
   removeVirtualDevice(busId: string, idempotencyKey: string): Promise<VirtualDeviceRemoveResult>;
   listVirtualRoutes(): Promise<VirtualRouteListResult>;
-  replaceVirtualRoutes(baseRevision: number, routes: VirtualBusRoute[], idempotencyKey: string): Promise<VirtualRouteReplaceResult>;
+  replaceVirtualRoutes(
+    baseRevision: number,
+    routes: VirtualBusRoute[],
+    idempotencyKey: string,
+  ): Promise<VirtualRouteReplaceResult>;
   previewRecording(recordingId: string): Promise<RecordingPreviewResult>;
   getRecordingRecovery(recordingId: string): Promise<RecordingRecoverySingleResult>;
   listRecordingRecovery(): Promise<RecordingRecoveryList>;
   revealRecording(recordingId: string): Promise<RecordingRevealResult>;
-  setRecordingMetadata(recordingId: string, metadata: { title?: string | null; artist?: string | null; comment?: string | null; idempotencyKey?: string }): Promise<RecordingMetadataResult>;
+  setRecordingMetadata(
+    recordingId: string,
+    metadata: { title?: string | null; artist?: string | null; comment?: string | null; idempotencyKey?: string },
+  ): Promise<RecordingMetadataResult>;
   renameRecording(recordingId: string, newPath: string, idempotencyKey?: string): Promise<RecordingRenameResult>;
   setPrivacyMute(muted: boolean, idempotencyKey?: string): Promise<PrivacyMuteResult>;
   clearRecoverySafeMode(idempotencyKey?: string): Promise<RecoveryClearResult>;
@@ -232,8 +326,16 @@ export interface UiBackend {
   recycleRecording(recordingId: string, confirm: boolean, idempotencyKey?: string): Promise<RecordingRecycleResult>;
   createRecorder(params: MethodParams["recorders.create"]): Promise<RecorderCreateResult>;
   /** One-click Record / Stop on a Recorder node, using its own settings. */
-  startNodeRecording(sessionId: string, nodeId: string, idempotencyKey: string): Promise<MethodResult["recorders.startRecording"]>;
-  stopNodeRecording(sessionId: string, nodeId: string, idempotencyKey: string): Promise<MethodResult["recorders.stopRecording"]>;
+  startNodeRecording(
+    sessionId: string,
+    nodeId: string,
+    idempotencyKey: string,
+  ): Promise<MethodResult["recorders.startRecording"]>;
+  stopNodeRecording(
+    sessionId: string,
+    nodeId: string,
+    idempotencyKey: string,
+  ): Promise<MethodResult["recorders.stopRecording"]>;
   /** The approved recording folder (null until chosen) and a suggestion. */
   getRecordingRoot?(): Promise<MethodResult["recordings.getRoot"]>;
   /** Whether the user allowed this app to open audio devices on Play. */
@@ -243,13 +345,43 @@ export interface UiBackend {
   /** Approve a local recording folder, creating it when asked. */
   setRecordingRoot?(root: string, create: boolean, idempotencyKey: string): Promise<MethodResult["recordings.setRoot"]>;
   armRecorder(sessionId: string, idempotencyKey?: string, nodeId?: string): Promise<RecorderLifecycleResult>;
-  startRecorder(sessionId: string, frame: number, idempotencyKey?: string, nodeId?: string): Promise<RecorderLifecycleResult>;
-  pauseRecorder(sessionId: string, frame: number, idempotencyKey?: string, nodeId?: string): Promise<RecorderLifecycleResult>;
-  resumeRecorder(sessionId: string, frame: number, idempotencyKey?: string, nodeId?: string): Promise<RecorderLifecycleResult>;
-  splitRecorder(sessionId: string, frame: number, idempotencyKey?: string, nodeId?: string): Promise<RecorderLifecycleResult>;
-  stopRecorder(sessionId: string, frame: number, idempotencyKey?: string, nodeId?: string): Promise<RecorderLifecycleResult>;
+  startRecorder(
+    sessionId: string,
+    frame: number,
+    idempotencyKey?: string,
+    nodeId?: string,
+  ): Promise<RecorderLifecycleResult>;
+  pauseRecorder(
+    sessionId: string,
+    frame: number,
+    idempotencyKey?: string,
+    nodeId?: string,
+  ): Promise<RecorderLifecycleResult>;
+  resumeRecorder(
+    sessionId: string,
+    frame: number,
+    idempotencyKey?: string,
+    nodeId?: string,
+  ): Promise<RecorderLifecycleResult>;
+  splitRecorder(
+    sessionId: string,
+    frame: number,
+    idempotencyKey?: string,
+    nodeId?: string,
+  ): Promise<RecorderLifecycleResult>;
+  stopRecorder(
+    sessionId: string,
+    frame: number,
+    idempotencyKey?: string,
+    nodeId?: string,
+  ): Promise<RecorderLifecycleResult>;
   createSession(session: Session, idempotencyKey?: string): Promise<SessionCreateResult>;
-  duplicateSession(sourceSessionId: string, sessionId: string, name?: string, idempotencyKey?: string): Promise<SessionCreateResult>;
+  duplicateSession(
+    sourceSessionId: string,
+    sessionId: string,
+    name?: string,
+    idempotencyKey?: string,
+  ): Promise<SessionCreateResult>;
   deleteSession(sessionId: string, idempotencyKey?: string): Promise<SessionDeleteResult>;
   startSession(sessionId: string, idempotencyKey?: string, candidate?: Session): Promise<SessionStartResult>;
   resetMeter?(sessionId: string, nodeId: string): Promise<{ sessionId: string; nodeId: string; reset: boolean }>;
@@ -265,8 +397,15 @@ export interface UiBackend {
   registerStartup?(enabled: boolean): Promise<string>;
   startupRegistrationStatus?(): Promise<"registered" | "unregistered">;
   listClients(): Promise<ClientRow[]>;
-  authorizeClient(clientId: string, role: "observer" | "editor" | "operator", idempotencyKey: string): Promise<ClientAuthorizeResult>;
+  authorizeClient(
+    clientId: string,
+    role: "observer" | "editor" | "operator",
+    idempotencyKey: string,
+  ): Promise<ClientAuthorizeResult>;
   revokeClient(clientId: string, idempotencyKey: string): Promise<ClientRevokeResult>;
+  /** Opt-in verbose logging (P2-3); absent when there is no backend. */
+  getVerboseDiagnostics?(): Promise<VerboseDiagnosticsStatus>;
+  setVerboseDiagnostics?(enabled: boolean): Promise<VerboseDiagnosticsStatus>;
 }
 
 export type UiSnapshotState = {
@@ -378,11 +517,21 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     async undoGraphPlan() {
       throw new Error("The backend is disconnected; undo is unavailable.");
     },
-    async beginAudioUpload() { throw new Error("The backend is disconnected; audio import is unavailable."); },
-    async uploadAudioChunk() { throw new Error("The backend is disconnected; audio import is unavailable."); },
-    async finishAudioUpload() { throw new Error("The backend is disconnected; audio import is unavailable."); },
-    async importTemporaryRecording() { throw new Error("The backend is disconnected; temporary audio import is unavailable."); },
-    async transportAudioSource() { throw new Error("The backend is disconnected; audio playback is unavailable."); },
+    async beginAudioUpload() {
+      throw new Error("The backend is disconnected; audio import is unavailable.");
+    },
+    async uploadAudioChunk() {
+      throw new Error("The backend is disconnected; audio import is unavailable.");
+    },
+    async finishAudioUpload() {
+      throw new Error("The backend is disconnected; audio import is unavailable.");
+    },
+    async importTemporaryRecording() {
+      throw new Error("The backend is disconnected; temporary audio import is unavailable.");
+    },
+    async transportAudioSource() {
+      throw new Error("The backend is disconnected; audio playback is unavailable.");
+    },
     async listRecordings() {
       return [];
     },
@@ -594,7 +743,12 @@ async function collectPagedRows<T>(request: PagedRequest): Promise<T[]> {
 }
 
 /** Adapter for a future framed/local transport implementation. */
-export function createLiveBackend(client: AudioRouterClient, sessionId: string, registerStartup?: (enabled: boolean) => Promise<string>, startupRegistrationStatus?: () => Promise<"registered" | "unregistered">): UiBackend {
+export function createLiveBackend(
+  client: AudioRouterClient,
+  sessionId: string,
+  registerStartup?: (enabled: boolean) => Promise<string>,
+  startupRegistrationStatus?: () => Promise<"registered" | "unregistered">,
+): UiBackend {
   return {
     connected: true,
     async snapshot(selectedSessionId = sessionId) {
@@ -665,19 +819,22 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
       return client.request("audioSources.transport", { sessionId: currentSessionId, nodeId, action });
     },
     async listRecordings(recordingSessionId = sessionId) {
-      return collectPagedRows(
-        (cursor) => client.request("recordings.list", cursor === null
-          ? { sessionId: recordingSessionId, limit: 500 }
-          : { sessionId: recordingSessionId, limit: 500, cursor }),
+      return collectPagedRows((cursor) =>
+        client.request(
+          "recordings.list",
+          cursor === null
+            ? { sessionId: recordingSessionId, limit: 500 }
+            : { sessionId: recordingSessionId, limit: 500, cursor },
+        ),
       );
     },
     async listRecorders() {
       return client.request("recorders.list", undefined);
     },
     async listSessions() {
-      return collectPagedRows((cursor) => client.request("sessions.list", cursor === null
-        ? { limit: 500 }
-        : { limit: 500, cursor }));
+      return collectPagedRows((cursor) =>
+        client.request("sessions.list", cursor === null ? { limit: 500 } : { limit: 500, cursor }),
+      );
     },
     async getActiveSession() {
       return client.request("sessions.active.get", undefined);
@@ -692,9 +849,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
       return client.request("applications.list", undefined);
     },
     async listDevices() {
-      const devices: DeviceListItem[] = await collectPagedRows((cursor) => client.request("devices.list", cursor === null
-        ? { limit: 500 }
-        : { limit: 500, cursor }));
+      const devices: DeviceListItem[] = await collectPagedRows((cursor) =>
+        client.request("devices.list", cursor === null ? { limit: 500 } : { limit: 500, cursor }),
+      );
       rememberDeviceNames(devices);
       return devices;
     },
@@ -736,7 +893,10 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
       return client.request("nativeDuplex.detach", { sessionId: currentSessionId });
     },
     async prepareNativeApplication(params) {
-      return client.request("nativeApplications.prepare", params as import("@audiorouter/contracts").MethodParams["nativeApplications.prepare"]);
+      return client.request(
+        "nativeApplications.prepare",
+        params as import("@audiorouter/contracts").MethodParams["nativeApplications.prepare"],
+      );
     },
     async pumpNativeEndpoint(currentSessionId, generation, maxPackets = 64) {
       return client.request("nativeEndpoints.pump", { sessionId: currentSessionId, generation, maxPackets });
@@ -793,9 +953,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
       return client.request("plugins.parameters", { path });
     },
     async listVirtualDevices() {
-      return collectPagedRows((cursor) => client.request("virtualDevices.list", cursor === null
-        ? { limit: 500 }
-        : { limit: 500, cursor }));
+      return collectPagedRows((cursor) =>
+        client.request("virtualDevices.list", cursor === null ? { limit: 500 } : { limit: 500, cursor }),
+      );
     },
     async planVirtualDevice(operation) {
       return client.request("virtualDevices.plan", { operation });
@@ -836,10 +996,17 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
       return client.request("recordings.setMetadata", { recordingId, ...metadata });
     },
     async renameRecording(recordingId, newPath, idempotencyKey) {
-      return client.request("recordings.rename", { recordingId, newPath, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+      return client.request("recordings.rename", {
+        recordingId,
+        newPath,
+        ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
+      });
     },
     async setPrivacyMute(muted, idempotencyKey) {
-      return client.request("safety.setPrivacyMute", { muted, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+      return client.request("safety.setPrivacyMute", {
+        muted,
+        ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
+      });
     },
     async clearRecoverySafeMode(idempotencyKey) {
       return client.request("recovery.clearSafeMode", idempotencyKey === undefined ? undefined : { idempotencyKey });
@@ -851,10 +1018,17 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
       });
     },
     async removeRecordingEntry(recordingId, idempotencyKey) {
-      return client.request("recordings.removeEntry", { recordingId, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+      return client.request("recordings.removeEntry", {
+        recordingId,
+        ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
+      });
     },
     async recycleRecording(recordingId, confirm, idempotencyKey) {
-      return client.request("recordings.recycle", { recordingId, confirm, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+      return client.request("recordings.recycle", {
+        recordingId,
+        confirm,
+        ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
+      });
     },
     async createRecorder(params) {
       return client.request("recorders.create", params);
@@ -878,46 +1052,97 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
       return client.request("recordings.setRoot", { root, create, idempotencyKey });
     },
     async armRecorder(recorderSessionId, idempotencyKey, nodeId) {
-      return client.request("recorders.arm", { sessionId: recorderSessionId, ...(nodeId === undefined ? {} : { nodeId }), ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+      return client.request("recorders.arm", {
+        sessionId: recorderSessionId,
+        ...(nodeId === undefined ? {} : { nodeId }),
+        ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
+      });
     },
     async startRecorder(recorderSessionId, frame, idempotencyKey, nodeId) {
-      return client.request("recorders.start", { sessionId: recorderSessionId, frame, ...(nodeId === undefined ? {} : { nodeId }), ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+      return client.request("recorders.start", {
+        sessionId: recorderSessionId,
+        frame,
+        ...(nodeId === undefined ? {} : { nodeId }),
+        ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
+      });
     },
     async pauseRecorder(recorderSessionId, frame, idempotencyKey, nodeId) {
-      return client.request("recorders.pause", { sessionId: recorderSessionId, frame, ...(nodeId === undefined ? {} : { nodeId }), ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+      return client.request("recorders.pause", {
+        sessionId: recorderSessionId,
+        frame,
+        ...(nodeId === undefined ? {} : { nodeId }),
+        ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
+      });
     },
     async resumeRecorder(recorderSessionId, frame, idempotencyKey, nodeId) {
-      return client.request("recorders.resume", { sessionId: recorderSessionId, frame, ...(nodeId === undefined ? {} : { nodeId }), ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+      return client.request("recorders.resume", {
+        sessionId: recorderSessionId,
+        frame,
+        ...(nodeId === undefined ? {} : { nodeId }),
+        ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
+      });
     },
     async splitRecorder(recorderSessionId, frame, idempotencyKey, nodeId) {
-      return client.request("recorders.split", { sessionId: recorderSessionId, frame, ...(nodeId === undefined ? {} : { nodeId }), ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+      return client.request("recorders.split", {
+        sessionId: recorderSessionId,
+        frame,
+        ...(nodeId === undefined ? {} : { nodeId }),
+        ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
+      });
     },
     async stopRecorder(recorderSessionId, frame, idempotencyKey, nodeId) {
-      return client.request("recorders.stop", { sessionId: recorderSessionId, frame, ...(nodeId === undefined ? {} : { nodeId }), ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+      return client.request("recorders.stop", {
+        sessionId: recorderSessionId,
+        frame,
+        ...(nodeId === undefined ? {} : { nodeId }),
+        ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
+      });
     },
     async createSession(session, idempotencyKey) {
-      return client.request("sessions.create", { session, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+      return client.request("sessions.create", {
+        session,
+        ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
+      });
     },
     async duplicateSession(sourceSessionId, sessionId, name, idempotencyKey) {
-      return client.request("sessions.duplicate", { sourceSessionId, sessionId, ...(name === undefined ? {} : { name }), ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+      return client.request("sessions.duplicate", {
+        sourceSessionId,
+        sessionId,
+        ...(name === undefined ? {} : { name }),
+        ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
+      });
     },
     async deleteSession(sessionId, idempotencyKey) {
-      return client.request("sessions.delete", { sessionId, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+      return client.request("sessions.delete", {
+        sessionId,
+        ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
+      });
     },
     async startSession(startSessionId, idempotencyKey, candidate) {
-      return client.request("session.start", { sessionId: startSessionId, ...(idempotencyKey === undefined ? {} : { idempotencyKey }), ...(candidate === undefined ? {} : { candidate }) });
+      return client.request("session.start", {
+        sessionId: startSessionId,
+        ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
+        ...(candidate === undefined ? {} : { candidate }),
+      });
     },
     async resetMeter(sessionId, nodeId) {
       return client.request("meters.reset", { sessionId, nodeId });
     },
     async stopSession(stopSessionId, idempotencyKey) {
-      return client.request("session.stop", { sessionId: stopSessionId, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+      return client.request("session.stop", {
+        sessionId: stopSessionId,
+        ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
+      });
     },
     async exportSession(exportSessionId) {
       return client.request("sessions.export", { sessionId: exportSessionId });
     },
     async exportSessionFile(exportSessionId, path, replace) {
-      return client.request("sessions.exportFile", { sessionId: exportSessionId, path, ...(replace ? { replace: true } : {}) });
+      return client.request("sessions.exportFile", {
+        sessionId: exportSessionId,
+        path,
+        ...(replace ? { replace: true } : {}),
+      });
     },
     async importSessionFile(path) {
       return client.request("sessions.importFile", { path });
@@ -946,12 +1171,30 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
     async revokeClient(clientId, idempotencyKey) {
       return client.request("clients.revoke", { clientId, idempotencyKey });
     },
+    async getVerboseDiagnostics() {
+      return client.request("diagnostics.getVerbose", undefined);
+    },
+    async setVerboseDiagnostics(enabled) {
+      return client.request("diagnostics.setVerbose", { enabled });
+    },
     ...(registerStartup === undefined ? {} : { registerStartup }),
     ...(startupRegistrationStatus === undefined ? {} : { startupRegistrationStatus }),
   };
 }
 
 /** Build the live UI backend directly from the host-provided framed transport. */
-export function createLiveBackendFromTransport(transport: RpcTransport, sessionId: string, registerStartup?: (enabled: boolean) => Promise<string>, startupRegistrationStatus?: () => Promise<"registered" | "unregistered">): UiBackend {
-  return createLiveBackend(createAudioRouterClient(transport), sessionId, registerStartup, startupRegistrationStatus);
+export function createLiveBackendFromTransport(
+  transport: RpcTransport,
+  sessionId: string,
+  registerStartup?: (enabled: boolean) => Promise<string>,
+  startupRegistrationStatus?: () => Promise<"registered" | "unregistered">,
+): UiBackend {
+  // Each request carries a correlation ID; failures are summarized (method,
+  // category, ID) in the client diagnostics so they can be matched in the logs.
+  return createLiveBackend(
+    createAudioRouterClient(transport, { onRequestFailed: reportRpcFailure }),
+    sessionId,
+    registerStartup,
+    startupRegistrationStatus,
+  );
 }

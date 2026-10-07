@@ -187,8 +187,10 @@ dependencies = [
 name = "audiorouter-protocol"
 version = "0.0.14"
 dependencies = [
+ "hmac",
  "serde",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]
@@ -219,6 +221,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "windows 0.62.2",
+ "zip",
 ]
 
 [[package]]

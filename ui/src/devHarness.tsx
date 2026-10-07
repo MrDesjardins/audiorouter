@@ -18,13 +18,59 @@ const nodeVisualsSession: Session = {
   schemaVersion: 1,
   revision: 1,
   nodes: [
-    { id: "mic", kind: "physicalInput", typeVersion: 1, name: "Microphone", enabled: true, bypass: false, parameters: {}, ports: [{ name: "out", direction: "output", channels: 1 }] },
-    { id: "gain", kind: "gain", typeVersion: 1, name: "Voice gain", enabled: true, bypass: false, parameters: { gainDb: 4.5 }, ports: [{ name: "in", direction: "input", channels: 1 }, { name: "out", direction: "output", channels: 1 }] },
-    { id: "headphones", kind: "physicalOutput", typeVersion: 1, name: "Headphones", enabled: true, bypass: false, parameters: {}, ports: [{ name: "in", direction: "input", channels: 2 }] },
+    {
+      id: "mic",
+      kind: "physicalInput",
+      typeVersion: 1,
+      name: "Microphone",
+      enabled: true,
+      bypass: false,
+      parameters: {},
+      ports: [{ name: "out", direction: "output", channels: 1 }],
+    },
+    {
+      id: "gain",
+      kind: "gain",
+      typeVersion: 1,
+      name: "Voice gain",
+      enabled: true,
+      bypass: false,
+      parameters: { gainDb: 4.5 },
+      ports: [
+        { name: "in", direction: "input", channels: 1 },
+        { name: "out", direction: "output", channels: 1 },
+      ],
+    },
+    {
+      id: "headphones",
+      kind: "physicalOutput",
+      typeVersion: 1,
+      name: "Headphones",
+      enabled: true,
+      bypass: false,
+      parameters: {},
+      ports: [{ name: "in", direction: "input", channels: 2 }],
+    },
   ],
   edges: [
-    { id: "mic-to-gain", sourceNode: "mic", sourcePort: "out", destinationNode: "gain", destinationPort: "in", matrix: [], enabled: true },
-    { id: "gain-to-headphones", sourceNode: "gain", sourcePort: "out", destinationNode: "headphones", destinationPort: "in", matrix: [], enabled: true },
+    {
+      id: "mic-to-gain",
+      sourceNode: "mic",
+      sourcePort: "out",
+      destinationNode: "gain",
+      destinationPort: "in",
+      matrix: [],
+      enabled: true,
+    },
+    {
+      id: "gain-to-headphones",
+      sourceNode: "gain",
+      sourcePort: "out",
+      destinationNode: "headphones",
+      destinationPort: "in",
+      matrix: [],
+      enabled: true,
+    },
   ],
 };
 
@@ -40,9 +86,35 @@ const diagnostics: DiagnosticsSnapshot = {
   nativeSessionId: null,
   schedulerTelemetry: null,
   nodeTelemetry: [
-    { nodeId: "mic", kind: "physicalInput", meter: { peakDb: -12, rmsDb: -18, clippedSamples: 0, channelPeakDb: [-12], channelRmsDb: [-18], channelClippedSamples: [0] }, processor: null, plugin: null },
+    {
+      nodeId: "mic",
+      kind: "physicalInput",
+      meter: {
+        peakDb: -12,
+        rmsDb: -18,
+        clippedSamples: 0,
+        channelPeakDb: [-12],
+        channelRmsDb: [-18],
+        channelClippedSamples: [0],
+      },
+      processor: null,
+      plugin: null,
+    },
     { nodeId: "gain", kind: "gain", meter: null, processor: null, plugin: null },
-    { nodeId: "headphones", kind: "physicalOutput", meter: { peakDb: -9, rmsDb: -14, clippedSamples: 0, channelPeakDb: [-9, -9], channelRmsDb: [-14, -14], channelClippedSamples: [0, 0] }, processor: null, plugin: null },
+    {
+      nodeId: "headphones",
+      kind: "physicalOutput",
+      meter: {
+        peakDb: -9,
+        rmsDb: -14,
+        clippedSamples: 0,
+        channelPeakDb: [-9, -9],
+        channelRmsDb: [-14, -14],
+        channelClippedSamples: [0, 0],
+      },
+      processor: null,
+      plugin: null,
+    },
   ],
   applicationCaptureStates: [],
   privacyMute: { muted: false, persistence: "memory" },
@@ -84,7 +156,9 @@ function Harness() {
     console.info("[Harness] onSetNodeParameter", nodeId, name, value);
     setSession((current) => ({
       ...current,
-      nodes: current.nodes.map((node) => (node.id === nodeId ? { ...node, parameters: { ...node.parameters, [name]: value } } : node)),
+      nodes: current.nodes.map((node) =>
+        node.id === nodeId ? { ...node, parameters: { ...node.parameters, [name]: value } } : node,
+      ),
     }));
   };
 
@@ -106,7 +180,10 @@ function Harness() {
 
   return (
     <div className="flow-harness" style={{ height: "100vh", background: "#10131a" }}>
-      <header className="flow-harness-caption"><strong>Signal flow preview</strong><span>Simulated telemetry · visual check only · no audio device is connected</span></header>
+      <header className="flow-harness-caption">
+        <strong>Signal flow preview</strong>
+        <span>Simulated telemetry · visual check only · no audio device is connected</span>
+      </header>
       <SessionFlowCanvas
         session={session}
         selectedNodeId={selectedNodeId}
@@ -121,7 +198,12 @@ function Harness() {
         onAddLibraryNode={onAddLibraryNode}
         onAddVirtualBusNode={onAddVirtualBusNode}
         onOpenPluginPicker={() => console.info("[Harness] onOpenPluginPicker")}
-        onToggleConnection={(edgeId, enabled) => setSession((current) => ({ ...current, edges: current.edges.map((edge) => (edge.id === edgeId ? { ...edge, enabled } : edge)) }))}
+        onToggleConnection={(edgeId, enabled) =>
+          setSession((current) => ({
+            ...current,
+            edges: current.edges.map((edge) => (edge.id === edgeId ? { ...edge, enabled } : edge)),
+          }))
+        }
       />
     </div>
   );

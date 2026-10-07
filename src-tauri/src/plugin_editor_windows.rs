@@ -13,7 +13,7 @@ use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW,
-    GetWindowLongPtrW, LoadCursorW, PostMessageW, PostQuitMessage, RegisterClassW,
+    GetWindowLongPtrW, IsWindow, LoadCursorW, PostMessageW, PostQuitMessage, RegisterClassW,
     SetWindowLongPtrW, TranslateMessage, CREATESTRUCTW, CW_USEDEFAULT, GWLP_USERDATA, IDC_ARROW,
     MSG, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WNDCLASSW, WS_OVERLAPPEDWINDOW, WS_VISIBLE,
 };
@@ -57,9 +57,11 @@ fn run_window(
     on_close: CloseHook,
     ready: mpsc::SyncSender<Result<isize, String>>,
 ) {
+    // SAFETY: called on this dedicated thread, which then runs the window's
+    // message loop and frees `hook` below; see `create_window`.
     let created = unsafe { create_window(title, width, height, on_close) };
-    let window = match created {
-        Ok(window) => window,
+    let (window, hook) = match created {
+        Ok(created) => created,
         Err(error) => {
             let _ = ready.send(Err(error));
             return;
@@ -69,19 +71,41 @@ fn run_window(
     let mut message = MSG::default();
     // SAFETY: a standard message loop for windows created on this thread.
     while unsafe { GetMessageW(&mut message, None, 0, 0) }.0 > 0 {
+        // SAFETY: `message` was just filled by GetMessageW; dispatch runs the
+        // window procedure of a window owned by this thread.
         unsafe {
             let _ = TranslateMessage(&message);
             DispatchMessageW(&message);
         }
     }
+    // SAFETY: the loop normally ends with the WM_QUIT that WM_NCDESTROY posts,
+    // so the window is gone; if it ended early, destroy the window (owned by
+    // this thread) first. Either way WM_NCDESTROY has detached `hook` from
+    // the window, so nothing else can reach it and it is reclaimed once.
+    unsafe {
+        if IsWindow(Some(window)).as_bool() {
+            let _ = DestroyWindow(window);
+        }
+        drop(Box::from_raw(hook));
+    }
 }
 
+/// Create the editor host window on the calling thread.
+///
+/// The returned hook pointer is read by the window procedure through
+/// GWLP_USERDATA. The caller owns it and frees it with `Box::from_raw` only
+/// after the window is destroyed; the window procedure never frees it. That
+/// keeps one owner even when CreateWindowExW fails after WM_NCCREATE
+/// (Windows then sends WM_NCDESTROY before returning).
+///
+/// # Safety
+/// Call on the thread that will run the window's message loop.
 unsafe fn create_window(
     title: &str,
     width: i32,
     height: i32,
     on_close: CloseHook,
-) -> Result<HWND, String> {
+) -> Result<(HWND, *mut Option<CloseHook>), String> {
     let instance =
         GetModuleHandleW(None).map_err(|error| format!("GetModuleHandleW failed: {error}"))?;
     let class = WNDCLASSW {
@@ -93,8 +117,8 @@ unsafe fn create_window(
     };
     // A second registration fails with "class already exists", which is fine.
     RegisterClassW(&class);
-    // Ownership of the hook passes to the window (GWLP_USERDATA) and is
-    // reclaimed exactly once, in WM_CLOSE or WM_NCDESTROY.
+    // The window borrows the hook through GWLP_USERDATA; WM_CLOSE takes the
+    // callback out, and `run_window` frees the box after the window is gone.
     let hook = Box::into_raw(Box::new(Some(on_close)));
     let title = HSTRING::from(title);
     CreateWindowExW(
@@ -111,7 +135,10 @@ unsafe fn create_window(
         Some(instance.into()),
         Some(hook.cast()),
     )
+    .map(|window| (window, hook))
     .map_err(|error| {
+        // No window exists (any partially created one has already received
+        // WM_NCDESTROY, which only detaches the hook), so free it once here.
         drop(Box::from_raw(hook));
         format!("CreateWindowExW failed: {error}")
     })
@@ -135,7 +162,8 @@ unsafe extern "system" fn window_proc(
             let hook = GetWindowLongPtrW(window, GWLP_USERDATA) as *mut Option<CloseHook>;
             if !hook.is_null() {
                 // SAFETY: the pointer came from Box::into_raw in create_window
-                // and stays valid until WM_NCDESTROY frees it.
+                // and stays valid until `run_window` frees it, which happens
+                // only after WM_NCDESTROY has detached it from this window.
                 if let Some(on_close) = (*hook).take() {
                     on_close();
                 }
@@ -144,11 +172,9 @@ unsafe extern "system" fn window_proc(
             LRESULT(0)
         }
         WM_NCDESTROY => {
-            let hook = SetWindowLongPtrW(window, GWLP_USERDATA, 0) as *mut Option<CloseHook>;
-            if !hook.is_null() {
-                // SAFETY: reclaim the Box exactly once; the pointer is cleared above.
-                drop(Box::from_raw(hook));
-            }
+            // Detach the hook so no later message can reach it; its owner
+            // (`run_window`, or `create_window` on failure) frees it.
+            SetWindowLongPtrW(window, GWLP_USERDATA, 0);
             PostQuitMessage(0);
             DefWindowProcW(window, message, wparam, lparam)
         }

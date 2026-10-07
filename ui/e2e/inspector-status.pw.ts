@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`inspector status remains clear in ${theme}`, async ({ page }, testInfo) => {
-    await page.addInitScript(theme => localStorage.setItem("audiorouter.ui.theme", theme), theme);
+    await page.addInitScript((theme) => localStorage.setItem("audiorouter.ui.theme", theme), theme);
     await page.goto("/route-harness.html");
     await page.getByTestId("rf__node-voice").click();
     await expect(page.getByLabel("Node status: Ready")).toBeVisible();

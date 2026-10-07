@@ -1,0 +1,325 @@
+name: AudioRouter quality (nightly)
+
+# Code review P2-8: coverage, an engine soak and a startup timing, nightly and
+# on demand. Coverage is reported, never gated. The soak fails on a memory
+# leak or a slow quantum (limits in crates/engine/examples/soak.rs and
+# docs/spec/14-quality.md NFR-04/05/06). Each run adds a row to a small trend
+# table kept in the Actions cache.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      soak_minutes:
+        description: Engine soak duration in minutes
+        required: false
+        default: "20"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  coverage:
+    name: Rust and UI coverage
+    runs-on: windows-latest
+    timeout-minutes: 240
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pinned Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.14.0
+          package-manager-cache: false
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # 2026-07-16 action revision
+        with:
+          toolchain: 1.96.0
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+        with:
+          tool: cargo-llvm-cov@0.9.1
+
+      # The whole workspace, as `cargo test --workspace` runs it in CI;
+      # the summary also totals the portable crates on their own.
+      - name: Rust coverage (workspace)
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'coverage'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          cargo llvm-cov --workspace --locked --no-report
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          cargo llvm-cov report --json --summary-only --output-path (Join-Path $out 'rust-workspace.json')
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          cargo llvm-cov report --lcov --output-path (Join-Path $out 'rust-workspace.lcov')
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          cargo llvm-cov report --html --output-dir (Join-Path $out 'rust-workspace-html')
+
+      - name: Rust coverage (desktop shell)
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'coverage'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          cargo llvm-cov --manifest-path src-tauri/Cargo.toml --locked --no-report
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          cargo llvm-cov report --manifest-path src-tauri/Cargo.toml --json --summary-only --output-path (Join-Path $out 'rust-shell.json')
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          cargo llvm-cov report --manifest-path src-tauri/Cargo.toml --lcov --output-path (Join-Path $out 'rust-shell.lcov')
+
+      - name: UI coverage
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: |
+          npm ci --prefix ui
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          npm --prefix ui test -- --coverage
+
+      - name: Coverage summary
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'coverage'
+          $metrics = Join-Path $env:RUNNER_TEMP 'metrics'
+          New-Item -ItemType Directory -Force -Path $metrics | Out-Null
+          $lines = @()
+          $workspace = Join-Path $out 'rust-workspace.json'
+          if (Test-Path $workspace) {
+            node tools/quality/summary.mjs rust $workspace 'Rust coverage (workspace)' >> $env:GITHUB_STEP_SUMMARY
+            $lines += 'rust_lines={0:F1}' -f (Get-Content $workspace -Raw | ConvertFrom-Json).data[0].totals.lines.percent
+          }
+          $shell = Join-Path $out 'rust-shell.json'
+          if (Test-Path $shell) {
+            node tools/quality/summary.mjs rust $shell 'Rust coverage (desktop shell)' >> $env:GITHUB_STEP_SUMMARY
+            $lines += 'shell_lines={0:F1}' -f (Get-Content $shell -Raw | ConvertFrom-Json).data[0].totals.lines.percent
+          }
+          if (Test-Path ui/coverage/coverage-summary.json) {
+            node tools/quality/summary.mjs ui ui/coverage/coverage-summary.json >> $env:GITHUB_STEP_SUMMARY
+            $lines += 'ui_lines={0:F1}' -f (Get-Content ui/coverage/coverage-summary.json -Raw | ConvertFrom-Json).total.lines.pct
+          }
+          $lines | Set-Content -Encoding ascii (Join-Path $metrics 'coverage.env')
+
+      - name: Upload coverage reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage
+          path: |
+            ${{ runner.temp }}/coverage
+            ui/coverage
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload coverage metrics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: metrics-coverage
+          path: ${{ runner.temp }}/metrics
+          if-no-files-found: ignore
+          retention-days: 14
+
+  soak:
+    name: Engine soak
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      SOAK_MINUTES: ${{ inputs.soak_minutes || '20' }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # 2026-07-16 action revision
+        with:
+          toolchain: 1.96.0
+
+      - name: Build the soak example
+        run: cargo build --release --locked -p audiorouter-engine --example soak
+
+      # The example checks heap growth, allocations and per-quantum time
+      # itself. From outside, this step samples the process's private bytes
+      # and working set, and fails if private bytes grow by 10 MiB or more
+      # after the warm-up (NFR-06's limit for 8 hours).
+      - name: Run the soak
+        shell: pwsh
+        run: |
+          $seconds = [double]$env:SOAK_MINUTES * 60
+          if ($seconds -le 0) { throw "soak_minutes must be positive" }
+          $env:AUDIOROUTER_SOAK_SECONDS = "$seconds"
+          $metrics = Join-Path $env:RUNNER_TEMP 'metrics'
+          New-Item -ItemType Directory -Force -Path $metrics | Out-Null
+          $metricsFile = Join-Path $metrics 'soak.env'
+          $env:AUDIOROUTER_SOAK_METRICS = $metricsFile
+          $report = Join-Path $env:RUNNER_TEMP 'soak.md'
+          $progress = Join-Path $env:RUNNER_TEMP 'soak.err'
+          $process = Start-Process -FilePath 'target/release/examples/soak.exe' -NoNewWindow -PassThru `
+            -RedirectStandardOutput $report -RedirectStandardError $progress
+          $null = $process.Handle  # keeps ExitCode available after exit
+          $started = Get-Date
+          $samples = [System.Collections.Generic.List[object]]::new()
+          while (-not $process.WaitForExit(15000)) {
+            $process.Refresh()
+            $samples.Add([pscustomobject]@{
+              Seconds = [int]((Get-Date) - $started).TotalSeconds
+              PrivateMiB = [math]::Round($process.PrivateMemorySize64 / 1MB, 1)
+              WorkingSetMiB = [math]::Round($process.WorkingSet64 / 1MB, 1)
+            })
+          }
+          $process.WaitForExit()
+          $exitCode = $process.ExitCode
+          Get-Content $progress | Select-Object -Last 3
+          Get-Content $report | Add-Content $env:GITHUB_STEP_SUMMARY
+          Get-Content $report
+
+          $warmUp = [math]::Max(1, $seconds / 10)
+          $steady = @($samples | Where-Object { $_.Seconds -ge $warmUp })
+          $growth = 0.0
+          if ($steady.Count -ge 2) { $growth = $steady[-1].PrivateMiB - $steady[0].PrivateMiB }
+          $summary = @('', '### Windows process memory (sampled every 15 s)', '',
+            '| Elapsed (s) | Private (MiB) | Working set (MiB) |', '| ---: | ---: | ---: |')
+          $step = [math]::Max(1, [math]::Ceiling($samples.Count / 12))
+          for ($i = 0; $i -lt $samples.Count; $i++) {
+            if ($i % $step -eq 0 -or $i -eq $samples.Count - 1) {
+              $s = $samples[$i]
+              $summary += "| $($s.Seconds) | $($s.PrivateMiB) | $($s.WorkingSetMiB) |"
+            }
+          }
+          $memoryOk = $growth -lt 10
+          $result = if ($memoryOk) { 'pass' } else { '**FAIL**' }
+          $summary += @('', "Private bytes growth after warm-up: $([math]::Round($growth, 1)) MiB (limit < 10 MiB): $result", '')
+          $summary | Add-Content $env:GITHUB_STEP_SUMMARY
+          $summary
+          Add-Content $metricsFile ('soak_private_growth_mib={0:F1}' -f $growth)
+          if ($exitCode -ne 0) { throw "soak checks failed (exit code $exitCode)" }
+          if (-not $memoryOk) { throw "private bytes grew by $growth MiB after warm-up" }
+
+      - name: Upload soak metrics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: metrics-soak
+          path: ${{ runner.temp }}/metrics
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # NFR-14, backend part: launch the release shell as a fresh install (the
+  # fresh_install_shell test) and time its embedded backend's first answer.
+  # The time until the window's UI is ready is not measured yet.
+  startup:
+    name: Startup timing (fresh install)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pinned Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.14.0
+          package-manager-cache: false
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # 2026-07-16 action revision
+        with:
+          toolchain: 1.96.0
+
+      # custom-protocol embeds ui/dist; without it the release shell loads
+      # the development URL (AGENTS.md lesson 2026-09-26).
+      - name: Build the UI and the release shell
+        shell: pwsh
+        run: |
+          npm ci --prefix ui
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          npm --prefix ui run build
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          cargo build --manifest-path src-tauri/Cargo.toml --release --locked --features custom-protocol
+
+      - name: Launch as a fresh install and time the backend
+        shell: pwsh
+        run: |
+          $metrics = Join-Path $env:RUNNER_TEMP 'metrics'
+          New-Item -ItemType Directory -Force -Path $metrics | Out-Null
+          $env:AUDIOROUTER_SHELL_EXE = (Resolve-Path 'src-tauri/target/release/audiorouter-shell.exe').Path
+          $env:AUDIOROUTER_STARTUP_METRICS = Join-Path $metrics 'startup.env'
+          cargo test -p audiorouter-transport --test fresh_install_shell --locked -- --ignored --nocapture
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $ms = ((Get-Content $env:AUDIOROUTER_STARTUP_METRICS) -replace '^backend_ready_ms=', '')
+          @('## Startup (NFR-14, backend part)', '',
+            '| Measure | Target (NFR-14) | Measured |', '| --- | --- | --- |',
+            "| Launch to first backend answer (fresh install, hosted runner) | UI ready ≤ 3 s warm / 8 s cold | $ms ms |",
+            '', 'Not measured yet: the time until the window''s UI is ready, and cold versus warm starts.', '') |
+            Add-Content $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload startup metrics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: metrics-startup
+          path: ${{ runner.temp }}/metrics
+          if-no-files-found: ignore
+          retention-days: 14
+
+  trend:
+    name: Trend table
+    needs: [coverage, soak, startup]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pinned Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.14.0
+          package-manager-cache: false
+
+      - name: Download this run's metrics
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: metrics-*
+          path: metrics
+          merge-multiple: true
+
+      - name: Restore the trend history
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: quality-history.csv
+          key: quality-history-${{ github.run_id }}
+          restore-keys: quality-history-
+
+      - name: Append this run and print the trend
+        shell: bash
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          declare -A value
+          for file in metrics/*.env; do
+            [ -f "$file" ] || continue
+            while IFS='=' read -r key val; do
+              [ -n "$key" ] && value[$key]=$(tr -d '\r' <<<"$val")
+            done < "$file"
+          done
+          columns="rust_lines shell_lines ui_lines soak_p99_us soak_p999_us soak_heap_growth_kib soak_private_growth_mib backend_ready_ms"
+          args=("date=$(date -u +%Y-%m-%d)" "commit=${SHA:0:8}")
+          for column in $columns; do args+=("$column=${value[$column]:-}"); done
+          node tools/quality/summary.mjs history quality-history.csv "${args[@]}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save the trend history
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: quality-history.csv
+          key: quality-history-${{ github.run_id }}

@@ -10,22 +10,30 @@ export function processorParameterError(
   nodeTypes: DiscoveryDocument["nodeTypes"] | null = null,
 ): string | null {
   const wireKind = nodeKind.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
-  const parameter = processors?.find((processor) => processor.id === nodeKind)?.parameters
-    .find((candidate) => candidate.name === name)
-    ?? nodeTypes?.find((node) => node.type === `${wireKind}@1` || node.type === `${nodeKind}@1`)?.parameters
-      .find((candidate) => candidate.name === name);
+  const parameter =
+    processors
+      ?.find((processor) => processor.id === nodeKind)
+      ?.parameters.find((candidate) => candidate.name === name) ??
+    nodeTypes
+      ?.find((node) => node.type === `${wireKind}@1` || node.type === `${nodeKind}@1`)
+      ?.parameters.find((candidate) => candidate.name === name);
   if (!parameter) return null;
   if (parameter.type === "number") {
     if (typeof value !== "number" || !Number.isFinite(value)) return `${name} must be finite`;
-    if (parameter.minimum !== undefined && value < parameter.minimum) return `${name} must be at least ${parameter.minimum}`;
-    if (parameter.maximum !== undefined && value > parameter.maximum) return `${name} must be at most ${parameter.maximum}`;
+    if (parameter.minimum !== undefined && value < parameter.minimum)
+      return `${name} must be at least ${parameter.minimum}`;
+    if (parameter.maximum !== undefined && value > parameter.maximum)
+      return `${name} must be at most ${parameter.maximum}`;
     if (parameter.step !== undefined && parameter.step > 0 && Number.isFinite(parameter.step)) {
       const steps = (value - (parameter.minimum ?? 0)) / parameter.step;
       if (Math.abs(steps - Math.round(steps)) > 1e-7) return `${name} must use steps of ${parameter.step}`;
     }
   } else if (parameter.type === "boolean" && typeof value !== "boolean") {
     return `${name} must be boolean`;
-  } else if (parameter.type === "string" && (!parameter.enum || typeof value !== "string" || !parameter.enum.includes(value))) {
+  } else if (
+    parameter.type === "string" &&
+    (!parameter.enum || typeof value !== "string" || !parameter.enum.includes(value))
+  ) {
     return `${name} must be one of the advertised values`;
   }
   return null;
@@ -43,12 +51,15 @@ export function processorLatencyText(processor: ProcessorDescriptor): string {
 
 export function processorParametersText(processor: ProcessorDescriptor): string {
   if (processor.parameters.length === 0) return "no parameters";
-  return processor.parameters.map((parameter) => {
-    const range = parameter.minimum !== undefined && parameter.maximum !== undefined
-      ? `, ${parameter.minimum}..${parameter.maximum}`
-      : "";
-    const unit = parameter.unit ? ` ${parameter.unit}` : "";
-    const choices = parameter.enum ? ` (${parameter.enum.join("/")})` : "";
-    return `${parameter.name}: ${parameter.type}${unit}${range}${choices}`;
-  }).join("; ");
+  return processor.parameters
+    .map((parameter) => {
+      const range =
+        parameter.minimum !== undefined && parameter.maximum !== undefined
+          ? `, ${parameter.minimum}..${parameter.maximum}`
+          : "";
+      const unit = parameter.unit ? ` ${parameter.unit}` : "";
+      const choices = parameter.enum ? ` (${parameter.enum.join("/")})` : "";
+      return `${parameter.name}: ${parameter.type}${unit}${range}${choices}`;
+    })
+    .join("; ");
 }

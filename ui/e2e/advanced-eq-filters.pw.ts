@@ -6,7 +6,10 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(page.getByRole("heading", { name: "Offline qualification", exact: true })).toBeVisible();
     await page.getByLabel("Color theme").selectOption(theme);
     await page.getByRole("tab", { name: "Tools", exact: true }).click();
-    await page.locator(".tool-card").filter({ has: page.getByText("Advanced EQ", { exact: true }) }).click();
+    await page
+      .locator(".tool-card")
+      .filter({ has: page.getByText("Advanced EQ", { exact: true }) })
+      .click();
     await page.getByTestId("rf__node-parametricEq-1").locator(".flow-node-title").click();
     const editor = page.getByRole("region", { name: "Advanced EQ editor" });
     const graph = editor.locator(".advanced-eq-graph");

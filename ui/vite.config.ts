@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import os from "node:os";
 import path from "node:path";
 import { readFileSync } from "node:fs";
@@ -19,6 +20,17 @@ export default defineConfig({
   // itself remains writable for local UI inspection.
   cacheDir: process.env.AUDIOROUTER_VITE_CACHE ?? path.join(os.tmpdir(), "audiorouter-vite-cache"),
   plugins: [react()],
+  // Used only with `npm test -- --coverage` (nightly quality workflow); the
+  // report is informational and never gates a change.
+  test: {
+    coverage: {
+      provider: "v8",
+      include: ["src/**"],
+      exclude: ["src/**/*.test.{ts,tsx}"],
+      reporter: ["text-summary", "json-summary", "html"],
+      reportsDirectory: "coverage",
+    },
+  },
   build: {
     rollupOptions: {
       output: {
@@ -26,8 +38,12 @@ export default defineConfig({
         // chunk. This makes the packaged shell's startup payload explicit
         // and prevents a single entry chunk from crossing the warning
         // threshold as the editor grows.
+        // React is its own chunk for the same reason. The rarely used panels
+        // (API, MCP, Logs) total about 10 kB, so lazy-loading them would not
+        // shrink startup: the shell loads every chunk from local disk anyway.
         manualChunks: {
           "xyflow-vendor": ["@xyflow/react"],
+          "react-vendor": ["react", "react-dom", "react-dom/client", "scheduler"],
         },
       },
     },

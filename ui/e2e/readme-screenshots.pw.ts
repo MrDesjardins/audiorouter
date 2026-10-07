@@ -1,6 +1,12 @@
 import path from "node:path";
 import type { Session } from "../../contracts/src/index";
-import { appendDraftConnection, appendLibraryNode, setNodeDraftName, setNodeDraftParameter, type LibraryNodeKind } from "../src/draft";
+import {
+  appendDraftConnection,
+  appendLibraryNode,
+  setNodeDraftName,
+  setNodeDraftParameter,
+  type LibraryNodeKind,
+} from "../src/draft";
 import { test, expect } from "./real-backend";
 
 // Renders the README screenshots in docs/images from realistic sessions.
@@ -9,20 +15,31 @@ const out = path.resolve("../docs/images");
 
 class Builder {
   session: Session;
-  constructor(id: string, name: string) { this.session = { id, name, schemaVersion: 1, revision: 0, nodes: [], edges: [] }; }
+  constructor(id: string, name: string) {
+    this.session = { id, name, schemaVersion: 1, revision: 0, nodes: [], edges: [] };
+  }
   add(kind: LibraryNodeKind, name: string, parameters: Record<string, number | string | boolean> = {}) {
     this.session = appendLibraryNode(this.session, kind);
     const id = this.session.nodes.at(-1)!.id;
     this.session = setNodeDraftName(this.session, id, name);
-    for (const [key, value] of Object.entries(parameters)) this.session = setNodeDraftParameter(this.session, id, key, value);
+    for (const [key, value] of Object.entries(parameters))
+      this.session = setNodeDraftParameter(this.session, id, key, value);
     return id;
   }
   link(source: string, destination: string) {
     const src = this.session.nodes.find((node) => node.id === source)!;
     const dst = this.session.nodes.find((node) => node.id === destination)!;
-    this.session = appendDraftConnection(this.session, source, src.ports.find((port) => port.direction === "output")!.name, destination, dst.ports.find((port) => port.direction === "input")!.name);
+    this.session = appendDraftConnection(
+      this.session,
+      source,
+      src.ports.find((port) => port.direction === "output")!.name,
+      destination,
+      dst.ports.find((port) => port.direction === "input")!.name,
+    );
   }
-  chain(...ids: string[]) { for (let index = 1; index < ids.length; index += 1) this.link(ids[index - 1], ids[index]); }
+  chain(...ids: string[]) {
+    for (let index = 1; index < ids.length; index += 1) this.link(ids[index - 1], ids[index]);
+  }
 }
 
 function streamerVoice() {
@@ -30,7 +47,26 @@ function streamerVoice() {
   const mic = b.add("physicalInput", "Shure SM7B (USB interface)");
   const gate = b.add("gate", "Noise gate");
   const denoise = b.add("denoise", "Denoise");
-  const eq = b.add("parametricEq", "Voice EQ", { band0Enabled: true, band0Type: "highPass", band0FrequencyHz: 90, band1Enabled: true, band1Type: "peaking", band1FrequencyHz: 250, band1GainDb: -3.5, band1Q: 1.2, band2Enabled: true, band2Type: "peaking", band2FrequencyHz: 3200, band2GainDb: 4, band2Q: 0.9, band3Enabled: true, band3Type: "highShelf", band3FrequencyHz: 9000, band3GainDb: 2.5, band3Q: 0.7 });
+  const eq = b.add("parametricEq", "Voice EQ", {
+    band0Enabled: true,
+    band0Type: "highPass",
+    band0FrequencyHz: 90,
+    band1Enabled: true,
+    band1Type: "peaking",
+    band1FrequencyHz: 250,
+    band1GainDb: -3.5,
+    band1Q: 1.2,
+    band2Enabled: true,
+    band2Type: "peaking",
+    band2FrequencyHz: 3200,
+    band2GainDb: 4,
+    band2Q: 0.9,
+    band3Enabled: true,
+    band3Type: "highShelf",
+    band3FrequencyHz: 9000,
+    band3GainDb: 2.5,
+    band3Q: 0.7,
+  });
   const comp = b.add("compressor", "Compressor");
   const limiter = b.add("limiter", "Limiter");
   const discord = b.add("physicalOutput", "CABLE Input → Discord");

@@ -22,7 +22,10 @@ it("shows the shell's saved autoplay value and saves a change", async () => {
 });
 
 it("keeps the saved value when saving fails, and is unavailable outside the desktop app", async () => {
-  const invoke = vi.fn(async (command: string) => { if (command === "autoplay_get") return false; throw new Error("disk full"); });
+  const invoke = vi.fn(async (command: string) => {
+    if (command === "autoplay_get") return false;
+    throw new Error("disk full");
+  });
   const view = render(<AutoplaySetting invoke={invoke} />);
   const box = screen.getByLabelText("Play the selected session automatically") as HTMLInputElement;
   await waitFor(() => expect(box.disabled).toBe(false));
@@ -39,7 +42,10 @@ it("shows and saves API auto-start through its own shell command", async () => {
   let saved = false;
   const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
     if (command === "api_autostart_get") return saved;
-    if (command === "api_autostart_set") { saved = args?.enabled === true; return saved; }
+    if (command === "api_autostart_set") {
+      saved = args?.enabled === true;
+      return saved;
+    }
     throw new Error(`unexpected ${command}`);
   });
   render(<ApiAutostartSetting invoke={invoke} />);

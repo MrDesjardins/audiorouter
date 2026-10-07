@@ -6,18 +6,23 @@ import { demoSession } from "../src/fixtures";
 // keep the layout fixed when its guidance changes, and edit only the draft.
 const session = {
   ...demoSession,
-  nodes: demoSession.nodes.map((node) => node.kind === "physicalInput"
-    ? { ...node, name: "Interface mic", parameters: { endpointId: "capture-preview" } }
-    : node),
+  nodes: demoSession.nodes.map((node) =>
+    node.kind === "physicalInput"
+      ? { ...node, name: "Interface mic", parameters: { endpointId: "capture-preview" } }
+      : node,
+  ),
 };
 const inputId = session.nodes.find((node) => node.kind === "physicalInput")!.id;
 
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`input channels inspector in ${theme}`, async ({ page }, testInfo) => {
-    await page.addInitScript(({ session, theme }) => {
-      localStorage.setItem("audiorouter.ui.theme", theme);
-      Object.assign(window, { __routeFixtureSession: session });
-    }, { session, theme });
+    await page.addInitScript(
+      ({ session, theme }) => {
+        localStorage.setItem("audiorouter.ui.theme", theme);
+        Object.assign(window, { __routeFixtureSession: session });
+      },
+      { session, theme },
+    );
     await page.goto("/route-harness.html");
     await page.getByTestId(`rf__node-${inputId}`).click();
     const select = page.getByLabel("Input channels");
@@ -37,6 +42,12 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await page.getByLabel("Spatial audio mode").selectOption("off");
     await select.selectOption("mono");
     expect((await below.boundingBox())?.y).toBe(before?.y);
-    expect(await page.evaluate(() => (window as any).__routeFixtureCalls().filter((call: string) => call === "commit"))).toEqual([]);
+    expect(
+      await page.evaluate(() =>
+        (window as unknown as { __routeFixtureCalls: () => string[] })
+          .__routeFixtureCalls()
+          .filter((call: string) => call === "commit"),
+      ),
+    ).toEqual([]);
   });
 }

@@ -22,7 +22,11 @@ describe("update check", () => {
       { tag_name: "nightly", draft: false },
       null,
     ];
-    expect(newestUpdate(releases, "0.0.8")).toEqual({ version: "0.0.10", tag: "v0.0.10", url: `${RELEASE_PAGE_PREFIX}v0.0.10` });
+    expect(newestUpdate(releases, "0.0.8")).toEqual({
+      version: "0.0.10",
+      tag: "v0.0.10",
+      url: `${RELEASE_PAGE_PREFIX}v0.0.10`,
+    });
     expect(newestUpdate(releases, "0.0.10")).toBeNull();
     expect(newestUpdate({ message: "API rate limit exceeded" }, "0.0.8")).toBeNull();
   });

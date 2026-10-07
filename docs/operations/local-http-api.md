@@ -227,15 +227,28 @@ durable save does not guarantee that every topology change can apply live.
 foreign browser Origin or wrong Host. Use the displayed **127.0.0.1** address,
 not `localhost`; from another device use the Network URL. 409: stale revision; fetch and plan again.
 429: request budget exhausted; back off. 503: backend unavailable; reconnect
-in the app. A busy port prevents startup and says to choose another port.
+in the app. 503 with `Retry-After: 1`: the adapter is busy (all workers and
+queue slots taken); retry after a second. A busy port prevents startup and says to choose another port.
 Backend errors retain `error.code`, `message` and structured `data`.
+
+Every request that reaches the backend gets a request ID, returned in the
+`X-Request-Id` response header (success and error alike). Send your own
+`X-Request-Id: <1-32 characters from A-Z a-z 0-9 ->` to choose it, for example
+a Stream Deck key name plus a counter; any other value is replaced by a
+generated 8-character ID. The same ID is written as `requestId` to
+`shell.jsonl` (with `"source": "http"`) and `backend.jsonl`, so a support
+case can follow one call through the logs. Successful HTTP reads are logged
+only while verbose logging is on, so polling controllers do not fill the log.
 
 The adapter bounds headers to 16 KiB, body to 4 MiB, header/body reads to a
 two-second deadline and socket writes to two seconds. Four workers and 32
 queued connections keep work off audio threads. A shared token bucket refills
 20 units/s with burst 40; mutations cost one unit and reads cost 0.1. Backend
-limits additionally apply. Overflow connections may be closed without an
-operation. JSON must be an object; no HTTP batches, query parameters, chunked
+limits additionally apply. Each listener waits for connections without
+polling. A connection that arrives while every worker is busy and the queue
+is full runs no operation: it gets `503 Service Unavailable` with
+`Retry-After: 1`, `Connection: close` and a JSON `error.message`, written
+within a 100 ms bound so a slow client cannot stall the listener. JSON must be an object; no HTTP batches, query parameters, chunked
 bodies, cookie auth or cross-origin browser calls. `Expect: 100-continue` is
 accepted only after authentication and body-length checks.
 Swagger/docs assets are public local documentation; API data/control needs the

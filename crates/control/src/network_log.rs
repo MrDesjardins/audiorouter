@@ -35,13 +35,23 @@ pub fn socket_error_hint(code: i32) -> Option<&'static str> {
 
 /// Why a playing Network Receive may be silent, from its counters.
 pub fn receive_hint(record: &ReceiveSummary) -> Option<String> {
+    if record.auth_failures > 0 && record.received_packets == 0 {
+        return Some(match record.auth_problem {
+            Some("senderNotPaired") => "audio arrives from the sending computer without a pairing key: enter this Network Receive's pairing key in the Network Send there".into(),
+            Some("receiverNotPaired") => "audio arrives with a pairing key: enter the sending computer's pairing key in this Network Receive".into(),
+            _ => "audio arrives from the sending computer with a different pairing key: enter the same key on both computers".into(),
+        });
+    }
     if let Some(sender) = record.last_rejected_sender.as_deref() {
         return Some(format!(
             "AudioRouter audio arrives from {sender}, but this Network Receive accepts only {expected}: set its sending computer address to {sender}",
             expected = record.expected_sender
         ));
     }
-    if record.received_packets == 0 && record.rejected_datagrams == 0 && record.seconds_playing >= 5
+    if record.received_packets == 0
+        && record.rejected_datagrams == 0
+        && record.auth_failures == 0
+        && record.seconds_playing >= 5
     {
         return Some(format!(
             "nothing arrived on UDP port {port}: on the sending computer, the Network Send must target {target}:{port} and be playing; Windows Firewall on this computer must allow AudioRouter (private networks); both computers must be on the same network",
@@ -92,6 +102,11 @@ pub struct ReceiveSummary {
     pub overflow_packets: u64,
     pub receive_errors: u64,
     pub last_error_code: Option<i32>,
+    /// Never the key itself: only whether one is set, and the counters.
+    pub paired: bool,
+    pub auth_failures: u64,
+    pub auth_problem: Option<&'static str>,
+    pub replayed_packets: u64,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -104,6 +119,7 @@ pub struct SendSummary {
     pub dropped_packets: u64,
     pub send_errors: u64,
     pub last_error_code: Option<i32>,
+    pub paired: bool,
 }
 
 impl ReceiveSummary {
@@ -117,7 +133,9 @@ impl ReceiveSummary {
             "latePackets": self.late_packets, "rejectedDatagrams": self.rejected_datagrams,
             "lastRejectedSender": self.last_rejected_sender, "underruns": self.underruns,
             "overflowPackets": self.overflow_packets, "receiveErrors": self.receive_errors,
-            "lastErrorCode": self.last_error_code, "hint": receive_hint(self),
+            "lastErrorCode": self.last_error_code, "paired": self.paired,
+            "authFailures": self.auth_failures, "authProblem": self.auth_problem,
+            "replayedPackets": self.replayed_packets, "hint": receive_hint(self),
         })
     }
 }
@@ -130,7 +148,7 @@ impl SendSummary {
             "secondsPlaying": self.seconds_playing,
             "sentPackets": self.sent_packets, "droppedPackets": self.dropped_packets,
             "sendErrors": self.send_errors, "lastErrorCode": self.last_error_code,
-            "hint": send_hint(self),
+            "paired": self.paired, "hint": send_hint(self),
         })
     }
 }
@@ -291,6 +309,24 @@ mod tests {
             ..receive()
         };
         assert!(receive_hint(&choppy).unwrap().contains("raise the buffer"));
+        // Pairing mismatches name the side to fix, not the firewall.
+        for (problem, expected) in [
+            (Some("wrongKey"), "same key on both computers"),
+            (Some("senderNotPaired"), "in the Network Send there"),
+            (Some("receiverNotPaired"), "in this Network Receive"),
+        ] {
+            let unpaired = ReceiveSummary {
+                auth_failures: 40,
+                auth_problem: problem,
+                ..receive()
+            };
+            let hint = receive_hint(&unpaired).unwrap();
+            assert!(hint.contains(expected), "{hint}");
+            assert!(!unpaired
+                .to_record("summary")
+                .to_string()
+                .contains("Firewall"));
+        }
         let starting = ReceiveSummary {
             seconds_playing: 2,
             ..receive()

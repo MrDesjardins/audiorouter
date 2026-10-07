@@ -33,9 +33,10 @@ jobs:
       release: ${{ steps.detect.outputs.release }}
       windows: ${{ steps.detect.outputs.windows }}
       rust: ${{ steps.detect.outputs.rust }}
+      supply: ${{ steps.detect.outputs.supply }}
     steps:
       - name: Check out
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # A pull_request checkout is the merge commit; its first parent is
           # the base branch tip, so HEAD^1..HEAD is exactly the PR's change.
@@ -68,6 +69,15 @@ jobs:
             out sdk       '^(tools/m06-vst3-sdk/|tests/acceptance/m06-)'
             out release   '^(tools/release/|drivers/|tests/acceptance/m08-|src-tauri/tauri[^/]*\.json$|src-tauri/Cargo\.toml$|ui/package\.json$)'
           fi
+          # Dependency manifests, lockfiles and the cargo-deny policy. Not an
+          # area: a lockfile-only change to tools/streamdeck needs no Windows
+          # build, but it does need the supply-chain checks.
+          if [ "$EVENT_NAME" != "pull_request" ] || [ "$all" = true ] \
+            || grep -qE '^(deny\.toml|Cargo\.(toml|lock)|src-tauri/Cargo\.(toml|lock)|crates/[^/]+/Cargo\.toml|(ui|contracts|tools/streamdeck)/package(-lock)?\.json|\.github/workflows/ci\.yml)$' <<<"$files"; then
+            echo "supply=true"
+          else
+            echo "supply=false"
+          fi >> "$GITHUB_OUTPUT"
           # Derived flags, from the area flags just written.
           declare -A flag
           while IFS='=' read -r key value; do flag[$key]=$value; done < "$GITHUB_OUTPUT"
@@ -81,16 +91,64 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install pinned Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22.14.0
           package-manager-cache: false
 
       - name: Validate documentation
         run: node tools/docs/validate.mjs
+
+  # cargo-deny reads Cargo metadata only, so Linux can resolve the Windows-only
+  # dependency graph (deny.toml limits it to x86_64-pc-windows-msvc).
+  supply-chain:
+    name: Dependency advisories, licenses and sources
+    needs: changes
+    if: needs.changes.outputs.supply == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # 2026-07-16 action revision
+        with:
+          toolchain: 1.96.0
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+        with:
+          tool: cargo-deny@0.20.2
+
+      - name: cargo deny (root workspace)
+        run: cargo deny --manifest-path Cargo.toml check advisories licenses sources bans
+
+      - name: cargo deny (desktop shell)
+        run: cargo deny --manifest-path src-tauri/Cargo.toml check advisories licenses sources bans
+
+      - name: Install pinned Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.14.0
+          package-manager-cache: false
+
+      # Shipped (runtime) npm dependencies only; fails on high or critical.
+      # npm audit reads the lockfile, so no install is needed.
+      - name: npm audit (ui, contracts, Stream Deck plugin)
+        shell: bash
+        run: |
+          set -uo pipefail
+          status=0
+          for dir in ui contracts tools/streamdeck; do
+            echo "::group::npm audit $dir"
+            npm audit --omit=dev --audit-level=high --prefix "$dir" || status=1
+            echo "::endgroup::"
+          done
+          exit $status
 
   windows:
     name: Windows build, tests and release preparation
@@ -100,10 +158,10 @@ jobs:
     timeout-minutes: 150
     steps:
       - name: Check out
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install pinned Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22.14.0
           package-manager-cache: false
@@ -176,6 +234,10 @@ jobs:
         if: needs.changes.outputs.ui == 'true'
         shell: pwsh
         run: |
+          npm --prefix ui run format:check
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          npm --prefix ui run lint
+          if ($LASTEXITCODE -ne 0) { exit 1 }
           npm --prefix ui test
           if ($LASTEXITCODE -ne 0) { exit 1 }
           npm --prefix ui run build
@@ -207,10 +269,10 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Check out
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install pinned Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22.14.0
           package-manager-cache: false
@@ -238,7 +300,7 @@ jobs:
 
       - name: Upload Playwright traces and screenshots
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-results
           path: ${{ runner.temp }}/audiorouter-playwright-results

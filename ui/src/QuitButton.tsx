@@ -19,20 +19,33 @@ export function QuitButton({ onMessage }: { onMessage: (message: string) => void
   }, [armed]);
   if (!invoke) return null;
   const quit = async () => {
-    if (!armed) { setArmed(true); return; }
+    if (!armed) {
+      setArmed(true);
+      return;
+    }
     setBusy(true);
     try {
       await invoke("quit_app");
       // The shell exits on success; nothing else to update.
     } catch (error) {
-      onMessage(`Quit refused: ${error instanceof Error ? error.message : String(error)}. Audio keeps playing; stop any recording and try again.`);
+      onMessage(
+        `Quit refused: ${error instanceof Error ? error.message : String(error)}. Audio keeps playing; stop any recording and try again.`,
+      );
       setArmed(false);
     } finally {
       setBusy(false);
     }
   };
-  return <button type="button" className={armed ? "quit-button is-armed" : "quit-button secondary"} onClick={() => void quit()} disabled={busy}
-    title="Stop audio, finish recordings and close AudioRouter (same as the tray's Quit)" aria-label={armed ? "Confirm quit AudioRouter" : "Quit AudioRouter"}>
-    {busy ? "Quitting…" : armed ? "Click again to quit" : "Quit"}
-  </button>;
+  return (
+    <button
+      type="button"
+      className={armed ? "quit-button is-armed" : "quit-button secondary"}
+      onClick={() => void quit()}
+      disabled={busy}
+      title="Stop audio, finish recordings and close AudioRouter (same as the tray's Quit)"
+      aria-label={armed ? "Confirm quit AudioRouter" : "Quit AudioRouter"}
+    >
+      {busy ? "Quitting…" : armed ? "Click again to quit" : "Quit"}
+    </button>
+  );
 }

@@ -3,7 +3,10 @@ import { readTheme, writeTheme } from "./preferences";
 
 function storage() {
   const values = new Map<string, string>();
-  return { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value) };
+  return {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => values.set(key, value),
+  };
 }
 
 describe("theme preferences", () => {
