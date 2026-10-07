@@ -389,6 +389,19 @@ P2 and P3 remain a backlog.
   readiness wait. Answer `503` with `Retry-After` when the queue is full.
 - **Verify.** Measure the latency of an idle-to-first request, and test the
   queue-full response.
+- **Status (2026-10-07): fixed in code, Windows run pending.** Intake moved to
+  `src-tauri/src/http_accept.rs` (std only). Each listener has its own
+  blocking accept thread, and workers block in `recv`, so nothing polls.
+  Stop sets the flag and connects to each listener to wake its accept. A
+  thread that cannot be woken (the network address left the PC) is detached
+  instead of hanging the caller. A full queue answers 503 with
+  `Retry-After: 1` and a JSON `error.message`. The write is bounded at
+  100 ms and the linger at 20 ms. Tests cover the 503, a stop under 500 ms
+  that frees the port, one accept call while idle, and refused peers. They
+  passed natively on Linux (25 repeated runs) through a scratch crate that
+  includes the module. Windows-target Clippy is clean. Running the shell
+  tests on Windows, and measuring idle-to-first-request latency, are still
+  open.
 
 ### P2-7 DSP loops look up channels per sample
 

@@ -16,6 +16,7 @@ use tauri::{
 #[cfg(windows)]
 mod api_token;
 mod backend_supervisor;
+mod http_accept;
 mod http_api;
 #[cfg(windows)]
 mod instance_windows;

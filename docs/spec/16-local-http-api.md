@@ -78,7 +78,9 @@ second backend.
   side effects and bearer security. Swagger authorization is memory-only.
 - **HTTP-06 — Bounds.** Exact listener Host and same-origin browser requests;
   no wildcard CORS, cookies or token URLs. Bound headers, JSON size/depth,
-  deadlines, concurrency and request rate. HTTP runs off audio threads.
+  deadlines, concurrency and request rate. A connection beyond the bounded
+  queue gets 503 with `Retry-After`, never a silent close. HTTP runs off
+  audio threads.
   Documentation has restrictive CSP and only fixed assets. No bodies/tokens
   in diagnostics.
 

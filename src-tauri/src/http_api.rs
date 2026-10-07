@@ -1,4 +1,5 @@
 //! Optional loopback adapter. No state or audio execution is owned here.
+use crate::http_accept::{close_gracefully, reply_with, ConnectionPool};
 use audiorouter_protocol::{JsonRpcRequest, JsonRpcResponse};
 use serde_json::{json, Value};
 use std::io::{Read, Write};
@@ -17,16 +18,8 @@ pub struct HttpApi {
     pub port: u16,
     pub lan: Option<Ipv4Addr>,
     pub token: String,
-    stop: Arc<AtomicBool>,
-    thread: Option<std::thread::JoinHandle<()>>,
-}
-impl Drop for HttpApi {
-    fn drop(&mut self) {
-        self.stop.store(true, Ordering::Release);
-        if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
-        }
-    }
+    /// Dropping the pool stops the listeners and workers.
+    _pool: ConnectionPool,
 }
 impl HttpApi {
     #[cfg(test)]
@@ -64,11 +57,10 @@ impl HttpApi {
                 return Err(format!("{address} is not a private local-network address. Choose this PC's home or office network address."));
             }
         }
+        // Listeners stay blocking: each accept thread waits in the kernel
+        // until a connection arrives, with no idle wake-ups or polling delay.
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, port))
             .map_err(|_| format!("Cannot open localhost port {port}. Choose another port or stop the application using it."))?;
-        listener
-            .set_nonblocking(true)
-            .map_err(|_| "Cannot configure API listener")?;
         let port = listener
             .local_addr()
             .map_err(|_| "Cannot read API port")?
@@ -77,9 +69,6 @@ impl HttpApi {
         if let Some(address) = lan {
             let network = TcpListener::bind((address, port))
                 .map_err(|_| format!("Cannot open port {port} on {address}. Check that this PC still has that address, or choose another port."))?;
-            network
-                .set_nonblocking(true)
-                .map_err(|_| "Cannot configure API listener")?;
             listeners.push((network, true));
         }
         let mut hosts = vec![format!("127.0.0.1:{port}")];
@@ -87,84 +76,21 @@ impl HttpApi {
         let describe = forward(&rpc("system.describe", None))?
             .result
             .ok_or("Backend discovery unavailable; reconnect before starting API")?;
-        let openapi = Arc::new(openapi(&describe, port, lan));
-        let stop = Arc::new(AtomicBool::new(false));
-        let thread_stop = stop.clone();
+        let schema = openapi(&describe, port, lan);
+        let rate = Mutex::new((Instant::now(), 40f64));
         let secret = token.clone();
-        let thread = std::thread::Builder::new()
-            .name("audiorouter-http".into())
-            .spawn(move || {
-                // Four fixed workers and 32 queued sockets bound memory/concurrency
-                // while accommodating the frontend's initial discovery/read burst.
-                let (sender, receiver) = std::sync::mpsc::sync_channel::<TcpStream>(32);
-                let receiver = Arc::new(Mutex::new(receiver));
-                let rate = Arc::new(Mutex::new((Instant::now(), 40f64)));
-                let mut workers = Vec::new();
-                for _ in 0..4 {
-                    let (receiver, forward, schema, token, stop, rate, hosts) = (
-                        receiver.clone(),
-                        forward.clone(),
-                        openapi.clone(),
-                        secret.clone(),
-                        thread_stop.clone(),
-                        rate.clone(),
-                        hosts.clone(),
-                    );
-                    workers.push(std::thread::spawn(move || loop {
-                        let stream = {
-                            let Ok(receiver) = receiver.lock() else { break };
-                            receiver.recv_timeout(Duration::from_millis(100))
-                        };
-                        if stop.load(Ordering::Acquire) {
-                            break;
-                        }
-                        match stream {
-                            Ok(mut stream) => {
-                                let _ = handle(
-                                    &mut stream,
-                                    &hosts,
-                                    &token,
-                                    &schema,
-                                    &forward,
-                                    &stop,
-                                    &rate,
-                                );
-                            }
-                            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
-                            Err(_) => {}
-                        }
-                    }));
-                }
-                'accept: while !thread_stop.load(Ordering::Acquire) {
-                    let mut idle = true;
-                    for (listener, network) in &listeners {
-                        match listener.accept() {
-                            Ok((stream, address)) => {
-                                idle = false;
-                                if peer_allowed(address.ip(), *network) {
-                                    let _ = sender.try_send(stream);
-                                }
-                            }
-                            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
-                            Err(_) => break 'accept,
-                        }
-                    }
-                    if idle {
-                        std::thread::sleep(Duration::from_millis(10));
-                    }
-                }
-                drop(sender);
-                for worker in workers {
-                    let _ = worker.join();
-                }
-            })
-            .map_err(|_| "Cannot start HTTP adapter")?;
+        let pool = ConnectionPool::start(
+            listeners,
+            peer_allowed,
+            Arc::new(move |stream: &mut TcpStream, stop: &AtomicBool| {
+                let _ = handle(stream, &hosts, &secret, &schema, &forward, stop, &rate);
+            }),
+        )?;
         Ok(Self {
             port,
             lan,
             token,
-            stop,
-            thread: Some(thread),
+            _pool: pool,
         })
     }
 }
@@ -268,8 +194,7 @@ fn reply(
     content_type: &str,
     body: &[u8],
 ) -> std::io::Result<()> {
-    write!(stream, "HTTP/1.1 {status} {}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nContent-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n\r\n", match status { 200 => "OK", 400 => "Bad Request", 401 => "Unauthorized", 403 => "Forbidden", 404 => "Not Found", 405 => "Method Not Allowed", 409 => "Conflict", 413 => "Payload Too Large", 429 => "Too Many Requests", _ => "Service Unavailable" }, body.len())?;
-    stream.write_all(body)
+    reply_with(stream, status, content_type, "", body)
 }
 fn fail(stream: &mut TcpStream, status: u16, message: &str) -> std::io::Result<()> {
     reply(
@@ -280,20 +205,12 @@ fn fail(stream: &mut TcpStream, status: u16, message: &str) -> std::io::Result<(
             .to_string()
             .as_bytes(),
     )?;
-    // Finish the response before a bounded discard of already arriving bytes.
-    // Closing a Windows socket with unread POST data can reset the connection
-    // and hide the actionable 401/403 response from ordinary HTTP clients.
-    let _ = stream.shutdown(std::net::Shutdown::Write);
-    let _ = stream.set_read_timeout(Some(Duration::from_millis(20)));
-    let deadline = Instant::now();
-    let mut discarded = 0usize;
-    let mut buffer = [0u8; 4096];
-    while discarded < MAX_BODY && deadline.elapsed() < Duration::from_millis(50) {
-        match stream.read(&mut buffer) {
-            Ok(0) | Err(_) => break,
-            Ok(count) => discarded += count,
-        }
-    }
+    close_gracefully(
+        stream,
+        Duration::from_millis(20),
+        Duration::from_millis(50),
+        MAX_BODY,
+    );
     Ok(())
 }
 fn token_matches(actual: &str, token: &str) -> bool {
@@ -315,9 +232,9 @@ fn handle(
     stop: &AtomicBool,
     rate: &Mutex<(Instant, f64)>,
 ) -> std::io::Result<()> {
-    // Windows accepted sockets may inherit the listener's nonblocking mode.
-    // Clients send headers/body in separate packets; bounded blocking reads
-    // must wait for those packets instead of treating WouldBlock as disconnect.
+    // Listeners are blocking, but keep accepted sockets explicitly blocking:
+    // clients send headers/body in separate packets, and bounded blocking
+    // reads must wait for them instead of treating WouldBlock as disconnect.
     stream.set_nonblocking(false)?;
     stream.set_read_timeout(Some(Duration::from_secs(2)))?;
     stream.set_write_timeout(Some(Duration::from_secs(2)))?;
@@ -531,6 +448,7 @@ fn handle(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::http_accept::{QUEUE, WORKERS};
     use audiorouter_control::ControlPlane;
 
     fn exchange(port: u16, request: &str) -> String {
@@ -853,6 +771,89 @@ mod tests {
         stream.read_to_string(&mut result).unwrap();
         assert!(result.starts_with("HTTP/1.1 200"), "{result}");
     }
+    /// A backend that answers discovery and blocks every other call until
+    /// `release` is set, reporting each blocked call on `entered`.
+    fn blocking_backend(
+        entered: std::sync::mpsc::Sender<()>,
+        release: Arc<(Mutex<bool>, std::sync::Condvar)>,
+    ) -> Arc<Forward> {
+        let schema = ControlPlane::new("http-busy").describe();
+        Arc::new(move |request| {
+            if request.method == "system.describe" {
+                return Ok(JsonRpcResponse::success(request.id.clone(), schema.clone()));
+            }
+            let _ = entered.send(());
+            let (open, wake) = &*release;
+            let mut open = open.lock().unwrap();
+            while !*open {
+                open = wake.wait(open).unwrap();
+            }
+            Ok(ControlPlane::new("http-busy").dispatch(request.clone()))
+        })
+    }
+    fn connect(port: u16) -> TcpStream {
+        let stream = TcpStream::connect((Ipv4Addr::LOCALHOST, port)).unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        stream
+    }
+
+    #[test]
+    fn full_queue_answers_503_with_retry_after_instead_of_dropping() {
+        let (entered, entered_calls) = std::sync::mpsc::channel();
+        let release = Arc::new((Mutex::new(false), std::sync::Condvar::new()));
+        let api = HttpApi::start(0, blocking_backend(entered, release.clone())).unwrap();
+        // Occupy every worker inside the backend call.
+        let mut busy = Vec::new();
+        for _ in 0..WORKERS {
+            let mut stream = connect(api.port);
+            write!(
+                stream,
+                "GET /api/v1/status HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nAuthorization: Bearer {}\r\n\r\n",
+                api.port, api.token
+            )
+            .unwrap();
+            busy.push(stream);
+        }
+        for _ in 0..WORKERS {
+            entered_calls.recv_timeout(Duration::from_secs(5)).unwrap();
+        }
+        // Fill the queue; nobody can take these sockets yet.
+        let queued = (0..QUEUE).map(|_| connect(api.port)).collect::<Vec<_>>();
+        // The next connection is answered at once rather than closed silently.
+        let started = Instant::now();
+        let mut overflow = connect(api.port);
+        let mut response = String::new();
+        overflow.read_to_string(&mut response).unwrap();
+        assert!(started.elapsed() < Duration::from_secs(1));
+        let (headers, body) = response.split_once("\r\n\r\n").unwrap();
+        assert!(
+            headers.starts_with("HTTP/1.1 503 Service Unavailable\r\n"),
+            "{headers}"
+        );
+        assert!(headers.contains("\r\nRetry-After: 1\r\n"), "{headers}");
+        assert!(headers.contains("\r\nConnection: close\r\n"), "{headers}");
+        assert!(
+            headers.contains("\r\nContent-Type: application/json\r\n"),
+            "{headers}"
+        );
+        let body: Value = serde_json::from_str(body).unwrap();
+        assert!(body["error"]["message"].as_str().unwrap().contains("busy"));
+        // Releasing the backend completes the held requests normally.
+        *release.0.lock().unwrap() = true;
+        release.1.notify_all();
+        for mut stream in busy {
+            let mut response = String::new();
+            stream.read_to_string(&mut response).unwrap();
+            assert!(response.starts_with("HTTP/1.1 200"), "{response}");
+        }
+        drop(queued);
+        let started = Instant::now();
+        drop(api);
+        assert!(started.elapsed() < Duration::from_secs(3));
+    }
+
     #[test]
     fn openapi_covers_every_method_and_docs_are_offline() {
         let (api, plane) = fixture();
