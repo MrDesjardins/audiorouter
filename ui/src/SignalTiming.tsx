@@ -31,7 +31,7 @@ export function signalTimingRoutes(session: Session, telemetry: DiagnosticsSnaps
   const timing = new Map<string, NodeTiming>();
   for (const item of telemetry) if (item.timing) timing.set(item.nodeId, item.timing);
   const incoming = (nodeId: string) => session.edges.filter((edge) => edge.enabled && edge.destinationNode === nodeId);
-  const delay = (node: Node) => !node.enabled || node.bypass ? null : timing.get(node.id)?.delayMs ?? null;
+  const delay = (node: Node) => (!node.enabled || node.bypass ? null : (timing.get(node.id)?.delayMs ?? null));
   const upstream = (node: Node, seen: Set<string>): { steps: Node[]; total: number } => {
     if (seen.has(node.id) || seen.size > 64) return { steps: [node], total: delay(node) ?? 0 };
     const next = new Set(seen).add(node.id);
@@ -52,44 +52,87 @@ export function signalTimingRoutes(session: Session, telemetry: DiagnosticsSnaps
       const steps = route.steps.map((node): TimingStep => ({
         node,
         delayMs: delay(node),
-        processingUsAvg: !node.enabled || node.bypass ? null : timing.get(node.id)?.processingUsAvg ?? null,
+        processingUsAvg: !node.enabled || node.bypass ? null : (timing.get(node.id)?.processingUsAvg ?? null),
       }));
       const measured = steps.some((step) => step.delayMs !== null);
       const slowest = measured
-        ? steps.reduce<TimingStep | null>((worst, step) => step.delayMs !== null && (worst === null || step.delayMs > (worst.delayMs ?? 0)) ? step : worst, null)
+        ? steps.reduce<TimingStep | null>(
+            (worst, step) =>
+              step.delayMs !== null && (worst === null || step.delayMs > (worst.delayMs ?? 0)) ? step : worst,
+            null,
+          )
         : null;
       return { output, steps, totalMs: route.total, slowest, measured };
     });
 }
 
-const formatMs = (value: number) => value < 10 ? value.toFixed(1) : value.toFixed(0);
+const formatMs = (value: number) => (value < 10 ? value.toFixed(1) : value.toFixed(0));
 
 /** Shows, for each output, how long the sound takes and which step is slowest. */
-export function SignalTimingPanel({ session, telemetry, running }: { session: Session; telemetry: DiagnosticsSnapshot["nodeTelemetry"]; running: boolean }) {
+export function SignalTimingPanel({
+  session,
+  telemetry,
+  running,
+}: {
+  session: Session;
+  telemetry: DiagnosticsSnapshot["nodeTelemetry"];
+  running: boolean;
+}) {
   const routes = signalTimingRoutes(session, running ? telemetry : []);
-  return <section className="signal-timing" aria-label="Signal timing">
-    <p className="muted">Average time the sound spends at each step on its way to an output. The longest bar is the step slowing the sound most. Sources show how long audio waits before it is picked up; outputs show how much audio is queued ahead of the device.</p>
-    {!running && <p className="muted">Press Play to measure. Timing is measured while a route with a Mixer or several paths is playing.</p>}
-    {routes.length === 0 && <p className="muted">This route has no connected output.</p>}
-    {routes.map((route) => <article className="timing-route" key={route.output.id} aria-label={`Timing to ${route.output.name}`}>
-      <header>
-        <strong>{route.steps[0]?.node.name} → {route.output.name}</strong>
-        <span className="timing-total">{route.measured ? `${formatMs(route.totalMs)} ms` : "not measured"}</span>
-      </header>
-      <ol>
-        {route.steps.map((step) => {
-          const share = route.totalMs > 0 && step.delayMs !== null ? Math.max(2, Math.min(100, (step.delayMs / route.totalMs) * 100)) : 0;
-          const slowest = route.slowest === step && (step.delayMs ?? 0) > 0;
-          return <li key={step.node.id} className={slowest ? "timing-step is-slowest" : "timing-step"}>
-            <div className="timing-step-label">
-              <span>{step.node.name}{!step.node.enabled ? " (off)" : step.node.bypass ? " (bypassed)" : ""}{slowest && <em> slowest</em>}</span>
-              <span>{step.delayMs === null ? "–" : `${formatMs(step.delayMs)} ms`}</span>
-            </div>
-            <div className="timing-bar" aria-hidden="true"><span style={{ width: `${share}%` }} /></div>
-            {step.processingUsAvg !== null && <small className="muted">processing {step.processingUsAvg < 100 ? step.processingUsAvg.toFixed(1) : step.processingUsAvg.toFixed(0)} µs per block</small>}
-          </li>;
-        })}
-      </ol>
-    </article>)}
-  </section>;
+  return (
+    <section className="signal-timing" aria-label="Signal timing">
+      <p className="muted">
+        Average time the sound spends at each step on its way to an output. The longest bar is the step slowing the
+        sound most. Sources show how long audio waits before it is picked up; outputs show how much audio is queued
+        ahead of the device.
+      </p>
+      {!running && (
+        <p className="muted">
+          Press Play to measure. Timing is measured while a route with a Mixer or several paths is playing.
+        </p>
+      )}
+      {routes.length === 0 && <p className="muted">This route has no connected output.</p>}
+      {routes.map((route) => (
+        <article className="timing-route" key={route.output.id} aria-label={`Timing to ${route.output.name}`}>
+          <header>
+            <strong>
+              {route.steps[0]?.node.name} → {route.output.name}
+            </strong>
+            <span className="timing-total">{route.measured ? `${formatMs(route.totalMs)} ms` : "not measured"}</span>
+          </header>
+          <ol>
+            {route.steps.map((step) => {
+              const share =
+                route.totalMs > 0 && step.delayMs !== null
+                  ? Math.max(2, Math.min(100, (step.delayMs / route.totalMs) * 100))
+                  : 0;
+              const slowest = route.slowest === step && (step.delayMs ?? 0) > 0;
+              return (
+                <li key={step.node.id} className={slowest ? "timing-step is-slowest" : "timing-step"}>
+                  <div className="timing-step-label">
+                    <span>
+                      {step.node.name}
+                      {!step.node.enabled ? " (off)" : step.node.bypass ? " (bypassed)" : ""}
+                      {slowest && <em> slowest</em>}
+                    </span>
+                    <span>{step.delayMs === null ? "–" : `${formatMs(step.delayMs)} ms`}</span>
+                  </div>
+                  <div className="timing-bar" aria-hidden="true">
+                    <span style={{ width: `${share}%` }} />
+                  </div>
+                  {step.processingUsAvg !== null && (
+                    <small className="muted">
+                      processing{" "}
+                      {step.processingUsAvg < 100 ? step.processingUsAvg.toFixed(1) : step.processingUsAvg.toFixed(0)}{" "}
+                      µs per block
+                    </small>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </article>
+      ))}
+    </section>
+  );
 }

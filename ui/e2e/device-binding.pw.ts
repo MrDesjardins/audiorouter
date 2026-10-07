@@ -7,11 +7,17 @@ import { demoSession } from "../src/fixtures";
 // refused with "Choose the device for …" (support report 2026-10-03).
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`unbound output shows no borrowed device in ${theme}`, async ({ page }, testInfo) => {
-    await page.addInitScript(({ session, theme }) => {
-      localStorage.setItem("audiorouter.ui.theme", theme);
-      localStorage.setItem(`audiorouter.ui.endpoint-binding.${session.id}`, JSON.stringify({ captureEndpointId: "", renderEndpointId: "render-preview" }));
-      Object.assign(window, { __routeFixtureSession: session });
-    }, { session: demoSession, theme });
+    await page.addInitScript(
+      ({ session, theme }) => {
+        localStorage.setItem("audiorouter.ui.theme", theme);
+        localStorage.setItem(
+          `audiorouter.ui.endpoint-binding.${session.id}`,
+          JSON.stringify({ captureEndpointId: "", renderEndpointId: "render-preview" }),
+        );
+        Object.assign(window, { __routeFixtureSession: session });
+      },
+      { session: demoSession, theme },
+    );
     await page.goto("/route-harness.html");
     await page.getByTestId("rf__node-headphones").click();
     const picker = page.getByLabel("Physical output endpoint");
@@ -25,6 +31,12 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(picker).toHaveValue("render-preview");
     await expect(binding).not.toContainText("No device is chosen");
     await expect(page.getByText(/Unsaved: endpointId/)).toBeVisible();
-    expect(await page.evaluate(() => (window as unknown as { __routeFixtureCalls: () => string[] }).__routeFixtureCalls().filter((call) => call === "commit"))).toEqual([]);
+    expect(
+      await page.evaluate(() =>
+        (window as unknown as { __routeFixtureCalls: () => string[] })
+          .__routeFixtureCalls()
+          .filter((call) => call === "commit"),
+      ),
+    ).toEqual([]);
   });
 }

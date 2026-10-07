@@ -52,14 +52,24 @@ export class ErrorBoundary extends Component<BoundaryProps, BoundaryState> {
   render(): ReactNode {
     if (!this.state.failed) return this.props.children;
     if (this.props.fallback) return this.props.fallback(this.reset);
-    return <section className="panel error-boundary-panel" role="alert" aria-label={`${this.props.area} stopped`}>
-      <p className="panel-message is-error">{this.props.area} stopped working. Audio keeps running, and the rest of the window still works.</p>
-      <p className="muted">The cause is listed in the Logs tab. Try again, or reload the window if it keeps failing.</p>
-      <div className="error-boundary-actions">
-        <button type="button" className="secondary" onClick={this.reset}>Try again</button>
-        <button type="button" className="secondary" onClick={reloadWindow}>Reload window</button>
-      </div>
-    </section>;
+    return (
+      <section className="panel error-boundary-panel" role="alert" aria-label={`${this.props.area} stopped`}>
+        <p className="panel-message is-error">
+          {this.props.area} stopped working. Audio keeps running, and the rest of the window still works.
+        </p>
+        <p className="muted">
+          The cause is listed in the Logs tab. Try again, or reload the window if it keeps failing.
+        </p>
+        <div className="error-boundary-actions">
+          <button type="button" className="secondary" onClick={this.reset}>
+            Try again
+          </button>
+          <button type="button" className="secondary" onClick={reloadWindow}>
+            Reload window
+          </button>
+        </div>
+      </section>
+    );
   }
 }
 
@@ -83,16 +93,40 @@ export function RootRecoveryPanel({ onPrivacyMute }: { onPrivacyMute?: () => Pro
       setMuteState("failed");
     }
   };
-  const status = muteState === "done" ? "Privacy mute is on." : muteState === "failed" ? "Could not turn on privacy mute. Use the tray icon instead." : "\u00a0";
-  return <main className={`app-shell theme-${readTheme(browserDiagnosticStorage())} root-recovery`} role="alert" aria-label="AudioRouter stopped">
-    <section className="panel error-boundary-panel">
-      <h1>AudioRouter's window stopped working</h1>
-      <p>Audio keeps running in the background. Reload the window to continue; your saved sessions are kept.</p>
-      <div className="error-boundary-actions">
-        <button type="button" onClick={reloadWindow}>Reload window</button>
-        {onPrivacyMute && <button type="button" className="secondary" disabled={muteState === "busy" || muteState === "done"} onClick={() => void mute()}>Turn on privacy mute</button>}
-      </div>
-      <p className="muted error-boundary-status" role="status">{status}</p>
-    </section>
-  </main>;
+  const status =
+    muteState === "done"
+      ? "Privacy mute is on."
+      : muteState === "failed"
+        ? "Could not turn on privacy mute. Use the tray icon instead."
+        : "\u00a0";
+  return (
+    <main
+      className={`app-shell theme-${readTheme(browserDiagnosticStorage())} root-recovery`}
+      role="alert"
+      aria-label="AudioRouter stopped"
+    >
+      <section className="panel error-boundary-panel">
+        <h1>AudioRouter's window stopped working</h1>
+        <p>Audio keeps running in the background. Reload the window to continue; your saved sessions are kept.</p>
+        <div className="error-boundary-actions">
+          <button type="button" onClick={reloadWindow}>
+            Reload window
+          </button>
+          {onPrivacyMute && (
+            <button
+              type="button"
+              className="secondary"
+              disabled={muteState === "busy" || muteState === "done"}
+              onClick={() => void mute()}
+            >
+              Turn on privacy mute
+            </button>
+          )}
+        </div>
+        <p className="muted error-boundary-status" role="status">
+          {status}
+        </p>
+      </section>
+    </main>
+  );
 }

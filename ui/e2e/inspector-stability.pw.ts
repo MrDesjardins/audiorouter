@@ -14,7 +14,10 @@ async function addAndOpen(page: Page, label: string, kind: string) {
   await page.goto("/backend-harness.html");
   await expect(page.getByRole("heading", { name: "Offline qualification", exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Tools", exact: true }).click();
-  await page.locator(".tool-card").filter({ has: page.getByText(label, { exact: true }) }).click();
+  await page
+    .locator(".tool-card")
+    .filter({ has: page.getByText(label, { exact: true }) })
+    .click();
   await page.getByTestId(`rf__node-${kind}-1`).locator(".flow-node-title").click();
   return page.locator(".main-content > .inspector");
 }
@@ -29,8 +32,8 @@ for (const entry of libraryEntries.filter((item) => item.kind && item.kind !== "
     const heading = inspector.getByRole("heading", { level: 2 }).first();
     const before = { heading: await top(heading), field: await top(first) };
     const current = Number(await first.inputValue());
-    const min = Number(await first.getAttribute("aria-valuemin") ?? Number.NEGATIVE_INFINITY);
-    const max = Number(await first.getAttribute("aria-valuemax") ?? Number.POSITIVE_INFINITY);
+    const min = Number((await first.getAttribute("aria-valuemin")) ?? Number.NEGATIVE_INFINITY);
+    const max = Number((await first.getAttribute("aria-valuemax")) ?? Number.POSITIVE_INFINITY);
     const next = current + 1 <= max ? current + 1 : Math.max(min, current - 1);
     await first.fill(String(next));
     await page.waitForTimeout(300);
@@ -38,7 +41,9 @@ for (const entry of libraryEntries.filter((item) => item.kind && item.kind !== "
   });
 }
 
-test("Advanced EQ: adding, editing and removing points keeps the sidebar still, and fields accept retyping and negatives", async ({ page }) => {
+test("Advanced EQ: adding, editing and removing points keeps the sidebar still, and fields accept retyping and negatives", async ({
+  page,
+}) => {
   const inspector = await addAndOpen(page, "Advanced EQ", "parametricEq");
   const graph = inspector.locator(".advanced-eq-graph");
   const heading = inspector.getByRole("heading", { level: 2 }).first();

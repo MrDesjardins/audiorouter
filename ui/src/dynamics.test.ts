@@ -1,13 +1,33 @@
 import { describe, expect, it } from "vitest";
 import type { Node } from "@audiorouter/contracts";
 import {
-  compressorOutputDb, compressorReductionDb, gateOutputDb, levelStatistics, nextFallingLevel, nextPeakHold, ratioForOutputAtFullScale,
-  responseSketch, suggestCompressorThreshold, suggestGateThreshold, PEAK_FALL_DB_PER_SECOND, PEAK_HOLD_MS, type LevelSample,
+  compressorOutputDb,
+  compressorReductionDb,
+  gateOutputDb,
+  levelStatistics,
+  nextFallingLevel,
+  nextPeakHold,
+  ratioForOutputAtFullScale,
+  responseSketch,
+  suggestCompressorThreshold,
+  suggestGateThreshold,
+  PEAK_FALL_DB_PER_SECOND,
+  PEAK_HOLD_MS,
+  type LevelSample,
 } from "./dynamics";
 
 const node = (kind: Node["kind"], parameters: Node["parameters"]): Node => ({
-  id: kind, kind, typeVersion: 1, name: kind, enabled: true, bypass: false, parameters,
-  ports: [{ name: "in", direction: "input", channels: 1 }, { name: "out", direction: "output", channels: 1 }],
+  id: kind,
+  kind,
+  typeVersion: 1,
+  name: kind,
+  enabled: true,
+  bypass: false,
+  parameters,
+  ports: [
+    { name: "in", direction: "input", channels: 1 },
+    { name: "out", direction: "output", channels: 1 },
+  ],
 });
 
 describe("dynamics curves mirror the DSP reference vectors", () => {
@@ -35,15 +55,32 @@ describe("dynamics curves mirror the DSP reference vectors", () => {
 
 describe("response sketch", () => {
   it("shows a longer release as a slower return to unity", () => {
-    const fast = responseSketch("compressor", node("compressor", { thresholdDb: -20, ratio: 4, attackMs: 1, releaseMs: 20 }));
-    const slow = responseSketch("compressor", node("compressor", { thresholdDb: -20, ratio: 4, attackMs: 1, releaseMs: 400 }));
+    const fast = responseSketch(
+      "compressor",
+      node("compressor", { thresholdDb: -20, ratio: 4, attackMs: 1, releaseMs: 20 }),
+    );
+    const slow = responseSketch(
+      "compressor",
+      node("compressor", { thresholdDb: -20, ratio: 4, attackMs: 1, releaseMs: 400 }),
+    );
     const at = (sketch: typeof fast, ms: number) => sketch.points.find((point) => point.ms >= ms)!.gainDb;
     expect(at(fast, 390)).toBeLessThan(-8); // 12 dB over at 4:1 → 9 dB reduction
     expect(at(fast, 520)).toBeGreaterThan(-0.5);
     expect(at(slow, 520)).toBeLessThan(at(fast, 520) - 1.5);
   });
   it("keeps a gate open through Hold, then releases toward Range", () => {
-    const sketch = responseSketch("gate", node("gate", { thresholdDb: -40, rangeDb: 40, hysteresisDb: 3, ratio: 20, attackMs: 1, holdMs: 200, releaseMs: 20 }));
+    const sketch = responseSketch(
+      "gate",
+      node("gate", {
+        thresholdDb: -40,
+        rangeDb: 40,
+        hysteresisDb: 3,
+        ratio: 20,
+        attackMs: 1,
+        holdMs: 200,
+        releaseMs: 20,
+      }),
+    );
     const at = (ms: number) => sketch.points.find((point) => point.ms >= ms)!.gainDb;
     expect(at(80)).toBeCloseTo(-40, 0);
     expect(at(300)).toBeGreaterThan(-0.1);
@@ -53,7 +90,8 @@ describe("response sketch", () => {
 });
 
 describe("level statistics and suggestions", () => {
-  const samples = (levels: number[]): LevelSample[] => levels.map((inputDb, index) => ({ at: index * 50, inputDb, outputDb: inputDb, reductionDb: 0, open: null }));
+  const samples = (levels: number[]): LevelSample[] =>
+    levels.map((inputDb, index) => ({ at: index * 50, inputDb, outputDb: inputDb, reductionDb: 0, open: null }));
   it("needs enough material and a usable gap", () => {
     expect(levelStatistics(samples(Array(20).fill(-30)))).toBeNull();
     expect(levelStatistics(samples(Array(100).fill(-30)))).toBeNull();

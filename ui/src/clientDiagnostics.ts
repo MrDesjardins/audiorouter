@@ -17,7 +17,10 @@ export function readClientDiagnostics(storage: DiagnosticStorage | null): string
   try {
     const parsed: unknown = JSON.parse(storage.getItem(CLIENT_DIAGNOSTICS_STORAGE_KEY) ?? "[]");
     return Array.isArray(parsed)
-      ? parsed.filter((row): row is string => typeof row === "string").slice(0, MAX_ROWS).map((row) => row.slice(0, MAX_ROW_CHARS))
+      ? parsed
+          .filter((row): row is string => typeof row === "string")
+          .slice(0, MAX_ROWS)
+          .map((row) => row.slice(0, MAX_ROW_CHARS))
       : [];
   } catch {
     return [];
@@ -58,7 +61,10 @@ const SAFE_TOKEN = /^[A-Za-z0-9.-]{1,96}$/;
 export function formatRpcFailure(failure: RpcFailureRow): string {
   const method = SAFE_TOKEN.test(failure.method) ? failure.method : "request";
   const kind = failure.kind !== undefined && SAFE_TOKEN.test(failure.kind) ? failure.kind : undefined;
-  const category = failure.code === undefined ? "no response" : kind ?? `code ${Number.isFinite(failure.code) ? Math.trunc(failure.code) : "?"}`;
+  const category =
+    failure.code === undefined
+      ? "no response"
+      : (kind ?? `code ${Number.isFinite(failure.code) ? Math.trunc(failure.code) : "?"}`);
   const id = /^[A-Za-z0-9-]{1,32}$/.test(failure.requestId) ? ` [req ${failure.requestId}]` : "";
   return `RPC failed: ${method} (${category})${id}`;
 }
@@ -80,7 +86,9 @@ export function reportRpcFailure(failure: RpcFailureRow, now = Date.now()): void
 /** Receive failed-request rows; returns the unsubscribe function. */
 export function onRpcFailure(listener: RpcFailureListener): () => void {
   rpcFailureListeners.add(listener);
-  return () => { rpcFailureListeners.delete(listener); };
+  return () => {
+    rpcFailureListeners.delete(listener);
+  };
 }
 
 /** Test hook: forget collapsed repeats. */

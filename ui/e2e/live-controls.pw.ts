@@ -5,7 +5,10 @@ async function playingRoute(page: Page, mode = "") {
   await page.goto(`/route-harness.html?flags=${mode}`);
   await openConnectionForm(page);
   const editor = page.locator(".workbench-connection-editor");
-  for (const [source, target] of [["Microphone · out · 1ch", "Voice gain · in · 1ch"], ["Voice gain · out · 1ch", "Headphones · in · 2ch"]]) {
+  for (const [source, target] of [
+    ["Microphone · out · 1ch", "Voice gain · in · 1ch"],
+    ["Voice gain · out · 1ch", "Headphones · in · 2ch"],
+  ]) {
     await editor.getByLabel("Source output port").selectOption({ label: source });
     await editor.getByLabel("Destination input port").selectOption({ label: target });
     await editor.getByRole("button", { name: "Add connection", exact: true }).click();
@@ -20,7 +23,8 @@ async function playingRoute(page: Page, mode = "") {
   await expect(page.locator(".audio-run-state")).toContainText("Audio running");
 }
 
-const calls = (page: Page) => page.evaluate(() => (window as unknown as { __routeFixtureCalls(): string[] }).__routeFixtureCalls());
+const calls = (page: Page) =>
+  page.evaluate(() => (window as unknown as { __routeFixtureCalls(): string[] }).__routeFixtureCalls());
 
 test("live Enabled and Bypass changes retain Play and never call Stop or Start again", async ({ page }) => {
   await playingRoute(page);
@@ -40,9 +44,9 @@ test("live Enabled and Bypass changes retain Play and never call Stop or Start a
   await inspector.getByLabel("Bypass", { exact: true }).uncheck();
   await expect(page.locator(".global-action-message")).toContainText("applied to the playing audio");
   const ledger = await calls(page);
-  expect(ledger.filter(call => call === "stop")).toHaveLength(0);
-  expect(ledger.filter(call => call === "start")).toHaveLength(1);
-  expect(ledger.filter(call => call === "commit")).toHaveLength(9);
+  expect(ledger.filter((call) => call === "stop")).toHaveLength(0);
+  expect(ledger.filter((call) => call === "start")).toHaveLength(1);
+  expect(ledger.filter((call) => call === "commit")).toHaveLength(9);
 });
 
 for (const mode of ["reject", "restart"]) {
@@ -50,10 +54,13 @@ for (const mode of ["reject", "restart"]) {
     await playingRoute(page, mode);
     await page.getByTestId("rf__node-voice").locator(".flow-node-title").click();
     await page.locator(".main-content > .inspector").getByLabel("Bypass", { exact: true }).click();
-    await expect(page.locator(".global-action-message")).toContainText(mode === "reject" ? "Fixture commit rejected" : "could not take this change");
+    await expect(page.locator(".global-action-message")).toContainText(
+      mode === "reject" ? "Fixture commit rejected" : "could not take this change",
+    );
     await expect(page.locator(".audio-run-state")).toContainText("Audio running");
-    expect((await calls(page)).filter(call => call === "stop")).toHaveLength(0);
-    if (mode === "reject") await expect(page.locator(".main-content > .inspector").getByLabel("Bypass", { exact: true })).not.toBeChecked();
+    expect((await calls(page)).filter((call) => call === "stop")).toHaveLength(0);
+    if (mode === "reject")
+      await expect(page.locator(".main-content > .inspector").getByLabel("Bypass", { exact: true })).not.toBeChecked();
   });
 }
 
@@ -63,7 +70,10 @@ test("live flags apply only the flag and keep unsaved topology edits in the draf
   await playingRoute(page);
   const save = page.locator(".topbar").getByRole("button", { name: "Save", exact: true });
   await page.getByRole("tab", { name: "Tools", exact: true }).click();
-  await page.locator(".tool-card").filter({ has: page.getByText("Gain", { exact: true }) }).click();
+  await page
+    .locator(".tool-card")
+    .filter({ has: page.getByText("Gain", { exact: true }) })
+    .click();
   await expect(page.getByTestId("rf__node-gain-1")).toBeVisible();
   await expect(save).toBeEnabled();
   await page.getByTestId("rf__node-voice").locator(".flow-node-title").click();
@@ -71,7 +81,7 @@ test("live flags apply only the flag and keep unsaved topology edits in the draf
   await bypass.click();
   await expect(page.locator(".global-action-message")).toContainText("applied to the playing audio");
   await expect(bypass).toBeChecked();
-  expect((await calls(page)).filter(call => call === "commit")).toHaveLength(2);
+  expect((await calls(page)).filter((call) => call === "commit")).toHaveLength(2);
   // The added Gain was not saved with the flag: it is still on the canvas and Save is still needed.
   await expect(page.getByTestId("rf__node-gain-1")).toBeVisible();
   await expect(save).toBeEnabled();
@@ -79,5 +89,5 @@ test("live flags apply only the flag and keep unsaved topology edits in the draf
   await save.click();
   await expect(page.locator(".global-action-message")).toContainText(/saved.*revision/i);
   await expect(save).toBeDisabled();
-  expect((await calls(page)).filter(call => call === "commit")).toHaveLength(3);
+  expect((await calls(page)).filter((call) => call === "commit")).toHaveLength(3);
 });

@@ -22,8 +22,16 @@ export function createTelemetryStore(): TelemetryStore {
   const listeners = new Set<() => void>();
   return {
     get: () => value,
-    set: (next) => { value = next; for (const listener of listeners) listener(); },
-    subscribe: (listener) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
+    set: (next) => {
+      value = next;
+      for (const listener of listeners) listener();
+    },
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
   };
 }
 
@@ -33,7 +41,10 @@ export function useTelemetryStore(): TelemetryStore {
 }
 
 /** Whether two diagnostics snapshots differ only in their live node telemetry. */
-export function differsOnlyInTelemetry(previous: DiagnosticsSnapshot | null | undefined, next: DiagnosticsSnapshot): boolean {
+export function differsOnlyInTelemetry(
+  previous: DiagnosticsSnapshot | null | undefined,
+  next: DiagnosticsSnapshot,
+): boolean {
   if (!previous) return false;
   const before: Record<string, unknown> = { ...previous, nodeTelemetry: null };
   const after: Record<string, unknown> = { ...next, nodeTelemetry: null };
@@ -52,17 +63,27 @@ const noStore: TelemetryStore = { get: () => null, set: () => {}, subscribe: () 
  * snapshot (a state change, or Stop) wins at once. Without a store the
  * diagnostics are returned as they are.
  */
-export function useLiveDiagnostics(store: TelemetryStore | undefined, diagnostics: DiagnosticsSnapshot | null): DiagnosticsSnapshot | null {
+export function useLiveDiagnostics(
+  store: TelemetryStore | undefined,
+  diagnostics: DiagnosticsSnapshot | null,
+): DiagnosticsSnapshot | null {
   const source = store ?? noStore;
   const live = useSyncExternalStore(source.subscribe, source.get, source.get);
   return useMemo(
-    () => diagnostics && live && live.basis === diagnostics ? { ...diagnostics, nodeTelemetry: live.nodeTelemetry } : diagnostics,
+    () =>
+      diagnostics && live && live.basis === diagnostics
+        ? { ...diagnostics, nodeTelemetry: live.nodeTelemetry }
+        : diagnostics,
     [diagnostics, live],
   );
 }
 
 /** Renders `children` with the latest live diagnostics (see `useLiveDiagnostics`). */
-export function LiveTelemetry({ store, diagnostics, children }: {
+export function LiveTelemetry({
+  store,
+  diagnostics,
+  children,
+}: {
   store: TelemetryStore;
   diagnostics: DiagnosticsSnapshot | null;
   children: (diagnostics: DiagnosticsSnapshot | null) => ReactNode;

@@ -20,12 +20,17 @@ export function ApplicationIdentityPanel({ applications }: { applications: Appli
             <li key={`${application.processId}-${application.creationTime100ns ?? "unknown"}`}>
               <strong>{application.executable}</strong>
               <br />
-              <small>PID {application.processId} · {application.executablePath}</small>
+              <small>
+                PID {application.processId} · {application.executablePath}
+              </small>
             </li>
           ))}
         </ul>
       )}
-      <p className="muted">Identity is read-only discovery data; binding still requires verified process identity and backend authorization.</p>
+      <p className="muted">
+        Identity is read-only discovery data; binding still requires verified process identity and backend
+        authorization.
+      </p>
     </section>
   );
 }

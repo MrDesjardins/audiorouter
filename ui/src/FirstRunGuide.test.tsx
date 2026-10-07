@@ -6,7 +6,11 @@ import { FirstRunGuide } from "./FirstRunGuide";
 afterEach(cleanup);
 
 const device = (id: string, direction: "capture" | "render") => ({
-  id, name: id, direction, state: "active" as const, defaultRoles: [],
+  id,
+  name: id,
+  direction,
+  state: "active" as const,
+  defaultRoles: [],
   format: { sampleRateHz: 48_000, channels: 2, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 8 },
   periods: { default100ns: 100_000, minimum100ns: 30_000 },
 });
@@ -23,7 +27,14 @@ describe("FirstRunGuide", () => {
 
   it("shows discovered input/output counts and offers the next route step", () => {
     const onOpenTools = vi.fn();
-    render(<FirstRunGuide devices={[device("mic", "capture"), device("headphones", "render")]} connected onRefresh={vi.fn()} onOpenTools={onOpenTools} />);
+    render(
+      <FirstRunGuide
+        devices={[device("mic", "capture"), device("headphones", "render")]}
+        connected
+        onRefresh={vi.fn()}
+        onOpenTools={onOpenTools}
+      />,
+    );
     expect(screen.getByRole("status").textContent).toContain("Found 1 input and 1 output");
     fireEvent.click(screen.getByRole("button", { name: "Open Tools" }));
     expect(onOpenTools).toHaveBeenCalledOnce();

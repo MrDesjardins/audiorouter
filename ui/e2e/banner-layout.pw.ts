@@ -2,14 +2,47 @@ import { expect, test, type Page } from "@playwright/test";
 import type { Session } from "../../contracts/src/index";
 
 const port = (name: string, direction: "input" | "output") => ({ name, direction, channels: 2 });
-const node = (id: string, kind: Session["nodes"][number]["kind"], name: string, sourceOnly = false): Session["nodes"][number] => ({
-  id, kind, name, typeVersion: 1, enabled: true, bypass: false, parameters: {},
-  ports: sourceOnly ? [port("out", "output")] : kind === "physicalOutput" ? [port("in", "input")] : [port("in", "input"), port("out", "output")],
+const node = (
+  id: string,
+  kind: Session["nodes"][number]["kind"],
+  name: string,
+  sourceOnly = false,
+): Session["nodes"][number] => ({
+  id,
+  kind,
+  name,
+  typeVersion: 1,
+  enabled: true,
+  bypass: false,
+  parameters: {},
+  ports: sourceOnly
+    ? [port("out", "output")]
+    : kind === "physicalOutput"
+      ? [port("in", "input")]
+      : [port("in", "input"), port("out", "output")],
 });
 const session: Session = {
-  id: "banner-regression", name: "Siege route", revision: 1, schemaVersion: 1,
-  nodes: [node("game", "physicalInput", "Siege game", true), node("eq", "parametricEq", "Siege Advanced EQ"), node("mixer", "mixer", "Mixer 1"), node("output", "physicalOutput", "Physical output 1")],
-  edges: [{ id: "game-eq", sourceNode: "game", sourcePort: "out", destinationNode: "eq", destinationPort: "in", enabled: true, matrix: [1, 0, 0, 1] }],
+  id: "banner-regression",
+  name: "Siege route",
+  revision: 1,
+  schemaVersion: 1,
+  nodes: [
+    node("game", "physicalInput", "Siege game", true),
+    node("eq", "parametricEq", "Siege Advanced EQ"),
+    node("mixer", "mixer", "Mixer 1"),
+    node("output", "physicalOutput", "Physical output 1"),
+  ],
+  edges: [
+    {
+      id: "game-eq",
+      sourceNode: "game",
+      sourcePort: "out",
+      destinationNode: "eq",
+      destinationPort: "in",
+      enabled: true,
+      matrix: [1, 0, 0, 1],
+    },
+  ],
 };
 
 async function connect(page: Page, sender: string, receiver: string) {
@@ -28,18 +61,29 @@ async function connect(page: Page, sender: string, receiver: string) {
 }
 
 for (const occupiedOutput of [false, true]) {
-  test(`sender-first Siege EQ branches to Scarlett and Discord Mixer (${occupiedOutput ? "occupied" : "empty"} output)`, async ({ page }, testInfo) => {
+  test(`sender-first Siege EQ branches to Scarlett and Discord Mixer (${occupiedOutput ? "occupied" : "empty"} output)`, async ({
+    page,
+  }, testInfo) => {
     const fixture: Session = {
       ...session,
-      nodes: [...session.nodes, node("discord", "physicalInput", "Discord", true), node("scarlett", "physicalOutput", "Scarlett")],
-      edges: [...session.edges,
+      nodes: [
+        ...session.nodes,
+        node("discord", "physicalInput", "Discord", true),
+        node("scarlett", "physicalOutput", "Scarlett"),
+      ],
+      edges: [
+        ...session.edges,
         { ...session.edges[0], id: "eq-scarlett", sourceNode: "eq", destinationNode: "scarlett" },
         { ...session.edges[0], id: "discord-mixer", sourceNode: "discord", destinationNode: "mixer" },
-        ...(occupiedOutput ? [{ ...session.edges[0], id: "eq-output", sourceNode: "eq", destinationNode: "output" }] : []),
+        ...(occupiedOutput
+          ? [{ ...session.edges[0], id: "eq-output", sourceNode: "eq", destinationNode: "output" }]
+          : []),
       ],
     };
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.addInitScript((value) => { Object.assign(window, { __routeFixtureSession: value }); }, fixture);
+    await page.addInitScript((value) => {
+      Object.assign(window, { __routeFixtureSession: value });
+    }, fixture);
     await page.goto("/route-harness.html");
     await expect(page.getByTestId("rf__edge-eq-scarlett")).toHaveCount(1);
     await expect(page.getByTestId("rf__edge-discord-mixer")).toHaveCount(1);
@@ -61,10 +105,26 @@ for (const occupiedOutput of [false, true]) {
 }
 
 test("long Timing content scrolls in the sidebar without pushing the canvas down", async ({ page }, testInfo) => {
-  const outputs = Array.from({ length: 12 }, (_, index) => node(`output-${index}`, "physicalOutput", `Output ${index + 1}`));
-  const fixture: Session = { ...session, nodes: [...session.nodes.slice(0, 3), ...outputs], edges: [...session.edges, ...outputs.map((output) => ({ ...session.edges[0], id: `eq-${output.id}`, sourceNode: "eq", destinationNode: output.id }))] };
+  const outputs = Array.from({ length: 12 }, (_, index) =>
+    node(`output-${index}`, "physicalOutput", `Output ${index + 1}`),
+  );
+  const fixture: Session = {
+    ...session,
+    nodes: [...session.nodes.slice(0, 3), ...outputs],
+    edges: [
+      ...session.edges,
+      ...outputs.map((output) => ({
+        ...session.edges[0],
+        id: `eq-${output.id}`,
+        sourceNode: "eq",
+        destinationNode: output.id,
+      })),
+    ],
+  };
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.addInitScript((value) => { Object.assign(window, { __routeFixtureSession: value }); }, fixture);
+  await page.addInitScript((value) => {
+    Object.assign(window, { __routeFixtureSession: value });
+  }, fixture);
   await page.goto("/route-harness.html");
   const panel = page.locator("#signal-flow-panel");
   const before = (await panel.boundingBox())!;
@@ -74,7 +134,9 @@ test("long Timing content scrolls in the sidebar without pushing the canvas down
   expect(Math.abs(after.y - before.y)).toBeLessThan(1);
   expect(Math.abs(after.height - before.height)).toBeLessThan(1);
   expect(after.y).toBeLessThan(210);
-  expect(await page.locator(".right-workbench").evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  expect(
+    await page.locator(".right-workbench").evaluate((element) => element.scrollHeight > element.clientHeight),
+  ).toBe(true);
   for (const theme of ["dark", "light", "high-contrast"]) {
     await page.getByRole("combobox", { name: "Color theme" }).selectOption(theme);
     await page.screenshot({ path: testInfo.outputPath(`long-timing-${theme}.png`) });
@@ -84,13 +146,20 @@ test("long Timing content scrolls in the sidebar without pushing the canvas down
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`occupied input notice and Timing keep canvas usable in ${theme}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1280, height: 720 });
-    await page.addInitScript((fixture) => { Object.assign(window, { __routeFixtureSession: fixture }); }, session);
+    await page.addInitScript((fixture) => {
+      Object.assign(window, { __routeFixtureSession: fixture });
+    }, session);
     await page.goto("/route-harness.html");
     await page.getByRole("combobox", { name: "Color theme" }).selectOption(theme);
     const canvas = page.locator(".session-flow-canvas");
     const bounds = await canvas.boundingBox();
     if (!bounds) throw new Error("Missing canvas");
-    for (const [id, x, y] of [["game", 90, 60], ["eq", 280, 180], ["mixer", 510, 60], ["output", 650, 180]] as const) {
+    for (const [id, x, y] of [
+      ["game", 90, 60],
+      ["eq", 280, 180],
+      ["mixer", 510, 60],
+      ["output", 650, 180],
+    ] as const) {
       const title = await page.getByTestId(`rf__node-${id}`).locator(".flow-node-title").boundingBox();
       if (!title) throw new Error("Missing node title");
       await page.mouse.move(title.x + title.width / 2, title.y + title.height / 2);
@@ -105,7 +174,9 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(notice).toContainText("blue sending connector");
     await expect(page.locator(".inactive-route-warning")).toBeVisible();
     const noticeBox = (await notice.boundingBox())!;
-    expect((await page.locator(".workspace-grid").boundingBox())!.y).toBeGreaterThanOrEqual(noticeBox.y + noticeBox.height - 1);
+    expect((await page.locator(".workspace-grid").boundingBox())!.y).toBeGreaterThanOrEqual(
+      noticeBox.y + noticeBox.height - 1,
+    );
     await page.screenshot({ path: testInfo.outputPath(`banners-${theme}.png`) });
     await page.getByRole("button", { name: "Dismiss message", exact: true }).click();
     await expect(notice).not.toContainText("already receives");

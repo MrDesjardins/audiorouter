@@ -2,15 +2,42 @@ import { MeterInspector } from "./MeterInspector";
 import { NodePropertyStatus } from "./NodePropertyStatus";
 import { NodeIdentity } from "./NodeIdentity";
 import { useCanvasGroups, CanvasGroupInspector } from "./CanvasGroups";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties } from "react";
-import type { NativeDuplexPumpResult, NativeEndpointPumpResult, NativeMultiInputPumpResult, NativeRenderSourcePumpResult, Node, PluginParametersResult, RecordingRecoveryItem, StateEventCategory } from "@audiorouter/contracts";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type CSSProperties,
+} from "react";
+import type {
+  NativeDuplexPumpResult,
+  NativeEndpointPumpResult,
+  NativeMultiInputPumpResult,
+  NativeRenderSourcePumpResult,
+  Node,
+  PluginParametersResult,
+  RecordingRecoveryItem,
+  StateEventCategory,
+} from "@audiorouter/contracts";
 import { LIBRARY_DROP_SOURCE, SessionFlowCanvas } from "./SessionFlowCanvas";
 import { SignalTimingPanel } from "./SignalTiming";
 import { Workbench, type WorkbenchTab, type McpActivity, type McpSetupInfo } from "./Workbench";
 import { RequestBuilder } from "./ApiRequestBuilder";
 import { UpdatesPanel, VersionLine } from "./UpdateNotice";
 import { isAutomatedHarness, setUpdateCheckEnabled, updateCheckEnabled, useUpdateCheck } from "./updateCheck";
-import { createDisconnectedBackend, formatUiError, isRevisionConflict, SnapshotCache, type ApplicationRow, type ClientRow, type RecorderStatus, type UiBackend } from "./backend";
+import {
+  createDisconnectedBackend,
+  formatUiError,
+  isRevisionConflict,
+  SnapshotCache,
+  type ApplicationRow,
+  type ClientRow,
+  type RecorderStatus,
+  type UiBackend,
+} from "./backend";
 import type { DeviceListItem } from "@audiorouter/contracts";
 import { SpatialAudioField } from "./SpatialAudioField";
 import { InputChannelsField } from "./InputChannelsField";
@@ -18,14 +45,75 @@ import { LiveTelemetry, differsOnlyInTelemetry, useTelemetryStore } from "./live
 import { useReportUnsaved } from "./unsavedReport";
 import { ApiAutostartSetting, AutoplaySetting } from "./AutoplaySetting";
 import { QuitButton } from "./QuitButton";
-import { addSourceToOccupiedOutput, appendApplicationCaptureNode, applicationCaptureChoices, applicationChoiceKey, applicationOnlyRouteSource, generatedOnlyRoute, needsNativePaths, unboundDeviceNodes, isParameterOnlyChange, pluginCatalog, STANDARD_PLUGIN_FOLDERS, mixedApplicationRouteOtherSources, mixerInputs, mixerRouteSources, mixerInputVolumeKey, rebindApplicationCaptureNode, appendDraftConnection, appendEndpointLoopbackNode, appendEqPresetNode, appendLibraryNode, appendPluginPlaceholderNode, appendVirtualBusNode, appendVoiceChainPreset, applyGraphDraft, duplicateDraftNode, insertDraftMixer, insertDraftPluginProcessor, insertDraftProcessor, removeDraftConnection, removeDraftNode, removeSinglePathDraftMixer, resetNodeDraftParameters, routeFedMixerToOccupiedOutput, setDraftConnectionEnabled, setNodeDraftFlag, setNodeDraftName, setNodeDraftParameter, setSessionDraftName, type EqPresetId, type InsertableProcessorKind, type LibraryNodeKind, type VoiceChainPresetId } from "./draft";
+import {
+  addSourceToOccupiedOutput,
+  appendApplicationCaptureNode,
+  applicationCaptureChoices,
+  applicationChoiceKey,
+  applicationOnlyRouteSource,
+  generatedOnlyRoute,
+  needsNativePaths,
+  unboundDeviceNodes,
+  isParameterOnlyChange,
+  pluginCatalog,
+  STANDARD_PLUGIN_FOLDERS,
+  mixedApplicationRouteOtherSources,
+  mixerInputs,
+  mixerRouteSources,
+  mixerInputVolumeKey,
+  rebindApplicationCaptureNode,
+  appendDraftConnection,
+  appendEndpointLoopbackNode,
+  appendEqPresetNode,
+  appendLibraryNode,
+  appendPluginPlaceholderNode,
+  appendVirtualBusNode,
+  appendVoiceChainPreset,
+  applyGraphDraft,
+  duplicateDraftNode,
+  insertDraftMixer,
+  insertDraftPluginProcessor,
+  insertDraftProcessor,
+  removeDraftConnection,
+  removeDraftNode,
+  removeSinglePathDraftMixer,
+  resetNodeDraftParameters,
+  routeFedMixerToOccupiedOutput,
+  setDraftConnectionEnabled,
+  setNodeDraftFlag,
+  setNodeDraftName,
+  setNodeDraftParameter,
+  setSessionDraftName,
+  type EqPresetId,
+  type InsertableProcessorKind,
+  type LibraryNodeKind,
+  type VoiceChainPresetId,
+} from "./draft";
 import { actionMessageTone } from "./actionMessage";
 import { unfedRouteNodes } from "./draft";
 import { audioUploadProblem, uploadAudioMedia } from "./audioUpload";
 import { demoSession, demoSessions } from "./fixtures";
-import { recordDraft, redoDraft as redoDraftHistory, undoDraft as undoDraftHistory, type DraftHistory } from "./history";
+import {
+  recordDraft,
+  redoDraft as redoDraftHistory,
+  undoDraft as undoDraftHistory,
+  type DraftHistory,
+} from "./history";
 import { filterLibraryEntries, libraryEntries, toolDescription } from "./library";
-import { readFlowAnimation, readLastSession, readShortcuts, readSidebarWidth, readTheme, writeFlowAnimation, writeLastSession, writeShortcuts, writeSidebarWidth, writeTheme, type FlowAnimationMode, type ThemeMode } from "./preferences";
+import {
+  readFlowAnimation,
+  readLastSession,
+  readShortcuts,
+  readSidebarWidth,
+  readTheme,
+  writeFlowAnimation,
+  writeLastSession,
+  writeShortcuts,
+  writeSidebarWidth,
+  writeTheme,
+  type FlowAnimationMode,
+  type ThemeMode,
+} from "./preferences";
 import { FlowAnimationSetting } from "./FlowAnimationSetting";
 import { SidebarResizer } from "./SidebarResizer";
 import { SessionFilePanel } from "./SessionFilePanel";
@@ -37,16 +125,44 @@ import { SpectralGateEditor } from "./SpectralGateEditor";
 import { DynamicsEditor } from "./DynamicsEditor";
 import { DuckEditor } from "./DuckEditor";
 import { RecorderControls, RecordingFolderField } from "./RecorderControls";
-import { announceDeviceAccessChanged, DeviceAccessDialog, DeviceAccessSetting, isDeviceAccessDenied } from "./DeviceAccess";
+import {
+  announceDeviceAccessChanged,
+  DeviceAccessDialog,
+  DeviceAccessSetting,
+  isDeviceAccessDenied,
+} from "./DeviceAccess";
 import { LibraryDragOverlay } from "./libraryDrag";
-import { BassTrebleEditor, DehumEditor, DelayEditor, GraphicEqEditor, InputSwitchEditor, LevelEditor, LiveLevelBar, PitchEditor, StrengthEditor } from "./ToolVisuals";
+import {
+  BassTrebleEditor,
+  DehumEditor,
+  DelayEditor,
+  GraphicEqEditor,
+  InputSwitchEditor,
+  LevelEditor,
+  LiveLevelBar,
+  PitchEditor,
+  StrengthEditor,
+} from "./ToolVisuals";
 import { isDynamicsKind } from "./dynamics";
 import { selectNativePump } from "./nativePump";
-import { defaultShortcutBinding, isEditableShortcutTarget, shortcutConflicts, shortcutFromKeyboardEvent, type ShortcutAction, type ShortcutBinding } from "./shortcuts";
+import {
+  defaultShortcutBinding,
+  isEditableShortcutTarget,
+  shortcutConflicts,
+  shortcutFromKeyboardEvent,
+  type ShortcutAction,
+  type ShortcutBinding,
+} from "./shortcuts";
 import { ApplicationIdentityPanel } from "./ApplicationIdentityPanel";
 import { setupChecklist } from "./setup";
 import { uiIdempotencyKey } from "./idempotency";
-import { processorAvailabilityText, processorLatencyText, processorParameterError, processorParametersText, type ProcessorDescriptor } from "./processorCatalog";
+import {
+  processorAvailabilityText,
+  processorLatencyText,
+  processorParameterError,
+  processorParametersText,
+  type ProcessorDescriptor,
+} from "./processorCatalog";
 import { NetworkNodeEditor, networkTelemetryText } from "./NetworkNodeEditor";
 import { NumberField } from "./NumberField";
 import { mergeSessionInventory, reconcileSessionDraft, sameSessionDraft } from "./sessionInventory";
@@ -54,13 +170,21 @@ import type { Connection } from "@xyflow/react";
 import { decodeTopologyAction } from "./DraftConnectionList";
 import { BackendConnectionContext } from "./backendConnectionContext";
 import { GraphList as NodeList } from "./GraphList";
-import { appendClientDiagnostic, browserDiagnosticStorage, onRpcFailure, readClientDiagnostics } from "./clientDiagnostics";
+import {
+  appendClientDiagnostic,
+  browserDiagnosticStorage,
+  onRpcFailure,
+  readClientDiagnostics,
+} from "./clientDiagnostics";
 import { ErrorBoundary, RootRecoveryPanel, safeErrorName } from "./ErrorBoundary";
 import { AdvancedEqEditor, EqSpectrumContext } from "./AdvancedEqEditor";
 
 const defaultBackend = createDisconnectedBackend();
 const EqBackendContext = createContext<UiBackend>(defaultBackend);
-const PluginParameterContext = createContext<{ parameters: PluginParametersResult | null; error: string | null }>({ parameters: null, error: null });
+const PluginParameterContext = createContext<{ parameters: PluginParametersResult | null; error: string | null }>({
+  parameters: null,
+  error: null,
+});
 
 /** State categories that can invalidate the workspace snapshot. Meter events
  * are intentionally excluded; diagnostics use the bounded snapshot path. */
@@ -93,7 +217,8 @@ export const DIAGNOSTICS_REFRESH_INTERVAL_MS = 50;
  */
 export const NATIVE_COUNTERS_REFRESH_MS = 1000;
 
-type NativePumpStats = NativeEndpointPumpResult | NativeDuplexPumpResult | NativeMultiInputPumpResult | NativeRenderSourcePumpResult;
+type NativePumpStats =
+  NativeEndpointPumpResult | NativeDuplexPumpResult | NativeMultiInputPumpResult | NativeRenderSourcePumpResult;
 
 export function formatNativePumpSummary(stats: NativePumpStats | null, running: boolean): string | null {
   const summary = formatNativePumpCounters(stats, running);
@@ -118,9 +243,7 @@ function formatNativePumpCounters(stats: NativePumpStats | null, running: boolea
     output.renderBackpressureEvents > 0 ? `${output.renderBackpressureEvents} backpressure` : null,
   ].filter((value): value is string => value !== null);
   const recorderChunks = "recorderChunksDrained" in stats ? stats.recorderChunksDrained : 0;
-  const processedQuanta = "input" in stats
-    ? input.processedQuanta + output.processedQuanta
-    : stats.processedQuanta;
+  const processedQuanta = "input" in stats ? input.processedQuanta + output.processedQuanta : stats.processedQuanta;
   return `native ${input.capturedFrames} in / ${output.renderedFrames} out / ${processedQuanta} quanta${recorderChunks > 0 ? ` / ${recorderChunks} recorder chunks` : ""}${warnings.length > 0 ? ` / ${warnings.join(" / ")}` : ""}`;
 }
 
@@ -134,7 +257,10 @@ export function formatRecordingDuration(frames: number, sampleRate: number): str
   return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}.${milliseconds.toString().padStart(3, "0")}`;
 }
 
-export function recorderHasCaptureSource(session: import("@audiorouter/contracts").Session, targetNodeId: string): boolean {
+export function recorderHasCaptureSource(
+  session: import("@audiorouter/contracts").Session,
+  targetNodeId: string,
+): boolean {
   const visited = new Set<string>();
   const pending = [targetNodeId];
   while (pending.length > 0) {
@@ -157,24 +283,52 @@ function RecoveryCheckpointPanel({ backend }: { backend: UiBackend }) {
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
-    void backend.listRecordingRecovery().then((result) => {
-      if (active) {
-        setItems(result.items);
-        setError(null);
-      }
-    }).catch((reason) => {
-      if (active) {
-        setItems([]);
-        setError(formatUiError(reason, "Recording recovery unavailable."));
-      }
-    });
-    return () => { active = false; };
+    void backend
+      .listRecordingRecovery()
+      .then((result) => {
+        if (active) {
+          setItems(result.items);
+          setError(null);
+        }
+      })
+      .catch((reason) => {
+        if (active) {
+          setItems([]);
+          setError(formatUiError(reason, "Recording recovery unavailable."));
+        }
+      });
+    return () => {
+      active = false;
+    };
   }, [backend]);
-  return <section className="panel recovery-checkpoints" aria-labelledby="recovery-checkpoints-heading">
-    <div className="section-heading"><div><p className="eyebrow">Recorder files</p><h2 id="recovery-checkpoints-heading">Recovery checkpoints</h2></div><span className="badge">{error ? "unavailable" : items.length}</span></div>
-    {error ? <p className="muted">{error}</p> : items.length === 0 ? <p className="muted">No persisted recorder checkpoints were found.</p> : <ul aria-label="Persisted recorder checkpoints">{items.map((item) => <li key={item.recordingId}><code>{item.recordingId}</code> — {item.status}{item.checkpoint ? ` (${item.checkpoint.state})` : ""}</li>)}</ul>}
-    <p className="muted">This list is read-only. Recovery inspection does not open, repair, play, or delete audio files.</p>
-  </section>;
+  return (
+    <section className="panel recovery-checkpoints" aria-labelledby="recovery-checkpoints-heading">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Recorder files</p>
+          <h2 id="recovery-checkpoints-heading">Recovery checkpoints</h2>
+        </div>
+        <span className="badge">{error ? "unavailable" : items.length}</span>
+      </div>
+      {error ? (
+        <p className="muted">{error}</p>
+      ) : items.length === 0 ? (
+        <p className="muted">No persisted recorder checkpoints were found.</p>
+      ) : (
+        <ul aria-label="Persisted recorder checkpoints">
+          {items.map((item) => (
+            <li key={item.recordingId}>
+              <code>{item.recordingId}</code> — {item.status}
+              {item.checkpoint ? ` (${item.checkpoint.state})` : ""}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="muted">
+        This list is read-only. Recovery inspection does not open, repair, play, or delete audio files.
+      </p>
+    </section>
+  );
 }
 
 function StartupPanel({ backend }: { backend: UiBackend }) {
@@ -182,31 +336,51 @@ function StartupPanel({ backend }: { backend: UiBackend }) {
   const [enabled, setEnabled] = useState(false);
   const [plan, setPlan] = useState<import("@audiorouter/contracts").StartupPlanResult | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [nativeRegistration, setNativeRegistration] = useState<"registered" | "unregistered" | "unavailable">("unavailable");
+  const [nativeRegistration, setNativeRegistration] = useState<"registered" | "unregistered" | "unavailable">(
+    "unavailable",
+  );
   const refreshGeneration = useRef(0);
   const [busy, setBusy] = useState(false);
   const refresh = (clearMessage = true) => {
     const generation = ++refreshGeneration.current;
-    void backend.getStartup().then((result) => {
-      if (generation !== refreshGeneration.current) return;
-      setStatus(result); setEnabled(result.enabled); if (clearMessage) setMessage(null);
-    }).catch((error) => {
-      if (generation === refreshGeneration.current) setMessage(formatUiError(error, "Startup status unavailable."));
-    });
-    if (backend.startupRegistrationStatus) void backend.startupRegistrationStatus().then((result) => {
-      if (generation === refreshGeneration.current) setNativeRegistration(result);
-    }).catch(() => {
-      if (generation === refreshGeneration.current) setNativeRegistration("unavailable");
-    });
+    void backend
+      .getStartup()
+      .then((result) => {
+        if (generation !== refreshGeneration.current) return;
+        setStatus(result);
+        setEnabled(result.enabled);
+        if (clearMessage) setMessage(null);
+      })
+      .catch((error) => {
+        if (generation === refreshGeneration.current) setMessage(formatUiError(error, "Startup status unavailable."));
+      });
+    if (backend.startupRegistrationStatus)
+      void backend
+        .startupRegistrationStatus()
+        .then((result) => {
+          if (generation === refreshGeneration.current) setNativeRegistration(result);
+        })
+        .catch(() => {
+          if (generation === refreshGeneration.current) setNativeRegistration("unavailable");
+        });
   };
-  useEffect(() => { setPlan(null); refresh(); }, [backend, backend.connected]);
+  useEffect(() => {
+    setPlan(null);
+    refresh();
+  }, [backend, backend.connected]);
   const createPlan = async () => {
     if (busy || !backend.connected) return;
     setBusy(true);
     setMessage("Planning sign-in startup policy...");
-    try { const result = await backend.planStartup(enabled); setPlan(result); setMessage(result.reason); }
-    catch (error) { setMessage(formatUiError(error, "Startup planning unavailable.")); }
-    finally { setBusy(false); }
+    try {
+      const result = await backend.planStartup(enabled);
+      setPlan(result);
+      setMessage(result.reason);
+    } catch (error) {
+      setMessage(formatUiError(error, "Startup planning unavailable."));
+    } finally {
+      setBusy(false);
+    }
   };
   const applyPlan = async () => {
     if (!plan || busy || !backend.connected) return;
@@ -219,19 +393,83 @@ function StartupPanel({ backend }: { backend: UiBackend }) {
         try {
           const commandLine = await backend.registerStartup(plannedEnabled);
           setNativeRegistration(plannedEnabled ? "registered" : "unregistered");
-          setMessage(`${plannedEnabled ? "Startup registration enabled" : "Startup registration disabled"}: ${commandLine}`);
+          setMessage(
+            `${plannedEnabled ? "Startup registration enabled" : "Startup registration disabled"}: ${commandLine}`,
+          );
         } catch (error) {
-          setMessage(`Backend policy saved, but native startup registration failed: ${formatUiError(error, "native registration failed")}`);
+          setMessage(
+            `Backend policy saved, but native startup registration failed: ${formatUiError(error, "native registration failed")}`,
+          );
         }
       } else {
         setMessage(result.reason);
       }
-      setPlan(null); refresh(false);
+      setPlan(null);
+      refresh(false);
+    } catch (error) {
+      setMessage(formatUiError(error, "Startup apply unavailable."));
+    } finally {
+      setBusy(false);
     }
-    catch (error) { setMessage(formatUiError(error, "Startup apply unavailable.")); }
-    finally { setBusy(false); }
   };
-  return <section className="panel startup-panel" aria-labelledby="startup-heading"><div className="section-heading"><div><p className="eyebrow">Background lifecycle</p><h2 id="startup-heading">Start at sign-in</h2></div><button type="button" className="secondary" onClick={() => refresh()} disabled={busy}>Refresh</button></div><p className="muted">{status?.reason ?? "Loading startup capability..."}</p><p className="muted" role="status">Native registration: {nativeRegistration}</p><label>Desired policy<select aria-label="Desired sign-in startup policy" value={enabled ? "enabled" : "disabled"} onChange={(event) => { setEnabled(event.target.value === "enabled"); setPlan(null); }} disabled={!backend.connected || busy}><option value="disabled">Disabled</option><option value="enabled">Enabled</option></select></label><div className="actions"><button type="button" className="secondary" onClick={() => void createPlan()} disabled={!backend.connected || busy}>Plan startup policy</button>{plan && <button type="button" className="secondary" onClick={() => void applyPlan()} disabled={!backend.connected || busy}>Apply planned policy</button>}</div>{message && <PanelMessage message={message} />}<p className="muted">{backend.registerStartup ? "The native shell can register this user's startup preference after an authorized plan is applied." : "Native startup registration is unavailable in this host; planning remains a backend-only operation."}</p></section>;
+  return (
+    <section className="panel startup-panel" aria-labelledby="startup-heading">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Background lifecycle</p>
+          <h2 id="startup-heading">Start at sign-in</h2>
+        </div>
+        <button type="button" className="secondary" onClick={() => refresh()} disabled={busy}>
+          Refresh
+        </button>
+      </div>
+      <p className="muted">{status?.reason ?? "Loading startup capability..."}</p>
+      <p className="muted" role="status">
+        Native registration: {nativeRegistration}
+      </p>
+      <label>
+        Desired policy
+        <select
+          aria-label="Desired sign-in startup policy"
+          value={enabled ? "enabled" : "disabled"}
+          onChange={(event) => {
+            setEnabled(event.target.value === "enabled");
+            setPlan(null);
+          }}
+          disabled={!backend.connected || busy}
+        >
+          <option value="disabled">Disabled</option>
+          <option value="enabled">Enabled</option>
+        </select>
+      </label>
+      <div className="actions">
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => void createPlan()}
+          disabled={!backend.connected || busy}
+        >
+          Plan startup policy
+        </button>
+        {plan && (
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => void applyPlan()}
+            disabled={!backend.connected || busy}
+          >
+            Apply planned policy
+          </button>
+        )}
+      </div>
+      {message && <PanelMessage message={message} />}
+      <p className="muted">
+        {backend.registerStartup
+          ? "The native shell can register this user's startup preference after an authorized plan is applied."
+          : "Native startup registration is unavailable in this host; planning remains a backend-only operation."}
+      </p>
+    </section>
+  );
 }
 
 function OsTransitionPanel({ backend, onRefresh }: { backend: UiBackend; onRefresh: () => void }) {
@@ -246,9 +484,11 @@ function OsTransitionPanel({ backend, onRefresh }: { backend: UiBackend; onRefre
       const next = await backend.osTransition("resume", uiIdempotencyKey("os-resume"));
       setResult(next);
       onRefresh();
-      setMessage(next.action === "revalidateBeforeRestart"
-        ? `Revalidation required for ${next.sessionIds.length + next.nativeSessionIds.length} stopped route${next.sessionIds.length + next.nativeSessionIds.length === 1 ? "" : "s"}. No route was restarted.`
-        : "No stopped routes are waiting for revalidation.");
+      setMessage(
+        next.action === "revalidateBeforeRestart"
+          ? `Revalidation required for ${next.sessionIds.length + next.nativeSessionIds.length} stopped route${next.sessionIds.length + next.nativeSessionIds.length === 1 ? "" : "s"}. No route was restarted.`
+          : "No stopped routes are waiting for revalidation.",
+      );
     } catch (error) {
       setMessage(formatUiError(error, "OS-transition revalidation failed."));
     } finally {
@@ -268,29 +508,89 @@ function OsTransitionPanel({ backend, onRefresh }: { backend: UiBackend; onRefre
         failures.push(`${sessionId}: ${formatUiError(error, "start failed")}`);
       }
     }
-    setMessage(failures.length === 0
-      ? `Restarted ${started} validated portable route${started === 1 ? "" : "s"}. Native routes remain stopped.`
-      : `Restarted ${started} portable route${started === 1 ? "" : "s"}; ${failures.length} route${failures.length === 1 ? "" : "s"} failed. ${failures.join(" ")}`);
+    setMessage(
+      failures.length === 0
+        ? `Restarted ${started} validated portable route${started === 1 ? "" : "s"}. Native routes remain stopped.`
+        : `Restarted ${started} portable route${started === 1 ? "" : "s"}; ${failures.length} route${failures.length === 1 ? "" : "s"} failed. ${failures.join(" ")}`,
+    );
     onRefresh();
     setBusy(false);
   };
-  return <section className="panel os-transition-panel" aria-labelledby="os-transition-heading"><div className="section-heading"><div><p className="eyebrow">Background lifecycle</p><h2 id="os-transition-heading">Resume validation</h2></div><span className="badge">{result?.endpointInventory ?? "not run"}</span></div><p className="muted">After sleep, sign-out, or an endpoint change, refresh the exact endpoint inventory before restarting any stopped route.</p><div className="actions"><button type="button" className="secondary" onClick={() => void revalidate()} disabled={!backend.connected || !backend.osTransition || busy}>Revalidate after resume</button>{result?.sessionIds.length ? <button type="button" className="primary" onClick={() => void restartPortable()} disabled={!backend.connected || busy}>Restart validated portable routes</button> : null}</div>{result && <p className="muted" role="status">Last result: {result.action}; portable routes {result.sessionIds.length}; native routes {result.nativeSessionIds.length}.</p>}<PanelMessage message={message} /><p className="muted">Native routes remain stopped until deliberate endpoint/driver validation. This action never changes Windows defaults, volume, mute, or driver state.</p></section>;
+  return (
+    <section className="panel os-transition-panel" aria-labelledby="os-transition-heading">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Background lifecycle</p>
+          <h2 id="os-transition-heading">Resume validation</h2>
+        </div>
+        <span className="badge">{result?.endpointInventory ?? "not run"}</span>
+      </div>
+      <p className="muted">
+        After sleep, sign-out, or an endpoint change, refresh the exact endpoint inventory before restarting any stopped
+        route.
+      </p>
+      <div className="actions">
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => void revalidate()}
+          disabled={!backend.connected || !backend.osTransition || busy}
+        >
+          Revalidate after resume
+        </button>
+        {result?.sessionIds.length ? (
+          <button
+            type="button"
+            className="primary"
+            onClick={() => void restartPortable()}
+            disabled={!backend.connected || busy}
+          >
+            Restart validated portable routes
+          </button>
+        ) : null}
+      </div>
+      {result && (
+        <p className="muted" role="status">
+          Last result: {result.action}; portable routes {result.sessionIds.length}; native routes{" "}
+          {result.nativeSessionIds.length}.
+        </p>
+      )}
+      <PanelMessage message={message} />
+      <p className="muted">
+        Native routes remain stopped until deliberate endpoint/driver validation. This action never changes Windows
+        defaults, volume, mute, or driver state.
+      </p>
+    </section>
+  );
 }
 
-function GraphHistoryPanel({ backend, session, onReverted }: { backend: UiBackend; session: import("@audiorouter/contracts").Session; onReverted: () => void }) {
+function GraphHistoryPanel({
+  backend,
+  session,
+  onReverted,
+}: {
+  backend: UiBackend;
+  session: import("@audiorouter/contracts").Session;
+  onReverted: () => void;
+}) {
   const [history, setHistory] = useState<import("@audiorouter/contracts").Session[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const refreshGeneration = useRef(0);
   const refresh = () => {
     const generation = ++refreshGeneration.current;
-    void backend.listGraphHistory(session.id, undefined, 10).then((page) => {
-      if (generation === refreshGeneration.current) setHistory(page.items);
-    }).catch((error) => {
-      if (generation === refreshGeneration.current) setMessage(formatUiError(error, "Revision history unavailable."));
-    });
+    void backend
+      .listGraphHistory(session.id, undefined, 10)
+      .then((page) => {
+        if (generation === refreshGeneration.current) setHistory(page.items);
+      })
+      .catch((error) => {
+        if (generation === refreshGeneration.current) setMessage(formatUiError(error, "Revision history unavailable."));
+      });
   };
-  useEffect(() => { refresh(); }, [backend, backend.connected, session.id, session.revision]);
+  useEffect(() => {
+    refresh();
+  }, [backend, backend.connected, session.id, session.revision]);
   const undoLast = async () => {
     if (busy || !backend.connected) return;
     setBusy(true);
@@ -307,13 +607,50 @@ function GraphHistoryPanel({ backend, session, onReverted }: { backend: UiBacken
       setBusy(false);
     }
   };
-  return <section className="panel graph-history-panel" aria-labelledby="graph-history-heading">
-    <div className="section-heading"><div><p className="eyebrow">Committed history</p><h2 id="graph-history-heading">Revision history</h2></div><button type="button" className="secondary" onClick={refresh} disabled={busy}>Refresh</button></div>
-    <p className="muted">This lists revisions the backend has actually committed, separate from the local draft undo above the canvas. Undoing here reverts the authoritative graph to the state before the last commit; running it again steps to the revision before that.</p>
-    <div className="actions"><button type="button" className="secondary" disabled={!backend.connected || busy || history.length < 2} onClick={() => void undoLast()}>Undo last committed change</button></div>
-    {history.length === 0 ? <p className="muted">No committed history is available yet.</p> : <ol aria-label="Committed revisions">{history.map((entry) => <li key={entry.revision}><strong>Revision {entry.revision}</strong> <small>{entry.nodes.length} node{entry.nodes.length === 1 ? "" : "s"} · {entry.edges.length} connection{entry.edges.length === 1 ? "" : "s"}</small></li>)}</ol>}
-    <PanelMessage message={message} />
-  </section>;
+  return (
+    <section className="panel graph-history-panel" aria-labelledby="graph-history-heading">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Committed history</p>
+          <h2 id="graph-history-heading">Revision history</h2>
+        </div>
+        <button type="button" className="secondary" onClick={refresh} disabled={busy}>
+          Refresh
+        </button>
+      </div>
+      <p className="muted">
+        This lists revisions the backend has actually committed, separate from the local draft undo above the canvas.
+        Undoing here reverts the authoritative graph to the state before the last commit; running it again steps to the
+        revision before that.
+      </p>
+      <div className="actions">
+        <button
+          type="button"
+          className="secondary"
+          disabled={!backend.connected || busy || history.length < 2}
+          onClick={() => void undoLast()}
+        >
+          Undo last committed change
+        </button>
+      </div>
+      {history.length === 0 ? (
+        <p className="muted">No committed history is available yet.</p>
+      ) : (
+        <ol aria-label="Committed revisions">
+          {history.map((entry) => (
+            <li key={entry.revision}>
+              <strong>Revision {entry.revision}</strong>{" "}
+              <small>
+                {entry.nodes.length} node{entry.nodes.length === 1 ? "" : "s"} · {entry.edges.length} connection
+                {entry.edges.length === 1 ? "" : "s"}
+              </small>
+            </li>
+          ))}
+        </ol>
+      )}
+      <PanelMessage message={message} />
+    </section>
+  );
 }
 
 const CLIENT_ROLES = ["observer", "editor", "operator"] as const;
@@ -327,13 +664,18 @@ function ClientsPanel({ backend }: { backend: UiBackend }) {
   const refreshGeneration = useRef(0);
   const refresh = () => {
     const generation = ++refreshGeneration.current;
-    void backend.listClients().then((result) => {
-      if (generation === refreshGeneration.current) setClients(result);
-    }).catch((error) => {
-      if (generation === refreshGeneration.current) setMessage(formatUiError(error, "Client list unavailable."));
-    });
+    void backend
+      .listClients()
+      .then((result) => {
+        if (generation === refreshGeneration.current) setClients(result);
+      })
+      .catch((error) => {
+        if (generation === refreshGeneration.current) setMessage(formatUiError(error, "Client list unavailable."));
+      });
   };
-  useEffect(() => { refresh(); }, [backend, backend.connected]);
+  useEffect(() => {
+    refresh();
+  }, [backend, backend.connected]);
   const authorize = async () => {
     const clientId = newClientId.trim();
     if (!clientId || busy || !backend.connected) return;
@@ -362,17 +704,86 @@ function ClientsPanel({ backend }: { backend: UiBackend }) {
       setBusy(false);
     }
   };
-  return <section className="panel clients-panel" aria-labelledby="clients-heading">
-    <div className="section-heading"><div><p className="eyebrow">Security</p><h2 id="clients-heading">Connected clients</h2></div><button type="button" className="secondary" onClick={refresh} disabled={busy}>Refresh</button></div>
-    <p className="muted">Every CLI, MCP, or shell connection is a separately authorized client. Revoke access immediately if a client should no longer reach this backend.</p>
-    {clients.length === 0 ? <p className="muted">No clients are known yet.</p> : <ul aria-label="Known clients">{clients.map((client) => <li key={client.clientId}><strong>{client.clientId}</strong> <small>{client.role}{client.revoked ? " · revoked" : ""}</small> {!client.revoked && <button type="button" className="secondary" disabled={!backend.connected || busy} onClick={() => void revoke(client.clientId)}>Revoke</button>}</li>)}</ul>}
-    <div className="actions">
-      <label>Client ID<input type="text" aria-label="New client ID" value={newClientId} maxLength={120} disabled={!backend.connected || busy} onChange={(event) => setNewClientId(event.target.value)} /></label>
-      <label>Role<select aria-label="New client role" value={newClientRole} disabled={!backend.connected || busy} onChange={(event) => setNewClientRole(event.target.value as (typeof CLIENT_ROLES)[number])}>{CLIENT_ROLES.map((role) => <option key={role} value={role}>{role.charAt(0).toUpperCase()}{role.slice(1)}</option>)}</select></label>
-      <button type="button" className="secondary" disabled={!backend.connected || busy || !newClientId.trim()} onClick={() => void authorize()}>Authorize client</button>
-    </div>
-    <PanelMessage message={message} />
-  </section>;
+  return (
+    <section className="panel clients-panel" aria-labelledby="clients-heading">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Security</p>
+          <h2 id="clients-heading">Connected clients</h2>
+        </div>
+        <button type="button" className="secondary" onClick={refresh} disabled={busy}>
+          Refresh
+        </button>
+      </div>
+      <p className="muted">
+        Every CLI, MCP, or shell connection is a separately authorized client. Revoke access immediately if a client
+        should no longer reach this backend.
+      </p>
+      {clients.length === 0 ? (
+        <p className="muted">No clients are known yet.</p>
+      ) : (
+        <ul aria-label="Known clients">
+          {clients.map((client) => (
+            <li key={client.clientId}>
+              <strong>{client.clientId}</strong>{" "}
+              <small>
+                {client.role}
+                {client.revoked ? " · revoked" : ""}
+              </small>{" "}
+              {!client.revoked && (
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={!backend.connected || busy}
+                  onClick={() => void revoke(client.clientId)}
+                >
+                  Revoke
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="actions">
+        <label>
+          Client ID
+          <input
+            type="text"
+            aria-label="New client ID"
+            value={newClientId}
+            maxLength={120}
+            disabled={!backend.connected || busy}
+            onChange={(event) => setNewClientId(event.target.value)}
+          />
+        </label>
+        <label>
+          Role
+          <select
+            aria-label="New client role"
+            value={newClientRole}
+            disabled={!backend.connected || busy}
+            onChange={(event) => setNewClientRole(event.target.value as (typeof CLIENT_ROLES)[number])}
+          >
+            {CLIENT_ROLES.map((role) => (
+              <option key={role} value={role}>
+                {role.charAt(0).toUpperCase()}
+                {role.slice(1)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="secondary"
+          disabled={!backend.connected || busy || !newClientId.trim()}
+          onClick={() => void authorize()}
+        >
+          Authorize client
+        </button>
+      </div>
+      <PanelMessage message={message} />
+    </section>
+  );
 }
 
 /** Root failures outlive AppContent's state, so they go straight to storage for the next window. */
@@ -383,91 +794,351 @@ function recordStoredUiDiagnostic(message: string) {
 
 export function App({ backend }: { backend?: UiBackend } = {}) {
   const resolvedBackend = backend ?? defaultBackend;
-  return <BackendConnectionContext.Provider value={resolvedBackend.connected}><EqBackendContext.Provider value={resolvedBackend}><ErrorBoundary area="AudioRouter" onError={recordStoredUiDiagnostic} fallback={() => <RootRecoveryPanel onPrivacyMute={resolvedBackend.connected ? () => resolvedBackend.setPrivacyMute(true, uiIdempotencyKey("privacy-mute")) : undefined} />}><AppContent backend={resolvedBackend} /></ErrorBoundary></EqBackendContext.Provider></BackendConnectionContext.Provider>;
+  return (
+    <BackendConnectionContext.Provider value={resolvedBackend.connected}>
+      <EqBackendContext.Provider value={resolvedBackend}>
+        <ErrorBoundary
+          area="AudioRouter"
+          onError={recordStoredUiDiagnostic}
+          fallback={() => (
+            <RootRecoveryPanel
+              onPrivacyMute={
+                resolvedBackend.connected
+                  ? () => resolvedBackend.setPrivacyMute(true, uiIdempotencyKey("privacy-mute"))
+                  : undefined
+              }
+            />
+          )}
+        >
+          <AppContent backend={resolvedBackend} />
+        </ErrorBoundary>
+      </EqBackendContext.Provider>
+    </BackendConnectionContext.Provider>
+  );
 }
 
-function ProcessorCatalog({ processors, error, node, backend }: { processors: ProcessorDescriptor[] | null; error: string | null; node: Node; backend: UiBackend }) {
-  return <section className="panel processor-catalog" aria-labelledby="processor-catalog-heading"><div className="section-heading"><div><p className="eyebrow">DSP catalog</p><h2 id="processor-catalog-heading">Built-in processors</h2></div><span className="badge">{processors?.length ?? 0}</span></div>{error ? <p className="muted" role="status">Processor catalog unavailable: {error}</p> : processors === null ? <p className="muted">Connect to the backend to load the authoritative processor catalog.</p> : processors.length === 0 ? <p className="muted">No built-in processors are advertised.</p> : <ul aria-label="Built-in processor catalog">{processors.map((processor) => <li key={`${processor.id}@${processor.version}`}><strong>{processor.id}</strong> <small>{processor.category} · {processorAvailabilityText(processor)} · {processorLatencyText(processor)}</small><br /><small>Parameters: {processorParametersText(processor)}</small></li>)}</ul>}<p className="muted">This catalog is read-only. Unavailable processors cannot be added or activated.</p><EqResponsePreview node={node} backend={backend} /></section>;
+function ProcessorCatalog({
+  processors,
+  error,
+  node,
+  backend,
+}: {
+  processors: ProcessorDescriptor[] | null;
+  error: string | null;
+  node: Node;
+  backend: UiBackend;
+}) {
+  return (
+    <section className="panel processor-catalog" aria-labelledby="processor-catalog-heading">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">DSP catalog</p>
+          <h2 id="processor-catalog-heading">Built-in processors</h2>
+        </div>
+        <span className="badge">{processors?.length ?? 0}</span>
+      </div>
+      {error ? (
+        <p className="muted" role="status">
+          Processor catalog unavailable: {error}
+        </p>
+      ) : processors === null ? (
+        <p className="muted">Connect to the backend to load the authoritative processor catalog.</p>
+      ) : processors.length === 0 ? (
+        <p className="muted">No built-in processors are advertised.</p>
+      ) : (
+        <ul aria-label="Built-in processor catalog">
+          {processors.map((processor) => (
+            <li key={`${processor.id}@${processor.version}`}>
+              <strong>{processor.id}</strong>{" "}
+              <small>
+                {processor.category} · {processorAvailabilityText(processor)} · {processorLatencyText(processor)}
+              </small>
+              <br />
+              <small>Parameters: {processorParametersText(processor)}</small>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="muted">This catalog is read-only. Unavailable processors cannot be added or activated.</p>
+      <EqResponsePreview node={node} backend={backend} />
+    </section>
+  );
 }
 
 /** Duck settings the Duck editor owns (trigger mode and Siege phases). */
 const DUCK_EDITOR_PARAMETERS = new Set(["trigger", "duckMenu", "duckPrep", "duckBetweenRounds"]);
 
-function ProcessorParameterEditor({ node, processors, nodeTypes = null, pluginParameters = null, pluginParameterError = null, connected, onChange }: { node: Node; processors: ProcessorDescriptor[] | null; nodeTypes?: import("@audiorouter/contracts").DiscoveryDocument["nodeTypes"] | null; pluginParameters?: PluginParametersResult | null; pluginParameterError?: string | null; connected: boolean; onChange: (name: string, value: boolean | number | string) => void }) {
+function ProcessorParameterEditor({
+  node,
+  processors,
+  nodeTypes = null,
+  pluginParameters = null,
+  pluginParameterError = null,
+  connected,
+  onChange,
+}: {
+  node: Node;
+  processors: ProcessorDescriptor[] | null;
+  nodeTypes?: import("@audiorouter/contracts").DiscoveryDocument["nodeTypes"] | null;
+  pluginParameters?: PluginParametersResult | null;
+  pluginParameterError?: string | null;
+  connected: boolean;
+  onChange: (name: string, value: boolean | number | string) => void;
+}) {
   const eqBackend = useContext(EqBackendContext);
   const pluginContext = useContext(PluginParameterContext);
-  if (node.kind === "parametricEq") return <AdvancedEqEditor node={node} backend={eqBackend} connected={connected} onChange={onChange} />;
+  if (node.kind === "parametricEq")
+    return <AdvancedEqEditor node={node} backend={eqBackend} connected={connected} onChange={onChange} />;
   if (node.kind === "graphicEq" || node.kind === "inputSwitch") return null;
   pluginParameters ??= pluginContext.parameters;
   pluginParameterError ??= pluginContext.error;
   if (node.kind === "plugin") {
-    if (pluginParameterError) return <p className="muted" role="status">Plugin parameters unavailable: {pluginParameterError}</p>;
-    if (!pluginParameters) return <p className="muted" role="status">Loading bounded parameters from the exact scanned plugin...</p>;
-    if (pluginParameters.parameters.length === 0) return <p className="muted" role="status">This plugin exposes no automatable parameters.</p>;
-    return <>{pluginParameters.parameters.map((parameter) => { const name = `pluginParameter:${parameter.parameterId}`; const value = typeof node.parameters[name] === "number" && Number.isFinite(node.parameters[name] as number) ? node.parameters[name] as number : parameter.defaultValue; return <label key={name}><span>{parameter.title}</span><input type="range" aria-label={`${parameter.title} slider`} value={value} min={parameter.minimum} max={parameter.maximum} step={0.001} disabled={!connected} onChange={(event) => onChange(name, Number(event.target.value))} /><NumberField aria-label={`${parameter.title} precise value`} value={value} min={parameter.minimum} max={parameter.maximum} step={0.001} disabled={!connected} onValue={(next) => onChange(name, next)} /><small>normalized parameter {parameter.parameterId}</small></label>; })}</>;
+    if (pluginParameterError)
+      return (
+        <p className="muted" role="status">
+          Plugin parameters unavailable: {pluginParameterError}
+        </p>
+      );
+    if (!pluginParameters)
+      return (
+        <p className="muted" role="status">
+          Loading bounded parameters from the exact scanned plugin...
+        </p>
+      );
+    if (pluginParameters.parameters.length === 0)
+      return (
+        <p className="muted" role="status">
+          This plugin exposes no automatable parameters.
+        </p>
+      );
+    return (
+      <>
+        {pluginParameters.parameters.map((parameter) => {
+          const name = `pluginParameter:${parameter.parameterId}`;
+          const value =
+            typeof node.parameters[name] === "number" && Number.isFinite(node.parameters[name] as number)
+              ? (node.parameters[name] as number)
+              : parameter.defaultValue;
+          return (
+            <label key={name}>
+              <span>{parameter.title}</span>
+              <input
+                type="range"
+                aria-label={`${parameter.title} slider`}
+                value={value}
+                min={parameter.minimum}
+                max={parameter.maximum}
+                step={0.001}
+                disabled={!connected}
+                onChange={(event) => onChange(name, Number(event.target.value))}
+              />
+              <NumberField
+                aria-label={`${parameter.title} precise value`}
+                value={value}
+                min={parameter.minimum}
+                max={parameter.maximum}
+                step={0.001}
+                disabled={!connected}
+                onValue={(next) => onChange(name, next)}
+              />
+              <small>normalized parameter {parameter.parameterId}</small>
+            </label>
+          );
+        })}
+      </>
+    );
   }
   const wireKind = node.kind.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
   const descriptor = processors?.find((processor) => processor.id === node.kind);
   // Parameter families such as the Mixer's `inputVolume:<nodeId>` have their own editor.
   // Learning is started and stopped with the Learn buttons, not a checkbox.
-  const parameters = (descriptor?.parameters ?? nodeTypes?.find((nodeType) => nodeType.type === `${wireKind}@1` || nodeType.type === `${node.kind}@1`)?.parameters ?? []).filter((parameter) => !parameter.name.endsWith(":") && !(parameter.name === "learning" && (node.kind === "denoise" || node.kind === "spectralGate"))
-    // Node references and the Duck trigger/phase choices have dedicated pickers in the Duck editor.
-    && !("reference" in parameter && parameter.reference) && !(node.kind === "duck" && DUCK_EDITOR_PARAMETERS.has(parameter.name)));
+  const parameters = (
+    descriptor?.parameters ??
+    nodeTypes?.find((nodeType) => nodeType.type === `${wireKind}@1` || nodeType.type === `${node.kind}@1`)
+      ?.parameters ??
+    []
+  ).filter(
+    (parameter) =>
+      !parameter.name.endsWith(":") &&
+      !(parameter.name === "learning" && (node.kind === "denoise" || node.kind === "spectralGate")) &&
+      // Node references and the Duck trigger/phase choices have dedicated pickers in the Duck editor.
+      !("reference" in parameter && parameter.reference) &&
+      !(node.kind === "duck" && DUCK_EDITOR_PARAMETERS.has(parameter.name)),
+  );
   if (parameters.length === 0) return null;
-  return <>{parameters.map((parameter) => {
-    const value = node.parameters[parameter.name];
-    const { label, help } = parameterText(node.kind, parameter.name);
-    const helpText = help ? <small className="parameter-help">{help}</small> : null;
-    if (parameter.type === "boolean") {
-      return <label key={parameter.name}>{label}{helpText}<input aria-label={label} type="checkbox" checked={value === true} disabled={!connected} onChange={(event) => onChange(parameter.name, event.target.checked)} /></label>;
-    }
-    if (parameter.type === "string" && parameter.enum) {
-      const fallback = typeof parameter.default === "string" && parameter.enum.includes(parameter.default) ? parameter.default : parameter.enum[0];
-      const stringValue = typeof value === "string" && parameter.enum.includes(value) ? value : fallback;
-      return <label key={parameter.name}>{label}{helpText}<select aria-label={label} value={stringValue} disabled={!connected} onChange={(event) => onChange(parameter.name, event.target.value)}>{parameter.enum.map((option) => <option key={option} value={option}>{optionLabel(option)}</option>)}</select></label>;
-    }
-    if (parameter.type !== "number") return null;
-    const fallback = typeof parameter.default === "number" ? parameter.default : 0;
-    const numericValue = typeof value === "number" && Number.isFinite(value) ? value : fallback;
-    const step = typeof parameter.step === "number" && Number.isFinite(parameter.step) && parameter.step > 0 ? parameter.step : parameter.unit === "Hz" ? 1 : 0.1;
-    const hasRange = Number.isFinite(parameter.minimum) && Number.isFinite(parameter.maximum) && parameter.minimum! < parameter.maximum!;
-    const sliderValue = hasRange ? Math.min(parameter.maximum!, Math.max(parameter.minimum!, numericValue)) : numericValue;
-    // Caption with a readable value, then the slider for quick changes and
-    // the exact field for experts. Double-click the slider for the default.
-    return <label key={parameter.name} className="param-row"><span className="param-caption"><span>{label}{parameter.unit ? ` (${parameter.unit})` : ""}</span><b aria-hidden="true">{formatParameterValue(numericValue, parameter.unit, step)}</b></span>{helpText}<span className={`param-control${hasRange ? "" : " is-field-only"}`}>{hasRange && <input type="range" aria-label={`${label} slider`} title={typeof parameter.default === "number" ? `Double-click to restore the default (${formatParameterValue(parameter.default, parameter.unit, step)})` : undefined} value={sliderValue} min={parameter.minimum} max={parameter.maximum} step={step} disabled={!connected} onChange={(event) => onChange(parameter.name, Number(event.target.value))} onDoubleClick={() => { if (typeof parameter.default === "number" && connected) onChange(parameter.name, parameter.default); }} />}<NumberField aria-label={`${label} precise value`} value={numericValue} min={parameter.minimum} max={parameter.maximum} step={step} disabled={!connected} onValue={(next) => onChange(parameter.name, next)} /></span></label>;
-  })}</>;
+  return (
+    <>
+      {parameters.map((parameter) => {
+        const value = node.parameters[parameter.name];
+        const { label, help } = parameterText(node.kind, parameter.name);
+        const helpText = help ? <small className="parameter-help">{help}</small> : null;
+        if (parameter.type === "boolean") {
+          return (
+            <label key={parameter.name}>
+              {label}
+              {helpText}
+              <input
+                aria-label={label}
+                type="checkbox"
+                checked={value === true}
+                disabled={!connected}
+                onChange={(event) => onChange(parameter.name, event.target.checked)}
+              />
+            </label>
+          );
+        }
+        if (parameter.type === "string" && parameter.enum) {
+          const fallback =
+            typeof parameter.default === "string" && parameter.enum.includes(parameter.default)
+              ? parameter.default
+              : parameter.enum[0];
+          const stringValue = typeof value === "string" && parameter.enum.includes(value) ? value : fallback;
+          return (
+            <label key={parameter.name}>
+              {label}
+              {helpText}
+              <select
+                aria-label={label}
+                value={stringValue}
+                disabled={!connected}
+                onChange={(event) => onChange(parameter.name, event.target.value)}
+              >
+                {parameter.enum.map((option) => (
+                  <option key={option} value={option}>
+                    {optionLabel(option)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          );
+        }
+        if (parameter.type !== "number") return null;
+        const fallback = typeof parameter.default === "number" ? parameter.default : 0;
+        const numericValue = typeof value === "number" && Number.isFinite(value) ? value : fallback;
+        const step =
+          typeof parameter.step === "number" && Number.isFinite(parameter.step) && parameter.step > 0
+            ? parameter.step
+            : parameter.unit === "Hz"
+              ? 1
+              : 0.1;
+        const hasRange =
+          Number.isFinite(parameter.minimum) &&
+          Number.isFinite(parameter.maximum) &&
+          parameter.minimum! < parameter.maximum!;
+        const sliderValue = hasRange
+          ? Math.min(parameter.maximum!, Math.max(parameter.minimum!, numericValue))
+          : numericValue;
+        // Caption with a readable value, then the slider for quick changes and
+        // the exact field for experts. Double-click the slider for the default.
+        return (
+          <label key={parameter.name} className="param-row">
+            <span className="param-caption">
+              <span>
+                {label}
+                {parameter.unit ? ` (${parameter.unit})` : ""}
+              </span>
+              <b aria-hidden="true">{formatParameterValue(numericValue, parameter.unit, step)}</b>
+            </span>
+            {helpText}
+            <span className={`param-control${hasRange ? "" : " is-field-only"}`}>
+              {hasRange && (
+                <input
+                  type="range"
+                  aria-label={`${label} slider`}
+                  title={
+                    typeof parameter.default === "number"
+                      ? `Double-click to restore the default (${formatParameterValue(parameter.default, parameter.unit, step)})`
+                      : undefined
+                  }
+                  value={sliderValue}
+                  min={parameter.minimum}
+                  max={parameter.maximum}
+                  step={step}
+                  disabled={!connected}
+                  onChange={(event) => onChange(parameter.name, Number(event.target.value))}
+                  onDoubleClick={() => {
+                    if (typeof parameter.default === "number" && connected) onChange(parameter.name, parameter.default);
+                  }}
+                />
+              )}
+              <NumberField
+                aria-label={`${label} precise value`}
+                value={numericValue}
+                min={parameter.minimum}
+                max={parameter.maximum}
+                step={step}
+                disabled={!connected}
+                onValue={(next) => onChange(parameter.name, next)}
+              />
+            </span>
+          </label>
+        );
+      })}
+    </>
+  );
 }
 
 function InspectorChangeSummary({ draftNode, authoritativeNode }: { draftNode: Node; authoritativeNode?: Node }) {
   if (!authoritativeNode) {
-    return <p className="muted inspector-change-summary" role="status">New node. Save to keep it.</p>;
+    return (
+      <p className="muted inspector-change-summary" role="status">
+        New node. Save to keep it.
+      </p>
+    );
   }
   const changes: string[] = [];
   if (draftNode.name !== authoritativeNode.name) changes.push('rename to "' + draftNode.name + '"');
   if (draftNode.enabled !== authoritativeNode.enabled) changes.push(draftNode.enabled ? "enable node" : "disable node");
-  if (draftNode.bypass !== authoritativeNode.bypass) changes.push(draftNode.bypass ? "bypass processing" : "resume processing");
-  const parameterNames = [...new Set([...Object.keys(authoritativeNode.parameters), ...Object.keys(draftNode.parameters)])].sort();
+  if (draftNode.bypass !== authoritativeNode.bypass)
+    changes.push(draftNode.bypass ? "bypass processing" : "resume processing");
+  const parameterNames = [
+    ...new Set([...Object.keys(authoritativeNode.parameters), ...Object.keys(draftNode.parameters)]),
+  ].sort();
   for (const name of parameterNames) {
     if (!Object.is(authoritativeNode.parameters[name], draftNode.parameters[name])) {
       // A network pairing key is a secret: name the change, never the key.
-      changes.push(name === "pairingKey" ? (draftNode.parameters[name] ? "change pairing key" : "remove pairing key") : name + ": " + String(authoritativeNode.parameters[name] ?? "unset") + " → " + String(draftNode.parameters[name] ?? "unset"));
+      changes.push(
+        name === "pairingKey"
+          ? draftNode.parameters[name]
+            ? "change pairing key"
+            : "remove pairing key"
+          : name +
+              ": " +
+              String(authoritativeNode.parameters[name] ?? "unset") +
+              " → " +
+              String(draftNode.parameters[name] ?? "unset"),
+      );
     }
   }
   // One fixed line, so editing never moves the controls below it; the full
   // list is in the tooltip.
-  const summary = changes.length === 0
-    ? "No unsaved changes to this node."
-    : changes.length === 1
-      ? `Unsaved: ${changes[0]}. Save to keep it.`
-      : `${changes.length} unsaved changes. Save to keep them.`;
-  return <p className="muted inspector-change-summary" role="status" title={changes.join("\n") || undefined}>{summary}</p>;
+  const summary =
+    changes.length === 0
+      ? "No unsaved changes to this node."
+      : changes.length === 1
+        ? `Unsaved: ${changes[0]}. Save to keep it.`
+        : `${changes.length} unsaved changes. Save to keep them.`;
+  return (
+    <p className="muted inspector-change-summary" role="status" title={changes.join("\n") || undefined}>
+      {summary}
+    </p>
+  );
 }
 
-function NodeTelemetryPanel({ node, snapshot, running }: { node: Node; snapshot: import("@audiorouter/contracts").DiagnosticsSnapshot | null; running: boolean }) {
+function NodeTelemetryPanel({
+  node,
+  snapshot,
+  running,
+}: {
+  node: Node;
+  snapshot: import("@audiorouter/contracts").DiagnosticsSnapshot | null;
+  running: boolean;
+}) {
   const observation = snapshot?.nodeTelemetry.find((item) => item.nodeId === node.id);
-  const applicationCaptureState = node.kind === "applicationCapture"
-    ? snapshot?.applicationCaptureStates.find((item) => item.nodeId === node.id) ?? null
-    : null;
+  const applicationCaptureState =
+    node.kind === "applicationCapture"
+      ? (snapshot?.applicationCaptureStates.find((item) => item.nodeId === node.id) ?? null)
+      : null;
   const reason = (snapshot?.audio.reason ?? "").toLocaleLowerCase();
   const endpointOwned = reason.includes("in use") || reason.includes("owned");
   const tiles: Array<{ label: string; value: string; detail?: string; tone?: "good" | "warn" | "bad" }> = [];
@@ -475,52 +1146,119 @@ function NodeTelemetryPanel({ node, snapshot, running }: { node: Node; snapshot:
     const meter = observation.meter;
     if (meter) {
       const current = meter.currentPeakDb ?? meter.peakDb;
-      tiles.push({ label: "Level", value: current <= -120 ? "Silent" : `${current.toFixed(1)} dB`, detail: current <= -120 ? "no sound right now" : `peak · RMS ${meter.rmsDb.toFixed(1)} dB` });
-      tiles.push({ label: "Clipping", value: String(meter.clippedSamples), detail: "samples over 0 dB", tone: meter.clippedSamples > 0 ? "warn" : "good" });
+      tiles.push({
+        label: "Level",
+        value: current <= -120 ? "Silent" : `${current.toFixed(1)} dB`,
+        detail: current <= -120 ? "no sound right now" : `peak · RMS ${meter.rmsDb.toFixed(1)} dB`,
+      });
+      tiles.push({
+        label: "Clipping",
+        value: String(meter.clippedSamples),
+        detail: "samples over 0 dB",
+        tone: meter.clippedSamples > 0 ? "warn" : "good",
+      });
     }
     if (observation.processor) {
       const reduction = Math.max(0, ...observation.processor.gainReductionDb);
-      if (observation.processor.gainReductionDb.length > 0) tiles.push({ label: "Gain reduction", value: `${reduction.toFixed(1)} dB` });
+      if (observation.processor.gainReductionDb.length > 0)
+        tiles.push({ label: "Gain reduction", value: `${reduction.toFixed(1)} dB` });
       if (observation.processor.gateOpen.length > 0) {
         const open = observation.processor.gateOpen.some(Boolean);
         tiles.push({ label: "Gate", value: open ? "Open" : "Closed", tone: open ? "good" : undefined });
       }
     }
     if (observation.timing) {
-      tiles.push({ label: "Delay", value: `${observation.timing.delayMs.toFixed(1)} ms`, detail: "added at this step" });
-      if (typeof observation.timing.processingUsAvg === "number") tiles.push({ label: "CPU per block", value: `${Math.round(observation.timing.processingUsAvg)} µs`, detail: typeof observation.timing.processingUsMax === "number" ? `max ${Math.round(observation.timing.processingUsMax)} µs` : undefined });
+      tiles.push({
+        label: "Delay",
+        value: `${observation.timing.delayMs.toFixed(1)} ms`,
+        detail: "added at this step",
+      });
+      if (typeof observation.timing.processingUsAvg === "number")
+        tiles.push({
+          label: "CPU per block",
+          value: `${Math.round(observation.timing.processingUsAvg)} µs`,
+          detail:
+            typeof observation.timing.processingUsMax === "number"
+              ? `max ${Math.round(observation.timing.processingUsMax)} µs`
+              : undefined,
+        });
     }
     if (observation.plugin) {
       const plugin = observation.plugin;
       const healthy = plugin.state === "running";
-      tiles.push({ label: "Plugin", value: healthy ? "Running" : plugin.state === "failed" ? "Failed" : plugin.state, tone: healthy ? "good" : "bad", detail: plugin.failureCount > 0 ? `${plugin.failureCount} failures` : undefined });
+      tiles.push({
+        label: "Plugin",
+        value: healthy ? "Running" : plugin.state === "failed" ? "Failed" : plugin.state,
+        tone: healthy ? "good" : "bad",
+        detail: plugin.failureCount > 0 ? `${plugin.failureCount} failures` : undefined,
+      });
     }
     if (observation.network) {
       const text = networkTelemetryText(observation.network);
-      if (text) tiles.push({ label: "Network", value: observation.network.direction === "send" ? "Sending" : (observation.network.receivedPackets ?? 0) > 0 ? "Receiving" : "Waiting", detail: text.split(" · ").slice(1).join(" · ") || undefined });
+      if (text)
+        tiles.push({
+          label: "Network",
+          value:
+            observation.network.direction === "send"
+              ? "Sending"
+              : (observation.network.receivedPackets ?? 0) > 0
+                ? "Receiving"
+                : "Waiting",
+          detail: text.split(" · ").slice(1).join(" · ") || undefined,
+        });
     }
   }
-  const status = !node.enabled ? "Off" : node.bypass ? "Bypass" : applicationCaptureState
-    ? applicationCaptureState.state
-    : !running
-      ? "Waiting for Play"
-      : endpointOwned
-        ? "Device busy"
-        : tiles.length > 0
-          ? "Live"
-          : "No readings";
-  const note = !node.enabled ? "This node is off. Effects pass sound through; inputs and outputs contribute silence." : node.bypass ? "This node is bypassed. Its processing and live analysis are inactive; bypassed inputs, outputs and Mixers contribute silence." : applicationCaptureState?.detail
-    // Only notes that tell the user something; the status pill covers the rest.
-    ?? (running && endpointOwned ? "Another program has exclusive use of this device. Close it, then press Play again." : null);
-  return <section className={`node-telemetry${running ? " is-live" : ""}`} aria-labelledby="node-telemetry-heading">
-    <div className="node-telemetry-heading">
-      <h3 id="node-telemetry-heading">Live readings</h3>
-      <span className={`node-telemetry-status${status === "Live" ? " is-live" : ""}`} role="status">{status === "Live" && <span className="node-telemetry-dot" aria-hidden="true" />}{status}</span>
-    </div>
-    {note && <p className="node-telemetry-note">{note}</p>}
-    {running && node.enabled && !node.bypass && observation?.meter && <LiveLevelBar peakDb={observation.meter.currentPeakDb ?? observation.meter.peakDb} rmsDb={observation.meter.rmsDb} />}
-    {tiles.length > 0 && <dl className="node-telemetry-tiles">{tiles.map((tile) => <div key={tile.label} className={`node-telemetry-tile${tile.tone ? ` is-${tile.tone}` : ""}`}><dt>{tile.label}</dt><dd>{tile.value}</dd>{tile.detail && <small>{tile.detail}</small>}</div>)}</dl>}
-  </section>;
+  const status = !node.enabled
+    ? "Off"
+    : node.bypass
+      ? "Bypass"
+      : applicationCaptureState
+        ? applicationCaptureState.state
+        : !running
+          ? "Waiting for Play"
+          : endpointOwned
+            ? "Device busy"
+            : tiles.length > 0
+              ? "Live"
+              : "No readings";
+  const note = !node.enabled
+    ? "This node is off. Effects pass sound through; inputs and outputs contribute silence."
+    : node.bypass
+      ? "This node is bypassed. Its processing and live analysis are inactive; bypassed inputs, outputs and Mixers contribute silence."
+      : (applicationCaptureState?.detail ??
+        // Only notes that tell the user something; the status pill covers the rest.
+        (running && endpointOwned
+          ? "Another program has exclusive use of this device. Close it, then press Play again."
+          : null));
+  return (
+    <section className={`node-telemetry${running ? " is-live" : ""}`} aria-labelledby="node-telemetry-heading">
+      <div className="node-telemetry-heading">
+        <h3 id="node-telemetry-heading">Live readings</h3>
+        <span className={`node-telemetry-status${status === "Live" ? " is-live" : ""}`} role="status">
+          {status === "Live" && <span className="node-telemetry-dot" aria-hidden="true" />}
+          {status}
+        </span>
+      </div>
+      {note && <p className="node-telemetry-note">{note}</p>}
+      {running && node.enabled && !node.bypass && observation?.meter && (
+        <LiveLevelBar
+          peakDb={observation.meter.currentPeakDb ?? observation.meter.peakDb}
+          rmsDb={observation.meter.rmsDb}
+        />
+      )}
+      {tiles.length > 0 && (
+        <dl className="node-telemetry-tiles">
+          {tiles.map((tile) => (
+            <div key={tile.label} className={`node-telemetry-tile${tile.tone ? ` is-${tile.tone}` : ""}`}>
+              <dt>{tile.label}</dt>
+              <dd>{tile.value}</dd>
+              {tile.detail && <small>{tile.detail}</small>}
+            </div>
+          ))}
+        </dl>
+      )}
+    </section>
+  );
 }
 
 const EQ_RESPONSE_FREQUENCIES = Array.from({ length: 48 }, (_, index) => 20 * Math.pow(1000, index / 47));
@@ -529,47 +1267,155 @@ function EqResponsePreview({ node, backend }: { node: Node; backend: UiBackend }
   const [response, setResponse] = useState<import("./backend").ProcessorResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    if (node.kind !== "parametricEq" || !backend.connected) { setResponse(null); setError(null); return; }
+    if (node.kind !== "parametricEq" || !backend.connected) {
+      setResponse(null);
+      setError(null);
+      return;
+    }
     let active = true;
     const bands = Array.from({ length: 16 }, (_, index) => {
       const prefix = `band${index}`;
       const legacy = index === 0;
       return {
-        enabled: typeof node.parameters[`${prefix}Enabled`] === "boolean" ? node.parameters[`${prefix}Enabled`] as boolean : legacy && node.parameters.frequencyHz !== undefined,
-        type: (node.parameters[`${prefix}Type`] ?? "peaking") as "peaking" | "lowShelf" | "highShelf" | "lowPass" | "highPass" | "bandPass" | "allPass" | "notch",
+        enabled:
+          typeof node.parameters[`${prefix}Enabled`] === "boolean"
+            ? (node.parameters[`${prefix}Enabled`] as boolean)
+            : legacy && node.parameters.frequencyHz !== undefined,
+        type: (node.parameters[`${prefix}Type`] ?? "peaking") as
+          "peaking" | "lowShelf" | "highShelf" | "lowPass" | "highPass" | "bandPass" | "allPass" | "notch",
         frequencyHz: Number(node.parameters[`${prefix}FrequencyHz`] ?? (legacy ? node.parameters.frequencyHz : 1000)),
         q: Number(node.parameters[`${prefix}Q`] ?? (legacy ? node.parameters.q : 1)),
         gainDb: Number(node.parameters[`${prefix}GainDb`] ?? (legacy ? node.parameters.gainDb : 0)),
       };
     });
-    void backend.processorResponse({ sampleRateHz: 48000, bands, frequenciesHz: EQ_RESPONSE_FREQUENCIES }).then((value) => { if (active) { setResponse(value); setError(null); } }).catch((reason) => { if (active) { setResponse(null); setError(formatUiError(reason, "EQ response unavailable.")); } });
-    return () => { active = false; };
+    void backend
+      .processorResponse({ sampleRateHz: 48000, bands, frequenciesHz: EQ_RESPONSE_FREQUENCIES })
+      .then((value) => {
+        if (active) {
+          setResponse(value);
+          setError(null);
+        }
+      })
+      .catch((reason) => {
+        if (active) {
+          setResponse(null);
+          setError(formatUiError(reason, "EQ response unavailable."));
+        }
+      });
+    return () => {
+      active = false;
+    };
   }, [backend, node.kind, node.parameters]);
   if (node.kind !== "parametricEq") return null;
-  const points = response?.frequenciesHz.map((frequency, index) => { const magnitude = response.magnitudeDb[index] ?? 0; const x = 8 + (Math.log10(frequency / 20) / 3) * 284; const bounded = Math.max(-24, Math.min(24, magnitude)); const y = 56 - ((bounded + 24) / 48) * 48; return `${x.toFixed(1)},${y.toFixed(1)}`; }).join(" ");
-  return <section className="eq-response" aria-labelledby="eq-response-heading"><h3 id="eq-response-heading">EQ response</h3>{error ? <p className="muted" role="status">{error}</p> : !response ? <p className="muted">Loading the authoritative response...</p> : <svg viewBox="0 0 300 64" role="img" aria-label="Parametric EQ magnitude response"><line x1="8" y1="32" x2="292" y2="32" stroke="currentColor" opacity="0.35" /><polyline points={points} fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>}</section>;
+  const points = response?.frequenciesHz
+    .map((frequency, index) => {
+      const magnitude = response.magnitudeDb[index] ?? 0;
+      const x = 8 + (Math.log10(frequency / 20) / 3) * 284;
+      const bounded = Math.max(-24, Math.min(24, magnitude));
+      const y = 56 - ((bounded + 24) / 48) * 48;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  return (
+    <section className="eq-response" aria-labelledby="eq-response-heading">
+      <h3 id="eq-response-heading">EQ response</h3>
+      {error ? (
+        <p className="muted" role="status">
+          {error}
+        </p>
+      ) : !response ? (
+        <p className="muted">Loading the authoritative response...</p>
+      ) : (
+        <svg viewBox="0 0 300 64" role="img" aria-label="Parametric EQ magnitude response">
+          <line x1="8" y1="32" x2="292" y2="32" stroke="currentColor" opacity="0.35" />
+          <polyline points={points} fill="none" stroke="currentColor" strokeWidth="1.5" />
+        </svg>
+      )}
+    </section>
+  );
 }
 
-function PresetCatalog({ presets, error }: { presets: import("@audiorouter/contracts").DiscoveryDocument["presets"] | null; error: string | null }) {
+function PresetCatalog({
+  presets,
+  error,
+}: {
+  presets: import("@audiorouter/contracts").DiscoveryDocument["presets"] | null;
+  error: string | null;
+}) {
   const request = (kind: "eq" | "voiceChain", presetId: string) => {
-    globalThis.dispatchEvent(new CustomEvent(kind === "eq" ? "audiorouter:append-eq-preset" : "audiorouter:append-voice-preset", { detail: { presetId } }));
+    globalThis.dispatchEvent(
+      new CustomEvent(kind === "eq" ? "audiorouter:append-eq-preset" : "audiorouter:append-voice-preset", {
+        detail: { presetId },
+      }),
+    );
   };
-  return <section className="panel preset-catalog" aria-labelledby="preset-catalog-heading">
-    <div className="section-heading"><div><p className="eyebrow">Saved starting points</p><h2 id="preset-catalog-heading">Presets</h2></div><span className="badge">{presets ? presets.voiceChains.length + presets.eq.length : 0}</span></div>
-    {error ? <p className="muted" role="status">Preset catalog unavailable: {error}</p> : presets === null ? <p className="muted">Connect to the backend to load the authoritative preset catalog.</p> : <ul aria-label="Available presets">
-      {presets.voiceChains.map((preset) => <li key={"voice-" + preset.id}><strong>{preset.name}</strong> <small>Voice chain · {preset.description}</small><button type="button" className="secondary" disabled={!presets} onClick={() => request("voiceChain", preset.id)}>Add voice chain to draft</button></li>)}
-      {presets.eq.map((preset) => <li key={"eq-" + preset.id}><strong>{preset.name}</strong> <small>EQ · {preset.description}</small><button type="button" className="secondary" disabled={!presets} onClick={() => request("eq", preset.id)}>Add EQ to draft</button></li>)}
-    </ul>}
-    <p className="muted">Presets expand into ordinary draft nodes; all actions remain subject to Plan changes.</p>
-  </section>;
+  return (
+    <section className="panel preset-catalog" aria-labelledby="preset-catalog-heading">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Saved starting points</p>
+          <h2 id="preset-catalog-heading">Presets</h2>
+        </div>
+        <span className="badge">{presets ? presets.voiceChains.length + presets.eq.length : 0}</span>
+      </div>
+      {error ? (
+        <p className="muted" role="status">
+          Preset catalog unavailable: {error}
+        </p>
+      ) : presets === null ? (
+        <p className="muted">Connect to the backend to load the authoritative preset catalog.</p>
+      ) : (
+        <ul aria-label="Available presets">
+          {presets.voiceChains.map((preset) => (
+            <li key={"voice-" + preset.id}>
+              <strong>{preset.name}</strong> <small>Voice chain · {preset.description}</small>
+              <button
+                type="button"
+                className="secondary"
+                disabled={!presets}
+                onClick={() => request("voiceChain", preset.id)}
+              >
+                Add voice chain to draft
+              </button>
+            </li>
+          ))}
+          {presets.eq.map((preset) => (
+            <li key={"eq-" + preset.id}>
+              <strong>{preset.name}</strong> <small>EQ · {preset.description}</small>
+              <button type="button" className="secondary" disabled={!presets} onClick={() => request("eq", preset.id)}>
+                Add EQ to draft
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="muted">Presets expand into ordinary draft nodes; all actions remain subject to Plan changes.</p>
+    </section>
+  );
 }
 
-function SessionTransferPanel({ backend, session, onImported }: { backend: UiBackend; session: import("@audiorouter/contracts").Session; onImported: (session: import("@audiorouter/contracts").Session) => void }) {
+function SessionTransferPanel({
+  backend,
+  session,
+  onImported,
+}: {
+  backend: UiBackend;
+  session: import("@audiorouter/contracts").Session;
+  onImported: (session: import("@audiorouter/contracts").Session) => void;
+}) {
   const [message, setMessage] = useState<string | null>(null);
   const [plan, setPlan] = useState<import("@audiorouter/contracts").SessionImportPlanResult | null>(null);
   const [busy, setBusy] = useState(false);
   const importRequest = useRef(0);
-  const readFileText = (file: File) => typeof file.text === "function" ? file.text() : new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result ?? "")); reader.onerror = () => reject(reader.error ?? new Error("Unable to read import file.")); reader.readAsText(file); });
+  const readFileText = (file: File) =>
+    typeof file.text === "function"
+      ? file.text()
+      : new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result ?? ""));
+          reader.onerror = () => reject(reader.error ?? new Error("Unable to read import file."));
+          reader.readAsText(file);
+        });
   const exportSession = async () => {
     setMessage("Exporting the selected stopped-session configuration...");
     try {
@@ -582,7 +1428,9 @@ function SessionTransferPanel({ backend, session, onImported }: { backend: UiBac
       anchor.click();
       URL.revokeObjectURL(url);
       setMessage(`Exported ${exported.name}. Credentials, grants, recordings, and plugin binaries are not included.`);
-    } catch (error) { setMessage(formatUiError(error, "Unable to export session.")); }
+    } catch (error) {
+      setMessage(formatUiError(error, "Unable to export session."));
+    }
   };
   const inspectImport = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -598,8 +1446,14 @@ function SessionTransferPanel({ backend, session, onImported }: { backend: UiBac
       if (request !== importRequest.current) return;
       setPlan(next);
       setMessage(`Import validated for ${next.session.name}; it will remain stopped until you commit it.`);
-    } catch (error) { if (request === importRequest.current) { setPlan(null); setMessage(formatUiError(error, "Unable to validate session import.")); } }
-    finally { if (request === importRequest.current) setBusy(false); }
+    } catch (error) {
+      if (request === importRequest.current) {
+        setPlan(null);
+        setMessage(formatUiError(error, "Unable to validate session import."));
+      }
+    } finally {
+      if (request === importRequest.current) setBusy(false);
+    }
   };
   const commitImport = async () => {
     if (!plan || busy || !backend.connected) return;
@@ -610,13 +1464,76 @@ function SessionTransferPanel({ backend, session, onImported }: { backend: UiBac
       setPlan(null);
       onImported(result.session);
       setMessage(`Imported stopped session ${result.session.name}. Review bindings before starting it.`);
-    } catch (error) { setMessage(formatUiError(error, "Unable to commit session import.")); }
-    finally { setBusy(false); }
+    } catch (error) {
+      setMessage(formatUiError(error, "Unable to commit session import."));
+    } finally {
+      setBusy(false);
+    }
   };
-  return <section className="panel session-transfer-panel" aria-labelledby="session-transfer-heading"><div className="section-heading"><div><p className="eyebrow">Portable configuration</p><h2 id="session-transfer-heading">Session transfer</h2></div><span className="badge">stopped only</span></div><p className="muted">Graph-only JSON transfer for scripts and review. To back up or move a whole setup (including imported audio and plugin settings), use Session → Session file instead. Imports never start audio, arm recorders, enable startup, or include credentials, recordings, plugin binaries, or machine-specific authorization.</p><div className="actions"><button type="button" className="secondary" onClick={() => void exportSession()} disabled={!backend.connected || busy}>Export session</button><label className="file-picker">Import session<input aria-label="Import session configuration" type="file" accept=".json,.audiorouter.json,application/json" onChange={(event) => void inspectImport(event)} disabled={!backend.connected || busy} /></label>{plan && <button type="button" className="primary" onClick={() => void commitImport()} disabled={!backend.connected || busy}>Commit stopped import</button>}</div>{plan && <p className="muted" role="status">Validated import: {plan.session.name} · expires in {Math.ceil(plan.expiresInMs / 1000)} seconds. Explicit commit is required.</p>}<PanelMessage message={message} /></section>;
+  return (
+    <section className="panel session-transfer-panel" aria-labelledby="session-transfer-heading">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Portable configuration</p>
+          <h2 id="session-transfer-heading">Session transfer</h2>
+        </div>
+        <span className="badge">stopped only</span>
+      </div>
+      <p className="muted">
+        Graph-only JSON transfer for scripts and review. To back up or move a whole setup (including imported audio and
+        plugin settings), use Session → Session file instead. Imports never start audio, arm recorders, enable startup,
+        or include credentials, recordings, plugin binaries, or machine-specific authorization.
+      </p>
+      <div className="actions">
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => void exportSession()}
+          disabled={!backend.connected || busy}
+        >
+          Export session
+        </button>
+        <label className="file-picker">
+          Import session
+          <input
+            aria-label="Import session configuration"
+            type="file"
+            accept=".json,.audiorouter.json,application/json"
+            onChange={(event) => void inspectImport(event)}
+            disabled={!backend.connected || busy}
+          />
+        </label>
+        {plan && (
+          <button
+            type="button"
+            className="primary"
+            onClick={() => void commitImport()}
+            disabled={!backend.connected || busy}
+          >
+            Commit stopped import
+          </button>
+        )}
+      </div>
+      {plan && (
+        <p className="muted" role="status">
+          Validated import: {plan.session.name} · expires in {Math.ceil(plan.expiresInMs / 1000)} seconds. Explicit
+          commit is required.
+        </p>
+      )}
+      <PanelMessage message={message} />
+    </section>
+  );
 }
 
-function PluginScanPanel({ backend, onAddPlaceholder, headingId = "plugin-scan-heading" }: { backend: UiBackend; onAddPlaceholder?: (entry: import("@audiorouter/contracts").PluginScanEntry) => void; headingId?: string }) {
+function PluginScanPanel({
+  backend,
+  onAddPlaceholder,
+  headingId = "plugin-scan-heading",
+}: {
+  backend: UiBackend;
+  onAddPlaceholder?: (entry: import("@audiorouter/contracts").PluginScanEntry) => void;
+  headingId?: string;
+}) {
   const [directory, setDirectory] = useState("");
   const [result, setResult] = useState<import("@audiorouter/contracts").PluginScanResult | null>(null);
   const [inspectionPath, setInspectionPath] = useState("");
@@ -626,50 +1543,121 @@ function PluginScanPanel({ backend, onAddPlaceholder, headingId = "plugin-scan-h
   const requestGeneration = useRef(0);
   const directoryRef = useRef("");
   const inspectionPathRef = useRef("");
-  useEffect(() => { directoryRef.current = directory; inspectionPathRef.current = inspectionPath; }, [directory, inspectionPath]);
+  useEffect(() => {
+    directoryRef.current = directory;
+    inspectionPathRef.current = inspectionPath;
+  }, [directory, inspectionPath]);
   const scan = async () => {
-    if (!directory.trim()) { setMessage("Enter an absolute plugin directory."); return; }
+    if (!directory.trim()) {
+      setMessage("Enter an absolute plugin directory.");
+      return;
+    }
     if (busy || !backend.connected) return;
     const requestedDirectory = directory.trim();
     const request = ++requestGeneration.current;
     setBusy(true);
     setMessage("Scanning selected directory...");
-    try { const next = await backend.scanPlugins(requestedDirectory); if (request === requestGeneration.current && directoryRef.current.trim() === requestedDirectory) { setResult(next); setInspection(null); setInspectionPath(""); setMessage("Plugin scan completed without loading plugin code."); } }
-    catch (error) { if (request === requestGeneration.current) { setResult(null); setInspection(null); setInspectionPath(""); setMessage(formatUiError(error, "Plugin scan unavailable.")); } }
-    finally { if (request === requestGeneration.current) setBusy(false); }
+    try {
+      const next = await backend.scanPlugins(requestedDirectory);
+      if (request === requestGeneration.current && directoryRef.current.trim() === requestedDirectory) {
+        setResult(next);
+        setInspection(null);
+        setInspectionPath("");
+        setMessage("Plugin scan completed without loading plugin code.");
+      }
+    } catch (error) {
+      if (request === requestGeneration.current) {
+        setResult(null);
+        setInspection(null);
+        setInspectionPath("");
+        setMessage(formatUiError(error, "Plugin scan unavailable."));
+      }
+    } finally {
+      if (request === requestGeneration.current) setBusy(false);
+    }
   };
   const list = async () => {
-    if (!directory.trim()) { setMessage("Enter an absolute plugin directory."); return; }
+    if (!directory.trim()) {
+      setMessage("Enter an absolute plugin directory.");
+      return;
+    }
     if (busy || !backend.connected) return;
     const requestedDirectory = directory.trim();
     const request = ++requestGeneration.current;
     setBusy(true);
     setMessage("Loading the last explicit plugin scan...");
-    try { const next = await backend.listPlugins(requestedDirectory); if (request === requestGeneration.current && directoryRef.current.trim() === requestedDirectory) { setResult(next); setInspection(null); setInspectionPath(""); setMessage("Loaded the last backend scan without rescanning."); } }
-    catch (error) { if (request === requestGeneration.current) { setResult(null); setInspection(null); setInspectionPath(""); setMessage(formatUiError(error, "Plugin inventory unavailable.")); } }
-    finally { if (request === requestGeneration.current) setBusy(false); }
+    try {
+      const next = await backend.listPlugins(requestedDirectory);
+      if (request === requestGeneration.current && directoryRef.current.trim() === requestedDirectory) {
+        setResult(next);
+        setInspection(null);
+        setInspectionPath("");
+        setMessage("Loaded the last backend scan without rescanning.");
+      }
+    } catch (error) {
+      if (request === requestGeneration.current) {
+        setResult(null);
+        setInspection(null);
+        setInspectionPath("");
+        setMessage(formatUiError(error, "Plugin inventory unavailable."));
+      }
+    } finally {
+      if (request === requestGeneration.current) setBusy(false);
+    }
   };
   const inspect = async () => {
-    if (!inspectionPath.trim()) { setMessage("Enter an absolute plugin path."); return; }
+    if (!inspectionPath.trim()) {
+      setMessage("Enter an absolute plugin path.");
+      return;
+    }
     if (busy || !backend.connected) return;
     const requestedPath = inspectionPath.trim();
     const request = ++requestGeneration.current;
     setBusy(true);
     setMessage("Inspecting selected plugin path...");
-    try { const next = await backend.inspectPlugin(requestedPath); if (request === requestGeneration.current && inspectionPathRef.current.trim() === requestedPath) { setInspection(next); setMessage("Plugin inspection completed without loading plugin code."); } }
-    catch (error) { if (request === requestGeneration.current) { setInspection(null); setMessage(formatUiError(error, "Plugin inspection unavailable.")); } }
-    finally { if (request === requestGeneration.current) setBusy(false); }
+    try {
+      const next = await backend.inspectPlugin(requestedPath);
+      if (request === requestGeneration.current && inspectionPathRef.current.trim() === requestedPath) {
+        setInspection(next);
+        setMessage("Plugin inspection completed without loading plugin code.");
+      }
+    } catch (error) {
+      if (request === requestGeneration.current) {
+        setInspection(null);
+        setMessage(formatUiError(error, "Plugin inspection unavailable."));
+      }
+    } finally {
+      if (request === requestGeneration.current) setBusy(false);
+    }
   };
   const retry = async () => {
-    if (!directory.trim()) { setMessage("Enter an absolute plugin directory."); return; }
+    if (!directory.trim()) {
+      setMessage("Enter an absolute plugin directory.");
+      return;
+    }
     if (busy || !backend.connected) return;
     const requestedDirectory = directory.trim();
     const request = ++requestGeneration.current;
     setBusy(true);
     setMessage("Retrying selected directory scan...");
-    try { const next = await backend.retryPlugins(requestedDirectory, uiIdempotencyKey("plugins-retry")); if (request === requestGeneration.current && directoryRef.current.trim() === requestedDirectory) { setResult(next); setInspection(null); setInspectionPath(""); setMessage("Plugin scan retry completed without loading plugin code."); } }
-    catch (error) { if (request === requestGeneration.current) { setResult(null); setInspection(null); setInspectionPath(""); setMessage(formatUiError(error, "Plugin scan retry unavailable.")); } }
-    finally { if (request === requestGeneration.current) setBusy(false); }
+    try {
+      const next = await backend.retryPlugins(requestedDirectory, uiIdempotencyKey("plugins-retry"));
+      if (request === requestGeneration.current && directoryRef.current.trim() === requestedDirectory) {
+        setResult(next);
+        setInspection(null);
+        setInspectionPath("");
+        setMessage("Plugin scan retry completed without loading plugin code.");
+      }
+    } catch (error) {
+      if (request === requestGeneration.current) {
+        setResult(null);
+        setInspection(null);
+        setInspectionPath("");
+        setMessage(formatUiError(error, "Plugin scan retry unavailable."));
+      }
+    } finally {
+      if (request === requestGeneration.current) setBusy(false);
+    }
   };
   const selectInspectionPath = (path: string) => {
     setInspectionPath(path);
@@ -677,14 +1665,143 @@ function PluginScanPanel({ backend, onAddPlaceholder, headingId = "plugin-scan-h
     setMessage("Selected the discovered path; inspect it explicitly when ready.");
   };
   const addToDraft = (entry: import("@audiorouter/contracts").PluginScanEntry) => {
-    if (entry.identity && ["supportedVst2X64Gated", "supportedVst3X64"].includes(entry.identity.compatibility) && onAddPlaceholder) {
+    if (
+      entry.identity &&
+      ["supportedVst2X64Gated", "supportedVst3X64"].includes(entry.identity.compatibility) &&
+      onAddPlaceholder
+    ) {
       onAddPlaceholder(entry);
     }
   };
-  return <section className="panel plugin-scan-panel" aria-labelledby={headingId}><div className="section-heading"><div><p className="eyebrow">VST3 and VST2 discovery</p><h2 id={headingId}>Plugin scan</h2></div><span className="badge">{result?.entries.length ?? 0}</span></div><p className="muted">Choose a directory explicitly. Discovery inspects bounded metadata only; it does not load or execute plugins.</p><label>Absolute plugin directory<input aria-label="Absolute plugin directory" value={directory} onChange={(event) => setDirectory(event.target.value)} disabled={!backend.connected} placeholder="C:\Plugins" /></label><button type="button" className="secondary" onClick={() => void scan()} disabled={!backend.connected}>Scan directory</button><button type="button" className="secondary" onClick={() => void list()} disabled={!backend.connected}>Load last scan</button><button type="button" className="secondary" onClick={() => void retry()} disabled={!backend.connected}>Retry scan</button>{result && <ul aria-label="Plugin scan results">{result.entries.length === 0 ? <li className="muted">No VST3, VST2, or other DLL candidates found.</li> : result.entries.map((entry) => { const supported = entry.identity?.compatibility === "supportedVst2X64Gated" || entry.identity?.compatibility === "supportedVst3X64"; return <li key={entry.path}><strong>{entry.path}</strong> <small>{entry.identity ? `${entry.identity.format} · ${entry.identity.architecture} · ${entry.identity.compatibility}` : `${entry.errorCode ?? "unknown"}: ${entry.error ?? "inspection failed"}`}</small><button type="button" className="secondary" onClick={() => selectInspectionPath(entry.path)} disabled={!backend.connected}>Select for inspection</button>{supported && <button type="button" className="secondary" aria-label={`Add to draft: ${entry.path}`} onClick={() => addToDraft(entry)} disabled={!backend.connected || !onAddPlaceholder}>Add to draft</button>}</li>; })}</ul>}<label>Absolute plugin path<input aria-label="Absolute plugin path" value={inspectionPath} onChange={(event) => { setInspectionPath(event.target.value); setInspection(null); }} disabled={!backend.connected} placeholder="C:\Plugins\effect.vst3 or effect.dll" /></label><button type="button" className="secondary" onClick={() => void inspect()} disabled={!backend.connected}>Inspect path</button>{inspection && <p className="muted" role="status">{inspection.identity ? `${inspection.identity.format} ${inspection.identity.architecture} · ${inspection.identity.compatibility}` : `${inspection.errorCode ?? "unknown"}: ${inspection.error ?? "inspection failed"}`}</p>}<PanelMessage message={message} /><p className="muted">The explicit <code>pluginScan</code> permission is required by the backend; selecting a result only copies its path, and inspection remains explicit. Adding a result to the graph is a separate explicit action. Loading the last scan never triggers a new filesystem scan.</p></section>;
+  return (
+    <section className="panel plugin-scan-panel" aria-labelledby={headingId}>
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">VST3 and VST2 discovery</p>
+          <h2 id={headingId}>Plugin scan</h2>
+        </div>
+        <span className="badge">{result?.entries.length ?? 0}</span>
+      </div>
+      <p className="muted">
+        Choose a directory explicitly. Discovery inspects bounded metadata only; it does not load or execute plugins.
+      </p>
+      <label>
+        Absolute plugin directory
+        <input
+          aria-label="Absolute plugin directory"
+          value={directory}
+          onChange={(event) => setDirectory(event.target.value)}
+          disabled={!backend.connected}
+          placeholder="C:\Plugins"
+        />
+      </label>
+      <button type="button" className="secondary" onClick={() => void scan()} disabled={!backend.connected}>
+        Scan directory
+      </button>
+      <button type="button" className="secondary" onClick={() => void list()} disabled={!backend.connected}>
+        Load last scan
+      </button>
+      <button type="button" className="secondary" onClick={() => void retry()} disabled={!backend.connected}>
+        Retry scan
+      </button>
+      {result && (
+        <ul aria-label="Plugin scan results">
+          {result.entries.length === 0 ? (
+            <li className="muted">No VST3, VST2, or other DLL candidates found.</li>
+          ) : (
+            result.entries.map((entry) => {
+              const supported =
+                entry.identity?.compatibility === "supportedVst2X64Gated" ||
+                entry.identity?.compatibility === "supportedVst3X64";
+              return (
+                <li key={entry.path}>
+                  <strong>{entry.path}</strong>{" "}
+                  <small>
+                    {entry.identity
+                      ? `${entry.identity.format} · ${entry.identity.architecture} · ${entry.identity.compatibility}`
+                      : `${entry.errorCode ?? "unknown"}: ${entry.error ?? "inspection failed"}`}
+                  </small>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => selectInspectionPath(entry.path)}
+                    disabled={!backend.connected}
+                  >
+                    Select for inspection
+                  </button>
+                  {supported && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      aria-label={`Add to draft: ${entry.path}`}
+                      onClick={() => addToDraft(entry)}
+                      disabled={!backend.connected || !onAddPlaceholder}
+                    >
+                      Add to draft
+                    </button>
+                  )}
+                </li>
+              );
+            })
+          )}
+        </ul>
+      )}
+      <label>
+        Absolute plugin path
+        <input
+          aria-label="Absolute plugin path"
+          value={inspectionPath}
+          onChange={(event) => {
+            setInspectionPath(event.target.value);
+            setInspection(null);
+          }}
+          disabled={!backend.connected}
+          placeholder="C:\Plugins\effect.vst3 or effect.dll"
+        />
+      </label>
+      <button type="button" className="secondary" onClick={() => void inspect()} disabled={!backend.connected}>
+        Inspect path
+      </button>
+      {inspection && (
+        <p className="muted" role="status">
+          {inspection.identity
+            ? `${inspection.identity.format} ${inspection.identity.architecture} · ${inspection.identity.compatibility}`
+            : `${inspection.errorCode ?? "unknown"}: ${inspection.error ?? "inspection failed"}`}
+        </p>
+      )}
+      <PanelMessage message={message} />
+      <p className="muted">
+        The explicit <code>pluginScan</code> permission is required by the backend; selecting a result only copies its
+        path, and inspection remains explicit. Adding a result to the graph is a separate explicit action. Loading the
+        last scan never triggers a new filesystem scan.
+      </p>
+    </section>
+  );
 }
 
-function RecorderActions({ backend, sessionId, connected, recorderStatuses, recorderStatusAvailable, recorderNodeIds, selectedNodeId, onSelectNode, format, onFormatChange }: { backend: UiBackend; sessionId: string; connected: boolean; recorderStatuses: RecorderStatus[]; recorderStatusAvailable: boolean; recorderNodeIds: string[]; selectedNodeId: string; onSelectNode: (nodeId: string) => void; format: import("@audiorouter/contracts").RecorderFileFormat; onFormatChange: (value: import("@audiorouter/contracts").RecorderFileFormat) => void }) {
+function RecorderActions({
+  backend,
+  sessionId,
+  connected,
+  recorderStatuses,
+  recorderStatusAvailable,
+  recorderNodeIds,
+  selectedNodeId,
+  onSelectNode,
+  format,
+  onFormatChange,
+}: {
+  backend: UiBackend;
+  sessionId: string;
+  connected: boolean;
+  recorderStatuses: RecorderStatus[];
+  recorderStatusAvailable: boolean;
+  recorderNodeIds: string[];
+  selectedNodeId: string;
+  onSelectNode: (nodeId: string) => void;
+  format: import("@audiorouter/contracts").RecorderFileFormat;
+  onFormatChange: (value: import("@audiorouter/contracts").RecorderFileFormat) => void;
+}) {
   const [frameText, setFrameText] = useState("0");
   const [state, setState] = useState("idle");
   const [lastFrame, setLastFrame] = useState<number | null>(null);
@@ -699,23 +1816,52 @@ function RecorderActions({ backend, sessionId, connected, recorderStatuses, reco
   const validFrame = Number.isSafeInteger(frame) && frame >= 0;
   const selectedRecorderNodeId = recorderNodeIds.includes(selectedNodeId) ? selectedNodeId : "";
   useEffect(() => {
-    if (!recorderStatusAvailable) { setState("unavailable"); setLastFrame(null); setNodeId(null); return; }
+    if (!recorderStatusAvailable) {
+      setState("unavailable");
+      setLastFrame(null);
+      setNodeId(null);
+      return;
+    }
     const status = recorderStatuses.find((item) => item.sessionId === sessionId);
-    if (status) { setState(status.state); setLastFrame(status.lastFrame); setNodeId(status.nodeId ?? null); }
-    else { setState("idle"); setLastFrame(null); setNodeId(null); }
+    if (status) {
+      setState(status.state);
+      setLastFrame(status.lastFrame);
+      setNodeId(status.nodeId ?? null);
+    } else {
+      setState("idle");
+      setLastFrame(null);
+      setNodeId(null);
+    }
   }, [recorderStatuses, recorderStatusAvailable, sessionId]);
   const create = async () => {
-    if (!recorderId.trim()) { setMessage("Provide a recorder ID."); return; }
+    if (!recorderId.trim()) {
+      setMessage("Provide a recorder ID.");
+      return;
+    }
     if (busy || !connected) return;
     setBusy(true);
     setMessage("Creating an unarmed recorder...");
     try {
-      const result = await backend.createRecorder({ sessionId, nodeId: selectedRecorderNodeId || undefined, recorderId: recorderId.trim(), format, sequence: 1, channels, sampleRate, dither, queueCapacity: 8, maximumChunksPerPass: 1, idempotencyKey: uiIdempotencyKey("recorder-create") });
+      const result = await backend.createRecorder({
+        sessionId,
+        nodeId: selectedRecorderNodeId || undefined,
+        recorderId: recorderId.trim(),
+        format,
+        sequence: 1,
+        channels,
+        sampleRate,
+        dither,
+        queueCapacity: 8,
+        maximumChunksPerPass: 1,
+        idempotencyKey: uiIdempotencyKey("recorder-create"),
+      });
       setState(result.state);
       setMessage(`Recorder ${result.recorderId} created unarmed at ${result.path}.`);
     } catch (error) {
       setMessage(formatUiError(error, "Unable to create recorder."));
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
   const run = async (action: string, operation: () => Promise<{ state: string; lastFrame?: number | null }>) => {
     if (busy || !connected) return;
@@ -729,38 +1875,349 @@ function RecorderActions({ backend, sessionId, connected, recorderStatuses, reco
     } catch (error) {
       setState("failed");
       setMessage(formatUiError(error, `Unable to ${action.toLowerCase()} recorder.`));
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
-  return <section className="panel recorder-actions" aria-labelledby="recorder-actions-heading">
-    <div className="section-heading"><div><p className="eyebrow">Frame boundary control</p><h2 id="recorder-actions-heading">Recorder</h2></div><span className="badge">{state}</span></div>
-    <label>Graph recorder node<select aria-label="Graph recorder node" value={selectedRecorderNodeId} disabled={!connected || recorderNodeIds.length === 0} onChange={(event) => onSelectNode(event.target.value)}><option value="">Session recorder (no graph node)</option>{recorderNodeIds.map((id) => <option key={id} value={id}>{id}{id === selectedRecorderNodeId ? " (selected)" : ""}</option>)}</select></label>
-    <fieldset disabled={!connected}><legend>Create unarmed recorder</legend><label>Recorder ID<input aria-label="Recorder ID" value={recorderId} onChange={(event) => setRecorderId(event.target.value)} /></label><label>Format<select aria-label="Recorder format" value={format} onChange={(event) => { const next = event.target.value as typeof format; onFormatChange(next); if (next === "wavFloat32" || next === "mp3") setDither(false); }}><option value="wavPcm24">WAV PCM24</option><option value="wavPcm16">WAV PCM16</option><option value="wavFloat32">WAV Float32</option><option value="flac16">FLAC 16</option><option value="flac24">FLAC 24</option><option value="mp3">MP3 192 kbps</option></select></label><label>Channels<select aria-label="Recorder channels" value={channels} onChange={(event) => setChannels(Number(event.target.value) as 1 | 2)}><option value={1}>Mono</option><option value={2}>Stereo</option></select></label><label>Sample rate<select aria-label="Recorder sample rate" value={sampleRate} onChange={(event) => setSampleRate(Number(event.target.value) as 44100 | 48000)}><option value={48000}>48 kHz</option><option value={44100}>44.1 kHz</option></select></label><label>TPDF dither<input aria-label="TPDF dither" type="checkbox" checked={dither} disabled={format === "wavFloat32" || format === "mp3"} onChange={(event) => setDither(event.target.checked)} /></label>{(format === "wavFloat32" || format === "mp3") && <small>{format === "mp3" ? "MP3 uses the encoder's bounded psychoacoustic quantization; TPDF dither is not applied." : "Float32 output is not dithered."}</small>}<button type="button" className="secondary" onClick={() => void create()}>Create recorder</button></fieldset>
-    <label>Engine frame<input aria-label="Recorder engine frame" inputMode="numeric" value={frameText} onChange={(event) => setFrameText(event.target.value)} disabled={!connected} /></label>
-    <div className="actions">
-      <button type="button" className="secondary" onClick={() => void run("Arming", () => backend.armRecorder(sessionId, uiIdempotencyKey("recorder-arm"), selectedRecorderNodeId || undefined))} disabled={!connected}>Arm</button>
-      <button type="button" className="secondary" onClick={() => void run("Starting", () => backend.startRecorder(sessionId, frame, uiIdempotencyKey("recorder-start"), selectedRecorderNodeId || undefined))} disabled={!connected || !validFrame}>Start</button>
-      <button type="button" className="secondary" onClick={() => void run("Pausing", () => backend.pauseRecorder(sessionId, frame, uiIdempotencyKey("recorder-pause"), selectedRecorderNodeId || undefined))} disabled={!connected || !validFrame}>Pause</button>
-      <button type="button" className="secondary" onClick={() => void run("Resuming", () => backend.resumeRecorder(sessionId, frame, uiIdempotencyKey("recorder-resume"), selectedRecorderNodeId || undefined))} disabled={!connected || !validFrame}>Resume</button>
-      <button type="button" className="secondary" onClick={() => void run("Splitting", () => backend.splitRecorder(sessionId, frame, uiIdempotencyKey("recorder-split"), selectedRecorderNodeId || undefined))} disabled={!connected || !validFrame}>Split</button>
-      <button type="button" className="secondary" onClick={() => void run("Stopping", () => backend.stopRecorder(sessionId, frame, uiIdempotencyKey("recorder-stop"), selectedRecorderNodeId || undefined))} disabled={!connected || !validFrame}>Stop</button>
-    </div>
-    {message && <PanelMessage message={message} />}
-    {nodeId && <p className="muted" role="status">Attached recorder node: {nodeId}</p>}
-    {lastFrame !== null && <p className="muted" role="status">Backend last frame: {lastFrame}</p>}
-    <p className="muted">Actions are sent only to a connected backend and use explicit engine frame boundaries. The preview backend never arms or starts recording.</p>
-  </section>;
+  return (
+    <section className="panel recorder-actions" aria-labelledby="recorder-actions-heading">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Frame boundary control</p>
+          <h2 id="recorder-actions-heading">Recorder</h2>
+        </div>
+        <span className="badge">{state}</span>
+      </div>
+      <label>
+        Graph recorder node
+        <select
+          aria-label="Graph recorder node"
+          value={selectedRecorderNodeId}
+          disabled={!connected || recorderNodeIds.length === 0}
+          onChange={(event) => onSelectNode(event.target.value)}
+        >
+          <option value="">Session recorder (no graph node)</option>
+          {recorderNodeIds.map((id) => (
+            <option key={id} value={id}>
+              {id}
+              {id === selectedRecorderNodeId ? " (selected)" : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+      <fieldset disabled={!connected}>
+        <legend>Create unarmed recorder</legend>
+        <label>
+          Recorder ID
+          <input aria-label="Recorder ID" value={recorderId} onChange={(event) => setRecorderId(event.target.value)} />
+        </label>
+        <label>
+          Format
+          <select
+            aria-label="Recorder format"
+            value={format}
+            onChange={(event) => {
+              const next = event.target.value as typeof format;
+              onFormatChange(next);
+              if (next === "wavFloat32" || next === "mp3") setDither(false);
+            }}
+          >
+            <option value="wavPcm24">WAV PCM24</option>
+            <option value="wavPcm16">WAV PCM16</option>
+            <option value="wavFloat32">WAV Float32</option>
+            <option value="flac16">FLAC 16</option>
+            <option value="flac24">FLAC 24</option>
+            <option value="mp3">MP3 192 kbps</option>
+          </select>
+        </label>
+        <label>
+          Channels
+          <select
+            aria-label="Recorder channels"
+            value={channels}
+            onChange={(event) => setChannels(Number(event.target.value) as 1 | 2)}
+          >
+            <option value={1}>Mono</option>
+            <option value={2}>Stereo</option>
+          </select>
+        </label>
+        <label>
+          Sample rate
+          <select
+            aria-label="Recorder sample rate"
+            value={sampleRate}
+            onChange={(event) => setSampleRate(Number(event.target.value) as 44100 | 48000)}
+          >
+            <option value={48000}>48 kHz</option>
+            <option value={44100}>44.1 kHz</option>
+          </select>
+        </label>
+        <label>
+          TPDF dither
+          <input
+            aria-label="TPDF dither"
+            type="checkbox"
+            checked={dither}
+            disabled={format === "wavFloat32" || format === "mp3"}
+            onChange={(event) => setDither(event.target.checked)}
+          />
+        </label>
+        {(format === "wavFloat32" || format === "mp3") && (
+          <small>
+            {format === "mp3"
+              ? "MP3 uses the encoder's bounded psychoacoustic quantization; TPDF dither is not applied."
+              : "Float32 output is not dithered."}
+          </small>
+        )}
+        <button type="button" className="secondary" onClick={() => void create()}>
+          Create recorder
+        </button>
+      </fieldset>
+      <label>
+        Engine frame
+        <input
+          aria-label="Recorder engine frame"
+          inputMode="numeric"
+          value={frameText}
+          onChange={(event) => setFrameText(event.target.value)}
+          disabled={!connected}
+        />
+      </label>
+      <div className="actions">
+        <button
+          type="button"
+          className="secondary"
+          onClick={() =>
+            void run("Arming", () =>
+              backend.armRecorder(sessionId, uiIdempotencyKey("recorder-arm"), selectedRecorderNodeId || undefined),
+            )
+          }
+          disabled={!connected}
+        >
+          Arm
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          onClick={() =>
+            void run("Starting", () =>
+              backend.startRecorder(
+                sessionId,
+                frame,
+                uiIdempotencyKey("recorder-start"),
+                selectedRecorderNodeId || undefined,
+              ),
+            )
+          }
+          disabled={!connected || !validFrame}
+        >
+          Start
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          onClick={() =>
+            void run("Pausing", () =>
+              backend.pauseRecorder(
+                sessionId,
+                frame,
+                uiIdempotencyKey("recorder-pause"),
+                selectedRecorderNodeId || undefined,
+              ),
+            )
+          }
+          disabled={!connected || !validFrame}
+        >
+          Pause
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          onClick={() =>
+            void run("Resuming", () =>
+              backend.resumeRecorder(
+                sessionId,
+                frame,
+                uiIdempotencyKey("recorder-resume"),
+                selectedRecorderNodeId || undefined,
+              ),
+            )
+          }
+          disabled={!connected || !validFrame}
+        >
+          Resume
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          onClick={() =>
+            void run("Splitting", () =>
+              backend.splitRecorder(
+                sessionId,
+                frame,
+                uiIdempotencyKey("recorder-split"),
+                selectedRecorderNodeId || undefined,
+              ),
+            )
+          }
+          disabled={!connected || !validFrame}
+        >
+          Split
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          onClick={() =>
+            void run("Stopping", () =>
+              backend.stopRecorder(
+                sessionId,
+                frame,
+                uiIdempotencyKey("recorder-stop"),
+                selectedRecorderNodeId || undefined,
+              ),
+            )
+          }
+          disabled={!connected || !validFrame}
+        >
+          Stop
+        </button>
+      </div>
+      {message && <PanelMessage message={message} />}
+      {nodeId && (
+        <p className="muted" role="status">
+          Attached recorder node: {nodeId}
+        </p>
+      )}
+      {lastFrame !== null && (
+        <p className="muted" role="status">
+          Backend last frame: {lastFrame}
+        </p>
+      )}
+      <p className="muted">
+        Actions are sent only to a connected backend and use explicit engine frame boundaries. The preview backend never
+        arms or starts recording.
+      </p>
+    </section>
+  );
 }
 
-function RecordingActions({ recordings, connected, busy, onRename, onReveal, onRecycle }: { recordings: import("@audiorouter/contracts").RecordingRow[]; connected: boolean; busy: boolean; onRename: (recordingId: string, newPath: string) => Promise<void>; onReveal: (recordingId: string) => Promise<void>; onRecycle: (recordingId: string, confirm: boolean) => Promise<void> }) {
+function RecordingActions({
+  recordings,
+  connected,
+  busy,
+  onRename,
+  onReveal,
+  onRecycle,
+}: {
+  recordings: import("@audiorouter/contracts").RecordingRow[];
+  connected: boolean;
+  busy: boolean;
+  onRename: (recordingId: string, newPath: string) => Promise<void>;
+  onReveal: (recordingId: string) => Promise<void>;
+  onRecycle: (recordingId: string, confirm: boolean) => Promise<void>;
+}) {
   const [selectedId, setSelectedId] = useState("");
   const [newPath, setNewPath] = useState("");
   const selected = recordings.find((recording) => recording.id === selectedId) ?? recordings[0];
-  useEffect(() => { if (selected) { setSelectedId(selected.id); setNewPath(selected.path); } else { setSelectedId(""); setNewPath(""); } }, [selected?.id, selected?.path]);
+  useEffect(() => {
+    if (selected) {
+      setSelectedId(selected.id);
+      setNewPath(selected.path);
+    } else {
+      setSelectedId("");
+      setNewPath("");
+    }
+  }, [selected?.id, selected?.path]);
   if (!selected) return null;
-  return <section className="panel recording-actions" aria-labelledby="recording-actions-heading"><div className="section-heading"><div><p className="eyebrow">File actions</p><h2 id="recording-actions-heading">Recording operations</h2></div><span className="badge">explicit</span></div><label>Recording<select aria-label="Recording file action target" value={selected.id} onChange={(event) => { const next = recordings.find((recording) => recording.id === event.target.value); setSelectedId(event.target.value); setNewPath(next?.path ?? ""); }} disabled={busy}>{recordings.map((recording) => <option key={recording.id} value={recording.id}>{recording.title || recording.id} · {recording.state}</option>)}</select></label><label>New path<input type="text" value={newPath} onChange={(event) => setNewPath(event.target.value)} disabled={!connected || busy} /></label><div className="actions"><button type="button" className="secondary" onClick={() => void onRename(selected.id, newPath)} disabled={!connected || busy || !newPath.trim() || newPath === selected.path}>Rename in approved directory</button><button type="button" className="secondary" onClick={() => void onReveal(selected.id)} disabled={!connected || busy}>Reveal</button><button type="button" className="secondary" onClick={() => void onRecycle(selected.id, false)} disabled={!connected || busy}>Preview recycle</button><button type="button" className="secondary" onClick={() => { if (window.confirm("Recycle this recording through the operating system?")) void onRecycle(selected.id, true); }} disabled={!connected || busy}>Recycle recording</button></div><p className="muted">Rename is restricted by the backend to the approved directory. Reveal and recycle never run while disconnected; recycle requires an explicit confirmation.</p></section>;
+  return (
+    <section className="panel recording-actions" aria-labelledby="recording-actions-heading">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">File actions</p>
+          <h2 id="recording-actions-heading">Recording operations</h2>
+        </div>
+        <span className="badge">explicit</span>
+      </div>
+      <label>
+        Recording
+        <select
+          aria-label="Recording file action target"
+          value={selected.id}
+          onChange={(event) => {
+            const next = recordings.find((recording) => recording.id === event.target.value);
+            setSelectedId(event.target.value);
+            setNewPath(next?.path ?? "");
+          }}
+          disabled={busy}
+        >
+          {recordings.map((recording) => (
+            <option key={recording.id} value={recording.id}>
+              {recording.title || recording.id} · {recording.state}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        New path
+        <input
+          type="text"
+          value={newPath}
+          onChange={(event) => setNewPath(event.target.value)}
+          disabled={!connected || busy}
+        />
+      </label>
+      <div className="actions">
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => void onRename(selected.id, newPath)}
+          disabled={!connected || busy || !newPath.trim() || newPath === selected.path}
+        >
+          Rename in approved directory
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => void onReveal(selected.id)}
+          disabled={!connected || busy}
+        >
+          Reveal
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => void onRecycle(selected.id, false)}
+          disabled={!connected || busy}
+        >
+          Preview recycle
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => {
+            if (window.confirm("Recycle this recording through the operating system?"))
+              void onRecycle(selected.id, true);
+          }}
+          disabled={!connected || busy}
+        >
+          Recycle recording
+        </button>
+      </div>
+      <p className="muted">
+        Rename is restricted by the backend to the approved directory. Reveal and recycle never run while disconnected;
+        recycle requires an explicit confirmation.
+      </p>
+    </section>
+  );
 }
 
-function VirtualDeviceLifecyclePanel({ backend, onAddVirtualBusNode }: { backend: UiBackend; onAddVirtualBusNode: (busId: string, direction: "renderSource" | "captureSink") => void }) {
+function VirtualDeviceLifecyclePanel({
+  backend,
+  onAddVirtualBusNode,
+}: {
+  backend: UiBackend;
+  onAddVirtualBusNode: (busId: string, direction: "renderSource" | "captureSink") => void;
+}) {
   const [devices, setDevices] = useState<import("@audiorouter/contracts").VirtualDeviceInfo[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [action, setAction] = useState<"create" | "rename" | "setEnabled" | "delete">("create");
@@ -771,17 +2228,287 @@ function VirtualDeviceLifecyclePanel({ backend, onAddVirtualBusNode }: { backend
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const refreshGeneration = useRef(0);
-  const refresh = () => { const generation = ++refreshGeneration.current; setPlan(null); void backend.listVirtualDevices().then((items) => { if (generation !== refreshGeneration.current) return; setDevices(items); if (!items.some((item) => item.id === selectedId)) { const next = items[0]; setSelectedId(next?.id ?? ""); setBusId(next?.id ?? "virtual-bus"); setBusName(next?.name ?? "AudioRouter Bus"); } }).catch((error) => { if (generation === refreshGeneration.current) setMessage(formatUiError(error, "Virtual-device inventory unavailable.")); }); };
-  useEffect(() => { if (backend.connected) refresh(); else { setDevices([]); setPlan(null); } }, [backend, backend.connected]);
+  const refresh = () => {
+    const generation = ++refreshGeneration.current;
+    setPlan(null);
+    void backend
+      .listVirtualDevices()
+      .then((items) => {
+        if (generation !== refreshGeneration.current) return;
+        setDevices(items);
+        if (!items.some((item) => item.id === selectedId)) {
+          const next = items[0];
+          setSelectedId(next?.id ?? "");
+          setBusId(next?.id ?? "virtual-bus");
+          setBusName(next?.name ?? "AudioRouter Bus");
+        }
+      })
+      .catch((error) => {
+        if (generation === refreshGeneration.current)
+          setMessage(formatUiError(error, "Virtual-device inventory unavailable."));
+      });
+  };
+  useEffect(() => {
+    if (backend.connected) refresh();
+    else {
+      setDevices([]);
+      setPlan(null);
+    }
+  }, [backend, backend.connected]);
   // The buttons that use this value are disabled until an inventory row exists;
   // the non-null assertion keeps their guarded event handlers type-safe.
   const selected = devices.find((device) => device.id === selectedId) ?? devices[0]!;
-  const chooseAction = (next: "create" | "rename" | "setEnabled" | "delete") => { setAction(next); setPlan(null); if (next === "create") { setBusId("virtual-bus"); setBusName("AudioRouter Bus"); } else if (selected) { setBusId(selected.id); setBusName(selected.name); } };
-  const createPlan = async () => { if (busy || !backend.connected) return; const operation: import("@audiorouter/contracts").VirtualDeviceOperation = action === "create" ? { action, id: busId.trim(), name: busName.trim() } : action === "rename" ? { action, id: selectedId, name: busName.trim() } : action === "setEnabled" ? { action, id: selectedId, enabled: !(selected?.enabled ?? false) } : { action, id: selectedId }; if (!operation.id || ("name" in operation && !operation.name)) { setMessage("Provide a valid bus ID and name."); return; } setBusy(true); setMessage("Planning managed virtual-bus change..."); try { const result = await backend.planVirtualDevice(operation); setPlan(result); setMessage(result.availability.reason); } catch (error) { setMessage(formatUiError(error, "Unable to plan managed virtual-bus change.")); } finally { setBusy(false); } };
-  const applyPlan = async () => { if (!plan || busy || !backend.connected) return; setBusy(true); setMessage("Applying desired virtual-bus state..."); try { const result = await backend.applyVirtualDevice(plan.planId, uiIdempotencyKey("virtual-device-apply")); setPlan(null); setMessage(`${result.availability.reason}; no native endpoint is active in this build.`); refresh(); } catch (error) { setMessage(formatUiError(error, "Unable to apply virtual-bus plan.")); } finally { setBusy(false); } };
-  const provision = async () => { if (!selected || busy || !backend.connected || !instanceId.trim()) return; setBusy(true); setMessage("Provisioning the explicitly selected managed device..."); try { const result = await backend.provisionVirtualDevice(selected.id, instanceId.trim(), uiIdempotencyKey("virtual-device-provision")); setMessage(`${result.availability.reason}; device identity ${result.driverInstanceId} is retained.`); refresh(); } catch (error) { setMessage(formatUiError(error, "Unable to provision the managed device.")); } finally { setBusy(false); } };
-  const remove = async () => { if (!selected || busy || !backend.connected) return; setBusy(true); setMessage("Removing the explicitly selected managed device..."); try { const result = await backend.removeVirtualDevice(selected.id, uiIdempotencyKey("virtual-device-remove")); setMessage(`${result.availability.reason}; managed device removed.`); refresh(); } catch (error) { setMessage(formatUiError(error, "Unable to remove the managed device.")); } finally { setBusy(false); } };
-  return <section className="panel virtual-device-lifecycle" aria-labelledby="virtual-device-lifecycle-heading"><div className="section-heading"><div><p className="eyebrow">Managed buses</p><h2 id="virtual-device-lifecycle-heading">Virtual-device lifecycle</h2></div><button type="button" className="secondary" onClick={refresh} disabled={!backend.connected || busy}>Refresh</button></div>{devices.length === 0 ? <p className="muted">No managed virtual buses are currently listed.</p> : <ul aria-label="Managed virtual devices">{devices.map((device) => <li key={device.id}><strong>{device.name}</strong> <small>{device.enabled ? "enabled" : "disabled"} · {device.availability.reason} · lease {device.leaseOwner ?? "none"}</small></li>)}</ul>}<fieldset disabled={!backend.connected || busy}><legend>Desired-state operation</legend><label>Action<select aria-label="Virtual-device action" value={action} onChange={(event) => chooseAction(event.target.value as typeof action)}><option value="create">Create</option><option value="rename" disabled={!selected}>Rename</option><option value="setEnabled" disabled={!selected}>Enable/disable</option><option value="delete" disabled={!selected}>Delete</option></select></label>{action !== "create" && <label>Existing bus<select aria-label="Existing virtual-device target" value={selectedId} onChange={(event) => { const next = devices.find((device) => device.id === event.target.value); setSelectedId(event.target.value); setBusName(next?.name ?? ""); }}>{devices.map((device) => <option key={device.id} value={device.id}>{device.name}</option>)}</select></label>}<label>Bus ID<input value={busId} maxLength={64} disabled={action !== "create"} onChange={(event) => setBusId(event.target.value)} /></label>{action !== "delete" && <label>Bus name<input value={busName} maxLength={120} disabled={action === "setEnabled"} onChange={(event) => setBusName(event.target.value)} /></label>}<button type="button" className="secondary" onClick={() => void createPlan()} disabled={!backend.connected || busy}>Plan {action}</button>{plan && <button type="button" className="secondary" onClick={() => void applyPlan()} disabled={!backend.connected || busy}>Apply planned state</button>}</fieldset><fieldset disabled={!backend.connected || busy || !selected}><legend>Graph bus nodes</legend><div className="actions"><button type="button" className="secondary" onClick={() => onAddVirtualBusNode(selected.id, "renderSource")} disabled={!backend.connected || busy || !selected}>Add render source to graph</button><button type="button" className="secondary" onClick={() => onAddVirtualBusNode(selected.id, "captureSink")} disabled={!backend.connected || busy || !selected}>Add capture sink to graph</button></div><p className="muted">Nodes are stopped and bound to this exact bus ID; endpoint availability remains reported by the backend.</p></fieldset><fieldset disabled={!backend.connected || busy || !selected}><legend>Native device ownership</legend><label>Instance ID<input aria-label="Managed device instance ID" value={instanceId} maxLength={256} onChange={(event) => setInstanceId(event.target.value)} /></label><div className="actions"><button type="button" className="secondary" onClick={() => void provision()} disabled={!backend.connected || busy || !selected || !instanceId.trim()}>Provision managed device</button><button type="button" className="secondary" onClick={() => void remove()} disabled={!backend.connected || busy || !selected}>Remove managed device</button></div></fieldset>{message && <PanelMessage message={message} />}<p className="muted">Desired state uses plan/apply. Native ownership is a separate explicit <code>deviceAdministration</code> operation and remains unavailable until the managed driver is loaded and qualified.</p></section>;
+  const chooseAction = (next: "create" | "rename" | "setEnabled" | "delete") => {
+    setAction(next);
+    setPlan(null);
+    if (next === "create") {
+      setBusId("virtual-bus");
+      setBusName("AudioRouter Bus");
+    } else if (selected) {
+      setBusId(selected.id);
+      setBusName(selected.name);
+    }
+  };
+  const createPlan = async () => {
+    if (busy || !backend.connected) return;
+    const operation: import("@audiorouter/contracts").VirtualDeviceOperation =
+      action === "create"
+        ? { action, id: busId.trim(), name: busName.trim() }
+        : action === "rename"
+          ? { action, id: selectedId, name: busName.trim() }
+          : action === "setEnabled"
+            ? { action, id: selectedId, enabled: !(selected?.enabled ?? false) }
+            : { action, id: selectedId };
+    if (!operation.id || ("name" in operation && !operation.name)) {
+      setMessage("Provide a valid bus ID and name.");
+      return;
+    }
+    setBusy(true);
+    setMessage("Planning managed virtual-bus change...");
+    try {
+      const result = await backend.planVirtualDevice(operation);
+      setPlan(result);
+      setMessage(result.availability.reason);
+    } catch (error) {
+      setMessage(formatUiError(error, "Unable to plan managed virtual-bus change."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const applyPlan = async () => {
+    if (!plan || busy || !backend.connected) return;
+    setBusy(true);
+    setMessage("Applying desired virtual-bus state...");
+    try {
+      const result = await backend.applyVirtualDevice(plan.planId, uiIdempotencyKey("virtual-device-apply"));
+      setPlan(null);
+      setMessage(`${result.availability.reason}; no native endpoint is active in this build.`);
+      refresh();
+    } catch (error) {
+      setMessage(formatUiError(error, "Unable to apply virtual-bus plan."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const provision = async () => {
+    if (!selected || busy || !backend.connected || !instanceId.trim()) return;
+    setBusy(true);
+    setMessage("Provisioning the explicitly selected managed device...");
+    try {
+      const result = await backend.provisionVirtualDevice(
+        selected.id,
+        instanceId.trim(),
+        uiIdempotencyKey("virtual-device-provision"),
+      );
+      setMessage(`${result.availability.reason}; device identity ${result.driverInstanceId} is retained.`);
+      refresh();
+    } catch (error) {
+      setMessage(formatUiError(error, "Unable to provision the managed device."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async () => {
+    if (!selected || busy || !backend.connected) return;
+    setBusy(true);
+    setMessage("Removing the explicitly selected managed device...");
+    try {
+      const result = await backend.removeVirtualDevice(selected.id, uiIdempotencyKey("virtual-device-remove"));
+      setMessage(`${result.availability.reason}; managed device removed.`);
+      refresh();
+    } catch (error) {
+      setMessage(formatUiError(error, "Unable to remove the managed device."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="panel virtual-device-lifecycle" aria-labelledby="virtual-device-lifecycle-heading">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Managed buses</p>
+          <h2 id="virtual-device-lifecycle-heading">Virtual-device lifecycle</h2>
+        </div>
+        <button type="button" className="secondary" onClick={refresh} disabled={!backend.connected || busy}>
+          Refresh
+        </button>
+      </div>
+      {devices.length === 0 ? (
+        <p className="muted">No managed virtual buses are currently listed.</p>
+      ) : (
+        <ul aria-label="Managed virtual devices">
+          {devices.map((device) => (
+            <li key={device.id}>
+              <strong>{device.name}</strong>{" "}
+              <small>
+                {device.enabled ? "enabled" : "disabled"} · {device.availability.reason} · lease{" "}
+                {device.leaseOwner ?? "none"}
+              </small>
+            </li>
+          ))}
+        </ul>
+      )}
+      <fieldset disabled={!backend.connected || busy}>
+        <legend>Desired-state operation</legend>
+        <label>
+          Action
+          <select
+            aria-label="Virtual-device action"
+            value={action}
+            onChange={(event) => chooseAction(event.target.value as typeof action)}
+          >
+            <option value="create">Create</option>
+            <option value="rename" disabled={!selected}>
+              Rename
+            </option>
+            <option value="setEnabled" disabled={!selected}>
+              Enable/disable
+            </option>
+            <option value="delete" disabled={!selected}>
+              Delete
+            </option>
+          </select>
+        </label>
+        {action !== "create" && (
+          <label>
+            Existing bus
+            <select
+              aria-label="Existing virtual-device target"
+              value={selectedId}
+              onChange={(event) => {
+                const next = devices.find((device) => device.id === event.target.value);
+                setSelectedId(event.target.value);
+                setBusName(next?.name ?? "");
+              }}
+            >
+              {devices.map((device) => (
+                <option key={device.id} value={device.id}>
+                  {device.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <label>
+          Bus ID
+          <input
+            value={busId}
+            maxLength={64}
+            disabled={action !== "create"}
+            onChange={(event) => setBusId(event.target.value)}
+          />
+        </label>
+        {action !== "delete" && (
+          <label>
+            Bus name
+            <input
+              value={busName}
+              maxLength={120}
+              disabled={action === "setEnabled"}
+              onChange={(event) => setBusName(event.target.value)}
+            />
+          </label>
+        )}
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => void createPlan()}
+          disabled={!backend.connected || busy}
+        >
+          Plan {action}
+        </button>
+        {plan && (
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => void applyPlan()}
+            disabled={!backend.connected || busy}
+          >
+            Apply planned state
+          </button>
+        )}
+      </fieldset>
+      <fieldset disabled={!backend.connected || busy || !selected}>
+        <legend>Graph bus nodes</legend>
+        <div className="actions">
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => onAddVirtualBusNode(selected.id, "renderSource")}
+            disabled={!backend.connected || busy || !selected}
+          >
+            Add render source to graph
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => onAddVirtualBusNode(selected.id, "captureSink")}
+            disabled={!backend.connected || busy || !selected}
+          >
+            Add capture sink to graph
+          </button>
+        </div>
+        <p className="muted">
+          Nodes are stopped and bound to this exact bus ID; endpoint availability remains reported by the backend.
+        </p>
+      </fieldset>
+      <fieldset disabled={!backend.connected || busy || !selected}>
+        <legend>Native device ownership</legend>
+        <label>
+          Instance ID
+          <input
+            aria-label="Managed device instance ID"
+            value={instanceId}
+            maxLength={256}
+            onChange={(event) => setInstanceId(event.target.value)}
+          />
+        </label>
+        <div className="actions">
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => void provision()}
+            disabled={!backend.connected || busy || !selected || !instanceId.trim()}
+          >
+            Provision managed device
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => void remove()}
+            disabled={!backend.connected || busy || !selected}
+          >
+            Remove managed device
+          </button>
+        </div>
+      </fieldset>
+      {message && <PanelMessage message={message} />}
+      <p className="muted">
+        Desired state uses plan/apply. Native ownership is a separate explicit <code>deviceAdministration</code>{" "}
+        operation and remains unavailable until the managed driver is loaded and qualified.
+      </p>
+    </section>
+  );
 }
 
 function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
@@ -793,13 +2520,19 @@ function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
   const refreshGeneration = useRef(0);
   const refresh = () => {
     const generation = ++refreshGeneration.current;
-    void backend.listVirtualRoutes().then((result) => {
-      if (generation !== refreshGeneration.current) return;
-      setState(result);
-      setRouteText(JSON.stringify(result.routes, null, 2));
-      setRevisionText(String(result.revision));
-      setMessage(null);
-    }).catch((error) => { if (generation === refreshGeneration.current) setMessage(formatUiError(error, "Virtual-route inventory unavailable.")); });
+    void backend
+      .listVirtualRoutes()
+      .then((result) => {
+        if (generation !== refreshGeneration.current) return;
+        setState(result);
+        setRouteText(JSON.stringify(result.routes, null, 2));
+        setRevisionText(String(result.revision));
+        setMessage(null);
+      })
+      .catch((error) => {
+        if (generation === refreshGeneration.current)
+          setMessage(formatUiError(error, "Virtual-route inventory unavailable."));
+      });
   };
   useEffect(() => {
     if (backend.connected) refresh();
@@ -826,18 +2559,90 @@ function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
       setMessage(error instanceof Error ? error.message : "Route JSON is invalid.");
       return;
     }
-    setBusy(true); setMessage("Replacing explicit virtual-bus routes...");
+    setBusy(true);
+    setMessage("Replacing explicit virtual-bus routes...");
     try {
-      const result = await backend.replaceVirtualRoutes(baseRevision, routes, uiIdempotencyKey("virtual-routes-replace"));
+      const result = await backend.replaceVirtualRoutes(
+        baseRevision,
+        routes,
+        uiIdempotencyKey("virtual-routes-replace"),
+      );
       setState({ revision: result.revision, routes: result.routes });
       setRouteText(JSON.stringify(result.routes, null, 2));
       setRevisionText(String(result.revision));
       setMessage(`Virtual routes ${result.state} at revision ${result.revision}.`);
     } catch (error) {
       setMessage(formatUiError(error, "Unable to replace virtual-bus routes."));
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
-  return <section className="panel virtual-route-panel" aria-labelledby="virtual-route-heading"><div className="section-heading"><div><p className="eyebrow">Explicit cross-session routing</p><h2 id="virtual-route-heading">Virtual-bus routes</h2></div><div className="actions"><span className="badge">rev {state?.revision ?? "-"}</span><button type="button" className="secondary" onClick={refresh} disabled={!backend.connected || busy}>Refresh</button></div></div><p className="muted">Routes are replaced as one revisioned document. The backend validates bus identities, sessions, cycles, authorization, and idempotency before changing desired state.</p>{state?.routes.length ? <ul aria-label="Explicit cross-session routes">{state.routes.map((route) => <li key={`${route.busId}-${route.producerSessionId}-${route.consumerSessionId}`}><code>{route.busId}</code> · {route.producerSessionId} → {route.consumerSessionId}</li>)}</ul> : <p className="muted">No explicit cross-session routes are currently listed.</p>}<fieldset disabled={!backend.connected || busy}><legend>Revisioned replacement</legend><label>Base revision<input aria-label="Virtual-route base revision" inputMode="numeric" value={revisionText} onChange={(event) => setRevisionText(event.target.value)} /></label><label>Routes JSON<textarea aria-label="Virtual-route JSON" value={routeText} onChange={(event) => setRouteText(event.target.value)} rows={6} spellCheck={false} /></label><button type="button" className="secondary" onClick={() => void replace()} disabled={!backend.connected || busy}>Replace routes</button></fieldset><PanelMessage message={message} /><p className="muted">Disconnected preview mode never mutates route state. Replacement requires the backend’s <code>deviceAdministration</code> permission and does not activate endpoints by itself.</p></section>;
+  return (
+    <section className="panel virtual-route-panel" aria-labelledby="virtual-route-heading">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Explicit cross-session routing</p>
+          <h2 id="virtual-route-heading">Virtual-bus routes</h2>
+        </div>
+        <div className="actions">
+          <span className="badge">rev {state?.revision ?? "-"}</span>
+          <button type="button" className="secondary" onClick={refresh} disabled={!backend.connected || busy}>
+            Refresh
+          </button>
+        </div>
+      </div>
+      <p className="muted">
+        Routes are replaced as one revisioned document. The backend validates bus identities, sessions, cycles,
+        authorization, and idempotency before changing desired state.
+      </p>
+      {state?.routes.length ? (
+        <ul aria-label="Explicit cross-session routes">
+          {state.routes.map((route) => (
+            <li key={`${route.busId}-${route.producerSessionId}-${route.consumerSessionId}`}>
+              <code>{route.busId}</code> · {route.producerSessionId} → {route.consumerSessionId}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted">No explicit cross-session routes are currently listed.</p>
+      )}
+      <fieldset disabled={!backend.connected || busy}>
+        <legend>Revisioned replacement</legend>
+        <label>
+          Base revision
+          <input
+            aria-label="Virtual-route base revision"
+            inputMode="numeric"
+            value={revisionText}
+            onChange={(event) => setRevisionText(event.target.value)}
+          />
+        </label>
+        <label>
+          Routes JSON
+          <textarea
+            aria-label="Virtual-route JSON"
+            value={routeText}
+            onChange={(event) => setRouteText(event.target.value)}
+            rows={6}
+            spellCheck={false}
+          />
+        </label>
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => void replace()}
+          disabled={!backend.connected || busy}
+        >
+          Replace routes
+        </button>
+      </fieldset>
+      <PanelMessage message={message} />
+      <p className="muted">
+        Disconnected preview mode never mutates route state. Replacement requires the backend’s{" "}
+        <code>deviceAdministration</code> permission and does not activate endpoints by itself.
+      </p>
+    </section>
+  );
 }
 
 function endpointBindingStorageKey(sessionId: string) {
@@ -850,8 +2655,10 @@ function readEndpointBindingHint(sessionId: string): { captureEndpointId?: strin
     if (!value || typeof value !== "object") return {};
     const record = value as Record<string, unknown>;
     return {
-      captureEndpointId: typeof record.captureEndpointId === "string" ? record.captureEndpointId.slice(0, 32768) : undefined,
-      renderEndpointId: typeof record.renderEndpointId === "string" ? record.renderEndpointId.slice(0, 32768) : undefined,
+      captureEndpointId:
+        typeof record.captureEndpointId === "string" ? record.captureEndpointId.slice(0, 32768) : undefined,
+      renderEndpointId:
+        typeof record.renderEndpointId === "string" ? record.renderEndpointId.slice(0, 32768) : undefined,
     };
   } catch {
     return {};
@@ -863,19 +2670,32 @@ function readEndpointBindingHint(sessionId: string): { captureEndpointId?: strin
  * Input and Output nodes' Properties, else the last choice made on this PC.
  * Never a default device.
  */
-function routeEndpointBinding(route: import("@audiorouter/contracts").Session, sessionId: string): { captureEndpointId?: string; renderEndpointId?: string } {
+function routeEndpointBinding(
+  route: import("@audiorouter/contracts").Session,
+  sessionId: string,
+): { captureEndpointId?: string; renderEndpointId?: string } {
   const hint = readEndpointBindingHint(sessionId);
-  const connected = (nodeId: string) => route.edges.some((edge) => edge.enabled && (edge.sourceNode === nodeId || edge.destinationNode === nodeId));
+  const connected = (nodeId: string) =>
+    route.edges.some((edge) => edge.enabled && (edge.sourceNode === nodeId || edge.destinationNode === nodeId));
   const bound = (kind: string) => {
-    const value = route.nodes.find((node) => node.enabled && node.kind === kind && connected(node.id) && typeof node.parameters.endpointId === "string")?.parameters.endpointId;
+    const value = route.nodes.find(
+      (node) =>
+        node.enabled && node.kind === kind && connected(node.id) && typeof node.parameters.endpointId === "string",
+    )?.parameters.endpointId;
     return typeof value === "string" ? value : undefined;
   };
-  return { captureEndpointId: bound("physicalInput") ?? hint.captureEndpointId, renderEndpointId: bound("physicalOutput") ?? hint.renderEndpointId };
+  return {
+    captureEndpointId: bound("physicalInput") ?? hint.captureEndpointId,
+    renderEndpointId: bound("physicalOutput") ?? hint.renderEndpointId,
+  };
 }
 
 function writeEndpointBindingHint(sessionId: string, captureEndpointId: string, renderEndpointId: string) {
   try {
-    window.localStorage.setItem(endpointBindingStorageKey(sessionId), JSON.stringify({ captureEndpointId, renderEndpointId }));
+    window.localStorage.setItem(
+      endpointBindingStorageKey(sessionId),
+      JSON.stringify({ captureEndpointId, renderEndpointId }),
+    );
   } catch {
     // Local presentation persistence is best effort and never blocks routing.
   }
@@ -887,46 +2707,111 @@ function writeEndpointBindingHint(sessionId: string, captureEndpointId: string, 
  * a user-facing convenience; the returned values are still the exact stable
  * endpoint IDs sent to the backend.
  */
-export function findVbCableEndpointPair(devices: DeviceListItem[]): { captureEndpointId: string; renderEndpointId: string } | null {
+export function findVbCableEndpointPair(
+  devices: DeviceListItem[],
+): { captureEndpointId: string; renderEndpointId: string } | null {
   const isVbCable = (name: string) => {
     const normalized = name.toLocaleLowerCase();
-    return normalized.includes("vb-audio") || normalized.includes("vb audio") || normalized.includes("vb-cable") || normalized.includes("vb cable");
+    return (
+      normalized.includes("vb-audio") ||
+      normalized.includes("vb audio") ||
+      normalized.includes("vb-cable") ||
+      normalized.includes("vb cable")
+    );
   };
   const capture = devices.filter((device) => device.id === findVbCableCaptureEndpointId(devices));
-  const render = devices.filter((device) => device.state === "active" && device.direction === "render" && isVbCable(device.name) && device.name.toLocaleLowerCase().includes("cable input"));
-  return capture.length === 1 && render.length === 1 ? { captureEndpointId: capture[0].id, renderEndpointId: render[0].id } : null;
+  const render = devices.filter(
+    (device) =>
+      device.state === "active" &&
+      device.direction === "render" &&
+      isVbCable(device.name) &&
+      device.name.toLocaleLowerCase().includes("cable input"),
+  );
+  return capture.length === 1 && render.length === 1
+    ? { captureEndpointId: capture[0].id, renderEndpointId: render[0].id }
+    : null;
 }
 
 /** Return the unambiguous active VB-Cable capture endpoint, if present. */
 export function findVbCableCaptureEndpointId(devices: DeviceListItem[]): string | null {
   const capture = devices.filter((device) => {
     const normalized = device.name.toLocaleLowerCase();
-    return device.state === "active" && device.direction === "capture" &&
-      (normalized.includes("vb-audio") || normalized.includes("vb audio") || normalized.includes("vb-cable") || normalized.includes("vb cable")) &&
-      normalized.includes("cable output");
+    return (
+      device.state === "active" &&
+      device.direction === "capture" &&
+      (normalized.includes("vb-audio") ||
+        normalized.includes("vb audio") ||
+        normalized.includes("vb-cable") ||
+        normalized.includes("vb cable")) &&
+      normalized.includes("cable output")
+    );
   });
   return capture.length === 1 ? capture[0].id : null;
 }
 
 function sortDevicesAlphabetically<T extends DeviceListItem>(devices: T[]): T[] {
-  return [...devices].sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }) || left.id.localeCompare(right.id));
+  return [...devices].sort(
+    (left, right) =>
+      left.name.localeCompare(right.name, undefined, { sensitivity: "base" }) || left.id.localeCompare(right.id),
+  );
 }
 
 export function deviceChoiceLabel(device: Extract<DeviceListItem, { state: "active" }>): string {
-  const channels = device.format.channels === 1
-    ? "Mono · 1 channel"
-    : device.format.channels === 2
-      ? "Stereo · 2 channels"
-      : `${device.format.channels}-channel multichannel`;
+  const channels =
+    device.format.channels === 1
+      ? "Mono · 1 channel"
+      : device.format.channels === 2
+        ? "Stereo · 2 channels"
+        : `${device.format.channels}-channel multichannel`;
   return `${channels} · ${Math.round(device.format.sampleRateHz / 1000)} kHz — ${device.name}`;
 }
 
-function NativeEndpointPanel({ backend, sessionId, devices, sessionRunning, onStart, onStop, onAddEndpointLoopback, captureEndpointId, setCaptureEndpointId, renderEndpointId, setRenderEndpointId }: { backend: UiBackend; sessionId: string; devices: DeviceListItem[]; sessionRunning: boolean; onStart: () => Promise<void>; onStop: () => Promise<void>; onAddEndpointLoopback: (endpointId: string) => void; captureEndpointId: string; setCaptureEndpointId: (value: string) => void; renderEndpointId: string; setRenderEndpointId: (value: string) => void }) {
-  const activeCapture = sortDevicesAlphabetically(devices.filter((device): device is Extract<DeviceListItem, { state: "active" }> => device.state === "active" && device.direction === "capture"));
-  const activeRender = sortDevicesAlphabetically(devices.filter((device): device is Extract<DeviceListItem, { state: "active" }> => device.state === "active" && device.direction === "render"));
+function NativeEndpointPanel({
+  backend,
+  sessionId,
+  devices,
+  sessionRunning,
+  onStart,
+  onStop,
+  onAddEndpointLoopback,
+  captureEndpointId,
+  setCaptureEndpointId,
+  renderEndpointId,
+  setRenderEndpointId,
+}: {
+  backend: UiBackend;
+  sessionId: string;
+  devices: DeviceListItem[];
+  sessionRunning: boolean;
+  onStart: () => Promise<void>;
+  onStop: () => Promise<void>;
+  onAddEndpointLoopback: (endpointId: string) => void;
+  captureEndpointId: string;
+  setCaptureEndpointId: (value: string) => void;
+  renderEndpointId: string;
+  setRenderEndpointId: (value: string) => void;
+}) {
+  const activeCapture = sortDevicesAlphabetically(
+    devices.filter(
+      (device): device is Extract<DeviceListItem, { state: "active" }> =>
+        device.state === "active" && device.direction === "capture",
+    ),
+  );
+  const activeRender = sortDevicesAlphabetically(
+    devices.filter(
+      (device): device is Extract<DeviceListItem, { state: "active" }> =>
+        device.state === "active" && device.direction === "render",
+    ),
+  );
   const savedHint = readEndpointBindingHint(sessionId);
-  const missingCaptureHint = devices.length > 0 && Boolean(savedHint.captureEndpointId) && !activeCapture.some((device) => device.id === savedHint.captureEndpointId);
-  const missingRenderHint = devices.length > 0 && Boolean(savedHint.renderEndpointId) && !activeRender.some((device) => device.id === savedHint.renderEndpointId);
+  const missingCaptureHint =
+    devices.length > 0 &&
+    Boolean(savedHint.captureEndpointId) &&
+    !activeCapture.some((device) => device.id === savedHint.captureEndpointId);
+  const missingRenderHint =
+    devices.length > 0 &&
+    Boolean(savedHint.renderEndpointId) &&
+    !activeRender.some((device) => device.id === savedHint.renderEndpointId);
   const vbCablePair = findVbCableEndpointPair(devices);
   const vbCableCaptureEndpointId = findVbCableCaptureEndpointId(devices);
   const [message, setMessage] = useState<string | null>(null);
@@ -946,71 +2831,394 @@ function NativeEndpointPanel({ backend, sessionId, devices, sessionRunning, onSt
   }, [devices, sessionId, captureEndpointId, renderEndpointId]);
   const prepare = async () => {
     if (busy || !backend.connected) return;
-    if (!backend.prepareNativeEndpoint) { setMessage("Native endpoint preparation is unavailable in this backend."); return; }
-    if (!captureEndpointId || !renderEndpointId) { setMessage("Select both an active capture and render endpoint."); return; }
-    setBusy(true); setMessage("Preparing exact endpoints in stopped state...");
-    try { const result = await backend.prepareNativeEndpoint(sessionId, captureEndpointId, renderEndpointId); setMessage(`Prepared ${result.state}; start the session to activate audio.`); }
-    catch (error) { setMessage(formatUiError(error, "Native endpoint preparation failed.")); }
-    finally { setBusy(false); }
+    if (!backend.prepareNativeEndpoint) {
+      setMessage("Native endpoint preparation is unavailable in this backend.");
+      return;
+    }
+    if (!captureEndpointId || !renderEndpointId) {
+      setMessage("Select both an active capture and render endpoint.");
+      return;
+    }
+    setBusy(true);
+    setMessage("Preparing exact endpoints in stopped state...");
+    try {
+      const result = await backend.prepareNativeEndpoint(sessionId, captureEndpointId, renderEndpointId);
+      setMessage(`Prepared ${result.state}; start the session to activate audio.`);
+    } catch (error) {
+      setMessage(formatUiError(error, "Native endpoint preparation failed."));
+    } finally {
+      setBusy(false);
+    }
   };
   const rebind = async () => {
     if (busy || !backend.connected) return;
-    if (!backend.rebindNativeEndpoint) { setMessage("Native endpoint rebinding is unavailable in this backend."); return; }
-    if (!captureEndpointId || !renderEndpointId) { setMessage("Select both active endpoints before rebinding."); return; }
-    setBusy(true); setMessage("Refreshing and rebinding exact endpoints in stopped state...");
-    try { const result = await backend.rebindNativeEndpoint(sessionId, captureEndpointId, renderEndpointId); setMessage(`Rebound ${result.state}; start the session to activate audio.`); }
-    catch (error) { setMessage(formatUiError(error, "Native endpoint rebind failed.")); }
-    finally { setBusy(false); }
+    if (!backend.rebindNativeEndpoint) {
+      setMessage("Native endpoint rebinding is unavailable in this backend.");
+      return;
+    }
+    if (!captureEndpointId || !renderEndpointId) {
+      setMessage("Select both active endpoints before rebinding.");
+      return;
+    }
+    setBusy(true);
+    setMessage("Refreshing and rebinding exact endpoints in stopped state...");
+    try {
+      const result = await backend.rebindNativeEndpoint(sessionId, captureEndpointId, renderEndpointId);
+      setMessage(`Rebound ${result.state}; start the session to activate audio.`);
+    } catch (error) {
+      setMessage(formatUiError(error, "Native endpoint rebind failed."));
+    } finally {
+      setBusy(false);
+    }
   };
   const detach = async () => {
     if (busy || !backend.connected) return;
-    if (!backend.detachNativeEndpoint) { setMessage("Native endpoint detachment is unavailable in this backend."); return; }
-    setBusy(true); setMessage("Detaching the stopped native worker...");
-    try { const result = await backend.detachNativeEndpoint(sessionId); setMessage(`Native worker ${result.state}; select new endpoints before preparing again.`); }
-    catch (error) { setMessage(formatUiError(error, "Native endpoint detachment failed.")); }
-    finally { setBusy(false); }
+    if (!backend.detachNativeEndpoint) {
+      setMessage("Native endpoint detachment is unavailable in this backend.");
+      return;
+    }
+    setBusy(true);
+    setMessage("Detaching the stopped native worker...");
+    try {
+      const result = await backend.detachNativeEndpoint(sessionId);
+      setMessage(`Native worker ${result.state}; select new endpoints before preparing again.`);
+    } catch (error) {
+      setMessage(formatUiError(error, "Native endpoint detachment failed."));
+    } finally {
+      setBusy(false);
+    }
   };
   const selectVbCable = () => {
-    if (!vbCablePair) { setMessage("An unambiguous active VB-Cable input/output pair was not found."); return; }
+    if (!vbCablePair) {
+      setMessage("An unambiguous active VB-Cable input/output pair was not found.");
+      return;
+    }
     setCaptureEndpointId(vbCablePair.captureEndpointId);
     setRenderEndpointId(vbCablePair.renderEndpointId);
     writeEndpointBindingHint(sessionId, vbCablePair.captureEndpointId, vbCablePair.renderEndpointId);
     setMessage("VB-Cable pair selected. Review the graph, then prepare and start the session.");
   };
   const selectVbCableCapture = () => {
-    if (!vbCableCaptureEndpointId) { setMessage("An unambiguous active VB-Cable capture endpoint was not found."); return; }
+    if (!vbCableCaptureEndpointId) {
+      setMessage("An unambiguous active VB-Cable capture endpoint was not found.");
+      return;
+    }
     setCaptureEndpointId(vbCableCaptureEndpointId);
     writeEndpointBindingHint(sessionId, vbCableCaptureEndpointId, renderEndpointId);
     setMessage("VB-Cable capture selected. Choose the physical render output, then prepare and start the session.");
   };
-  return <section id="native-endpoint-panel" className="panel native-endpoint-panel" aria-labelledby="native-endpoint-heading"><div className="section-heading"><div><p className="eyebrow">Native adapter</p><h2 id="native-endpoint-heading">Endpoint binding</h2></div><span className="badge">{sessionRunning ? "running" : "stopped"}</span></div><ol className="native-audio-steps"><li>Saving is optional for a temporary preview. Save the route only when you want to keep it.</li><li>Select the capture and render endpoints below. The current adapter needs both, including for Test Signal; no microphone is chosen automatically.</li><li>Click Prepare native endpoints, then press Play to preview the current route. Save it in Session only if you want to keep these edits.</li></ol>{missingCaptureHint && <p className="muted" role="status">Saved capture endpoint is unavailable. Select a replacement deliberately.</p>}{missingRenderHint && <p className="muted" role="status">Saved render endpoint is unavailable. Select a replacement deliberately.</p>}<div className="actions"><button type="button" className="secondary" onClick={selectVbCableCapture} disabled={!backend.connected || !vbCableCaptureEndpointId || sessionRunning} title={vbCableCaptureEndpointId ? "Select the exact active VB-Cable capture endpoint" : "No unambiguous active VB-Cable capture endpoint found"}>Select VB-Cable capture</button><button type="button" className="secondary" onClick={selectVbCable} disabled={!backend.connected || !vbCablePair || sessionRunning} title={vbCablePair ? "Select the exact active VB-Cable loopback endpoints" : "No unambiguous active VB-Cable loopback pair found"}>Select VB-Cable loopback pair</button>{vbCablePair && <small>Active loopback pair detected</small>}</div><label>Capture endpoint<select aria-label="Native capture endpoint" value={captureEndpointId} disabled={!backend.connected || activeCapture.length === 0 || sessionRunning} onChange={(event) => { setCaptureEndpointId(event.target.value); writeEndpointBindingHint(sessionId, event.target.value, renderEndpointId); }}><option value="">Select capture endpoint</option>{activeCapture.map((device) => <option key={device.id} value={device.id}>{deviceChoiceLabel(device)}</option>)}</select></label><label>Render endpoint<select aria-label="Native render endpoint" value={renderEndpointId} disabled={!backend.connected || activeRender.length === 0 || sessionRunning} onChange={(event) => { setRenderEndpointId(event.target.value); writeEndpointBindingHint(sessionId, captureEndpointId, event.target.value); }}><option value="">Select render endpoint</option>{activeRender.map((device) => <option key={device.id} value={device.id}>{deviceChoiceLabel(device)}</option>)}</select></label><div className="actions"><button type="button" className="secondary" onClick={() => { if (!renderEndpointId) { setMessage("Select an exact active render endpoint before adding an endpoint-loopback source."); return; } onAddEndpointLoopback(renderEndpointId); }} disabled={!backend.connected || !renderEndpointId || sessionRunning}>Add loopback source to graph</button><button type="button" className="secondary" onClick={() => void prepare()} disabled={!backend.connected || !backend.prepareNativeEndpoint || !captureEndpointId || !renderEndpointId || sessionRunning}>Prepare native endpoints</button><button type="button" className="secondary" onClick={() => void rebind()} disabled={!backend.connected || !backend.rebindNativeEndpoint || !captureEndpointId || !renderEndpointId || sessionRunning}>Rebind exact endpoints</button><button type="button" className="secondary" onClick={() => void detach()} disabled={!backend.connected || !backend.detachNativeEndpoint || sessionRunning}>Detach stopped worker</button><button type="button" className={sessionRunning ? "secondary" : "primary"} onClick={() => void (sessionRunning ? onStop() : onStart())} disabled={!backend.connected}>{sessionRunning ? "Stop session" : "Start session"}</button></div><PanelMessage message={message} /><p className="muted">Preparation, rebinding, and detachment require <code>deviceAdministration</code>. If preparation reports permission denied, close the desktop shell and relaunch it from PowerShell with <code>$env:AUDIOROUTER_ALLOW_DEVICE_ADMIN = "1"</code> set for that process. This requires an enrolled operator account. Physical endpoints and existing VB-Cable devices do not require the AudioRouter virtual driver. Endpoint defaults, volume, and mute are never changed. Selected IDs are retained only as local UI hints; a missing saved ID stays unselected until you deliberately choose a replacement. Use the loopback action only for a deliberate CABLE Input → CABLE Output test; for normal monitoring choose a physical render endpoint.</p></section>;
+  return (
+    <section
+      id="native-endpoint-panel"
+      className="panel native-endpoint-panel"
+      aria-labelledby="native-endpoint-heading"
+    >
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Native adapter</p>
+          <h2 id="native-endpoint-heading">Endpoint binding</h2>
+        </div>
+        <span className="badge">{sessionRunning ? "running" : "stopped"}</span>
+      </div>
+      <ol className="native-audio-steps">
+        <li>Saving is optional for a temporary preview. Save the route only when you want to keep it.</li>
+        <li>
+          Select the capture and render endpoints below. The current adapter needs both, including for Test Signal; no
+          microphone is chosen automatically.
+        </li>
+        <li>
+          Click Prepare native endpoints, then press Play to preview the current route. Save it in Session only if you
+          want to keep these edits.
+        </li>
+      </ol>
+      {missingCaptureHint && (
+        <p className="muted" role="status">
+          Saved capture endpoint is unavailable. Select a replacement deliberately.
+        </p>
+      )}
+      {missingRenderHint && (
+        <p className="muted" role="status">
+          Saved render endpoint is unavailable. Select a replacement deliberately.
+        </p>
+      )}
+      <div className="actions">
+        <button
+          type="button"
+          className="secondary"
+          onClick={selectVbCableCapture}
+          disabled={!backend.connected || !vbCableCaptureEndpointId || sessionRunning}
+          title={
+            vbCableCaptureEndpointId
+              ? "Select the exact active VB-Cable capture endpoint"
+              : "No unambiguous active VB-Cable capture endpoint found"
+          }
+        >
+          Select VB-Cable capture
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          onClick={selectVbCable}
+          disabled={!backend.connected || !vbCablePair || sessionRunning}
+          title={
+            vbCablePair
+              ? "Select the exact active VB-Cable loopback endpoints"
+              : "No unambiguous active VB-Cable loopback pair found"
+          }
+        >
+          Select VB-Cable loopback pair
+        </button>
+        {vbCablePair && <small>Active loopback pair detected</small>}
+      </div>
+      <label>
+        Capture endpoint
+        <select
+          aria-label="Native capture endpoint"
+          value={captureEndpointId}
+          disabled={!backend.connected || activeCapture.length === 0 || sessionRunning}
+          onChange={(event) => {
+            setCaptureEndpointId(event.target.value);
+            writeEndpointBindingHint(sessionId, event.target.value, renderEndpointId);
+          }}
+        >
+          <option value="">Select capture endpoint</option>
+          {activeCapture.map((device) => (
+            <option key={device.id} value={device.id}>
+              {deviceChoiceLabel(device)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Render endpoint
+        <select
+          aria-label="Native render endpoint"
+          value={renderEndpointId}
+          disabled={!backend.connected || activeRender.length === 0 || sessionRunning}
+          onChange={(event) => {
+            setRenderEndpointId(event.target.value);
+            writeEndpointBindingHint(sessionId, captureEndpointId, event.target.value);
+          }}
+        >
+          <option value="">Select render endpoint</option>
+          {activeRender.map((device) => (
+            <option key={device.id} value={device.id}>
+              {deviceChoiceLabel(device)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="actions">
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => {
+            if (!renderEndpointId) {
+              setMessage("Select an exact active render endpoint before adding an endpoint-loopback source.");
+              return;
+            }
+            onAddEndpointLoopback(renderEndpointId);
+          }}
+          disabled={!backend.connected || !renderEndpointId || sessionRunning}
+        >
+          Add loopback source to graph
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => void prepare()}
+          disabled={
+            !backend.connected ||
+            !backend.prepareNativeEndpoint ||
+            !captureEndpointId ||
+            !renderEndpointId ||
+            sessionRunning
+          }
+        >
+          Prepare native endpoints
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => void rebind()}
+          disabled={
+            !backend.connected ||
+            !backend.rebindNativeEndpoint ||
+            !captureEndpointId ||
+            !renderEndpointId ||
+            sessionRunning
+          }
+        >
+          Rebind exact endpoints
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => void detach()}
+          disabled={!backend.connected || !backend.detachNativeEndpoint || sessionRunning}
+        >
+          Detach stopped worker
+        </button>
+        <button
+          type="button"
+          className={sessionRunning ? "secondary" : "primary"}
+          onClick={() => void (sessionRunning ? onStop() : onStart())}
+          disabled={!backend.connected}
+        >
+          {sessionRunning ? "Stop session" : "Start session"}
+        </button>
+      </div>
+      <PanelMessage message={message} />
+      <p className="muted">
+        Preparation, rebinding, and detachment require <code>deviceAdministration</code>. If preparation reports
+        permission denied, close the desktop shell and relaunch it from PowerShell with{" "}
+        <code>$env:AUDIOROUTER_ALLOW_DEVICE_ADMIN = "1"</code> set for that process. This requires an enrolled operator
+        account. Physical endpoints and existing VB-Cable devices do not require the AudioRouter virtual driver.
+        Endpoint defaults, volume, and mute are never changed. Selected IDs are retained only as local UI hints; a
+        missing saved ID stays unselected until you deliberately choose a replacement. Use the loopback action only for
+        a deliberate CABLE Input → CABLE Output test; for normal monitoring choose a physical render endpoint.
+      </p>
+    </section>
+  );
 }
 
-function NativeOutputFanoutPanel({ backend, sessionId, devices, sessionRunning }: { backend: UiBackend; sessionId: string; devices: DeviceListItem[]; sessionRunning: boolean }) {
-  const activeRender = sortDevicesAlphabetically(devices.filter((device): device is Extract<DeviceListItem, { state: "active" }> => device.state === "active" && device.direction === "render"));
+function NativeOutputFanoutPanel({
+  backend,
+  sessionId,
+  devices,
+  sessionRunning,
+}: {
+  backend: UiBackend;
+  sessionId: string;
+  devices: DeviceListItem[];
+  sessionRunning: boolean;
+}) {
+  const activeRender = sortDevicesAlphabetically(
+    devices.filter(
+      (device): device is Extract<DeviceListItem, { state: "active" }> =>
+        device.state === "active" && device.direction === "render",
+    ),
+  );
   const [endpointIds, setEndpointIds] = useState<string[]>([]);
   const [generation, setGeneration] = useState("1");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const prepare = async () => {
     if (busy || !backend.connected) return;
-    if (!backend.prepareNativeOutputs) { setMessage("Native output fan-out preparation is unavailable in this backend."); return; }
+    if (!backend.prepareNativeOutputs) {
+      setMessage("Native output fan-out preparation is unavailable in this backend.");
+      return;
+    }
     const parsedGeneration = Number(generation);
-    if (!Number.isSafeInteger(parsedGeneration) || parsedGeneration < 1) { setMessage("Generation must be a positive integer."); return; }
-    if (endpointIds.length < 1 || endpointIds.length > 8) { setMessage("Select one to eight exact render endpoints."); return; }
-    setBusy(true); setMessage("Preparing exact stopped render branches...");
-    try { const result = await backend.prepareNativeOutputs(sessionId, parsedGeneration, endpointIds); setMessage(`Prepared ${result.outputCount} stopped render branches for generation ${result.generation}.`); }
-    catch (error) { setMessage(formatUiError(error, "Native output fan-out preparation failed.")); }
-    finally { setBusy(false); }
+    if (!Number.isSafeInteger(parsedGeneration) || parsedGeneration < 1) {
+      setMessage("Generation must be a positive integer.");
+      return;
+    }
+    if (endpointIds.length < 1 || endpointIds.length > 8) {
+      setMessage("Select one to eight exact render endpoints.");
+      return;
+    }
+    setBusy(true);
+    setMessage("Preparing exact stopped render branches...");
+    try {
+      const result = await backend.prepareNativeOutputs(sessionId, parsedGeneration, endpointIds);
+      setMessage(`Prepared ${result.outputCount} stopped render branches for generation ${result.generation}.`);
+    } catch (error) {
+      setMessage(formatUiError(error, "Native output fan-out preparation failed."));
+    } finally {
+      setBusy(false);
+    }
   };
-  return <section className="panel native-output-fanout-panel" aria-labelledby="native-output-fanout-heading"><div className="section-heading"><div><p className="eyebrow">Many-output routing</p><h2 id="native-output-fanout-heading">Physical render fan-out</h2></div><span className="badge">{endpointIds.length}/8</span></div><p className="muted">Select exact active render endpoints to receive the same processed graph output. Preparation is stopped; the backend validates format, ownership, and generation.</p><label>Graph generation<input aria-label="Native output fan-out generation" type="number" min={1} step={1} value={generation} disabled={!backend.connected || sessionRunning || busy} onChange={(event) => setGeneration(event.target.value)} /></label><label>Render branches<select aria-label="Native output fan-out render endpoints" multiple size={Math.min(8, Math.max(3, activeRender.length))} value={endpointIds} disabled={!backend.connected || activeRender.length === 0 || sessionRunning || busy} onChange={(event) => setEndpointIds(Array.from(event.target.selectedOptions, (option) => option.value))}>{activeRender.map((device) => <option key={device.id} value={device.id}>{deviceChoiceLabel(device)}</option>)}</select></label><button type="button" className="secondary" onClick={() => void prepare()} disabled={!backend.connected || !backend.prepareNativeOutputs || endpointIds.length === 0 || sessionRunning || busy}>Prepare stopped fan-out</button><PanelMessage message={message} /><p className="muted">This prepares explicit branches only; start/stop and graph validity remain backend-owned. It does not change Windows defaults or volume.</p></section>;
+  return (
+    <section className="panel native-output-fanout-panel" aria-labelledby="native-output-fanout-heading">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Many-output routing</p>
+          <h2 id="native-output-fanout-heading">Physical render fan-out</h2>
+        </div>
+        <span className="badge">{endpointIds.length}/8</span>
+      </div>
+      <p className="muted">
+        Select exact active render endpoints to receive the same processed graph output. Preparation is stopped; the
+        backend validates format, ownership, and generation.
+      </p>
+      <label>
+        Graph generation
+        <input
+          aria-label="Native output fan-out generation"
+          type="number"
+          min={1}
+          step={1}
+          value={generation}
+          disabled={!backend.connected || sessionRunning || busy}
+          onChange={(event) => setGeneration(event.target.value)}
+        />
+      </label>
+      <label>
+        Render branches
+        <select
+          aria-label="Native output fan-out render endpoints"
+          multiple
+          size={Math.min(8, Math.max(3, activeRender.length))}
+          value={endpointIds}
+          disabled={!backend.connected || activeRender.length === 0 || sessionRunning || busy}
+          onChange={(event) => setEndpointIds(Array.from(event.target.selectedOptions, (option) => option.value))}
+        >
+          {activeRender.map((device) => (
+            <option key={device.id} value={device.id}>
+              {deviceChoiceLabel(device)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button
+        type="button"
+        className="secondary"
+        onClick={() => void prepare()}
+        disabled={
+          !backend.connected || !backend.prepareNativeOutputs || endpointIds.length === 0 || sessionRunning || busy
+        }
+      >
+        Prepare stopped fan-out
+      </button>
+      <PanelMessage message={message} />
+      <p className="muted">
+        This prepares explicit branches only; start/stop and graph validity remain backend-owned. It does not change
+        Windows defaults or volume.
+      </p>
+    </section>
+  );
 }
 
 type MultiInputSourceRef = { kind: "physical"; id: string } | { kind: "application"; id: string };
 
-function NativeMultiInputPanel({ backend, sessionId, devices, sessionRunning, applicationNodes }: { backend: UiBackend; sessionId: string; devices: DeviceListItem[]; sessionRunning: boolean; applicationNodes: Node[] }) {
-  const activeCapture = sortDevicesAlphabetically(devices.filter((device): device is Extract<DeviceListItem, { state: "active" }> => device.state === "active" && device.direction === "capture"));
-  const boundApplicationNodes = applicationNodes.filter((node) => node.kind === "applicationCapture" && node.enabled && node.parameters.processPolicy === "selectedInstance" && typeof node.parameters.processId === "number" && typeof node.parameters.creationTime100ns === "string");
+function NativeMultiInputPanel({
+  backend,
+  sessionId,
+  devices,
+  sessionRunning,
+  applicationNodes,
+}: {
+  backend: UiBackend;
+  sessionId: string;
+  devices: DeviceListItem[];
+  sessionRunning: boolean;
+  applicationNodes: Node[];
+}) {
+  const activeCapture = sortDevicesAlphabetically(
+    devices.filter(
+      (device): device is Extract<DeviceListItem, { state: "active" }> =>
+        device.state === "active" && device.direction === "capture",
+    ),
+  );
+  const boundApplicationNodes = applicationNodes.filter(
+    (node) =>
+      node.kind === "applicationCapture" &&
+      node.enabled &&
+      node.parameters.processPolicy === "selectedInstance" &&
+      typeof node.parameters.processId === "number" &&
+      typeof node.parameters.creationTime100ns === "string",
+  );
   const [sources, setSources] = useState<MultiInputSourceRef[]>([]);
   const [generation, setGeneration] = useState("1");
   const [mode, setMode] = useState<"include" | "exclude">("include");
@@ -1040,16 +3248,30 @@ function NativeMultiInputPanel({ backend, sessionId, devices, sessionRunning, ap
   };
   const prepare = async () => {
     if (busy || !backend.connected) return;
-    if (!backend.prepareNativeMultiInputs) { setMessage("Native multi-input preparation is unavailable in this backend."); return; }
+    if (!backend.prepareNativeMultiInputs) {
+      setMessage("Native multi-input preparation is unavailable in this backend.");
+      return;
+    }
     const parsedGeneration = Number(generation);
-    if (!Number.isSafeInteger(parsedGeneration) || parsedGeneration < 1) { setMessage("Generation must be a positive integer."); return; }
-    if (sources.length < 2 || sources.length > 8) { setMessage("Select two to eight exact capture sources."); return; }
+    if (!Number.isSafeInteger(parsedGeneration) || parsedGeneration < 1) {
+      setMessage("Generation must be a positive integer.");
+      return;
+    }
+    if (sources.length < 2 || sources.length > 8) {
+      setMessage("Select two to eight exact capture sources.");
+      return;
+    }
     let bindings: import("@audiorouter/contracts").NativeMultiInputSourceBinding[];
     try {
       bindings = sources.map((entry) => {
         if (entry.kind === "physical") return { kind: "physical" as const, endpointId: entry.id };
         const node = boundApplicationNodes.find((candidate) => candidate.id === entry.id);
-        if (!node || typeof node.parameters.processId !== "number" || typeof node.parameters.creationTime100ns !== "string" || typeof node.parameters.executable !== "string") {
+        if (
+          !node ||
+          typeof node.parameters.processId !== "number" ||
+          typeof node.parameters.creationTime100ns !== "string" ||
+          typeof node.parameters.executable !== "string"
+        ) {
           throw new Error(`Application source ${entry.id} no longer has a bound process identity.`);
         }
         return {
@@ -1061,15 +3283,146 @@ function NativeMultiInputPanel({ backend, sessionId, devices, sessionRunning, ap
           mode,
         };
       });
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Could not build source bindings."); return; }
-    setBusy(true); setMessage("Preparing exact stopped capture sources...");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not build source bindings.");
+      return;
+    }
+    setBusy(true);
+    setMessage("Preparing exact stopped capture sources...");
     try {
       const result = await backend.prepareNativeMultiInputs(sessionId, parsedGeneration, bindings);
-      setMessage(`Prepared ${result.sources.length} capture sources for generation ${result.generation}; start the session to activate routing.`);
-    } catch (error) { setMessage(formatUiError(error, "Native multi-input preparation failed.")); }
-    finally { setBusy(false); }
+      setMessage(
+        `Prepared ${result.sources.length} capture sources for generation ${result.generation}; start the session to activate routing.`,
+      );
+    } catch (error) {
+      setMessage(formatUiError(error, "Native multi-input preparation failed."));
+    } finally {
+      setBusy(false);
+    }
   };
-  return <section className="panel native-multi-input-panel" aria-labelledby="native-multi-input-heading"><div className="section-heading"><div><p className="eyebrow">Many-input routing</p><h2 id="native-multi-input-heading">Multiple capture sources</h2></div><span className="badge">{sources.length}/8</span></div><p className="muted">Select exact active capture endpoints and/or bound application-capture nodes, then verify their explicit order matches the committed mixer-input nodes. Preparation is stopped; session start binds the graph’s physical, virtual, recorder, tool, and pre-bound plugin stages.</p><label>Graph generation<input aria-label="Native multi-input graph generation" type="number" min={1} step={1} value={generation} disabled={!backend.connected || sessionRunning || busy} onChange={(event) => setGeneration(event.target.value)} /></label><label>Physical capture sources<select aria-label="Native multi-input capture endpoints" multiple size={Math.min(8, Math.max(3, activeCapture.length))} value={sources.filter((entry) => entry.kind === "physical").map((entry) => entry.id)} disabled={!backend.connected || activeCapture.length === 0 || sessionRunning || busy} onChange={(event) => toggleSelection("physical", new Set(Array.from(event.target.selectedOptions, (option) => option.value)))}>{activeCapture.map((device) => <option key={device.id} value={device.id}>{deviceChoiceLabel(device)}</option>)}</select></label><label>Application capture sources<select aria-label="Native multi-input application sources" multiple size={Math.min(8, Math.max(3, boundApplicationNodes.length))} value={sources.filter((entry) => entry.kind === "application").map((entry) => entry.id)} disabled={!backend.connected || boundApplicationNodes.length === 0 || sessionRunning || busy} onChange={(event) => toggleSelection("application", new Set(Array.from(event.target.selectedOptions, (option) => option.value)))}>{boundApplicationNodes.map((node) => <option key={node.id} value={node.id}>{node.name} · {String(node.parameters.executable)}</option>)}</select></label><label>Application capture policy<select aria-label="Native multi-input application capture policy" value={mode} disabled={!backend.connected || sessionRunning || busy} onChange={(event) => setMode(event.target.value as "include" | "exclude")}><option value="include">Include selected application</option><option value="exclude">Exclude selected application</option></select></label>{sources.length > 0 && <fieldset disabled={sessionRunning || busy}><legend>Source order</legend><ol aria-label="Selected multi-input source order">{sources.map((entry, index) => <li key={`${entry.kind}-${entry.id}`}><span>{describe(entry)}</span><button type="button" className="secondary" onClick={() => reorder(index, -1)} disabled={index === 0} aria-label={`Move ${entry.id} up`}>Move up</button><button type="button" className="secondary" onClick={() => reorder(index, 1)} disabled={index === sources.length - 1} aria-label={`Move ${entry.id} down`}>Move down</button></li>)}</ol></fieldset>}<button type="button" className="secondary" onClick={() => void prepare()} disabled={!backend.connected || !backend.prepareNativeMultiInputs || sources.length < 2 || sessionRunning || busy}>Prepare stopped multi-input</button><PanelMessage message={message} /><p className="muted">No fallback microphone or application is selected. If an exact source changes, disappears, or exits, the backend stops the worker and requires deliberate rebind.</p></section>;
+  return (
+    <section className="panel native-multi-input-panel" aria-labelledby="native-multi-input-heading">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Many-input routing</p>
+          <h2 id="native-multi-input-heading">Multiple capture sources</h2>
+        </div>
+        <span className="badge">{sources.length}/8</span>
+      </div>
+      <p className="muted">
+        Select exact active capture endpoints and/or bound application-capture nodes, then verify their explicit order
+        matches the committed mixer-input nodes. Preparation is stopped; session start binds the graph’s physical,
+        virtual, recorder, tool, and pre-bound plugin stages.
+      </p>
+      <label>
+        Graph generation
+        <input
+          aria-label="Native multi-input graph generation"
+          type="number"
+          min={1}
+          step={1}
+          value={generation}
+          disabled={!backend.connected || sessionRunning || busy}
+          onChange={(event) => setGeneration(event.target.value)}
+        />
+      </label>
+      <label>
+        Physical capture sources
+        <select
+          aria-label="Native multi-input capture endpoints"
+          multiple
+          size={Math.min(8, Math.max(3, activeCapture.length))}
+          value={sources.filter((entry) => entry.kind === "physical").map((entry) => entry.id)}
+          disabled={!backend.connected || activeCapture.length === 0 || sessionRunning || busy}
+          onChange={(event) =>
+            toggleSelection("physical", new Set(Array.from(event.target.selectedOptions, (option) => option.value)))
+          }
+        >
+          {activeCapture.map((device) => (
+            <option key={device.id} value={device.id}>
+              {deviceChoiceLabel(device)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Application capture sources
+        <select
+          aria-label="Native multi-input application sources"
+          multiple
+          size={Math.min(8, Math.max(3, boundApplicationNodes.length))}
+          value={sources.filter((entry) => entry.kind === "application").map((entry) => entry.id)}
+          disabled={!backend.connected || boundApplicationNodes.length === 0 || sessionRunning || busy}
+          onChange={(event) =>
+            toggleSelection("application", new Set(Array.from(event.target.selectedOptions, (option) => option.value)))
+          }
+        >
+          {boundApplicationNodes.map((node) => (
+            <option key={node.id} value={node.id}>
+              {node.name} · {String(node.parameters.executable)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Application capture policy
+        <select
+          aria-label="Native multi-input application capture policy"
+          value={mode}
+          disabled={!backend.connected || sessionRunning || busy}
+          onChange={(event) => setMode(event.target.value as "include" | "exclude")}
+        >
+          <option value="include">Include selected application</option>
+          <option value="exclude">Exclude selected application</option>
+        </select>
+      </label>
+      {sources.length > 0 && (
+        <fieldset disabled={sessionRunning || busy}>
+          <legend>Source order</legend>
+          <ol aria-label="Selected multi-input source order">
+            {sources.map((entry, index) => (
+              <li key={`${entry.kind}-${entry.id}`}>
+                <span>{describe(entry)}</span>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => reorder(index, -1)}
+                  disabled={index === 0}
+                  aria-label={`Move ${entry.id} up`}
+                >
+                  Move up
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => reorder(index, 1)}
+                  disabled={index === sources.length - 1}
+                  aria-label={`Move ${entry.id} down`}
+                >
+                  Move down
+                </button>
+              </li>
+            ))}
+          </ol>
+        </fieldset>
+      )}
+      <button
+        type="button"
+        className="secondary"
+        onClick={() => void prepare()}
+        disabled={
+          !backend.connected || !backend.prepareNativeMultiInputs || sources.length < 2 || sessionRunning || busy
+        }
+      >
+        Prepare stopped multi-input
+      </button>
+      <PanelMessage message={message} />
+      <p className="muted">
+        No fallback microphone or application is selected. If an exact source changes, disappears, or exits, the backend
+        stops the worker and requires deliberate rebind.
+      </p>
+    </section>
+  );
 }
 
 /**
@@ -1078,15 +3431,38 @@ function NativeMultiInputPanel({ backend, sessionId, devices, sessionRunning, ap
  * add. Scans read metadata only; adding creates a stopped placeholder whose
  * binary is re-verified before it ever runs in an isolated worker.
  */
-function PluginToolsGroup({ backend, connected, search, refreshKey, onAdd, onOpenPicker }: { backend: UiBackend; connected: boolean; search: string; refreshKey: boolean; onAdd: (entry: import("@audiorouter/contracts").PluginScanEntry) => void; onOpenPicker: () => void }) {
+function PluginToolsGroup({
+  backend,
+  connected,
+  search,
+  refreshKey,
+  onAdd,
+  onOpenPicker,
+}: {
+  backend: UiBackend;
+  connected: boolean;
+  search: string;
+  refreshKey: boolean;
+  onAdd: (entry: import("@audiorouter/contracts").PluginScanEntry) => void;
+  onOpenPicker: () => void;
+}) {
   const [inventories, setInventories] = useState<import("@audiorouter/contracts").PluginScanResult[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   useEffect(() => {
     if (!connected || !backend.pluginInventory) return;
     let active = true;
-    void backend.pluginInventory().then((result) => { if (active) setInventories(result.inventories); }).catch((error) => { if (active) setMessage(formatUiError(error, "Plugin list unavailable.")); });
-    return () => { active = false; };
+    void backend
+      .pluginInventory()
+      .then((result) => {
+        if (active) setInventories(result.inventories);
+      })
+      .catch((error) => {
+        if (active) setMessage(formatUiError(error, "Plugin list unavailable."));
+      });
+    return () => {
+      active = false;
+    };
   }, [backend, connected, refreshKey]);
   const scanStandardFolders = async () => {
     setBusy(true);
@@ -1094,63 +3470,256 @@ function PluginToolsGroup({ backend, connected, search, refreshKey, onAdd, onOpe
     const results: import("@audiorouter/contracts").PluginScanResult[] = [];
     let denied: string | null = null;
     for (const folder of STANDARD_PLUGIN_FOLDERS) {
-      try { results.push(await backend.scanPlugins(folder)); }
-      catch (error) { if (/permission/i.test(error instanceof Error ? error.message : "")) { denied = formatUiError(error, "Plugin scanning is not permitted."); break; } }
+      try {
+        results.push(await backend.scanPlugins(folder));
+      } catch (error) {
+        if (/permission/i.test(error instanceof Error ? error.message : "")) {
+          denied = formatUiError(error, "Plugin scanning is not permitted.");
+          break;
+        }
+      }
     }
-    const merged = [...inventories.filter((inventory) => !results.some((result) => result.directory === inventory.directory)), ...results];
+    const merged = [
+      ...inventories.filter((inventory) => !results.some((result) => result.directory === inventory.directory)),
+      ...results,
+    ];
     setInventories(merged);
     const found = pluginCatalog(results).length;
-    setMessage(denied ?? `Found ${found} supported plugin${found === 1 ? "" : "s"} in ${results.length} standard folder${results.length === 1 ? "" : "s"}. Other folders: use Scan another folder.`);
+    setMessage(
+      denied ??
+        `Found ${found} supported plugin${found === 1 ? "" : "s"} in ${results.length} standard folder${results.length === 1 ? "" : "s"}. Other folders: use Scan another folder.`,
+    );
     setBusy(false);
   };
   const query = search.trim().toLocaleLowerCase();
-  const catalog = pluginCatalog(inventories).filter((item) => !query || `${item.name} ${item.format} ${item.entry.identity?.vendor ?? ""} plugin vst`.toLocaleLowerCase().includes(query));
-  return <div className="tool-plugin-group" aria-label="Plugins">
-    <h4>Plugins (VST2/VST3)</h4>
-    {catalog.map((item) => { const help = `${item.format}${item.entry.identity?.vendor ? ` · ${item.entry.identity.vendor}` : ""} · ${item.folder}`; return <button key={`${item.entry.identity?.sha256}-${item.entry.path}`} className="tool-card" type="button" disabled={!connected} title={help} aria-description={help} onClick={() => onAdd(item.entry)}>
-      <span className="tool-card-icon tool-card-plugin-badge" aria-hidden="true">{item.format === "VST3" ? "V3" : "V2"}</span>
-      <span><strong>{item.name}</strong><small>{help}</small></span>
-    </button>; })}
-    {catalog.length === 0 && !query && <p className="muted">No plugins found yet. Scan Windows' standard plugin folders, or pick another folder.</p>}
-    <div className="actions"><button type="button" className="secondary" disabled={!connected || busy} onClick={() => void scanStandardFolders()}>{busy ? "Scanning…" : "Scan standard folders"}</button><button type="button" className="secondary" disabled={!connected} onClick={onOpenPicker}>Scan another folder…</button></div>
-    {message && <PanelMessage message={message} small />}
-  </div>;
+  const catalog = pluginCatalog(inventories).filter(
+    (item) =>
+      !query ||
+      `${item.name} ${item.format} ${item.entry.identity?.vendor ?? ""} plugin vst`.toLocaleLowerCase().includes(query),
+  );
+  return (
+    <div className="tool-plugin-group" aria-label="Plugins">
+      <h4>Plugins (VST2/VST3)</h4>
+      {catalog.map((item) => {
+        const help = `${item.format}${item.entry.identity?.vendor ? ` · ${item.entry.identity.vendor}` : ""} · ${item.folder}`;
+        return (
+          <button
+            key={`${item.entry.identity?.sha256}-${item.entry.path}`}
+            className="tool-card"
+            type="button"
+            disabled={!connected}
+            title={help}
+            aria-description={help}
+            onClick={() => onAdd(item.entry)}
+          >
+            <span className="tool-card-icon tool-card-plugin-badge" aria-hidden="true">
+              {item.format === "VST3" ? "V3" : "V2"}
+            </span>
+            <span>
+              <strong>{item.name}</strong>
+              <small>{help}</small>
+            </span>
+          </button>
+        );
+      })}
+      {catalog.length === 0 && !query && (
+        <p className="muted">No plugins found yet. Scan Windows' standard plugin folders, or pick another folder.</p>
+      )}
+      <div className="actions">
+        <button
+          type="button"
+          className="secondary"
+          disabled={!connected || busy}
+          onClick={() => void scanStandardFolders()}
+        >
+          {busy ? "Scanning…" : "Scan standard folders"}
+        </button>
+        <button type="button" className="secondary" disabled={!connected} onClick={onOpenPicker}>
+          Scan another folder…
+        </button>
+      </div>
+      {message && <PanelMessage message={message} small />}
+    </div>
+  );
 }
 
-function FirFilterEditor({ node, backend, disabled, onChange }: { node: Node; backend: UiBackend; disabled: boolean; onChange: (changes: Array<[string, boolean | number | string]>) => void }) {
+function FirFilterEditor({
+  node,
+  backend,
+  disabled,
+  onChange,
+}: {
+  node: Node;
+  backend: UiBackend;
+  disabled: boolean;
+  onChange: (changes: Array<[string, boolean | number | string]>) => void;
+}) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const choose = async (file?: File) => {
     if (!file) return;
     const problem = audioUploadProblem(file);
-    if (problem) { setMessage(problem); return; }
+    if (problem) {
+      setMessage(problem);
+      return;
+    }
     setBusy(true);
     try {
       const media = await uploadAudioMedia(backend, file);
-      onChange([["mediaId", media.mediaId], ["fileName", media.fileName]]);
-      setMessage(`${media.fileName} · ${(media.durationMs / 1000).toFixed(2)} s${media.durationMs > 2000 ? " (only the first 2 s are used)" : ""}. Save the route to apply it.`);
-    } catch (error) { setMessage(formatUiError(error, "Impulse response import failed.")); }
-    finally { setBusy(false); }
+      onChange([
+        ["mediaId", media.mediaId],
+        ["fileName", media.fileName],
+      ]);
+      setMessage(
+        `${media.fileName} · ${(media.durationMs / 1000).toFixed(2)} s${media.durationMs > 2000 ? " (only the first 2 s are used)" : ""}. Save the route to apply it.`,
+      );
+    } catch (error) {
+      setMessage(formatUiError(error, "Impulse response import failed."));
+    } finally {
+      setBusy(false);
+    }
   };
-  return <div className="node-binding-editor" aria-label="FIR impulse response"><div><p className="eyebrow">Impulse response</p><strong>{typeof node.parameters.fileName === "string" ? node.parameters.fileName : "No impulse response selected"}</strong></div>
-    <label className="secondary file-picker">Choose WAV or MP3<input type="file" accept=".wav,.mp3,audio/wav,audio/mpeg" disabled={disabled || busy} onChange={(event) => { void choose(event.target.files?.[0]); event.target.value = ""; }} /></label>
-    <small>{message ?? "The response is normalized to unit energy. Wet mix blends it with the original (dry) sound; Output gain sets the level. Until a file is chosen, audio passes unchanged."}</small>
-  </div>;
+  return (
+    <div className="node-binding-editor" aria-label="FIR impulse response">
+      <div>
+        <p className="eyebrow">Impulse response</p>
+        <strong>
+          {typeof node.parameters.fileName === "string" ? node.parameters.fileName : "No impulse response selected"}
+        </strong>
+      </div>
+      <label className="secondary file-picker">
+        Choose WAV or MP3
+        <input
+          type="file"
+          accept=".wav,.mp3,audio/wav,audio/mpeg"
+          disabled={disabled || busy}
+          onChange={(event) => {
+            void choose(event.target.files?.[0]);
+            event.target.value = "";
+          }}
+        />
+      </label>
+      <small>
+        {message ??
+          "The response is normalized to unit energy. Wet mix blends it with the original (dry) sound; Output gain sets the level. Until a file is chosen, audio passes unchanged."}
+      </small>
+    </div>
+  );
 }
 
-function DenoiseLearnEditor({ node, running, liveProfile, disabled, onChange }: { node: Node; running: boolean; liveProfile: string | null; disabled: boolean; onChange: (changes: Array<[string, boolean | number | string]>) => void }) {
+function DenoiseLearnEditor({
+  node,
+  running,
+  liveProfile,
+  disabled,
+  onChange,
+}: {
+  node: Node;
+  running: boolean;
+  liveProfile: string | null;
+  disabled: boolean;
+  onChange: (changes: Array<[string, boolean | number | string]>) => void;
+}) {
   const learning = node.parameters.learning === true;
   const hasProfile = typeof node.parameters.noiseProfile === "string";
-  return <div className="node-binding-editor" aria-label="Denoise noise profile"><div><p className="eyebrow">Noise profile</p><strong>{learning ? "Learning the noise now" : hasProfile ? "A noise profile is stored" : "Teach this tool the noise to remove"}</strong></div>
-    {!learning ? <button type="button" className="secondary" disabled={disabled || !running || !node.enabled || node.bypass} onClick={() => onChange([["learning", true]])}>{hasProfile ? "Learn again" : "Learn noise"}</button>
-      : <button type="button" className="primary" disabled={disabled || !running || !node.enabled || node.bypass || !liveProfile} onClick={() => liveProfile && onChange([["noiseProfile", liveProfile], ["learning", false]])}>Stop learning and keep profile</button>}
-    <small>{!node.enabled ? "Off: enable this tool before learning noise." : node.bypass ? "Bypass: turn Bypass off before learning noise." : !running ? "Start the route first. Then play only the unwanted noise (for example room tone or fan hiss) for a few seconds while learning." : learning ? (liveProfile ? "Keep only the noise playing for 3–5 seconds, then stop learning. Audio passes unchanged while learning." : "Waiting for the first noise measurement…") : "Reduction sets how aggressively the profile is removed; the remaining floor keeps some noise to avoid unnatural silence."}</small>
-  </div>;
+  return (
+    <div className="node-binding-editor" aria-label="Denoise noise profile">
+      <div>
+        <p className="eyebrow">Noise profile</p>
+        <strong>
+          {learning
+            ? "Learning the noise now"
+            : hasProfile
+              ? "A noise profile is stored"
+              : "Teach this tool the noise to remove"}
+        </strong>
+      </div>
+      {!learning ? (
+        <button
+          type="button"
+          className="secondary"
+          disabled={disabled || !running || !node.enabled || node.bypass}
+          onClick={() => onChange([["learning", true]])}
+        >
+          {hasProfile ? "Learn again" : "Learn noise"}
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="primary"
+          disabled={disabled || !running || !node.enabled || node.bypass || !liveProfile}
+          onClick={() =>
+            liveProfile &&
+            onChange([
+              ["noiseProfile", liveProfile],
+              ["learning", false],
+            ])
+          }
+        >
+          Stop learning and keep profile
+        </button>
+      )}
+      <small>
+        {!node.enabled
+          ? "Off: enable this tool before learning noise."
+          : node.bypass
+            ? "Bypass: turn Bypass off before learning noise."
+            : !running
+              ? "Start the route first. Then play only the unwanted noise (for example room tone or fan hiss) for a few seconds while learning."
+              : learning
+                ? liveProfile
+                  ? "Keep only the noise playing for 3–5 seconds, then stop learning. Audio passes unchanged while learning."
+                  : "Waiting for the first noise measurement…"
+                : "Reduction sets how aggressively the profile is removed; the remaining floor keeps some noise to avoid unnatural silence."}
+      </small>
+    </div>
+  );
 }
 
-function MixerInputsEditor({ session, mixer, disabled, onChange }: { session: import("@audiorouter/contracts").Session; mixer: Node; disabled: boolean; onChange: (name: string, value: number) => void }) {
+function MixerInputsEditor({
+  session,
+  mixer,
+  disabled,
+  onChange,
+}: {
+  session: import("@audiorouter/contracts").Session;
+  mixer: Node;
+  disabled: boolean;
+  onChange: (name: string, value: number) => void;
+}) {
   const inputs = mixerInputs(session, mixer.id);
-  return <div className="node-binding-editor mixer-inputs-editor" aria-label="Mixer input volumes"><div><p className="eyebrow">Mixer inputs</p><strong>Volume per source</strong></div>{inputs.length === 0 ? <small>Connect sources to this Mixer to set their volumes.</small> : inputs.map((input) => <label key={input.edgeId} className="mixer-input-volume"><span>{input.upstream.name}{input.enabled ? "" : " (off)"}</span><input type="range" min={0} max={100} step={1} value={input.percent} disabled={disabled} aria-label={`Volume for ${input.upstream.name}`} onChange={(event) => onChange(mixerInputVolumeKey(input.upstream.id), Number(event.target.value))} /><output>{Math.round(input.percent)} %</output></label>)}<small>0–100 % per input. For a boost above 100 %, put a Volume tool between the source and the Mixer.</small></div>;
+  return (
+    <div className="node-binding-editor mixer-inputs-editor" aria-label="Mixer input volumes">
+      <div>
+        <p className="eyebrow">Mixer inputs</p>
+        <strong>Volume per source</strong>
+      </div>
+      {inputs.length === 0 ? (
+        <small>Connect sources to this Mixer to set their volumes.</small>
+      ) : (
+        inputs.map((input) => (
+          <label key={input.edgeId} className="mixer-input-volume">
+            <span>
+              {input.upstream.name}
+              {input.enabled ? "" : " (off)"}
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={input.percent}
+              disabled={disabled}
+              aria-label={`Volume for ${input.upstream.name}`}
+              onChange={(event) => onChange(mixerInputVolumeKey(input.upstream.id), Number(event.target.value))}
+            />
+            <output>{Math.round(input.percent)} %</output>
+          </label>
+        ))
+      )}
+      <small>0–100 % per input. For a boost above 100 %, put a Volume tool between the source and the Mixer.</small>
+    </div>
+  );
 }
 
 function applicationChoiceLabel(application: ApplicationRow): string {
@@ -1159,33 +3728,295 @@ function applicationChoiceLabel(application: ApplicationRow): string {
 
 function ApplicationChoiceOptions({ applications }: { applications: ApplicationRow[] }) {
   const { withAudio, other } = applicationCaptureChoices(applications);
-  return <>{withAudio.length > 0 && <optgroup label="Using audio now">{withAudio.map((application) => <option key={applicationChoiceKey(application)} value={applicationChoiceKey(application)}>{applicationChoiceLabel(application)}</option>)}</optgroup>}{other.length > 0 && <optgroup label="Other running applications">{other.map((application) => <option key={applicationChoiceKey(application)} value={applicationChoiceKey(application)}>{applicationChoiceLabel(application)}</option>)}</optgroup>}</>;
+  return (
+    <>
+      {withAudio.length > 0 && (
+        <optgroup label="Using audio now">
+          {withAudio.map((application) => (
+            <option key={applicationChoiceKey(application)} value={applicationChoiceKey(application)}>
+              {applicationChoiceLabel(application)}
+            </option>
+          ))}
+        </optgroup>
+      )}
+      {other.length > 0 && (
+        <optgroup label="Other running applications">
+          {other.map((application) => (
+            <option key={applicationChoiceKey(application)} value={applicationChoiceKey(application)}>
+              {applicationChoiceLabel(application)}
+            </option>
+          ))}
+        </optgroup>
+      )}
+    </>
+  );
 }
 
-function ApplicationCaptureBinding({ node, applications, error, disabled, onRefresh, onSelect }: { node: Node; applications: ApplicationRow[]; error: string | null; disabled: boolean; onRefresh: () => void; onSelect: (application: ApplicationRow) => void }) {
+function ApplicationCaptureBinding({
+  node,
+  applications,
+  error,
+  disabled,
+  onRefresh,
+  onSelect,
+}: {
+  node: Node;
+  applications: ApplicationRow[];
+  error: string | null;
+  disabled: boolean;
+  onRefresh: () => void;
+  onSelect: (application: ApplicationRow) => void;
+}) {
   const processId = typeof node.parameters.processId === "number" ? node.parameters.processId : null;
   const creationTime = typeof node.parameters.creationTime100ns === "string" ? node.parameters.creationTime100ns : null;
   const executable = typeof node.parameters.executable === "string" ? node.parameters.executable : "application";
-  const current = applications.find((application) => application.processId === processId && application.creationTime100ns === creationTime) ?? null;
+  const current =
+    applications.find(
+      (application) => application.processId === processId && application.creationTime100ns === creationTime,
+    ) ?? null;
   const currentKey = current ? applicationChoiceKey(current) : "";
-  return <div className="node-binding-editor" aria-label="Application capture binding"><div><p className="eyebrow">Application source</p><strong>Choose the running application to capture</strong></div><select aria-label="Application to capture" value={currentKey} disabled={disabled || applications.length === 0} onChange={(event) => { const next = applications.find((application) => applicationChoiceKey(application) === event.target.value); if (next) onSelect(next); }}>{!current && <option value="">{processId === null ? `${executable} (any verified instance)` : `${executable} - PID ${processId} (not running)`}</option>}<ApplicationChoiceOptions applications={applications} /></select><small>{error ? `Application inventory unavailable: ${error}` : disabled ? "Stop the session to change the application." : "Changing the application keeps this node and its connections. Commit the draft to apply it."}</small><button type="button" className="secondary" onClick={onRefresh} disabled={disabled}>Refresh applications</button></div>;
+  return (
+    <div className="node-binding-editor" aria-label="Application capture binding">
+      <div>
+        <p className="eyebrow">Application source</p>
+        <strong>Choose the running application to capture</strong>
+      </div>
+      <select
+        aria-label="Application to capture"
+        value={currentKey}
+        disabled={disabled || applications.length === 0}
+        onChange={(event) => {
+          const next = applications.find((application) => applicationChoiceKey(application) === event.target.value);
+          if (next) onSelect(next);
+        }}
+      >
+        {!current && (
+          <option value="">
+            {processId === null
+              ? `${executable} (any verified instance)`
+              : `${executable} - PID ${processId} (not running)`}
+          </option>
+        )}
+        <ApplicationChoiceOptions applications={applications} />
+      </select>
+      <small>
+        {error
+          ? `Application inventory unavailable: ${error}`
+          : disabled
+            ? "Stop the session to change the application."
+            : "Changing the application keeps this node and its connections. Commit the draft to apply it."}
+      </small>
+      <button type="button" className="secondary" onClick={onRefresh} disabled={disabled}>
+        Refresh applications
+      </button>
+    </div>
+  );
 }
 
-function PhysicalInputBinding({ devices, value, disabled, onChange, onRefresh, surround = false }: { devices: DeviceListItem[]; value: string; disabled: boolean; onChange: (value: string) => void; onRefresh: () => void; surround?: boolean }) {
-  const activeCapture = sortDevicesAlphabetically(devices.filter((device): device is Extract<DeviceListItem, { state: "active" }> => device.state === "active" && device.direction === "capture"));
+function PhysicalInputBinding({
+  devices,
+  value,
+  disabled,
+  onChange,
+  onRefresh,
+  surround = false,
+}: {
+  devices: DeviceListItem[];
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+  onRefresh: () => void;
+  surround?: boolean;
+}) {
+  const activeCapture = sortDevicesAlphabetically(
+    devices.filter(
+      (device): device is Extract<DeviceListItem, { state: "active" }> =>
+        device.state === "active" && device.direction === "capture",
+    ),
+  );
   // Surround to headphones can also loopback-capture a 5.1/7.1 playback device.
-  const surroundPlayback = surround ? sortDevicesAlphabetically(devices.filter((device): device is Extract<DeviceListItem, { state: "active" }> => device.state === "active" && device.direction === "render" && (device.format.channels === 6 || device.format.channels === 8))) : [];
-  return <div className="node-binding-editor" aria-label="Physical input binding"><div><p className="eyebrow">Capture source</p><strong>Choose a microphone, input, or virtual capture bus</strong></div><select aria-label="Physical input endpoint" value={value} disabled={disabled || activeCapture.length === 0} onChange={(event) => onChange(event.target.value)}><option value="">Select capture endpoint</option>{surroundPlayback.length > 0 ? <optgroup label="Recording devices">{activeCapture.map((device) => <option key={device.id} value={device.id}>{deviceChoiceLabel(device)}</option>)}</optgroup> : activeCapture.map((device) => <option key={device.id} value={device.id}>{deviceChoiceLabel(device)}</option>)}{surroundPlayback.length > 0 && <optgroup label="Surround playback devices (loopback)">{surroundPlayback.map((device) => <option key={device.id} value={device.id}>{"Loopback · " + deviceChoiceLabel(device)}</option>)}</optgroup>}</select><small className={!value && activeCapture.length > 0 ? "node-binding-missing" : undefined}>{activeCapture.length === 0 ? "No active capture endpoints are available. Refresh the device list; a reboot is not normally required." : !value ? "No device is chosen for this node yet. Choose one, then Save." : "Voicemeeter Out B1 receives system sound only while the Voicemeeter mixer runs with B1 enabled. For an app-independent virtual cable, send Windows sound to CABLE Input and select CABLE Output here."}</small><button type="button" className="secondary" onClick={onRefresh} disabled={disabled}>Refresh available inputs</button></div>;
+  const surroundPlayback = surround
+    ? sortDevicesAlphabetically(
+        devices.filter(
+          (device): device is Extract<DeviceListItem, { state: "active" }> =>
+            device.state === "active" &&
+            device.direction === "render" &&
+            (device.format.channels === 6 || device.format.channels === 8),
+        ),
+      )
+    : [];
+  return (
+    <div className="node-binding-editor" aria-label="Physical input binding">
+      <div>
+        <p className="eyebrow">Capture source</p>
+        <strong>Choose a microphone, input, or virtual capture bus</strong>
+      </div>
+      <select
+        aria-label="Physical input endpoint"
+        value={value}
+        disabled={disabled || activeCapture.length === 0}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="">Select capture endpoint</option>
+        {surroundPlayback.length > 0 ? (
+          <optgroup label="Recording devices">
+            {activeCapture.map((device) => (
+              <option key={device.id} value={device.id}>
+                {deviceChoiceLabel(device)}
+              </option>
+            ))}
+          </optgroup>
+        ) : (
+          activeCapture.map((device) => (
+            <option key={device.id} value={device.id}>
+              {deviceChoiceLabel(device)}
+            </option>
+          ))
+        )}
+        {surroundPlayback.length > 0 && (
+          <optgroup label="Surround playback devices (loopback)">
+            {surroundPlayback.map((device) => (
+              <option key={device.id} value={device.id}>
+                {"Loopback · " + deviceChoiceLabel(device)}
+              </option>
+            ))}
+          </optgroup>
+        )}
+      </select>
+      <small className={!value && activeCapture.length > 0 ? "node-binding-missing" : undefined}>
+        {activeCapture.length === 0
+          ? "No active capture endpoints are available. Refresh the device list; a reboot is not normally required."
+          : !value
+            ? "No device is chosen for this node yet. Choose one, then Save."
+            : "Voicemeeter Out B1 receives system sound only while the Voicemeeter mixer runs with B1 enabled. For an app-independent virtual cable, send Windows sound to CABLE Input and select CABLE Output here."}
+      </small>
+      <button type="button" className="secondary" onClick={onRefresh} disabled={disabled}>
+        Refresh available inputs
+      </button>
+    </div>
+  );
 }
 
-function PhysicalOutputBinding({ devices, value, disabled, onChange, onRefresh }: { devices: DeviceListItem[]; value: string; disabled: boolean; onChange: (value: string) => void; onRefresh: () => void }) {
-  const activeRender = sortDevicesAlphabetically(devices.filter((device): device is Extract<DeviceListItem, { state: "active" }> => device.state === "active" && device.direction === "render"));
-  return <div className="node-binding-editor" aria-label="Physical output binding"><div><p className="eyebrow">Render destination</p><strong>Choose the headphones, speakers, or virtual output</strong></div><select aria-label="Physical output endpoint" value={value} disabled={disabled || activeRender.length === 0} onChange={(event) => onChange(event.target.value)}><option value="">Select render endpoint</option>{activeRender.map((device) => <option key={device.id} value={device.id}>{deviceChoiceLabel(device)}</option>)}</select><small className={!value && activeRender.length > 0 ? "node-binding-missing" : undefined}>{activeRender.length === 0 ? "No active render endpoints are available. Refresh the device list; a reboot is not normally required." : !value ? "No device is chosen for this node yet. Choose one, then Save." : "This selection is used by the session's stopped native render binding."}</small><button type="button" className="secondary" onClick={onRefresh} disabled={disabled}>Refresh available outputs</button></div>;
+function PhysicalOutputBinding({
+  devices,
+  value,
+  disabled,
+  onChange,
+  onRefresh,
+}: {
+  devices: DeviceListItem[];
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+  onRefresh: () => void;
+}) {
+  const activeRender = sortDevicesAlphabetically(
+    devices.filter(
+      (device): device is Extract<DeviceListItem, { state: "active" }> =>
+        device.state === "active" && device.direction === "render",
+    ),
+  );
+  return (
+    <div className="node-binding-editor" aria-label="Physical output binding">
+      <div>
+        <p className="eyebrow">Render destination</p>
+        <strong>Choose the headphones, speakers, or virtual output</strong>
+      </div>
+      <select
+        aria-label="Physical output endpoint"
+        value={value}
+        disabled={disabled || activeRender.length === 0}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="">Select render endpoint</option>
+        {activeRender.map((device) => (
+          <option key={device.id} value={device.id}>
+            {deviceChoiceLabel(device)}
+          </option>
+        ))}
+      </select>
+      <small className={!value && activeRender.length > 0 ? "node-binding-missing" : undefined}>
+        {activeRender.length === 0
+          ? "No active render endpoints are available. Refresh the device list; a reboot is not normally required."
+          : !value
+            ? "No device is chosen for this node yet. Choose one, then Save."
+            : "This selection is used by the session's stopped native render binding."}
+      </small>
+      <button type="button" className="secondary" onClick={onRefresh} disabled={disabled}>
+        Refresh available outputs
+      </button>
+    </div>
+  );
 }
 
-function LoadedPluginsPanel({ nodes, selectedNodeId, disabled, onSelect, onUnload, diagnostics }: { nodes: Node[]; selectedNodeId: string; disabled: boolean; onSelect: (nodeId: string) => void; onUnload: (nodeId: string) => void; diagnostics: import("@audiorouter/contracts").DiagnosticsSnapshot | null }) {
+function LoadedPluginsPanel({
+  nodes,
+  selectedNodeId,
+  disabled,
+  onSelect,
+  onUnload,
+  diagnostics,
+}: {
+  nodes: Node[];
+  selectedNodeId: string;
+  disabled: boolean;
+  onSelect: (nodeId: string) => void;
+  onUnload: (nodeId: string) => void;
+  diagnostics: import("@audiorouter/contracts").DiagnosticsSnapshot | null;
+}) {
   const plugins = nodes.filter((node) => node.kind === "plugin");
-  return <section className="panel loaded-plugins-panel" aria-labelledby="loaded-plugins-heading"><div className="section-heading"><div><p className="eyebrow">Currently in this draft</p><h2 id="loaded-plugins-heading">Loaded plugins</h2></div><span className="badge">{plugins.length}</span></div>{plugins.length === 0 ? <p className="muted">No VST2/VST3 plugin is loaded into the draft yet. Scan a directory below and add one.</p> : <ul aria-label="Loaded plugins">{plugins.map((node) => { const format = node.parameters.format; const formatLabel = format === "vst3" ? "VST3" : format === "vst2" ? "VST2" : "Plugin"; const fileName = String(node.parameters.path ?? "").replace(/\\/g, "/").split("/").pop() || "unbound"; const health = diagnostics?.nodeTelemetry.find((item) => item.nodeId === node.id)?.plugin ?? null; const healthAlert = health?.state === "failed" || health?.state === "quarantined"; return <li key={node.id} className={[node.id === selectedNodeId ? "selected" : null, healthAlert ? "is-alert" : null].filter(Boolean).join(" ") || undefined}><span><strong>{node.name}</strong> <small>{formatLabel} · {fileName} · {node.bypass ? "bypass" : node.enabled ? "active" : "stopped"}{health && ` · worker ${health.state}`}</small></span><button type="button" className="secondary" onClick={() => onSelect(node.id)} disabled={disabled}>Select</button><button type="button" className="secondary" onClick={() => onUnload(node.id)} disabled={disabled}>Unload</button></li>; })}</ul>}</section>;
+  return (
+    <section className="panel loaded-plugins-panel" aria-labelledby="loaded-plugins-heading">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Currently in this draft</p>
+          <h2 id="loaded-plugins-heading">Loaded plugins</h2>
+        </div>
+        <span className="badge">{plugins.length}</span>
+      </div>
+      {plugins.length === 0 ? (
+        <p className="muted">No VST2/VST3 plugin is loaded into the draft yet. Scan a directory below and add one.</p>
+      ) : (
+        <ul aria-label="Loaded plugins">
+          {plugins.map((node) => {
+            const format = node.parameters.format;
+            const formatLabel = format === "vst3" ? "VST3" : format === "vst2" ? "VST2" : "Plugin";
+            const fileName =
+              String(node.parameters.path ?? "")
+                .replace(/\\/g, "/")
+                .split("/")
+                .pop() || "unbound";
+            const health = diagnostics?.nodeTelemetry.find((item) => item.nodeId === node.id)?.plugin ?? null;
+            const healthAlert = health?.state === "failed" || health?.state === "quarantined";
+            return (
+              <li
+                key={node.id}
+                className={
+                  [node.id === selectedNodeId ? "selected" : null, healthAlert ? "is-alert" : null]
+                    .filter(Boolean)
+                    .join(" ") || undefined
+                }
+              >
+                <span>
+                  <strong>{node.name}</strong>{" "}
+                  <small>
+                    {formatLabel} · {fileName} · {node.bypass ? "bypass" : node.enabled ? "active" : "stopped"}
+                    {health && ` · worker ${health.state}`}
+                  </small>
+                </span>
+                <button type="button" className="secondary" onClick={() => onSelect(node.id)} disabled={disabled}>
+                  Select
+                </button>
+                <button type="button" className="secondary" onClick={() => onUnload(node.id)} disabled={disabled}>
+                  Unload
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
 }
 
 const PLUGIN_HEALTH_LABELS: Record<string, string> = {
@@ -1205,9 +4036,15 @@ function PanelMessage({ message, small = false }: { message: string | null | und
   const tone = actionMessageTone(message);
   const error = tone === "error";
   const className = `panel-message is-${tone}`;
-  return small
-    ? <small className={className} role={error ? "alert" : "status"}>{message}</small>
-    : <p className={className} role={error ? "alert" : "status"} aria-live={error ? "assertive" : "polite"}>{message}</p>;
+  return small ? (
+    <small className={className} role={error ? "alert" : "status"}>
+      {message}
+    </small>
+  ) : (
+    <p className={className} role={error ? "alert" : "status"} aria-live={error ? "assertive" : "polite"}>
+      {message}
+    </p>
+  );
 }
 
 /**
@@ -1216,7 +4053,19 @@ function PanelMessage({ message, small = false }: { message: string | null | und
  * edits to the audio. "Save plugin settings" stores the plugin's full state
  * with the route so it is restored the next time the route plays.
  */
-function PluginEditorControls({ node, backend, sessionId, running, onStateSaved }: { node: Node; backend: UiBackend; sessionId: string; running: boolean; onStateSaved: (stateId: string) => void }) {
+function PluginEditorControls({
+  node,
+  backend,
+  sessionId,
+  running,
+  onStateSaved,
+}: {
+  node: Node;
+  backend: UiBackend;
+  sessionId: string;
+  running: boolean;
+  onStateSaved: (stateId: string) => void;
+}) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const inShell = typeof window !== "undefined" && Boolean(window.__TAURI_INTERNALS__?.invoke);
@@ -1226,10 +4075,19 @@ function PluginEditorControls({ node, backend, sessionId, running, onStateSaved 
     if (!invoke) return;
     setBusy(true);
     try {
-      const response = await invoke("open_plugin_editor", { sessionId, nodeId: node.id, title: node.name }) as { error?: { message?: string } | null };
-      setMessage(response?.error ? `Editor unavailable: ${response.error.message ?? "the backend refused"}` : "Editor opened in its own window. Changes apply as you make them and are kept automatically when you close the window or press Stop.");
-    } catch (error) { setMessage(formatUiError(error, "The plugin editor could not be opened.")); }
-    finally { setBusy(false); }
+      const response = (await invoke("open_plugin_editor", { sessionId, nodeId: node.id, title: node.name })) as {
+        error?: { message?: string } | null;
+      };
+      setMessage(
+        response?.error
+          ? `Editor unavailable: ${response.error.message ?? "the backend refused"}`
+          : "Editor opened in its own window. Changes apply as you make them and are kept automatically when you close the window or press Stop.",
+      );
+    } catch (error) {
+      setMessage(formatUiError(error, "The plugin editor could not be opened."));
+    } finally {
+      setBusy(false);
+    }
   };
   const saveState = async () => {
     if (!backend.savePluginState) return;
@@ -1237,20 +4095,79 @@ function PluginEditorControls({ node, backend, sessionId, running, onStateSaved 
     try {
       const result = await backend.savePluginState(sessionId, node.id);
       onStateSaved(result.stateId);
-      setMessage(`Plugin settings saved (${Math.max(1, Math.round(result.sizeBytes / 1024))} KB). They are restored every time this route plays.`);
-    } catch (error) { setMessage(formatUiError(error, "Plugin settings could not be saved.")); }
-    finally { setBusy(false); }
+      setMessage(
+        `Plugin settings saved (${Math.max(1, Math.round(result.sizeBytes / 1024))} KB). They are restored every time this route plays.`,
+      );
+    } catch (error) {
+      setMessage(formatUiError(error, "Plugin settings could not be saved."));
+    } finally {
+      setBusy(false);
+    }
   };
-  return <div className="node-binding-editor" aria-label="Plugin editor and settings"><div><p className="eyebrow">Plugin editor</p><strong>Your changes are kept automatically</strong></div>
-    <div className="actions">
-      <button type="button" className="secondary" disabled={busy || !running || !inShell || !isVst2} title={!isVst2 ? "VST3 editors are not supported yet; use the parameters below." : !inShell ? "Editors open only in the desktop app." : !running ? "Start the route first." : "Open the plugin's own window"} onClick={() => void openEditor()}>Open plugin editor</button>
-      <button type="button" className="secondary" disabled={busy || !running || !backend.savePluginState} title={!running ? "Start the route first." : "Keep the current settings now, without stopping. Changes are also kept automatically when you close the editor or press Stop."} onClick={() => void saveState()}>Save plugin settings</button>
+  return (
+    <div className="node-binding-editor" aria-label="Plugin editor and settings">
+      <div>
+        <p className="eyebrow">Plugin editor</p>
+        <strong>Your changes are kept automatically</strong>
+      </div>
+      <div className="actions">
+        <button
+          type="button"
+          className="secondary"
+          disabled={busy || !running || !inShell || !isVst2}
+          title={
+            !isVst2
+              ? "VST3 editors are not supported yet; use the parameters below."
+              : !inShell
+                ? "Editors open only in the desktop app."
+                : !running
+                  ? "Start the route first."
+                  : "Open the plugin's own window"
+          }
+          onClick={() => void openEditor()}
+        >
+          Open plugin editor
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          disabled={busy || !running || !backend.savePluginState}
+          title={
+            !running
+              ? "Start the route first."
+              : "Keep the current settings now, without stopping. Changes are also kept automatically when you close the editor or press Stop."
+          }
+          onClick={() => void saveState()}
+        >
+          Save plugin settings
+        </button>
+      </div>
+      {message ? (
+        <PanelMessage message={message} small />
+      ) : (
+        <small className="muted">
+          {!running
+            ? "Start the route to open the editor. Settings you change are kept automatically when you close the editor or press Stop."
+            : !isVst2
+              ? "This VST3 plugin's own editor cannot be opened yet; adjust it with the parameters below. Changes are kept when you press Stop."
+              : "Open the editor and make changes. They are kept when you close its window or press Stop."}
+        </small>
+      )}
     </div>
-    {message ? <PanelMessage message={message} small /> : <small className="muted">{!running ? "Start the route to open the editor. Settings you change are kept automatically when you close the editor or press Stop." : !isVst2 ? "This VST3 plugin's own editor cannot be opened yet; adjust it with the parameters below. Changes are kept when you press Stop." : "Open the editor and make changes. They are kept when you close its window or press Stop."}</small>}
-  </div>;
+  );
 }
 
-function PluginNodeInspector({ node, disabled, onUnload, snapshot }: { node: Node; disabled: boolean; onUnload: () => void; snapshot: import("@audiorouter/contracts").DiagnosticsSnapshot | null }) {
+function PluginNodeInspector({
+  node,
+  disabled,
+  onUnload,
+  snapshot,
+}: {
+  node: Node;
+  disabled: boolean;
+  onUnload: () => void;
+  snapshot: import("@audiorouter/contracts").DiagnosticsSnapshot | null;
+}) {
   const path = typeof node.parameters.path === "string" ? node.parameters.path : "";
   const format = node.parameters.format;
   const formatLabel = format === "vst3" ? "VST3" : format === "vst2" ? "VST2" : "Plugin";
@@ -1258,32 +4175,94 @@ function PluginNodeInspector({ node, disabled, onUnload, snapshot }: { node: Nod
   const fileName = path.replace(/\\/g, "/").split("/").pop() || path;
   const health = snapshot?.nodeTelemetry.find((item) => item.nodeId === node.id)?.plugin ?? null;
   const healthAlert = health?.state === "failed" || health?.state === "quarantined";
-  return <div className="node-binding-editor plugin-node-editor" aria-label="VST plugin binding">
-    <div><p className="eyebrow">{formatLabel} plugin loaded from disk</p><strong title={path}>{fileName || "No plugin binary bound"}</strong></div>
-    <label>Binary path<input aria-label="Plugin binary path" value={path} readOnly /></label>
-    <label>SHA-256 fingerprint<input aria-label="Plugin fingerprint" value={fingerprint} readOnly /></label>
-    <div className={`plugin-worker-health${healthAlert ? " is-alert" : ""}`} role={healthAlert ? "alert" : undefined} aria-label="Plugin worker health">
-      <span className="eyebrow">Isolated worker health</span>
-      <strong>{health ? PLUGIN_HEALTH_LABELS[health.state] ?? health.state : "Not running"}</strong>
-      {health && health.failureCount > 0 && <small>{health.failureCount} failure{health.failureCount === 1 ? "" : "s"} recorded{health.state === "quarantined" ? "; requires deliberate retry after review" : ""}.</small>}
-      {!health && <small>Health is only observable while the session is running with this worker bound.</small>}
-      {health?.outputMisses !== undefined && <small>Audio continuity: {health.outputMisses} missing output blocks (includes startup), {health.inputDrops ?? 0} dropped input blocks. These counts are shared by plugins in the same worker.</small>}
+  return (
+    <div className="node-binding-editor plugin-node-editor" aria-label="VST plugin binding">
+      <div>
+        <p className="eyebrow">{formatLabel} plugin loaded from disk</p>
+        <strong title={path}>{fileName || "No plugin binary bound"}</strong>
+      </div>
+      <label>
+        Binary path
+        <input aria-label="Plugin binary path" value={path} readOnly />
+      </label>
+      <label>
+        SHA-256 fingerprint
+        <input aria-label="Plugin fingerprint" value={fingerprint} readOnly />
+      </label>
+      <div
+        className={`plugin-worker-health${healthAlert ? " is-alert" : ""}`}
+        role={healthAlert ? "alert" : undefined}
+        aria-label="Plugin worker health"
+      >
+        <span className="eyebrow">Isolated worker health</span>
+        <strong>{health ? (PLUGIN_HEALTH_LABELS[health.state] ?? health.state) : "Not running"}</strong>
+        {health && health.failureCount > 0 && (
+          <small>
+            {health.failureCount} failure{health.failureCount === 1 ? "" : "s"} recorded
+            {health.state === "quarantined" ? "; requires deliberate retry after review" : ""}.
+          </small>
+        )}
+        {!health && <small>Health is only observable while the session is running with this worker bound.</small>}
+        {health?.outputMisses !== undefined && (
+          <small>
+            Audio continuity: {health.outputMisses} missing output blocks (includes startup), {health.inputDrops ?? 0}{" "}
+            dropped input blocks. These counts are shared by plugins in the same worker.
+          </small>
+        )}
+      </div>
+      <button type="button" className="secondary" onClick={onUnload} disabled={disabled}>
+        Unload plugin from draft
+      </button>
+      <small>
+        Execution is bound to this exact binary and fingerprint; a changed file requires rescanning and re-adding it
+        from Plugin scan. Unloading removes this node and its connections from the draft only — Plan and Commit changes
+        to save the removal. AudioRouter does not open the plugin's own native editor window in this build — adjust its
+        parameters with the controls below instead.
+      </small>
     </div>
-    <button type="button" className="secondary" onClick={onUnload} disabled={disabled}>Unload plugin from draft</button>
-    <small>Execution is bound to this exact binary and fingerprint; a changed file requires rescanning and re-adding it from Plugin scan. Unloading removes this node and its connections from the draft only — Plan and Commit changes to save the removal. AudioRouter does not open the plugin's own native editor window in this build — adjust its parameters with the controls below instead.</small>
-  </div>;
+  );
 }
 
-function AudioFileNodeEditor({ node, backend, disabled, transportDisabled, sessionRunning, state, sessionId, currentSessionIdRef, recorderNodes, recorderStatuses, onChange, onTransport }: { node: Node; backend: UiBackend; disabled: boolean; transportDisabled: boolean; sessionRunning: boolean; state: "playing" | "paused" | "stopped"; sessionId: string; currentSessionIdRef: { current: string }; recorderNodes: Node[]; recorderStatuses: RecorderStatus[]; onChange: (name: string, value: boolean | number | string) => void; onTransport: (nodeId: string, action: "play" | "pause" | "stop") => void }) {
+function AudioFileNodeEditor({
+  node,
+  backend,
+  disabled,
+  transportDisabled,
+  sessionRunning,
+  state,
+  sessionId,
+  currentSessionIdRef,
+  recorderNodes,
+  recorderStatuses,
+  onChange,
+  onTransport,
+}: {
+  node: Node;
+  backend: UiBackend;
+  disabled: boolean;
+  transportDisabled: boolean;
+  sessionRunning: boolean;
+  state: "playing" | "paused" | "stopped";
+  sessionId: string;
+  currentSessionIdRef: { current: string };
+  recorderNodes: Node[];
+  recorderStatuses: RecorderStatus[];
+  onChange: (name: string, value: boolean | number | string) => void;
+  onTransport: (nodeId: string, action: "play" | "pause" | "stop") => void;
+}) {
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("Choose a WAV or MP3 file. Audio is decoded by the backend and routed through this graph.");
+  const [message, setMessage] = useState(
+    "Choose a WAV or MP3 file. Audio is decoded by the backend and routed through this graph.",
+  );
   const [selectedRecorder, setSelectedRecorder] = useState("");
   const [takeState, setTakeState] = useState<"idle" | "recording" | "importing">("idle");
   const activeTakeId = useRef<string | null>(null);
   const stopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const status = recorderStatuses.find((item) => item.sessionId === sessionId && item.nodeId === selectedRecorder);
   const recorderNode = recorderNodes.find((item) => item.id === selectedRecorder);
-  useEffect(() => { if (!recorderNodes.some((item) => item.id === selectedRecorder)) setSelectedRecorder(recorderNodes[0]?.id ?? ""); }, [recorderNodes, selectedRecorder]);
+  useEffect(() => {
+    if (!recorderNodes.some((item) => item.id === selectedRecorder)) setSelectedRecorder(recorderNodes[0]?.id ?? "");
+  }, [recorderNodes, selectedRecorder]);
   const stopAndImportTake = async () => {
     const recorderId = activeTakeId.current;
     if (!recorderId || !selectedRecorder || busy) return;
@@ -1299,20 +4278,26 @@ function AudioFileNodeEditor({ node, backend, disabled, transportDisabled, sessi
         await backend.stopRecorder(sessionId, frame, uiIdempotencyKey("temporary-take-stop"), selectedRecorder);
       }
       const recordings = await backend.listRecordings(sessionId);
-      const recording = [...recordings].reverse().find((item) => item.recorderId === recorderId && item.state === "completed");
+      const recording = [...recordings]
+        .reverse()
+        .find((item) => item.recorderId === recorderId && item.state === "completed");
       if (!recording) throw new Error("The temporary WAV take did not finalize. Check Recorder status and try again.");
       const media = await backend.importTemporaryRecording(recording.id);
       if (currentSessionIdRef.current === sessionId) {
         onChange("mediaId", media.mediaId);
         onChange("fileName", media.fileName);
       }
-      setMessage(`Temporary take ready Â· ${Math.round(media.durationMs / 1000)} sec Â· expires in 24 hours. Plan and commit this source before playback.`);
+      setMessage(
+        `Temporary take ready Â· ${Math.round(media.durationMs / 1000)} sec Â· expires in 24 hours. Plan and commit this source before playback.`,
+      );
       activeTakeId.current = null;
       setTakeState("idle");
     } catch (error) {
       setMessage(formatUiError(error, "Temporary recording could not be imported."));
       setTakeState("idle");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
   const startTemporaryTake = async () => {
     if (!selectedRecorder || busy || !backend.connected || !sessionRunning) return;
@@ -1321,34 +4306,160 @@ function AudioFileNodeEditor({ node, backend, disabled, transportDisabled, sessi
     setMessage("Creating and arming a temporary WAV recorder on the selected graph branch...");
     try {
       const channels = recorderNode?.ports.find((port) => port.direction === "input")?.channels ?? 2;
-      await backend.createRecorder({ sessionId, nodeId: selectedRecorder, recorderId, format: "wavPcm16", sequence: Date.now(), channels, sampleRate: 48000, dither: false, queueCapacity: 8, maximumChunksPerPass: 1, idempotencyKey: uiIdempotencyKey("temporary-take-create") });
+      await backend.createRecorder({
+        sessionId,
+        nodeId: selectedRecorder,
+        recorderId,
+        format: "wavPcm16",
+        sequence: Date.now(),
+        channels,
+        sampleRate: 48000,
+        dither: false,
+        queueCapacity: 8,
+        maximumChunksPerPass: 1,
+        idempotencyKey: uiIdempotencyKey("temporary-take-create"),
+      });
       await backend.armRecorder(sessionId, uiIdempotencyKey("temporary-take-arm"), selectedRecorder);
       const frame = status?.lastFrame ?? 0;
       await backend.startRecorder(sessionId, frame, uiIdempotencyKey("temporary-take-start"), selectedRecorder);
       activeTakeId.current = recorderId;
       setTakeState("recording");
-      setMessage("Recording from the selected, already-routed Recorder node. The take stops automatically at 120 seconds.");
-      stopTimer.current = setTimeout(() => { void stopAndImportTake(); }, 120_000);
+      setMessage(
+        "Recording from the selected, already-routed Recorder node. The take stops automatically at 120 seconds.",
+      );
+      stopTimer.current = setTimeout(() => {
+        void stopAndImportTake();
+      }, 120_000);
     } catch (error) {
       setMessage(formatUiError(error, "Temporary recording could not start."));
       setTakeState("idle");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
   const importFile = async (file?: File) => {
     if (!file) return;
     const problem = audioUploadProblem(file);
-    if (problem) { setMessage(problem); return; }
+    if (problem) {
+      setMessage(problem);
+      return;
+    }
     setBusy(true);
     try {
       const media = await uploadAudioMedia(backend, file);
       if (currentSessionIdRef.current !== sessionId) return;
       onChange("mediaId", media.mediaId);
       onChange("fileName", media.fileName);
-      setMessage(`${media.fileName} · ${Math.round(media.durationMs / 1000)} sec · ${media.channels} channel${media.channels === 1 ? "" : "s"}. Plan and commit this source before playback.`);
-    } catch (error) { setMessage(formatUiError(error, "Audio import failed.")); }
-    finally { setBusy(false); }
+      setMessage(
+        `${media.fileName} · ${Math.round(media.durationMs / 1000)} sec · ${media.channels} channel${media.channels === 1 ? "" : "s"}. Plan and commit this source before playback.`,
+      );
+    } catch (error) {
+      setMessage(formatUiError(error, "Audio import failed."));
+    } finally {
+      setBusy(false);
+    }
   };
-  return <div className="node-binding-editor audio-file-editor" aria-label="Audio file source settings"><div><p className="eyebrow">Audio source</p><strong>{String(node.parameters.fileName ?? "No file selected")}</strong></div><label>Choose WAV or MP3<input type="file" accept="audio/wav,audio/mpeg,.wav,.mp3" disabled={disabled || busy || takeState === "recording"} onChange={(event) => { void importFile(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label><section className="temporary-take" aria-label="Temporary voice take"><p className="eyebrow">Temporary voice take</p><label>Already-routed Recorder node<select aria-label="Recorder node for temporary take" value={selectedRecorder} disabled={!backend.connected || busy || takeState === "recording" || recorderNodes.length === 0} onChange={(event) => setSelectedRecorder(event.target.value)}><option value="">Choose an enabled Recorder node</option>{recorderNodes.map((item) => <option key={item.id} value={item.id}>{item.name || item.id}</option>)}</select></label>{takeState === "recording" ? <button type="button" className="secondary" disabled={busy} onClick={() => void stopAndImportTake()}>Stop and use take</button> : <button type="button" className="secondary" disabled={!backend.connected || !sessionRunning || busy || !selectedRecorder} onClick={() => void startTemporaryTake()}>{takeState === "importing" ? "Importing take…" : "Record temporary take"}</button>}<small>Connect an existing physical-input or application source through this Recorder node first. Start the prepared session, then record here. Takes stop at 120 seconds and imported samples expire after 24 hours. This control does not select or open a microphone.</small></section><div className="audio-file-inspector-transport" aria-label="Audio file playback controls"><button type="button" className="secondary" disabled={transportDisabled || !node.parameters.mediaId || state === "playing"} onClick={() => onTransport(node.id, "play")}>Play</button><button type="button" className="secondary" disabled={transportDisabled || !node.parameters.mediaId || state !== "playing"} onClick={() => onTransport(node.id, "pause")}>Pause</button><button type="button" className="secondary" disabled={transportDisabled || !node.parameters.mediaId || state === "stopped"} onClick={() => onTransport(node.id, "stop")}>Stop</button><span className="audio-file-node-state" role="status">{state}</span></div><label>Loop<input type="checkbox" checked={node.parameters.loop === true} disabled={disabled || busy} onChange={(event) => onChange("loop", event.target.checked)} /></label><PanelMessage message={message} /><small>Maximum imported file size is 64 MiB and duration 120 seconds. Playback uses this source in the current route preview and the exact prepared native output route.</small></div>;
+  return (
+    <div className="node-binding-editor audio-file-editor" aria-label="Audio file source settings">
+      <div>
+        <p className="eyebrow">Audio source</p>
+        <strong>{String(node.parameters.fileName ?? "No file selected")}</strong>
+      </div>
+      <label>
+        Choose WAV or MP3
+        <input
+          type="file"
+          accept="audio/wav,audio/mpeg,.wav,.mp3"
+          disabled={disabled || busy || takeState === "recording"}
+          onChange={(event) => {
+            void importFile(event.target.files?.[0]);
+            event.currentTarget.value = "";
+          }}
+        />
+      </label>
+      <section className="temporary-take" aria-label="Temporary voice take">
+        <p className="eyebrow">Temporary voice take</p>
+        <label>
+          Already-routed Recorder node
+          <select
+            aria-label="Recorder node for temporary take"
+            value={selectedRecorder}
+            disabled={!backend.connected || busy || takeState === "recording" || recorderNodes.length === 0}
+            onChange={(event) => setSelectedRecorder(event.target.value)}
+          >
+            <option value="">Choose an enabled Recorder node</option>
+            {recorderNodes.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name || item.id}
+              </option>
+            ))}
+          </select>
+        </label>
+        {takeState === "recording" ? (
+          <button type="button" className="secondary" disabled={busy} onClick={() => void stopAndImportTake()}>
+            Stop and use take
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="secondary"
+            disabled={!backend.connected || !sessionRunning || busy || !selectedRecorder}
+            onClick={() => void startTemporaryTake()}
+          >
+            {takeState === "importing" ? "Importing take…" : "Record temporary take"}
+          </button>
+        )}
+        <small>
+          Connect an existing physical-input or application source through this Recorder node first. Start the prepared
+          session, then record here. Takes stop at 120 seconds and imported samples expire after 24 hours. This control
+          does not select or open a microphone.
+        </small>
+      </section>
+      <div className="audio-file-inspector-transport" aria-label="Audio file playback controls">
+        <button
+          type="button"
+          className="secondary"
+          disabled={transportDisabled || !node.parameters.mediaId || state === "playing"}
+          onClick={() => onTransport(node.id, "play")}
+        >
+          Play
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          disabled={transportDisabled || !node.parameters.mediaId || state !== "playing"}
+          onClick={() => onTransport(node.id, "pause")}
+        >
+          Pause
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          disabled={transportDisabled || !node.parameters.mediaId || state === "stopped"}
+          onClick={() => onTransport(node.id, "stop")}
+        >
+          Stop
+        </button>
+        <span className="audio-file-node-state" role="status">
+          {state}
+        </span>
+      </div>
+      <label>
+        Loop
+        <input
+          type="checkbox"
+          checked={node.parameters.loop === true}
+          disabled={disabled || busy}
+          onChange={(event) => onChange("loop", event.target.checked)}
+        />
+      </label>
+      <PanelMessage message={message} />
+      <small>
+        Maximum imported file size is 64 MiB and duration 120 seconds. Playback uses this source in the current route
+        preview and the exact prepared native output route.
+      </small>
+    </div>
+  );
 }
 
 function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) {
@@ -1360,7 +4471,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   currentSessionIdRef.current = selectedSessionId;
   const [selectedNodeId, setSelectedNodeId] = useState(demoSession.nodes[0].id);
   const [selectedNodeIds, setSelectedNodeIdsState] = useState<string[]>([demoSession.nodes[0].id]);
-  const setSelectedNodeIds = (ids: string[]) => { setSelectedNodeIdsState((current) => current.length === ids.length && current.every((id, index) => id === ids[index]) ? current : ids); };
+  const setSelectedNodeIds = (ids: string[]) => {
+    setSelectedNodeIdsState((current) =>
+      current.length === ids.length && current.every((id, index) => id === ids[index]) ? current : ids,
+    );
+  };
   const [draft, setDraft] = useState(demoSession);
   const draftRef = useRef(draft);
   draftRef.current = draft;
@@ -1375,8 +4490,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [recorderStatusAvailable, setRecorderStatusAvailable] = useState(!backend.connected);
   const [applications, setApplications] = useState<ApplicationRow[]>([]);
   const [devices, setDevices] = useState<DeviceListItem[]>([]);
-  const [captureEndpointId, setCaptureEndpointId] = useState(() => readEndpointBindingHint(demoSession.id).captureEndpointId ?? "");
-  const [renderEndpointId, setRenderEndpointId] = useState(() => readEndpointBindingHint(demoSession.id).renderEndpointId ?? "");
+  const [captureEndpointId, setCaptureEndpointId] = useState(
+    () => readEndpointBindingHint(demoSession.id).captureEndpointId ?? "",
+  );
+  const [renderEndpointId, setRenderEndpointId] = useState(
+    () => readEndpointBindingHint(demoSession.id).renderEndpointId ?? "",
+  );
   const [devicesError, setDevicesError] = useState<string | null>(null);
   const [applicationsError, setApplicationsError] = useState<string | null>(null);
   const [recordingsError, setRecordingsError] = useState<string | null>(null);
@@ -1410,11 +4529,23 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [pluginParameterError, setPluginParameterError] = useState<string | null>(null);
   const [presets, setPresets] = useState<import("@audiorouter/contracts").DiscoveryDocument["presets"] | null>(null);
   const [presetError, setPresetError] = useState<string | null>(null);
-  const [theme, setTheme] = useState<ThemeMode>(() => readTheme(typeof window === "undefined" ? null : window.localStorage));
-  const [flowAnimation, setFlowAnimation] = useState<FlowAnimationMode>(() => readFlowAnimation(typeof window === "undefined" ? null : window.localStorage));
-  const changeFlowAnimation = (mode: FlowAnimationMode) => { setFlowAnimation(mode); writeFlowAnimation(typeof window === "undefined" ? null : window.localStorage, mode); };
-  const [sidebarWidth, setSidebarWidth] = useState(() => readSidebarWidth(typeof window === "undefined" ? null : window.localStorage));
-  const changeSidebarWidth = (width: number) => { setSidebarWidth(width); writeSidebarWidth(typeof window === "undefined" ? null : window.localStorage, width); };
+  const [theme, setTheme] = useState<ThemeMode>(() =>
+    readTheme(typeof window === "undefined" ? null : window.localStorage),
+  );
+  const [flowAnimation, setFlowAnimation] = useState<FlowAnimationMode>(() =>
+    readFlowAnimation(typeof window === "undefined" ? null : window.localStorage),
+  );
+  const changeFlowAnimation = (mode: FlowAnimationMode) => {
+    setFlowAnimation(mode);
+    writeFlowAnimation(typeof window === "undefined" ? null : window.localStorage, mode);
+  };
+  const [sidebarWidth, setSidebarWidth] = useState(() =>
+    readSidebarWidth(typeof window === "undefined" ? null : window.localStorage),
+  );
+  const changeSidebarWidth = (width: number) => {
+    setSidebarWidth(width);
+    writeSidebarWidth(typeof window === "undefined" ? null : window.localStorage, width);
+  };
   const groupState = useCanvasGroups(selectedSessionId);
   const selectedGroup = groupState.groups.find((group) => group.id === groupState.selectedGroupId);
   const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>("tools");
@@ -1432,11 +4563,20 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [mcpActivity, setMcpActivity] = useState<McpActivity[]>([]);
   const [mcpSetupInfo, setMcpSetupInfo] = useState<McpSetupInfo | null>(null);
   const [backendActivity, setBackendActivity] = useState<Record<string, unknown>[]>([]);
-  const [shortcuts, setShortcuts] = useState<ShortcutBinding>(() => readShortcuts(typeof window === "undefined" ? null : window.localStorage, defaultShortcutBinding));
+  const [shortcuts, setShortcuts] = useState<ShortcutBinding>(() =>
+    readShortcuts(typeof window === "undefined" ? null : window.localStorage, defaultShortcutBinding),
+  );
   const [shortcutMessage, setShortcutMessage] = useState<string | null>(null);
   const [connectionSource, setConnectionSource] = useState("");
   const [connectionDestination, setConnectionDestination] = useState("");
-  const [connectionReplacement, setConnectionReplacement] = useState<{ sessionId: string; edgeId: string; sourceNode: string; sourcePort: string; destinationNode: string; destinationPort: string } | null>(null);
+  const [connectionReplacement, setConnectionReplacement] = useState<{
+    sessionId: string;
+    edgeId: string;
+    sourceNode: string;
+    sourcePort: string;
+    destinationNode: string;
+    destinationPort: string;
+  } | null>(null);
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
   const connectionDialogReturnFocus = useRef<HTMLElement | null>(null);
   const connectionDialog = useRef<HTMLElement | null>(null);
@@ -1450,7 +4590,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const applicationPickerReturnFocus = useRef<HTMLElement | null>(null);
   const applicationPickerDialog = useRef<HTMLElement | null>(null);
   const [createdSessions, setCreatedSessions] = useState<import("@audiorouter/contracts").Session[]>([]);
-  const [listedSessions, setListedSessions] = useState<import("@audiorouter/contracts").Session[]>(backend.connected ? [] : demoSessions);
+  const [listedSessions, setListedSessions] = useState<import("@audiorouter/contracts").Session[]>(
+    backend.connected ? [] : demoSessions,
+  );
   const [sessionInventoryError, setSessionInventoryError] = useState<string | null>(null);
   const [nativeGenerations, setNativeGenerations] = useState<Record<string, { generation: number; kind: string }>>({});
   const [nativePumpStats, setNativePumpStats] = useState<NativePumpStats | null>(null);
@@ -1460,23 +4602,94 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const sessionRefreshGeneration = useRef(0);
   const recordingRefreshGeneration = useRef(0);
   const recorderRefreshGeneration = useRef(0);
-  useEffect(() => { let mounted = true; void snapshotCache.refresh(backend).then((nextState) => { if (mounted) { setSnapshotState(nextState); if (nextState.snapshot && !rememberedSessionId) setSelectedSessionId((current) => current === demoSession.id ? nextState.snapshot!.session.id : current); if (nextState.snapshot) eventCursor.current = { backendEpoch: nextState.snapshot.status.eventCursor.backendEpoch, sequence: nextState.snapshot.status.eventCursor.latestSequence }; } }); return () => { mounted = false; }; }, [backend, snapshotCache, rememberedSessionId]);
+  useEffect(() => {
+    let mounted = true;
+    void snapshotCache.refresh(backend).then((nextState) => {
+      if (mounted) {
+        setSnapshotState(nextState);
+        if (nextState.snapshot && !rememberedSessionId)
+          setSelectedSessionId((current) => (current === demoSession.id ? nextState.snapshot!.session.id : current));
+        if (nextState.snapshot)
+          eventCursor.current = {
+            backendEpoch: nextState.snapshot.status.eventCursor.backendEpoch,
+            sequence: nextState.snapshot.status.eventCursor.latestSequence,
+          };
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [backend, snapshotCache, rememberedSessionId]);
   const refreshApplications = () => {
     const generation = ++applicationRefreshGeneration.current;
-    void backend.listApplications().then((items) => { if (generation !== applicationRefreshGeneration.current) return; setApplications(items); setApplicationsError(null); }).catch((error) => { if (generation !== applicationRefreshGeneration.current) return; setApplications([]); setApplicationsError(formatUiError(error, "Application inventory unavailable")); });
+    void backend
+      .listApplications()
+      .then((items) => {
+        if (generation !== applicationRefreshGeneration.current) return;
+        setApplications(items);
+        setApplicationsError(null);
+      })
+      .catch((error) => {
+        if (generation !== applicationRefreshGeneration.current) return;
+        setApplications([]);
+        setApplicationsError(formatUiError(error, "Application inventory unavailable"));
+      });
   };
   const refreshDevices = ({ announce = true }: { announce?: boolean } = {}) => {
     const generation = ++deviceRefreshGeneration.current;
     if (announce) setActionMessage("Refreshing audio endpoints...");
-    void backend.listDevices().then((items) => { if (generation !== deviceRefreshGeneration.current) return; setDevices(items); setDevicesError(null); if (announce) setActionMessage(items.length === 0 ? "Audio endpoint refresh completed: the backend returned no endpoints." : `Audio endpoint refresh completed: ${items.length} endpoint${items.length === 1 ? "" : "s"} found.`); }).catch((error) => { if (generation !== deviceRefreshGeneration.current) return; setDevices([]); const message = formatUiError(error, "Device inventory unavailable"); setDevicesError(message); if (announce) setActionMessage(`Audio endpoint refresh failed: ${message}`); });
+    void backend
+      .listDevices()
+      .then((items) => {
+        if (generation !== deviceRefreshGeneration.current) return;
+        setDevices(items);
+        setDevicesError(null);
+        if (announce)
+          setActionMessage(
+            items.length === 0
+              ? "Audio endpoint refresh completed: the backend returned no endpoints."
+              : `Audio endpoint refresh completed: ${items.length} endpoint${items.length === 1 ? "" : "s"} found.`,
+          );
+      })
+      .catch((error) => {
+        if (generation !== deviceRefreshGeneration.current) return;
+        setDevices([]);
+        const message = formatUiError(error, "Device inventory unavailable");
+        setDevicesError(message);
+        if (announce) setActionMessage(`Audio endpoint refresh failed: ${message}`);
+      });
   };
   const refreshSessions = () => {
     const generation = ++sessionRefreshGeneration.current;
-    return backend.listSessions().then((items) => { if (generation !== sessionRefreshGeneration.current) return; setListedSessions(items); setSessionInventoryError(null); setSelectedSessionId((current) => items.some((item) => item.id === current) ? current : items[0]?.id ?? current); }).catch((error) => { if (generation !== sessionRefreshGeneration.current) return; setSessionInventoryError(formatUiError(error, "Session inventory unavailable")); });
+    return backend
+      .listSessions()
+      .then((items) => {
+        if (generation !== sessionRefreshGeneration.current) return;
+        setListedSessions(items);
+        setSessionInventoryError(null);
+        setSelectedSessionId((current) =>
+          items.some((item) => item.id === current) ? current : (items[0]?.id ?? current),
+        );
+      })
+      .catch((error) => {
+        if (generation !== sessionRefreshGeneration.current) return;
+        setSessionInventoryError(formatUiError(error, "Session inventory unavailable"));
+      });
   };
   const refreshRecordings = (sessionId: string) => {
     const generation = ++recordingRefreshGeneration.current;
-    void backend.listRecordings(sessionId).then((items) => { if (generation !== recordingRefreshGeneration.current) return; setRecordings(items); setRecordingsError(null); }).catch((error) => { if (generation !== recordingRefreshGeneration.current) return; setRecordings([]); setRecordingsError(formatUiError(error, "Recording library unavailable")); });
+    void backend
+      .listRecordings(sessionId)
+      .then((items) => {
+        if (generation !== recordingRefreshGeneration.current) return;
+        setRecordings(items);
+        setRecordingsError(null);
+      })
+      .catch((error) => {
+        if (generation !== recordingRefreshGeneration.current) return;
+        setRecordings([]);
+        setRecordingsError(formatUiError(error, "Recording library unavailable"));
+      });
   };
   // One-click Record / Stop for a Recorder node (canvas button and Properties).
   const [recordingBusy, setRecordingBusy] = useState<string | null>(null);
@@ -1512,7 +4725,18 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   const refreshRecorders = () => {
     const generation = ++recorderRefreshGeneration.current;
-    void backend.listRecorders().then((items) => { if (generation !== recorderRefreshGeneration.current) return; setRecorderStatuses(items); setRecorderStatusAvailable(true); }).catch(() => { if (generation !== recorderRefreshGeneration.current) return; setRecorderStatuses([]); setRecorderStatusAvailable(false); });
+    void backend
+      .listRecorders()
+      .then((items) => {
+        if (generation !== recorderRefreshGeneration.current) return;
+        setRecorderStatuses(items);
+        setRecorderStatusAvailable(true);
+      })
+      .catch(() => {
+        if (generation !== recorderRefreshGeneration.current) return;
+        setRecorderStatuses([]);
+        setRecorderStatusAvailable(false);
+      });
   };
   const refresh = async () => {
     const requestedSessionId = session.id;
@@ -1535,7 +4759,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     uiDiagnosticsRef.current = next;
     setUiDiagnostics(next);
   };
-  useEffect(() => { writeTheme(typeof window === "undefined" ? null : window.localStorage, theme); }, [theme]);
+  useEffect(() => {
+    writeTheme(typeof window === "undefined" ? null : window.localStorage, theme);
+  }, [theme]);
   useEffect(() => {
     const onError = (event: ErrorEvent) => {
       const rawName = event.error instanceof Error ? event.error.name : "unknown";
@@ -1550,37 +4776,93 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const reasonType = /^[A-Za-z][A-Za-z0-9_.-]{0,47}$/.test(rawType) ? rawType : "Error";
       recordUiDiagnostic(`Unhandled promise rejection (${reasonType})`);
     };
-    window.addEventListener("error", onError); window.addEventListener("unhandledrejection", onReject);
-    return () => { window.removeEventListener("error", onError); window.removeEventListener("unhandledrejection", onReject); };
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onReject);
+    return () => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onReject);
+    };
   }, []);
   // The Logs tab's verbose switch; stable per backend so the panel reads it once.
-  const verboseLogging = useMemo(() => backend.getVerboseDiagnostics && backend.setVerboseDiagnostics
-    ? { get: () => backend.getVerboseDiagnostics!(), set: (enabled: boolean) => backend.setVerboseDiagnostics!(enabled) }
-    : undefined, [backend]);
+  const verboseLogging = useMemo(
+    () =>
+      backend.getVerboseDiagnostics && backend.setVerboseDiagnostics
+        ? {
+            get: () => backend.getVerboseDiagnostics!(),
+            set: (enabled: boolean) => backend.setVerboseDiagnostics!(enabled),
+          }
+        : undefined,
+    [backend],
+  );
   // Failed backend requests, with the correlation ID that finds them in shell.jsonl and backend.jsonl (P2-3).
   useEffect(() => onRpcFailure(recordUiDiagnostic), []);
   useEffect(() => {
     if ((workbenchTab !== "mcp" && workbenchTab !== "diagnostics") || !window.__TAURI_INTERNALS__?.invoke) return;
     let active = true;
-    void window.__TAURI_INTERNALS__.invoke("mcp_setup_info").then((info) => { if (active) setMcpSetupInfo(info as McpSetupInfo); }).catch(() => { if (active) setMcpSetupInfo(null); });
-    void window.__TAURI_INTERNALS__.invoke("backend_diagnostics_list").then((items) => { if (active && Array.isArray(items)) setBackendActivity(items as Record<string, unknown>[]); }).catch(() => { if (active) setBackendActivity([]); });
-    const refreshActivity = () => { void window.__TAURI_INTERNALS__?.invoke?.("mcp_activity_list").then((items) => { if (active && Array.isArray(items)) setMcpActivity(items as McpActivity[]); }).catch((error: unknown) => { if (active) { const type = error instanceof Error ? error.name.slice(0, 48) : typeof error; recordUiDiagnostic(`MCP activity read failed (${type})`); } }); void window.__TAURI_INTERNALS__?.invoke?.("backend_diagnostics_list").then((items) => { if (active && Array.isArray(items)) setBackendActivity(items as Record<string, unknown>[]); }).catch(() => undefined); };
-    refreshActivity(); const timer = window.setInterval(refreshActivity, 2000);
-    return () => { active = false; window.clearInterval(timer); };
+    void window.__TAURI_INTERNALS__
+      .invoke("mcp_setup_info")
+      .then((info) => {
+        if (active) setMcpSetupInfo(info as McpSetupInfo);
+      })
+      .catch(() => {
+        if (active) setMcpSetupInfo(null);
+      });
+    void window.__TAURI_INTERNALS__
+      .invoke("backend_diagnostics_list")
+      .then((items) => {
+        if (active && Array.isArray(items)) setBackendActivity(items as Record<string, unknown>[]);
+      })
+      .catch(() => {
+        if (active) setBackendActivity([]);
+      });
+    const refreshActivity = () => {
+      void window.__TAURI_INTERNALS__
+        ?.invoke?.("mcp_activity_list")
+        .then((items) => {
+          if (active && Array.isArray(items)) setMcpActivity(items as McpActivity[]);
+        })
+        .catch((error: unknown) => {
+          if (active) {
+            const type = error instanceof Error ? error.name.slice(0, 48) : typeof error;
+            recordUiDiagnostic(`MCP activity read failed (${type})`);
+          }
+        });
+      void window.__TAURI_INTERNALS__
+        ?.invoke?.("backend_diagnostics_list")
+        .then((items) => {
+          if (active && Array.isArray(items)) setBackendActivity(items as Record<string, unknown>[]);
+        })
+        .catch(() => undefined);
+    };
+    refreshActivity();
+    const timer = window.setInterval(refreshActivity, 2000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
   }, [workbenchTab]);
-  useEffect(() => { writeShortcuts(typeof window === "undefined" ? null : window.localStorage, shortcuts); }, [shortcuts]);
+  useEffect(() => {
+    writeShortcuts(typeof window === "undefined" ? null : window.localStorage, shortcuts);
+  }, [shortcuts]);
   // Follow the backend's mute state when it changes. Diagnostics refresh
   // every 50 ms while playing and carry the current value; `status` is only
   // refreshed on a full snapshot, so reacting to every new snapshot object
   // reverted a live toggle to the stale status value.
-  const backendPrivacyMuted = snapshot ? snapshot.diagnostics?.privacyMute?.muted ?? snapshot.status.privacyMute.muted : undefined;
-  useEffect(() => { if (backendPrivacyMuted !== undefined) setPrivacyMuted(backendPrivacyMuted); }, [backendPrivacyMuted]);
+  const backendPrivacyMuted = snapshot
+    ? (snapshot.diagnostics?.privacyMute?.muted ?? snapshot.status.privacyMute.muted)
+    : undefined;
+  useEffect(() => {
+    if (backendPrivacyMuted !== undefined) setPrivacyMuted(backendPrivacyMuted);
+  }, [backendPrivacyMuted]);
   const availableSessions = mergeSessionInventory(listedSessions, snapshot?.session ?? null, createdSessions);
-  const session = availableSessions.find((item) => item.id === selectedSessionId) ?? availableSessions[0] ?? demoSession;
+  const session =
+    availableSessions.find((item) => item.id === selectedSessionId) ?? availableSessions[0] ?? demoSession;
   const sessionIsAvailable = availableSessions.some((item) => item.id === session.id);
   useEffect(() => {
     if (!backend.connected || !backend.setActiveSession || !sessionIsAvailable) return;
-    void backend.setActiveSession(session.id).catch((error) => setSessionInventoryError(formatUiError(error, "Active session selection unavailable")));
+    void backend
+      .setActiveSession(session.id)
+      .catch((error) => setSessionInventoryError(formatUiError(error, "Active session selection unavailable")));
   }, [backend, session.id, sessionIsAvailable]);
   useEffect(() => {
     if (availableSessions.some((item) => item.id === selectedSessionId)) {
@@ -1589,115 +4871,295 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   }, [selectedSessionId, listedSessions, snapshot?.session, createdSessions]);
   currentSessionIdRef.current = session.id;
   const selectedNode = draft.nodes.find((node) => node.id === selectedNodeId) ?? draft.nodes[0];
-  useEffect(() => { recordUiDiagnostic(`Graph checkpoint: ${draft.nodes.length} nodes, ${draft.edges.length} connections; revision ${session.revision}`); }, [draft.nodes.length, draft.edges.length, session.revision]);
+  useEffect(() => {
+    recordUiDiagnostic(
+      `Graph checkpoint: ${draft.nodes.length} nodes, ${draft.edges.length} connections; revision ${session.revision}`,
+    );
+  }, [draft.nodes.length, draft.edges.length, session.revision]);
   const sessionRunning = snapshot?.status.activeSessionIds.includes(session.id) ?? false;
   const routeChanged = !sameSessionDraft(draft, session);
   // Lets the shell free the WebView on close only when nothing would be lost.
   useReportUnsaved(routeChanged);
-  useEffect(() => { setAudioSourceStates({}); }, [session.id]);
-  useEffect(() => { if (selectedNode?.kind === "applicationCapture" && backend.connected) refreshApplications(); }, [selectedNode?.id, selectedNode?.kind, backend.connected]);
   useEffect(() => {
-    const playingNodes = draft.nodes.filter((node) => (node.kind === "audioFile" || node.kind === "testSignal") && audioSourceStates[node.id] === "playing").slice(0, 16);
-    if (!sessionRunning) { if (Object.keys(audioSourceStates).length > 0) setAudioSourceStates({}); return; }
+    setAudioSourceStates({});
+  }, [session.id]);
+  useEffect(() => {
+    if (selectedNode?.kind === "applicationCapture" && backend.connected) refreshApplications();
+  }, [selectedNode?.id, selectedNode?.kind, backend.connected]);
+  useEffect(() => {
+    const playingNodes = draft.nodes
+      .filter(
+        (node) => (node.kind === "audioFile" || node.kind === "testSignal") && audioSourceStates[node.id] === "playing",
+      )
+      .slice(0, 16);
+    if (!sessionRunning) {
+      if (Object.keys(audioSourceStates).length > 0) setAudioSourceStates({});
+      return;
+    }
     if (!backend.connected || playingNodes.length === 0) return;
     let polling = false;
     let statusFailing = false;
     const timer = window.setInterval(() => {
       if (polling) return;
       polling = true;
-      void Promise.all(playingNodes.map(async (node) => [node.id, await backend.transportAudioSource(session.id, node.id, "status")] as const))
-        .then((states) => setAudioSourceStates((current) => {
-          let changed = false;
-          const next = { ...current };
-          for (const [nodeId, result] of states) if (next[nodeId] !== result.state) { next[nodeId] = result.state; changed = true; }
-          return changed ? next : current;
-        }))
-        .then(() => { statusFailing = false; })
+      void Promise.all(
+        playingNodes.map(
+          async (node) => [node.id, await backend.transportAudioSource(session.id, node.id, "status")] as const,
+        ),
+      )
+        .then((states) =>
+          setAudioSourceStates((current) => {
+            let changed = false;
+            const next = { ...current };
+            for (const [nodeId, result] of states)
+              if (next[nodeId] !== result.state) {
+                next[nodeId] = result.state;
+                changed = true;
+              }
+            return changed ? next : current;
+          }),
+        )
+        .then(() => {
+          statusFailing = false;
+        })
         .catch((error: unknown) => {
           // Keep the last states shown; note the first failure of a run.
           if (!statusFailing) recordUiDiagnostic(`Audio file status unavailable (${safeErrorName(error)})`);
           statusFailing = true;
         })
-        .finally(() => { polling = false; });
+        .finally(() => {
+          polling = false;
+        });
     }, 750);
     return () => window.clearInterval(timer);
   }, [backend, draft.nodes, session.id, sessionRunning, audioSourceStates]);
-  const testSignalPlaybackReady = backend.connected
-    && sameSessionDraft(draft, session);
-  const testSignalEndpointPrepared = snapshot?.diagnostics.nativeSessionId === session.id
-    && snapshot.diagnostics.nativeAdapter === "configured-stopped"
-    && snapshot.diagnostics.nativeAdapterKind === "endpoint";
-  useEffect(() => { const hint = readEndpointBindingHint(session.id); setCaptureEndpointId(hint.captureEndpointId ?? ""); setRenderEndpointId(hint.renderEndpointId ?? ""); }, [session.id]);
+  const testSignalPlaybackReady = backend.connected && sameSessionDraft(draft, session);
+  const testSignalEndpointPrepared =
+    snapshot?.diagnostics.nativeSessionId === session.id &&
+    snapshot.diagnostics.nativeAdapter === "configured-stopped" &&
+    snapshot.diagnostics.nativeAdapterKind === "endpoint";
+  useEffect(() => {
+    const hint = readEndpointBindingHint(session.id);
+    setCaptureEndpointId(hint.captureEndpointId ?? "");
+    setRenderEndpointId(hint.renderEndpointId ?? "");
+  }, [session.id]);
   useEffect(() => {
     if (backend.connected && !snapshot && availableSessions.length === 0) return;
     const previous = authoritativeSession.current;
-    const transition = hasAuthoritativeSession.current ? reconcileSessionDraft(draftRef.current, previous, session) : "adopt";
+    const transition = hasAuthoritativeSession.current
+      ? reconcileSessionDraft(draftRef.current, previous, session)
+      : "adopt";
     hasAuthoritativeSession.current = true;
     if (transition === "unchanged") return;
     authoritativeSession.current = session;
-    setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null); setPendingGraphPlan(null);
+    setPendingWarnings([]);
+    setAcknowledgedWarnings(new Set());
+    setPendingOperation(null);
+    setPendingGraphPlan(null);
     if (transition === "conflict") {
       setDraftHistory({ past: [], future: [] });
-      recordUiDiagnostic(`Graph refresh conflict: kept draft revision ${draftRef.current.revision}; backend revision ${session.revision}`);
-      setActionMessage("This session changed elsewhere. Your draft is preserved. In Session, discard the draft to load the saved graph, or copy your edits before resolving the revision conflict.");
+      recordUiDiagnostic(
+        `Graph refresh conflict: kept draft revision ${draftRef.current.revision}; backend revision ${session.revision}`,
+      );
+      setActionMessage(
+        "This session changed elsewhere. Your draft is preserved. In Session, discard the draft to load the saved graph, or copy your edits before resolving the revision conflict.",
+      );
       return;
     }
-    setDraft(session); setDraftHistory({ past: [], future: [] }); editGroup.current = null;
-    setSelectedNodeId((current) => session.nodes.some((node) => node.id === current) ? current : session.nodes[0]?.id ?? "");
+    setDraft(session);
+    setDraftHistory({ past: [], future: [] });
+    editGroup.current = null;
+    setSelectedNodeId((current) =>
+      session.nodes.some((node) => node.id === current) ? current : (session.nodes[0]?.id ?? ""),
+    );
     setSelectedNodeIdsState((current) => {
       const retained = current.filter((id) => session.nodes.some((node) => node.id === id));
       return retained.length ? retained : session.nodes[0] ? [session.nodes[0].id] : [];
     });
-    setConnectionSource(""); setConnectionDestination("");
+    setConnectionSource("");
+    setConnectionDestination("");
   }, [session]);
   useEffect(() => {
     let active = true;
-    void backend.listPresets().then((items) => { if (active) { setPresets(items); setPresetError(null); } }).catch((error) => { if (active) { setPresets(null); setPresetError(formatUiError(error, "Preset catalog unavailable")); } });
-    return () => { active = false; };
+    void backend
+      .listPresets()
+      .then((items) => {
+        if (active) {
+          setPresets(items);
+          setPresetError(null);
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setPresets(null);
+          setPresetError(formatUiError(error, "Preset catalog unavailable"));
+        }
+      });
+    return () => {
+      active = false;
+    };
   }, [backend]);
   useEffect(() => {
     let active = true;
-    void backend.listProcessors().then((items) => { if (active) { setProcessors(items); setProcessorError(null); } }).catch((error) => { if (active) { setProcessors(null); setProcessorError(formatUiError(error, "Processor catalog unavailable")); } });
-    return () => { active = false; };
+    void backend
+      .listProcessors()
+      .then((items) => {
+        if (active) {
+          setProcessors(items);
+          setProcessorError(null);
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setProcessors(null);
+          setProcessorError(formatUiError(error, "Processor catalog unavailable"));
+        }
+      });
+    return () => {
+      active = false;
+    };
   }, [backend]);
   useEffect(() => {
-    if (selectedNode?.kind !== "plugin" || !backend.connected) { setPluginParameters(null); setPluginParameterError(null); return; }
+    if (selectedNode?.kind !== "plugin" || !backend.connected) {
+      setPluginParameters(null);
+      setPluginParameterError(null);
+      return;
+    }
     const path = selectedNode.parameters.path;
     const fingerprint = selectedNode.parameters.fingerprint;
-    if (typeof path !== "string" || typeof fingerprint !== "string") { setPluginParameters(null); setPluginParameterError("The plugin placeholder is missing its verified path or fingerprint."); return; }
+    if (typeof path !== "string" || typeof fingerprint !== "string") {
+      setPluginParameters(null);
+      setPluginParameterError("The plugin placeholder is missing its verified path or fingerprint.");
+      return;
+    }
     let active = true;
-    setPluginParameters(null); setPluginParameterError(null);
-    void backend.describePluginParameters(path).then((result) => {
-      if (!active) return;
-      if (result.sha256 !== fingerprint) { setPluginParameterError("Plugin identity changed; scan it again before editing parameters."); return; }
-      setPluginParameters(result);
-    }).catch((error) => { if (active) setPluginParameterError(formatUiError(error, "Plugin parameters unavailable.")); });
-    return () => { active = false; };
-  }, [backend, selectedNode?.id, selectedNode?.kind, selectedNode?.parameters.path, selectedNode?.parameters.fingerprint]);
+    setPluginParameters(null);
+    setPluginParameterError(null);
+    void backend
+      .describePluginParameters(path)
+      .then((result) => {
+        if (!active) return;
+        if (result.sha256 !== fingerprint) {
+          setPluginParameterError("Plugin identity changed; scan it again before editing parameters.");
+          return;
+        }
+        setPluginParameters(result);
+      })
+      .catch((error) => {
+        if (active) setPluginParameterError(formatUiError(error, "Plugin parameters unavailable."));
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    backend,
+    selectedNode?.id,
+    selectedNode?.kind,
+    selectedNode?.parameters.path,
+    selectedNode?.parameters.fingerprint,
+  ]);
   useEffect(() => {
     let active = true;
-    void backend.listSessions().then((items) => { if (active) { setListedSessions(items); setSessionInventoryError(null); setSelectedSessionId((current) => items.some((item) => item.id === current) ? current : items[0]?.id ?? current); } }).catch((error) => { if (active) { setSessionInventoryError(formatUiError(error, "Session inventory unavailable")); setListedSessions(backend.connected ? [] : demoSessions); } });
-    return () => { active = false; };
+    void backend
+      .listSessions()
+      .then((items) => {
+        if (active) {
+          setListedSessions(items);
+          setSessionInventoryError(null);
+          setSelectedSessionId((current) =>
+            items.some((item) => item.id === current) ? current : (items[0]?.id ?? current),
+          );
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setSessionInventoryError(formatUiError(error, "Session inventory unavailable"));
+          setListedSessions(backend.connected ? [] : demoSessions);
+        }
+      });
+    return () => {
+      active = false;
+    };
   }, [backend]);
   useEffect(() => {
     let active = true;
-    void backend.listRecordings(session.id).then((items) => { if (active) { setRecordings(items); setRecordingsError(null); } }).catch((error) => { if (active) { setRecordings([]); setRecordingsError(formatUiError(error, "Recording library unavailable")); } });
-    return () => { active = false; };
+    void backend
+      .listRecordings(session.id)
+      .then((items) => {
+        if (active) {
+          setRecordings(items);
+          setRecordingsError(null);
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setRecordings([]);
+          setRecordingsError(formatUiError(error, "Recording library unavailable"));
+        }
+      });
+    return () => {
+      active = false;
+    };
   }, [backend, session.id]);
   useEffect(() => {
     let active = true;
-    void backend.listRecorders().then((items) => { if (active) { setRecorderStatuses(items); setRecorderStatusAvailable(true); } }).catch(() => { if (active) { setRecorderStatuses([]); setRecorderStatusAvailable(false); } });
-    return () => { active = false; };
+    void backend
+      .listRecorders()
+      .then((items) => {
+        if (active) {
+          setRecorderStatuses(items);
+          setRecorderStatusAvailable(true);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setRecorderStatuses([]);
+          setRecorderStatusAvailable(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
   }, [backend]);
   useEffect(() => {
     let active = true;
-    void backend.listApplications().then((items) => { if (active) { setApplications(items); setApplicationsError(null); } }).catch((error) => { if (active) { setApplications([]); setApplicationsError(formatUiError(error, "Application inventory unavailable")); } });
-    return () => { active = false; };
+    void backend
+      .listApplications()
+      .then((items) => {
+        if (active) {
+          setApplications(items);
+          setApplicationsError(null);
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setApplications([]);
+          setApplicationsError(formatUiError(error, "Application inventory unavailable"));
+        }
+      });
+    return () => {
+      active = false;
+    };
   }, [backend]);
   useEffect(() => {
     let active = true;
-    void backend.listDevices().then((items) => { if (active) { setDevices(items); setDevicesError(null); } }).catch((error) => { if (active) { setDevices([]); setDevicesError(formatUiError(error, "Device inventory unavailable")); } });
-    return () => { active = false; };
+    void backend
+      .listDevices()
+      .then((items) => {
+        if (active) {
+          setDevices(items);
+          setDevicesError(null);
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setDevices([]);
+          setDevicesError(formatUiError(error, "Device inventory unavailable"));
+        }
+      });
+    return () => {
+      active = false;
+    };
   }, [backend]);
   useEffect(() => {
     if (!backend.connected || !hasSnapshot) return;
@@ -1707,22 +5169,32 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       if (!active || polling) return;
       polling = true;
       try {
-        const result = await backend.subscribe(eventCursor.current.sequence, session.id, eventCursor.current.backendEpoch, [...WORKSPACE_EVENT_CATEGORIES]);
+        const result = await backend.subscribe(
+          eventCursor.current.sequence,
+          session.id,
+          eventCursor.current.backendEpoch,
+          [...WORKSPACE_EVENT_CATEGORIES],
+        );
         if (!active) return;
         const bindingInvalidatedEvent = result.events.find((event) => event.category === "devices.bindingInvalidated");
         const selectionChangedEvent = result.events.find((event) => event.category === "session.selectionChanged");
-        const activeSession = selectionChangedEvent && backend.getActiveSession
-          ? await backend.getActiveSession()
-          : null;
+        const activeSession =
+          selectionChangedEvent && backend.getActiveSession ? await backend.getActiveSession() : null;
         if (activeSession?.sessionId) setSelectedSessionId(activeSession.sessionId);
-        const bridgeEvent = result.events.find((event) => event.category === "virtualBridge.failed" || event.category === "virtualBridge.expired");
+        const bridgeEvent = result.events.find(
+          (event) => event.category === "virtualBridge.failed" || event.category === "virtualBridge.expired",
+        );
         if (bindingInvalidatedEvent) {
-          setActionMessage("Native endpoint binding changed; audio is stopped. Review the exact endpoints and rebind before restarting.");
+          setActionMessage(
+            "Native endpoint binding changed; audio is stopped. Review the exact endpoints and rebind before restarting.",
+          );
         } else if (bridgeEvent) {
           const bus = bridgeEvent.operationId ?? "an affected bus";
-          setActionMessage(bridgeEvent.category === "virtualBridge.expired"
-            ? `Virtual bridge lease expired for ${bus}; the route is silenced until it is deliberately restarted.`
-            : `Virtual bridge failure detected for ${bus}; the route is silenced until it is deliberately recovered.`);
+          setActionMessage(
+            bridgeEvent.category === "virtualBridge.expired"
+              ? `Virtual bridge lease expired for ${bus}; the route is silenced until it is deliberately restarted.`
+              : `Virtual bridge failure detected for ${bus}; the route is silenced until it is deliberately recovered.`,
+          );
         }
         if (result.resyncRequired || result.events.length > 0) {
           const nextState = await snapshotCache.refresh(backend, activeSession?.sessionId ?? session.id);
@@ -1731,22 +5203,51 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             refreshApplications();
             refreshDevices({ announce: false });
             void refreshSessions();
-            void backend.listRecordings(session.id).then((items) => { if (active) { setRecordings(items); setRecordingsError(null); } }).catch((error) => { if (active) setRecordingsError(formatUiError(error, "Recording library unavailable")); });
-            void backend.listRecorders().then((items) => { if (active) { setRecorderStatuses(items); setRecorderStatusAvailable(true); } }).catch(() => { if (active) setRecorderStatusAvailable(false); });
-            if (!nextState.stale) eventCursor.current = { backendEpoch: result.backendEpoch, sequence: result.nextSequence };
+            void backend
+              .listRecordings(session.id)
+              .then((items) => {
+                if (active) {
+                  setRecordings(items);
+                  setRecordingsError(null);
+                }
+              })
+              .catch((error) => {
+                if (active) setRecordingsError(formatUiError(error, "Recording library unavailable"));
+              });
+            void backend
+              .listRecorders()
+              .then((items) => {
+                if (active) {
+                  setRecorderStatuses(items);
+                  setRecorderStatusAvailable(true);
+                }
+              })
+              .catch(() => {
+                if (active) setRecorderStatusAvailable(false);
+              });
+            if (!nextState.stale)
+              eventCursor.current = { backendEpoch: result.backendEpoch, sequence: result.nextSequence };
           }
         } else {
           eventCursor.current = { backendEpoch: result.backendEpoch, sequence: result.nextSequence };
         }
       } catch (error) {
-        if (active) setSnapshotState((current) => ({ ...current, stale: true, error: formatUiError(error, "Event subscription failed") }));
+        if (active)
+          setSnapshotState((current) => ({
+            ...current,
+            stale: true,
+            error: formatUiError(error, "Event subscription failed"),
+          }));
       } finally {
         polling = false;
       }
     };
     void poll();
     const timer = window.setInterval(() => void poll(), 1000);
-    return () => { active = false; window.clearInterval(timer); };
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
   }, [backend, session.id, snapshotCache, hasSnapshot]);
   useEffect(() => {
     if (!backend.connected || !sessionRunning) return;
@@ -1762,8 +5263,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         // Meters alone change between ticks: publish them to the live views
         // only, instead of re-rendering the whole app 20 times a second.
         const basis = diagnosticsRef.current;
-        if (basis && differsOnlyInTelemetry(basis, diagnostics)) telemetryStore.set({ basis, nodeTelemetry: diagnostics.nodeTelemetry });
-        else setSnapshotState((current) => current.snapshot ? { ...current, snapshot: { ...current.snapshot, diagnostics } } : current);
+        if (basis && differsOnlyInTelemetry(basis, diagnostics))
+          telemetryStore.set({ basis, nodeTelemetry: diagnostics.nodeTelemetry });
+        else
+          setSnapshotState((current) =>
+            current.snapshot ? { ...current, snapshot: { ...current.snapshot, diagnostics } } : current,
+          );
         failing = false;
       } catch (error) {
         // Keep the last known diagnostics; the event/snapshot path reports
@@ -1777,14 +5282,19 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     };
     void refreshDiagnostics();
     const timer = window.setInterval(() => void refreshDiagnostics(), DIAGNOSTICS_REFRESH_INTERVAL_MS);
-    return () => { active = false; window.clearInterval(timer); };
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
   }, [backend, sessionRunning, telemetryStore]);
   useEffect(() => {
     const pumpNativeEndpoint = backend.pumpNativeEndpoint;
     const pumpNativeDuplex = backend.pumpNativeDuplex;
     const pumpNativeRenderSource = backend.pumpNativeRenderSource;
     const pumpNativeMultiInputs = backend.pumpNativeMultiInputs;
-    const activeRoutes = Object.entries(nativeGenerations).filter(([sessionId]) => snapshot?.status.activeSessionIds.includes(sessionId));
+    const activeRoutes = Object.entries(nativeGenerations).filter(([sessionId]) =>
+      snapshot?.status.activeSessionIds.includes(sessionId),
+    );
     if (!backend.connected || activeRoutes.length === 0 || !pumpNativeEndpoint) return;
     let active = true;
     let pumping = false;
@@ -1800,15 +5310,22 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           // Each independently prepared endpoint route has its own scheduler
           // and graph. Service every running route even when another session
           // is selected in the sidebar.
-          const pumpKind = selectNativePump(route.kind, Boolean(pumpNativeEndpoint), Boolean(pumpNativeDuplex), Boolean(pumpNativeRenderSource), Boolean(pumpNativeMultiInputs));
+          const pumpKind = selectNativePump(
+            route.kind,
+            Boolean(pumpNativeEndpoint),
+            Boolean(pumpNativeDuplex),
+            Boolean(pumpNativeRenderSource),
+            Boolean(pumpNativeMultiInputs),
+          );
           if (!pumpKind) continue;
-          const result = pumpKind === "multiInput"
-            ? await pumpNativeMultiInputs!(sessionId, route.generation, 64)
-            : pumpKind === "duplex"
-              ? await pumpNativeDuplex!(sessionId, route.generation, 64, 64)
-              : pumpKind === "renderSource"
-                ? await pumpNativeRenderSource!(sessionId, route.generation, 64)
-                : await pumpNativeEndpoint!(sessionId, route.generation, 64);
+          const result =
+            pumpKind === "multiInput"
+              ? await pumpNativeMultiInputs!(sessionId, route.generation, 64)
+              : pumpKind === "duplex"
+                ? await pumpNativeDuplex!(sessionId, route.generation, 64, 64)
+                : pumpKind === "renderSource"
+                  ? await pumpNativeRenderSource!(sessionId, route.generation, 64)
+                  : await pumpNativeEndpoint!(sessionId, route.generation, 64);
           if (sessionId === session.id) setNativePumpStats(result);
         }
         failing = false;
@@ -1818,16 +5335,32 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         // endpoints here. Record the first failure of a run, not every tick.
         if (!failing) recordUiDiagnostic(`Native route counters unavailable (${safeErrorName(error)})`);
         failing = true;
-      } finally { pumping = false; }
+      } finally {
+        pumping = false;
+      }
     };
     void pump();
     const timer = window.setInterval(() => void pump(), NATIVE_COUNTERS_REFRESH_MS);
-    return () => { active = false; window.clearInterval(timer); };
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
   }, [backend, nativeGenerations, session.id, snapshot?.status.activeSessionIds]);
-  const outputPorts = draft.nodes.flatMap((node) => node.ports.filter((port) => port.direction === "output").map((port) => ({ nodeId: node.id, nodeName: node.name, portName: port.name, channels: port.channels })));
-  const inputPorts = draft.nodes.flatMap((node) => node.ports.filter((port) => port.direction === "input").map((port) => ({ nodeId: node.id, nodeName: node.name, portName: port.name, channels: port.channels })));
+  const outputPorts = draft.nodes.flatMap((node) =>
+    node.ports
+      .filter((port) => port.direction === "output")
+      .map((port) => ({ nodeId: node.id, nodeName: node.name, portName: port.name, channels: port.channels })),
+  );
+  const inputPorts = draft.nodes.flatMap((node) =>
+    node.ports
+      .filter((port) => port.direction === "input")
+      .map((port) => ({ nodeId: node.id, nodeName: node.name, portName: port.name, channels: port.channels })),
+  );
   const encodePort = (nodeId: string, portName: string) => `${nodeId}::${portName}`;
-  const decodePort = (value: string) => { const separator = value.indexOf("::"); return separator < 0 ? null : { nodeId: value.slice(0, separator), portName: value.slice(separator + 2) }; };
+  const decodePort = (value: string) => {
+    const separator = value.indexOf("::");
+    return separator < 0 ? null : { nodeId: value.slice(0, separator), portName: value.slice(separator + 2) };
+  };
   const visibleRecordings = recordings.filter((recording) => {
     const query = recordingSearch.trim().toLocaleLowerCase();
     if (!query) return true;
@@ -1836,11 +5369,20 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       .some((value) => value.toLocaleLowerCase().includes(query));
   });
   const visibleLibraryEntries = filterLibraryEntries(libraryEntries, librarySearch);
-  const setupSteps = setupChecklist({ connected: backend.connected, audio: snapshot?.status.audio ?? null, storage: snapshot?.status.storage ?? null, deviceCount: devices.length, applicationCount: applications.length, vbCablePairAvailable: findVbCableEndpointPair(devices) !== null });
-   const connectionLabel = backend.connected ? "Backend ready" : "Backend unavailable";
+  const setupSteps = setupChecklist({
+    connected: backend.connected,
+    audio: snapshot?.status.audio ?? null,
+    storage: snapshot?.status.storage ?? null,
+    deviceCount: devices.length,
+    applicationCount: applications.length,
+    vbCablePairAvailable: findVbCableEndpointPair(devices) !== null,
+  });
+  const connectionLabel = backend.connected ? "Backend ready" : "Backend unavailable";
   const nativePumpSummary = formatNativePumpSummary(nativePumpStats, sessionRunning);
   const schedulerTelemetry = snapshot?.diagnostics.schedulerTelemetry;
-  const schedulerSummary = schedulerTelemetry ? ` - ${schedulerTelemetry.processedQuanta} quanta / ${schedulerTelemetry.xruns} xruns` : "";
+  const schedulerSummary = schedulerTelemetry
+    ? ` - ${schedulerTelemetry.processedQuanta} quanta / ${schedulerTelemetry.xruns} xruns`
+    : "";
   const statusSummary = `${snapshot ? `${snapshot.status.audio} audio (${snapshot.status.reason}) - ${snapshot.status.storage} storage - ${snapshot.status.sessionCount} session${snapshot.status.sessionCount === 1 ? "" : "s"}` : "Waiting for backend snapshot"}${schedulerSummary}${nativePumpSummary ? ` - ${nativePumpSummary}` : ""}${sessionCrudBusyState ? " - Updating session..." : ""}`;
   const editGroup = useRef<{ key: string; time: number } | null>(null);
   const recordDraftChange = (next: import("@audiorouter/contracts").Session, group?: string) => {
@@ -1850,19 +5392,33 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     const coalesce = group && editGroup.current?.key === group && now - editGroup.current.time < 750;
     editGroup.current = group ? { key: group, time: now } : null;
     draftRef.current = next;
-    setDraftHistory((history) => coalesce && history.past.length > 0 ? { ...history, future: [] } : recordDraft(history, previous, next));
-    setDraft(next); setConnectionReplacement(null); setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null); setPendingGraphPlan(null);
+    setDraftHistory((history) =>
+      coalesce && history.past.length > 0 ? { ...history, future: [] } : recordDraft(history, previous, next),
+    );
+    setDraft(next);
+    setConnectionReplacement(null);
+    setPendingWarnings([]);
+    setAcknowledgedWarnings(new Set());
+    setPendingOperation(null);
+    setPendingGraphPlan(null);
   };
   const restoreDraftHistory = (direction: "undo" | "redo") => {
     if (!backend.connected || graphBusy || sessionActionBusy) return;
     editGroup.current = null;
     const current = draftRef.current;
-    const transition = direction === "undo" ? undoDraftHistory(draftHistory, current) : redoDraftHistory(draftHistory, current);
+    const transition =
+      direction === "undo" ? undoDraftHistory(draftHistory, current) : redoDraftHistory(draftHistory, current);
     if (transition.current === current) return;
     // History restores content; all subsequent commits use today's revision.
     const restored = { ...transition.current, revision: current.revision };
-    setDraftHistory(transition.history); draftRef.current = restored; setDraft(restored);
-    setConnectionReplacement(null); setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null); setPendingGraphPlan(null);
+    setDraftHistory(transition.history);
+    draftRef.current = restored;
+    setDraft(restored);
+    setConnectionReplacement(null);
+    setPendingWarnings([]);
+    setAcknowledgedWarnings(new Set());
+    setPendingOperation(null);
+    setPendingGraphPlan(null);
     setActionMessage(direction === "undo" ? "Undid the last change." : "Redid the change.");
   };
   const undoDraft = () => restoreDraftHistory("undo");
@@ -1874,7 +5430,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       if (key !== "z" && key !== "y") return;
       const target = event.target instanceof Element ? event.target : null;
       if (target?.closest("[role='dialog']")) return;
-      const numeric = target?.closest("[role='spinbutton'], input[type='range'], input[type='number'], input[type='checkbox'], select");
+      const numeric = target?.closest(
+        "[role='spinbutton'], input[type='range'], input[type='number'], input[type='checkbox'], select",
+      );
       if (!numeric && isEditableShortcutTarget(event.target)) return;
       event.preventDefault();
       if (numeric instanceof HTMLElement) numeric.blur();
@@ -1887,7 +5445,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     if (sessionBusy.current || nodeFlagBusy.current || graphBusy || !backend.connected) return;
     const next = setNodeDraftFlag(draftRef.current, selectedNode.id, flag, value);
     const wasRunning = sessionRunning;
-    if (!wasRunning) { recordDraftChange(next); setActionMessage("Node state changed in the draft. Save the route before pressing Play."); return; }
+    if (!wasRunning) {
+      recordDraftChange(next);
+      setActionMessage("Node state changed in the draft. Save the route before pressing Play.");
+      return;
+    }
     if (!session.nodes.some((node) => node.id === selectedNode.id)) {
       setActionMessage("This new tool is not playing yet. Save the route to add it before changing its live state.");
       return;
@@ -1902,32 +5464,108 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       recordDraftChange(setNodeDraftFlag(draftRef.current, selectedNode.id, flag, value));
       await finishGraphSave(submitted, result.revision, result.activation);
     } catch (error) {
-      setActionMessage(formatUiError(error, "The node change could not be applied. Audio is still playing with its previous settings."));
-    } finally { nodeFlagBusy.current = false; setGraphBusy(false); }
+      setActionMessage(
+        formatUiError(
+          error,
+          "The node change could not be applied. Audio is still playing with its previous settings.",
+        ),
+      );
+    } finally {
+      nodeFlagBusy.current = false;
+      setGraphBusy(false);
+    }
   };
-  const changeNodeName = (name: string) => { try { recordDraftChange(setNodeDraftName(draft, selectedNode.id, name)); setActionMessage("Name changed. Save to keep it."); } catch (error) { setActionMessage(formatUiError(error, "Unable to rename node.")); } };
-  const changeNodeParameterOn = (nodeId: string, name: string, value: boolean | number | string) => { const targetNode = draftRef.current.nodes.find((candidate) => candidate.id === nodeId); if (!targetNode) return; const error = targetNode.kind === "audioFile" ? (!(name === "mediaId" && typeof value === "string" && value.length <= 128) && !(name === "fileName" && typeof value === "string" && value.length <= 255) && !(name === "loop" && typeof value === "boolean") ? "Invalid audio source setting" : null) : targetNode.kind === "plugin" ? (() => { const id = Number(name.slice("pluginParameter:".length)); const descriptor = pluginParameters?.parameters.find((parameter) => parameter.parameterId === id); return !descriptor || typeof value !== "number" || !Number.isFinite(value) || value < descriptor.minimum || value > descriptor.maximum ? "Plugin parameter value is outside the worker-provided range" : null; })() : processorParameterError(processors, targetNode.kind, name, value, snapshot?.discovery?.nodeTypes ?? null); if (error) { setActionMessage(`Draft rejected: ${error}.`); return; } recordDraftChange(setNodeDraftParameter(draftRef.current, nodeId, name, value), nodeId + ":" + name); setActionMessage("Draft updated. Review and plan the changes before committing."); };
-  const changeNodeParameter = (name: string, value: boolean | number | string) => changeNodeParameterOn(selectedNode.id, name, value);
-  const resetNodeParameters = () => { recordDraftChange(resetNodeDraftParameters(draft, selectedNode.id)); setActionMessage("Processor parameters reset in the draft. Review and plan the changes before committing."); };
-  const changeSessionName = (name: string) => { try { recordDraftChange(setSessionDraftName(draft, name)); setActionMessage("Session name changed. Save to keep it."); } catch (error) { setActionMessage(formatUiError(error, "Unable to rename session.")); } };
-  const finishGraphSave = async (submitted: import("@audiorouter/contracts").Session, revision: number, activation?: import("@audiorouter/contracts").GraphCommitResult["activation"]) => {
-    setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null); setPendingGraphPlan(null);
+  const changeNodeName = (name: string) => {
+    try {
+      recordDraftChange(setNodeDraftName(draft, selectedNode.id, name));
+      setActionMessage("Name changed. Save to keep it.");
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to rename node."));
+    }
+  };
+  const changeNodeParameterOn = (nodeId: string, name: string, value: boolean | number | string) => {
+    const targetNode = draftRef.current.nodes.find((candidate) => candidate.id === nodeId);
+    if (!targetNode) return;
+    const error =
+      targetNode.kind === "audioFile"
+        ? !(name === "mediaId" && typeof value === "string" && value.length <= 128) &&
+          !(name === "fileName" && typeof value === "string" && value.length <= 255) &&
+          !(name === "loop" && typeof value === "boolean")
+          ? "Invalid audio source setting"
+          : null
+        : targetNode.kind === "plugin"
+          ? (() => {
+              const id = Number(name.slice("pluginParameter:".length));
+              const descriptor = pluginParameters?.parameters.find((parameter) => parameter.parameterId === id);
+              return !descriptor ||
+                typeof value !== "number" ||
+                !Number.isFinite(value) ||
+                value < descriptor.minimum ||
+                value > descriptor.maximum
+                ? "Plugin parameter value is outside the worker-provided range"
+                : null;
+            })()
+          : processorParameterError(processors, targetNode.kind, name, value, snapshot?.discovery?.nodeTypes ?? null);
+    if (error) {
+      setActionMessage(`Draft rejected: ${error}.`);
+      return;
+    }
+    recordDraftChange(setNodeDraftParameter(draftRef.current, nodeId, name, value), nodeId + ":" + name);
+    setActionMessage("Draft updated. Review and plan the changes before committing.");
+  };
+  const changeNodeParameter = (name: string, value: boolean | number | string) =>
+    changeNodeParameterOn(selectedNode.id, name, value);
+  const resetNodeParameters = () => {
+    recordDraftChange(resetNodeDraftParameters(draft, selectedNode.id));
+    setActionMessage("Processor parameters reset in the draft. Review and plan the changes before committing.");
+  };
+  const changeSessionName = (name: string) => {
+    try {
+      recordDraftChange(setSessionDraftName(draft, name));
+      setActionMessage("Session name changed. Save to keep it.");
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to rename session."));
+    }
+  };
+  const finishGraphSave = async (
+    submitted: import("@audiorouter/contracts").Session,
+    revision: number,
+    activation?: import("@audiorouter/contracts").GraphCommitResult["activation"],
+  ) => {
+    setPendingWarnings([]);
+    setAcknowledgedWarnings(new Set());
+    setPendingOperation(null);
+    setPendingGraphPlan(null);
     const saved = { ...submitted, revision };
     setCreatedSessions((current) => [...current.filter((item) => item.id !== saved.id), saved]);
     if (currentSessionIdRef.current === saved.id) {
       authoritativeSession.current = saved;
-      setDraft((current) => current.id === saved.id ? { ...current, revision } : current);
+      setDraft((current) => (current.id === saved.id ? { ...current, revision } : current));
       editGroup.current = null;
       const native = activation && activation.state === "running" ? activation.native : null;
       // A change applied to the playing audio starts a new runtime generation;
       // keep servicing the route with it (the old one is rejected as stale).
       if (native?.state === "applied" && activation?.state === "running") {
         const nextGeneration = activation.generation;
-        setNativeGenerations((current) => current[saved.id] ? { ...current, [saved.id]: { ...current[saved.id], generation: nextGeneration } } : current);
+        setNativeGenerations((current) =>
+          current[saved.id]
+            ? { ...current, [saved.id]: { ...current[saved.id], generation: nextGeneration } }
+            : current,
+        );
       }
-      setActionMessage(native?.state === "applied" ? `Saved (revision ${revision}) and applied to the playing audio.` : native?.state === "restarted" ? `Saved (revision ${revision}). The route changed, so audio restarted automatically with the new connections.` : native?.state === "restartRequired" ? `Saved (revision ${revision}), but the playing audio could not take this change: ${native.reason}` : `Route saved (revision ${revision}). Prepare devices before playing.`);
+      setActionMessage(
+        native?.state === "applied"
+          ? `Saved (revision ${revision}) and applied to the playing audio.`
+          : native?.state === "restarted"
+            ? `Saved (revision ${revision}). The route changed, so audio restarted automatically with the new connections.`
+            : native?.state === "restartRequired"
+              ? `Saved (revision ${revision}), but the playing audio could not take this change: ${native.reason}`
+              : `Route saved (revision ${revision}). Prepare devices before playing.`,
+      );
     }
-    recordUiDiagnostic(`Graph commit succeeded: revision ${revision}; ${submitted.nodes.length} nodes, ${submitted.edges.length} connections`);
+    recordUiDiagnostic(
+      `Graph commit succeeded: revision ${revision}; ${submitted.nodes.length} nodes, ${submitted.edges.length} connections`,
+    );
     await refresh();
   };
   const planChanges = async () => {
@@ -1941,7 +5579,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         setActionMessage("The draft changed during review. Plan changes again before committing.");
         return;
       }
-      if (plan.baseRevision !== draft.revision) throw new Error("Backend returned a plan for a different session revision");
+      if (plan.baseRevision !== draft.revision)
+        throw new Error("Backend returned a plan for a different session revision");
       if (plan.warnings.length === 0) {
         const result = await backend.commitGraph(plan.planId, plan.baseRevision, operation);
         await finishGraphSave(draft, result.revision, result.activation);
@@ -1950,18 +5589,25 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         setPendingGraphPlan({ planId: plan.planId, baseRevision: plan.baseRevision });
         setPendingWarnings(plan.warnings);
         setAcknowledgedWarnings(new Set());
-        setActionMessage("Review the warnings in Session, then choose Confirm and save route. Nothing has been saved yet.");
+        setActionMessage(
+          "Review the warnings in Session, then choose Confirm and save route. Nothing has been saved yet.",
+        );
       }
     } catch (error) {
       if (isRevisionConflict(error)) {
-        setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null); setPendingGraphPlan(null);
+        setPendingWarnings([]);
+        setAcknowledgedWarnings(new Set());
+        setPendingOperation(null);
+        setPendingGraphPlan(null);
         void snapshotCache.refresh(backend, session.id).then((nextState) => {
           setSnapshotState(nextState);
           void refreshSessions();
         });
         setActionMessage(formatUiError(error, "Graph changed elsewhere."));
       } else setActionMessage(formatUiError(error, "Unable to apply graph changes."));
-    } finally { setGraphBusy(false); }
+    } finally {
+      setGraphBusy(false);
+    }
   };
   // While audio plays, slider-style edits (parameter values only) are saved
   // after a short pause so the change is heard without Stop/Play. Topology
@@ -1970,45 +5616,290 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const planChangesRef = useRef(planChanges);
   planChangesRef.current = planChanges;
   useEffect(() => {
-    if (!sessionRunning || graphBusy || !backend.connected || pendingGraphPlan || !isParameterOnlyChange(session, draft)) return;
+    if (
+      !sessionRunning ||
+      graphBusy ||
+      !backend.connected ||
+      pendingGraphPlan ||
+      !isParameterOnlyChange(session, draft)
+    )
+      return;
     const key = JSON.stringify(draft);
     if (lastAutoSaveDraft.current === key) return;
-    const timer = window.setTimeout(() => { lastAutoSaveDraft.current = key; void planChangesRef.current(); }, 400);
+    const timer = window.setTimeout(() => {
+      lastAutoSaveDraft.current = key;
+      void planChangesRef.current();
+    }, 400);
     return () => window.clearTimeout(timer);
   }, [draft, session, sessionRunning, graphBusy, backend.connected, pendingGraphPlan]);
   const commitAcknowledgedPlan = async () => {
-    if (graphBusy || !backend.connected || !pendingOperation || !pendingGraphPlan || acknowledgedWarnings.size !== pendingWarnings.length) return;
+    if (
+      graphBusy ||
+      !backend.connected ||
+      !pendingOperation ||
+      !pendingGraphPlan ||
+      acknowledgedWarnings.size !== pendingWarnings.length
+    )
+      return;
     setGraphBusy(true);
     setActionMessage("Saving route...");
     const submitted = draft;
     try {
-      const result = pendingWarnings.length === 0
-        ? await backend.commitGraph(pendingGraphPlan.planId, pendingGraphPlan.baseRevision, pendingOperation)
-        : await applyGraphDraft(backend, draft, pendingOperation, [...acknowledgedWarnings]);
+      const result =
+        pendingWarnings.length === 0
+          ? await backend.commitGraph(pendingGraphPlan.planId, pendingGraphPlan.baseRevision, pendingOperation)
+          : await applyGraphDraft(backend, draft, pendingOperation, [...acknowledgedWarnings]);
       await finishGraphSave(submitted, result.revision);
     } catch (error) {
       if (isRevisionConflict(error)) {
-        setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null); setPendingGraphPlan(null);
+        setPendingWarnings([]);
+        setAcknowledgedWarnings(new Set());
+        setPendingOperation(null);
+        setPendingGraphPlan(null);
         void snapshotCache.refresh(backend, session.id).then((nextState) => {
           setSnapshotState(nextState);
           void refreshSessions();
         });
         setActionMessage(formatUiError(error, "Graph changed elsewhere."));
       } else setActionMessage(formatUiError(error, "Unable to commit acknowledged changes."));
-    } finally { setGraphBusy(false); }
+    } finally {
+      setGraphBusy(false);
+    }
   };
-  const previewRecording = async (recordingId: string) => { const request = ++previewRequest.current; setPreviewMessage("Inspecting recording..."); try { const result = await backend.previewRecording(recordingId); if (request === previewRequest.current) setPreviewMessage(`${String(result.preview.status)} recording preview loaded.`); } catch (error) { if (request === previewRequest.current) setPreviewMessage(formatUiError(error, "Recording preview unavailable.")); } };
-  const inspectRecovery = async (recordingId: string) => { const request = ++recoveryRequest.current; setRecoveryMessage("Inspecting recorder recovery..."); try { const result = await backend.getRecordingRecovery(recordingId); if (request === recoveryRequest.current) setRecoveryMessage(result.status === "missing" ? "No persisted recovery checkpoint is available." : `Recovery checkpoint: ${result.checkpoint.state}.`); } catch (error) { if (request === recoveryRequest.current) setRecoveryMessage(formatUiError(error, "Recording recovery unavailable.")); } };
-  const saveRecordingMetadata = async (recording: import("@audiorouter/contracts").RecordingRow) => { if (!backend.connected || recordingMutationBusy.current) return; recordingMutationBusy.current = true; setRecordingMutationBusyState(true); try { const title = metadataTitles[recording.id]?.trim() ?? recording.title ?? ""; const artist = metadataArtists[recording.id]?.trim() ?? recording.artist ?? ""; const comment = metadataComments[recording.id]?.trim() ?? recording.comment ?? ""; await backend.setRecordingMetadata(recording.id, { title: title || null, artist: artist || null, comment: comment || null, idempotencyKey: uiIdempotencyKey("recording-metadata") }); setRecordings((current) => current.map((item) => item.id === recording.id ? { ...item, title: title || null, artist: artist || null, comment: comment || null } : item)); setPreviewMessage("Recording metadata saved; the audio file was unchanged."); } catch (error) { setPreviewMessage(formatUiError(error, "Unable to save recording metadata.")); } finally { recordingMutationBusy.current = false; setRecordingMutationBusyState(false); } };
-  const removeRecordingEntry = async (recordingId: string) => { if (!window.confirm("Remove this library entry? The audio file will be preserved.")) return; if (!backend.connected || recordingMutationBusy.current) return; recordingMutationBusy.current = true; setRecordingMutationBusyState(true); try { await backend.removeRecordingEntry(recordingId, uiIdempotencyKey("recording-entry-remove")); setRecordings((current) => current.filter((item) => item.id !== recordingId)); setPreviewMessage("Library entry removed; the audio file was preserved."); } catch (error) { setPreviewMessage(formatUiError(error, "Unable to remove recording entry.")); } finally { recordingMutationBusy.current = false; setRecordingMutationBusyState(false); } };
-  const renameRecording = async (recordingId: string, newPath: string) => { if (!backend.connected || recordingMutationBusy.current) return; recordingMutationBusy.current = true; setRecordingMutationBusyState(true); try { const result = await backend.renameRecording(recordingId, newPath.trim(), uiIdempotencyKey("recording-rename")); setRecordings((current) => current.map((item) => item.id === recordingId ? { ...item, path: result.path, missing: false } : item)); setPreviewMessage("Recording renamed within the approved directory."); } catch (error) { setPreviewMessage(formatUiError(error, "Unable to rename recording.")); } finally { recordingMutationBusy.current = false; setRecordingMutationBusyState(false); } };
-  const revealRecording = async (recordingId: string) => { if (!backend.connected || recordingMutationBusy.current) return; recordingMutationBusy.current = true; setRecordingMutationBusyState(true); try { const result = await backend.revealRecording(recordingId); setPreviewMessage(result.revealed ? "Recording revealed by the operating system." : "Recording is missing; no operating-system action was performed."); } catch (error) { setPreviewMessage(formatUiError(error, "Unable to reveal recording.")); } finally { recordingMutationBusy.current = false; setRecordingMutationBusyState(false); } };
-  const recycleRecording = async (recordingId: string, confirm: boolean) => { if (!backend.connected || recordingMutationBusy.current) return; recordingMutationBusy.current = true; setRecordingMutationBusyState(true); try { const result = await backend.recycleRecording(recordingId, confirm, confirm ? uiIdempotencyKey("recording-recycle") : undefined); setPreviewMessage(result.fileAction === "recycled" ? "Recording recycled." : result.fileAction === "recycle" ? "Recycle preview loaded; confirmation is still required." : `Recording was not recycled: ${result.reason}.`); if (result.fileAction === "recycled") setRecordings((current) => current.map((item) => item.id === recordingId ? { ...item, missing: true } : item)); } catch (error) { setPreviewMessage(formatUiError(error, "Unable to recycle recording.")); } finally { recordingMutationBusy.current = false; setRecordingMutationBusyState(false); } };
-  const togglePrivacyMute = async () => { if (safetyActionBusy.current || !backend.connected) return; safetyActionBusy.current = true; setSafetyActionBusyState(true); const next = !privacyMuted; setActionMessage(next ? "Enabling privacy mute..." : "Disabling privacy mute..."); try { await backend.setPrivacyMute(next, uiIdempotencyKey("privacy-mute")); setPrivacyMuted(next); setActionMessage(next ? "Privacy mute enabled." : "Privacy mute disabled."); } catch (error) { setPrivacyMuted(true); setActionMessage(formatUiError(error, "Unable to change privacy mute.")); } finally { safetyActionBusy.current = false; setSafetyActionBusyState(false); } };
-  const clearRecoverySafeMode = async () => { if (safetyActionBusy.current || !backend.connected) return; safetyActionBusy.current = true; setSafetyActionBusyState(true); setActionMessage("Clearing recovery safe mode..."); try { await backend.clearRecoverySafeMode(uiIdempotencyKey("recovery-clear")); await refresh(); setActionMessage("Recovery safe mode cleared."); } catch (error) { setActionMessage(formatUiError(error, "Unable to clear recovery safe mode.")); } finally { safetyActionBusy.current = false; setSafetyActionBusyState(false); } };
-  const createSession = async () => { if (sessionCrudBusy.current || !backend.connected) return; const name = window.prompt("New session name", "New session")?.trim(); if (!name) return; sessionCrudBusy.current = true; setSessionCrudBusyState(true); const id = `session-${Date.now()}`; try { const result = await backend.createSession({ ...demoSession, id, name, revision: 0, nodes: demoSession.nodes.map((node) => ({ ...node, parameters: { ...node.parameters } })), edges: [...demoSession.edges] }, uiIdempotencyKey("session-create")); setCreatedSessions((current) => [...current, result.session]); setSelectedSessionId(result.session.id); setActionMessage(`Created stopped session ${result.session.name}.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to create session.")); } finally { sessionCrudBusy.current = false; setSessionCrudBusyState(false); } };
-  const duplicateSession = async () => { if (sessionCrudBusy.current || !backend.connected) return; sessionCrudBusy.current = true; setSessionCrudBusyState(true); const id = `session-copy-${Date.now()}`; const name = `${session.name} (copy)`; try { const result = await backend.duplicateSession(session.id, id, name, uiIdempotencyKey("session-duplicate")); setCreatedSessions((current) => [...current, result.session]); setSelectedSessionId(result.session.id); setActionMessage(`Duplicated stopped session ${result.session.name}.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to duplicate session.")); } finally { sessionCrudBusy.current = false; setSessionCrudBusyState(false); } };
-  const deleteSession = async () => { if (sessionCrudBusy.current || !backend.connected || !window.confirm(`Delete stopped session “${session.name}”?`)) return; sessionCrudBusy.current = true; setSessionCrudBusyState(true); try { await backend.deleteSession(session.id, uiIdempotencyKey("session-delete")); setCreatedSessions((current) => current.filter((item) => item.id !== session.id)); const fallback = availableSessions.find((item) => item.id !== session.id); if (fallback) setSelectedSessionId(fallback.id); setActionMessage(`Deleted session ${session.name}.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to delete session.")); } finally { sessionCrudBusy.current = false; setSessionCrudBusyState(false); } };
+  const previewRecording = async (recordingId: string) => {
+    const request = ++previewRequest.current;
+    setPreviewMessage("Inspecting recording...");
+    try {
+      const result = await backend.previewRecording(recordingId);
+      if (request === previewRequest.current)
+        setPreviewMessage(`${String(result.preview.status)} recording preview loaded.`);
+    } catch (error) {
+      if (request === previewRequest.current) setPreviewMessage(formatUiError(error, "Recording preview unavailable."));
+    }
+  };
+  const inspectRecovery = async (recordingId: string) => {
+    const request = ++recoveryRequest.current;
+    setRecoveryMessage("Inspecting recorder recovery...");
+    try {
+      const result = await backend.getRecordingRecovery(recordingId);
+      if (request === recoveryRequest.current)
+        setRecoveryMessage(
+          result.status === "missing"
+            ? "No persisted recovery checkpoint is available."
+            : `Recovery checkpoint: ${result.checkpoint.state}.`,
+        );
+    } catch (error) {
+      if (request === recoveryRequest.current)
+        setRecoveryMessage(formatUiError(error, "Recording recovery unavailable."));
+    }
+  };
+  const saveRecordingMetadata = async (recording: import("@audiorouter/contracts").RecordingRow) => {
+    if (!backend.connected || recordingMutationBusy.current) return;
+    recordingMutationBusy.current = true;
+    setRecordingMutationBusyState(true);
+    try {
+      const title = metadataTitles[recording.id]?.trim() ?? recording.title ?? "";
+      const artist = metadataArtists[recording.id]?.trim() ?? recording.artist ?? "";
+      const comment = metadataComments[recording.id]?.trim() ?? recording.comment ?? "";
+      await backend.setRecordingMetadata(recording.id, {
+        title: title || null,
+        artist: artist || null,
+        comment: comment || null,
+        idempotencyKey: uiIdempotencyKey("recording-metadata"),
+      });
+      setRecordings((current) =>
+        current.map((item) =>
+          item.id === recording.id
+            ? { ...item, title: title || null, artist: artist || null, comment: comment || null }
+            : item,
+        ),
+      );
+      setPreviewMessage("Recording metadata saved; the audio file was unchanged.");
+    } catch (error) {
+      setPreviewMessage(formatUiError(error, "Unable to save recording metadata."));
+    } finally {
+      recordingMutationBusy.current = false;
+      setRecordingMutationBusyState(false);
+    }
+  };
+  const removeRecordingEntry = async (recordingId: string) => {
+    if (!window.confirm("Remove this library entry? The audio file will be preserved.")) return;
+    if (!backend.connected || recordingMutationBusy.current) return;
+    recordingMutationBusy.current = true;
+    setRecordingMutationBusyState(true);
+    try {
+      await backend.removeRecordingEntry(recordingId, uiIdempotencyKey("recording-entry-remove"));
+      setRecordings((current) => current.filter((item) => item.id !== recordingId));
+      setPreviewMessage("Library entry removed; the audio file was preserved.");
+    } catch (error) {
+      setPreviewMessage(formatUiError(error, "Unable to remove recording entry."));
+    } finally {
+      recordingMutationBusy.current = false;
+      setRecordingMutationBusyState(false);
+    }
+  };
+  const renameRecording = async (recordingId: string, newPath: string) => {
+    if (!backend.connected || recordingMutationBusy.current) return;
+    recordingMutationBusy.current = true;
+    setRecordingMutationBusyState(true);
+    try {
+      const result = await backend.renameRecording(recordingId, newPath.trim(), uiIdempotencyKey("recording-rename"));
+      setRecordings((current) =>
+        current.map((item) => (item.id === recordingId ? { ...item, path: result.path, missing: false } : item)),
+      );
+      setPreviewMessage("Recording renamed within the approved directory.");
+    } catch (error) {
+      setPreviewMessage(formatUiError(error, "Unable to rename recording."));
+    } finally {
+      recordingMutationBusy.current = false;
+      setRecordingMutationBusyState(false);
+    }
+  };
+  const revealRecording = async (recordingId: string) => {
+    if (!backend.connected || recordingMutationBusy.current) return;
+    recordingMutationBusy.current = true;
+    setRecordingMutationBusyState(true);
+    try {
+      const result = await backend.revealRecording(recordingId);
+      setPreviewMessage(
+        result.revealed
+          ? "Recording revealed by the operating system."
+          : "Recording is missing; no operating-system action was performed.",
+      );
+    } catch (error) {
+      setPreviewMessage(formatUiError(error, "Unable to reveal recording."));
+    } finally {
+      recordingMutationBusy.current = false;
+      setRecordingMutationBusyState(false);
+    }
+  };
+  const recycleRecording = async (recordingId: string, confirm: boolean) => {
+    if (!backend.connected || recordingMutationBusy.current) return;
+    recordingMutationBusy.current = true;
+    setRecordingMutationBusyState(true);
+    try {
+      const result = await backend.recycleRecording(
+        recordingId,
+        confirm,
+        confirm ? uiIdempotencyKey("recording-recycle") : undefined,
+      );
+      setPreviewMessage(
+        result.fileAction === "recycled"
+          ? "Recording recycled."
+          : result.fileAction === "recycle"
+            ? "Recycle preview loaded; confirmation is still required."
+            : `Recording was not recycled: ${result.reason}.`,
+      );
+      if (result.fileAction === "recycled")
+        setRecordings((current) =>
+          current.map((item) => (item.id === recordingId ? { ...item, missing: true } : item)),
+        );
+    } catch (error) {
+      setPreviewMessage(formatUiError(error, "Unable to recycle recording."));
+    } finally {
+      recordingMutationBusy.current = false;
+      setRecordingMutationBusyState(false);
+    }
+  };
+  const togglePrivacyMute = async () => {
+    if (safetyActionBusy.current || !backend.connected) return;
+    safetyActionBusy.current = true;
+    setSafetyActionBusyState(true);
+    const next = !privacyMuted;
+    setActionMessage(next ? "Enabling privacy mute..." : "Disabling privacy mute...");
+    try {
+      await backend.setPrivacyMute(next, uiIdempotencyKey("privacy-mute"));
+      setPrivacyMuted(next);
+      setActionMessage(next ? "Privacy mute enabled." : "Privacy mute disabled.");
+    } catch (error) {
+      setPrivacyMuted(true);
+      setActionMessage(formatUiError(error, "Unable to change privacy mute."));
+    } finally {
+      safetyActionBusy.current = false;
+      setSafetyActionBusyState(false);
+    }
+  };
+  const clearRecoverySafeMode = async () => {
+    if (safetyActionBusy.current || !backend.connected) return;
+    safetyActionBusy.current = true;
+    setSafetyActionBusyState(true);
+    setActionMessage("Clearing recovery safe mode...");
+    try {
+      await backend.clearRecoverySafeMode(uiIdempotencyKey("recovery-clear"));
+      await refresh();
+      setActionMessage("Recovery safe mode cleared.");
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to clear recovery safe mode."));
+    } finally {
+      safetyActionBusy.current = false;
+      setSafetyActionBusyState(false);
+    }
+  };
+  const createSession = async () => {
+    if (sessionCrudBusy.current || !backend.connected) return;
+    const name = window.prompt("New session name", "New session")?.trim();
+    if (!name) return;
+    sessionCrudBusy.current = true;
+    setSessionCrudBusyState(true);
+    const id = `session-${Date.now()}`;
+    try {
+      const result = await backend.createSession(
+        {
+          ...demoSession,
+          id,
+          name,
+          revision: 0,
+          nodes: demoSession.nodes.map((node) => ({ ...node, parameters: { ...node.parameters } })),
+          edges: [...demoSession.edges],
+        },
+        uiIdempotencyKey("session-create"),
+      );
+      setCreatedSessions((current) => [...current, result.session]);
+      setSelectedSessionId(result.session.id);
+      setActionMessage(`Created stopped session ${result.session.name}.`);
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to create session."));
+    } finally {
+      sessionCrudBusy.current = false;
+      setSessionCrudBusyState(false);
+    }
+  };
+  const duplicateSession = async () => {
+    if (sessionCrudBusy.current || !backend.connected) return;
+    sessionCrudBusy.current = true;
+    setSessionCrudBusyState(true);
+    const id = `session-copy-${Date.now()}`;
+    const name = `${session.name} (copy)`;
+    try {
+      const result = await backend.duplicateSession(session.id, id, name, uiIdempotencyKey("session-duplicate"));
+      setCreatedSessions((current) => [...current, result.session]);
+      setSelectedSessionId(result.session.id);
+      setActionMessage(`Duplicated stopped session ${result.session.name}.`);
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to duplicate session."));
+    } finally {
+      sessionCrudBusy.current = false;
+      setSessionCrudBusyState(false);
+    }
+  };
+  const deleteSession = async () => {
+    if (sessionCrudBusy.current || !backend.connected || !window.confirm(`Delete stopped session “${session.name}”?`))
+      return;
+    sessionCrudBusy.current = true;
+    setSessionCrudBusyState(true);
+    try {
+      await backend.deleteSession(session.id, uiIdempotencyKey("session-delete"));
+      setCreatedSessions((current) => current.filter((item) => item.id !== session.id));
+      const fallback = availableSessions.find((item) => item.id !== session.id);
+      if (fallback) setSelectedSessionId(fallback.id);
+      setActionMessage(`Deleted session ${session.name}.`);
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to delete session."));
+    } finally {
+      sessionCrudBusy.current = false;
+      setSessionCrudBusyState(false);
+    }
+  };
   // First Play on a fresh install: ask once before opening audio devices.
   const [deviceConsent, setDeviceConsent] = useState<{ busy: boolean; error: string | null } | null>(null);
   const allowDeviceAccessAndPlay = async () => {
@@ -2029,8 +5920,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setActionMessage("Wait for the current route check to finish before starting audio.");
       return false;
     }
-    sessionBusy.current = true; setSessionActionBusy(true);
-    setActionMessage("Checking audio endpoints..."); setNativePumpStats(null);
+    sessionBusy.current = true;
+    setSessionActionBusy(true);
+    setActionMessage("Checking audio endpoints...");
+    setNativePumpStats(null);
     try {
       let diagnostics = await backend.refreshDiagnostics();
       // Several independent paths (or several devices on one path) run as one
@@ -2041,99 +5934,144 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       // it plays on the multi-path worker so no microphone is opened. An
       // unsaved edit with a chosen input keeps the temporary preview below.
       const generatedOnly = generatedOnlyRoute(draftRef.current);
-      const multiPathRoute = needsNativePaths(draftRef.current)
-        || (generatedOnly && (!routeEndpointBinding(draftRef.current, session.id).captureEndpointId
-          || (sameSessionDraft(draftRef.current, session) && unboundDeviceNodes(draftRef.current).length === 0)));
+      const multiPathRoute =
+        needsNativePaths(draftRef.current) ||
+        (generatedOnly &&
+          (!routeEndpointBinding(draftRef.current, session.id).captureEndpointId ||
+            (sameSessionDraft(draftRef.current, session) && unboundDeviceNodes(draftRef.current).length === 0)));
       if (multiPathRoute) {
         if (generatedOnly && unboundDeviceNodes(draftRef.current).length > 0) {
-          setActionMessage("No audio started. Select the speaker or headphone device in the Output Device node's Properties, then press Play.");
+          setActionMessage(
+            "No audio started. Select the speaker or headphone device in the Output Device node's Properties, then press Play.",
+          );
           return false;
         }
         if (!sameSessionDraft(draftRef.current, session)) {
-          setActionMessage(generatedOnly
-            ? "No audio started. Save the route, then press Play: a Test Signal or Audio File route plays its saved version, without any input device."
-            : "No audio started. Save the route, then press Play: a session with several paths plays its saved route.");
+          setActionMessage(
+            generatedOnly
+              ? "No audio started. Save the route, then press Play: a Test Signal or Audio File route plays its saved version, without any input device."
+              : "No audio started. Save the route, then press Play: a session with several paths plays its saved route.",
+          );
           return false;
         }
         const unbound = unboundDeviceNodes(session);
         if (unbound.length > 0) {
-          setActionMessage(`No audio started. Choose the device for ${unbound.map((node) => node.name).join(", ")} in Properties, save, then press Play.`);
+          setActionMessage(
+            `No audio started. Choose the device for ${unbound.map((node) => node.name).join(", ")} in Properties, save, then press Play.`,
+          );
           return false;
         }
         if (!backend.prepareNativePaths) {
           setActionMessage("No audio started. This backend cannot prepare a session with several paths.");
           return false;
         }
-        if (diagnostics.nativeSessionId === session.id && backend.detachNativeEndpoint) await backend.detachNativeEndpoint(session.id);
+        if (diagnostics.nativeSessionId === session.id && backend.detachNativeEndpoint)
+          await backend.detachNativeEndpoint(session.id);
         setActionMessage("Preparing every path of this session...");
         await backend.prepareNativePaths(session.id);
         diagnostics = await backend.refreshDiagnostics();
       }
       const applicationSource = multiPathRoute ? null : applicationOnlyRouteSource(draftRef.current);
       const mixerSources = applicationSource || multiPathRoute ? null : mixerRouteSources(draftRef.current);
-      const mixerApplicationRoute = mixerSources !== null && mixerSources.length >= 2 && mixerSources.some((node) => node.kind === "applicationCapture");
+      const mixerApplicationRoute =
+        mixerSources !== null &&
+        mixerSources.length >= 2 &&
+        mixerSources.some((node) => node.kind === "applicationCapture");
       if (mixerApplicationRoute && mixerSources) {
         // Applications mixed with a microphone run on the native multi-input
         // Mixer, which keeps each application reconnecting after a restart.
         // Test Signal and Audio File are generated inside the Mixer input;
         // endpoint loopback and virtual sources are not supported here yet.
-        const unsupported = mixerSources.filter((node) => !["physicalInput", "applicationCapture", "testSignal", "audioFile"].includes(node.kind));
+        const unsupported = mixerSources.filter(
+          (node) => !["physicalInput", "applicationCapture", "testSignal", "audioFile"].includes(node.kind),
+        );
         const microphones = mixerSources.filter((node) => node.kind === "physicalInput");
         if (unsupported.length > 0) {
-          setActionMessage(`No audio started. A Mixer that includes an application can combine applications, Test Signals, audio files, and one input device. Turn off ${unsupported.map((node) => node.name).join(", ")}, save, then press Play.`);
+          setActionMessage(
+            `No audio started. A Mixer that includes an application can combine applications, Test Signals, audio files, and one input device. Turn off ${unsupported.map((node) => node.name).join(", ")}, save, then press Play.`,
+          );
           return false;
         }
         if (microphones.length > 1) {
-          setActionMessage("No audio started. A Mixer that includes an application can use one input device at a time. Turn off the extra input devices, save, then press Play.");
+          setActionMessage(
+            "No audio started. A Mixer that includes an application can use one input device at a time. Turn off the extra input devices, save, then press Play.",
+          );
           return false;
         }
         if (!sameSessionDraft(draftRef.current, session)) {
-          setActionMessage("No audio started. Save the route, then press Play: application capture runs the saved route.");
+          setActionMessage(
+            "No audio started. Save the route, then press Play: application capture runs the saved route.",
+          );
           return false;
         }
         const endpoints = routeEndpointBinding(draftRef.current, session.id);
         if (!endpoints.renderEndpointId || (microphones.length === 1 && !endpoints.captureEndpointId)) {
-          setActionMessage(!endpoints.renderEndpointId
-            ? "No audio started. Select the speaker or headphone device in Physical Output Properties, then press Play."
-            : "No audio started. Select the input device in Physical Input Properties, then press Play.");
+          setActionMessage(
+            !endpoints.renderEndpointId
+              ? "No audio started. Select the speaker or headphone device in Physical Output Properties, then press Play."
+              : "No audio started. Select the input device in Physical Input Properties, then press Play.",
+          );
           return false;
         }
-        const unbound = mixerSources.find((node) => node.kind === "applicationCapture" && (typeof node.parameters.processId !== "number" || typeof node.parameters.creationTime100ns !== "string" || typeof node.parameters.executable !== "string"));
+        const unbound = mixerSources.find(
+          (node) =>
+            node.kind === "applicationCapture" &&
+            (typeof node.parameters.processId !== "number" ||
+              typeof node.parameters.creationTime100ns !== "string" ||
+              typeof node.parameters.executable !== "string"),
+        );
         if (unbound) {
-          setActionMessage(`No audio started. Select a specific running application for ${unbound.name} in its Properties, save, then press Play.`);
+          setActionMessage(
+            `No audio started. Select a specific running application for ${unbound.name} in its Properties, save, then press Play.`,
+          );
           return false;
         }
         if (!backend.prepareNativeMultiInputs || !backend.prepareNativeOutputs) {
           setActionMessage("No audio started. This backend cannot prepare a Mixer with application sources.");
           return false;
         }
-        if (!(diagnostics.nativeSessionId === session.id && diagnostics.nativeAdapterKind === "multi-input" && ["configured-stopped", "running"].includes(diagnostics.nativeAdapter))) {
-          if (diagnostics.nativeSessionId === session.id && backend.detachNativeEndpoint) await backend.detachNativeEndpoint(session.id);
-          const bindings = mixerSources.map((node): import("@audiorouter/contracts").NativeMultiInputSourceBinding => node.kind === "testSignal" || node.kind === "audioFile"
-            ? { kind: "generated" }
-            : node.kind === "physicalInput"
-            ? { kind: "physical", endpointId: endpoints.captureEndpointId ?? "" }
-            : {
-              kind: "application",
-              processId: Number(node.parameters.processId),
-              executable: String(node.parameters.executable),
-              executablePath: typeof node.parameters.executablePath === "string" ? node.parameters.executablePath : null,
-              creationTime100ns: String(node.parameters.creationTime100ns),
-              mode: "include",
-            });
+        if (!(
+          diagnostics.nativeSessionId === session.id &&
+          diagnostics.nativeAdapterKind === "multi-input" &&
+          ["configured-stopped", "running"].includes(diagnostics.nativeAdapter)
+        )) {
+          if (diagnostics.nativeSessionId === session.id && backend.detachNativeEndpoint)
+            await backend.detachNativeEndpoint(session.id);
+          const bindings = mixerSources.map((node): import("@audiorouter/contracts").NativeMultiInputSourceBinding =>
+            node.kind === "testSignal" || node.kind === "audioFile"
+              ? { kind: "generated" }
+              : node.kind === "physicalInput"
+                ? { kind: "physical", endpointId: endpoints.captureEndpointId ?? "" }
+                : {
+                    kind: "application",
+                    processId: Number(node.parameters.processId),
+                    executable: String(node.parameters.executable),
+                    executablePath:
+                      typeof node.parameters.executablePath === "string" ? node.parameters.executablePath : null,
+                    creationTime100ns: String(node.parameters.creationTime100ns),
+                    mode: "include",
+                  },
+          );
           setActionMessage(`Preparing ${bindings.length} Mixer sources...`);
           await backend.prepareNativeMultiInputs(session.id, undefined, bindings);
           await backend.prepareNativeOutputs(session.id, undefined, [endpoints.renderEndpointId]);
           diagnostics = await backend.refreshDiagnostics();
         }
       }
-      const mixedApplicationSource = applicationSource || mixerApplicationRoute || multiPathRoute ? null : draftRef.current.nodes.find((node) => node.kind === "applicationCapture" && node.enabled) ?? null;
+      const mixedApplicationSource =
+        applicationSource || mixerApplicationRoute || multiPathRoute
+          ? null
+          : (draftRef.current.nodes.find((node) => node.kind === "applicationCapture" && node.enabled) ?? null);
       if (mixedApplicationSource) {
         const executable = String(mixedApplicationSource.parameters.executable ?? "an application");
-        const others = mixedApplicationRouteOtherSources(draftRef.current, mixedApplicationSource.id).map((node) => node.name).join(", ");
-        setActionMessage(others
-          ? `No audio started. Play can capture ${executable} only when it is the route's only enabled source. Turn off or remove the other sources (${others}), save, then press Play. Mixing an application with other sources is available only from Many-input routing in Full workspace, without automatic reconnect.`
-          : `No audio started. Select a specific running ${executable} in the node's Properties, save, then press Play.`);
+        const others = mixedApplicationRouteOtherSources(draftRef.current, mixedApplicationSource.id)
+          .map((node) => node.name)
+          .join(", ");
+        setActionMessage(
+          others
+            ? `No audio started. Play can capture ${executable} only when it is the route's only enabled source. Turn off or remove the other sources (${others}), save, then press Play. Mixing an application with other sources is available only from Many-input routing in Full workspace, without automatic reconnect.`
+            : `No audio started. Select a specific running ${executable} in the node's Properties, save, then press Play.`,
+        );
         recordUiDiagnostic("Session start blocked: application capture mixed with other sources");
         return false;
       }
@@ -2141,51 +6079,79 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         // An application-only route runs on the process-loopback worker, which
         // also reconnects the app after it restarts. It binds the saved node.
         if (!sameSessionDraft(draftRef.current, session)) {
-          setActionMessage("No audio started. Save the route, then press Play: application capture runs the saved route.");
+          setActionMessage(
+            "No audio started. Save the route, then press Play: application capture runs the saved route.",
+          );
           return false;
         }
         const outputEndpointId = routeEndpointBinding(draftRef.current, session.id).renderEndpointId;
         if (!outputEndpointId) {
-          setActionMessage("No audio started. Select the speaker or headphone device in Physical Output Properties, then press Play.");
+          setActionMessage(
+            "No audio started. Select the speaker or headphone device in Physical Output Properties, then press Play.",
+          );
           return false;
         }
         if (!backend.prepareNativeApplication) {
           setActionMessage("No audio started. This backend cannot prepare application capture.");
           return false;
         }
-        if (!(diagnostics.nativeSessionId === session.id && diagnostics.nativeAdapterKind === "process-loopback" && ["configured-stopped", "running"].includes(diagnostics.nativeAdapter))) {
-          if (diagnostics.nativeSessionId === session.id && backend.detachNativeEndpoint) await backend.detachNativeEndpoint(session.id);
+        if (!(
+          diagnostics.nativeSessionId === session.id &&
+          diagnostics.nativeAdapterKind === "process-loopback" &&
+          ["configured-stopped", "running"].includes(diagnostics.nativeAdapter)
+        )) {
+          if (diagnostics.nativeSessionId === session.id && backend.detachNativeEndpoint)
+            await backend.detachNativeEndpoint(session.id);
           const executable = String(applicationSource.parameters.executable);
           setActionMessage(`Preparing ${executable} audio capture...`);
           await backend.prepareNativeApplication({
             sessionId: session.id,
             processId: Number(applicationSource.parameters.processId),
             executable,
-            executablePath: typeof applicationSource.parameters.executablePath === "string" ? applicationSource.parameters.executablePath : null,
+            executablePath:
+              typeof applicationSource.parameters.executablePath === "string"
+                ? applicationSource.parameters.executablePath
+                : null,
             creationTime100ns: String(applicationSource.parameters.creationTime100ns),
             mode: "include",
             renderEndpointId: outputEndpointId,
           });
           diagnostics = await backend.refreshDiagnostics();
         }
-      } else if (!mixerApplicationRoute && !multiPathRoute && (diagnostics.nativeSessionId !== session.id || !["configured-stopped", "running"].includes(diagnostics.nativeAdapter))) {
-          const binding = routeEndpointBinding(draftRef.current, session.id);
-          if (!binding.renderEndpointId || !binding.captureEndpointId) {
-            setActionMessage(!binding.renderEndpointId
+      } else if (
+        !mixerApplicationRoute &&
+        !multiPathRoute &&
+        (diagnostics.nativeSessionId !== session.id ||
+          !["configured-stopped", "running"].includes(diagnostics.nativeAdapter))
+      ) {
+        const binding = routeEndpointBinding(draftRef.current, session.id);
+        if (!binding.renderEndpointId || !binding.captureEndpointId) {
+          setActionMessage(
+            !binding.renderEndpointId
               ? "No audio started. Select the speaker or headphone device in Physical Output Properties, then press Play."
-              : "No audio started. This route also needs an input device: add an Input Device node, choose its device in Properties and connect it, or choose one in Advanced → Troubleshooting. Then press Play.");
-            recordUiDiagnostic("Session start blocked: exact endpoint selection is incomplete");
-            return false;
-          }
-          if (!backend.prepareNativeEndpoint) {
-            setActionMessage("No audio started. This backend cannot prepare the selected audio devices. See Advanced → Troubleshooting for details.");
-            return false;
-          }
-          setActionMessage("Preparing the selected audio devices...");
-          await backend.prepareNativeEndpoint(session.id, binding.captureEndpointId, binding.renderEndpointId);
-          diagnostics = await backend.refreshDiagnostics();
+              : "No audio started. This route also needs an input device: add an Input Device node, choose its device in Properties and connect it, or choose one in Advanced → Troubleshooting. Then press Play.",
+          );
+          recordUiDiagnostic("Session start blocked: exact endpoint selection is incomplete");
+          return false;
         }
-      if (!multiPathRoute && !applicationSource && !mixerApplicationRoute && diagnostics.nativeSessionId === session.id && diagnostics.nativeAdapter === "configured-stopped" && diagnostics.nativeAdapterKind === "endpoint") {
+        if (!backend.prepareNativeEndpoint) {
+          setActionMessage(
+            "No audio started. This backend cannot prepare the selected audio devices. See Advanced → Troubleshooting for details.",
+          );
+          return false;
+        }
+        setActionMessage("Preparing the selected audio devices...");
+        await backend.prepareNativeEndpoint(session.id, binding.captureEndpointId, binding.renderEndpointId);
+        diagnostics = await backend.refreshDiagnostics();
+      }
+      if (
+        !multiPathRoute &&
+        !applicationSource &&
+        !mixerApplicationRoute &&
+        diagnostics.nativeSessionId === session.id &&
+        diagnostics.nativeAdapter === "configured-stopped" &&
+        diagnostics.nativeAdapterKind === "endpoint"
+      ) {
         // A stopped WASAPI client may still reference the endpoints selected
         // before a device restart or a changed UI binding. Reopen only the
         // exact selected pair before activation; never substitute a default.
@@ -2207,7 +6173,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         setActionMessage("Checking the unsaved route for audio preview...");
         const plan = await backend.planGraph(candidate);
         if (currentSessionIdRef.current !== session.id || !sameSessionDraft(draftRef.current, candidate)) {
-          setActionMessage("The route changed while it was being checked. Press Play again to preview the latest draft.");
+          setActionMessage(
+            "The route changed while it was being checked. Press Play again to preview the latest draft.",
+          );
           return false;
         }
         if (plan.warnings.length > 0) {
@@ -2226,18 +6194,25 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       if (result.runtime !== "native") {
         await backend.stopSession(session.id, uiIdempotencyKey("simulation-stop"));
         await refresh();
-        setActionMessage("No audio played. The backend started a preview without a physical audio route, so it was stopped. Check the device chosen in each Input Device and Output Device node's Properties, then try again.");
+        setActionMessage(
+          "No audio played. The backend started a preview without a physical audio route, so it was stopped. Check the device chosen in each Input Device and Output Device node's Properties, then try again.",
+        );
         recordUiDiagnostic("Session start rejected simulated runtime; stopped it");
         return false;
       }
-      setNativeGenerations((current) => ({ ...current, [session.id]: {
-        generation: result.generation,
-        kind: diagnostics.nativeSessionId === session.id ? diagnostics.nativeAdapterKind ?? "endpoint" : "endpoint",
-      } }));
+      setNativeGenerations((current) => ({
+        ...current,
+        [session.id]: {
+          generation: result.generation,
+          kind: diagnostics.nativeSessionId === session.id ? (diagnostics.nativeAdapterKind ?? "endpoint") : "endpoint",
+        },
+      }));
       await refresh();
-      setActionMessage(candidate
-        ? `Temporary preview is running (generation ${result.generation}); the saved session is unchanged.`
-        : `Audio session is running (generation ${result.generation}).`);
+      setActionMessage(
+        candidate
+          ? `Temporary preview is running (generation ${result.generation}); the saved session is unchanged.`
+          : `Audio session is running (generation ${result.generation}).`,
+      );
       recordUiDiagnostic(`Native session started: generation ${result.generation}`);
       return true;
     } catch (error) {
@@ -2248,25 +6223,44 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         return false;
       }
       const message = formatUiError(error, "Unable to start session.");
-      setActionMessage(message); recordUiDiagnostic("Session start failed; review the current error and backend activity.");
+      setActionMessage(message);
+      recordUiDiagnostic("Session start failed; review the current error and backend activity.");
       return false;
-    } finally { sessionBusy.current = false; setSessionActionBusy(false); }
+    } finally {
+      sessionBusy.current = false;
+      setSessionActionBusy(false);
+    }
   };
-  const [timeShiftStatuses, setTimeShiftStatuses] = useState<Record<string, import("@audiorouter/contracts").MethodResult["timeShift.transport"]>>({});
-  const transportTimeShift = async (nodeId: string, action: import("@audiorouter/contracts").MethodParams["timeShift.transport"]["action"]) => {
+  const [timeShiftStatuses, setTimeShiftStatuses] = useState<
+    Record<string, import("@audiorouter/contracts").MethodResult["timeShift.transport"]>
+  >({});
+  const transportTimeShift = async (
+    nodeId: string,
+    action: import("@audiorouter/contracts").MethodParams["timeShift.transport"]["action"],
+  ) => {
     if (!backend.connected || !backend.transportTimeShift) return;
     try {
       const status = await backend.transportTimeShift(session.id, nodeId, action);
       if (currentSessionIdRef.current !== session.id) return;
       setTimeShiftStatuses((current) => ({ ...current, [nodeId]: status }));
-    } catch (error) { if (action !== "status") setActionMessage(formatUiError(error, "Time Shift is unavailable.")); }
+    } catch (error) {
+      if (action !== "status") setActionMessage(formatUiError(error, "Time Shift is unavailable."));
+    }
   };
   const transportTimeShiftRef = useRef(transportTimeShift);
   transportTimeShiftRef.current = transportTimeShift;
-  const timeShiftNodeIds = draft.nodes.filter((node) => node.kind === "timeShift" && node.enabled).map((node) => node.id).join(",");
+  const timeShiftNodeIds = draft.nodes
+    .filter((node) => node.kind === "timeShift" && node.enabled)
+    .map((node) => node.id)
+    .join(",");
   useEffect(() => {
-    if (!sessionRunning || !timeShiftNodeIds) { setTimeShiftStatuses({}); return; }
-    const poll = () => { for (const nodeId of timeShiftNodeIds.split(",")) void transportTimeShiftRef.current(nodeId, "status"); };
+    if (!sessionRunning || !timeShiftNodeIds) {
+      setTimeShiftStatuses({});
+      return;
+    }
+    const poll = () => {
+      for (const nodeId of timeShiftNodeIds.split(",")) void transportTimeShiftRef.current(nodeId, "status");
+    };
     poll();
     const timer = window.setInterval(poll, 1000);
     return () => window.clearInterval(timer);
@@ -2280,19 +6274,50 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       if (currentSessionIdRef.current !== session.id) return;
       setAudioSourceStates((current) => ({ ...current, [nodeId]: result.state }));
       setActionMessage(`${draft.nodes.find((node) => node.id === nodeId)?.name ?? "Audio file"} ${result.state}.`);
-    } catch (error) { setActionMessage(formatUiError(error, "Audio source transport failed.")); }
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Audio source transport failed."));
+    }
   };
   const startSessionRef = useRef(startSession);
   startSessionRef.current = startSession;
-  const stopSession = async (propagateFailure = false) => { if (sessionBusy.current || !backend.connected) return; sessionBusy.current = true; setSessionActionBusy(true); setActionMessage("Stopping session..."); try { await backend.stopSession(session.id, uiIdempotencyKey("session-stop")); setNativeGenerations((current) => { const next = { ...current }; delete next[session.id]; return next; }); setNativePumpStats(null); setAudioSourceStates({}); await refresh(); setActionMessage("Session stopped."); } catch (error) { setNativePumpStats(null); setActionMessage(formatUiError(error, "Unable to stop session.")); if (propagateFailure) throw error; } finally { sessionBusy.current = false; setSessionActionBusy(false); } };
+  const stopSession = async (propagateFailure = false) => {
+    if (sessionBusy.current || !backend.connected) return;
+    sessionBusy.current = true;
+    setSessionActionBusy(true);
+    setActionMessage("Stopping session...");
+    try {
+      await backend.stopSession(session.id, uiIdempotencyKey("session-stop"));
+      setNativeGenerations((current) => {
+        const next = { ...current };
+        delete next[session.id];
+        return next;
+      });
+      setNativePumpStats(null);
+      setAudioSourceStates({});
+      await refresh();
+      setActionMessage("Session stopped.");
+    } catch (error) {
+      setNativePumpStats(null);
+      setActionMessage(formatUiError(error, "Unable to stop session."));
+      if (propagateFailure) throw error;
+    } finally {
+      sessionBusy.current = false;
+      setSessionActionBusy(false);
+    }
+  };
   useEffect(() => {
     const onShortcut = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
       if (isEditableShortcutTarget(event.target)) return;
       const shortcut = shortcutFromKeyboardEvent(event);
       if (!shortcut || shortcutConflicts(shortcuts).length > 0) return;
-      if (shortcut === shortcuts.sessionToggle && backend.connected) { event.preventDefault(); void (sessionRunning ? stopSession() : startSession()); }
-      else if (shortcut === shortcuts.privacyMute && backend.connected) { event.preventDefault(); void togglePrivacyMute(); }
+      if (shortcut === shortcuts.sessionToggle && backend.connected) {
+        event.preventDefault();
+        void (sessionRunning ? stopSession() : startSession());
+      } else if (shortcut === shortcuts.privacyMute && backend.connected) {
+        event.preventDefault();
+        void togglePrivacyMute();
+      }
     };
     window.addEventListener("keydown", onShortcut);
     return () => window.removeEventListener("keydown", onShortcut);
@@ -2300,37 +6325,108 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const captureShortcut = (action: ShortcutAction, event: React.KeyboardEvent<HTMLInputElement>) => {
     event.preventDefault();
     const shortcut = shortcutFromKeyboardEvent(event.nativeEvent);
-    if (!shortcut) { setShortcutMessage("Use at least one modifier key and a non-modifier key."); return; }
+    if (!shortcut) {
+      setShortcutMessage("Use at least one modifier key and a non-modifier key.");
+      return;
+    }
     const next = { ...shortcuts, [action]: shortcut };
     setShortcuts(next);
-    setShortcutMessage(shortcutConflicts(next).length > 0 ? "Shortcut conflict: duplicate bindings are disabled until resolved." : null);
+    setShortcutMessage(
+      shortcutConflicts(next).length > 0 ? "Shortcut conflict: duplicate bindings are disabled until resolved." : null,
+    );
   };
-  const addLibraryNode = (kind: LibraryNodeKind, _position?: { x: number; y: number }) => { if (!backend.connected) { setActionMessage("Connect the backend before changing the draft."); return; } const next = appendLibraryNode(draft, kind); const inserted = next.nodes[next.nodes.length - 1]; recordDraftChange(next); setSelectedNodeId(inserted.id); setActionMessage(`${inserted.name} added to the draft. Review and plan the changes before committing.`); return inserted.id; };
-  const addEndpointLoopback = (endpointId: string) => { if (!backend.connected) { setActionMessage("Connect the backend before changing the draft."); return; } try { const next = appendEndpointLoopbackNode(draft, endpointId); const inserted = next.nodes.at(-1); recordDraftChange(next); if (inserted) setSelectedNodeId(inserted.id); setActionMessage(`${inserted?.name ?? "Endpoint loopback"} added to the stopped draft. Review and plan the changes before committing.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to add endpoint loopback.")); } };
-  const addVirtualBusNode = (busId: string, direction: "renderSource" | "captureSink") => { if (!backend.connected) { setActionMessage("Connect the backend before changing the draft."); return undefined; } try { const next = appendVirtualBusNode(draft, busId, direction); const inserted = next.nodes.at(-1); recordDraftChange(next); if (inserted) setSelectedNodeId(inserted.id); setActionMessage(`${inserted?.name ?? "Virtual bus node"} added to the stopped draft. Review and plan the changes before committing.`); return inserted?.id; } catch (error) { setActionMessage(formatUiError(error, "Unable to add virtual bus node.")); return undefined; } };
+  const addLibraryNode = (kind: LibraryNodeKind, _position?: { x: number; y: number }) => {
+    if (!backend.connected) {
+      setActionMessage("Connect the backend before changing the draft.");
+      return;
+    }
+    const next = appendLibraryNode(draft, kind);
+    const inserted = next.nodes[next.nodes.length - 1];
+    recordDraftChange(next);
+    setSelectedNodeId(inserted.id);
+    setActionMessage(`${inserted.name} added to the draft. Review and plan the changes before committing.`);
+    return inserted.id;
+  };
+  const addEndpointLoopback = (endpointId: string) => {
+    if (!backend.connected) {
+      setActionMessage("Connect the backend before changing the draft.");
+      return;
+    }
+    try {
+      const next = appendEndpointLoopbackNode(draft, endpointId);
+      const inserted = next.nodes.at(-1);
+      recordDraftChange(next);
+      if (inserted) setSelectedNodeId(inserted.id);
+      setActionMessage(
+        `${inserted?.name ?? "Endpoint loopback"} added to the stopped draft. Review and plan the changes before committing.`,
+      );
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to add endpoint loopback."));
+    }
+  };
+  const addVirtualBusNode = (busId: string, direction: "renderSource" | "captureSink") => {
+    if (!backend.connected) {
+      setActionMessage("Connect the backend before changing the draft.");
+      return undefined;
+    }
+    try {
+      const next = appendVirtualBusNode(draft, busId, direction);
+      const inserted = next.nodes.at(-1);
+      recordDraftChange(next);
+      if (inserted) setSelectedNodeId(inserted.id);
+      setActionMessage(
+        `${inserted?.name ?? "Virtual bus node"} added to the stopped draft. Review and plan the changes before committing.`,
+      );
+      return inserted?.id;
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to add virtual bus node."));
+      return undefined;
+    }
+  };
   const addPluginToDraft = (entry: import("@audiorouter/contracts").PluginScanEntry) => {
-    if (!backend.connected) { setActionMessage("Connect the backend before changing the draft."); return; }
+    if (!backend.connected) {
+      setActionMessage("Connect the backend before changing the draft.");
+      return;
+    }
     try {
       if (pluginInsertEdgeId) {
         const next = insertDraftPluginProcessor(draft, pluginInsertEdgeId, entry);
         const inserted = next.nodes.at(-1);
         recordDraftChange(next);
-        if (inserted) { setSelectedNodeId(inserted.id); setSelectedNodeIds([inserted.id]); }
-        setActionMessage(`${inserted?.name ?? "Plugin"}: inserted a stopped plugin placeholder into the connection. Bind a worker before activation, then Plan changes.`);
+        if (inserted) {
+          setSelectedNodeId(inserted.id);
+          setSelectedNodeIds([inserted.id]);
+        }
+        setActionMessage(
+          `${inserted?.name ?? "Plugin"}: inserted a stopped plugin placeholder into the connection. Bind a worker before activation, then Plan changes.`,
+        );
       } else {
         const next = appendPluginPlaceholderNode(draft, entry);
         const inserted = next.nodes.at(-1);
         recordDraftChange(next);
-        if (inserted) { setSelectedNodeId(inserted.id); setSelectedNodeIds([inserted.id]); }
-        setActionMessage(`${inserted?.name ?? "Plugin"}: added a stopped plugin placeholder to the draft. Bind a worker before activation, then Plan changes.`);
+        if (inserted) {
+          setSelectedNodeId(inserted.id);
+          setSelectedNodeIds([inserted.id]);
+        }
+        setActionMessage(
+          `${inserted?.name ?? "Plugin"}: added a stopped plugin placeholder to the draft. Bind a worker before activation, then Plan changes.`,
+        );
       }
       closePluginPicker();
     } catch (error) {
       setActionMessage(error instanceof Error ? error.message : "Could not add plugin placeholder.");
     }
   };
-  const addDroppedVirtualBusNode = (direction: "renderSource" | "captureSink", _position: { x: number; y: number }) => { const busId = window.prompt("Existing virtual bus ID", "virtual-bus")?.trim(); return busId ? addVirtualBusNode(busId, direction) : undefined; };
-  const tryDraftConnection = (sourceNode: string, sourcePort: string, destinationNode: string, destinationPort: string): string | null => {
+  const addDroppedVirtualBusNode = (direction: "renderSource" | "captureSink", _position: { x: number; y: number }) => {
+    const busId = window.prompt("Existing virtual bus ID", "virtual-bus")?.trim();
+    return busId ? addVirtualBusNode(busId, direction) : undefined;
+  };
+  const tryDraftConnection = (
+    sourceNode: string,
+    sourcePort: string,
+    destinationNode: string,
+    destinationPort: string,
+  ): string | null => {
     const current = draftRef.current;
     try {
       const next = appendDraftConnection(current, sourceNode, sourcePort, destinationNode, destinationPort);
@@ -2339,9 +6435,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setActionMessage("Connection added to the draft. Save route when you are ready.");
       return added?.id ?? null;
     } catch (error) {
-      const occupied = error instanceof Error && error.message === "That input already has a connection"
-        ? current.edges.find((edge) => edge.destinationNode === destinationNode && edge.destinationPort === destinationPort)
-        : undefined;
+      const occupied =
+        error instanceof Error && error.message === "That input already has a connection"
+          ? current.edges.find(
+              (edge) => edge.destinationNode === destinationNode && edge.destinationPort === destinationPort,
+            )
+          : undefined;
       if (occupied) {
         const destinationName = current.nodes.find((node) => node.id === destinationNode)?.name ?? "This input";
         const priorName = current.nodes.find((node) => node.id === occupied.sourceNode)?.name ?? "another source";
@@ -2352,10 +6451,17 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             try {
               const rerouted = routeFedMixerToOccupiedOutput(current, occupied.id, sourceNode, sourcePort);
               if (rerouted) {
-                const newEdge = rerouted.edges.find((edge) => edge.sourceNode === sourceNode && edge.destinationNode === destinationNode && edge.destinationPort === destinationPort);
+                const newEdge = rerouted.edges.find(
+                  (edge) =>
+                    edge.sourceNode === sourceNode &&
+                    edge.destinationNode === destinationNode &&
+                    edge.destinationPort === destinationPort,
+                );
                 recordDraftChange(rerouted);
                 setConnectionReplacement(null);
-                setActionMessage(`Connected ${requestedSource.name} to ${destinationName} and removed the direct ${priorName} branch so the same signal is not heard twice.`);
+                setActionMessage(
+                  `Connected ${requestedSource.name} to ${destinationName} and removed the direct ${priorName} branch so the same signal is not heard twice.`,
+                );
                 setSelectedNodeId(requestedSource.id);
                 setSelectedNodeIds([requestedSource.id]);
                 return newEdge?.id ?? null;
@@ -2370,19 +6476,33 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             const mixer = mixed.nodes.at(-1);
             recordDraftChange(mixed);
             setConnectionReplacement(null);
-            setActionMessage(`Added a Mixer so ${priorName} and ${current.nodes.find((node) => node.id === sourceNode)?.name ?? "the new source"} can share ${destinationName}. Adjust the Mixer, then Save route when ready.`);
-            if (mixer) { setSelectedNodeId(mixer.id); setSelectedNodeIds([mixer.id]); }
+            setActionMessage(
+              `Added a Mixer so ${priorName} and ${current.nodes.find((node) => node.id === sourceNode)?.name ?? "the new source"} can share ${destinationName}. Adjust the Mixer, then Save route when ready.`,
+            );
+            if (mixer) {
+              setSelectedNodeId(mixer.id);
+              setSelectedNodeIds([mixer.id]);
+            }
             return mixer?.id ?? null;
           } catch (mixError) {
             setActionMessage(formatUiError(mixError, "Unable to combine these sources."));
             return null;
           }
         }
-        setConnectionReplacement({ sessionId: session.id, edgeId: occupied.id, sourceNode, sourcePort, destinationNode, destinationPort });
+        setConnectionReplacement({
+          sessionId: session.id,
+          edgeId: occupied.id,
+          sourceNode,
+          sourcePort,
+          destinationNode,
+          destinationPort,
+        });
         const directionHelp = destination?.ports.some((port) => port.direction === "output")
           ? ` To send audio out of ${destinationName}, start at its blue sending connector and drag to the receiving tool's orange connector.`
           : " An input accepts one source.";
-        setActionMessage(`${destinationName} already receives ${priorName}.${directionHelp} Choose Replace input connection only to change what feeds ${destinationName}; Undo restores its previous input.`);
+        setActionMessage(
+          `${destinationName} already receives ${priorName}.${directionHelp} Choose Replace input connection only to change what feeds ${destinationName}; Undo restores its previous input.`,
+        );
         recordUiDiagnostic("Connection rejected: occupied destination input; replacement offered");
       } else {
         setConnectionReplacement(null);
@@ -2394,21 +6514,97 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const replaceInputConnection = () => {
     const pending = connectionReplacement;
     const current = draftRef.current;
-    if (!pending || pending.sessionId !== session.id || !current.edges.some((edge) => edge.id === pending.edgeId && edge.destinationNode === pending.destinationNode && edge.destinationPort === pending.destinationPort)) {
+    if (
+      !pending ||
+      pending.sessionId !== session.id ||
+      !current.edges.some(
+        (edge) =>
+          edge.id === pending.edgeId &&
+          edge.destinationNode === pending.destinationNode &&
+          edge.destinationPort === pending.destinationPort,
+      )
+    ) {
       setConnectionReplacement(null);
       setActionMessage("That connection changed. Try connecting the nodes again.");
       return;
     }
     try {
-      const next = appendDraftConnection(removeDraftConnection(current, pending.edgeId), pending.sourceNode, pending.sourcePort, pending.destinationNode, pending.destinationPort);
+      const next = appendDraftConnection(
+        removeDraftConnection(current, pending.edgeId),
+        pending.sourceNode,
+        pending.sourcePort,
+        pending.destinationNode,
+        pending.destinationPort,
+      );
       recordDraftChange(next);
-      setActionMessage("Input connection replaced in the draft. Undo restores the previous route; Save route when ready.");
-    } catch (error) { setConnectionReplacement(null); setActionMessage(formatUiError(error, "Unable to replace the input connection.")); }
+      setActionMessage(
+        "Input connection replaced in the draft. Undo restores the previous route; Save route when ready.",
+      );
+    } catch (error) {
+      setConnectionReplacement(null);
+      setActionMessage(formatUiError(error, "Unable to replace the input connection."));
+    }
   };
-  const addConnection = () => { const source = decodePort(connectionSource); const destination = decodePort(connectionDestination); if (!source || !destination) { setActionMessage("Choose an output and input port first."); return false; } return tryDraftConnection(source.nodeId, source.portName, destination.nodeId, destination.portName) !== null; };
-  const insertProcessor = (edgeId: string, kind: InsertableProcessorKind) => { if (!backend.connected) { setActionMessage("Connect the backend before changing draft topology."); return; } try { const next = insertDraftProcessor(draft, edgeId, kind); const inserted = next.nodes.at(-1); recordDraftChange(next); if (inserted) setSelectedNodeId(inserted.id); setActionMessage(`${inserted?.name ?? kind} inserted into the draft. Review and plan the changes before committing.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to insert processor.")); } };
-  const appendPreset = (presetId: EqPresetId) => { if (!backend.connected) { setActionMessage("Connect the backend before adding a preset."); return; } try { const next = appendEqPresetNode(draft, presetId); const inserted = next.nodes.at(-1); recordDraftChange(next); if (inserted) setSelectedNodeId(inserted.id); setActionMessage(`${inserted?.name ?? "EQ preset"} added to the draft. Review and plan the changes before committing.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to add preset.")); } };
-  const appendVoicePreset = (presetId: VoiceChainPresetId) => { if (!backend.connected) { setActionMessage("Connect the backend before adding a preset."); return; } try { const next = appendVoiceChainPreset(draft, presetId); const added = next.nodes.slice(draft.nodes.length); recordDraftChange(next); if (added[0]) setSelectedNodeId(added[0].id); setActionMessage(`${added.map((node) => node.name).join(", ")} added to the draft. Review and plan the changes before committing.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to add voice preset.")); } };
+  const addConnection = () => {
+    const source = decodePort(connectionSource);
+    const destination = decodePort(connectionDestination);
+    if (!source || !destination) {
+      setActionMessage("Choose an output and input port first.");
+      return false;
+    }
+    return tryDraftConnection(source.nodeId, source.portName, destination.nodeId, destination.portName) !== null;
+  };
+  const insertProcessor = (edgeId: string, kind: InsertableProcessorKind) => {
+    if (!backend.connected) {
+      setActionMessage("Connect the backend before changing draft topology.");
+      return;
+    }
+    try {
+      const next = insertDraftProcessor(draft, edgeId, kind);
+      const inserted = next.nodes.at(-1);
+      recordDraftChange(next);
+      if (inserted) setSelectedNodeId(inserted.id);
+      setActionMessage(
+        `${inserted?.name ?? kind} inserted into the draft. Review and plan the changes before committing.`,
+      );
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to insert processor."));
+    }
+  };
+  const appendPreset = (presetId: EqPresetId) => {
+    if (!backend.connected) {
+      setActionMessage("Connect the backend before adding a preset.");
+      return;
+    }
+    try {
+      const next = appendEqPresetNode(draft, presetId);
+      const inserted = next.nodes.at(-1);
+      recordDraftChange(next);
+      if (inserted) setSelectedNodeId(inserted.id);
+      setActionMessage(
+        `${inserted?.name ?? "EQ preset"} added to the draft. Review and plan the changes before committing.`,
+      );
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to add preset."));
+    }
+  };
+  const appendVoicePreset = (presetId: VoiceChainPresetId) => {
+    if (!backend.connected) {
+      setActionMessage("Connect the backend before adding a preset.");
+      return;
+    }
+    try {
+      const next = appendVoiceChainPreset(draft, presetId);
+      const added = next.nodes.slice(draft.nodes.length);
+      recordDraftChange(next);
+      if (added[0]) setSelectedNodeId(added[0].id);
+      setActionMessage(
+        `${added.map((node) => node.name).join(", ")} added to the draft. Review and plan the changes before committing.`,
+      );
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to add voice preset."));
+    }
+  };
   useEffect(() => {
     const handleInsertProcessor = (event: Event) => {
       const detail = (event as CustomEvent<{ edgeId?: string; kind?: InsertableProcessorKind }>).detail;
@@ -2456,68 +6652,140 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const addDroppedCanvasNode = (kind: string, _dropPosition?: { x: number; y: number }) => {
     if (kind === "virtualRenderSource" || kind === "virtualCaptureSink") {
       const busId = window.prompt("Existing virtual bus ID", "virtual-bus")?.trim();
-      return busId ? addVirtualBusNode(busId, kind === "virtualRenderSource" ? "renderSource" : "captureSink") : undefined;
+      return busId
+        ? addVirtualBusNode(busId, kind === "virtualRenderSource" ? "renderSource" : "captureSink")
+        : undefined;
     }
     return addLibraryNode(kind as LibraryNodeKind);
   };
   const connectCanvas = (connection: Connection, dropPosition?: { x: number; y: number }) => {
-    if (!backend.connected) { setActionMessage("Connect the backend before adding a canvas connection."); return; }
+    if (!backend.connected) {
+      setActionMessage("Connect the backend before adding a canvas connection.");
+      return;
+    }
     if (connection.source === LIBRARY_DROP_SOURCE && connection.sourceHandle) {
       return addDroppedCanvasNode(connection.sourceHandle, dropPosition);
     }
-    if (!connection.source || !connection.sourceHandle || !connection.target || !connection.targetHandle) { setActionMessage("Choose a named output and input port."); return; }
-    return tryDraftConnection(connection.source, connection.sourceHandle, connection.target, connection.targetHandle) ?? undefined;
+    if (!connection.source || !connection.sourceHandle || !connection.target || !connection.targetHandle) {
+      setActionMessage("Choose a named output and input port.");
+      return;
+    }
+    return (
+      tryDraftConnection(connection.source, connection.sourceHandle, connection.target, connection.targetHandle) ??
+      undefined
+    );
   };
-  const openConnectionDialog = (event: React.MouseEvent<HTMLButtonElement>) => { connectionDialogReturnFocus.current = event.currentTarget; setConnectionDialogOpen(true); };
-  const closeConnectionDialog = () => { setConnectionDialogOpen(false); window.setTimeout(() => connectionDialogReturnFocus.current?.focus(), 0); };
+  const openConnectionDialog = (event: React.MouseEvent<HTMLButtonElement>) => {
+    connectionDialogReturnFocus.current = event.currentTarget;
+    setConnectionDialogOpen(true);
+  };
+  const closeConnectionDialog = () => {
+    setConnectionDialogOpen(false);
+    window.setTimeout(() => connectionDialogReturnFocus.current?.focus(), 0);
+  };
   useEffect(() => {
     if (!connectionDialogOpen) return;
     connectionDialogSource.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.preventDefault(); closeConnectionDialog(); return; }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeConnectionDialog();
+        return;
+      }
       if (event.key !== "Tab") return;
-      const focusable = connectionDialog.current?.querySelectorAll<HTMLElement>("button:not([disabled]), select:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])");
+      const focusable = connectionDialog.current?.querySelectorAll<HTMLElement>(
+        "button:not([disabled]), select:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+      );
       if (!focusable?.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [connectionDialogOpen]);
-  const openPluginPicker = (edgeId?: string) => { pluginPickerReturnFocus.current = document.activeElement as HTMLElement | null; setPluginInsertEdgeId(edgeId ?? null); setPluginPickerOpen(true); };
-  const closePluginPicker = () => { setPluginPickerOpen(false); setPluginInsertEdgeId(null); window.setTimeout(() => pluginPickerReturnFocus.current?.focus(), 0); };
+  const openPluginPicker = (edgeId?: string) => {
+    pluginPickerReturnFocus.current = document.activeElement as HTMLElement | null;
+    setPluginInsertEdgeId(edgeId ?? null);
+    setPluginPickerOpen(true);
+  };
+  const closePluginPicker = () => {
+    setPluginPickerOpen(false);
+    setPluginInsertEdgeId(null);
+    window.setTimeout(() => pluginPickerReturnFocus.current?.focus(), 0);
+  };
   useEffect(() => {
     if (!pluginPickerOpen) return;
-    (pluginPickerDialog.current?.querySelector<HTMLElement>("input") ?? pluginPickerDialog.current?.querySelector<HTMLElement>("button"))?.focus();
+    (
+      pluginPickerDialog.current?.querySelector<HTMLElement>("input") ??
+      pluginPickerDialog.current?.querySelector<HTMLElement>("button")
+    )?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.preventDefault(); closePluginPicker(); return; }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closePluginPicker();
+        return;
+      }
       if (event.key !== "Tab") return;
-      const focusable = pluginPickerDialog.current?.querySelectorAll<HTMLElement>("button:not([disabled]), select:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])");
+      const focusable = pluginPickerDialog.current?.querySelectorAll<HTMLElement>(
+        "button:not([disabled]), select:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+      );
       if (!focusable?.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [pluginPickerOpen]);
-  const openApplicationPicker = () => { applicationPickerReturnFocus.current = document.activeElement as HTMLElement | null; setApplicationPickerSelection(""); refreshApplications(); setApplicationPickerOpen(true); };
-  const closeApplicationPicker = () => { setApplicationPickerOpen(false); window.setTimeout(() => applicationPickerReturnFocus.current?.focus(), 0); };
+  const openApplicationPicker = () => {
+    applicationPickerReturnFocus.current = document.activeElement as HTMLElement | null;
+    setApplicationPickerSelection("");
+    refreshApplications();
+    setApplicationPickerOpen(true);
+  };
+  const closeApplicationPicker = () => {
+    setApplicationPickerOpen(false);
+    window.setTimeout(() => applicationPickerReturnFocus.current?.focus(), 0);
+  };
   useEffect(() => {
     if (!applicationPickerOpen) return;
-    (applicationPickerDialog.current?.querySelector<HTMLElement>("select") ?? applicationPickerDialog.current?.querySelector<HTMLElement>("button:not([disabled])"))?.focus();
+    (
+      applicationPickerDialog.current?.querySelector<HTMLElement>("select") ??
+      applicationPickerDialog.current?.querySelector<HTMLElement>("button:not([disabled])")
+    )?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.preventDefault(); closeApplicationPicker(); return; }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeApplicationPicker();
+        return;
+      }
       if (event.key !== "Tab") return;
-      const focusable = applicationPickerDialog.current?.querySelectorAll<HTMLElement>("button:not([disabled]), select:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])");
+      const focusable = applicationPickerDialog.current?.querySelectorAll<HTMLElement>(
+        "button:not([disabled]), select:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+      );
       if (!focusable?.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -2531,80 +6799,1738 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setSelectedNodeId(added.id);
       setActionMessage("Added an application-capture source; review identity and plan the graph before committing.");
       closeApplicationPicker();
-    } catch (error) { setActionMessage(error instanceof Error ? error.message : "Could not add application capture."); }
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : "Could not add application capture.");
+    }
   };
   const rebindApplicationCapture = (nodeId: string, application: ApplicationRow) => {
     try {
       recordDraftChange(rebindApplicationCaptureNode(draftRef.current, nodeId, application));
-      setActionMessage(`Application source changed to ${application.executable} (PID ${application.processId}). Review and plan the changes before committing.`);
-    } catch (error) { setActionMessage(error instanceof Error ? error.message : "Could not change the application source."); }
+      setActionMessage(
+        `Application source changed to ${application.executable} (PID ${application.processId}). Review and plan the changes before committing.`,
+      );
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : "Could not change the application source.");
+    }
   };
-  const removeConnection = (edgeId: string) => { if (!backend.connected) { setActionMessage("Connect the backend before changing draft topology."); return; } const topologyAction = decodeTopologyAction(edgeId); try { if (topologyAction?.kind === "insertMixer") recordDraftChange(insertDraftMixer(draft, topologyAction.id)); else if (topologyAction?.kind === "removeMixer") recordDraftChange(removeSinglePathDraftMixer(draft, topologyAction.id)); else recordDraftChange(removeDraftConnection(draft, edgeId)); setActionMessage(topologyAction?.kind === "insertMixer" ? "Mixer inserted into the draft. Review and plan the changes before committing." : topologyAction?.kind === "removeMixer" ? "Mixer removed and its single path reconnected in the draft. Review and plan the changes before committing." : "Connection removed from the draft. Review and plan the changes before committing."); } catch (error) { setActionMessage(formatUiError(error, topologyAction?.kind === "insertMixer" ? "Unable to insert mixer." : topologyAction?.kind === "removeMixer" ? "Unable to remove and reconnect mixer." : "Unable to remove connection.")); } };
-  const toggleConnection = (edgeId: string, enabled: boolean) => { if (!backend.connected) { setActionMessage("Connect the backend before changing draft topology."); return; } try { recordDraftChange(setDraftConnectionEnabled(draft, edgeId, enabled)); setActionMessage(`Connection ${enabled ? "enabled" : "disabled"} in the draft. Review and plan the changes before committing.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to change connection state.")); } };
-  const removeSelectedNode = () => { if (draft.nodes.length <= 1) { setActionMessage("A route must keep at least one node. Add another node before removing this one."); return; } try { const next = removeDraftNode(draft, selectedNode.id); recordDraftChange(next); setSelectedNodeId(next.nodes[0]?.id ?? ""); setActionMessage("Node removed. Choose Undo in Session to bring it back, or Save route to keep the change."); } catch (error) { setActionMessage(formatUiError(error, "Unable to remove node.")); } };
+  const removeConnection = (edgeId: string) => {
+    if (!backend.connected) {
+      setActionMessage("Connect the backend before changing draft topology.");
+      return;
+    }
+    const topologyAction = decodeTopologyAction(edgeId);
+    try {
+      if (topologyAction?.kind === "insertMixer") recordDraftChange(insertDraftMixer(draft, topologyAction.id));
+      else if (topologyAction?.kind === "removeMixer")
+        recordDraftChange(removeSinglePathDraftMixer(draft, topologyAction.id));
+      else recordDraftChange(removeDraftConnection(draft, edgeId));
+      setActionMessage(
+        topologyAction?.kind === "insertMixer"
+          ? "Mixer inserted into the draft. Review and plan the changes before committing."
+          : topologyAction?.kind === "removeMixer"
+            ? "Mixer removed and its single path reconnected in the draft. Review and plan the changes before committing."
+            : "Connection removed from the draft. Review and plan the changes before committing.",
+      );
+    } catch (error) {
+      setActionMessage(
+        formatUiError(
+          error,
+          topologyAction?.kind === "insertMixer"
+            ? "Unable to insert mixer."
+            : topologyAction?.kind === "removeMixer"
+              ? "Unable to remove and reconnect mixer."
+              : "Unable to remove connection.",
+        ),
+      );
+    }
+  };
+  const toggleConnection = (edgeId: string, enabled: boolean) => {
+    if (!backend.connected) {
+      setActionMessage("Connect the backend before changing draft topology.");
+      return;
+    }
+    try {
+      recordDraftChange(setDraftConnectionEnabled(draft, edgeId, enabled));
+      setActionMessage(
+        `Connection ${enabled ? "enabled" : "disabled"} in the draft. Review and plan the changes before committing.`,
+      );
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to change connection state."));
+    }
+  };
+  const removeSelectedNode = () => {
+    if (draft.nodes.length <= 1) {
+      setActionMessage("A route must keep at least one node. Add another node before removing this one.");
+      return;
+    }
+    try {
+      const next = removeDraftNode(draft, selectedNode.id);
+      recordDraftChange(next);
+      setSelectedNodeId(next.nodes[0]?.id ?? "");
+      setActionMessage("Node removed. Choose Undo in Session to bring it back, or Save route to keep the change.");
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to remove node."));
+    }
+  };
   const unloadPluginNode = (nodeId: string) => {
     const node = draft.nodes.find((candidate) => candidate.id === nodeId);
     if (!node) return;
-    if (draft.nodes.length <= 1) { setActionMessage("A draft must keep at least one node. Add another node before removing this one."); return; }
+    if (draft.nodes.length <= 1) {
+      setActionMessage("A draft must keep at least one node. Add another node before removing this one.");
+      return;
+    }
     if (!window.confirm(`Unload plugin “${node.name}” and remove it from the draft?`)) return;
     try {
       const next = removeDraftNode(draft, nodeId);
       recordDraftChange(next);
-      if (selectedNodeId === nodeId) { setSelectedNodeId(next.nodes[0]?.id ?? ""); setSelectedNodeIds(next.nodes[0] ? [next.nodes[0].id] : []); }
+      if (selectedNodeId === nodeId) {
+        setSelectedNodeId(next.nodes[0]?.id ?? "");
+        setSelectedNodeIds(next.nodes[0] ? [next.nodes[0].id] : []);
+      }
       setActionMessage(`${node.name} unloaded from the draft. Review and plan the changes before committing.`);
-    } catch (error) { setActionMessage(formatUiError(error, "Unable to unload plugin.")); }
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to unload plugin."));
+    }
   };
-  const duplicateSelectedNode = () => { try { const next = duplicateDraftNode(draft, selectedNode.id); const copy = next.nodes[next.nodes.length - 1]; recordDraftChange(next); setSelectedNodeId(copy.id); setActionMessage(`${copy.name} added to the draft without connections. Review and plan the changes before committing.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to duplicate node.")); } };
-  if (backend.connected && !hasSnapshot) return <div className={`app-shell theme-${theme}`}><main className="panel" aria-label="Loading saved session"><h1>AudioRouter</h1><p role="status">{snapshotState.error ? `Unable to load your saved session: ${snapshotState.error}` : "Loading your saved session…"}</p>{snapshotState.error && <button type="button" onClick={refresh}>Reconnect</button>}</main></div>;
+  const duplicateSelectedNode = () => {
+    try {
+      const next = duplicateDraftNode(draft, selectedNode.id);
+      const copy = next.nodes[next.nodes.length - 1];
+      recordDraftChange(next);
+      setSelectedNodeId(copy.id);
+      setActionMessage(
+        `${copy.name} added to the draft without connections. Review and plan the changes before committing.`,
+      );
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to duplicate node."));
+    }
+  };
+  if (backend.connected && !hasSnapshot)
+    return (
+      <div className={`app-shell theme-${theme}`}>
+        <main className="panel" aria-label="Loading saved session">
+          <h1>AudioRouter</h1>
+          <p role="status">
+            {snapshotState.error
+              ? `Unable to load your saved session: ${snapshotState.error}`
+              : "Loading your saved session…"}
+          </p>
+          {snapshotState.error && (
+            <button type="button" onClick={refresh}>
+              Reconnect
+            </button>
+          )}
+        </main>
+      </div>
+    );
   // Built once per App render, outside the per-tick telemetry render prop:
   // meter ticks reach the canvas only through its telemetry store.
-  const flowCanvas = <SessionFlowCanvas groups={groupState.groups} selectedGroupId={groupState.selectedGroupId} onSelectGroup={(id) => { groupState.selectGroup(id); if (id) setWorkbenchTab("properties"); }} onChangeGroup={groupState.changeGroup} onRemoveGroup={groupState.removeGroup} session={draft} selectedNodeId={selectedNode.id} selectedNodeIds={selectedNodeIds} diagnostics={snapshot?.diagnostics ?? null} telemetryStore={telemetryStore} flowAnimation={flowAnimation} sessionRunning={sessionRunning} sessionActionBusy={sessionActionBusy} testSignalPlaybackReady={testSignalPlaybackReady} testSignalEndpointPrepared={testSignalEndpointPrepared} onStartTestSignal={() => void startSession()} onStopTestSignal={() => void stopSession()} onAudioSourceTransport={(nodeId, action) => void transportAudioSource(nodeId, action)} onTimeShiftTransport={(nodeId, action) => void transportTimeShift(nodeId, action)} timeShiftStatuses={timeShiftStatuses} audioSourceStates={audioSourceStates} recorderStatuses={recorderStatuses} onSetNodeParameter={changeNodeParameterOn} onToggleRecording={(nodeId, record) => void toggleNodeRecording(nodeId, record)} recordingBusyNodeId={recordingBusy} onSelect={selectNodeProperties} onSelectMany={(ids) => { setSelectedNodeIds(ids); if (ids[0]) setSelectedNodeId(ids[0]); }} onConnect={connectCanvas} onRemoveConnection={removeConnection} onToggleConnection={toggleConnection} onInsertProcessor={insertProcessor} onAddLibraryNode={addLibraryNode} onAddVirtualBusNode={addDroppedVirtualBusNode} onOpenPluginPicker={openPluginPicker} onOpenApplicationPicker={openApplicationPicker} onConnectionRejected={setActionMessage} canEdit={backend.connected} />;
-  const connectionWorkbenchContent = <fieldset className="connection-editor workbench-connection-editor" disabled={!backend.connected}><legend>Add connections to the draft</legend><p className="muted">Choose an output and input for each link. These connections are reviewed when you plan the graph.</p><label>Output<select aria-label="Source output port" value={connectionSource} onChange={(event) => setConnectionSource(event.target.value)}><option value="">Choose source</option>{outputPorts.map((port) => <option key={encodePort(port.nodeId, port.portName)} value={encodePort(port.nodeId, port.portName)}>{port.nodeName} · {port.portName} · {port.channels}ch</option>)}</select></label><label>Input<select aria-label="Destination input port" value={connectionDestination} onChange={(event) => setConnectionDestination(event.target.value)}><option value="">Choose destination</option>{inputPorts.map((port) => <option key={encodePort(port.nodeId, port.portName)} value={encodePort(port.nodeId, port.portName)}>{port.nodeName} · {port.portName} · {port.channels}ch</option>)}</select></label><button type="button" className="primary" onClick={addConnection}>Add connection</button></fieldset>;
-  const setupWorkbenchContent = <><DeviceAccessSetting backend={backend} />
-    <FirstRunGuide devices={devices} connected={backend.connected} onRefresh={() => refreshDevices()} onOpenTools={() => setWorkbenchTab("tools")} />
-    <section className="panel setup-panel" aria-labelledby="setup-status-heading"><h3 id="setup-status-heading">Status</h3><ul className="setup-status-list">{setupSteps.map((step) => <li key={step.id} className={`is-${step.state}`}><span className="setup-status-dot" aria-hidden="true" /><span><strong>{step.label}</strong><small>{step.detail}</small></span></li>)}</ul></section>
-    <ThisPcDevices devices={devices} connected={backend.connected} onRefresh={() => refreshDevices()} />
-    <section className="panel setup-panel" aria-labelledby="setup-other-apps-heading"><h3 id="setup-other-apps-heading">Use with other apps</h3><p className="muted">AudioRouter does not change settings in Windows or in other apps. To send your processed microphone to Discord, OBS or a game, end the route in an Output Device set to a virtual cable (for example CABLE Input), then choose the matching input (CABLE Output) as the microphone in that app.</p></section>
-    <FlowAnimationSetting mode={flowAnimation} onChange={changeFlowAnimation} />
-    <UpdatesPanel enabled={updateChecks} onChange={(enabled) => { setUpdateCheckEnabled(enabled); setUpdateChecks(enabled); }} update={availableUpdate} />
-  </>;
-  const devicesWorkbenchContent = <><p className="muted">Devices chosen here are used only when a single route's Input Device or Output Device node has no device of its own.</p><NativeEndpointPanel backend={backend} sessionId={session.id} devices={devices} sessionRunning={sessionRunning} onStart={async () => { await startSession(); }} onStop={stopSession} onAddEndpointLoopback={addEndpointLoopback} captureEndpointId={captureEndpointId} setCaptureEndpointId={setCaptureEndpointId} renderEndpointId={renderEndpointId} setRenderEndpointId={setRenderEndpointId} /><details><summary>Multiple capture devices</summary><NativeMultiInputPanel backend={backend} sessionId={session.id} devices={devices} sessionRunning={sessionRunning} applicationNodes={session.nodes} /></details><details><summary>Multiple output devices</summary><NativeOutputFanoutPanel backend={backend} sessionId={session.id} devices={devices} sessionRunning={sessionRunning} /></details><details><summary>Managed virtual devices and routes</summary><VirtualDeviceLifecyclePanel backend={backend} onAddVirtualBusNode={addVirtualBusNode} /><VirtualRoutePanel backend={backend} /></details></>;
-  const recordingWorkbenchContent = <><RecordingFolderField backend={backend} connected={backend.connected} /><RecorderActions backend={backend} sessionId={session.id} connected={backend.connected} recorderStatuses={recorderStatuses} recorderStatusAvailable={recorderStatusAvailable} recorderNodeIds={draft.nodes.filter((node) => node.kind === "recorder").map((node) => node.id)} selectedNodeId={selectedNode.id} onSelectNode={(nodeId) => { setSelectedNodeId(nodeId); setSelectedNodeIds([nodeId]); }} format={recorderFormat} onFormatChange={setRecorderFormat} /><RecordingActions recordings={recordings} connected={backend.connected} busy={recordingMutationBusyState} onRename={renameRecording} onReveal={revealRecording} onRecycle={recycleRecording} /><p className="muted">{recordingsError ?? (recordings.length === 0 ? "No completed recording files yet." : `${recordings.length} recording files are available.`)}</p>{/* The recording library: browse, search, preview and edit takes. Until 2026-10-04 it rendered only in an always-hidden panel. */}<section className="recording-library" aria-label="Recording library"><div className="panel"><div className="section-heading"><h2>Recordings</h2><span className="badge">{recordingsError ? "unavailable" : `${visibleRecordings.length}${recordingSearch.trim() ? ` of ${recordings.length}` : ""} file${visibleRecordings.length === 1 ? "" : "s"}`}</span></div><label className="recording-search">Search recordings<input id="recording-search" type="search" value={recordingSearch} onChange={(event) => setRecordingSearch(event.target.value.slice(0, 160))} placeholder="Title, path, or status" /></label>{recordingsError ? <p className="muted">Recording library unavailable: {recordingsError}</p> : recordings.length === 0 ? <p className="muted">No recording has been armed. Completed recordings will appear here with path and status.</p> : visibleRecordings.length === 0 ? <p className="muted">No recording matches this search.</p> : visibleRecordings.map((recording) => <article className="recording-row" key={recording.id} aria-label={recording.title || recording.path.split(/[\\/]/).pop() || recording.id}>
-      <div className="recording-row-heading"><strong>{recording.title || recording.path.split(/[\\/]/).pop()}</strong><span className="badge">{recording.missing ? "missing" : recording.state}</span></div>
-      <small className="recording-row-path">{recording.path}</small>
-      <small>Duration {formatRecordingDuration(recording.frames, recording.sampleRate)} · {recording.fileBytes} bytes</small>
-      <label>Title<input aria-label={`Title for ${recording.id}`} value={metadataTitles[recording.id] ?? recording.title ?? ""} onChange={(event) => setMetadataTitles((current) => ({ ...current, [recording.id]: event.target.value }))} /></label>
-      <label>Artist<input aria-label={`Artist for ${recording.id}`} value={metadataArtists[recording.id] ?? recording.artist ?? ""} onChange={(event) => setMetadataArtists((current) => ({ ...current, [recording.id]: event.target.value }))} /></label>
-      <label>Comment<input aria-label={`Comment for ${recording.id}`} value={metadataComments[recording.id] ?? recording.comment ?? ""} onChange={(event) => setMetadataComments((current) => ({ ...current, [recording.id]: event.target.value }))} /></label>
-      <div className="recording-row-actions"><button type="button" className="secondary" onClick={() => void saveRecordingMetadata(recording)} disabled={!backend.connected}>Save metadata</button><button type="button" className="secondary" onClick={() => void previewRecording(recording.id)} disabled={!backend.connected}>Preview</button><button type="button" className="secondary" onClick={() => void inspectRecovery(recording.id)} disabled={!backend.connected}>Recovery</button><button type="button" className="secondary" onClick={() => void removeRecordingEntry(recording.id)} disabled={!backend.connected}>Remove entry</button></div>
-    </article>)}{previewMessage && <p className="muted" role="status">{previewMessage}</p>}{recoveryMessage && <p className="muted" role="status">{recoveryMessage}</p>}</div></section></>;
-  const advancedWorkbenchContent = <div className="workbench-groups">
-    <details className="startup-group"><summary>When AudioRouter starts</summary><p className="muted">Start with Windows in the tray (no window) and, if you like, play the selected session and start the API right away. Closing the window keeps audio playing in the tray.</p><StartupPanel backend={backend} /><AutoplaySetting /><ApiAutostartSetting /></details>
-    <details><summary>Keyboard graph controls</summary><NodeList session={draft} selectedNodeId={selectedNode.id} onSelect={selectNodeProperties} onRemoveConnection={removeConnection} onToggleConnection={toggleConnection} onInsertProcessor={insertProcessor} onOpenPluginPicker={openPluginPicker} /></details>
-    <details className="connection-form-group"><summary>Connect nodes without dragging</summary><p className="muted">The same as dragging from one node to another on the canvas, for keyboard and screen-reader use.</p>{connectionWorkbenchContent}</details>
-    <details className="device-troubleshooting"><summary>Troubleshooting: manual device binding</summary><p className="muted">You normally do not need this. Choose each device in the Input Device or Output Device node's Properties and press Play. Use these controls to check a device's format, reopen a device after Windows reset it, run a deliberate VB-Cable loopback test, or add a loopback source.</p>{devicesWorkbenchContent}</details>
-    <details><summary>Keyboard shortcuts</summary><section className="panel shortcut-panel"><h3>Local shortcuts</h3><p className="muted">These work while AudioRouter is focused and never capture typing in a text field.</p><label>Start or stop session<input aria-label="Start or stop session shortcut" value={shortcuts.sessionToggle} readOnly onKeyDown={(event) => captureShortcut("sessionToggle", event)} /></label><label>Privacy mute<input aria-label="Privacy mute shortcut" value={shortcuts.privacyMute} readOnly onKeyDown={(event) => captureShortcut("privacyMute", event)} /></label>{shortcutMessage && <p className="muted" role="alert">{shortcutMessage}</p>}<small>Native tray and OS-wide registration remain platform validation work.</small></section></details>
-    <details><summary>Plug-ins</summary><PluginScanPanel backend={backend} onAddPlaceholder={addPluginToDraft} /></details>
-    <details><summary>Built-in processors and presets</summary><ProcessorCatalog processors={processors} error={processorError} node={selectedNode} backend={backend} /><PresetCatalog presets={presets} error={presetError} /></details>
-    <details><summary>JSON graph transfer (for scripts)</summary><SessionTransferPanel backend={backend} session={session} onImported={(imported) => { setCreatedSessions((current) => [...current.filter((item) => item.id !== imported.id), imported]); setSelectedSessionId(imported.id); void refresh(); }} /></details>
-    <details><summary>Resume after sleep and revision history</summary><OsTransitionPanel backend={backend} onRefresh={refresh} /><GraphHistoryPanel backend={backend} session={session} onReverted={refresh} /></details>
-    <details><summary>Application identity and recovery</summary><ApplicationIdentityPanel applications={applications} /><section className="panel recovery-panel"><div className="section-heading"><h3>Crash recovery</h3><span className="badge">{snapshot?.status.recovery.recentCrashes ?? 0} recent</span></div><p className="muted">{snapshot?.status.recovery.safeMode ? "Safe mode is active." : "Normal startup mode."} Recovery state is owned by the backend.</p><button type="button" className="secondary" onClick={() => void clearRecoverySafeMode()} disabled={!backend.connected || safetyActionBusyState || !snapshot?.status.recovery.safeMode}>Clear safe mode</button></section><RecoveryCheckpointPanel backend={backend} /></details>
-    <details><summary>Connected clients</summary><ClientsPanel backend={backend} /></details>
-  </div>;
-  return <PluginParameterContext.Provider value={{ parameters: pluginParameters, error: pluginParameterError }}><div className={`app-shell theme-${theme}`}>
-    <header className="topbar"><div><VersionLine update={availableUpdate} /><h1>{draft.name || "Routing workspace"}</h1></div><div className={`status-cluster ${backend.connected ? "connected" : "disconnected"}`} aria-live="polite"><span className={`audio-run-state${sessionRunning ? " is-running" : ""}`} role="status">{sessionActionBusy ? "Starting or stopping audio…" : sessionRunning ? "● Audio running" : "○ Audio stopped"}</span><span className="status-detail" title={statusSummary}>{connectionLabel}</span><span className="history-toolbar"><button type="button" className="secondary" aria-label="Undo" title="Undo (Ctrl+Z)" onClick={undoDraft} disabled={!backend.connected || graphBusy || sessionActionBusy || draftHistory.past.length === 0}><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 4 4 9l5 5M4 9h10a6 6 0 0 1 0 12" /></svg>Undo</button><button type="button" className="secondary" aria-label="Redo" title="Redo (Ctrl+Y)" onClick={redoDraft} disabled={!backend.connected || graphBusy || sessionActionBusy || draftHistory.future.length === 0}><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 4 5 5-5 5m5-5H10a6 6 0 0 0 0 12" /></svg>Redo</button></span><button type="button" className={routeChanged ? "primary" : "secondary"} onClick={() => void (pendingGraphPlan ? commitAcknowledgedPlan() : planChanges())} disabled={!backend.connected || graphBusy || (pendingGraphPlan ? acknowledgedWarnings.size !== pendingWarnings.length : !routeChanged)}>{graphBusy ? "Saving…" : pendingGraphPlan ? "Confirm Save" : "Save"}</button><button type="button" className={sessionRunning ? "secondary" : "primary"} onClick={() => void (sessionRunning ? stopSession() : startSession())} disabled={!backend.connected || sessionActionBusy}>{sessionRunning ? "Stop" : "Play"}</button><button type="button" className="secondary privacy-mute-action" aria-pressed={privacyMuted} aria-label={privacyMuted ? "Microphone muted" : "Mute microphone"} onClick={() => void togglePrivacyMute()} disabled={!backend.connected || safetyActionBusyState}>{privacyMuted ? "Mic muted" : "Mute mic"}</button><label className="theme-picker">Theme<select aria-label="Color theme" value={theme} onChange={(event) => setTheme(event.target.value as ThemeMode)}><option value="dark">Dark</option><option value="light">Light</option><option value="high-contrast">High contrast</option></select></label><button type="button" onClick={refresh}>Reconnect</button><QuitButton onMessage={setActionMessage} /></div></header>
-    {unfedRouteNodes(draft).length > 0 && <p className="panel-message is-warning inactive-route-warning" role="status">Warning: no input reaches {unfedRouteNodes(draft).map((node) => node.name).join(", ")}. These nodes are ignored during playback; connected routes can still play.</p>}
-    {(() => {
-      const text = actionMessage ? actionMessage : !backend.connected ? `Audio unavailable: ${(snapshot?.status.reason ?? "the backend is disconnected").replace(/\.+$/, "")}. Reconnect to edit or play.` : sessionRunning ? "Audio is running through this session." : "Audio is stopped. Press Play to start this session. To set up a new route, add an input (such as your microphone) and an output (such as your headphones), then connect their ports on the canvas.";
-      const tone = !backend.connected ? "error" : actionMessage ? actionMessageTone(actionMessage) : "info";
-      return <div className={`global-action-message is-${tone}`} role={tone === "error" ? "alert" : "status"} aria-live={tone === "error" ? "assertive" : "polite"}><span className="global-action-message-icon" aria-hidden="true">{tone === "error" ? "!" : tone === "warning" ? "!" : tone === "success" ? "✓" : "i"}</span><span className="global-action-message-text" title={text}>{text}</span>{backend.connected && connectionReplacement && actionMessage?.includes("Replace input connection") && <button type="button" className="secondary" onClick={replaceInputConnection}>Replace input connection</button>}{backend.connected && actionMessage?.includes("Troubleshooting") && workbenchTab !== "advanced" && <button type="button" className="secondary" onClick={() => setWorkbenchTab("advanced")}>Open Advanced</button>}{backend.connected && actionMessage?.includes("Open Session") && workbenchTab !== "session" && <button type="button" className="secondary" onClick={() => setWorkbenchTab("session")}>Open Session</button>}{backend.connected && actionMessage && <button type="button" className="secondary global-action-message-dismiss" aria-label="Dismiss message" title="Dismiss message" onClick={() => { setActionMessage(null); setConnectionReplacement(null); }}>×</button>}</div>;
-    })()}
-    {pendingGraphPlan && pendingWarnings.length > 0 && <section className="save-warning-review" aria-label="Save warnings"><strong>Review before saving</strong>{pendingWarnings.map((warning) => <label key={warning}><input type="checkbox" checked={acknowledgedWarnings.has(warning)} onChange={(event) => setAcknowledgedWarnings((current) => { const next = new Set(current); if (event.target.checked) next.add(warning); else next.delete(warning); return next; })} />{warning}</label>)}</section>}
-      <div className="workspace-grid">
-      <main className="main-content" style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}><SidebarResizer width={sidebarWidth} onWidth={changeSidebarWidth} /><section className="workspace-title"><div><p className="eyebrow">{sessionRunning ? "Running session" : "Stopped session"}</p><label className="session-name">Session name<input value={draft.name} maxLength={120} disabled={!backend.connected} onChange={(event) => changeSessionName(event.target.value)} /></label><p className="muted">Revision {session.revision} - {backend.connected ? "draft changes require review, then an explicit commit" : "changes are presentation-only in this preview"}</p></div><div className="actions"><button type="button" className="secondary" onClick={() => void duplicateSession()} disabled={!backend.connected}>Duplicate</button><button type="button" className="secondary" onClick={() => void deleteSession()} disabled={!backend.connected}>Delete</button><button type="button" className="secondary" onClick={undoDraft} disabled={!backend.connected || draftHistory.past.length === 0}>Undo draft</button><button type="button" className="secondary" onClick={redoDraft} disabled={!backend.connected || draftHistory.future.length === 0}>Redo draft</button><button type="button" className="secondary" onClick={() => { setDraft(session); setDraftHistory({ past: [], future: [] }); setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null); setPendingGraphPlan(null); setActionMessage("Draft discarded."); }} disabled={!backend.connected}>Discard draft</button><button type="button" className="primary" onClick={() => void planChanges()} disabled={!backend.connected || graphBusy}>Plan changes</button></div></section>
-        <ErrorBoundary area="Signal flow" onError={recordUiDiagnostic}><LiveTelemetry store={telemetryStore} diagnostics={snapshot?.diagnostics ?? null}>{(liveDiagnostics) => <section id="signal-flow-panel" className="canvas-panel" aria-labelledby="canvas-heading"><div className="section-heading"><div><p className="eyebrow">Signal flow</p><h2 id="canvas-heading">Canvas</h2></div></div><p className="muted canvas-handle-legend"><span className="canvas-handle-legend-dot canvas-handle-legend-dot-target" aria-hidden="true" /> Send (start)<span className="canvas-handle-legend-dot canvas-handle-legend-dot-source" aria-hidden="true" /> Receive (end) - drag from the sending tool's blue dot to the receiving tool's orange dot.</p>{flowCanvas}<fieldset className="connection-editor" disabled={!backend.connected}><legend>Add connection to draft</legend><label>Output<select aria-label="Source output port" value={connectionSource} onChange={(event) => setConnectionSource(event.target.value)}><option value="">Choose source</option>{outputPorts.map((port) => <option key={encodePort(port.nodeId, port.portName)} value={encodePort(port.nodeId, port.portName)}>{port.nodeName} · {port.portName} · {port.channels}ch</option>)}</select></label><span aria-hidden="true">→</span><label>Input<select aria-label="Destination input port" value={connectionDestination} onChange={(event) => setConnectionDestination(event.target.value)}><option value="">Choose destination</option>{inputPorts.map((port) => <option key={encodePort(port.nodeId, port.portName)} value={encodePort(port.nodeId, port.portName)}>{port.nodeName} · {port.portName} · {port.channels}ch</option>)}</select></label><button type="button" className="secondary" onClick={addConnection}>Add connection</button><button type="button" className="secondary" onClick={openConnectionDialog}>Keyboard connection dialog</button></fieldset>{connectionDialogOpen && <div className="dialog-backdrop" role="presentation"><section ref={connectionDialog} className="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="connection-dialog-heading" aria-describedby="connection-dialog-description"><div className="section-heading"><h2 id="connection-dialog-heading">Keyboard connection</h2><button type="button" className="secondary" onClick={closeConnectionDialog} aria-label="Close keyboard connection dialog">Close</button></div><p id="connection-dialog-description" className="muted">Choose an output and input, then add the connection to the draft. Press Escape to close.</p><label>Output<select ref={connectionDialogSource} aria-label="Keyboard source output port" value={connectionSource} onChange={(event) => setConnectionSource(event.target.value)}><option value="">Choose source</option>{outputPorts.map((port) => <option key={encodePort(port.nodeId, port.portName)} value={encodePort(port.nodeId, port.portName)}>{port.nodeName} · {port.portName} · {port.channels}ch</option>)}</select></label><label>Input<select aria-label="Keyboard destination input port" value={connectionDestination} onChange={(event) => setConnectionDestination(event.target.value)}><option value="">Choose destination</option>{inputPorts.map((port) => <option key={encodePort(port.nodeId, port.portName)} value={encodePort(port.nodeId, port.portName)}>{port.nodeName} · {port.portName} · {port.channels}ch</option>)}</select></label><div className="actions"><button type="button" className="primary" onClick={() => { if (addConnection()) closeConnectionDialog(); }}>Add connection to draft</button><button type="button" className="secondary" onClick={closeConnectionDialog}>Cancel</button></div></section></div>}{pluginPickerOpen && <div className="dialog-backdrop" role="presentation"><section ref={pluginPickerDialog} className="connection-dialog plugin-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="plugin-picker-heading" aria-describedby="plugin-picker-description"><div className="section-heading"><h2 id="plugin-picker-heading">{pluginInsertEdgeId ? "Insert a VST2/VST3 plugin into this connection" : "Add a VST2/VST3 plugin"}</h2><button type="button" className="secondary" onClick={closePluginPicker} aria-label="Close plugin picker">Close</button></div><p id="plugin-picker-description" className="muted">Scan an absolute directory on this machine for supported x64 VST2/VST3 binaries, then {pluginInsertEdgeId ? "insert one directly into the connection" : "add one as a stopped node"}. Press Escape to close.</p><LoadedPluginsPanel nodes={draft.nodes} selectedNodeId={selectedNode.id} disabled={!backend.connected} onSelect={(nodeId) => { setSelectedNodeId(nodeId); setSelectedNodeIds([nodeId]); }} onUnload={unloadPluginNode} diagnostics={liveDiagnostics ?? null} /><PluginScanPanel backend={backend} onAddPlaceholder={addPluginToDraft} headingId="plugin-picker-scan-heading" /></section></div>}{applicationPickerOpen && (() => { const choices = applicationCaptureChoices(applications); const capturable = [...choices.withAudio, ...choices.other]; const applicationKey = applicationChoiceKey; const selected = capturable.find((application) => applicationKey(application) === applicationPickerSelection) ?? capturable[0]; return <div className="dialog-backdrop" role="presentation"><section ref={applicationPickerDialog} className="connection-dialog plugin-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="application-picker-heading" aria-describedby="application-picker-description"><div className="section-heading"><h2 id="application-picker-heading">Add an application capture source</h2><button type="button" className="secondary" onClick={closeApplicationPicker} aria-label="Close application picker">Close</button></div><p id="application-picker-description" className="muted">Pick a running application to capture its audio as an input node. After restart, AudioRouter reconnects when it finds one verified matching instance; if several match, choose the intended instance again. Playback does not start just because the app is open.</p><div className="actions"><button type="button" className="secondary" onClick={refreshApplications}>Refresh applications</button></div>{applicationsError ? <p className="muted" role="status">Application inventory unavailable: {applicationsError}</p> : capturable.length === 0 ? <p className="muted" role="status">No running applications were found. Refresh to try again.</p> : <><label>Application<select aria-label="Application to capture" value={selected ? applicationKey(selected) : ""} onChange={(event) => setApplicationPickerSelection(event.target.value)}><ApplicationChoiceOptions applications={applications} /></select></label>{selected && <p className="muted" role="status">{selected.executable} · {selected.audioSessionCount > 0 ? `audio ` : "no audio session yet; capture begins when it plays sound"}</p>}<div className="actions"><button type="button" className="primary" onClick={() => selected && addApplicationCaptureFromPicker(selected)} disabled={!backend.connected || !selected}>Add capture source</button></div></>}<p className="muted">For advanced options (application-capture policy, preparing the native worker), use the Applications panel in Full workspace mode.</p></section></div>; })()}</section>}</LiveTelemetry></ErrorBoundary>
-        <ErrorBoundary area="Properties" onError={recordUiDiagnostic}><LiveTelemetry store={telemetryStore} diagnostics={snapshot?.diagnostics ?? null}>{(liveDiagnostics) => (selectedGroup ? <CanvasGroupInspector group={selectedGroup} onChange={(patch) => groupState.changeGroup(selectedGroup.id, patch)} onRemove={() => groupState.removeGroup(selectedGroup.id)} /> : <><section className="panel inspector" aria-labelledby="inspector-heading"><div className="section-heading"><div><p className="eyebrow">Selected node</p><div className="inspector-title"><h2 id="inspector-heading">{selectedNode.name}</h2><NodePropertyStatus node={selectedNode} connected={backend.connected} running={sessionRunning} snapshot={liveDiagnostics ?? null} /></div></div><span className="badge">{libraryEntries.find((entry) => entry.kind === selectedNode.kind)?.label ?? selectedNode.kind}</span></div>{toolDescription(selectedNode.kind) && <p className="muted tool-description">{toolDescription(selectedNode.kind)}</p>}<p className="muted">For delay and processing measurements, open Timing while audio plays. Ready means enabled for the next playback; Active does not guarantee an incoming signal.</p><InspectorChangeSummary draftNode={selectedNode} authoritativeNode={session.nodes.find((node) => node.id === selectedNode.id)} />{selectedNode.kind === "meter" ? <MeterInspector key={selectedNode.id} node={selectedNode} sessionId={session.id} snapshot={liveDiagnostics ?? null} running={sessionRunning} backend={backend} onUpgrade={() => { recordDraftChange({ ...draft, nodes: draft.nodes.map(n => n.id === selectedNode.id ? { ...n, ports: [...n.ports, { name: "out", direction: "output", channels: n.ports.find(p => p.direction === "input")?.channels ?? 2 }] } : n) }); setActionMessage("Meter output added to the draft. Connect it downstream and Save to keep it."); }} /> : selectedNode.kind === "duck" ? <DuckEditor key={selectedNode.id} node={selectedNode} session={draft} telemetry={liveDiagnostics?.nodeTelemetry.find((item) => item.nodeId === selectedNode.id)?.processor ?? null} running={sessionRunning} disabled={!backend.connected} gameRound={liveDiagnostics?.gameRound ?? null} onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)} /> : isDynamicsKind(selectedNode.kind) ? <DynamicsEditor key={selectedNode.id} kind={selectedNode.kind} node={selectedNode} telemetry={liveDiagnostics?.nodeTelemetry.find((item) => item.nodeId === selectedNode.id)?.processor ?? null} channels={selectedNode.ports.find((port) => port.direction === "input")?.channels ?? 2} running={sessionRunning} disabled={!backend.connected} onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)} /> : <NodeTelemetryPanel node={selectedNode} snapshot={liveDiagnostics ?? null} running={sessionRunning} />}{selectedNode.kind === "physicalInput" && <PhysicalInputBinding devices={devices} surround={selectedNode.parameters.spatialMode === "headphones" || selectedNode.parameters.spatialMode === "speakers"} value={typeof selectedNode.parameters.endpointId === "string" ? selectedNode.parameters.endpointId : ""} disabled={!backend.connected || sessionRunning} onRefresh={refreshDevices} onChange={(value) => { setCaptureEndpointId(value); writeEndpointBindingHint(session.id, value, renderEndpointId); if (value) changeNodeParameterOn(selectedNode.id, "endpointId", value); }} />}{selectedNode.kind === "physicalInput" && <InputChannelsField devices={devices} endpointId={typeof selectedNode.parameters.endpointId === "string" ? selectedNode.parameters.endpointId : ""} mode={selectedNode.parameters.channelMode} surround={selectedNode.parameters.spatialMode === "headphones" || selectedNode.parameters.spatialMode === "speakers"} disabled={!backend.connected} onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)} />}{selectedNode.kind === "physicalInput" && <SpatialAudioField devices={devices} endpointId={typeof selectedNode.parameters.endpointId === "string" ? selectedNode.parameters.endpointId : ""} mode={typeof selectedNode.parameters.spatialMode === "string" ? selectedNode.parameters.spatialMode : "off"} disabled={!backend.connected} roomPercent={typeof selectedNode.parameters.spatialRoomPercent === "number" ? selectedNode.parameters.spatialRoomPercent : 0} running={sessionRunning} onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)} />}{selectedNode.kind === "firFilter" && <FirFilterEditor node={selectedNode} backend={backend} disabled={!backend.connected} onChange={(changes) => { for (const [name, value] of changes) changeNodeParameterOn(selectedNode.id, name, value); }} />}{selectedNode.kind === "spectralGate" && <SpectralGateEditor node={selectedNode} running={sessionRunning} levelsDb={liveDiagnostics?.nodeTelemetry.find((item) => item.nodeId === selectedNode.id)?.spectrum?.levelsDb ?? null} liveProfile={liveDiagnostics?.nodeTelemetry.find((item) => item.nodeId === selectedNode.id)?.noiseProfile ?? null} disabled={!backend.connected} onChange={(changes) => { for (const [name, value] of changes) changeNodeParameterOn(selectedNode.id, name, value); }} />}{selectedNode.kind === "denoise" && <DenoiseLearnEditor node={selectedNode} running={sessionRunning} liveProfile={liveDiagnostics?.nodeTelemetry.find((item) => item.nodeId === selectedNode.id)?.noiseProfile ?? null} disabled={!backend.connected} onChange={(changes) => { for (const [name, value] of changes) changeNodeParameterOn(selectedNode.id, name, value); }} />}{selectedNode.kind === "dehum" && <DehumEditor node={selectedNode} disabled={!backend.connected} onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)} />}{selectedNode.kind === "graphicEq" && <GraphicEqEditor node={selectedNode} backend={backend} disabled={!backend.connected} onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)} />}{selectedNode.kind === "bassTreble" && <BassTrebleEditor node={selectedNode} backend={backend} disabled={!backend.connected} onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)} />}{selectedNode.kind === "pitch" && <PitchEditor node={selectedNode} disabled={!backend.connected} onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)} />}{selectedNode.kind === "delay" && <DelayEditor node={selectedNode} disabled={!backend.connected} onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)} />}{selectedNode.kind === "inputSwitch" && <InputSwitchEditor node={selectedNode} session={draft} disabled={!backend.connected} onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)} />}{(selectedNode.kind === "declick" || selectedNode.kind === "speechDenoise") && <StrengthEditor node={selectedNode} disabled={!backend.connected} onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)} />}{(selectedNode.kind === "volume" || selectedNode.kind === "gain") && <LevelEditor node={selectedNode} disabled={!backend.connected} onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)} />}{selectedNode.kind === "mixer" && <MixerInputsEditor session={draft} mixer={selectedNode} disabled={!backend.connected} onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)} />}{selectedNode.kind === "applicationCapture" && <ApplicationCaptureBinding node={selectedNode} applications={applications} error={applicationsError} disabled={!backend.connected || sessionRunning} onRefresh={refreshApplications} onSelect={(application) => rebindApplicationCapture(selectedNode.id, application)} />}{selectedNode.kind === "physicalOutput" && <PhysicalOutputBinding devices={devices} value={typeof selectedNode.parameters.endpointId === "string" ? selectedNode.parameters.endpointId : ""} disabled={!backend.connected || sessionRunning} onRefresh={refreshDevices} onChange={(value) => { setRenderEndpointId(value); writeEndpointBindingHint(session.id, captureEndpointId, value); if (value) changeNodeParameterOn(selectedNode.id, "endpointId", value); }} />}{(selectedNode.kind === "networkSend" || selectedNode.kind === "networkReceive") && <NetworkNodeEditor node={selectedNode} disabled={!backend.connected} telemetry={liveDiagnostics?.nodeTelemetry.find((item) => item.nodeId === selectedNode.id)?.network} onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)} />}{selectedNode.kind === "recorder" && <RecorderControls node={selectedNode} status={recorderStatuses.find((status) => status.nodeId === selectedNode.id)} running={sessionRunning} connected={backend.connected} busy={recordingBusy === selectedNode.id} lastPath={lastRecordingPaths[selectedNode.id] ?? null} message={recordingMessage?.nodeId === selectedNode.id ? recordingMessage.text : null} onToggle={(nodeId, record) => void toggleNodeRecording(nodeId, record)} />}{selectedNode.kind === "recorder" && <RecordingFolderField backend={backend} connected={backend.connected} />}{selectedNode.kind === "audioFile" && <AudioFileNodeEditor node={selectedNode} backend={backend} disabled={!backend.connected || sessionRunning} transportDisabled={!backend.connected} sessionRunning={sessionRunning} state={audioSourceStates[selectedNode.id] ?? "stopped"} sessionId={session.id} currentSessionIdRef={currentSessionIdRef} recorderNodes={session.nodes.filter((item) => item.kind === "recorder" && item.enabled && recorderHasCaptureSource(session, item.id))} recorderStatuses={recorderStatuses} onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)} onTransport={(nodeId, action) => void transportAudioSource(nodeId, action)} />}{selectedNode.kind === "plugin" && <><PluginEditorControls node={selectedNode} backend={backend} sessionId={session.id} running={sessionRunning} onStateSaved={(stateId) => changeNodeParameterOn(selectedNode.id, "stateId", stateId)} /><PluginNodeInspector node={selectedNode} disabled={!backend.connected} onUnload={() => unloadPluginNode(selectedNode.id)} snapshot={liveDiagnostics ?? null} /></>}<details className="inspector-help"><summary>How Enabled and Bypass work</summary><p className="muted">Off silences inputs and outputs; an off effect passes sound without processing. Bypass passes sound around an effect; on a prepared input, output, or Mixer it silences that contribution. Live toggles do not require Save or Stop and keep other draft edits. Use Mute to silence a route. Enabled and Bypass apply to prepared nodes while audio keeps playing. Off devices remain open until Stop and contribute silence.</p></details><div className="inspector-grid"><label>Node name<TextField key={selectedNode.id} maxLength={120} value={selectedNode.name} disabled={!backend.connected} onValue={changeNodeName} /></label><div className="inspector-toggles"><label>Enabled<input type="checkbox" checked={selectedNode.enabled} disabled={!backend.connected || sessionActionBusy || graphBusy} onChange={(event) => changeNodeFlag("enabled", event.target.checked)} /></label><label>Bypass<input type="checkbox" checked={selectedNode.bypass} disabled={!backend.connected || sessionActionBusy || graphBusy} onChange={(event) => changeNodeFlag("bypass", event.target.checked)} /></label></div><EqSpectrumContext.Provider value={sessionRunning ? liveDiagnostics?.nodeTelemetry.find((item) => item.nodeId === selectedNode.id)?.spectrum ?? null : null}><ProcessorParameterEditor node={selectedNode} processors={processors} nodeTypes={snapshot?.discovery?.nodeTypes ?? null} connected={backend.connected} onChange={changeNodeParameter} /></EqSpectrumContext.Provider>{processors?.some((processor) => processor.id === selectedNode.kind && processor.parameters.length > 0) && <button type="button" className="secondary" onClick={resetNodeParameters} disabled={!backend.connected}>Reset parameters</button>}<button type="button" className="secondary" onClick={duplicateSelectedNode} disabled={!backend.connected}>Duplicate node to draft</button><button type="button" className="secondary" onClick={removeSelectedNode} disabled={!backend.connected}>Remove node from draft</button><button type="button" onClick={() => void togglePrivacyMute()} disabled={!backend.connected} aria-pressed={privacyMuted}>{privacyMuted ? "Privacy mute enabled" : "Enable privacy mute"}</button><p className="muted">{backend.connected ? "Plan changes reviews the draft; Commit changes saves it. Privacy mute is an immediate safety latch." : "Controls are disabled while disconnected. Selection is local presentation state only."}</p></div><NodeIdentity nodeId={selectedNode.id} /></section></>)}</LiveTelemetry></ErrorBoundary>
-        <ErrorBoundary area="Side panel" onError={recordUiDiagnostic}><Workbench onAddGroup={() => { groupState.addGroup(); setWorkbenchTab("properties"); }} tab={workbenchTab} onTab={(tab) => setWorkbenchTab(tab)} sessionFileContent={<SessionFilePanel backend={backend} session={session} unsaved={routeChanged} onImported={(imported) => { setCreatedSessions((current) => [...current.filter((item) => item.id !== imported.id), imported]); setSelectedSessionId(imported.id); void refresh(); }} />} pluginsContent={<PluginToolsGroup backend={backend} connected={backend.connected} search={librarySearch} refreshKey={pluginPickerOpen} onAdd={addPluginToDraft} onOpenPicker={() => openPluginPicker()} />} tools={visibleLibraryEntries} connected={backend.connected} onAdd={addLibraryNode} onApplicationPicker={openApplicationPicker} librarySearch={librarySearch} onLibrarySearch={(value) => setLibrarySearch(value.slice(0, 80))} onNewSession={() => void createSession()} onDuplicate={() => void duplicateSession()} onDelete={() => void deleteSession()} onUndo={undoDraft} onRedo={redoDraft} onDiscard={() => { setDraft(session); setDraftHistory({ past: [], future: [] }); setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null); setPendingGraphPlan(null); setConnectionReplacement(null); setActionMessage("Draft discarded."); }} onPlan={() => void planChanges()} onCommit={() => void commitAcknowledgedPlan()} canCommit={acknowledgedWarnings.size === pendingWarnings.length && !graphBusy} pendingPlan={Boolean(pendingGraphPlan)} actionMessage={actionMessage} onReplaceInputConnection={connectionReplacement && actionMessage?.includes("Replace input connection") ? replaceInputConnection : undefined} apiBuilder={(baseUrl) => <RequestBuilder sessions={availableSessions} activeSessionId={session.id} nodeTypes={snapshot?.discovery?.nodeTypes ?? null} baseUrl={baseUrl} connected={backend.connected} onSend={backend.setNode ? (params) => backend.setNode!(params) : undefined} />} sessions={availableSessions} selectedSessionId={session.id} onSelectSession={(id) => { setConnectionReplacement(null); setSelectedSessionId(id); }} revision={session.revision} sessionName={draft.name} onNameChange={changeSessionName} warnings={pendingWarnings} acknowledgedWarnings={[...acknowledgedWarnings]} onAcknowledgeWarning={(warning, checked) => setAcknowledgedWarnings((current) => { const next = new Set(current); if (checked) next.add(warning); else next.delete(warning); return next; })} diagnostics={uiDiagnostics} verboseLogging={verboseLogging} backendActivity={backendActivity} mcpActivity={mcpActivity} mcpSetupInfo={mcpSetupInfo} clientsPanel={<ClientsPanel backend={backend} />} setupContent={setupWorkbenchContent} timingContent={<LiveTelemetry store={telemetryStore} diagnostics={snapshot?.diagnostics ?? null}>{(liveDiagnostics) => <SignalTimingPanel session={session} telemetry={liveDiagnostics?.nodeTelemetry ?? []} running={sessionRunning} />}</LiveTelemetry>} recordingContent={recordingWorkbenchContent} advancedContent={advancedWorkbenchContent} /></ErrorBoundary>
-      </main></div>
-  <LibraryDragOverlay />{deviceConsent && <DeviceAccessDialog busy={deviceConsent.busy} error={deviceConsent.error} onAllow={() => void allowDeviceAccessAndPlay()} onCancel={() => setDeviceConsent(null)} />}</div></PluginParameterContext.Provider>;
+  const flowCanvas = (
+    <SessionFlowCanvas
+      groups={groupState.groups}
+      selectedGroupId={groupState.selectedGroupId}
+      onSelectGroup={(id) => {
+        groupState.selectGroup(id);
+        if (id) setWorkbenchTab("properties");
+      }}
+      onChangeGroup={groupState.changeGroup}
+      onRemoveGroup={groupState.removeGroup}
+      session={draft}
+      selectedNodeId={selectedNode.id}
+      selectedNodeIds={selectedNodeIds}
+      diagnostics={snapshot?.diagnostics ?? null}
+      telemetryStore={telemetryStore}
+      flowAnimation={flowAnimation}
+      sessionRunning={sessionRunning}
+      sessionActionBusy={sessionActionBusy}
+      testSignalPlaybackReady={testSignalPlaybackReady}
+      testSignalEndpointPrepared={testSignalEndpointPrepared}
+      onStartTestSignal={() => void startSession()}
+      onStopTestSignal={() => void stopSession()}
+      onAudioSourceTransport={(nodeId, action) => void transportAudioSource(nodeId, action)}
+      onTimeShiftTransport={(nodeId, action) => void transportTimeShift(nodeId, action)}
+      timeShiftStatuses={timeShiftStatuses}
+      audioSourceStates={audioSourceStates}
+      recorderStatuses={recorderStatuses}
+      onSetNodeParameter={changeNodeParameterOn}
+      onToggleRecording={(nodeId, record) => void toggleNodeRecording(nodeId, record)}
+      recordingBusyNodeId={recordingBusy}
+      onSelect={selectNodeProperties}
+      onSelectMany={(ids) => {
+        setSelectedNodeIds(ids);
+        if (ids[0]) setSelectedNodeId(ids[0]);
+      }}
+      onConnect={connectCanvas}
+      onRemoveConnection={removeConnection}
+      onToggleConnection={toggleConnection}
+      onInsertProcessor={insertProcessor}
+      onAddLibraryNode={addLibraryNode}
+      onAddVirtualBusNode={addDroppedVirtualBusNode}
+      onOpenPluginPicker={openPluginPicker}
+      onOpenApplicationPicker={openApplicationPicker}
+      onConnectionRejected={setActionMessage}
+      canEdit={backend.connected}
+    />
+  );
+  const connectionWorkbenchContent = (
+    <fieldset className="connection-editor workbench-connection-editor" disabled={!backend.connected}>
+      <legend>Add connections to the draft</legend>
+      <p className="muted">
+        Choose an output and input for each link. These connections are reviewed when you plan the graph.
+      </p>
+      <label>
+        Output
+        <select
+          aria-label="Source output port"
+          value={connectionSource}
+          onChange={(event) => setConnectionSource(event.target.value)}
+        >
+          <option value="">Choose source</option>
+          {outputPorts.map((port) => (
+            <option key={encodePort(port.nodeId, port.portName)} value={encodePort(port.nodeId, port.portName)}>
+              {port.nodeName} · {port.portName} · {port.channels}ch
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Input
+        <select
+          aria-label="Destination input port"
+          value={connectionDestination}
+          onChange={(event) => setConnectionDestination(event.target.value)}
+        >
+          <option value="">Choose destination</option>
+          {inputPorts.map((port) => (
+            <option key={encodePort(port.nodeId, port.portName)} value={encodePort(port.nodeId, port.portName)}>
+              {port.nodeName} · {port.portName} · {port.channels}ch
+            </option>
+          ))}
+        </select>
+      </label>
+      <button type="button" className="primary" onClick={addConnection}>
+        Add connection
+      </button>
+    </fieldset>
+  );
+  const setupWorkbenchContent = (
+    <>
+      <DeviceAccessSetting backend={backend} />
+      <FirstRunGuide
+        devices={devices}
+        connected={backend.connected}
+        onRefresh={() => refreshDevices()}
+        onOpenTools={() => setWorkbenchTab("tools")}
+      />
+      <section className="panel setup-panel" aria-labelledby="setup-status-heading">
+        <h3 id="setup-status-heading">Status</h3>
+        <ul className="setup-status-list">
+          {setupSteps.map((step) => (
+            <li key={step.id} className={`is-${step.state}`}>
+              <span className="setup-status-dot" aria-hidden="true" />
+              <span>
+                <strong>{step.label}</strong>
+                <small>{step.detail}</small>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
+      <ThisPcDevices devices={devices} connected={backend.connected} onRefresh={() => refreshDevices()} />
+      <section className="panel setup-panel" aria-labelledby="setup-other-apps-heading">
+        <h3 id="setup-other-apps-heading">Use with other apps</h3>
+        <p className="muted">
+          AudioRouter does not change settings in Windows or in other apps. To send your processed microphone to
+          Discord, OBS or a game, end the route in an Output Device set to a virtual cable (for example CABLE Input),
+          then choose the matching input (CABLE Output) as the microphone in that app.
+        </p>
+      </section>
+      <FlowAnimationSetting mode={flowAnimation} onChange={changeFlowAnimation} />
+      <UpdatesPanel
+        enabled={updateChecks}
+        onChange={(enabled) => {
+          setUpdateCheckEnabled(enabled);
+          setUpdateChecks(enabled);
+        }}
+        update={availableUpdate}
+      />
+    </>
+  );
+  const devicesWorkbenchContent = (
+    <>
+      <p className="muted">
+        Devices chosen here are used only when a single route's Input Device or Output Device node has no device of its
+        own.
+      </p>
+      <NativeEndpointPanel
+        backend={backend}
+        sessionId={session.id}
+        devices={devices}
+        sessionRunning={sessionRunning}
+        onStart={async () => {
+          await startSession();
+        }}
+        onStop={stopSession}
+        onAddEndpointLoopback={addEndpointLoopback}
+        captureEndpointId={captureEndpointId}
+        setCaptureEndpointId={setCaptureEndpointId}
+        renderEndpointId={renderEndpointId}
+        setRenderEndpointId={setRenderEndpointId}
+      />
+      <details>
+        <summary>Multiple capture devices</summary>
+        <NativeMultiInputPanel
+          backend={backend}
+          sessionId={session.id}
+          devices={devices}
+          sessionRunning={sessionRunning}
+          applicationNodes={session.nodes}
+        />
+      </details>
+      <details>
+        <summary>Multiple output devices</summary>
+        <NativeOutputFanoutPanel
+          backend={backend}
+          sessionId={session.id}
+          devices={devices}
+          sessionRunning={sessionRunning}
+        />
+      </details>
+      <details>
+        <summary>Managed virtual devices and routes</summary>
+        <VirtualDeviceLifecyclePanel backend={backend} onAddVirtualBusNode={addVirtualBusNode} />
+        <VirtualRoutePanel backend={backend} />
+      </details>
+    </>
+  );
+  const recordingWorkbenchContent = (
+    <>
+      <RecordingFolderField backend={backend} connected={backend.connected} />
+      <RecorderActions
+        backend={backend}
+        sessionId={session.id}
+        connected={backend.connected}
+        recorderStatuses={recorderStatuses}
+        recorderStatusAvailable={recorderStatusAvailable}
+        recorderNodeIds={draft.nodes.filter((node) => node.kind === "recorder").map((node) => node.id)}
+        selectedNodeId={selectedNode.id}
+        onSelectNode={(nodeId) => {
+          setSelectedNodeId(nodeId);
+          setSelectedNodeIds([nodeId]);
+        }}
+        format={recorderFormat}
+        onFormatChange={setRecorderFormat}
+      />
+      <RecordingActions
+        recordings={recordings}
+        connected={backend.connected}
+        busy={recordingMutationBusyState}
+        onRename={renameRecording}
+        onReveal={revealRecording}
+        onRecycle={recycleRecording}
+      />
+      <p className="muted">
+        {recordingsError ??
+          (recordings.length === 0
+            ? "No completed recording files yet."
+            : `${recordings.length} recording files are available.`)}
+      </p>
+      {/* The recording library: browse, search, preview and edit takes. Until 2026-10-04 it rendered only in an always-hidden panel. */}
+      <section className="recording-library" aria-label="Recording library">
+        <div className="panel">
+          <div className="section-heading">
+            <h2>Recordings</h2>
+            <span className="badge">
+              {recordingsError
+                ? "unavailable"
+                : `${visibleRecordings.length}${recordingSearch.trim() ? ` of ${recordings.length}` : ""} file${visibleRecordings.length === 1 ? "" : "s"}`}
+            </span>
+          </div>
+          <label className="recording-search">
+            Search recordings
+            <input
+              id="recording-search"
+              type="search"
+              value={recordingSearch}
+              onChange={(event) => setRecordingSearch(event.target.value.slice(0, 160))}
+              placeholder="Title, path, or status"
+            />
+          </label>
+          {recordingsError ? (
+            <p className="muted">Recording library unavailable: {recordingsError}</p>
+          ) : recordings.length === 0 ? (
+            <p className="muted">
+              No recording has been armed. Completed recordings will appear here with path and status.
+            </p>
+          ) : visibleRecordings.length === 0 ? (
+            <p className="muted">No recording matches this search.</p>
+          ) : (
+            visibleRecordings.map((recording) => (
+              <article
+                className="recording-row"
+                key={recording.id}
+                aria-label={recording.title || recording.path.split(/[\\/]/).pop() || recording.id}
+              >
+                <div className="recording-row-heading">
+                  <strong>{recording.title || recording.path.split(/[\\/]/).pop()}</strong>
+                  <span className="badge">{recording.missing ? "missing" : recording.state}</span>
+                </div>
+                <small className="recording-row-path">{recording.path}</small>
+                <small>
+                  Duration {formatRecordingDuration(recording.frames, recording.sampleRate)} · {recording.fileBytes}{" "}
+                  bytes
+                </small>
+                <label>
+                  Title
+                  <input
+                    aria-label={`Title for ${recording.id}`}
+                    value={metadataTitles[recording.id] ?? recording.title ?? ""}
+                    onChange={(event) =>
+                      setMetadataTitles((current) => ({ ...current, [recording.id]: event.target.value }))
+                    }
+                  />
+                </label>
+                <label>
+                  Artist
+                  <input
+                    aria-label={`Artist for ${recording.id}`}
+                    value={metadataArtists[recording.id] ?? recording.artist ?? ""}
+                    onChange={(event) =>
+                      setMetadataArtists((current) => ({ ...current, [recording.id]: event.target.value }))
+                    }
+                  />
+                </label>
+                <label>
+                  Comment
+                  <input
+                    aria-label={`Comment for ${recording.id}`}
+                    value={metadataComments[recording.id] ?? recording.comment ?? ""}
+                    onChange={(event) =>
+                      setMetadataComments((current) => ({ ...current, [recording.id]: event.target.value }))
+                    }
+                  />
+                </label>
+                <div className="recording-row-actions">
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => void saveRecordingMetadata(recording)}
+                    disabled={!backend.connected}
+                  >
+                    Save metadata
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => void previewRecording(recording.id)}
+                    disabled={!backend.connected}
+                  >
+                    Preview
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => void inspectRecovery(recording.id)}
+                    disabled={!backend.connected}
+                  >
+                    Recovery
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => void removeRecordingEntry(recording.id)}
+                    disabled={!backend.connected}
+                  >
+                    Remove entry
+                  </button>
+                </div>
+              </article>
+            ))
+          )}
+          {previewMessage && (
+            <p className="muted" role="status">
+              {previewMessage}
+            </p>
+          )}
+          {recoveryMessage && (
+            <p className="muted" role="status">
+              {recoveryMessage}
+            </p>
+          )}
+        </div>
+      </section>
+    </>
+  );
+  const advancedWorkbenchContent = (
+    <div className="workbench-groups">
+      <details className="startup-group">
+        <summary>When AudioRouter starts</summary>
+        <p className="muted">
+          Start with Windows in the tray (no window) and, if you like, play the selected session and start the API right
+          away. Closing the window keeps audio playing in the tray.
+        </p>
+        <StartupPanel backend={backend} />
+        <AutoplaySetting />
+        <ApiAutostartSetting />
+      </details>
+      <details>
+        <summary>Keyboard graph controls</summary>
+        <NodeList
+          session={draft}
+          selectedNodeId={selectedNode.id}
+          onSelect={selectNodeProperties}
+          onRemoveConnection={removeConnection}
+          onToggleConnection={toggleConnection}
+          onInsertProcessor={insertProcessor}
+          onOpenPluginPicker={openPluginPicker}
+        />
+      </details>
+      <details className="connection-form-group">
+        <summary>Connect nodes without dragging</summary>
+        <p className="muted">
+          The same as dragging from one node to another on the canvas, for keyboard and screen-reader use.
+        </p>
+        {connectionWorkbenchContent}
+      </details>
+      <details className="device-troubleshooting">
+        <summary>Troubleshooting: manual device binding</summary>
+        <p className="muted">
+          You normally do not need this. Choose each device in the Input Device or Output Device node's Properties and
+          press Play. Use these controls to check a device's format, reopen a device after Windows reset it, run a
+          deliberate VB-Cable loopback test, or add a loopback source.
+        </p>
+        {devicesWorkbenchContent}
+      </details>
+      <details>
+        <summary>Keyboard shortcuts</summary>
+        <section className="panel shortcut-panel">
+          <h3>Local shortcuts</h3>
+          <p className="muted">These work while AudioRouter is focused and never capture typing in a text field.</p>
+          <label>
+            Start or stop session
+            <input
+              aria-label="Start or stop session shortcut"
+              value={shortcuts.sessionToggle}
+              readOnly
+              onKeyDown={(event) => captureShortcut("sessionToggle", event)}
+            />
+          </label>
+          <label>
+            Privacy mute
+            <input
+              aria-label="Privacy mute shortcut"
+              value={shortcuts.privacyMute}
+              readOnly
+              onKeyDown={(event) => captureShortcut("privacyMute", event)}
+            />
+          </label>
+          {shortcutMessage && (
+            <p className="muted" role="alert">
+              {shortcutMessage}
+            </p>
+          )}
+          <small>Native tray and OS-wide registration remain platform validation work.</small>
+        </section>
+      </details>
+      <details>
+        <summary>Plug-ins</summary>
+        <PluginScanPanel backend={backend} onAddPlaceholder={addPluginToDraft} />
+      </details>
+      <details>
+        <summary>Built-in processors and presets</summary>
+        <ProcessorCatalog processors={processors} error={processorError} node={selectedNode} backend={backend} />
+        <PresetCatalog presets={presets} error={presetError} />
+      </details>
+      <details>
+        <summary>JSON graph transfer (for scripts)</summary>
+        <SessionTransferPanel
+          backend={backend}
+          session={session}
+          onImported={(imported) => {
+            setCreatedSessions((current) => [...current.filter((item) => item.id !== imported.id), imported]);
+            setSelectedSessionId(imported.id);
+            void refresh();
+          }}
+        />
+      </details>
+      <details>
+        <summary>Resume after sleep and revision history</summary>
+        <OsTransitionPanel backend={backend} onRefresh={refresh} />
+        <GraphHistoryPanel backend={backend} session={session} onReverted={refresh} />
+      </details>
+      <details>
+        <summary>Application identity and recovery</summary>
+        <ApplicationIdentityPanel applications={applications} />
+        <section className="panel recovery-panel">
+          <div className="section-heading">
+            <h3>Crash recovery</h3>
+            <span className="badge">{snapshot?.status.recovery.recentCrashes ?? 0} recent</span>
+          </div>
+          <p className="muted">
+            {snapshot?.status.recovery.safeMode ? "Safe mode is active." : "Normal startup mode."} Recovery state is
+            owned by the backend.
+          </p>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => void clearRecoverySafeMode()}
+            disabled={!backend.connected || safetyActionBusyState || !snapshot?.status.recovery.safeMode}
+          >
+            Clear safe mode
+          </button>
+        </section>
+        <RecoveryCheckpointPanel backend={backend} />
+      </details>
+      <details>
+        <summary>Connected clients</summary>
+        <ClientsPanel backend={backend} />
+      </details>
+    </div>
+  );
+  return (
+    <PluginParameterContext.Provider value={{ parameters: pluginParameters, error: pluginParameterError }}>
+      <div className={`app-shell theme-${theme}`}>
+        <header className="topbar">
+          <div>
+            <VersionLine update={availableUpdate} />
+            <h1>{draft.name || "Routing workspace"}</h1>
+          </div>
+          <div className={`status-cluster ${backend.connected ? "connected" : "disconnected"}`} aria-live="polite">
+            <span className={`audio-run-state${sessionRunning ? " is-running" : ""}`} role="status">
+              {sessionActionBusy
+                ? "Starting or stopping audio…"
+                : sessionRunning
+                  ? "● Audio running"
+                  : "○ Audio stopped"}
+            </span>
+            <span className="status-detail" title={statusSummary}>
+              {connectionLabel}
+            </span>
+            <span className="history-toolbar">
+              <button
+                type="button"
+                className="secondary"
+                aria-label="Undo"
+                title="Undo (Ctrl+Z)"
+                onClick={undoDraft}
+                disabled={!backend.connected || graphBusy || sessionActionBusy || draftHistory.past.length === 0}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 4 4 9l5 5M4 9h10a6 6 0 0 1 0 12" />
+                </svg>
+                Undo
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                aria-label="Redo"
+                title="Redo (Ctrl+Y)"
+                onClick={redoDraft}
+                disabled={!backend.connected || graphBusy || sessionActionBusy || draftHistory.future.length === 0}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="m15 4 5 5-5 5m5-5H10a6 6 0 0 0 0 12" />
+                </svg>
+                Redo
+              </button>
+            </span>
+            <button
+              type="button"
+              className={routeChanged ? "primary" : "secondary"}
+              onClick={() => void (pendingGraphPlan ? commitAcknowledgedPlan() : planChanges())}
+              disabled={
+                !backend.connected ||
+                graphBusy ||
+                (pendingGraphPlan ? acknowledgedWarnings.size !== pendingWarnings.length : !routeChanged)
+              }
+            >
+              {graphBusy ? "Saving…" : pendingGraphPlan ? "Confirm Save" : "Save"}
+            </button>
+            <button
+              type="button"
+              className={sessionRunning ? "secondary" : "primary"}
+              onClick={() => void (sessionRunning ? stopSession() : startSession())}
+              disabled={!backend.connected || sessionActionBusy}
+            >
+              {sessionRunning ? "Stop" : "Play"}
+            </button>
+            <button
+              type="button"
+              className="secondary privacy-mute-action"
+              aria-pressed={privacyMuted}
+              aria-label={privacyMuted ? "Microphone muted" : "Mute microphone"}
+              onClick={() => void togglePrivacyMute()}
+              disabled={!backend.connected || safetyActionBusyState}
+            >
+              {privacyMuted ? "Mic muted" : "Mute mic"}
+            </button>
+            <label className="theme-picker">
+              Theme
+              <select
+                aria-label="Color theme"
+                value={theme}
+                onChange={(event) => setTheme(event.target.value as ThemeMode)}
+              >
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+                <option value="high-contrast">High contrast</option>
+              </select>
+            </label>
+            <button type="button" onClick={refresh}>
+              Reconnect
+            </button>
+            <QuitButton onMessage={setActionMessage} />
+          </div>
+        </header>
+        {unfedRouteNodes(draft).length > 0 && (
+          <p className="panel-message is-warning inactive-route-warning" role="status">
+            Warning: no input reaches{" "}
+            {unfedRouteNodes(draft)
+              .map((node) => node.name)
+              .join(", ")}
+            . These nodes are ignored during playback; connected routes can still play.
+          </p>
+        )}
+        {(() => {
+          const text = actionMessage
+            ? actionMessage
+            : !backend.connected
+              ? `Audio unavailable: ${(snapshot?.status.reason ?? "the backend is disconnected").replace(/\.+$/, "")}. Reconnect to edit or play.`
+              : sessionRunning
+                ? "Audio is running through this session."
+                : "Audio is stopped. Press Play to start this session. To set up a new route, add an input (such as your microphone) and an output (such as your headphones), then connect their ports on the canvas.";
+          const tone = !backend.connected ? "error" : actionMessage ? actionMessageTone(actionMessage) : "info";
+          return (
+            <div
+              className={`global-action-message is-${tone}`}
+              role={tone === "error" ? "alert" : "status"}
+              aria-live={tone === "error" ? "assertive" : "polite"}
+            >
+              <span className="global-action-message-icon" aria-hidden="true">
+                {tone === "error" ? "!" : tone === "warning" ? "!" : tone === "success" ? "✓" : "i"}
+              </span>
+              <span className="global-action-message-text" title={text}>
+                {text}
+              </span>
+              {backend.connected && connectionReplacement && actionMessage?.includes("Replace input connection") && (
+                <button type="button" className="secondary" onClick={replaceInputConnection}>
+                  Replace input connection
+                </button>
+              )}
+              {backend.connected && actionMessage?.includes("Troubleshooting") && workbenchTab !== "advanced" && (
+                <button type="button" className="secondary" onClick={() => setWorkbenchTab("advanced")}>
+                  Open Advanced
+                </button>
+              )}
+              {backend.connected && actionMessage?.includes("Open Session") && workbenchTab !== "session" && (
+                <button type="button" className="secondary" onClick={() => setWorkbenchTab("session")}>
+                  Open Session
+                </button>
+              )}
+              {backend.connected && actionMessage && (
+                <button
+                  type="button"
+                  className="secondary global-action-message-dismiss"
+                  aria-label="Dismiss message"
+                  title="Dismiss message"
+                  onClick={() => {
+                    setActionMessage(null);
+                    setConnectionReplacement(null);
+                  }}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          );
+        })()}
+        {pendingGraphPlan && pendingWarnings.length > 0 && (
+          <section className="save-warning-review" aria-label="Save warnings">
+            <strong>Review before saving</strong>
+            {pendingWarnings.map((warning) => (
+              <label key={warning}>
+                <input
+                  type="checkbox"
+                  checked={acknowledgedWarnings.has(warning)}
+                  onChange={(event) =>
+                    setAcknowledgedWarnings((current) => {
+                      const next = new Set(current);
+                      if (event.target.checked) next.add(warning);
+                      else next.delete(warning);
+                      return next;
+                    })
+                  }
+                />
+                {warning}
+              </label>
+            ))}
+          </section>
+        )}
+        <div className="workspace-grid">
+          <main className="main-content" style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}>
+            <SidebarResizer width={sidebarWidth} onWidth={changeSidebarWidth} />
+            <section className="workspace-title">
+              <div>
+                <p className="eyebrow">{sessionRunning ? "Running session" : "Stopped session"}</p>
+                <label className="session-name">
+                  Session name
+                  <input
+                    value={draft.name}
+                    maxLength={120}
+                    disabled={!backend.connected}
+                    onChange={(event) => changeSessionName(event.target.value)}
+                  />
+                </label>
+                <p className="muted">
+                  Revision {session.revision} -{" "}
+                  {backend.connected
+                    ? "draft changes require review, then an explicit commit"
+                    : "changes are presentation-only in this preview"}
+                </p>
+              </div>
+              <div className="actions">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => void duplicateSession()}
+                  disabled={!backend.connected}
+                >
+                  Duplicate
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => void deleteSession()}
+                  disabled={!backend.connected}
+                >
+                  Delete
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={undoDraft}
+                  disabled={!backend.connected || draftHistory.past.length === 0}
+                >
+                  Undo draft
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={redoDraft}
+                  disabled={!backend.connected || draftHistory.future.length === 0}
+                >
+                  Redo draft
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    setDraft(session);
+                    setDraftHistory({ past: [], future: [] });
+                    setPendingWarnings([]);
+                    setAcknowledgedWarnings(new Set());
+                    setPendingOperation(null);
+                    setPendingGraphPlan(null);
+                    setActionMessage("Draft discarded.");
+                  }}
+                  disabled={!backend.connected}
+                >
+                  Discard draft
+                </button>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => void planChanges()}
+                  disabled={!backend.connected || graphBusy}
+                >
+                  Plan changes
+                </button>
+              </div>
+            </section>
+            <ErrorBoundary area="Signal flow" onError={recordUiDiagnostic}>
+              <LiveTelemetry store={telemetryStore} diagnostics={snapshot?.diagnostics ?? null}>
+                {(liveDiagnostics) => (
+                  <section id="signal-flow-panel" className="canvas-panel" aria-labelledby="canvas-heading">
+                    <div className="section-heading">
+                      <div>
+                        <p className="eyebrow">Signal flow</p>
+                        <h2 id="canvas-heading">Canvas</h2>
+                      </div>
+                    </div>
+                    <p className="muted canvas-handle-legend">
+                      <span className="canvas-handle-legend-dot canvas-handle-legend-dot-target" aria-hidden="true" />{" "}
+                      Send (start)
+                      <span
+                        className="canvas-handle-legend-dot canvas-handle-legend-dot-source"
+                        aria-hidden="true"
+                      />{" "}
+                      Receive (end) - drag from the sending tool's blue dot to the receiving tool's orange dot.
+                    </p>
+                    {flowCanvas}
+                    <fieldset className="connection-editor" disabled={!backend.connected}>
+                      <legend>Add connection to draft</legend>
+                      <label>
+                        Output
+                        <select
+                          aria-label="Source output port"
+                          value={connectionSource}
+                          onChange={(event) => setConnectionSource(event.target.value)}
+                        >
+                          <option value="">Choose source</option>
+                          {outputPorts.map((port) => (
+                            <option
+                              key={encodePort(port.nodeId, port.portName)}
+                              value={encodePort(port.nodeId, port.portName)}
+                            >
+                              {port.nodeName} · {port.portName} · {port.channels}ch
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <span aria-hidden="true">→</span>
+                      <label>
+                        Input
+                        <select
+                          aria-label="Destination input port"
+                          value={connectionDestination}
+                          onChange={(event) => setConnectionDestination(event.target.value)}
+                        >
+                          <option value="">Choose destination</option>
+                          {inputPorts.map((port) => (
+                            <option
+                              key={encodePort(port.nodeId, port.portName)}
+                              value={encodePort(port.nodeId, port.portName)}
+                            >
+                              {port.nodeName} · {port.portName} · {port.channels}ch
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button type="button" className="secondary" onClick={addConnection}>
+                        Add connection
+                      </button>
+                      <button type="button" className="secondary" onClick={openConnectionDialog}>
+                        Keyboard connection dialog
+                      </button>
+                    </fieldset>
+                    {connectionDialogOpen && (
+                      <div className="dialog-backdrop" role="presentation">
+                        <section
+                          ref={connectionDialog}
+                          className="connection-dialog"
+                          role="dialog"
+                          aria-modal="true"
+                          aria-labelledby="connection-dialog-heading"
+                          aria-describedby="connection-dialog-description"
+                        >
+                          <div className="section-heading">
+                            <h2 id="connection-dialog-heading">Keyboard connection</h2>
+                            <button
+                              type="button"
+                              className="secondary"
+                              onClick={closeConnectionDialog}
+                              aria-label="Close keyboard connection dialog"
+                            >
+                              Close
+                            </button>
+                          </div>
+                          <p id="connection-dialog-description" className="muted">
+                            Choose an output and input, then add the connection to the draft. Press Escape to close.
+                          </p>
+                          <label>
+                            Output
+                            <select
+                              ref={connectionDialogSource}
+                              aria-label="Keyboard source output port"
+                              value={connectionSource}
+                              onChange={(event) => setConnectionSource(event.target.value)}
+                            >
+                              <option value="">Choose source</option>
+                              {outputPorts.map((port) => (
+                                <option
+                                  key={encodePort(port.nodeId, port.portName)}
+                                  value={encodePort(port.nodeId, port.portName)}
+                                >
+                                  {port.nodeName} · {port.portName} · {port.channels}ch
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            Input
+                            <select
+                              aria-label="Keyboard destination input port"
+                              value={connectionDestination}
+                              onChange={(event) => setConnectionDestination(event.target.value)}
+                            >
+                              <option value="">Choose destination</option>
+                              {inputPorts.map((port) => (
+                                <option
+                                  key={encodePort(port.nodeId, port.portName)}
+                                  value={encodePort(port.nodeId, port.portName)}
+                                >
+                                  {port.nodeName} · {port.portName} · {port.channels}ch
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <div className="actions">
+                            <button
+                              type="button"
+                              className="primary"
+                              onClick={() => {
+                                if (addConnection()) closeConnectionDialog();
+                              }}
+                            >
+                              Add connection to draft
+                            </button>
+                            <button type="button" className="secondary" onClick={closeConnectionDialog}>
+                              Cancel
+                            </button>
+                          </div>
+                        </section>
+                      </div>
+                    )}
+                    {pluginPickerOpen && (
+                      <div className="dialog-backdrop" role="presentation">
+                        <section
+                          ref={pluginPickerDialog}
+                          className="connection-dialog plugin-picker-dialog"
+                          role="dialog"
+                          aria-modal="true"
+                          aria-labelledby="plugin-picker-heading"
+                          aria-describedby="plugin-picker-description"
+                        >
+                          <div className="section-heading">
+                            <h2 id="plugin-picker-heading">
+                              {pluginInsertEdgeId
+                                ? "Insert a VST2/VST3 plugin into this connection"
+                                : "Add a VST2/VST3 plugin"}
+                            </h2>
+                            <button
+                              type="button"
+                              className="secondary"
+                              onClick={closePluginPicker}
+                              aria-label="Close plugin picker"
+                            >
+                              Close
+                            </button>
+                          </div>
+                          <p id="plugin-picker-description" className="muted">
+                            Scan an absolute directory on this machine for supported x64 VST2/VST3 binaries, then{" "}
+                            {pluginInsertEdgeId
+                              ? "insert one directly into the connection"
+                              : "add one as a stopped node"}
+                            . Press Escape to close.
+                          </p>
+                          <LoadedPluginsPanel
+                            nodes={draft.nodes}
+                            selectedNodeId={selectedNode.id}
+                            disabled={!backend.connected}
+                            onSelect={(nodeId) => {
+                              setSelectedNodeId(nodeId);
+                              setSelectedNodeIds([nodeId]);
+                            }}
+                            onUnload={unloadPluginNode}
+                            diagnostics={liveDiagnostics ?? null}
+                          />
+                          <PluginScanPanel
+                            backend={backend}
+                            onAddPlaceholder={addPluginToDraft}
+                            headingId="plugin-picker-scan-heading"
+                          />
+                        </section>
+                      </div>
+                    )}
+                    {applicationPickerOpen &&
+                      (() => {
+                        const choices = applicationCaptureChoices(applications);
+                        const capturable = [...choices.withAudio, ...choices.other];
+                        const applicationKey = applicationChoiceKey;
+                        const selected =
+                          capturable.find(
+                            (application) => applicationKey(application) === applicationPickerSelection,
+                          ) ?? capturable[0];
+                        return (
+                          <div className="dialog-backdrop" role="presentation">
+                            <section
+                              ref={applicationPickerDialog}
+                              className="connection-dialog plugin-picker-dialog"
+                              role="dialog"
+                              aria-modal="true"
+                              aria-labelledby="application-picker-heading"
+                              aria-describedby="application-picker-description"
+                            >
+                              <div className="section-heading">
+                                <h2 id="application-picker-heading">Add an application capture source</h2>
+                                <button
+                                  type="button"
+                                  className="secondary"
+                                  onClick={closeApplicationPicker}
+                                  aria-label="Close application picker"
+                                >
+                                  Close
+                                </button>
+                              </div>
+                              <p id="application-picker-description" className="muted">
+                                Pick a running application to capture its audio as an input node. After restart,
+                                AudioRouter reconnects when it finds one verified matching instance; if several match,
+                                choose the intended instance again. Playback does not start just because the app is
+                                open.
+                              </p>
+                              <div className="actions">
+                                <button type="button" className="secondary" onClick={refreshApplications}>
+                                  Refresh applications
+                                </button>
+                              </div>
+                              {applicationsError ? (
+                                <p className="muted" role="status">
+                                  Application inventory unavailable: {applicationsError}
+                                </p>
+                              ) : capturable.length === 0 ? (
+                                <p className="muted" role="status">
+                                  No running applications were found. Refresh to try again.
+                                </p>
+                              ) : (
+                                <>
+                                  <label>
+                                    Application
+                                    <select
+                                      aria-label="Application to capture"
+                                      value={selected ? applicationKey(selected) : ""}
+                                      onChange={(event) => setApplicationPickerSelection(event.target.value)}
+                                    >
+                                      <ApplicationChoiceOptions applications={applications} />
+                                    </select>
+                                  </label>
+                                  {selected && (
+                                    <p className="muted" role="status">
+                                      {selected.executable} ·{" "}
+                                      {selected.audioSessionCount > 0
+                                        ? `audio `
+                                        : "no audio session yet; capture begins when it plays sound"}
+                                    </p>
+                                  )}
+                                  <div className="actions">
+                                    <button
+                                      type="button"
+                                      className="primary"
+                                      onClick={() => selected && addApplicationCaptureFromPicker(selected)}
+                                      disabled={!backend.connected || !selected}
+                                    >
+                                      Add capture source
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                              <p className="muted">
+                                For advanced options (application-capture policy, preparing the native worker), use the
+                                Applications panel in Full workspace mode.
+                              </p>
+                            </section>
+                          </div>
+                        );
+                      })()}
+                  </section>
+                )}
+              </LiveTelemetry>
+            </ErrorBoundary>
+            <ErrorBoundary area="Properties" onError={recordUiDiagnostic}>
+              <LiveTelemetry store={telemetryStore} diagnostics={snapshot?.diagnostics ?? null}>
+                {(liveDiagnostics) =>
+                  selectedGroup ? (
+                    <CanvasGroupInspector
+                      group={selectedGroup}
+                      onChange={(patch) => groupState.changeGroup(selectedGroup.id, patch)}
+                      onRemove={() => groupState.removeGroup(selectedGroup.id)}
+                    />
+                  ) : (
+                    <>
+                      <section className="panel inspector" aria-labelledby="inspector-heading">
+                        <div className="section-heading">
+                          <div>
+                            <p className="eyebrow">Selected node</p>
+                            <div className="inspector-title">
+                              <h2 id="inspector-heading">{selectedNode.name}</h2>
+                              <NodePropertyStatus
+                                node={selectedNode}
+                                connected={backend.connected}
+                                running={sessionRunning}
+                                snapshot={liveDiagnostics ?? null}
+                              />
+                            </div>
+                          </div>
+                          <span className="badge">
+                            {libraryEntries.find((entry) => entry.kind === selectedNode.kind)?.label ??
+                              selectedNode.kind}
+                          </span>
+                        </div>
+                        {toolDescription(selectedNode.kind) && (
+                          <p className="muted tool-description">{toolDescription(selectedNode.kind)}</p>
+                        )}
+                        <p className="muted">
+                          For delay and processing measurements, open Timing while audio plays. Ready means enabled for
+                          the next playback; Active does not guarantee an incoming signal.
+                        </p>
+                        <InspectorChangeSummary
+                          draftNode={selectedNode}
+                          authoritativeNode={session.nodes.find((node) => node.id === selectedNode.id)}
+                        />
+                        {selectedNode.kind === "meter" ? (
+                          <MeterInspector
+                            key={selectedNode.id}
+                            node={selectedNode}
+                            sessionId={session.id}
+                            snapshot={liveDiagnostics ?? null}
+                            running={sessionRunning}
+                            backend={backend}
+                            onUpgrade={() => {
+                              recordDraftChange({
+                                ...draft,
+                                nodes: draft.nodes.map((n) =>
+                                  n.id === selectedNode.id
+                                    ? {
+                                        ...n,
+                                        ports: [
+                                          ...n.ports,
+                                          {
+                                            name: "out",
+                                            direction: "output",
+                                            channels: n.ports.find((p) => p.direction === "input")?.channels ?? 2,
+                                          },
+                                        ],
+                                      }
+                                    : n,
+                                ),
+                              });
+                              setActionMessage(
+                                "Meter output added to the draft. Connect it downstream and Save to keep it.",
+                              );
+                            }}
+                          />
+                        ) : selectedNode.kind === "duck" ? (
+                          <DuckEditor
+                            key={selectedNode.id}
+                            node={selectedNode}
+                            session={draft}
+                            telemetry={
+                              liveDiagnostics?.nodeTelemetry.find((item) => item.nodeId === selectedNode.id)
+                                ?.processor ?? null
+                            }
+                            running={sessionRunning}
+                            disabled={!backend.connected}
+                            gameRound={liveDiagnostics?.gameRound ?? null}
+                            onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+                          />
+                        ) : isDynamicsKind(selectedNode.kind) ? (
+                          <DynamicsEditor
+                            key={selectedNode.id}
+                            kind={selectedNode.kind}
+                            node={selectedNode}
+                            telemetry={
+                              liveDiagnostics?.nodeTelemetry.find((item) => item.nodeId === selectedNode.id)
+                                ?.processor ?? null
+                            }
+                            channels={selectedNode.ports.find((port) => port.direction === "input")?.channels ?? 2}
+                            running={sessionRunning}
+                            disabled={!backend.connected}
+                            onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+                          />
+                        ) : (
+                          <NodeTelemetryPanel
+                            node={selectedNode}
+                            snapshot={liveDiagnostics ?? null}
+                            running={sessionRunning}
+                          />
+                        )}
+                        {selectedNode.kind === "physicalInput" && (
+                          <PhysicalInputBinding
+                            devices={devices}
+                            surround={
+                              selectedNode.parameters.spatialMode === "headphones" ||
+                              selectedNode.parameters.spatialMode === "speakers"
+                            }
+                            value={
+                              typeof selectedNode.parameters.endpointId === "string"
+                                ? selectedNode.parameters.endpointId
+                                : ""
+                            }
+                            disabled={!backend.connected || sessionRunning}
+                            onRefresh={refreshDevices}
+                            onChange={(value) => {
+                              setCaptureEndpointId(value);
+                              writeEndpointBindingHint(session.id, value, renderEndpointId);
+                              if (value) changeNodeParameterOn(selectedNode.id, "endpointId", value);
+                            }}
+                          />
+                        )}
+                        {selectedNode.kind === "physicalInput" && (
+                          <InputChannelsField
+                            devices={devices}
+                            endpointId={
+                              typeof selectedNode.parameters.endpointId === "string"
+                                ? selectedNode.parameters.endpointId
+                                : ""
+                            }
+                            mode={selectedNode.parameters.channelMode}
+                            surround={
+                              selectedNode.parameters.spatialMode === "headphones" ||
+                              selectedNode.parameters.spatialMode === "speakers"
+                            }
+                            disabled={!backend.connected}
+                            onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+                          />
+                        )}
+                        {selectedNode.kind === "physicalInput" && (
+                          <SpatialAudioField
+                            devices={devices}
+                            endpointId={
+                              typeof selectedNode.parameters.endpointId === "string"
+                                ? selectedNode.parameters.endpointId
+                                : ""
+                            }
+                            mode={
+                              typeof selectedNode.parameters.spatialMode === "string"
+                                ? selectedNode.parameters.spatialMode
+                                : "off"
+                            }
+                            disabled={!backend.connected}
+                            roomPercent={
+                              typeof selectedNode.parameters.spatialRoomPercent === "number"
+                                ? selectedNode.parameters.spatialRoomPercent
+                                : 0
+                            }
+                            running={sessionRunning}
+                            onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+                          />
+                        )}
+                        {selectedNode.kind === "firFilter" && (
+                          <FirFilterEditor
+                            node={selectedNode}
+                            backend={backend}
+                            disabled={!backend.connected}
+                            onChange={(changes) => {
+                              for (const [name, value] of changes) changeNodeParameterOn(selectedNode.id, name, value);
+                            }}
+                          />
+                        )}
+                        {selectedNode.kind === "spectralGate" && (
+                          <SpectralGateEditor
+                            node={selectedNode}
+                            running={sessionRunning}
+                            levelsDb={
+                              liveDiagnostics?.nodeTelemetry.find((item) => item.nodeId === selectedNode.id)?.spectrum
+                                ?.levelsDb ?? null
+                            }
+                            liveProfile={
+                              liveDiagnostics?.nodeTelemetry.find((item) => item.nodeId === selectedNode.id)
+                                ?.noiseProfile ?? null
+                            }
+                            disabled={!backend.connected}
+                            onChange={(changes) => {
+                              for (const [name, value] of changes) changeNodeParameterOn(selectedNode.id, name, value);
+                            }}
+                          />
+                        )}
+                        {selectedNode.kind === "denoise" && (
+                          <DenoiseLearnEditor
+                            node={selectedNode}
+                            running={sessionRunning}
+                            liveProfile={
+                              liveDiagnostics?.nodeTelemetry.find((item) => item.nodeId === selectedNode.id)
+                                ?.noiseProfile ?? null
+                            }
+                            disabled={!backend.connected}
+                            onChange={(changes) => {
+                              for (const [name, value] of changes) changeNodeParameterOn(selectedNode.id, name, value);
+                            }}
+                          />
+                        )}
+                        {selectedNode.kind === "dehum" && (
+                          <DehumEditor
+                            node={selectedNode}
+                            disabled={!backend.connected}
+                            onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+                          />
+                        )}
+                        {selectedNode.kind === "graphicEq" && (
+                          <GraphicEqEditor
+                            node={selectedNode}
+                            backend={backend}
+                            disabled={!backend.connected}
+                            onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+                          />
+                        )}
+                        {selectedNode.kind === "bassTreble" && (
+                          <BassTrebleEditor
+                            node={selectedNode}
+                            backend={backend}
+                            disabled={!backend.connected}
+                            onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+                          />
+                        )}
+                        {selectedNode.kind === "pitch" && (
+                          <PitchEditor
+                            node={selectedNode}
+                            disabled={!backend.connected}
+                            onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+                          />
+                        )}
+                        {selectedNode.kind === "delay" && (
+                          <DelayEditor
+                            node={selectedNode}
+                            disabled={!backend.connected}
+                            onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+                          />
+                        )}
+                        {selectedNode.kind === "inputSwitch" && (
+                          <InputSwitchEditor
+                            node={selectedNode}
+                            session={draft}
+                            disabled={!backend.connected}
+                            onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+                          />
+                        )}
+                        {(selectedNode.kind === "declick" || selectedNode.kind === "speechDenoise") && (
+                          <StrengthEditor
+                            node={selectedNode}
+                            disabled={!backend.connected}
+                            onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+                          />
+                        )}
+                        {(selectedNode.kind === "volume" || selectedNode.kind === "gain") && (
+                          <LevelEditor
+                            node={selectedNode}
+                            disabled={!backend.connected}
+                            onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+                          />
+                        )}
+                        {selectedNode.kind === "mixer" && (
+                          <MixerInputsEditor
+                            session={draft}
+                            mixer={selectedNode}
+                            disabled={!backend.connected}
+                            onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+                          />
+                        )}
+                        {selectedNode.kind === "applicationCapture" && (
+                          <ApplicationCaptureBinding
+                            node={selectedNode}
+                            applications={applications}
+                            error={applicationsError}
+                            disabled={!backend.connected || sessionRunning}
+                            onRefresh={refreshApplications}
+                            onSelect={(application) => rebindApplicationCapture(selectedNode.id, application)}
+                          />
+                        )}
+                        {selectedNode.kind === "physicalOutput" && (
+                          <PhysicalOutputBinding
+                            devices={devices}
+                            value={
+                              typeof selectedNode.parameters.endpointId === "string"
+                                ? selectedNode.parameters.endpointId
+                                : ""
+                            }
+                            disabled={!backend.connected || sessionRunning}
+                            onRefresh={refreshDevices}
+                            onChange={(value) => {
+                              setRenderEndpointId(value);
+                              writeEndpointBindingHint(session.id, captureEndpointId, value);
+                              if (value) changeNodeParameterOn(selectedNode.id, "endpointId", value);
+                            }}
+                          />
+                        )}
+                        {(selectedNode.kind === "networkSend" || selectedNode.kind === "networkReceive") && (
+                          <NetworkNodeEditor
+                            node={selectedNode}
+                            disabled={!backend.connected}
+                            telemetry={
+                              liveDiagnostics?.nodeTelemetry.find((item) => item.nodeId === selectedNode.id)?.network
+                            }
+                            onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+                          />
+                        )}
+                        {selectedNode.kind === "recorder" && (
+                          <RecorderControls
+                            node={selectedNode}
+                            status={recorderStatuses.find((status) => status.nodeId === selectedNode.id)}
+                            running={sessionRunning}
+                            connected={backend.connected}
+                            busy={recordingBusy === selectedNode.id}
+                            lastPath={lastRecordingPaths[selectedNode.id] ?? null}
+                            message={recordingMessage?.nodeId === selectedNode.id ? recordingMessage.text : null}
+                            onToggle={(nodeId, record) => void toggleNodeRecording(nodeId, record)}
+                          />
+                        )}
+                        {selectedNode.kind === "recorder" && (
+                          <RecordingFolderField backend={backend} connected={backend.connected} />
+                        )}
+                        {selectedNode.kind === "audioFile" && (
+                          <AudioFileNodeEditor
+                            node={selectedNode}
+                            backend={backend}
+                            disabled={!backend.connected || sessionRunning}
+                            transportDisabled={!backend.connected}
+                            sessionRunning={sessionRunning}
+                            state={audioSourceStates[selectedNode.id] ?? "stopped"}
+                            sessionId={session.id}
+                            currentSessionIdRef={currentSessionIdRef}
+                            recorderNodes={session.nodes.filter(
+                              (item) =>
+                                item.kind === "recorder" && item.enabled && recorderHasCaptureSource(session, item.id),
+                            )}
+                            recorderStatuses={recorderStatuses}
+                            onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+                            onTransport={(nodeId, action) => void transportAudioSource(nodeId, action)}
+                          />
+                        )}
+                        {selectedNode.kind === "plugin" && (
+                          <>
+                            <PluginEditorControls
+                              node={selectedNode}
+                              backend={backend}
+                              sessionId={session.id}
+                              running={sessionRunning}
+                              onStateSaved={(stateId) => changeNodeParameterOn(selectedNode.id, "stateId", stateId)}
+                            />
+                            <PluginNodeInspector
+                              node={selectedNode}
+                              disabled={!backend.connected}
+                              onUnload={() => unloadPluginNode(selectedNode.id)}
+                              snapshot={liveDiagnostics ?? null}
+                            />
+                          </>
+                        )}
+                        <details className="inspector-help">
+                          <summary>How Enabled and Bypass work</summary>
+                          <p className="muted">
+                            Off silences inputs and outputs; an off effect passes sound without processing. Bypass
+                            passes sound around an effect; on a prepared input, output, or Mixer it silences that
+                            contribution. Live toggles do not require Save or Stop and keep other draft edits. Use Mute
+                            to silence a route. Enabled and Bypass apply to prepared nodes while audio keeps playing.
+                            Off devices remain open until Stop and contribute silence.
+                          </p>
+                        </details>
+                        <div className="inspector-grid">
+                          <label>
+                            Node name
+                            <TextField
+                              key={selectedNode.id}
+                              maxLength={120}
+                              value={selectedNode.name}
+                              disabled={!backend.connected}
+                              onValue={changeNodeName}
+                            />
+                          </label>
+                          <div className="inspector-toggles">
+                            <label>
+                              Enabled
+                              <input
+                                type="checkbox"
+                                checked={selectedNode.enabled}
+                                disabled={!backend.connected || sessionActionBusy || graphBusy}
+                                onChange={(event) => changeNodeFlag("enabled", event.target.checked)}
+                              />
+                            </label>
+                            <label>
+                              Bypass
+                              <input
+                                type="checkbox"
+                                checked={selectedNode.bypass}
+                                disabled={!backend.connected || sessionActionBusy || graphBusy}
+                                onChange={(event) => changeNodeFlag("bypass", event.target.checked)}
+                              />
+                            </label>
+                          </div>
+                          <EqSpectrumContext.Provider
+                            value={
+                              sessionRunning
+                                ? (liveDiagnostics?.nodeTelemetry.find((item) => item.nodeId === selectedNode.id)
+                                    ?.spectrum ?? null)
+                                : null
+                            }
+                          >
+                            <ProcessorParameterEditor
+                              node={selectedNode}
+                              processors={processors}
+                              nodeTypes={snapshot?.discovery?.nodeTypes ?? null}
+                              connected={backend.connected}
+                              onChange={changeNodeParameter}
+                            />
+                          </EqSpectrumContext.Provider>
+                          {processors?.some(
+                            (processor) => processor.id === selectedNode.kind && processor.parameters.length > 0,
+                          ) && (
+                            <button
+                              type="button"
+                              className="secondary"
+                              onClick={resetNodeParameters}
+                              disabled={!backend.connected}
+                            >
+                              Reset parameters
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={duplicateSelectedNode}
+                            disabled={!backend.connected}
+                          >
+                            Duplicate node to draft
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={removeSelectedNode}
+                            disabled={!backend.connected}
+                          >
+                            Remove node from draft
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void togglePrivacyMute()}
+                            disabled={!backend.connected}
+                            aria-pressed={privacyMuted}
+                          >
+                            {privacyMuted ? "Privacy mute enabled" : "Enable privacy mute"}
+                          </button>
+                          <p className="muted">
+                            {backend.connected
+                              ? "Plan changes reviews the draft; Commit changes saves it. Privacy mute is an immediate safety latch."
+                              : "Controls are disabled while disconnected. Selection is local presentation state only."}
+                          </p>
+                        </div>
+                        <NodeIdentity nodeId={selectedNode.id} />
+                      </section>
+                    </>
+                  )
+                }
+              </LiveTelemetry>
+            </ErrorBoundary>
+            <ErrorBoundary area="Side panel" onError={recordUiDiagnostic}>
+              <Workbench
+                onAddGroup={() => {
+                  groupState.addGroup();
+                  setWorkbenchTab("properties");
+                }}
+                tab={workbenchTab}
+                onTab={(tab) => setWorkbenchTab(tab)}
+                sessionFileContent={
+                  <SessionFilePanel
+                    backend={backend}
+                    session={session}
+                    unsaved={routeChanged}
+                    onImported={(imported) => {
+                      setCreatedSessions((current) => [...current.filter((item) => item.id !== imported.id), imported]);
+                      setSelectedSessionId(imported.id);
+                      void refresh();
+                    }}
+                  />
+                }
+                pluginsContent={
+                  <PluginToolsGroup
+                    backend={backend}
+                    connected={backend.connected}
+                    search={librarySearch}
+                    refreshKey={pluginPickerOpen}
+                    onAdd={addPluginToDraft}
+                    onOpenPicker={() => openPluginPicker()}
+                  />
+                }
+                tools={visibleLibraryEntries}
+                connected={backend.connected}
+                onAdd={addLibraryNode}
+                onApplicationPicker={openApplicationPicker}
+                librarySearch={librarySearch}
+                onLibrarySearch={(value) => setLibrarySearch(value.slice(0, 80))}
+                onNewSession={() => void createSession()}
+                onDuplicate={() => void duplicateSession()}
+                onDelete={() => void deleteSession()}
+                onUndo={undoDraft}
+                onRedo={redoDraft}
+                onDiscard={() => {
+                  setDraft(session);
+                  setDraftHistory({ past: [], future: [] });
+                  setPendingWarnings([]);
+                  setAcknowledgedWarnings(new Set());
+                  setPendingOperation(null);
+                  setPendingGraphPlan(null);
+                  setConnectionReplacement(null);
+                  setActionMessage("Draft discarded.");
+                }}
+                onPlan={() => void planChanges()}
+                onCommit={() => void commitAcknowledgedPlan()}
+                canCommit={acknowledgedWarnings.size === pendingWarnings.length && !graphBusy}
+                pendingPlan={Boolean(pendingGraphPlan)}
+                actionMessage={actionMessage}
+                onReplaceInputConnection={
+                  connectionReplacement && actionMessage?.includes("Replace input connection")
+                    ? replaceInputConnection
+                    : undefined
+                }
+                apiBuilder={(baseUrl) => (
+                  <RequestBuilder
+                    sessions={availableSessions}
+                    activeSessionId={session.id}
+                    nodeTypes={snapshot?.discovery?.nodeTypes ?? null}
+                    baseUrl={baseUrl}
+                    connected={backend.connected}
+                    onSend={backend.setNode ? (params) => backend.setNode!(params) : undefined}
+                  />
+                )}
+                sessions={availableSessions}
+                selectedSessionId={session.id}
+                onSelectSession={(id) => {
+                  setConnectionReplacement(null);
+                  setSelectedSessionId(id);
+                }}
+                revision={session.revision}
+                sessionName={draft.name}
+                onNameChange={changeSessionName}
+                warnings={pendingWarnings}
+                acknowledgedWarnings={[...acknowledgedWarnings]}
+                onAcknowledgeWarning={(warning, checked) =>
+                  setAcknowledgedWarnings((current) => {
+                    const next = new Set(current);
+                    if (checked) next.add(warning);
+                    else next.delete(warning);
+                    return next;
+                  })
+                }
+                diagnostics={uiDiagnostics}
+                verboseLogging={verboseLogging}
+                backendActivity={backendActivity}
+                mcpActivity={mcpActivity}
+                mcpSetupInfo={mcpSetupInfo}
+                clientsPanel={<ClientsPanel backend={backend} />}
+                setupContent={setupWorkbenchContent}
+                timingContent={
+                  <LiveTelemetry store={telemetryStore} diagnostics={snapshot?.diagnostics ?? null}>
+                    {(liveDiagnostics) => (
+                      <SignalTimingPanel
+                        session={session}
+                        telemetry={liveDiagnostics?.nodeTelemetry ?? []}
+                        running={sessionRunning}
+                      />
+                    )}
+                  </LiveTelemetry>
+                }
+                recordingContent={recordingWorkbenchContent}
+                advancedContent={advancedWorkbenchContent}
+              />
+            </ErrorBoundary>
+          </main>
+        </div>
+        <LibraryDragOverlay />
+        {deviceConsent && (
+          <DeviceAccessDialog
+            busy={deviceConsent.busy}
+            error={deviceConsent.error}
+            onAllow={() => void allowDeviceAccessAndPlay()}
+            onCancel={() => setDeviceConsent(null)}
+          />
+        )}
+      </div>
+    </PluginParameterContext.Provider>
+  );
 }

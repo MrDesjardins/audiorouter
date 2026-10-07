@@ -40,9 +40,12 @@ export class WebView2RpcTransport implements RpcTransport {
     private readonly maxPending = 64,
     private readonly allowedOrigin?: string,
   ) {
-    if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60_000) throw new Error("WebView2 transport timeout is out of bounds");
-    if (!Number.isInteger(maxPending) || maxPending < 1 || maxPending > 256) throw new Error("WebView2 transport pending limit is out of bounds");
-    if (allowedOrigin !== undefined && !isTrustedWebView2Origin(allowedOrigin)) throw new Error("WebView2 allowed origin is invalid");
+    if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60_000)
+      throw new Error("WebView2 transport timeout is out of bounds");
+    if (!Number.isInteger(maxPending) || maxPending < 1 || maxPending > 256)
+      throw new Error("WebView2 transport pending limit is out of bounds");
+    if (allowedOrigin !== undefined && !isTrustedWebView2Origin(allowedOrigin))
+      throw new Error("WebView2 allowed origin is invalid");
     this.listener = (event) => this.receive(event.data, event.origin);
     webview.addEventListener("message", this.listener);
   }
@@ -50,7 +53,8 @@ export class WebView2RpcTransport implements RpcTransport {
   send(request: JsonRpcRequest): Promise<JsonRpcResponse> {
     if (this.closed) return Promise.reject(new Error("WebView2 transport is closed"));
     if (!isWebView2Request(request)) return Promise.reject(new Error("WebView2 transport rejected the request shape"));
-    if (this.pending.size >= this.maxPending) return Promise.reject(new Error("WebView2 transport pending request limit reached"));
+    if (this.pending.size >= this.maxPending)
+      return Promise.reject(new Error("WebView2 transport pending request limit reached"));
     const key = requestKey(request.id);
     if (this.pending.has(key)) return Promise.reject(new Error("WebView2 request ID is already pending"));
     return new Promise<JsonRpcResponse>((resolve, reject) => {
@@ -82,9 +86,15 @@ export class WebView2RpcTransport implements RpcTransport {
 
   private receive(value: unknown, origin: string | undefined): void {
     if (this.allowedOrigin !== undefined && origin !== this.allowedOrigin) return;
-    if (typeof value !== "object" || value === null || (value as { type?: unknown }).type !== "audiorouter.rpc.response") return;
+    if (
+      typeof value !== "object" ||
+      value === null ||
+      (value as { type?: unknown }).type !== "audiorouter.rpc.response"
+    )
+      return;
     const response = (value as { response?: unknown }).response;
-    if (typeof response !== "object" || response === null || (response as { jsonrpc?: unknown }).jsonrpc !== "2.0") return;
+    if (typeof response !== "object" || response === null || (response as { jsonrpc?: unknown }).jsonrpc !== "2.0")
+      return;
     const id = (response as { id?: unknown }).id;
     if ((typeof id !== "string" && typeof id !== "number") || !isJsonRpcResponse(response)) return;
     const key = requestKey(id);
@@ -102,9 +112,15 @@ export class TauriRpcTransport implements RpcTransport {
   private closed = false;
   private generation = 0;
 
-  constructor(private readonly core: TauriCore, private readonly timeoutMs = 5000, private readonly maxPending = 64) {
-    if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60_000) throw new Error("Tauri transport timeout is out of bounds");
-    if (!Number.isInteger(maxPending) || maxPending < 1 || maxPending > 256) throw new Error("Tauri transport pending limit is out of bounds");
+  constructor(
+    private readonly core: TauriCore,
+    private readonly timeoutMs = 5000,
+    private readonly maxPending = 64,
+  ) {
+    if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60_000)
+      throw new Error("Tauri transport timeout is out of bounds");
+    if (!Number.isInteger(maxPending) || maxPending < 1 || maxPending > 256)
+      throw new Error("Tauri transport pending limit is out of bounds");
   }
 
   send(request: JsonRpcRequest): Promise<JsonRpcResponse> {
@@ -112,7 +128,8 @@ export class TauriRpcTransport implements RpcTransport {
     if (!isWebView2Request(request)) return Promise.reject(new Error("Tauri transport rejected the request shape"));
     const key = requestKey(request.id);
     if (this.pending.has(key)) return Promise.reject(new Error("Tauri request ID is already pending"));
-    if (this.pending.size >= this.maxPending) return Promise.reject(new Error("Tauri transport pending request limit reached"));
+    if (this.pending.size >= this.maxPending)
+      return Promise.reject(new Error("Tauri transport pending request limit reached"));
     const generation = this.generation;
     let rejectDisposed: (error: Error) => void = () => undefined;
     const disposedPromise = new Promise<JsonRpcResponse>((_, reject) => {
@@ -133,7 +150,13 @@ export class TauriRpcTransport implements RpcTransport {
     return Promise.race([
       invocation.then((response) => {
         if (this.closed || this.generation !== generation) throw new Error("Tauri transport is closed");
-        if (typeof response !== "object" || response === null || !isJsonRpcResponse(response) || response.id !== request.id) throw new Error("Tauri transport received an invalid response");
+        if (
+          typeof response !== "object" ||
+          response === null ||
+          !isJsonRpcResponse(response) ||
+          response.id !== request.id
+        )
+          throw new Error("Tauri transport received an invalid response");
         return response;
       }),
       timeoutPromise,
@@ -168,12 +191,14 @@ function isJsonRpcResponse(value: object): value is JsonRpcResponse {
 function isWebView2Request(value: unknown): value is JsonRpcRequest {
   if (typeof value !== "object" || value === null) return false;
   const request = value as { jsonrpc?: unknown; id?: unknown; method?: unknown };
-  return request.jsonrpc === "2.0" &&
+  return (
+    request.jsonrpc === "2.0" &&
     typeof request.method === "string" &&
     request.method.length > 0 &&
     request.method.length <= 256 &&
     ((typeof request.id === "string" && request.id.length > 0 && request.id.length <= 128) ||
-      (typeof request.id === "number" && Number.isFinite(request.id) && Number.isSafeInteger(request.id)));
+      (typeof request.id === "number" && Number.isFinite(request.id) && Number.isSafeInteger(request.id)))
+  );
 }
 
 function isTrustedWebView2Origin(value: unknown): value is string {
@@ -194,20 +219,24 @@ declare global {
 function isHostBridge(value: unknown): value is AudioRouterHostBridge {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value as { transport?: unknown; sessionId?: unknown };
-  return typeof candidate.sessionId === "string" &&
+  return (
+    typeof candidate.sessionId === "string" &&
     candidate.sessionId.length > 0 &&
     candidate.sessionId.length <= 128 &&
     typeof candidate.transport === "object" &&
     candidate.transport !== null &&
-    typeof (candidate.transport as { send?: unknown }).send === "function";
+    typeof (candidate.transport as { send?: unknown }).send === "function"
+  );
 }
 
 function isWebView2Webview(value: unknown): value is WebView2Webview {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value as Partial<WebView2Webview>;
-  return typeof candidate.postMessage === "function" &&
+  return (
+    typeof candidate.postMessage === "function" &&
     typeof candidate.addEventListener === "function" &&
-    typeof candidate.removeEventListener === "function";
+    typeof candidate.removeEventListener === "function"
+  );
 }
 
 function isTauriCore(value: unknown): value is TauriCore {
@@ -218,19 +247,27 @@ function isTauriCore(value: unknown): value is TauriCore {
 /** The desktop shell's Windows sign-in registration commands. */
 function shellStartupRegistration(core: TauriCore) {
   return [
-    (enabled: boolean) => Promise.resolve(core.invoke("startup_register", { enabled })).then((value) => {
-      if (typeof value !== "string") throw new Error("native startup registration returned an invalid response");
-      return value;
-    }),
-    () => Promise.resolve(core.invoke("startup_status")).then((value) => {
-      if (value !== "registered" && value !== "unregistered") throw new Error("native startup status returned an invalid response");
-      return value;
-    }),
+    (enabled: boolean) =>
+      Promise.resolve(core.invoke("startup_register", { enabled })).then((value) => {
+        if (typeof value !== "string") throw new Error("native startup registration returned an invalid response");
+        return value;
+      }),
+    () =>
+      Promise.resolve(core.invoke("startup_status")).then((value) => {
+        if (value !== "registered" && value !== "unregistered")
+          throw new Error("native startup status returned an invalid response");
+        return value;
+      }),
   ] as const;
 }
 
 /** Select the injected native backend, or remain safely disconnected. */
-export function createInitialBackend(host: unknown, webview: unknown = undefined, sessionId: unknown = undefined, webviewOrigin: unknown = undefined): UiBackend {
+export function createInitialBackend(
+  host: unknown,
+  webview: unknown = undefined,
+  sessionId: unknown = undefined,
+  webviewOrigin: unknown = undefined,
+): UiBackend {
   // The desktop shell injects a host bridge and also exposes its Tauri
   // core; sign-in registration lives in the shell, so pass it on. Without
   // it the Start at sign-in panel reported "unavailable in this host".
@@ -240,7 +277,11 @@ export function createInitialBackend(host: unknown, webview: unknown = undefined
       : createLiveBackendFromTransport(host.transport, host.sessionId);
   }
   if (isTauriCore(webview) && typeof sessionId === "string" && sessionId.length > 0 && sessionId.length <= 128) {
-    return createLiveBackendFromTransport(new TauriRpcTransport(webview), sessionId, ...shellStartupRegistration(webview));
+    return createLiveBackendFromTransport(
+      new TauriRpcTransport(webview),
+      sessionId,
+      ...shellStartupRegistration(webview),
+    );
   }
   if (isWebView2Webview(webview) && typeof sessionId === "string" && sessionId.length > 0 && sessionId.length <= 128) {
     if (!isTrustedWebView2Origin(webviewOrigin)) return createDisconnectedBackend();

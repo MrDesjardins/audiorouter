@@ -2,20 +2,59 @@ import { test, expect } from "@playwright/test";
 import { demoSession } from "../src/fixtures";
 
 // The user's route: Microphone → Meter → { "Hear my voice", Recorder }.
-const node = (id: string, kind: string, name: string, ins: boolean, outs: boolean, parameters: Record<string, unknown> = {}) => ({ id, kind, typeVersion: 1, name, enabled: true, bypass: false, parameters, ports: [...(ins ? [{ name: "in", direction: "input", channels: 2 }] : []), ...(outs ? [{ name: "out", direction: "output", channels: 2 }] : [])] });
-const edge = (id: string, source: string, target: string) => ({ id, sourceNode: source, sourcePort: "out", destinationNode: target, destinationPort: "in", matrix: [1, 0, 0, 1], enabled: true });
+const node = (
+  id: string,
+  kind: string,
+  name: string,
+  ins: boolean,
+  outs: boolean,
+  parameters: Record<string, unknown> = {},
+) => ({
+  id,
+  kind,
+  typeVersion: 1,
+  name,
+  enabled: true,
+  bypass: false,
+  parameters,
+  ports: [
+    ...(ins ? [{ name: "in", direction: "input", channels: 2 }] : []),
+    ...(outs ? [{ name: "out", direction: "output", channels: 2 }] : []),
+  ],
+});
+const edge = (id: string, source: string, target: string) => ({
+  id,
+  sourceNode: source,
+  sourcePort: "out",
+  destinationNode: target,
+  destinationPort: "in",
+  matrix: [1, 0, 0, 1],
+  enabled: true,
+});
 const session = {
   ...demoSession,
-  nodes: [node("mic", "testSignal", "Microphone", false, true), node("meter", "meter", "Meter 1", true, true), node("hear", "physicalOutput", "Hear my voice", true, false), node("rec", "recorder", "Podcast recorder", true, true, { format: "wavPcm24", autoRecord: false, splitMinutes: 10 })],
+  nodes: [
+    node("mic", "testSignal", "Microphone", false, true),
+    node("meter", "meter", "Meter 1", true, true),
+    node("hear", "physicalOutput", "Hear my voice", true, false),
+    node("rec", "recorder", "Podcast recorder", true, true, {
+      format: "wavPcm24",
+      autoRecord: false,
+      splitMinutes: 10,
+    }),
+  ],
   edges: [edge("mic-meter", "mic", "meter"), edge("meter-hear", "meter", "hear"), edge("meter-rec", "meter", "rec")],
 };
 
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`one-click Record and Stop on a playing Recorder node in ${theme}`, async ({ page }, testInfo) => {
-    await page.addInitScript(({ session, theme }) => {
-      localStorage.setItem("audiorouter.ui.theme", theme);
-      Object.assign(window, { __routeFixtureSession: session, __routeFixtureRunning: true });
-    }, { session, theme });
+    await page.addInitScript(
+      ({ session, theme }) => {
+        localStorage.setItem("audiorouter.ui.theme", theme);
+        Object.assign(window, { __routeFixtureSession: session, __routeFixtureRunning: true });
+      },
+      { session, theme },
+    );
     await page.goto("/route-harness.html");
     const recorder = page.getByTestId("rf__node-rec");
     await expect(recorder).toBeVisible();
@@ -33,15 +72,24 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await controls.getByRole("button", { name: "Stop recording Podcast recorder" }).click();
     await expect(page.locator(".global-action-message")).toContainText("Recording saved.");
     await expect(recorder.getByRole("button", { name: "Record Podcast recorder" })).toBeVisible();
-    const calls = await page.evaluate(() => (window as unknown as { __routeFixtureCalls(): string[] }).__routeFixtureCalls());
+    const calls = await page.evaluate(() =>
+      (window as unknown as { __routeFixtureCalls(): string[] }).__routeFixtureCalls(),
+    );
     expect(calls.filter((call) => call.includes("record"))).toEqual(["record:rec", "stop-record:rec"]);
   });
 }
 
 test("a take that lost audio says so at Stop and keeps the file", async ({ page }) => {
-  await page.addInitScript(({ session }) => {
-    Object.assign(window, { __routeFixtureSession: session, __routeFixtureRunning: true, __routeFixtureRecordingLostAudio: true });
-  }, { session });
+  await page.addInitScript(
+    ({ session }) => {
+      Object.assign(window, {
+        __routeFixtureSession: session,
+        __routeFixtureRunning: true,
+        __routeFixtureRecordingLostAudio: true,
+      });
+    },
+    { session },
+  );
   await page.goto("/route-harness.html");
   const recorder = page.getByTestId("rf__node-rec");
   await recorder.getByRole("button", { name: "Record Podcast recorder" }).click();
@@ -58,10 +106,17 @@ test("a take that lost audio says so at Stop and keeps the file", async ({ page 
 
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`first Record asks for a recording folder and one click approves it in ${theme}`, async ({ page }, testInfo) => {
-    await page.addInitScript(({ session, theme }) => {
-      localStorage.setItem("audiorouter.ui.theme", theme);
-      Object.assign(window, { __routeFixtureSession: session, __routeFixtureRunning: true, __routeFixtureNoRecordingRoot: true });
-    }, { session, theme });
+    await page.addInitScript(
+      ({ session, theme }) => {
+        localStorage.setItem("audiorouter.ui.theme", theme);
+        Object.assign(window, {
+          __routeFixtureSession: session,
+          __routeFixtureRunning: true,
+          __routeFixtureNoRecordingRoot: true,
+        });
+      },
+      { session, theme },
+    );
     await page.goto("/route-harness.html");
     const recorder = page.getByTestId("rf__node-rec");
     await expect(recorder).toBeVisible();
@@ -89,6 +144,8 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(page.getByLabel("Recorder controls").getByRole("status").first()).toHaveText("Recording");
     // The Recording tab shows the same folder.
     await page.getByRole("tab", { name: "Recording", exact: true }).click();
-    await expect(page.getByRole("tabpanel").getByRole("group", { name: "Recording folder" }).locator(".recording-folder-path")).toHaveText("D:\\Podcast");
+    await expect(
+      page.getByRole("tabpanel").getByRole("group", { name: "Recording folder" }).locator(".recording-folder-path"),
+    ).toHaveText("D:\\Podcast");
   });
 }

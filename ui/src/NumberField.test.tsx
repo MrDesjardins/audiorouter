@@ -37,7 +37,9 @@ describe("NumberField", () => {
 
   it("ignores letters, restores the saved value on leaving invalid text, and steps with arrows", () => {
     const onValue = vi.fn();
-    const { rerender } = render(<NumberField aria-label="Q" value={1} min={0.1} max={20} step={0.1} onValue={onValue} />);
+    const { rerender } = render(
+      <NumberField aria-label="Q" value={1} min={0.1} max={20} step={0.1} onValue={onValue} />,
+    );
     const field = screen.getByRole("spinbutton", { name: "Q" }) as HTMLInputElement;
     fireEvent.focus(field);
     fireEvent.change(field, { target: { value: "abc" } });

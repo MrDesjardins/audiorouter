@@ -9,14 +9,34 @@ afterEach(cleanup);
 
 it("stores the choice, defaulting to on for anything unknown", () => {
   const values = new Map<string, string>();
-  const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); } };
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      values.set(key, value);
+    },
+  };
   expect(readFlowAnimation(storage)).toBe("on");
   writeFlowAnimation(storage, "focus");
   expect(readFlowAnimation(storage)).toBe("focus");
   values.set("audiorouter.ui.flow-animation", "sometimes");
   expect(readFlowAnimation(storage)).toBe("on");
-  expect(readFlowAnimation({ getItem: () => { throw new Error("blocked"); } })).toBe("on");
-  expect(() => writeFlowAnimation({ setItem: () => { throw new Error("blocked"); } }, "off")).not.toThrow();
+  expect(
+    readFlowAnimation({
+      getItem: () => {
+        throw new Error("blocked");
+      },
+    }),
+  ).toBe("on");
+  expect(() =>
+    writeFlowAnimation(
+      {
+        setItem: () => {
+          throw new Error("blocked");
+        },
+      },
+      "off",
+    ),
+  ).not.toThrow();
   expect(readFlowAnimation(null)).toBe("on");
 });
 
@@ -30,9 +50,21 @@ it("offers the three choices and explains the selected one", () => {
 });
 
 function lights(mode: FlowAnimationMode) {
-  return render(<svg><FlowMotionProvider mode={mode}>
-    <FlowActiveLayers id="e1" path="M0,0 C10,0 20,0 30,0" source={{ x: 0, y: 0 }} target={{ x: 30, y: 0 }} targetSide="left" levelDb={-20} core={() => <path className="core" />} />
-  </FlowMotionProvider></svg>);
+  return render(
+    <svg>
+      <FlowMotionProvider mode={mode}>
+        <FlowActiveLayers
+          id="e1"
+          path="M0,0 C10,0 20,0 30,0"
+          source={{ x: 0, y: 0 }}
+          target={{ x: 30, y: 0 }}
+          targetSide="left"
+          levelDb={-20}
+          core={() => <path className="core" />}
+        />
+      </FlowMotionProvider>
+    </svg>,
+  );
 }
 
 it("moves comets when on, never when off, and pauses them while unfocused", () => {
@@ -48,10 +80,14 @@ it("moves comets when on, never when off, and pauses them while unfocused", () =
   const focus = lights("focus");
   expect(comets(focus)).toBeGreaterThan(0);
   hasFocus.mockReturnValue(false);
-  act(() => { window.dispatchEvent(new Event("blur")); });
+  act(() => {
+    window.dispatchEvent(new Event("blur"));
+  });
   expect(comets(focus)).toBe(0);
   hasFocus.mockReturnValue(true);
-  act(() => { window.dispatchEvent(new Event("focus")); });
+  act(() => {
+    window.dispatchEvent(new Event("focus"));
+  });
   expect(comets(focus)).toBeGreaterThan(0);
   hasFocus.mockRestore();
 });

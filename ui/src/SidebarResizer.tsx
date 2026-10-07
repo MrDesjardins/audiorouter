@@ -20,37 +20,47 @@ export function SidebarResizer({ width, onWidth }: { width: number; onWidth: (wi
     if (!drag.current) return;
     // The sidebar is on the right: moving the handle left makes it wider.
     const viewportLimit = typeof window === "undefined" ? MAX_SIDEBAR_WIDTH : window.innerWidth * 0.7;
-    onWidth(Math.min(viewportLimit, clampSidebarWidth(drag.current.startWidth + (drag.current.startX - event.clientX))));
+    onWidth(
+      Math.min(viewportLimit, clampSidebarWidth(drag.current.startWidth + (drag.current.startX - event.clientX))),
+    );
   };
   const onPointerUp = (event: PointerEvent<HTMLDivElement>) => {
     drag.current = null;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    if (event.currentTarget.hasPointerCapture(event.pointerId))
+      event.currentTarget.releasePointerCapture(event.pointerId);
   };
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const next = event.key === "ArrowLeft" ? width + KEYBOARD_STEP
-      : event.key === "ArrowRight" ? width - KEYBOARD_STEP
-        : event.key === "Home" ? MIN_SIDEBAR_WIDTH
-          : event.key === "End" ? MAX_SIDEBAR_WIDTH
-            : null;
+    const next =
+      event.key === "ArrowLeft"
+        ? width + KEYBOARD_STEP
+        : event.key === "ArrowRight"
+          ? width - KEYBOARD_STEP
+          : event.key === "Home"
+            ? MIN_SIDEBAR_WIDTH
+            : event.key === "End"
+              ? MAX_SIDEBAR_WIDTH
+              : null;
     if (next === null) return;
     event.preventDefault();
     onWidth(clampSidebarWidth(next));
   };
-  return <div
-    className="sidebar-resizer"
-    role="separator"
-    aria-orientation="vertical"
-    aria-label="Resize the right panel"
-    aria-valuemin={MIN_SIDEBAR_WIDTH}
-    aria-valuemax={MAX_SIDEBAR_WIDTH}
-    aria-valuenow={width}
-    title="Drag to resize the panel. Double-click to reset."
-    tabIndex={0}
-    onPointerDown={onPointerDown}
-    onPointerMove={onPointerMove}
-    onPointerUp={onPointerUp}
-    onPointerCancel={onPointerUp}
-    onKeyDown={onKeyDown}
-    onDoubleClick={() => onWidth(DEFAULT_SIDEBAR_WIDTH)}
-  />;
+  return (
+    <div
+      className="sidebar-resizer"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize the right panel"
+      aria-valuemin={MIN_SIDEBAR_WIDTH}
+      aria-valuemax={MAX_SIDEBAR_WIDTH}
+      aria-valuenow={width}
+      title="Drag to resize the panel. Double-click to reset."
+      tabIndex={0}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onKeyDown={onKeyDown}
+      onDoubleClick={() => onWidth(DEFAULT_SIDEBAR_WIDTH)}
+    />
+  );
 }

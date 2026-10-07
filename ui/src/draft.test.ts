@@ -1,6 +1,39 @@
 import { describe, expect, it } from "vitest";
 import type { ApplicationInfo, Session } from "@audiorouter/contracts";
-import { addSourceToOccupiedOutput, appendApplicationCaptureNode, applicationCaptureChoices, applicationOnlyRouteSource, independentPaths, generatedOnlyRoute, needsNativePaths, unboundDeviceNodes, isParameterOnlyChange, pluginCatalog, STANDARD_PLUGIN_FOLDERS, mixerInputs, mixerRouteSources, pruneInactiveUpstream, mixerInputVolumeKey, mixedApplicationRouteOtherSources, rebindApplicationCaptureNode, appendDraftConnection, appendEndpointLoopbackNode, appendLibraryNode, appendPluginPlaceholderNode, appendVirtualBusNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, type LibraryNodeKind, removeDraftNode, resetNodeDraftParameters, routeFedMixerToOccupiedOutput, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
+import {
+  addSourceToOccupiedOutput,
+  appendApplicationCaptureNode,
+  applicationCaptureChoices,
+  applicationOnlyRouteSource,
+  independentPaths,
+  generatedOnlyRoute,
+  needsNativePaths,
+  unboundDeviceNodes,
+  isParameterOnlyChange,
+  pluginCatalog,
+  STANDARD_PLUGIN_FOLDERS,
+  mixerInputs,
+  mixerRouteSources,
+  pruneInactiveUpstream,
+  mixerInputVolumeKey,
+  mixedApplicationRouteOtherSources,
+  rebindApplicationCaptureNode,
+  appendDraftConnection,
+  appendEndpointLoopbackNode,
+  appendLibraryNode,
+  appendPluginPlaceholderNode,
+  appendVirtualBusNode,
+  duplicateDraftNode,
+  GAIN_MAX_DB,
+  GAIN_MIN_DB,
+  type LibraryNodeKind,
+  removeDraftNode,
+  resetNodeDraftParameters,
+  routeFedMixerToOccupiedOutput,
+  setNodeDraftName,
+  setNodeDraftParameter,
+  setSessionDraftName,
+} from "./draft";
 import { demoSession } from "./fixtures";
 import { unfedRouteNodes } from "./draft";
 import { insertDraftProcessor } from "./draft";
@@ -10,28 +43,57 @@ describe("Meter insertion", () => {
     let session = appendLibraryNode({ ...demoSession, nodes: [], edges: [] }, "gain");
     session = appendLibraryNode(session, "compressor");
     const [source, destination] = session.nodes;
-    session = { ...session, nodes: session.nodes.map(node => node.id === source.id
-      ? { ...node, ports: node.ports.map(port => ({ ...port, channels })) } : node) };
+    session = {
+      ...session,
+      nodes: session.nodes.map((node) =>
+        node.id === source.id ? { ...node, ports: node.ports.map((port) => ({ ...port, channels })) } : node,
+      ),
+    };
     session = appendDraftConnection(session, source.id, "out", destination.id, "in");
     const original = { ...session.edges[0], matrix: channels === 1 ? [0.5, 0.75] : [0.5, 0.25, 0.75, 1] };
     const inserted = insertDraftProcessor({ ...session, edges: [original] }, original.id, "meter");
     const meter = inserted.nodes.at(-1)!;
     expect(meter.kind).toBe("meter");
-    expect(meter.ports.map(port => [port.direction, port.channels])).toEqual([["input", channels], ["output", channels]]);
+    expect(meter.ports.map((port) => [port.direction, port.channels])).toEqual([
+      ["input", channels],
+      ["output", channels],
+    ]);
     expect(inserted.edges).toHaveLength(2);
-    expect(inserted.edges.find(edge => edge.sourceNode === meter.id)?.matrix).toEqual(original.matrix);
-    expect(inserted.edges.find(edge => edge.destinationNode === meter.id)?.sourceNode).toBe(source.id);
+    expect(inserted.edges.find((edge) => edge.sourceNode === meter.id)?.matrix).toEqual(original.matrix);
+    expect(inserted.edges.find((edge) => edge.destinationNode === meter.id)?.sourceNode).toBe(source.id);
   });
 });
 
 describe("output fan-out across library tools", () => {
   const nodeKinds: Record<LibraryNodeKind, true> = {
-    physicalInput: true, physicalOutput: true, testSignal: true, audioFile: true,
-    mixer: true, gain: true, volume: true, bassTreble: true, dehum: true,
-    declick: true, inputSwitch: true, duck: true, denoise: true, speechDenoise: true,
-    spectralGate: true, firFilter: true, timeShift: true, mute: true, meter: true,
-    parametricEq: true, compressor: true, gate: true, limiter: true, delay: true,
-    graphicEq: true, pitch: true, recorder: true, networkSend: true,
+    physicalInput: true,
+    physicalOutput: true,
+    testSignal: true,
+    audioFile: true,
+    mixer: true,
+    gain: true,
+    volume: true,
+    bassTreble: true,
+    dehum: true,
+    declick: true,
+    inputSwitch: true,
+    duck: true,
+    denoise: true,
+    speechDenoise: true,
+    spectralGate: true,
+    firFilter: true,
+    timeShift: true,
+    mute: true,
+    meter: true,
+    parametricEq: true,
+    compressor: true,
+    gate: true,
+    limiter: true,
+    delay: true,
+    graphicEq: true,
+    pitch: true,
+    recorder: true,
+    networkSend: true,
     networkReceive: true,
   };
 
@@ -56,33 +118,44 @@ describe("output fan-out across library tools", () => {
       session = appendDraftConnection(session, source.id, outputPort.name, outputTwo.id, "in");
       session = appendDraftConnection(session, source.id, outputPort.name, mixer.id, "in");
       session = appendDraftConnection(session, mixer.id, "out", mixedOutput.id, "in");
-      const directOutputEdge = session.edges.find((edge) => edge.sourceNode === source.id && edge.destinationNode === outputOne.id)!;
+      const directOutputEdge = session.edges.find(
+        (edge) => edge.sourceNode === source.id && edge.destinationNode === outputOne.id,
+      )!;
       session = routeFedMixerToOccupiedOutput(session, directOutputEdge.id, mixer.id, "out")!;
 
-      expect(session.edges.filter((edge) => edge.sourceNode === source.id && edge.sourcePort === outputPort.name)).toHaveLength(2);
-      expect(session.edges.some((edge) => edge.sourceNode === mixer.id && edge.destinationNode === mixedOutput.id)).toBe(true);
-      expect(session.edges.some((edge) => edge.sourceNode === mixer.id && edge.destinationNode === outputOne.id)).toBe(true);
+      expect(
+        session.edges.filter((edge) => edge.sourceNode === source.id && edge.sourcePort === outputPort.name),
+      ).toHaveLength(2);
+      expect(
+        session.edges.some((edge) => edge.sourceNode === mixer.id && edge.destinationNode === mixedOutput.id),
+      ).toBe(true);
+      expect(session.edges.some((edge) => edge.sourceNode === mixer.id && edge.destinationNode === outputOne.id)).toBe(
+        true,
+      );
     }
   });
 
   it("allows a scanned plugin output to feed multiple destinations", () => {
-    let session = appendPluginPlaceholderNode({ ...demoSession, edges: [] }, {
-      path: "C:\\Plugins\\effect.dll",
-      identity: {
+    let session = appendPluginPlaceholderNode(
+      { ...demoSession, edges: [] },
+      {
         path: "C:\\Plugins\\effect.dll",
-        binaryPath: "C:\\Plugins\\effect.dll",
-        format: "vst2",
-        architecture: "x64",
-        fileBytes: 10,
-        sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-        vendor: "Test vendor",
-        version: "1.0",
-        classIds: ["test-class"],
-        compatibility: "supportedVst2X64Gated",
+        identity: {
+          path: "C:\\Plugins\\effect.dll",
+          binaryPath: "C:\\Plugins\\effect.dll",
+          format: "vst2",
+          architecture: "x64",
+          fileBytes: 10,
+          sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          vendor: "Test vendor",
+          version: "1.0",
+          classIds: ["test-class"],
+          compatibility: "supportedVst2X64Gated",
+        },
+        error: null,
+        errorCode: null,
       },
-      error: null,
-      errorCode: null,
-    });
+    );
     const plugin = session.nodes.at(-1)!;
     session = appendLibraryNode(session, "physicalOutput");
     const firstOutput = session.nodes.at(-1)!;
@@ -219,7 +292,12 @@ describe("appendLibraryNode", () => {
     const connected = appendDraftConnection(demoSession, "mic", "out", "voice", "in");
     const duplicated = duplicateDraftNode(connected, "voice");
     const copy = duplicated.nodes.at(-1);
-    expect(copy).toMatchObject({ id: "voice-copy-1", name: "Voice gain copy 1", kind: "gain", parameters: { gainDb: 0 } });
+    expect(copy).toMatchObject({
+      id: "voice-copy-1",
+      name: "Voice gain copy 1",
+      kind: "gain",
+      parameters: { gainDb: 0 },
+    });
     expect(duplicated.edges).toEqual(connected.edges);
     expect(duplicated.revision).toBe(demoSession.revision);
     const twice = duplicateDraftNode(duplicated, "voice");
@@ -227,7 +305,10 @@ describe("appendLibraryNode", () => {
   });
 
   it("resets supported parameters without changing topology", () => {
-    const changed = { ...demoSession, nodes: demoSession.nodes.map((node) => node.id === "voice" ? { ...node, parameters: { gainDb: 8 } } : node) };
+    const changed = {
+      ...demoSession,
+      nodes: demoSession.nodes.map((node) => (node.id === "voice" ? { ...node, parameters: { gainDb: 8 } } : node)),
+    };
     const reset = resetNodeDraftParameters(changed, "voice");
     expect(reset.nodes.find((node) => node.id === "voice")?.parameters).toEqual({ gainDb: 0 });
     expect(reset.revision).toBe(demoSession.revision);
@@ -238,12 +319,14 @@ describe("appendLibraryNode", () => {
     const withEq = appendLibraryNode(demoSession, "parametricEq");
     const changed = {
       ...withEq,
-      nodes: withEq.nodes.map((node) => node.kind === "parametricEq"
-        ? { ...node, parameters: { frequencyHz: 12_000, q: 8, gainDb: 18 } }
-        : node),
+      nodes: withEq.nodes.map((node) =>
+        node.kind === "parametricEq" ? { ...node, parameters: { frequencyHz: 12_000, q: 8, gainDb: 18 } } : node,
+      ),
     };
     const reset = resetNodeDraftParameters(changed, "parametricEq-1");
-    expect(reset.nodes.at(-1)?.parameters).toEqual(expect.objectContaining({ frequencyHz: 1000, q: 1, gainDb: 0, band7Enabled: false, band7Type: "peaking" }));
+    expect(reset.nodes.at(-1)?.parameters).toEqual(
+      expect.objectContaining({ frequencyHz: 1000, q: 1, gainDb: 0, band7Enabled: false, band7Type: "peaking" }),
+    );
     expect(reset.edges).toEqual(demoSession.edges);
   });
 
@@ -283,8 +366,18 @@ describe("appendVirtualBusNode", () => {
   it("adds stopped source and sink nodes bound to the exact bus identity", () => {
     const source = appendVirtualBusNode(demoSession, " bus-1 ", "renderSource");
     const sink = appendVirtualBusNode(source, "bus-1", "captureSink");
-    expect(source.nodes.at(-1)).toMatchObject({ kind: "virtualRenderSource", enabled: false, parameters: { busId: "bus-1" }, ports: [{ name: "out", direction: "output", channels: 2 }] });
-    expect(sink.nodes.at(-1)).toMatchObject({ kind: "virtualCaptureSink", enabled: false, parameters: { busId: "bus-1" }, ports: [{ name: "in", direction: "input", channels: 2 }] });
+    expect(source.nodes.at(-1)).toMatchObject({
+      kind: "virtualRenderSource",
+      enabled: false,
+      parameters: { busId: "bus-1" },
+      ports: [{ name: "out", direction: "output", channels: 2 }],
+    });
+    expect(sink.nodes.at(-1)).toMatchObject({
+      kind: "virtualCaptureSink",
+      enabled: false,
+      parameters: { busId: "bus-1" },
+      ports: [{ name: "in", direction: "input", channels: 2 }],
+    });
     expect(sink.edges).toEqual(demoSession.edges);
   });
 
@@ -292,22 +385,18 @@ describe("appendVirtualBusNode", () => {
     const withSource = appendVirtualBusNode(demoSession, "bus-1", "renderSource");
     const withBoth = appendVirtualBusNode(withSource, "bus-1", "captureSink");
     const routed = appendDraftConnection(
-      appendDraftConnection(
-        withBoth,
-        "virtual-render-source-1",
-        "out",
-        "headphones",
-        "in",
-      ),
+      appendDraftConnection(withBoth, "virtual-render-source-1", "out", "headphones", "in"),
       "mic",
       "out",
       "virtual-capture-sink-1",
       "in",
     );
-    expect(routed.edges).toEqual(expect.arrayContaining([
-      expect.objectContaining({ sourceNode: "virtual-render-source-1", destinationNode: "headphones" }),
-      expect.objectContaining({ sourceNode: "mic", destinationNode: "virtual-capture-sink-1" }),
-    ]));
+    expect(routed.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sourceNode: "virtual-render-source-1", destinationNode: "headphones" }),
+        expect.objectContaining({ sourceNode: "mic", destinationNode: "virtual-capture-sink-1" }),
+      ]),
+    );
   });
 
   it("rejects an absent bus identity", () => {
@@ -320,12 +409,19 @@ describe("destination connection creation", () => {
     ["physical output", () => demoSession, "headphones", "in"],
     ["processor", () => appendLibraryNode(demoSession, "compressor"), "compressor-1", "in"],
     ["recorder", () => appendLibraryNode(demoSession, "recorder"), "recorder-1", "in"],
-    ["existing virtual capture sink", () => appendVirtualBusNode(demoSession, "cable-bus", "captureSink"), "virtual-capture-sink-1", "in"],
+    [
+      "existing virtual capture sink",
+      () => appendVirtualBusNode(demoSession, "cable-bus", "captureSink"),
+      "virtual-capture-sink-1",
+      "in",
+    ],
   ])("connects a source into a %s destination", (_label, makeSession, destinationNode, destinationPort) => {
     const next = appendDraftConnection(makeSession(), "mic", "out", destinationNode, destinationPort);
-    expect(next.edges).toEqual(expect.arrayContaining([
-      expect.objectContaining({ sourceNode: "mic", sourcePort: "out", destinationNode, destinationPort }),
-    ]));
+    expect(next.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sourceNode: "mic", sourcePort: "out", destinationNode, destinationPort }),
+      ]),
+    );
   });
 
   it("inserts a visible mixer when a second source is connected to the occupied physical output", () => {
@@ -334,21 +430,37 @@ describe("destination connection creation", () => {
     const routed = addSourceToOccupiedOutput(signal, "edge-1", "testSignal-1", "out");
     const mixer = routed.nodes.find((node) => node.kind === "mixer");
     expect(mixer).toBeDefined();
-    expect(routed.edges.filter((edge) => edge.destinationNode === mixer?.id && edge.destinationPort === "in")).toHaveLength(2);
-    expect(routed.edges).toEqual(expect.arrayContaining([
-      expect.objectContaining({ sourceNode: "mic", destinationNode: mixer?.id }),
-      expect.objectContaining({ sourceNode: "testSignal-1", destinationNode: mixer?.id }),
-      expect.objectContaining({ sourceNode: mixer?.id, destinationNode: "headphones" }),
-    ]));
+    expect(
+      routed.edges.filter((edge) => edge.destinationNode === mixer?.id && edge.destinationPort === "in"),
+    ).toHaveLength(2);
+    expect(routed.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sourceNode: "mic", destinationNode: mixer?.id }),
+        expect.objectContaining({ sourceNode: "testSignal-1", destinationNode: mixer?.id }),
+        expect.objectContaining({ sourceNode: mixer?.id, destinationNode: "headphones" }),
+      ]),
+    );
   });
 });
 
 describe("application capture identity", () => {
-  const app = (processId: number, executable: string, executablePath: string, creationTime100ns: string, audioSessionCount = 0): ApplicationInfo => ({
-    processId, executable, executablePath, creationTime100ns,
+  const app = (
+    processId: number,
+    executable: string,
+    executablePath: string,
+    creationTime100ns: string,
+    audioSessionCount = 0,
+  ): ApplicationInfo => ({
+    processId,
+    executable,
+    executablePath,
+    creationTime100ns,
     audioActivity: audioSessionCount > 0 ? "active" : "none",
     captureCapability: "notObserved",
-    audioSessionCount, activeAudioSessionCount: audioSessionCount, captureSessionCount: 0, renderSessionCount: audioSessionCount,
+    audioSessionCount,
+    activeAudioSessionCount: audioSessionCount,
+    captureSessionCount: 0,
+    renderSessionCount: audioSessionCount,
     audioDisplayNames: [],
   });
 
@@ -369,12 +481,27 @@ describe("application capture identity", () => {
   });
 
   it("identifies a route whose only enabled source is one bound application", () => {
-    const withApp = appendApplicationCaptureNode({ ...demoSession, nodes: demoSession.nodes.filter((node) => !["physicalInput", "testSignal", "audioFile"].includes(node.kind)) }, app(7, "Discord.exe", "C:\\Discord\\app-1\\Discord.exe", "1"));
+    const withApp = appendApplicationCaptureNode(
+      {
+        ...demoSession,
+        nodes: demoSession.nodes.filter((node) => !["physicalInput", "testSignal", "audioFile"].includes(node.kind)),
+      },
+      app(7, "Discord.exe", "C:\\Discord\\app-1\\Discord.exe", "1"),
+    );
     expect(applicationOnlyRouteSource(withApp)?.kind).toBe("applicationCapture");
     expect(applicationOnlyRouteSource(demoSession)).toBeNull();
-    const withMic = { ...withApp, nodes: [...withApp.nodes, { ...withApp.nodes.at(-1)!, id: "mic", kind: "physicalInput" as const, parameters: {} }] };
+    const withMic = {
+      ...withApp,
+      nodes: [
+        ...withApp.nodes,
+        { ...withApp.nodes.at(-1)!, id: "mic", kind: "physicalInput" as const, parameters: {} },
+      ],
+    };
     expect(applicationOnlyRouteSource(withMic)).toBeNull();
-    const disabledMic = { ...withMic, nodes: withMic.nodes.map((node) => node.id === "mic" ? { ...node, enabled: false } : node) };
+    const disabledMic = {
+      ...withMic,
+      nodes: withMic.nodes.map((node) => (node.id === "mic" ? { ...node, enabled: false } : node)),
+    };
     expect(applicationOnlyRouteSource(disabledMic)?.kind).toBe("applicationCapture");
     const appId = withApp.nodes.at(-1)!.id;
     expect(mixedApplicationRouteOtherSources(withMic, appId).map((node) => node.id)).toEqual(["mic"]);
@@ -382,10 +509,17 @@ describe("application capture identity", () => {
   });
 
   it("rebinds a node in place, keeping its id, connections, and custom settings", () => {
-    const withNode = appendApplicationCaptureNode(demoSession, app(1284, "Discord.exe", "C:\\Discord\\app-1.0.9258\\Discord.exe", "100"));
+    const withNode = appendApplicationCaptureNode(
+      demoSession,
+      app(1284, "Discord.exe", "C:\\Discord\\app-1.0.9258\\Discord.exe", "100"),
+    );
     const nodeId = withNode.nodes.at(-1)!.id;
     const custom = setNodeDraftParameter(withNode, nodeId, "muted", true);
-    const next = rebindApplicationCaptureNode(custom, nodeId, app(36808, "Discord.exe", "C:\\Discord\\app-1.0.9259\\Discord.exe", "200"));
+    const next = rebindApplicationCaptureNode(
+      custom,
+      nodeId,
+      app(36808, "Discord.exe", "C:\\Discord\\app-1.0.9259\\Discord.exe", "200"),
+    );
     const node = next.nodes.find((candidate) => candidate.id === nodeId)!;
     expect(next.nodes).toHaveLength(custom.nodes.length);
     expect(next.edges).toEqual(custom.edges);
@@ -403,13 +537,26 @@ describe("application capture identity", () => {
   it("renames only generated names and drops a stale instance identity", () => {
     const withNode = appendApplicationCaptureNode(demoSession, app(1, "game.exe", "C:\\game.exe", "1"));
     const nodeId = withNode.nodes.at(-1)!.id;
-    const renamed = rebindApplicationCaptureNode(withNode, nodeId, { ...app(2, "chat.exe", "C:\\chat.exe", "2"), creationTime100ns: null });
+    const renamed = rebindApplicationCaptureNode(withNode, nodeId, {
+      ...app(2, "chat.exe", "C:\\chat.exe", "2"),
+      creationTime100ns: null,
+    });
     const node = renamed.nodes.find((candidate) => candidate.id === nodeId)!;
     expect(node.name).toBe("chat.exe capture 1");
-    expect(node.parameters).toEqual({ executable: "chat.exe", executablePath: "C:\\chat.exe", processPolicy: "allVerifiedInstances" });
+    expect(node.parameters).toEqual({
+      executable: "chat.exe",
+      executablePath: "C:\\chat.exe",
+      processPolicy: "allVerifiedInstances",
+    });
     const custom = setNodeDraftName(withNode, nodeId, "Voice chat");
-    expect(rebindApplicationCaptureNode(custom, nodeId, app(3, "chat.exe", "C:\\chat.exe", "3")).nodes.find((candidate) => candidate.id === nodeId)!.name).toBe("Voice chat");
-    expect(() => rebindApplicationCaptureNode(withNode, withNode.nodes[0].id, app(3, "chat.exe", "C:\\chat.exe", "3"))).toThrow(/application capture node/);
+    expect(
+      rebindApplicationCaptureNode(custom, nodeId, app(3, "chat.exe", "C:\\chat.exe", "3")).nodes.find(
+        (candidate) => candidate.id === nodeId,
+      )!.name,
+    ).toBe("Voice chat");
+    expect(() =>
+      rebindApplicationCaptureNode(withNode, withNode.nodes[0].id, app(3, "chat.exe", "C:\\chat.exe", "3")),
+    ).toThrow(/application capture node/);
   });
 });
 
@@ -459,7 +606,10 @@ describe("per-source volume", () => {
     const session = mixerSession();
     const volume = session.nodes.find((node) => node.kind === "volume")!;
     expect(volume.parameters).toEqual({ percent: 100 });
-    expect(setNodeDraftParameter(session, volume.id, "percent", 110).nodes.find((node) => node.id === volume.id)!.parameters.percent).toBe(110);
+    expect(
+      setNodeDraftParameter(session, volume.id, "percent", 110).nodes.find((node) => node.id === volume.id)!.parameters
+        .percent,
+    ).toBe(110);
     expect(() => setNodeDraftParameter(session, volume.id, "percent", 201)).toThrow(/0 and 200/);
   });
 
@@ -479,9 +629,24 @@ describe("per-source volume", () => {
 });
 
 describe("Mixer route sources", () => {
-  const app = (processId: number): ApplicationInfo => ({ processId, executable: "Discord.exe", executablePath: "C:\\Discord\\app-1\\Discord.exe", creationTime100ns: "1", audioActivity: "active", captureCapability: "notObserved", audioSessionCount: 1, activeAudioSessionCount: 1, captureSessionCount: 0, renderSessionCount: 1, audioDisplayNames: [] });
+  const app = (processId: number): ApplicationInfo => ({
+    processId,
+    executable: "Discord.exe",
+    executablePath: "C:\\Discord\\app-1\\Discord.exe",
+    creationTime100ns: "1",
+    audioActivity: "active",
+    captureCapability: "notObserved",
+    audioSessionCount: 1,
+    activeAudioSessionCount: 1,
+    captureSessionCount: 0,
+    renderSessionCount: 1,
+    audioDisplayNames: [],
+  });
   const route = (): Session => {
-    let next = appendLibraryNode({ ...demoSession, nodes: demoSession.nodes.filter((node) => node.kind !== "gain"), edges: [] }, "mixer");
+    let next = appendLibraryNode(
+      { ...demoSession, nodes: demoSession.nodes.filter((node) => node.kind !== "gain"), edges: [] },
+      "mixer",
+    );
     next = appendLibraryNode(next, "testSignal");
     next = appendApplicationCaptureNode(next, app(7));
     next = appendLibraryNode(next, "volume");
@@ -494,14 +659,23 @@ describe("Mixer route sources", () => {
   };
 
   it("walks processor chains to the real sources in Mixer connection order", () => {
-    expect(mixerRouteSources(route())?.map((node) => node.kind)).toEqual(["applicationCapture", "physicalInput", "testSignal"]);
+    expect(mixerRouteSources(route())?.map((node) => node.kind)).toEqual([
+      "applicationCapture",
+      "physicalInput",
+      "testSignal",
+    ]);
   });
 
   it("prunes disabled sources that nothing feeds, like the engine", () => {
     const session = route();
-    const withoutTone = { ...session, nodes: session.nodes.map((node) => node.kind === "testSignal" ? { ...node, enabled: false } : node) };
+    const withoutTone = {
+      ...session,
+      nodes: session.nodes.map((node) => (node.kind === "testSignal" ? { ...node, enabled: false } : node)),
+    };
     expect(mixerRouteSources(withoutTone)?.map((node) => node.kind)).toEqual(["applicationCapture", "physicalInput"]);
-    expect(pruneInactiveUpstream(withoutTone).edges.some((edge) => edge.sourceNode.startsWith("testSignal"))).toBe(false);
+    expect(pruneInactiveUpstream(withoutTone).edges.some((edge) => edge.sourceNode.startsWith("testSignal"))).toBe(
+      false,
+    );
     expect(pruneInactiveUpstream(session).nodes.some((node) => node.id === "headphones")).toBe(false);
   });
 
@@ -517,7 +691,10 @@ describe("isParameterOnlyChange", () => {
     expect(Object.keys(gate.parameters)).toEqual(["thresholdDb", "reductionDb", "learning"]);
     // The backend returns the same settings with sorted keys.
     const sorted = Object.fromEntries(Object.entries(gate.parameters).sort(([a], [b]) => a.localeCompare(b)));
-    const saved = { ...draft, nodes: draft.nodes.map((node) => node.id === gate.id ? { ...node, parameters: sorted } : node) };
+    const saved = {
+      ...draft,
+      nodes: draft.nodes.map((node) => (node.id === gate.id ? { ...node, parameters: sorted } : node)),
+    };
     expect(isParameterOnlyChange(saved, draft)).toBe(false);
     expect(isParameterOnlyChange(saved, setNodeDraftParameter(draft, gate.id, "thresholdDb", 6))).toBe(true);
   });
@@ -530,16 +707,41 @@ describe("isParameterOnlyChange", () => {
     expect(isParameterOnlyChange(saved, setNodeDraftParameter(saved, volumeId, "percent", 50))).toBe(true);
     expect(isParameterOnlyChange(saved, appendLibraryNode(saved, "gain"))).toBe(false);
     expect(isParameterOnlyChange(saved, setNodeDraftName(saved, volumeId, "Discord level"))).toBe(false);
-    expect(isParameterOnlyChange(saved, { ...saved, nodes: saved.nodes.map((node) => node.id === volumeId ? { ...node, enabled: false } : node) })).toBe(false);
+    expect(
+      isParameterOnlyChange(saved, {
+        ...saved,
+        nodes: saved.nodes.map((node) => (node.id === volumeId ? { ...node, enabled: false } : node)),
+      }),
+    ).toBe(false);
     expect(saved.edges.length).toBeGreaterThan(0);
-    expect(isParameterOnlyChange(saved, { ...setNodeDraftParameter(saved, volumeId, "percent", 50), edges: saved.edges.slice(1) })).toBe(false);
+    expect(
+      isParameterOnlyChange(saved, {
+        ...setNodeDraftParameter(saved, volumeId, "percent", 50),
+        edges: saved.edges.slice(1),
+      }),
+    ).toBe(false);
   });
 });
 
 describe("Input Switch routes", () => {
   it("treats an Input Switch as the convergence node for Play", () => {
-    let next = appendLibraryNode({ ...demoSession, nodes: demoSession.nodes.filter((node) => node.kind !== "gain"), edges: [] }, "inputSwitch");
-    next = appendApplicationCaptureNode(next, { processId: 9, executable: "Spotify.exe", executablePath: "C:\\Spotify\\Spotify.exe", creationTime100ns: "3", audioActivity: "active", captureCapability: "notObserved", audioSessionCount: 1, activeAudioSessionCount: 1, captureSessionCount: 0, renderSessionCount: 1, audioDisplayNames: [] });
+    let next = appendLibraryNode(
+      { ...demoSession, nodes: demoSession.nodes.filter((node) => node.kind !== "gain"), edges: [] },
+      "inputSwitch",
+    );
+    next = appendApplicationCaptureNode(next, {
+      processId: 9,
+      executable: "Spotify.exe",
+      executablePath: "C:\\Spotify\\Spotify.exe",
+      creationTime100ns: "3",
+      audioActivity: "active",
+      captureCapability: "notObserved",
+      audioSessionCount: 1,
+      activeAudioSessionCount: 1,
+      captureSessionCount: 0,
+      renderSessionCount: 1,
+      audioDisplayNames: [],
+    });
     const switchId = next.nodes.find((node) => node.kind === "inputSwitch")!.id;
     const appId = next.nodes.find((node) => node.kind === "applicationCapture")!.id;
     next = appendDraftConnection(next, appId, "out", switchId, "a");
@@ -551,54 +753,130 @@ describe("Input Switch routes", () => {
 });
 
 describe("pluginCatalog", () => {
-  const entry = (path: string, sha256: string, format: "vst3" | "vst2", compatibility: "supportedVst3X64" | "supportedVst2X64Gated" | "unsupportedFormat") => ({
+  const entry = (
+    path: string,
+    sha256: string,
+    format: "vst3" | "vst2",
+    compatibility: "supportedVst3X64" | "supportedVst2X64Gated" | "unsupportedFormat",
+  ) => ({
     path,
-    identity: { path, binaryPath: path, format, architecture: "x64" as const, fileBytes: 1, sha256, vendor: "Cockos", version: "1", classIds: [], compatibility },
+    identity: {
+      path,
+      binaryPath: path,
+      format,
+      architecture: "x64" as const,
+      fileBytes: 1,
+      sha256,
+      vendor: "Cockos",
+      version: "1",
+      classIds: [],
+      compatibility,
+    },
     error: null,
     errorCode: null,
   });
   it("lists supported plugins once each, sorted by name, with format and folder", () => {
     const catalog = pluginCatalog([
-      { directory: "C:\\A", entries: [entry("C:\\A\\ReaEQ.dll", "aa", "vst2", "supportedVst2X64Gated"), entry("C:\\A\\old32.dll", "bb", "vst2", "unsupportedFormat")] },
-      { directory: "C:\\B", entries: [entry("C:\\A\\ReaEQ.dll", "aa", "vst2", "supportedVst2X64Gated"), entry("C:\\B\\Compressor.vst3", "cc", "vst3", "supportedVst3X64")] },
+      {
+        directory: "C:\\A",
+        entries: [
+          entry("C:\\A\\ReaEQ.dll", "aa", "vst2", "supportedVst2X64Gated"),
+          entry("C:\\A\\old32.dll", "bb", "vst2", "unsupportedFormat"),
+        ],
+      },
+      {
+        directory: "C:\\B",
+        entries: [
+          entry("C:\\A\\ReaEQ.dll", "aa", "vst2", "supportedVst2X64Gated"),
+          entry("C:\\B\\Compressor.vst3", "cc", "vst3", "supportedVst3X64"),
+        ],
+      },
     ]);
-    expect(catalog.map((item) => [item.name, item.format, item.folder])).toEqual([["Compressor", "VST3", "C:\\B"], ["ReaEQ", "VST2", "C:\\A"]]);
+    expect(catalog.map((item) => [item.name, item.format, item.folder])).toEqual([
+      ["Compressor", "VST3", "C:\\B"],
+      ["ReaEQ", "VST2", "C:\\A"],
+    ]);
     expect(STANDARD_PLUGIN_FOLDERS).toContain("C:\\Program Files\\Common Files\\VST3");
   });
 });
 
 describe("independent paths", () => {
-  const node = (id: string, kind: Session["nodes"][number]["kind"], extra: Partial<Session["nodes"][number]> = {}): Session["nodes"][number] => ({
-    id, kind, typeVersion: 1, name: id, enabled: true, bypass: false, parameters: {}, ports: [
-      ...(["physicalInput", "testSignal", "audioFile"].includes(kind) ? [] : [{ name: "in", direction: "input" as const, channels: 2 as const }]),
+  const node = (
+    id: string,
+    kind: Session["nodes"][number]["kind"],
+    extra: Partial<Session["nodes"][number]> = {},
+  ): Session["nodes"][number] => ({
+    id,
+    kind,
+    typeVersion: 1,
+    name: id,
+    enabled: true,
+    bypass: false,
+    parameters: {},
+    ports: [
+      ...(["physicalInput", "testSignal", "audioFile"].includes(kind)
+        ? []
+        : [{ name: "in", direction: "input" as const, channels: 2 as const }]),
       { name: "out", direction: "output", channels: 2 as const },
-    ], ...extra,
+    ],
+    ...extra,
   });
   const edge = (id: string, sourceNode: string, destinationNode: string): Session["edges"][number] => ({
-    id, sourceNode, sourcePort: "out", destinationNode, destinationPort: "in", matrix: [1, 0, 0, 1], enabled: true,
+    id,
+    sourceNode,
+    sourcePort: "out",
+    destinationNode,
+    destinationPort: "in",
+    matrix: [1, 0, 0, 1],
+    enabled: true,
   });
   const twoPaths: Session = {
     ...demoSession,
-    nodes: [node("mic", "physicalInput"), node("voice", "gain"), node("cable-a", "physicalOutput"), node("cable-b", "physicalInput"), node("eq", "parametricEq"), node("scarlett", "physicalOutput"), node("spare", "gain")],
-    edges: [edge("e1", "mic", "voice"), edge("e2", "voice", "cable-a"), edge("e3", "cable-b", "eq"), edge("e4", "eq", "scarlett")],
+    nodes: [
+      node("mic", "physicalInput"),
+      node("voice", "gain"),
+      node("cable-a", "physicalOutput"),
+      node("cable-b", "physicalInput"),
+      node("eq", "parametricEq"),
+      node("scarlett", "physicalOutput"),
+      node("spare", "gain"),
+    ],
+    edges: [
+      edge("e1", "mic", "voice"),
+      edge("e2", "voice", "cable-a"),
+      edge("e3", "cable-b", "eq"),
+      edge("e4", "eq", "scarlett"),
+    ],
   };
 
   it("groups connected nodes into paths and leaves unconnected nodes out", () => {
-    expect(independentPaths(twoPaths).map((path) => path.map((item) => item.id))).toEqual([["mic", "voice", "cable-a"], ["cable-b", "eq", "scarlett"]]);
+    expect(independentPaths(twoPaths).map((path) => path.map((item) => item.id))).toEqual([
+      ["mic", "voice", "cable-a"],
+      ["cable-b", "eq", "scarlett"],
+    ]);
     expect(needsNativePaths(twoPaths)).toBe(true);
   });
 
   it("uses the multi-path worker for one path with two outputs but not for a plain chain", () => {
     const single: Session = { ...twoPaths, nodes: twoPaths.nodes.slice(0, 3), edges: twoPaths.edges.slice(0, 2) };
     expect(needsNativePaths(single)).toBe(false);
-    const monitored: Session = { ...single, nodes: [...single.nodes, node("monitor", "physicalOutput")], edges: [...single.edges, edge("e5", "voice", "monitor")] };
+    const monitored: Session = {
+      ...single,
+      nodes: [...single.nodes, node("monitor", "physicalOutput")],
+      edges: [...single.edges, edge("e5", "voice", "monitor")],
+    };
     expect(needsNativePaths(monitored)).toBe(true);
   });
 
   it("reuses a fed Mixer when routing its source branch to an already occupied output", () => {
     const session: Session = {
       ...demoSession,
-      nodes: [node("siege", "physicalInput"), node("eq", "parametricEq"), node("mixer", "mixer"), node("output", "physicalOutput")],
+      nodes: [
+        node("siege", "physicalInput"),
+        node("eq", "parametricEq"),
+        node("mixer", "mixer"),
+        node("output", "physicalOutput"),
+      ],
       edges: [edge("siege-eq", "siege", "eq"), edge("eq-output", "eq", "output"), edge("eq-mixer", "eq", "mixer")],
     };
     const rerouted = routeFedMixerToOccupiedOutput(session, "eq-output", "mixer", "out");
@@ -613,20 +891,44 @@ describe("independent paths", () => {
   it("does not reuse a Mixer fed by a different output port of the occupied source", () => {
     const session: Session = {
       ...demoSession,
-      nodes: [node("siege", "physicalInput"), node("eq", "parametricEq"), node("mixer", "mixer"), node("output", "physicalOutput")].map((item) => item.id === "eq"
-        ? { ...item, ports: [...item.ports, { name: "out-2", direction: "output" as const, channels: 2 as const }] }
-        : item),
-      edges: [edge("siege-eq", "siege", "eq"), edge("eq-output", "eq", "output"), { ...edge("eq-mixer", "eq", "mixer"), sourcePort: "out-2" }],
+      nodes: [
+        node("siege", "physicalInput"),
+        node("eq", "parametricEq"),
+        node("mixer", "mixer"),
+        node("output", "physicalOutput"),
+      ].map((item) =>
+        item.id === "eq"
+          ? { ...item, ports: [...item.ports, { name: "out-2", direction: "output" as const, channels: 2 as const }] }
+          : item,
+      ),
+      edges: [
+        edge("siege-eq", "siege", "eq"),
+        edge("eq-output", "eq", "output"),
+        { ...edge("eq-mixer", "eq", "mixer"), sourcePort: "out-2" },
+      ],
     };
     expect(routeFedMixerToOccupiedOutput(session, "eq-output", "mixer", "out")).toBeNull();
   });
 
   it("recognizes generated-only routes that need no input device", () => {
-    const tone: Session = { ...twoPaths, nodes: [node("tone", "testSignal"), node("voice", "gain"), node("cable-a", "physicalOutput")], edges: [edge("e1", "tone", "voice"), edge("e2", "voice", "cable-a")] };
+    const tone: Session = {
+      ...twoPaths,
+      nodes: [node("tone", "testSignal"), node("voice", "gain"), node("cable-a", "physicalOutput")],
+      edges: [edge("e1", "tone", "voice"), edge("e2", "voice", "cable-a")],
+    };
     expect(generatedOnlyRoute(tone)).toBe(true);
     const file: Session = { ...tone, nodes: [node("tone", "audioFile"), ...tone.nodes.slice(1)] };
     expect(generatedOnlyRoute(file)).toBe(true);
-    const withMic: Session = { ...tone, nodes: [...tone.nodes, node("mic", "physicalInput"), node("mix", "mixer")], edges: [edge("e1", "tone", "mix"), edge("e3", "mic", "mix"), edge("e4", "mix", "voice"), edge("e2", "voice", "cable-a")] };
+    const withMic: Session = {
+      ...tone,
+      nodes: [...tone.nodes, node("mic", "physicalInput"), node("mix", "mixer")],
+      edges: [
+        edge("e1", "tone", "mix"),
+        edge("e3", "mic", "mix"),
+        edge("e4", "mix", "voice"),
+        edge("e2", "voice", "cable-a"),
+      ],
+    };
     expect(generatedOnlyRoute(withMic)).toBe(false);
     const noOutput: Session = { ...tone, nodes: tone.nodes.slice(0, 2), edges: tone.edges.slice(0, 1) };
     expect(generatedOnlyRoute(noOutput)).toBe(false);
@@ -634,14 +936,28 @@ describe("independent paths", () => {
 
   it("uses the multi-path worker for a route with a connected Recorder branch", () => {
     const single: Session = { ...twoPaths, nodes: twoPaths.nodes.slice(0, 3), edges: twoPaths.edges.slice(0, 2) };
-    const recorded: Session = { ...single, nodes: [...single.nodes, node("take", "recorder")], edges: [...single.edges, edge("e6", "voice", "take")] };
+    const recorded: Session = {
+      ...single,
+      nodes: [...single.nodes, node("take", "recorder")],
+      edges: [...single.edges, edge("e6", "voice", "take")],
+    };
     expect(needsNativePaths(recorded)).toBe(true);
     const unconnected: Session = { ...single, nodes: [...single.nodes, node("take", "recorder")] };
     expect(needsNativePaths(unconnected)).toBe(false);
   });
 
   it("lists device nodes that still need a saved endpoint", () => {
-    const bound: Session = { ...twoPaths, nodes: twoPaths.nodes.map((item) => item.id === "scarlett" ? item : { ...item, parameters: item.kind.startsWith("physical") ? { endpointId: `${item.id}-endpoint` } : item.parameters }) };
+    const bound: Session = {
+      ...twoPaths,
+      nodes: twoPaths.nodes.map((item) =>
+        item.id === "scarlett"
+          ? item
+          : {
+              ...item,
+              parameters: item.kind.startsWith("physical") ? { endpointId: `${item.id}-endpoint` } : item.parameters,
+            },
+      ),
+    };
     expect(unboundDeviceNodes(bound).map((item) => item.id)).toEqual(["scarlett"]);
   });
 });

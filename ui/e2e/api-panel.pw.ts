@@ -2,15 +2,33 @@ import { test, expect } from "@playwright/test";
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`API listener controls and address in ${theme}`, async ({ page }, testInfo) => {
     await page.addInitScript(() => {
-      let running = false; let network: string | null = null;
-      Object.assign(window, { __TAURI_INTERNALS__: { invoke: async (command: string, args?: { action?: string; port?: number; network?: string | null }) => {
-        if (command === "http_api_addresses") return [{ address: "192.168.1.20", adapter: "Wi-Fi" }];
-        if (command !== "http_api_control") return [];
-        if (args?.action === "start") { running = true; network = args.network ?? null; }
-        if (args?.action === "stop") { running = false; network = null; }
-        const port = args?.port ?? 17891;
-        return { running, port, url: running ? `http://127.0.0.1:${port}` : null, network, networkUrl: running && network ? `http://${network}:${port}` : null, token: null };
-      } } });
+      let running = false;
+      let network: string | null = null;
+      Object.assign(window, {
+        __TAURI_INTERNALS__: {
+          invoke: async (command: string, args?: { action?: string; port?: number; network?: string | null }) => {
+            if (command === "http_api_addresses") return [{ address: "192.168.1.20", adapter: "Wi-Fi" }];
+            if (command !== "http_api_control") return [];
+            if (args?.action === "start") {
+              running = true;
+              network = args.network ?? null;
+            }
+            if (args?.action === "stop") {
+              running = false;
+              network = null;
+            }
+            const port = args?.port ?? 17891;
+            return {
+              running,
+              port,
+              url: running ? `http://127.0.0.1:${port}` : null,
+              network,
+              networkUrl: running && network ? `http://${network}:${port}` : null,
+              token: null,
+            };
+          },
+        },
+      });
     });
     await page.goto("/route-harness.html");
     await page.getByLabel("Color theme").selectOption(theme);

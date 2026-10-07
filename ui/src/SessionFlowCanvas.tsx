@@ -19,13 +19,30 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import {
+  createContext,
+  memo,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent,
+  type ReactNode,
+} from "react";
 import { useLiveDiagnostics, type TelemetryStore } from "./liveTelemetry";
 import type { DiagnosticsSnapshot, Node, NodeKind, Session } from "@audiorouter/contracts";
 import { readLayout, writeLayout, type LayoutPositions } from "./layout";
 import { nodePortLabels } from "./graphView";
 import { libraryEntries, type LibraryEntry, type LibraryFlowGroup } from "./library";
-import { DEFAULT_NETWORK_AUDIO_PORT, GAIN_MAX_DB, GAIN_MIN_DB, mixerInputs, mixerInputVolumeKey, type LibraryNodeKind } from "./draft";
+import {
+  DEFAULT_NETWORK_AUDIO_PORT,
+  GAIN_MAX_DB,
+  GAIN_MIN_DB,
+  mixerInputs,
+  mixerInputVolumeKey,
+  type LibraryNodeKind,
+} from "./draft";
 import { networkTelemetryText } from "./NetworkNodeEditor";
 import { PROCESSOR_ACTIONS } from "./DraftConnectionList";
 import { TestSignalPlaybackControls } from "./TestSignalPlaybackControls";
@@ -36,10 +53,20 @@ import { FlowActiveLayers, FlowArrow, FlowMotionProvider } from "./flowLine";
 import type { FlowAnimationMode } from "./preferences";
 import { RecordButton } from "./RecorderControls";
 import { appendLibraryNode as appendPreviewNode } from "./draft";
-import { draggedLibraryKind, endLibraryDrag, readLibraryDropKind, setLibraryDragOverCanvas, startLibraryDrag } from "./libraryDrag";
+import {
+  draggedLibraryKind,
+  endLibraryDrag,
+  readLibraryDropKind,
+  setLibraryDragOverCanvas,
+  startLibraryDrag,
+} from "./libraryDrag";
 
 /** Kinds a library drag can carry (library tools and virtual buses). */
-const DRAGGABLE_KINDS = [...libraryEntries.map((entry) => entry.kind ?? entry.virtualKind).filter((kind): kind is NonNullable<typeof kind> => Boolean(kind))];
+const DRAGGABLE_KINDS = [
+  ...libraryEntries
+    .map((entry) => entry.kind ?? entry.virtualKind)
+    .filter((kind): kind is NonNullable<typeof kind> => Boolean(kind)),
+];
 const DROP_PREVIEW_ID = "__drop-preview";
 /** Where the pointer holds the preview card (its title area). */
 const DROP_GRAB_OFFSET = { x: 90, y: 28 };
@@ -66,7 +93,10 @@ type SessionFlowCanvasProps = {
   onInsertProcessor?: (edgeId: string, kind: import("./draft").InsertableProcessorKind) => void;
   onRemoveNode?: (nodeId: string) => void;
   onAddLibraryNode?: (kind: LibraryNodeKind, position: { x: number; y: number }) => string | void;
-  onAddVirtualBusNode?: (direction: "renderSource" | "captureSink", position: { x: number; y: number }) => string | void;
+  onAddVirtualBusNode?: (
+    direction: "renderSource" | "captureSink",
+    position: { x: number; y: number },
+  ) => string | void;
   diagnostics?: DiagnosticsSnapshot | null;
   /** Live meter telemetry for `diagnostics`; read only by the views that show it. */
   telemetryStore?: TelemetryStore;
@@ -81,7 +111,10 @@ type SessionFlowCanvasProps = {
   onAudioSourceTransport?: (nodeId: string, action: "play" | "pause" | "stop") => void;
   audioSourceStates?: Record<string, "playing" | "paused" | "stopped">;
   onTimeShiftTransport?: (nodeId: string, action: "pause" | "resume" | "back" | "forward" | "live") => void;
-  timeShiftStatuses?: Record<string, { state: "live" | "delayed" | "paused"; delaySeconds: number; bufferedSeconds: number }>;
+  timeShiftStatuses?: Record<
+    string,
+    { state: "live" | "delayed" | "paused"; delaySeconds: number; bufferedSeconds: number }
+  >;
   recorderStatuses?: RecorderStatus[];
   onSetNodeParameter?: (nodeId: string, name: string, value: boolean | number | string) => void;
   /** One-click Record / Stop on a Recorder node. */
@@ -122,12 +155,23 @@ function FlowNodeRenderer({ data }: NodeProps) {
 type LiveCanvas = { diagnostics: DiagnosticsSnapshot | null; fresh: boolean };
 const LiveCanvasContext = createContext<LiveCanvas>({ diagnostics: null, fresh: false });
 
-function LiveCanvasProvider({ store, diagnostics, children }: { store?: TelemetryStore; diagnostics: DiagnosticsSnapshot | null; children: ReactNode }) {
+function LiveCanvasProvider({
+  store,
+  diagnostics,
+  children,
+}: {
+  store?: TelemetryStore;
+  diagnostics: DiagnosticsSnapshot | null;
+  children: ReactNode;
+}) {
   const live = useLiveDiagnostics(store, diagnostics);
   // Telemetry is fresh for 160 ms after each update; then connections show stale.
   const [fresh, setFresh] = useState(false);
   useEffect(() => {
-    if (!live) { setFresh(false); return; }
+    if (!live) {
+      setFresh(false);
+      return;
+    }
     setFresh(true);
     const timer = window.setTimeout(() => setFresh(false), 160);
     return () => window.clearTimeout(timer);
@@ -152,11 +196,18 @@ function CanvasConnectorMeasurements({ geometryKey }: { geometryKey: string }) {
       if (cancelled) return;
       const missing = expected.filter(({ id, source, target }) => {
         const bounds = getInternalNode(id)?.internals.handleBounds;
-        const valid = (bound: { id?: string | null; x: number; y: number; width: number; height: number }, handle: string) =>
-          bound.id === handle && [bound.x, bound.y, bound.width, bound.height].every(Number.isFinite)
-            && bound.width > 0 && bound.height > 0;
-        return source.some((handle) => !bounds?.source?.some((bound) => valid(bound, handle)))
-          || target.some((handle) => !bounds?.target?.some((bound) => valid(bound, handle)));
+        const valid = (
+          bound: { id?: string | null; x: number; y: number; width: number; height: number },
+          handle: string,
+        ) =>
+          bound.id === handle &&
+          [bound.x, bound.y, bound.width, bound.height].every(Number.isFinite) &&
+          bound.width > 0 &&
+          bound.height > 0;
+        return (
+          source.some((handle) => !bounds?.source?.some((bound) => valid(bound, handle))) ||
+          target.some((handle) => !bounds?.target?.some((bound) => valid(bound, handle)))
+        );
       });
       if (missing.length && attempts++ < 8) {
         updateNodeInternals(missing.map(({ id }) => id));
@@ -171,7 +222,10 @@ function CanvasConnectorMeasurements({ geometryKey }: { geometryKey: string }) {
         frame = requestAnimationFrame(repair);
       }
     });
-    return () => { cancelled = true; cancelAnimationFrame(frame); };
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+    };
   }, [geometryKey, getInternalNode, updateNodeInternals]);
   return null;
 }
@@ -179,7 +233,8 @@ function CanvasConnectorMeasurements({ geometryKey }: { geometryKey: string }) {
 type EdgeSide = "left" | "right" | "top" | "bottom";
 const IDLE_CONNECTION_MODE: "idle" = "idle";
 const EDGE_SIDES: EdgeSide[] = ["left", "right", "top", "bottom"];
-const edgeSidePosition = (side: EdgeSide) => side === "left" ? Position.Left : side === "right" ? Position.Right : side === "top" ? Position.Top : Position.Bottom;
+const edgeSidePosition = (side: EdgeSide) =>
+  side === "left" ? Position.Left : side === "right" ? Position.Right : side === "top" ? Position.Top : Position.Bottom;
 
 function edgePoint(node: ReturnType<typeof useInternalNode>, side: EdgeSide, fallbackX: number, fallbackY: number) {
   if (!node) return { x: fallbackX, y: fallbackY };
@@ -239,7 +294,12 @@ const FLOW_GROUPS: LibraryFlowGroup[] = ["input", "tool", "output"];
 const FLOW_GROUP_LABELS: Record<LibraryFlowGroup, string> = { input: "Inputs", tool: "Tools", output: "Outputs" };
 
 type NodeKindFamily = "input" | "native" | "vst" | "output";
-const NODE_KIND_FAMILY_LABELS: Record<NodeKindFamily, string> = { input: "Input", native: "Native", vst: "VST", output: "Output" };
+const NODE_KIND_FAMILY_LABELS: Record<NodeKindFamily, string> = {
+  input: "Input",
+  native: "Native",
+  vst: "VST",
+  output: "Output",
+};
 
 /** Beyond input/tool/output signal-flow position, a "tool" is either a
  * built-in native processor or an isolated-worker VST plugin; those are
@@ -309,7 +369,9 @@ function logicalPortHandle(handle: string | null | undefined) {
   if (!handle) return { port: handle ?? null, side: undefined as EdgeSide | undefined };
   const separator = handle.lastIndexOf("__edge_");
   const side = handle.slice(separator + 7) as EdgeSide;
-  return separator > 0 && EDGE_SIDES.includes(side) ? { port: handle.slice(0, separator), side } : { port: handle, side: undefined };
+  return separator > 0 && EDGE_SIDES.includes(side)
+    ? { port: handle.slice(0, separator), side }
+    : { port: handle, side: undefined };
 }
 
 function logConnectionDebug(event: string, details: Record<string, unknown>) {
@@ -334,43 +396,211 @@ function positionFor(index: number) {
   };
 }
 
-function AudioEdgeActions({ id, source, target, sourceX, sourceY, targetX, targetY, data, style: edgeStyle, selected }: EdgeProps) {
+function AudioEdgeActions({
+  id,
+  source,
+  target,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  data,
+  style: edgeStyle,
+  selected,
+}: EdgeProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
   const sourceNode = useInternalNode(source);
   const targetNode = useInternalNode(target);
-  const rawData = data as { edge: Session["edges"][number]; session: Session; running: boolean; enabled?: boolean; sourceSide?: EdgeSide; targetSide?: EdgeSide; onSetSide?: (edgeId: string, endpoint: "source" | "target", side: EdgeSide) => void; onToggle?: SessionFlowCanvasProps["onToggleConnection"]; onRemove?: SessionFlowCanvasProps["onRemoveConnection"]; onInsert?: SessionFlowCanvasProps["onInsertProcessor"]; onOpenPluginPicker?: SessionFlowCanvasProps["onOpenPluginPicker"]; canEdit?: boolean } | undefined;
+  const rawData = data as
+    | {
+        edge: Session["edges"][number];
+        session: Session;
+        running: boolean;
+        enabled?: boolean;
+        sourceSide?: EdgeSide;
+        targetSide?: EdgeSide;
+        onSetSide?: (edgeId: string, endpoint: "source" | "target", side: EdgeSide) => void;
+        onToggle?: SessionFlowCanvasProps["onToggleConnection"];
+        onRemove?: SessionFlowCanvasProps["onRemoveConnection"];
+        onInsert?: SessionFlowCanvasProps["onInsertProcessor"];
+        onOpenPluginPicker?: SessionFlowCanvasProps["onOpenPluginPicker"];
+        canEdit?: boolean;
+      }
+    | undefined;
   // The live signal comes from the canvas context, so meter ticks redraw only
   // the connection lights, not the canvas.
   const live = useContext(LiveCanvasContext);
-  const signal = rawData ? edgeSignalForConnection(rawData.edge, rawData.session, live.diagnostics, rawData.running, live.fresh) : null;
-  const edgeData = rawData && signal ? { ...rawData, active: signal.active, levelDb: signal.levelDb, signalState: signal.state, signalLabel: signal.label } : undefined;
+  const signal = rawData
+    ? edgeSignalForConnection(rawData.edge, rawData.session, live.diagnostics, rawData.running, live.fresh)
+    : null;
+  const edgeData =
+    rawData && signal
+      ? {
+          ...rawData,
+          active: signal.active,
+          levelDb: signal.levelDb,
+          signalState: signal.state,
+          signalLabel: signal.label,
+        }
+      : undefined;
   const style = signal?.active ? edgeStyle : { ...edgeStyle, strokeWidth: 2.5 };
   const sourceSide = edgeData?.sourceSide ?? "right";
   const targetSide = edgeData?.targetSide ?? "left";
   const sourcePoint = edgePoint(sourceNode, sourceSide, sourceX, sourceY);
   const targetPoint = edgePoint(targetNode, targetSide, targetX, targetY);
-  const [path, labelX, labelY] = getBezierPath({ sourceX: sourcePoint.x, sourceY: sourcePoint.y, sourcePosition: edgeSidePosition(sourceSide), targetX: targetPoint.x, targetY: targetPoint.y, targetPosition: edgeSidePosition(targetSide) });
+  const [path, labelX, labelY] = getBezierPath({
+    sourceX: sourcePoint.x,
+    sourceY: sourcePoint.y,
+    sourcePosition: edgeSidePosition(sourceSide),
+    targetX: targetPoint.x,
+    targetY: targetPoint.y,
+    targetPosition: edgeSidePosition(targetSide),
+  });
   const stateClass = `flow-edge-${edgeData?.signalState ?? "configured"}${edgeData?.active ? " flow-edge-active" : ""}`;
   // Track under every connection; active ones add glow, level colour and
   // travelling comets around the interactive core path.
-  return <>
-    <g className={`flow-line ${stateClass}`} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
-      <path d={path} className="flow-track" />
-      {edgeData?.active
-        ? <FlowActiveLayers id={id} path={path} source={sourcePoint} target={targetPoint} targetSide={targetSide} levelDb={edgeData.levelDb ?? null} core={(coreStyle) => <BaseEdge path={path} style={{ ...style, ...coreStyle }} className={stateClass} />} />
-        : <><BaseEdge path={path} style={style} className={stateClass} /><FlowArrow at={targetPoint} side={targetSide} className={`flow-arrow is-${edgeData?.signalState ?? "configured"}`} /></>}
-    </g>
-    <EdgeLabelRenderer>
-      <span className="sr-only" role="img" aria-label={`Connection ${id}: ${edgeData?.signalLabel ?? "configured"}`} style={{ position: "absolute", transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}>Connection {id}: {edgeData?.signalLabel ?? "configured"}</span>
-      <div className={`edge-action-bar nodrag nopan${selected || hovered || menuOpen ? " is-emphasized" : ""}`} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} style={{ transform: `translate(-50%, calc(-100% - 9px)) translate(${labelX}px, ${labelY}px)` }} onPointerDown={(event) => event.stopPropagation()}>
-        <button type="button" className="edge-action-icon" disabled={!edgeData?.canEdit} aria-label={edgeData?.enabled ? `Pause connection ${id}` : `Resume connection ${id}`} title={edgeData?.enabled ? "Pause this connection. The link stays in the route; Undo restores it." : "Resume audio through this connection."} onClick={() => edgeData?.onToggle?.(id, !edgeData.enabled)}>{edgeData?.enabled ? "⏸" : "▶"}</button>
-        <button type="button" className="edge-action-icon edge-action-remove" disabled={!edgeData?.canEdit} aria-label={`Remove connection ${id}`} title="Remove this connection from the route. Use Undo in Session to restore it." onClick={() => edgeData?.onRemove?.(id)}>×</button>
-        <button type="button" className="edge-action-icon" disabled={!edgeData?.canEdit} aria-label={`Add processor to connection ${id}`} title="Add a tool between these two nodes." onClick={() => setMenuOpen((open) => !open)}>＋</button>
-        {menuOpen && <div className="edge-insert-menu" role="menu" aria-label={`Configure connection ${id}`}><div className="edge-side-picker"><strong>Source side</strong>{EDGE_SIDES.map((side) => <button key={`source-${side}`} type="button" className={sourceSide === side ? "is-selected" : ""} role="menuitem" onClick={() => edgeData?.onSetSide?.(id, "source", side)}>{side}</button>)}</div><div className="edge-side-picker"><strong>Target side</strong>{EDGE_SIDES.map((side) => <button key={`target-${side}`} type="button" className={targetSide === side ? "is-selected" : ""} role="menuitem" onClick={() => edgeData?.onSetSide?.(id, "target", side)}>{side}</button>)}</div><div className="edge-processor-picker"><strong>Add processor</strong>{PROCESSOR_ACTIONS.map((processor) => <button key={processor.kind} type="button" role="menuitem" onClick={() => { edgeData?.onInsert?.(id, processor.kind); setMenuOpen(false); }}>{processor.label}</button>)}<button type="button" role="menuitem" onClick={() => { edgeData?.onOpenPluginPicker?.(id); setMenuOpen(false); }}>VST plugin…</button></div></div>}
-      </div>
-    </EdgeLabelRenderer>
-  </>;
+  return (
+    <>
+      <g
+        className={`flow-line ${stateClass}`}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      >
+        <path d={path} className="flow-track" />
+        {edgeData?.active ? (
+          <FlowActiveLayers
+            id={id}
+            path={path}
+            source={sourcePoint}
+            target={targetPoint}
+            targetSide={targetSide}
+            levelDb={edgeData.levelDb ?? null}
+            core={(coreStyle) => <BaseEdge path={path} style={{ ...style, ...coreStyle }} className={stateClass} />}
+          />
+        ) : (
+          <>
+            <BaseEdge path={path} style={style} className={stateClass} />
+            <FlowArrow
+              at={targetPoint}
+              side={targetSide}
+              className={`flow-arrow is-${edgeData?.signalState ?? "configured"}`}
+            />
+          </>
+        )}
+      </g>
+      <EdgeLabelRenderer>
+        <span
+          className="sr-only"
+          role="img"
+          aria-label={`Connection ${id}: ${edgeData?.signalLabel ?? "configured"}`}
+          style={{ position: "absolute", transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
+        >
+          Connection {id}: {edgeData?.signalLabel ?? "configured"}
+        </span>
+        <div
+          className={`edge-action-bar nodrag nopan${selected || hovered || menuOpen ? " is-emphasized" : ""}`}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          style={{ transform: `translate(-50%, calc(-100% - 9px)) translate(${labelX}px, ${labelY}px)` }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="edge-action-icon"
+            disabled={!edgeData?.canEdit}
+            aria-label={edgeData?.enabled ? `Pause connection ${id}` : `Resume connection ${id}`}
+            title={
+              edgeData?.enabled
+                ? "Pause this connection. The link stays in the route; Undo restores it."
+                : "Resume audio through this connection."
+            }
+            onClick={() => edgeData?.onToggle?.(id, !edgeData.enabled)}
+          >
+            {edgeData?.enabled ? "⏸" : "▶"}
+          </button>
+          <button
+            type="button"
+            className="edge-action-icon edge-action-remove"
+            disabled={!edgeData?.canEdit}
+            aria-label={`Remove connection ${id}`}
+            title="Remove this connection from the route. Use Undo in Session to restore it."
+            onClick={() => edgeData?.onRemove?.(id)}
+          >
+            ×
+          </button>
+          <button
+            type="button"
+            className="edge-action-icon"
+            disabled={!edgeData?.canEdit}
+            aria-label={`Add processor to connection ${id}`}
+            title="Add a tool between these two nodes."
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            ＋
+          </button>
+          {menuOpen && (
+            <div className="edge-insert-menu" role="menu" aria-label={`Configure connection ${id}`}>
+              <div className="edge-side-picker">
+                <strong>Source side</strong>
+                {EDGE_SIDES.map((side) => (
+                  <button
+                    key={`source-${side}`}
+                    type="button"
+                    className={sourceSide === side ? "is-selected" : ""}
+                    role="menuitem"
+                    onClick={() => edgeData?.onSetSide?.(id, "source", side)}
+                  >
+                    {side}
+                  </button>
+                ))}
+              </div>
+              <div className="edge-side-picker">
+                <strong>Target side</strong>
+                {EDGE_SIDES.map((side) => (
+                  <button
+                    key={`target-${side}`}
+                    type="button"
+                    className={targetSide === side ? "is-selected" : ""}
+                    role="menuitem"
+                    onClick={() => edgeData?.onSetSide?.(id, "target", side)}
+                  >
+                    {side}
+                  </button>
+                ))}
+              </div>
+              <div className="edge-processor-picker">
+                <strong>Add processor</strong>
+                {PROCESSOR_ACTIONS.map((processor) => (
+                  <button
+                    key={processor.kind}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      edgeData?.onInsert?.(id, processor.kind);
+                      setMenuOpen(false);
+                    }}
+                  >
+                    {processor.label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    edgeData?.onOpenPluginPicker?.(id);
+                    setMenuOpen(false);
+                  }}
+                >
+                  VST plugin…
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </EdgeLabelRenderer>
+    </>
+  );
 }
 
 /** Dashed side-chain link from a Duck's trigger node to the Duck. It carries
@@ -381,29 +611,66 @@ function DuckTriggerEdge({ id, source, target, sourceX, sourceY, targetX, target
   // Leave the trigger through the side facing the Duck, so the link never
   // crosses either card: up into its underside, down into its top, or a dip
   // below both when they share a row.
-  const sourceTop = edgePoint(sourceNode, "top", sourceX, sourceY), sourceBottom = edgePoint(sourceNode, "bottom", sourceX, sourceY);
-  const targetTop = edgePoint(targetNode, "top", targetX, targetY), targetBottom = edgePoint(targetNode, "bottom", targetX, targetY);
+  const sourceTop = edgePoint(sourceNode, "top", sourceX, sourceY),
+    sourceBottom = edgePoint(sourceNode, "bottom", sourceX, sourceY);
+  const targetTop = edgePoint(targetNode, "top", targetX, targetY),
+    targetBottom = edgePoint(targetNode, "bottom", targetX, targetY);
   // `entry` is the Duck side the link enters, as FlowArrow expects.
-  const [from, to, entry, path, labelY] = targetBottom.y + 24 < sourceTop.y
-    ? [sourceTop, targetBottom, "bottom" as const, `M${sourceTop.x},${sourceTop.y} C${sourceTop.x},${(sourceTop.y + targetBottom.y) / 2} ${targetBottom.x},${(sourceTop.y + targetBottom.y) / 2} ${targetBottom.x},${targetBottom.y}`, (sourceTop.y + targetBottom.y) / 2 - 6]
-    : targetTop.y > sourceBottom.y + 24
-      ? [sourceBottom, targetTop, "top" as const, `M${sourceBottom.x},${sourceBottom.y} C${sourceBottom.x},${(sourceBottom.y + targetTop.y) / 2} ${targetTop.x},${(sourceBottom.y + targetTop.y) / 2} ${targetTop.x},${targetTop.y}`, (sourceBottom.y + targetTop.y) / 2 - 6]
-      : (() => { const dip = Math.max(sourceBottom.y, targetBottom.y) + 56; return [sourceBottom, targetBottom, "bottom" as const, `M${sourceBottom.x},${sourceBottom.y} C${sourceBottom.x},${dip} ${targetBottom.x},${dip} ${targetBottom.x},${targetBottom.y}`, dip - 4] as const; })();
+  const [from, to, entry, path, labelY] =
+    targetBottom.y + 24 < sourceTop.y
+      ? [
+          sourceTop,
+          targetBottom,
+          "bottom" as const,
+          `M${sourceTop.x},${sourceTop.y} C${sourceTop.x},${(sourceTop.y + targetBottom.y) / 2} ${targetBottom.x},${(sourceTop.y + targetBottom.y) / 2} ${targetBottom.x},${targetBottom.y}`,
+          (sourceTop.y + targetBottom.y) / 2 - 6,
+        ]
+      : targetTop.y > sourceBottom.y + 24
+        ? [
+            sourceBottom,
+            targetTop,
+            "top" as const,
+            `M${sourceBottom.x},${sourceBottom.y} C${sourceBottom.x},${(sourceBottom.y + targetTop.y) / 2} ${targetTop.x},${(sourceBottom.y + targetTop.y) / 2} ${targetTop.x},${targetTop.y}`,
+            (sourceBottom.y + targetTop.y) / 2 - 6,
+          ]
+        : (() => {
+            const dip = Math.max(sourceBottom.y, targetBottom.y) + 56;
+            return [
+              sourceBottom,
+              targetBottom,
+              "bottom" as const,
+              `M${sourceBottom.x},${sourceBottom.y} C${sourceBottom.x},${dip} ${targetBottom.x},${dip} ${targetBottom.x},${targetBottom.y}`,
+              dip - 4,
+            ] as const;
+          })();
   const trigger = data as { duck: Node; running: boolean } | undefined;
   const live = useContext(LiveCanvasContext);
-  const ducking = Boolean(trigger?.running && (nodeTelemetryFor(trigger.duck, live.diagnostics)?.processor?.gateOpen.some(Boolean) ?? false));
-  return <g className={`duck-trigger-edge${ducking ? " is-ducking" : ""}`} aria-label={`Trigger for ${id.replace(/^trigger-/, "")}`}>
-    <path d={path} className="duck-trigger-path" />
-    <FlowArrow at={to} side={entry} className="duck-trigger-arrow" />
-    <text x={(from.x + to.x) / 2 + 8} y={labelY} textAnchor="start" className="duck-trigger-label">{ducking ? "ducking" : "trigger"}</text>
-  </g>;
+  const ducking = Boolean(
+    trigger?.running && (nodeTelemetryFor(trigger.duck, live.diagnostics)?.processor?.gateOpen.some(Boolean) ?? false),
+  );
+  return (
+    <g
+      className={`duck-trigger-edge${ducking ? " is-ducking" : ""}`}
+      aria-label={`Trigger for ${id.replace(/^trigger-/, "")}`}
+    >
+      <path d={path} className="duck-trigger-path" />
+      <FlowArrow at={to} side={entry} className="duck-trigger-arrow" />
+      <text x={(from.x + to.x) / 2 + 8} y={labelY} textAnchor="start" className="duck-trigger-label">
+        {ducking ? "ducking" : "trigger"}
+      </text>
+    </g>
+  );
 }
 
 const edgeTypes = { audioActions: AudioEdgeActions, duckTrigger: DuckTriggerEdge };
 
 /** Connection line styles; each state class matches the canvas edge styling. */
 export const SIGNAL_FLOW_LEGEND: ReadonlyArray<{ state: EdgeSignalState["state"] | "configured"; label: string }> = [
-  { state: "active", label: "Moving lights: audio is flowing. Colour, glow and number of lights follow the level (teal quiet, gold speech, orange loud, red near clipping)" },
+  {
+    state: "active",
+    label:
+      "Moving lights: audio is flowing. Colour, glow and number of lights follow the level (teal quiet, gold speech, orange loud, red near clipping)",
+  },
   { state: "configured", label: "Solid grey: connected, session stopped or not metered" },
   { state: "silent", label: "Grey dots: running but silent" },
   { state: "disabled", label: "Orange dashes: connection paused, node disabled, or muted" },
@@ -412,14 +679,59 @@ export const SIGNAL_FLOW_LEGEND: ReadonlyArray<{ state: EdgeSignalState["state"]
 ];
 
 function SignalFlowLegend() {
-  return <ul className="signal-flow-legend" aria-label="Connection line legend">{SIGNAL_FLOW_LEGEND.map((item) => <li key={item.state} className={`react-flow__edge flow-edge-${item.state}${item.state === "active" ? " flow-edge-active" : ""}`}><svg width="40" height="12" viewBox="0 0 40 12" aria-hidden="true">
-    {item.state === "active"
-      ? <><defs><linearGradient id="legend-flow" x1="0" x2="1"><stop offset="0%" stopColor="var(--flow-cold)" /><stop offset="55%" stopColor="var(--flow-warm)" /><stop offset="100%" stopColor="var(--flow-hot)" /></linearGradient></defs><path className="react-flow__edge-path" d="M2 6H30" style={{ stroke: "url(#legend-flow)", strokeWidth: 4 }} /><ellipse cx="18" cy="6" rx="5" ry="1.4" className="legend-comet" /><path className="flow-arrow is-active" style={{ fill: "var(--flow-hot)" }} d="M-9,-5 L0,0 L-9,5 L-6.5,0 Z" transform="translate(39 6)" /></>
-      : <><path className="react-flow__edge-path" d="M2 6H30" /><path className={`flow-arrow is-${item.state}`} d="M-9,-5 L0,0 L-9,5 L-6.5,0 Z" transform="translate(39 6)" /></>}
-  </svg>{item.label}</li>)}</ul>;
+  return (
+    <ul className="signal-flow-legend" aria-label="Connection line legend">
+      {SIGNAL_FLOW_LEGEND.map((item) => (
+        <li
+          key={item.state}
+          className={`react-flow__edge flow-edge-${item.state}${item.state === "active" ? " flow-edge-active" : ""}`}
+        >
+          <svg width="40" height="12" viewBox="0 0 40 12" aria-hidden="true">
+            {item.state === "active" ? (
+              <>
+                <defs>
+                  <linearGradient id="legend-flow" x1="0" x2="1">
+                    <stop offset="0%" stopColor="var(--flow-cold)" />
+                    <stop offset="55%" stopColor="var(--flow-warm)" />
+                    <stop offset="100%" stopColor="var(--flow-hot)" />
+                  </linearGradient>
+                </defs>
+                <path
+                  className="react-flow__edge-path"
+                  d="M2 6H30"
+                  style={{ stroke: "url(#legend-flow)", strokeWidth: 4 }}
+                />
+                <ellipse cx="18" cy="6" rx="5" ry="1.4" className="legend-comet" />
+                <path
+                  className="flow-arrow is-active"
+                  style={{ fill: "var(--flow-hot)" }}
+                  d="M-9,-5 L0,0 L-9,5 L-6.5,0 Z"
+                  transform="translate(39 6)"
+                />
+              </>
+            ) : (
+              <>
+                <path className="react-flow__edge-path" d="M2 6H30" />
+                <path
+                  className={`flow-arrow is-${item.state}`}
+                  d="M-9,-5 L0,0 L-9,5 L-6.5,0 Z"
+                  transform="translate(39 6)"
+                />
+              </>
+            )}
+          </svg>
+          {item.label}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
-export function libraryDropPosition(clientX: number, clientY: number, bounds: Pick<DOMRect, "left" | "top">): { x: number; y: number } {
+export function libraryDropPosition(
+  clientX: number,
+  clientY: number,
+  bounds: Pick<DOMRect, "left" | "top">,
+): { x: number; y: number } {
   const safeX = Number.isFinite(clientX) ? clientX : bounds.left;
   const safeY = Number.isFinite(clientY) ? clientY : bounds.top;
   return { x: Math.max(0, safeX - bounds.left - 20), y: Math.max(0, safeY - bounds.top - 20) };
@@ -432,7 +744,6 @@ function isLibraryNodeKind(value: string): value is LibraryNodeKind {
 function isVirtualBusKind(value: string): value is "virtualRenderSource" | "virtualCaptureSink" {
   return value === "virtualRenderSource" || value === "virtualCaptureSink";
 }
-
 
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(maximum, Math.max(minimum, value));
@@ -447,7 +758,7 @@ function formatDb(value: number) {
 }
 
 function nodeTelemetryFor(node: Node | undefined, diagnostics: DiagnosticsSnapshot | null | undefined) {
-  return node ? diagnostics?.nodeTelemetry.find((item) => item.nodeId === node.id) ?? null : null;
+  return node ? (diagnostics?.nodeTelemetry.find((item) => item.nodeId === node.id) ?? null) : null;
 }
 
 function MiniMeter({ telemetry }: { telemetry: ReturnType<typeof nodeTelemetryFor> }) {
@@ -457,10 +768,21 @@ function MiniMeter({ telemetry }: { telemetry: ReturnType<typeof nodeTelemetryFo
   // The peak bar holds, then falls, so a spoken peak stays readable.
   const hold = useRef<PeakHold | null>(null);
   hold.current = nextPeakHold(hold.current, peak, performance.now());
-  return <div className={`node-meter ${active ? "is-active" : "is-silent"}`} aria-label={`Peak ${formatDb(peak)}, RMS ${formatDb(rms)}`}>
-    <div className="node-meter-track"><span className="node-meter-rms" style={{ height: `${dbPercent(rms)}%` }} /><span className="node-meter-peak" style={{ height: `${dbPercent(hold.current.db)}%` }} /></div>
-    <div className="node-meter-readout"><span>RMS {formatDb(rms)}</span><span>PK {formatDb(peak)}</span></div>
-  </div>;
+  return (
+    <div
+      className={`node-meter ${active ? "is-active" : "is-silent"}`}
+      aria-label={`Peak ${formatDb(peak)}, RMS ${formatDb(rms)}`}
+    >
+      <div className="node-meter-track">
+        <span className="node-meter-rms" style={{ height: `${dbPercent(rms)}%` }} />
+        <span className="node-meter-peak" style={{ height: `${dbPercent(hold.current.db)}%` }} />
+      </div>
+      <div className="node-meter-readout">
+        <span>RMS {formatDb(rms)}</span>
+        <span>PK {formatDb(peak)}</span>
+      </div>
+    </div>
+  );
 }
 
 type EqBand = { index: number; enabled: boolean; frequencyHz: number; gainDb: number; q: number; type: string };
@@ -481,7 +803,9 @@ function eqBandsFor(node: Node): EqBand[] {
     const prefix = `band${index}`;
     return {
       index,
-      enabled: node.parameters[`${prefix}Enabled`] === true || (index === 0 && node.parameters[`${prefix}Enabled`] === undefined && node.parameters.frequencyHz !== undefined),
+      enabled:
+        node.parameters[`${prefix}Enabled`] === true ||
+        (index === 0 && node.parameters[`${prefix}Enabled`] === undefined && node.parameters.frequencyHz !== undefined),
       frequencyHz: Number(node.parameters[`${prefix}FrequencyHz`] ?? 1000),
       gainDb: Number(node.parameters[`${prefix}GainDb`] ?? 0),
       q: Number(node.parameters[`${prefix}Q`] ?? 1),
@@ -534,9 +858,18 @@ export function testSignalHasPhysicalOutputPath(session: Session, nodeId: string
   return false;
 }
 
-type EdgeSignalState = { active: boolean; levelDb: number | null; state: "active" | "silent" | "unmetered" | "stopped" | "muted" | "disabled" | "stale" | "unavailable" | "faulted"; label: string };
+type EdgeSignalState = {
+  active: boolean;
+  levelDb: number | null;
+  state: "active" | "silent" | "unmetered" | "stopped" | "muted" | "disabled" | "stale" | "unavailable" | "faulted";
+  label: string;
+};
 
-function edgeMeterDb(edge: Session["edges"][number], session: Session, diagnostics: DiagnosticsSnapshot): number | null {
+function edgeMeterDb(
+  edge: Session["edges"][number],
+  session: Session,
+  diagnostics: DiagnosticsSnapshot,
+): number | null {
   const nodeById = new Map(session.nodes.map((node) => [node.id, node]));
   const directSource = nodeTelemetryFor(nodeById.get(edge.sourceNode), diagnostics)?.meter;
   if (directSource && Number.isFinite(directSource.rmsDb)) return directSource.rmsDb;
@@ -567,7 +900,8 @@ function edgeMeterDb(edge: Session["edges"][number], session: Session, diagnosti
 /** Privacy mute silences capture contributions, not graph-generated tones or
  * file playback. A mixed branch may still carry an audible synthetic source. */
 function hasOnlyCaptureSources(session: Session, nodeId: string): boolean {
-  const pending = [nodeId], visited = new Set<string>();
+  const pending = [nodeId],
+    visited = new Set<string>();
   let foundCapture = false;
   while (pending.length) {
     const id = pending.pop()!;
@@ -576,13 +910,18 @@ function hasOnlyCaptureSources(session: Session, nodeId: string): boolean {
     const node = session.nodes.find((item) => item.id === id);
     if (!node?.enabled) continue;
     if (node.kind === "testSignal" || node.kind === "audioFile") return false;
-    if (["physicalInput", "applicationCapture", "endpointLoopback", "virtualRenderSource"].includes(node.kind)) foundCapture = true;
+    if (["physicalInput", "applicationCapture", "endpointLoopback", "virtualRenderSource"].includes(node.kind))
+      foundCapture = true;
     for (const edge of session.edges) if (edge.enabled && edge.destinationNode === id) pending.push(edge.sourceNode);
   }
   return foundCapture;
 }
 
-function applicationCaptureStateForPath(session: Session, nodeId: string, diagnostics: DiagnosticsSnapshot): DiagnosticsSnapshot["applicationCaptureStates"][number] | null {
+function applicationCaptureStateForPath(
+  session: Session,
+  nodeId: string,
+  diagnostics: DiagnosticsSnapshot,
+): DiagnosticsSnapshot["applicationCaptureStates"][number] | null {
   const byId = new Map(session.nodes.map((node) => [node.id, node]));
   const pending = [nodeId];
   const visited = new Set<string>();
@@ -592,19 +931,27 @@ function applicationCaptureStateForPath(session: Session, nodeId: string, diagno
     visited.add(id);
     const node = byId.get(id);
     if (node?.kind === "applicationCapture") {
-      return diagnostics.applicationCaptureStates.find((item) => item.nodeId === id) ?? {
-        sessionId: session.id,
-        nodeId: id,
-        state: "failed",
-        detail: "Application capture has no live backend status.",
-      };
+      return (
+        diagnostics.applicationCaptureStates.find((item) => item.nodeId === id) ?? {
+          sessionId: session.id,
+          nodeId: id,
+          state: "failed",
+          detail: "Application capture has no live backend status.",
+        }
+      );
     }
     for (const edge of session.edges) if (edge.enabled && edge.destinationNode === id) pending.push(edge.sourceNode);
   }
   return null;
 }
 
-export function edgeSignalForConnection(edge: Session["edges"][number], session: Session, diagnostics: DiagnosticsSnapshot | null | undefined, running: boolean, fresh: boolean): EdgeSignalState {
+export function edgeSignalForConnection(
+  edge: Session["edges"][number],
+  session: Session,
+  diagnostics: DiagnosticsSnapshot | null | undefined,
+  running: boolean,
+  fresh: boolean,
+): EdgeSignalState {
   const source = session.nodes.find((node) => node.id === edge.sourceNode);
   const target = session.nodes.find((node) => node.id === edge.destinationNode);
   const pathNodes = [source, target].filter((node): node is Node => Boolean(node));
@@ -612,13 +959,25 @@ export function edgeSignalForConnection(edge: Session["edges"][number], session:
     const worker = nodeTelemetryFor(node, diagnostics)?.plugin;
     return worker?.state === "failed" || worker?.state === "quarantined";
   });
-  const result = (state: EdgeSignalState["state"], levelDb: number | null = null): EdgeSignalState => ({ active: state === "active", levelDb, state, label: state === "active" ? `active, ${levelDb?.toFixed(1)} dB RMS` : state });
+  const result = (state: EdgeSignalState["state"], levelDb: number | null = null): EdgeSignalState => ({
+    active: state === "active",
+    levelDb,
+    state,
+    label: state === "active" ? `active, ${levelDb?.toFixed(1)} dB RMS` : state,
+  });
   if (!edge.enabled || pathNodes.some((node) => !node.enabled)) return result("disabled");
   if (faulted) return result("faulted");
-  if ((diagnostics?.privacyMute.muted && hasOnlyCaptureSources(session, edge.sourceNode)) || pathNodes.some((node) => node.parameters.muted === true)) return result("muted");
+  if (
+    (diagnostics?.privacyMute.muted && hasOnlyCaptureSources(session, edge.sourceNode)) ||
+    pathNodes.some((node) => node.parameters.muted === true)
+  )
+    return result("muted");
   if (!running) return result("stopped");
-  const appCaptureState = diagnostics ? applicationCaptureStateForPath(session, edge.destinationNode, diagnostics) : null;
-  if (appCaptureState && appCaptureState.state !== "connected") return result(appCaptureState.state === "configured-stopped" ? "stopped" : "unavailable");
+  const appCaptureState = diagnostics
+    ? applicationCaptureStateForPath(session, edge.destinationNode, diagnostics)
+    : null;
+  if (appCaptureState && appCaptureState.state !== "connected")
+    return result(appCaptureState.state === "configured-stopped" ? "stopped" : "unavailable");
   if (!diagnostics || diagnostics.audio.state !== "available") return result("unavailable");
   if (!fresh) return result("stale");
   const levelDb = edgeMeterDb(edge, session, diagnostics);
@@ -626,7 +985,13 @@ export function edgeSignalForConnection(edge: Session["edges"][number], session:
   return levelDb > -60 ? result("active", levelDb) : result("silent", levelDb);
 }
 
-function MiniEq({ node, onSetNodeParameter }: { node: Node; onSetNodeParameter?: SessionFlowCanvasProps["onSetNodeParameter"] }) {
+function MiniEq({
+  node,
+  onSetNodeParameter,
+}: {
+  node: Node;
+  onSetNodeParameter?: SessionFlowCanvasProps["onSetNodeParameter"];
+}) {
   const bands = eqBandsFor(node);
   const [dragBandIndex, setDragBandIndex] = useState<number | null>(null);
   const updateBand = (band: EqBand, event: PointerEvent<SVGSVGElement>) => {
@@ -639,34 +1004,135 @@ function MiniEq({ node, onSetNodeParameter }: { node: Node; onSetNodeParameter?:
       onSetNodeParameter(node.id, `band${band.index}Db`, Number(gainDb.toFixed(1)));
       return;
     }
-    const frequencyHz = 20 * (10 ** (x / 184 * 3));
+    const frequencyHz = 20 * 10 ** ((x / 184) * 3);
     onSetNodeParameter(node.id, `band${band.index}FrequencyHz`, Math.round(frequencyHz));
     onSetNodeParameter(node.id, `band${band.index}GainDb`, Number(gainDb.toFixed(1)));
   };
-  return <div className={`node-eq nodrag nopan ${node.kind === "graphicEq" ? "node-eq-graphic" : "node-eq-parametric"}`} aria-label={`${node.kind === "graphicEq" ? "Graphic" : "Parametric"} equalizer response preview`}>
-    <svg className="nodrag nopan" viewBox="0 0 200 88" role="img" aria-label="Parametric EQ curve" onPointerMove={(event) => { if (dragBandIndex !== null && bands[dragBandIndex]) updateBand(bands[dragBandIndex], event); }} onPointerUp={(event) => { setDragBandIndex(null); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} onPointerCancel={(event) => { setDragBandIndex(null); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }}>
-      <path className="eq-grid" d="M8 14H192M8 44H192M8 74H192M8 8V80M69 8V80M130 8V80M192 8V80" />
-      <path className="eq-curve" d={bands.length ? `M8 44 ${bands.map((band) => `L ${eqX(band.frequencyHz).toFixed(1)} ${eqY(band.gainDb).toFixed(1)}`).join(" ")} L192 44` : "M8 44H192"} />
-      {bands.map((band) => <circle key={band.index} className="eq-band nodrag nopan" cx={eqX(band.frequencyHz)} cy={eqY(band.gainDb)} r="4" tabIndex={0} role="slider" aria-valuemin={-12} aria-valuemax={12} aria-valuenow={band.gainDb} aria-label={`Band ${band.index + 1}, ${band.frequencyHz} Hz, ${band.gainDb} dB`} onKeyDown={(event) => { if (!onSetNodeParameter) return; const gainStep = event.key === "ArrowUp" ? 0.5 : event.key === "ArrowDown" ? -0.5 : 0; const frequencyStep = event.key === "ArrowRight" ? 1.08 : event.key === "ArrowLeft" ? 1 / 1.08 : 1; if (gainStep !== 0 || frequencyStep !== 1) { event.preventDefault(); if (gainStep !== 0) onSetNodeParameter(node.id, `band${band.index}GainDb`, Number(clamp(band.gainDb + gainStep, -12, 12).toFixed(1))); if (frequencyStep !== 1) onSetNodeParameter(node.id, `band${band.index}FrequencyHz`, Math.round(clamp(band.frequencyHz * frequencyStep, 20, 20_000))); } }} onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); setDragBandIndex(bands.findIndex((candidate) => candidate.index === band.index)); event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId); }} />)}
-    </svg>
-    <div className="node-eq-scale"><span>20 Hz</span><span>1 kHz</span><span>20 kHz</span></div>
-  </div>;
+  return (
+    <div
+      className={`node-eq nodrag nopan ${node.kind === "graphicEq" ? "node-eq-graphic" : "node-eq-parametric"}`}
+      aria-label={`${node.kind === "graphicEq" ? "Graphic" : "Parametric"} equalizer response preview`}
+    >
+      <svg
+        className="nodrag nopan"
+        viewBox="0 0 200 88"
+        role="img"
+        aria-label="Parametric EQ curve"
+        onPointerMove={(event) => {
+          if (dragBandIndex !== null && bands[dragBandIndex]) updateBand(bands[dragBandIndex], event);
+        }}
+        onPointerUp={(event) => {
+          setDragBandIndex(null);
+          if (event.currentTarget.hasPointerCapture(event.pointerId))
+            event.currentTarget.releasePointerCapture(event.pointerId);
+        }}
+        onPointerCancel={(event) => {
+          setDragBandIndex(null);
+          if (event.currentTarget.hasPointerCapture(event.pointerId))
+            event.currentTarget.releasePointerCapture(event.pointerId);
+        }}
+      >
+        <path className="eq-grid" d="M8 14H192M8 44H192M8 74H192M8 8V80M69 8V80M130 8V80M192 8V80" />
+        <path
+          className="eq-curve"
+          d={
+            bands.length
+              ? `M8 44 ${bands.map((band) => `L ${eqX(band.frequencyHz).toFixed(1)} ${eqY(band.gainDb).toFixed(1)}`).join(" ")} L192 44`
+              : "M8 44H192"
+          }
+        />
+        {bands.map((band) => (
+          <circle
+            key={band.index}
+            className="eq-band nodrag nopan"
+            cx={eqX(band.frequencyHz)}
+            cy={eqY(band.gainDb)}
+            r="4"
+            tabIndex={0}
+            role="slider"
+            aria-valuemin={-12}
+            aria-valuemax={12}
+            aria-valuenow={band.gainDb}
+            aria-label={`Band ${band.index + 1}, ${band.frequencyHz} Hz, ${band.gainDb} dB`}
+            onKeyDown={(event) => {
+              if (!onSetNodeParameter) return;
+              const gainStep = event.key === "ArrowUp" ? 0.5 : event.key === "ArrowDown" ? -0.5 : 0;
+              const frequencyStep = event.key === "ArrowRight" ? 1.08 : event.key === "ArrowLeft" ? 1 / 1.08 : 1;
+              if (gainStep !== 0 || frequencyStep !== 1) {
+                event.preventDefault();
+                if (gainStep !== 0)
+                  onSetNodeParameter(
+                    node.id,
+                    `band${band.index}GainDb`,
+                    Number(clamp(band.gainDb + gainStep, -12, 12).toFixed(1)),
+                  );
+                if (frequencyStep !== 1)
+                  onSetNodeParameter(
+                    node.id,
+                    `band${band.index}FrequencyHz`,
+                    Math.round(clamp(band.frequencyHz * frequencyStep, 20, 20_000)),
+                  );
+              }
+            }}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setDragBandIndex(bands.findIndex((candidate) => candidate.index === band.index));
+              event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId);
+            }}
+          />
+        ))}
+      </svg>
+      <div className="node-eq-scale">
+        <span>20 Hz</span>
+        <span>1 kHz</span>
+        <span>20 kHz</span>
+      </div>
+    </div>
+  );
 }
 
 function trySetPointerCapture(element: Element, pointerId: number) {
-  try { (element as Element & { setPointerCapture?: (id: number) => void }).setPointerCapture?.(pointerId); } catch { /* unsupported in this environment */ }
+  try {
+    (element as Element & { setPointerCapture?: (id: number) => void }).setPointerCapture?.(pointerId);
+  } catch {
+    /* unsupported in this environment */
+  }
 }
 
 function tryReleasePointerCapture(element: Element, pointerId: number) {
   try {
-    const withCapture = element as Element & { hasPointerCapture?: (id: number) => boolean; releasePointerCapture?: (id: number) => void };
+    const withCapture = element as Element & {
+      hasPointerCapture?: (id: number) => boolean;
+      releasePointerCapture?: (id: number) => void;
+    };
     if (withCapture.hasPointerCapture?.(pointerId)) withCapture.releasePointerCapture?.(pointerId);
-  } catch { /* unsupported in this environment */ }
+  } catch {
+    /* unsupported in this environment */
+  }
 }
 
 /** Compact horizontal slider used inline on a canvas node for a single numeric
  * parameter (gain, delay time, pitch shift). Read-only when onChange is absent. */
-function MiniFader({ label, value, min, max, step, formatValue, onChange, ariaLabel }: { label: string; value: number; min: number; max: number; step: number; formatValue: (value: number) => string; onChange?: (value: number) => void; ariaLabel: string }) {
+function MiniFader({
+  label,
+  value,
+  min,
+  max,
+  step,
+  formatValue,
+  onChange,
+  ariaLabel,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  formatValue: (value: number) => string;
+  onChange?: (value: number) => void;
+  ariaLabel: string;
+}) {
   const percent = clamp(((value - min) / (max - min)) * 100, 0, 100);
   const setFromClientX = (clientX: number, bounds: DOMRect) => {
     if (!onChange) return;
@@ -674,23 +1140,54 @@ function MiniFader({ label, value, min, max, step, formatValue, onChange, ariaLa
     const raw = min + ratio * (max - min);
     onChange(clamp(Math.round(raw / step) * step, min, max));
   };
-  return <div className="node-fader nodrag nopan">
-    <div className="node-fader-track" role="slider" tabIndex={onChange ? 0 : -1} aria-label={ariaLabel} aria-valuemin={min} aria-valuemax={max} aria-valuenow={value} aria-valuetext={formatValue(value)}
-      onPointerDown={(event) => { if (!onChange) return; event.preventDefault(); event.stopPropagation(); setFromClientX(event.clientX, event.currentTarget.getBoundingClientRect()); trySetPointerCapture(event.currentTarget, event.pointerId); }}
-      onPointerMove={(event) => { if (!onChange || event.buttons !== 1) return; setFromClientX(event.clientX, event.currentTarget.getBoundingClientRect()); }}
-      onPointerUp={(event) => tryReleasePointerCapture(event.currentTarget, event.pointerId)}
-      onKeyDown={(event) => {
-        if (!onChange) return;
-        if (event.key === "ArrowRight" || event.key === "ArrowUp") { event.preventDefault(); onChange(clamp(value + step, min, max)); }
-        else if (event.key === "ArrowLeft" || event.key === "ArrowDown") { event.preventDefault(); onChange(clamp(value - step, min, max)); }
-        else if (event.key === "Home") { event.preventDefault(); onChange(min); }
-        else if (event.key === "End") { event.preventDefault(); onChange(max); }
-      }}
-    >
-      <div className="node-fader-fill" style={{ width: `${percent}%` }} />
+  return (
+    <div className="node-fader nodrag nopan">
+      <div
+        className="node-fader-track"
+        role="slider"
+        tabIndex={onChange ? 0 : -1}
+        aria-label={ariaLabel}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        aria-valuenow={value}
+        aria-valuetext={formatValue(value)}
+        onPointerDown={(event) => {
+          if (!onChange) return;
+          event.preventDefault();
+          event.stopPropagation();
+          setFromClientX(event.clientX, event.currentTarget.getBoundingClientRect());
+          trySetPointerCapture(event.currentTarget, event.pointerId);
+        }}
+        onPointerMove={(event) => {
+          if (!onChange || event.buttons !== 1) return;
+          setFromClientX(event.clientX, event.currentTarget.getBoundingClientRect());
+        }}
+        onPointerUp={(event) => tryReleasePointerCapture(event.currentTarget, event.pointerId)}
+        onKeyDown={(event) => {
+          if (!onChange) return;
+          if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+            event.preventDefault();
+            onChange(clamp(value + step, min, max));
+          } else if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+            event.preventDefault();
+            onChange(clamp(value - step, min, max));
+          } else if (event.key === "Home") {
+            event.preventDefault();
+            onChange(min);
+          } else if (event.key === "End") {
+            event.preventDefault();
+            onChange(max);
+          }
+        }}
+      >
+        <div className="node-fader-fill" style={{ width: `${percent}%` }} />
+      </div>
+      <div className="node-fader-readout">
+        <span>{label}</span>
+        <strong>{formatValue(value)}</strong>
+      </div>
     </div>
-    <div className="node-fader-readout"><span>{label}</span><strong>{formatValue(value)}</strong></div>
-  </div>;
+  );
 }
 
 /** Gain-reduction meter for dynamics processors (compressor/limiter), driven
@@ -699,87 +1196,247 @@ function GainReductionMeter({ telemetry, detail }: { telemetry: ReturnType<typeo
   const values = telemetry?.processor?.gainReductionDb ?? null;
   const grDb = values && values.length > 0 ? Math.max(...values) : null;
   const percent = grDb === null ? 0 : clamp((grDb / 24) * 100, 0, 100);
-  return <div className="node-gr-meter" aria-label={grDb === null ? "Gain reduction not available" : `Gain reduction ${grDb.toFixed(1)} dB`}>
-    <div className="node-gr-track"><span className="node-gr-fill" style={{ height: `${percent}%` }} /></div>
-    <div className="node-gr-readout"><span>GR</span><strong>{grDb === null ? "—" : `${grDb.toFixed(1)} dB`}</strong></div>
-    <small className="node-gr-detail">{detail}</small>
-  </div>;
+  return (
+    <div
+      className="node-gr-meter"
+      aria-label={grDb === null ? "Gain reduction not available" : `Gain reduction ${grDb.toFixed(1)} dB`}
+    >
+      <div className="node-gr-track">
+        <span className="node-gr-fill" style={{ height: `${percent}%` }} />
+      </div>
+      <div className="node-gr-readout">
+        <span>GR</span>
+        <strong>{grDb === null ? "—" : `${grDb.toFixed(1)} dB`}</strong>
+      </div>
+      <small className="node-gr-detail">{detail}</small>
+    </div>
+  );
 }
 
 /** Open/closed indicator for a gate node, driven by the backend's per-channel
  * gateOpen telemetry when available. */
-function DuckVisual({ node, telemetry, triggerName, onSetNodeParameter }: { node: Node; telemetry: ReturnType<typeof nodeTelemetryFor>; triggerName: string | null; onSetNodeParameter?: SessionFlowCanvasProps["onSetNodeParameter"] }) {
+function DuckVisual({
+  node,
+  telemetry,
+  triggerName,
+  onSetNodeParameter,
+}: {
+  node: Node;
+  telemetry: ReturnType<typeof nodeTelemetryFor>;
+  triggerName: string | null;
+  onSetNodeParameter?: SessionFlowCanvasProps["onSetNodeParameter"];
+}) {
   const amount = Number(node.parameters.amountDb ?? 6);
   const ducking = telemetry?.processor?.gateOpen.some(Boolean) ?? false;
   const reduction = Math.max(0, ...(telemetry?.processor?.gainReductionDb ?? [0]));
   const roundMode = node.parameters.trigger === "siegeRound";
-  const status = ducking ? `Ducking −${reduction.toFixed(1)} dB`
-    : roundMode ? "Siege round · full volume"
-      : !triggerName ? "Choose a trigger in Properties" : `Listening to ${triggerName}`;
-  const title = roundMode ? "Follows the Siege round (Stats.cc)" : triggerName ? `Triggered by ${triggerName}` : undefined;
-  return <div className="node-fader-stack nodrag nopan">
-    <span className={`node-duck-status${ducking ? " is-ducking" : ""}`} role="status" title={title}>
-      {/* The duck surfaces while it is turning this audio down. */}
-      {ducking ? <DuckGlyph className="node-duck-badge" size="1.15rem" /> : <span className="node-duck-dot" aria-hidden="true" />}
-      {status}
-    </span>
-    <div className="node-duck-reduction" aria-hidden="true"><span style={{ width: `${amount > 0 ? clamp(reduction / amount * 100, 0, 100) : 0}%` }} /></div>
-    <MiniFader label="Amount" value={amount} min={0} max={40} step={1} formatValue={(value) => `−${Math.round(value)} dB`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "amountDb", Math.round(value)) : undefined} ariaLabel={`${node.name} duck amount`} />
-  </div>;
+  const status = ducking
+    ? `Ducking −${reduction.toFixed(1)} dB`
+    : roundMode
+      ? "Siege round · full volume"
+      : !triggerName
+        ? "Choose a trigger in Properties"
+        : `Listening to ${triggerName}`;
+  const title = roundMode
+    ? "Follows the Siege round (Stats.cc)"
+    : triggerName
+      ? `Triggered by ${triggerName}`
+      : undefined;
+  return (
+    <div className="node-fader-stack nodrag nopan">
+      <span className={`node-duck-status${ducking ? " is-ducking" : ""}`} role="status" title={title}>
+        {/* The duck surfaces while it is turning this audio down. */}
+        {ducking ? (
+          <DuckGlyph className="node-duck-badge" size="1.15rem" />
+        ) : (
+          <span className="node-duck-dot" aria-hidden="true" />
+        )}
+        {status}
+      </span>
+      <div className="node-duck-reduction" aria-hidden="true">
+        <span style={{ width: `${amount > 0 ? clamp((reduction / amount) * 100, 0, 100) : 0}%` }} />
+      </div>
+      <MiniFader
+        label="Amount"
+        value={amount}
+        min={0}
+        max={40}
+        step={1}
+        formatValue={(value) => `−${Math.round(value)} dB`}
+        onChange={
+          onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "amountDb", Math.round(value)) : undefined
+        }
+        ariaLabel={`${node.name} duck amount`}
+      />
+    </div>
+  );
 }
 
 /** Names of the nodes feeding an Input Switch's A and B inputs. */
 export function inputSwitchSourceNames(session: Session, switchId: string): { a: string | null; b: string | null } {
   const name = (port: "a" | "b") => {
-    const edge = session.edges.find((item) => item.enabled && item.destinationNode === switchId && item.destinationPort === port);
-    return edge ? session.nodes.find((node) => node.id === edge.sourceNode)?.name ?? null : null;
+    const edge = session.edges.find(
+      (item) => item.enabled && item.destinationNode === switchId && item.destinationPort === port,
+    );
+    return edge ? (session.nodes.find((node) => node.id === edge.sourceNode)?.name ?? null) : null;
   };
   return { a: name("a"), b: name("b") };
 }
 
-function GateVisual({ telemetry, thresholdDb }: { telemetry: ReturnType<typeof nodeTelemetryFor>; thresholdDb: number }) {
+function GateVisual({
+  telemetry,
+  thresholdDb,
+}: {
+  telemetry: ReturnType<typeof nodeTelemetryFor>;
+  thresholdDb: number;
+}) {
   const states = telemetry?.processor?.gateOpen ?? null;
   const open = states && states.length > 0 ? states.some(Boolean) : null;
-  return <div className={`node-gate ${open === true ? "is-open" : open === false ? "is-closed" : "is-unknown"}`} aria-label={open === null ? "Gate state not available" : open ? "Gate open" : "Gate closed"}>
-    <span className="node-gate-dot" />
-    <strong>{open === null ? "Gate" : open ? "Open" : "Closed"}</strong>
-    <small>Threshold {thresholdDb} dB</small>
-  </div>;
+  return (
+    <div
+      className={`node-gate ${open === true ? "is-open" : open === false ? "is-closed" : "is-unknown"}`}
+      aria-label={open === null ? "Gate state not available" : open ? "Gate open" : "Gate closed"}
+    >
+      <span className="node-gate-dot" />
+      <strong>{open === null ? "Gate" : open ? "Open" : "Closed"}</strong>
+      <small>Threshold {thresholdDb} dB</small>
+    </div>
+  );
 }
 
 /** One-tap mute toggle so the most common live action on a Mute node does not
  * require opening the inspector. */
-function MuteToggle({ node, onSetNodeParameter }: { node: Node; onSetNodeParameter?: SessionFlowCanvasProps["onSetNodeParameter"] }) {
+function MuteToggle({
+  node,
+  onSetNodeParameter,
+}: {
+  node: Node;
+  onSetNodeParameter?: SessionFlowCanvasProps["onSetNodeParameter"];
+}) {
   const muted = Boolean(node.parameters.muted);
-  return <button type="button" className={`node-mute-toggle nodrag nopan ${muted ? "is-muted" : "is-live"}`} disabled={!onSetNodeParameter} aria-pressed={muted} aria-label={muted ? `${node.name}, muted, click to unmute` : `${node.name}, live, click to mute`} onClick={(event) => { event.stopPropagation(); onSetNodeParameter?.(node.id, "muted", !muted); }}>
-    <span className="node-mute-dot" />{muted ? "Muted" : "Live"}
-  </button>;
+  return (
+    <button
+      type="button"
+      className={`node-mute-toggle nodrag nopan ${muted ? "is-muted" : "is-live"}`}
+      disabled={!onSetNodeParameter}
+      aria-pressed={muted}
+      aria-label={muted ? `${node.name}, muted, click to unmute` : `${node.name}, live, click to mute`}
+      onClick={(event) => {
+        event.stopPropagation();
+        onSetNodeParameter?.(node.id, "muted", !muted);
+      }}
+    >
+      <span className="node-mute-dot" />
+      {muted ? "Muted" : "Live"}
+    </button>
+  );
 }
 
 /** Merge glyph for a Mixer node plus a live count of connected inputs, since a
  * static "sums connected inputs" label never actually reflected the graph. */
-function MixerVisual({ mixer, inputs, telemetry, onSetNodeParameter }: { mixer: Node; inputs: ReturnType<typeof mixerInputs>; telemetry: ReturnType<typeof nodeTelemetryFor>; onSetNodeParameter?: SessionFlowCanvasProps["onSetNodeParameter"] }) {
+function MixerVisual({
+  mixer,
+  inputs,
+  telemetry,
+  onSetNodeParameter,
+}: {
+  mixer: Node;
+  inputs: ReturnType<typeof mixerInputs>;
+  telemetry: ReturnType<typeof nodeTelemetryFor>;
+  onSetNodeParameter?: SessionFlowCanvasProps["onSetNodeParameter"];
+}) {
   const inputCount = inputs.length;
-  return <div className="node-mixer-wrap">
-    <div className="node-mixer" aria-label={inputCount === 0 ? "Mixer has no connected inputs yet" : `Mixer sums ${inputCount} connected input${inputCount === 1 ? "" : "s"}`}>
-      <span className="node-mixer-icon" aria-hidden="true">Σ</span>
-      <span>{inputCount === 0 ? "No inputs connected" : `Summing ${inputCount} input${inputCount === 1 ? "" : "s"}`}</span>
+  return (
+    <div className="node-mixer-wrap">
+      <div
+        className="node-mixer"
+        aria-label={
+          inputCount === 0
+            ? "Mixer has no connected inputs yet"
+            : `Mixer sums ${inputCount} connected input${inputCount === 1 ? "" : "s"}`
+        }
+      >
+        <span className="node-mixer-icon" aria-hidden="true">
+          Σ
+        </span>
+        <span>
+          {inputCount === 0 ? "No inputs connected" : `Summing ${inputCount} input${inputCount === 1 ? "" : "s"}`}
+        </span>
+      </div>
+      {inputs.length > 0 && (
+        <div className="node-mixer-inputs nodrag nopan">
+          {inputs.map((input) => (
+            <MiniFader
+              key={input.edgeId}
+              label={input.upstream.name}
+              value={input.percent}
+              min={0}
+              max={100}
+              step={1}
+              formatValue={(value) => (input.enabled ? `${Math.round(value)} %` : `${Math.round(value)} % · off`)}
+              onChange={
+                onSetNodeParameter
+                  ? (value) => onSetNodeParameter(mixer.id, mixerInputVolumeKey(input.upstream.id), Math.round(value))
+                  : undefined
+              }
+              ariaLabel={`${mixer.name} input volume for ${input.upstream.name}`}
+            />
+          ))}
+        </div>
+      )}
+      {telemetry?.meter && <MiniMeter telemetry={telemetry} />}
     </div>
-    {inputs.length > 0 && <div className="node-mixer-inputs nodrag nopan">{inputs.map((input) => <MiniFader key={input.edgeId} label={input.upstream.name} value={input.percent} min={0} max={100} step={1} formatValue={(value) => input.enabled ? `${Math.round(value)} %` : `${Math.round(value)} % · off`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(mixer.id, mixerInputVolumeKey(input.upstream.id), Math.round(value)) : undefined} ariaLabel={`${mixer.name} input volume for ${input.upstream.name}`} />)}</div>}
-    {telemetry?.meter && <MiniMeter telemetry={telemetry} />}
-  </div>;
+  );
 }
 
 /** Test Signal shows its configured tone alongside the ordinary output meter
  * so the source's shape is visible without opening the inspector. */
-function TestSignalVisual({ node, telemetry, routed, sessionRunning, playing, actionBusy, playbackReady, endpointPrepared, onStart, onStop }: { node: Node; telemetry: ReturnType<typeof nodeTelemetryFor>; routed: boolean; sessionRunning: boolean; playing: boolean; actionBusy: boolean; playbackReady: boolean; endpointPrepared: boolean; onStart?: () => void; onStop?: () => void }) {
+function TestSignalVisual({
+  node,
+  telemetry,
+  routed,
+  sessionRunning,
+  playing,
+  actionBusy,
+  playbackReady,
+  endpointPrepared,
+  onStart,
+  onStop,
+}: {
+  node: Node;
+  telemetry: ReturnType<typeof nodeTelemetryFor>;
+  routed: boolean;
+  sessionRunning: boolean;
+  playing: boolean;
+  actionBusy: boolean;
+  playbackReady: boolean;
+  endpointPrepared: boolean;
+  onStart?: () => void;
+  onStop?: () => void;
+}) {
   const frequencyHz = Number(node.parameters.frequencyHz ?? 440);
   const levelDb = Number(node.parameters.levelDb ?? -18);
-  return <div className="node-test-signal">
-    <div className="node-test-signal-config"><span>{frequencyHz} Hz</span><span>{levelDb.toFixed(1)} dB</span></div>
-    <MiniMeter telemetry={telemetry} />
-    <TestSignalPlaybackControls durationMs={Number(node.parameters.durationMs ?? 1000)} routed={routed} sessionRunning={sessionRunning} playing={playing} actionBusy={actionBusy} playbackReady={playbackReady} endpointPrepared={endpointPrepared} nodeEnabled={node.enabled && !node.bypass} onStart={onStart} onStop={onStop} />
-  </div>;
+  return (
+    <div className="node-test-signal">
+      <div className="node-test-signal-config">
+        <span>{frequencyHz} Hz</span>
+        <span>{levelDb.toFixed(1)} dB</span>
+      </div>
+      <MiniMeter telemetry={telemetry} />
+      <TestSignalPlaybackControls
+        durationMs={Number(node.parameters.durationMs ?? 1000)}
+        routed={routed}
+        sessionRunning={sessionRunning}
+        playing={playing}
+        actionBusy={actionBusy}
+        playbackReady={playbackReady}
+        endpointPrepared={endpointPrepared}
+        nodeEnabled={node.enabled && !node.bypass}
+        onStart={onStart}
+        onStop={onStop}
+      />
+    </div>
+  );
 }
 
 const RECORDER_STATE_LABEL: Record<RecorderStatus["state"], string> = {
@@ -794,16 +1451,45 @@ const RECORDER_STATE_LABEL: Record<RecorderStatus["state"], string> = {
 
 /** A Recorder node's most important fact is whether it is actually recording
  * right now, which a generic pass-through meter never showed. */
-function RecorderVisual({ node, status, telemetry, sessionRunning, onToggleRecording, busy }: { node: Node; status: RecorderStatus | null | undefined; telemetry: ReturnType<typeof nodeTelemetryFor>; sessionRunning: boolean; onToggleRecording?: (nodeId: string, record: boolean) => void; busy: boolean }) {
+function RecorderVisual({
+  node,
+  status,
+  telemetry,
+  sessionRunning,
+  onToggleRecording,
+  busy,
+}: {
+  node: Node;
+  status: RecorderStatus | null | undefined;
+  telemetry: ReturnType<typeof nodeTelemetryFor>;
+  sessionRunning: boolean;
+  onToggleRecording?: (nodeId: string, record: boolean) => void;
+  busy: boolean;
+}) {
   const state = status?.state ?? null;
-  return <div className="node-recorder">
-    {onToggleRecording && <RecordButton node={node} status={status} running={sessionRunning} connected busy={busy} onToggle={onToggleRecording} compact />}
-    <div className={`node-recorder-state ${state ? `is-${state}` : "is-unknown"}`} aria-label={state ? `Recorder ${RECORDER_STATE_LABEL[state]}` : "No recorder session for this node yet"}>
-      <span className="node-recorder-dot" />
-      <strong>{state ? RECORDER_STATE_LABEL[state] : "No session"}</strong>
+  return (
+    <div className="node-recorder">
+      {onToggleRecording && (
+        <RecordButton
+          node={node}
+          status={status}
+          running={sessionRunning}
+          connected
+          busy={busy}
+          onToggle={onToggleRecording}
+          compact
+        />
+      )}
+      <div
+        className={`node-recorder-state ${state ? `is-${state}` : "is-unknown"}`}
+        aria-label={state ? `Recorder ${RECORDER_STATE_LABEL[state]}` : "No recorder session for this node yet"}
+      >
+        <span className="node-recorder-dot" />
+        <strong>{state ? RECORDER_STATE_LABEL[state] : "No session"}</strong>
+      </div>
+      <MiniMeter telemetry={telemetry} />
     </div>
-    <MiniMeter telemetry={telemetry} />
-  </div>;
+  );
 }
 
 /** Basename of a filesystem path, tolerant of both `/` and `\` separators. */
@@ -820,43 +1506,101 @@ function basename(path: string) {
  * backend reports it connected; otherwise the chip asks for attention instead
  * of a generic "ready" that contradicts the capture state below it.
  */
-export function nodeHeaderState(node: Node, applicationCaptureState: DiagnosticsSnapshot["applicationCaptureStates"][number] | null): { label: string; tone: "ready" | "bypassed" | "disabled" | "attention" } {
+export function nodeHeaderState(
+  node: Node,
+  applicationCaptureState: DiagnosticsSnapshot["applicationCaptureStates"][number] | null,
+): { label: string; tone: "ready" | "bypassed" | "disabled" | "attention" } {
   if (node.bypass) return { label: "bypass", tone: "bypassed" };
   if (!node.enabled) return { label: "off", tone: "disabled" };
   if (node.kind !== "applicationCapture") return { label: "ready", tone: "ready" };
   switch (applicationCaptureState?.state) {
-    case "connected": return { label: "live", tone: "ready" };
-    case "reconnecting": return { label: "reconnecting", tone: "bypassed" };
-    case "configured-stopped": return { label: "stopped", tone: "disabled" };
-    case "app-closed": return { label: "app closed", tone: "attention" };
-    case "ambiguous": return { label: "pick instance", tone: "attention" };
-    case "output-unavailable": return { label: "no output", tone: "attention" };
-    case "unsupported": return { label: "pick app", tone: "attention" };
-    case "failed": return { label: "retrying", tone: "attention" };
-    default: return { label: "not prepared", tone: "attention" };
+    case "connected":
+      return { label: "live", tone: "ready" };
+    case "reconnecting":
+      return { label: "reconnecting", tone: "bypassed" };
+    case "configured-stopped":
+      return { label: "stopped", tone: "disabled" };
+    case "app-closed":
+      return { label: "app closed", tone: "attention" };
+    case "ambiguous":
+      return { label: "pick instance", tone: "attention" };
+    case "output-unavailable":
+      return { label: "no output", tone: "attention" };
+    case "unsupported":
+      return { label: "pick app", tone: "attention" };
+    case "failed":
+      return { label: "retrying", tone: "attention" };
+    default:
+      return { label: "not prepared", tone: "attention" };
   }
 }
 
-function ApplicationCaptureVisual({ node, telemetry, state }: { node: Node; telemetry: ReturnType<typeof nodeTelemetryFor>; state: DiagnosticsSnapshot["applicationCaptureStates"][number] | null }) {
+function ApplicationCaptureVisual({
+  node,
+  telemetry,
+  state,
+}: {
+  node: Node;
+  telemetry: ReturnType<typeof nodeTelemetryFor>;
+  state: DiagnosticsSnapshot["applicationCaptureStates"][number] | null;
+}) {
   const executable = String(node.parameters.executable ?? "Unknown application");
-  const policy = node.parameters.processPolicy === "selectedInstance" ? "This running instance" : "Any matching instance";
+  const policy =
+    node.parameters.processPolicy === "selectedInstance" ? "This running instance" : "Any matching instance";
   const status = state?.state ?? "not-prepared";
-  const label = status === "connected" ? "Connected" : status === "configured-stopped" ? "Route stopped" : status === "app-closed" ? "App closed · reconnecting" : status === "reconnecting" ? "Reconnecting" : status === "ambiguous" ? "Choose instance" : status === "output-unavailable" ? "Output unavailable" : status === "unsupported" ? "Choose again" : status === "failed" ? "Retrying" : "Not prepared · open Properties";
-  return <div className="node-app-capture-wrap">
-    <div className="node-app-capture" title={executable}><strong>{executable}</strong><small>{policy}</small></div>
-    <span className={`node-app-capture-state is-${status}`} role="status" aria-label={`${label}. ${state?.detail ?? "Prepare this source to monitor its application state."}`} title={state?.detail}>{label}</span>
-    {status === "connected" && telemetry?.meter && <MiniMeter telemetry={telemetry} />}
-  </div>;
+  const label =
+    status === "connected"
+      ? "Connected"
+      : status === "configured-stopped"
+        ? "Route stopped"
+        : status === "app-closed"
+          ? "App closed · reconnecting"
+          : status === "reconnecting"
+            ? "Reconnecting"
+            : status === "ambiguous"
+              ? "Choose instance"
+              : status === "output-unavailable"
+                ? "Output unavailable"
+                : status === "unsupported"
+                  ? "Choose again"
+                  : status === "failed"
+                    ? "Retrying"
+                    : "Not prepared · open Properties";
+  return (
+    <div className="node-app-capture-wrap">
+      <div className="node-app-capture" title={executable}>
+        <strong>{executable}</strong>
+        <small>{policy}</small>
+      </div>
+      <span
+        className={`node-app-capture-state is-${status}`}
+        role="status"
+        aria-label={`${label}. ${state?.detail ?? "Prepare this source to monitor its application state."}`}
+        title={state?.detail}
+      >
+        {label}
+      </span>
+      {status === "connected" && telemetry?.meter && <MiniMeter telemetry={telemetry} />}
+    </div>
+  );
 }
 
 /** Shows which exact render endpoint this loopback source is bound to. */
 function EndpointLoopbackVisual({ node, telemetry }: { node: Node; telemetry: ReturnType<typeof nodeTelemetryFor> }) {
   const endpointId = String(node.parameters.endpointId ?? "");
-  const shortId = endpointId.length > 22 ? `${endpointId.slice(0, 10)}…${endpointId.slice(-8)}` : endpointId || "No endpoint bound";
-  return <div className="node-endpoint-loopback-wrap">
-    <div className="node-endpoint-loopback" title={endpointId}><span className="node-endpoint-loopback-icon" aria-hidden="true">↺</span><span>{shortId}</span></div>
-    {telemetry?.meter && <MiniMeter telemetry={telemetry} />}
-  </div>;
+  const shortId =
+    endpointId.length > 22 ? `${endpointId.slice(0, 10)}…${endpointId.slice(-8)}` : endpointId || "No endpoint bound";
+  return (
+    <div className="node-endpoint-loopback-wrap">
+      <div className="node-endpoint-loopback" title={endpointId}>
+        <span className="node-endpoint-loopback-icon" aria-hidden="true">
+          ↺
+        </span>
+        <span>{shortId}</span>
+      </div>
+      {telemetry?.meter && <MiniMeter telemetry={telemetry} />}
+    </div>
+  );
 }
 
 /** Deferred virtual-bus source/sink still shows which existing bus identity
@@ -864,10 +1608,17 @@ function EndpointLoopbackVisual({ node, telemetry }: { node: Node; telemetry: Re
 function VirtualBusVisual({ node, telemetry }: { node: Node; telemetry: ReturnType<typeof nodeTelemetryFor> }) {
   const busId = String(node.parameters.busId ?? "Unbound");
   const isSource = node.kind === "virtualRenderSource";
-  return <div className="node-virtual-bus-wrap">
-    <div className="node-virtual-bus" title={busId}><span className="node-virtual-bus-icon" aria-hidden="true">{isSource ? "↦" : "↤"}</span><span>Bus {busId}</span></div>
-    {telemetry?.meter && <MiniMeter telemetry={telemetry} />}
-  </div>;
+  return (
+    <div className="node-virtual-bus-wrap">
+      <div className="node-virtual-bus" title={busId}>
+        <span className="node-virtual-bus-icon" aria-hidden="true">
+          {isSource ? "↦" : "↤"}
+        </span>
+        <span>Bus {busId}</span>
+      </div>
+      {telemetry?.meter && <MiniMeter telemetry={telemetry} />}
+    </div>
+  );
 }
 
 /** A plugin node's format and binary identity matter more than a generic
@@ -878,16 +1629,70 @@ function PluginVisual({ node, telemetry }: { node: Node; telemetry: ReturnType<t
   const fileName = basename(String(node.parameters.path ?? ""));
   const health = telemetry?.plugin ?? null;
   const healthAlert = health?.state === "failed" || health?.state === "quarantined";
-  return <div className="node-plugin">
-    <div className="node-plugin-header"><span className="node-plugin-format">{formatLabel}</span><span className={`node-state ${node.bypass ? "is-bypassed" : node.enabled ? "is-ready" : "is-disabled"}`}>{node.bypass ? "bypass" : node.enabled ? "active" : "stopped"}</span></div>
-    <div className="node-plugin-file" title={fileName}>{fileName}</div>
-    {healthAlert && <div className="node-plugin-health-alert" role="alert">{health.state === "quarantined" ? `Quarantined (${health.failureCount} failures)` : "Worker failed"}</div>}
-    {telemetry?.meter && <MiniMeter telemetry={telemetry} />}
-  </div>;
+  return (
+    <div className="node-plugin">
+      <div className="node-plugin-header">
+        <span className="node-plugin-format">{formatLabel}</span>
+        <span className={`node-state ${node.bypass ? "is-bypassed" : node.enabled ? "is-ready" : "is-disabled"}`}>
+          {node.bypass ? "bypass" : node.enabled ? "active" : "stopped"}
+        </span>
+      </div>
+      <div className="node-plugin-file" title={fileName}>
+        {fileName}
+      </div>
+      {healthAlert && (
+        <div className="node-plugin-health-alert" role="alert">
+          {health.state === "quarantined" ? `Quarantined (${health.failureCount} failures)` : "Worker failed"}
+        </div>
+      )}
+      {telemetry?.meter && <MiniMeter telemetry={telemetry} />}
+    </div>
+  );
 }
 
-export function AudioFileNodeControls({ node, state = "stopped", onTransport }: { node: Node; state?: "playing" | "paused" | "stopped"; onTransport?: (nodeId: string, action: "play" | "pause" | "stop") => void }) {
-  return <div className="audio-file-node"><span className="audio-file-node-name" title={String(node.parameters.fileName ?? "")}>{String(node.parameters.fileName ?? "Choose audio in properties")}</span><div className="audio-file-node-controls"><button type="button" disabled={!node.enabled || !node.parameters.mediaId || state === "playing"} aria-label={`Play ${node.name}`} onClick={(event) => { event.stopPropagation(); onTransport?.(node.id, "play"); }}>Play</button><button type="button" disabled={!node.enabled || !node.parameters.mediaId || state === "stopped"} aria-label={`Stop ${node.name}`} onClick={(event) => { event.stopPropagation(); onTransport?.(node.id, "stop"); }}>Stop</button></div><span className="audio-file-node-state" role="status">{state}</span></div>;
+export function AudioFileNodeControls({
+  node,
+  state = "stopped",
+  onTransport,
+}: {
+  node: Node;
+  state?: "playing" | "paused" | "stopped";
+  onTransport?: (nodeId: string, action: "play" | "pause" | "stop") => void;
+}) {
+  return (
+    <div className="audio-file-node">
+      <span className="audio-file-node-name" title={String(node.parameters.fileName ?? "")}>
+        {String(node.parameters.fileName ?? "Choose audio in properties")}
+      </span>
+      <div className="audio-file-node-controls">
+        <button
+          type="button"
+          disabled={!node.enabled || !node.parameters.mediaId || state === "playing"}
+          aria-label={`Play ${node.name}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onTransport?.(node.id, "play");
+          }}
+        >
+          Play
+        </button>
+        <button
+          type="button"
+          disabled={!node.enabled || !node.parameters.mediaId || state === "stopped"}
+          aria-label={`Stop ${node.name}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onTransport?.(node.id, "stop");
+          }}
+        >
+          Stop
+        </button>
+      </div>
+      <span className="audio-file-node-state" role="status">
+        {state}
+      </span>
+    </div>
+  );
 }
 
 /** A node's visual, fed with that node's live telemetry from the canvas. */
@@ -898,75 +1703,493 @@ function LiveNodeVisual(props: Omit<Parameters<typeof NodeVisual>[0], "telemetry
 // Each tick delivers new telemetry objects; redraw only when this node's values change.
 const MemoNodeVisual = memo(NodeVisual, (before, after) => {
   for (const key of new Set([...Object.keys(before), ...Object.keys(after)]) as Set<keyof typeof before>) {
-    if (key === "telemetry" ? JSON.stringify(before.telemetry) !== JSON.stringify(after.telemetry) : !Object.is(before[key], after[key])) return false;
+    if (
+      key === "telemetry"
+        ? JSON.stringify(before.telemetry) !== JSON.stringify(after.telemetry)
+        : !Object.is(before[key], after[key])
+    )
+      return false;
   }
   return true;
 });
 
-function NodeVisual({ node, telemetry, applicationCaptureState, onSetNodeParameter, onToggleRecording, recordingBusyNodeId, recorderStatus, mixerInputCount, mixerInputList, duckTriggerName, switchSourceNames, routed, sessionRunning, sessionActionBusy, testSignalPlaybackReady, testSignalEndpointPrepared, onStartTestSignal, onStopTestSignal, onAudioSourceTransport, audioSourceStates, onTimeShiftTransport, timeShiftStatuses }: { node: Node; telemetry: ReturnType<typeof nodeTelemetryFor>; applicationCaptureState: DiagnosticsSnapshot["applicationCaptureStates"][number] | null; onSetNodeParameter?: SessionFlowCanvasProps["onSetNodeParameter"]; recorderStatus?: RecorderStatus | null; mixerInputCount?: number; mixerInputList?: ReturnType<typeof mixerInputs>; duckTriggerName?: string | null; onToggleRecording?: (nodeId: string, record: boolean) => void; recordingBusyNodeId?: string | null; switchSourceNames?: { a: string | null; b: string | null }; routed: boolean; sessionRunning: boolean; sessionActionBusy: boolean; testSignalPlaybackReady: boolean; testSignalEndpointPrepared: boolean; onStartTestSignal?: () => void; onStopTestSignal?: () => void; onAudioSourceTransport?: SessionFlowCanvasProps["onAudioSourceTransport"]; audioSourceStates?: SessionFlowCanvasProps["audioSourceStates"]; onTimeShiftTransport?: SessionFlowCanvasProps["onTimeShiftTransport"]; timeShiftStatuses?: SessionFlowCanvasProps["timeShiftStatuses"] }) {
-  if (node.kind === "parametricEq" || node.kind === "graphicEq") return <MiniEq node={node} onSetNodeParameter={onSetNodeParameter} />;
+function NodeVisual({
+  node,
+  telemetry,
+  applicationCaptureState,
+  onSetNodeParameter,
+  onToggleRecording,
+  recordingBusyNodeId,
+  recorderStatus,
+  mixerInputCount,
+  mixerInputList,
+  duckTriggerName,
+  switchSourceNames,
+  routed,
+  sessionRunning,
+  sessionActionBusy,
+  testSignalPlaybackReady,
+  testSignalEndpointPrepared,
+  onStartTestSignal,
+  onStopTestSignal,
+  onAudioSourceTransport,
+  audioSourceStates,
+  onTimeShiftTransport,
+  timeShiftStatuses,
+}: {
+  node: Node;
+  telemetry: ReturnType<typeof nodeTelemetryFor>;
+  applicationCaptureState: DiagnosticsSnapshot["applicationCaptureStates"][number] | null;
+  onSetNodeParameter?: SessionFlowCanvasProps["onSetNodeParameter"];
+  recorderStatus?: RecorderStatus | null;
+  mixerInputCount?: number;
+  mixerInputList?: ReturnType<typeof mixerInputs>;
+  duckTriggerName?: string | null;
+  onToggleRecording?: (nodeId: string, record: boolean) => void;
+  recordingBusyNodeId?: string | null;
+  switchSourceNames?: { a: string | null; b: string | null };
+  routed: boolean;
+  sessionRunning: boolean;
+  sessionActionBusy: boolean;
+  testSignalPlaybackReady: boolean;
+  testSignalEndpointPrepared: boolean;
+  onStartTestSignal?: () => void;
+  onStopTestSignal?: () => void;
+  onAudioSourceTransport?: SessionFlowCanvasProps["onAudioSourceTransport"];
+  audioSourceStates?: SessionFlowCanvasProps["audioSourceStates"];
+  onTimeShiftTransport?: SessionFlowCanvasProps["onTimeShiftTransport"];
+  timeShiftStatuses?: SessionFlowCanvasProps["timeShiftStatuses"];
+}) {
+  if (node.kind === "parametricEq" || node.kind === "graphicEq")
+    return <MiniEq node={node} onSetNodeParameter={onSetNodeParameter} />;
   if (node.kind === "networkSend" || node.kind === "networkReceive") {
     const sending = node.kind === "networkSend";
     const address = sending ? node.parameters.host : node.parameters.sender;
-    const target = typeof address === "string" ? `${sending ? "To" : "From"} ${address}:${String(node.parameters.port ?? DEFAULT_NETWORK_AUDIO_PORT)}` : "Set the IP address in Properties";
+    const target =
+      typeof address === "string"
+        ? `${sending ? "To" : "From"} ${address}:${String(node.parameters.port ?? DEFAULT_NETWORK_AUDIO_PORT)}`
+        : "Set the IP address in Properties";
     const status = networkTelemetryText(telemetry?.network);
-    return <div className="node-fader-stack"><span className="node-denoise-status" title={target}>{target}</span>{status && <span className="node-network-status" role="status">{status}</span>}</div>;
+    return (
+      <div className="node-fader-stack">
+        <span className="node-denoise-status" title={target}>
+          {target}
+        </span>
+        {status && (
+          <span className="node-network-status" role="status">
+            {status}
+          </span>
+        )}
+      </div>
+    );
   }
-  if (node.kind === "gain") return <MiniFader label="Gain" value={Number(node.parameters.gainDb ?? 0)} min={GAIN_MIN_DB} max={GAIN_MAX_DB} step={1} formatValue={(value) => `${value.toFixed(1)} dB`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "gainDb", Number(value.toFixed(1))) : undefined} ariaLabel={`${node.name} gain`} />;
-  if (node.kind === "pitch") return <MiniFader label="Pitch" value={Number(node.parameters.semitones ?? 0)} min={-24} max={24} step={0.5} formatValue={(value) => `${value > 0 ? "+" : ""}${value.toFixed(1)} st`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "semitones", Number(value.toFixed(1))) : undefined} ariaLabel={`${node.name} pitch shift`} />;
-  if (node.kind === "volume") return <MiniFader label="Volume" value={Number(node.parameters.percent ?? 100)} min={0} max={200} step={1} formatValue={(value) => `${Math.round(value)} %`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "percent", Math.round(value)) : undefined} ariaLabel={`${node.name} volume percent`} />;
+  if (node.kind === "gain")
+    return (
+      <MiniFader
+        label="Gain"
+        value={Number(node.parameters.gainDb ?? 0)}
+        min={GAIN_MIN_DB}
+        max={GAIN_MAX_DB}
+        step={1}
+        formatValue={(value) => `${value.toFixed(1)} dB`}
+        onChange={
+          onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "gainDb", Number(value.toFixed(1))) : undefined
+        }
+        ariaLabel={`${node.name} gain`}
+      />
+    );
+  if (node.kind === "pitch")
+    return (
+      <MiniFader
+        label="Pitch"
+        value={Number(node.parameters.semitones ?? 0)}
+        min={-24}
+        max={24}
+        step={0.5}
+        formatValue={(value) => `${value > 0 ? "+" : ""}${value.toFixed(1)} st`}
+        onChange={
+          onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "semitones", Number(value.toFixed(1))) : undefined
+        }
+        ariaLabel={`${node.name} pitch shift`}
+      />
+    );
+  if (node.kind === "volume")
+    return (
+      <MiniFader
+        label="Volume"
+        value={Number(node.parameters.percent ?? 100)}
+        min={0}
+        max={200}
+        step={1}
+        formatValue={(value) => `${Math.round(value)} %`}
+        onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "percent", Math.round(value)) : undefined}
+        ariaLabel={`${node.name} volume percent`}
+      />
+    );
   if (node.kind === "denoise") {
-    const status = node.parameters.learning === true ? "Learning noise…" : typeof node.parameters.noiseProfile === "string" ? "Noise profile learned" : "No noise profile yet";
-    return <div className="node-fader-stack nodrag nopan"><span className={`node-denoise-status${node.parameters.learning === true ? " is-learning" : ""}`} role="status">{status}</span><MiniFader label="Reduction" value={Number(node.parameters.reductionPercent ?? 70)} min={0} max={100} step={1} formatValue={(value) => `${Math.round(value)} %`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "reductionPercent", Math.round(value)) : undefined} ariaLabel={`${node.name} noise reduction`} /></div>;
+    const status =
+      node.parameters.learning === true
+        ? "Learning noise…"
+        : typeof node.parameters.noiseProfile === "string"
+          ? "Noise profile learned"
+          : "No noise profile yet";
+    return (
+      <div className="node-fader-stack nodrag nopan">
+        <span className={`node-denoise-status${node.parameters.learning === true ? " is-learning" : ""}`} role="status">
+          {status}
+        </span>
+        <MiniFader
+          label="Reduction"
+          value={Number(node.parameters.reductionPercent ?? 70)}
+          min={0}
+          max={100}
+          step={1}
+          formatValue={(value) => `${Math.round(value)} %`}
+          onChange={
+            onSetNodeParameter
+              ? (value) => onSetNodeParameter(node.id, "reductionPercent", Math.round(value))
+              : undefined
+          }
+          ariaLabel={`${node.name} noise reduction`}
+        />
+      </div>
+    );
   }
   if (node.kind === "spectralGate") {
-    const status = node.parameters.learning === true ? "Learning noise…" : hasLearnedNoise(node.parameters.noiseProfile) ? "Blocking learned noise" : "Learn the noise in Properties";
-    return <div className="node-fader-stack nodrag nopan"><span className={`node-denoise-status${node.parameters.learning === true ? " is-learning" : ""}`} role="status">{status}</span><MiniFader label="Threshold" value={Number(node.parameters.thresholdDb ?? 3)} min={-20} max={20} step={0.5} formatValue={(value) => `${value > 0 ? "+" : ""}${value.toFixed(1)} dB`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "thresholdDb", Math.round(value * 2) / 2) : undefined} ariaLabel={`${node.name} threshold above noise`} /></div>;
+    const status =
+      node.parameters.learning === true
+        ? "Learning noise…"
+        : hasLearnedNoise(node.parameters.noiseProfile)
+          ? "Blocking learned noise"
+          : "Learn the noise in Properties";
+    return (
+      <div className="node-fader-stack nodrag nopan">
+        <span className={`node-denoise-status${node.parameters.learning === true ? " is-learning" : ""}`} role="status">
+          {status}
+        </span>
+        <MiniFader
+          label="Threshold"
+          value={Number(node.parameters.thresholdDb ?? 3)}
+          min={-20}
+          max={20}
+          step={0.5}
+          formatValue={(value) => `${value > 0 ? "+" : ""}${value.toFixed(1)} dB`}
+          onChange={
+            onSetNodeParameter
+              ? (value) => onSetNodeParameter(node.id, "thresholdDb", Math.round(value * 2) / 2)
+              : undefined
+          }
+          ariaLabel={`${node.name} threshold above noise`}
+        />
+      </div>
+    );
   }
   if (node.kind === "timeShift") {
     const status = timeShiftStatuses?.[node.id];
     const paused = status?.state === "paused";
-    const label = !sessionRunning ? "Plays live when the route runs" : !status ? "Live" : status.state === "live" ? "Live" : status.state === "paused" ? `Paused · ${status.delaySeconds.toFixed(0)} s behind` : `${status.delaySeconds.toFixed(0)} s behind live`;
+    const label = !sessionRunning
+      ? "Plays live when the route runs"
+      : !status
+        ? "Live"
+        : status.state === "live"
+          ? "Live"
+          : status.state === "paused"
+            ? `Paused · ${status.delaySeconds.toFixed(0)} s behind`
+            : `${status.delaySeconds.toFixed(0)} s behind live`;
     const act = (action: "pause" | "resume" | "back" | "forward" | "live") => onTimeShiftTransport?.(node.id, action);
     const disabled = !sessionRunning || !onTimeShiftTransport;
-    return <div className="node-time-shift nodrag nopan"><span className={`node-denoise-status${status && status.state !== "live" ? " is-learning" : ""}`} role="status">{label}</span><div className="node-time-shift-buttons" role="group" aria-label={`${node.name} transport`}>
-      <button type="button" disabled={disabled} aria-label="Jump back 10 seconds" title="Jump back 10 s" onClick={() => act("back")}>«10</button>
-      <button type="button" disabled={disabled} aria-label={paused ? "Resume" : "Pause"} title={paused ? "Resume" : "Pause"} onClick={() => act(paused ? "resume" : "pause")}>{paused ? "▶" : "⏸"}</button>
-      <button type="button" disabled={disabled || status?.state === "live" || !status} aria-label="Jump forward 10 seconds" title="Jump forward 10 s" onClick={() => act("forward")}>10»</button>
-      <button type="button" disabled={disabled || status?.state === "live" || !status} aria-label="Jump to live" title="Jump to live" onClick={() => act("live")}>Live</button>
-    </div></div>;
+    return (
+      <div className="node-time-shift nodrag nopan">
+        <span className={`node-denoise-status${status && status.state !== "live" ? " is-learning" : ""}`} role="status">
+          {label}
+        </span>
+        <div className="node-time-shift-buttons" role="group" aria-label={`${node.name} transport`}>
+          <button
+            type="button"
+            disabled={disabled}
+            aria-label="Jump back 10 seconds"
+            title="Jump back 10 s"
+            onClick={() => act("back")}
+          >
+            «10
+          </button>
+          <button
+            type="button"
+            disabled={disabled}
+            aria-label={paused ? "Resume" : "Pause"}
+            title={paused ? "Resume" : "Pause"}
+            onClick={() => act(paused ? "resume" : "pause")}
+          >
+            {paused ? "▶" : "⏸"}
+          </button>
+          <button
+            type="button"
+            disabled={disabled || status?.state === "live" || !status}
+            aria-label="Jump forward 10 seconds"
+            title="Jump forward 10 s"
+            onClick={() => act("forward")}
+          >
+            10»
+          </button>
+          <button
+            type="button"
+            disabled={disabled || status?.state === "live" || !status}
+            aria-label="Jump to live"
+            title="Jump to live"
+            onClick={() => act("live")}
+          >
+            Live
+          </button>
+        </div>
+      </div>
+    );
   }
-  if (node.kind === "firFilter") return <div className="node-fader-stack nodrag nopan"><span className="node-denoise-status" title={String(node.parameters.fileName ?? "")}>{typeof node.parameters.fileName === "string" ? node.parameters.fileName : "Choose an impulse response in Properties"}</span><MiniFader label="Mix" value={Number(node.parameters.wetPercent ?? 100)} min={0} max={100} step={1} formatValue={(value) => `${Math.round(value)} % wet`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "wetPercent", Math.round(value)) : undefined} ariaLabel={`${node.name} wet mix`} /></div>;
-  if (node.kind === "speechDenoise") return <MiniFader label="Strength" value={Number(node.parameters.strengthPercent ?? 70)} min={0} max={100} step={1} formatValue={(value) => `${Math.round(value)} %`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "strengthPercent", Math.round(value)) : undefined} ariaLabel={`${node.name} speech denoise strength`} />;
+  if (node.kind === "firFilter")
+    return (
+      <div className="node-fader-stack nodrag nopan">
+        <span className="node-denoise-status" title={String(node.parameters.fileName ?? "")}>
+          {typeof node.parameters.fileName === "string"
+            ? node.parameters.fileName
+            : "Choose an impulse response in Properties"}
+        </span>
+        <MiniFader
+          label="Mix"
+          value={Number(node.parameters.wetPercent ?? 100)}
+          min={0}
+          max={100}
+          step={1}
+          formatValue={(value) => `${Math.round(value)} % wet`}
+          onChange={
+            onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "wetPercent", Math.round(value)) : undefined
+          }
+          ariaLabel={`${node.name} wet mix`}
+        />
+      </div>
+    );
+  if (node.kind === "speechDenoise")
+    return (
+      <MiniFader
+        label="Strength"
+        value={Number(node.parameters.strengthPercent ?? 70)}
+        min={0}
+        max={100}
+        step={1}
+        formatValue={(value) => `${Math.round(value)} %`}
+        onChange={
+          onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "strengthPercent", Math.round(value)) : undefined
+        }
+        ariaLabel={`${node.name} speech denoise strength`}
+      />
+    );
   if (node.kind === "inputSwitch") {
     const selected = node.parameters.selected === "b" ? "b" : "a";
-    return <div className="node-input-switch nodrag nopan" role="group" aria-label={`${node.name} input selection`}>{(["a", "b"] as const).map((side) => <button key={side} type="button" className={selected === side ? "is-selected" : ""} aria-pressed={selected === side} disabled={!onSetNodeParameter} title={`Pass input ${side.toUpperCase()}. Shift-click for a slow 2 s crossfade.`} onClick={(event) => { if (!onSetNodeParameter || selected === side) return; onSetNodeParameter(node.id, "fade", event.shiftKey ? "slow" : "normal"); onSetNodeParameter(node.id, "selected", side); }}><b>{side.toUpperCase()}</b><small title={switchSourceNames?.[side] ?? undefined}>{switchSourceNames?.[side] ?? "not connected"}</small></button>)}</div>;
+    return (
+      <div className="node-input-switch nodrag nopan" role="group" aria-label={`${node.name} input selection`}>
+        {(["a", "b"] as const).map((side) => (
+          <button
+            key={side}
+            type="button"
+            className={selected === side ? "is-selected" : ""}
+            aria-pressed={selected === side}
+            disabled={!onSetNodeParameter}
+            title={`Pass input ${side.toUpperCase()}. Shift-click for a slow 2 s crossfade.`}
+            onClick={(event) => {
+              if (!onSetNodeParameter || selected === side) return;
+              onSetNodeParameter(node.id, "fade", event.shiftKey ? "slow" : "normal");
+              onSetNodeParameter(node.id, "selected", side);
+            }}
+          >
+            <b>{side.toUpperCase()}</b>
+            <small title={switchSourceNames?.[side] ?? undefined}>{switchSourceNames?.[side] ?? "not connected"}</small>
+          </button>
+        ))}
+      </div>
+    );
   }
-  if (node.kind === "bassTreble") return <div className="node-fader-stack nodrag nopan">{(["bassDb", "trebleDb"] as const).map((name) => <MiniFader key={name} label={name === "bassDb" ? "Bass" : "Treble"} value={Number(node.parameters[name] ?? 0)} min={-12} max={12} step={0.5} formatValue={(value) => `${value > 0 ? "+" : ""}${value.toFixed(1)} dB`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, name, Number(value.toFixed(1))) : undefined} ariaLabel={`${node.name} ${name === "bassDb" ? "bass" : "treble"}`} />)}</div>;
-  if (node.kind === "dehum") return <MiniFader label={`Hum ${Math.round(Number(node.parameters.frequencyHz ?? 60))} Hz`} value={Number(node.parameters.amountPercent ?? 50)} min={0} max={100} step={1} formatValue={(value) => `${Math.round(value)} %`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "amountPercent", Math.round(value)) : undefined} ariaLabel={`${node.name} dehum amount`} />;
-  if (node.kind === "declick") return <MiniFader label="Threshold" value={Number(node.parameters.thresholdPercent ?? 50)} min={0} max={100} step={1} formatValue={(value) => `${Math.round(value)} %`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "thresholdPercent", Math.round(value)) : undefined} ariaLabel={`${node.name} declick threshold`} />;
-  if (node.kind === "delay") return <MiniFader label="Sync" value={Number(node.parameters.delayMs ?? 0)} min={0} max={1000} step={10} formatValue={(value) => `${Math.round(value)} ms`} onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "delayMs", Math.round(value)) : undefined} ariaLabel={`${node.name} delay time`} />;
+  if (node.kind === "bassTreble")
+    return (
+      <div className="node-fader-stack nodrag nopan">
+        {(["bassDb", "trebleDb"] as const).map((name) => (
+          <MiniFader
+            key={name}
+            label={name === "bassDb" ? "Bass" : "Treble"}
+            value={Number(node.parameters[name] ?? 0)}
+            min={-12}
+            max={12}
+            step={0.5}
+            formatValue={(value) => `${value > 0 ? "+" : ""}${value.toFixed(1)} dB`}
+            onChange={
+              onSetNodeParameter ? (value) => onSetNodeParameter(node.id, name, Number(value.toFixed(1))) : undefined
+            }
+            ariaLabel={`${node.name} ${name === "bassDb" ? "bass" : "treble"}`}
+          />
+        ))}
+      </div>
+    );
+  if (node.kind === "dehum")
+    return (
+      <MiniFader
+        label={`Hum ${Math.round(Number(node.parameters.frequencyHz ?? 60))} Hz`}
+        value={Number(node.parameters.amountPercent ?? 50)}
+        min={0}
+        max={100}
+        step={1}
+        formatValue={(value) => `${Math.round(value)} %`}
+        onChange={
+          onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "amountPercent", Math.round(value)) : undefined
+        }
+        ariaLabel={`${node.name} dehum amount`}
+      />
+    );
+  if (node.kind === "declick")
+    return (
+      <MiniFader
+        label="Threshold"
+        value={Number(node.parameters.thresholdPercent ?? 50)}
+        min={0}
+        max={100}
+        step={1}
+        formatValue={(value) => `${Math.round(value)} %`}
+        onChange={
+          onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "thresholdPercent", Math.round(value)) : undefined
+        }
+        ariaLabel={`${node.name} declick threshold`}
+      />
+    );
+  if (node.kind === "delay")
+    return (
+      <MiniFader
+        label="Sync"
+        value={Number(node.parameters.delayMs ?? 0)}
+        min={0}
+        max={1000}
+        step={10}
+        formatValue={(value) => `${Math.round(value)} ms`}
+        onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "delayMs", Math.round(value)) : undefined}
+        ariaLabel={`${node.name} delay time`}
+      />
+    );
   if (node.kind === "mute") return <MuteToggle node={node} onSetNodeParameter={onSetNodeParameter} />;
-  if (node.kind === "compressor") return <GainReductionMeter telemetry={telemetry} detail={`Threshold ${node.parameters.thresholdDb} dB · Ratio ${node.parameters.ratio}:1`} />;
-  if (node.kind === "limiter") return <GainReductionMeter telemetry={telemetry} detail={`Ceiling ${node.parameters.ceilingDb} dB`} />;
-  if (node.kind === "gate") return <GateVisual telemetry={telemetry} thresholdDb={Number(node.parameters.thresholdDb ?? 0)} />;
-  if (node.kind === "duck") return <DuckVisual node={node} telemetry={telemetry} triggerName={duckTriggerName ?? null} onSetNodeParameter={onSetNodeParameter} />;
-  if (node.kind === "mixer") return <MixerVisual mixer={node} inputs={mixerInputList ?? []} telemetry={telemetry} onSetNodeParameter={onSetNodeParameter} />;
-  if (node.kind === "testSignal") return <TestSignalVisual node={node} telemetry={telemetry} routed={routed} sessionRunning={sessionRunning} playing={audioSourceStates?.[node.id] === "playing"} actionBusy={sessionActionBusy} playbackReady={testSignalPlaybackReady} endpointPrepared={testSignalEndpointPrepared} onStart={onAudioSourceTransport ? () => onAudioSourceTransport(node.id, "play") : undefined} onStop={onAudioSourceTransport ? () => onAudioSourceTransport(node.id, "stop") : undefined} />;
-  if (node.kind === "audioFile") return <AudioFileNodeControls node={node} state={audioSourceStates?.[node.id]} onTransport={onAudioSourceTransport} />;
-  if (node.kind === "recorder") return <RecorderVisual node={node} status={recorderStatus} telemetry={telemetry} sessionRunning={sessionRunning} onToggleRecording={onToggleRecording} busy={recordingBusyNodeId === node.id} />;
-  if (node.kind === "applicationCapture") return <ApplicationCaptureVisual node={node} telemetry={telemetry} state={applicationCaptureState} />;
+  if (node.kind === "compressor")
+    return (
+      <GainReductionMeter
+        telemetry={telemetry}
+        detail={`Threshold ${node.parameters.thresholdDb} dB · Ratio ${node.parameters.ratio}:1`}
+      />
+    );
+  if (node.kind === "limiter")
+    return <GainReductionMeter telemetry={telemetry} detail={`Ceiling ${node.parameters.ceilingDb} dB`} />;
+  if (node.kind === "gate")
+    return <GateVisual telemetry={telemetry} thresholdDb={Number(node.parameters.thresholdDb ?? 0)} />;
+  if (node.kind === "duck")
+    return (
+      <DuckVisual
+        node={node}
+        telemetry={telemetry}
+        triggerName={duckTriggerName ?? null}
+        onSetNodeParameter={onSetNodeParameter}
+      />
+    );
+  if (node.kind === "mixer")
+    return (
+      <MixerVisual
+        mixer={node}
+        inputs={mixerInputList ?? []}
+        telemetry={telemetry}
+        onSetNodeParameter={onSetNodeParameter}
+      />
+    );
+  if (node.kind === "testSignal")
+    return (
+      <TestSignalVisual
+        node={node}
+        telemetry={telemetry}
+        routed={routed}
+        sessionRunning={sessionRunning}
+        playing={audioSourceStates?.[node.id] === "playing"}
+        actionBusy={sessionActionBusy}
+        playbackReady={testSignalPlaybackReady}
+        endpointPrepared={testSignalEndpointPrepared}
+        onStart={onAudioSourceTransport ? () => onAudioSourceTransport(node.id, "play") : undefined}
+        onStop={onAudioSourceTransport ? () => onAudioSourceTransport(node.id, "stop") : undefined}
+      />
+    );
+  if (node.kind === "audioFile")
+    return (
+      <AudioFileNodeControls node={node} state={audioSourceStates?.[node.id]} onTransport={onAudioSourceTransport} />
+    );
+  if (node.kind === "recorder")
+    return (
+      <RecorderVisual
+        node={node}
+        status={recorderStatus}
+        telemetry={telemetry}
+        sessionRunning={sessionRunning}
+        onToggleRecording={onToggleRecording}
+        busy={recordingBusyNodeId === node.id}
+      />
+    );
+  if (node.kind === "applicationCapture")
+    return <ApplicationCaptureVisual node={node} telemetry={telemetry} state={applicationCaptureState} />;
   if (node.kind === "endpointLoopback") return <EndpointLoopbackVisual node={node} telemetry={telemetry} />;
-  if (node.kind === "virtualRenderSource" || node.kind === "virtualCaptureSink") return <VirtualBusVisual node={node} telemetry={telemetry} />;
+  if (node.kind === "virtualRenderSource" || node.kind === "virtualCaptureSink")
+    return <VirtualBusVisual node={node} telemetry={telemetry} />;
   if (node.kind === "plugin") return <PluginVisual node={node} telemetry={telemetry} />;
-  if (telemetry?.meter || ["physicalInput", "physicalOutput", "meter"].includes(node.kind)) return <MiniMeter telemetry={telemetry} />;
-  return <div className="node-activity" aria-label={node.enabled && !node.bypass ? "Processor ready" : "Processor inactive"}><span className="activity-dot" />{node.bypass ? "Bypassed" : node.enabled ? "Ready" : "Disabled"}</div>;
+  if (telemetry?.meter || ["physicalInput", "physicalOutput", "meter"].includes(node.kind))
+    return <MiniMeter telemetry={telemetry} />;
+  return (
+    <div className="node-activity" aria-label={node.enabled && !node.bypass ? "Processor ready" : "Processor inactive"}>
+      <span className="activity-dot" />
+      {node.bypass ? "Bypassed" : node.enabled ? "Ready" : "Disabled"}
+    </div>
+  );
 }
 
-export function SessionFlowCanvas({ telemetryStore, flowAnimation = "on", onToggleRecording, recordingBusyNodeId = null, groups = [], selectedGroupId = "", onSelectGroup, onChangeGroup, onRemoveGroup, session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect, onRemoveConnection, onToggleConnection, onInsertProcessor, onRemoveNode, onAddLibraryNode, onAddVirtualBusNode, diagnostics, sessionRunning, sessionActionBusy = false, testSignalPlaybackReady = false, testSignalEndpointPrepared = false, onStartTestSignal, onStopTestSignal, onAudioSourceTransport, audioSourceStates, onTimeShiftTransport, timeShiftStatuses, recorderStatuses = [], onSetNodeParameter, onOpenPluginPicker, onOpenApplicationPicker, onConnectionRejected, canEdit = true }: SessionFlowCanvasProps) {
+export function SessionFlowCanvas({
+  telemetryStore,
+  flowAnimation = "on",
+  onToggleRecording,
+  recordingBusyNodeId = null,
+  groups = [],
+  selectedGroupId = "",
+  onSelectGroup,
+  onChangeGroup,
+  onRemoveGroup,
+  session,
+  selectedNodeId,
+  selectedNodeIds = [selectedNodeId],
+  onSelect,
+  onSelectMany,
+  onConnect,
+  onRemoveConnection,
+  onToggleConnection,
+  onInsertProcessor,
+  onRemoveNode,
+  onAddLibraryNode,
+  onAddVirtualBusNode,
+  diagnostics,
+  sessionRunning,
+  sessionActionBusy = false,
+  testSignalPlaybackReady = false,
+  testSignalEndpointPrepared = false,
+  onStartTestSignal,
+  onStopTestSignal,
+  onAudioSourceTransport,
+  audioSourceStates,
+  onTimeShiftTransport,
+  timeShiftStatuses,
+  recorderStatuses = [],
+  onSetNodeParameter,
+  onOpenPluginPicker,
+  onOpenApplicationPicker,
+  onConnectionRejected,
+  canEdit = true,
+}: SessionFlowCanvasProps) {
   const graphRunning = sessionRunning ?? diagnostics?.schedulerTelemetry?.activeGeneration != null;
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
-  const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey));
+  const [positions, setPositions] = useState<LayoutPositions>(() =>
+    readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey),
+  );
   const [dropPreview, setDropPreview] = useState<{ kind: string; position: { x: number; y: number } } | null>(null);
   // Controlled React Flow nodes must retain measured dimensions across meter
   // updates. Omitting them on every 20 Hz render resets handle bounds and can
@@ -975,14 +2198,28 @@ export function SessionFlowCanvas({ telemetryStore, flowAnimation = "on", onTogg
   const edgeLayoutKey = `${layoutKey}.edges`;
   const [edgeSides, setEdgeSides] = useState<Record<string, { source: EdgeSide; target: EdgeSide }>>(() => {
     if (typeof window === "undefined") return {};
-    try { return JSON.parse(window.localStorage.getItem(edgeLayoutKey) ?? "{}") as Record<string, { source: EdgeSide; target: EdgeSide }>; } catch { return {}; }
+    try {
+      return JSON.parse(window.localStorage.getItem(edgeLayoutKey) ?? "{}") as Record<
+        string,
+        { source: EdgeSide; target: EdgeSide }
+      >;
+    } catch {
+      return {};
+    }
   });
-  const [connectionHandleMode, setConnectionHandleMode] = useState<"idle" | "from-input" | "from-output">(IDLE_CONNECTION_MODE);
+  const [connectionHandleMode, setConnectionHandleMode] = useState<"idle" | "from-input" | "from-output">(
+    IDLE_CONNECTION_MODE,
+  );
   const positionsRef = useRef(positions);
   const nextLayoutIndexRef = useRef(session.nodes.length);
   const sourceHandleRef = useRef<{ nodeId: string; handleId: string; side: EdgeSide } | null>(null);
   const targetHandleRef = useRef<{ nodeId: string; handleId: string; side: EdgeSide } | null>(null);
-  const pendingConnectionRef = useRef<{ connection: Connection; sourceSide?: EdgeSide; targetSide?: EdgeSide; rawTargetHandle?: string | null } | null>(null);
+  const pendingConnectionRef = useRef<{
+    connection: Connection;
+    sourceSide?: EdgeSide;
+    targetSide?: EdgeSide;
+    rawTargetHandle?: string | null;
+  } | null>(null);
   const flowInstanceRef = useRef<ReactFlowInstance | null>(null);
   const initialFitDoneRef = useRef(false);
   const skipNextFitRef = useRef(false);
@@ -994,7 +2231,16 @@ export function SessionFlowCanvas({ telemetryStore, flowAnimation = "on", onTogg
     setPositions(next);
     setMeasured({});
     if (typeof window !== "undefined") {
-      try { setEdgeSides(JSON.parse(window.localStorage.getItem(edgeLayoutKey) ?? "{}") as Record<string, { source: EdgeSide; target: EdgeSide }>); } catch { setEdgeSides({}); }
+      try {
+        setEdgeSides(
+          JSON.parse(window.localStorage.getItem(edgeLayoutKey) ?? "{}") as Record<
+            string,
+            { source: EdgeSide; target: EdgeSide }
+          >,
+        );
+      } catch {
+        setEdgeSides({});
+      }
     }
   }, [layoutKey, edgeLayoutKey]);
   const nextNodePosition = () => {
@@ -1016,8 +2262,13 @@ export function SessionFlowCanvas({ telemetryStore, flowAnimation = "on", onTogg
     // Fit after additions/removals too; otherwise library-added nodes can land
     // outside the current viewport and look like the graph lost them. A
     // drag-and-drop placed the node in view on purpose, so keep the view.
-    if (skipNextFitRef.current) { skipNextFitRef.current = false; return; }
-    const frame = globalThis.requestAnimationFrame(() => flowInstanceRef.current?.fitView({ padding: 0.2, duration: 180 }));
+    if (skipNextFitRef.current) {
+      skipNextFitRef.current = false;
+      return;
+    }
+    const frame = globalThis.requestAnimationFrame(() =>
+      flowInstanceRef.current?.fitView({ padding: 0.2, duration: 180 }),
+    );
     return () => globalThis.cancelAnimationFrame(frame);
   }, [session.nodes.length]);
   useEffect(() => {
@@ -1032,7 +2283,12 @@ export function SessionFlowCanvas({ telemetryStore, flowAnimation = "on", onTogg
       width = nextWidth;
       height = nextHeight;
       if (!changedEnough) return;
-      globalThis.requestAnimationFrame(() => flowInstanceRef.current?.fitView({ padding: 0.2, duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 180 }));
+      globalThis.requestAnimationFrame(() =>
+        flowInstanceRef.current?.fitView({
+          padding: 0.2,
+          duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 180,
+        }),
+      );
     });
     observer.observe(canvas);
     return () => observer.disconnect();
@@ -1040,7 +2296,10 @@ export function SessionFlowCanvas({ telemetryStore, flowAnimation = "on", onTogg
   // One Arrange action: inputs left, outputs right, tools between, and
   // default connection sides. The previous arrangement can be restored for
   // a short time with Undo arrange.
-  const [arrangeUndo, setArrangeUndo] = useState<{ positions: LayoutPositions; sides: Record<string, { source: EdgeSide; target: EdgeSide }> } | null>(null);
+  const [arrangeUndo, setArrangeUndo] = useState<{
+    positions: LayoutPositions;
+    sides: Record<string, { source: EdgeSide; target: EdgeSide }>;
+  } | null>(null);
   useEffect(() => {
     if (!arrangeUndo) return;
     const timer = window.setTimeout(() => setArrangeUndo(null), 15_000);
@@ -1062,8 +2321,18 @@ export function SessionFlowCanvas({ telemetryStore, flowAnimation = "on", onTogg
   useEffect(() => {
     if (!fitRequest) return;
     let second = 0;
-    const first = requestAnimationFrame(() => { second = requestAnimationFrame(() => flowInstanceRef.current?.fitView({ padding: 0.12, duration: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 220 })); });
-    return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() =>
+        flowInstanceRef.current?.fitView({
+          padding: 0.12,
+          duration: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 220,
+        }),
+      );
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
   }, [fitRequest]);
   const tidyLayout = () => {
     setArrangeUndo({ positions: positionsRef.current, sides: edgeSides });
@@ -1093,7 +2362,10 @@ export function SessionFlowCanvas({ telemetryStore, flowAnimation = "on", onTogg
     }
   };
   const routeLibraryDrop = (kind: string, position: { x: number; y: number }) => {
-    const nodeId = onConnect({ source: LIBRARY_DROP_SOURCE, sourceHandle: kind, target: "__drop__", targetHandle: null }, position);
+    const nodeId = onConnect(
+      { source: LIBRARY_DROP_SOURCE, sourceHandle: kind, target: "__drop__", targetHandle: null },
+      position,
+    );
     if (nodeId) {
       const next = { ...positionsRef.current, [nodeId]: position };
       positionsRef.current = next;
@@ -1104,16 +2376,55 @@ export function SessionFlowCanvas({ telemetryStore, flowAnimation = "on", onTogg
   const libraryButton = (entry: LibraryEntry) => {
     const kind = entry.kind ?? entry.virtualKind!;
     const unavailable = Boolean(entry.unavailableReason);
-    return <button type="button" key={`drag-${entry.id}`} className="canvas-library-item" aria-label={entry.label} draggable={canEdit && !unavailable} disabled={!canEdit || unavailable} title={entry.unavailableReason ?? entry.note} onClick={() => { if (unavailable) return; const position = nextNodePosition(); if (entry.kind) addLibraryNode(entry.kind, position); else if (onAddVirtualBusNode) addVirtualBusNode(entry.virtualKind === "virtualRenderSource" ? "renderSource" : "captureSink", position); else routeLibraryDrop(entry.virtualKind!, position); }} onDragStart={(event) => { if (!canEdit || unavailable) return; startLibraryDrag(event, kind, entry.label); }} onDragEnd={() => { endLibraryDrag(); setDropPreview(null); }}>
-      <span className="canvas-library-item-icon" aria-hidden="true">{entry.label.charAt(0)}</span>
-      <span>{entry.label}</span>
-    </button>;
+    return (
+      <button
+        type="button"
+        key={`drag-${entry.id}`}
+        className="canvas-library-item"
+        aria-label={entry.label}
+        draggable={canEdit && !unavailable}
+        disabled={!canEdit || unavailable}
+        title={entry.unavailableReason ?? entry.note}
+        onClick={() => {
+          if (unavailable) return;
+          const position = nextNodePosition();
+          if (entry.kind) addLibraryNode(entry.kind, position);
+          else if (onAddVirtualBusNode)
+            addVirtualBusNode(entry.virtualKind === "virtualRenderSource" ? "renderSource" : "captureSink", position);
+          else routeLibraryDrop(entry.virtualKind!, position);
+        }}
+        onDragStart={(event) => {
+          if (!canEdit || unavailable) return;
+          startLibraryDrag(event, kind, entry.label);
+        }}
+        onDragEnd={() => {
+          endLibraryDrag();
+          setDropPreview(null);
+        }}
+      >
+        <span className="canvas-library-item-icon" aria-hidden="true">
+          {entry.label.charAt(0)}
+        </span>
+        <span>{entry.label}</span>
+      </button>
+    );
   };
-  const captureConnectionHandle = (event: { target: EventTarget | null; clientX?: number; clientY?: number; button?: number }) => {
+  const captureConnectionHandle = (event: {
+    target: EventTarget | null;
+    clientX?: number;
+    clientY?: number;
+    button?: number;
+  }) => {
     const target = event.target as HTMLElement | null;
     let handle = target?.closest<HTMLElement>("[data-debug-handle-id]");
     if (!handle && typeof document !== "undefined" && event.clientX !== undefined && event.clientY !== undefined) {
-      handle = document.elementsFromPoint(event.clientX, event.clientY).find((element): element is HTMLElement => element instanceof HTMLElement && Boolean(element.dataset.debugHandleId)) ?? null;
+      handle =
+        document
+          .elementsFromPoint(event.clientX, event.clientY)
+          .find(
+            (element): element is HTMLElement =>
+              element instanceof HTMLElement && Boolean(element.dataset.debugHandleId),
+          ) ?? null;
     }
     if (!handle) return;
     const handleId = handle.dataset.debugHandleId;
@@ -1140,52 +2451,228 @@ export function SessionFlowCanvas({ telemetryStore, flowAnimation = "on", onTogg
   // the pointer holds the card by its title.
   const dropFlowPosition = (clientX: number, clientY: number, bounds: DOMRect) => {
     const flow = flowInstanceRef.current?.screenToFlowPosition?.({ x: clientX, y: clientY });
-    if (!flow || !Number.isFinite(flow.x) || !Number.isFinite(flow.y)) return libraryDropPosition(clientX, clientY, bounds);
+    if (!flow || !Number.isFinite(flow.x) || !Number.isFinite(flow.y))
+      return libraryDropPosition(clientX, clientY, bounds);
     return { x: Math.round(flow.x - DROP_GRAB_OFFSET.x), y: Math.round(flow.y - DROP_GRAB_OFFSET.y) };
   };
   // A live preview of the dragged tool, drawn by the same node renderer.
-  const previewNode = dropPreview && isLibraryNodeKind(dropPreview.kind)
-    ? { ...appendPreviewNode({ ...session, nodes: [], edges: [] }, dropPreview.kind).nodes[0], id: DROP_PREVIEW_ID }
-    : null;
+  const previewNode =
+    dropPreview && isLibraryNodeKind(dropPreview.kind)
+      ? { ...appendPreviewNode({ ...session, nodes: [], edges: [] }, dropPreview.kind).nodes[0], id: DROP_PREVIEW_ID }
+      : null;
   const nodes: FlowNode[] = (previewNode ? [...session.nodes, previewNode] : session.nodes).map((node, index) => {
-    const applicationCaptureState = diagnostics?.applicationCaptureStates.find((item) => item.nodeId === node.id) ?? null;
+    const applicationCaptureState =
+      diagnostics?.applicationCaptureStates.find((item) => item.nodeId === node.id) ?? null;
     const headerState = nodeHeaderState(node, applicationCaptureState);
-    const recorderStatus = node.kind === "recorder" ? recorderStatuses.find((status) => status.nodeId === node.id) ?? null : null;
-    const mixerInputCount = node.kind === "mixer" ? session.edges.filter((edge) => edge.destinationNode === node.id).length : 0;
-    return ({
-    id: node.id,
-    type: "flowNode",
-    position: node.id === DROP_PREVIEW_ID && dropPreview ? dropPreview.position : positions[node.id] ?? positionFor(index),
-    measured: measured[node.id],
-    selected: !selectedGroupId && selectedNodeIds.includes(node.id),
-    data: {
-      label: (
-        <div className={`flow-node-content node-kind-${node.kind}`} aria-label={`${node.name}, ${node.kind}`} onMouseDownCapture={captureConnectionHandle} onPointerDownCapture={captureConnectionHandle}>
-          {node.ports.filter((port) => port.direction === "input").map((port) => { const offset = portOffset(node, port); return EDGE_SIDES.map((side) => { const handleId = edgeHandleId(port.name, side); return <Handle key={`input-${port.name}-${side}`} type="target" id={handleId} position={edgeSidePosition(side)} style={side === "left" || side === "right" ? { top: offset } : { left: offset }} aria-label={side === "left" ? `${node.name} ${port.name} input` : `${node.name} ${port.name} input ${side} connector`} data-debug-side={side} data-debug-direction="target" data-debug-handle-id={handleId} onMouseDown={(event) => { targetHandleRef.current = { nodeId: node.id, handleId, side }; logConnectionDebug("handle-mousedown", { nodeId: node.id, nodeName: node.name, direction: "target", port: port.name, side, handleId, clientX: event.clientX, clientY: event.clientY, button: event.button }); }} onPointerDown={(event) => logConnectionDebug("handle-pointer-down", { nodeId: node.id, nodeName: node.name, direction: "target", port: port.name, side, handleId, clientX: event.clientX, clientY: event.clientY, button: event.button })} />; }); })}
-          <div className="flow-node-kicker"><span className={`node-kind-family node-kind-family-${nodeKindFamily(node.kind)}`}>{NODE_KIND_FAMILY_LABELS[nodeKindFamily(node.kind)]}</span><span className="node-kind">{humanizeNodeKind(node)}</span><span className={`node-state is-${headerState.tone}`} title={applicationCaptureState?.detail}>{headerState.label}</span></div>
-          <div className="flow-node-title"><strong>{node.name}</strong>{canEdit && <button type="button" className="flow-node-delete" aria-label={`Delete ${node.name}`} title={`Delete ${node.name}`} onClick={(event) => { event.stopPropagation(); if (onRemoveNode) onRemoveNode(node.id); else globalThis.dispatchEvent(new CustomEvent("audiorouter:remove-node", { detail: { nodeId: node.id } })); }}>×</button>}</div>
-          <LiveNodeVisual node={node} applicationCaptureState={applicationCaptureState} onSetNodeParameter={onSetNodeParameter} onToggleRecording={canEdit ? onToggleRecording : undefined} recordingBusyNodeId={recordingBusyNodeId} recorderStatus={recorderStatus} mixerInputCount={mixerInputCount} mixerInputList={node.kind === "mixer" ? mixerInputs(session, node.id) : undefined} switchSourceNames={node.kind === "inputSwitch" ? inputSwitchSourceNames(session, node.id) : undefined} duckTriggerName={node.kind === "duck" ? session.nodes.find((candidate) => candidate.id === node.parameters.keyNodeId)?.name ?? null : undefined} routed={node.kind === "testSignal" && testSignalHasPhysicalOutputPath(session, node.id)} sessionRunning={Boolean(sessionRunning)} sessionActionBusy={sessionActionBusy} testSignalPlaybackReady={testSignalPlaybackReady} testSignalEndpointPrepared={testSignalEndpointPrepared} onStartTestSignal={canEdit ? onStartTestSignal : undefined} onStopTestSignal={canEdit ? onStopTestSignal : undefined} onAudioSourceTransport={onAudioSourceTransport} audioSourceStates={audioSourceStates} onTimeShiftTransport={onTimeShiftTransport} timeShiftStatuses={timeShiftStatuses} />
-          <small className="node-port-count">{node.ports.length} port{node.ports.length === 1 ? "" : "s"} · {node.enabled ? "enabled" : "disabled"}</small>
-          <span className="flow-port-list">{nodePortLabels(node).map((port) => <small key={port}>{port}</small>)}</span>
-          {node.ports.filter((port) => port.direction === "output").map((port) => { const offset = portOffset(node, port); return EDGE_SIDES.map((side) => { const handleId = edgeHandleId(port.name, side); return <Handle key={`output-${port.name}-${side}`} type="source" id={handleId} position={edgeSidePosition(side)} style={side === "left" || side === "right" ? { top: offset } : { left: offset }} aria-label={side === "right" ? `${node.name} ${port.name} output` : `${node.name} ${port.name} output ${side} connector`} data-debug-side={side} data-debug-direction="source" data-debug-handle-id={handleId} onMouseDown={(event) => { sourceHandleRef.current = { nodeId: node.id, handleId, side }; logConnectionDebug("handle-mousedown", { nodeId: node.id, nodeName: node.name, direction: "source", port: port.name, side, handleId, clientX: event.clientX, clientY: event.clientY, button: event.button }); }} onPointerDown={(event) => logConnectionDebug("handle-pointer-down", { nodeId: node.id, nodeName: node.name, direction: "source", port: port.name, side, handleId, clientX: event.clientX, clientY: event.clientY, button: event.button })} />; }); })}
-        </div>
-      ),
-    },
-    className: `${node.id === DROP_PREVIEW_ID ? "flow-drop-preview " : ""}flow-node-${nodeFlowGroup(node.kind)}${node.kind === "plugin" ? " flow-node-vst" : ""}${node.kind === "testSignal" ? " flow-node-test-signal" : node.kind === "audioFile" ? " flow-node-audio-file" : ""}`,
-    // The drop preview is only a picture: no dragging, selecting or connecting.
-    draggable: node.id !== DROP_PREVIEW_ID,
-    selectable: node.id !== DROP_PREVIEW_ID,
-    deletable: canEdit && node.id !== DROP_PREVIEW_ID,
-    ...(node.id === DROP_PREVIEW_ID ? { connectable: false, zIndex: 1000, ariaHidden: true } : {}),
-    style: {
-      border: !selectedGroupId && selectedNodeIds.includes(node.id) ? "2px solid var(--accent, #65d1b5)" : "1px solid var(--line, #40536b)",
-      borderRadius: 10,
-      background: "var(--panel, #162132)",
-      color: "var(--text, #edf4ff)",
-      minWidth: 190,
-      opacity: 1,
-    },
-    });
+    const recorderStatus =
+      node.kind === "recorder" ? (recorderStatuses.find((status) => status.nodeId === node.id) ?? null) : null;
+    const mixerInputCount =
+      node.kind === "mixer" ? session.edges.filter((edge) => edge.destinationNode === node.id).length : 0;
+    return {
+      id: node.id,
+      type: "flowNode",
+      position:
+        node.id === DROP_PREVIEW_ID && dropPreview ? dropPreview.position : (positions[node.id] ?? positionFor(index)),
+      measured: measured[node.id],
+      selected: !selectedGroupId && selectedNodeIds.includes(node.id),
+      data: {
+        label: (
+          <div
+            className={`flow-node-content node-kind-${node.kind}`}
+            aria-label={`${node.name}, ${node.kind}`}
+            onMouseDownCapture={captureConnectionHandle}
+            onPointerDownCapture={captureConnectionHandle}
+          >
+            {node.ports
+              .filter((port) => port.direction === "input")
+              .map((port) => {
+                const offset = portOffset(node, port);
+                return EDGE_SIDES.map((side) => {
+                  const handleId = edgeHandleId(port.name, side);
+                  return (
+                    <Handle
+                      key={`input-${port.name}-${side}`}
+                      type="target"
+                      id={handleId}
+                      position={edgeSidePosition(side)}
+                      style={side === "left" || side === "right" ? { top: offset } : { left: offset }}
+                      aria-label={
+                        side === "left"
+                          ? `${node.name} ${port.name} input`
+                          : `${node.name} ${port.name} input ${side} connector`
+                      }
+                      data-debug-side={side}
+                      data-debug-direction="target"
+                      data-debug-handle-id={handleId}
+                      onMouseDown={(event) => {
+                        targetHandleRef.current = { nodeId: node.id, handleId, side };
+                        logConnectionDebug("handle-mousedown", {
+                          nodeId: node.id,
+                          nodeName: node.name,
+                          direction: "target",
+                          port: port.name,
+                          side,
+                          handleId,
+                          clientX: event.clientX,
+                          clientY: event.clientY,
+                          button: event.button,
+                        });
+                      }}
+                      onPointerDown={(event) =>
+                        logConnectionDebug("handle-pointer-down", {
+                          nodeId: node.id,
+                          nodeName: node.name,
+                          direction: "target",
+                          port: port.name,
+                          side,
+                          handleId,
+                          clientX: event.clientX,
+                          clientY: event.clientY,
+                          button: event.button,
+                        })
+                      }
+                    />
+                  );
+                });
+              })}
+            <div className="flow-node-kicker">
+              <span className={`node-kind-family node-kind-family-${nodeKindFamily(node.kind)}`}>
+                {NODE_KIND_FAMILY_LABELS[nodeKindFamily(node.kind)]}
+              </span>
+              <span className="node-kind">{humanizeNodeKind(node)}</span>
+              <span className={`node-state is-${headerState.tone}`} title={applicationCaptureState?.detail}>
+                {headerState.label}
+              </span>
+            </div>
+            <div className="flow-node-title">
+              <strong>{node.name}</strong>
+              {canEdit && (
+                <button
+                  type="button"
+                  className="flow-node-delete"
+                  aria-label={`Delete ${node.name}`}
+                  title={`Delete ${node.name}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (onRemoveNode) onRemoveNode(node.id);
+                    else
+                      globalThis.dispatchEvent(
+                        new CustomEvent("audiorouter:remove-node", { detail: { nodeId: node.id } }),
+                      );
+                  }}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+            <LiveNodeVisual
+              node={node}
+              applicationCaptureState={applicationCaptureState}
+              onSetNodeParameter={onSetNodeParameter}
+              onToggleRecording={canEdit ? onToggleRecording : undefined}
+              recordingBusyNodeId={recordingBusyNodeId}
+              recorderStatus={recorderStatus}
+              mixerInputCount={mixerInputCount}
+              mixerInputList={node.kind === "mixer" ? mixerInputs(session, node.id) : undefined}
+              switchSourceNames={node.kind === "inputSwitch" ? inputSwitchSourceNames(session, node.id) : undefined}
+              duckTriggerName={
+                node.kind === "duck"
+                  ? (session.nodes.find((candidate) => candidate.id === node.parameters.keyNodeId)?.name ?? null)
+                  : undefined
+              }
+              routed={node.kind === "testSignal" && testSignalHasPhysicalOutputPath(session, node.id)}
+              sessionRunning={Boolean(sessionRunning)}
+              sessionActionBusy={sessionActionBusy}
+              testSignalPlaybackReady={testSignalPlaybackReady}
+              testSignalEndpointPrepared={testSignalEndpointPrepared}
+              onStartTestSignal={canEdit ? onStartTestSignal : undefined}
+              onStopTestSignal={canEdit ? onStopTestSignal : undefined}
+              onAudioSourceTransport={onAudioSourceTransport}
+              audioSourceStates={audioSourceStates}
+              onTimeShiftTransport={onTimeShiftTransport}
+              timeShiftStatuses={timeShiftStatuses}
+            />
+            <small className="node-port-count">
+              {node.ports.length} port{node.ports.length === 1 ? "" : "s"} · {node.enabled ? "enabled" : "disabled"}
+            </small>
+            <span className="flow-port-list">
+              {nodePortLabels(node).map((port) => (
+                <small key={port}>{port}</small>
+              ))}
+            </span>
+            {node.ports
+              .filter((port) => port.direction === "output")
+              .map((port) => {
+                const offset = portOffset(node, port);
+                return EDGE_SIDES.map((side) => {
+                  const handleId = edgeHandleId(port.name, side);
+                  return (
+                    <Handle
+                      key={`output-${port.name}-${side}`}
+                      type="source"
+                      id={handleId}
+                      position={edgeSidePosition(side)}
+                      style={side === "left" || side === "right" ? { top: offset } : { left: offset }}
+                      aria-label={
+                        side === "right"
+                          ? `${node.name} ${port.name} output`
+                          : `${node.name} ${port.name} output ${side} connector`
+                      }
+                      data-debug-side={side}
+                      data-debug-direction="source"
+                      data-debug-handle-id={handleId}
+                      onMouseDown={(event) => {
+                        sourceHandleRef.current = { nodeId: node.id, handleId, side };
+                        logConnectionDebug("handle-mousedown", {
+                          nodeId: node.id,
+                          nodeName: node.name,
+                          direction: "source",
+                          port: port.name,
+                          side,
+                          handleId,
+                          clientX: event.clientX,
+                          clientY: event.clientY,
+                          button: event.button,
+                        });
+                      }}
+                      onPointerDown={(event) =>
+                        logConnectionDebug("handle-pointer-down", {
+                          nodeId: node.id,
+                          nodeName: node.name,
+                          direction: "source",
+                          port: port.name,
+                          side,
+                          handleId,
+                          clientX: event.clientX,
+                          clientY: event.clientY,
+                          button: event.button,
+                        })
+                      }
+                    />
+                  );
+                });
+              })}
+          </div>
+        ),
+      },
+      className: `${node.id === DROP_PREVIEW_ID ? "flow-drop-preview " : ""}flow-node-${nodeFlowGroup(node.kind)}${node.kind === "plugin" ? " flow-node-vst" : ""}${node.kind === "testSignal" ? " flow-node-test-signal" : node.kind === "audioFile" ? " flow-node-audio-file" : ""}`,
+      // The drop preview is only a picture: no dragging, selecting or connecting.
+      draggable: node.id !== DROP_PREVIEW_ID,
+      selectable: node.id !== DROP_PREVIEW_ID,
+      deletable: canEdit && node.id !== DROP_PREVIEW_ID,
+      ...(node.id === DROP_PREVIEW_ID ? { connectable: false, zIndex: 1000, ariaHidden: true } : {}),
+      style: {
+        border:
+          !selectedGroupId && selectedNodeIds.includes(node.id)
+            ? "2px solid var(--accent, #65d1b5)"
+            : "1px solid var(--line, #40536b)",
+        borderRadius: 10,
+        background: "var(--panel, #162132)",
+        color: "var(--text, #edf4ff)",
+        minWidth: 190,
+        opacity: 1,
+      },
+    };
   });
 
   // Connection signals and Duck trigger states are read live inside the edge
@@ -1195,7 +2682,20 @@ export function SessionFlowCanvas({ telemetryStore, flowAnimation = "on", onTogg
     source: edge.sourceNode,
     target: edge.destinationNode,
     type: "audioActions",
-    data: { edge, session, running: graphRunning, enabled: edge.enabled, sourceSide: edgeSides[edge.id]?.source, targetSide: edgeSides[edge.id]?.target, onSetSide: setEdgeSide, onToggle: onToggleConnection, onRemove: onRemoveConnection, onInsert: onInsertProcessor, onOpenPluginPicker, canEdit },
+    data: {
+      edge,
+      session,
+      running: graphRunning,
+      enabled: edge.enabled,
+      sourceSide: edgeSides[edge.id]?.source,
+      targetSide: edgeSides[edge.id]?.target,
+      onSetSide: setEdgeSide,
+      onToggle: onToggleConnection,
+      onRemove: onRemoveConnection,
+      onInsert: onInsertProcessor,
+      onOpenPluginPicker,
+      canEdit,
+    },
     deletable: canEdit && onRemoveConnection !== undefined,
     selectable: true,
   }));
@@ -1204,107 +2704,408 @@ export function SessionFlowCanvas({ telemetryStore, flowAnimation = "on", onTogg
   for (const duck of session.nodes) {
     const key = duck.kind === "duck" ? duck.parameters.keyNodeId : undefined;
     if (typeof key !== "string" || !key || key === duck.id || !session.nodes.some((node) => node.id === key)) continue;
-    edges.push({ id: `trigger-${duck.id}`, source: key, target: duck.id, type: "duckTrigger", data: { duck, running: graphRunning }, selectable: false, deletable: false, focusable: false, reconnectable: false, className: "duck-trigger" });
+    edges.push({
+      id: `trigger-${duck.id}`,
+      source: key,
+      target: duck.id,
+      type: "duckTrigger",
+      data: { duck, running: graphRunning },
+      selectable: false,
+      deletable: false,
+      focusable: false,
+      reconnectable: false,
+      className: "duck-trigger",
+    });
   }
 
   return (
-    <LiveCanvasProvider store={telemetryStore} diagnostics={diagnostics ?? null}><FlowMotionProvider mode={flowAnimation}>
-    <div className="canvas-layout-actions" aria-label="Canvas layout actions"><span className="muted" role="status" aria-live="polite">{selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} selected</span><button type="button" className="secondary" title="Inputs on the left, outputs on the right, tools in between, with room around every connection" onClick={tidyLayout}>Arrange</button>{arrangeUndo && <button type="button" className="secondary" onClick={undoArrange}>Undo arrange</button>}</div>
-    <SignalFlowLegend />
-    <div className="session-flow-canvas" aria-label="Signal-flow graph" data-connection-mode={connectionHandleMode} onDragOver={(event) => {
-      if (!canEdit) return;
-      event.preventDefault();
-      event.dataTransfer.dropEffect = "copy";
-      const kind = draggedLibraryKind(event.dataTransfer, DRAGGABLE_KINDS);
-      if (!kind) return;
-      setLibraryDragOverCanvas(true);
-      const position = dropFlowPosition(event.clientX, event.clientY, event.currentTarget.getBoundingClientRect());
-      setDropPreview((current) => current && current.kind === kind && Math.abs(current.position.x - position.x) < 1 && Math.abs(current.position.y - position.y) < 1 ? current : { kind, position });
-    }} onDragLeave={(event) => {
-      if (event.relatedTarget instanceof globalThis.Node && event.currentTarget.contains(event.relatedTarget)) return;
-      setDropPreview(null);
-      setLibraryDragOverCanvas(false);
-    }} onDrop={(event) => { const kind = readLibraryDropKind(event.dataTransfer); event.preventDefault(); const position = dropFlowPosition(event.clientX, event.clientY, event.currentTarget.getBoundingClientRect()); setDropPreview(null); endLibraryDrag(); skipNextFitRef.current = true; requestAnimationFrame(() => requestAnimationFrame(() => { skipNextFitRef.current = false; })); if (isLibraryNodeKind(kind)) { if (onAddLibraryNode) addLibraryNode(kind, position); else routeLibraryDrop(kind, position); } else if (isVirtualBusKind(kind)) { if (onAddVirtualBusNode) addVirtualBusNode(kind === "virtualRenderSource" ? "renderSource" : "captureSink", position); else routeLibraryDrop(kind, position); } }}>
-        <div className="canvas-library" aria-label="Drag processors to canvas">
-          <strong>Drag or select to add</strong>
-          {FLOW_GROUPS.map((group) => {
-            const entries = libraryEntries.filter((entry) => entry.flow === group && (entry.kind !== undefined || entry.virtualKind !== undefined)).sort((left, right) => left.label.localeCompare(right.label));
-            if (entries.length === 0) return null;
-            return <div key={group} className={`canvas-library-group canvas-library-group-${group}`}>
-              <span className="canvas-library-group-label">{FLOW_GROUP_LABELS[group]}</span>
-              {entries.map((entry) => libraryButton(entry))}
-              {group === "input" && <button type="button" className="canvas-library-item" disabled={!canEdit} onClick={() => onOpenApplicationPicker?.()}>
-                <span className="canvas-library-item-icon" aria-hidden="true">A</span>
-                <span>Application</span>
-              </button>}
-              {group === "tool" && <button type="button" className="canvas-library-item" disabled={!canEdit} onClick={() => onOpenPluginPicker?.()}>
-                <span className="canvas-library-item-icon" aria-hidden="true">P</span>
-                <span>Plugin (VST2/VST3)</span>
-              </button>}
-            </div>;
-          })}
+    <LiveCanvasProvider store={telemetryStore} diagnostics={diagnostics ?? null}>
+      <FlowMotionProvider mode={flowAnimation}>
+        <div className="canvas-layout-actions" aria-label="Canvas layout actions">
+          <span className="muted" role="status" aria-live="polite">
+            {selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} selected
+          </span>
+          <button
+            type="button"
+            className="secondary"
+            title="Inputs on the left, outputs on the right, tools in between, with room around every connection"
+            onClick={tidyLayout}
+          >
+            Arrange
+          </button>
+          {arrangeUndo && (
+            <button type="button" className="secondary" onClick={undoArrange}>
+              Undo arrange
+            </button>
+          )}
         </div>
-      <ReactFlow
-        nodes={[...groups.map((group) => ({ id: group.id, type: "visualGroup", position: { x: group.x, y: group.y }, width: group.width, height: group.height, measured: measured[group.id], style: { width: group.width, height: group.height }, selected: group.id === selectedGroupId, data: { group }, zIndex: -1, className: `visual-group-node${group.locked ? " is-locked" : ""}`, connectable: false, draggable: !group.locked, deletable: !group.locked })), ...nodes]}
-        edges={edges}
-        onNodesChange={(changes) => {
-          setMeasured((current) => {
-            let next = current;
-            for (const change of changes) {
-              if (change.type !== "dimensions" || !change.dimensions) continue;
-              const { width, height } = change.dimensions;
-              if (current[change.id]?.width === width && current[change.id]?.height === height) continue;
-              if (next === current) next = { ...current };
-              next[change.id] = { width, height };
+        <SignalFlowLegend />
+        <div
+          className="session-flow-canvas"
+          aria-label="Signal-flow graph"
+          data-connection-mode={connectionHandleMode}
+          onDragOver={(event) => {
+            if (!canEdit) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "copy";
+            const kind = draggedLibraryKind(event.dataTransfer, DRAGGABLE_KINDS);
+            if (!kind) return;
+            setLibraryDragOverCanvas(true);
+            const position = dropFlowPosition(
+              event.clientX,
+              event.clientY,
+              event.currentTarget.getBoundingClientRect(),
+            );
+            setDropPreview((current) =>
+              current &&
+              current.kind === kind &&
+              Math.abs(current.position.x - position.x) < 1 &&
+              Math.abs(current.position.y - position.y) < 1
+                ? current
+                : { kind, position },
+            );
+          }}
+          onDragLeave={(event) => {
+            if (event.relatedTarget instanceof globalThis.Node && event.currentTarget.contains(event.relatedTarget))
+              return;
+            setDropPreview(null);
+            setLibraryDragOverCanvas(false);
+          }}
+          onDrop={(event) => {
+            const kind = readLibraryDropKind(event.dataTransfer);
+            event.preventDefault();
+            const position = dropFlowPosition(
+              event.clientX,
+              event.clientY,
+              event.currentTarget.getBoundingClientRect(),
+            );
+            setDropPreview(null);
+            endLibraryDrag();
+            skipNextFitRef.current = true;
+            requestAnimationFrame(() =>
+              requestAnimationFrame(() => {
+                skipNextFitRef.current = false;
+              }),
+            );
+            if (isLibraryNodeKind(kind)) {
+              if (onAddLibraryNode) addLibraryNode(kind, position);
+              else routeLibraryDrop(kind, position);
+            } else if (isVirtualBusKind(kind)) {
+              if (onAddVirtualBusNode)
+                addVirtualBusNode(kind === "virtualRenderSource" ? "renderSource" : "captureSink", position);
+              else routeLibraryDrop(kind, position);
             }
-            return next;
-          });
-          for (const change of changes) { if (!("id" in change) || !groups.some((g) => g.id === change.id)) continue; if (change.type === "position" && change.position) onChangeGroup?.(change.id, { x: change.position.x, y: change.position.y }); if (change.type === "dimensions" && change.dimensions && change.resizing) onChangeGroup?.(change.id, { width: change.dimensions.width, height: change.dimensions.height }); }
-          const moved = changes.filter((change) => change.type === "position" && change.position && !groups.some((g) => g.id === change.id));
-          if (moved.length) {
-            const next = { ...positionsRef.current };
-            for (const change of moved) if (change.type === "position" && change.position) next[change.id] = change.position;
-            positionsRef.current = next;
-            setPositions(next);
-          }
-          const selection = changes.filter((change) => change.type === "select" && !groups.some((g) => g.id === change.id));
-          if (selection.length) {
-            const selected = new Set(selectedNodeIds);
-            for (const change of selection) if (change.type === "select") {
-              if (change.selected) selected.add(change.id); else selected.delete(change.id);
+          }}
+        >
+          <div className="canvas-library" aria-label="Drag processors to canvas">
+            <strong>Drag or select to add</strong>
+            {FLOW_GROUPS.map((group) => {
+              const entries = libraryEntries
+                .filter(
+                  (entry) => entry.flow === group && (entry.kind !== undefined || entry.virtualKind !== undefined),
+                )
+                .sort((left, right) => left.label.localeCompare(right.label));
+              if (entries.length === 0) return null;
+              return (
+                <div key={group} className={`canvas-library-group canvas-library-group-${group}`}>
+                  <span className="canvas-library-group-label">{FLOW_GROUP_LABELS[group]}</span>
+                  {entries.map((entry) => libraryButton(entry))}
+                  {group === "input" && (
+                    <button
+                      type="button"
+                      className="canvas-library-item"
+                      disabled={!canEdit}
+                      onClick={() => onOpenApplicationPicker?.()}
+                    >
+                      <span className="canvas-library-item-icon" aria-hidden="true">
+                        A
+                      </span>
+                      <span>Application</span>
+                    </button>
+                  )}
+                  {group === "tool" && (
+                    <button
+                      type="button"
+                      className="canvas-library-item"
+                      disabled={!canEdit}
+                      onClick={() => onOpenPluginPicker?.()}
+                    >
+                      <span className="canvas-library-item-icon" aria-hidden="true">
+                        P
+                      </span>
+                      <span>Plugin (VST2/VST3)</span>
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <ReactFlow
+            nodes={[
+              ...groups.map((group) => ({
+                id: group.id,
+                type: "visualGroup",
+                position: { x: group.x, y: group.y },
+                width: group.width,
+                height: group.height,
+                measured: measured[group.id],
+                style: { width: group.width, height: group.height },
+                selected: group.id === selectedGroupId,
+                data: { group },
+                zIndex: -1,
+                className: `visual-group-node${group.locked ? " is-locked" : ""}`,
+                connectable: false,
+                draggable: !group.locked,
+                deletable: !group.locked,
+              })),
+              ...nodes,
+            ]}
+            edges={edges}
+            onNodesChange={(changes) => {
+              setMeasured((current) => {
+                let next = current;
+                for (const change of changes) {
+                  if (change.type !== "dimensions" || !change.dimensions) continue;
+                  const { width, height } = change.dimensions;
+                  if (current[change.id]?.width === width && current[change.id]?.height === height) continue;
+                  if (next === current) next = { ...current };
+                  next[change.id] = { width, height };
+                }
+                return next;
+              });
+              for (const change of changes) {
+                if (!("id" in change) || !groups.some((g) => g.id === change.id)) continue;
+                if (change.type === "position" && change.position)
+                  onChangeGroup?.(change.id, { x: change.position.x, y: change.position.y });
+                if (change.type === "dimensions" && change.dimensions && change.resizing)
+                  onChangeGroup?.(change.id, { width: change.dimensions.width, height: change.dimensions.height });
+              }
+              const moved = changes.filter(
+                (change) => change.type === "position" && change.position && !groups.some((g) => g.id === change.id),
+              );
+              if (moved.length) {
+                const next = { ...positionsRef.current };
+                for (const change of moved)
+                  if (change.type === "position" && change.position) next[change.id] = change.position;
+                positionsRef.current = next;
+                setPositions(next);
+              }
+              const selection = changes.filter(
+                (change) => change.type === "select" && !groups.some((g) => g.id === change.id),
+              );
+              if (selection.length) {
+                const selected = new Set(selectedNodeIds);
+                for (const change of selection)
+                  if (change.type === "select") {
+                    if (change.selected) selected.add(change.id);
+                    else selected.delete(change.id);
+                  }
+                onSelectMany?.([...selected]);
+              }
+            }}
+            nodeTypes={NODE_TYPES}
+            elevateNodesOnSelect={false}
+            onInit={(instance) => {
+              flowInstanceRef.current = instance;
+              if (session.nodes.length > 0 && !initialFitDoneRef.current) {
+                initialFitDoneRef.current = true;
+                globalThis.requestAnimationFrame(() => instance.fitView({ padding: 0.2 }));
+              }
+            }}
+            nodesConnectable={canEdit}
+            deleteKeyCode={["Backspace", "Delete"]}
+            nodesDraggable
+            selectionOnDrag
+            onNodeClick={(_, node) => {
+              if (node.type === "visualGroup") onSelectGroup?.(node.id);
+              else {
+                onSelectGroup?.("");
+                onSelect(node.id);
+              }
+            }}
+            onMouseDownCapture={captureConnectionHandle}
+            onPointerDownCapture={captureConnectionHandle}
+            onConnectStart={(event, params) => {
+              sourceHandleRef.current = null;
+              targetHandleRef.current = null;
+              pendingConnectionRef.current = null;
+              setConnectionHandleMode(params.handleType === "target" ? "from-input" : "from-output");
+              captureConnectionHandle(event);
+              logConnectionDebug("react-flow-connect-start", {
+                handleType: params.handleType,
+                nodeId: params.nodeId,
+                handleId: params.handleId,
+                capturedSource: sourceHandleRef.current,
+                capturedTarget: targetHandleRef.current,
+              });
+            }}
+            onConnectEnd={(event, connectionState) => {
+              const clientX = "clientX" in event ? event.clientX : undefined;
+              const clientY = "clientY" in event ? event.clientY : undefined;
+              captureConnectionHandle(event);
+              const pending = pendingConnectionRef.current;
+              if (
+                pending &&
+                connectionState.fromNode &&
+                connectionState.toNode &&
+                connectionState.fromHandle &&
+                connectionState.toHandle
+              ) {
+                const targetNode = session.nodes.find((node) => node.id === pending.connection.target);
+                let rawTargetHandle =
+                  pending.rawTargetHandle ??
+                  (targetHandleRef.current?.nodeId === pending.connection.target
+                    ? targetHandleRef.current.handleId
+                    : null);
+                if (
+                  !rawTargetHandle &&
+                  targetNode &&
+                  clientX !== undefined &&
+                  clientY !== undefined &&
+                  typeof document !== "undefined"
+                ) {
+                  const nodeElement = Array.from(document.querySelectorAll<HTMLElement>(".react-flow__node")).find(
+                    (element) => element.dataset.id === targetNode.id,
+                  );
+                  const bounds = nodeElement?.getBoundingClientRect();
+                  if (bounds) {
+                    const distances: Record<EdgeSide, number> = {
+                      left: Math.abs(clientX - bounds.left),
+                      right: Math.abs(clientX - bounds.right),
+                      top: Math.abs(clientY - bounds.top),
+                      bottom: Math.abs(clientY - bounds.bottom),
+                    };
+                    const side = EDGE_SIDES.reduce(
+                      (closest, candidate) => (distances[candidate] < distances[closest] ? candidate : closest),
+                      "left" as EdgeSide,
+                    );
+                    const port = targetNode.ports.find((candidate) => candidate.direction === "input")?.name;
+                    if (port) {
+                      rawTargetHandle = edgeHandleId(port, side);
+                      targetHandleRef.current = { nodeId: targetNode.id, handleId: rawTargetHandle, side };
+                    }
+                  }
+                }
+                const target = logicalPortHandle(rawTargetHandle);
+                const finalConnection = { ...pending.connection, targetHandle: target.port };
+                const edgeId = onConnect(finalConnection);
+                logConnectionDebug("draft-connect-result", {
+                  edgeId,
+                  normalizedSourceHandle: finalConnection.sourceHandle,
+                  normalizedTargetHandle: finalConnection.targetHandle,
+                  sourceSide: pending.sourceSide,
+                  targetSide: target.side,
+                });
+                if (edgeId) {
+                  if (pending.sourceSide) setEdgeSide(edgeId, "source", pending.sourceSide);
+                  if (target.side) setEdgeSide(edgeId, "target", target.side);
+                }
+              } else if (
+                !pending &&
+                connectionState.fromHandle &&
+                connectionState.toHandle &&
+                connectionState.fromHandle.type === connectionState.toHandle.type
+              ) {
+                onConnectionRejected?.(
+                  connectionState.fromHandle.type === "target"
+                    ? "That drag started and ended on a receiving connector; start from a sending connector (blue) instead."
+                    : "That drag started and ended on a sending connector; release on a receiving connector (orange) instead.",
+                );
+              }
+              pendingConnectionRef.current = null;
+              sourceHandleRef.current = null;
+              targetHandleRef.current = null;
+              setConnectionHandleMode(IDLE_CONNECTION_MODE);
+              logConnectionDebug("react-flow-connect-end", {
+                inProgress: "inProgress" in connectionState ? connectionState.inProgress : false,
+                fromNode: connectionState.fromNode?.id,
+                fromHandle: connectionState.fromHandle?.id,
+                toNode: connectionState.toNode?.id,
+                toHandle: connectionState.toHandle?.id,
+                toPosition: connectionState.toPosition,
+              });
+            }}
+            onConnect={
+              canEdit
+                ? (connection) => {
+                    const rawSourceHandle =
+                      connection.sourceHandle ??
+                      (sourceHandleRef.current?.nodeId === connection.source ? sourceHandleRef.current.handleId : null);
+                    const rawTargetHandle =
+                      connection.targetHandle ??
+                      (targetHandleRef.current?.nodeId === connection.target ? targetHandleRef.current.handleId : null);
+                    logConnectionDebug("react-flow-connect", {
+                      source: connection.source,
+                      sourceHandle: connection.sourceHandle,
+                      recoveredSourceHandle: rawSourceHandle,
+                      target: connection.target,
+                      targetHandle: connection.targetHandle,
+                      recoveredTargetHandle: rawTargetHandle,
+                    });
+                    const source = logicalPortHandle(rawSourceHandle);
+                    const target = logicalPortHandle(rawTargetHandle);
+                    pendingConnectionRef.current = {
+                      connection: { ...connection, sourceHandle: source.port, targetHandle: target.port },
+                      sourceSide: source.side,
+                      targetSide: target.side,
+                      rawTargetHandle,
+                    };
+                  }
+                : undefined
             }
-            onSelectMany?.([...selected]);
-          }
-        }}
-        nodeTypes={NODE_TYPES}
-        elevateNodesOnSelect={false}
-        onInit={(instance) => { flowInstanceRef.current = instance; if (session.nodes.length > 0 && !initialFitDoneRef.current) { initialFitDoneRef.current = true; globalThis.requestAnimationFrame(() => instance.fitView({ padding: 0.2 })); } }}
-        nodesConnectable={canEdit}
-        deleteKeyCode={["Backspace", "Delete"]}
-        nodesDraggable
-        selectionOnDrag
-        onNodeClick={(_, node) => { if (node.type === "visualGroup") onSelectGroup?.(node.id); else { onSelectGroup?.(""); onSelect(node.id); } }}
-        onMouseDownCapture={captureConnectionHandle}
-        onPointerDownCapture={captureConnectionHandle}
-        onConnectStart={(event, params) => { sourceHandleRef.current = null; targetHandleRef.current = null; pendingConnectionRef.current = null; setConnectionHandleMode(params.handleType === "target" ? "from-input" : "from-output"); captureConnectionHandle(event); logConnectionDebug("react-flow-connect-start", { handleType: params.handleType, nodeId: params.nodeId, handleId: params.handleId, capturedSource: sourceHandleRef.current, capturedTarget: targetHandleRef.current }); }}
-        onConnectEnd={(event, connectionState) => { const clientX = "clientX" in event ? event.clientX : undefined; const clientY = "clientY" in event ? event.clientY : undefined; captureConnectionHandle(event); const pending = pendingConnectionRef.current; if (pending && connectionState.fromNode && connectionState.toNode && connectionState.fromHandle && connectionState.toHandle) { const targetNode = session.nodes.find((node) => node.id === pending.connection.target); let rawTargetHandle = pending.rawTargetHandle ?? (targetHandleRef.current?.nodeId === pending.connection.target ? targetHandleRef.current.handleId : null); if (!rawTargetHandle && targetNode && clientX !== undefined && clientY !== undefined && typeof document !== "undefined") { const nodeElement = Array.from(document.querySelectorAll<HTMLElement>(".react-flow__node")).find((element) => element.dataset.id === targetNode.id); const bounds = nodeElement?.getBoundingClientRect(); if (bounds) { const distances: Record<EdgeSide, number> = { left: Math.abs(clientX - bounds.left), right: Math.abs(clientX - bounds.right), top: Math.abs(clientY - bounds.top), bottom: Math.abs(clientY - bounds.bottom) }; const side = EDGE_SIDES.reduce((closest, candidate) => distances[candidate] < distances[closest] ? candidate : closest, "left" as EdgeSide); const port = targetNode.ports.find((candidate) => candidate.direction === "input")?.name; if (port) { rawTargetHandle = edgeHandleId(port, side); targetHandleRef.current = { nodeId: targetNode.id, handleId: rawTargetHandle, side }; } } } const target = logicalPortHandle(rawTargetHandle); const finalConnection = { ...pending.connection, targetHandle: target.port }; const edgeId = onConnect(finalConnection); logConnectionDebug("draft-connect-result", { edgeId, normalizedSourceHandle: finalConnection.sourceHandle, normalizedTargetHandle: finalConnection.targetHandle, sourceSide: pending.sourceSide, targetSide: target.side }); if (edgeId) { if (pending.sourceSide) setEdgeSide(edgeId, "source", pending.sourceSide); if (target.side) setEdgeSide(edgeId, "target", target.side); } } else if (!pending && connectionState.fromHandle && connectionState.toHandle && connectionState.fromHandle.type === connectionState.toHandle.type) { onConnectionRejected?.(connectionState.fromHandle.type === "target" ? "That drag started and ended on a receiving connector; start from a sending connector (blue) instead." : "That drag started and ended on a sending connector; release on a receiving connector (orange) instead."); } pendingConnectionRef.current = null; sourceHandleRef.current = null; targetHandleRef.current = null; setConnectionHandleMode(IDLE_CONNECTION_MODE); logConnectionDebug("react-flow-connect-end", { inProgress: "inProgress" in connectionState ? connectionState.inProgress : false, fromNode: connectionState.fromNode?.id, fromHandle: connectionState.fromHandle?.id, toNode: connectionState.toNode?.id, toHandle: connectionState.toHandle?.id, toPosition: connectionState.toPosition }); }}
-        onConnect={canEdit ? (connection) => { const rawSourceHandle = connection.sourceHandle ?? (sourceHandleRef.current?.nodeId === connection.source ? sourceHandleRef.current.handleId : null); const rawTargetHandle = connection.targetHandle ?? (targetHandleRef.current?.nodeId === connection.target ? targetHandleRef.current.handleId : null); logConnectionDebug("react-flow-connect", { source: connection.source, sourceHandle: connection.sourceHandle, recoveredSourceHandle: rawSourceHandle, target: connection.target, targetHandle: connection.targetHandle, recoveredTargetHandle: rawTargetHandle }); const source = logicalPortHandle(rawSourceHandle); const target = logicalPortHandle(rawTargetHandle); pendingConnectionRef.current = { connection: { ...connection, sourceHandle: source.port, targetHandle: target.port }, sourceSide: source.side, targetSide: target.side, rawTargetHandle }; } : undefined}
-        edgeTypes={edgeTypes}
-        minZoom={0.2}
-        onEdgesDelete={canEdit && onRemoveConnection ? (deleted) => { for (const edgeId of deletedConnectionIds(deleted)) onRemoveConnection(edgeId); } : undefined}
-        onNodesDelete={canEdit ? (deleted) => { for (const nodeId of deletedNodeIds(deleted)) { if (groups.some((g) => g.id === nodeId)) { onRemoveGroup?.(nodeId); continue; } if (onRemoveNode) onRemoveNode(nodeId); else globalThis.dispatchEvent(new CustomEvent("audiorouter:remove-node", { detail: { nodeId } })); } } : undefined}
-        onNodeDragStop={(_, node) => { if (node.type === "visualGroup") { onChangeGroup?.(node.id, { x: node.position.x, y: node.position.y }); return; } const next = { ...positionsRef.current, [node.id]: node.position }; positionsRef.current = next; setPositions(next); writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next); }}
-        proOptions={{ hideAttribution: true }}
-      >
-        <CanvasConnectorMeasurements geometryKey={JSON.stringify(session.nodes.map((node) => ({
-          id: node.id,
-          source: node.ports.filter((port) => port.direction === "output").flatMap((port) => EDGE_SIDES.map((side) => edgeHandleId(port.name, side))),
-          target: node.ports.filter((port) => port.direction === "input").flatMap((port) => EDGE_SIDES.map((side) => edgeHandleId(port.name, side))),
-        })))} />
-        <Background gap={24} size={1} color="#2e4057" />
-        <Controls showInteractive={false} />
-      </ReactFlow>
-    </div>
-    </FlowMotionProvider></LiveCanvasProvider>
+            edgeTypes={edgeTypes}
+            minZoom={0.2}
+            onEdgesDelete={
+              canEdit && onRemoveConnection
+                ? (deleted) => {
+                    for (const edgeId of deletedConnectionIds(deleted)) onRemoveConnection(edgeId);
+                  }
+                : undefined
+            }
+            onNodesDelete={
+              canEdit
+                ? (deleted) => {
+                    for (const nodeId of deletedNodeIds(deleted)) {
+                      if (groups.some((g) => g.id === nodeId)) {
+                        onRemoveGroup?.(nodeId);
+                        continue;
+                      }
+                      if (onRemoveNode) onRemoveNode(nodeId);
+                      else globalThis.dispatchEvent(new CustomEvent("audiorouter:remove-node", { detail: { nodeId } }));
+                    }
+                  }
+                : undefined
+            }
+            onNodeDragStop={(_, node) => {
+              if (node.type === "visualGroup") {
+                onChangeGroup?.(node.id, { x: node.position.x, y: node.position.y });
+                return;
+              }
+              const next = { ...positionsRef.current, [node.id]: node.position };
+              positionsRef.current = next;
+              setPositions(next);
+              writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
+            }}
+            proOptions={{ hideAttribution: true }}
+          >
+            <CanvasConnectorMeasurements
+              geometryKey={JSON.stringify(
+                session.nodes.map((node) => ({
+                  id: node.id,
+                  source: node.ports
+                    .filter((port) => port.direction === "output")
+                    .flatMap((port) => EDGE_SIDES.map((side) => edgeHandleId(port.name, side))),
+                  target: node.ports
+                    .filter((port) => port.direction === "input")
+                    .flatMap((port) => EDGE_SIDES.map((side) => edgeHandleId(port.name, side))),
+                })),
+              )}
+            />
+            <Background gap={24} size={1} color="#2e4057" />
+            <Controls showInteractive={false} />
+          </ReactFlow>
+        </div>
+      </FlowMotionProvider>
+    </LiveCanvasProvider>
   );
 }

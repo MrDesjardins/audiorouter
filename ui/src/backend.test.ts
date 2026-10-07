@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import { createDisconnectedBackend, createLiveBackend, createLiveBackendFromTransport, formatUiError, isRevisionConflict, rememberDeviceNames, SnapshotCache, type UiBackend } from "./backend";
+import {
+  createDisconnectedBackend,
+  createLiveBackend,
+  createLiveBackendFromTransport,
+  formatUiError,
+  isRevisionConflict,
+  rememberDeviceNames,
+  SnapshotCache,
+  type UiBackend,
+} from "./backend";
 import { AudioRouterRpcError } from "@audiorouter/contracts";
 import { demoSession } from "./fixtures";
 import { applyGraphDraft, describeDraftChanges, setNodeDraftFlag, setNodeDraftParameter } from "./draft";
@@ -36,7 +45,14 @@ describe("UI error formatting", () => {
     const error = new AudioRouterRpcError({
       code: -32000,
       message: "Windows audio error 0x88890004",
-      data: { code: "deviceInvalidated", fieldPath: null, resourceIds: [], retryable: true, remediation: "Refresh endpoint inventory.", hresult: 0x88890004 },
+      data: {
+        code: "deviceInvalidated",
+        fieldPath: null,
+        resourceIds: [],
+        retryable: true,
+        remediation: "Refresh endpoint inventory.",
+        hresult: 0x88890004,
+      },
     });
     expect(formatUiError(error, "Start failed")).toContain("select the exact input and output again");
   });
@@ -51,7 +67,7 @@ describe("UI error formatting", () => {
         resourceIds: [],
         retryable: true,
         remediation: "Retry after the owning stream releases the endpoint.",
-        hresult: 0x8889000A,
+        hresult: 0x8889000a,
       },
     });
     expect(formatUiError(error, "fallback")).toBe(
@@ -60,21 +76,59 @@ describe("UI error formatting", () => {
   });
 
   it("names the exact device another application holds, from the last device list", () => {
-    const busy = (resourceIds: string[]) => new AudioRouterRpcError({
-      code: -32000,
-      message: "audio endpoint is busy",
-      data: { code: "deviceInUse", fieldPath: null, resourceIds, retryable: true, remediation: "", hresult: 0x8889000A },
-    });
-    const format = { tag: 3, channels: 2, sampleRateHz: 48000, bitsPerSample: 32, bytesPerFrame: 8, channelMask: 3, subformat: null } as never;
+    const busy = (resourceIds: string[]) =>
+      new AudioRouterRpcError({
+        code: -32000,
+        message: "audio endpoint is busy",
+        data: {
+          code: "deviceInUse",
+          fieldPath: null,
+          resourceIds,
+          retryable: true,
+          remediation: "",
+          hresult: 0x8889000a,
+        },
+      });
+    const format = {
+      tag: 3,
+      channels: 2,
+      sampleRateHz: 48000,
+      bitsPerSample: 32,
+      bytesPerFrame: 8,
+      channelMask: 3,
+      subformat: null,
+    } as never;
     rememberDeviceNames([
-      { id: "cable-input", name: "CABLE Input (VB-Audio Virtual Cable)", direction: "render", state: "active", defaultRoles: [], format, periods: null as never },
-      { id: "mic", name: "Microphone (PD200X)", direction: "capture", state: "active", defaultRoles: [], format, periods: null as never },
+      {
+        id: "cable-input",
+        name: "CABLE Input (VB-Audio Virtual Cable)",
+        direction: "render",
+        state: "active",
+        defaultRoles: [],
+        format,
+        periods: null as never,
+      },
+      {
+        id: "mic",
+        name: "Microphone (PD200X)",
+        direction: "capture",
+        state: "active",
+        defaultRoles: [],
+        format,
+        periods: null as never,
+      },
     ]);
-    expect(formatUiError(busy(["cable-input"]), "fallback")).toContain("\"CABLE Input (VB-Audio Virtual Cable)\" is in use by another application");
-    expect(formatUiError(busy(["cable-input"]), "fallback")).toContain("Playback → CABLE Input (VB-Audio Virtual Cable) → Properties → Advanced");
+    expect(formatUiError(busy(["cable-input"]), "fallback")).toContain(
+      '"CABLE Input (VB-Audio Virtual Cable)" is in use by another application',
+    );
+    expect(formatUiError(busy(["cable-input"]), "fallback")).toContain(
+      "Playback → CABLE Input (VB-Audio Virtual Cable) → Properties → Advanced",
+    );
     expect(formatUiError(busy(["mic"]), "fallback")).toContain("Recording → Microphone (PD200X)");
     // An unknown device keeps the generic guidance.
-    expect(formatUiError(busy(["gone"]), "fallback")).toContain("The selected audio device is in use by another application.");
+    expect(formatUiError(busy(["gone"]), "fallback")).toContain(
+      "The selected audio device is in use by another application.",
+    );
     // No 16ch twin in the list: no VB-Cable twin hint.
     expect(formatUiError(busy(["cable-input"]), "fallback")).not.toContain("twin");
   });
@@ -83,24 +137,49 @@ describe("UI error formatting", () => {
     const busy = new AudioRouterRpcError({
       code: -32000,
       message: "audio endpoint is busy",
-      data: { code: "deviceInUse", fieldPath: null, resourceIds: ["cable-input"], retryable: true, remediation: "", hresult: 0x8889000A },
+      data: {
+        code: "deviceInUse",
+        fieldPath: null,
+        resourceIds: ["cable-input"],
+        retryable: true,
+        remediation: "",
+        hresult: 0x8889000a,
+      },
     });
-    const format = { tag: 3, channels: 2, sampleRateHz: 48000, bitsPerSample: 32, bytesPerFrame: 8, channelMask: 3, subformat: null } as never;
-    const render = (id: string, name: string) => ({ id, name, direction: "render" as const, state: "active" as const, defaultRoles: [], format, periods: null as never });
+    const format = {
+      tag: 3,
+      channels: 2,
+      sampleRateHz: 48000,
+      bitsPerSample: 32,
+      bytesPerFrame: 8,
+      channelMask: 3,
+      subformat: null,
+    } as never;
+    const render = (id: string, name: string) => ({
+      id,
+      name,
+      direction: "render" as const,
+      state: "active" as const,
+      defaultRoles: [],
+      format,
+      periods: null as never,
+    });
     rememberDeviceNames([
       render("cable-input", "CABLE Input (VB-Audio Virtual Cable)"),
       render("cable-16", "CABLE In 16ch (VB-Audio Virtual Cable)"),
       render("cable-a-16", "CABLE-A In 16ch (VB-Audio Virtual Cable A)"),
     ]);
     const text = formatUiError(busy, "fallback");
-    expect(text).toContain("its twin \"CABLE In 16ch (VB-Audio Virtual Cable)\" (the same cable)");
-    expect(text).toContain("set that application to \"CABLE Input (VB-Audio Virtual Cable)\"");
+    expect(text).toContain('its twin "CABLE In 16ch (VB-Audio Virtual Cable)" (the same cable)');
+    expect(text).toContain('set that application to "CABLE Input (VB-Audio Virtual Cable)"');
     // Another cable's 16ch endpoint is not this cable's twin.
     expect(text).not.toContain("CABLE-A In 16ch");
   });
 
   it("explains an unsupported audio route without blaming channel counts", () => {
-    expect(formatUiError(new Error("native graph rejected: UnsupportedTopology"), "Start failed")).toContain("audio combination");
+    expect(formatUiError(new Error("native graph rejected: UnsupportedTopology"), "Start failed")).toContain(
+      "audio combination",
+    );
   });
 
   it("uses the fallback for non-error failures", () => {
@@ -153,12 +232,20 @@ describe("snapshot cache", () => {
     const first = await cache.refresh(createDisconnectedBackend());
     const failing: UiBackend = {
       connected: true,
-      snapshot: async () => { throw new Error("pipe closed"); },
-      refreshDiagnostics: async () => { throw new Error("pipe closed"); },
+      snapshot: async () => {
+        throw new Error("pipe closed");
+      },
+      refreshDiagnostics: async () => {
+        throw new Error("pipe closed");
+      },
       subscribe: async () => ({ backendEpoch: 0, events: [], nextSequence: 0 }),
       inspectRoute: async () => null,
-      planGraph: async () => { throw new Error("not connected"); },
-      commitGraph: async () => { throw new Error("not connected"); },
+      planGraph: async () => {
+        throw new Error("not connected");
+      },
+      commitGraph: async () => {
+        throw new Error("not connected");
+      },
       listRecordings: async () => [],
       listRecorders: async () => [],
       listRecordingRecovery: async () => ({ items: [], nextCursor: null }),
@@ -167,60 +254,158 @@ describe("snapshot cache", () => {
       listDevices: async () => [],
       listProcessors: async () => [],
       processorResponse: async () => ({ frequenciesHz: [], magnitudeDb: [] }),
-      listPresets: async () => { throw new Error("not connected"); },
-      scanPlugins: async () => { throw new Error("not connected"); },
-      listPlugins: async () => { throw new Error("not connected"); },
-      retryPlugins: async () => { throw new Error("not connected"); },
-      inspectPlugin: async () => { throw new Error("not connected"); },
-      describePluginParameters: async () => { throw new Error("not connected"); },
+      listPresets: async () => {
+        throw new Error("not connected");
+      },
+      scanPlugins: async () => {
+        throw new Error("not connected");
+      },
+      listPlugins: async () => {
+        throw new Error("not connected");
+      },
+      retryPlugins: async () => {
+        throw new Error("not connected");
+      },
+      inspectPlugin: async () => {
+        throw new Error("not connected");
+      },
+      describePluginParameters: async () => {
+        throw new Error("not connected");
+      },
       listVirtualDevices: async () => [],
-      planVirtualDevice: async () => { throw new Error("not connected"); },
-      applyVirtualDevice: async () => { throw new Error("not connected"); },
-      provisionVirtualDevice: async () => { throw new Error("not connected"); },
-      removeVirtualDevice: async () => { throw new Error("not connected"); },
+      planVirtualDevice: async () => {
+        throw new Error("not connected");
+      },
+      applyVirtualDevice: async () => {
+        throw new Error("not connected");
+      },
+      provisionVirtualDevice: async () => {
+        throw new Error("not connected");
+      },
+      removeVirtualDevice: async () => {
+        throw new Error("not connected");
+      },
       listVirtualRoutes: async () => ({ revision: 0, routes: [] }),
-      replaceVirtualRoutes: async () => { throw new Error("not connected"); },
-      previewRecording: async () => { throw new Error("not connected"); },
-      setPrivacyMute: async () => { throw new Error("not connected"); },
-      clearRecoverySafeMode: async () => { throw new Error("not connected"); },
-      removeRecordingEntry: async () => { throw new Error("not connected"); },
-      recycleRecording: async () => { throw new Error("not connected"); },
-      createRecorder: async () => { throw new Error("not connected"); },
-      startNodeRecording: async () => { throw new Error("not connected"); },
-      stopNodeRecording: async () => { throw new Error("not connected"); },
-      armRecorder: async () => { throw new Error("not connected"); },
-      startRecorder: async () => { throw new Error("not connected"); },
-      pauseRecorder: async () => { throw new Error("not connected"); },
-      resumeRecorder: async () => { throw new Error("not connected"); },
-      splitRecorder: async () => { throw new Error("not connected"); },
-      stopRecorder: async () => { throw new Error("not connected"); },
-      createSession: async () => { throw new Error("not connected"); },
-      duplicateSession: async () => { throw new Error("not connected"); },
-      deleteSession: async () => { throw new Error("not connected"); },
-      startSession: async () => { throw new Error("not connected"); },
-      stopSession: async () => { throw new Error("not connected"); },
-      exportSession: async () => { throw new Error("not connected"); },
-      exportSessionFile: async () => { throw new Error("not connected"); },
-      importSessionFile: async () => { throw new Error("not connected"); },
-      planSessionImport: async () => { throw new Error("not connected"); },
-      commitSessionImport: async () => { throw new Error("not connected"); },
+      replaceVirtualRoutes: async () => {
+        throw new Error("not connected");
+      },
+      previewRecording: async () => {
+        throw new Error("not connected");
+      },
+      setPrivacyMute: async () => {
+        throw new Error("not connected");
+      },
+      clearRecoverySafeMode: async () => {
+        throw new Error("not connected");
+      },
+      removeRecordingEntry: async () => {
+        throw new Error("not connected");
+      },
+      recycleRecording: async () => {
+        throw new Error("not connected");
+      },
+      createRecorder: async () => {
+        throw new Error("not connected");
+      },
+      startNodeRecording: async () => {
+        throw new Error("not connected");
+      },
+      stopNodeRecording: async () => {
+        throw new Error("not connected");
+      },
+      armRecorder: async () => {
+        throw new Error("not connected");
+      },
+      startRecorder: async () => {
+        throw new Error("not connected");
+      },
+      pauseRecorder: async () => {
+        throw new Error("not connected");
+      },
+      resumeRecorder: async () => {
+        throw new Error("not connected");
+      },
+      splitRecorder: async () => {
+        throw new Error("not connected");
+      },
+      stopRecorder: async () => {
+        throw new Error("not connected");
+      },
+      createSession: async () => {
+        throw new Error("not connected");
+      },
+      duplicateSession: async () => {
+        throw new Error("not connected");
+      },
+      deleteSession: async () => {
+        throw new Error("not connected");
+      },
+      startSession: async () => {
+        throw new Error("not connected");
+      },
+      stopSession: async () => {
+        throw new Error("not connected");
+      },
+      exportSession: async () => {
+        throw new Error("not connected");
+      },
+      exportSessionFile: async () => {
+        throw new Error("not connected");
+      },
+      importSessionFile: async () => {
+        throw new Error("not connected");
+      },
+      planSessionImport: async () => {
+        throw new Error("not connected");
+      },
+      commitSessionImport: async () => {
+        throw new Error("not connected");
+      },
       getStartup: async () => ({ enabled: false, registration: "unavailable", reason: "not connected" }),
-      planStartup: async () => { throw new Error("not connected"); },
-      applyStartup: async () => { throw new Error("not connected"); },
-      getRecordingRecovery: async () => { throw new Error("not connected"); },
-      revealRecording: async () => { throw new Error("not connected"); },
-      setRecordingMetadata: async () => { throw new Error("not connected"); },
-      renameRecording: async () => { throw new Error("not connected"); },
+      planStartup: async () => {
+        throw new Error("not connected");
+      },
+      applyStartup: async () => {
+        throw new Error("not connected");
+      },
+      getRecordingRecovery: async () => {
+        throw new Error("not connected");
+      },
+      revealRecording: async () => {
+        throw new Error("not connected");
+      },
+      setRecordingMetadata: async () => {
+        throw new Error("not connected");
+      },
+      renameRecording: async () => {
+        throw new Error("not connected");
+      },
       listGraphHistory: async () => ({ items: [], nextCursor: null }),
-      undoGraphPlan: async () => { throw new Error("not connected"); },
-      beginAudioUpload: async () => { throw new Error("not connected"); },
-      uploadAudioChunk: async () => { throw new Error("not connected"); },
-      finishAudioUpload: async () => { throw new Error("not connected"); },
-      importTemporaryRecording: async () => { throw new Error("not connected"); },
-      transportAudioSource: async () => { throw new Error("not connected"); },
+      undoGraphPlan: async () => {
+        throw new Error("not connected");
+      },
+      beginAudioUpload: async () => {
+        throw new Error("not connected");
+      },
+      uploadAudioChunk: async () => {
+        throw new Error("not connected");
+      },
+      finishAudioUpload: async () => {
+        throw new Error("not connected");
+      },
+      importTemporaryRecording: async () => {
+        throw new Error("not connected");
+      },
+      transportAudioSource: async () => {
+        throw new Error("not connected");
+      },
       listClients: async () => [],
-      authorizeClient: async () => { throw new Error("not connected"); },
-      revokeClient: async () => { throw new Error("not connected"); },
+      authorizeClient: async () => {
+        throw new Error("not connected");
+      },
+      revokeClient: async () => {
+        throw new Error("not connected");
+      },
     };
     const second = await cache.refresh(failing);
     expect(first.snapshot?.session.id).toBe(demoSession.id);
@@ -233,9 +418,14 @@ describe("snapshot cache", () => {
     const cache = new SnapshotCache();
     const base = await createDisconnectedBackend().snapshot();
     let releaseOld!: (value: typeof base) => void;
-    const oldSnapshot = new Promise<typeof base>((resolve) => { releaseOld = resolve; });
+    const oldSnapshot = new Promise<typeof base>((resolve) => {
+      releaseOld = resolve;
+    });
     const newer = { ...base, session: { ...base.session, name: "new snapshot" } };
-    const backend: UiBackend = { ...createDisconnectedBackend(), snapshot: vi.fn().mockReturnValueOnce(oldSnapshot).mockResolvedValueOnce(newer) };
+    const backend: UiBackend = {
+      ...createDisconnectedBackend(),
+      snapshot: vi.fn().mockReturnValueOnce(oldSnapshot).mockResolvedValueOnce(newer),
+    };
     const oldRefresh = cache.refresh(backend);
     await expect(cache.refresh(backend)).resolves.toMatchObject({ snapshot: { session: { name: "new snapshot" } } });
     releaseOld(base);
@@ -265,7 +455,8 @@ describe("snapshot cache", () => {
     };
     await expect(cache.refresh(failing)).resolves.toMatchObject({
       stale: true,
-      error: "Audio status unavailable. [accessDenied, HRESULT 0x80070005] Check endpoint access and microphone privacy permissions.",
+      error:
+        "Audio status unavailable. [accessDenied, HRESULT 0x80070005] Check endpoint access and microphone privacy permissions.",
     });
   });
 });
@@ -322,15 +513,27 @@ describe("live event cursor", () => {
 
   it("targets the selected session for snapshots, plans, and route inspection", async () => {
     const requests: { method: string; params: unknown }[] = [];
-    const client = { request: async (method: string, params: unknown) => { requests.push({ method, params }); return {}; } } as never;
+    const client = {
+      request: async (method: string, params: unknown) => {
+        requests.push({ method, params });
+        return {};
+      },
+    } as never;
     const backend = createLiveBackend(client, "startup-session");
     const candidate = { ...demoSession, id: "selected-session" };
     await backend.snapshot(candidate.id);
     await backend.planGraph(candidate);
     await backend.inspectRoute("out", candidate.id);
     expect(requests.find((request) => request.method === "sessions.get")?.params).toEqual({ sessionId: candidate.id });
-    expect(requests.find((request) => request.method === "graph.plan")?.params).toEqual({ sessionId: candidate.id, baseRevision: candidate.revision, candidate });
-    expect(requests.find((request) => request.method === "routes.inspect")?.params).toEqual({ sessionId: candidate.id, destinationNode: "out" });
+    expect(requests.find((request) => request.method === "graph.plan")?.params).toEqual({
+      sessionId: candidate.id,
+      baseRevision: candidate.revision,
+      candidate,
+    });
+    expect(requests.find((request) => request.method === "routes.inspect")?.params).toEqual({
+      sessionId: candidate.id,
+      destinationNode: "out",
+    });
   });
 
   it("forwards the backend epoch and bounded cursor to the shared client", async () => {
@@ -345,18 +548,27 @@ describe("live event cursor", () => {
     await backend.subscribe(7, demoSession.id, 8, ["graph.committed"]);
     expect(received).toEqual({
       method: "events.subscribe",
-      params: { afterSequence: 7, limit: 500, backendEpoch: 8, sessionId: demoSession.id, categories: ["graph.committed"] },
+      params: {
+        afterSequence: 7,
+        limit: 500,
+        backendEpoch: 8,
+        sessionId: demoSession.id,
+        categories: ["graph.committed"],
+      },
     });
   });
 
   it("constructs the typed live backend from a host transport", async () => {
     let method = "";
-    const backend = createLiveBackendFromTransport({
-      send: async request => {
-        method = request.method;
-        return { jsonrpc: "2.0", id: request.id ?? null, result: { backendEpoch: 1, events: [], nextSequence: 0 } };
+    const backend = createLiveBackendFromTransport(
+      {
+        send: async (request) => {
+          method = request.method;
+          return { jsonrpc: "2.0", id: request.id ?? null, result: { backendEpoch: 1, events: [], nextSequence: 0 } };
+        },
       },
-    }, demoSession.id);
+      demoSession.id,
+    );
     await backend.subscribe();
     expect(method).toBe("events.subscribe");
   });
@@ -379,11 +591,22 @@ describe("live event cursor", () => {
     const client = {
       request: async (method: string, params: unknown) => {
         received = { method, params };
-        return { sessionId: demoSession.id, generation: 3, state: "configured-stopped", renderEndpointIds: ["render-a", "render-b"], outputCount: 2 };
+        return {
+          sessionId: demoSession.id,
+          generation: 3,
+          state: "configured-stopped",
+          renderEndpointIds: ["render-a", "render-b"],
+          outputCount: 2,
+        };
       },
     } as never;
-    await expect(createLiveBackend(client, demoSession.id).prepareNativeOutputs!(demoSession.id, 3, ["render-a", "render-b"])).resolves.toMatchObject({ outputCount: 2 });
-    expect(received).toEqual({ method: "nativeOutputs.prepare", params: { sessionId: demoSession.id, generation: 3, renderEndpointIds: ["render-a", "render-b"] } });
+    await expect(
+      createLiveBackend(client, demoSession.id).prepareNativeOutputs!(demoSession.id, 3, ["render-a", "render-b"]),
+    ).resolves.toMatchObject({ outputCount: 2 });
+    expect(received).toEqual({
+      method: "nativeOutputs.prepare",
+      params: { sessionId: demoSession.id, generation: 3, renderEndpointIds: ["render-a", "render-b"] },
+    });
   });
 
   it("normalizes a paged recording response for the existing UI row contract", async () => {
@@ -473,10 +696,21 @@ describe("live event cursor", () => {
   });
 
   it("normalizes a paged device response through the bounded discovery API", async () => {
-    const device = { id: "device-1", name: "Test render", direction: "render", state: "active", defaultRoles: [], format: { sampleRateHz: 48000, channels: 2, bitsPerSample: 32, formatTag: 65534, bytesPerFrame: 8 }, periods: { default100ns: 100000, minimum100ns: 20000 } };
+    const device = {
+      id: "device-1",
+      name: "Test render",
+      direction: "render",
+      state: "active",
+      defaultRoles: [],
+      format: { sampleRateHz: 48000, channels: 2, bitsPerSample: 32, formatTag: 65534, bytesPerFrame: 8 },
+      periods: { default100ns: 100000, minimum100ns: 20000 },
+    };
     let received: unknown;
     const client = {
-      request: async (method: string, params: unknown) => { received = { method, params }; return { items: [device], nextCursor: null }; },
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return { items: [device], nextCursor: null };
+      },
     } as never;
     await expect(createLiveBackend(client, demoSession.id).listDevices()).resolves.toEqual([device]);
     expect(received).toEqual({ method: "devices.list", params: { limit: 500 } });
@@ -486,7 +720,10 @@ describe("live event cursor", () => {
     let received: unknown;
     const result = { sessionId: demoSession.id, state: "detached" as const };
     const client = {
-      request: async (method: string, params: unknown) => { received = { method, params }; return result; },
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return result;
+      },
     } as never;
     const backend = createLiveBackend(client, demoSession.id);
     await expect(backend.detachNativeEndpoint?.(demoSession.id)).resolves.toEqual(result);
@@ -495,20 +732,34 @@ describe("live event cursor", () => {
 
   it("forwards native endpoint rebinding with exact endpoint IDs", async () => {
     let received: unknown;
-    const result = { sessionId: demoSession.id, state: "configured-stopped" as const, captureEndpointId: "capture-1", renderEndpointId: "render-1" };
+    const result = {
+      sessionId: demoSession.id,
+      state: "configured-stopped" as const,
+      captureEndpointId: "capture-1",
+      renderEndpointId: "render-1",
+    };
     const client = {
-      request: async (method: string, params: unknown) => { received = { method, params }; return result; },
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return result;
+      },
     } as never;
     const backend = createLiveBackend(client, demoSession.id);
     await expect(backend.rebindNativeEndpoint?.(demoSession.id, "capture-1", "render-1")).resolves.toEqual(result);
-    expect(received).toEqual({ method: "nativeEndpoints.rebind", params: { sessionId: demoSession.id, captureEndpointId: "capture-1", renderEndpointId: "render-1" } });
+    expect(received).toEqual({
+      method: "nativeEndpoints.rebind",
+      params: { sessionId: demoSession.id, captureEndpointId: "capture-1", renderEndpointId: "render-1" },
+    });
   });
 
   it("forwards native duplex detachment for the exact session", async () => {
     let received: unknown;
     const result = { sessionId: demoSession.id, state: "detached" as const };
     const client = {
-      request: async (method: string, params: unknown) => { received = { method, params }; return result; },
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return result;
+      },
     } as never;
     const backend = createLiveBackend(client, demoSession.id);
     await expect(backend.detachNativeDuplex?.(demoSession.id)).resolves.toEqual(result);
@@ -517,13 +768,29 @@ describe("live event cursor", () => {
 
   it("forwards the bounded native pump with the exact session generation", async () => {
     let received: unknown;
-    const result = { sessionId: demoSession.id, generation: 7, packets: 2, capturedFrames: 256, processedQuanta: 2, renderedFrames: 256, droppedRenderFrames: 0, renderBackpressureEvents: 0, recorderChunksDrained: 0 };
+    const result = {
+      sessionId: demoSession.id,
+      generation: 7,
+      packets: 2,
+      capturedFrames: 256,
+      processedQuanta: 2,
+      renderedFrames: 256,
+      droppedRenderFrames: 0,
+      renderBackpressureEvents: 0,
+      recorderChunksDrained: 0,
+    };
     const client = {
-      request: async (method: string, params: unknown) => { received = { method, params }; return result; },
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return result;
+      },
     } as never;
     const backend = createLiveBackend(client, demoSession.id);
     await expect(backend.pumpNativeEndpoint?.(demoSession.id, 7, 2)).resolves.toEqual(result);
-    expect(received).toEqual({ method: "nativeEndpoints.pump", params: { sessionId: demoSession.id, generation: 7, maxPackets: 2 } });
+    expect(received).toEqual({
+      method: "nativeEndpoints.pump",
+      params: { sessionId: demoSession.id, generation: 7, maxPackets: 2 },
+    });
   });
 
   it("forwards independent duplex pump budgets with the exact session generation", async () => {
@@ -531,11 +798,28 @@ describe("live event cursor", () => {
     const result = {
       sessionId: demoSession.id,
       generation: 8,
-      input: { packets: 1, capturedFrames: 128, processedQuanta: 1, renderedFrames: 128, droppedRenderFrames: 0, renderBackpressureEvents: 0 },
-      output: { packets: 2, capturedFrames: 256, processedQuanta: 2, renderedFrames: 256, droppedRenderFrames: 0, renderBackpressureEvents: 0 },
+      input: {
+        packets: 1,
+        capturedFrames: 128,
+        processedQuanta: 1,
+        renderedFrames: 128,
+        droppedRenderFrames: 0,
+        renderBackpressureEvents: 0,
+      },
+      output: {
+        packets: 2,
+        capturedFrames: 256,
+        processedQuanta: 2,
+        renderedFrames: 256,
+        droppedRenderFrames: 0,
+        renderBackpressureEvents: 0,
+      },
     };
     const client = {
-      request: async (method: string, params: unknown) => { received = { method, params }; return result; },
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return result;
+      },
     } as never;
     const backend = createLiveBackend(client, demoSession.id);
     await expect(backend.pumpNativeDuplex?.(demoSession.id, 8, 1, 2)).resolves.toEqual(result);
@@ -547,13 +831,26 @@ describe("live event cursor", () => {
 
   it("forwards the bounded render-source pump with the exact session generation", async () => {
     let received: unknown;
-    const result = { sessionId: demoSession.id, generation: 9, packets: 2, processedQuanta: 2, renderedFrames: 256, droppedRenderFrames: 0 };
+    const result = {
+      sessionId: demoSession.id,
+      generation: 9,
+      packets: 2,
+      processedQuanta: 2,
+      renderedFrames: 256,
+      droppedRenderFrames: 0,
+    };
     const client = {
-      request: async (method: string, params: unknown) => { received = { method, params }; return result; },
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return result;
+      },
     } as never;
     const backend = createLiveBackend(client, demoSession.id);
     await expect(backend.pumpNativeRenderSource?.(demoSession.id, 9, 2)).resolves.toEqual(result);
-    expect(received).toEqual({ method: "nativeRenderSources.pump", params: { sessionId: demoSession.id, generation: 9, maxQuanta: 2 } });
+    expect(received).toEqual({
+      method: "nativeRenderSources.pump",
+      params: { sessionId: demoSession.id, generation: 9, maxQuanta: 2 },
+    });
   });
 
   it("forwards explicit plugin scan and inspection requests", async () => {
@@ -561,7 +858,9 @@ describe("live event cursor", () => {
     const client = {
       request: async (method: string, params: unknown) => {
         requests.push({ method, params });
-        return method === "plugins.scan" ? { directory: "C:\\Plugins", entries: [] } : { path: "C:\\Plugins\\demo.vst3", identity: null, error: "NotPe", errorCode: "notPe" };
+        return method === "plugins.scan"
+          ? { directory: "C:\\Plugins", entries: [] }
+          : { path: "C:\\Plugins\\demo.vst3", identity: null, error: "NotPe", errorCode: "notPe" };
       },
     } as never;
     const backend = createLiveBackend(client, demoSession.id);
@@ -597,8 +896,20 @@ describe("live event cursor", () => {
       request: async (method: string, params: unknown) => {
         calls.push({ method, params });
         return method === "virtualDevices.plan"
-          ? { planId: "plan-1", expiresInMs: 300000, operation, availability: { status: "unavailable", reason: "driver" }, requiredScopes: ["deviceAdministration"], warnings: [] }
-          : { planId: "plan-1", state: "applied", operation, availability: { status: "unavailable", reason: "driver" } };
+          ? {
+              planId: "plan-1",
+              expiresInMs: 300000,
+              operation,
+              availability: { status: "unavailable", reason: "driver" },
+              requiredScopes: ["deviceAdministration"],
+              warnings: [],
+            }
+          : {
+              planId: "plan-1",
+              state: "applied",
+              operation,
+              availability: { status: "unavailable", reason: "driver" },
+            };
       },
     } as never;
     const backend = createLiveBackend(client, demoSession.id);
@@ -642,7 +953,10 @@ describe("live event cursor", () => {
       },
     } as never;
     const backend = createLiveBackend(client, demoSession.id);
-    await expect(backend.previewRecording("take-1")).resolves.toEqual({ recordingId: "take-1", preview: { status: "missing" } });
+    await expect(backend.previewRecording("take-1")).resolves.toEqual({
+      recordingId: "take-1",
+      preview: { status: "missing" },
+    });
     expect(received).toEqual({ method: "recordings.preview", params: { recordingId: "take-1" } });
   });
 
@@ -651,7 +965,15 @@ describe("live event cursor", () => {
     const client = {
       request: async (method: string, params: unknown) => {
         received = { method, params };
-        return { sessionId: "session-1", nodeId: null, recorderId: "recorder-1", format: "wavPcm24", path: "C:\\Audio\\take.wav", state: "idle", armed: false };
+        return {
+          sessionId: "session-1",
+          nodeId: null,
+          recorderId: "recorder-1",
+          format: "wavPcm24",
+          path: "C:\\Audio\\take.wav",
+          state: "idle",
+          armed: false,
+        };
       },
     } as never;
     const params = {
@@ -665,7 +987,10 @@ describe("live event cursor", () => {
       maximumChunksPerPass: 1,
       idempotencyKey: "create-recorder",
     };
-    await expect(createLiveBackend(client, demoSession.id).createRecorder(params)).resolves.toMatchObject({ recorderId: "recorder-1", armed: false });
+    await expect(createLiveBackend(client, demoSession.id).createRecorder(params)).resolves.toMatchObject({
+      recorderId: "recorder-1",
+      armed: false,
+    });
     expect(received).toEqual({ method: "recorders.create", params });
   });
 
@@ -677,33 +1002,66 @@ describe("live event cursor", () => {
         return [{ sessionId: "session-1", nodeId: "recorder-node", state: "recording", lastFrame: 480 }];
       },
     } as never;
-    await expect(createLiveBackend(client, demoSession.id).listRecorders()).resolves.toEqual([{ sessionId: "session-1", nodeId: "recorder-node", state: "recording", lastFrame: 480 }]);
+    await expect(createLiveBackend(client, demoSession.id).listRecorders()).resolves.toEqual([
+      { sessionId: "session-1", nodeId: "recorder-node", state: "recording", lastFrame: 480 },
+    ]);
     expect(received).toEqual({ method: "recorders.list", params: undefined });
   });
 
   it("forwards the privacy safety latch through the live API", async () => {
     let received: unknown;
-    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { muted: true, persistence: "memory", audioEffect: "process-local" }; } } as never;
-    await expect(createLiveBackend(client, demoSession.id).setPrivacyMute(true)).resolves.toEqual({ muted: true, persistence: "memory", audioEffect: "process-local" });
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return { muted: true, persistence: "memory", audioEffect: "process-local" };
+      },
+    } as never;
+    await expect(createLiveBackend(client, demoSession.id).setPrivacyMute(true)).resolves.toEqual({
+      muted: true,
+      persistence: "memory",
+      audioEffect: "process-local",
+    });
     expect(received).toEqual({ method: "safety.setPrivacyMute", params: { muted: true } });
   });
 
   it("forwards OS transitions through the shared contract", async () => {
     let received: unknown;
-    const client = { request: async (method: string, params: unknown) => {
-      received = { method, params };
-      return { transition: "resume", action: "revalidateBeforeRestart", endpointInventory: "refreshed", nativeSessionIds: ["native-1"], sessionIds: ["portable-1"] };
-    } } as never;
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return {
+          transition: "resume",
+          action: "revalidateBeforeRestart",
+          endpointInventory: "refreshed",
+          nativeSessionIds: ["native-1"],
+          sessionIds: ["portable-1"],
+        };
+      },
+    } as never;
     await expect(createLiveBackend(client, demoSession.id).osTransition?.("resume", "resume-key")).resolves.toEqual({
-      transition: "resume", action: "revalidateBeforeRestart", endpointInventory: "refreshed", nativeSessionIds: ["native-1"], sessionIds: ["portable-1"],
+      transition: "resume",
+      action: "revalidateBeforeRestart",
+      endpointInventory: "refreshed",
+      nativeSessionIds: ["native-1"],
+      sessionIds: ["portable-1"],
     });
-    expect(received).toEqual({ method: "system.osTransition", params: { transition: "resume", idempotencyKey: "resume-key" } });
+    expect(received).toEqual({
+      method: "system.osTransition",
+      params: { transition: "resume", idempotencyKey: "resume-key" },
+    });
   });
 
   it("forwards authorized recovery safe-mode clearing through the live API", async () => {
     let received: unknown;
-    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { safeMode: false, recentCrashes: 0, persistence: "durable" }; } } as never;
-    await expect(createLiveBackend(client, demoSession.id).clearRecoverySafeMode()).resolves.toMatchObject({ safeMode: false });
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return { safeMode: false, recentCrashes: 0, persistence: "durable" };
+      },
+    } as never;
+    await expect(createLiveBackend(client, demoSession.id).clearRecoverySafeMode()).resolves.toMatchObject({
+      safeMode: false,
+    });
     expect(received).toEqual({ method: "recovery.clearSafeMode", params: undefined });
   });
 
@@ -712,9 +1070,23 @@ describe("live event cursor", () => {
     const client = {
       request: async (method: string, params: unknown) => {
         calls.push({ method, params });
-        if (method === "startup.get") return { enabled: false, registration: "unavailable", reason: "native registration unavailable" };
-        if (method === "startup.plan") return { planId: "startup-plan", enabled: true, registration: "unavailable", reason: "native registration unavailable", requiredScopes: ["startupWrite"], warnings: [] };
-        return { planId: "startup-plan", state: "unavailable", registration: "unavailable", reason: "native registration unavailable" };
+        if (method === "startup.get")
+          return { enabled: false, registration: "unavailable", reason: "native registration unavailable" };
+        if (method === "startup.plan")
+          return {
+            planId: "startup-plan",
+            enabled: true,
+            registration: "unavailable",
+            reason: "native registration unavailable",
+            requiredScopes: ["startupWrite"],
+            warnings: [],
+          };
+        return {
+          planId: "startup-plan",
+          state: "unavailable",
+          registration: "unavailable",
+          reason: "native registration unavailable",
+        };
       },
     } as never;
     const backend = createLiveBackend(client, demoSession.id);
@@ -730,29 +1102,62 @@ describe("live event cursor", () => {
 
   it("forwards metadata-only recording entry removal", async () => {
     let received: unknown;
-    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { recordingId: "take-1", removed: true, fileAction: "none" }; } } as never;
-    await expect(createLiveBackend(client, demoSession.id).removeRecordingEntry("take-1", "remove-key")).resolves.toEqual({ recordingId: "take-1", removed: true, fileAction: "none" });
-    expect(received).toEqual({ method: "recordings.removeEntry", params: { recordingId: "take-1", idempotencyKey: "remove-key" } });
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return { recordingId: "take-1", removed: true, fileAction: "none" };
+      },
+    } as never;
+    await expect(
+      createLiveBackend(client, demoSession.id).removeRecordingEntry("take-1", "remove-key"),
+    ).resolves.toEqual({ recordingId: "take-1", removed: true, fileAction: "none" });
+    expect(received).toEqual({
+      method: "recordings.removeEntry",
+      params: { recordingId: "take-1", idempotencyKey: "remove-key" },
+    });
   });
 
   it("forwards recording recovery inspection without file actions", async () => {
     let received: unknown;
-    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { recordingId: "take-1", status: "missing" }; } } as never;
-    await expect(createLiveBackend(client, demoSession.id).getRecordingRecovery("take-1")).resolves.toEqual({ recordingId: "take-1", status: "missing" });
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return { recordingId: "take-1", status: "missing" };
+      },
+    } as never;
+    await expect(createLiveBackend(client, demoSession.id).getRecordingRecovery("take-1")).resolves.toEqual({
+      recordingId: "take-1",
+      status: "missing",
+    });
     expect(received).toEqual({ method: "recordings.recovery", params: { recordingId: "take-1" } });
   });
 
   it("forwards bounded recording recovery listing", async () => {
     let received: unknown;
-    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { items: [], nextCursor: null }; } } as never;
-    await expect(createLiveBackend(client, demoSession.id).listRecordingRecovery()).resolves.toEqual({ items: [], nextCursor: null });
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return { items: [], nextCursor: null };
+      },
+    } as never;
+    await expect(createLiveBackend(client, demoSession.id).listRecordingRecovery()).resolves.toEqual({
+      items: [],
+      nextCursor: null,
+    });
     expect(received).toEqual({ method: "recordings.recovery", params: { limit: 500 } });
   });
 
   it("forwards recording reveal without opening the path in the UI adapter", async () => {
     let received: unknown;
-    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { recordingId: "take-1", path: "C:\\approved\\take.wav", fileAction: "none", reason: "missing" }; } } as never;
-    await expect(createLiveBackend(client, demoSession.id).revealRecording("take-1")).resolves.toMatchObject({ reason: "missing" });
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return { recordingId: "take-1", path: "C:\\approved\\take.wav", fileAction: "none", reason: "missing" };
+      },
+    } as never;
+    await expect(createLiveBackend(client, demoSession.id).revealRecording("take-1")).resolves.toMatchObject({
+      reason: "missing",
+    });
     expect(received).toEqual({ method: "recordings.reveal", params: { recordingId: "take-1" } });
   });
 
@@ -764,30 +1169,62 @@ describe("live event cursor", () => {
         return { recordingId: "take-1", path: "C:\\approved\\take.wav", fileAction: "recycle", preview: true };
       },
     } as never;
-    await expect(createLiveBackend(client, demoSession.id).recycleRecording("take-1", false)).resolves.toMatchObject({ preview: true });
+    await expect(createLiveBackend(client, demoSession.id).recycleRecording("take-1", false)).resolves.toMatchObject({
+      preview: true,
+    });
     expect(received).toEqual({ method: "recordings.recycle", params: { recordingId: "take-1", confirm: false } });
   });
 
   it("forwards metadata edits without changing the recording path", async () => {
     let received: unknown;
-    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { recordingId: "take-1", path: "C:\\approved\\take.wav", title: "Edited" }; } } as never;
-    await expect(createLiveBackend(client, demoSession.id).setRecordingMetadata("take-1", { title: "Edited" })).resolves.toMatchObject({ title: "Edited" });
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return { recordingId: "take-1", path: "C:\\approved\\take.wav", title: "Edited" };
+      },
+    } as never;
+    await expect(
+      createLiveBackend(client, demoSession.id).setRecordingMetadata("take-1", { title: "Edited" }),
+    ).resolves.toMatchObject({ title: "Edited" });
     expect(received).toEqual({ method: "recordings.setMetadata", params: { recordingId: "take-1", title: "Edited" } });
   });
 
   it("rejects oversized recording metadata before dispatch", async () => {
     let dispatched = false;
-    const client = { request: async () => { dispatched = true; return { recordingId: "take-1", updated: true }; } } as never;
+    const client = {
+      request: async () => {
+        dispatched = true;
+        return { recordingId: "take-1", updated: true };
+      },
+    } as never;
     const title = "😀".repeat(257);
-    await expect(createLiveBackend(client, demoSession.id).setRecordingMetadata("take-1", { title })).rejects.toThrow("256 characters");
+    await expect(createLiveBackend(client, demoSession.id).setRecordingMetadata("take-1", { title })).rejects.toThrow(
+      "256 characters",
+    );
     expect(dispatched).toBe(false);
   });
 
   it("forwards recording renames as an explicit file operation", async () => {
     let received: unknown;
-    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { recordingId: "take-1", oldPath: "C:\\approved\\take.wav", newPath: "C:\\approved\\renamed.wav", renamed: true, fileAction: "renamed" }; } } as never;
-    await expect(createLiveBackend(client, demoSession.id).renameRecording("take-1", "C:\\approved\\renamed.wav")).resolves.toMatchObject({ renamed: true });
-    expect(received).toEqual({ method: "recordings.rename", params: { recordingId: "take-1", newPath: "C:\\approved\\renamed.wav" } });
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return {
+          recordingId: "take-1",
+          oldPath: "C:\\approved\\take.wav",
+          newPath: "C:\\approved\\renamed.wav",
+          renamed: true,
+          fileAction: "renamed",
+        };
+      },
+    } as never;
+    await expect(
+      createLiveBackend(client, demoSession.id).renameRecording("take-1", "C:\\approved\\renamed.wav"),
+    ).resolves.toMatchObject({ renamed: true });
+    expect(received).toEqual({
+      method: "recordings.rename",
+      params: { recordingId: "take-1", newPath: "C:\\approved\\renamed.wav" },
+    });
   });
 
   it("forwards session lifecycle actions through the shared API", async () => {
@@ -803,7 +1240,9 @@ describe("live event cursor", () => {
     const backend = createLiveBackend(client, demoSession.id);
     await expect(backend.startSession(demoSession.id)).resolves.toMatchObject({ state: "running" });
     const candidate = { ...demoSession, name: "temporary preview" };
-    await expect(backend.startSession(demoSession.id, "preview-key", candidate)).resolves.toMatchObject({ state: "running" });
+    await expect(backend.startSession(demoSession.id, "preview-key", candidate)).resolves.toMatchObject({
+      state: "running",
+    });
     await expect(backend.stopSession(demoSession.id)).resolves.toMatchObject({ state: "stopped" });
     expect(received).toEqual([
       { method: "session.start", params: { sessionId: demoSession.id } },
@@ -817,7 +1256,13 @@ describe("live event cursor", () => {
     const client = {
       request: async (method: string, params: unknown) => {
         received.push({ method, params });
-        return { sessionId: demoSession.id, state: method.endsWith("arm") ? "armed" : "recording", parts: [], pauses: [], lastFrame: 12 };
+        return {
+          sessionId: demoSession.id,
+          state: method.endsWith("arm") ? "armed" : "recording",
+          parts: [],
+          pauses: [],
+          lastFrame: 12,
+        };
       },
     } as never;
     const backend = createLiveBackend(client, demoSession.id);
@@ -831,14 +1276,36 @@ describe("live event cursor", () => {
 
   it("routes graph-recorder commands by node and imports temporary takes through the backend", async () => {
     const received: unknown[] = [];
-    const client = { request: async (method: string, params: unknown) => { received.push({ method, params }); return method === "audioMedia.importTemporaryRecording" ? { mediaId: "audio-media-temp", fileName: "Temporary voice take.wav", format: "wav", durationMs: 1200, channels: 1, sampleRateHz: 48000, expiresAt: 1, sourceRemoved: true } : { sessionId: demoSession.id, state: "recording", parts: [], pauses: [], lastFrame: 12 }; } } as never;
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received.push({ method, params });
+        return method === "audioMedia.importTemporaryRecording"
+          ? {
+              mediaId: "audio-media-temp",
+              fileName: "Temporary voice take.wav",
+              format: "wav",
+              durationMs: 1200,
+              channels: 1,
+              sampleRateHz: 48000,
+              expiresAt: 1,
+              sourceRemoved: true,
+            }
+          : { sessionId: demoSession.id, state: "recording", parts: [], pauses: [], lastFrame: 12 };
+      },
+    } as never;
     const backend = createLiveBackend(client, demoSession.id);
     await backend.startRecorder(demoSession.id, 12, "take-start", "voice-recorder");
     await backend.stopRecorder(demoSession.id, 60, "take-stop", "voice-recorder");
     await backend.importTemporaryRecording("recording-temp");
     expect(received).toEqual([
-      { method: "recorders.start", params: { sessionId: demoSession.id, frame: 12, nodeId: "voice-recorder", idempotencyKey: "take-start" } },
-      { method: "recorders.stop", params: { sessionId: demoSession.id, frame: 60, nodeId: "voice-recorder", idempotencyKey: "take-stop" } },
+      {
+        method: "recorders.start",
+        params: { sessionId: demoSession.id, frame: 12, nodeId: "voice-recorder", idempotencyKey: "take-start" },
+      },
+      {
+        method: "recorders.stop",
+        params: { sessionId: demoSession.id, frame: 60, nodeId: "voice-recorder", idempotencyKey: "take-stop" },
+      },
       { method: "audioMedia.importTemporaryRecording", params: { recordingId: "recording-temp" } },
     ]);
   });
@@ -849,7 +1316,8 @@ describe("live event cursor", () => {
       request: async (method: string, params: unknown) => {
         received.push({ method, params });
         if (method === "sessions.export") return demoSession;
-        if (method === "sessions.importPlan") return { planId: "import-plan-1", expiresInMs: 300000, session: demoSession };
+        if (method === "sessions.importPlan")
+          return { planId: "import-plan-1", expiresInMs: 300000, session: demoSession };
         return { session: demoSession, state: "stopped", imported: true };
       },
     } as never;
@@ -866,24 +1334,55 @@ describe("live event cursor", () => {
 
   it("creates a stopped session through the shared API", async () => {
     let received: unknown;
-    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { session: { ...demoSession, id: "new-session", name: "New", revision: 0 }, state: "stopped" }; } } as never;
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return { session: { ...demoSession, id: "new-session", name: "New", revision: 0 }, state: "stopped" };
+      },
+    } as never;
     const candidate = { ...demoSession, id: "new-session", name: "New", revision: 0 };
-    await expect(createLiveBackend(client, demoSession.id).createSession(candidate, "create-key")).resolves.toMatchObject({ state: "stopped" });
-    expect(received).toEqual({ method: "sessions.create", params: { session: candidate, idempotencyKey: "create-key" } });
+    await expect(
+      createLiveBackend(client, demoSession.id).createSession(candidate, "create-key"),
+    ).resolves.toMatchObject({ state: "stopped" });
+    expect(received).toEqual({
+      method: "sessions.create",
+      params: { session: candidate, idempotencyKey: "create-key" },
+    });
   });
 
   it("duplicates a stopped session through the shared API", async () => {
     let received: unknown;
-    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { session: { ...demoSession, id: "copy", name: "Copy", revision: 0 }, state: "stopped" }; } } as never;
-    await expect(createLiveBackend(client, demoSession.id).duplicateSession(demoSession.id, "copy", "Copy", "duplicate-key")).resolves.toMatchObject({ state: "stopped" });
-    expect(received).toEqual({ method: "sessions.duplicate", params: { sourceSessionId: demoSession.id, sessionId: "copy", name: "Copy", idempotencyKey: "duplicate-key" } });
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return { session: { ...demoSession, id: "copy", name: "Copy", revision: 0 }, state: "stopped" };
+      },
+    } as never;
+    await expect(
+      createLiveBackend(client, demoSession.id).duplicateSession(demoSession.id, "copy", "Copy", "duplicate-key"),
+    ).resolves.toMatchObject({ state: "stopped" });
+    expect(received).toEqual({
+      method: "sessions.duplicate",
+      params: { sourceSessionId: demoSession.id, sessionId: "copy", name: "Copy", idempotencyKey: "duplicate-key" },
+    });
   });
 
   it("deletes a session through the shared API", async () => {
     let received: unknown;
-    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { deleted: true, state: "stopped" }; } } as never;
-    await expect(createLiveBackend(client, demoSession.id).deleteSession("copy", "delete-key")).resolves.toEqual({ deleted: true, state: "stopped" });
-    expect(received).toEqual({ method: "sessions.delete", params: { sessionId: "copy", idempotencyKey: "delete-key" } });
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return { deleted: true, state: "stopped" };
+      },
+    } as never;
+    await expect(createLiveBackend(client, demoSession.id).deleteSession("copy", "delete-key")).resolves.toEqual({
+      deleted: true,
+      state: "stopped",
+    });
+    expect(received).toEqual({
+      method: "sessions.delete",
+      params: { sessionId: "copy", idempotencyKey: "delete-key" },
+    });
   });
 });
 
@@ -902,30 +1401,26 @@ describe("plan-only drafts", () => {
     const candidate = setNodeDraftParameter(demoSession, "voice", "gainDb", -6);
     expect(candidate.revision).toBe(demoSession.revision);
     expect(candidate.nodes[1].parameters.gainDb).toBe(-6);
-    expect(describeDraftChanges(demoSession, candidate)).toEqual([
-      { path: "/nodes/1/parameters/gainDb", value: -6 },
-    ]);
+    expect(describeDraftChanges(demoSession, candidate)).toEqual([{ path: "/nodes/1/parameters/gainDb", value: -6 }]);
   });
 
   it("edits a boolean Mute parameter without changing the revision", () => {
     const muteSession = {
       ...demoSession,
-      nodes: demoSession.nodes.map((node) => node.id === "voice"
-        ? { ...node, kind: "mute" as const, parameters: {} }
-        : node),
+      nodes: demoSession.nodes.map((node) =>
+        node.id === "voice" ? { ...node, kind: "mute" as const, parameters: {} } : node,
+      ),
     };
     const candidate = setNodeDraftParameter(muteSession, "voice", "muted", true);
     expect(candidate.revision).toBe(muteSession.revision);
     expect(candidate.nodes[1].parameters.muted).toBe(true);
-    expect(describeDraftChanges(muteSession, candidate)).toEqual([
-      { path: "/nodes/1/parameters/muted", value: true },
-    ]);
+    expect(describeDraftChanges(muteSession, candidate)).toEqual([{ path: "/nodes/1/parameters/muted", value: true }]);
   });
 
   it("plans before committing and forwards the revision/key", async () => {
     const calls: string[] = [];
     const backend: Pick<UiBackend, "planGraph" | "commitGraph"> = {
-      planGraph: async candidate => {
+      planGraph: async (candidate) => {
         calls.push(`plan:${candidate.revision}`);
         return {
           planId: "plan-ui",
@@ -946,10 +1441,7 @@ describe("plan-only drafts", () => {
       sessionId: demoSession.id,
       revision: demoSession.revision + 1,
     });
-    expect(calls).toEqual([
-      `plan:${demoSession.revision}`,
-      `commit:plan-ui:${demoSession.revision}:ui-operation`,
-    ]);
+    expect(calls).toEqual([`plan:${demoSession.revision}`, `commit:plan-ui:${demoSession.revision}:ui-operation`]);
   });
 
   it("rejects a plan whose base revision does not match the draft", async () => {
@@ -973,11 +1465,24 @@ describe("plan-only drafts", () => {
   it("requires and forwards explicit acknowledgments for warning plans", async () => {
     const calls: unknown[][] = [];
     const backend: Pick<UiBackend, "planGraph" | "commitGraph"> = {
-      planGraph: async () => ({ planId: "warn-plan", baseRevision: demoSession.revision, expiresInMs: 30_000, diff: [], affectedDestinations: [], warnings: ["audible change"], requiredScopes: ["graph.write"] }),
-      commitGraph: async (...args) => { calls.push(args); return { sessionId: demoSession.id, revision: 2 }; },
+      planGraph: async () => ({
+        planId: "warn-plan",
+        baseRevision: demoSession.revision,
+        expiresInMs: 30_000,
+        diff: [],
+        affectedDestinations: [],
+        warnings: ["audible change"],
+        requiredScopes: ["graph.write"],
+      }),
+      commitGraph: async (...args) => {
+        calls.push(args);
+        return { sessionId: demoSession.id, revision: 2 };
+      },
     };
     await expect(applyGraphDraft(backend, demoSession, "warning-operation")).rejects.toThrow("requires acknowledgment");
-    await expect(applyGraphDraft(backend, demoSession, "warning-operation", ["audible change"])).resolves.toMatchObject({ revision: 2 });
+    await expect(applyGraphDraft(backend, demoSession, "warning-operation", ["audible change"])).resolves.toMatchObject(
+      { revision: 2 },
+    );
     expect(calls).toEqual([["warn-plan", demoSession.revision, "warning-operation", ["audible change"]]]);
   });
 });
@@ -985,8 +1490,15 @@ describe("plan-only drafts", () => {
 describe("permission errors", () => {
   it("explain which permission is missing and read as an error", async () => {
     const { actionMessageTone } = await import("./actionMessage");
-    const message = formatUiError(new Error("permission denied: PluginScan [permissionDenied] request the required permission scope for the target operation"), "fallback");
-    expect(message).toBe("Permission denied: this app is not granted the PluginScan permission needed for this action, so the backend refused it. Nothing was changed.");
+    const message = formatUiError(
+      new Error(
+        "permission denied: PluginScan [permissionDenied] request the required permission scope for the target operation",
+      ),
+      "fallback",
+    );
+    expect(message).toBe(
+      "Permission denied: this app is not granted the PluginScan permission needed for this action, so the backend refused it. Nothing was changed.",
+    );
     expect(actionMessageTone(message)).toBe("error");
   });
 });

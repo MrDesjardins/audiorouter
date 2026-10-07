@@ -3,7 +3,9 @@ import { afterEach, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useReportUnsaved } from "./unsavedReport";
 
-afterEach(() => { delete (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__; });
+afterEach(() => {
+  delete (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+});
 
 it("reports each change of the unsaved state to the shell, once", () => {
   const invoke = vi.fn(() => Promise.resolve());

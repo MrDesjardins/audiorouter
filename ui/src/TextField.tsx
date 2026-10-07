@@ -16,16 +16,23 @@ type TextFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onC
  */
 export function TextField({ value, onValue, onBlur, ...rest }: TextFieldProps) {
   const [text, setText] = useState(value);
-  useEffect(() => { setText((current) => current.trim() === value ? current : value); }, [value]);
-  return <input
-    {...rest}
-    type="text"
-    value={text}
-    onBlur={(event) => { setText(value); onBlur?.(event); }}
-    onChange={(event) => {
-      setText(event.target.value);
-      const trimmed = event.target.value.trim();
-      if (trimmed && trimmed !== value) onValue(trimmed);
-    }}
-  />;
+  useEffect(() => {
+    setText((current) => (current.trim() === value ? current : value));
+  }, [value]);
+  return (
+    <input
+      {...rest}
+      type="text"
+      value={text}
+      onBlur={(event) => {
+        setText(value);
+        onBlur?.(event);
+      }}
+      onChange={(event) => {
+        setText(event.target.value);
+        const trimmed = event.target.value.trim();
+        if (trimmed && trimmed !== value) onValue(trimmed);
+      }}
+    />
+  );
 }

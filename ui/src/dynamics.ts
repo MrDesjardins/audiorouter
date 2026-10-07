@@ -7,10 +7,26 @@
 import type { Node } from "@audiorouter/contracts";
 
 export type DynamicsKind = "compressor" | "gate" | "limiter";
-export const isDynamicsKind = (kind: string): kind is DynamicsKind => kind === "compressor" || kind === "gate" || kind === "limiter";
+export const isDynamicsKind = (kind: string): kind is DynamicsKind =>
+  kind === "compressor" || kind === "gate" || kind === "limiter";
 
-export type CompressorSettings = { thresholdDb: number; ratio: number; attackMs: number; releaseMs: number; kneeDb: number; makeupDb: number };
-export type GateSettings = { thresholdDb: number; rangeDb: number; hysteresisDb: number; ratio: number; attackMs: number; holdMs: number; releaseMs: number };
+export type CompressorSettings = {
+  thresholdDb: number;
+  ratio: number;
+  attackMs: number;
+  releaseMs: number;
+  kneeDb: number;
+  makeupDb: number;
+};
+export type GateSettings = {
+  thresholdDb: number;
+  rangeDb: number;
+  hysteresisDb: number;
+  ratio: number;
+  attackMs: number;
+  holdMs: number;
+  releaseMs: number;
+};
 export type LimiterSettings = { ceilingDb: number; lookaheadMs: number; releaseMs: number };
 
 /** Backend defaults (`crates/control` node catalog) for unset parameters. */
@@ -33,11 +49,14 @@ export const gateSettings = (node: Node): GateSettings => read(node, DEFAULTS.ga
 export const limiterSettings = (node: Node): LimiterSettings => read(node, DEFAULTS.limiter);
 
 /** Gain reduction (positive dB) for a detector level, as `compression_reduction`. */
-export function compressorReductionDb(levelDb: number, { thresholdDb, ratio, kneeDb }: Pick<CompressorSettings, "thresholdDb" | "ratio" | "kneeDb">): number {
+export function compressorReductionDb(
+  levelDb: number,
+  { thresholdDb, ratio, kneeDb }: Pick<CompressorSettings, "thresholdDb" | "ratio" | "kneeDb">,
+): number {
   const over = levelDb - thresholdDb;
   if (kneeDb > 0 && over > -kneeDb / 2 && over < kneeDb / 2) {
     const distance = over + kneeDb / 2;
-    return distance * distance * (1 - 1 / ratio) / (2 * kneeDb);
+    return (distance * distance * (1 - 1 / ratio)) / (2 * kneeDb);
   }
   return over > 0 ? over * (1 - 1 / ratio) : 0;
 }
@@ -47,12 +66,16 @@ export function compressorOutputDb(levelDb: number, settings: CompressorSettings
 }
 
 /** Static gate curve for a steady level: open at or above the threshold. */
-export function gateOutputDb(levelDb: number, { thresholdDb, ratio, rangeDb }: Pick<GateSettings, "thresholdDb" | "ratio" | "rangeDb">): number {
+export function gateOutputDb(
+  levelDb: number,
+  { thresholdDb, ratio, rangeDb }: Pick<GateSettings, "thresholdDb" | "ratio" | "rangeDb">,
+): number {
   if (levelDb >= thresholdDb) return levelDb;
   return levelDb - Math.min(Math.max((thresholdDb - levelDb) * (ratio - 1), 0), rangeDb);
 }
 
-export const limiterOutputDb = (levelDb: number, { ceilingDb }: Pick<LimiterSettings, "ceilingDb">) => Math.min(levelDb, ceilingDb);
+export const limiterOutputDb = (levelDb: number, { ceilingDb }: Pick<LimiterSettings, "ceilingDb">) =>
+  Math.min(levelDb, ceilingDb);
 
 /** The ratio that places the curve's 0 dBFS input at `outputDb` (compressor, no knee, no makeup). */
 export function ratioForOutputAtFullScale(thresholdDb: number, outputDb: number): number {
@@ -62,7 +85,14 @@ export function ratioForOutputAtFullScale(thresholdDb: number, outputDb: number)
 }
 
 export type ResponsePoint = { ms: number; inputDb: number; gainDb: number };
-export type ResponseSketch = { points: ResponsePoint[]; wordStartMs: number; wordEndMs: number; totalMs: number; quietDb: number; loudDb: number };
+export type ResponseSketch = {
+  points: ResponsePoint[];
+  wordStartMs: number;
+  wordEndMs: number;
+  totalMs: number;
+  quietDb: number;
+  loudDb: number;
+};
 
 const SKETCH_RATE = 16_000;
 const SKETCH_STEP_MS = 4;
@@ -79,8 +109,8 @@ export function responseSketch(kind: DynamicsKind, node: Node): ResponseSketch {
   const wordEndMs = 400;
   const points: ResponsePoint[] = [];
   const coefficient = (ms: number) => Math.exp(-1 / (Math.max(ms, 0.01) * 0.001 * SKETCH_RATE));
-  const frames = Math.round(totalMs * SKETCH_RATE / 1000);
-  const every = Math.round(SKETCH_STEP_MS * SKETCH_RATE / 1000);
+  const frames = Math.round((totalMs * SKETCH_RATE) / 1000);
+  const every = Math.round((SKETCH_STEP_MS * SKETCH_RATE) / 1000);
   if (kind === "compressor") {
     const settings = compressorSettings(node);
     const loudDb = Math.min(settings.thresholdDb + 12, 0);
@@ -89,7 +119,7 @@ export function responseSketch(kind: DynamicsKind, node: Node): ResponseSketch {
     const release = coefficient(settings.releaseMs);
     let envelope = quietDb;
     for (let frame = 0; frame < frames; frame += 1) {
-      const ms = frame * 1000 / SKETCH_RATE;
+      const ms = (frame * 1000) / SKETCH_RATE;
       const inputDb = ms >= wordStartMs && ms < wordEndMs ? loudDb : quietDb;
       const c = inputDb > envelope ? attack : release;
       envelope = c * envelope + (1 - c) * inputDb;
@@ -108,17 +138,20 @@ export function responseSketch(kind: DynamicsKind, node: Node): ResponseSketch {
     let open = false;
     let holdFrames = 0;
     for (let frame = 0; frame < frames; frame += 1) {
-      const ms = frame * 1000 / SKETCH_RATE;
+      const ms = (frame * 1000) / SKETCH_RATE;
       const inputDb = ms >= wordStartMs && ms < wordEndMs ? loudDb : quietDb;
       if (open) {
         if (inputDb < settings.thresholdDb - settings.hysteresisDb) {
-          if (holdFrames > 0) holdFrames -= 1; else open = false;
+          if (holdFrames > 0) holdFrames -= 1;
+          else open = false;
         } else holdFrames = hold;
       } else if (inputDb >= settings.thresholdDb) {
         open = true;
         holdFrames = hold;
       }
-      const target = open ? 0 : -Math.min(Math.max((settings.thresholdDb - inputDb) * (settings.ratio - 1), 0), settings.rangeDb);
+      const target = open
+        ? 0
+        : -Math.min(Math.max((settings.thresholdDb - inputDb) * (settings.ratio - 1), 0), settings.rangeDb);
       const c = target > gainDb ? attack : release;
       gainDb = c * gainDb + (1 - c) * target;
       if (frame % every === 0) points.push({ ms, inputDb, gainDb });
@@ -131,7 +164,7 @@ export function responseSketch(kind: DynamicsKind, node: Node): ResponseSketch {
   const release = coefficient(settings.releaseMs);
   let gain = 1;
   for (let frame = 0; frame < frames; frame += 1) {
-    const ms = frame * 1000 / SKETCH_RATE;
+    const ms = (frame * 1000) / SKETCH_RATE;
     const inputDb = ms >= wordStartMs && ms < wordEndMs ? loudDb : quietDb;
     const desired = inputDb > settings.ceilingDb ? 10 ** ((settings.ceilingDb - inputDb) / 20) : 1;
     gain = Math.min(gain, desired);
@@ -151,7 +184,10 @@ export type LevelSample = { at: number; inputDb: number; outputDb: number; reduc
  * Returns null until there is enough material and enough speech.
  */
 export function levelStatistics(samples: LevelSample[]): { noiseDb: number; voiceDb: number } | null {
-  const levels = samples.map((sample) => sample.inputDb).filter((db) => Number.isFinite(db) && db > -110).sort((a, b) => a - b);
+  const levels = samples
+    .map((sample) => sample.inputDb)
+    .filter((db) => Number.isFinite(db) && db > -110)
+    .sort((a, b) => a - b);
   if (levels.length < 40) return null;
   const noiseDb = levels[Math.floor(0.15 * levels.length)];
   const speech = levels.filter((db) => db >= noiseDb + 10);
@@ -168,7 +204,10 @@ const round = (value: number, step: number) => Math.round(value / step) * step;
  * noise so room noise cannot reopen it, and the threshold stays in the lower
  * half of the noise-to-voice range so quiet words still open it.
  */
-export function suggestGateThreshold({ noiseDb, voiceDb }: { noiseDb: number; voiceDb: number }, hysteresisDb = 0): number {
+export function suggestGateThreshold(
+  { noiseDb, voiceDb }: { noiseDb: number; voiceDb: number },
+  hysteresisDb = 0,
+): number {
   const third = noiseDb + (voiceDb - noiseDb) / 3;
   const lowest = noiseDb + 6 + Math.max(0, hysteresisDb);
   const highest = (noiseDb + voiceDb) / 2;
@@ -187,7 +226,11 @@ export const MAX_COMPRESSOR_DEPTH_DB = 12;
  * less reduction instead of a threshold that also squeezes breaths and room
  * noise. Returns the threshold and the reduction it gives on voice peaks.
  */
-export function suggestCompressorThreshold({ noiseDb, voiceDb }: { noiseDb: number; voiceDb: number }, ratio: number, targetDb = 6): { thresholdDb: number; reductionDb: number } {
+export function suggestCompressorThreshold(
+  { noiseDb, voiceDb }: { noiseDb: number; voiceDb: number },
+  ratio: number,
+  targetDb = 6,
+): { thresholdDb: number; reductionDb: number } {
   const slope = ratio > 1.01 ? 1 - 1 / ratio : 0;
   const ideal = slope > 0 ? voiceDb - targetDb / slope : voiceDb;
   const lowest = Math.max(voiceDb - MAX_COMPRESSOR_DEPTH_DB, (noiseDb + voiceDb) / 2);
@@ -204,17 +247,28 @@ export type PeakHold = { db: number; heldAt: number; updatedAt: number };
  * `PEAK_HOLD_MS`, then the marker falls at a fixed rate but never below
  * the current reading. This only slows the picture; values stay exact.
  */
-export function nextPeakHold(previous: PeakHold | null, valueDb: number, now: number, holdMs = PEAK_HOLD_MS, fallDbPerSecond = PEAK_FALL_DB_PER_SECOND): PeakHold {
+export function nextPeakHold(
+  previous: PeakHold | null,
+  valueDb: number,
+  now: number,
+  holdMs = PEAK_HOLD_MS,
+  fallDbPerSecond = PEAK_FALL_DB_PER_SECOND,
+): PeakHold {
   if (!previous || valueDb >= previous.db) return { db: valueDb, heldAt: now, updatedAt: now };
   const held = now - previous.heldAt < holdMs;
   if (held) return { ...previous, updatedAt: now };
   const fallStart = Math.max(previous.updatedAt, previous.heldAt + holdMs);
-  const fallen = previous.db - fallDbPerSecond * Math.max(0, now - fallStart) / 1000;
+  const fallen = previous.db - (fallDbPerSecond * Math.max(0, now - fallStart)) / 1000;
   return { db: Math.max(valueDb, fallen), heldAt: previous.heldAt, updatedAt: now };
 }
 
 /** Level bar ballistics: rises at once, falls at `fallDbPerSecond`. */
-export function nextFallingLevel(previous: { db: number; at: number } | null, valueDb: number, now: number, fallDbPerSecond = 30): { db: number; at: number } {
+export function nextFallingLevel(
+  previous: { db: number; at: number } | null,
+  valueDb: number,
+  now: number,
+  fallDbPerSecond = 30,
+): { db: number; at: number } {
   if (!previous || valueDb >= previous.db) return { db: valueDb, at: now };
-  return { db: Math.max(valueDb, previous.db - fallDbPerSecond * Math.max(0, now - previous.at) / 1000), at: now };
+  return { db: Math.max(valueDb, previous.db - (fallDbPerSecond * Math.max(0, now - previous.at)) / 1000), at: now };
 }

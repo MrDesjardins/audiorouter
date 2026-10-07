@@ -21,8 +21,12 @@ describe("session inventory merge", () => {
   it("preserves dirty drafts when telemetry returns a fresh unchanged session object", () => {
     const draft = { ...demoSession, name: "Unsaved edit" };
     expect(reconcileSessionDraft(draft, demoSession, structuredClone(demoSession))).toBe("unchanged");
-    expect(reconcileSessionDraft(draft, demoSession, { ...demoSession, revision: demoSession.revision + 1 })).toBe("conflict");
-    expect(reconcileSessionDraft(demoSession, demoSession, { ...demoSession, revision: demoSession.revision + 1 })).toBe("adopt");
+    expect(reconcileSessionDraft(draft, demoSession, { ...demoSession, revision: demoSession.revision + 1 })).toBe(
+      "conflict",
+    );
+    expect(
+      reconcileSessionDraft(demoSession, demoSession, { ...demoSession, revision: demoSession.revision + 1 }),
+    ).toBe("adopt");
   });
   it("prefers the point-in-time snapshot over a stale listed copy", () => {
     const listed = { ...demoSession, name: "stale", revision: 2 };

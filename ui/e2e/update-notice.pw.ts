@@ -3,19 +3,30 @@ import { test, expect } from "@playwright/test";
 
 // UI-18: the header shows the version and, when the (here injected) release
 // list has a newer release, a link to its page. No request reaches GitHub.
-const version = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
+const version = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string })
+  .version;
 
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`header shows the version and a newer release in ${theme}`, async ({ page, context }, testInfo) => {
     // Count only the app page's requests; the release page popup is answered
     // locally so the test never loads github.com (whose page calls its API).
     let githubRequests = 0;
-    await page.route("https://api.github.com/**", (route) => { githubRequests += 1; return route.abort(); });
-    await context.route("https://github.com/**", (route) => route.fulfill({ contentType: "text/html", body: "<title>release page stub</title>" }));
+    await page.route("https://api.github.com/**", (route) => {
+      githubRequests += 1;
+      return route.abort();
+    });
+    await context.route("https://github.com/**", (route) =>
+      route.fulfill({ contentType: "text/html", body: "<title>release page stub</title>" }),
+    );
     await page.addInitScript((theme) => {
       localStorage.setItem("audiorouter.ui.theme", theme);
       localStorage.removeItem("audiorouter.ui.update-check");
-      Object.assign(window, { __updateCheckReleases: [{ tag_name: "v9.9.9", draft: false, prerelease: true }, { tag_name: "v99.0.0", draft: true }] });
+      Object.assign(window, {
+        __updateCheckReleases: [
+          { tag_name: "v9.9.9", draft: false, prerelease: true },
+          { tag_name: "v99.0.0", draft: true },
+        ],
+      });
     }, theme);
     await page.goto("/route-harness.html");
     const line = page.locator(".topbar .app-version-line");

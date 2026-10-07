@@ -22,7 +22,14 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       localStorage.setItem("audiorouter.ui.theme", theme);
       // Simulated desktop shell: only the quit command is recorded.
       const calls: string[] = [];
-      Object.assign(window, { __quitCalls: calls, __TAURI_INTERNALS__: { invoke: async (command: string) => { calls.push(command); } } });
+      Object.assign(window, {
+        __quitCalls: calls,
+        __TAURI_INTERNALS__: {
+          invoke: async (command: string) => {
+            calls.push(command);
+          },
+        },
+      });
     }, theme);
     await page.goto("/route-harness.html");
     const quit = page.getByRole("button", { name: "Quit AudioRouter" });

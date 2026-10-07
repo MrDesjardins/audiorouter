@@ -15,9 +15,17 @@ for (const theme of ["dark", "light", "high-contrast"]) {
         __TAURI_INTERNALS__: {
           invoke: async (command: string, args?: { enabled?: boolean }) => {
             if (command === "autoplay_get") return autoplay;
-            if (command === "autoplay_set") { calls.push(args); autoplay = args?.enabled === true; return autoplay; }
+            if (command === "autoplay_set") {
+              calls.push(args);
+              autoplay = args?.enabled === true;
+              return autoplay;
+            }
             if (command === "api_autostart_get") return apiAutostart;
-            if (command === "api_autostart_set") { calls.push({ api: args?.enabled }); apiAutostart = args?.enabled === true; return apiAutostart; }
+            if (command === "api_autostart_set") {
+              calls.push({ api: args?.enabled });
+              apiAutostart = args?.enabled === true;
+              return apiAutostart;
+            }
             throw new Error(`not available in this test: ${command}`);
           },
         },
@@ -37,7 +45,10 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(api).toBeEnabled();
     await api.check();
     await expect(group.getByText("The API will start with AudioRouter.")).toBeVisible();
-    expect(await page.evaluate(() => (window as unknown as { __autoplayCalls: unknown[] }).__autoplayCalls)).toEqual([{ enabled: true }, { api: true }]);
+    expect(await page.evaluate(() => (window as unknown as { __autoplayCalls: unknown[] }).__autoplayCalls)).toEqual([
+      { enabled: true },
+      { api: true },
+    ]);
     await group.scrollIntoViewIfNeeded();
     await group.screenshot({ path: testInfo.outputPath(`startup-autoplay-${theme}.png`) });
   });

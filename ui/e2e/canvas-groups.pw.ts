@@ -3,10 +3,34 @@ import { demoSession } from "../src/fixtures";
 
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`visual groups remain behind editable audio in ${theme}`, async ({ page }, testInfo) => {
-    await page.addInitScript((session) => { Object.assign(window, { __routeFixtureSession: session }); }, { ...demoSession, edges: [
-      { id: "mic-voice", sourceNode: "mic", sourcePort: "out", destinationNode: "voice", destinationPort: "in", matrix: [1], enabled: true },
-      { id: "voice-output", sourceNode: "voice", sourcePort: "out", destinationNode: "headphones", destinationPort: "in", matrix: [1, 1], enabled: true },
-    ] });
+    await page.addInitScript(
+      (session) => {
+        Object.assign(window, { __routeFixtureSession: session });
+      },
+      {
+        ...demoSession,
+        edges: [
+          {
+            id: "mic-voice",
+            sourceNode: "mic",
+            sourcePort: "out",
+            destinationNode: "voice",
+            destinationPort: "in",
+            matrix: [1],
+            enabled: true,
+          },
+          {
+            id: "voice-output",
+            sourceNode: "voice",
+            sourcePort: "out",
+            destinationNode: "headphones",
+            destinationPort: "in",
+            matrix: [1, 1],
+            enabled: true,
+          },
+        ],
+      },
+    );
     await page.goto("/route-harness.html");
     await page.getByLabel("Color theme").selectOption(theme);
     const nodes = await page.locator(".react-flow__node-flowNode").count();
@@ -23,11 +47,17 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     expect(await group.evaluate((element) => Number(getComputedStyle(element).zIndex))).toBeLessThan(0);
     const box = await group.locator(".canvas-group-caption").boundingBox();
     if (!box) throw new Error("Group caption not visible");
-    await page.mouse.move(box.x + 20, box.y + 12); await page.mouse.down(); await page.mouse.move(box.x + 100, box.y + 62, { steps: 12 }); await page.mouse.up();
+    await page.mouse.move(box.x + 20, box.y + 12);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 100, box.y + 62, { steps: 12 });
+    await page.mouse.up();
     const resize = group.locator(".react-flow__resize-control.bottom.right");
     const handle = await resize.boundingBox();
     if (!handle) throw new Error("Group resize control not visible");
-    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2); await page.mouse.down(); await page.mouse.move(handle.x + 75, handle.y + 45, { steps: 10 }); await page.mouse.up();
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handle.x + 75, handle.y + 45, { steps: 10 });
+    await page.mouse.up();
     await expect(page.locator(".react-flow__node-flowNode")).toHaveCount(nodes);
     await expect(page.locator(".react-flow__edge")).toHaveCount(edges);
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
