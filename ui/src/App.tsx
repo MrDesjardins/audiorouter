@@ -8,8 +8,8 @@ import { LIBRARY_DROP_SOURCE, SessionFlowCanvas } from "./SessionFlowCanvas";
 import { SignalTimingPanel } from "./SignalTiming";
 import { Workbench, type WorkbenchTab, type McpActivity, type McpSetupInfo } from "./Workbench";
 import { RequestBuilder } from "./ApiRequestBuilder";
-import { UpdatesPanel, VersionLine } from "./UpdateNotice";
-import { isAutomatedHarness, setUpdateCheckEnabled, updateCheckEnabled, useUpdateCheck } from "./updateCheck";
+import { VersionLine } from "./UpdateNotice";
+import { isAutomatedHarness, updateCheckEnabled, useUpdateCheck } from "./updateCheck";
 import {
   formatUiError,
   isRevisionConflict,
@@ -23,7 +23,6 @@ import { SpatialAudioField } from "./SpatialAudioField";
 import { InputChannelsField } from "./InputChannelsField";
 import { LiveTelemetry, useTelemetryStore } from "./liveTelemetry";
 import { useReportUnsaved } from "./unsavedReport";
-import { ApiAutostartSetting, AutoplaySetting } from "./AutoplaySetting";
 import { QuitButton } from "./QuitButton";
 import {
   addSourceToOccupiedOutput,
@@ -89,22 +88,14 @@ import {
   type FlowAnimationMode,
   type ThemeMode,
 } from "./preferences";
-import { FlowAnimationSetting } from "./FlowAnimationSetting";
 import { SidebarResizer } from "./SidebarResizer";
 import { SessionFilePanel } from "./SessionFilePanel";
-import { ThisPcDevices } from "./ThisPcDevices";
-import { FirstRunGuide } from "./FirstRunGuide";
 import { TextField } from "./TextField";
 import { SpectralGateEditor } from "./SpectralGateEditor";
 import { DynamicsEditor } from "./DynamicsEditor";
 import { DuckEditor } from "./DuckEditor";
 import { RecorderControls, RecordingFolderField } from "./RecorderControls";
-import {
-  announceDeviceAccessChanged,
-  DeviceAccessDialog,
-  DeviceAccessSetting,
-  isDeviceAccessDenied,
-} from "./DeviceAccess";
+import { announceDeviceAccessChanged, DeviceAccessDialog, isDeviceAccessDenied } from "./DeviceAccess";
 import { LibraryDragOverlay } from "./libraryDrag";
 import {
   BassTrebleEditor,
@@ -125,7 +116,6 @@ import {
   type ShortcutAction,
   type ShortcutBinding,
 } from "./shortcuts";
-import { ApplicationIdentityPanel } from "./ApplicationIdentityPanel";
 import { setupChecklist } from "./setup";
 import { uiIdempotencyKey } from "./idempotency";
 import { processorParameterError, type ProcessorDescriptor } from "./processorCatalog";
@@ -134,7 +124,6 @@ import { mergeSessionInventory, reconcileSessionDraft, sameSessionDraft } from "
 import type { Connection } from "@xyflow/react";
 import { decodeTopologyAction } from "./DraftConnectionList";
 import { BackendConnectionContext } from "./backendConnectionContext";
-import { GraphList as NodeList } from "./GraphList";
 import {
   appendClientDiagnostic,
   browserDiagnosticStorage,
@@ -150,29 +139,8 @@ import {
   routeEndpointBinding,
   writeEndpointBindingHint,
 } from "./endpointBinding";
-import {
-  NativeEndpointPanel,
-  NativeMultiInputPanel,
-  NativeOutputFanoutPanel,
-  VirtualDeviceLifecyclePanel,
-  VirtualRoutePanel,
-} from "./NativeDevicePanels";
-import {
-  RecorderActions,
-  RecordingActions,
-  formatRecordingDuration,
-  recorderHasCaptureSource,
-} from "./RecordingPanels";
-import {
-  ClientsPanel,
-  GraphHistoryPanel,
-  OsTransitionPanel,
-  PresetCatalog,
-  ProcessorCatalog,
-  RecoveryCheckpointPanel,
-  SessionTransferPanel,
-  StartupPanel,
-} from "./AdvancedPanels";
+import { recorderHasCaptureSource } from "./RecordingPanels";
+import { ClientsPanel } from "./AdvancedPanels";
 import {
   LoadedPluginsPanel,
   PluginEditorControls,
@@ -199,6 +167,11 @@ import { useAudioFileStatus } from "./useAudioFileStatus";
 import { WORKSPACE_EVENT_CATEGORIES, useWorkspaceEvents } from "./useWorkspaceEvents";
 import { DIAGNOSTICS_REFRESH_INTERVAL_MS, useDiagnosticsRefresh } from "./useDiagnosticsRefresh";
 import { formatNativePumpSummary, useNativeCounters, type NativePumpStats } from "./useNativeCounters";
+import { ConnectionForm } from "./ConnectionForm";
+import { SetupWorkbench } from "./SetupWorkbench";
+import { DeviceTroubleshooting } from "./DeviceTroubleshooting";
+import { RecordingWorkbench } from "./RecordingWorkbench";
+import { AdvancedWorkbench } from "./AdvancedWorkbench";
 export { WORKSPACE_EVENT_CATEGORIES, DIAGNOSTICS_REFRESH_INTERVAL_MS, formatNativePumpSummary };
 export { NATIVE_COUNTERS_REFRESH_MS } from "./useNativeCounters";
 
@@ -2554,419 +2527,112 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     />
   );
   const connectionWorkbenchContent = (
-    <fieldset className="connection-editor workbench-connection-editor" disabled={!backend.connected}>
-      <legend>Add connections to the draft</legend>
-      <p className="muted">
-        Choose an output and input for each link. These connections are reviewed when you plan the graph.
-      </p>
-      <label>
-        Output
-        <select
-          aria-label="Source output port"
-          value={connectionSource}
-          onChange={(event) => setConnectionSource(event.target.value)}
-        >
-          <option value="">Choose source</option>
-          {outputPorts.map((port) => (
-            <option key={encodePort(port.nodeId, port.portName)} value={encodePort(port.nodeId, port.portName)}>
-              {port.nodeName} · {port.portName} · {port.channels}ch
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Input
-        <select
-          aria-label="Destination input port"
-          value={connectionDestination}
-          onChange={(event) => setConnectionDestination(event.target.value)}
-        >
-          <option value="">Choose destination</option>
-          {inputPorts.map((port) => (
-            <option key={encodePort(port.nodeId, port.portName)} value={encodePort(port.nodeId, port.portName)}>
-              {port.nodeName} · {port.portName} · {port.channels}ch
-            </option>
-          ))}
-        </select>
-      </label>
-      <button type="button" className="primary" onClick={addConnection}>
-        Add connection
-      </button>
-    </fieldset>
+    <ConnectionForm
+      backend={backend}
+      connectionSource={connectionSource}
+      setConnectionSource={setConnectionSource}
+      outputPorts={outputPorts}
+      encodePort={encodePort}
+      connectionDestination={connectionDestination}
+      setConnectionDestination={setConnectionDestination}
+      inputPorts={inputPorts}
+      addConnection={addConnection}
+    />
   );
   const setupWorkbenchContent = (
-    <>
-      <DeviceAccessSetting backend={backend} />
-      <FirstRunGuide
-        devices={devices}
-        connected={backend.connected}
-        onRefresh={() => refreshDevices()}
-        onOpenTools={() => setWorkbenchTab("tools")}
-      />
-      <section className="panel setup-panel" aria-labelledby="setup-status-heading">
-        <h3 id="setup-status-heading">Status</h3>
-        <ul className="setup-status-list">
-          {setupSteps.map((step) => (
-            <li key={step.id} className={`is-${step.state}`}>
-              <span className="setup-status-dot" aria-hidden="true" />
-              <span>
-                <strong>{step.label}</strong>
-                <small>{step.detail}</small>
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
-      <ThisPcDevices devices={devices} connected={backend.connected} onRefresh={() => refreshDevices()} />
-      <section className="panel setup-panel" aria-labelledby="setup-other-apps-heading">
-        <h3 id="setup-other-apps-heading">Use with other apps</h3>
-        <p className="muted">
-          AudioRouter does not change settings in Windows or in other apps. To send your processed microphone to
-          Discord, OBS or a game, end the route in an Output Device set to a virtual cable (for example CABLE Input),
-          then choose the matching input (CABLE Output) as the microphone in that app.
-        </p>
-      </section>
-      <FlowAnimationSetting mode={flowAnimation} onChange={changeFlowAnimation} />
-      <UpdatesPanel
-        enabled={updateChecks}
-        onChange={(enabled) => {
-          setUpdateCheckEnabled(enabled);
-          setUpdateChecks(enabled);
-        }}
-        update={availableUpdate}
-      />
-    </>
+    <SetupWorkbench
+      backend={backend}
+      devices={devices}
+      refreshDevices={refreshDevices}
+      setWorkbenchTab={setWorkbenchTab}
+      setupSteps={setupSteps}
+      flowAnimation={flowAnimation}
+      changeFlowAnimation={changeFlowAnimation}
+      updateChecks={updateChecks}
+      setUpdateChecks={setUpdateChecks}
+      availableUpdate={availableUpdate}
+    />
   );
   const devicesWorkbenchContent = (
-    <>
-      <p className="muted">
-        Devices chosen here are used only when a single route's Input Device or Output Device node has no device of its
-        own.
-      </p>
-      <NativeEndpointPanel
-        backend={backend}
-        sessionId={session.id}
-        devices={devices}
-        sessionRunning={sessionRunning}
-        onStart={async () => {
-          await startSession();
-        }}
-        onStop={stopSession}
-        onAddEndpointLoopback={addEndpointLoopback}
-        captureEndpointId={captureEndpointId}
-        setCaptureEndpointId={setCaptureEndpointId}
-        renderEndpointId={renderEndpointId}
-        setRenderEndpointId={setRenderEndpointId}
-      />
-      <details>
-        <summary>Multiple capture devices</summary>
-        <NativeMultiInputPanel
-          backend={backend}
-          sessionId={session.id}
-          devices={devices}
-          sessionRunning={sessionRunning}
-          applicationNodes={session.nodes}
-        />
-      </details>
-      <details>
-        <summary>Multiple output devices</summary>
-        <NativeOutputFanoutPanel
-          backend={backend}
-          sessionId={session.id}
-          devices={devices}
-          sessionRunning={sessionRunning}
-        />
-      </details>
-      <details>
-        <summary>Managed virtual devices and routes</summary>
-        <VirtualDeviceLifecyclePanel backend={backend} onAddVirtualBusNode={addVirtualBusNode} />
-        <VirtualRoutePanel backend={backend} />
-      </details>
-    </>
+    <DeviceTroubleshooting
+      backend={backend}
+      session={session}
+      devices={devices}
+      sessionRunning={sessionRunning}
+      startSession={startSession}
+      stopSession={stopSession}
+      addEndpointLoopback={addEndpointLoopback}
+      captureEndpointId={captureEndpointId}
+      setCaptureEndpointId={setCaptureEndpointId}
+      renderEndpointId={renderEndpointId}
+      setRenderEndpointId={setRenderEndpointId}
+      addVirtualBusNode={addVirtualBusNode}
+    />
   );
   const recordingWorkbenchContent = (
-    <>
-      <RecordingFolderField backend={backend} connected={backend.connected} />
-      <RecorderActions
-        backend={backend}
-        sessionId={session.id}
-        connected={backend.connected}
-        recorderStatuses={recorderStatuses}
-        recorderStatusAvailable={recorderStatusAvailable}
-        recorderNodeIds={draft.nodes.filter((node) => node.kind === "recorder").map((node) => node.id)}
-        selectedNodeId={selectedNode.id}
-        onSelectNode={(nodeId) => {
-          setSelectedNodeId(nodeId);
-          setSelectedNodeIds([nodeId]);
-        }}
-        format={recorderFormat}
-        onFormatChange={setRecorderFormat}
-      />
-      <RecordingActions
-        recordings={recordings}
-        connected={backend.connected}
-        busy={recordingMutationBusyState}
-        onRename={renameRecording}
-        onReveal={revealRecording}
-        onRecycle={recycleRecording}
-      />
-      <p className="muted">
-        {recordingsError ??
-          (recordings.length === 0
-            ? "No completed recording files yet."
-            : `${recordings.length} recording files are available.`)}
-      </p>
-      {/* The recording library: browse, search, preview and edit takes. Until 2026-10-04 it rendered only in an always-hidden panel. */}
-      <section className="recording-library" aria-label="Recording library">
-        <div className="panel">
-          <div className="section-heading">
-            <h2>Recordings</h2>
-            <span className="badge">
-              {recordingsError
-                ? "unavailable"
-                : `${visibleRecordings.length}${recordingSearch.trim() ? ` of ${recordings.length}` : ""} file${visibleRecordings.length === 1 ? "" : "s"}`}
-            </span>
-          </div>
-          <label className="recording-search">
-            Search recordings
-            <input
-              id="recording-search"
-              type="search"
-              value={recordingSearch}
-              onChange={(event) => setRecordingSearch(event.target.value.slice(0, 160))}
-              placeholder="Title, path, or status"
-            />
-          </label>
-          {recordingsError ? (
-            <p className="muted">Recording library unavailable: {recordingsError}</p>
-          ) : recordings.length === 0 ? (
-            <p className="muted">
-              No recording has been armed. Completed recordings will appear here with path and status.
-            </p>
-          ) : visibleRecordings.length === 0 ? (
-            <p className="muted">No recording matches this search.</p>
-          ) : (
-            visibleRecordings.map((recording) => (
-              <article
-                className="recording-row"
-                key={recording.id}
-                aria-label={recording.title || recording.path.split(/[\\/]/).pop() || recording.id}
-              >
-                <div className="recording-row-heading">
-                  <strong>{recording.title || recording.path.split(/[\\/]/).pop()}</strong>
-                  <span className="badge">{recording.missing ? "missing" : recording.state}</span>
-                </div>
-                <small className="recording-row-path">{recording.path}</small>
-                <small>
-                  Duration {formatRecordingDuration(recording.frames, recording.sampleRate)} · {recording.fileBytes}{" "}
-                  bytes
-                </small>
-                <label>
-                  Title
-                  <input
-                    aria-label={`Title for ${recording.id}`}
-                    value={metadataTitles[recording.id] ?? recording.title ?? ""}
-                    onChange={(event) =>
-                      setMetadataTitles((current) => ({ ...current, [recording.id]: event.target.value }))
-                    }
-                  />
-                </label>
-                <label>
-                  Artist
-                  <input
-                    aria-label={`Artist for ${recording.id}`}
-                    value={metadataArtists[recording.id] ?? recording.artist ?? ""}
-                    onChange={(event) =>
-                      setMetadataArtists((current) => ({ ...current, [recording.id]: event.target.value }))
-                    }
-                  />
-                </label>
-                <label>
-                  Comment
-                  <input
-                    aria-label={`Comment for ${recording.id}`}
-                    value={metadataComments[recording.id] ?? recording.comment ?? ""}
-                    onChange={(event) =>
-                      setMetadataComments((current) => ({ ...current, [recording.id]: event.target.value }))
-                    }
-                  />
-                </label>
-                <div className="recording-row-actions">
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => void saveRecordingMetadata(recording)}
-                    disabled={!backend.connected}
-                  >
-                    Save metadata
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => void previewRecording(recording.id)}
-                    disabled={!backend.connected}
-                  >
-                    Preview
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => void inspectRecovery(recording.id)}
-                    disabled={!backend.connected}
-                  >
-                    Recovery
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => void removeRecordingEntry(recording.id)}
-                    disabled={!backend.connected}
-                  >
-                    Remove entry
-                  </button>
-                </div>
-              </article>
-            ))
-          )}
-          {previewMessage && (
-            <p className="muted" role="status">
-              {previewMessage}
-            </p>
-          )}
-          {recoveryMessage && (
-            <p className="muted" role="status">
-              {recoveryMessage}
-            </p>
-          )}
-        </div>
-      </section>
-    </>
+    <RecordingWorkbench
+      backend={backend}
+      session={session}
+      recorderStatuses={recorderStatuses}
+      recorderStatusAvailable={recorderStatusAvailable}
+      draft={draft}
+      selectedNode={selectedNode}
+      setSelectedNodeId={setSelectedNodeId}
+      setSelectedNodeIds={setSelectedNodeIds}
+      recorderFormat={recorderFormat}
+      setRecorderFormat={setRecorderFormat}
+      recordings={recordings}
+      recordingMutationBusyState={recordingMutationBusyState}
+      renameRecording={renameRecording}
+      revealRecording={revealRecording}
+      recycleRecording={recycleRecording}
+      recordingsError={recordingsError}
+      visibleRecordings={visibleRecordings}
+      recordingSearch={recordingSearch}
+      setRecordingSearch={setRecordingSearch}
+      metadataTitles={metadataTitles}
+      setMetadataTitles={setMetadataTitles}
+      metadataArtists={metadataArtists}
+      setMetadataArtists={setMetadataArtists}
+      metadataComments={metadataComments}
+      setMetadataComments={setMetadataComments}
+      saveRecordingMetadata={saveRecordingMetadata}
+      previewRecording={previewRecording}
+      inspectRecovery={inspectRecovery}
+      removeRecordingEntry={removeRecordingEntry}
+      previewMessage={previewMessage}
+      recoveryMessage={recoveryMessage}
+    />
   );
   const advancedWorkbenchContent = (
-    <div className="workbench-groups">
-      <details className="startup-group">
-        <summary>When AudioRouter starts</summary>
-        <p className="muted">
-          Start with Windows in the tray (no window) and, if you like, play the selected session and start the API right
-          away. Closing the window keeps audio playing in the tray.
-        </p>
-        <StartupPanel backend={backend} />
-        <AutoplaySetting />
-        <ApiAutostartSetting />
-      </details>
-      <details>
-        <summary>Keyboard graph controls</summary>
-        <NodeList
-          session={draft}
-          selectedNodeId={selectedNode.id}
-          onSelect={selectNodeProperties}
-          onRemoveConnection={removeConnection}
-          onToggleConnection={toggleConnection}
-          onInsertProcessor={insertProcessor}
-          onOpenPluginPicker={openPluginPicker}
-        />
-      </details>
-      <details className="connection-form-group">
-        <summary>Connect nodes without dragging</summary>
-        <p className="muted">
-          The same as dragging from one node to another on the canvas, for keyboard and screen-reader use.
-        </p>
-        {connectionWorkbenchContent}
-      </details>
-      <details className="device-troubleshooting">
-        <summary>Troubleshooting: manual device binding</summary>
-        <p className="muted">
-          You normally do not need this. Choose each device in the Input Device or Output Device node's Properties and
-          press Play. Use these controls to check a device's format, reopen a device after Windows reset it, run a
-          deliberate VB-Cable loopback test, or add a loopback source.
-        </p>
-        {devicesWorkbenchContent}
-      </details>
-      <details>
-        <summary>Keyboard shortcuts</summary>
-        <section className="panel shortcut-panel">
-          <h3>Local shortcuts</h3>
-          <p className="muted">These work while AudioRouter is focused and never capture typing in a text field.</p>
-          <label>
-            Start or stop session
-            <input
-              aria-label="Start or stop session shortcut"
-              value={shortcuts.sessionToggle}
-              readOnly
-              onKeyDown={(event) => captureShortcut("sessionToggle", event)}
-            />
-          </label>
-          <label>
-            Privacy mute
-            <input
-              aria-label="Privacy mute shortcut"
-              value={shortcuts.privacyMute}
-              readOnly
-              onKeyDown={(event) => captureShortcut("privacyMute", event)}
-            />
-          </label>
-          {shortcutMessage && (
-            <p className="muted" role="alert">
-              {shortcutMessage}
-            </p>
-          )}
-          <small>Native tray and OS-wide registration remain platform validation work.</small>
-        </section>
-      </details>
-      <details>
-        <summary>Plug-ins</summary>
-        <PluginScanPanel backend={backend} onAddPlaceholder={addPluginToDraft} />
-      </details>
-      <details>
-        <summary>Built-in processors and presets</summary>
-        <ProcessorCatalog processors={processors} error={processorError} node={selectedNode} backend={backend} />
-        <PresetCatalog presets={presets} error={presetError} />
-      </details>
-      <details>
-        <summary>JSON graph transfer (for scripts)</summary>
-        <SessionTransferPanel
-          backend={backend}
-          session={session}
-          onImported={(imported) => {
-            setCreatedSessions((current) => [...current.filter((item) => item.id !== imported.id), imported]);
-            setSelectedSessionId(imported.id);
-            void refresh();
-          }}
-        />
-      </details>
-      <details>
-        <summary>Resume after sleep and revision history</summary>
-        <OsTransitionPanel backend={backend} onRefresh={refresh} />
-        <GraphHistoryPanel backend={backend} session={session} onReverted={refresh} />
-      </details>
-      <details>
-        <summary>Application identity and recovery</summary>
-        <ApplicationIdentityPanel applications={applications} />
-        <section className="panel recovery-panel">
-          <div className="section-heading">
-            <h3>Crash recovery</h3>
-            <span className="badge">{snapshot?.status.recovery.recentCrashes ?? 0} recent</span>
-          </div>
-          <p className="muted">
-            {snapshot?.status.recovery.safeMode ? "Safe mode is active." : "Normal startup mode."} Recovery state is
-            owned by the backend.
-          </p>
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => void clearRecoverySafeMode()}
-            disabled={!backend.connected || safetyActionBusyState || !snapshot?.status.recovery.safeMode}
-          >
-            Clear safe mode
-          </button>
-        </section>
-        <RecoveryCheckpointPanel backend={backend} />
-      </details>
-      <details>
-        <summary>Connected clients</summary>
-        <ClientsPanel backend={backend} />
-      </details>
-    </div>
+    <AdvancedWorkbench
+      backend={backend}
+      draft={draft}
+      selectedNode={selectedNode}
+      selectNodeProperties={selectNodeProperties}
+      removeConnection={removeConnection}
+      toggleConnection={toggleConnection}
+      insertProcessor={insertProcessor}
+      openPluginPicker={openPluginPicker}
+      connectionWorkbenchContent={connectionWorkbenchContent}
+      devicesWorkbenchContent={devicesWorkbenchContent}
+      shortcuts={shortcuts}
+      captureShortcut={captureShortcut}
+      shortcutMessage={shortcutMessage}
+      addPluginToDraft={addPluginToDraft}
+      processors={processors}
+      processorError={processorError}
+      presets={presets}
+      presetError={presetError}
+      session={session}
+      setCreatedSessions={setCreatedSessions}
+      setSelectedSessionId={setSelectedSessionId}
+      refresh={refresh}
+      applications={applications}
+      snapshot={snapshot}
+      clearRecoverySafeMode={clearRecoverySafeMode}
+      safetyActionBusyState={safetyActionBusyState}
+    />
   );
   return (
     <PluginParameterContext.Provider value={{ parameters: pluginParameters, error: pluginParameterError }}>
