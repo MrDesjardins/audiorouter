@@ -68,7 +68,7 @@ and a place in the [active plan](../active/current.md).
 ## Status: P0 and P1 fixed (2026-10-07, user request "Fix all P0 and P1")
 
 All P0 and P1 items were fixed on branch `claude/zealous-archimedes-fz1lbv`.
-The details are in the [active plan](../active/current.md#code-review-p0-and-p1-fixes-2026-10-07-user-request).
+The details are in the [active plan](../archived/2026-10-07-maintenance-0.0.12-to-code-review.md#code-review-p0-and-p1-fixes-2026-10-07-user-request).
 P2 and P3 remain a backlog.
 
 | ID | Fix | Commit | What remains |
@@ -613,6 +613,10 @@ P2 and P3 remain a backlog.
   MCP, Advanced) with dynamic imports.
 - **Active plan size.** The active plan is long. Archive completed sections
   so a new agent can find the current state quickly.
+  *Status 2026-10-07: done.* Completed sections (release 0.0.12, website,
+  CI on Windows, code review P0/P1) moved verbatim to
+  [an execution record](../archived/2026-10-07-maintenance-0.0.12-to-code-review.md);
+  the active plan went from 774 to about 300 lines.
 - **Silent catches.** The UI swallows errors in a few `catch {}` blocks
   (`App.tsx:845`, `868`, `1743`, `1795`). Record a diagnostic category in
   each.

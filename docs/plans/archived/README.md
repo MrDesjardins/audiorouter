@@ -16,6 +16,7 @@ Keep an index below with date, milestone/task, outcome, and path. Do not move st
 
 | Date | Milestone / task | Outcome | Path |
 | --- | --- | --- | --- |
+| 2026-10-07 | Maintenance: release 0.0.12, website, CI on Windows, code review P0/P1 | Completed sections moved from the active plan; their attended and Windows-only open items stay in the active plan | [Execution record](2026-10-07-maintenance-0.0.12-to-code-review.md) |
 | 2026-10-05 | Release 0.0.13 (backend panic recovery) | Published unsigned prerelease; exact-package first run and public assets verified; panic site and sleep/resume qualification open | [Execution record](2026-10-05-release-0.0.13.md) |
 | 2026-10-04 | Release 0.0.12 | Published unsigned prerelease, plugin and installer assets verified; broader M08 gates open | [Execution record](2026-10-04-release-0.0.12.md) |
 | 2026-10-03 | 0.0.6 and 0.0.7 fixes and releases | Completed for this scope: both unsigned prereleases published with exact-package first-run and asset verification. Attended confirmations and full M08 remain open in the active plan. | [2026-10-03-releases-0.0.6-0.0.7.md](2026-10-03-releases-0.0.6-0.0.7.md) |
