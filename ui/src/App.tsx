@@ -3,14 +3,7 @@ import { NodePropertyStatus } from "./NodePropertyStatus";
 import { NodeIdentity } from "./NodeIdentity";
 import { useCanvasGroups, CanvasGroupInspector } from "./CanvasGroups";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import type {
-  NativeDuplexPumpResult,
-  NativeEndpointPumpResult,
-  NativeMultiInputPumpResult,
-  NativeRenderSourcePumpResult,
-  PluginParametersResult,
-  StateEventCategory,
-} from "@audiorouter/contracts";
+import type { PluginParametersResult } from "@audiorouter/contracts";
 import { LIBRARY_DROP_SOURCE, SessionFlowCanvas } from "./SessionFlowCanvas";
 import { SignalTimingPanel } from "./SignalTiming";
 import { Workbench, type WorkbenchTab, type McpActivity, type McpSetupInfo } from "./Workbench";
@@ -28,7 +21,7 @@ import {
 import type { DeviceListItem } from "@audiorouter/contracts";
 import { SpatialAudioField } from "./SpatialAudioField";
 import { InputChannelsField } from "./InputChannelsField";
-import { LiveTelemetry, differsOnlyInTelemetry, useTelemetryStore } from "./liveTelemetry";
+import { LiveTelemetry, useTelemetryStore } from "./liveTelemetry";
 import { useReportUnsaved } from "./unsavedReport";
 import { ApiAutostartSetting, AutoplaySetting } from "./AutoplaySetting";
 import { QuitButton } from "./QuitButton";
@@ -124,7 +117,6 @@ import {
   StrengthEditor,
 } from "./ToolVisuals";
 import { isDynamicsKind } from "./dynamics";
-import { selectNativePump } from "./nativePump";
 import {
   defaultShortcutBinding,
   isEditableShortcutTarget,
@@ -149,7 +141,7 @@ import {
   onRpcFailure,
   readClientDiagnostics,
 } from "./clientDiagnostics";
-import { ErrorBoundary, RootRecoveryPanel, safeErrorName } from "./ErrorBoundary";
+import { ErrorBoundary, RootRecoveryPanel } from "./ErrorBoundary";
 import { EqSpectrumContext } from "./AdvancedEqEditor";
 import { EqBackendContext, PluginParameterContext, defaultBackend } from "./appContext";
 import {
@@ -203,67 +195,12 @@ import {
 import { AudioFileNodeEditor } from "./AudioFileNodeEditor";
 export { formatRecordingDuration, recorderHasCaptureSource } from "./RecordingPanels";
 export { findVbCableEndpointPair, findVbCableCaptureEndpointId, deviceChoiceLabel } from "./endpointBinding";
-
-/** State categories that can invalidate the workspace snapshot. Meter events
- * are intentionally excluded; diagnostics use the bounded snapshot path. */
-export const WORKSPACE_EVENT_CATEGORIES = [
-  "session.selectionChanged",
-  "graph.committed",
-  "runtime.crashed",
-  "runtime.started",
-  "runtime.activated",
-  "runtime.stopped",
-  "devices.changed",
-  "devices.bindingInvalidated",
-  "recovery.safeModeCleared",
-  "virtualDevice.changed",
-  "virtualBridge.failed",
-  "virtualBridge.expired",
-  "recorder.changed",
-  "recording.metadataChanged",
-  "recording.renamed",
-  "recording.entryRemoved",
-  "recording.recycled",
-  "application.captureStateChanged",
-] as const satisfies readonly StateEventCategory[];
-
-/** Default diagnostics/meter refresh: 20 Hz, below the API's 30 Hz ceiling. */
-export const DIAGNOSTICS_REFRESH_INTERVAL_MS = 50;
-/**
- * How often the UI reads native route counters. The backend pumps native
- * audio itself every 1 ms (its audio service); the UI never paces audio.
- */
-export const NATIVE_COUNTERS_REFRESH_MS = 1000;
-
-type NativePumpStats =
-  NativeEndpointPumpResult | NativeDuplexPumpResult | NativeMultiInputPumpResult | NativeRenderSourcePumpResult;
-
-export function formatNativePumpSummary(stats: NativePumpStats | null, running: boolean): string | null {
-  const summary = formatNativePumpCounters(stats, running);
-  const service = stats?.audioService;
-  if (summary === null || !service || service.lateGaps === 0) return summary;
-  // Late backend service passes are the audible-continuity risk: report them.
-  return `${summary} / ${service.lateGaps} late audio service gap${service.lateGaps === 1 ? "" : "s"} (max ${(service.maxGapMicros / 1000).toFixed(1)} ms)`;
-}
-
-function formatNativePumpCounters(stats: NativePumpStats | null, running: boolean): string | null {
-  if (!stats || !running) return null;
-  if ("submittedQuanta" in stats) {
-    return `native multi-input ${stats.capturedFrames} in / ${stats.renderedFrames} out / ${stats.submittedQuanta} quanta${stats.outputCount > 0 ? ` / ${stats.deliveredQuanta} branches` : ""}${stats.renderBackpressureEvents > 0 ? ` / ${stats.renderBackpressureEvents} backpressure` : ""}${(stats.outputUnderruns ?? 0) > 0 ? ` / ${stats.outputUnderruns} output underrun${stats.outputUnderruns === 1 ? "" : "s"}` : ""}`;
-  }
-  if (!("capturedFrames" in stats) && !("input" in stats)) {
-    return `native render-source ${stats.renderedFrames} out / ${stats.processedQuanta} quanta${stats.droppedRenderFrames > 0 ? ` / ${stats.droppedRenderFrames} dropped` : ""}`;
-  }
-  const input = "input" in stats ? stats.input : stats;
-  const output = "output" in stats ? stats.output : stats;
-  const warnings = [
-    output.droppedRenderFrames > 0 ? `${output.droppedRenderFrames} dropped` : null,
-    output.renderBackpressureEvents > 0 ? `${output.renderBackpressureEvents} backpressure` : null,
-  ].filter((value): value is string => value !== null);
-  const recorderChunks = "recorderChunksDrained" in stats ? stats.recorderChunksDrained : 0;
-  const processedQuanta = "input" in stats ? input.processedQuanta + output.processedQuanta : stats.processedQuanta;
-  return `native ${input.capturedFrames} in / ${output.renderedFrames} out / ${processedQuanta} quanta${recorderChunks > 0 ? ` / ${recorderChunks} recorder chunks` : ""}${warnings.length > 0 ? ` / ${warnings.join(" / ")}` : ""}`;
-}
+import { useAudioFileStatus } from "./useAudioFileStatus";
+import { WORKSPACE_EVENT_CATEGORIES, useWorkspaceEvents } from "./useWorkspaceEvents";
+import { DIAGNOSTICS_REFRESH_INTERVAL_MS, useDiagnosticsRefresh } from "./useDiagnosticsRefresh";
+import { formatNativePumpSummary, useNativeCounters, type NativePumpStats } from "./useNativeCounters";
+export { WORKSPACE_EVENT_CATEGORIES, DIAGNOSTICS_REFRESH_INTERVAL_MS, formatNativePumpSummary };
+export { NATIVE_COUNTERS_REFRESH_MS } from "./useNativeCounters";
 
 /** Root failures outlive AppContent's state, so they go straight to storage for the next window. */
 function recordStoredUiDiagnostic(message: string) {
@@ -720,53 +657,15 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   useEffect(() => {
     if (selectedNode?.kind === "applicationCapture" && backend.connected) refreshApplications();
   }, [selectedNode?.id, selectedNode?.kind, backend.connected]);
-  useEffect(() => {
-    const playingNodes = draft.nodes
-      .filter(
-        (node) => (node.kind === "audioFile" || node.kind === "testSignal") && audioSourceStates[node.id] === "playing",
-      )
-      .slice(0, 16);
-    if (!sessionRunning) {
-      if (Object.keys(audioSourceStates).length > 0) setAudioSourceStates({});
-      return;
-    }
-    if (!backend.connected || playingNodes.length === 0) return;
-    let polling = false;
-    let statusFailing = false;
-    const timer = window.setInterval(() => {
-      if (polling) return;
-      polling = true;
-      void Promise.all(
-        playingNodes.map(
-          async (node) => [node.id, await backend.transportAudioSource(session.id, node.id, "status")] as const,
-        ),
-      )
-        .then((states) =>
-          setAudioSourceStates((current) => {
-            let changed = false;
-            const next = { ...current };
-            for (const [nodeId, result] of states)
-              if (next[nodeId] !== result.state) {
-                next[nodeId] = result.state;
-                changed = true;
-              }
-            return changed ? next : current;
-          }),
-        )
-        .then(() => {
-          statusFailing = false;
-        })
-        .catch((error: unknown) => {
-          // Keep the last states shown; note the first failure of a run.
-          if (!statusFailing) recordUiDiagnostic(`Audio file status unavailable (${safeErrorName(error)})`);
-          statusFailing = true;
-        })
-        .finally(() => {
-          polling = false;
-        });
-    }, 750);
-    return () => window.clearInterval(timer);
-  }, [backend, draft.nodes, session.id, sessionRunning, audioSourceStates]);
+  useAudioFileStatus({
+    backend,
+    draft,
+    session,
+    sessionRunning,
+    audioSourceStates,
+    setAudioSourceStates,
+    recordUiDiagnostic,
+  });
   const testSignalPlaybackReady = backend.connected && sameSessionDraft(draft, session);
   const testSignalEndpointPrepared =
     snapshot?.diagnostics.nativeSessionId === session.id &&
@@ -995,191 +894,32 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       active = false;
     };
   }, [backend]);
-  useEffect(() => {
-    if (!backend.connected || !hasSnapshot) return;
-    let active = true;
-    let polling = false;
-    const poll = async () => {
-      if (!active || polling) return;
-      polling = true;
-      try {
-        const result = await backend.subscribe(
-          eventCursor.current.sequence,
-          session.id,
-          eventCursor.current.backendEpoch,
-          [...WORKSPACE_EVENT_CATEGORIES],
-        );
-        if (!active) return;
-        const bindingInvalidatedEvent = result.events.find((event) => event.category === "devices.bindingInvalidated");
-        const selectionChangedEvent = result.events.find((event) => event.category === "session.selectionChanged");
-        const activeSession =
-          selectionChangedEvent && backend.getActiveSession ? await backend.getActiveSession() : null;
-        if (activeSession?.sessionId) setSelectedSessionId(activeSession.sessionId);
-        const bridgeEvent = result.events.find(
-          (event) => event.category === "virtualBridge.failed" || event.category === "virtualBridge.expired",
-        );
-        if (bindingInvalidatedEvent) {
-          setActionMessage(
-            "Native endpoint binding changed; audio is stopped. Review the exact endpoints and rebind before restarting.",
-          );
-        } else if (bridgeEvent) {
-          const bus = bridgeEvent.operationId ?? "an affected bus";
-          setActionMessage(
-            bridgeEvent.category === "virtualBridge.expired"
-              ? `Virtual bridge lease expired for ${bus}; the route is silenced until it is deliberately restarted.`
-              : `Virtual bridge failure detected for ${bus}; the route is silenced until it is deliberately recovered.`,
-          );
-        }
-        if (result.resyncRequired || result.events.length > 0) {
-          const nextState = await snapshotCache.refresh(backend, activeSession?.sessionId ?? session.id);
-          if (active) {
-            setSnapshotState(nextState);
-            refreshApplications();
-            refreshDevices({ announce: false });
-            void refreshSessions();
-            void backend
-              .listRecordings(session.id)
-              .then((items) => {
-                if (active) {
-                  setRecordings(items);
-                  setRecordingsError(null);
-                }
-              })
-              .catch((error) => {
-                if (active) setRecordingsError(formatUiError(error, "Recording library unavailable"));
-              });
-            void backend
-              .listRecorders()
-              .then((items) => {
-                if (active) {
-                  setRecorderStatuses(items);
-                  setRecorderStatusAvailable(true);
-                }
-              })
-              .catch(() => {
-                if (active) setRecorderStatusAvailable(false);
-              });
-            if (!nextState.stale)
-              eventCursor.current = { backendEpoch: result.backendEpoch, sequence: result.nextSequence };
-          }
-        } else {
-          eventCursor.current = { backendEpoch: result.backendEpoch, sequence: result.nextSequence };
-        }
-      } catch (error) {
-        if (active)
-          setSnapshotState((current) => ({
-            ...current,
-            stale: true,
-            error: formatUiError(error, "Event subscription failed"),
-          }));
-      } finally {
-        polling = false;
-      }
-    };
-    void poll();
-    const timer = window.setInterval(() => void poll(), 1000);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-    };
-  }, [backend, session.id, snapshotCache, hasSnapshot]);
-  useEffect(() => {
-    if (!backend.connected || !sessionRunning) return;
-    let active = true;
-    let refreshing = false;
-    let failing = false;
-    const refreshDiagnostics = async () => {
-      if (!active || refreshing) return;
-      refreshing = true;
-      try {
-        const diagnostics = await backend.refreshDiagnostics();
-        if (!active) return;
-        // Meters alone change between ticks: publish them to the live views
-        // only, instead of re-rendering the whole app 20 times a second.
-        const basis = diagnosticsRef.current;
-        if (basis && differsOnlyInTelemetry(basis, diagnostics))
-          telemetryStore.set({ basis, nodeTelemetry: diagnostics.nodeTelemetry });
-        else
-          setSnapshotState((current) =>
-            current.snapshot ? { ...current, snapshot: { ...current.snapshot, diagnostics } } : current,
-          );
-        failing = false;
-      } catch (error) {
-        // Keep the last known diagnostics; the event/snapshot path reports
-        // connection failures and never replaces observations with guesses.
-        // Record the first failure of a run, not one row per 50 ms tick.
-        if (!failing) recordUiDiagnostic(`Live diagnostics refresh failed (${safeErrorName(error)})`);
-        failing = true;
-      } finally {
-        refreshing = false;
-      }
-    };
-    void refreshDiagnostics();
-    const timer = window.setInterval(() => void refreshDiagnostics(), DIAGNOSTICS_REFRESH_INTERVAL_MS);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-    };
-  }, [backend, sessionRunning, telemetryStore]);
-  useEffect(() => {
-    const pumpNativeEndpoint = backend.pumpNativeEndpoint;
-    const pumpNativeDuplex = backend.pumpNativeDuplex;
-    const pumpNativeRenderSource = backend.pumpNativeRenderSource;
-    const pumpNativeMultiInputs = backend.pumpNativeMultiInputs;
-    const activeRoutes = Object.entries(nativeGenerations).filter(([sessionId]) =>
-      snapshot?.status.activeSessionIds.includes(sessionId),
-    );
-    if (!backend.connected || activeRoutes.length === 0 || !pumpNativeEndpoint) return;
-    let active = true;
-    let pumping = false;
-    let failing = false;
-    // The backend services native audio itself; this loop only reads each
-    // route's counters (the pump call returns them) once a second.
-    const pump = async () => {
-      if (!active || pumping) return;
-      pumping = true;
-      try {
-        for (const [sessionId, route] of activeRoutes) {
-          if (!active) return;
-          // Each independently prepared endpoint route has its own scheduler
-          // and graph. Service every running route even when another session
-          // is selected in the sidebar.
-          const pumpKind = selectNativePump(
-            route.kind,
-            Boolean(pumpNativeEndpoint),
-            Boolean(pumpNativeDuplex),
-            Boolean(pumpNativeRenderSource),
-            Boolean(pumpNativeMultiInputs),
-          );
-          if (!pumpKind) continue;
-          const result =
-            pumpKind === "multiInput"
-              ? await pumpNativeMultiInputs!(sessionId, route.generation, 64)
-              : pumpKind === "duplex"
-                ? await pumpNativeDuplex!(sessionId, route.generation, 64, 64)
-                : pumpKind === "renderSource"
-                  ? await pumpNativeRenderSource!(sessionId, route.generation, 64)
-                  : await pumpNativeEndpoint!(sessionId, route.generation, 64);
-          if (sessionId === session.id) setNativePumpStats(result);
-        }
-        failing = false;
-      } catch (error) {
-        setNativePumpStats(null);
-        // Diagnostics remain backend-owned; do not retry or substitute
-        // endpoints here. Record the first failure of a run, not every tick.
-        if (!failing) recordUiDiagnostic(`Native route counters unavailable (${safeErrorName(error)})`);
-        failing = true;
-      } finally {
-        pumping = false;
-      }
-    };
-    void pump();
-    const timer = window.setInterval(() => void pump(), NATIVE_COUNTERS_REFRESH_MS);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-    };
-  }, [backend, nativeGenerations, session.id, snapshot?.status.activeSessionIds]);
+  useWorkspaceEvents({
+    backend,
+    hasSnapshot,
+    session,
+    snapshotCache,
+    eventCursor,
+    setSnapshotState,
+    setSelectedSessionId,
+    setActionMessage,
+    refreshApplications,
+    refreshDevices,
+    refreshSessions,
+    setRecordings,
+    setRecordingsError,
+    setRecorderStatuses,
+    setRecorderStatusAvailable,
+  });
+  useDiagnosticsRefresh({
+    backend,
+    sessionRunning,
+    telemetryStore,
+    diagnosticsRef,
+    setSnapshotState,
+    recordUiDiagnostic,
+  });
+  useNativeCounters({ backend, nativeGenerations, snapshot, session, setNativePumpStats, recordUiDiagnostic });
   const outputPorts = draft.nodes.flatMap((node) =>
     node.ports
       .filter((port) => port.direction === "output")
