@@ -6305,18 +6305,25 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setSessionActionBusy(false);
     }
   };
+  // The listener below is re-registered only when its dependencies change, so
+  // it calls this render's actions through a ref. Captured directly, a
+  // shortcut pressed after Save started the pre-save `session` and so played
+  // a "temporary preview of the unsaved route" instead of the saved one.
+  const shortcutActions = useRef({ startSession, stopSession, togglePrivacyMute });
+  shortcutActions.current = { startSession, stopSession, togglePrivacyMute };
   useEffect(() => {
     const onShortcut = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
       if (isEditableShortcutTarget(event.target)) return;
       const shortcut = shortcutFromKeyboardEvent(event);
       if (!shortcut || shortcutConflicts(shortcuts).length > 0) return;
+      const actions = shortcutActions.current;
       if (shortcut === shortcuts.sessionToggle && backend.connected) {
         event.preventDefault();
-        void (sessionRunning ? stopSession() : startSession());
+        void (sessionRunning ? actions.stopSession() : actions.startSession());
       } else if (shortcut === shortcuts.privacyMute && backend.connected) {
         event.preventDefault();
-        void togglePrivacyMute();
+        void actions.togglePrivacyMute();
       }
     };
     window.addEventListener("keydown", onShortcut);
