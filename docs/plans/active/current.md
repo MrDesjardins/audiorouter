@@ -167,6 +167,18 @@ costs and phases in the [driver track](../future/M03-driver-signing.md).
 
 ### Code review P2/P3 follow-ups (2026-10-07, user request)
 
+- **P2-1 (control-plane split).** `crates/control/src/lib.rs` went from
+  33,117 to 1,290 lines. Code moved, without behavior change, into 22
+  domain modules. The largest is `api_output_schema` at 2,045 lines. Tests
+  moved to `<module>_tests.rs`, with shared fixtures in `test_support.rs`.
+  Checks: 244 tests before and after, an identical `pub` item list, and
+  item-by-item equivalence. Workspace Clippy (windows-gnu, `-D warnings`)
+  and fmt are clean. The tests were not run here (they need Windows), and
+  the test binary does not link in the container (`-lSwdevice` is
+  missing). The typed method table was not done. Module list in the
+  [review](../future/code-review-2026-10-07.md#p2-1-the-control-plane-is-one-21500-line-file).
+  Next action: a Windows CI run of `cargo test -p audiorouter-control`.
+
 - **P2-7 (DSP loops).** Engine block kernels (fixed delay, gain ramp,
   interleave/PCM16 conversions, channel matrix, `map_from`,
   `mix_mapped_from`, linear and streaming resamplers, voice-chain

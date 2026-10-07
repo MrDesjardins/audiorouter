@@ -307,6 +307,38 @@ P2 and P3 remain a backlog.
   Move tests next to each module. Do it as mechanical moves, one domain per
   pull request, with no behavior change.
 - **Verify.** Same test results. Each module stays under about 3,000 lines.
+- **Status (2026-10-07, user request): split done, as mechanical moves.**
+  `lib.rs` now holds the `ControlPlane` struct, `new`, the dispatch entry
+  points (`dispatch*`, handshake), `ControlError` and the error-response
+  helpers: 1,290 lines including 7 dispatch-core tests. Each domain module
+  adds its own `impl ControlPlane` block. Its tests live in
+  `<module>_tests.rs` (the `simple_tests.rs` layout), and shared fixtures
+  live in `test_support.rs`. Module sizes in lines (code / tests):
+  `api_output_schema` 2,045; `recorder_workers` 1,895 / 582;
+  `native_dispatch` 1,374 / 359; `sessions` 1,360 / 478; `native_workers`
+  1,353 / 1,044; `plugins` 1,323 / 438; `recording` 1,295 / 1,635;
+  `api_schema` 952; `native_paths` 942 / 355; `virtual_devices` 928 / 687;
+  `native_bindings` 903 / 203; `native_application` 819 / 265; `graph`
+  789 / 418; `safety` 699 / 676; `persistence` 693 / 463;
+  `recording_library` 670 / 394; `status` 607 / 385; `audio_media`
+  603 / 227; `authorization` 592 / 517; `catalog` 460 / 1,174;
+  `audio_service` 450 / 22; `network` 392 / 576; `test_support` 257.
+  The only change to moved code is visibility: private items and the
+  struct fields that other modules use became `pub(crate)`. Public paths
+  are re-exported from `lib.rs`, so `cli`, `transport` and the examples
+  compile without source changes. `src-tauri` uses only root paths
+  (`ControlPlane`, `ClientGrant`, `ClientRole`, `os_transition`), which are
+  kept; it was not built here. Checks: 244 `#[test]` functions before and
+  after; the `pub` item list is identical (198); all 883 items (functions,
+  methods, types, impls) match their originals once whitespace,
+  `pub(crate)` and the trailing commas rustfmt adds are ignored; all 960
+  comment lines are kept. Workspace Clippy for `x86_64-pc-windows-gnu`
+  with `-D warnings` is clean, and `cargo fmt --check` is clean. The tests
+  were not run: they need Windows.
+  Not done: the typed method table. `dispatch` still matches method
+  strings. Replacing that match is a behavior-sensitive change and should
+  be its own change. `method_output_schema` is still a single
+  1,400-line function.
 
 ### P2-2 `App.tsx` is a 2,600-line component
 
