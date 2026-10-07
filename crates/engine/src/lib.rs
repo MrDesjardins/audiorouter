@@ -118,23 +118,24 @@ impl FixedDelay {
         if block.channels() != self.channels {
             return Err(FixedDelayError::ShapeMismatch);
         }
-        for frame in 0..block.frames() {
-            let read_frame = (self.write_frame + self.capacity_frames - self.delay_frames)
-                % self.capacity_frames;
-            for channel in 0..self.channels {
-                let input = block.channel(channel).unwrap()[frame];
-                let input = if input.is_finite() { input } else { 0.0 };
-                let index = self.write_frame * self.channels + channel;
-                let delayed = self.buffer[read_frame * self.channels + channel];
-                self.buffer[index] = input;
-                block.channel_mut(channel).unwrap()[frame] = if self.delay_frames == 0 {
-                    input
-                } else {
-                    delayed
-                };
+        let (channels, capacity, delay) = (self.channels, self.capacity_frames, self.delay_frames);
+        let frames = block.frames();
+        let start = self.write_frame;
+        // Channels are independent, so each planar channel runs through the
+        // ring on its own; the ring keeps its interleaved layout.
+        for (channel, samples) in block.samples.chunks_exact_mut(frames).enumerate() {
+            let mut write = start;
+            let mut read = (start + capacity - delay) % capacity;
+            for sample in samples {
+                let input = if sample.is_finite() { *sample } else { 0.0 };
+                let delayed = self.buffer[read * channels + channel];
+                self.buffer[write * channels + channel] = input;
+                *sample = if delay == 0 { input } else { delayed };
+                write = if write + 1 == capacity { 0 } else { write + 1 };
+                read = if read + 1 == capacity { 0 } else { read + 1 };
             }
-            self.write_frame = (self.write_frame + 1) % self.capacity_frames;
         }
+        self.write_frame = (start + frames) % capacity;
         Ok(())
     }
 }
@@ -1400,7 +1401,21 @@ impl GainRamp {
 
     /// Apply the current ramp to every channel of a block without allocating.
     pub fn apply(&mut self, block: &mut AudioBlock) {
-        for frame in 0..block.frames {
+        let frames = block.frames;
+        if self.remaining_frames == 0 {
+            // Steady gain: one multiply per sample over the whole block.
+            let gain = self.current;
+            for sample in &mut block.samples {
+                *sample *= gain;
+            }
+            return;
+        }
+        // Advance the ramp once per frame, exactly as before, then apply the
+        // per-frame gains channel by channel. `AudioBlock::new` bounds
+        // `frames` by the quantum, so the stack array always suffices.
+        debug_assert!(frames <= PROCESSING_QUANTUM_FRAMES);
+        let mut gains = [0.0_f32; PROCESSING_QUANTUM_FRAMES];
+        for gain in gains.iter_mut().take(frames) {
             if self.remaining_frames > 0 {
                 self.current += self.step;
                 self.remaining_frames -= 1;
@@ -1409,11 +1424,37 @@ impl GainRamp {
                     self.step = 0.0;
                 }
             }
-            for channel in 0..block.channels {
-                block.channel_mut(channel).unwrap()[frame] *= self.current;
+            *gain = self.current;
+        }
+        for samples in block.samples.chunks_exact_mut(frames) {
+            for (sample, gain) in samples.iter_mut().zip(&gains) {
+                *sample *= *gain;
             }
         }
     }
+}
+
+// The planar kernels below handle mono and stereo blocks only; a larger
+// channel limit must add its own kernels.
+const _: () = assert!(MAX_CHANNELS == 2);
+
+/// One mapped sample from a mono source. The sum starts at +0.0, like the
+/// original per-sample accumulator, so a -0.0 product still maps to +0.0.
+#[inline(always)]
+fn mapped_mono(a: f32, coefficient: f32) -> f32 {
+    let mut value = 0.0;
+    value += a * coefficient;
+    value
+}
+
+/// One mapped sample from a stereo source through a two-coefficient row,
+/// summed in source-channel order from +0.0.
+#[inline(always)]
+fn mapped_stereo(a: f32, b: f32, row: &[f32]) -> f32 {
+    let mut value = 0.0;
+    value += a * row[0];
+    value += b * row[1];
+    value
 }
 
 impl AudioBlock {
@@ -1492,9 +1533,13 @@ impl AudioBlock {
         if source.len() != self.channels * self.frames {
             return Err(BlockError::ShapeMismatch);
         }
-        for (frame, samples) in source.chunks_exact(self.channels).enumerate() {
-            for (channel, sample) in samples.iter().enumerate() {
-                self.channel_mut(channel).unwrap()[frame] = *sample;
+        let channels = self.channels;
+        for (channel, planar) in self.samples.chunks_exact_mut(self.frames).enumerate() {
+            for (sample, interleaved) in planar
+                .iter_mut()
+                .zip(source.iter().skip(channel).step_by(channels))
+            {
+                *sample = *interleaved;
             }
         }
         Ok(())
@@ -1508,9 +1553,13 @@ impl AudioBlock {
         if source.len() != self.channels * self.frames {
             return Err(BlockError::ShapeMismatch);
         }
-        for (frame, samples) in source.chunks_exact(self.channels).enumerate() {
-            for (channel, sample) in samples.iter().enumerate() {
-                self.channel_mut(channel).unwrap()[frame] = f32::from(*sample) / 32_768.0;
+        let channels = self.channels;
+        for (channel, planar) in self.samples.chunks_exact_mut(self.frames).enumerate() {
+            for (sample, interleaved) in planar
+                .iter_mut()
+                .zip(source.iter().skip(channel).step_by(channels))
+            {
+                *sample = f32::from(*interleaved) / 32_768.0;
             }
         }
         Ok(())
@@ -1522,9 +1571,14 @@ impl AudioBlock {
         if destination.len() != self.channels * self.frames {
             return Err(BlockError::ShapeMismatch);
         }
-        for (frame, samples) in destination.chunks_exact_mut(self.channels).enumerate() {
-            for (channel, sample) in samples.iter_mut().enumerate() {
-                *sample = self.channel(channel).unwrap()[frame];
+        for (channel, planar) in self.samples.chunks_exact(self.frames).enumerate() {
+            for (interleaved, sample) in destination
+                .iter_mut()
+                .skip(channel)
+                .step_by(self.channels)
+                .zip(planar)
+            {
+                *interleaved = *sample;
             }
         }
         Ok(())
@@ -1537,9 +1591,13 @@ impl AudioBlock {
         if destination.len() != self.channels * self.frames {
             return Err(BlockError::ShapeMismatch);
         }
-        for (frame, samples) in destination.chunks_exact_mut(self.channels).enumerate() {
-            for (channel, sample) in samples.iter_mut().enumerate() {
-                let value = self.channel(channel).unwrap()[frame];
+        for (channel, planar) in self.samples.chunks_exact(self.frames).enumerate() {
+            for (sample, &value) in destination
+                .iter_mut()
+                .skip(channel)
+                .step_by(self.channels)
+                .zip(planar)
+            {
                 let scaled = if value.is_finite() {
                     (value.clamp(-1.0, 1.0) * 32_768.0).round()
                 } else {
@@ -1560,25 +1618,27 @@ impl AudioBlock {
         }
     }
 
-    /// Apply a same-channel destination-major matrix in place. The fixed
-    /// two-channel scratch array keeps this operation allocation-free.
+    /// Apply a same-channel destination-major matrix in place without
+    /// allocating.
     pub fn apply_channel_matrix(&mut self, matrix: &[f32]) -> Result<(), BlockError> {
         if matrix.len() != self.channels * self.channels {
             return Err(BlockError::ShapeMismatch);
         }
-        for frame in 0..self.frames {
-            let mut input = [0.0; MAX_CHANNELS];
-            for (channel, sample) in input.iter_mut().enumerate().take(self.channels) {
-                *sample = self.channel(channel).unwrap()[frame];
+        if self.channels == 1 {
+            let coefficient = matrix[0];
+            for sample in &mut self.samples {
+                *sample = mapped_mono(*sample, coefficient);
             }
-            for destination_channel in 0..self.channels {
-                let mut value = 0.0;
-                for source_channel in 0..self.channels {
-                    let coefficient = matrix[destination_channel * self.channels + source_channel];
-                    value += input[source_channel] * coefficient;
-                }
-                self.channel_mut(destination_channel).unwrap()[frame] = value;
-            }
+            return Ok(());
+        }
+        // Stereo: the only other shape (`MAX_CHANNELS` is 2, checked above
+        // `mapped_mono`). Both inputs are read before either is replaced.
+        let (left, right) = self.samples.split_at_mut(self.frames);
+        let (left_row, right_row) = matrix.split_at(2);
+        for (left, right) in left.iter_mut().zip(right.iter_mut()) {
+            let (a, b) = (*left, *right);
+            *left = mapped_stereo(a, b, left_row);
+            *right = mapped_stereo(a, b, right_row);
         }
         Ok(())
     }
@@ -1604,17 +1664,14 @@ impl AudioBlock {
         {
             return Err(BlockError::ShapeMismatch);
         }
-        for destination_channel in 0..self.channels {
-            let destination = self.channel_mut(destination_channel).unwrap();
-            for (frame, sample) in destination.iter_mut().enumerate() {
-                let mut value = 0.0;
-                for source_channel in 0..source.channels {
-                    value += source.channel(source_channel).unwrap()[frame]
-                        * matrix[destination_channel * source.channels + source_channel];
-                }
+        self.for_each_mapped(
+            source,
+            matrix,
+            |coefficient| coefficient,
+            |sample, value| {
                 *sample = value;
-            }
-        }
+            },
+        );
         Ok(())
     }
 
@@ -1627,24 +1684,54 @@ impl AudioBlock {
         {
             return Err(BlockError::ShapeMismatch);
         }
-        for destination_channel in 0..self.channels {
-            let destination = self.channel_mut(destination_channel).unwrap();
-            for (frame, sample) in destination.iter_mut().enumerate() {
-                let mut value = 0.0;
-                for source_channel in 0..source.channels {
-                    let coefficient =
-                        matrix[destination_channel * source.channels + source_channel];
-                    let coefficient = if coefficient.is_finite() {
-                        coefficient
-                    } else {
-                        0.0
-                    };
-                    value += source.channel(source_channel).unwrap()[frame] * coefficient;
+        self.for_each_mapped(
+            source,
+            matrix,
+            |coefficient| {
+                if coefficient.is_finite() {
+                    coefficient
+                } else {
+                    0.0
                 }
-                *sample += value;
+            },
+            |sample, value| *sample += value,
+        );
+        Ok(())
+    }
+
+    /// Shared kernel of `map_from` and `mix_mapped_from`: for every
+    /// destination sample, sum the source channels through that destination's
+    /// matrix row (after `coefficient`) and hand the sum to `write`. The
+    /// caller has checked equal frame counts and the matrix length; channel
+    /// slices are borrowed once per destination channel, and the per-sample
+    /// sum keeps the original operation order.
+    #[inline(always)]
+    fn for_each_mapped(
+        &mut self,
+        source: &Self,
+        matrix: &[f32],
+        coefficient: impl Fn(f32) -> f32,
+        mut write: impl FnMut(&mut f32, f32),
+    ) {
+        let frames = self.frames;
+        let rows = matrix.chunks_exact(source.channels);
+        if source.channels == 1 {
+            for (destination, row) in self.samples.chunks_exact_mut(frames).zip(rows) {
+                let gain = coefficient(row[0]);
+                for (sample, &a) in destination.iter_mut().zip(&source.samples) {
+                    write(sample, mapped_mono(a, gain));
+                }
+            }
+            return;
+        }
+        // Stereo source (`MAX_CHANNELS` is 2).
+        let (left, right) = source.samples.split_at(frames);
+        for (destination, row) in self.samples.chunks_exact_mut(frames).zip(rows) {
+            let row = [coefficient(row[0]), coefficient(row[1])];
+            for ((sample, &a), &b) in destination.iter_mut().zip(left).zip(right) {
+                write(sample, mapped_stereo(a, b, &row));
             }
         }
-        Ok(())
     }
 
     /// Linearly resample a same-channel source into this preallocated block.
@@ -1679,9 +1766,11 @@ impl AudioBlock {
         if source.frames == 0 {
             return Err(BlockError::InvalidFrameCount);
         }
-        for destination_channel in 0..self.channels {
-            let destination = self.channel_mut(destination_channel).unwrap();
-            let input = source.channel(destination_channel).unwrap();
+        for (destination, input) in self
+            .samples
+            .chunks_exact_mut(self.frames)
+            .zip(source.samples.chunks_exact(source.frames))
+        {
             for (frame, sample) in destination.iter_mut().enumerate() {
                 let position = frame as f64 * ratio;
                 let lower = position.floor() as usize;
@@ -1847,10 +1936,13 @@ impl StreamingResampler {
             return Ok(0);
         }
         let accepted = source.frames;
-        for channel in 0..self.channels {
-            let source_channel = source.channel(channel).unwrap();
-            let start = channel * self.capacity_frames + self.read_frames + self.queued_frames;
-            self.fifo[start..start + accepted].copy_from_slice(&source_channel[..accepted]);
+        let start = self.read_frames + self.queued_frames;
+        for (plane, source_channel) in self
+            .fifo
+            .chunks_exact_mut(self.capacity_frames)
+            .zip(source.samples.chunks_exact(source.frames))
+        {
+            plane[start..start + accepted].copy_from_slice(source_channel);
         }
         self.queued_frames += accepted;
         Ok(accepted)
@@ -1872,24 +1964,33 @@ impl StreamingResampler {
             return Err(BlockError::InvalidSampleRate);
         }
         destination.clear();
+        let queued = self.read_frames..self.read_frames + self.queued_frames;
         let mut produced = 0;
-        for frame in 0..destination.frames {
-            let position = self.phase + frame as f64 * ratio;
-            let lower = position.floor() as usize;
-            if lower + 1 >= self.queued_frames {
-                break;
-            }
-            let fraction = (position - lower as f64) as f32;
-            for channel in 0..self.channels {
-                let base = channel * self.capacity_frames + self.read_frames;
-                let first = self.fifo[base + lower];
-                let second = self.fifo[base + lower + 1];
+        // Every channel interpolates at the same positions, so each one runs
+        // its own pass and stops at the same frame.
+        for (plane, output) in self
+            .fifo
+            .chunks_exact(self.capacity_frames)
+            .zip(destination.samples.chunks_exact_mut(destination.frames))
+        {
+            let Some(input) = plane.get(queued.clone()) else {
+                return Err(BlockError::InvalidFrameCount);
+            };
+            produced = 0;
+            for (frame, sample) in output.iter_mut().enumerate() {
+                let position = self.phase + frame as f64 * ratio;
+                let lower = position.floor() as usize;
+                if lower + 1 >= input.len() {
+                    break;
+                }
+                let fraction = (position - lower as f64) as f32;
+                let first = input[lower];
+                let second = input[lower + 1];
                 let first = if first.is_finite() { first } else { 0.0 };
                 let second = if second.is_finite() { second } else { 0.0 };
-                destination.channel_mut(channel).unwrap()[frame] =
-                    first + (second - first) * fraction;
+                *sample = first + (second - first) * fraction;
+                produced += 1;
             }
-            produced += 1;
         }
         if produced != destination.frames {
             return Ok(0);
@@ -1944,20 +2045,9 @@ impl VoiceChainBlockProcessor {
         if block.channels() != self.channels || block.frames() != self.frames {
             return Err(BlockError::ShapeMismatch);
         }
-        for frame in 0..self.frames {
-            for channel in 0..self.channels {
-                self.scratch[frame * self.channels + channel] =
-                    block.channel(channel).unwrap()[frame];
-            }
-        }
+        block.copy_to_interleaved(&mut self.scratch)?;
         self.chain.process_interleaved(&mut self.scratch);
-        for frame in 0..self.frames {
-            for channel in 0..self.channels {
-                block.channel_mut(channel).unwrap()[frame] =
-                    self.scratch[frame * self.channels + channel];
-            }
-        }
-        Ok(())
+        block.copy_from_interleaved(&self.scratch)
     }
 
     pub fn meter(&self) -> audiorouter_dsp::MeterSnapshot {
@@ -4788,8 +4878,68 @@ impl BlockMeter {
         let _ = self.published.set(level);
     }
 
+    /// Record one block's levels. All statistics come from a single pass
+    /// over each planar channel; they equal the separate `peak_abs`, `rms`,
+    /// `channel_peak_abs`, `channel_rms` and clip-count passes this replaced
+    /// bit for bit: non-finite samples contribute a zero magnitude (a no-op
+    /// for the max and for the non-negative f64 sums) and are not counted,
+    /// and the whole-block sum runs in the same channel-then-frame order.
     pub fn observe(&self, block: &AudioBlock) {
-        let peak = block.peak_abs();
+        let mut channel_peaks = [0.0_f32; MAX_CHANNELS];
+        let mut channel_rms = [0.0_f32; MAX_CHANNELS];
+        let mut channel_clipped = [0_u64; MAX_CHANNELS];
+        let mut total_sum = 0.0_f64;
+        let mut total_count = 0_usize;
+        for (channel, samples) in block.samples.chunks_exact(block.frames).enumerate() {
+            // Independent per-sample work first, so it vectorizes. A finite
+            // magnitude is non-negative, so its bits order like its value.
+            let mut peak_bits = 0_u32;
+            let mut count = 0_usize;
+            let mut clipped = 0_u64;
+            for &sample in samples {
+                let finite = sample.is_finite();
+                let magnitude = if finite { sample.abs() } else { 0.0 };
+                peak_bits = peak_bits.max(magnitude.to_bits());
+                count += usize::from(finite);
+                clipped += u64::from(magnitude > 1.0);
+            }
+            // The f64 sums stay sequential to keep their rounding. The first
+            // channel's sum is also the start of the whole-block sum.
+            let square = |sample: f32| {
+                if sample.is_finite() {
+                    f64::from(sample) * f64::from(sample)
+                } else {
+                    0.0
+                }
+            };
+            let mut sum = 0.0_f64;
+            if channel == 0 {
+                for &sample in samples {
+                    sum += square(sample);
+                }
+                total_sum = sum;
+            } else {
+                for &sample in samples {
+                    let square = square(sample);
+                    sum += square;
+                    total_sum += square;
+                }
+            }
+            total_count += count;
+            channel_peaks[channel] = f32::from_bits(peak_bits);
+            channel_rms[channel] = if count == 0 {
+                0.0
+            } else {
+                (sum / count as f64).sqrt() as f32
+            };
+            channel_clipped[channel] = clipped;
+        }
+        let peak = channel_peaks.iter().copied().fold(0.0, f32::max);
+        let rms = if total_count == 0 {
+            0.0
+        } else {
+            (total_sum / total_count as f64).sqrt() as f32
+        };
         self.current_peak_bits
             .store(peak.to_bits(), Ordering::Relaxed);
         if let Some(level) = self.published.get() {
@@ -4797,31 +4947,19 @@ impl BlockMeter {
         }
         self.observed_frames
             .fetch_add(block.frames() as u64, Ordering::Relaxed);
-        for channel in 0..MAX_CHANNELS {
-            self.channel_current_peak_bits[channel].store(
-                block.channel_peak_abs(channel).unwrap_or(0.0).to_bits(),
-                Ordering::Relaxed,
-            );
+        // Channels the block lacks report a zero current peak.
+        for (bits, channel_peak) in self.channel_current_peak_bits.iter().zip(channel_peaks) {
+            bits.store(channel_peak.to_bits(), Ordering::Relaxed);
         }
         update_atomic_peak(&self.peak_bits, peak);
-        self.rms_bits
-            .store(block.rms().to_bits(), Ordering::Relaxed);
+        self.rms_bits.store(rms.to_bits(), Ordering::Relaxed);
         let mut clipped = 0;
         for channel in 0..block.channels() {
-            if let Some(channel_peak) = block.channel_peak_abs(channel) {
-                update_atomic_peak(&self.channel_peak_bits[channel], channel_peak);
-            }
-            if let Some(channel_rms) = block.channel_rms(channel) {
-                self.channel_rms_bits[channel].store(channel_rms.to_bits(), Ordering::Relaxed);
-            }
-            let channel_clipped = block
-                .channel(channel)
-                .into_iter()
-                .flatten()
-                .filter(|sample| sample.is_finite() && sample.abs() > 1.0)
-                .count() as u64;
-            self.channel_clipped_samples[channel].fetch_add(channel_clipped, Ordering::Relaxed);
-            clipped += channel_clipped;
+            update_atomic_peak(&self.channel_peak_bits[channel], channel_peaks[channel]);
+            self.channel_rms_bits[channel].store(channel_rms[channel].to_bits(), Ordering::Relaxed);
+            self.channel_clipped_samples[channel]
+                .fetch_add(channel_clipped[channel], Ordering::Relaxed);
+            clipped += channel_clipped[channel];
         }
         self.clipped_samples.fetch_add(clipped, Ordering::Relaxed);
     }
@@ -9562,13 +9700,14 @@ impl RuntimeGraph {
                     if block.channels() == 2 && right.is_none() {
                         let linked = left
                             .try_with(|processor| {
-                                if processor.channels() == 2 {
-                                    let (left_samples, right_samples) =
-                                        block.channels_mut_pair().unwrap();
-                                    processor.process_planar_linked(left_samples, right_samples);
-                                    true
-                                } else {
-                                    false
+                                // The block was checked to be stereo above.
+                                match (processor.channels(), block.channels_mut_pair()) {
+                                    (2, Some((left_samples, right_samples))) => {
+                                        processor
+                                            .process_planar_linked(left_samples, right_samples);
+                                        true
+                                    }
+                                    _ => false,
                                 }
                             })
                             .unwrap_or(false);
@@ -9610,13 +9749,14 @@ impl RuntimeGraph {
                     if block.channels() == 2 && right.is_none() {
                         let linked = left
                             .try_with(|processor| {
-                                if processor.channels() == 2 {
-                                    let (left_samples, right_samples) =
-                                        block.channels_mut_pair().unwrap();
-                                    processor.process_planar_linked(left_samples, right_samples);
-                                    true
-                                } else {
-                                    false
+                                // The block was checked to be stereo above.
+                                match (processor.channels(), block.channels_mut_pair()) {
+                                    (2, Some((left_samples, right_samples))) => {
+                                        processor
+                                            .process_planar_linked(left_samples, right_samples);
+                                        true
+                                    }
+                                    _ => false,
                                 }
                             })
                             .unwrap_or(false);

@@ -406,6 +406,38 @@ P2 and P3 remain a backlog.
   with shape checks done once at the top.
 - **Verify.** Benchmarks show the gain, and the continuity harness stays
   glitch-free.
+- **Status (2026-10-07).** Done except the Windows continuity run. The
+  hot loops borrow channel slices once and iterate channel-major; their 21
+  `unwrap`s (19 in the kernels, 2 in linked dynamics) are gone (shape checks were already
+  at the top; the remaining engine `unwrap`s are in graph compilation and
+  pool setup). The ~23 µs per-route cost came from `BlockMeter::observe`:
+  each route observes about eight meters per quantum, and each observation
+  walked the block about eight times (peak, RMS, per-channel peak twice,
+  per-channel RMS, clip count). It is now one vectorizable pass plus the
+  sequential f64 sums, with bit-identical results. Median µs per quantum,
+  `cargo bench -p audiorouter-engine --bench realtime`, Linux container:
+
+  | Route | Before | After |
+  | --- | ---: | ---: |
+  | Denoise | 66.3 | 46.4 |
+  | SpeechDenoise | 67.0 | 47.1 |
+  | SpectralGate | 63.5 | 43.6 |
+  | Pitch | 93.5 | 72.9 |
+  | ParametricEq | 24.3 | 3.7 |
+  | GraphicEq | 34.2 | 13.9 |
+  | FirFilter | 23.9 | 3.5 |
+  | Compressor | 26.9 | 6.6 |
+  | Gate | 36.7 | 16.7 |
+  | Limiter | 25.1 | 5.2 |
+  | Dehum | 27.6 | 7.7 |
+  | Declick | 24.6 | 4.7 |
+  | BassTreble | 25.6 | 5.6 |
+  | Delay | 25.5 | 5.6 |
+  | Meter | 26.0 | 3.9 |
+  | Gain | 23.4 | 3.5 |
+  | route-32-tools | 680.0 | 507.6 |
+
+  The 32-tool route is now dominated by the DSP tools themselves.
 
 ### P2-8 No coverage or soak automation
 
