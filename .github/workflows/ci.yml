@@ -135,11 +135,14 @@ jobs:
 
       # Builds the e2e_backend fixture, then runs every Playwright test in the
       # installed Edge. README screenshots stay off (they write into docs/).
+      # One worker: with two, the live Duck and Compressor tests overlapped
+      # and both pages' "element is stable" waits stalled for over a minute
+      # (run 37560544251); each passes in seconds when run alone.
       - name: Run Playwright tests
         shell: pwsh
         env:
           TEMP: ${{ runner.temp }}
-        run: npm --prefix ui run e2e
+        run: npm --prefix ui run e2e -- --workers=1
 
       - name: Upload Playwright traces and screenshots
         if: failure()
