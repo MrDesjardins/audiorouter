@@ -188,8 +188,25 @@ budget); a 32-tool route 694 µs (26 %). Gain alone costs 23 µs, so most of
 that is per-route overhead, which is a P2-7 follow-up.
 Windows evidence: CI on the branch (see the next action). Transport,
 control and CLI tests run only there.
-Remaining: P0-1 still runs plug-in worker start/re-hash at Play and
-bundle export/import inline. Rollback: revert the individual commits;
+P0-1 follow-up (same day): plug-in preparation at Play now gathers the
+scan entry, saved state and parameters on the control thread, then re-hashes
+each binary, starts its worker process and runtime bridge in
+`start_plugin_bridges` under `while_servicing_audio`; the bridges are
+published to the node controls afterwards. Only routes already running are
+serviced meanwhile; the route being prepared is compiled from the returned
+stages later. Session-file export and import are split in `storage`:
+`prepare_bundle_export` (SQLite reads) and `PreparedBundleExport::write`
+(state files, SHA-256, ZIP), `stage_session_bundle` (unpack, hash checks,
+asset reads) and `restore_session_bundle` (SQLite writes, state files). The
+file parts run under `while_servicing_audio`. Test:
+`bundle_file_work_runs_without_the_connection` (both halves are `Send` and
+round-trip across threads). No control-level timing test for these paths:
+service passes are counted only while a native worker runs, which needs a
+device (Windows) and, for plug-ins, a worker executable.
+Remaining for P0-1: SQLite reads/writes (export reads imported audio of up
+to 64 MB per file from the database on the control thread), database
+backups, and the sine-continuity measurement on Windows.
+Rollback: revert the individual commits;
 the WAL switch is undone by `PRAGMA journal_mode = DELETE`.
 Next action: green Windows CI on the branch, then a pull request if the
 user asks for one.

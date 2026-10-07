@@ -73,7 +73,7 @@ P2 and P3 remain a backlog.
 
 | ID | Fix | Commit | What remains |
 | --- | --- | --- | --- |
-| P0-1 | Plug-in scan/inspect and audio decoding run on a worker while the control thread keeps servicing audio every 1 ms | `2cae3569` | Plug-in worker start and re-hash at Play, and bundle export/import, still run inline |
+| P0-1 | Plug-in scan/inspect, audio decoding, plug-in re-hash and worker start at Play, and the file part of session-file export/import (ZIP, hashing, asset files) run on a worker while the control thread keeps servicing audio every 1 ms | `2cae3569`, see the active plan | SQLite reads and writes stay on the control thread (session and imported audio for export, restored assets for import, saved plug-in state at Play); database backups; the sine-continuity measurement on Windows |
 | P0-2 | Four pipe instances; I/O threads survive bad connections; clients wait up to 2 s on a busy pipe | `72aa0731` | — |
 | P0-3 | The production loop logs RPCs through a bounded queue to a writer thread | `f8440b20` | — |
 | P1-1 | Successful 20 Hz polls are not logged; the log mutex wait is bounded (250 ms); panic hook uses `try_lock` | `f8440b20` | — |
