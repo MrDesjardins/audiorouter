@@ -219,6 +219,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "windows 0.62.2",
+ "zip",
 ]
 
 [[package]]

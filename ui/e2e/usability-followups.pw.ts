@@ -84,6 +84,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       Object.assign(window, { __TAURI_INTERNALS__: { invoke: async (command: string) => {
         if (command === "log_folder_path") return "C:/Users/Example/AppData/Local/AudioRouter/logs";
         if (command === "open_logs_folder") { Object.assign(window, { __logsOpened: true }); return null; }
+        if (command === "export_support_bundle") return "audiorouter-support-1.zip";
         return null;
       } } });
       Object.defineProperty(navigator, "clipboard", { value: { writeText: async () => undefined } });
@@ -94,9 +95,28 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     const panel = page.getByRole("region", { name: "Send logs for support" });
     await expect(panel.getByLabel("Logs folder", { exact: true })).toHaveValue("C:/Users/Example/AppData/Local/AudioRouter/logs");
     await panel.getByRole("button", { name: "Open logs folder" }).click();
-    await expect(panel.getByRole("status")).toContainText("Logs folder opened");
+    const message = panel.locator(".log-files-message");
+    await expect(message).toContainText("Logs folder opened");
     await panel.getByRole("button", { name: "Copy folder path" }).click();
-    await expect(panel.getByRole("status")).toHaveText("Folder path copied.");
+    await expect(message).toHaveText("Folder path copied.");
+    // Verbose logging (P2-3): the status keeps its place and size while it
+    // switches on and counts down (UI-17).
+    const verboseStatus = panel.getByRole("status", { name: "Verbose logging status" });
+    await expect(verboseStatus).toHaveText("Off");
+    const below = panel.getByLabel("Logs folder", { exact: true });
+    // Offsets inside the panel: the side panel may scroll to the clicked control.
+    const offset = async () => (await below.boundingBox())!.y - (await panel.boundingBox())!.y;
+    const before = await offset();
+    const statusBox = (await verboseStatus.boundingBox())!;
+    const panelHeight = (await panel.boundingBox())!.height;
+    await panel.getByRole("checkbox", { name: "Verbose logging" }).check();
+    await expect(verboseStatus).toHaveText(/^On · (60:00|59:5\d) left$/);
+    expect(await offset()).toBe(before);
+    expect((await verboseStatus.boundingBox())!.height).toBe(statusBox.height);
+    await panel.getByRole("button", { name: "Copy support bundle" }).click();
+    await expect(message).toContainText("Saved audiorouter-support-1.zip");
+    expect(await offset()).toBe(before);
+    expect((await panel.boundingBox())!.height).toBe(panelHeight);
     const field = panel.getByLabel("Logs folder", { exact: true });
     await expect(field).toHaveCSS("border-radius", "9px");
     const box = (await panel.boundingBox())!;

@@ -85,9 +85,33 @@ method, session, destination, and path before approving a mutating operation.
 
 ## Diagnostics and support
 
-In AudioRouter, choose **Logs → Open logs folder** to open File Explorer.
-Use **Copy folder path** if you need to paste the location into another window.
-The Logs panel lists which files to attach to your support message.
+In AudioRouter, choose **Logs → Copy support bundle**. It saves one
+`audiorouter-support-<time>.zip` in the logs folder and selects it in File
+Explorer. The ZIP holds a `manifest.json` (app version, build, Windows
+version, file list), the last 2,000 lines of `backend.jsonl`, `shell.jsonl`
+and `mcp-activity.jsonl`, and the window's client diagnostics. Every line
+passes through a path filter (`C:\…`, `\\server\…`, `/home/…` become
+`<path>`) before it enters the ZIP. Nothing is uploaded; attach the file
+yourself. **Open logs folder** opens File Explorer on the folder instead, and
+**Copy folder path** copies its location.
+
+To trace one action across the logs, use its request ID. The window sends a
+short `requestId` (8 characters such as `K7Q2M9XD`) with every request; the
+tray makes one per action, the localhost HTTP adapter one per HTTP request
+(or uses a valid `X-Request-Id` from the caller), and the MCP server one per
+tool call. The same ID appears as `requestId` in `shell.jsonl`,
+`backend.jsonl` and `mcp-activity.jsonl`, and a failed request adds a client
+diagnostics row such as `RPC failed: sessions.play (permissionDenied) [req
+K7Q2M9XD]`. IDs are 1 to 32 characters from `A-Z a-z 0-9 -`; anything else is
+dropped, never logged.
+
+For a hard-to-catch problem, turn on **Logs → Verbose logging** before you
+reproduce it. For one hour at most (the status shows the time left; it then
+switches itself off) the backend and shell also log successful routine reads
+(such as the 20 Hz diagnostics poll) and each request's `durationMs`. Verbose
+records carry `"verbose": true`. They still contain no parameters, file paths
+or audio. Verbose mode fills the 5 MiB logs faster, so switch it off when
+done. The switch is the `diagnostics.setVerbose` method (`sessionControl`).
 
 Before reproducing an issue, note the local time and the action you take.
 Afterwards, copy the JSONL files from `%LOCALAPPDATA%\AudioRouter\logs`
@@ -97,6 +121,8 @@ Afterwards, copy the JSONL files from `%LOCALAPPDATA%\AudioRouter\logs`
 - `backend.jsonl` and `backend.previous.jsonl`: backend requests and outcomes.
 - `discovery.jsonl` and `discovery.previous.jsonl`: failed device reads,
   including endpoints skipped because they disappeared during enumeration.
+- `mcp-activity.jsonl`: assistant tool calls (tool name, safe argument
+  names, outcome, request ID).
 
 Each file rotates at 5 MiB and keeps one previous file. Collect all three
 types when the input/output list is empty. The diagnostics review build adds

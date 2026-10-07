@@ -1,7 +1,9 @@
 import { AudioRouterRpcError, createAudioRouterClient } from "@audiorouter/contracts";
 import { uiIdempotencyKey } from "./idempotency";
+import { reportRpcFailure } from "./clientDiagnostics";
 import type {
   AudioRouterClient,
+  VerboseDiagnosticsStatus,
   ApplicationInfo,
   DeviceListItem,
   VirtualDeviceInfo,
@@ -267,6 +269,9 @@ export interface UiBackend {
   listClients(): Promise<ClientRow[]>;
   authorizeClient(clientId: string, role: "observer" | "editor" | "operator", idempotencyKey: string): Promise<ClientAuthorizeResult>;
   revokeClient(clientId: string, idempotencyKey: string): Promise<ClientRevokeResult>;
+  /** Opt-in verbose logging (P2-3); absent when there is no backend. */
+  getVerboseDiagnostics?(): Promise<VerboseDiagnosticsStatus>;
+  setVerboseDiagnostics?(enabled: boolean): Promise<VerboseDiagnosticsStatus>;
 }
 
 export type UiSnapshotState = {
@@ -946,6 +951,12 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
     async revokeClient(clientId, idempotencyKey) {
       return client.request("clients.revoke", { clientId, idempotencyKey });
     },
+    async getVerboseDiagnostics() {
+      return client.request("diagnostics.getVerbose", undefined);
+    },
+    async setVerboseDiagnostics(enabled) {
+      return client.request("diagnostics.setVerbose", { enabled });
+    },
     ...(registerStartup === undefined ? {} : { registerStartup }),
     ...(startupRegistrationStatus === undefined ? {} : { startupRegistrationStatus }),
   };
@@ -953,5 +964,7 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string, 
 
 /** Build the live UI backend directly from the host-provided framed transport. */
 export function createLiveBackendFromTransport(transport: RpcTransport, sessionId: string, registerStartup?: (enabled: boolean) => Promise<string>, startupRegistrationStatus?: () => Promise<"registered" | "unregistered">): UiBackend {
-  return createLiveBackend(createAudioRouterClient(transport), sessionId, registerStartup, startupRegistrationStatus);
+  // Each request carries a correlation ID; failures are summarized (method,
+  // category, ID) in the client diagnostics so they can be matched in the logs.
+  return createLiveBackend(createAudioRouterClient(transport, { onRequestFailed: reportRpcFailure }), sessionId, registerStartup, startupRegistrationStatus);
 }

@@ -81,6 +81,14 @@ second backend.
   deadlines, concurrency and request rate. HTTP runs off audio threads.
   Documentation has restrictive CSP and only fixed assets. No bodies/tokens
   in diagnostics.
+- **HTTP-10 — Request IDs.** Each request forwarded to the backend carries a
+  correlation ID: the caller's `X-Request-Id` when it is 1–32 characters from
+  `[A-Za-z0-9-]`, otherwise a generated 8-character ID (an invalid value is
+  never echoed or logged). It travels as the JSON-RPC `requestId` member,
+  appears in `shell.jsonl` (`"source": "http"`) and `backend.jsonl`, and is
+  returned in the `X-Request-Id` response header of every forwarded call.
+  Successful read-only HTTP calls are written to `shell.jsonl` only while
+  verbose logging is on.
 
 ## Acceptance and rollback
 

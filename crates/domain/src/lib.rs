@@ -766,7 +766,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 121] = [
+pub const API_METHODS: [ApiMethodSpec; 123] = [
     ApiMethodSpec {
         name: "meters.reset",
         permission: PermissionScope::SessionControl,
@@ -858,6 +858,19 @@ pub const API_METHODS: [ApiMethodSpec; 121] = [
         name: "system.diagnostics",
         permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
+    },
+    // Opt-in verbose logging for a support case (P2-3): one hour at most,
+    // still without parameters, paths or audio. Changing it is a session
+    // control, not a read, so observers cannot fill the user's logs.
+    ApiMethodSpec {
+        name: "diagnostics.getVerbose",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "diagnostics.setVerbose",
+        permission: PermissionScope::SessionControl,
+        side_effect: SideEffectClass::Mutating,
     },
     ApiMethodSpec {
         name: "system.quit",

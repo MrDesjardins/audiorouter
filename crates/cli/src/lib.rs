@@ -2170,6 +2170,10 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
                 ))
             }
             "tools/call" if initialized => {
+                // One correlation ID per tool call: every backend request the
+                // tool makes carries it, and the activity record names it.
+                let request_id = audiorouter_protocol::diagnostics::new_correlation_id();
+                MCP_CORRELATION_ID.with(|current| *current.borrow_mut() = Some(request_id.clone()));
                 let response = mcp_tool_call(
                     &mut plane,
                     &client_id,
@@ -2177,7 +2181,8 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
                     pipe_name.as_deref(),
                     &message,
                 );
-                log_mcp_tool_activity(&client_id, &message, &response);
+                MCP_CORRELATION_ID.with(|current| *current.borrow_mut() = None);
+                log_mcp_tool_activity(&client_id, &message, &response, &request_id);
                 Some(response)
             }
             "resources/list" if initialized => Some(json!({
@@ -2315,10 +2320,17 @@ fn mcp_listed_tools(advanced: bool) -> Value {
     )
 }
 
+thread_local! {
+    /// Correlation ID of the MCP tool call this thread is serving, carried as
+    /// `requestId` on each backend request it makes (P2-3).
+    static MCP_CORRELATION_ID: std::cell::RefCell<Option<String>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 /// Keep an auditable, local summary of assistant tool use. Argument values are
 /// deliberately excluded because call_api may contain private configuration or
 /// opaque media; only safe argument field names and outcome are recorded.
-fn log_mcp_tool_activity(client_id: &str, request: &Value, response: &Value) {
+fn log_mcp_tool_activity(client_id: &str, request: &Value, response: &Value, request_id: &str) {
     use std::io::Write;
     static LOG_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
     let lock = LOG_LOCK.get_or_init(|| std::sync::Mutex::new(()));
@@ -2353,7 +2365,7 @@ fn log_mcp_tool_activity(client_id: &str, request: &Value, response: &Value) {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_millis())
         .unwrap_or_default();
-    let record = mcp_tool_activity_record(client_id, request, response, now_ms);
+    let record = mcp_tool_activity_record(client_id, request, response, now_ms, request_id);
     if let Ok(mut file) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -2370,7 +2382,9 @@ fn mcp_tool_activity_record(
     request: &Value,
     response: &Value,
     now_ms: u128,
+    request_id: &str,
 ) -> Value {
+    let request_id = audiorouter_protocol::diagnostics::valid_correlation_id(Some(request_id));
     let tool = request
         .pointer("/params/name")
         .and_then(Value::as_str)
@@ -2441,7 +2455,7 @@ fn mcp_tool_activity_record(
         .filter(|character| !character.is_control())
         .take(128)
         .collect::<String>();
-    serde_json::json!({ "timeUnixMs": now_ms, "clientId": client_id, "tool": tool, "argumentFields": keys, "outcome": if failed { "error" } else { "ok" }, "errorKind": error_kind })
+    serde_json::json!({ "timeUnixMs": now_ms, "requestId": request_id, "clientId": client_id, "tool": tool, "argumentFields": keys, "outcome": if failed { "error" } else { "ok" }, "errorKind": error_kind })
 }
 
 fn option_value_owned(args: &[String], option: &str) -> Result<String, CliError> {
@@ -2907,8 +2921,14 @@ fn mcp_api_value(
         params,
     };
     if let Some(pipe_name) = pipe_name {
-        let frame = audiorouter_protocol::encode_frame(&request)
-            .map_err(|error| format!("cannot encode backend request: {error}"))?;
+        let request_id = MCP_CORRELATION_ID.with(|current| current.borrow().clone());
+        let frame = audiorouter_protocol::encode_frame(
+            &audiorouter_protocol::diagnostics::CorrelatedRequest::new(
+                &request,
+                request_id.as_deref(),
+            ),
+        )
+        .map_err(|error| format!("cannot encode backend request: {error}"))?;
         let response = audiorouter_transport::round_trip(pipe_name, &frame)
             .map_err(|error| format!("backend pipe request failed: {error}"))?;
         return audiorouter_protocol::decode_frame::<Value>(&response)
@@ -2973,8 +2993,10 @@ mod tests {
         });
         let response =
             serde_json::json!({ "result": { "isError": true, "text": "private response" } });
-        let record = mcp_tool_activity_record("assistant-client", &request, &response, 1234);
+        let record =
+            mcp_tool_activity_record("assistant-client", &request, &response, 1234, "K7Q2M9XD");
         assert_eq!(record["tool"], "call_api");
+        assert_eq!(record["requestId"], "K7Q2M9XD");
         assert_eq!(record["outcome"], "error");
         assert_eq!(record["timeUnixMs"], 1234);
         assert_eq!(
@@ -2999,8 +3021,11 @@ mod tests {
         let request =
             serde_json::json!({"params":{"name":"apply_graph_change","arguments":{"revision":7}}});
         let response = serde_json::json!({"error":{"code":-32001,"message":"private server detail","data":{"code":"permissionDenied"}}});
-        let record = mcp_tool_activity_record("assistant-client", &request, &response, 1234);
+        let record =
+            mcp_tool_activity_record("assistant-client", &request, &response, 1234, "bad id");
         assert_eq!(record["errorKind"], "permissionDenied");
+        // An invalid correlation ID is never logged.
+        assert_eq!(record["requestId"], Value::Null);
         assert_eq!(record["outcome"], "error");
         assert!(!record.to_string().contains("private server detail"));
     }
@@ -3018,7 +3043,9 @@ mod tests {
             &request,
             &serde_json::json!({"result":{}}),
             1234,
+            &"x".repeat(33),
         );
+        assert_eq!(record["requestId"], Value::Null);
         assert_eq!(record["argumentFields"].as_array().unwrap().len(), 32);
         assert!(record["argumentFields"]
             .as_array()

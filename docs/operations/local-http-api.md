@@ -230,6 +230,15 @@ not `localhost`; from another device use the Network URL. 409: stale revision; f
 in the app. A busy port prevents startup and says to choose another port.
 Backend errors retain `error.code`, `message` and structured `data`.
 
+Every request that reaches the backend gets a request ID, returned in the
+`X-Request-Id` response header (success and error alike). Send your own
+`X-Request-Id: <1-32 characters from A-Z a-z 0-9 ->` to choose it, for example
+a Stream Deck key name plus a counter; any other value is replaced by a
+generated 8-character ID. The same ID is written as `requestId` to
+`shell.jsonl` (with `"source": "http"`) and `backend.jsonl`, so a support
+case can follow one call through the logs. Successful HTTP reads are logged
+only while verbose logging is on, so polling controllers do not fill the log.
+
 The adapter bounds headers to 16 KiB, body to 4 MiB, header/body reads to a
 two-second deadline and socket writes to two seconds. Four workers and 32
 queued connections keep work off audio threads. A shared token bucket refills

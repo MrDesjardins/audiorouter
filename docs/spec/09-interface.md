@@ -130,6 +130,14 @@ opens in Explorer; support instructions identify current/previous shell, backend
 and discovery JSONL files and ask for reproduction steps/time. Missing clipboard
 or Explorer access provides a useful fallback; browser previews explain that
 local log access requires the installed desktop app (UI-13, SEC-10).
+Logs also offers Copy support bundle: the shell writes one new ZIP to the logs
+folder (manifest with app/build/Windows version, the last 2,000 lines of the
+backend, shell and MCP activity logs, and the client diagnostics, each line
+path-filtered) and selects it in Explorer; nothing is uploaded. A Verbose
+logging switch calls `diagnostics.setVerbose` and shows the time left in a
+fixed-width status that never moves the panel (UI-17); it expires after one
+hour. Failed requests add a client diagnostics row with the method, error
+category and request ID (P2-3).
 
 Desktop startup detects an existing same-user, same-Windows-session AudioRouter
 instance before opening the database or contacting its backend. Show “There is
@@ -144,6 +152,14 @@ opens in Explorer; support instructions identify current/previous shell, backend
 and discovery JSONL files and ask for reproduction steps/time. Missing clipboard
 or Explorer access provides a useful fallback; browser previews explain that
 local log access requires the installed desktop app (UI-13, SEC-10).
+Logs also offers Copy support bundle: the shell writes one new ZIP to the logs
+folder (manifest with app/build/Windows version, the last 2,000 lines of the
+backend, shell and MCP activity logs, and the client diagnostics, each line
+path-filtered) and selects it in Explorer; nothing is uploaded. A Verbose
+logging switch calls `diagnostics.setVerbose` and shows the time left in a
+fixed-width status that never moves the panel (UI-17); it expires after one
+hour. Failed requests add a client diagnostics row with the method, error
+category and request ID (P2-3).
 
 The primary graph remains a canvas; it has no List view switch. Advanced
 provides expandable Keyboard graph controls with node selection and the same
