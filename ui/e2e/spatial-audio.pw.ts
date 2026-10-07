@@ -45,7 +45,11 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(page.getByRole("slider", { name: "Room" })).toHaveCount(0);
     await expect(endpoint.locator("option", { hasText: "Loopback ·" })).toHaveCount(0);
     expect(
-      await page.evaluate(() => (window as any).__routeFixtureCalls().filter((call: string) => call === "commit")),
+      await page.evaluate(() =>
+        (window as unknown as { __routeFixtureCalls: () => string[] })
+          .__routeFixtureCalls()
+          .filter((call: string) => call === "commit"),
+      ),
     ).toEqual([]);
   });
 }

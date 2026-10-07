@@ -75,6 +75,8 @@ export class RealBackend {
   private restarting: Promise<void> | null = null;
   private pending = new Map<
     number,
+    // JSON-RPC test client: responses are untyped JSON by design.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     { resolve: (value: any) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }
   >();
   readonly methods: string[] = [];
@@ -128,6 +130,7 @@ export class RealBackend {
     if (this.restarting) await this.restarting;
     const id = ++this.sequence;
     this.methods.push(request.method);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- untyped JSON-RPC response
     const response: any = await new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
@@ -140,6 +143,8 @@ export class RealBackend {
     });
     return { ...response, id: request.id ?? id };
   }
+  // Tests read ad hoc result fields, so the default result type stays `any`.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async call<T = any>(method: string, params?: unknown): Promise<T> {
     const response = await this.send({ method, params });
     if (response.error)
@@ -203,6 +208,9 @@ export const test = base.extend<{ backend: RealBackend }>({
           path.dirname(directory) !== path.resolve(tmpdir()) ||
           !path.basename(directory).startsWith("audiorouter-e2e-")
         )
+          // Deliberate: refusing to delete an unexpected path must fail the
+          // test even when it would hide the test's own error.
+          // eslint-disable-next-line no-unsafe-finally
           throw new Error("Invalid cleanup target");
         await rm(directory, { recursive: true, force: true });
       }

@@ -1,5 +1,5 @@
 import { test, expect } from "./real-backend";
-import { openConnectionForm, openDeviceTroubleshooting } from "./workbench";
+import { openConnectionForm } from "./workbench";
 import { syntheticWav } from "./audio-fixtures";
 import type { Session } from "../../contracts/src/index";
 

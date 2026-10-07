@@ -37,8 +37,12 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     const confirm = page.getByRole("button", { name: "Confirm quit AudioRouter" });
     await expect(confirm).toHaveText("Click again to quit");
     await page.locator(".topbar").screenshot({ path: testInfo.outputPath(`quit-armed-${theme}.png`) });
-    expect(await page.evaluate(() => (window as any).__quitCalls)).not.toContain("quit_app");
+    expect(await page.evaluate(() => (window as unknown as { __quitCalls: string[] }).__quitCalls)).not.toContain(
+      "quit_app",
+    );
     await confirm.click();
-    await expect.poll(() => page.evaluate(() => (window as any).__quitCalls)).toContain("quit_app");
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { __quitCalls: string[] }).__quitCalls))
+      .toContain("quit_app");
   });
 }

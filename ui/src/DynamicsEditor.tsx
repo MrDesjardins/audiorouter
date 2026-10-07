@@ -123,9 +123,9 @@ function TransferCurve({
       .join(" ");
   const ticks: number[] = [];
   for (let value = max - (max % grid); value >= min; value -= grid) ticks.push(value);
-  let path = "";
-  let handles: HandleSpec[] = [];
-  let guides: ReactNode = null;
+  let path: string;
+  let handles: HandleSpec[];
+  let guides: ReactNode;
   if (kind === "compressor") {
     const settings = compressorSettings(node);
     path = curve((level) => compressorOutputDb(level, settings));

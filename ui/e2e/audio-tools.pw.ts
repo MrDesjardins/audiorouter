@@ -381,38 +381,7 @@ test("a complex multi-source set can be added and its mute control responds", as
   for (const label of kinds)
     await page.locator(".canvas-library").getByRole("button", { name: label, exact: true }).click();
   await page.addStyleTag({ content: ".canvas-library { display: none !important; }" });
-  const node = (label: string, index = -1) => {
-    const matches = page.locator(".react-flow__node").filter({ hasText: label });
-    return index < 0 ? matches.last() : matches.nth(index);
-  };
-  const connect = async (source: ReturnType<typeof node>, target: ReturnType<typeof node>, inputIndex = 0) => {
-    const outputs = source.locator('.react-flow__handle.source[data-debug-side="right"]');
-    const inputs = target.locator('.react-flow__handle.target[data-debug-side="left"]');
-    const count = await inputs.count();
-    const before = await page.locator(".react-flow__edges .react-flow__edge").count();
-    await outputs.last().dragTo(inputs.nth(Math.min(inputIndex, count - 1)));
-    await expect(
-      page.locator(".react-flow__edges .react-flow__edge"),
-      `${await source.innerText()} → ${await target.innerText()}`,
-    ).toHaveCount(before + 1, { timeout: 1500 });
-  };
-  const moveNode = async (target: ReturnType<typeof node>, x: number, y: number) => {
-    const box = await target.boundingBox();
-    if (!box) throw new Error("Graph node is not visible");
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(x, y, { steps: 12 });
-    await page.mouse.up();
-  };
-  const initialEdges = await page.locator(".react-flow__edges .react-flow__edge").count();
-  const source = node("Physical input 1");
-  const sourceTwo = node("Physical input 2");
-  const mixer = node("Mixer 1");
-  const chain = [mixer, node("Gain 1"), node("Advanced EQ 1"), node("Compressor 1"), node("Limiter 1")];
   const muteNode = page.getByTestId("rf__node-mute-1");
-  const meterNode = node("Meter 1");
-  const outputNode = node("Physical output 1");
-  const recorderNode = node("Recorder 1");
   await expect(page.getByText("No inputs connected")).toBeVisible();
   const mute = muteNode.getByRole("button", { name: /live, click to mute/i });
   await mute.click();

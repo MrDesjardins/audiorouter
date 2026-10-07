@@ -26,9 +26,17 @@ test("failed live autosave does not retry unchanged draft; explicit Save still w
   await expect(page.locator(".global-action-message")).toContainText("Another save changed");
   // More than five previous 400 ms retry intervals.
   await page.waitForTimeout(2300);
-  expect(await page.evaluate(() => (window as any).__routeFixturePlanCalls())).toBe(1);
+  expect(
+    await page.evaluate(() =>
+      (window as unknown as { __routeFixturePlanCalls: () => number }).__routeFixturePlanCalls(),
+    ),
+  ).toBe(1);
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect.poll(() => page.evaluate(() => (window as any).__routeFixturePlanCalls())).toBe(2);
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as unknown as { __routeFixturePlanCalls: () => number }).__routeFixturePlanCalls()),
+    )
+    .toBe(2);
 });
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`reading digit boundary stays stable in ${theme}`, async ({ page }, testInfo) => {
@@ -64,7 +72,8 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(panel).toContainText("-99.9");
     const before = await panel.boundingBox();
     await page.evaluate(() => {
-      const fixture = (window as any).__routeFixtureTelemetry[0].meter;
+      const fixture = (window as unknown as { __routeFixtureTelemetry: { meter: { peakDb: number; rmsDb: number } }[] })
+        .__routeFixtureTelemetry[0].meter;
       fixture.peakDb = -100;
       fixture.rmsDb = -100;
     });

@@ -82,7 +82,11 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(inspector).toContainText("Peak hold and clipping counters reset");
     await expect(inspector).not.toContainText("0.010 s");
     expect(
-      await page.evaluate(() => (window as any).__routeFixtureCalls().filter((x: string) => x === "commit")),
+      await page.evaluate(() =>
+        (window as unknown as { __routeFixtureCalls: () => string[] })
+          .__routeFixtureCalls()
+          .filter((x: string) => x === "commit"),
+      ),
     ).toEqual([]);
   });
 }

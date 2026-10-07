@@ -29,7 +29,6 @@ import type {
   RecordingMetadataResult,
   RecordingRenameResult,
   RecordingPreviewResult,
-  RecordingRecoveryResult,
   RecordingRecoverySingleResult,
   RecordingRecoveryList,
   RecordingRevealResult,

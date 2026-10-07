@@ -17,7 +17,7 @@ const plugin = (id: string, name: string) =>
   node(id, "plugin", name, [port("in", "input", 1), port("out", "output", 1)], {
     format: "vst2",
     classId: "default",
-    path: `C:\Plugins\${id}.dll`,
+    path: `C:\\Plugins\\${id}.dll`,
     fingerprint: "0".repeat(64),
   });
 const edge = (id: string, from: string, to: string, matrix: number[]) => ({

@@ -4496,7 +4496,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [renderEndpointId, setRenderEndpointId] = useState(
     () => readEndpointBindingHint(demoSession.id).renderEndpointId ?? "",
   );
-  const [devicesError, setDevicesError] = useState<string | null>(null);
+  const [, setDevicesError] = useState<string | null>(null);
   const [applicationsError, setApplicationsError] = useState<string | null>(null);
   const [recordingsError, setRecordingsError] = useState<string | null>(null);
   const [previewMessage, setPreviewMessage] = useState<string | null>(null);
@@ -4593,7 +4593,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [listedSessions, setListedSessions] = useState<import("@audiorouter/contracts").Session[]>(
     backend.connected ? [] : demoSessions,
   );
-  const [sessionInventoryError, setSessionInventoryError] = useState<string | null>(null);
+  const [, setSessionInventoryError] = useState<string | null>(null);
   const [nativeGenerations, setNativeGenerations] = useState<Record<string, { generation: number; kind: string }>>({});
   const [nativePumpStats, setNativePumpStats] = useState<NativePumpStats | null>(null);
   const eventCursor = useRef({ backendEpoch: 0, sequence: 0 });

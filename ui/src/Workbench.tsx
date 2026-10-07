@@ -102,8 +102,6 @@ export function Workbench({
   onUndo,
   onRedo,
   onDiscard,
-  actionMessage,
-  onReplaceInputConnection,
   sessions,
   selectedSessionId,
   onSelectSession,

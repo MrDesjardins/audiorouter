@@ -21,7 +21,7 @@ test("Recorder UI creates real WAV, arms, pauses, resumes and finalizes syntheti
     try {
       await expect(panel.locator(".badge")).toHaveText(state);
     } catch (error) {
-      throw new Error(`${action}: ${await panel.innerText()}\n${error}`);
+      throw new Error(`${action}: ${await panel.innerText()}\n${error}`, { cause: error });
     }
   };
   await run("Arm", 0, "armed");

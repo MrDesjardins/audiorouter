@@ -57,7 +57,11 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await editor.scrollIntoViewIfNeeded();
     await editor.screenshot({ path: testInfo.outputPath(`duck-siege-round-${theme}.png`) });
     expect(
-      await page.evaluate(() => (window as any).__routeFixtureCalls().filter((call: string) => call === "commit")),
+      await page.evaluate(() =>
+        (window as unknown as { __routeFixtureCalls: () => string[] })
+          .__routeFixtureCalls()
+          .filter((call: string) => call === "commit"),
+      ),
     ).toEqual([]);
   });
 }

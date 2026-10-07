@@ -231,7 +231,7 @@ function CanvasConnectorMeasurements({ geometryKey }: { geometryKey: string }) {
 }
 
 type EdgeSide = "left" | "right" | "top" | "bottom";
-const IDLE_CONNECTION_MODE: "idle" = "idle";
+const IDLE_CONNECTION_MODE = "idle" as const;
 const EDGE_SIDES: EdgeSide[] = ["left", "right", "top", "bottom"];
 const edgeSidePosition = (side: EdgeSide) =>
   side === "left" ? Position.Left : side === "right" ? Position.Right : side === "top" ? Position.Top : Position.Bottom;
@@ -1721,7 +1721,6 @@ function NodeVisual({
   onToggleRecording,
   recordingBusyNodeId,
   recorderStatus,
-  mixerInputCount,
   mixerInputList,
   duckTriggerName,
   switchSourceNames,
@@ -1730,8 +1729,6 @@ function NodeVisual({
   sessionActionBusy,
   testSignalPlaybackReady,
   testSignalEndpointPrepared,
-  onStartTestSignal,
-  onStopTestSignal,
   onAudioSourceTransport,
   audioSourceStates,
   onTimeShiftTransport,

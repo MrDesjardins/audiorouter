@@ -14,6 +14,24 @@ export default tseslint.config(
   {
     files: ["**/*.{ts,tsx}"],
     languageOptions: { ecmaVersion: 2022, globals: { ...globals.browser, ...globals.node } },
+    rules: {
+      // A leading underscore marks a deliberately unused parameter (fixture
+      // stubs with the real signature) or binding.
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+          destructuredArrayIgnorePattern: "^_",
+        },
+      ],
+    },
+  },
+  {
+    // React code only: Playwright fixtures in e2e/ call a `use` callback that
+    // is not React's `use` hook.
+    files: ["src/**/*.{ts,tsx}"],
     plugins: { "react-hooks": reactHooks },
     rules: {
       "react-hooks/rules-of-hooks": "error",

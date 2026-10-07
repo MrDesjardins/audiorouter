@@ -43,7 +43,11 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await select.selectOption("mono");
     expect((await below.boundingBox())?.y).toBe(before?.y);
     expect(
-      await page.evaluate(() => (window as any).__routeFixtureCalls().filter((call: string) => call === "commit")),
+      await page.evaluate(() =>
+        (window as unknown as { __routeFixtureCalls: () => string[] })
+          .__routeFixtureCalls()
+          .filter((call: string) => call === "commit"),
+      ),
     ).toEqual([]);
   });
 }

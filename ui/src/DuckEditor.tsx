@@ -241,8 +241,9 @@ export function DuckEditor({
   };
   const sketch = useMemo(
     () => duckSketch(settings),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [settings.amountDb, settings.attackMs, settings.holdMs, settings.releaseMs],
-  ); // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const sx = (ms: number) => L + (ms / sketch.totalMs) * (R - L);
   const sy = (gainDb: number) => 20 + clamp(-gainDb / Math.max(settings.amountDb, 1), 0, 1) * 52;
   const suggestion = statistics ? suggestGateThreshold(statistics) : null;
