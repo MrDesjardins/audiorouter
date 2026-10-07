@@ -38,13 +38,19 @@ impl Drop for DiagnosticMutexGuard {
     }
 }
 
+/// Longest wait for another process's diagnostic write. A log record is
+/// dropped rather than blocking the caller behind a stuck writer.
+#[cfg(windows)]
+const DIAGNOSTIC_MUTEX_WAIT_MS: u32 = 250;
+
 /// Acquire a named, same-logon-session mutex for a short local file operation.
-/// The wait occurs only on a control/logging thread, never in an audio callback.
+/// The wait occurs only on a control/logging thread, never in an audio callback,
+/// and is bounded: `None` means the record should be skipped.
 #[cfg(windows)]
 pub fn acquire_diagnostic_mutex(name: &str) -> Option<DiagnosticMutexGuard> {
     use windows::core::PCWSTR;
     use windows::Win32::Foundation::{WAIT_ABANDONED, WAIT_OBJECT_0};
-    use windows::Win32::System::Threading::{CreateMutexW, WaitForSingleObject, INFINITE};
+    use windows::Win32::System::Threading::{CreateMutexW, WaitForSingleObject};
     if name.is_empty()
         || name.len() > 96
         || !name
@@ -62,7 +68,7 @@ pub fn acquire_diagnostic_mutex(name: &str) -> Option<DiagnosticMutexGuard> {
     let handle = unsafe { CreateMutexW(None, false, PCWSTR(wide_name.as_ptr())) }.ok()?;
     // SAFETY: `handle` is the valid owned handle returned above. An abandoned
     // mutex is also acquired and must be released by the returned guard.
-    let result = unsafe { WaitForSingleObject(handle, INFINITE) };
+    let result = unsafe { WaitForSingleObject(handle, DIAGNOSTIC_MUTEX_WAIT_MS) };
     if result == WAIT_OBJECT_0 || result == WAIT_ABANDONED {
         Some(DiagnosticMutexGuard(handle))
     } else {
@@ -74,25 +80,81 @@ pub fn acquire_diagnostic_mutex(name: &str) -> Option<DiagnosticMutexGuard> {
     }
 }
 
+/// One backend request and its responses, queued for the logger thread.
+struct BackendLogEntry {
+    frame: Vec<u8>,
+    responses: Vec<Vec<u8>>,
+    now_ms: u128,
+}
+
+/// Queued records before new ones are dropped. A burst larger than this is
+/// lost from the log rather than slowing the control plane.
+const BACKEND_LOG_QUEUE: usize = 256;
+
+fn backend_log_directory() -> Option<std::path::PathBuf> {
+    std::env::var_os("LOCALAPPDATA")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("TEMP").map(std::path::PathBuf::from))
+        .map(|root| root.join("AudioRouter").join("logs"))
+}
+
+/// Start the thread that writes `backend.jsonl` in `directory`. The control
+/// plane only enqueues; all parsing and file I/O happen on this thread, so
+/// logging never delays the audio service passes that share the control
+/// thread. The thread ends when every sender is dropped.
+fn spawn_backend_rpc_logger(
+    directory: std::path::PathBuf,
+) -> Option<(
+    std::sync::mpsc::SyncSender<BackendLogEntry>,
+    std::thread::JoinHandle<()>,
+)> {
+    let (sender, receiver) = std::sync::mpsc::sync_channel::<BackendLogEntry>(BACKEND_LOG_QUEUE);
+    let handle = std::thread::Builder::new()
+        .name("audiorouter-backend-log".into())
+        .spawn(move || {
+            for entry in receiver {
+                write_backend_rpc_log(&directory, &entry);
+            }
+        })
+        .ok()?;
+    Some((sender, handle))
+}
+
 /// Control-plane-side request summaries for attended desktop diagnosis.
-/// Parameter values and response payloads are deliberately excluded; this is
-/// called on the transport thread and never from the realtime audio callback.
+/// Parameter values and response payloads are deliberately excluded. This
+/// only copies the frames into a bounded queue (dropping the record when it
+/// is full); the logger thread does the rest.
 fn log_backend_rpc(frame: &[u8], responses: &[Vec<u8>]) {
+    static SINK: std::sync::OnceLock<Option<std::sync::mpsc::SyncSender<BackendLogEntry>>> =
+        std::sync::OnceLock::new();
+    let sink = SINK.get_or_init(|| {
+        backend_log_directory()
+            .and_then(spawn_backend_rpc_logger)
+            .map(|(sender, _detached)| sender)
+    });
+    let Some(sender) = sink else { return };
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis())
+        .unwrap_or_default();
+    let _ = sender.try_send(BackendLogEntry {
+        frame: frame.to_vec(),
+        responses: responses.to_vec(),
+        now_ms,
+    });
+}
+
+fn write_backend_rpc_log(directory: &std::path::Path, entry: &BackendLogEntry) {
     use std::io::Write;
-    static LOG_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
-    let lock = LOG_LOCK.get_or_init(|| std::sync::Mutex::new(()));
-    let Ok(_guard) = lock.lock() else { return };
+    let records = backend_rpc_log_records(&entry.frame, &entry.responses, entry.now_ms);
+    if records.is_empty() {
+        return;
+    }
     #[cfg(windows)]
     let Some(_cross_process_guard) = acquire_diagnostic_mutex("AudioRouter.BackendDiagnostics") else {
         return;
     };
-    let root = std::env::var_os("LOCALAPPDATA")
-        .map(std::path::PathBuf::from)
-        .or_else(|| std::env::var_os("TEMP").map(std::path::PathBuf::from));
-    let Some(directory) = root.map(|root| root.join("AudioRouter").join("logs")) else {
-        return;
-    };
-    if std::fs::create_dir_all(&directory).is_err() {
+    if std::fs::create_dir_all(directory).is_err() {
         return;
     }
     let path = directory.join("backend.jsonl");
@@ -104,16 +166,12 @@ fn log_backend_rpc(frame: &[u8], responses: &[Vec<u8>]) {
         let _ = std::fs::remove_file(&previous);
         let _ = std::fs::rename(&path, previous);
     }
-    let now_ms = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_millis())
-        .unwrap_or_default();
     if let Ok(mut file) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(path)
     {
-        for record in backend_rpc_log_records(frame, responses, now_ms) {
+        for record in records {
             if serde_json::to_writer(&mut file, &record).is_ok() {
                 let _ = file.write_all(b"\n");
             }
@@ -301,7 +359,7 @@ fn backend_rpc_log_records(
         let detail = response.and_then(|value| value.get("error")).map(rpc_failure_log_summary);
         let error_kind = detail.as_ref().and_then(|detail| detail.get("kind")).cloned().or_else(|| error_kind.map(serde_json::Value::String));
         serde_json::json!({ "timeUnixMs": now_ms, "processId": std::process::id(), "version": env!("CARGO_PKG_VERSION"), "buildId": option_env!("AUDIOROUTER_BUILD_ID").unwrap_or("development"), "method": method, "outcome": if error_code.is_some() { "error" } else { "ok" }, "errorCode": error_code, "errorKind": error_kind, "detail": detail, "summary": state })
-    }).filter(|record| record["method"] != "events.subscribe" || record["outcome"] == "error").collect()
+    }).filter(|record| record["outcome"] == "error" || !record["method"].as_str().is_some_and(is_routine_read_rpc)).collect()
 }
 
 pub fn device_inventory_log_summary(result: &serde_json::Value) -> serde_json::Value {
@@ -336,6 +394,59 @@ fn failure_logs_preserve_audio_context_and_reject_unbounded_private_fields() {
 }
 
 #[test]
+fn backend_logger_thread_writes_commits_and_skips_routine_read_successes() {
+    let directory = std::env::temp_dir().join(format!(
+        "audiorouter-backend-log-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let frame = |method: &str| {
+        audiorouter_protocol::encode_frame(
+            &serde_json::json!({"jsonrpc":"2.0","id":1,"method":method,"params":{}}),
+        )
+        .unwrap()
+    };
+    let ok = audiorouter_protocol::encode_frame(
+        &serde_json::json!({"jsonrpc":"2.0","id":1,"result":{"revision":3,"nodes":[],"edges":[]}}),
+    )
+    .unwrap();
+    let failed = audiorouter_protocol::encode_frame(
+        &serde_json::json!({"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"private"}}),
+    )
+    .unwrap();
+    let (sender, handle) = spawn_backend_rpc_logger(directory.clone()).unwrap();
+    for (method, response) in [
+        ("graph.commit", &ok),
+        ("system.diagnostics", &ok),
+        ("system.diagnostics", &failed),
+    ] {
+        sender
+            .send(BackendLogEntry {
+                frame: frame(method),
+                responses: vec![response.clone()],
+                now_ms: 1,
+            })
+            .unwrap();
+    }
+    drop(sender);
+    handle.join().unwrap();
+    let log = std::fs::read_to_string(directory.join("backend.jsonl")).unwrap();
+    let lines = log
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(lines.len(), 2, "{log}");
+    assert_eq!(lines[0]["method"], "graph.commit");
+    assert_eq!(lines[1]["method"], "system.diagnostics");
+    assert_eq!(lines[1]["outcome"], "error");
+    assert!(!log.contains("private"));
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
 fn device_logs_show_counts_without_names_and_event_errors_remain_visible() {
     let summary = device_inventory_log_summary(
         &serde_json::json!({"items":[{"direction":"capture","state":"active","name":"private mic"},{"direction":"render","state":"unplugged","id":"private id"}],"nextCursor":"private cursor"}),
@@ -359,6 +470,14 @@ fn device_logs_show_counts_without_names_and_event_errors_remain_visible() {
         backend_rpc_log_records(&request, &[error], 1)[0]["errorKind"],
         "resyncRequired"
     );
+}
+
+/// Reads the window repeats on a timer (`system.diagnostics` 20 times a
+/// second while playing, `events.subscribe` every second). Their successes
+/// would fill a 5 MB log within minutes and rotate out the events a support
+/// case needs, so only their failures are logged.
+pub fn is_routine_read_rpc(method: &str) -> bool {
+    matches!(method, "system.diagnostics" | "events.subscribe")
 }
 
 fn is_high_frequency_rpc(method: &str) -> bool {
@@ -425,7 +544,7 @@ mod windows_pipe {
     };
     use windows::Win32::System::Pipes::{
         ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, GetNamedPipeClientProcessId,
-        PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
+        WaitNamedPipeW, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
     };
     use windows::Win32::System::Threading::{
         CreateMutexW, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
@@ -631,6 +750,13 @@ mod windows_pipe {
         Ok(frame)
     }
 
+    /// Pipe instances one server may hold open at once. The production backend
+    /// accepts on this many I/O threads so the window, tray, HTTP adapter and
+    /// MCP do not queue behind each other's connection; requests are still
+    /// dispatched one at a time by the control thread. Every instance of a
+    /// name must be created with the same value.
+    pub const SERVER_PIPE_INSTANCES: u32 = 4;
+
     fn accept_client(name: &str) -> Result<(Handle, u32), TransportError> {
         check_name(name)?;
         let name = wide(name);
@@ -645,7 +771,7 @@ mod windows_pipe {
                 PCWSTR(name.as_ptr()),
                 PIPE_ACCESS_DUPLEX,
                 PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
-                1,
+                SERVER_PIPE_INSTANCES,
                 (MAX_FRAME_BYTES + 4) as u32,
                 (MAX_FRAME_BYTES + 4) as u32,
                 0,
@@ -757,6 +883,57 @@ mod windows_pipe {
         Ok(())
     }
 
+    /// Longest wait for a busy pipe (every server instance serving another
+    /// client). Requests are short, so this covers bursts from the window,
+    /// tray, HTTP workers and MCP at once.
+    const PIPE_BUSY_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
+    /// Longest wait for a pipe that does not exist yet. Kept short so callers
+    /// learn quickly that no backend is running.
+    const PIPE_MISSING_WAIT: std::time::Duration = std::time::Duration::from_millis(100);
+
+    /// Open a client connection to `name` (NUL-terminated UTF-16).
+    fn connect_client(name: &[u16]) -> Result<Handle, TransportError> {
+        const ERROR_FILE_NOT_FOUND: i32 = 0x8007_0002_u32 as i32;
+        const ERROR_PIPE_BUSY: i32 = 0x8007_00E7_u32 as i32;
+        let started = std::time::Instant::now();
+        loop {
+            // SAFETY: `name` is NUL-terminated and outlives the call; the
+            // returned handle is owned by the `Handle` wrapper below.
+            let result = unsafe {
+                CreateFileW(
+                    PCWSTR(name.as_ptr()),
+                    (GENERIC_READ | GENERIC_WRITE).0,
+                    FILE_SHARE_NONE,
+                    None,
+                    OPEN_EXISTING,
+                    Default::default(),
+                    None,
+                )
+            };
+            let error = match result {
+                Ok(handle) => return Ok(Handle(handle)),
+                Err(error) => error,
+            };
+            let elapsed = started.elapsed();
+            match error.code().0 {
+                ERROR_PIPE_BUSY if elapsed < PIPE_BUSY_WAIT => {
+                    let remaining = (PIPE_BUSY_WAIT - elapsed).as_millis().clamp(1, 50) as u32;
+                    // SAFETY: as above; this only waits for a free instance.
+                    let _ = unsafe { WaitNamedPipeW(PCWSTR(name.as_ptr()), remaining) };
+                }
+                ERROR_FILE_NOT_FOUND if elapsed < PIPE_MISSING_WAIT => {
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                }
+                ERROR_PIPE_BUSY | ERROR_FILE_NOT_FOUND => {
+                    return Err(TransportError::Windows(
+                        "timed out waiting for a free named-pipe instance".into(),
+                    ))
+                }
+                _ => return Err(win_error(error)),
+            }
+        }
+    }
+
     /// Connect to a local named pipe and exchange one framed message.
     pub fn round_trip(name: &str, request: &[u8]) -> Result<Vec<u8>, TransportError> {
         check_name(name)?;
@@ -764,39 +941,7 @@ mod windows_pipe {
             return Err(TransportError::Protocol("invalid request frame".into()));
         }
         let name = wide(name);
-        let handle = (0..20)
-            .find_map(|_| {
-                let result = unsafe {
-                    CreateFileW(
-                        PCWSTR(name.as_ptr()),
-                        (GENERIC_READ | GENERIC_WRITE).0,
-                        FILE_SHARE_NONE,
-                        None,
-                        OPEN_EXISTING,
-                        Default::default(),
-                        None,
-                    )
-                };
-                match result {
-                    Ok(handle) => Some(Ok(handle)),
-                    Err(error)
-                        if matches!(
-                            error.code().0,
-                            x if x == 0x8007_00E7u32 as i32 || x == 0x8007_0002u32 as i32
-                        ) =>
-                    {
-                        std::thread::sleep(std::time::Duration::from_millis(5));
-                        None
-                    }
-                    Err(error) => Some(Err(win_error(error))),
-                }
-            })
-            .unwrap_or_else(|| {
-                Err(TransportError::Windows(
-                    "timed out waiting for a free named-pipe instance".into(),
-                ))
-            })?;
-        let handle = Handle(handle);
+        let handle = connect_client(&name)?;
         write_all(handle.0, request)?;
         read_frame(handle.0)
     }
@@ -813,39 +958,7 @@ mod windows_pipe {
             return Err(TransportError::Protocol("invalid request frame".into()));
         }
         let name = wide(name);
-        let handle = (0..20)
-            .find_map(|_| {
-                let result = unsafe {
-                    CreateFileW(
-                        PCWSTR(name.as_ptr()),
-                        (GENERIC_READ | GENERIC_WRITE).0,
-                        FILE_SHARE_NONE,
-                        None,
-                        OPEN_EXISTING,
-                        Default::default(),
-                        None,
-                    )
-                };
-                match result {
-                    Ok(handle) => Some(Ok(handle)),
-                    Err(error)
-                        if matches!(
-                            error.code().0,
-                            x if x == 0x8007_00E7u32 as i32 || x == 0x8007_0002u32 as i32
-                        ) =>
-                    {
-                        std::thread::sleep(std::time::Duration::from_millis(5));
-                        None
-                    }
-                    Err(error) => Some(Err(win_error(error))),
-                }
-            })
-            .unwrap_or_else(|| {
-                Err(TransportError::Windows(
-                    "timed out waiting for a free named-pipe instance".into(),
-                ))
-            })?;
-        let handle = Handle(handle);
+        let handle = connect_client(&name)?;
         write_all(handle.0, request)?;
         (0..responses).map(|_| read_frame(handle.0)).collect()
     }
@@ -886,39 +999,7 @@ mod windows_pipe {
             }
         }
         let name = wide(name);
-        let handle = (0..20)
-            .find_map(|_| {
-                let result = unsafe {
-                    CreateFileW(
-                        PCWSTR(name.as_ptr()),
-                        (GENERIC_READ | GENERIC_WRITE).0,
-                        FILE_SHARE_NONE,
-                        None,
-                        OPEN_EXISTING,
-                        Default::default(),
-                        None,
-                    )
-                };
-                match result {
-                    Ok(handle) => Some(Ok(handle)),
-                    Err(error)
-                        if matches!(
-                            error.code().0,
-                            x if x == 0x8007_00E7u32 as i32 || x == 0x8007_0002u32 as i32
-                        ) =>
-                    {
-                        std::thread::sleep(std::time::Duration::from_millis(5));
-                        None
-                    }
-                    Err(error) => Some(Err(win_error(error))),
-                }
-            })
-            .unwrap_or_else(|| {
-                Err(TransportError::Windows(
-                    "timed out waiting for a free named-pipe instance".into(),
-                ))
-            })?;
-        let handle = Handle(handle);
+        let handle = connect_client(&name)?;
         let mut responses = Vec::with_capacity(requests.len());
         for request in requests {
             write_all(handle.0, request)?;
@@ -934,39 +1015,7 @@ mod windows_pipe {
             return Err(TransportError::Protocol("invalid request frame".into()));
         }
         let name = wide(name);
-        let handle = (0..20)
-            .find_map(|_| {
-                let result = unsafe {
-                    CreateFileW(
-                        PCWSTR(name.as_ptr()),
-                        (GENERIC_READ | GENERIC_WRITE).0,
-                        FILE_SHARE_NONE,
-                        None,
-                        OPEN_EXISTING,
-                        Default::default(),
-                        None,
-                    )
-                };
-                match result {
-                    Ok(handle) => Some(Ok(handle)),
-                    Err(error)
-                        if matches!(
-                            error.code().0,
-                            x if x == 0x8007_00E7u32 as i32 || x == 0x8007_0002u32 as i32
-                        ) =>
-                    {
-                        std::thread::sleep(std::time::Duration::from_millis(5));
-                        None
-                    }
-                    Err(error) => Some(Err(win_error(error))),
-                }
-            })
-            .unwrap_or_else(|| {
-                Err(TransportError::Windows(
-                    "timed out waiting for a free named-pipe instance".into(),
-                ))
-            })?;
-        let handle = Handle(handle);
+        let handle = connect_client(&name)?;
         write_all(handle.0, request)
     }
 
@@ -983,7 +1032,7 @@ pub use windows_pipe::{
     acquire_server_singleton, client_is_same_user, client_user_sid, current_user_sid, echo_handler,
     round_trip, round_trip_many, round_trip_session, round_trip_session_many, send_oneway,
     serve_connections, serve_once, serve_once_with_client, serve_once_with_client_optional,
-    serve_session, ServerSingleton,
+    serve_session, ServerSingleton, SERVER_PIPE_INSTANCES,
 };
 
 #[cfg(windows)]
@@ -1168,12 +1217,8 @@ pub fn serve_control_connections_forever_observed(
         serve_control_plane_frames(&mut plane, &grant, &received, observer.as_ref())
     }));
     match served {
-        Ok(()) => match io.join() {
-            Ok(result) => result,
-            Err(_) => Err(TransportError::Protocol(
-                "control I/O thread panicked".into(),
-            )),
-        },
+        // Every I/O thread has ended (the receiver disconnected).
+        Ok(()) => io.join(),
         Err(_) => {
             drop(received);
             stop_control_io(name, io);
@@ -1182,55 +1227,117 @@ pub fn serve_control_connections_forever_observed(
     }
 }
 
-/// The pipe I/O thread and the frames it forwards to the control plane.
+/// The pipe I/O threads (one per pipe instance) and their shared stop flag.
 #[cfg(windows)]
-type ControlIo = (
-    std::thread::JoinHandle<Result<(), TransportError>>,
-    std::sync::mpsc::Receiver<ControlFrame>,
-);
-
-/// Start the pipe I/O thread that accepts clients and forwards each frame to
-/// the returned receiver, waiting for the control plane's reply.
-#[cfg(windows)]
-fn spawn_control_io(name: &str) -> Result<ControlIo, TransportError> {
-    let (frames, received) = std::sync::mpsc::sync_channel::<ControlFrame>(0);
-    let io_name = name.to_owned();
-    let io = std::thread::Builder::new()
-        .name("audiorouter-control-io".into())
-        .spawn(move || -> Result<(), TransportError> {
-            loop {
-                serve_once_with_client_optional(&io_name, |client_pid, frame| {
-                    let (reply, response) = std::sync::mpsc::sync_channel(1);
-                    frames
-                        .send(ControlFrame {
-                            client_pid,
-                            frame: frame.to_vec(),
-                            reply,
-                        })
-                        .map_err(|_| TransportError::Protocol("control plane stopped".into()))?;
-                    response
-                        .recv()
-                        .map_err(|_| TransportError::Protocol("control plane stopped".into()))?
-                })?;
-            }
-        })
-        .map_err(|error| TransportError::Windows(format!("control I/O thread: {error}")))?;
-    Ok((io, received))
+struct ControlIo {
+    threads: Vec<std::thread::JoinHandle<Result<(), TransportError>>>,
+    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
-/// Wake the I/O thread after the control plane stopped, so it releases the
-/// single pipe instance before a restarted server creates a new one. The
-/// thread is usually blocked accepting a client; one connection of our own
-/// reaches its stopped-plane error. Bounded: an unresponsive thread is left
-/// detached rather than hanging the supervisor.
 #[cfg(windows)]
-fn stop_control_io(name: &str, io: std::thread::JoinHandle<Result<(), TransportError>>) {
+impl ControlIo {
+    /// Wait for every I/O thread; the first failure is the serve result.
+    fn join(self) -> Result<(), TransportError> {
+        let mut result = Ok(());
+        for thread in self.threads {
+            let outcome = thread.join().unwrap_or_else(|_| {
+                Err(TransportError::Protocol(
+                    "control I/O thread panicked".into(),
+                ))
+            });
+            if result.is_ok() {
+                result = outcome;
+            }
+        }
+        result
+    }
+}
+
+/// Consecutive connection failures after which an I/O thread gives up. Only
+/// a persistent fault (the pipe can no longer be created) reaches it; one
+/// client that disconnects early or fails the same-user check does not.
+#[cfg(windows)]
+const MAX_CONSECUTIVE_PIPE_FAILURES: u32 = 50;
+
+/// Start one pipe I/O thread per server instance. Each accepts clients and
+/// forwards every frame to the returned receiver, waiting for the control
+/// plane's reply, so requests are still handled one at a time. A failed
+/// connection is dropped and the thread keeps serving; the threads end when
+/// the control plane stops (the stop flag, or a closed receiver).
+#[cfg(windows)]
+fn spawn_control_io(
+    name: &str,
+) -> Result<(ControlIo, std::sync::mpsc::Receiver<ControlFrame>), TransportError> {
+    use std::sync::atomic::Ordering;
+    let (frames, received) = std::sync::mpsc::sync_channel::<ControlFrame>(0);
+    let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let mut threads = Vec::new();
+    for index in 0..SERVER_PIPE_INSTANCES {
+        let io_name = name.to_owned();
+        let frames = frames.clone();
+        let stop = stop.clone();
+        let thread = std::thread::Builder::new()
+            .name(format!("audiorouter-control-io-{index}"))
+            .spawn(move || -> Result<(), TransportError> {
+                let mut failures = 0_u32;
+                while !stop.load(Ordering::Acquire) {
+                    let served = serve_once_with_client_optional(&io_name, |client_pid, frame| {
+                        let (reply, response) = std::sync::mpsc::sync_channel(1);
+                        let stopped = || {
+                            stop.store(true, Ordering::Release);
+                            TransportError::Protocol("control plane stopped".into())
+                        };
+                        frames
+                            .send(ControlFrame {
+                                client_pid,
+                                frame: frame.to_vec(),
+                                reply,
+                            })
+                            .map_err(|_| stopped())?;
+                        response.recv().map_err(|_| stopped())?
+                    });
+                    match served {
+                        Ok(()) => failures = 0,
+                        Err(_) if stop.load(Ordering::Acquire) => break,
+                        Err(error) => {
+                            failures += 1;
+                            if failures >= MAX_CONSECUTIVE_PIPE_FAILURES {
+                                return Err(error);
+                            }
+                            std::thread::sleep(std::time::Duration::from_millis(5));
+                        }
+                    }
+                }
+                Ok(())
+            })
+            .map_err(|error| TransportError::Windows(format!("control I/O thread: {error}")))?;
+        threads.push(thread);
+    }
+    Ok((ControlIo { threads, stop }, received))
+}
+
+/// Wake the I/O threads after the control plane stopped, so they release
+/// their pipe instances before a restarted server creates new ones. Threads
+/// usually block accepting a client; a connection of our own reaches each
+/// one. Bounded: an unresponsive thread is left detached rather than hanging
+/// the supervisor.
+#[cfg(windows)]
+fn stop_control_io(name: &str, io: ControlIo) {
+    io.stop.store(true, std::sync::atomic::Ordering::Release);
+    let mut threads = io.threads;
     for _ in 0..50 {
-        if io.is_finished() {
-            let _ = io.join();
+        let (finished, running): (Vec<_>, Vec<_>) =
+            threads.into_iter().partition(|thread| thread.is_finished());
+        for thread in finished {
+            let _ = thread.join();
+        }
+        if running.is_empty() {
             return;
         }
-        let _ = send_oneway(name, &0_u32.to_le_bytes());
+        threads = running;
+        for _ in 0..threads.len() {
+            let _ = send_oneway(name, &0_u32.to_le_bytes());
+        }
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
 }
@@ -1292,6 +1399,7 @@ fn dispatch_control_frame(
     let responses = plane
         .dispatch_frame_authorized_for_client(frame, &client_id, grant)
         .map_err(|error| TransportError::Protocol(error.to_string()))?;
+    log_backend_rpc(frame, &responses);
     if responses.is_empty() {
         Ok(None)
     } else {
@@ -1520,6 +1628,72 @@ mod tests {
         let response = round_trip(&name, &request).expect("restarted server accepts");
         assert_eq!(response, request);
         server.join().unwrap().unwrap();
+    }
+
+    /// Answer every forwarded frame with itself after `delay`, as a slow
+    /// control plane would, until the I/O threads stop.
+    #[cfg(windows)]
+    fn echo_control_plane(
+        received: std::sync::mpsc::Receiver<ControlFrame>,
+        delay: std::time::Duration,
+    ) -> std::thread::JoinHandle<()> {
+        std::thread::spawn(move || {
+            for request in received {
+                std::thread::sleep(delay);
+                let _ = request.reply.send(Ok(Some(request.frame)));
+            }
+        })
+    }
+
+    /// 2026-10-07 review P0-2: one pipe instance plus a ~100 ms client budget
+    /// made concurrent clients (window, tray, HTTP, MCP) fail at random.
+    #[cfg(windows)]
+    #[test]
+    fn concurrent_clients_all_reach_a_slow_control_plane() {
+        let name = format!(
+            r"\\.\pipe\audiorouter-test-io-concurrent-{}",
+            std::process::id()
+        );
+        let (io, received) = spawn_control_io(&name).unwrap();
+        // Eight clients at 20 ms each is 160 ms of queued work, well past the
+        // old 100 ms budget for the last client in line.
+        let plane = echo_control_plane(received, std::time::Duration::from_millis(20));
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        let clients = (0..8)
+            .map(|client| {
+                let name = name.clone();
+                std::thread::spawn(move || {
+                    let request = encode_frame(&serde_json::json!({ "client": client })).unwrap();
+                    assert_eq!(round_trip(&name, &request).unwrap(), request);
+                })
+            })
+            .collect::<Vec<_>>();
+        for client in clients {
+            client.join().unwrap();
+        }
+        stop_control_io(&name, io);
+        plane.join().unwrap();
+    }
+
+    /// Before 2026-10-07 one bad connection ended the only I/O thread, which
+    /// stopped the control plane and restarted the backend.
+    #[cfg(windows)]
+    #[test]
+    fn a_malformed_client_does_not_stop_the_control_io() {
+        let name = format!(
+            r"\\.\pipe\audiorouter-test-io-malformed-{}",
+            std::process::id()
+        );
+        let (io, received) = spawn_control_io(&name).unwrap();
+        let plane = echo_control_plane(received, std::time::Duration::ZERO);
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        // A length header far beyond the frame limit fails that connection.
+        let _ = send_oneway(&name, &[0xff, 0xff, 0xff, 0xff]);
+        let request = encode_frame(&serde_json::json!({"after": "malformed"})).unwrap();
+        assert_eq!(round_trip(&name, &request).unwrap(), request);
+        assert!(io.threads.iter().all(|thread| !thread.is_finished()));
+        stop_control_io(&name, io);
+        plane.join().unwrap();
     }
 
     #[test]

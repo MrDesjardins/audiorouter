@@ -45,6 +45,28 @@ mod threaded_recorder;
 
 use os_transition::{plan_os_transition, OsTransition};
 
+/// Run `work` on a scoped helper thread and call `service` on this thread
+/// every [`AUDIO_SERVICE_PASS_DURING_WORK`] until it finishes. A panic in
+/// `work` resumes on this thread, so the caller's panic handling still applies.
+fn run_while_servicing<T: Send>(work: impl FnOnce() -> T + Send, mut service: impl FnMut()) -> T {
+    std::thread::scope(|scope| {
+        let worker = scope.spawn(work);
+        while !worker.is_finished() {
+            service();
+            std::thread::sleep(AUDIO_SERVICE_PASS_DURING_WORK);
+        }
+        match worker.join() {
+            Ok(value) => value,
+            Err(panic) => std::panic::resume_unwind(panic),
+        }
+    })
+}
+
+/// Pause between audio service passes while a long handler's work runs on a
+/// helper thread (see `ControlPlane::while_servicing_audio`). Matches the
+/// backend loop's 1 ms interval, well below a 10 ms WASAPI period.
+const AUDIO_SERVICE_PASS_DURING_WORK: std::time::Duration = std::time::Duration::from_millis(1);
+
 const MUTATION_RATE_PER_SECOND: f64 = 20.0;
 const MUTATION_BURST: f64 = 40.0;
 const MAX_MUTATION_BUCKETS: usize = 256;
@@ -6380,7 +6402,10 @@ impl ControlPlane {
                         "audio source media is missing; select the file again".into(),
                     )
                 })?;
-            let decoded = audiorouter_engine::decode_audio_bytes(bytes, &format, sample_rate_hz)
+            let decoded = self
+                .while_servicing_audio(|| {
+                    audiorouter_engine::decode_audio_bytes(bytes, &format, sample_rate_hz)
+                })
                 .map_err(|error| {
                     ControlError::InvalidRequest(format!(
                         "audio source could not be decoded: {error}"
@@ -7370,6 +7395,19 @@ impl ControlPlane {
             written.push(record);
         }
         written
+    }
+
+    /// Run self-contained work (it must not borrow the plane) on a helper
+    /// thread while this thread keeps servicing running native audio every
+    /// [`AUDIO_SERVICE_PASS_DURING_WORK`]. Use it for long, pure work inside a
+    /// request handler (folder scans, plugin hashing, audio decoding): the
+    /// control thread is also the audio service thread, so running such work
+    /// inline would starve render buffers of every playing route. Call it only
+    /// where the plane's state is consistent, before the handler mutates it.
+    fn while_servicing_audio<T: Send>(&mut self, work: impl FnOnce() -> T + Send) -> T {
+        run_while_servicing(work, || {
+            self.service_running_native_audio(std::time::Instant::now());
+        })
     }
 
     pub fn service_running_native_audio(&mut self, now: std::time::Instant) -> usize {
@@ -17306,14 +17344,17 @@ impl ControlPlane {
                 "audio upload is incomplete".into(),
             ));
         }
-        let decoded = audiorouter_engine::decode_audio_bytes(
-            upload.bytes.clone(),
-            &upload.format,
-            audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ,
-        )
-        .map_err(|error| {
-            ControlError::InvalidRequest(format!("audio file could not be imported: {error}"))
-        })?;
+        let decoded = self
+            .while_servicing_audio(|| {
+                audiorouter_engine::decode_audio_bytes(
+                    upload.bytes.clone(),
+                    &upload.format,
+                    audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ,
+                )
+            })
+            .map_err(|error| {
+                ControlError::InvalidRequest(format!("audio file could not be imported: {error}"))
+            })?;
         let media_id = loop {
             let candidate = format!("audio-media-{}", self.next_audio_media);
             self.next_audio_media = self.next_audio_media.checked_add(1).ok_or_else(|| {
@@ -17416,13 +17457,21 @@ impl ControlPlane {
             ));
         }
         let bytes = std::fs::read(path).map_err(|error| storage_error(StorageError::Io(error)))?;
-        let decoded = audiorouter_engine::decode_audio_bytes(
-            bytes.clone(),
-            "wav",
-            audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ,
-        )
-        .map_err(|error| {
-            ControlError::InvalidRequest(format!("temporary WAV could not be decoded: {error}"))
+        let decoded = self
+            .while_servicing_audio(|| {
+                audiorouter_engine::decode_audio_bytes(
+                    bytes.clone(),
+                    "wav",
+                    audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ,
+                )
+            })
+            .map_err(|error| {
+                ControlError::InvalidRequest(format!("temporary WAV could not be decoded: {error}"))
+            })?;
+        let storage = self.storage.as_ref().ok_or_else(|| {
+            ControlError::InvalidRequest(
+                "temporary audio import requires persistent backend storage".into(),
+            )
         })?;
         let media_id = loop {
             let candidate = format!("audio-media-{}", self.next_audio_media);
@@ -19696,8 +19745,9 @@ impl ControlPlane {
                 "directory path must be absolute".into(),
             ));
         }
-        let entries =
-            audiorouter_plugin_host::scan_directory(root).map_err(ControlError::PluginScan)?;
+        let entries = self
+            .while_servicing_audio(|| audiorouter_plugin_host::scan_directory(root))
+            .map_err(ControlError::PluginScan)?;
         let result = json!({
             "directory": directory,
             "entries": entries.into_iter().map(|entry| {
@@ -19779,7 +19829,7 @@ impl ControlPlane {
         Ok(result)
     }
 
-    fn dispatch_plugins_inspect(&self, params: Option<Value>) -> Result<Value, ControlError> {
+    fn dispatch_plugins_inspect(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let path = params
             .as_ref()
             .and_then(|value| value.get("path"))
@@ -19793,8 +19843,10 @@ impl ControlPlane {
         let root = candidate.parent().ok_or_else(|| {
             ControlError::InvalidRequest("path must have a parent directory".into())
         })?;
-        let result = match audiorouter_plugin_host::inspect_binary(candidate, &[root.to_path_buf()])
-        {
+        let roots = [root.to_path_buf()];
+        let inspected = self
+            .while_servicing_audio(|| audiorouter_plugin_host::inspect_binary(candidate, &roots));
+        let result = match inspected {
             Ok(identity) => json!({
                 "path": path,
                 "identity": {
@@ -21537,6 +21589,25 @@ mod tests {
     use super::*;
     use audiorouter_domain::{Edge, Node, NodeKind, Port, PortDirection};
     use audiorouter_engine::{RuntimeGeneration, RuntimeGraph, RuntimeProcessor};
+
+    #[test]
+    fn long_handler_work_keeps_audio_service_passes_running() {
+        let mut passes = 0_u32;
+        let value = run_while_servicing(
+            || {
+                std::thread::sleep(std::time::Duration::from_millis(40));
+                7
+            },
+            || passes += 1,
+        );
+        assert_eq!(value, 7);
+        // 40 ms of work at a 1 ms cadence; a loaded machine still manages a few.
+        assert!(passes >= 5, "only {passes} service passes during the work");
+        let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            run_while_servicing(|| -> u8 { panic!("decoder failed") }, || ())
+        }));
+        assert!(panicked.is_err());
+    }
 
     fn feedback_fixture() -> Session {
         let port = |name: &str, direction| Port {

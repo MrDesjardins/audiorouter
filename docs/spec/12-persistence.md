@@ -17,6 +17,20 @@ Milestone ownership: M01 storage/revisions/import schema; M04 recording state; M
 - **STATE-11 — OS transitions.** On lock, keep explicitly running sessions according to saved policy; default permits a live call to continue and retains visible tray status when unlocked. On sign-out stop and release ownership; on sleep suspend streams; on resume re-enumerate and revalidate before continuing. No cross-user automatic microphone substitution.
 - **STATE-12 — Backups and retention.** Keep at least the ten most recent daily configuration backups and pre-migration backup, subject to a documented 100 MiB default configuration backup budget; large referenced plugin assets are deduplicated and counted. Never prune recordings as part of configuration retention. Provide explicit export and restore preview via API.
 
+## Storage settings (2026-10-07)
+
+An on-disk database uses SQLite's write-ahead log with `synchronous=NORMAL`,
+a 2-second busy timeout, and `BEGIN IMMEDIATE` for every write transaction.
+Commits run on the backend thread that also feeds running audio, so they
+must stay short; a power cut can lose the last commits but cannot corrupt
+the database (STATE-02 still holds: each commit is atomic). Other processes
+(CLI, MCP) wait up to 2 seconds for the writer instead of failing.
+
+A database is now the `.sqlite` file plus, while it is open, its `-wal` and
+`-shm` files. To take a copy for diagnosis, use the app's backup, or close
+AudioRouter first so SQLite folds the log back into the main file; copying
+only the `.sqlite` file of a running app can miss recent commits.
+
 ## Bundle manifest example
 
 ```json

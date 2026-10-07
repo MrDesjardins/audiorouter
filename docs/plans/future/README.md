@@ -16,6 +16,7 @@ These ideas are recorded for later prioritization. They are not authorized imple
 
 | Candidate | User value | Reconsider only when |
 | --- | --- | --- |
+| [Code review 2026-10-07](code-review-2026-10-07.md) | Prioritized (P0–P3) fixes for performance, reliability, tests, debuggability, UX and security across backend, API, MCP and UI | Each item is picked up individually with the user's go-ahead; start with P0 |
 | [External app integrations](external-app-integrations.md) | Generate REST requests by selecting a session, tool and property; game menu/match volume events | Existing API use cases reviewed; user approves request-builder scope, temporary-state and multi-tool policies |
 | [Siege footstep EQ](siege-footstep-eq.md) | Hear steps and drones better from a measured EQ + dynamics chain | User reference recordings exist; user requested 2026-10-03 |
 | [Hardware control panel](hardware-control-panel.md) | Raspberry Pi touch console with knobs and a shaped bezel to glance at and adjust any session while playing | Local-network listener (HTTP-09) done 2026-10-04; prototype, live-gesture method, pins and pairing each need the user's go-ahead |

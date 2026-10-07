@@ -12,8 +12,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
 use audiorouter_engine::{
-    compile_native_paths_with_plugins_and_audio, AudioBlock, CompiledPathSet, RealtimeMixerFanout,
-    RuntimeGeneration,
+    compile_native_paths_with_plugins_and_audio, AudioBlock, AudioBlockRing, CompiledPathSet,
+    RealtimeMixerFanout, RuntimeGeneration,
 };
 use serde_json::json;
 
@@ -476,4 +476,133 @@ fn recompiling_the_same_combination_gives_identical_audio() {
             }
         }
     }
+}
+
+/// Counts heap allocations made on the current thread while `TRACKING` is
+/// set. Other test threads keep allocating freely.
+struct CountingAllocator;
+
+thread_local! {
+    static TRACKING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static ALLOCATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+fn note_allocation() {
+    // `try_with` keeps thread teardown (TLS already destroyed) from panicking.
+    let _ = TRACKING.try_with(|tracking| {
+        if tracking.get() {
+            let _ = ALLOCATIONS.try_with(|count| count.set(count.get() + 1));
+        }
+    });
+}
+
+// SAFETY: every call forwards unchanged to the system allocator, which upholds
+// the `GlobalAlloc` contract; the counter only touches const-initialized
+// thread-local `Cell`s, which never allocate.
+unsafe impl std::alloc::GlobalAlloc for CountingAllocator {
+    unsafe fn alloc(&self, layout: std::alloc::Layout) -> *mut u8 {
+        note_allocation();
+        unsafe { std::alloc::System.alloc(layout) }
+    }
+    unsafe fn alloc_zeroed(&self, layout: std::alloc::Layout) -> *mut u8 {
+        note_allocation();
+        unsafe { std::alloc::System.alloc_zeroed(layout) }
+    }
+    unsafe fn realloc(&self, ptr: *mut u8, layout: std::alloc::Layout, size: usize) -> *mut u8 {
+        note_allocation();
+        unsafe { std::alloc::System.realloc(ptr, layout, size) }
+    }
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: std::alloc::Layout) {
+        unsafe { std::alloc::System.dealloc(ptr, layout) }
+    }
+}
+
+#[global_allocator]
+static ALLOCATOR: CountingAllocator = CountingAllocator;
+
+/// Heap allocations `work` makes on this thread.
+fn allocations_during(work: impl FnOnce()) -> usize {
+    ALLOCATIONS.with(|count| count.set(0));
+    TRACKING.with(|tracking| tracking.set(true));
+    work();
+    TRACKING.with(|tracking| tracking.set(false));
+    ALLOCATIONS.with(|count| count.get())
+}
+
+/// Realtime rule (AGENTS.md "Architecture rules"): processing a quantum never
+/// allocates. Each tool runs on its own, from the very first quantum, through
+/// the caller-owned-block path; then whole chains run through the ring path
+/// the native outputs use, in every layout. Add new tools to `TOOLS`.
+#[test]
+fn processing_never_allocates_for_any_tool_or_layout() {
+    // The counter itself must see a deliberate allocation.
+    assert!(allocations_during(|| drop(std::hint::black_box(vec![0u8; 64]))) >= 1);
+    let quanta = 24;
+    let mut failures = Vec::new();
+    for (index, &kind) in TOOLS.iter().enumerate() {
+        let set = compile(&route(&[kind], Layout::Single, Flags::AllActive, index));
+        let path = &set.paths()[0];
+        let blocks = (0..quanta)
+            .map(|quantum| vec![source_block("src-a", quantum)])
+            .collect::<Vec<_>>();
+        let mut scratch = AudioBlock::new(path.mixer_channels(), FRAMES).unwrap();
+        let mut output = AudioBlock::new(2, FRAMES).unwrap();
+        let count = allocations_during(|| {
+            for inputs in &blocks {
+                path.process(inputs, &mut scratch, &mut [&mut output])
+                    .unwrap();
+            }
+        });
+        if count != 0 {
+            failures.push(format!("{kind:?} alone: {count} allocations"));
+        }
+    }
+    for (chain_index, chain) in chains().iter().enumerate().step_by(3) {
+        for layout in LAYOUTS {
+            let set = compile(&route(chain, layout, Flags::AllActive, chain_index));
+            let channels = set.input_node_ids().iter().map(|_| 2).collect::<Vec<_>>();
+            let inputs = set
+                .input_node_ids()
+                .iter()
+                .map(|id| id.as_str().to_owned())
+                .collect::<Vec<_>>();
+            let mut fanout = RealtimeMixerFanout::from_paths(set, 4, &channels, FRAMES).unwrap();
+            let rings = (0..fanout.branch_count())
+                .map(|_| AudioBlockRing::new(4, 2, FRAMES).unwrap())
+                .collect::<Vec<_>>();
+            let destinations = rings.iter().collect::<Vec<_>>();
+            let blocks = (0..quanta)
+                .map(|quantum| {
+                    inputs
+                        .iter()
+                        .map(|id| source_block(id, quantum))
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+            let generation = fanout.generation();
+            let mut delivered = 0;
+            let count = allocations_during(|| {
+                for quantum in &blocks {
+                    for (input, block) in quantum.iter().enumerate() {
+                        assert!(fanout.try_submit_input(input, generation, block).unwrap());
+                    }
+                    delivered += fanout.process_once(&destinations).unwrap();
+                    for ring in &rings {
+                        while let Some(block) = ring.try_receive() {
+                            let _ = ring.try_recycle(block);
+                        }
+                    }
+                }
+            });
+            assert_eq!(delivered, quanta * rings.len(), "{chain:?} {layout:?}");
+            if count != 0 {
+                failures.push(format!("{chain:?} {layout:?}: {count} allocations"));
+            }
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "processing allocated:\n{}",
+        failures.join("\n")
+    );
 }

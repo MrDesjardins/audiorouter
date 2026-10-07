@@ -62,6 +62,8 @@ fn mcp_stdio_client_interoperates_with_cli_process() {
             "mcp-stdio-client",
             "--database",
             database.to_str().unwrap(),
+            // This test drives internal tools (call_api, plan_graph_change).
+            "--advanced-tools",
         ])
         .env("LOCALAPPDATA", &local_app_data)
         .stdin(Stdio::piped())
@@ -108,6 +110,14 @@ fn mcp_stdio_client_interoperates_with_cli_process() {
         json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" }),
     );
     assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 76);
+
+    // A malformed line gets a JSON-RPC parse error and the session continues.
+    writeln!(input, "{{ not json").unwrap();
+    input.flush().unwrap();
+    let mut line = String::new();
+    output.read_line(&mut line).unwrap();
+    let parse_error: serde_json::Value = serde_json::from_str(&line).unwrap();
+    assert_eq!(parse_error["error"]["code"], -32700);
 
     let processors = send(
         &mut input,

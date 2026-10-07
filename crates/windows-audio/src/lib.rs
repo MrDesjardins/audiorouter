@@ -12836,6 +12836,7 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
+    #[ignore = "needs audio devices; hosted CI runners have none"]
     fn active_endpoint_enumeration_is_read_only() {
         let endpoints = enumerate_active_endpoints().unwrap();
         assert!(!endpoints.is_empty());
@@ -12845,6 +12846,7 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
+    #[ignore = "needs audio devices; hosted CI runners have none"]
     fn endpoint_monitor_starts_with_snapshot_and_no_pending_changes() {
         let mut monitor = EndpointMonitor::start().unwrap();
         assert!(!monitor.snapshot().is_empty());

@@ -165,6 +165,35 @@ costs and phases in the [driver track](../future/M03-driver-signing.md).
 
 ## Open work
 
+### Code review P0 and P1 fixes (2026-10-07, user request)
+
+The user asked to fix every P0 and P1 item in the
+[code review](../future/code-review-2026-10-07.md). Commits on
+`claude/zealous-archimedes-fz1lbv`: `f8440b20` (P0-3, P1-1), `2cae3569`
+(P0-1), `72aa0731` (P0-2), `69ab047c` (P1-3), `0fa970f0` (P1-5),
+`8477b97a` (P1-6), `9b1ac2ea` (P1-2) and `e3621dcc` (P1-4).
+Decisions: benchmarks use a small `harness = false` bench instead of
+Criterion, so no new dependencies; the MCP default tool list is a
+hand-picked set of 38 task-level tools (`DEFAULT_MCP_TOOLS`), and every
+tool a recipe names must be in it (unit test); the database runs in WAL
+mode, so a copy of a running database must include `-wal`
+(spec 12, AGENTS.md lesson updated).
+Local evidence (Linux container): Windows-target Clippy (mingw) clean for
+the transport, control, CLI and windows-audio crates; storage (97) and
+engine tests pass, including `processing_never_allocates_for_any_tool_or_layout`;
+485 Vitest tests; 146 harness-only Playwright tests in Chromium; error
+panels checked in the dark, light and high-contrast themes. Bench, release
+build on Linux: tools 23–93 µs per 128-frame quantum (0.9–3.5 % of the
+budget); a 32-tool route 694 µs (26 %). Gain alone costs 23 µs, so most of
+that is per-route overhead, which is a P2-7 follow-up.
+Windows evidence: CI on the branch (see the next action). Transport,
+control and CLI tests run only there.
+Remaining: P0-1 still runs plug-in worker start/re-hash at Play and
+bundle export/import inline. Rollback: revert the individual commits;
+the WAL switch is undone by `PRAGMA journal_mode = DELETE`.
+Next action: green Windows CI on the branch, then a pull request if the
+user asks for one.
+
 ### CI back to green on Windows (2026-10-06, user request)
 
 All 500+ `AudioRouter CI` runs through 2026-09-07 failed; the workflow was

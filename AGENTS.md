@@ -239,7 +239,8 @@ Report the result, affected requirement IDs/files, checks performed and limitati
   within 10 ms and left header-less WAVs. Feed taps through a multi-path
   `RealtimeMixerFanout` with paths on different clocks, inject drops,
   stalls and repeats, parse every WAV header (`assert_playable_wav`), and
-  load the user's session from a database copy to check its path count.
+  load the user's session from a database copy (taken with the app
+  closed, or with its `-wal` file, since 2026-10-07) to check its path count.
 
 - **2026-10-01 — Test the first-run state of every precondition a feature needs.**
   Evidence: [active plan, recording-folder defect](docs/plans/active/current.md).

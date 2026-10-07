@@ -577,6 +577,10 @@ pub enum JournalFailureStage {
     AfterJournal,
 }
 
+/// How long a write waits for another connection (the CLI, an MCP server
+/// started without `--pipe`) to release the database before failing with
+/// "database is locked".
+const BUSY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
 impl Storage {
     pub fn open_memory() -> Result<Self, StorageError> {
         let storage = Self {
@@ -595,10 +599,52 @@ impl Storage {
             connection: Connection::open(path)?,
             database_path: Some(path.to_path_buf()),
         };
+        storage.connection.busy_timeout(BUSY_TIMEOUT)?;
         storage.check_integrity()?;
+        storage.use_write_ahead_log();
         storage.migrate()?;
         storage.prune_expired_recovery()?;
         Ok(storage)
+    }
+
+    /// Commits run on the backend's control thread, which also feeds running
+    /// audio. The default rollback journal with full sync flushes to disk
+    /// several times per commit; a write-ahead log with `synchronous=NORMAL`
+    /// flushes once per checkpoint instead and lets readers in other
+    /// processes (CLI, MCP) work alongside the writer. A power cut can lose
+    /// the last commits but cannot corrupt the database. Best effort: a
+    /// database that cannot switch (read-only media) keeps its journal mode.
+    fn use_write_ahead_log(&self) {
+        let switched = self
+            .connection
+            .query_row("PRAGMA journal_mode = WAL", [], |row| {
+                row.get::<_, String>(0)
+            })
+            .is_ok_and(|mode| mode.eq_ignore_ascii_case("wal"));
+        if switched {
+            let _ = self
+                .connection
+                .execute_batch("PRAGMA synchronous = NORMAL;");
+        }
+    }
+
+    /// Begin a write transaction that takes the write lock up front
+    /// (`BEGIN IMMEDIATE`). A deferred transaction that reads first and then
+    /// writes cannot wait for another writer: SQLite reports "database is
+    /// locked" at once instead of honouring the busy timeout.
+    fn write_transaction(&self) -> Result<rusqlite::Transaction<'_>, StorageError> {
+        Ok(rusqlite::Transaction::new_unchecked(
+            &self.connection,
+            rusqlite::TransactionBehavior::Immediate,
+        )?)
+    }
+
+    /// The journal mode SQLite reports for this connection (`wal`, `delete`,
+    /// `memory`), for diagnostics and tests.
+    pub fn journal_mode(&self) -> Result<String, StorageError> {
+        Ok(self
+            .connection
+            .query_row("PRAGMA journal_mode", [], |row| row.get(0))?)
     }
 
     /// Persist a user-selected audio file under an opaque ID, keeping graph
@@ -1141,7 +1187,7 @@ impl Storage {
                 "too many virtual buses".into(),
             ));
         }
-        let transaction = self.connection.unchecked_transaction()?;
+        let transaction = self.write_transaction()?;
         transaction.execute("DELETE FROM virtual_buses", [])?;
         for snapshot in snapshots {
             transaction.execute(
@@ -1170,7 +1216,7 @@ impl Storage {
                 "too many virtual buses".into(),
             ));
         }
-        let transaction = self.connection.unchecked_transaction()?;
+        let transaction = self.write_transaction()?;
         transaction.execute("DELETE FROM virtual_buses", [])?;
         for snapshot in snapshots {
             transaction.execute(
@@ -1212,7 +1258,7 @@ impl Storage {
         validate_journal_fields("virtualDevices.apply", &result, 0)?;
         self.prune_expired_journal()?;
         self.ensure_journal_capacity(idempotency_key)?;
-        let transaction = self.connection.unchecked_transaction()?;
+        let transaction = self.write_transaction()?;
         transaction.execute("DELETE FROM virtual_buses", [])?;
         for snapshot in snapshots {
             transaction.execute(
@@ -1259,7 +1305,7 @@ impl Storage {
         validate_journal_fields(operation, &result, 0)?;
         self.prune_expired_journal()?;
         self.ensure_journal_capacity(idempotency_key)?;
-        let transaction = self.connection.unchecked_transaction()?;
+        let transaction = self.write_transaction()?;
         transaction.execute("DELETE FROM virtual_buses", [])?;
         for snapshot in snapshots {
             transaction.execute(
@@ -1296,7 +1342,7 @@ impl Storage {
                 "too many virtual buses".into(),
             ));
         }
-        let transaction = self.connection.unchecked_transaction()?;
+        let transaction = self.write_transaction()?;
         let deleted = transaction.execute(
             "DELETE FROM operation_journal WHERE idempotency_key = ?1 AND request_hash = ?2",
             params![idempotency_key, request_hash],
@@ -1516,7 +1562,7 @@ impl Storage {
         validate_journal_fields("virtualRoutes.replace", &result, 0)?;
         self.prune_expired_journal()?;
         self.ensure_journal_capacity(idempotency_key)?;
-        let transaction = self.connection.unchecked_transaction()?;
+        let transaction = self.write_transaction()?;
         transaction.execute(
             "INSERT INTO control_settings(key, value) VALUES ('virtualBusRoutes', ?1)
              ON CONFLICT(key) DO UPDATE SET value=excluded.value",
@@ -1732,7 +1778,7 @@ impl Storage {
         let document = Self::serialize_validated_session(session)?;
         let revision = i64::try_from(session.revision)
             .map_err(|_| StorageError::InvalidSession("session revision is too large".into()))?;
-        let transaction = self.connection.unchecked_transaction()?;
+        let transaction = self.write_transaction()?;
         let existing: bool = transaction.query_row(
             "SELECT EXISTS(SELECT 1 FROM sessions WHERE id = ?1)",
             params![session.id.as_str()],
@@ -1764,7 +1810,7 @@ impl Storage {
 
     pub fn delete_session(&self, id: &EntityId) -> Result<bool, StorageError> {
         validate_session_id(id)?;
-        let transaction = self.connection.unchecked_transaction()?;
+        let transaction = self.write_transaction()?;
         let changed =
             transaction.execute("DELETE FROM sessions WHERE id = ?1", params![id.as_str()])?;
         transaction.execute(
@@ -2087,7 +2133,7 @@ impl Storage {
     /// Removes only the durable library row; it never touches the recording path.
     pub fn remove_recording_entry(&self, id: &str) -> Result<bool, StorageError> {
         validate_recording_id(id)?;
-        let transaction = self.connection.unchecked_transaction()?;
+        let transaction = self.write_transaction()?;
         let removed =
             transaction.execute("DELETE FROM recordings WHERE id = ?1", params![id])? == 1;
         if removed {
@@ -3263,7 +3309,9 @@ impl Storage {
         validate_request_hash(request_hash)?;
         validate_journal_fields(operation, result, 0)?;
 
-        let transaction = self.connection.transaction()?;
+        let transaction = self
+            .connection
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         transaction.execute(
             "DELETE FROM operation_journal
              WHERE created_at < datetime('now', ?1)",
@@ -3607,7 +3655,7 @@ impl Storage {
         let timestamp =
             i64::try_from(timestamp_seconds).map_err(|_| StorageError::InvalidRecoveryTimestamp)?;
         let cutoff = timestamp.saturating_sub(RECOVERY_CRASH_WINDOW_SECONDS as i64);
-        let transaction = self.connection.unchecked_transaction()?;
+        let transaction = self.write_transaction()?;
         transaction.execute(
             "DELETE FROM recovery_crashes WHERE occurred_at < ?1",
             params![cutoff],
@@ -3659,7 +3707,7 @@ impl Storage {
         let timestamp =
             i64::try_from(timestamp_seconds).map_err(|_| StorageError::InvalidRecoveryTimestamp)?;
         let cutoff = timestamp.saturating_sub(RECOVERY_CRASH_WINDOW_SECONDS as i64);
-        let transaction = self.connection.unchecked_transaction()?;
+        let transaction = self.write_transaction()?;
         let recent_crashes = transaction.query_row(
             "SELECT COUNT(*) FROM recovery_crashes WHERE occurred_at >= ?1",
             params![cutoff],
@@ -3682,7 +3730,7 @@ impl Storage {
     }
 
     pub fn clear_recovery_crashes(&self) -> Result<(), StorageError> {
-        let transaction = self.connection.unchecked_transaction()?;
+        let transaction = self.write_transaction()?;
         transaction.execute("DELETE FROM recovery_crashes", [])?;
         transaction.execute(
             "INSERT INTO control_settings(key, value) VALUES ('recoverySafeMode', 'false')
@@ -3706,7 +3754,7 @@ impl Storage {
         validate_idempotency_key(key)?;
         validate_request_hash(request_hash)?;
         validate_journal_fields(operation, result, 0)?;
-        let transaction = self.connection.unchecked_transaction()?;
+        let transaction = self.write_transaction()?;
         transaction.execute(
             "DELETE FROM operation_journal
              WHERE created_at < datetime('now', ?1)",
@@ -3826,7 +3874,7 @@ impl Storage {
         let document = Self::serialize_validated_session(session)?;
         self.prune_expired_journal()?;
         self.ensure_journal_capacity(key)?;
-        let transaction = self.connection.unchecked_transaction()?;
+        let transaction = self.write_transaction()?;
         let existing: bool = transaction.query_row(
             "SELECT EXISTS(SELECT 1 FROM sessions WHERE id = ?1)",
             params![session.id.as_str()],
@@ -5783,6 +5831,38 @@ mod tests {
                     && maximum == MAX_BACKUP_BYTES as usize
         ));
         assert!(!destination.exists());
+    }
+
+    /// 2026-10-07 review P1-3: commits run on the audio service thread, and a
+    /// second process got an immediate "database is locked".
+    #[test]
+    fn file_databases_use_a_write_ahead_log_and_wait_for_a_busy_writer() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-storage-wal-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let storage = Storage::open(&path).unwrap();
+        assert_eq!(storage.journal_mode().unwrap(), "wal");
+        assert_eq!(
+            Storage::open_memory().unwrap().journal_mode().unwrap(),
+            "memory"
+        );
+
+        // Another process holds the write lock for 300 ms; this writer waits
+        // for it instead of failing.
+        let other = Connection::open(&path).unwrap();
+        other.execute_batch("BEGIN IMMEDIATE;").unwrap();
+        let releaser = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            other.execute_batch("COMMIT;").unwrap();
+        });
+        let original = session();
+        storage.save_session(&original).unwrap();
+        releaser.join().unwrap();
+        assert_eq!(storage.load_session(&original.id).unwrap(), Some(original));
+        drop(storage);
+        std::fs::remove_file(&path).unwrap();
     }
 
     #[test]

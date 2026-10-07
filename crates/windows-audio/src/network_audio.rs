@@ -921,6 +921,24 @@ mod tests {
     use super::*;
     use audiorouter_engine::{AudioBlock, AudioTap};
 
+    /// Real-time tests pace audio with short sleeps and judge continuity and
+    /// buffer depth by wall clock. Run them one at a time, with the 1 ms
+    /// timer the production audio service thread uses: on a 4-core CI runner
+    /// at the default 15.6 ms tick, running beside each other, the drift
+    /// test's buffer swung between 0 and 270 ms and the loopback tone broke
+    /// up (CI run 37563525281).
+    fn realtime_test() -> (
+        std::sync::MutexGuard<'static, ()>,
+        crate::AudioServiceThreadGuard,
+    ) {
+        static REALTIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let serial = REALTIME
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let (timer, _) = crate::AudioServiceThreadGuard::enter();
+        (serial, timer)
+    }
+
     fn header(sequence: u32) -> NetworkPacketHeader {
         NetworkPacketHeader {
             channels: 2,
@@ -1009,6 +1027,7 @@ mod tests {
     /// jitter buffer fills, and a lost packet is concealed, not skipped.
     #[test]
     fn a_tone_sent_over_loopback_plays_back_continuously() {
+        let _realtime = realtime_test();
         let port = free_port();
         let receiver = NetworkReceiver::start("127.0.0.1".parse().unwrap(), port, 20.0).unwrap();
         let sender = NetworkSender::start(SocketAddr::from(([127, 0, 0, 1], port))).unwrap();
@@ -1163,6 +1182,7 @@ mod tests {
 
     #[test]
     fn stereo_stays_separate_and_a_mono_sender_plays_on_both_channels() {
+        let _realtime = realtime_test();
         for channels in [2_usize, 1] {
             let port = free_port();
             let receiver =
@@ -1198,6 +1218,7 @@ mod tests {
     /// near its target, with no gap and no skip, for the whole run.
     #[test]
     fn sender_clock_drift_is_absorbed_without_gaps_or_growing_delay() {
+        let _realtime = realtime_test();
         let runs = [1.003_f64, 0.997].map(|speed| {
             std::thread::spawn(move || {
                 let port = free_port();
@@ -1266,6 +1287,7 @@ mod tests {
     /// at once instead of being treated as late or duplicate audio.
     #[test]
     fn a_restarted_sender_is_followed_immediately() {
+        let _realtime = realtime_test();
         let port = free_port();
         let receiver = NetworkReceiver::start("127.0.0.1".parse().unwrap(), port, 10.0).unwrap();
         let block = AudioBlock::new(2, 128).unwrap();
@@ -1293,6 +1315,7 @@ mod tests {
     /// receiver drops the excess instead of keeping seconds of extra delay.
     #[test]
     fn a_burst_after_a_stall_does_not_leave_extra_delay() {
+        let _realtime = realtime_test();
         let port = free_port();
         let receiver = NetworkReceiver::start("127.0.0.1".parse().unwrap(), port, 40.0).unwrap();
         let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -1333,6 +1356,7 @@ mod tests {
     /// address (not loopback), and IPv6. Skips the LAN half without a network.
     #[test]
     fn audio_arrives_over_this_computers_lan_address_and_over_ipv6() {
+        let _realtime = realtime_test();
         let lan = UdpSocket::bind("0.0.0.0:0")
             .and_then(|probe| probe.connect("192.0.2.1:9").map(|()| probe))
             .and_then(|probe| probe.local_addr())
@@ -1364,6 +1388,7 @@ mod tests {
 
     #[test]
     fn a_sequence_gap_is_concealed_and_late_packets_are_dropped() {
+        let _realtime = realtime_test();
         let port = free_port();
         let receiver = NetworkReceiver::start("127.0.0.1".parse().unwrap(), port, 10.0).unwrap();
         let socket = UdpSocket::bind("127.0.0.1:0").unwrap();

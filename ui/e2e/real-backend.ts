@@ -26,12 +26,17 @@ export class RealBackend {
   private restarting: Promise<void> | null = null;
   private pending = new Map<number, { resolve: (value: any) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   readonly methods: string[] = [];
+  /** Last stderr of the current fixture process and how it ended, for failure reports. */
+  stderrTail = "";
+  exitCode: number | null = null;
   constructor(readonly directory: string) { this.start(); }
   private start() {
     const executable = path.resolve("../target/debug/examples", process.platform === "win32" ? "e2e_backend.exe" : "e2e_backend");
     this.process = spawn(executable, [this.directory], { windowsHide: true, stdio: "pipe" });
     let stderr = "";
-    this.process.stderr.on("data", bytes => { stderr = (stderr + bytes.toString()).slice(-4000); });
+    this.stderrTail = ""; this.exitCode = null;
+    this.process.stderr.on("data", bytes => { stderr = (stderr + bytes.toString()).slice(-4000); this.stderrTail = stderr; });
+    this.process.on("exit", code => { this.exitCode = code; });
     createInterface({ input: this.process.stdout }).on("line", line => {
       try {
         const response = JSON.parse(line);
@@ -76,7 +81,7 @@ export class RealBackend {
 }
 
 export const test = base.extend<{ backend: RealBackend }>({
-  backend: [async ({ page }, use) => {
+  backend: [async ({ page }, use, testInfo) => {
     const directory = await mkdtemp(path.join(tmpdir(), "audiorouter-e2e-"));
     const backend = new RealBackend(directory);
     const pageErrors: string[] = [];
@@ -95,6 +100,7 @@ export const test = base.extend<{ backend: RealBackend }>({
         await route.fulfill(response).catch(() => undefined);
       });
       await use(backend);
+      if (testInfo.status !== testInfo.expectedStatus) await reportFailureState(page, backend);
       expect(pageErrors, "No uncaught UI exceptions").toEqual([]);
     } finally {
       await page.unroute("**/__e2e_rpc");
@@ -106,3 +112,12 @@ export const test = base.extend<{ backend: RealBackend }>({
   }, { auto: true }],
 });
 export { expect };
+
+/** On a failed test, print what the page shows and the fixture backend's state (CI has no screen). */
+async function reportFailureState(page: import("@playwright/test").Page, backend: RealBackend) {
+  const visible = await page.evaluate(() => [...document.querySelectorAll("h1, h2, [role=alert], [role=status]")]
+    .map((element) => `${element.tagName.toLowerCase()}${element.getAttribute("role") ? `[${element.getAttribute("role")}]` : ""}: ${(element.textContent ?? "").trim().slice(0, 160)}`)
+    .filter((line) => !line.endsWith(": ")).slice(0, 25)).catch((error) => [`page unavailable: ${error}`]);
+  const sessions = await backend.call("sessions.list").then((list) => JSON.stringify(list.items?.map((item: { id: string; name: string }) => `${item.id}=${item.name}`))).catch((error) => `sessions.list failed: ${error}`);
+  console.log(["E2E FAILURE STATE", ...visible, `backend exit: ${backend.exitCode ?? "running"}; sessions: ${sessions}`, `backend stderr: ${backend.stderrTail.slice(-1500) || "(empty)"}`].join("\n  "));
+}
