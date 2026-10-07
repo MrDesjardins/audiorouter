@@ -175,6 +175,14 @@ costs and phases in the [driver track](../future/M03-driver-signing.md).
   `cargo deny` runs and all three audits pass. Details in the
   [review](../future/code-review-2026-10-07.md#p2-4-dependency-and-supply-chain-checks-are-missing).
   Next action: first CI run of the `supply-chain` job.
+- **P2-8 coverage and soak:** nightly/manual `quality.yml` (Windows):
+  `cargo llvm-cov` and Vitest coverage (not gated), a 20-minute engine soak
+  (`crates/engine/examples/soak.rs`, gates on heap growth, allocations and
+  p99 per quantum), and the backend part of NFR-14 timed by
+  `fresh_install_shell`. Local: 10 s soak passes; UI coverage 74.5 % of
+  lines; portable-crate coverage 86.5 %. UI-ready startup time is not
+  measured yet. Next action: dispatch `quality.yml` once and record the
+  first numbers.
 
 ### Code review P0 and P1 fixes (2026-10-07, user request)
 

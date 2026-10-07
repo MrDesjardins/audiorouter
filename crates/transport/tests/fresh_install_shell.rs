@@ -5,6 +5,11 @@
 //! other AudioRouter may be running (checked first). Opt in with
 //! AUDIOROUTER_SHELL_EXE=<path to audiorouter-shell.exe>. The app window
 //! opens for a few seconds; no audio device is opened.
+//!
+//! It also prints how long the embedded backend took to answer its first
+//! `status.get` after launch (NFR-14 startup, backend part only; the time
+//! until the window's UI is ready is not measured). With
+//! AUDIOROUTER_STARTUP_METRICS=<file> it writes `backend_ready_ms=<n>` there.
 
 #[cfg(windows)]
 #[test]
@@ -36,6 +41,7 @@ fn a_fresh_install_asks_once_for_device_access_then_plays() {
             let _ = self.0.wait();
         }
     }
+    let launched = Instant::now();
     let app = Kill(
         std::process::Command::new(&exe)
             .env("AUDIOROUTER_DATABASE", folder.join("state.sqlite"))
@@ -53,7 +59,19 @@ fn a_fresh_install_asks_once_for_device_access_then_plays() {
     let deadline = Instant::now() + Duration::from_secs(30);
     while audiorouter_transport::round_trip(pipe, &request("status.get", json!({}))).is_err() {
         assert!(Instant::now() < deadline, "the app's backend did not start");
-        std::thread::sleep(Duration::from_millis(200));
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    let backend_ready = launched.elapsed();
+    eprintln!(
+        "startup: backend answered status.get {} ms after launch",
+        backend_ready.as_millis()
+    );
+    if let Ok(path) = std::env::var("AUDIOROUTER_STARTUP_METRICS") {
+        std::fs::write(
+            &path,
+            format!("backend_ready_ms={}\n", backend_ready.as_millis()),
+        )
+        .unwrap_or_else(|error| panic!("{path}: {error}"));
     }
     let denied = |response: &Value| {
         response["error"]["message"]
