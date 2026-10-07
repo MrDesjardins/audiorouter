@@ -80,11 +80,7 @@ jobs:
 
       - name: Test Rust workspace
         shell: pwsh
-        run: cargo test --workspace --locked --exclude audiorouter-windows-audio
-
-      - name: Check Windows audio adapter
-        shell: pwsh
-        run: cargo check -p audiorouter-windows-audio --locked
+        run: cargo test --workspace --locked
 
       - name: Test and build UI
         shell: pwsh

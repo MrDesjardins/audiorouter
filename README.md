@@ -216,9 +216,13 @@ cargo fmt --all -- --check
 cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
-cargo test --workspace --locked --exclude audiorouter-windows-audio
+cargo test --workspace --locked
 npm.cmd --prefix ui test
+npm.cmd --prefix ui run e2e   # Playwright in Edge, a separate CI job
 ```
+
+Tests that need real audio devices are `#[ignore]`d; run them on a PC with
+endpoints using `cargo test -p audiorouter-windows-audio -- --ignored`.
 
 Format with `cargo fmt --all` and
 `cargo fmt --manifest-path src-tauri/Cargo.toml`. To format staged Rust files
