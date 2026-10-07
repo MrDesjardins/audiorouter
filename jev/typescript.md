@@ -2,78 +2,6 @@
 applies_to: **/*.ts
 ---
 
-# Function Size
-Function should always be under 20 lines of code
-
-Good:
-```ts
-function parseCount(raw: string): number {
-  const value = Number(raw);
-  return Number.isFinite(value) ? value : 0;
-}
-```
-
-Bad:
-```ts
-function processOrder(order: Order): Receipt {
-  // ...25+ lines mixing validation, pricing, tax, discounts,
-  // inventory updates, and email notification all in one function...
-  validate(order);
-  const price = computePrice(order);
-  const tax = computeTax(price);
-  const discount = computeDiscount(order, price);
-  updateInventory(order);
-  sendConfirmationEmail(order);
-  return buildReceipt(order, price, tax, discount);
-}
-```
-
-# Variable name
-All variables must be short, the shorter the better
-
-Good:
-```ts
-const a = 1;
-```
-
-Bad:
-```ts
-const a_b_c_d_e = 34;
-const a_b_d_d_e_f_g_h_i = 100;
-```
-
-# Usage of const and let
-The code must use const as much as possible, then let.
-
-Good:
-```ts
-const total = items.reduce((sum, i) => sum + i.price, 0);
-let retries = 0;
-```
-
-Bad:
-```ts
-let total = 0;
-for (const item of items) {
-  total += item.price; // never reassigned elsewhere, should be const-friendly design
-}
-var retries = 0;
-```
-
-# No console statements
-Code must not contain `console.log`, `console.debug`, or `console.info`
-calls. Use a proper logger, or remove them before committing.
-
-Good:
-```ts
-logger.info("Config loaded", { path });
-```
-
-Bad:
-```ts
-console.log("Config loaded", path);
-```
-
 # No explicit any type
 TypeScript code must not use the `any` type. Use a specific type, `unknown`,
 or a generic parameter instead.
@@ -90,39 +18,6 @@ Bad:
 function parseJson(text: string): any {
   return JSON.parse(text);
 }
-```
-
-# No commented-out code
-Do not leave blocks of commented-out code. Delete code that is no longer
-used instead of commenting it out.
-
-Good:
-```ts
-const total = computeTotal(items);
-```
-
-Bad:
-```ts
-const total = computeTotal(items);
-// const total = items.reduce((sum, i) => sum + i.price, 0);
-// console.log(total);
-```
-
-# TODO comments need a reference
-Any `TODO` or `FIXME` comment must include a ticket/issue reference, for
-example `TODO(JIRA-123): ...`. A bare `TODO` or `FIXME` with no reference is
-a violation.
-
-Good:
-```ts
-// TODO(JIRA-482): remove this fallback once the v2 API is fully rolled out.
-return legacyFetch(url);
-```
-
-Bad:
-```ts
-// TODO: fix this later
-return legacyFetch(url);
 ```
 
 # No empty catch blocks
@@ -144,58 +39,6 @@ Bad:
 try {
   await save(record);
 } catch (err) {}
-```
-
-# No unreachable code
-Code that can never execute (after a `return`, `throw`, `break`, or
-`continue`, or behind a condition that is always false) must be removed.
-
-Good:
-```ts
-function greet(name: string): string {
-  return `Hello, ${name}`;
-}
-```
-
-Bad:
-```ts
-function greet(name: string): string {
-  return `Hello, ${name}`;
-  console.log("done"); // never runs
-}
-```
-
-# No unused variables
-Declared variables that are never read must be removed. A variable that is
-only ever assigned to, never used, is a violation.
-
-Good:
-```ts
-const total = computeTotal(items);
-return total;
-```
-
-Bad:
-```ts
-const total = computeTotal(items);
-const unusedFlag = true;
-return total;
-```
-
-# No unused imports
-Imported symbols that are never referenced in the file must be removed.
-
-Good:
-```ts
-import { parseRules } from "./rulesParser";
-parseRules(text);
-```
-
-Bad:
-```ts
-import { parseRules } from "./rulesParser";
-import { readFile } from "node:fs/promises"; // never used
-parseRules(text);
 ```
 
 # Avoid duplicate object keys
@@ -267,27 +110,6 @@ Bad:
 ```ts
 if (status == "active") { ... }
 if (count != 0) { ... }
-```
-
-# Switch statements must have a default case
-Every `switch` statement must include a `default` case, even if it only
-throws or logs on an unexpected value.
-
-Good:
-```ts
-switch (status) {
-  case "active": return handleActive();
-  case "closed": return handleClosed();
-  default: throw new Error(`Unhandled status: ${status}`);
-}
-```
-
-Bad:
-```ts
-switch (status) {
-  case "active": return handleActive();
-  case "closed": return handleClosed();
-}
 ```
 
 # Errors must not be swallowed silently
@@ -396,43 +218,6 @@ while (true) {
 }
 ```
 
-# Avoid unnecessary await in return statements
-`return await someAsyncCall();` inside a function is unnecessary unless it
-is inside a try/catch that needs to catch that call's rejection; otherwise
-prefer `return someAsyncCall();`.
-
-Good:
-```ts
-async function loadUser(id: string): Promise<User> {
-  return fetchUser(id);
-}
-```
-
-Bad:
-```ts
-async function loadUser(id: string): Promise<User> {
-  return await fetchUser(id); // no surrounding try/catch, await is redundant
-}
-```
-
-# Do not use async without await
-A function declared `async` that contains no `await` expression is a
-violation; drop the `async` keyword or use the await.
-
-Good:
-```ts
-function double(n: number): number {
-  return n * 2;
-}
-```
-
-Bad:
-```ts
-async function double(n: number): Promise<number> {
-  return n * 2; // no await anywhere in the body
-}
-```
-
 # Parallelizable awaits must use Promise.all
 Two or more independent `await` calls in sequence that do not depend on
 each other's results should be run concurrently with `Promise.all`
@@ -483,28 +268,6 @@ useEffect(() => {
 }, []);
 ```
 
-# Avoid nested callbacks deeper than 2 levels
-Callback functions nested more than two levels deep are a violation;
-prefer async/await, named functions, or Promise chaining.
-
-Good:
-```ts
-const user = await fetchUser(id);
-const orders = await fetchOrders(user.id);
-const total = await computeTotal(orders);
-```
-
-Bad:
-```ts
-fetchUser(id, (user) => {
-  fetchOrders(user.id, (orders) => {
-    computeTotal(orders, (total) => {
-      console.log(total);
-    });
-  });
-});
-```
-
 # Long-running loops must not block the event loop
 A loop performing heavy synchronous work over a large or unbounded
 collection on the main thread (in a server or UI context) should yield
@@ -543,24 +306,6 @@ Bad:
 const user = data as User; // no runtime check, just silences the type error
 ```
 
-# Exported functions must have explicit return types
-Every exported function or method must declare its return type explicitly
-rather than relying on inference.
-
-Good:
-```ts
-export function parseCount(raw: string): number {
-  return Number(raw) || 0;
-}
-```
-
-Bad:
-```ts
-export function parseCount(raw: string) {
-  return Number(raw) || 0;
-}
-```
-
 # Avoid non-null assertion operator
 The non-null assertion operator (`!`) must not be used to bypass a
 legitimate possibility of `null`/`undefined`; handle the case explicitly
@@ -577,77 +322,6 @@ Bad:
 ```ts
 const user = users.get(id)!;
 use(user);
-```
-
-# Interfaces over type aliases for object shapes
-Object shapes should be declared with `interface`, not `type`, unless a
-union, intersection, or mapped type is required.
-
-Good:
-```ts
-interface User {
-  id: string;
-  name: string;
-}
-```
-
-Bad:
-```ts
-type User = {
-  id: string;
-  name: string;
-};
-```
-
-# No implicit any in function parameters
-Every function parameter must have an explicit type; none may rely on
-implicit `any`.
-
-Good:
-```ts
-function double(n: number): number {
-  return n * 2;
-}
-```
-
-Bad:
-```ts
-function double(n) {
-  return n * 2;
-}
-```
-
-# Generic type parameters must be constrained when possible
-A generic type parameter that is only ever used in ways that assume a
-particular shape (e.g. calling `.length`) should have an `extends`
-constraint reflecting that assumption.
-
-Good:
-```ts
-function firstOf<T extends { length: number }>(collection: T): number {
-  return collection.length;
-}
-```
-
-Bad:
-```ts
-function firstOf<T>(collection: T): number {
-  return (collection as any).length;
-}
-```
-
-# Avoid `Function` and `Object` as types
-The bare `Function` and `Object` types must not be used; specify a precise
-function signature or object shape instead.
-
-Good:
-```ts
-function onClick(handler: (event: MouseEvent) => void): void {}
-```
-
-Bad:
-```ts
-function onClick(handler: Function): void {}
 ```
 
 # Discriminated unions must have exhaustive switch handling
@@ -671,118 +345,6 @@ switch (shape.kind) {
   case "circle": return Math.PI * shape.radius ** 2;
   // "square" silently falls through to undefined if added later
 }
-```
-
-# Boolean variables must be prefixed with is/has/should/can
-A variable or property of boolean type should be named starting with
-`is`, `has`, `should`, `can`, or a similarly clear predicate prefix.
-
-Good:
-```ts
-const isReady = queue.length === 0;
-const hasPermission = user.role === "admin";
-```
-
-Bad:
-```ts
-const ready = queue.length === 0;
-const permission = user.role === "admin";
-```
-
-# Constants must be named in SCREAMING_SNAKE_CASE
-Module-level constants that represent fixed configuration values (not
-derived at runtime) should be named in `SCREAMING_SNAKE_CASE`.
-
-Good:
-```ts
-const MAX_RETRIES = 3;
-const DEFAULT_TIMEOUT_MS = 5000;
-```
-
-Bad:
-```ts
-const maxRetries = 3;
-const defaultTimeoutMs = 5000;
-```
-
-# No single-letter variable names except loop counters
-Variable names must be at least two characters and descriptive, except for
-conventional loop counters (`i`, `j`, `k`) in simple `for` loops.
-
-Good:
-```ts
-const user = users.find((u) => u.id === id);
-for (let i = 0; i < items.length; i++) { ... }
-```
-
-Bad:
-```ts
-const u = users.find((x) => x.id === id);
-```
-
-# Function names must be verbs describing the action
-A function's name should start with a verb (e.g. `get`, `create`,
-`parse`, `validate`) that describes what it does, not a noun alone.
-
-Good:
-```ts
-function parseConfig(text: string): Config { ... }
-```
-
-Bad:
-```ts
-function config(text: string): Config { ... }
-```
-
-# Avoid abbreviations in identifiers
-Identifiers should spell out words rather than using unclear abbreviations
-(e.g. prefer `configuration` or `config` over `cfg`, `userIdentifier` over
-`usrId`), unless the abbreviation is a well-known industry term (e.g. `id`,
-`url`, `html`).
-
-Good:
-```ts
-const configuration = loadConfiguration();
-const userId = getCurrentUserId();
-```
-
-Bad:
-```ts
-const cfg = loadCfg();
-const usrId = getCurUsrId();
-```
-
-# File names must match their default export
-A file whose primary export is a single class, function, or component
-should be named after that export (case-insensitively), not a generic name
-like `index2.ts` or `helper.ts`.
-
-Good:
-```ts
-// file: UserProfile.tsx
-export default function UserProfile() { ... }
-```
-
-Bad:
-```ts
-// file: helper.ts
-export default function UserProfile() { ... }
-```
-
-# Avoid magic numbers
-A numeric literal used in a conditional or calculation (other than 0, 1,
-or -1) should be assigned to a named constant that explains its meaning,
-instead of appearing inline.
-
-Good:
-```ts
-const MAX_LOGIN_ATTEMPTS = 5;
-if (attempts > MAX_LOGIN_ATTEMPTS) { lockAccount(); }
-```
-
-Bad:
-```ts
-if (attempts > 5) { lockAccount(); }
 ```
 
 # No hardcoded credentials or API keys
@@ -964,26 +526,6 @@ app.get("/config", (req, res) => {
 });
 ```
 
-# New exported functions must have at least one corresponding test
-A newly added exported function or class should be accompanied by at least
-one test exercising its main behavior.
-
-Good:
-```ts
-export function parseCount(raw: string): number { ... }
-
-// parseCount.test.ts
-test("parseCount returns 0 for non-numeric input", () => {
-  assert.equal(parseCount("abc"), 0);
-});
-```
-
-Bad:
-```ts
-export function parseCount(raw: string): number { ... }
-// no test file added for this new export
-```
-
 # Tests must not depend on execution order
 A test must not rely on state left behind by a previous test running
 first; each test should set up and tear down its own state.
@@ -1002,21 +544,6 @@ Bad:
 const cart = new Cart(); // shared across tests
 test("adds an item", () => { cart.add(item); assert.equal(cart.items.length, 1); });
 test("cart has one item", () => { assert.equal(cart.items.length, 1); }); // depends on prior test running first
-```
-
-# Test descriptions must state the expected behavior
-A test's name/description should state the expected behavior being
-verified (e.g. "returns null when input is empty"), not a vague label like
-"test 1" or "works".
-
-Good:
-```ts
-test("returns 0 when the input string is not a number", () => { ... });
-```
-
-Bad:
-```ts
-test("test 1", () => { ... });
 ```
 
 # Mocks must be reset between tests
@@ -1070,203 +597,6 @@ test("computes total", () => {
 });
 ```
 
-# Public functions must have a doc comment describing purpose
-An exported function or class intended for use by other modules should
-have a short doc comment describing what it does, its parameters, and its
-return value.
-
-Good:
-```ts
-/** Parses a raw rules Markdown file into a list of Rule objects. */
-export function parseRules(markdown: string): Rule[] { ... }
-```
-
-Bad:
-```ts
-export function parseRules(markdown: string): Rule[] { ... }
-```
-
-# Comments must explain why, not what
-A comment should explain the reasoning behind non-obvious code (a
-constraint, a workaround, a subtle invariant), not restate what
-well-named code already makes obvious.
-
-Good:
-```ts
-// Floored at 1s so rapid edits can never trigger more than one request/sec.
-const delay = Math.max(1000, configuredDelay);
-```
-
-Bad:
-```ts
-// set delay to the max of 1000 and configuredDelay
-const delay = Math.max(1000, configuredDelay);
-```
-
-# No misleading or outdated comments
-A comment must accurately describe the code next to it; a comment that
-contradicts the code it annotates (e.g. describing removed behavior) is a
-violation.
-
-Good:
-```ts
-// Retries up to 3 times with exponential backoff.
-for (let attempt = 0; attempt < 3; attempt++) { ... }
-```
-
-Bad:
-```ts
-// Retries up to 3 times with exponential backoff.
-for (let attempt = 0; attempt < 10; attempt++) { ... } // comment no longer matches
-```
-
-# Deprecated code must be marked with a deprecation notice
-Code being kept temporarily for backward compatibility must be marked with
-a `@deprecated` tag or equivalent comment explaining what to use instead.
-
-Good:
-```ts
-/** @deprecated Use fetchUserV2 instead. Will be removed after 2026-Q2. */
-export function fetchUser(id: string): User { ... }
-```
-
-Bad:
-```ts
-export function fetchUser(id: string): User { ... } // kept around with no notice it's obsolete
-```
-
-# Commits must not include debug-only code
-Debug-only scaffolding (temporary console output, hardcoded test values,
-commented-out feature flags used only for local debugging) must not be
-part of the change.
-
-Good:
-```ts
-const userId = req.params.userId;
-```
-
-Bad:
-```ts
-const userId = "test-user-123"; // hardcoded for local debugging, left in by mistake
-console.log("DEBUG", userId);
-```
-
-# No large binary files committed to source control
-Large binary assets (e.g. multi-megabyte images, archives, compiled
-binaries) should not be added directly to the repository; use an external
-asset store or Git LFS instead.
-
-Good:
-```
-assets/logo.svg          (4 KB, vector, tracked normally)
-```
-
-Bad:
-```
-assets/product-demo.mp4  (85 MB, committed directly to git)
-```
-
-# Config files must not contain environment-specific secrets
-Committed configuration files must not contain secrets or
-environment-specific values (API keys, database URLs with credentials);
-these belong in environment variables or a secrets manager.
-
-Good:
-```json
-{ "databaseUrl": "${DATABASE_URL}", "apiKey": "${TYPESAFE_API_KEY}" }
-```
-
-Bad:
-```json
-{ "databaseUrl": "postgres://admin:hunter2@prod-db:5432/app" }
-```
-
-# Feature flags must have a clear rollback path
-Code gated behind a new feature flag must be structured so the flag can be
-turned off to fully restore the previous behavior, without requiring a
-code change.
-
-Good:
-```ts
-const checkout = flags.newCheckoutFlow ? renderNewCheckout() : renderLegacyCheckout();
-```
-
-Bad:
-```ts
-if (flags.newCheckoutFlow) {
-  removeLegacyCheckoutCode(); // old path deleted, flag can no longer be turned off safely
-}
-renderNewCheckout();
-```
-
-# Functions should have a single responsibility
-A function should do one identifiable thing. A function that performs
-several unrelated responsibilities (e.g. fetching data, transforming it,
-and rendering UI all in one function) should be split up.
-
-Good:
-```ts
-const raw = await fetchOrders(userId);
-const orders = normalizeOrders(raw);
-renderOrders(orders);
-```
-
-Bad:
-```ts
-async function loadAndRenderOrders(userId: string) {
-  const res = await fetch(`/orders?user=${userId}`);
-  const raw = await res.json();
-  const normalized = raw.map((o) => ({ ...o, total: o.price * o.qty }));
-  document.getElementById("orders")!.innerHTML = normalized.map(renderRow).join("");
-}
-```
-
-# Avoid deeply nested conditionals
-Conditional logic should not nest more than three levels deep; prefer
-early returns, guard clauses, or extracting helper functions.
-
-Good:
-```ts
-function canCheckout(user: User): boolean {
-  if (!user.isVerified) return false;
-  if (user.cart.length === 0) return false;
-  return user.paymentMethod != null;
-}
-```
-
-Bad:
-```ts
-function canCheckout(user: User): boolean {
-  if (user.isVerified) {
-    if (user.cart.length > 0) {
-      if (user.paymentMethod != null) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-```
-
-# Duplicate logic should be extracted into a shared function
-Near-identical logic repeated in more than one place in the same change
-should be extracted into a shared, named function instead of copy-pasted.
-
-Good:
-```ts
-function formatCurrency(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
-}
-const priceLabel = formatCurrency(order.price);
-const taxLabel = formatCurrency(order.tax);
-```
-
-Bad:
-```ts
-const priceLabel = `$${(order.price / 100).toFixed(2)}`;
-const taxLabel = `$${(order.tax / 100).toFixed(2)}`; // same formatting logic copy-pasted
-```
-
 # Circular dependencies between modules are not allowed
 A module must not import (directly or transitively) from a module that
 imports back from it.
@@ -1288,53 +618,6 @@ import { getOrders } from "./orderService";
 import { getUser } from "./userService"; // creates a cycle with userService.ts
 ```
 
-# Barrel files must not re-export internal-only symbols
-An `index.ts` barrel file must only re-export a module's public API, not
-internal helpers meant to stay private to that module.
-
-Good:
-```ts
-// index.ts
-export { AnalysisController } from "./analysisController";
-export type { AnalysisStatus } from "./analysisController";
-```
-
-Bad:
-```ts
-// index.ts
-export * from "./analysisController"; // also leaks internal helpers not meant for consumers
-```
-
-# Prefer readonly for properties that are never reassigned
-Object and array properties that are set once and never mutated afterward should be declared `readonly`.
-
-Good:
-```ts
-interface Config {
-  readonly maxRetries: number;
-}
-```
-
-Bad:
-```ts
-interface Config {
-  maxRetries: number;
-}
-```
-
-# Avoid enum when a string literal union suffices
-Prefer a union of string literal types over `enum` unless you specifically need enum's runtime object.
-
-Good:
-```ts
-type Status = "active" | "closed";
-```
-
-Bad:
-```ts
-enum Status { Active, Closed }
-```
-
 # Do not export mutable let bindings from a module
 A module should not export a `let` variable that other modules can reassign; export a function or readonly value instead.
 
@@ -1349,60 +632,6 @@ export function increment(): number {
 Bad:
 ```ts
 export let count = 0;
-```
-
-# Avoid default exports for non-component modules
-Utility/service modules should use named exports; reserve default exports for single-component files where the convention is established.
-
-Good:
-```ts
-export function parseCount(raw: string): number { ... }
-```
-
-Bad:
-```ts
-export default function parseCount(raw: string) { ... }
-```
-
-# Avoid deep relative import chains
-An import path should not traverse more than two `../` segments; restructure or use a path alias instead.
-
-Good:
-```ts
-import { Rule } from "@/types";
-```
-
-Bad:
-```ts
-import { Rule } from "../../../../types";
-```
-
-# Avoid star imports except for designed namespaces
-`import * as X` should be reserved for modules explicitly designed as a namespace; otherwise import named symbols.
-
-Good:
-```ts
-import { parseRules } from "./rulesParser";
-```
-
-Bad:
-```ts
-import * as RulesParser from "./rulesParser";
-```
-
-# Do not use the namespace or module keyword
-Use ES modules (`import`/`export`) instead of TypeScript's legacy `namespace`/`module` syntax.
-
-Good:
-```ts
-export function helper(): void {}
-```
-
-Bad:
-```ts
-namespace Helpers {
-  export function helper(): void {}
-}
 ```
 
 # Avoid ts-ignore; use ts-expect-error with a reason
@@ -1449,58 +678,6 @@ Bad:
 const user = data as unknown as User;
 ```
 
-# Prefer template literal types for structured strings
-When a string follows a known structure (e.g. `user:${id}`), use a template literal type instead of the bare `string` type.
-
-Good:
-```ts
-type UserKey = `user:${string}`;
-```
-
-Bad:
-```ts
-type UserKey = string;
-```
-
-# Avoid optional chaining on values that are never optional
-Do not use `?.` on a value whose type guarantees it is never null/undefined; it hides a real type error.
-
-Good:
-```ts
-config.timeout.toString();
-```
-
-Bad:
-```ts
-config?.timeout?.toString();
-```
-
-# Do not use var
-Use `const` or `let`; `var`'s function-scoping and hoisting behavior is a common source of bugs.
-
-Good:
-```ts
-const total = 0;
-```
-
-Bad:
-```ts
-var total = 0;
-```
-
-# Avoid empty interfaces that only extend another type
-An `interface Foo extends Bar {}` with no additional members should just be a type alias, or removed.
-
-Good:
-```ts
-type Admin = User;
-```
-
-Bad:
-```ts
-interface Admin extends User {}
-```
-
 # Prefer Array.isArray over instanceof Array
 Use `Array.isArray(x)` rather than `x instanceof Array`, which can be unreliable across realms.
 
@@ -1544,47 +721,6 @@ function addTax(order: Order): void {
 }
 ```
 
-# Avoid returning different shapes from the same function based on a flag
-A function should not return a different result shape depending on an internal condition; split into separate functions or use a discriminated union.
-
-Good:
-```ts
-function parse(raw: string): ParseResult { return { ok: true, value: 1 }; }
-```
-
-Bad:
-```ts
-function parse(raw: string, strict: boolean) {
-  return strict ? { value: 1 } : 1;
-}
-```
-
-# Prefer named exports over default exports for utility modules
-Utility modules should use named exports so imports are consistent and refactor-friendly across the codebase.
-
-Good:
-```ts
-export function formatCurrency(cents: number): string { ... }
-```
-
-Bad:
-```ts
-export default function formatCurrency(cents: number) { ... }
-```
-
-# Avoid long parameter lists
-A function with more than 3-4 parameters should take an options object instead.
-
-Good:
-```ts
-function createUser(options: { name: string; email: string; role: string }): User { ... }
-```
-
-Bad:
-```ts
-function createUser(name: string, email: string, role: string, isAdmin: boolean): User { ... }
-```
-
 # Do not catch and rethrow the same error unchanged
 A `catch` block that only rethrows the exact same error adds no value; remove the try/catch or add real handling.
 
@@ -1602,36 +738,6 @@ try {
 }
 ```
 
-# Avoid try/catch around code that cannot throw
-Do not wrap non-throwing operations in try/catch; it adds noise without protecting anything.
-
-Good:
-```ts
-const total = a + b;
-```
-
-Bad:
-```ts
-try {
-  const total = a + b;
-} catch (err) {
-  // never happens
-}
-```
-
-# Prefer Array.prototype.includes over indexOf checks
-Use `arr.includes(x)` instead of `arr.indexOf(x) !== -1` for membership checks.
-
-Good:
-```ts
-if (roles.includes("admin")) { ... }
-```
-
-Bad:
-```ts
-if (roles.indexOf("admin") !== -1) { ... }
-```
-
 # Do not compare floating point numbers with strict equality
 Floating point comparisons should use an epsilon tolerance instead of `===`, which is unreliable for computed values.
 
@@ -1643,52 +749,6 @@ if (Math.abs(a - b) < 1e-9) { ... }
 Bad:
 ```ts
 if (a === b) { ... }
-```
-
-# Avoid recursive functions without a documented base case
-A recursive function must have a clearly stated, reachable base case; document it if not obvious.
-
-Good:
-```ts
-// Base case: n <= 1 returns 1.
-function factorial(n: number): number {
-  return n <= 1 ? 1 : n * factorial(n - 1);
-}
-```
-
-Bad:
-```ts
-function factorial(n: number): number {
-  return n * factorial(n - 1);
-}
-```
-
-# Prefer const assertions for literal tuples
-An array literal meant to be used as a fixed-length tuple should use `as const` to preserve its literal type.
-
-Good:
-```ts
-const point = [0, 0] as const;
-```
-
-Bad:
-```ts
-const point = [0, 0];
-```
-
-# Do not export test-only helpers from production modules
-Helpers that exist only to support tests should live in a test-utilities module, not be exported from production code.
-
-Good:
-```ts
-// test/helpers.ts
-export function makeFakeUser(): User { ... }
-```
-
-Bad:
-```ts
-// src/user.ts
-export function makeFakeUser(): User { ... }
 ```
 
 # Avoid global mutable state
@@ -1703,20 +763,6 @@ func NewStore() *Store { return &Store{} }
 Bad:
 ```go
 var items []Item
-```
-
-# Prefer dependency injection over module-level singletons
-For testability, pass dependencies (clients, clocks, loggers) into functions/classes instead of importing a shared singleton.
-
-Good:
-```ts
-function loadUser(client: HttpClient, id: string) { return client.get(id); }
-```
-
-Bad:
-```ts
-import { client } from "./singletonClient";
-function loadUser(id: string) { return client.get(id); }
 ```
 
 # Do not silently ignore JSON.parse errors
@@ -1777,19 +823,6 @@ Bad:
 const arr = new Array(5);
 ```
 
-# Avoid bitwise operators outside real bit manipulation
-Do not use `|`, `&`, `^`, `~` as a shorthand for boolean/arithmetic logic; reserve them for actual bitwise work.
-
-Good:
-```ts
-const isEven = n % 2 === 0;
-```
-
-Bad:
-```ts
-const isEven = !(n & 1);
-```
-
 # Prefer explicit undefined checks for numbers that can be zero
 Use `x !== undefined` rather than `if (x)` when `0` is a valid, meaningful value.
 
@@ -1803,47 +836,6 @@ Bad:
 if (discount) { applyDiscount(discount); } // 0 is falsy but valid
 ```
 
-# Do not export functions that exist only for testing
-A function exported solely so a test can call it should be marked/organized as a test seam, not part of the public API.
-
-Good:
-```ts
-// test/utils.ts
-export function resetClock(): void { ... }
-```
-
-Bad:
-```ts
-// src/clock.ts
-export function resetClock(): void { ... } // only used by tests
-```
-
-# Avoid deeply chained optional calls without a fallback
-A long chain of `?.` calls without a final `??` fallback can silently produce `undefined`; make the fallback explicit.
-
-Good:
-```ts
-const city = user?.address?.city ?? "Unknown";
-```
-
-Bad:
-```ts
-const city = user?.address?.city;
-```
-
-# Prefer Object.freeze for exported constant objects
-An exported object meant to be immutable should be wrapped in `Object.freeze` so misuse fails loudly.
-
-Good:
-```ts
-export const DEFAULTS = Object.freeze({ retries: 3 });
-```
-
-Bad:
-```ts
-export const DEFAULTS = { retries: 3 };
-```
-
 # Do not use the delete operator on array elements
 Use `splice` or filter to remove array elements; `delete arr[i]` leaves a hole instead of shrinking the array.
 
@@ -1855,34 +847,6 @@ items.splice(index, 1);
 Bad:
 ```ts
 delete items[index];
-```
-
-# Avoid function overloads when a union parameter is clearer
-Prefer a single signature with a union-typed parameter over multiple overload signatures, unless overloads meaningfully narrow the return type.
-
-Good:
-```ts
-function format(value: string | number): string { ... }
-```
-
-Bad:
-```ts
-function format(value: string): string;
-function format(value: number): string;
-function format(value: any): string { ... }
-```
-
-# Prefer explicit generic type arguments when inference is ambiguous
-When TypeScript cannot infer a generic type unambiguously, specify it explicitly rather than relying on a wrong inferred type.
-
-Good:
-```ts
-const result = parse<Config>(raw);
-```
-
-Bad:
-```ts
-const result = parse(raw); // T inferred as unknown
 ```
 
 # Do not leave debugger statements in committed code
@@ -1899,35 +863,6 @@ function process(order: Order): void {
   debugger;
   ...
 }
-```
-
-# Avoid large repeated inline object literals
-A large object literal used identically in multiple places should be extracted into a named constant.
-
-Good:
-```ts
-const DEFAULT_OPTIONS = { retries: 3, timeout: 1000 };
-fetch(url, DEFAULT_OPTIONS);
-```
-
-Bad:
-```ts
-fetch(url1, { retries: 3, timeout: 1000 });
-fetch(url2, { retries: 3, timeout: 1000 });
-```
-
-# Prefer async generators over manual callback queues
-For streaming/async iteration, prefer an async generator (`async function*`) over hand-rolled callback queue management.
-
-Good:
-```ts
-async function* stream() { yield await fetchNext(); }
-```
-
-Bad:
-```ts
-const queue: Array<() => void> = [];
-function onNext(cb: () => void) { queue.push(cb); }
 ```
 
 # Do not call process.exit inside library code
@@ -1955,48 +890,6 @@ catch (err) { if (err instanceof NotFoundError) { ... } }
 Bad:
 ```ts
 catch (err) { if (err.message.includes("not found")) { ... } }
-```
-
-# Prefer typed event emitters over string-keyed ones
-An event emitter's event names and payloads should be typed, not loosely-typed strings with `any` payloads.
-
-Good:
-```ts
-emitter.emit("userCreated", { id: string }); // typed via generic EventEmitter<Events>
-```
-
-Bad:
-```ts
-emitter.emit("userCreated", anyPayload);
-```
-
-# Do not export both a type and a value with the same default export name
-A module's default export should be either a type or a value, not conflate the two under one ambiguous name.
-
-Good:
-```ts
-export type Config = { retries: number };
-export function loadConfig(): Config { ... }
-```
-
-Bad:
-```ts
-export default interface Config { ... }
-export default function Config() { ... }
-```
-
-# Avoid unnecessary single-use intermediate variables
-Do not introduce a variable that is assigned once and used exactly once immediately after; inline the expression if it doesn't hurt readability.
-
-Good:
-```ts
-return computeTotal(items);
-```
-
-Bad:
-```ts
-const result = computeTotal(items);
-return result;
 ```
 
 # forEach does not await async callbacks
@@ -2199,26 +1092,6 @@ window.addEventListener("resize", debounce(recomputeLayout, 150));
 Bad:
 ```ts
 window.addEventListener("resize", recomputeLayout); // runs on every single resize tick
-```
-
-# Avoid recomputing derived data on every call instead of caching
-A pure computation derived from unchanged inputs (e.g. building a lookup index from a large list) should be cached/memoized rather than recomputed from scratch on every invocation.
-
-Good:
-```ts
-const indexCache = new Map<string, Map<string, Item>>();
-function getIndex(items: Item[], key: string): Map<string, Item> {
-  if (!indexCache.has(key)) indexCache.set(key, buildIndex(items, key));
-  return indexCache.get(key)!;
-}
-```
-
-Bad:
-```ts
-function findItem(items: Item[], id: string): Item | undefined {
-  const index = buildIndex(items, "id"); // rebuilt from scratch on every single lookup
-  return index.get(id);
-}
 ```
 
 # Avoid deep-cloning large objects when a shallow copy suffices
