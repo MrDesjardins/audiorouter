@@ -165,6 +165,17 @@ costs and phases in the [driver track](../future/M03-driver-signing.md).
 
 ## Open work
 
+### Code review P2/P3 follow-ups (2026-10-07, user request)
+
+- **P2-4 supply chain:** Dependabot, `deny.toml` and a `supply-chain` CI
+  job (cargo deny for both workspaces, `npm audit --omit=dev` for ui,
+  contracts and Stream Deck); actions bumped to Node 24 releases. Five
+  unmaintained rust-unic advisories in `src-tauri` are ignored until
+  2027-01-07 (needs a Tauri update checked on Windows). Local: both
+  `cargo deny` runs and all three audits pass. Details in the
+  [review](../future/code-review-2026-10-07.md#p2-4-dependency-and-supply-chain-checks-are-missing).
+  Next action: first CI run of the `supply-chain` job.
+
 ### Code review P0 and P1 fixes (2026-10-07, user request)
 
 The user asked to fix every P0 and P1 item in the

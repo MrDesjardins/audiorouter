@@ -360,6 +360,28 @@ P2 and P3 remain a backlog.
   - Bump `actions/checkout` and `actions/setup-node`.
 - **Verify.** The jobs run on pull requests, and the licenses match
   `THIRD-PARTY-NOTICES.txt`.
+- **Status (2026-10-07, user request).** Done, except a first CI run.
+  - `.github/dependabot.yml`: weekly Cargo (root, `src-tauri`,
+    `tools/m00-wasapi-probe`), npm (`ui`, `contracts`, `tools/streamdeck`)
+    and Actions updates, minor and patch grouped.
+  - `deny.toml` plus a `supply-chain` CI job (Linux) for both Cargo
+    workspaces, limited to the Windows target, and `npm audit --omit=dev
+    --audit-level=high` for the three npm projects. Licenses allowed:
+    Apache-2.0, MIT, MIT-0, 0BSD, BSD-2/3-Clause, Zlib, Unicode-3.0,
+    Unlicense, CC0-1.0, MPL-2.0 and LGPL-3.0-only (mp3lame). The workspace
+    crates are now `publish = false`.
+  - Advisories: the root workspace is clean. `src-tauri` has five
+    "unmaintained" notices for the rust-unic crates (RUSTSEC-2025-0075,
+    -0080, -0081, -0098, -0100), via `tauri-utils` 2.9.3 and `urlpattern`
+    0.3. They are ignored with a reason until 2027-01-07, because the
+    `tauri-utils` 2.10 update also moves several Tauri build crates and
+    needs a Windows check. npm: no runtime findings; a high dev-only
+    `source-map-js` finding in `ui` was fixed in the lockfile (1.2.2).
+  - `actions/checkout` v7.0.1, `setup-node` v7.0.0 and `upload-artifact`
+    v7.0.1 (all Node 24), pinned by SHA in every workflow; the Pages
+    actions too.
+  - Remaining: `THIRD-PARTY-NOTICES.txt` lists only the root workspace's
+    crates, not the shell's Tauri tree (`src-tauri/Cargo.lock`).
 
 ### P2-5 Network audio accepts any packet from the sender's IP
 
