@@ -26,8 +26,12 @@ export default defineConfig({
         // chunk. This makes the packaged shell's startup payload explicit
         // and prevents a single entry chunk from crossing the warning
         // threshold as the editor grows.
+        // React is its own chunk for the same reason. The rarely used panels
+        // (API, MCP, Logs) total about 10 kB, so lazy-loading them would not
+        // shrink startup: the shell loads every chunk from local disk anyway.
         manualChunks: {
           "xyflow-vendor": ["@xyflow/react"],
+          "react-vendor": ["react", "react-dom", "react-dom/client", "scheduler"],
         },
       },
     },

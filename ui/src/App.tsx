@@ -55,7 +55,7 @@ import { decodeTopologyAction } from "./DraftConnectionList";
 import { BackendConnectionContext } from "./backendConnectionContext";
 import { GraphList as NodeList } from "./GraphList";
 import { appendClientDiagnostic, browserDiagnosticStorage, readClientDiagnostics } from "./clientDiagnostics";
-import { ErrorBoundary, RootRecoveryPanel } from "./ErrorBoundary";
+import { ErrorBoundary, RootRecoveryPanel, safeErrorName } from "./ErrorBoundary";
 import { AdvancedEqEditor, EqSpectrumContext } from "./AdvancedEqEditor";
 
 const defaultBackend = createDisconnectedBackend();
@@ -87,8 +87,11 @@ export const WORKSPACE_EVENT_CATEGORIES = [
 
 /** Default diagnostics/meter refresh: 20 Hz, below the API's 30 Hz ceiling. */
 export const DIAGNOSTICS_REFRESH_INTERVAL_MS = 50;
-/** UI pump cadence once the backend owns native audio service (counters only). */
-export const BACKEND_SERVICED_PUMP_INTERVAL_MS = 100;
+/**
+ * How often the UI reads native route counters. The backend pumps native
+ * audio itself every 1 ms (its audio service); the UI never paces audio.
+ */
+export const NATIVE_COUNTERS_REFRESH_MS = 1000;
 
 type NativePumpStats = NativeEndpointPumpResult | NativeDuplexPumpResult | NativeMultiInputPumpResult | NativeRenderSourcePumpResult;
 
@@ -1591,6 +1594,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     if (!sessionRunning) { if (Object.keys(audioSourceStates).length > 0) setAudioSourceStates({}); return; }
     if (!backend.connected || playingNodes.length === 0) return;
     let polling = false;
+    let statusFailing = false;
     const timer = window.setInterval(() => {
       if (polling) return;
       polling = true;
@@ -1601,7 +1605,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           for (const [nodeId, result] of states) if (next[nodeId] !== result.state) { next[nodeId] = result.state; changed = true; }
           return changed ? next : current;
         }))
-        .catch(() => {})
+        .then(() => { statusFailing = false; })
+        .catch((error: unknown) => {
+          // Keep the last states shown; note the first failure of a run.
+          if (!statusFailing) recordUiDiagnostic(`Audio file status unavailable (${safeErrorName(error)})`);
+          statusFailing = true;
+        })
         .finally(() => { polling = false; });
     }, 750);
     return () => window.clearInterval(timer);
@@ -1736,6 +1745,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     if (!backend.connected || !sessionRunning) return;
     let active = true;
     let refreshing = false;
+    let failing = false;
     const refreshDiagnostics = async () => {
       if (!active || refreshing) return;
       refreshing = true;
@@ -1747,9 +1757,13 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         const basis = diagnosticsRef.current;
         if (basis && differsOnlyInTelemetry(basis, diagnostics)) telemetryStore.set({ basis, nodeTelemetry: diagnostics.nodeTelemetry });
         else setSnapshotState((current) => current.snapshot ? { ...current, snapshot: { ...current.snapshot, diagnostics } } : current);
-      } catch {
+        failing = false;
+      } catch (error) {
         // Keep the last known diagnostics; the event/snapshot path reports
         // connection failures and never replaces observations with guesses.
+        // Record the first failure of a run, not one row per 50 ms tick.
+        if (!failing) recordUiDiagnostic(`Live diagnostics refresh failed (${safeErrorName(error)})`);
+        failing = true;
       } finally {
         refreshing = false;
       }
@@ -1767,15 +1781,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     if (!backend.connected || activeRoutes.length === 0 || !pumpNativeEndpoint) return;
     let active = true;
     let pumping = false;
-    let lastReportedAt = 0;
-    // A backend that reports an active audio service pumps native audio
-    // itself; this loop then only refreshes counters and needs no 5 ms cadence.
-    let backendServiced = false;
-    let lastPumpedAt = 0;
+    let failing = false;
+    // The backend services native audio itself; this loop only reads each
+    // route's counters (the pump call returns them) once a second.
     const pump = async () => {
       if (!active || pumping) return;
-      if (backendServiced && Date.now() - lastPumpedAt < BACKEND_SERVICED_PUMP_INTERVAL_MS) return;
-      lastPumpedAt = Date.now();
       pumping = true;
       try {
         for (const [sessionId, route] of activeRoutes) {
@@ -1792,21 +1802,19 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               : pumpKind === "renderSource"
                 ? await pumpNativeRenderSource!(sessionId, route.generation, 64)
                 : await pumpNativeEndpoint!(sessionId, route.generation, 64);
-          backendServiced = result.audioService?.active === true;
-          if (sessionId === session.id) {
-            const now = Date.now();
-            if (now - lastReportedAt >= 1000) { lastReportedAt = now; setNativePumpStats(result); }
-          }
+          if (sessionId === session.id) setNativePumpStats(result);
         }
-      }
-      catch { setNativePumpStats(null); /* Diagnostics remain backend-owned; do not retry or substitute endpoints here. */ }
-      finally { pumping = false; }
+        failing = false;
+      } catch (error) {
+        setNativePumpStats(null);
+        // Diagnostics remain backend-owned; do not retry or substitute
+        // endpoints here. Record the first failure of a run, not every tick.
+        if (!failing) recordUiDiagnostic(`Native route counters unavailable (${safeErrorName(error)})`);
+        failing = true;
+      } finally { pumping = false; }
     };
     void pump();
-    // Older backends need service below the common 10 ms WASAPI engine
-    // period; 20 ms service can exhaust a small render buffer. The in-flight
-    // guard bounds requests.
-    const timer = window.setInterval(() => void pump(), 5);
+    const timer = window.setInterval(() => void pump(), NATIVE_COUNTERS_REFRESH_MS);
     return () => { active = false; window.clearInterval(timer); };
   }, [backend, nativeGenerations, session.id, snapshot?.status.activeSessionIds]);
   const outputPorts = draft.nodes.flatMap((node) => node.ports.filter((port) => port.direction === "output").map((port) => ({ nodeId: node.id, nodeName: node.name, portName: port.name, channels: port.channels })));
