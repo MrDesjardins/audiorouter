@@ -162,23 +162,42 @@ Click **OK**, then **Start**.
    takes 20–40 minutes. Do not type anything unless a window asks you to.
    If setup stops at a question (for example region or keyboard), answer
    it; if it insists on a Microsoft account, see Part 7.
-2. **Check the computer name.** In the VM: Start → Settings → System →
+2. **Eject the install disk.** In the VM window: **Devices → Optical
+   Drives → Remove disk from virtual drive** (if VirtualBox asks, choose
+   **Force Unmount**). Hover over the CD icon in the status bar at the
+   bottom: it must say the drive is empty. Do not pick `Win11.iso` in that
+   menu: that inserts it. While the install disk stays in, every update
+   restart boots the installer instead of Windows, which hangs the VM or
+   leaves it unable to start.
+3. **Check the computer name.** In the VM: Start → Settings → System →
    About. "Device name" must be `AR-DriverTest`. If it is not, click
    **Rename this PC**, type `AR-DriverTest`, restart.
-3. **Guest Additions.** If the VirtualBox menu **Devices → Shared Clipboard**
+4. **Guest Additions.** If the VirtualBox menu **Devices → Shared Clipboard**
    is greyed out or Part 4's shared folder does not appear, install them by
    hand: **Devices → Insert Guest Additions CD image…**, then in the VM open
    File Explorer → the CD drive → run `VBoxWindowsAdditions.exe` with the
-   defaults, restart.
-4. **Clipboard.** **Devices → Shared Clipboard → Bidirectional**, so you can
+   defaults, restart. Eject that CD afterwards as in step 2.
+5. **Clipboard.** **Devices → Shared Clipboard → Bidirectional**, so you can
    paste the commands from this guide into the VM.
-5. **Windows Update.** In the VM: Settings → Windows Update → **Check for
+6. **Windows Update.** In the VM: Settings → Windows Update → **Check for
    updates**; install everything and restart until no update is left.
    This can take up to an hour once and avoids updates interrupting tests.
-6. **Shut the VM down** (Start → Power → Shut down).
-7. **Snapshot 1.** In VirtualBox, select `AR-DriverTest`, click the menu
+   A feature update shows a blue **"Installing Windows 11 — xx% complete"**
+   screen and restarts two or three times; it can sit on one percentage
+   for 5–15 minutes. Leave it alone while the disk icon at the bottom of
+   the VirtualBox window flickers. The driver tests do not need a feature
+   update: if one hangs (see Part 7), click **Cancel** on that screen
+   instead of retrying. After the updates, check once more.
+   Then click **Pause updates → 5 weeks** (the longest choice), so no new
+   update starts during a test or right after you restore a snapshot.
+7. **Shut the VM down** (Start → Power → Shut down).
+8. **Snapshot 1.** In VirtualBox, select `AR-DriverTest`, click the menu
    icon (☰) next to it → **Snapshots** → **Take**. Name it
    `01-clean-windows`.
+
+Take every snapshot with the VM **shut down**. A snapshot of a running VM
+also saves its memory; on this PC (VirtualBox through Windows Hypervisor
+Platform) that froze the VM for over 15 minutes and failed.
 
 ## Part 4: Turn the VM into a driver test machine (once)
 
@@ -227,6 +246,12 @@ answer **No**. Click **OK**.
 
 This is a setting of the VM's virtual firmware. Your PC's Secure Boot is not
 affected.
+
+If Windows installed updates (for example a feature update) after you took
+Snapshot 1, finish them first and pause updates as in Part 3 step 6. Then,
+with the VM shut down, take a new snapshot, `01b-updated-secure-boot-off`.
+Otherwise restoring Snapshot 1 brings the old Windows back and the updates
+run again. You can then delete `01-clean-windows` to save disk space.
 
 ### 4.4 Copy the files and enable Test Mode
 
@@ -425,15 +450,19 @@ recording.
 | VirtualBox: "VT-x is not available" or "VERR_NEM_…" | Windows Hypervisor Platform not enabled | Part 1.2, then restart the PC |
 | Windows setup: "This PC can't run Windows 11" | TPM/EFI off or too little memory | VM Settings → System: EFI ticked, TPM v2.0, 8192 MB |
 | Setup insists on a Microsoft account | Recent Windows 11 builds | Sign in with a Microsoft account (fine for a test VM), or at the network screen press Shift+F10 and type `start ms-cxh:localonly` |
-| No `Z:` drive in the VM | Guest Additions missing or folder not auto-mounted | Part 3 step 3; check Settings → Shared Folders; or use `\\vboxsvr\ar-share` |
+| No `Z:` drive in the VM | Guest Additions missing or folder not auto-mounted | Part 3 step 4; check Settings → Shared Folders; or use `\\vboxsvr\ar-share` |
 | `bcdedit` says the value is protected by Secure Boot policy | Secure Boot still on in the VM | Shut down, Part 4.3, start again |
 | No "Test Mode" text after restart | `bcdedit` did not apply | Run `bcdedit /enum {current}`: `testsigning Yes` must be listed |
 | `preflight` FAIL on the certificate | Certificate not imported in both stores | Repeat Part 4.4 step 4 |
-| A script says "Refusing driver smoke test outside AR-DriverTest" | Wrong computer name | Rename the VM to `AR-DriverTest` (Part 3 step 2), or create the marker file `C:\ar\IS_TEST_VM` **inside the VM only** |
+| A script says "Refusing driver smoke test outside AR-DriverTest" | Wrong computer name | Rename the VM to `AR-DriverTest` (Part 3 step 3), or create the marker file `C:\ar\IS_TEST_VM` **inside the VM only** |
 | Helper exit code 2 | Package not trusted or not test-enabled | Run `preflight`; never copy the helper from another build than the share |
 | Device Manager shows the device with Code 52 | Signature not accepted | Test Mode off or certificate missing; see the two rows above |
 | Device Manager shows Code 10 or the endpoints never appear | Driver failed to start | Run `collect` and send it; it contains `setupapi.dev.log` |
 | Blue screen | Driver bug | Let it restart, run `collect`, send the zip |
+| Stuck on a black **"Restarting"** screen; the spinner dots do not move and the disk icon stays dark for several minutes | Windows hung while restarting (seen after an update) | **Machine → Reset**. Windows resumes or rolls back the update on the next start; let it finish |
+| Popup "It looks like you started an upgrade and booted from installation media" | The install disk is still in the VM's DVD drive | **Never click No** (it starts a clean install that erases Windows). Eject the disk (Part 3 step 2), check the drive is empty, then click **Yes** |
+| Firmware menu after "Boot failure"; **Windows Boot Manager** returns straight to the menu | An upgrade was started from the install disk and the disk is now gone | Do not repair. Restore the last snapshot, eject the disk before starting, untick Secure Boot again if that snapshot predates 4.3, then cancel the update if it resumes |
+| **"Installing Windows 11 — xx%"** does not move | A feature update installing; slow in a VM | Wait while the disk icon flickers (up to 15 minutes per percentage). Only if it stays put for 30+ minutes with a dark disk icon: **Machine → Reset**, or restore the last snapshot |
 | VM very slow, turtle icon | Running through Windows' hypervisor | Expected; give the VM 4 CPUs and 8 GB, close other heavy apps |
 
 When in doubt: restore snapshot 2 and start the session again. Nothing in
