@@ -38,13 +38,19 @@ impl Drop for DiagnosticMutexGuard {
     }
 }
 
+/// Longest wait for another process's diagnostic write. A log record is
+/// dropped rather than blocking the caller behind a stuck writer.
+#[cfg(windows)]
+const DIAGNOSTIC_MUTEX_WAIT_MS: u32 = 250;
+
 /// Acquire a named, same-logon-session mutex for a short local file operation.
-/// The wait occurs only on a control/logging thread, never in an audio callback.
+/// The wait occurs only on a control/logging thread, never in an audio callback,
+/// and is bounded: `None` means the record should be skipped.
 #[cfg(windows)]
 pub fn acquire_diagnostic_mutex(name: &str) -> Option<DiagnosticMutexGuard> {
     use windows::core::PCWSTR;
     use windows::Win32::Foundation::{WAIT_ABANDONED, WAIT_OBJECT_0};
-    use windows::Win32::System::Threading::{CreateMutexW, WaitForSingleObject, INFINITE};
+    use windows::Win32::System::Threading::{CreateMutexW, WaitForSingleObject};
     if name.is_empty()
         || name.len() > 96
         || !name
@@ -62,7 +68,7 @@ pub fn acquire_diagnostic_mutex(name: &str) -> Option<DiagnosticMutexGuard> {
     let handle = unsafe { CreateMutexW(None, false, PCWSTR(wide_name.as_ptr())) }.ok()?;
     // SAFETY: `handle` is the valid owned handle returned above. An abandoned
     // mutex is also acquired and must be released by the returned guard.
-    let result = unsafe { WaitForSingleObject(handle, INFINITE) };
+    let result = unsafe { WaitForSingleObject(handle, DIAGNOSTIC_MUTEX_WAIT_MS) };
     if result == WAIT_OBJECT_0 || result == WAIT_ABANDONED {
         Some(DiagnosticMutexGuard(handle))
     } else {
@@ -74,25 +80,81 @@ pub fn acquire_diagnostic_mutex(name: &str) -> Option<DiagnosticMutexGuard> {
     }
 }
 
+/// One backend request and its responses, queued for the logger thread.
+struct BackendLogEntry {
+    frame: Vec<u8>,
+    responses: Vec<Vec<u8>>,
+    now_ms: u128,
+}
+
+/// Queued records before new ones are dropped. A burst larger than this is
+/// lost from the log rather than slowing the control plane.
+const BACKEND_LOG_QUEUE: usize = 256;
+
+fn backend_log_directory() -> Option<std::path::PathBuf> {
+    std::env::var_os("LOCALAPPDATA")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("TEMP").map(std::path::PathBuf::from))
+        .map(|root| root.join("AudioRouter").join("logs"))
+}
+
+/// Start the thread that writes `backend.jsonl` in `directory`. The control
+/// plane only enqueues; all parsing and file I/O happen on this thread, so
+/// logging never delays the audio service passes that share the control
+/// thread. The thread ends when every sender is dropped.
+fn spawn_backend_rpc_logger(
+    directory: std::path::PathBuf,
+) -> Option<(
+    std::sync::mpsc::SyncSender<BackendLogEntry>,
+    std::thread::JoinHandle<()>,
+)> {
+    let (sender, receiver) = std::sync::mpsc::sync_channel::<BackendLogEntry>(BACKEND_LOG_QUEUE);
+    let handle = std::thread::Builder::new()
+        .name("audiorouter-backend-log".into())
+        .spawn(move || {
+            for entry in receiver {
+                write_backend_rpc_log(&directory, &entry);
+            }
+        })
+        .ok()?;
+    Some((sender, handle))
+}
+
 /// Control-plane-side request summaries for attended desktop diagnosis.
-/// Parameter values and response payloads are deliberately excluded; this is
-/// called on the transport thread and never from the realtime audio callback.
+/// Parameter values and response payloads are deliberately excluded. This
+/// only copies the frames into a bounded queue (dropping the record when it
+/// is full); the logger thread does the rest.
 fn log_backend_rpc(frame: &[u8], responses: &[Vec<u8>]) {
+    static SINK: std::sync::OnceLock<Option<std::sync::mpsc::SyncSender<BackendLogEntry>>> =
+        std::sync::OnceLock::new();
+    let sink = SINK.get_or_init(|| {
+        backend_log_directory()
+            .and_then(spawn_backend_rpc_logger)
+            .map(|(sender, _detached)| sender)
+    });
+    let Some(sender) = sink else { return };
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis())
+        .unwrap_or_default();
+    let _ = sender.try_send(BackendLogEntry {
+        frame: frame.to_vec(),
+        responses: responses.to_vec(),
+        now_ms,
+    });
+}
+
+fn write_backend_rpc_log(directory: &std::path::Path, entry: &BackendLogEntry) {
     use std::io::Write;
-    static LOG_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
-    let lock = LOG_LOCK.get_or_init(|| std::sync::Mutex::new(()));
-    let Ok(_guard) = lock.lock() else { return };
+    let records = backend_rpc_log_records(&entry.frame, &entry.responses, entry.now_ms);
+    if records.is_empty() {
+        return;
+    }
     #[cfg(windows)]
     let Some(_cross_process_guard) = acquire_diagnostic_mutex("AudioRouter.BackendDiagnostics") else {
         return;
     };
-    let root = std::env::var_os("LOCALAPPDATA")
-        .map(std::path::PathBuf::from)
-        .or_else(|| std::env::var_os("TEMP").map(std::path::PathBuf::from));
-    let Some(directory) = root.map(|root| root.join("AudioRouter").join("logs")) else {
-        return;
-    };
-    if std::fs::create_dir_all(&directory).is_err() {
+    if std::fs::create_dir_all(directory).is_err() {
         return;
     }
     let path = directory.join("backend.jsonl");
@@ -104,16 +166,12 @@ fn log_backend_rpc(frame: &[u8], responses: &[Vec<u8>]) {
         let _ = std::fs::remove_file(&previous);
         let _ = std::fs::rename(&path, previous);
     }
-    let now_ms = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_millis())
-        .unwrap_or_default();
     if let Ok(mut file) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(path)
     {
-        for record in backend_rpc_log_records(frame, responses, now_ms) {
+        for record in records {
             if serde_json::to_writer(&mut file, &record).is_ok() {
                 let _ = file.write_all(b"\n");
             }
@@ -301,7 +359,7 @@ fn backend_rpc_log_records(
         let detail = response.and_then(|value| value.get("error")).map(rpc_failure_log_summary);
         let error_kind = detail.as_ref().and_then(|detail| detail.get("kind")).cloned().or_else(|| error_kind.map(serde_json::Value::String));
         serde_json::json!({ "timeUnixMs": now_ms, "processId": std::process::id(), "version": env!("CARGO_PKG_VERSION"), "buildId": option_env!("AUDIOROUTER_BUILD_ID").unwrap_or("development"), "method": method, "outcome": if error_code.is_some() { "error" } else { "ok" }, "errorCode": error_code, "errorKind": error_kind, "detail": detail, "summary": state })
-    }).filter(|record| record["method"] != "events.subscribe" || record["outcome"] == "error").collect()
+    }).filter(|record| record["outcome"] == "error" || !record["method"].as_str().is_some_and(is_routine_read_rpc)).collect()
 }
 
 pub fn device_inventory_log_summary(result: &serde_json::Value) -> serde_json::Value {
@@ -336,6 +394,59 @@ fn failure_logs_preserve_audio_context_and_reject_unbounded_private_fields() {
 }
 
 #[test]
+fn backend_logger_thread_writes_commits_and_skips_routine_read_successes() {
+    let directory = std::env::temp_dir().join(format!(
+        "audiorouter-backend-log-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let frame = |method: &str| {
+        audiorouter_protocol::encode_frame(
+            &serde_json::json!({"jsonrpc":"2.0","id":1,"method":method,"params":{}}),
+        )
+        .unwrap()
+    };
+    let ok = audiorouter_protocol::encode_frame(
+        &serde_json::json!({"jsonrpc":"2.0","id":1,"result":{"revision":3,"nodes":[],"edges":[]}}),
+    )
+    .unwrap();
+    let failed = audiorouter_protocol::encode_frame(
+        &serde_json::json!({"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"private"}}),
+    )
+    .unwrap();
+    let (sender, handle) = spawn_backend_rpc_logger(directory.clone()).unwrap();
+    for (method, response) in [
+        ("graph.commit", &ok),
+        ("system.diagnostics", &ok),
+        ("system.diagnostics", &failed),
+    ] {
+        sender
+            .send(BackendLogEntry {
+                frame: frame(method),
+                responses: vec![response.clone()],
+                now_ms: 1,
+            })
+            .unwrap();
+    }
+    drop(sender);
+    handle.join().unwrap();
+    let log = std::fs::read_to_string(directory.join("backend.jsonl")).unwrap();
+    let lines = log
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(lines.len(), 2, "{log}");
+    assert_eq!(lines[0]["method"], "graph.commit");
+    assert_eq!(lines[1]["method"], "system.diagnostics");
+    assert_eq!(lines[1]["outcome"], "error");
+    assert!(!log.contains("private"));
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
 fn device_logs_show_counts_without_names_and_event_errors_remain_visible() {
     let summary = device_inventory_log_summary(
         &serde_json::json!({"items":[{"direction":"capture","state":"active","name":"private mic"},{"direction":"render","state":"unplugged","id":"private id"}],"nextCursor":"private cursor"}),
@@ -359,6 +470,14 @@ fn device_logs_show_counts_without_names_and_event_errors_remain_visible() {
         backend_rpc_log_records(&request, &[error], 1)[0]["errorKind"],
         "resyncRequired"
     );
+}
+
+/// Reads the window repeats on a timer (`system.diagnostics` 20 times a
+/// second while playing, `events.subscribe` every second). Their successes
+/// would fill a 5 MB log within minutes and rotate out the events a support
+/// case needs, so only their failures are logged.
+pub fn is_routine_read_rpc(method: &str) -> bool {
+    matches!(method, "system.diagnostics" | "events.subscribe")
 }
 
 fn is_high_frequency_rpc(method: &str) -> bool {
@@ -1292,6 +1411,7 @@ fn dispatch_control_frame(
     let responses = plane
         .dispatch_frame_authorized_for_client(frame, &client_id, grant)
         .map_err(|error| TransportError::Protocol(error.to_string()))?;
+    log_backend_rpc(frame, &responses);
     if responses.is_empty() {
         Ok(None)
     } else {

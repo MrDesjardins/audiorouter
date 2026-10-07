@@ -50,6 +50,16 @@ const WEBVIEW_BROWSER_ARGS: &str =
 /// that cannot be inspected through the WebView console in an attended shell.
 /// Request parameters and audio/media data are never written to this log.
 fn log_shell_rpc(request: &JsonRpcRequest, response: &Result<JsonRpcResponse, String>) {
+    log_shell_rpc_with(request, response, false);
+}
+
+/// `from_panic_hook` makes the in-process lock a single try: a panic raised
+/// while this thread already holds it would otherwise deadlock.
+fn log_shell_rpc_with(
+    request: &JsonRpcRequest,
+    response: &Result<JsonRpcResponse, String>,
+    from_panic_hook: bool,
+) {
     if matches!(
         request.method.as_str(),
         "nativeBridges.heartbeat"
@@ -69,7 +79,15 @@ fn log_shell_rpc(request: &JsonRpcRequest, response: &Result<JsonRpcResponse, St
     };
     let directory = root.join(DEFAULT_DATABASE_DIRECTORY).join("logs");
     let lock = LOG_LOCK.get_or_init(|| std::sync::Mutex::new(()));
-    let Ok(_guard) = lock.lock() else { return };
+    let _guard = if from_panic_hook {
+        match lock.try_lock() {
+            Ok(guard) => guard,
+            Err(_) => return,
+        }
+    } else {
+        let Ok(guard) = lock.lock() else { return };
+        guard
+    };
     let Some(_cross_process_guard) =
         audiorouter_transport::acquire_diagnostic_mutex("AudioRouter.ShellDiagnostics")
     else {
@@ -84,7 +102,9 @@ fn write_shell_rpc_log(
     response: &Result<JsonRpcResponse, String>,
 ) {
     use std::io::Write;
-    if request.method == "events.subscribe"
+    // Timer-driven reads succeed many times a second; logging their
+    // successes would rotate useful events out of the 5 MB file in minutes.
+    if audiorouter_transport::is_routine_read_rpc(&request.method)
         && matches!(response, Ok(value) if value.error.is_none())
     {
         return;
@@ -1556,7 +1576,7 @@ fn install_panic_log() {
             params: None,
         };
         let detail = panic_log_detail(std::thread::current().name(), info.location());
-        log_shell_rpc(&request, &Ok(JsonRpcResponse::success(None, detail)));
+        log_shell_rpc_with(&request, &Ok(JsonRpcResponse::success(None, detail)), true);
         default_hook(info);
     }));
 }
@@ -2500,12 +2520,21 @@ mod tests {
 
     #[test]
     fn shell_does_not_log_successful_event_polls_but_keeps_poll_failures() {
-        let directory =
-            std::env::temp_dir().join(format!("audiorouter-shell-poll-log-{}", std::process::id()));
+        for method in ["events.subscribe", "system.diagnostics"] {
+            assert_poll_success_skipped_and_failure_kept(method);
+        }
+    }
+
+    fn assert_poll_success_skipped_and_failure_kept(method: &str) {
+        let directory = std::env::temp_dir().join(format!(
+            "audiorouter-shell-poll-log-{}-{method}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&directory);
         let request = JsonRpcRequest {
             jsonrpc: "2.0".into(),
             id: Some(serde_json::json!(10)),
-            method: "events.subscribe".into(),
+            method: method.into(),
             params: None,
         };
         let ok = Ok(JsonRpcResponse {
