@@ -64,6 +64,20 @@ Archive a completed execution plan under `docs/plans/archived/` with a date and 
 
 For defects: record reproduction and affected versions; add a focused regression when useful; fix the owning layer; verify the original failure; document compatibility or migration consequences. For releases: use M08 gates, record artifacts and checksums, confirm rollback, publish known issues and migration instructions. For incidents: mitigate within authority, preserve redacted evidence, identify cause, repair, and add a prevention measure. Revisit the specification when experience disproves an assumption.
 
+## Rule check (Jev)
+
+`jev/` holds Markdown coding rules (Rust, TypeScript/React, CSS, user-mode C++ under `tools/`, and the AudioRouter realtime and UI rules above). Pull requests are checked against them automatically (`.github/workflows/jev-review.yml`). Before reporting a code change as done, run the same check on your uncommitted changes:
+
+1. Run `git add -N <path>` for each new file you created, so it is part of the diff. Name only your own files.
+2. Run, from the repository root:
+   ```bash
+   node ../jevrealtimecodecheck/node_modules/tsx/dist/cli.mjs ../jevrealtimecodecheck/scripts/review-pr.ts --cwd . --working-tree --fail-on-violation
+   ```
+   The API key is read from `TYPESAFE_API_KEY` or a `.env` file. Never print, log, or commit it.
+3. A non-zero exit lists each violation as JSON (`ruleName`, `ruleInstructions`, `severity`, `path`, `line`). Fix the code and run it again. If a finding is wrong, keep the code and say why in the handoff.
+4. Do not edit `jev/` to make a check pass. Changing a rule is a separate, explicitly requested task.
+5. If the tool is missing or cannot run (for example no `../jevrealtimecodecheck` clone), report the check as not run. Do not report it as passing.
+
 ## Self-learning, with evidence
 
 Maintain the “Validated lessons” section below. Add only concise, reusable lessons supported by an experiment, test, incident, or documented user preference. Each entry needs a date, evidence link, scope, and consequence. Keep provisional findings in the active plan until validated. Correct or supersede old lessons; do not accumulate contradictory instructions. Never claim persistent learning outside these repository files.

@@ -1,0 +1,48 @@
+name: Jev rule review
+
+# Checks each pull request's diff against the Markdown rules in jev/ using
+# TypeSafe's Jev model (https://github.com/MrDesjardins/jevrealtimecodecheck),
+# and posts a review comment on each violation it can place on a line.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    # Fork PRs get no secrets and a read-only token. pull_request_target is
+    # deliberately not used: it would run PR code with base-repo secrets.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Pinned to a commit so a change in the tool repo never runs here with
+      # this repo's secrets until the pin is deliberately updated.
+      - uses: actions/checkout@v4
+        with:
+          repository: MrDesjardins/jevrealtimecodecheck
+          ref: 62072b065bd9415f89f077f452961cd5741e7105
+          path: .jev-tool
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Jev tool
+        working-directory: .jev-tool
+        run: npm ci
+
+      # Compares origin/<PR base branch>...HEAD (taken from GITHUB_BASE_REF).
+      - name: Run Jev review
+        working-directory: .jev-tool
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node --import tsx scripts/review-pr.ts --cwd "$GITHUB_WORKSPACE"
