@@ -218,6 +218,8 @@ cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
 cargo test --workspace --locked
+npm.cmd --prefix ui run format:check   # Prettier
+npm.cmd --prefix ui run lint           # ESLint; warnings do not fail
 npm.cmd --prefix ui test
 npm.cmd --prefix ui run e2e   # Playwright in Edge, a separate CI job
 ```
@@ -240,8 +242,10 @@ job summary. Coverage is never a gate. Run the soak locally with
 (`AUDIOROUTER_SOAK_SECONDS` sets the duration; default 10).
 
 Format with `cargo fmt --all` and
-`cargo fmt --manifest-path src-tauri/Cargo.toml`. To format staged Rust files
-automatically at commit time, run once per clone:
+`cargo fmt --manifest-path src-tauri/Cargo.toml`, and the UI with
+`npm --prefix ui run format` (check it with `npm --prefix ui run lint`). To
+format staged Rust and UI files automatically at commit time, run once per
+clone:
 `git config core.hooksPath .githooks`. More in
 [CONTRIBUTING.md](CONTRIBUTING.md).
 

@@ -8,7 +8,11 @@ function clone(session: Session, name: string): Session {
   return {
     ...session,
     name,
-    nodes: session.nodes.map((node) => ({ ...node, parameters: { ...node.parameters }, ports: node.ports.map((port) => ({ ...port })) })),
+    nodes: session.nodes.map((node) => ({
+      ...node,
+      parameters: { ...node.parameters },
+      ports: node.ports.map((port) => ({ ...port })),
+    })),
     edges: session.edges.map((edge) => ({ ...edge, matrix: [...edge.matrix] })),
   };
 }
@@ -26,12 +30,20 @@ export function templateSession(id: TemplateId): Session {
       return voiceTemplate("Gaming + Discord");
     case "processed-microphone": {
       const session = voiceTemplate("Processed microphone");
-      return { ...session, nodes: session.nodes.map((node) => node.id === "voice" ? { ...node, name: "Processed voice gain", parameters: { gainDb: -3 } } : node) };
+      return {
+        ...session,
+        nodes: session.nodes.map((node) =>
+          node.id === "voice" ? { ...node, name: "Processed voice gain", parameters: { gainDb: -3 } } : node,
+        ),
+      };
     }
     case "mix-minus":
     case "mix-minus conversation": {
       const session = voiceTemplate("Mix-minus conversation");
-      return { ...session, nodes: session.nodes.map((node) => node.id === "voice" ? { ...node, name: "Call input (mic only)" } : node) };
+      return {
+        ...session,
+        nodes: session.nodes.map((node) => (node.id === "voice" ? { ...node, name: "Call input (mic only)" } : node)),
+      };
     }
   }
 }

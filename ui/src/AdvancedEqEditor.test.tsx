@@ -1,7 +1,13 @@
 /** @vitest-environment jsdom */
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AdvancedEqEditor, EqSpectrumContext, layoutPointCallouts, nextSpectrumTop, spectrumArea } from "./AdvancedEqEditor";
+import {
+  AdvancedEqEditor,
+  EqSpectrumContext,
+  layoutPointCallouts,
+  nextSpectrumTop,
+  spectrumArea,
+} from "./AdvancedEqEditor";
 import { appendLibraryNode } from "./draft";
 import { demoSession } from "./fixtures";
 import type { UiBackend } from "./backend";
@@ -19,7 +25,14 @@ describe("Advanced EQ editor", () => {
       node.parameters[`band${index}GainDb`] = index % 2 === 0 ? 6 : -6;
       node.parameters[`band${index}Q`] = 1;
     }
-    const view = render(<AdvancedEqEditor node={node} backend={{ processorResponse: vi.fn() } as unknown as UiBackend} connected onChange={vi.fn()} />);
+    const view = render(
+      <AdvancedEqEditor
+        node={node}
+        backend={{ processorResponse: vi.fn() } as unknown as UiBackend}
+        connected
+        onChange={vi.fn()}
+      />,
+    );
     const graph = view.getByRole("img", { name: "EQ frequency response and movable filter points" });
     const axisLabels = [...graph.querySelectorAll(".advanced-eq-axis")].map((label) => label.textContent);
     expect(axisLabels).toContain("+12");
@@ -50,16 +63,28 @@ describe("Advanced EQ editor", () => {
     }
     for (let left = 0; left < callouts.length; left += 1) {
       for (let right = left + 1; right < callouts.length; right += 1) {
-        expect(Math.hypot(callouts[left].labelX - callouts[right].labelX, callouts[left].labelY - callouts[right].labelY)).toBeGreaterThanOrEqual(18);
+        expect(
+          Math.hypot(callouts[left].labelX - callouts[right].labelX, callouts[left].labelY - callouts[right].labelY),
+        ).toBeGreaterThanOrEqual(18);
       }
     }
   });
 
   it("selects an existing point outside the graph without changing parameters", () => {
     const node = appendLibraryNode(demoSession, "parametricEq").nodes.at(-1)!;
-    node.parameters = { ...node.parameters, band0Enabled: true, band0Type: "peaking", band0FrequencyHz: 1000, band2Enabled: true, band2Type: "allPass", band2FrequencyHz: 250 };
+    node.parameters = {
+      ...node.parameters,
+      band0Enabled: true,
+      band0Type: "peaking",
+      band0FrequencyHz: 1000,
+      band2Enabled: true,
+      band2Type: "allPass",
+      band2FrequencyHz: 250,
+    };
     const onChange = vi.fn();
-    const backend = { processorResponse: vi.fn().mockResolvedValue({ frequenciesHz: [20], magnitudeDb: [0] }) } as unknown as UiBackend;
+    const backend = {
+      processorResponse: vi.fn().mockResolvedValue({ frequenciesHz: [20], magnitudeDb: [0] }),
+    } as unknown as UiBackend;
     const view = render(<AdvancedEqEditor node={node} backend={backend} connected onChange={onChange} />);
     expect(view.getByRole("option", { name: "Peaking/Band" })).toBeTruthy();
     fireEvent.change(view.getByLabelText("EQ point"), { target: { value: "2" } });
@@ -67,20 +92,32 @@ describe("Advanced EQ editor", () => {
     expect((view.getByLabelText("EQ filter type") as HTMLSelectElement).value).toBe("allPass");
     expect(onChange).not.toHaveBeenCalled();
   });
-  it.each(["bandPass", "allPass"])("preserves %s and requests its backend response without gain editing", async (type) => {
-    const node = appendLibraryNode(demoSession, "parametricEq").nodes.at(-1)!;
-    node.parameters = { ...node.parameters, band0Enabled: true, band0Type: type, band0GainDb: 12 };
-    const processorResponse = vi.fn().mockResolvedValue({ frequenciesHz: [20, 20000], magnitudeDb: [0, 0] });
-    const onChange = vi.fn();
-    const view = render(<AdvancedEqEditor node={node} backend={{ processorResponse } as unknown as UiBackend} connected onChange={onChange} />);
-    expect((view.getByLabelText("EQ filter type") as HTMLSelectElement).value).toBe(type);
-    expect((view.getByLabelText("EQ gain dB") as HTMLInputElement).disabled).toBe(true);
-    expect((view.getByLabelText("EQ Q width") as HTMLInputElement).disabled).toBe(false);
-    fireEvent.change(view.getByLabelText("EQ filter type"), { target: { value: type === "allPass" ? "bandPass" : "allPass" } });
-    expect(onChange).toHaveBeenCalledWith("band0Type", type === "allPass" ? "bandPass" : "allPass");
-    await waitFor(() => expect(processorResponse).toHaveBeenCalled());
-    expect(processorResponse.mock.calls.at(-1)?.[0].bands[0].type).toBe(type);
-  });
+  it.each(["bandPass", "allPass"])(
+    "preserves %s and requests its backend response without gain editing",
+    async (type) => {
+      const node = appendLibraryNode(demoSession, "parametricEq").nodes.at(-1)!;
+      node.parameters = { ...node.parameters, band0Enabled: true, band0Type: type, band0GainDb: 12 };
+      const processorResponse = vi.fn().mockResolvedValue({ frequenciesHz: [20, 20000], magnitudeDb: [0, 0] });
+      const onChange = vi.fn();
+      const view = render(
+        <AdvancedEqEditor
+          node={node}
+          backend={{ processorResponse } as unknown as UiBackend}
+          connected
+          onChange={onChange}
+        />,
+      );
+      expect((view.getByLabelText("EQ filter type") as HTMLSelectElement).value).toBe(type);
+      expect((view.getByLabelText("EQ gain dB") as HTMLInputElement).disabled).toBe(true);
+      expect((view.getByLabelText("EQ Q width") as HTMLInputElement).disabled).toBe(false);
+      fireEvent.change(view.getByLabelText("EQ filter type"), {
+        target: { value: type === "allPass" ? "bandPass" : "allPass" },
+      });
+      expect(onChange).toHaveBeenCalledWith("band0Type", type === "allPass" ? "bandPass" : "allPass");
+      await waitFor(() => expect(processorResponse).toHaveBeenCalled());
+      expect(processorResponse.mock.calls.at(-1)?.[0].bands[0].type).toBe(type);
+    },
+  );
   it("adds, selects, changes and removes a bounded point using node parameters", async () => {
     const node = appendLibraryNode(demoSession, "parametricEq").nodes.at(-1)!;
     const onChange = vi.fn();
@@ -113,7 +150,10 @@ describe("Advanced EQ editor", () => {
 
 describe("Advanced EQ live spectrum", () => {
   const bandFrequenciesHz = Array.from({ length: 64 }, (_, index) => 20 * Math.pow(1000, index / 63));
-  const tone = (peakIndex: number, peakDb: number) => ({ bandFrequenciesHz, levelsDb: bandFrequenciesHz.map((_, index) => (index === peakIndex ? peakDb : -110)) });
+  const tone = (peakIndex: number, peakDb: number) => ({
+    bandFrequenciesHz,
+    levelsDb: bandFrequenciesHz.map((_, index) => (index === peakIndex ? peakDb : -110)),
+  });
 
   it("keeps a ceiling that jumps to peaks and falls slowly, never below -40 dB", () => {
     expect(nextSpectrumTop(null, tone(10, -80))).toBe(-40);
@@ -133,10 +173,18 @@ describe("Advanced EQ live spectrum", () => {
   it("shows the shaded live area only while a spectrum is provided", () => {
     const node = appendLibraryNode(demoSession, "parametricEq").nodes.at(-1)!;
     const backend = { processorResponse: vi.fn().mockResolvedValue(null) } as unknown as UiBackend;
-    const view = render(<EqSpectrumContext.Provider value={tone(30, -30)}><AdvancedEqEditor node={node} backend={backend} connected onChange={vi.fn()} /></EqSpectrumContext.Provider>);
+    const view = render(
+      <EqSpectrumContext.Provider value={tone(30, -30)}>
+        <AdvancedEqEditor node={node} backend={backend} connected onChange={vi.fn()} />
+      </EqSpectrumContext.Provider>,
+    );
     expect(view.container.querySelector(".advanced-eq-spectrum")).not.toBeNull();
     expect(view.getByText("Live sound in (before EQ)")).toBeTruthy();
-    view.rerender(<EqSpectrumContext.Provider value={null}><AdvancedEqEditor node={node} backend={backend} connected onChange={vi.fn()} /></EqSpectrumContext.Provider>);
+    view.rerender(
+      <EqSpectrumContext.Provider value={null}>
+        <AdvancedEqEditor node={node} backend={backend} connected onChange={vi.fn()} />
+      </EqSpectrumContext.Provider>,
+    );
     expect(view.container.querySelector(".advanced-eq-spectrum")).toBeNull();
   });
 });

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { DiscoveryDocument } from "@audiorouter/contracts";
-import { processorAvailabilityText, processorLatencyText, processorParameterError, processorParametersText, type ProcessorDescriptor } from "./processorCatalog";
+import {
+  processorAvailabilityText,
+  processorLatencyText,
+  processorParameterError,
+  processorParametersText,
+  type ProcessorDescriptor,
+} from "./processorCatalog";
 
 const pitch: ProcessorDescriptor = {
   id: "pitch",
@@ -22,10 +28,12 @@ describe("processor catalog presentation", () => {
   });
 
   it("shows typed parameter ranges without inventing empty parameters", () => {
-    expect(processorParametersText({
-      ...pitch,
-      parameters: [{ name: "semitones", type: "number", unit: "st", minimum: -12, maximum: 12, default: 0 }],
-    })).toBe("semitones: number st, -12..12");
+    expect(
+      processorParametersText({
+        ...pitch,
+        parameters: [{ name: "semitones", type: "number", unit: "st", minimum: -12, maximum: 12, default: 0 }],
+      }),
+    ).toBe("semitones: number st, -12..12");
     expect(processorParametersText(pitch)).toBe("no parameters");
   });
 
@@ -37,7 +45,10 @@ describe("processor catalog presentation", () => {
   });
 
   it("validates inspector values against the authoritative descriptor", () => {
-    const descriptor = { ...pitch, parameters: [{ name: "semitones", type: "number", minimum: -12, maximum: 12, default: 0 }] };
+    const descriptor = {
+      ...pitch,
+      parameters: [{ name: "semitones", type: "number", minimum: -12, maximum: 12, default: 0 }],
+    };
     expect(processorParameterError([descriptor], "pitch", "semitones", 12.1)).toContain("at most 12");
     expect(processorParameterError([descriptor], "pitch", "semitones", 12)).toBeNull();
     expect(processorParameterError([descriptor], "pitch", "semitones", Number.NaN)).toContain("finite");
@@ -57,7 +68,10 @@ describe("processor catalog presentation", () => {
   });
 
   it("enforces advertised integer steps without rejecting floating-point roundoff", () => {
-    const descriptor = { ...pitch, parameters: [{ name: "harmonics", type: "number", minimum: 1, maximum: 8, step: 1 }] };
+    const descriptor = {
+      ...pitch,
+      parameters: [{ name: "harmonics", type: "number", minimum: 1, maximum: 8, step: 1 }],
+    };
     expect(processorParameterError([descriptor], "pitch", "harmonics", 4)).toBeNull();
     expect(processorParameterError([descriptor], "pitch", "harmonics", 4.1)).toContain("steps of 1");
     const fractional = { ...pitch, parameters: [{ name: "mix", type: "number", minimum: 0, maximum: 1, step: 0.1 }] };

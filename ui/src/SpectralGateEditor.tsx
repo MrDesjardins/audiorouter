@@ -3,10 +3,14 @@ import type { Node } from "@audiorouter/contracts";
 export function mergeNoiseProfiles(existing: unknown, additional: string | null): string | null {
   if (!additional || !/^[0-9a-fA-F]{128}$/.test(additional)) return null;
   if (typeof existing !== "string" || !/^[0-9a-fA-F]{128}$/.test(existing)) return additional;
-  return Array.from({ length: 64 }, (_, band) => Math.max(
-    parseInt(existing.slice(band * 2, band * 2 + 2), 16),
-    parseInt(additional.slice(band * 2, band * 2 + 2), 16),
-  ).toString(16).padStart(2, "0")).join("");
+  return Array.from({ length: 64 }, (_, band) =>
+    Math.max(
+      parseInt(existing.slice(band * 2, band * 2 + 2), 16),
+      parseInt(additional.slice(band * 2, band * 2 + 2), 16),
+    )
+      .toString(16)
+      .padStart(2, "0"),
+  ).join("");
 }
 
 const BANDS = 64;
@@ -34,7 +38,7 @@ export const BAND_FREQUENCIES_HZ: number[] = (() => {
   return Array.from({ length: BANDS }, (_, band) => {
     const low = Math.max(edges[band], 0.5);
     const high = Math.max(edges[band + 1] - 1, low);
-    return Math.sqrt(low * high) * SAMPLE_RATE / FRAME;
+    return (Math.sqrt(low * high) * SAMPLE_RATE) / FRAME;
   });
 })();
 
@@ -42,7 +46,10 @@ export const BAND_FREQUENCIES_HZ: number[] = (() => {
  * A profile that learned nothing (every band at the floor) counts as none. */
 export function decodeProfileDb(profile: unknown): number[] | null {
   if (typeof profile !== "string" || !/^[0-9a-fA-F]{128}$/.test(profile)) return null;
-  const levels = Array.from({ length: BANDS }, (_, band) => Number.parseInt(profile.slice(band * 2, band * 2 + 2), 16) - 160);
+  const levels = Array.from(
+    { length: BANDS },
+    (_, band) => Number.parseInt(profile.slice(band * 2, band * 2 + 2), 16) - 160,
+  );
   return levels.some((db) => db > -150) ? levels : null;
 }
 
@@ -54,11 +61,12 @@ export function hasLearnedNoise(profile: unknown): boolean {
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
 const xForHz = (hz: number) => LEFT + (Math.log10(clamp(hz, 20, 20000) / 20) / 3) * (RIGHT - LEFT);
 const yForDb = (db: number) => TOP + ((MAX_DB - clamp(db, MIN_DB, MAX_DB)) / (MAX_DB - MIN_DB)) * (BOTTOM - TOP);
-const line = (levels: number[], offset = 0) => levels
-  .map((db, band) => ({ hz: BAND_FREQUENCIES_HZ[band], db: db - DBFS_OFFSET + offset }))
-  .filter((point) => point.hz >= 20)
-  .map((point) => `${xForHz(point.hz).toFixed(1)},${yForDb(point.db).toFixed(1)}`)
-  .join(" ");
+const line = (levels: number[], offset = 0) =>
+  levels
+    .map((db, band) => ({ hz: BAND_FREQUENCIES_HZ[band], db: db - DBFS_OFFSET + offset }))
+    .filter((point) => point.hz >= 20)
+    .map((point) => `${xForHz(point.hz).toFixed(1)},${yForDb(point.db).toFixed(1)}`)
+    .join(" ");
 
 /**
  * Spectral Gate: shows the live spectrum of the sound entering the tool, lets
@@ -66,7 +74,14 @@ const line = (levels: number[], offset = 0) => levels
  * while learning), and draws the resulting gate threshold. Frequencies whose
  * level stays under the threshold are turned down.
  */
-export function SpectralGateEditor({ node, running, levelsDb, liveProfile, disabled, onChange }: {
+export function SpectralGateEditor({
+  node,
+  running,
+  levelsDb,
+  liveProfile,
+  disabled,
+  onChange,
+}: {
   node: Node;
   running: boolean;
   levelsDb: number[] | null;
@@ -79,28 +94,118 @@ export function SpectralGateEditor({ node, running, levelsDb, liveProfile, disab
   const threshold = typeof node.parameters.thresholdDb === "number" ? node.parameters.thresholdDb : 3;
   const learned = decodeProfileDb(learning ? combinedProfile : node.parameters.noiseProfile);
   const active = node.enabled && !node.bypass;
-  const status = !node.enabled ? "Off: enable this tool to see its live spectrum." : node.bypass ? "Bypass: turn Bypass off to process sound and see the live spectrum." : !running ? "Start the route to see the live spectrum."
-    : !levelsDb ? "Waiting for live spectrum readings. Check the incoming route and signal." : learning ? (liveProfile ? "Learning: play only the noise you want removed, then stop learning." : "Waiting for the first measurement…")
-      : learned ? "Frequencies under the gate threshold line are turned down." : "Learn the noise to start blocking it.";
-  return <section className="spectral-gate" aria-label="Spectral Gate editor">
-    <div className="advanced-eq-heading"><div><strong>Noise at every frequency</strong><small>{learning ? "Learning now" : learned ? "Learned noise is stored" : "No noise learned yet"}</small></div>
-      {!learning
-        ? <div className="actions"><button type="button" className="secondary" disabled={disabled || !running || !active} onClick={() => { onChange([["noiseProfile", "00".repeat(64)], ["learning", true]]); }}>{learned ? "Learn again" : "Learn noise"}</button>{learned && <button type="button" className="secondary" disabled={disabled || !running || !active} title="Keep the learned curve and add louder noise at each frequency" onClick={() => { onChange([["learning", true]]); }}>Add noise</button>}</div>
-        : <button type="button" className="primary" disabled={disabled || !running || !active || !combinedProfile} onClick={() => combinedProfile && onChange([["noiseProfile", combinedProfile], ["learning", false]])}>Stop and keep</button>}
-    </div>
-    <svg className="advanced-eq-graph spectral-gate-graph" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label="Live spectrum with the learned noise and gate threshold">
-      <rect x={LEFT} y={TOP} width={RIGHT - LEFT} height={BOTTOM - TOP} className="advanced-eq-plot" />
-      {[-100, -80, -60, -40, -20, 0].map((db) => <g key={db}><line x1={LEFT} x2={RIGHT} y1={yForDb(db)} y2={yForDb(db)} className="advanced-eq-grid" /><text x={LEFT - 5} y={yForDb(db) + 3} textAnchor="end" className="advanced-eq-axis">{db}</text></g>)}
-      {TICKS.map((hz) => <g key={hz}><line x1={xForHz(hz)} x2={xForHz(hz)} y1={TOP} y2={BOTTOM} className="advanced-eq-grid" /><text x={xForHz(hz)} y={HEIGHT - 12} textAnchor="middle" className="advanced-eq-axis">{hz >= 1000 ? `${hz / 1000}k` : hz}</text></g>)}
-      {running && active && levelsDb && <polyline points={line(levelsDb)} className="spectral-gate-live" />}
-      {learned && <polyline points={line(learned)} className="spectral-gate-learned" />}
-      {learned && !learning && <polyline points={line(learned, threshold)} className="spectral-gate-threshold" />}
-    </svg>
-    <div className="spectral-gate-legend" aria-hidden="true">
-      <span><i className="spectral-gate-key is-live" />Live sound</span>
-      <span><i className="spectral-gate-key is-learned" />Learned noise</span>
-      <span><i className="spectral-gate-key is-threshold" />Gate threshold</span>
-    </div>
-    <p role="status" className="muted spectral-gate-status">{status}</p>
-  </section>;
+  const status = !node.enabled
+    ? "Off: enable this tool to see its live spectrum."
+    : node.bypass
+      ? "Bypass: turn Bypass off to process sound and see the live spectrum."
+      : !running
+        ? "Start the route to see the live spectrum."
+        : !levelsDb
+          ? "Waiting for live spectrum readings. Check the incoming route and signal."
+          : learning
+            ? liveProfile
+              ? "Learning: play only the noise you want removed, then stop learning."
+              : "Waiting for the first measurement…"
+            : learned
+              ? "Frequencies under the gate threshold line are turned down."
+              : "Learn the noise to start blocking it.";
+  return (
+    <section className="spectral-gate" aria-label="Spectral Gate editor">
+      <div className="advanced-eq-heading">
+        <div>
+          <strong>Noise at every frequency</strong>
+          <small>{learning ? "Learning now" : learned ? "Learned noise is stored" : "No noise learned yet"}</small>
+        </div>
+        {!learning ? (
+          <div className="actions">
+            <button
+              type="button"
+              className="secondary"
+              disabled={disabled || !running || !active}
+              onClick={() => {
+                onChange([
+                  ["noiseProfile", "00".repeat(64)],
+                  ["learning", true],
+                ]);
+              }}
+            >
+              {learned ? "Learn again" : "Learn noise"}
+            </button>
+            {learned && (
+              <button
+                type="button"
+                className="secondary"
+                disabled={disabled || !running || !active}
+                title="Keep the learned curve and add louder noise at each frequency"
+                onClick={() => {
+                  onChange([["learning", true]]);
+                }}
+              >
+                Add noise
+              </button>
+            )}
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="primary"
+            disabled={disabled || !running || !active || !combinedProfile}
+            onClick={() =>
+              combinedProfile &&
+              onChange([
+                ["noiseProfile", combinedProfile],
+                ["learning", false],
+              ])
+            }
+          >
+            Stop and keep
+          </button>
+        )}
+      </div>
+      <svg
+        className="advanced-eq-graph spectral-gate-graph"
+        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+        role="img"
+        aria-label="Live spectrum with the learned noise and gate threshold"
+      >
+        <rect x={LEFT} y={TOP} width={RIGHT - LEFT} height={BOTTOM - TOP} className="advanced-eq-plot" />
+        {[-100, -80, -60, -40, -20, 0].map((db) => (
+          <g key={db}>
+            <line x1={LEFT} x2={RIGHT} y1={yForDb(db)} y2={yForDb(db)} className="advanced-eq-grid" />
+            <text x={LEFT - 5} y={yForDb(db) + 3} textAnchor="end" className="advanced-eq-axis">
+              {db}
+            </text>
+          </g>
+        ))}
+        {TICKS.map((hz) => (
+          <g key={hz}>
+            <line x1={xForHz(hz)} x2={xForHz(hz)} y1={TOP} y2={BOTTOM} className="advanced-eq-grid" />
+            <text x={xForHz(hz)} y={HEIGHT - 12} textAnchor="middle" className="advanced-eq-axis">
+              {hz >= 1000 ? `${hz / 1000}k` : hz}
+            </text>
+          </g>
+        ))}
+        {running && active && levelsDb && <polyline points={line(levelsDb)} className="spectral-gate-live" />}
+        {learned && <polyline points={line(learned)} className="spectral-gate-learned" />}
+        {learned && !learning && <polyline points={line(learned, threshold)} className="spectral-gate-threshold" />}
+      </svg>
+      <div className="spectral-gate-legend" aria-hidden="true">
+        <span>
+          <i className="spectral-gate-key is-live" />
+          Live sound
+        </span>
+        <span>
+          <i className="spectral-gate-key is-learned" />
+          Learned noise
+        </span>
+        <span>
+          <i className="spectral-gate-key is-threshold" />
+          Gate threshold
+        </span>
+      </div>
+      <p role="status" className="muted spectral-gate-status">
+        {status}
+      </p>
+    </section>
+  );
 }

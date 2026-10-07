@@ -16,22 +16,41 @@ let state: DragState = null;
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((listener) => listener());
 const store = {
-  subscribe(listener: () => void) { listeners.add(listener); return () => listeners.delete(listener); },
+  subscribe(listener: () => void) {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  },
   get: () => state,
-  set(next: DragState) { state = next; emit(); },
-  patch(update: Partial<NonNullable<DragState>>) { if (state) { state = { ...state, ...update }; emit(); } },
+  set(next: DragState) {
+    state = next;
+    emit();
+  },
+  patch(update: Partial<NonNullable<DragState>>) {
+    if (state) {
+      state = { ...state, ...update };
+      emit();
+    }
+  },
 };
 
 let blankImage: HTMLImageElement | null = null;
 
 /** Begin a library drag: drag data for the drop, a readable kind marker, and
  * a hidden browser drag image (the app draws its own preview). */
-export function startLibraryDrag(event: { dataTransfer: DataTransfer; clientX: number; clientY: number }, kind: string, label: string) {
+export function startLibraryDrag(
+  event: { dataTransfer: DataTransfer; clientX: number; clientY: number },
+  kind: string,
+  label: string,
+) {
   const { dataTransfer } = event;
   dataTransfer.effectAllowed = "copy";
   dataTransfer.setData(LIBRARY_DROP_MIME, kind);
   dataTransfer.setData(LIBRARY_DROP_TEXT_MIME, kind);
-  try { dataTransfer.setData(`${KIND_MARKER}${kind.toLowerCase()}`, "1"); } catch { /* optional marker */ }
+  try {
+    dataTransfer.setData(`${KIND_MARKER}${kind.toLowerCase()}`, "1");
+  } catch {
+    /* optional marker */
+  }
   if (typeof Image !== "undefined" && typeof dataTransfer.setDragImage === "function") {
     blankImage ??= Object.assign(new Image(), { src: TRANSPARENT_PIXEL });
     dataTransfer.setDragImage(blankImage, 0, 0);
@@ -65,7 +84,9 @@ export function LibraryDragOverlay() {
   const drag = useSyncExternalStore(store.subscribe, store.get, store.get);
   useEffect(() => {
     if (!drag) return;
-    const move = (event: DragEvent) => { if (event.clientX || event.clientY) store.patch({ x: event.clientX, y: event.clientY }); };
+    const move = (event: DragEvent) => {
+      if (event.clientX || event.clientY) store.patch({ x: event.clientX, y: event.clientY });
+    };
     const finish = () => store.set(null);
     document.addEventListener("dragover", move);
     document.addEventListener("dragend", finish);
@@ -77,7 +98,15 @@ export function LibraryDragOverlay() {
     };
   }, [drag !== null]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!drag || drag.overCanvas) return null;
-  return <div className="library-drag-chip" aria-hidden="true" style={{ transform: `translate(${drag.x + 14}px, ${drag.y + 12}px)` }}>
-    <span className="library-drag-chip-plus">+</span>{drag.label}<small>Drop on the canvas</small>
-  </div>;
+  return (
+    <div
+      className="library-drag-chip"
+      aria-hidden="true"
+      style={{ transform: `translate(${drag.x + 14}px, ${drag.y + 12}px)` }}
+    >
+      <span className="library-drag-chip-plus">+</span>
+      {drag.label}
+      <small>Drop on the canvas</small>
+    </div>
+  );
 }

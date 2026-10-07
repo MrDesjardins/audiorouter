@@ -1,20 +1,34 @@
 import { describe, expect, it } from "vitest";
-import { appendDraftConnection, appendEqPresetNode, appendLibraryNode, appendVoiceChainPreset, defaultChannelMatrix, insertDraftMixer, insertDraftPluginProcessor, insertDraftProcessor, removeDraftConnection, removeSinglePathDraftMixer, setDraftConnectionEnabled } from "./draft";
+import {
+  appendDraftConnection,
+  appendEqPresetNode,
+  appendLibraryNode,
+  appendVoiceChainPreset,
+  defaultChannelMatrix,
+  insertDraftMixer,
+  insertDraftPluginProcessor,
+  insertDraftProcessor,
+  removeDraftConnection,
+  removeSinglePathDraftMixer,
+  setDraftConnectionEnabled,
+} from "./draft";
 import { templateSession } from "./templates";
 import { demoSession } from "./fixtures";
 
 describe("appendDraftConnection", () => {
   it("adds a deterministic identity matrix without changing revision", () => {
     const next = appendDraftConnection(demoSession, "mic", "out", "voice", "in");
-    expect(next.edges).toEqual([{
-      id: "edge-1",
-      sourceNode: "mic",
-      sourcePort: "out",
-      destinationNode: "voice",
-      destinationPort: "in",
-      matrix: [1],
-      enabled: true,
-    }]);
+    expect(next.edges).toEqual([
+      {
+        id: "edge-1",
+        sourceNode: "mic",
+        sourcePort: "out",
+        destinationNode: "voice",
+        destinationPort: "in",
+        matrix: [1],
+        enabled: true,
+      },
+    ]);
     expect(next.revision).toBe(demoSession.revision);
   });
 
@@ -26,7 +40,12 @@ describe("appendDraftConnection", () => {
   });
 
   it("downmixes a stereo source into a mono destination instead of dropping a channel", () => {
-    const stereoSource = { ...demoSession, nodes: demoSession.nodes.map((node) => node.id === "mic" ? { ...node, ports: [{ ...node.ports[0], channels: 2 as 1 | 2 }] } : node) };
+    const stereoSource = {
+      ...demoSession,
+      nodes: demoSession.nodes.map((node) =>
+        node.id === "mic" ? { ...node, ports: [{ ...node.ports[0], channels: 2 as 1 | 2 }] } : node,
+      ),
+    };
     const next = appendDraftConnection(stereoSource, "mic", "out", "voice", "in");
     expect(next.edges[0].matrix).toEqual([0.5, 0.5]);
   });
@@ -42,7 +61,12 @@ describe("appendDraftConnection", () => {
   it("toggles edge state without changing topology or revision", () => {
     const connected = appendDraftConnection(demoSession, "mic", "out", "voice", "in");
     const disabled = setDraftConnectionEnabled(connected, "edge-1", false);
-    expect(disabled.edges[0]).toMatchObject({ id: "edge-1", enabled: false, sourceNode: "mic", destinationNode: "voice" });
+    expect(disabled.edges[0]).toMatchObject({
+      id: "edge-1",
+      enabled: false,
+      sourceNode: "mic",
+      destinationNode: "voice",
+    });
     expect(disabled.revision).toBe(demoSession.revision);
     expect(() => setDraftConnectionEnabled(disabled, "missing", true)).toThrow("Unknown draft connection");
   });
@@ -53,14 +77,22 @@ describe("appendDraftConnection", () => {
     const mixer = inserted.nodes.find((node) => node.kind === "mixer");
     expect(mixer).toMatchObject({ id: "mixer-1", name: "Mixer 1" });
     expect(mixer?.ports.every((port) => port.channels === 1)).toBe(true);
-    expect(inserted.edges.map((edge) => [edge.sourceNode, edge.destinationNode])).toEqual([["mic", "mixer-1"], ["mixer-1", "voice"]]);
+    expect(inserted.edges.map((edge) => [edge.sourceNode, edge.destinationNode])).toEqual([
+      ["mic", "mixer-1"],
+      ["mixer-1", "voice"],
+    ]);
     const restored = removeSinglePathDraftMixer(inserted, "mixer-1");
     expect(restored.nodes.some((node) => node.id === "mixer-1")).toBe(false);
     expect(restored.edges.map((edge) => [edge.sourceNode, edge.destinationNode])).toEqual([["mic", "voice"]]);
   });
 
   it("keeps a stereo source width when inserting before a mono destination", () => {
-    const stereoSource = { ...demoSession, nodes: demoSession.nodes.map((node) => node.id === "mic" ? { ...node, ports: [{ ...node.ports[0], channels: 2 as 1 | 2 }] } : node) };
+    const stereoSource = {
+      ...demoSession,
+      nodes: demoSession.nodes.map((node) =>
+        node.id === "mic" ? { ...node, ports: [{ ...node.ports[0], channels: 2 as 1 | 2 }] } : node,
+      ),
+    };
     const connected = appendDraftConnection(stereoSource, "mic", "out", "voice", "in");
     const inserted = insertDraftMixer(connected, "edge-1");
     expect(inserted.nodes.find((node) => node.id === "mixer-1")?.ports).toEqual([
@@ -156,7 +188,17 @@ describe("appendDraftConnection", () => {
   });
 
   it("inserts every advertised in-house processor on a connected path", () => {
-    const kinds = ["gain", "mute", "parametricEq", "graphicEq", "compressor", "gate", "limiter", "delay", "pitch"] as const;
+    const kinds = [
+      "gain",
+      "mute",
+      "parametricEq",
+      "graphicEq",
+      "compressor",
+      "gate",
+      "limiter",
+      "delay",
+      "pitch",
+    ] as const;
     for (const kind of kinds) {
       const connected = appendDraftConnection(demoSession, "mic", "out", "voice", "in");
       const inserted = insertDraftProcessor(connected, "edge-1", kind);
@@ -182,7 +224,12 @@ describe("appendDraftConnection", () => {
     const neutral = appendEqPresetNode(demoSession, "voiceNeutral").nodes.at(-1);
     expect(neutral).toMatchObject({
       kind: "parametricEq",
-      parameters: expect.objectContaining({ band0Enabled: false, band0Type: "peaking", band0FrequencyHz: 1000, band0Q: 1 }),
+      parameters: expect.objectContaining({
+        band0Enabled: false,
+        band0Type: "peaking",
+        band0FrequencyHz: 1000,
+        band0Q: 1,
+      }),
     });
     expect(hum.edges).toEqual(demoSession.edges);
     expect(hum.revision).toBe(demoSession.revision);
@@ -190,10 +237,23 @@ describe("appendDraftConnection", () => {
 
   it("inserts the voice chain into one path but leaves a disconnected draft unwired", () => {
     const connected = appendVoiceChainPreset(templateSession("gaming-discord"), "voiceGateAndCompression");
-    expect(connected.nodes.map((node) => node.kind)).toEqual(["physicalInput", "gain", "physicalOutput", "gate", "compressor", "limiter"]);
-    expect(connected.edges.map((edge) => [edge.sourceNode, edge.destinationNode])).toEqual(expect.arrayContaining([
-      ["mic", "gate-1"], ["gate-1", "compressor-1"], ["compressor-1", "limiter-1"], ["limiter-1", "voice"], ["voice", "headphones"],
-    ]));
+    expect(connected.nodes.map((node) => node.kind)).toEqual([
+      "physicalInput",
+      "gain",
+      "physicalOutput",
+      "gate",
+      "compressor",
+      "limiter",
+    ]);
+    expect(connected.edges.map((edge) => [edge.sourceNode, edge.destinationNode])).toEqual(
+      expect.arrayContaining([
+        ["mic", "gate-1"],
+        ["gate-1", "compressor-1"],
+        ["compressor-1", "limiter-1"],
+        ["limiter-1", "voice"],
+        ["voice", "headphones"],
+      ]),
+    );
     expect(connected.edges).toHaveLength(5);
     const unwired = appendVoiceChainPreset(demoSession, "voiceNeutral");
     expect(unwired.nodes.at(-1)).toMatchObject({ kind: "limiter", name: "Limiter 1" });
@@ -208,7 +268,10 @@ describe("appendDraftConnection", () => {
   it("refuses to reconnect a mixer with a malformed channel matrix", () => {
     const connected = appendDraftConnection(demoSession, "mic", "out", "voice", "in");
     const inserted = insertDraftMixer(connected, "edge-1");
-    const malformed = { ...inserted, edges: inserted.edges.map((edge) => edge.sourceNode === "mic" ? { ...edge, matrix: [] } : edge) };
+    const malformed = {
+      ...inserted,
+      edges: inserted.edges.map((edge) => (edge.sourceNode === "mic" ? { ...edge, matrix: [] } : edge)),
+    };
     expect(() => removeSinglePathDraftMixer(malformed, "mixer-1")).toThrow("valid channel matrices");
   });
 });

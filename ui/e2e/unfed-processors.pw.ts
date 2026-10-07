@@ -11,7 +11,10 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     const eq = session.nodes.find((node) => node.kind === "parametricEq")!;
     session = appendDraftConnection(session, "mic", "out", "headphones", "in");
     session = appendDraftConnection(session, gate.id, "out", eq.id, "in");
-    await page.addInitScript((session) => Object.assign(window, { __routeFixtureSession: session, __routeFixtureRunning: true }), session);
+    await page.addInitScript(
+      (session) => Object.assign(window, { __routeFixtureSession: session, __routeFixtureRunning: true }),
+      session,
+    );
     await page.goto("/route-harness.html");
     await page.getByLabel("Color theme").selectOption(theme);
     await expect(page.locator(".inactive-route-warning")).toContainText("Spectral Gate");

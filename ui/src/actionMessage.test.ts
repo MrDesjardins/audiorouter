@@ -18,7 +18,10 @@ describe("action message tone", () => {
   });
 
   it("marks any caught backend error as an error whatever its wording", () => {
-    const shown = formatUiError(new Error("enabled plugin nodes require an attached native endpoint session"), "Unable to start session.");
+    const shown = formatUiError(
+      new Error("enabled plugin nodes require an attached native endpoint session"),
+      "Unable to start session.",
+    );
     expect(actionMessageTone(shown)).toBe("error");
   });
 

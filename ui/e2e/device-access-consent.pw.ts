@@ -12,7 +12,10 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await page.goto("/route-harness.html");
     await openConnectionForm(page);
     const editor = page.locator(".workbench-connection-editor");
-    for (const [source, target] of [["Microphone · out · 1ch", "Voice gain · in · 1ch"], ["Voice gain · out · 1ch", "Headphones · in · 2ch"]]) {
+    for (const [source, target] of [
+      ["Microphone · out · 1ch", "Voice gain · in · 1ch"],
+      ["Voice gain · out · 1ch", "Headphones · in · 2ch"],
+    ]) {
       await editor.getByLabel("Source output port").selectOption({ label: source });
       await editor.getByLabel("Destination input port").selectOption({ label: target });
       await editor.getByRole("button", { name: "Add connection", exact: true }).click();
@@ -45,7 +48,9 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     const setting = page.getByRole("group", { name: "Audio device access" });
     await expect(setting).toContainText("may open the audio devices");
     await expect(setting.getByRole("button", { name: "Withdraw access" })).toBeVisible();
-    const calls = await page.evaluate(() => (window as unknown as { __routeFixtureCalls(): string[] }).__routeFixtureCalls());
+    const calls = await page.evaluate(() =>
+      (window as unknown as { __routeFixtureCalls(): string[] }).__routeFixtureCalls(),
+    );
     expect(calls.filter((call) => call.startsWith("device-access"))).toEqual(["device-access:true"]);
   });
 }

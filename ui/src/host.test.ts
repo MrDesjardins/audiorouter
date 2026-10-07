@@ -8,18 +8,33 @@ describe("native host bridge", () => {
   it("uses the bounded Tauri command transport", async () => {
     const tauriResponse = { jsonrpc: "2.0" as const, id: 1, result: { ok: true } };
     const core = { invoke: vi.fn().mockResolvedValue(tauriResponse) };
-    await expect(new TauriRpcTransport(core).send({ jsonrpc: "2.0", id: 1, method: "session.snapshot" })).resolves.toEqual(tauriResponse);
-    expect(core.invoke).toHaveBeenCalledWith("rpc_request", { request: { jsonrpc: "2.0", id: 1, method: "session.snapshot" } });
+    await expect(
+      new TauriRpcTransport(core).send({ jsonrpc: "2.0", id: 1, method: "session.snapshot" }),
+    ).resolves.toEqual(tauriResponse);
+    expect(core.invoke).toHaveBeenCalledWith("rpc_request", {
+      request: { jsonrpc: "2.0", id: 1, method: "session.snapshot" },
+    });
   });
 
   it("rejects a Tauri response with a mismatched request ID", async () => {
-    const transport = new TauriRpcTransport({ invoke: vi.fn().mockResolvedValue({ jsonrpc: "2.0", id: 2, result: {} }) });
-    await expect(transport.send({ jsonrpc: "2.0", id: 1, method: "session.snapshot" })).rejects.toThrow("invalid response");
+    const transport = new TauriRpcTransport({
+      invoke: vi.fn().mockResolvedValue({ jsonrpc: "2.0", id: 2, result: {} }),
+    });
+    await expect(transport.send({ jsonrpc: "2.0", id: 1, method: "session.snapshot" })).rejects.toThrow(
+      "invalid response",
+    );
   });
 
   it("rejects a response that arrives after disposal", async () => {
     let resolveInvocation: ((value: unknown) => void) | undefined;
-    const core = { invoke: vi.fn(() => new Promise((resolve) => { resolveInvocation = resolve; })) };
+    const core = {
+      invoke: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            resolveInvocation = resolve;
+          }),
+      ),
+    };
     const transport = new TauriRpcTransport(core);
     const pending = transport.send({ jsonrpc: "2.0", id: 1, method: "session.snapshot" });
     transport.dispose();
@@ -36,18 +51,35 @@ describe("native host bridge", () => {
   });
 
   it("turns a synchronous Tauri invoke failure into a rejected request", async () => {
-    const transport = new TauriRpcTransport({ invoke: vi.fn(() => { throw new Error("bridge unavailable"); }) });
-    await expect(transport.send({ jsonrpc: "2.0", id: 1, method: "session.snapshot" })).rejects.toThrow("bridge unavailable");
+    const transport = new TauriRpcTransport({
+      invoke: vi.fn(() => {
+        throw new Error("bridge unavailable");
+      }),
+    });
+    await expect(transport.send({ jsonrpc: "2.0", id: 1, method: "session.snapshot" })).rejects.toThrow(
+      "bridge unavailable",
+    );
   });
 
   it("bounds pending Tauri requests and rejects duplicate IDs", async () => {
     const resolveInvocations: Array<(value: unknown) => void> = [];
-    const core = { invoke: vi.fn(() => new Promise((resolve) => { resolveInvocations.push(resolve); })) };
+    const core = {
+      invoke: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            resolveInvocations.push(resolve);
+          }),
+      ),
+    };
     const transport = new TauriRpcTransport(core, 1000, 2);
     const first = transport.send({ jsonrpc: "2.0", id: 1, method: "session.snapshot" });
     const second = transport.send({ jsonrpc: "2.0", id: 2, method: "session.snapshot" });
-    await expect(transport.send({ jsonrpc: "2.0", id: 1, method: "session.snapshot" })).rejects.toThrow("already pending");
-    await expect(transport.send({ jsonrpc: "2.0", id: 3, method: "session.snapshot" })).rejects.toThrow("pending request limit");
+    await expect(transport.send({ jsonrpc: "2.0", id: 1, method: "session.snapshot" })).rejects.toThrow(
+      "already pending",
+    );
+    await expect(transport.send({ jsonrpc: "2.0", id: 3, method: "session.snapshot" })).rejects.toThrow(
+      "pending request limit",
+    );
     transport.dispose();
     for (const resolve of resolveInvocations) resolve({ jsonrpc: "2.0", id: 1, result: {} });
     await expect(first).rejects.toThrow("closed");
@@ -64,9 +96,21 @@ describe("native host bridge", () => {
     // The desktop shell provides both; 0.0.10 and earlier dropped the
     // registration, so Start at sign-in reported "unavailable in this host".
     const transport = { send: async (_request: JsonRpcRequest) => response };
-    const core = { invoke: vi.fn().mockImplementation((command: string) =>
-      command === "startup_register" ? Promise.resolve('"C:\\AudioRouter\\audiorouter-shell.exe" --tray') : Promise.resolve("unregistered")) };
-    const backend = createInitialBackend({ transport, sessionId: "desktop-session" }, core, "desktop-session", "http://tauri.localhost");
+    const core = {
+      invoke: vi
+        .fn()
+        .mockImplementation((command: string) =>
+          command === "startup_register"
+            ? Promise.resolve('"C:\\AudioRouter\\audiorouter-shell.exe" --tray')
+            : Promise.resolve("unregistered"),
+        ),
+    };
+    const backend = createInitialBackend(
+      { transport, sessionId: "desktop-session" },
+      core,
+      "desktop-session",
+      "http://tauri.localhost",
+    );
     expect(backend.connected).toBe(true);
     await expect(backend.startupRegistrationStatus?.()).resolves.toBe("unregistered");
     await expect(backend.registerStartup?.(true)).resolves.toContain("--tray");
@@ -76,8 +120,15 @@ describe("native host bridge", () => {
   });
 
   it("exposes explicit native startup registration through Tauri", async () => {
-    const core = { invoke: vi.fn().mockImplementation((command: string) =>
-      command === "startup_register" ? Promise.resolve('"C:\\Program Files\\AudioRouter\\audiorouter-shell.exe"') : Promise.resolve(response)) };
+    const core = {
+      invoke: vi
+        .fn()
+        .mockImplementation((command: string) =>
+          command === "startup_register"
+            ? Promise.resolve('"C:\\Program Files\\AudioRouter\\audiorouter-shell.exe"')
+            : Promise.resolve(response),
+        ),
+    };
     const backend = createInitialBackend(undefined, core, "session-1", "https://tauri.local");
     await expect(backend.registerStartup?.(true)).resolves.toContain("AudioRouter");
     expect(core.invoke).toHaveBeenCalledWith("startup_register", { enabled: true });
@@ -94,15 +145,20 @@ describe("native host bridge", () => {
     const sent: unknown[] = [];
     const webview: WebView2Webview = {
       postMessage: (message) => sent.push(message),
-      addEventListener: (_type, listener) => { listeners.add(listener); },
-      removeEventListener: (_type, listener) => { listeners.delete(listener); },
+      addEventListener: (_type, listener) => {
+        listeners.add(listener);
+      },
+      removeEventListener: (_type, listener) => {
+        listeners.delete(listener);
+      },
     };
     const transport = new WebView2RpcTransport(webview, 1000, 2);
     const pending = transport.send({ jsonrpc: "2.0", id: 7, method: "status.get" });
     expect(sent).toHaveLength(1);
     for (const listener of listeners) listener({ data: { type: "other" } });
     const matchingResponse = { ...response, id: 7 };
-    for (const listener of listeners) listener({ data: { type: "audiorouter.rpc.response", response: matchingResponse } });
+    for (const listener of listeners)
+      listener({ data: { type: "audiorouter.rpc.response", response: matchingResponse } });
     await expect(pending).resolves.toEqual(matchingResponse);
     transport.dispose();
   });
@@ -111,18 +167,25 @@ describe("native host bridge", () => {
     const listeners = new Set<(event: { data: unknown; origin?: string }) => void>();
     const webview: WebView2Webview = {
       postMessage: () => undefined,
-      addEventListener: (_type, listener) => { listeners.add(listener); },
-      removeEventListener: (_type, listener) => { listeners.delete(listener); },
+      addEventListener: (_type, listener) => {
+        listeners.add(listener);
+      },
+      removeEventListener: (_type, listener) => {
+        listeners.delete(listener);
+      },
     };
     const transport = new WebView2RpcTransport(webview, 1000, 2, "https://app.audiorouter.local");
     const pending = transport.send({ jsonrpc: "2.0", id: 9, method: "status.get" });
     const emit = (origin: string | undefined) => {
-      for (const listener of listeners) listener({ origin, data: { type: "audiorouter.rpc.response", response: { ...response, id: 9 } } });
+      for (const listener of listeners)
+        listener({ origin, data: { type: "audiorouter.rpc.response", response: { ...response, id: 9 } } });
     };
     emit("https://untrusted.example");
     emit(undefined);
     let settled = false;
-    void pending.then(() => { settled = true; });
+    void pending.then(() => {
+      settled = true;
+    });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(settled).toBe(false);
     emit("https://app.audiorouter.local");
@@ -134,8 +197,12 @@ describe("native host bridge", () => {
     const listeners = new Set<(event: { data: unknown }) => void>();
     const webview: WebView2Webview = {
       postMessage: () => undefined,
-      addEventListener: (_type, listener) => { listeners.add(listener); },
-      removeEventListener: (_type, listener) => { listeners.delete(listener); },
+      addEventListener: (_type, listener) => {
+        listeners.add(listener);
+      },
+      removeEventListener: (_type, listener) => {
+        listeners.delete(listener);
+      },
     };
     const transport = new WebView2RpcTransport(webview, 20);
     const pending = transport.send({ jsonrpc: "2.0", id: 8, method: "status.get" });
@@ -156,7 +223,9 @@ describe("native host bridge", () => {
       removeEventListener: () => undefined,
     };
     const transport = new WebView2RpcTransport(webview);
-    await expect(transport.send({ jsonrpc: "2.0", id: 1.5, method: "status.get" } as JsonRpcRequest)).rejects.toThrow("request shape");
+    await expect(transport.send({ jsonrpc: "2.0", id: 1.5, method: "status.get" } as JsonRpcRequest)).rejects.toThrow(
+      "request shape",
+    );
     await expect(transport.send({ jsonrpc: "2.0", id: 1, method: "x".repeat(257) })).rejects.toThrow("request shape");
     expect(posted).toHaveLength(0);
     transport.dispose();
@@ -166,8 +235,12 @@ describe("native host bridge", () => {
     const listeners = new Set<(event: { data: unknown }) => void>();
     const webview: WebView2Webview = {
       postMessage: () => undefined,
-      addEventListener: (_type, listener) => { listeners.add(listener); },
-      removeEventListener: (_type, listener) => { listeners.delete(listener); },
+      addEventListener: (_type, listener) => {
+        listeners.add(listener);
+      },
+      removeEventListener: (_type, listener) => {
+        listeners.delete(listener);
+      },
     };
     const transport = new WebView2RpcTransport(webview);
     const first = transport.send({ jsonrpc: "2.0", id: 1, method: "status.get" });

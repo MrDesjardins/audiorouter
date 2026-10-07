@@ -3,7 +3,9 @@ import { COMET_SPEED, MAX_COMETS, bezierLength, flowColor, flowVisual } from "./
 
 describe("audio connection visuals", () => {
   it("grow in width, glow and moving lights with level, within fixed bounds", () => {
-    const quiet = flowVisual(-50), speech = flowVisual(-18), hot = flowVisual(-3);
+    const quiet = flowVisual(-50),
+      speech = flowVisual(-18),
+      hot = flowVisual(-3);
     expect(quiet.comets).toBeGreaterThanOrEqual(1);
     expect(speech.coreWidth).toBeGreaterThan(quiet.coreWidth);
     expect(hot.glowOpacity).toBeGreaterThan(speech.glowOpacity);

@@ -9,14 +9,31 @@ const translate = (element: Element) => {
 
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`dragging a tool shows a live preview and drops it exactly there in ${theme}`, async ({ page }, testInfo) => {
-    await page.addInitScript(({ session, theme }) => { localStorage.setItem("audiorouter.ui.theme", theme); Object.assign(window, { __routeFixtureSession: session }); }, { session: demoSession, theme });
+    await page.addInitScript(
+      ({ session, theme }) => {
+        localStorage.setItem("audiorouter.ui.theme", theme);
+        Object.assign(window, { __routeFixtureSession: session });
+      },
+      { session: demoSession, theme },
+    );
     await page.setViewportSize({ width: 1500, height: 950 });
     await page.goto("/route-harness.html");
     await expect(page.getByTestId("rf__node-mic")).toBeVisible();
     // Let the opening fit animation finish so the viewport is still.
-    const viewport = () => page.locator(".react-flow__viewport").evaluate((element) => (element as HTMLElement).style.transform);
+    const viewport = () =>
+      page.locator(".react-flow__viewport").evaluate((element) => (element as HTMLElement).style.transform);
     let last = "";
-    await expect.poll(async () => { const now = await viewport(); const still = now === last; last = now; return still; }, { intervals: [150] }).toBe(true);
+    await expect
+      .poll(
+        async () => {
+          const now = await viewport();
+          const still = now === last;
+          last = now;
+          return still;
+        },
+        { intervals: [150] },
+      )
+      .toBe(true);
     await page.getByRole("tab", { name: "Tools", exact: true }).click();
     const card = page.locator(".tool-card").filter({ has: page.getByText("Compressor", { exact: true }) });
     await card.scrollIntoViewIfNeeded();

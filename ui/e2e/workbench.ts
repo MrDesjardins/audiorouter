@@ -3,7 +3,8 @@ import type { Page } from "@playwright/test";
 async function openAdvancedGroup(page: Page, selector: string) {
   await page.getByRole("tab", { name: "Advanced", exact: true }).click();
   const group = page.locator(selector);
-  if (!(await group.evaluate((element) => (element as HTMLDetailsElement).open))) await group.locator("> summary").click();
+  if (!(await group.evaluate((element) => (element as HTMLDetailsElement).open)))
+    await group.locator("> summary").click();
 }
 
 /** Advanced → Connect nodes without dragging (the keyboard connection form). */

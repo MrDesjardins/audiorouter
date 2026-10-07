@@ -22,7 +22,14 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       localStorage.setItem("audiorouter.ui.theme", theme);
       // Simulated desktop shell: only the quit command is recorded.
       const calls: string[] = [];
-      Object.assign(window, { __quitCalls: calls, __TAURI_INTERNALS__: { invoke: async (command: string) => { calls.push(command); } } });
+      Object.assign(window, {
+        __quitCalls: calls,
+        __TAURI_INTERNALS__: {
+          invoke: async (command: string) => {
+            calls.push(command);
+          },
+        },
+      });
     }, theme);
     await page.goto("/route-harness.html");
     const quit = page.getByRole("button", { name: "Quit AudioRouter" });
@@ -30,8 +37,12 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     const confirm = page.getByRole("button", { name: "Confirm quit AudioRouter" });
     await expect(confirm).toHaveText("Click again to quit");
     await page.locator(".topbar").screenshot({ path: testInfo.outputPath(`quit-armed-${theme}.png`) });
-    expect(await page.evaluate(() => (window as any).__quitCalls)).not.toContain("quit_app");
+    expect(await page.evaluate(() => (window as unknown as { __quitCalls: string[] }).__quitCalls)).not.toContain(
+      "quit_app",
+    );
     await confirm.click();
-    await expect.poll(() => page.evaluate(() => (window as any).__quitCalls)).toContain("quit_app");
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { __quitCalls: string[] }).__quitCalls))
+      .toContain("quit_app");
   });
 }

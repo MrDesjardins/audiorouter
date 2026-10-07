@@ -6,7 +6,9 @@ import { nodePortLabels, nodeStateLabel, routeLatencyText, routeNodeLabels } fro
 
 describe("graph path highlighting", () => {
   it("prioritizes explicit muted and bypassed state labels", () => {
-    expect(nodeStateLabel({ ...demoSession.nodes[0], parameters: { muted: true }, bypass: true, enabled: false })).toBe("muted");
+    expect(nodeStateLabel({ ...demoSession.nodes[0], parameters: { muted: true }, bypass: true, enabled: false })).toBe(
+      "muted",
+    );
     expect(nodeStateLabel({ ...demoSession.nodes[0], parameters: {}, bypass: true, enabled: true })).toBe("bypassed");
     expect(nodeStateLabel({ ...demoSession.nodes[0], parameters: {}, bypass: false, enabled: false })).toBe("disabled");
   });
@@ -15,8 +17,15 @@ describe("graph path highlighting", () => {
   });
 
   it("includes authoritative node processing state in route labels", () => {
-    const session = { ...demoSession, nodes: demoSession.nodes.map((node) => node.id === "voice" ? { ...node, bypass: true } : node) };
-    expect(routeNodeLabels(session, ["mic", "voice", "missing"])).toEqual(["Microphone [enabled]", "Voice gain [bypassed]", "missing"]);
+    const session = {
+      ...demoSession,
+      nodes: demoSession.nodes.map((node) => (node.id === "voice" ? { ...node, bypass: true } : node)),
+    };
+    expect(routeNodeLabels(session, ["mic", "voice", "missing"])).toEqual([
+      "Microphone [enabled]",
+      "Voice gain [bypassed]",
+      "missing",
+    ]);
   });
 
   it("formats authoritative route latency and fails closed for invalid values", () => {
@@ -26,12 +35,24 @@ describe("graph path highlighting", () => {
   });
 
   it("finds all enabled upstream and downstream nodes", () => {
-    const connected = appendDraftConnection(appendDraftConnection(demoSession, "mic", "out", "voice", "in"), "voice", "out", "headphones", "in");
+    const connected = appendDraftConnection(
+      appendDraftConnection(demoSession, "mic", "out", "voice", "in"),
+      "voice",
+      "out",
+      "headphones",
+      "in",
+    );
     expect([...relatedNodeIds(connected, "voice")]).toEqual(["voice", "mic", "headphones"]);
   });
 
   it("does not cross disabled edges or unrelated branches", () => {
-    const connected = appendDraftConnection(appendDraftConnection(demoSession, "mic", "out", "voice", "in"), "voice", "out", "headphones", "in");
+    const connected = appendDraftConnection(
+      appendDraftConnection(demoSession, "mic", "out", "voice", "in"),
+      "voice",
+      "out",
+      "headphones",
+      "in",
+    );
     const disabled = setDraftConnectionEnabled(connected, "edge-1", false);
     expect(relatedNodeIds(disabled, "voice")).toEqual(new Set(["voice", "headphones"]));
     expect(relatedNodeIds(disabled, "unknown")).toEqual(new Set());

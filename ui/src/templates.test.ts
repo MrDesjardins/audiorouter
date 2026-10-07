@@ -6,7 +6,10 @@ describe("guided templates", () => {
     const template = templateSession("gaming-discord");
     expect(template.name).toBe("Gaming + Discord");
     expect(template.revision).toBe(7);
-    expect(template.edges.map((edge) => [edge.sourceNode, edge.destinationNode])).toEqual([["mic", "voice"], ["voice", "headphones"]]);
+    expect(template.edges.map((edge) => [edge.sourceNode, edge.destinationNode])).toEqual([
+      ["mic", "voice"],
+      ["voice", "headphones"],
+    ]);
     expect(template.edges.map((edge) => edge.matrix)).toEqual([[1], [1, 1]]);
   });
 

@@ -1,36 +1,59 @@
 #!/bin/sh
-# Format the staged Rust files, and only those, before each commit (CI runs
-# `cargo fmt --check`). A fully staged file is formatted and re-staged. A file
-# that also has unstaged edits is only checked, so the hook never stages work
-# you left out of the commit.
+# Format the staged Rust files and the staged UI sources (ui/src, ui/e2e), and
+# only those, before each commit (CI runs `cargo fmt --check` and
+# `npm --prefix ui run format:check`). A fully staged file is formatted and
+# re-staged. A file that also has unstaged edits is only checked, so the hook
+# never stages work you left out of the commit.
 # Enable once per clone: git config core.hooksPath .githooks
 #
 # rustfmt reads each file on stdin so it formats exactly that file; given a
-# path, it would also rewrite every submodule the file declares.
+# path, it would also rewrite every submodule the file declares. Prettier also
+# reads stdin; --stdin-filepath picks the parser and ui/.prettierrc.json.
 
-staged=$(git diff --cached --name-only --diff-filter=ACMR -- '*.rs')
-[ -z "$staged" ] && exit 0
-
-unstaged=$(git diff --name-only -- '*.rs')
 formatted=$(mktemp) || exit 1
 trap 'rm -f "$formatted"' EXIT
 status=0
-# Rust paths in this repository contain no spaces or newlines.
-for file in $staged; do
-    if ! rustfmt --edition 2021 < "$file" > "$formatted"; then
-        echo "rustfmt could not parse $file." >&2
+
+# format_staged <unstaged list> <fix hint> <file> <formatter command...>
+format_staged() {
+    unstaged=$1; hint=$2; file=$3; shift 3
+    if ! "$@" < "$file" > "$formatted"; then
+        echo "Could not format $file." >&2
         status=1
-        continue
+        return
     fi
-    cmp -s "$formatted" "$file" && continue
+    cmp -s "$formatted" "$file" && return
     if printf '%s\n' "$unstaged" | grep -qxF "$file"; then
         echo "$file is not formatted and has unstaged changes; format it and stage it:" >&2
-        echo "  rustfmt --edition 2021 $file" >&2
+        echo "  $hint" >&2
         status=1
     else
         cat "$formatted" > "$file"
         git add -- "$file"
         echo "Formatted $file"
     fi
-done
+}
+
+# Rust and UI paths in this repository contain no spaces or newlines.
+staged=$(git diff --cached --name-only --diff-filter=ACMR -- '*.rs')
+if [ -n "$staged" ]; then
+    unstaged=$(git diff --name-only -- '*.rs')
+    for file in $staged; do
+        format_staged "$unstaged" "rustfmt --edition 2021 $file" "$file" rustfmt --edition 2021
+    done
+fi
+
+ui_staged=$(git diff --cached --name-only --diff-filter=ACMR -- 'ui/src/*' 'ui/e2e/*')
+if [ -n "$ui_staged" ]; then
+    prettier=ui/node_modules/.bin/prettier
+    if [ ! -x "$prettier" ]; then
+        echo "UI files are staged but Prettier is not installed; run: npm ci --prefix ui" >&2
+        exit 1
+    fi
+    unstaged=$(git diff --name-only -- 'ui/src/*' 'ui/e2e/*')
+    for file in $ui_staged; do
+        format_staged "$unstaged" "npx --prefix ui prettier --write $file" "$file" \
+            "$prettier" --ignore-unknown --stdin-filepath "$file"
+    done
+fi
 exit $status

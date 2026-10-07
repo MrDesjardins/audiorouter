@@ -234,6 +234,10 @@ jobs:
         if: needs.changes.outputs.ui == 'true'
         shell: pwsh
         run: |
+          npm --prefix ui run format:check
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          npm --prefix ui run lint
+          if ($LASTEXITCODE -ne 0) { exit 1 }
           npm --prefix ui test
           if ($LASTEXITCODE -ne 0) { exit 1 }
           npm --prefix ui run build

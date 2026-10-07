@@ -18,7 +18,10 @@ test("the right panel can be widened by dragging or with the keyboard, and keeps
   expect(widened - before).toBeLessThan(220);
   // Advanced EQ benefits from the extra width.
   await page.getByRole("tab", { name: "Tools", exact: true }).click();
-  await page.locator(".tool-card").filter({ has: page.getByText("Advanced EQ", { exact: true }) }).click();
+  await page
+    .locator(".tool-card")
+    .filter({ has: page.getByText("Advanced EQ", { exact: true }) })
+    .click();
   await page.getByTestId("rf__node-parametricEq-1").locator(".flow-node-title").click();
   await page.screenshot({ path: path.resolve("../target/feature-confidence-visual/sidebar-widened.png") });
   await page.reload();

@@ -22,7 +22,8 @@ export type AvailableUpdate = { version: string; tag: string; url: string };
  */
 export function isAutomatedHarness(): boolean {
   if (typeof window !== "undefined" && "__updateCheckReleases" in window) return false;
-  const vitest = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.VITEST !== undefined;
+  const vitest =
+    (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.VITEST !== undefined;
   return vitest || (typeof navigator !== "undefined" && navigator.webdriver === true);
 }
 
@@ -59,32 +60,55 @@ function readCache(): Cache | null {
   try {
     const value = JSON.parse(window.localStorage.getItem(CACHE_KEY) ?? "null") as Cache | null;
     return value && typeof value.checkedAt === "number" ? value : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 function writeCache(cache: Cache) {
-  try { window.localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch { /* best effort */ }
+  try {
+    window.localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    /* best effort */
+  }
 }
 
 export function updateCheckEnabled(): boolean {
-  try { return window.localStorage.getItem(PREFERENCE_KEY) !== "off"; } catch { return true; }
+  try {
+    return window.localStorage.getItem(PREFERENCE_KEY) !== "off";
+  } catch {
+    return true;
+  }
 }
 
 export function setUpdateCheckEnabled(enabled: boolean) {
-  try { window.localStorage.setItem(PREFERENCE_KEY, enabled ? "on" : "off"); } catch { /* best effort */ }
+  try {
+    window.localStorage.setItem(PREFERENCE_KEY, enabled ? "on" : "off");
+  } catch {
+    /* best effort */
+  }
 }
 
 /**
  * The available update, checked at most once a day and cached. A cached
  * answer for an older app version is ignored after an upgrade.
  */
-export function useUpdateCheck(enabled: boolean, fetcher: typeof fetch = (...args) => fetch(...args), now = () => Date.now()): AvailableUpdate | null {
+export function useUpdateCheck(
+  enabled: boolean,
+  fetcher: typeof fetch = (...args) => fetch(...args),
+  now = () => Date.now(),
+): AvailableUpdate | null {
   const [update, setUpdate] = useState<AvailableUpdate | null>(() => {
     const cache = readCache();
-    return enabled && cache?.forVersion === APP_VERSION && cache.update && isNewer(cache.update.tag, APP_VERSION) ? cache.update : null;
+    return enabled && cache?.forVersion === APP_VERSION && cache.update && isNewer(cache.update.tag, APP_VERSION)
+      ? cache.update
+      : null;
   });
   useEffect(() => {
-    if (!enabled) { setUpdate(null); return; }
+    if (!enabled) {
+      setUpdate(null);
+      return;
+    }
     const cache = readCache();
     if (cache && cache.forVersion === APP_VERSION && now() - cache.checkedAt < CHECK_INTERVAL_MS) {
       setUpdate(cache.update && isNewer(cache.update.tag, APP_VERSION) ? cache.update : null);
@@ -93,19 +117,26 @@ export function useUpdateCheck(enabled: boolean, fetcher: typeof fetch = (...arg
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 10_000);
     const injected = (window as { __updateCheckReleases?: unknown }).__updateCheckReleases;
-    const releases = injected !== undefined
-      ? Promise.resolve(injected)
-      : fetcher(RELEASES_API, { headers: { Accept: "application/vnd.github+json" }, signal: controller.signal })
-        .then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))));
+    const releases =
+      injected !== undefined
+        ? Promise.resolve(injected)
+        : fetcher(RELEASES_API, { headers: { Accept: "application/vnd.github+json" }, signal: controller.signal }).then(
+            (response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))),
+          );
     void releases
       .then((releases) => {
         const found = newestUpdate(releases, APP_VERSION);
         writeCache({ checkedAt: now(), update: found, forVersion: APP_VERSION });
         setUpdate(found);
       })
-      .catch(() => { /* offline or rate-limited: no notice, try again next start */ })
+      .catch(() => {
+        /* offline or rate-limited: no notice, try again next start */
+      })
       .finally(() => window.clearTimeout(timeout));
-    return () => { controller.abort(); window.clearTimeout(timeout); };
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
   }, [enabled]); // eslint-disable-line react-hooks/exhaustive-deps
   return update;
 }

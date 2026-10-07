@@ -359,6 +359,36 @@ P2 and P3 remain a backlog.
   - Enforce both in CI and in the pre-commit hook.
 - **Verify.** CI lint is green, behavior unchanged, and all Vitest and
   Playwright tests pass.
+- **Status (2026-10-07, user request): done in part, Windows CI pending.**
+  - ESLint 10 (flat config, typescript-eslint recommended,
+    `react-hooks/rules-of-hooks` error, `exhaustive-deps` warning) and
+    Prettier 3.9 (`printWidth` 120, `endOfLine` auto) in `ui/`; scripts
+    `lint`, `format`, `format:check`. `ui/src` and `ui/e2e` were formatted
+    in one mechanical commit (`2697774b`). CI's Windows job runs
+    `format:check` and `lint` (errors only fail); the pre-commit hook
+    formats staged `ui/src` and `ui/e2e` files.
+  - Lint: 52 errors fixed (0 left, `rules-of-hooks` 0). 25
+    `exhaustive-deps` warnings remain, each reviewed; most are deliberate
+    (stable setters, mount-only effects, 20 Hz telemetry). One was a real
+    stale closure: Ctrl+Alt+S after Save started a "temporary preview of
+    the unsaved route" instead of the saved session (fixed, regression
+    `e2e/shortcut-after-save.pw.ts`).
+  - `App.tsx`: 2,610 lines before formatting, 8,543 after Prettier,
+    3,069 now (useState 152 -> 74, useEffect 51 -> 33). Moved verbatim:
+    61 top-level panels and helpers (`AdvancedPanels`, `NativeDevicePanels`,
+    `PluginPanels`, `RecordingPanels`, `NodeEditors`, `AudioFileNodeEditor`,
+    `PanelMessage`, `endpointBinding`, `appContext`); the four polling
+    loops into hooks (`useWorkspaceEvents`, `useDiagnosticsRefresh`,
+    `useNativeCounters`, `useAudioFileStatus`); the inline panels into
+    components (`SignalFlowPanel`, `PropertiesPanel`, `SetupWorkbench`,
+    `RecordingWorkbench`, `AdvancedWorkbench`, `ConnectionForm`,
+    `DeviceTroubleshooting`). Effects keep their dependency arrays; the
+    rendered HTML of every side-panel tab and node inspector is unchanged
+    in the dark, light and high-contrast themes.
+  - Open: the ~1,500-line target is not met. What remains in `AppContent`
+    is its state and action handlers (`startSession` alone is ~360
+    lines); moving them is a state-flow change and needs its own review.
+    `SessionFlowCanvas.tsx` was only formatted.
 
 ### P2-3 No way to follow one request across logs
 

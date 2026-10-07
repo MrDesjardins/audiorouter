@@ -16,7 +16,10 @@ export function isNetworkAddress(value: string): boolean {
 /** Pairing keys the backend accepts: blank (not paired) or 16-128
  * printable ASCII characters without leading or trailing spaces. */
 export function isPairingKey(value: string): boolean {
-  return value.length === 0 || (value.length >= 16 && value.length <= 128 && /^[\x20-\x7e]+$/.test(value) && value.trim() === value);
+  return (
+    value.length === 0 ||
+    (value.length >= 16 && value.length <= 128 && /^[\x20-\x7e]+$/.test(value) && value.trim() === value)
+  );
 }
 
 /** 32 symbols without the look-alikes 0/O and 1/I: a random byte masked to
@@ -25,7 +28,9 @@ const PAIRING_SYMBOLS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export const GENERATED_PAIRING_KEY_LENGTH = 24;
 
 /** A new random pairing key from the platform's cryptographic generator. */
-export function generatePairingKey(fill: (bytes: Uint8Array) => Uint8Array = (bytes) => crypto.getRandomValues(bytes)): string {
+export function generatePairingKey(
+  fill: (bytes: Uint8Array) => Uint8Array = (bytes) => crypto.getRandomValues(bytes),
+): string {
   const bytes = fill(new Uint8Array(GENERATED_PAIRING_KEY_LENGTH));
   return Array.from(bytes, (byte) => PAIRING_SYMBOLS[byte & 31]).join("");
 }
@@ -34,19 +39,31 @@ export function generatePairingKey(fill: (bytes: Uint8Array) => Uint8Array = (by
 function pairingProblemText(telemetry: NetworkNodeTelemetry): string {
   const count = telemetry.authFailures ?? 0;
   switch (telemetry.authProblem) {
-    case "senderNotPaired": return `${count} packets had no pairing key`;
-    case "receiverNotPaired": return `${count} packets had a pairing key`;
-    default: return `${count} packets had another pairing key`;
+    case "senderNotPaired":
+      return `${count} packets had no pairing key`;
+    case "receiverNotPaired":
+      return `${count} packets had a pairing key`;
+    default:
+      return `${count} packets had another pairing key`;
   }
 }
 
 /** What to change when audio arrives with the wrong pairing, or null. */
 export function pairingAdvice(telemetry: NetworkNodeTelemetry | null | undefined): string | null {
-  if (!telemetry || telemetry.direction !== "receive" || !telemetry.authFailures || (telemetry.receivedPackets ?? 0) > 0) return null;
+  if (
+    !telemetry ||
+    telemetry.direction !== "receive" ||
+    !telemetry.authFailures ||
+    (telemetry.receivedPackets ?? 0) > 0
+  )
+    return null;
   switch (telemetry.authProblem) {
-    case "senderNotPaired": return "The sending computer has no pairing key. Copy this key into its Network Send.";
-    case "receiverNotPaired": return "The sending computer uses a pairing key. Enter the same key here.";
-    default: return "The sending computer uses a different pairing key. Enter the same key on both computers.";
+    case "senderNotPaired":
+      return "The sending computer has no pairing key. Copy this key into its Network Send.";
+    case "receiverNotPaired":
+      return "The sending computer uses a pairing key. Enter the same key here.";
+    default:
+      return "The sending computer uses a different pairing key. Enter the same key on both computers.";
   }
 }
 
@@ -56,14 +73,17 @@ export function networkTelemetryText(telemetry: NetworkNodeTelemetry | null | un
   if (telemetry.direction === "send") {
     const problems = [
       telemetry.droppedPackets ? `${telemetry.droppedPackets} dropped` : null,
-      telemetry.sendErrors ? `${telemetry.sendErrors} send errors${telemetry.lastErrorCode === 10054 ? " (the receiving computer is not listening on this port)" : ""}` : null,
+      telemetry.sendErrors
+        ? `${telemetry.sendErrors} send errors${telemetry.lastErrorCode === 10054 ? " (the receiving computer is not listening on this port)" : ""}`
+        : null,
     ].filter(Boolean);
     return `Sending · ${telemetry.sentPackets ?? 0} packets${problems.length ? ` · ${problems.join(" · ")}` : ""}`;
   }
   const received = telemetry.receivedPackets ?? 0;
   if (received === 0) {
     if (telemetry.authFailures) return `Waiting for audio · ${pairingProblemText(telemetry)}`;
-    if (telemetry.rejectedFrom) return `Waiting for audio · audio from ${telemetry.rejectedFrom} was ignored because it is not the address entered`;
+    if (telemetry.rejectedFrom)
+      return `Waiting for audio · audio from ${telemetry.rejectedFrom} was ignored because it is not the address entered`;
     return telemetry.rejectedDatagrams
       ? `Waiting for audio · ${telemetry.rejectedDatagrams} packets from another address were ignored`
       : "Waiting for audio from the sending computer";
@@ -80,7 +100,12 @@ export function networkTelemetryText(telemetry: NetworkNodeTelemetry | null | un
 
 /** Properties of a Network Send or Network Receive node. Only valid values
  * reach the draft; the backend validates them again before audio starts. */
-export function NetworkNodeEditor({ node, disabled, telemetry, onChange }: {
+export function NetworkNodeEditor({
+  node,
+  disabled,
+  telemetry,
+  onChange,
+}: {
   node: Node;
   disabled: boolean;
   telemetry: NetworkNodeTelemetry | null | undefined;
@@ -113,62 +138,242 @@ export function NetworkNodeEditor({ node, disabled, telemetry, onChange }: {
   const bufferNumber = Number(buffer);
   const bufferValid = Number.isFinite(bufferNumber) && bufferNumber >= 10 && bufferNumber <= 500;
   const pairingValid = isPairingKey(pairingKey);
-  const changePairingKey = (value: string) => { setPairingKey(value); if (isPairingKey(value)) onChange("pairingKey", value); };
+  const changePairingKey = (value: string) => {
+    setPairingKey(value);
+    if (isPairingKey(value)) onChange("pairingKey", value);
+  };
   const copyPairingKey = () => {
-    void navigator.clipboard?.writeText(pairingKey).then(() => setCopied(true), () => setCopied(false));
+    void navigator.clipboard?.writeText(pairingKey).then(
+      () => setCopied(true),
+      () => setCopied(false),
+    );
   };
   // One reserved slot (UI-17): the warning, the paired note and the
   // validation message replace each other without moving anything below.
   // Advice from live telemetry applies to the saved key only: once the key
   // is edited here, the counters describe the previous one.
-  const advice = pairingKey === savedPairingKey && Boolean(telemetry?.paired) === (savedPairingKey.length > 0) ? pairingAdvice(telemetry) : null;
+  const advice =
+    pairingKey === savedPairingKey && Boolean(telemetry?.paired) === savedPairingKey.length > 0
+      ? pairingAdvice(telemetry)
+      : null;
   const pairingNote = !pairingValid
     ? "Use 16 to 128 letters, digits or symbols, or leave it blank."
-    : advice ?? ( pairingKey.length === 0
-      ? sending
-        ? "Not paired: anyone on your network can listen to this stream or send audio in its place."
-        : "Not paired: anyone on your network can send audio to this input."
-      : sending
-        ? "Paired: the other computer plays only audio with this key. The audio is not encrypted."
-        : "Paired: only audio sent with this key is played.");
+    : (advice ??
+      (pairingKey.length === 0
+        ? sending
+          ? "Not paired: anyone on your network can listen to this stream or send audio in its place."
+          : "Not paired: anyone on your network can send audio to this input."
+        : sending
+          ? "Paired: the other computer plays only audio with this key. The audio is not encrypted."
+          : "Paired: only audio sent with this key is played."));
   const status = networkTelemetryText(telemetry);
   const thisPc = sending ? telemetry?.localAddress : telemetry?.thisAddress;
   const addressLabel = sending ? "Receiving computer's IP address" : "Sending computer's IP address";
 
-  return <div className="node-binding-editor network-node-editor" aria-label={sending ? "Network send settings" : "Network receive settings"}>
-    <div><p className="eyebrow">{sending ? "Stream to another computer" : "Play audio from another computer"}</p><strong>{sending ? "Where should this audio go?" : "Which computer sends the audio?"}</strong></div>
-    <figure className="network-route-diagram" aria-label="Network audio direction">
-      <div className="network-route-computer"><svg viewBox="0 0 48 36" aria-hidden="true"><rect x="6" y="2" width="36" height="24" rx="3" /><path d="M18 34h12M24 26v8M12 16h4l3-7 6 13 4-9h7" /></svg><strong>{sending ? "This PC" : "Sending PC"}</strong><span>Audio in</span><b>Network Send</b><code>{sending ? "Your input / mix" : addressValid ? address : "Sender IP"}</code></div>
-      <div className="network-route-link"><span aria-hidden="true">→</span><small>UDP</small><code>{portValid ? portNumber : "Port"}</code></div>
-      <div className="network-route-computer"><svg viewBox="0 0 48 36" aria-hidden="true"><rect x="6" y="2" width="36" height="24" rx="3" /><path d="M18 34h12M24 26v8M12 16h4l3-7 6 13 4-9h7" /></svg><strong>{sending ? "Receiving PC" : "This PC"}</strong><span>Audio out</span><b>Network Receive</b><code>{sending ? addressValid ? address : "Destination IP" : "Your output / OBS"}</code></div>
-      <figcaption>{sending ? `Set Receive's sender to ${thisPc ?? "this PC's IP"}.` : `Set Send's destination to ${thisPc ?? "this PC's IP"}.`} Use port {portValid ? portNumber : "the same port"} on both PCs.</figcaption>
-    </figure>
-    <label>{addressLabel}<input type="text" inputMode="decimal" autoComplete="off" spellCheck={false} placeholder="192.168.1.20" value={address} disabled={disabled} aria-invalid={address.length > 0 && !addressValid}
-      onChange={(event) => { const value = event.target.value.trim(); setAddress(value); if (isNetworkAddress(value)) onChange(addressKey, value); }} /></label>
-    {address.length > 0 && !addressValid && <small role="alert">Enter a numeric IP address such as 192.168.1.20. Computer names are not used.</small>}
-    <label>Port<input type="number" min={1} max={65535} step={1} value={port} disabled={disabled} aria-invalid={!portValid}
-      onChange={(event) => { setPort(event.target.value); const value = Number(event.target.value); if (Number.isInteger(value) && value >= 1 && value <= 65535) onChange("port", value); }} /></label>
-    <div className="network-pairing">
-      <label>Pairing key<input type="text" autoComplete="off" spellCheck={false} maxLength={128} placeholder="Blank: not paired" value={pairingKey} disabled={disabled} aria-invalid={!pairingValid}
-        aria-describedby={`${node.id}-pairing-note`} onChange={(event) => changePairingKey(event.target.value)} /></label>
-      <div className="network-pairing-actions">
-        <button type="button" className="secondary" disabled={disabled} onClick={() => changePairingKey(generatePairingKey())}>Generate</button>
-        <button type="button" className="secondary" disabled={pairingKey.length === 0 || !pairingValid} onClick={copyPairingKey} aria-live="polite">{copied ? "Copied" : "Copy"}</button>
+  return (
+    <div
+      className="node-binding-editor network-node-editor"
+      aria-label={sending ? "Network send settings" : "Network receive settings"}
+    >
+      <div>
+        <p className="eyebrow">{sending ? "Stream to another computer" : "Play audio from another computer"}</p>
+        <strong>{sending ? "Where should this audio go?" : "Which computer sends the audio?"}</strong>
       </div>
-      <p id={`${node.id}-pairing-note`} className={`network-pairing-note${pairingValid && pairingKey.length > 0 && !advice ? " paired" : ""}`} data-testid="network-pairing-note">{pairingNote}</p>
-    </div>
-    {!sending && <label>Buffer (ms)<input type="number" min={10} max={500} step={5} value={buffer} disabled={disabled} aria-invalid={!bufferValid}
-      onChange={(event) => { setBuffer(event.target.value); const value = Number(event.target.value); if (Number.isFinite(value) && value >= 10 && value <= 500) onChange("bufferMs", value); }} /></label>}
-    {status && <p className="network-node-status" role="status">{status}</p>}
-    {!sending && telemetry?.rejectedFrom && telemetry.rejectedFrom !== address && <div className="network-node-fix" role="alert">
-      <span>AudioRouter audio is arriving from <code>{telemetry.rejectedFrom}</code>. If that is the sending computer, use its address.</span>
-      <button type="button" className="secondary" disabled={disabled} onClick={() => { setAddress(telemetry.rejectedFrom!); onChange("sender", telemetry.rejectedFrom!); }}>Use {telemetry.rejectedFrom}</button>
-    </div>}
-    {/* While playing, name this computer's real address: with several network
+      <figure className="network-route-diagram" aria-label="Network audio direction">
+        <div className="network-route-computer">
+          <svg viewBox="0 0 48 36" aria-hidden="true">
+            <rect x="6" y="2" width="36" height="24" rx="3" />
+            <path d="M18 34h12M24 26v8M12 16h4l3-7 6 13 4-9h7" />
+          </svg>
+          <strong>{sending ? "This PC" : "Sending PC"}</strong>
+          <span>Audio in</span>
+          <b>Network Send</b>
+          <code>{sending ? "Your input / mix" : addressValid ? address : "Sender IP"}</code>
+        </div>
+        <div className="network-route-link">
+          <span aria-hidden="true">→</span>
+          <small>UDP</small>
+          <code>{portValid ? portNumber : "Port"}</code>
+        </div>
+        <div className="network-route-computer">
+          <svg viewBox="0 0 48 36" aria-hidden="true">
+            <rect x="6" y="2" width="36" height="24" rx="3" />
+            <path d="M18 34h12M24 26v8M12 16h4l3-7 6 13 4-9h7" />
+          </svg>
+          <strong>{sending ? "Receiving PC" : "This PC"}</strong>
+          <span>Audio out</span>
+          <b>Network Receive</b>
+          <code>{sending ? (addressValid ? address : "Destination IP") : "Your output / OBS"}</code>
+        </div>
+        <figcaption>
+          {sending
+            ? `Set Receive's sender to ${thisPc ?? "this PC's IP"}.`
+            : `Set Send's destination to ${thisPc ?? "this PC's IP"}.`}{" "}
+          Use port {portValid ? portNumber : "the same port"} on both PCs.
+        </figcaption>
+      </figure>
+      <label>
+        {addressLabel}
+        <input
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
+          spellCheck={false}
+          placeholder="192.168.1.20"
+          value={address}
+          disabled={disabled}
+          aria-invalid={address.length > 0 && !addressValid}
+          onChange={(event) => {
+            const value = event.target.value.trim();
+            setAddress(value);
+            if (isNetworkAddress(value)) onChange(addressKey, value);
+          }}
+        />
+      </label>
+      {address.length > 0 && !addressValid && (
+        <small role="alert">Enter a numeric IP address such as 192.168.1.20. Computer names are not used.</small>
+      )}
+      <label>
+        Port
+        <input
+          type="number"
+          min={1}
+          max={65535}
+          step={1}
+          value={port}
+          disabled={disabled}
+          aria-invalid={!portValid}
+          onChange={(event) => {
+            setPort(event.target.value);
+            const value = Number(event.target.value);
+            if (Number.isInteger(value) && value >= 1 && value <= 65535) onChange("port", value);
+          }}
+        />
+      </label>
+      <div className="network-pairing">
+        <label>
+          Pairing key
+          <input
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            maxLength={128}
+            placeholder="Blank: not paired"
+            value={pairingKey}
+            disabled={disabled}
+            aria-invalid={!pairingValid}
+            aria-describedby={`${node.id}-pairing-note`}
+            onChange={(event) => changePairingKey(event.target.value)}
+          />
+        </label>
+        <div className="network-pairing-actions">
+          <button
+            type="button"
+            className="secondary"
+            disabled={disabled}
+            onClick={() => changePairingKey(generatePairingKey())}
+          >
+            Generate
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            disabled={pairingKey.length === 0 || !pairingValid}
+            onClick={copyPairingKey}
+            aria-live="polite"
+          >
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+        <p
+          id={`${node.id}-pairing-note`}
+          className={`network-pairing-note${pairingValid && pairingKey.length > 0 && !advice ? " paired" : ""}`}
+          data-testid="network-pairing-note"
+        >
+          {pairingNote}
+        </p>
+      </div>
+      {!sending && (
+        <label>
+          Buffer (ms)
+          <input
+            type="number"
+            min={10}
+            max={500}
+            step={5}
+            value={buffer}
+            disabled={disabled}
+            aria-invalid={!bufferValid}
+            onChange={(event) => {
+              setBuffer(event.target.value);
+              const value = Number(event.target.value);
+              if (Number.isFinite(value) && value >= 10 && value <= 500) onChange("bufferMs", value);
+            }}
+          />
+        </label>
+      )}
+      {status && (
+        <p className="network-node-status" role="status">
+          {status}
+        </p>
+      )}
+      {!sending && telemetry?.rejectedFrom && telemetry.rejectedFrom !== address && (
+        <div className="network-node-fix" role="alert">
+          <span>
+            AudioRouter audio is arriving from <code>{telemetry.rejectedFrom}</code>. If that is the sending computer,
+            use its address.
+          </span>
+          <button
+            type="button"
+            className="secondary"
+            disabled={disabled}
+            onClick={() => {
+              setAddress(telemetry.rejectedFrom!);
+              onChange("sender", telemetry.rejectedFrom!);
+            }}
+          >
+            Use {telemetry.rejectedFrom}
+          </button>
+        </div>
+      )}
+      {/* While playing, name this computer's real address: with several network
         adapters, the one ipconfig lists first is often not the one used. */}
-    <small>{sending
-      ? <>On the other computer, add a Network Receive node with {thisPc ? <>this computer's address <code>{thisPc}</code></> : "this computer's IP address"} as the sender and the same port. Both computers must be on the same local network. Audio is sent unencrypted, so use it only on a network you trust.</>
-      : <>On the other computer, add a Network Send node with {thisPc ? <>this computer's address <code>{thisPc}</code></> : "this computer's IP address"} and port {portValid ? portNumber : "the same port"}. Audio from any other address is ignored. The first time, Windows Firewall may ask you to allow AudioRouter on private networks. A larger buffer rides out Wi-Fi hiccups but adds delay.</>}
-      {!thisPc && <>{" "}To find a computer's IP address, run <code>ipconfig</code> and read its IPv4 Address.</>}</small>
-  </div>;
+      <small>
+        {sending ? (
+          <>
+            On the other computer, add a Network Receive node with{" "}
+            {thisPc ? (
+              <>
+                this computer's address <code>{thisPc}</code>
+              </>
+            ) : (
+              "this computer's IP address"
+            )}{" "}
+            as the sender and the same port. Both computers must be on the same local network. Audio is sent
+            unencrypted, so use it only on a network you trust.
+          </>
+        ) : (
+          <>
+            On the other computer, add a Network Send node with{" "}
+            {thisPc ? (
+              <>
+                this computer's address <code>{thisPc}</code>
+              </>
+            ) : (
+              "this computer's IP address"
+            )}{" "}
+            and port {portValid ? portNumber : "the same port"}. Audio from any other address is ignored. The first
+            time, Windows Firewall may ask you to allow AudioRouter on private networks. A larger buffer rides out Wi-Fi
+            hiccups but adds delay.
+          </>
+        )}
+        {!thisPc && (
+          <>
+            {" "}
+            To find a computer's IP address, run <code>ipconfig</code> and read its IPv4 Address.
+          </>
+        )}
+      </small>
+    </div>
+  );
 }
