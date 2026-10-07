@@ -1,0 +1,96 @@
+# cargo-deny policy for AudioRouter (code review P2-4).
+#
+# CI runs, for both Cargo workspaces (the root and src-tauri):
+#   cargo deny --manifest-path <Cargo.toml> check --config deny.toml \
+#     advisories licenses sources bans
+#
+# AudioRouter ships only for Windows 11 x64, so the graph is limited to that
+# target; Linux/macOS-only crates never reach a release and are not checked.
+
+[graph]
+targets = ["x86_64-pc-windows-msvc"]
+all-features = false
+
+[output]
+feature-depth = 1
+
+[advisories]
+# RustSec advisory database. Vulnerabilities always fail. Unmaintained and
+# unsound notices fail too unless listed below with a reason and a review
+# date; yanked crates fail.
+unmaintained = "all"
+yanked = "deny"
+ignore = [
+    # src-tauri only. The rust-unic crates are unmaintained (informational,
+    # no vulnerability). They come from urlpattern 0.3 through tauri-utils
+    # 2.9.3, which matches capability URLs. `cargo update -p tauri-utils`
+    # reaches 2.10.1 (urlpattern 0.6, no unic) but also moves ctor, brotli,
+    # cssparser, html5ever and selectors, so it belongs in a Tauri upgrade
+    # validated on Windows (Dependabot proposes it), not in this lockfile.
+    # Review by 2027-01-07, or remove when tauri-utils >= 2.10 is locked.
+    { id = "RUSTSEC-2025-0075", reason = "unic-char-range unmaintained, via tauri-utils/urlpattern 0.3; review 2027-01-07" },
+    { id = "RUSTSEC-2025-0080", reason = "unic-common unmaintained, via tauri-utils/urlpattern 0.3; review 2027-01-07" },
+    { id = "RUSTSEC-2025-0081", reason = "unic-char-property unmaintained, via tauri-utils/urlpattern 0.3; review 2027-01-07" },
+    { id = "RUSTSEC-2025-0098", reason = "unic-ucd-version unmaintained, via tauri-utils/urlpattern 0.3; review 2027-01-07" },
+    { id = "RUSTSEC-2025-0100", reason = "unic-ucd-ident unmaintained, via tauri-utils/urlpattern 0.3; review 2027-01-07" },
+]
+
+[licenses]
+# The set in use on 2026-10-07 (`cargo deny list` for both workspaces, Windows
+# target). The release THIRD-PARTY-NOTICES.txt is generated from the same
+# Cargo metadata (tools/release/prepare-artifacts.ps1), so a new license here
+# must be reviewed for GPL-3.0 compatibility before it is added.
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "MIT-0",
+    "0BSD",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "Zlib",
+    "Unicode-3.0",
+    "Unlicense",
+    "CC0-1.0",
+    # Weak copyleft, file/library-level; compatible with GPL-3.0-only.
+    # MPL-2.0: symphonia (decoders), cssparser/selectors (Tauri), option-ext.
+    "MPL-2.0",
+    # LGPL-3.0: mp3lame-encoder / mp3lame-sys (MP3 recording); see the
+    # clarifications below.
+    "LGPL-3.0-only",
+]
+confidence-threshold = 0.8
+# One allow list serves both workspaces; src-tauri uses a superset of the
+# root's licenses, so an allowance unused in one of them is expected.
+unused-allowed-license = "allow"
+
+# AudioRouter's own crates are GPL-3.0-only and `publish = false`.
+[licenses.private]
+ignore = true
+
+# Both crates declare the deprecated SPDX id "LGPL-3.0"; their LICENSE file is
+# the GNU LGPL version 3 text with no "or later" grant.
+[[licenses.clarify]]
+crate = "mp3lame-encoder"
+expression = "LGPL-3.0-only"
+license-files = []
+
+[[licenses.clarify]]
+crate = "mp3lame-sys"
+expression = "LGPL-3.0-only"
+license-files = []
+
+[bans]
+# Duplicate versions are common in the Tauri tree; report them, do not fail.
+multiple-versions = "warn"
+wildcards = "deny"
+# Path dependencies inside the workspace have no version requirement.
+allow-wildcard-paths = true
+highlight = "all"
+
+[sources]
+# Only crates.io. A git or alternative-registry dependency must be added here
+# deliberately.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

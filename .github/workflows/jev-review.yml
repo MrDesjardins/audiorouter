@@ -19,21 +19,23 @@ jobs:
     # deliberately not used: it would run PR code with base-repo secrets.
     if: github.event.pull_request.head.repo.full_name == github.repository
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       # Pinned to a commit so a change in the tool repo never runs here with
       # this repo's secrets until the pin is deliberately updated.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: MrDesjardins/jevrealtimecodecheck
           ref: 62072b065bd9415f89f077f452961cd5741e7105
           path: .jev-tool
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 20
+          node-version: 22.14.0
+          # This job holds secrets; never restore a cache written elsewhere.
+          package-manager-cache: false
 
       - name: Install Jev tool
         working-directory: .jev-tool

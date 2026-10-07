@@ -1,0 +1,45 @@
+# Dependency update proposals (code review P2-4). Weekly, with minor and
+# patch updates grouped into one pull request per ecosystem so the queue
+# stays small; major updates arrive one per pull request. Every proposal
+# still has to pass CI (and, for audio paths, the qualification AGENTS.md
+# asks for) before it is merged.
+version: 2
+updates:
+  # Three separate Cargo lockfiles: the root workspace, the desktop shell
+  # workspace and the native WASAPI probe (excluded from the root).
+  - package-ecosystem: cargo
+    directories:
+      - "/"
+      - "/src-tauri"
+      - "/tools/m00-wasapi-probe"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      cargo-minor-and-patch:
+        update-types: [minor, patch]
+
+  # Shipped or release-built npm projects. examples/ and videos/ are not
+  # part of a release and are left out.
+  - package-ecosystem: npm
+    directories:
+      - "/ui"
+      - "/contracts"
+      - "/tools/streamdeck"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions-minor-and-patch:
+        update-types: [minor, patch]

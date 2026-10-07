@@ -360,6 +360,28 @@ P2 and P3 remain a backlog.
   - Bump `actions/checkout` and `actions/setup-node`.
 - **Verify.** The jobs run on pull requests, and the licenses match
   `THIRD-PARTY-NOTICES.txt`.
+- **Status (2026-10-07, user request).** Done, except a first CI run.
+  - `.github/dependabot.yml`: weekly Cargo (root, `src-tauri`,
+    `tools/m00-wasapi-probe`), npm (`ui`, `contracts`, `tools/streamdeck`)
+    and Actions updates, minor and patch grouped.
+  - `deny.toml` plus a `supply-chain` CI job (Linux) for both Cargo
+    workspaces, limited to the Windows target, and `npm audit --omit=dev
+    --audit-level=high` for the three npm projects. Licenses allowed:
+    Apache-2.0, MIT, MIT-0, 0BSD, BSD-2/3-Clause, Zlib, Unicode-3.0,
+    Unlicense, CC0-1.0, MPL-2.0 and LGPL-3.0-only (mp3lame). The workspace
+    crates are now `publish = false`.
+  - Advisories: the root workspace is clean. `src-tauri` has five
+    "unmaintained" notices for the rust-unic crates (RUSTSEC-2025-0075,
+    -0080, -0081, -0098, -0100), via `tauri-utils` 2.9.3 and `urlpattern`
+    0.3. They are ignored with a reason until 2027-01-07, because the
+    `tauri-utils` 2.10 update also moves several Tauri build crates and
+    needs a Windows check. npm: no runtime findings; a high dev-only
+    `source-map-js` finding in `ui` was fixed in the lockfile (1.2.2).
+  - `actions/checkout` v7.0.1, `setup-node` v7.0.0 and `upload-artifact`
+    v7.0.1 (all Node 24), pinned by SHA in every workflow; the Pages
+    actions too.
+  - Remaining: `THIRD-PARTY-NOTICES.txt` lists only the root workspace's
+    crates, not the shell's Tauri tree (`src-tauri/Cargo.lock`).
 
 ### P2-5 Network audio accepts any packet from the sender's IP
 
@@ -464,6 +486,29 @@ P2 and P3 remain a backlog.
     software render path and records memory and CPU against NFR-05/06.
   - Time the app's startup in the installer smoke test.
 - **Verify.** Trend charts in the job summary.
+- **Status (2026-10-07, user request).** Done, except a first run on
+  GitHub. `.github/workflows/quality.yml` runs nightly and on demand, on
+  Windows:
+  - **Coverage** (never gated): `cargo llvm-cov` for the whole workspace
+    (per-crate table, portable crates totalled apart) and for `src-tauri`;
+    Vitest with `@vitest/coverage-v8`. Reports are uploaded. Local Linux
+    baseline: portable crates 86.5 % of lines, UI 74.5 % of lines.
+  - **Soak:** `crates/engine/examples/soak.rs` runs a heavier W1 (11 tools,
+    a Mixer, three outputs) through `RealtimeMixerFanout` for 20 minutes,
+    unpaced. It fails on live-heap growth of 1 MiB or more after warm-up
+    (NFR-06 allows <10 MiB over 8 h), on any allocation while processing,
+    or when p99 per quantum exceeds 50 % of the 2.67 ms quantum (NFR-04
+    asks p99.9 on the reference PC; hosted runners are too noisy for that,
+    so p99.9 is reported). The workflow also samples Windows private bytes
+    and fails on 10 MiB growth. Mean time per quantum is reported as a
+    share of the machine against NFR-05 (engine only, a lower bound).
+  - **Startup (NFR-14, partial):** builds the release shell and runs the
+    `fresh_install_shell` test, which now records the time from launch to
+    the backend's first answer. Missing: a signal that the window's UI is
+    ready (the 3 s warm / 8 s cold target), cold versus warm starts, and
+    W1 startup with devices. NFR-11 (24 h, sleep/resume) stays manual.
+  - **Trend:** a CSV history in the Actions cache; each run prints its last
+    14 rows as a table (a table, not a chart).
 
 ## P3 — when convenient
 

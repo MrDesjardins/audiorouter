@@ -224,6 +224,20 @@ npm.cmd --prefix ui run e2e   # Playwright in Edge, a separate CI job
 Tests that need real audio devices are `#[ignore]`d; run them on a PC with
 endpoints using `cargo test -p audiorouter-windows-audio -- --ignored`.
 
+When dependencies change, a Linux job checks them against `deny.toml`
+(RustSec advisories, licenses, crate sources) and runs
+`npm audit --omit=dev` for `ui`, `contracts` and `tools/streamdeck`; run
+`cargo deny check` and
+`cargo deny --manifest-path src-tauri/Cargo.toml check` locally. Dependabot
+proposes weekly updates (`.github/dependabot.yml`).
+
+A nightly (and manual) `quality.yml` workflow reports Rust (`cargo llvm-cov`)
+and UI (`npm --prefix ui test -- --coverage`) coverage, runs a 20-minute
+engine soak and times a fresh-install startup, with a trend table in the
+job summary. Coverage is never a gate. Run the soak locally with
+`cargo run --release -p audiorouter-engine --example soak`
+(`AUDIOROUTER_SOAK_SECONDS` sets the duration; default 10).
+
 Format with `cargo fmt --all` and
 `cargo fmt --manifest-path src-tauri/Cargo.toml`. To format staged Rust files
 automatically at commit time, run once per clone:

@@ -211,6 +211,23 @@ protocol and plugin-host tests pass. Windows CI and hardware runs not done
 here; the Jev rule check was not run (no tool checkout or key).
 Rollback: revert the commit.
 
+- **P2-4 supply chain:** Dependabot, `deny.toml` and a `supply-chain` CI
+  job (cargo deny for both workspaces, `npm audit --omit=dev` for ui,
+  contracts and Stream Deck); actions bumped to Node 24 releases. Five
+  unmaintained rust-unic advisories in `src-tauri` are ignored until
+  2027-01-07 (needs a Tauri update checked on Windows). Local: both
+  `cargo deny` runs and all three audits pass. Details in the
+  [review](../future/code-review-2026-10-07.md#p2-4-dependency-and-supply-chain-checks-are-missing).
+  Next action: first CI run of the `supply-chain` job.
+- **P2-8 coverage and soak:** nightly/manual `quality.yml` (Windows):
+  `cargo llvm-cov` and Vitest coverage (not gated), a 20-minute engine soak
+  (`crates/engine/examples/soak.rs`, gates on heap growth, allocations and
+  p99 per quantum), and the backend part of NFR-14 timed by
+  `fresh_install_shell`. Local: 10 s soak passes; UI coverage 74.5 % of
+  lines; portable-crate coverage 86.5 %. UI-ready startup time is not
+  measured yet. Next action: dispatch `quality.yml` once and record the
+  first numbers.
+
 ### Code review P0 and P1 fixes (2026-10-07, user request)
 
 The user asked to fix every P0 and P1 item in the
