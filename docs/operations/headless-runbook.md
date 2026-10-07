@@ -228,7 +228,9 @@ An enrolled local client can launch:
 audiorouter mcp serve --client-id enrolled-client --database C:\path\audiorouter.sqlite
 ```
 
-Use `--pipe \\.\pipe\AudioRouter` when a running backend exposes that local named pipe. MCP stdout is reserved for newline-delimited JSON-RPC; diagnostics belong on stderr. The adapter exposes read tools/resources and forwards API calls through enrolled permissions. It does not accept remote HTTP connections or stream raw audio to tools.
+Use `--pipe \\.\pipe\audiorouter-control` when the desktop app is running (its MCP tab shows the exact command). Without `--pipe`, `mcp serve` refuses to start on the app's own database while the app is running, so two control planes never edit the same data. MCP stdout is reserved for newline-delimited JSON-RPC; diagnostics belong on stderr. A malformed line is answered with a JSON-RPC parse error (`-32700`) and the session continues.
+
+By default `tools/list` shows the task-level tools (sessions, adding and connecting tools, settings, play, mute, levels, devices, recordings). Add `--advanced-tools` to also list and allow the internal ones: native pumps and bridges, virtual-device plans and provisioning, low-level recorder steps, OS transitions, raw graph plans and `call_api`. The adapter exposes read tools/resources and forwards API calls through enrolled permissions. It does not accept remote HTTP connections or stream raw audio to tools.
 
 The resource catalog includes capabilities, node schemas, bounded session
 snapshots, redacted diagnostics, and headless workflow guidance. Focused tools

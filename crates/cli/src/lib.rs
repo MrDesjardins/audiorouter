@@ -2090,6 +2090,11 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
             "--database path must be absolute".into(),
         ));
     }
+    if pipe_name.is_none() && is_running_app_database(&database_path) {
+        return Err(CliError::InvalidArguments(format!(
+            "AudioRouter is running and owns this database; add --pipe {APP_CONTROL_PIPE} so MCP works through its backend"
+        )));
+    }
     let storage =
         Storage::open(database_path).map_err(|error| CliError::Storage(format!("{error:?}")))?;
     let mut plane = ControlPlane::with_storage("mcp", storage);
@@ -2099,18 +2104,31 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
         .ok_or_else(|| {
             CliError::InvalidArguments("client is not enrolled or has been revoked".into())
         })?;
+    let advanced_tools = args.iter().any(|value| value == "--advanced-tools");
     let stdin = std::io::stdin();
     let mut stdout = std::io::BufWriter::new(std::io::stdout().lock());
     let mut initialized = false;
     for line in stdin.lock().lines() {
         let line = line.map_err(|error| CliError::Io(error.to_string()))?;
+        // One bad message is answered with a JSON-RPC error; the session
+        // stays open for the client's next request.
         if line.len() > 4 * 1024 * 1024 {
-            return Err(CliError::InvalidArguments(
-                "MCP message exceeds the 4 MiB limit".into(),
-            ));
+            write_mcp_message(
+                &mut stdout,
+                &mcp_error(None, -32600, "MCP message exceeds the 4 MiB limit"),
+            )?;
+            continue;
         }
-        let message: Value = serde_json::from_str(&line)
-            .map_err(|error| CliError::InvalidArguments(format!("invalid MCP JSON: {error}")))?;
+        let message: Value = match serde_json::from_str(&line) {
+            Ok(message) => message,
+            Err(_) => {
+                write_mcp_message(
+                    &mut stdout,
+                    &mcp_error(None, -32700, "parse error: invalid JSON"),
+                )?;
+                continue;
+            }
+        };
         let Some(method) = message.get("method").and_then(Value::as_str) else {
             continue;
         };
@@ -2137,8 +2155,20 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
             }
             "notifications/initialized" => None,
             "tools/list" if initialized => Some(json!({
-                "jsonrpc": "2.0", "id": id, "result": { "tools": mcp_tools() }
+                "jsonrpc": "2.0", "id": id, "result": { "tools": mcp_listed_tools(advanced_tools) }
             })),
+            "tools/call"
+                if initialized
+                    && !advanced_tools
+                    && !message["params"]["name"]
+                        .as_str()
+                        .is_some_and(is_default_mcp_tool) =>
+            {
+                Some(mcp_tool_error(
+                    id,
+                    "This is an advanced AudioRouter tool. Start the MCP server with --advanced-tools to use it.",
+                ))
+            }
             "tools/call" if initialized => {
                 let response = mcp_tool_call(
                     &mut plane,
@@ -2171,17 +2201,118 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
             )),
         };
         if let Some(response) = response {
-            serde_json::to_writer(&mut stdout, &response)
-                .map_err(|error| CliError::Io(error.to_string()))?;
-            stdout
-                .write_all(b"\n")
-                .map_err(|error| CliError::Io(error.to_string()))?;
-            stdout
-                .flush()
-                .map_err(|error| CliError::Io(error.to_string()))?;
+            write_mcp_message(&mut stdout, &response)?;
         }
     }
     Ok(())
+}
+
+/// The desktop app's control pipe (`src-tauri` `DEFAULT_PIPE_NAME`).
+const APP_CONTROL_PIPE: &str = r"\\.\pipe\audiorouter-control";
+
+/// True when `database` is the desktop app's own database and the app's
+/// backend answers on its pipe. An MCP server without `--pipe` would then
+/// run a second control plane over the same data, so its edits and device
+/// actions would race the app's.
+fn is_running_app_database(database: &std::path::Path) -> bool {
+    let Some(app_database) = std::env::var_os("LOCALAPPDATA").map(|root| {
+        std::path::PathBuf::from(root)
+            .join("AudioRouter")
+            .join("state.sqlite")
+    }) else {
+        return false;
+    };
+    let same_file = match (
+        std::fs::canonicalize(database),
+        std::fs::canonicalize(&app_database),
+    ) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => false,
+    };
+    if !same_file {
+        return false;
+    }
+    let request = json!({ "jsonrpc": "2.0", "id": 1, "method": "system.describe" });
+    audiorouter_protocol::encode_frame(&request)
+        .ok()
+        .is_some_and(|frame| audiorouter_transport::round_trip(APP_CONTROL_PIPE, &frame).is_ok())
+}
+
+fn write_mcp_message(output: &mut impl Write, message: &Value) -> Result<(), CliError> {
+    serde_json::to_writer(&mut *output, message)
+        .map_err(|error| CliError::Io(error.to_string()))?;
+    output
+        .write_all(b"\n")
+        .map_err(|error| CliError::Io(error.to_string()))?;
+    output
+        .flush()
+        .map_err(|error| CliError::Io(error.to_string()))
+}
+
+/// Task-level tools an assistant sees by default. The rest (native pumps and
+/// bridges, virtual-device apply, low-level recorder steps, OS transitions,
+/// raw graph plans and `call_api`) are listed only with `--advanced-tools`:
+/// every listed schema costs the assistant context, and internal plumbing
+/// invites wrong choices. The backend's permission checks apply either way.
+const DEFAULT_MCP_TOOLS: &[&str] = &[
+    "get_recipes",
+    "list_sessions",
+    "open_session",
+    "create_session",
+    "get_session_summary",
+    "get_session",
+    "list_tool_kinds",
+    "list_processors",
+    "add_tool",
+    "remove_tool",
+    "connect_nodes",
+    "disconnect_nodes",
+    "change_settings",
+    "toggle_setting",
+    "play",
+    "toggle_play",
+    "control_session",
+    "toggle_mic_mute",
+    "set_privacy_mute",
+    "get_levels",
+    "describe_capabilities",
+    "list_devices",
+    "list_applications",
+    "list_plugins",
+    "inspect_routes",
+    "export_session",
+    "plan_session_import",
+    "commit_session_import",
+    "list_recordings",
+    "list_live_recorders",
+    "start_recording",
+    "stop_recording",
+    "get_recording",
+    "set_recording_metadata",
+    "rename_recording",
+    "get_startup",
+    "get_operation",
+    "cancel_operation",
+];
+
+fn is_default_mcp_tool(name: &str) -> bool {
+    DEFAULT_MCP_TOOLS.contains(&name)
+}
+
+fn mcp_listed_tools(advanced: bool) -> Value {
+    let tools = mcp_tools();
+    if advanced {
+        return tools;
+    }
+    Value::Array(
+        tools
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|tool| tool["name"].as_str().is_some_and(is_default_mcp_tool))
+            .cloned()
+            .collect(),
+    )
 }
 
 /// Keep an auditable, local summary of assistant tool use. Argument values are
@@ -4717,6 +4848,31 @@ mod tests {
         let transition_payload: Value = serde_json::from_str(transition_content).unwrap();
         assert_eq!(transition_payload["result"]["transition"], "lock");
         assert_eq!(mcp_tools().as_array().unwrap().len(), 76);
+        // The default list is the task-level subset; every default name is a
+        // real tool and every tool the recipes mention is in it.
+        let all = mcp_tools();
+        let all_names = all
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|tool| tool["name"].as_str())
+            .collect::<Vec<_>>();
+        for name in DEFAULT_MCP_TOOLS {
+            assert!(all_names.contains(name), "unknown default tool {name}");
+        }
+        assert_eq!(
+            mcp_listed_tools(false).as_array().unwrap().len(),
+            DEFAULT_MCP_TOOLS.len()
+        );
+        assert_eq!(mcp_listed_tools(true), all);
+        for name in all_names.iter().filter(|name| MCP_RECIPES.contains(**name)) {
+            assert!(
+                is_default_mcp_tool(name),
+                "recipes use advanced tool {name}"
+            );
+        }
+        assert!(!is_default_mcp_tool("pump_native_multi_inputs"));
+        assert!(!is_default_mcp_tool("call_api"));
         let tools = mcp_tools();
         let multi_input = tools
             .as_array()
