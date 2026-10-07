@@ -343,6 +343,19 @@ P2 and P3 remain a backlog.
   - Offer a "copy support bundle" action that zips the logs and app
     version.
 - **Verify.** One action produces matching IDs in all three logs.
+- **Status (2026-10-07, commit `00ecb1ed`).** Done in code; Windows proof
+  pending. Requests carry an optional top-level `requestId` (1–32
+  characters, `[A-Za-z0-9-]`; invalid values are dropped). The window makes
+  one per request, the tray one per action, the HTTP adapter one per request
+  (or a valid `X-Request-Id`, echoed in the response), and MCP one per tool
+  call. `shell.jsonl`, `backend.jsonl` and `mcp-activity.jsonl` record it,
+  and failed window requests add a client diagnostics row with it.
+  `diagnostics.getVerbose`/`setVerbose` give a one-hour verbose window
+  (routine reads and `durationMs`). Logs → Copy support bundle writes a
+  local ZIP. Linux checks: protocol unit tests, UI tests, the Logs tab in
+  Chromium in three themes, and Windows-target Clippy. The transport, shell
+  and MCP tests and an end-to-end ID match need Windows CI or an attended
+  run.
 
 ### P2-4 Dependency and supply-chain checks are missing
 
