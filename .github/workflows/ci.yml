@@ -1,8 +1,12 @@
 name: AudioRouter CI
 
 # AudioRouter is a Windows 11 x64 product: the audio backend, shell and most
-# crates build only for Windows, so CI runs on Windows alone. The toolchain
-# matches the manual release workflow so lints do not change underneath us.
+# crates build only for Windows, so the build and test job runs on Windows.
+# The toolchain matches the manual release workflow so lints do not change
+# underneath us.
+#
+# Pull requests run only the checks for the areas they touch (see the
+# `changes` job). Pushes to main and manual runs always run everything.
 on:
   push:
     branches: [main]
@@ -17,8 +21,81 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect changed areas
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.detect.outputs.backend }}
+      contracts: ${{ steps.detect.outputs.contracts }}
+      ui: ${{ steps.detect.outputs.ui }}
+      probe: ${{ steps.detect.outputs.probe }}
+      sdk: ${{ steps.detect.outputs.sdk }}
+      release: ${{ steps.detect.outputs.release }}
+      windows: ${{ steps.detect.outputs.windows }}
+      rust: ${{ steps.detect.outputs.rust }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # A pull_request checkout is the merge commit; its first parent is
+          # the base branch tip, so HEAD^1..HEAD is exactly the PR's change.
+          fetch-depth: 2
+
+      - name: Classify changed files
+        id: detect
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          areas="backend contracts ui probe sdk release"
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            for area in $areas; do echo "$area=true" >> "$GITHUB_OUTPUT"; done
+          else
+            files=$(git diff --name-only HEAD^1 HEAD)
+            echo "Changed files:"; echo "$files"
+            # Markdown never affects a build or test; docs are validated in
+            # the docs job. A change to this workflow re-runs everything.
+            code=$(grep -vE '\.md$' <<<"$files" || true)
+            all=false
+            grep -qE '^\.github/workflows/ci\.yml$' <<<"$files" && all=true
+            has() { [ "$all" = true ] || grep -qE "$1" <<<"$code"; }
+            out() { if has "$2"; then echo "$1=true"; else echo "$1=false"; fi >> "$GITHUB_OUTPUT"; }
+            out backend   '^(crates/|src-tauri/|tests/|examples/|Cargo\.(toml|lock)$|rust-toolchain\.toml$)'
+            out contracts '^(contracts/|tools/contracts/)'
+            out ui        '^(ui/|contracts/)'
+            out probe     '^(tools/m00-wasapi-probe/|tools/m00-native-wasapi-probe/|tests/acceptance/m00-)'
+            out sdk       '^(tools/m06-vst3-sdk/|tests/acceptance/m06-)'
+            out release   '^(tools/release/|drivers/|tests/acceptance/m08-|src-tauri/tauri[^/]*\.json$|src-tauri/Cargo\.toml$|ui/package\.json$)'
+          fi
+          # Derived flags, from the area flags just written.
+          declare -A flag
+          while IFS='=' read -r key value; do flag[$key]=$value; done < "$GITHUB_OUTPUT"
+          any() { for area in "$@"; do [ "${flag[$area]}" = true ] && return 0; done; return 1; }
+          if any $areas; then echo "windows=true"; else echo "windows=false"; fi >> "$GITHUB_OUTPUT"
+          if any backend contracts probe release; then echo "rust=true"; else echo "rust=false"; fi >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
+  docs:
+    name: Validate documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install pinned Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.14.0
+          package-manager-cache: false
+
+      - name: Validate documentation
+        run: node tools/docs/validate.mjs
+
   windows:
     name: Windows build, tests and release preparation
+    needs: changes
+    if: needs.changes.outputs.windows == 'true'
     runs-on: windows-latest
     timeout-minutes: 150
     steps:
@@ -32,16 +109,14 @@ jobs:
           package-manager-cache: false
 
       - name: Install pinned Rust toolchain
+        if: needs.changes.outputs.rust == 'true'
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # 2026-07-16 action revision
         with:
           toolchain: 1.96.0
           components: rustfmt, clippy
 
-      - name: Validate documentation
-        shell: pwsh
-        run: ./tests/acceptance/docs.ps1
-
       - name: Check formatting
+        if: needs.changes.outputs.backend == 'true'
         shell: pwsh
         run: |
           cargo fmt --all -- --check
@@ -49,32 +124,43 @@ jobs:
           cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
       - name: Strict Clippy (workspace)
+        if: needs.changes.outputs.backend == 'true'
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
       - name: Strict Clippy (desktop shell)
+        if: needs.changes.outputs.backend == 'true'
         run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
 
       - name: Test workspace (no audio hardware)
+        if: needs.changes.outputs.backend == 'true'
         run: cargo test --workspace --locked --exclude audiorouter-windows-audio
 
       - name: Check Windows audio adapter
+        if: needs.changes.outputs.backend == 'true'
         run: cargo check -p audiorouter-windows-audio --locked
 
       - name: Test desktop shell
+        if: needs.changes.outputs.backend == 'true'
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked
 
       - name: Check native Rust WASAPI probe
+        if: needs.changes.outputs.probe == 'true'
         run: cargo check --manifest-path tools/m00-wasapi-probe/Cargo.toml --locked
 
       - name: Compile native WASAPI probe
+        if: needs.changes.outputs.probe == 'true'
         shell: pwsh
         run: ./tests/acceptance/m00-native-build.ps1
 
       - name: CLI parity acceptance
+        if: needs.changes.outputs.backend == 'true'
         shell: pwsh
         run: ./tests/acceptance/m01-cli.ps1 -AllowNoAudioEndpoints
 
+      # The drift check compares the TypeScript contracts with what the Rust
+      # CLI discovers, so a change on either side runs it.
       - name: Install contract dependencies and check API drift
+        if: needs.changes.outputs.contracts == 'true' || needs.changes.outputs.backend == 'true'
         shell: pwsh
         run: |
           npm ci --prefix contracts
@@ -83,10 +169,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           npm --prefix contracts run check:drift
 
+      # The release build below uses the Tauri CLI from ui/node_modules.
       - name: Install UI dependencies
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.release == 'true'
         run: npm ci --prefix ui
 
       - name: Test and build UI
+        if: needs.changes.outputs.ui == 'true'
         shell: pwsh
         run: |
           npm --prefix ui test
@@ -94,10 +183,12 @@ jobs:
           npm --prefix ui run build
 
       - name: Verify SDK installer provenance
+        if: needs.changes.outputs.sdk == 'true'
         shell: pwsh
         run: ./tests/acceptance/m06-sdk-installer.ps1
 
       - name: Test release tooling
+        if: needs.changes.outputs.release == 'true'
         shell: pwsh
         run: |
           ./tools/release/test-prepare-artifacts.ps1
@@ -105,5 +196,6 @@ jobs:
           ./tools/release/test-runbook-command.ps1
 
       - name: Build and verify the unsigned installer and release assets
+        if: needs.changes.outputs.release == 'true'
         shell: pwsh
         run: ./tests/acceptance/m08-release.ps1

@@ -9,3 +9,4 @@
 *.sys
 *.cat
 /ui/dist-review-*/
+/.env
