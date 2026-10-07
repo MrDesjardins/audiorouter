@@ -37,6 +37,9 @@ export class ErrorBoundary extends Component<BoundaryProps, BoundaryState> {
   }
 
   componentDidCatch(error: unknown, _info: ErrorInfo): void {
+    // React does not rethrow a caught render error. Report it like an
+    // uncaught one so browser tests and the window error log still see it.
+    if (typeof globalThis.reportError === "function") globalThis.reportError(error);
     try {
       this.props.onError?.(renderErrorDiagnostic(this.props.area, error));
     } catch {
