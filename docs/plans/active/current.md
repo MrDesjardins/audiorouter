@@ -179,6 +179,19 @@ costs and phases in the [driver track](../future/M03-driver-signing.md).
   and new code). `cargo bench --bench realtime` (Linux container, release):
   Gain 23.4 → 3.5 µs/quantum, ParametricEq 24.3 → 3.7, Denoise 66.3 → 46.4,
   route-32-tools 680.0 → 507.6. Continuity harness on Windows not run.
+- **P2-2 (UI lint, format, App.tsx).** ESLint (typescript-eslint,
+  react-hooks) and Prettier added to `ui/`; one mechanical format commit
+  (`2697774b`); CI runs `format:check` and `lint`, the pre-commit hook
+  formats staged UI files. 0 lint errors, 25 reviewed `exhaustive-deps`
+  warnings. A proven stale closure is fixed: Ctrl+Alt+S after Save
+  started a temporary preview instead of the saved session
+  (`e2e/shortcut-after-save.pw.ts`). `App.tsx` 8,543 (formatted) → 3,069
+  lines: helpers, four polling hooks and seven panels moved verbatim to
+  their own files. Linux container: tsc clean, Vitest 56 files / 498
+  tests before and after, build OK, harness-only Playwright (Linux
+  Chromium) 152 → 153 passed, HTML of every tab and node inspector
+  identical in three themes. Not run: backend-harness Playwright, Windows
+  CI. Next: moving AppContent's action handlers (state flow) into hooks.
 
 **P3-1 unsafe audit.** Every `unsafe` block and impl now has a
 `// SAFETY:` comment with its invariants (pointer and handle validity,
