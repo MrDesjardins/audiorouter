@@ -92,7 +92,7 @@ Core Ultra 9.
 2. Under **Download Windows 11 Disk Image (ISO) for x64 devices**, choose
    **Windows 11 (multi-edition ISO for x64 devices)**, then your language,
    then **64-bit Download**.
-3. Save it as `D:\ISO\Win11.iso` (about 6–7 GB).
+3. Save it as `E:\ISO\Win11.iso` (about 6–7 GB).
 
 The VM does not need a product key or activation for these tests; an
 unactivated Windows only shows a watermark and limits personalization.
@@ -101,8 +101,8 @@ unactivated Windows only shows a watermark and limits personalization.
 
 Create two folders on the D: drive (it has the most free space):
 
-- `D:\VMs` — VirtualBox will store the VM's virtual disk here (up to 80 GB).
-- `D:\ar-share` — the exchange folder between the PC and the VM. **Leave it
+- `E:\VMs` — VirtualBox will store the VM's virtual disk here (up to 80 GB).
+- `E:\ar-share` — the exchange folder between the PC and the VM. **Leave it
   empty**; Part 4 fills it.
 
 ## Part 2: Create the VM (once)
@@ -114,17 +114,17 @@ Open **Oracle VirtualBox** and click **New**.
 | Field | Value |
 | --- | --- |
 | Name | `AR-DriverTest` |
-| Folder | `D:\VMs` |
-| ISO Image | `D:\ISO\Win11.iso` |
+| Folder | `E:\VMs` |
+| ISO Image | `E:\ISO\Win11.iso` |
 | Type / Version | detected automatically: Microsoft Windows, Windows 11 (64-bit) |
-| Skip Unattended Installation | **leave unticked** (VirtualBox installs Windows for you) |
+| Proceed with Unattended Installation | **tick it** (VirtualBox installs Windows for you). VirtualBox 7.0 shows the opposite box, "Skip Unattended Installation": leave that one unticked. |
 
 **Unattended guest OS install setup** (next page)
 
 | Field | Value |
 | --- | --- |
 | Username | `artest` |
-| Password | choose one and write it down |
+| Password | 123123123 |
 | Hostname | `AR-DriverTest` (the test scripts check this exact name) |
 | Domain name | leave as proposed |
 | Product key | leave empty |
@@ -189,13 +189,13 @@ and run:
 
 ```powershell
 cd C:\code\audiorouter
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\prepare-vm-share.ps1 -Share D:\ar-share
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\prepare-vm-share.ps1 -Share E:\ar-share
 ```
 
-It takes 5–10 minutes and ends with `Ready: D:\ar-share`. It builds and
+It takes 5–10 minutes and ends with `Ready: E:\ar-share`. It builds and
 places:
 
-| In `D:\ar-share` | What it is |
+| In `E:\ar-share` | What it is |
 | --- | --- |
 | `driver\` | The test-signed driver package (`.inf`, `.sys`, `.cat`), `package.json`, logs, and `AudioRouterTest.cer` (public certificate only) |
 | `tools\audiorouter-driver-helper.exe` | The installer helper (debug build: the only build that accepts a test-signed driver, and only when a test explicitly allows it) |
@@ -213,7 +213,7 @@ the test certificate stays in your Windows certificate store on the PC.
 
 1. With the VM **shut down**, open its **Settings → Shared Folders**.
 2. Click the folder icon with **+**:
-   - Folder Path: `D:\ar-share`
+   - Folder Path: `E:\ar-share`
    - Folder Name: `ar-share`
    - **Read-only: unticked** (the VM copies its results back here)
    - **Auto-mount: ticked**, Mount point: `Z:`
@@ -411,8 +411,8 @@ This proves one Windows user cannot take over a cable another user is using.
 ## Part 6: Sending the results
 
 After `collect` and `Copy-Item C:\ar\evidence-*.zip Z:\`, the zip is in
-`D:\ar-share` on your PC. Tell the developer agent which session it was and
-the zip's name (for example "Session 2, `D:\ar-share\evidence-20261007-201500.zip`").
+`E:\ar-share` on your PC. Tell the developer agent which session it was and
+the zip's name (for example "Session 2, `E:\ar-share\evidence-20261007-201500.zip`").
 The agent unpacks it, checks every number, records it in
 `docs/plans/active/evidence/`, and fixes what failed. The evidence contains
 device names, endpoint IDs and test tones only, never a microphone
@@ -444,8 +444,8 @@ the VM can harm the PC.
 When the developer agent changes the driver, refresh the files without
 redoing Parts 2–4:
 
-1. On the PC, empty `D:\ar-share` (keep your evidence zips somewhere else
-   first) and run `tools\vm\prepare-vm-share.ps1 -Share D:\ar-share` again.
+1. On the PC, empty `E:\ar-share` (keep your evidence zips somewhere else
+   first) and run `tools\vm\prepare-vm-share.ps1 -Share E:\ar-share` again.
 2. Restore snapshot 2, start the VM, and in administrator PowerShell:
    `robocopy Z:\ C:\ar /MIR /XF evidence-*.zip` then
    `Get-ChildItem C:\ar -Recurse | Unblock-File`.
