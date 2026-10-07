@@ -165,6 +165,21 @@ costs and phases in the [driver track](../future/M03-driver-signing.md).
 
 ## Open work
 
+### Code review P2/P3 follow-ups (2026-10-07, user request)
+
+- **P2-7 (DSP loops).** Engine block kernels (fixed delay, gain ramp,
+  interleave/PCM16 conversions, channel matrix, `map_from`,
+  `mix_mapped_from`, linear and streaming resamplers, voice-chain
+  interleave) borrow planar channel slices once and run channel-major with
+  `zip`/`chunks_exact`; their per-sample `unwrap`s are gone. The fixed
+  per-route cost was `BlockMeter::observe` (80% of a bare Gain route in
+  callgrind: eight meters per quantum, each making about eight passes); it now
+  makes one vectorizable pass plus the sequential f64 sums. Output is
+  bit-identical (`tests/planar_kernels_match_reference.rs` passes on the old
+  and new code). `cargo bench --bench realtime` (Linux container, release):
+  Gain 23.4 → 3.5 µs/quantum, ParametricEq 24.3 → 3.7, Denoise 66.3 → 46.4,
+  route-32-tools 680.0 → 507.6. Continuity harness on Windows not run.
+
 ### Code review P0 and P1 fixes (2026-10-07, user request)
 
 The user asked to fix every P0 and P1 item in the
