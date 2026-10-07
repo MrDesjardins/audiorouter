@@ -203,6 +203,11 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
 .workbench-page { padding: .9rem; }
 .log-files-panel, .streamdeck-panel { display: grid; gap: .65rem; min-width: 0; margin: .75rem 0 1rem; padding: .75rem; border: 1px solid var(--ambient-edge); border-radius: 10px; }
 .log-files-panel > label { display: grid; gap: .35rem; min-width: 0; font-size: .82rem; }
+/* Verbose switch and its countdown: fixed-width status, reserved message slot (UI-17). */
+.log-verbose { display: flex; align-items: center; justify-content: space-between; gap: .75rem; min-width: 0; }
+.log-verbose-toggle { display: inline-flex; align-items: center; gap: .5rem; font-size: .86rem; }
+.log-verbose-status { flex: none; min-width: 12ch; text-align: right; font-size: .82rem; font-variant-numeric: tabular-nums; color: var(--text-soft); white-space: nowrap; }
+.log-files-message { min-height: 4.2em; margin: 0; font-size: .82rem; line-height: 1.4; }
 .workbench-page .recorder-actions { display: grid; gap: .7rem; min-width: 0; margin: .55rem 0; padding: .8rem; }
 .workbench-page .recorder-actions > label,
 .workbench-page .recorder-actions fieldset > label { display: grid; grid-template-columns: minmax(0, 1fr); gap: .32rem; min-width: 0; color: var(--text-soft); font-size: .8rem; }

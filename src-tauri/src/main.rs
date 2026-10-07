@@ -29,6 +29,7 @@ mod plugin_editor_windows;
 mod session_file_dialog;
 mod shell_settings;
 mod startup;
+mod support_bundle;
 mod tray_playback;
 
 use backend_supervisor::{BackendRestartDecision, BackendSupervisor};
@@ -51,7 +52,73 @@ const WEBVIEW_BROWSER_ARGS: &str =
 /// that cannot be inspected through the WebView console in an attended shell.
 /// Request parameters and audio/media data are never written to this log.
 fn log_shell_rpc(request: &JsonRpcRequest, response: &Result<JsonRpcResponse, String>) {
-    log_shell_rpc_with(request, response, false);
+    log_shell_rpc_with(request, response, false, ShellLogContext::default());
+}
+
+/// Log one request that carries a correlation ID (P2-3) and its round-trip
+/// time, from the window (`source: None`) or an adapter such as HTTP.
+fn log_shell_rpc_correlated(
+    request: &JsonRpcRequest,
+    response: &Result<JsonRpcResponse, String>,
+    context: ShellLogContext<'_>,
+) {
+    log_shell_rpc_with(request, response, false, context);
+}
+
+/// Extra, already-bounded fields of one `shell.jsonl` record.
+#[derive(Clone, Copy, Debug, Default)]
+struct ShellLogContext<'a> {
+    /// Correlation ID; written only when it is valid.
+    request_id: Option<&'a str>,
+    /// Round trip through the control pipe; written only in verbose mode.
+    duration: Option<std::time::Duration>,
+    /// The adapter that sent the request; `None` is the window or tray.
+    source: Option<&'static str>,
+    /// The opt-in verbose window is on.
+    verbose: bool,
+}
+
+/// Expiry (Unix ms, 0 = off) of the backend's verbose window as last seen in
+/// a `diagnostics.getVerbose`/`setVerbose` response through this shell.
+static SHELL_VERBOSE_UNTIL_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn shell_verbose_window(now_unix_ms: u64) -> audiorouter_protocol::diagnostics::VerboseDiagnostics {
+    let until = SHELL_VERBOSE_UNTIL_MS.load(std::sync::atomic::Ordering::Relaxed);
+    audiorouter_protocol::diagnostics::VerboseDiagnostics::from_expiry(
+        (until != 0).then_some(until),
+        now_unix_ms,
+    )
+}
+
+/// Follow the backend's verbose window from the responses that report it, so
+/// the shell's log matches the backend's without another request.
+fn observe_verbose_response(request: &JsonRpcRequest, response: &Result<JsonRpcResponse, String>) {
+    if !matches!(
+        request.method.as_str(),
+        "diagnostics.getVerbose" | "diagnostics.setVerbose"
+    ) {
+        return;
+    }
+    let Some(result) = response
+        .as_ref()
+        .ok()
+        .and_then(|response| response.result.as_ref())
+    else {
+        return;
+    };
+    let now = audiorouter_protocol::diagnostics::unix_time_ms();
+    let window = audiorouter_protocol::diagnostics::VerboseDiagnostics::from_expiry(
+        result
+            .get("expiresAtUnixMs")
+            .and_then(serde_json::Value::as_u64),
+        now,
+    );
+    let until = if window.is_active(now) {
+        now.saturating_add(window.remaining_ms(now))
+    } else {
+        0
+    };
+    SHELL_VERBOSE_UNTIL_MS.store(until, std::sync::atomic::Ordering::Relaxed);
 }
 
 /// `from_panic_hook` makes the in-process lock a single try: a panic raised
@@ -60,7 +127,13 @@ fn log_shell_rpc_with(
     request: &JsonRpcRequest,
     response: &Result<JsonRpcResponse, String>,
     from_panic_hook: bool,
+    mut context: ShellLogContext<'_>,
 ) {
+    if !from_panic_hook {
+        observe_verbose_response(request, response);
+        let now = audiorouter_protocol::diagnostics::unix_time_ms();
+        context.verbose = shell_verbose_window(now).is_active(now);
+    }
     if matches!(
         request.method.as_str(),
         "nativeBridges.heartbeat"
@@ -94,21 +167,41 @@ fn log_shell_rpc_with(
     else {
         return;
     };
-    write_shell_rpc_log(&directory, request, response);
+    write_shell_rpc_log_with(&directory, request, response, context);
 }
 
+#[cfg(test)]
 fn write_shell_rpc_log(
     directory: &std::path::Path,
     request: &JsonRpcRequest,
     response: &Result<JsonRpcResponse, String>,
 ) {
+    write_shell_rpc_log_with(directory, request, response, ShellLogContext::default());
+}
+
+fn write_shell_rpc_log_with(
+    directory: &std::path::Path,
+    request: &JsonRpcRequest,
+    response: &Result<JsonRpcResponse, String>,
+    context: ShellLogContext<'_>,
+) {
     use std::io::Write;
+    let succeeded = matches!(response, Ok(value) if value.error.is_none());
     // Timer-driven reads succeed many times a second; logging their
     // successes would rotate useful events out of the 5 MB file in minutes.
-    if audiorouter_transport::is_routine_read_rpc(&request.method)
-        && matches!(response, Ok(value) if value.error.is_none())
-    {
-        return;
+    // HTTP controllers (Stream Deck) poll reads too. Verbose mode keeps them.
+    if succeeded && !context.verbose {
+        if audiorouter_transport::is_routine_read_rpc(&request.method) {
+            return;
+        }
+        if context.source == Some("http")
+            && audiorouter_domain::API_METHODS.iter().any(|spec| {
+                spec.name == request.method
+                    && spec.side_effect == audiorouter_domain::SideEffectClass::ReadOnly
+            })
+        {
+            return;
+        }
     }
     let path = directory.join("shell.jsonl");
     if std::fs::create_dir_all(directory).is_err() {
@@ -181,16 +274,26 @@ fn write_shell_rpc_log(
         .duration_since(std::time::UNIX_EPOCH)
         .map(|elapsed| elapsed.as_millis())
         .unwrap_or_default();
-    let entry = serde_json::json!({
+    let mut entry = serde_json::json!({
         "timeUnixMs": now_ms,
         "processId": std::process::id(),
         "version": env!("CARGO_PKG_VERSION"),
         "buildId": option_env!("AUDIOROUTER_BUILD_ID").unwrap_or("development"),
+        "requestId": audiorouter_protocol::diagnostics::valid_correlation_id(context.request_id),
         "method": request.method.chars().take(96).collect::<String>(),
         "sessionId": request.params.as_ref().and_then(|params| params.get("sessionId")).and_then(serde_json::Value::as_str).filter(|id| id.len() <= 128 && id.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))),
         "outcome": outcome,
         "detail": detail,
     });
+    if let Some(source) = context.source {
+        entry["source"] = serde_json::json!(source);
+    }
+    if context.verbose {
+        entry["verbose"] = serde_json::json!(true);
+        if let Some(duration) = context.duration {
+            entry["durationMs"] = serde_json::json!(duration.as_micros() as f64 / 1000.0);
+        }
+    }
     if let Ok(mut file) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -377,12 +480,29 @@ fn start_http_api(
 ) -> Result<http_api::HttpApi, String> {
     let token = api_token::load_or_create(&api_token::default_path()?)?;
     let pipe = pipe.to_owned();
-    http_api::HttpApi::start_on(
-        port,
-        token,
-        lan,
-        std::sync::Arc::new(move |request| forward_rpc_request(request, &pipe)),
-    )
+    http_api::HttpApi::start_on(port, token, lan, http_forward(pipe))
+}
+
+/// The HTTP adapter's path to the backend: each request carries the adapter's
+/// correlation ID, and is logged to `shell.jsonl` with `source: "http"`
+/// (successful reads only in verbose mode, so polling controllers do not
+/// flood the log).
+fn http_forward(pipe: String) -> std::sync::Arc<http_api::Forward> {
+    std::sync::Arc::new(move |request: &JsonRpcRequest, request_id: &str| {
+        let started = std::time::Instant::now();
+        let response = forward_rpc_request_correlated(request, Some(request_id), &pipe);
+        log_shell_rpc_correlated(
+            request,
+            &response,
+            ShellLogContext {
+                request_id: Some(request_id),
+                duration: Some(started.elapsed()),
+                source: Some("http"),
+                ..ShellLogContext::default()
+            },
+        );
+        response
+    })
 }
 
 /// Remember the port and network the API started with, for auto-start.
@@ -469,7 +589,7 @@ fn http_api_control(
                     active_port,
                     token,
                     lan,
-                    std::sync::Arc::new(move |request| forward_rpc_request(request, &pipe)),
+                    http_forward(pipe),
                 )?);
             }
         }
@@ -527,13 +647,30 @@ fn http_api_control(
     })
 }
 
+/// The window's JSON-RPC bridge. The page sends a `requestId` correlation ID
+/// with each request (P2-3); one is made here when it is missing or invalid,
+/// and it is forwarded to the backend and written to `shell.jsonl`.
 #[tauri::command]
 fn rpc_request(
-    request: JsonRpcRequest,
+    request: audiorouter_protocol::diagnostics::IncomingRequest,
     state: State<'_, ShellState>,
 ) -> Result<JsonRpcResponse, String> {
-    let response = forward_rpc_request(&request, &state.pipe_name);
-    log_shell_rpc(&request, &response);
+    let request_id = request
+        .correlation_id()
+        .map(str::to_owned)
+        .unwrap_or_else(audiorouter_protocol::diagnostics::new_correlation_id);
+    let request = request.request;
+    let started = std::time::Instant::now();
+    let response = forward_rpc_request_correlated(&request, Some(&request_id), &state.pipe_name);
+    log_shell_rpc_correlated(
+        &request,
+        &response,
+        ShellLogContext {
+            request_id: Some(&request_id),
+            duration: Some(started.elapsed()),
+            ..ShellLogContext::default()
+        },
+    );
     if request.method == "system.describe" {
         if let Some(path) = &state.probe_file {
             // The probe is diagnostic-only. Preserve the production command's
@@ -618,8 +755,19 @@ fn backend_call(
             method: method.into(),
             params: Some(params),
         };
-        let response = forward_rpc_request(&request, pipe_name);
-        log_shell_rpc(&request, &response);
+        let request_id = audiorouter_protocol::diagnostics::new_correlation_id();
+        let started = std::time::Instant::now();
+        let response = forward_rpc_request_correlated(&request, Some(&request_id), pipe_name);
+        log_shell_rpc_correlated(
+            &request,
+            &response,
+            ShellLogContext {
+                request_id: Some(&request_id),
+                duration: Some(started.elapsed()),
+                source: Some("tray"),
+                ..ShellLogContext::default()
+            },
+        );
         let response = response?;
         match (response.result, response.error) {
             (_, Some(error)) => Err(error.message),
@@ -832,8 +980,20 @@ fn forward_rpc_request(
     request: &JsonRpcRequest,
     pipe_name: &str,
 ) -> Result<JsonRpcResponse, String> {
-    let frame =
-        encode_frame(&request).map_err(|error| format!("request encoding failed: {error}"))?;
+    forward_rpc_request_correlated(request, None, pipe_name)
+}
+
+/// Forward `request` with its optional `requestId` correlation member.
+/// Backends that predate it ignore the member.
+fn forward_rpc_request_correlated(
+    request: &JsonRpcRequest,
+    request_id: Option<&str>,
+    pipe_name: &str,
+) -> Result<JsonRpcResponse, String> {
+    let frame = encode_frame(&audiorouter_protocol::diagnostics::CorrelatedRequest::new(
+        request, request_id,
+    ))
+    .map_err(|error| format!("request encoding failed: {error}"))?;
 
     #[cfg(windows)]
     let response_frame = audiorouter_transport::round_trip(pipe_name, &frame)
@@ -946,6 +1106,49 @@ fn open_logs_folder() -> Result<(), String> {
             "Could not open the logs folder. Use Copy folder path and paste it into File Explorer."
         })?;
     Ok(())
+}
+
+/// "Copy support bundle" (P2-3): zip the app version, the Windows version,
+/// the last lines of the backend, shell and MCP logs, and the window's client
+/// diagnostics into a new file in the logs folder, then show it selected in
+/// File Explorer. Local only; nothing is sent anywhere. Returns the file name.
+#[tauri::command]
+fn export_support_bundle(client_diagnostics: Vec<String>) -> Result<String, String> {
+    let directory = log_directory()?;
+    let created = audiorouter_protocol::diagnostics::unix_time_ms();
+    let bundle = support_bundle::collect(
+        &directory,
+        &client_diagnostics,
+        support_bundle::os_version().as_deref(),
+        created,
+    );
+    let path = support_bundle::write_zip(&directory, &bundle, created)?;
+    let name = support_bundle::bundle_file_name(created);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let explorer = std::env::var_os("WINDIR")
+            .map(std::path::PathBuf::from)
+            .filter(|root| root.is_absolute())
+            .map(|root| root.join("explorer.exe"));
+        // Fixed executable; the argument is the app-owned bundle path just
+        // created (Windows paths cannot contain quotes). Explorer needs the
+        // `/select,"path"` form, which `arg` quoting would break.
+        let revealed = explorer.is_some_and(|explorer| {
+            std::process::Command::new(explorer)
+                .raw_arg(format!("/select,\"{}\"", path.display()))
+                .spawn()
+                .is_ok()
+        });
+        if !revealed {
+            return Err(format!(
+                "Saved {name} in the logs folder, but could not open File Explorer. Use Open logs folder."
+            ));
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = path;
+    Ok(name)
 }
 
 /// File name of the Stream Deck plugin the release installer bundles as a
@@ -1577,7 +1780,12 @@ fn install_panic_log() {
             params: None,
         };
         let detail = panic_log_detail(std::thread::current().name(), info.location());
-        log_shell_rpc_with(&request, &Ok(JsonRpcResponse::success(None, detail)), true);
+        log_shell_rpc_with(
+            &request,
+            &Ok(JsonRpcResponse::success(None, detail)),
+            true,
+            ShellLogContext::default(),
+        );
         default_hook(info);
     }));
 }
@@ -1653,6 +1861,7 @@ fn main() {
             backend_diagnostics_list,
             log_folder_path,
             open_logs_folder,
+            export_support_bundle,
             install_streamdeck_plugin,
             mcp_setup_info,
             startup_register,
@@ -2377,6 +2586,120 @@ mod tests {
         assert_eq!(std::fs::read(&path).unwrap(), br#"{"ok":true}"#);
         assert!(write_probe_marker(&path, b"replacement").is_err());
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn shell_rpc_log_carries_request_ids_and_verbose_reads_with_durations() {
+        let directory = std::env::temp_dir().join(format!(
+            "audiorouter-shell-correlation-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let request = |method: &str| JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(serde_json::json!(1)),
+            method: method.into(),
+            params: Some(serde_json::json!({"path": "C:\\private"})),
+        };
+        let ok = Ok(JsonRpcResponse::success(
+            Some(serde_json::json!(1)),
+            serde_json::json!({"state": "running"}),
+        ));
+        let context = |request_id: &'static str, verbose: bool, source| ShellLogContext {
+            request_id: Some(request_id),
+            duration: Some(std::time::Duration::from_micros(2_500)),
+            source,
+            verbose,
+        };
+        // Routine reads and HTTP reads are skipped unless verbose.
+        write_shell_rpc_log_with(
+            &directory,
+            &request("system.diagnostics"),
+            &ok,
+            context("POLL", false, None),
+        );
+        write_shell_rpc_log_with(
+            &directory,
+            &request("sessions.list"),
+            &ok,
+            context("DECK", false, Some("http")),
+        );
+        write_shell_rpc_log_with(
+            &directory,
+            &request("graph.commit"),
+            &ok,
+            context("K7Q2M9XD", false, None),
+        );
+        write_shell_rpc_log_with(
+            &directory,
+            &request("nodes.toggle"),
+            &ok,
+            context("bad id", false, Some("http")),
+        );
+        write_shell_rpc_log_with(
+            &directory,
+            &request("system.diagnostics"),
+            &ok,
+            context("POLL-2", true, None),
+        );
+        let log = std::fs::read_to_string(directory.join("shell.jsonl")).unwrap();
+        let lines = log
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(lines.len(), 3, "{log}");
+        assert_eq!(lines[0]["method"], "graph.commit");
+        assert_eq!(lines[0]["requestId"], "K7Q2M9XD");
+        assert!(lines[0].get("durationMs").is_none());
+        assert_eq!(lines[1]["method"], "nodes.toggle");
+        assert_eq!(lines[1]["source"], "http");
+        assert_eq!(lines[1]["requestId"], serde_json::Value::Null);
+        assert_eq!(lines[2]["method"], "system.diagnostics");
+        assert_eq!(lines[2]["requestId"], "POLL-2");
+        assert_eq!(lines[2]["durationMs"], 2.5);
+        assert_eq!(lines[2]["verbose"], true);
+        assert!(!log.contains("private"));
+        assert!(!log.contains("bad id"));
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn shell_follows_the_backend_verbose_window_from_its_responses() {
+        let request = |method: &str| JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(serde_json::json!(1)),
+            method: method.into(),
+            params: None,
+        };
+        let now = audiorouter_protocol::diagnostics::unix_time_ms();
+        let status = |expires: Option<u64>| {
+            Ok(JsonRpcResponse::success(
+                Some(serde_json::json!(1)),
+                serde_json::json!({"enabled": expires.is_some(), "expiresAtUnixMs": expires}),
+            ))
+        };
+        observe_verbose_response(
+            &request("diagnostics.setVerbose"),
+            &status(Some(now + 60_000)),
+        );
+        assert!(shell_verbose_window(now).is_active(now));
+        // Other methods never change it, and an implausible expiry is off.
+        observe_verbose_response(&request("graph.commit"), &status(None));
+        assert!(shell_verbose_window(now).is_active(now));
+        observe_verbose_response(
+            &request("diagnostics.getVerbose"),
+            &status(Some(now + 10 * 60 * 60 * 1000)),
+        );
+        assert!(!shell_verbose_window(now).is_active(now));
+        observe_verbose_response(
+            &request("diagnostics.setVerbose"),
+            &status(Some(now + 60_000)),
+        );
+        observe_verbose_response(&request("diagnostics.setVerbose"), &status(None));
+        assert!(!shell_verbose_window(now).is_active(now));
     }
 
     #[test]

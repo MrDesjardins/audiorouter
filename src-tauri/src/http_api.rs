@@ -12,7 +12,8 @@ use std::time::{Duration, Instant};
 
 const MAX_BODY: usize = 4 * 1024 * 1024;
 const MAX_HEADERS: usize = 16 * 1024;
-type Forward = dyn Fn(&JsonRpcRequest) -> Result<JsonRpcResponse, String> + Send + Sync;
+/// Forward one request to the backend with its correlation ID (P2-3).
+pub type Forward = dyn Fn(&JsonRpcRequest, &str) -> Result<JsonRpcResponse, String> + Send + Sync;
 
 pub struct HttpApi {
     pub port: u16,
@@ -73,9 +74,12 @@ impl HttpApi {
         }
         let mut hosts = vec![format!("127.0.0.1:{port}")];
         hosts.extend(lan.map(|address| format!("{address}:{port}")));
-        let describe = forward(&rpc("system.describe", None))?
-            .result
-            .ok_or("Backend discovery unavailable; reconnect before starting API")?;
+        let describe = forward(
+            &rpc("system.describe", None),
+            &audiorouter_protocol::diagnostics::new_correlation_id(),
+        )?
+        .result
+        .ok_or("Backend discovery unavailable; reconnect before starting API")?;
         let schema = openapi(&describe, port, lan);
         let rate = Mutex::new((Instant::now(), 40f64));
         let secret = token.clone();
@@ -194,7 +198,23 @@ fn reply(
     content_type: &str,
     body: &[u8],
 ) -> std::io::Result<()> {
-    reply_with(stream, status, content_type, "", body)
+    reply_with_id(stream, status, content_type, body, None)
+}
+
+/// `request_id` is echoed as `X-Request-Id`; it is always a validated
+/// correlation ID (`[A-Za-z0-9-]`, at most 32 characters), so it cannot
+/// split or inject header lines.
+fn reply_with_id(
+    stream: &mut TcpStream,
+    status: u16,
+    content_type: &str,
+    body: &[u8],
+    request_id: Option<&str>,
+) -> std::io::Result<()> {
+    let request_id = audiorouter_protocol::diagnostics::valid_correlation_id(request_id)
+        .map(|id| format!("X-Request-Id: {id}\r\n"))
+        .unwrap_or_default();
+    reply_with(stream, status, content_type, &request_id, body)
 }
 fn fail(stream: &mut TcpStream, status: u16, message: &str) -> std::io::Result<()> {
     reply(
@@ -393,6 +413,10 @@ fn handle(
     if stop.load(Ordering::Acquire) {
         return fail(stream, 503, "API stopped");
     }
+    // One correlation ID per HTTP request: the caller's `X-Request-Id` when
+    // it is a valid ID, otherwise a fresh one. It is forwarded to the backend,
+    // logged by the shell and backend, and returned in the response.
+    let request_id = request_correlation_id(fields.get("x-request-id").copied());
     {
         let mut budget = rate.lock().unwrap_or_else(|error| error.into_inner());
         budget.1 = (budget.1 + budget.0.elapsed().as_secs_f64() * 20.0).min(40.0);
@@ -409,7 +433,7 @@ fn handle(
         }
         budget.1 -= cost;
     }
-    match forward(&rpc(&method, params)) {
+    match forward(&rpc(&method, params), &request_id) {
         Ok(response) => match response.error {
             Some(error) => {
                 let kind = error
@@ -423,14 +447,15 @@ fn handle(
                     "rateLimited" => 429,
                     _ => 400,
                 };
-                reply(
+                reply_with_id(
                     stream,
                     status,
                     "application/json",
                     json!({"error": error}).to_string().as_bytes(),
+                    Some(&request_id),
                 )
             }
-            None => reply(
+            None => reply_with_id(
                 stream,
                 200,
                 "application/json",
@@ -439,10 +464,27 @@ fn handle(
                     .unwrap_or(Value::Null)
                     .to_string()
                     .as_bytes(),
+                Some(&request_id),
             ),
         },
-        Err(_) => fail(stream, 503, "Backend unavailable; reconnect in AudioRouter"),
+        Err(_) => reply_with_id(
+            stream,
+            503,
+            "application/json",
+            json!({"error": {"message": "Backend unavailable; reconnect in AudioRouter"}})
+                .to_string()
+                .as_bytes(),
+            Some(&request_id),
+        ),
     }
+}
+
+/// The caller's `X-Request-Id` when it is a valid correlation ID; anything
+/// else is replaced (never echoed or logged).
+fn request_correlation_id(header: Option<&str>) -> String {
+    audiorouter_protocol::diagnostics::valid_correlation_id(header)
+        .map(str::to_owned)
+        .unwrap_or_else(audiorouter_protocol::diagnostics::new_correlation_id)
 }
 
 #[cfg(test)]
@@ -485,7 +527,7 @@ mod tests {
                 let _ = reply.send(plane.dispatch(request));
             }
         });
-        let forward: Arc<Forward> = Arc::new(move |request| {
+        let forward: Arc<Forward> = Arc::new(move |request: &JsonRpcRequest, _request_id: &str| {
             let (reply, response) = std::sync::mpsc::sync_channel(1);
             sender
                 .send((request.clone(), reply))
@@ -518,10 +560,10 @@ mod tests {
             Some(json!({"planId":plan["planId"],"baseRevision":0,"idempotencyKey":"http-edit"})),
         );
         assert_eq!(status, 200, "{result}");
-        let read = plane(&rpc(
-            "sessions.get",
-            Some(json!({"sessionId":"desktop-session"})),
-        ))
+        let read = plane(
+            &rpc("sessions.get", Some(json!({"sessionId":"desktop-session"}))),
+            "TEST",
+        )
         .unwrap()
         .result
         .unwrap();
@@ -545,10 +587,10 @@ mod tests {
         );
         assert_eq!(status, 200, "{toggled}");
         assert_eq!(toggled["value"], true);
-        let session = plane(&rpc(
-            "sessions.get",
-            Some(json!({"sessionId":"desktop-session"})),
-        ))
+        let session = plane(
+            &rpc("sessions.get", Some(json!({"sessionId":"desktop-session"}))),
+            "TEST",
+        )
         .unwrap()
         .result
         .unwrap();
@@ -647,10 +689,13 @@ mod tests {
             &format!("{prefix}Content-Length: 0\r\nContent-Length: 0\r\n\r\n")
         )
         .starts_with("HTTP/1.1 400"));
-        assert!(HttpApi::start(api.port, Arc::new(|_| unreachable!()))
-            .err()
-            .unwrap()
-            .contains("Choose another port"));
+        assert!(HttpApi::start(
+            api.port,
+            Arc::new(|_: &JsonRpcRequest, _: &str| unreachable!())
+        )
+        .err()
+        .unwrap()
+        .contains("Choose another port"));
     }
 
     #[test]
@@ -675,7 +720,7 @@ mod tests {
             0,
             "a".repeat(64),
             Some("8.8.8.8".parse().unwrap()),
-            Arc::new(|_| unreachable!())
+            Arc::new(|_: &JsonRpcRequest, _: &str| unreachable!())
         )
         .err()
         .unwrap()
@@ -723,7 +768,7 @@ mod tests {
             0,
             "c".repeat(64),
             Some(lan),
-            Arc::new(move |request| {
+            Arc::new(move |request: &JsonRpcRequest, _request_id: &str| {
                 if request.method == "system.describe" {
                     return Ok(JsonRpcResponse::success(request.id.clone(), schema.clone()));
                 }
@@ -778,7 +823,7 @@ mod tests {
         release: Arc<(Mutex<bool>, std::sync::Condvar)>,
     ) -> Arc<Forward> {
         let schema = ControlPlane::new("http-busy").describe();
-        Arc::new(move |request| {
+        Arc::new(move |request: &JsonRpcRequest, _request_id: &str| {
             if request.method == "system.describe" {
                 return Ok(JsonRpcResponse::success(request.id.clone(), schema.clone()));
             }
@@ -870,7 +915,7 @@ mod tests {
             assert_eq!(
                 schema["paths"][operation_path(spec.name)]["post"]["requestBody"]["content"]
                     ["application/json"]["schema"],
-                plane(&rpc("system.describe", None))
+                plane(&rpc("system.describe", None), "TEST")
                     .unwrap()
                     .result
                     .unwrap()["methods"]
@@ -902,7 +947,7 @@ mod tests {
         let schema = ControlPlane::new("http-observer").describe();
         let api = HttpApi::start(
             0,
-            Arc::new(move |request| {
+            Arc::new(move |request: &JsonRpcRequest, _request_id: &str| {
                 if request.method == "system.describe" {
                     return Ok(JsonRpcResponse::success(request.id.clone(), schema.clone()));
                 }
@@ -922,7 +967,9 @@ mod tests {
         let restarted = HttpApi::start_with_token(
             port,
             token.clone(),
-            Arc::new(move |request| Ok(ControlPlane::new("restart").dispatch(request.clone()))),
+            Arc::new(move |request: &JsonRpcRequest, _request_id: &str| {
+                Ok(ControlPlane::new("restart").dispatch(request.clone()))
+            }),
         )
         .unwrap();
         assert_eq!(token, restarted.token);
@@ -931,13 +978,75 @@ mod tests {
         let rotated = HttpApi::start_with_token(
             port,
             crate::api_token::generate().unwrap(),
-            Arc::new(move |request| Ok(ControlPlane::new("rotation").dispatch(request.clone()))),
+            Arc::new(move |request: &JsonRpcRequest, _request_id: &str| {
+                Ok(ControlPlane::new("rotation").dispatch(request.clone()))
+            }),
         )
         .unwrap();
         assert_ne!(token, rotated.token);
         assert!(exchange(port, &format!("GET /api/v1/status HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\n\r\n")).starts_with("HTTP/1.1 401"));
         assert_eq!(call(&rotated, "/api/v1/status", None).0, 200);
     }
+    #[test]
+    fn http_request_ids_are_echoed_validated_and_forwarded() {
+        let schema = ControlPlane::new("http-request-id").describe();
+        let seen = Arc::new(Mutex::new(Vec::<String>::new()));
+        let observed = seen.clone();
+        let api = HttpApi::start(
+            0,
+            Arc::new(move |request: &JsonRpcRequest, request_id: &str| {
+                observed.lock().unwrap().push(request_id.to_owned());
+                if request.method == "system.describe" {
+                    return Ok(JsonRpcResponse::success(request.id.clone(), schema.clone()));
+                }
+                Ok(ControlPlane::new("http-request-id").dispatch(request.clone()))
+            }),
+        )
+        .unwrap();
+        let get = |extra: &str| {
+            exchange(
+                api.port,
+                &format!(
+                    "GET /api/v1/status HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nAuthorization: Bearer {}\r\n{extra}\r\n",
+                    api.port, api.token
+                ),
+            )
+        };
+        let header = |response: &str| {
+            response
+                .lines()
+                .find_map(|line| line.strip_prefix("X-Request-Id: "))
+                .map(str::to_owned)
+        };
+        let echoed = get("X-Request-Id: Deck-42\r\n");
+        assert!(echoed.starts_with("HTTP/1.1 200"), "{echoed}");
+        assert_eq!(header(&echoed).as_deref(), Some("Deck-42"));
+        assert_eq!(seen.lock().unwrap().last().unwrap(), "Deck-42");
+        let long = "x".repeat(33);
+        for hostile in ["has space", long.as_str(), "under_score"] {
+            let replaced = get(&format!("X-Request-Id: {hostile}\r\n"));
+            let id = header(&replaced).expect("a generated request ID");
+            assert_ne!(id, hostile);
+            assert!(audiorouter_protocol::diagnostics::is_valid_correlation_id(
+                &id
+            ));
+            assert!(!replaced.contains(hostile), "{replaced}");
+            assert_eq!(seen.lock().unwrap().last().unwrap(), &id);
+        }
+        let generated = header(&get("")).expect("a generated request ID");
+        assert_eq!(generated.len(), 8);
+        // Requests refused before reaching the backend carry no ID.
+        let refused = exchange(
+            api.port,
+            &format!(
+                "GET /api/v1/status HTTP/1.1\r\nHost: 127.0.0.1:{}\r\n\r\n",
+                api.port
+            ),
+        );
+        assert!(refused.starts_with("HTTP/1.1 401"));
+        assert_eq!(header(&refused), None);
+    }
+
     fn plane_dispatch_observer(request: &JsonRpcRequest) -> JsonRpcResponse {
         let mut plane = ControlPlane::new("observer");
         plane.dispatch_authorized(
@@ -967,11 +1076,7 @@ mod tests {
             )
             .unwrap();
         });
-        let api = HttpApi::start(
-            17893,
-            Arc::new(move |request| crate::forward_rpc_request(request, &pipe)),
-        )
-        .unwrap();
+        let api = HttpApi::start(17893, crate::http_forward(pipe)).unwrap();
         // Explicit test-only handshake consumed in memory by the browser runner.
         // This disposable grant has no user database or audio; do not persist it.
         println!("HTTP_FIXTURE {} {}", api.port, api.token);

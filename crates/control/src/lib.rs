@@ -2331,6 +2331,8 @@ fn method_description(name: &str) -> &'static str {
             "Apply a lock, sign-out, sleep, or resume lifecycle transition policy."
         }
         "system.diagnostics" => "Return a redacted backend diagnostic snapshot.",
+        "diagnostics.getVerbose" => "Report whether opt-in verbose logging is on and how long it has left.",
+        "diagnostics.setVerbose" => "Switch opt-in verbose logging on for one hour (routine reads and request durations, never parameters, paths or audio), or off.",
         "system.quit" => "Finalize active recorders and stop all running sessions before the owner exits.",
         "clients.list" => "List enrolled local client identities and roles.",
         "clients.authorize" => "Authorize a client with an explicit built-in role.",
@@ -2527,6 +2529,9 @@ fn object_schema(properties: Value, required: &[&str]) -> Value {
 
 fn method_input_schema(name: &str) -> Value {
     match name {
+        "diagnostics.setVerbose" => {
+            object_schema(json!({ "enabled": { "type": "boolean" } }), &["enabled"])
+        }
         "system.quit" => object_schema(
             json!({
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
@@ -3491,6 +3496,17 @@ fn method_output_schema(name: &str) -> Value {
         }),
         "status.get" => status_output_schema(),
         "system.diagnostics" => diagnostics_output_schema(),
+        "diagnostics.getVerbose" | "diagnostics.setVerbose" => json!({
+            "type": "object",
+            "properties": {
+                "enabled": { "type": "boolean" },
+                "expiresAtUnixMs": { "type": ["integer", "null"], "minimum": 0 },
+                "remainingSeconds": { "type": "integer", "minimum": 0, "maximum": audiorouter_protocol::diagnostics::MAX_VERBOSE_DIAGNOSTICS_MS / 1000 },
+                "maxSeconds": { "const": audiorouter_protocol::diagnostics::MAX_VERBOSE_DIAGNOSTICS_MS / 1000 }
+            },
+            "required": ["enabled", "expiresAtUnixMs", "remainingSeconds", "maxSeconds"],
+            "additionalProperties": false
+        }),
         "recovery.clearSafeMode" => json!({
             "type": "object",
             "properties": {
@@ -5732,6 +5748,9 @@ fn recorder_node_settings(node: &audiorouter_domain::Node) -> RecorderNodeSettin
 
 pub struct ControlPlane {
     store: GraphStore,
+    /// Opt-in verbose logging window (`diagnostics.setVerbose`). Read by the
+    /// transport's logger; never touches audio.
+    verbose_diagnostics: audiorouter_protocol::diagnostics::VerboseDiagnostics,
     active_session_id: Option<EntityId>,
     build: String,
     runtimes: HashMap<EntityId, FakeRuntime>,
@@ -6667,6 +6686,7 @@ impl ControlPlane {
     pub fn new(build: impl Into<String>) -> Self {
         Self {
             store: GraphStore::default(),
+            verbose_diagnostics: Default::default(),
             active_session_id: None,
             build: build.into(),
             runtimes: HashMap::new(),
@@ -7664,6 +7684,27 @@ impl ControlPlane {
         self.maintain_node_recordings(now);
         self.audio_service.record(now, serviced != 0);
         serviced
+    }
+
+    /// Whether opt-in verbose logging is on at `now_unix_ms`. The window
+    /// expires by itself after at most one hour.
+    pub fn verbose_diagnostics_active(&self, now_unix_ms: u64) -> bool {
+        self.verbose_diagnostics.is_active(now_unix_ms)
+    }
+
+    fn dispatch_verbose_diagnostics(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let now = audiorouter_protocol::diagnostics::unix_time_ms();
+        if let Some(params) = params {
+            let enabled = params
+                .get("enabled")
+                .and_then(Value::as_bool)
+                .ok_or_else(|| ControlError::InvalidRequest("enabled must be a boolean".into()))?;
+            self.verbose_diagnostics.set(enabled, now);
+        }
+        Ok(self.verbose_diagnostics.status(now))
     }
 
     /// Continuity statistics of the backend audio service, for diagnostics.
@@ -11133,6 +11174,7 @@ impl ControlPlane {
             });
         let mut plane = Self {
             store,
+            verbose_diagnostics: Default::default(),
             active_session_id,
             build: build.into(),
             runtimes: HashMap::new(),
@@ -15685,6 +15727,10 @@ impl ControlPlane {
                     "system.describe" => Ok(self.describe()),
                     "system.handshake" => self.dispatch_handshake(request.params),
                     "status.get" => self.status_snapshot(),
+                    "diagnostics.getVerbose" => self.dispatch_verbose_diagnostics(None),
+                    "diagnostics.setVerbose" => self.dispatch_verbose_diagnostics(Some(
+                        request.params.clone().unwrap_or(Value::Null),
+                    )),
                     "system.osTransition" => self.dispatch_os_transition(request.params),
                     "system.diagnostics" => {
                         let (recent_recovery_crashes, recovery_safe_mode) =
@@ -21404,6 +21450,8 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "virtualRoutes.replace" => &["baseRevision", "routes", "idempotencyKey"],
         "startup.plan" => &["enabled"],
         "startup.apply" => &["planId", "idempotencyKey"],
+        "diagnostics.getVerbose" => &[],
+        "diagnostics.setVerbose" => &["enabled"],
         "system.describe" | "status.get" | "system.diagnostics" | "startup.get" | "apps.list"
         | "applications.list" | "nodes.types" | "nodes.describe" | "presets.list"
         | "processors.list" | "clients.list" => &[],
@@ -29502,6 +29550,62 @@ mod tests {
             params: None,
         };
         assert_eq!(plane.dispatch(unknown).error.unwrap().code, -32601);
+    }
+
+    #[test]
+    fn verbose_diagnostics_switch_needs_session_control_and_reports_the_window() {
+        let call = |method: &str, params: Option<Value>| JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: method.into(),
+            params,
+        };
+        let mut plane = ControlPlane::default();
+        let now = audiorouter_protocol::diagnostics::unix_time_ms();
+        assert!(!plane.verbose_diagnostics_active(now));
+        let observer = ClientGrant::for_role(ClientRole::Observer);
+        let status = plane
+            .dispatch_authorized(call("diagnostics.getVerbose", None), &observer)
+            .result
+            .unwrap();
+        assert_eq!(status["enabled"], false);
+        let denied = plane.dispatch_authorized(
+            call("diagnostics.setVerbose", Some(json!({"enabled": true}))),
+            &observer,
+        );
+        assert!(denied.error.is_some());
+        assert!(!plane.verbose_diagnostics_active(now));
+        let on = plane
+            .dispatch_authorized(
+                call("diagnostics.setVerbose", Some(json!({"enabled": true}))),
+                &ClientGrant::for_desktop_shell(),
+            )
+            .result
+            .unwrap();
+        assert_eq!(on["enabled"], true);
+        assert!(on["remainingSeconds"].as_u64().unwrap() > 3_590);
+        assert_eq!(on["maxSeconds"], 3_600);
+        assert!(plane.verbose_diagnostics_active(audiorouter_protocol::diagnostics::unix_time_ms()));
+        assert!(!plane.verbose_diagnostics_active(on["expiresAtUnixMs"].as_u64().unwrap()));
+        for bad in [
+            json!({}),
+            json!({"enabled": "yes"}),
+            json!({"enabled": true, "path": "x"}),
+        ] {
+            assert!(plane
+                .dispatch(call("diagnostics.setVerbose", Some(bad)))
+                .error
+                .is_some());
+        }
+        let off = plane
+            .dispatch(call(
+                "diagnostics.setVerbose",
+                Some(json!({"enabled": false})),
+            ))
+            .result
+            .unwrap();
+        assert_eq!(off["enabled"], false);
+        assert_eq!(off["expiresAtUnixMs"], Value::Null);
     }
 
     #[test]

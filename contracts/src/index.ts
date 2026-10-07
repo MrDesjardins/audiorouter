@@ -1128,6 +1128,38 @@ export interface JsonRpcRequest<Params = unknown> {
   id?: string | number | null;
   method: string;
   params?: Params;
+  /**
+   * Optional correlation ID (P2-3): 1-32 characters from `[A-Za-z0-9-]`.
+   * It names one user action or adapter request in every log; backends that
+   * predate it ignore the member, and an invalid value is dropped.
+   */
+  requestId?: string;
+}
+
+/** Longest accepted correlation ID. */
+export const MAX_CORRELATION_ID_LENGTH = 32;
+
+/** Whether `value` is a well-formed correlation ID. */
+export function isValidCorrelationId(value: unknown): value is string {
+  return typeof value === "string" && value.length >= 1 && value.length <= MAX_CORRELATION_ID_LENGTH && /^[A-Za-z0-9-]+$/.test(value);
+}
+
+const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+/** A fresh 8-character Crockford base-32 correlation ID (40 random bits). */
+export function newCorrelationId(random: (bytes: Uint8Array) => Uint8Array = (bytes) => globalThis.crypto.getRandomValues(bytes)): string {
+  const bytes = random(new Uint8Array(8));
+  let id = "";
+  for (let index = 0; index < 8; index += 1) id += CROCKFORD[bytes[index] & 31];
+  return id;
+}
+
+/** `diagnostics.getVerbose` / `diagnostics.setVerbose` result. */
+export interface VerboseDiagnosticsStatus {
+  enabled: boolean;
+  expiresAtUnixMs: number | null;
+  remainingSeconds: number;
+  maxSeconds: number;
 }
 
 export interface JsonRpcSuccess<Result = unknown> {
@@ -1166,6 +1198,8 @@ export type ImplementedMethod =
   | "system.handshake"
   | "status.get"
   | "system.diagnostics"
+  | "diagnostics.getVerbose"
+  | "diagnostics.setVerbose"
   | "system.quit"
   | "system.osTransition"
   | "clients.list"
@@ -1290,6 +1324,8 @@ export type MethodParams = {
   "system.handshake": { protocolVersion: { major: number; minor: number } };
   "status.get": undefined;
   "system.diagnostics": undefined;
+  "diagnostics.getVerbose": undefined;
+  "diagnostics.setVerbose": { enabled: boolean };
   "system.quit": { idempotencyKey: string };
   "system.osTransition": { transition: OsTransition; idempotencyKey: string };
   "clients.list": undefined;
@@ -1467,6 +1503,8 @@ export type MethodResult = {
   };
   "status.get": StatusSnapshot;
   "system.diagnostics": DiagnosticsSnapshot;
+  "diagnostics.getVerbose": VerboseDiagnosticsStatus;
+  "diagnostics.setVerbose": VerboseDiagnosticsStatus;
   "system.quit": SystemQuitResult;
   "system.osTransition": OsTransitionResult;
   "clients.list": Array<{ clientId: string; role: string; revoked: boolean }>;
@@ -1592,13 +1630,33 @@ export interface RpcTransport {
 export class AudioRouterRpcError extends Error {
   readonly code: number;
   readonly data?: ApplicationErrorData;
+  /** Correlation ID of the failed request, to find it in the logs. */
+  readonly requestId?: string;
 
-  constructor(error: JsonRpcError["error"]) {
+  constructor(error: JsonRpcError["error"], requestId?: string) {
     super(error.message);
     this.name = "AudioRouterRpcError";
     this.code = error.code;
     this.data = error.data;
+    if (isValidCorrelationId(requestId)) this.requestId = requestId;
   }
+}
+
+/** A failed request, reported without its parameters or error text. */
+export interface RpcFailure {
+  method: string;
+  requestId: string;
+  /** JSON-RPC error code; absent when the transport itself failed. */
+  code?: number;
+  /** Application error category (`error.data.code`), when present. */
+  kind?: string;
+}
+
+export interface AudioRouterClientOptions {
+  /** Correlation ID source; one ID per request. */
+  newRequestId?: () => string;
+  /** Called once per failed request (error response or transport failure). */
+  onRequestFailed?: (failure: RpcFailure) => void;
 }
 
 export interface AudioRouterClient {
@@ -1608,19 +1666,41 @@ export interface AudioRouterClient {
   ): Promise<MethodResult[M]>;
 }
 
-/** Create the shared typed client over any framed/local transport adapter. */
-export function createAudioRouterClient(transport: RpcTransport): AudioRouterClient {
+/**
+ * Create the shared typed client over any framed/local transport adapter.
+ * Every request carries a fresh `requestId` correlation ID (P2-3).
+ */
+export function createAudioRouterClient(transport: RpcTransport, options: AudioRouterClientOptions = {}): AudioRouterClient {
   let nextId = 1;
+  const newRequestId = options.newRequestId ?? (() => newCorrelationId());
+  const reportFailure = (failure: RpcFailure) => {
+    try {
+      options.onRequestFailed?.(failure);
+    } catch {
+      // Diagnostics must never change a request's outcome.
+    }
+  };
   return {
     async request(method, params) {
-      const response = await transport.send({
-        jsonrpc: "2.0",
-        id: nextId++,
-        method,
-        ...(params === undefined ? {} : { params }),
-      });
+      const candidate = newRequestId();
+      const requestId = isValidCorrelationId(candidate) ? candidate : newCorrelationId();
+      let response: JsonRpcResponse;
+      try {
+        response = await transport.send({
+          jsonrpc: "2.0",
+          id: nextId++,
+          method,
+          ...(params === undefined ? {} : { params }),
+          requestId,
+        });
+      } catch (error) {
+        reportFailure({ method, requestId });
+        throw error;
+      }
       if ("error" in response) {
-        throw new AudioRouterRpcError(response.error);
+        const kind = typeof response.error.data?.code === "string" ? response.error.data.code : undefined;
+        reportFailure({ method, requestId, code: response.error.code, ...(kind === undefined ? {} : { kind }) });
+        throw new AudioRouterRpcError(response.error, requestId);
       }
       return response.result as MethodResult[typeof method];
     },

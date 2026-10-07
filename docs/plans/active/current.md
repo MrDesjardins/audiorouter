@@ -256,6 +256,29 @@ Rollback: revert the commit.
   Next action: Windows CI on the branch, then a two-PC attended check with
   the same key, a wrong key, and one side blank.
 
+- **P2-3 request IDs, verbose mode, support bundle** (commit `00ecb1ed`).
+  Protocol: optional top-level `requestId` member, which older backends
+  ignore. The logic is portable and unit-tested in
+  `crates/protocol/src/diagnostics.rs`. New methods are
+  `diagnostics.getVerbose` (`read`) and `diagnostics.setVerbose`
+  (`sessionControl`, one hour, expires by itself). The Logs tab has a Verbose
+  switch with a fixed-width countdown (UI-17) and "Copy support bundle"
+  (`export_support_bundle`, a ZIP in the logs folder, path-filtered, local
+  only). Decision: the ID travels beside `JsonRpcRequest` in wrappers
+  (`CorrelatedRequest`/`IncomingRequest`), not as a new struct field, to
+  leave its ~290 literal constructions unchanged. The HTTP forward signature
+  now takes the ID.
+  Verified on Linux: `cargo test -p audiorouter-protocol` and `-p
+  audiorouter-domain`, the support-bundle tests in a scratch crate,
+  `npm --prefix ui test` (493 passed), `tsc`, the Logs e2e in Chromium in
+  dark, light and high-contrast, Windows-GNU Clippy for the workspace and
+  `src-tauri`, and `tools/docs/validate.mjs`.
+  **Next:** let Windows CI run the transport, shell (`http_api`,
+  `support_bundle`, shell log) and `mcp_stdio` tests and
+  `check-drift.mjs`. Then, in an attended run, click Play with verbose on,
+  confirm one ID in the client row, `shell.jsonl` and `backend.jsonl`, and
+  open a support bundle.
+
 ### Code review P0 and P1 fixes (2026-10-07, user request)
 
 The user asked to fix every P0 and P1 item in the

@@ -16,7 +16,7 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
-The current catalog contains 103 methods, including backend-owned quit/finalize,
+The current catalog contains 123 methods, including backend-owned quit/finalize,
 session portability, bounded WAV/MP3 media import, source transport, recorder
 lifecycle, plugin inventory/retry, and startup plan/apply methods.
 
@@ -26,6 +26,8 @@ lifecycle, plugin inventory/retry, and startup plan/apply methods.
 | `system.handshake` | `read` | read-only |
 | `status.get` | `read` | read-only |
 | `system.diagnostics` | `read` | read-only |
+| `diagnostics.getVerbose` | `read` | read-only; whether opt-in verbose logging is on and the seconds left |
+| `diagnostics.setVerbose` | `sessionControl` | mutating; `{enabled}` turns verbose logging on for one hour (it expires by itself) or off; logs only, never audio or the saved graph |
 | `system.quit` | `sessionControl` | external operation; requires an idempotency key; finalizes active recorders before stopping running sessions |
 | `system.osTransition` | `sessionControl` | mutating; requires an idempotency key; reports routes requiring explicit resume validation |
 | `clients.list` | `read` | read-only |
@@ -232,6 +234,14 @@ checks to a standalone render-source worker. Its `maxQuanta` budget is bounded
 and the response reports processed and rendered frames separately. This path
 can coexist with the primary capture/graph worker but does not make a render-
 only worker graph-capable for plugin authorization.
+
+Any request may carry an optional top-level `requestId` correlation ID
+(1–32 characters from `A-Z a-z 0-9 -`), for example
+`{"jsonrpc":"2.0","id":7,"method":"graph.commit","params":{…},"requestId":"K7Q2M9XD"}`.
+The backend writes it to `backend.jsonl`; it never affects dispatch. An
+invalid value is dropped. Over HTTP use the `X-Request-Id` header instead.
+With verbose logging on (`diagnostics.setVerbose`), backend records also
+include routine reads and `durationMs`.
 
 The singular and plural session lifecycle names are compatibility aliases with
 the same authorization and behavior. Mutating graph and virtual-device calls

@@ -81,9 +81,18 @@ function graphValidationError(session: Session): string | null {
   return "Preview planner: connect an input to an output before planning.";
 }
 
+// Browser fixture for the Logs tab's verbose-logging switch (one hour).
+let verboseUntil: number | null = null;
+const verboseStatus = () => {
+  const remaining = verboseUntil === null ? 0 : Math.max(0, Math.ceil((verboseUntil - Date.now()) / 1000));
+  return { enabled: remaining > 0, expiresAtUnixMs: remaining > 0 ? verboseUntil : null, remainingSeconds: remaining, maxSeconds: 3600 };
+};
+
 const previewBackend: UiBackend = {
   ...fixtureBackend,
   connected: true,
+  async getVerboseDiagnostics() { return verboseStatus(); },
+  async setVerboseDiagnostics(enabled: boolean) { verboseUntil = enabled ? Date.now() + 3_600_000 : null; return verboseStatus(); },
   async listProcessors() { return injected.__routeFixtureProcessors ?? fixtureBackend.listProcessors(); },
   // Opt-in: recordings for the Recording tab library (browser tests).
   async listRecordings(sessionId?: string) { return (injected.__routeFixtureRecordings as Awaited<ReturnType<typeof fixtureBackend.listRecordings>> | undefined) ?? fixtureBackend.listRecordings(sessionId); },

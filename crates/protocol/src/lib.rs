@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod diagnostics;
 pub mod network_audio;
 
 pub const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
