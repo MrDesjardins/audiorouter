@@ -43,46 +43,51 @@ mod siege_round;
 mod simple;
 mod threaded_recorder;
 
-use os_transition::{plan_os_transition, OsTransition};
-mod native_paths;
-#[cfg(test)]
-mod test_support;
-pub use native_paths::*;
+// Control-plane domains. Each module adds its own `impl ControlPlane` block.
+// The globs re-export public items at the crate root and let sibling
+// modules reach crate-internal helpers through their `use super::*`.
+mod api_output_schema;
+mod api_schema;
+mod audio_media;
 mod audio_service;
-pub use audio_service::*;
+mod authorization;
+mod catalog;
+mod graph;
 mod native_application;
-pub use native_application::*;
 mod native_bindings;
 mod native_dispatch;
+mod native_paths;
 mod native_workers;
-mod persistence;
-use persistence::*;
-mod virtual_devices;
-use virtual_devices::*;
-mod authorization;
-pub use authorization::*;
-mod recording;
-use recording::*;
-mod recording_library;
-mod sessions;
-use sessions::*;
-mod graph;
-use graph::*;
-mod catalog;
-mod plugins;
-use catalog::*;
 mod network;
-mod safety;
-mod status;
-use network::*;
-mod audio_media;
-use audio_media::*;
+mod persistence;
+mod plugins;
 mod recorder_workers;
-pub use recorder_workers::*;
-mod api_schema;
-pub use api_schema::*;
-mod api_output_schema;
+mod recording;
+mod recording_library;
+mod safety;
+mod sessions;
+mod status;
+#[cfg(test)]
+mod test_support;
+mod virtual_devices;
+
 use api_output_schema::*;
+pub use api_schema::*;
+use audio_media::*;
+pub use audio_service::*;
+pub use authorization::*;
+use catalog::*;
+use graph::*;
+pub use native_application::*;
+pub use native_paths::*;
+use network::*;
+use persistence::*;
+pub use recorder_workers::*;
+use recording::*;
+use sessions::*;
+use virtual_devices::*;
+
+use os_transition::{plan_os_transition, OsTransition};
 
 /// Pause between audio service passes while a long handler's work runs on a
 /// helper thread (see `ControlPlane::while_servicing_audio`). Matches the
