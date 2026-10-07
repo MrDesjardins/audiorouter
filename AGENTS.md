@@ -76,7 +76,15 @@ For defects: record reproduction and affected versions; add a focused regression
    The API key is read from `TYPESAFE_API_KEY` or a `.env` file. Never print, log, or commit it.
 3. A non-zero exit lists each violation as JSON (`ruleName`, `ruleInstructions`, `severity`, `path`, `line`). Fix the code and run it again. If a finding is wrong, keep the code and say why in the handoff.
 4. Do not edit `jev/` to make a check pass. Changing a rule is a separate, explicitly requested task.
-5. If the tool is missing or cannot run (for example no `../jevrealtimecodecheck` clone), report the check as not run. Do not report it as passing.
+5. If `../jevrealtimecodecheck` is missing, set it up once, at the commit CI pins in `.github/workflows/jev-review.yml` (see the tool's [Setup](https://github.com/MrDesjardins/jevrealtimecodecheck#setup)):
+   ```bash
+   git clone https://github.com/MrDesjardins/jevrealtimecodecheck.git ../jevrealtimecodecheck
+   git -C ../jevrealtimecodecheck checkout <sha pinned in jev-review.yml>
+   npm ci --prefix ../jevrealtimecodecheck
+   ```
+   The key comes from this repository's `.env` (`TYPESAFE_API_KEY=...`, gitignored). Claude Code's auto mode may refuse the first run because it executes code from outside this repository; ask the user to allow it with `/permissions` instead of working around it.
+6. If the tool still cannot run (no key, permission refused), report the check as not run. Do not report it as passing.
+7. The check reviews diffs, so keep it to normal-sized changes. A range dominated by mechanical reformatting yields unlocated, low-confidence findings (2026-10-06: `--base 5841be2a`, ~14,600 lines, two findings at 6% and 13% confidence, both false).
 
 ## Self-learning, with evidence
 
