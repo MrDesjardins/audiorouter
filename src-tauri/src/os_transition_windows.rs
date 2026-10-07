@@ -71,9 +71,10 @@ impl OsTransitionListener {
 
 impl Drop for OsTransitionListener {
     fn drop(&mut self) {
-        // The message is posted to the listener thread's queue and never
-        // waits on the window procedure. A shutdown race is harmless because
-        // the thread also exits when its message queue closes.
+        // SAFETY: PostThreadMessageW passes only integers. The message is
+        // posted to the listener thread's queue and never waits on the window
+        // procedure. A shutdown race is harmless because the thread also
+        // exits when its message queue closes.
         let _ = unsafe { PostThreadMessageW(self.thread_id, STOP_MESSAGE, WPARAM(0), LPARAM(0)) };
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
@@ -85,8 +86,10 @@ fn run_message_loop(
     sender: SyncSender<OsTransition>,
     ready_sender: mpsc::SyncSender<Result<u32, String>>,
 ) {
+    // SAFETY: called once on this dedicated thread, which then owns the
+    // window and runs its message loop; see `create_message_window`.
     let result = unsafe { create_message_window(sender) };
-    let Ok((thread_id, window)) = result else {
+    let Ok((thread_id, window, context)) = result else {
         let error = result
             .err()
             .unwrap_or_else(|| "unknown OS transition listener error".into());
@@ -96,26 +99,48 @@ fn run_message_loop(
     let _ = ready_sender.send(Ok(thread_id));
     let mut message = MSG::default();
     loop {
+        // SAFETY: `message` is a live, writable MSG; a None window reads this
+        // thread's queue, which owns the listener window.
         let status = unsafe { GetMessageW(&mut message, None, 0, 0) };
         if status.0 <= 0 {
             break;
         }
         if message.message == STOP_MESSAGE {
+            // SAFETY: posts WM_QUIT to this thread's own queue; no pointers.
             unsafe { PostQuitMessage(0) };
             continue;
         }
+        // SAFETY: `message` was just filled by GetMessageW; dispatch runs the
+        // window procedure of a window owned by this thread.
         unsafe {
             let _ = TranslateMessage(&message);
             DispatchMessageW(&message);
         }
     }
+    // SAFETY: `window` was created on this thread and registered for session
+    // notifications in `create_message_window`. DestroyWindow delivers
+    // WM_NCDESTROY synchronously, after which the window procedure can no
+    // longer reach `context`, so the boxed sender is reclaimed exactly once.
     unsafe {
         let _ = WTSUnRegisterSessionNotification(window);
         let _ = DestroyWindow(window);
+        drop(Box::from_raw(context));
     }
 }
 
-unsafe fn create_message_window(sender: SyncSender<OsTransition>) -> Result<(u32, HWND), String> {
+/// Create the message-only listener window on the calling thread.
+///
+/// The returned `context` is the boxed sender the window procedure reads
+/// through GWLP_USERDATA. The caller owns it and must free it with
+/// `Box::from_raw` only after destroying the window; the window procedure
+/// never frees it. That keeps one owner even when CreateWindowExW fails after
+/// WM_NCCREATE (Windows then sends WM_NCDESTROY before returning).
+///
+/// # Safety
+/// Call on the thread that will run the window's message loop.
+unsafe fn create_message_window(
+    sender: SyncSender<OsTransition>,
+) -> Result<(u32, HWND, *mut SyncSender<OsTransition>), String> {
     let instance =
         GetModuleHandleW(None).map_err(|error| format!("GetModuleHandleW failed: {error}"))?;
     let class = WNDCLASSW {
@@ -144,15 +169,18 @@ unsafe fn create_message_window(sender: SyncSender<OsTransition>) -> Result<(u32
     ) {
         Ok(window) => window,
         Err(error) => {
+            // No window exists (any partially created one has already
+            // received WM_NCDESTROY), so nothing can reach the sender.
             drop(Box::from_raw(sender));
             return Err(format!("CreateWindowExW failed: {error}"));
         }
     };
     if let Err(error) = WTSRegisterSessionNotification(window, NOTIFY_FOR_THIS_SESSION) {
         let _ = DestroyWindow(window);
+        drop(Box::from_raw(sender));
         return Err(format!("WTSRegisterSessionNotification failed: {error}"));
     }
-    Ok((GetCurrentThreadId(), window))
+    Ok((GetCurrentThreadId(), window, sender))
 }
 
 unsafe extern "system" fn window_proc(
@@ -172,7 +200,8 @@ unsafe extern "system" fn window_proc(
         return LRESULT(1);
     }
     if message == WM_NCDESTROY && !sender.is_null() {
-        drop(Box::from_raw(sender as *mut SyncSender<OsTransition>));
+        // The creating thread owns and frees the sender after DestroyWindow;
+        // only detach it here so no later message can reach it.
         SetWindowLongPtrW(window, GWLP_USERDATA, 0);
     }
     DefWindowProcW(window, message, wparam, lparam)

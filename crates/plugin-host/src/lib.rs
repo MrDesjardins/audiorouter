@@ -2477,6 +2477,9 @@ struct WorkerSandbox;
 #[cfg(windows)]
 impl WorkerSandbox {
     fn attach(child: &Child) -> Result<Self, String> {
+        // SAFETY: CreateJobObjectW is called with null attributes and a null name
+        // (an unnamed, non-inheritable job). A null result is checked below; a
+        // non-null handle is owned by `Self` or closed on the failure path.
         let handle = unsafe { create_job_object() };
         if handle.is_null() {
             return Err("CreateJobObjectW failed".into());
@@ -2487,6 +2490,9 @@ impl WorkerSandbox {
             | JOB_OBJECT_LIMIT_PROCESS_MEMORY;
         limits.basic.active_process_limit = WORKER_MAX_ACTIVE_PROCESSES;
         limits.process_memory_limit = WORKER_MAX_PROCESS_MEMORY_BYTES;
+        // SAFETY: `handle` is the valid job created above. `limits` is a live
+        // `#[repr(C)]` value laid out as JOBOBJECT_EXTENDED_LIMIT_INFORMATION, and
+        // the length passed is exactly its size; Windows only reads it.
         let configured = unsafe {
             set_information_job_object(
                 handle,
@@ -2495,9 +2501,13 @@ impl WorkerSandbox {
                 std::mem::size_of::<JobObjectExtendedLimitInformation>() as u32,
             )
         };
+        // SAFETY: `handle` is the valid job and `child.as_raw_handle()` is the live
+        // process handle `Child` owns for the duration of this borrow.
         let assigned =
             configured && unsafe { assign_process_to_job_object(handle, child.as_raw_handle()) };
         if !assigned {
+            // SAFETY: the job handle is owned only by this function on this failure path
+            // and is closed exactly once.
             unsafe { close_handle(handle) };
             return Err("could not assign worker to a kill-on-close job".into());
         }
@@ -2515,6 +2525,9 @@ impl WorkerSandbox {
 #[cfg(windows)]
 impl Drop for WorkerSandbox {
     fn drop(&mut self) {
+        // SAFETY: `self.handle` is the non-null job handle created in `attach` and
+        // owned only by this value; closing it once also kills the worker
+        // (KILL_ON_JOB_CLOSE).
         unsafe { close_handle(self.handle) };
     }
 }
@@ -5464,6 +5477,9 @@ fn windows_file_identity(left: &Path, right: &Path) -> Result<bool, SharedAudioE
             file_index_high: 0,
             file_index_low: 0,
         };
+        // SAFETY: `file` is open for the whole call, so its raw handle is valid, and
+        // `information` is a live `#[repr(C)]` value laid out as
+        // BY_HANDLE_FILE_INFORMATION that Windows fills.
         let succeeded =
             unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut information) };
         if succeeded == 0 {
@@ -5980,6 +5996,12 @@ impl SharedAudioRegion {
             })?;
         file.set_len(layout.buffer_len() as u64)
             .map_err(|error| SharedAudioError::Io(error.to_string()))?;
+        // SAFETY: memmap2 requires that the file is not truncated or resized while
+        // mapped. The file was just created exclusively (`create_new`) at an
+        // absolute, non-reparse path and sized to exactly `buffer_len()`; it is a
+        // caller-owned IPC endpoint whose only other user is the paired worker,
+        // which maps the same length and never resizes it. `Self` keeps `file`
+        // alive with the map.
         let map = unsafe { MmapOptions::new().len(layout.buffer_len()).map_mut(&file) }
             .map_err(|error| SharedAudioError::Io(error.to_string()))?;
         Ok(Self { file, map, layout })
@@ -6006,6 +6028,9 @@ impl SharedAudioRegion {
         {
             return Err(SharedAudioError::BufferTooSmall);
         }
+        // SAFETY: as in `create`: the existing file was checked to be at least
+        // `buffer_len()` bytes, only that length is mapped, and the IPC protocol
+        // never truncates or resizes the slot while either side maps it.
         let map = unsafe { MmapOptions::new().len(layout.buffer_len()).map_mut(&file) }
             .map_err(|error| SharedAudioError::Io(error.to_string()))?;
         Ok(Self { file, map, layout })
@@ -6013,10 +6038,13 @@ impl SharedAudioRegion {
 
     pub fn write(&mut self, frame: &WorkerFrame) -> Result<(), SharedAudioError> {
         let state = self.state() as *const std::sync::atomic::AtomicU64;
+        // SAFETY: `state` points to the 8-byte-aligned seqlock word inside this live
+        // mapping (see `state`), which stays mapped while `self` is borrowed.
         let current = unsafe { (*state).load(std::sync::atomic::Ordering::Acquire) };
         if current & 1 != 0 {
             return Err(SharedAudioError::Busy);
         }
+        // SAFETY: same live, aligned state word as above.
         unsafe {
             (*state).compare_exchange(
                 current,
@@ -6029,14 +6057,18 @@ impl SharedAudioRegion {
         if current != 0 {
             let previous = u64::from_le_bytes(self.map[12..20].try_into().unwrap());
             if frame.sequence <= previous {
+                // SAFETY: same live, aligned state word; restores the value this writer
+                // replaced so readers see the previous frame again.
                 unsafe { (*state).store(current, std::sync::atomic::Ordering::Release) };
                 return Err(SharedAudioError::SequenceRegression);
             }
         }
         if let Err(error) = self.layout.write(&mut self.map, frame) {
+            // SAFETY: same live, aligned state word; restores the previous value.
             unsafe { (*state).store(current, std::sync::atomic::Ordering::Release) };
             return Err(error);
         }
+        // SAFETY: same live, aligned state word; the even value publishes the frame.
         unsafe {
             (*state).store(
                 current.saturating_add(2),
@@ -6095,6 +6127,11 @@ impl SharedAudioRegion {
     fn state(&self) -> &std::sync::atomic::AtomicU64 {
         // The mapping starts page-aligned and the state offset is 8-byte
         // aligned. The region is created/opened at the exact layout length.
+        // SAFETY: the mapping is page-aligned and exactly `buffer_len()` bytes, which
+        // is at least SHARED_AUDIO_HEADER_BYTES (40), so offset 32..40 is in bounds
+        // and 8-byte aligned for an AtomicU64. The returned reference borrows
+        // `self`, so it cannot outlive the mapping. The other process accesses this
+        // word only atomically.
         unsafe {
             &*(self.map.as_ptr().add(SHARED_AUDIO_STATE_OFFSET)
                 as *const std::sync::atomic::AtomicU64)
