@@ -397,6 +397,17 @@ P2 and P3 remain a backlog.
   until then.
 - **Verify.** A test with a correct-IP, wrong-key packet expects it to be
   rejected and counted.
+- **Status (2026-10-07, user request): fixed, Windows CI pending.** Both
+  nodes take an optional `pairingKey`. With a key, the sender's I/O thread
+  appends a 16-byte HMAC-SHA256 tag (packet version 2); the receive thread
+  verifies it in constant time and drops replays with a 64-packet window
+  per stream id, counting `authFailures` (with the reason) and
+  `replayedPackets`. Blank keys keep version 1 unchanged. The inspector has
+  Generate/Copy and a reserved "Not paired" warning. Portable logic is in
+  `crates/protocol/src/network_audio.rs`; details and evidence are in the
+  [active plan](../active/current.md#code-review-p2p3-follow-ups-2026-10-07-user-request).
+  Still open: encryption (listening stays possible) and replay of an
+  earlier stream to a restarted receiver.
 
 ### P2-6 HTTP adapter polls and drops connections silently
 

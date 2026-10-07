@@ -79,6 +79,14 @@ only from the sender address entered. Other datagrams are counted and
 ignored, and received data is never treated as anything but audio samples
 (SEC-13).
 
+Give both nodes the same **Pairing key** to authenticate the stream: the
+receiver then plays only packets tagged with that key (HMAC-SHA256) and drops
+replayed ones. Without a key, a device on the same network can fake the
+sender's address and inject audio, which may reach OBS or Discord. Pairing
+does not encrypt: others on the network can still listen. The key is stored
+with the session and in exported bundles, and is never written to logs,
+diagnostics or the inspector's change summary.
+
 Do not grant capture or recording scope to an automation client unless its
 requested action and approved file roots are understood. Review the concrete
 method, session, destination, and path before approving a mutating operation.

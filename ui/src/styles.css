@@ -967,6 +967,15 @@ button.primary { color: #1b2026; border-color: #ffd166; background: linear-gradi
 .network-node-editor .network-node-status { margin: 0; font-weight: 600; color: var(--text-strong, #edf4ff); }
 .network-node-editor .network-node-fix { display: grid; gap: .5rem; padding: .6rem .7rem; border: 1px solid color-mix(in srgb, var(--warning, #e5a43b) 70%, transparent); border-radius: 10px; }
 .theme-high-contrast .network-node-editor .network-node-fix { border-color: #ffd400; }
+.network-node-editor .network-pairing { display: grid; gap: .4rem; min-width: 0; }
+.network-node-editor .network-pairing-actions { display: flex; flex-wrap: wrap; gap: .4rem; }
+.network-node-editor .network-pairing-actions button { min-width: 6.5rem; }
+/* UI-17: the warning, paired note and validation text share one slot of
+   three lines, so switching between them never moves the controls below. */
+.network-node-editor .network-pairing-note { margin: 0; font-size: .78rem; line-height: 1.4; min-height: calc(3 * 1.4em); color: var(--warning, #ffc768); }
+.network-node-editor .network-pairing-note.paired { color: var(--text-soft); }
+.theme-light .network-node-editor .network-pairing-note:not(.paired) { color: #8a4b00; }
+.theme-high-contrast .network-node-editor .network-pairing-note:not(.paired) { color: #ffff00; }
 .node-binding-editor .file-picker { display: grid; gap: .3rem; cursor: pointer; }
 .node-time-shift { display: grid; gap: .3rem; }
 .node-time-shift-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: .25rem; }

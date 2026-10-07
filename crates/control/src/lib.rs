@@ -4821,7 +4821,11 @@ fn diagnostics_output_schema() -> Value {
                                 "rejectedFrom": { "type": "string", "maxLength": 64 },
                                 "thisAddress": { "type": "string", "maxLength": 64 },
                                 "localAddress": { "type": "string", "maxLength": 64 },
-                                "lastErrorCode": { "type": "integer" }
+                                "lastErrorCode": { "type": "integer" },
+                                "paired": { "type": "boolean" },
+                                "authFailures": { "type": "integer", "minimum": 0 },
+                                "authProblem": { "enum": ["wrongKey", "senderNotPaired", "receiverNotPaired"] },
+                                "replayedPackets": { "type": "integer", "minimum": 0 }
                             },
                             "required": ["direction"],
                             "additionalProperties": false
@@ -5462,6 +5466,27 @@ enum MultiInputBindings<'s, 'a> {
     ByNode(&'s HashMap<EntityId, NativeMultiInputSourceBinding<'a>>),
 }
 
+/// The pairing key of a Network Send/Receive node: `None` when blank (not
+/// paired). A key that is present but invalid refuses to start rather than
+/// silently streaming unpaired (SEC-13). The key itself is never logged.
+#[cfg(windows)]
+fn network_pairing_key(
+    node: &audiorouter_domain::Node,
+) -> Result<Option<audiorouter_windows_audio::NetworkPairingKey>, ControlError> {
+    match node.parameters.get("pairingKey") {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(key)) if audiorouter_domain::valid_network_pairing_key(key) => {
+            Ok(audiorouter_windows_audio::NetworkPairingKey::derive(key))
+        }
+        Some(_) => Err(ControlError::InvalidRequest(format!(
+            "the pairing key of {} must be blank or {}-{} printable characters",
+            node.name,
+            audiorouter_domain::MIN_NETWORK_PAIRING_KEY_CHARS,
+            audiorouter_domain::MAX_NETWORK_PAIRING_KEY_CHARS
+        ))),
+    }
+}
+
 /// Open the UDP sender of a Network Send node from its validated
 /// parameters. Only an IP literal and port are accepted (no name lookup).
 #[cfg(windows)]
@@ -5486,11 +5511,13 @@ fn start_network_sender(
                 node.name
             ))
         })?;
-    match audiorouter_windows_audio::NetworkSender::start(destination) {
+    let pairing_key = network_pairing_key(node)?;
+    let paired = pairing_key.is_some();
+    match audiorouter_windows_audio::NetworkSender::start_paired(destination, pairing_key) {
         Ok(sender) => {
             network_log::write(json!({
                 "event": "sendStarted", "role": "send", "nodeId": node.id.as_str(),
-                "destination": destination.to_string(),
+                "destination": destination.to_string(), "paired": paired,
                 "localAddress": sender.stats().local_address.map(|address| address.to_string()),
             }));
             Ok(sender)
@@ -5553,11 +5580,19 @@ fn start_network_receiver(
     // The address the sending computer must target, as routed from here.
     let local_toward_sender =
         audiorouter_windows_audio::local_address_toward(sender).map(|address| address.to_string());
-    match audiorouter_windows_audio::NetworkReceiver::start(sender, port, buffer_ms) {
+    let pairing_key = network_pairing_key(node)?;
+    let paired = pairing_key.is_some();
+    match audiorouter_windows_audio::NetworkReceiver::start_paired(
+        sender,
+        port,
+        buffer_ms,
+        pairing_key,
+    ) {
         Ok(receiver) => {
             network_log::write(json!({
                 "event": "receiveStarted", "role": "receive", "nodeId": node.id.as_str(),
                 "expectedSender": sender.to_string(), "port": port, "bufferMs": buffer_ms,
+                "paired": paired,
                 "listen": receiver.listen_address().to_string(),
                 "localAddressTowardSender": local_toward_sender,
             }));
@@ -7519,6 +7554,10 @@ impl ControlPlane {
                 overflow_packets: stats.overflow_packets,
                 receive_errors: stats.receive_errors,
                 last_error_code: stats.last_error_code,
+                paired: stats.paired,
+                auth_failures: stats.auth_failures,
+                auth_problem: stats.last_auth_failure.map(|failure| failure.as_str()),
+                replayed_packets: stats.replayed_packets,
             };
             records.push((node_id.as_str().to_owned(), summary.to_record("summary")));
         }
@@ -7538,6 +7577,7 @@ impl ControlPlane {
                 dropped_packets: stats.dropped_packets,
                 send_errors: stats.send_errors,
                 last_error_code: stats.last_error_code,
+                paired: stats.paired,
             };
             records.push((node_id.as_str().to_owned(), summary.to_record("summary")));
         }
@@ -10844,7 +10884,13 @@ impl ControlPlane {
                             "overflowPackets": stats.overflow_packets,
                             "bufferedMs": stats.buffered_frames as f64 * 1_000.0
                                 / f64::from(audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ),
+                            "paired": stats.paired,
+                            "authFailures": stats.auth_failures,
+                            "replayedPackets": stats.replayed_packets,
                         });
+                        if let Some(failure) = stats.last_auth_failure {
+                            telemetry["authProblem"] = json!(failure.as_str());
+                        }
                         if let Some(address) = stats.last_rejected_sender {
                             telemetry["rejectedFrom"] = json!(address.to_string());
                         }
@@ -10862,6 +10908,7 @@ impl ControlPlane {
                                 "sentPackets": stats.sent_packets,
                                 "droppedPackets": stats.dropped_packets,
                                 "sendErrors": stats.send_errors,
+                                "paired": stats.paired,
                             });
                             // The address the receiver must accept.
                             if let Some(address) = stats.local_address {
@@ -14036,6 +14083,11 @@ impl ControlPlane {
             let Some(worker) = self.native_multi_input_worker.as_mut() else {
                 break;
             };
+            // A new pairing key applies in place on both sides (a receiver's
+            // port stays bound, so it cannot be reopened beside itself).
+            let pairing_changed =
+                old.parameters.get("pairingKey") != node.parameters.get("pairingKey");
+            let pairing_key = network_pairing_key(node)?;
             if node.kind == NodeKind::NetworkSend {
                 let Some(index) = worker
                     .output_node_ids()
@@ -14060,6 +14112,9 @@ impl ControlPlane {
                 })?;
                 if let Some(sender) = worker.network_sender(index) {
                     sender.retarget(destination);
+                    if pairing_changed {
+                        sender.set_pairing_key(pairing_key);
+                    }
                     changed += 1;
                 }
                 continue;
@@ -14080,9 +14135,13 @@ impl ControlPlane {
             let port_changed = old.parameters.get("port") != node.parameters.get("port");
             let in_place = !port_changed
                 && sender.is_some_and(|sender| {
-                    worker
-                        .network_receiver(index)
-                        .is_some_and(|receiver| receiver.reconfigure(sender, buffer_ms))
+                    worker.network_receiver(index).is_some_and(|receiver| {
+                        let reconfigured = receiver.reconfigure(sender, buffer_ms);
+                        if reconfigured && pairing_changed {
+                            receiver.set_pairing_key(pairing_key.clone());
+                        }
+                        reconfigured
+                    })
                 });
             if !in_place {
                 let receiver = start_network_receiver(node)?;
@@ -25140,6 +25199,52 @@ mod tests {
             moved["receivedPackets"].as_u64().unwrap_or(0) > 200,
             "audio follows the new port: {moved}"
         );
+        // P2-5: pair the receiver while playing. The unpaired sender is now
+        // refused (counted, never played) until it gets the same key.
+        const PAIRING_KEY: &str = "K7QW2X9MPAIRSTUDIO4HJ8NV";
+        let (plane, _) = &mut planes[1];
+        call(
+            plane,
+            "nodes.set",
+            json!({ "node": "net-receive", "parameters": { "pairingKey": PAIRING_KEY }, "idempotencyKey": "pair-receive" }),
+        );
+        service(&mut planes, 0.3);
+        let before = receive_telemetry(&mut planes)["receivedPackets"]
+            .as_u64()
+            .unwrap_or(0);
+        service(&mut planes, 0.5);
+        let refused = receive_telemetry(&mut planes);
+        assert_eq!(refused["paired"], true, "{refused}");
+        assert_eq!(
+            refused["receivedPackets"].as_u64().unwrap_or(0),
+            before,
+            "nothing unpaired is played: {refused}"
+        );
+        assert!(
+            refused["authFailures"].as_u64().unwrap_or(0) > 100,
+            "{refused}"
+        );
+        assert_eq!(refused["authProblem"], "senderNotPaired", "{refused}");
+        let (plane, _) = &mut planes[0];
+        call(
+            plane,
+            "nodes.set",
+            json!({ "node": "net-send", "parameters": { "pairingKey": PAIRING_KEY }, "idempotencyKey": "pair-send" }),
+        );
+        service(&mut planes, 1.0);
+        let paired = receive_telemetry(&mut planes);
+        assert!(
+            paired["receivedPackets"].as_u64().unwrap_or(0) > before + 200,
+            "paired audio flows: {paired}"
+        );
+        assert_eq!(paired["replayedPackets"], 0, "{paired}");
+        for (plane, _) in planes.iter_mut() {
+            let diagnostics = call(plane, "system.diagnostics", json!({}));
+            assert!(
+                !diagnostics.to_string().contains(PAIRING_KEY),
+                "diagnostics never carry the key"
+            );
+        }
         for (plane, id) in planes.iter_mut() {
             call(
                 plane,

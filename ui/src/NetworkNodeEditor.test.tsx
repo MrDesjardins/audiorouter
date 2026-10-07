@@ -6,7 +6,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { Session } from "@audiorouter/contracts";
 import { appendDraftConnection, appendLibraryNode, needsNativePaths } from "./draft";
 import { demoSession } from "./fixtures";
-import { isNetworkAddress, NetworkNodeEditor, networkTelemetryText } from "./NetworkNodeEditor";
+import { generatePairingKey, GENERATED_PAIRING_KEY_LENGTH, isNetworkAddress, isPairingKey, NetworkNodeEditor, networkTelemetryText, pairingAdvice } from "./NetworkNodeEditor";
 
 describe("network node addresses", () => {
   it("accepts IPv4/IPv6 literals and rejects names, blanks and malformed input", () => {
@@ -112,5 +112,75 @@ describe("NetworkNodeEditor", () => {
     fireEvent.click(screen.getByRole("button", { name: "Use 192.168.1.51" }));
     expect(onChange).toHaveBeenLastCalledWith("sender", "192.168.1.51");
     expect((screen.getByLabelText("Sending computer's IP address") as HTMLInputElement).value).toBe("192.168.1.51");
+  });
+});
+
+describe("network pairing keys", () => {
+  afterEach(cleanup);
+  it("accepts a blank key or 16-128 printable characters, as the backend does", () => {
+    expect(isPairingKey("")).toBe(true);
+    expect(isPairingKey("ABCDEFGHJKLMNPQR")).toBe(true);
+    expect(isPairingKey("k".repeat(128))).toBe(true);
+    expect(isPairingKey("too short")).toBe(false);
+    expect(isPairingKey("k".repeat(129))).toBe(false);
+    expect(isPairingKey(" padded pairing key ")).toBe(false);
+    expect(isPairingKey("clé réseau du studio")).toBe(false);
+  });
+
+  it("generates 24 unambiguous characters from the cryptographic generator", () => {
+    const fill = vi.fn((bytes: Uint8Array) => { bytes.forEach((_, index) => { bytes[index] = index * 11; }); return bytes; });
+    const key = generatePairingKey(fill);
+    expect(fill).toHaveBeenCalledTimes(1);
+    expect(key).toHaveLength(GENERATED_PAIRING_KEY_LENGTH);
+    expect(key).toMatch(/^[A-HJ-NP-Z2-9]{24}$/);
+    expect(isPairingKey(key)).toBe(true);
+    expect(generatePairingKey()).not.toBe(generatePairingKey());
+  });
+
+  it("saves only valid keys, generates and copies one, and warns while unpaired", async () => {
+    const node = appendLibraryNode(demoSession, "networkReceive").nodes.at(-1)!;
+    const onChange = vi.fn();
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    render(<NetworkNodeEditor node={node} disabled={false} telemetry={null} onChange={onChange} />);
+    const note = screen.getByTestId("network-pairing-note");
+    expect(note.textContent).toBe("Not paired: anyone on your network can send audio to this input.");
+    expect(screen.getByRole("button", { name: "Copy" })).toHaveProperty("disabled", true);
+    const field = screen.getByLabelText("Pairing key") as HTMLInputElement;
+    fireEvent.change(field, { target: { value: "short" } });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(note.textContent).toContain("16 to 128");
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    expect(field.value).toMatch(/^[A-HJ-NP-Z2-9]{24}$/);
+    expect(onChange).toHaveBeenLastCalledWith("pairingKey", field.value);
+    expect(note.textContent).toBe("Paired: only audio sent with this key is played.");
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+    expect(writeText).toHaveBeenCalledWith(field.value);
+    expect(await screen.findByRole("button", { name: "Copied" })).toBeTruthy();
+    // Clearing the key unpairs (a blank key is valid and saved).
+    fireEvent.change(field, { target: { value: "" } });
+    expect(onChange).toHaveBeenLastCalledWith("pairingKey", "");
+    expect(note.textContent).toContain("Not paired");
+  });
+
+  it("warns a send node that its stream can be heard while unpaired", () => {
+    const node = appendLibraryNode(demoSession, "networkSend").nodes.at(-1)!;
+    render(<NetworkNodeEditor node={{ ...node, parameters: { ...node.parameters, pairingKey: "K7QW2X9MPAIRSTUDIO4HJ8NV" } }} disabled={false} telemetry={null} onChange={() => {}} />);
+    expect((screen.getByLabelText("Pairing key") as HTMLInputElement).value).toBe("K7QW2X9MPAIRSTUDIO4HJ8NV");
+    expect(screen.getByTestId("network-pairing-note").textContent).toContain("The audio is not encrypted");
+    cleanup();
+    render(<NetworkNodeEditor node={node} disabled={false} telemetry={null} onChange={() => {}} />);
+    expect(screen.getByTestId("network-pairing-note").textContent).toContain("Not paired: anyone on your network can listen to this stream");
+  });
+
+  it("explains which side's pairing to fix", () => {
+    expect(networkTelemetryText({ direction: "receive", receivedPackets: 0, authFailures: 30, authProblem: "wrongKey" })).toBe("Waiting for audio · 30 packets had another pairing key");
+    expect(networkTelemetryText({ direction: "receive", receivedPackets: 0, authFailures: 3, authProblem: "senderNotPaired" })).toBe("Waiting for audio · 3 packets had no pairing key");
+    expect(networkTelemetryText({ direction: "receive", receivedPackets: 0, authFailures: 3, authProblem: "receiverNotPaired" })).toBe("Waiting for audio · 3 packets had a pairing key");
+    expect(pairingAdvice({ direction: "receive", receivedPackets: 0, authFailures: 3, authProblem: "wrongKey" })).toContain("same key on both computers");
+    expect(pairingAdvice({ direction: "receive", receivedPackets: 0, authFailures: 3, authProblem: "senderNotPaired" })).toContain("into its Network Send");
+    expect(pairingAdvice({ direction: "receive", receivedPackets: 0, authFailures: 3, authProblem: "receiverNotPaired" })).toContain("same key here");
+    expect(pairingAdvice({ direction: "receive", receivedPackets: 9, authFailures: 3, authProblem: "wrongKey" })).toBeNull();
+    expect(networkTelemetryText({ direction: "receive", receivedPackets: 900, bufferedMs: 40, authFailures: 2, replayedPackets: 5 })).toBe("Receiving · 900 packets · 40 ms buffered · 2 with another pairing key · 5 replayed");
   });
 });
