@@ -13,6 +13,43 @@ export function isNetworkAddress(value: string): boolean {
   return value.includes(":") && /^[0-9a-fA-F:.]+$/.test(value) && (value.match(/::/g) ?? []).length <= 1;
 }
 
+/** Pairing keys the backend accepts: blank (not paired) or 16-128
+ * printable ASCII characters without leading or trailing spaces. */
+export function isPairingKey(value: string): boolean {
+  return value.length === 0 || (value.length >= 16 && value.length <= 128 && /^[\x20-\x7e]+$/.test(value) && value.trim() === value);
+}
+
+/** 32 symbols without the look-alikes 0/O and 1/I: a random byte masked to
+ * 5 bits picks one without bias, so 24 characters carry 120 random bits. */
+const PAIRING_SYMBOLS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+export const GENERATED_PAIRING_KEY_LENGTH = 24;
+
+/** A new random pairing key from the platform's cryptographic generator. */
+export function generatePairingKey(fill: (bytes: Uint8Array) => Uint8Array = (bytes) => crypto.getRandomValues(bytes)): string {
+  const bytes = fill(new Uint8Array(GENERATED_PAIRING_KEY_LENGTH));
+  return Array.from(bytes, (byte) => PAIRING_SYMBOLS[byte & 31]).join("");
+}
+
+/** Short enough for the canvas node's one-line status. */
+function pairingProblemText(telemetry: NetworkNodeTelemetry): string {
+  const count = telemetry.authFailures ?? 0;
+  switch (telemetry.authProblem) {
+    case "senderNotPaired": return `${count} packets had no pairing key`;
+    case "receiverNotPaired": return `${count} packets had a pairing key`;
+    default: return `${count} packets had another pairing key`;
+  }
+}
+
+/** What to change when audio arrives with the wrong pairing, or null. */
+export function pairingAdvice(telemetry: NetworkNodeTelemetry | null | undefined): string | null {
+  if (!telemetry || telemetry.direction !== "receive" || !telemetry.authFailures || (telemetry.receivedPackets ?? 0) > 0) return null;
+  switch (telemetry.authProblem) {
+    case "senderNotPaired": return "The sending computer has no pairing key. Copy this key into its Network Send.";
+    case "receiverNotPaired": return "The sending computer uses a pairing key. Enter the same key here.";
+    default: return "The sending computer uses a different pairing key. Enter the same key on both computers.";
+  }
+}
+
 /** A one-line status of a running network node, or null when idle. */
 export function networkTelemetryText(telemetry: NetworkNodeTelemetry | null | undefined): string | null {
   if (!telemetry) return null;
@@ -25,6 +62,7 @@ export function networkTelemetryText(telemetry: NetworkNodeTelemetry | null | un
   }
   const received = telemetry.receivedPackets ?? 0;
   if (received === 0) {
+    if (telemetry.authFailures) return `Waiting for audio · ${pairingProblemText(telemetry)}`;
     if (telemetry.rejectedFrom) return `Waiting for audio · audio from ${telemetry.rejectedFrom} was ignored because it is not the address entered`;
     return telemetry.rejectedDatagrams
       ? `Waiting for audio · ${telemetry.rejectedDatagrams} packets from another address were ignored`
@@ -34,6 +72,8 @@ export function networkTelemetryText(telemetry: NetworkNodeTelemetry | null | un
     telemetry.lostPackets ? `${telemetry.lostPackets} lost` : null,
     telemetry.latePackets ? `${telemetry.latePackets} late` : null,
     telemetry.underruns ? `${telemetry.underruns} gaps` : null,
+    telemetry.authFailures ? `${telemetry.authFailures} with another pairing key` : null,
+    telemetry.replayedPackets ? `${telemetry.replayedPackets} replayed` : null,
   ].filter(Boolean);
   return `Receiving · ${received} packets · ${Math.round(telemetry.bufferedMs ?? 0)} ms buffered${problems.length ? ` · ${problems.join(" · ")}` : ""}`;
 }
@@ -51,18 +91,46 @@ export function NetworkNodeEditor({ node, disabled, telemetry, onChange }: {
   const savedAddress = typeof node.parameters[addressKey] === "string" ? String(node.parameters[addressKey]) : "";
   const savedPort = Number(node.parameters.port ?? DEFAULT_NETWORK_AUDIO_PORT);
   const savedBuffer = Number(node.parameters.bufferMs ?? 40);
+  const savedPairingKey = typeof node.parameters.pairingKey === "string" ? node.parameters.pairingKey : "";
   const [address, setAddress] = useState(savedAddress);
   const [port, setPort] = useState(String(savedPort));
   const [buffer, setBuffer] = useState(String(savedBuffer));
   useEffect(() => setAddress(savedAddress), [node.id, savedAddress]);
   useEffect(() => setPort(String(savedPort)), [node.id, savedPort]);
   useEffect(() => setBuffer(String(savedBuffer)), [node.id, savedBuffer]);
+  const [pairingKey, setPairingKey] = useState(savedPairingKey);
+  useEffect(() => setPairingKey(savedPairingKey), [node.id, savedPairingKey]);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 1500);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
 
   const addressValid = isNetworkAddress(address);
   const portNumber = Number(port);
   const portValid = Number.isInteger(portNumber) && portNumber >= 1 && portNumber <= 65535;
   const bufferNumber = Number(buffer);
   const bufferValid = Number.isFinite(bufferNumber) && bufferNumber >= 10 && bufferNumber <= 500;
+  const pairingValid = isPairingKey(pairingKey);
+  const changePairingKey = (value: string) => { setPairingKey(value); if (isPairingKey(value)) onChange("pairingKey", value); };
+  const copyPairingKey = () => {
+    void navigator.clipboard?.writeText(pairingKey).then(() => setCopied(true), () => setCopied(false));
+  };
+  // One reserved slot (UI-17): the warning, the paired note and the
+  // validation message replace each other without moving anything below.
+  // Advice from live telemetry applies to the saved key only: once the key
+  // is edited here, the counters describe the previous one.
+  const advice = pairingKey === savedPairingKey && Boolean(telemetry?.paired) === (savedPairingKey.length > 0) ? pairingAdvice(telemetry) : null;
+  const pairingNote = !pairingValid
+    ? "Use 16 to 128 letters, digits or symbols, or leave it blank."
+    : advice ?? ( pairingKey.length === 0
+      ? sending
+        ? "Not paired: anyone on your network can listen to this stream or send audio in its place."
+        : "Not paired: anyone on your network can send audio to this input."
+      : sending
+        ? "Paired: the other computer plays only audio with this key. The audio is not encrypted."
+        : "Paired: only audio sent with this key is played.");
   const status = networkTelemetryText(telemetry);
   const thisPc = sending ? telemetry?.localAddress : telemetry?.thisAddress;
   const addressLabel = sending ? "Receiving computer's IP address" : "Sending computer's IP address";
@@ -80,6 +148,15 @@ export function NetworkNodeEditor({ node, disabled, telemetry, onChange }: {
     {address.length > 0 && !addressValid && <small role="alert">Enter a numeric IP address such as 192.168.1.20. Computer names are not used.</small>}
     <label>Port<input type="number" min={1} max={65535} step={1} value={port} disabled={disabled} aria-invalid={!portValid}
       onChange={(event) => { setPort(event.target.value); const value = Number(event.target.value); if (Number.isInteger(value) && value >= 1 && value <= 65535) onChange("port", value); }} /></label>
+    <div className="network-pairing">
+      <label>Pairing key<input type="text" autoComplete="off" spellCheck={false} maxLength={128} placeholder="Blank: not paired" value={pairingKey} disabled={disabled} aria-invalid={!pairingValid}
+        aria-describedby={`${node.id}-pairing-note`} onChange={(event) => changePairingKey(event.target.value)} /></label>
+      <div className="network-pairing-actions">
+        <button type="button" className="secondary" disabled={disabled} onClick={() => changePairingKey(generatePairingKey())}>Generate</button>
+        <button type="button" className="secondary" disabled={pairingKey.length === 0 || !pairingValid} onClick={copyPairingKey} aria-live="polite">{copied ? "Copied" : "Copy"}</button>
+      </div>
+      <p id={`${node.id}-pairing-note`} className={`network-pairing-note${pairingValid && pairingKey.length > 0 && !advice ? " paired" : ""}`} data-testid="network-pairing-note">{pairingNote}</p>
+    </div>
     {!sending && <label>Buffer (ms)<input type="number" min={10} max={500} step={5} value={buffer} disabled={disabled} aria-invalid={!bufferValid}
       onChange={(event) => { setBuffer(event.target.value); const value = Number(event.target.value); if (Number.isFinite(value) && value >= 10 && value <= 500) onChange("bufferMs", value); }} /></label>}
     {status && <p className="network-node-status" role="status">{status}</p>}

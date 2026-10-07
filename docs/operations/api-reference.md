@@ -253,8 +253,8 @@ The current node catalog is available through `nodes.describe` and contains:
 | `virtual-capture-sink@1` | unavailable | AudioRouter-owned virtual devices are out of scope; use an installed virtual cable through `physical-output` |
 | `test-signal@1` | available | `frequencyHz` 20–20,000, `levelDb` -60–0, `durationMs` 1–600,000; paced in real time |
 | `audio-file@1` | available | Imported WAV/MP3 media (`mediaId`), optional `loop`; paced in real time |
-| `network-send@1` | available | Streams its input over UDP to `host` (IPv4/IPv6 literal) and `port` (default 47800); see GRAPH-16/SEC-13 |
-| `network-receive@1` | available | Plays the stream from `sender` (IP literal) on `port`, with a `bufferMs` jitter buffer of 10–500 ms (default 40) |
+| `network-send@1` | available | Streams its input over UDP to `host` (IPv4/IPv6 literal) and `port` (default 47800); optional `pairingKey` (blank or 16–128 printable characters) tags every packet; see GRAPH-16/SEC-13 |
+| `network-receive@1` | available | Plays the stream from `sender` (IP literal) on `port`, with a `bufferMs` jitter buffer of 10–500 ms (default 40); with `pairingKey`, plays only packets tagged with the same key and drops replays (telemetry `authFailures`, `authProblem`, `replayedPackets`) |
 | `recorder@1` | available | Recording sink branch; the runtime tap is attached by the control plane |
 | `mixer@1` | available | Bounded graph mixer with per-input volume |
 | `input-switch@1` | available | Passes input A or B with a crossfade |

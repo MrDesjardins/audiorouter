@@ -338,6 +338,22 @@ both computers.
    entered (for example the sending PC also has Wi-Fi and Ethernet), the
    receive node names that address and offers **Use 192.168.x.y**. One click
    switches to it while playing.
+6. Pair the two computers (recommended). On one PC, select the node and
+   choose **Generate** under **Pairing key**, then **Copy**. Enter the same
+   key in the **Pairing key** of the node on the other PC, and save both.
+   The key is 16–128 characters; a generated one is 24 random characters.
+   While the key is blank, the node shows "Not paired": the receiving PC
+   then plays any AudioRouter audio that appears to come from the sender's
+   address, which another device on the network can fake.
+
+With a pairing key, every packet carries a tag made with that key, and the
+receiving PC plays only packets with the right tag that it has not played
+before. If the keys differ, or only one PC has a key, nothing is played and
+the receive node says which: for example "Waiting for audio · 40 packets had
+no pairing key" with "The sending computer has no pairing key. Copy this key
+into its Network Send." A key change applies while playing. Both PCs need an
+AudioRouter version with pairing; an older version cannot send to, or
+receive from, a paired node.
 
 The sending PC does not need a speaker or headphone output in its session:
 **Microphone → (tools) → Network Send** alone is a complete route.
@@ -349,8 +365,12 @@ cause. Open *Windows Security → Firewall & network protection → Allow an app
 through firewall* and make sure AudioRouter is allowed on **Private**
 networks, and that your network is set to Private, not Public.
 
-The stream is uncompressed 48 kHz float audio (about 3 Mbit/s for stereo). It
-is not encrypted, so use it only on a network you trust. On Wi-Fi, raise
+The stream is uncompressed 48 kHz float audio (about 3 Mbit/s for stereo).
+Pairing stops other devices from injecting or replaying audio, but the audio
+is **not encrypted**: anyone on the same network can still listen to it. Use
+it only on a network you trust. The pairing key is saved in the session (and
+in an exported session bundle), never in AudioRouter's logs or diagnostics;
+treat a shared bundle like the key itself. On Wi-Fi, raise
 **Buffer (ms)** on the receiver (for example to 80) if you hear gaps; the
 buffer is the added delay.
 

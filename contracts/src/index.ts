@@ -441,6 +441,14 @@ export interface NetworkNodeTelemetry {
   overflowPackets?: number;
   /** Audio buffered ahead of playout. */
   bufferedMs?: number;
+  /** The node has a pairing key: every datagram is tagged / must be tagged with it. */
+  paired?: boolean;
+  /** Receive: datagrams from the sender whose pairing did not match (never played). */
+  authFailures?: number;
+  /** Receive: why the latest of those failed. */
+  authProblem?: "wrongKey" | "senderNotPaired" | "receiverNotPaired";
+  /** Receive: correctly tagged packets received a second time (replays), dropped. */
+  replayedPackets?: number;
 }
 
 /** Continuity of the backend-owned native audio service (absent from older backends). */

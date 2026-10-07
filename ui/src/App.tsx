@@ -446,7 +446,8 @@ function InspectorChangeSummary({ draftNode, authoritativeNode }: { draftNode: N
   const parameterNames = [...new Set([...Object.keys(authoritativeNode.parameters), ...Object.keys(draftNode.parameters)])].sort();
   for (const name of parameterNames) {
     if (!Object.is(authoritativeNode.parameters[name], draftNode.parameters[name])) {
-      changes.push(name + ": " + String(authoritativeNode.parameters[name] ?? "unset") + " → " + String(draftNode.parameters[name] ?? "unset"));
+      // A network pairing key is a secret: name the change, never the key.
+      changes.push(name === "pairingKey" ? (draftNode.parameters[name] ? "change pairing key" : "remove pairing key") : name + ": " + String(authoritativeNode.parameters[name] ?? "unset") + " → " + String(draftNode.parameters[name] ?? "unset"));
     }
   }
   // One fixed line, so editing never moves the controls below it; the full

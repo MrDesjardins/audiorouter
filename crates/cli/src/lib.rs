@@ -2396,6 +2396,8 @@ fn mcp_tool_activity_record(
                         "data",
                         "content",
                         "path",
+                        // Network pairing keys (P2-5).
+                        "pairing",
                     ]
                     .iter()
                     .any(|sensitive| {
@@ -2968,7 +2970,8 @@ mod tests {
     fn mcp_activity_records_tool_identity_and_safe_argument_names_only() {
         let request = serde_json::json!({
             "params": { "name": "call_api", "arguments": {
-                "sessionId": "session-private", "secretToken": "do-not-log", "filePath": "C:/private.wav", "mediaId": "private-media", "revision": 4
+                "sessionId": "session-private", "secretToken": "do-not-log", "filePath": "C:/private.wav", "mediaId": "private-media", "revision": 4,
+                "pairingKey": "K7QW2X9MPAIRSTUDIO4HJ8NV"
             }}
         });
         let response =
@@ -2988,6 +2991,8 @@ mod tests {
             "private-media",
             "session-private",
             "private response",
+            "K7QW2X9MPAIRSTUDIO4HJ8NV",
+            "pairingKey",
         ] {
             assert!(!encoded.contains(private));
         }

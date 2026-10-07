@@ -165,6 +165,36 @@ costs and phases in the [driver track](../future/M03-driver-signing.md).
 
 ## Open work
 
+### Code review P2/P3 follow-ups (2026-10-07, user request)
+
+- **P2-5 network pairing key** (SEC-13, GRAPH-16; branch
+  `worktree-agent-ae33fb03459795579`). Network Send/Receive take an
+  optional `pairingKey` (domain validates blank or 16–128 printable ASCII).
+  Wire format: version 2 = version 1 plus a 16-byte truncated HMAC-SHA256
+  tag over header and samples; key = HMAC-SHA256(pairing key, fixed
+  context). Tagging runs on the send I/O thread and verification plus the
+  replay window (`crates/protocol/src/network_audio.rs`, portable) on the
+  receive thread, never on the audio thread. Counters `authFailures`,
+  `authProblem` and `replayedPackets` reach telemetry, `network.jsonl` and
+  the inspector; the key is never logged (no log writes parameter values;
+  MCP activity also drops `pairing*` argument names, and the inspector's
+  change summary hides the value). A key change applies in place on
+  both nodes. Decision: version 1 and 2 are mutually exclusive, so a paired
+  node cannot talk to an older AudioRouter (documented).
+  Evidence (Linux): protocol unit tests (pinned tag computed with Python
+  `hmac`); domain validation tests; Windows-target Clippy clean for
+  protocol, domain, windows-audio and control; the `network_audio.rs` socket
+  tests run on Linux in a throwaway harness (stubs for the crate types):
+  all pass except the pre-existing IPv6-loopback test, which also fails on
+  the unchanged file in this container; Vitest and the new
+  `ui/e2e/network-pairing.pw.ts` in Chromium, three themes, no layout
+  shift. Windows CI must still run `windows-audio` and the extended
+  `network_settings_corrected_while_playing_take_effect_without_restart`
+  control test. Rollback: revert the commit; sessions with a key then fail
+  validation until the key is removed.
+  Next action: Windows CI on the branch, then a two-PC attended check with
+  the same key, a wrong key, and one side blank.
+
 ### Code review P0 and P1 fixes (2026-10-07, user request)
 
 The user asked to fix every P0 and P1 item in the

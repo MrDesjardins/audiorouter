@@ -187,8 +187,10 @@ dependencies = [
 name = "audiorouter-protocol"
 version = "0.0.14"
 dependencies = [
+ "hmac",
  "serde",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]

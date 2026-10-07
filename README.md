@@ -71,7 +71,8 @@ recording, application capture and two-PC streaming.
   OBS, your headphones and a recorder at the same time. Mix several sources
   into one with the Mixer.
 - **Two-PC streaming built in.** Network Send and Network Receive carry audio
-  between computers on your home network, with no extra software.
+  between computers on your home network, with no extra software. A shared
+  pairing key stops other devices from injecting audio (it does not encrypt).
 - **Capture one application.** Route just the game, just the browser or just
   Spotify instead of the whole desktop.
 - **Record while you route**, with a recording library.

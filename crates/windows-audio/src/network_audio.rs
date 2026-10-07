@@ -8,14 +8,21 @@
 //! ```text
 //! offset  size  field
 //!      0     4  magic "ARNA"
-//!      4     1  version (1)
+//!      4     1  version (1, or 2 with a pairing-key tag)
 //!      5     1  channels (1..=2)
 //!      6     2  frames per packet, little endian (1..=MAX_NETWORK_PACKET_FRAMES)
 //!      8     4  sample rate, little endian (48000)
 //!     12     4  stream id, little endian (random per sender start)
 //!     16     4  sequence, little endian (wraps)
 //!     20     .  frames * channels float32, little endian, interleaved
+//!  end-16   16  version 2 only: truncated HMAC-SHA256 tag
 //! ```
+//!
+//! Pairing (SEC-13): when both nodes share a pairing key, the sender's I/O
+//! thread tags every datagram and the receive thread verifies the tag in
+//! constant time, then rejects replayed sequences, before a sample is used
+//! (`audiorouter_protocol::network_audio`). Neither runs on the audio
+//! thread. Without a key the format and behaviour are unchanged.
 //!
 //! Realtime boundary: the graph tap only copies a quantum into a
 //! preallocated packet pool; a separate thread performs socket I/O. The
@@ -33,17 +40,24 @@ use std::time::{Duration, Instant};
 
 use crossbeam_queue::ArrayQueue;
 
+use audiorouter_protocol::network_audio::{
+    open_network_datagram, seal_network_datagram, ReplayVerdict, ReplayWindow,
+};
+pub use audiorouter_protocol::network_audio::{
+    NetworkAuthFailure, NetworkPairingKey, NETWORK_AUDIO_HEADER_BYTES, NETWORK_AUDIO_MAGIC,
+    NETWORK_AUDIO_TAG_BYTES, NETWORK_AUDIO_VERSION, NETWORK_AUDIO_VERSION_AUTHENTICATED,
+};
+
 use crate::{AudioCaptureSource, AudioError, CapturePacket};
 
-pub const NETWORK_AUDIO_MAGIC: [u8; 4] = *b"ARNA";
-pub const NETWORK_AUDIO_VERSION: u8 = 1;
-pub const NETWORK_AUDIO_HEADER_BYTES: usize = 20;
 /// Largest quantum accepted in one datagram. 256 stereo frames is 2,068
-/// bytes; the normal 128-frame quantum (1,044 bytes) fits one Ethernet frame.
+/// bytes (2,084 paired); the normal 128-frame quantum (1,044 bytes, 1,060
+/// paired) fits one Ethernet frame.
 pub const MAX_NETWORK_PACKET_FRAMES: usize = 256;
 pub const MAX_NETWORK_CHANNELS: usize = 2;
-pub const MAX_NETWORK_PACKET_BYTES: usize =
-    NETWORK_AUDIO_HEADER_BYTES + MAX_NETWORK_PACKET_FRAMES * MAX_NETWORK_CHANNELS * 4;
+pub const MAX_NETWORK_PACKET_BYTES: usize = NETWORK_AUDIO_HEADER_BYTES
+    + MAX_NETWORK_PACKET_FRAMES * MAX_NETWORK_CHANNELS * 4
+    + NETWORK_AUDIO_TAG_BYTES;
 /// Packets waiting for the sender thread (about 170 ms of 128-frame quanta).
 const SEND_QUEUE_PACKETS: usize = 64;
 /// Received audio kept at most (about 1.4 s of 128-frame quanta).
@@ -67,9 +81,23 @@ pub enum NetworkAudioError {
     /// A well-formed datagram in a format this receiver does not play.
     Unsupported,
     BufferTooSmall,
+    /// The datagram's pairing does not match this receiver's key.
+    Auth(NetworkAuthFailure),
 }
 
-/// Encode one packet into `out` and return its length.
+/// Encode one paired packet into `out` and return its length: the version 2
+/// datagram with its tag.
+pub fn encode_authenticated_network_packet(
+    header: NetworkPacketHeader,
+    interleaved: &[f32],
+    key: &NetworkPairingKey,
+    out: &mut [u8],
+) -> Result<usize, NetworkAudioError> {
+    let length = encode_network_packet(header, interleaved, out)?;
+    seal_network_datagram(key, out, length).ok_or(NetworkAudioError::BufferTooSmall)
+}
+
+/// Encode one unpaired (version 1) packet into `out` and return its length.
 pub fn encode_network_packet(
     header: NetworkPacketHeader,
     interleaved: &[f32],
@@ -103,17 +131,29 @@ pub fn encode_network_packet(
     Ok(length)
 }
 
-/// Validate a datagram and return its header and sample payload. Only the
-/// internal 48 kHz rate is accepted; the payload length must match exactly.
+/// Validate an unpaired (version 1) datagram and return its header and
+/// sample payload. Only the internal 48 kHz rate is accepted; the payload
+/// length must match exactly.
 pub fn decode_network_packet(
     datagram: &[u8],
 ) -> Result<(NetworkPacketHeader, &[u8]), NetworkAudioError> {
+    open_network_packet(datagram, None)
+}
+
+/// Validate a datagram for a receiver with pairing key `key` (`None`: not
+/// paired). The pairing is checked first, the tag in constant time; only
+/// then are the header and payload interpreted.
+pub fn open_network_packet<'a>(
+    datagram: &'a [u8],
+    key: Option<&NetworkPairingKey>,
+) -> Result<(NetworkPacketHeader, &'a [u8]), NetworkAudioError> {
     if datagram.len() < NETWORK_AUDIO_HEADER_BYTES || datagram[0..4] != NETWORK_AUDIO_MAGIC {
         return Err(NetworkAudioError::Malformed);
     }
-    if datagram[4] != NETWORK_AUDIO_VERSION {
+    let Some(body) = open_network_datagram(key, datagram).map_err(NetworkAudioError::Auth)? else {
         return Err(NetworkAudioError::Unsupported);
-    }
+    };
+    let datagram = &datagram[..body];
     let header = NetworkPacketHeader {
         channels: datagram[5],
         frames: u16::from_le_bytes([datagram[6], datagram[7]]),
@@ -172,6 +212,8 @@ pub struct NetworkSendStats {
     /// The local address the audio leaves from; the receiver must expect
     /// this address (a computer with several adapters may use another one).
     pub local_address: Option<SocketAddr>,
+    /// Every datagram carries a pairing-key tag.
+    pub paired: bool,
 }
 
 struct SendPacket {
@@ -196,6 +238,10 @@ struct SenderShared {
     /// A new destination requested while running; applied by the I/O thread
     /// before its next send (a new socket when the IP family changes).
     retarget: Mutex<Option<SocketAddr>>,
+    /// The pairing key; the I/O thread takes a copy when `key_changed` is set.
+    pairing_key: Mutex<Option<NetworkPairingKey>>,
+    key_changed: AtomicBool,
+    paired: AtomicBool,
 }
 
 impl SenderShared {
@@ -240,7 +286,18 @@ pub struct NetworkSender {
 }
 
 impl NetworkSender {
+    /// Stream unpaired (version 1) datagrams to `destination`.
     pub fn start(destination: SocketAddr) -> Result<Self, AudioError> {
+        Self::start_paired(destination, None)
+    }
+
+    /// Stream to `destination`, tagging every datagram with `pairing_key`
+    /// when one is given. The tag is computed on the I/O thread, never in
+    /// the realtime tap.
+    pub fn start_paired(
+        destination: SocketAddr,
+        pairing_key: Option<NetworkPairingKey>,
+    ) -> Result<Self, AudioError> {
         let mut socket = connected_socket(destination).map_err(network_error)?;
         let shared = Arc::new(SenderShared {
             free: ArrayQueue::new(SEND_QUEUE_PACKETS),
@@ -255,6 +312,9 @@ impl NetworkSender {
             local: Mutex::new(socket.local_addr().ok()),
             thread: std::sync::OnceLock::new(),
             retarget: Mutex::new(None),
+            paired: AtomicBool::new(pairing_key.is_some()),
+            pairing_key: Mutex::new(pairing_key),
+            key_changed: AtomicBool::new(true),
         });
         for _ in 0..SEND_QUEUE_PACKETS {
             let _ = shared.free.push(SendPacket {
@@ -266,6 +326,7 @@ impl NetworkSender {
         let handle = std::thread::Builder::new()
             .name("audiorouter-network-send".into())
             .spawn(move || {
+                let mut pairing_key: Option<NetworkPairingKey> = None;
                 while thread_shared.running.load(Ordering::Acquire) {
                     let retarget = thread_shared
                         .retarget
@@ -288,8 +349,27 @@ impl NetworkSender {
                         }
                         thread_shared.record_local(&socket);
                     }
-                    while let Some(packet) = thread_shared.ready.pop() {
-                        match socket.send(&packet.bytes[..packet.length]) {
+                    while let Some(mut packet) = thread_shared.ready.pop() {
+                        // Checked after the pop: a key set before a quantum
+                        // was queued always applies to that quantum.
+                        if thread_shared.key_changed.swap(false, Ordering::AcqRel) {
+                            pairing_key = thread_shared.pairing_key.lock().map_or_else(
+                                |poisoned| poisoned.into_inner().clone(),
+                                |key| key.clone(),
+                            );
+                        }
+                        let length = match &pairing_key {
+                            Some(key) => {
+                                seal_network_datagram(key, &mut packet.bytes, packet.length)
+                            }
+                            None => Some(packet.length),
+                        };
+                        let Some(length) = length else {
+                            thread_shared.dropped.fetch_add(1, Ordering::Relaxed);
+                            let _ = thread_shared.free.push(packet);
+                            continue;
+                        };
+                        match socket.send(&packet.bytes[..length]) {
                             Ok(_) => {
                                 thread_shared.sent.fetch_add(1, Ordering::Relaxed);
                             }
@@ -330,6 +410,21 @@ impl NetworkSender {
         }
     }
 
+    /// Tag datagrams with another pairing key (or none) from the next packet
+    /// on: a live edit of a playing Network Send.
+    pub fn set_pairing_key(&self, pairing_key: Option<NetworkPairingKey>) {
+        self.shared
+            .paired
+            .store(pairing_key.is_some(), Ordering::Release);
+        if let Ok(mut key) = self.shared.pairing_key.lock() {
+            *key = pairing_key;
+        }
+        self.shared.key_changed.store(true, Ordering::Release);
+        if let Some(thread) = self.shared.thread.get() {
+            thread.unpark();
+        }
+    }
+
     /// The realtime graph tap feeding this sender.
     pub fn tap(&self) -> NetworkSendTap {
         NetworkSendTap {
@@ -345,6 +440,7 @@ impl NetworkSender {
             last_error_code: Some(self.shared.last_error.load(Ordering::Relaxed))
                 .filter(|code| *code != 0),
             local_address: self.shared.local.lock().ok().and_then(|local| *local),
+            paired: self.shared.paired.load(Ordering::Acquire),
         }
     }
 }
@@ -443,6 +539,16 @@ pub struct NetworkReceiveStats {
     /// This computer's address toward the configured sender: the address
     /// the sending computer must target.
     pub local_address_toward_sender: Option<IpAddr>,
+    /// Datagrams from the configured sender whose pairing did not match:
+    /// wrong key, or only one side has a key. Never played.
+    pub auth_failures: u64,
+    /// Why the latest of those failed.
+    pub last_auth_failure: Option<NetworkAuthFailure>,
+    /// Correctly tagged packets already accepted once (a replay), or too old
+    /// to tell. Never played.
+    pub replayed_packets: u64,
+    /// This receiver has a pairing key.
+    pub paired: bool,
 }
 
 struct ReceivePacket {
@@ -473,6 +579,32 @@ struct ReceiverShared {
     sender: Mutex<IpAddr>,
     /// Jitter-buffer target in frames; changeable while running.
     target_frames: AtomicUsize,
+    auth_failures: AtomicU64,
+    /// Latest `NetworkAuthFailure` (see `auth_failure_code`); 0 when none.
+    last_auth_failure: std::sync::atomic::AtomicU8,
+    replayed: AtomicU64,
+    /// The pairing key; the receive thread takes a copy when `key_changed`
+    /// is set.
+    pairing_key: Mutex<Option<NetworkPairingKey>>,
+    key_changed: AtomicBool,
+    paired: AtomicBool,
+}
+
+fn auth_failure_code(failure: NetworkAuthFailure) -> u8 {
+    match failure {
+        NetworkAuthFailure::WrongKey => 1,
+        NetworkAuthFailure::SenderNotPaired => 2,
+        NetworkAuthFailure::ReceiverNotPaired => 3,
+    }
+}
+
+fn auth_failure_from_code(code: u8) -> Option<NetworkAuthFailure> {
+    match code {
+        1 => Some(NetworkAuthFailure::WrongKey),
+        2 => Some(NetworkAuthFailure::SenderNotPaired),
+        3 => Some(NetworkAuthFailure::ReceiverNotPaired),
+        _ => None,
+    }
 }
 
 impl ReceiverShared {
@@ -517,9 +649,20 @@ fn same_host(left: IpAddr, right: IpAddr) -> bool {
 }
 
 impl NetworkReceiver {
-    /// Listen on `port` for audio from `sender` only, buffering `buffer_ms`
-    /// ahead of playout.
+    /// Listen on `port` for unpaired audio from `sender` only, buffering
+    /// `buffer_ms` ahead of playout.
     pub fn start(sender: IpAddr, port: u16, buffer_ms: f64) -> Result<Self, AudioError> {
+        Self::start_paired(sender, port, buffer_ms, None)
+    }
+
+    /// Like [`NetworkReceiver::start`]; with a pairing key, only datagrams
+    /// tagged with that key and not replayed are played.
+    pub fn start_paired(
+        sender: IpAddr,
+        port: u16,
+        buffer_ms: f64,
+        pairing_key: Option<NetworkPairingKey>,
+    ) -> Result<Self, AudioError> {
         if port == 0 || !buffer_ms.is_finite() {
             return Err(AudioError::InvalidFrameSize);
         }
@@ -551,6 +694,12 @@ impl NetworkReceiver {
             last_rejected_sender: Mutex::new(None),
             sender: Mutex::new(sender),
             target_frames: AtomicUsize::new(target_frames),
+            auth_failures: AtomicU64::new(0),
+            last_auth_failure: std::sync::atomic::AtomicU8::new(0),
+            replayed: AtomicU64::new(0),
+            paired: AtomicBool::new(pairing_key.is_some()),
+            pairing_key: Mutex::new(pairing_key),
+            key_changed: AtomicBool::new(true),
         });
         for _ in 0..RECEIVE_QUEUE_PACKETS {
             let _ = shared.free.push(ReceivePacket {
@@ -609,6 +758,20 @@ impl NetworkReceiver {
         true
     }
 
+    /// Accept only datagrams paired with another key (or unpaired ones, for
+    /// `None`) from the next datagram on: a live edit while playing. The
+    /// replay window starts over, and the pairing counters are kept.
+    pub fn set_pairing_key(&self, pairing_key: Option<NetworkPairingKey>) {
+        self.shared
+            .paired
+            .store(pairing_key.is_some(), Ordering::Release);
+        if let Ok(mut key) = self.shared.pairing_key.lock() {
+            *key = pairing_key;
+        }
+        self.shared.last_auth_failure.store(0, Ordering::Relaxed);
+        self.shared.key_changed.store(true, Ordering::Release);
+    }
+
     pub fn stats(&self) -> NetworkReceiveStats {
         NetworkReceiveStats {
             last_rejected_sender: self
@@ -633,6 +796,12 @@ impl NetworkReceiver {
                 .lock()
                 .ok()
                 .and_then(|local| *local),
+            auth_failures: self.shared.auth_failures.load(Ordering::Relaxed),
+            last_auth_failure: auth_failure_from_code(
+                self.shared.last_auth_failure.load(Ordering::Relaxed),
+            ),
+            replayed_packets: self.shared.replayed.load(Ordering::Relaxed),
+            paired: self.shared.paired.load(Ordering::Acquire),
         }
     }
 
@@ -664,11 +833,27 @@ fn buffer_target_frames(buffer_ms: f64, rate: f64) -> usize {
         / 1_000.0) as usize
 }
 
+/// The receive thread (`audiorouter-network-receive`), not the audio
+/// thread: socket reads, pairing verification and the replay window run
+/// here, before a packet reaches the bounded playout queue.
 fn receive_loop(socket: &UdpSocket, shared: &ReceiverShared) {
     let mut datagram = vec![0_u8; MAX_NETWORK_PACKET_BYTES + 1];
     let mut stream: Option<(u32, u32)> = None; // (stream id, next sequence)
+    let mut pairing_key: Option<NetworkPairingKey> = None;
+    let mut replay = ReplayWindow::default();
     while shared.running.load(Ordering::Acquire) {
-        let (length, from) = match socket.recv_from(&mut datagram) {
+        let received = socket.recv_from(&mut datagram);
+        // Checked after the read, which can wait 100 ms: a key changed
+        // meanwhile already applies to this datagram.
+        if shared.key_changed.swap(false, Ordering::AcqRel) {
+            pairing_key = shared
+                .pairing_key
+                .lock()
+                .map_or_else(|poisoned| poisoned.into_inner().clone(), |key| key.clone());
+            replay.reset();
+            stream = None;
+        }
+        let (length, from) = match received {
             Ok(received) => received,
             // The 100 ms read timeout only re-checks `running`.
             Err(error)
@@ -698,8 +883,9 @@ fn receive_loop(socket: &UdpSocket, shared: &ReceiverShared) {
         if !same_host(from.ip(), sender) {
             shared.rejected.fetch_add(1, Ordering::Relaxed);
             // Remember only real AudioRouter audio, never arbitrary traffic,
-            // so the hint names the sending computer's actual address.
-            if decode_network_packet(&datagram[..length]).is_ok() {
+            // so the hint names the sending computer's actual address. When
+            // paired, only audio tagged with this key qualifies.
+            if open_network_packet(&datagram[..length], pairing_key.as_ref()).is_ok() {
                 if let Ok(mut last) = shared.last_rejected_sender.lock() {
                     *last = Some(match from.ip() {
                         IpAddr::V6(v6) => v6.to_ipv4_mapped().map_or(IpAddr::V6(v6), IpAddr::V4),
@@ -709,10 +895,29 @@ fn receive_loop(socket: &UdpSocket, shared: &ReceiverShared) {
             }
             continue;
         }
-        let Ok((header, payload)) = decode_network_packet(&datagram[..length]) else {
-            shared.rejected.fetch_add(1, Ordering::Relaxed);
-            continue;
+        let (header, payload) = match open_network_packet(&datagram[..length], pairing_key.as_ref())
+        {
+            Ok(packet) => packet,
+            Err(NetworkAudioError::Auth(failure)) => {
+                shared.auth_failures.fetch_add(1, Ordering::Relaxed);
+                shared
+                    .last_auth_failure
+                    .store(auth_failure_code(failure), Ordering::Relaxed);
+                continue;
+            }
+            Err(_) => {
+                shared.rejected.fetch_add(1, Ordering::Relaxed);
+                continue;
+            }
         };
+        // Only a verified tag reaches the window, so forged packets cannot
+        // move it. Unpaired streams keep the late-packet rule below.
+        if pairing_key.is_some()
+            && replay.check_and_accept(header.stream_id, header.sequence) == ReplayVerdict::Replayed
+        {
+            shared.replayed.fetch_add(1, Ordering::Relaxed);
+            continue;
+        }
         let channels = usize::from(header.channels);
         let frames = usize::from(header.frames);
         match stream {
@@ -1412,5 +1617,209 @@ mod tests {
         assert_eq!(stats.late_packets, 1, "sequence 3 arrived after 4");
         // 4 received + 2 concealed quanta are buffered for playout.
         assert_eq!(stats.buffered_frames, 6 * 128);
+    }
+
+    const PAIRING_KEY: &str = "K7QW2X9MPAIRSTUDIO4HJ8NV";
+
+    fn pairing(key: &str) -> Option<NetworkPairingKey> {
+        NetworkPairingKey::derive(key)
+    }
+
+    #[test]
+    fn paired_packets_round_trip_and_reject_other_pairings() {
+        let key = pairing(PAIRING_KEY).unwrap();
+        let samples: Vec<f32> = (0..256).map(|index| index as f32 / 256.0).collect();
+        let mut buffer = [0_u8; MAX_NETWORK_PACKET_BYTES];
+        let length =
+            encode_authenticated_network_packet(header(9), &samples, &key, &mut buffer).unwrap();
+        assert_eq!(length, 20 + 256 * 4 + 16);
+        assert_eq!(buffer[4], NETWORK_AUDIO_VERSION_AUTHENTICATED);
+        let (decoded, payload) = open_network_packet(&buffer[..length], Some(&key)).unwrap();
+        assert_eq!(decoded, header(9));
+        assert_eq!(payload.len(), 256 * 4);
+        // The largest paired datagram fits the receive buffer.
+        let stereo = vec![0.0_f32; MAX_NETWORK_PACKET_FRAMES * 2];
+        let largest = NetworkPacketHeader {
+            frames: MAX_NETWORK_PACKET_FRAMES as u16,
+            ..header(1)
+        };
+        assert_eq!(
+            encode_authenticated_network_packet(largest, &stereo, &key, &mut buffer),
+            Ok(MAX_NETWORK_PACKET_BYTES)
+        );
+
+        let length =
+            encode_authenticated_network_packet(header(9), &samples, &key, &mut buffer).unwrap();
+        let other = pairing("a different pairing key").unwrap();
+        assert_eq!(
+            open_network_packet(&buffer[..length], Some(&other)),
+            Err(NetworkAudioError::Auth(NetworkAuthFailure::WrongKey))
+        );
+        assert_eq!(
+            decode_network_packet(&buffer[..length]),
+            Err(NetworkAudioError::Auth(
+                NetworkAuthFailure::ReceiverNotPaired
+            ))
+        );
+        let plain = encode_network_packet(header(9), &samples, &mut buffer).unwrap();
+        assert_eq!(
+            open_network_packet(&buffer[..plain], Some(&key)),
+            Err(NetworkAudioError::Auth(NetworkAuthFailure::SenderNotPaired))
+        );
+    }
+
+    fn wait_for(receiver: &NetworkReceiver, done: impl Fn(&NetworkReceiveStats) -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !done(&receiver.stats()) && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    /// P2-5: a datagram from the right address but with the wrong key (or
+    /// only one side paired) is never played, and is counted with its
+    /// reason. Fixing the key while playing lets the audio through.
+    #[test]
+    fn a_correct_address_wrong_key_packet_is_rejected_and_counted() {
+        // Not paced, but kept apart from the paced tests so its sockets and
+        // threads do not disturb their wall-clock checks.
+        let _realtime = realtime_test();
+        let block = AudioBlock::new(2, 128).unwrap();
+        let cases = [
+            (
+                pairing(PAIRING_KEY),
+                pairing("someone else's pairing key"),
+                NetworkAuthFailure::WrongKey,
+            ),
+            (
+                pairing(PAIRING_KEY),
+                None,
+                NetworkAuthFailure::SenderNotPaired,
+            ),
+            (
+                None,
+                pairing(PAIRING_KEY),
+                NetworkAuthFailure::ReceiverNotPaired,
+            ),
+        ];
+        for (receive_key, send_key, reason) in cases {
+            let port = free_port();
+            let receiver = NetworkReceiver::start_paired(
+                "127.0.0.1".parse().unwrap(),
+                port,
+                20.0,
+                receive_key.clone(),
+            )
+            .unwrap();
+            let sender =
+                NetworkSender::start_paired(SocketAddr::from(([127, 0, 0, 1], port)), send_key)
+                    .unwrap();
+            for _ in 0..20 {
+                sender.tap().on_processed_block(0, &block);
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            wait_for(&receiver, |stats| stats.auth_failures >= 20);
+            let stats = receiver.stats();
+            assert_eq!(stats.auth_failures, 20, "{reason:?}: {stats:?}");
+            assert_eq!(stats.last_auth_failure, Some(reason), "{stats:?}");
+            assert_eq!(stats.received_packets, 0, "{reason:?}: nothing played");
+            assert_eq!(stats.rejected_datagrams, 0, "the address was right");
+            assert_eq!(stats.buffered_frames, 0);
+            assert_eq!(stats.last_rejected_sender, None);
+            assert_eq!(stats.paired, receive_key.is_some());
+
+            // The user enters the receiver's key on the sending computer.
+            sender.set_pairing_key(receive_key.clone());
+            assert_eq!(sender.stats().paired, receive_key.is_some());
+            for _ in 0..10 {
+                sender.tap().on_processed_block(0, &block);
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            wait_for(&receiver, |stats| stats.received_packets >= 10);
+            let stats = receiver.stats();
+            assert_eq!(stats.received_packets, 10, "{reason:?}: {stats:?}");
+            assert_eq!(stats.auth_failures, 20, "{reason:?}: {stats:?}");
+        }
+    }
+
+    /// A captured paired packet sent again is dropped and counted, while
+    /// genuine reordering keeps today's late-packet rule.
+    #[test]
+    fn replayed_paired_packets_are_rejected_and_counted() {
+        let _realtime = realtime_test();
+        let key = pairing(PAIRING_KEY).unwrap();
+        let port = free_port();
+        let receiver = NetworkReceiver::start_paired(
+            "127.0.0.1".parse().unwrap(),
+            port,
+            10.0,
+            Some(key.clone()),
+        )
+        .unwrap();
+        let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let samples = vec![0.5_f32; 256];
+        let mut buffer = [0_u8; MAX_NETWORK_PACKET_BYTES];
+        // 0, 1, 2 once; then 1 and 2 again (replays); 4, then 3 (reordered,
+        // late); then 3 again (a replay of a late packet) and 0 again.
+        let sequences = [0_u32, 1, 2, 1, 2, 4, 3, 3, 0];
+        for sequence in sequences {
+            let length =
+                encode_authenticated_network_packet(header(sequence), &samples, &key, &mut buffer)
+                    .unwrap();
+            socket
+                .send_to(&buffer[..length], ("127.0.0.1", port))
+                .unwrap();
+        }
+        wait_for(&receiver, |stats| {
+            stats.received_packets + stats.late_packets + stats.replayed_packets
+                >= sequences.len() as u64
+        });
+        let stats = receiver.stats();
+        assert_eq!(stats.received_packets, 4, "0, 1, 2 and 4: {stats:?}");
+        assert_eq!(stats.replayed_packets, 4, "1, 2, 3 and 0 again: {stats:?}");
+        assert_eq!(stats.late_packets, 1, "3 arrived after 4: {stats:?}");
+        assert_eq!(stats.lost_packets, 1, "3 was concealed: {stats:?}");
+        assert_eq!(stats.auth_failures, 0, "{stats:?}");
+    }
+
+    /// Paired audio plays exactly like unpaired audio: continuous, nothing
+    /// rejected.
+    #[test]
+    fn a_paired_tone_plays_back_continuously() {
+        let _realtime = realtime_test();
+        let port = free_port();
+        let receiver = NetworkReceiver::start_paired(
+            "127.0.0.1".parse().unwrap(),
+            port,
+            20.0,
+            pairing(PAIRING_KEY),
+        )
+        .unwrap();
+        let sender = NetworkSender::start_paired(
+            SocketAddr::from(([127, 0, 0, 1], port)),
+            pairing(PAIRING_KEY),
+        )
+        .unwrap();
+        assert!(sender.stats().paired);
+        let feeder = feed_tone(sender.tap(), 300, 1.0, 2);
+        let frames = play_stereo(&receiver, 220);
+        feeder.join().unwrap();
+        let first = frames
+            .iter()
+            .position(|(left, _)| left.abs() > 0.05)
+            .expect("tone arrives");
+        let steady = &frames[first + 64..];
+        let coefficient = (2.0 * (2.0 * std::f64::consts::PI * 997.0 / 48_000.0).cos()) as f32;
+        let jumps = steady
+            .windows(3)
+            .filter(|window| (window[2].0 - (coefficient * window[1].0 - window[0].0)).abs() > 0.02)
+            .count();
+        let stats = receiver.stats();
+        eprintln!("paired tone: {jumps} discontinuities; {stats:?}");
+        assert!(stats.paired);
+        assert_eq!(stats.auth_failures, 0, "{stats:?}");
+        assert_eq!(stats.replayed_packets, 0, "{stats:?}");
+        assert_eq!(stats.rejected_datagrams, 0, "{stats:?}");
+        assert!(stats.received_packets > 200, "{stats:?}");
+        assert!(jumps <= 2, "{jumps} discontinuities, {stats:?}");
     }
 }
