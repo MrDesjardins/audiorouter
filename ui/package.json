@@ -7,6 +7,9 @@
     "dev": "vite --configLoader runner",
     "build": "tsc --noEmit && vite build --configLoader runner",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write src e2e",
+    "format:check": "prettier --check src e2e",
     "test": "vitest run --configLoader runner --exclude \"e2e/**\"",
     "e2e": "cargo build --manifest-path ../Cargo.toml -p audiorouter-control --example e2e_backend --locked && playwright test --config=playwright.config.ts",
     "e2e:production-canvas": "vite build --config vite.canvas-production.config.ts --configLoader runner && playwright test --config=playwright.production.config.ts"
@@ -19,6 +22,7 @@
     "react-dom": "19.1.1"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@playwright/test": "^1.63.0",
     "@tauri-apps/cli": "2.11.4",
     "@testing-library/react": "^16.3.0",
@@ -26,8 +30,13 @@
     "@types/react-dom": "19.1.7",
     "@vitejs/plugin-react": "5.0.4",
     "@vitest/coverage-v8": "5.0.0",
+    "eslint": "10.12.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.13.0",
     "jsdom": "^26.1.0",
+    "prettier": "3.9.9",
     "typescript": "5.9.2",
+    "typescript-eslint": "8.71.1",
     "vite": "7.3.6",
     "vitest": "^5.0.0"
   }
