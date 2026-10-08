@@ -793,11 +793,23 @@ pub fn interface_name(cable: u8, direction: Direction) -> String {
 }
 
 /// Recognise an AudioRouter endpoint from its friendly name. Windows shows
-/// either the interface name itself or "<description> (<interface name>)";
-/// a user rename only changes the description.
+/// either the cable name, "<description> (<cable name>)", or
+/// "<cable name> (AudioRouter Virtual Cable)". Generic Speakers/Line names
+/// never identify a cable. Renames of the cable-description form require
+/// stable metadata rather than this display-name classifier.
 pub fn classify_endpoint_name(friendly: &str) -> Option<(u8, Direction)> {
     let candidate = match friendly.strip_suffix(')') {
-        Some(rest) => rest.rsplit_once(" (").map(|(_, inner)| inner)?,
+        Some(rest) => {
+            let (outer, inner) = rest.rsplit_once(" (")?;
+            if outer.is_empty() || outer.contains(['(', ')']) || inner.contains(['(', ')']) {
+                return None;
+            }
+            if inner == "AudioRouter Virtual Cable" {
+                outer
+            } else {
+                inner
+            }
+        }
         None => friendly,
     };
     for cable in 0..MAX_CABLES {
@@ -808,6 +820,15 @@ pub fn classify_endpoint_name(friendly: &str) -> Option<(u8, Direction)> {
         }
     }
     None
+}
+
+/// Prefer the driver-provided category description so a user-visible rename
+/// cannot erase cable identity. Legacy test packages used the composed name.
+pub fn classify_endpoint_properties(
+    friendly: &str,
+    device_description: &str,
+) -> Option<(u8, Direction)> {
+    classify_endpoint_name(device_description).or_else(|| classify_endpoint_name(friendly))
 }
 
 /// The display name a configured cable name produces (VCAB-02).

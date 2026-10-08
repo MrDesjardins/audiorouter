@@ -40,6 +40,24 @@ audioroutervirtual.sys
 [AUDIOROUTERVIRTUAL_SA.AddReg]
 HKR,,AssociatedFilters,,"wdmaud,swmidi,redbook"
 HKR,,Driver,,audioroutervirtual.sys
+; BEGIN GENERATED PIN CATEGORY REGISTRATION
+HKR,MediaCategories\%GUID.CableARenderPinCategory%,Name,,%Name.CableARenderPinCategory%
+HKR,MediaCategories\%GUID.CableACapturePinCategory%,Name,,%Name.CableACapturePinCategory%
+HKR,MediaCategories\%GUID.CableBRenderPinCategory%,Name,,%Name.CableBRenderPinCategory%
+HKR,MediaCategories\%GUID.CableBCapturePinCategory%,Name,,%Name.CableBCapturePinCategory%
+HKR,MediaCategories\%GUID.CableCRenderPinCategory%,Name,,%Name.CableCRenderPinCategory%
+HKR,MediaCategories\%GUID.CableCCapturePinCategory%,Name,,%Name.CableCCapturePinCategory%
+HKR,MediaCategories\%GUID.CableDRenderPinCategory%,Name,,%Name.CableDRenderPinCategory%
+HKR,MediaCategories\%GUID.CableDCapturePinCategory%,Name,,%Name.CableDCapturePinCategory%
+HKR,MediaCategories\%GUID.CableERenderPinCategory%,Name,,%Name.CableERenderPinCategory%
+HKR,MediaCategories\%GUID.CableECapturePinCategory%,Name,,%Name.CableECapturePinCategory%
+HKR,MediaCategories\%GUID.CableFRenderPinCategory%,Name,,%Name.CableFRenderPinCategory%
+HKR,MediaCategories\%GUID.CableFCapturePinCategory%,Name,,%Name.CableFCapturePinCategory%
+HKR,MediaCategories\%GUID.CableGRenderPinCategory%,Name,,%Name.CableGRenderPinCategory%
+HKR,MediaCategories\%GUID.CableGCapturePinCategory%,Name,,%Name.CableGCapturePinCategory%
+HKR,MediaCategories\%GUID.CableHRenderPinCategory%,Name,,%Name.CableHRenderPinCategory%
+HKR,MediaCategories\%GUID.CableHCapturePinCategory%,Name,,%Name.CableHCapturePinCategory%
+; END GENERATED PIN CATEGORY REGISTRATION
 
 ;
 ; For demo only, please review these power management settings for your architecture.
@@ -416,6 +434,10 @@ KmdfLibraryVersion = $KMDFVERSION$
 ;Non-localizable
 
 ; BEGIN GENERATED CABLE STRINGS
+GUID.CableARenderPinCategory="{45FACA63-8302-4BB2-B12A-2E02B2F0F691}"
+Name.CableARenderPinCategory="AudioRouter Cable A Input"
+GUID.CableACapturePinCategory="{A978B404-531F-4B33-BF37-4ADD6595D93F}"
+Name.CableACapturePinCategory="AudioRouter Cable A Output"
 KSNAME_WaveCableARender="WaveCableARender"
 AUDIOROUTERVIRTUAL.WaveCableARender.szPname="AudioRouter Cable A Input"
 KSNAME_TopologyCableARender="TopologyCableARender"
@@ -424,6 +446,10 @@ KSNAME_WaveCableACapture="WaveCableACapture"
 AUDIOROUTERVIRTUAL.WaveCableACapture.szPname="AudioRouter Cable A Output"
 KSNAME_TopologyCableACapture="TopologyCableACapture"
 AUDIOROUTERVIRTUAL.TopologyCableACapture.szPname="AudioRouter Cable A Output"
+GUID.CableBRenderPinCategory="{7FD23486-D370-4EBD-B9E0-C20F2F751C89}"
+Name.CableBRenderPinCategory="AudioRouter Cable B Input"
+GUID.CableBCapturePinCategory="{8FD441B5-651E-45A2-956A-B878C20DA386}"
+Name.CableBCapturePinCategory="AudioRouter Cable B Output"
 KSNAME_WaveCableBRender="WaveCableBRender"
 AUDIOROUTERVIRTUAL.WaveCableBRender.szPname="AudioRouter Cable B Input"
 KSNAME_TopologyCableBRender="TopologyCableBRender"
@@ -432,6 +458,10 @@ KSNAME_WaveCableBCapture="WaveCableBCapture"
 AUDIOROUTERVIRTUAL.WaveCableBCapture.szPname="AudioRouter Cable B Output"
 KSNAME_TopologyCableBCapture="TopologyCableBCapture"
 AUDIOROUTERVIRTUAL.TopologyCableBCapture.szPname="AudioRouter Cable B Output"
+GUID.CableCRenderPinCategory="{66F3B079-5A39-4F4D-8A32-5A4B23D18D4D}"
+Name.CableCRenderPinCategory="AudioRouter Cable C Input"
+GUID.CableCCapturePinCategory="{DD4080A7-1F79-4381-A27C-EAFFF83024CA}"
+Name.CableCCapturePinCategory="AudioRouter Cable C Output"
 KSNAME_WaveCableCRender="WaveCableCRender"
 AUDIOROUTERVIRTUAL.WaveCableCRender.szPname="AudioRouter Cable C Input"
 KSNAME_TopologyCableCRender="TopologyCableCRender"
@@ -440,6 +470,10 @@ KSNAME_WaveCableCCapture="WaveCableCCapture"
 AUDIOROUTERVIRTUAL.WaveCableCCapture.szPname="AudioRouter Cable C Output"
 KSNAME_TopologyCableCCapture="TopologyCableCCapture"
 AUDIOROUTERVIRTUAL.TopologyCableCCapture.szPname="AudioRouter Cable C Output"
+GUID.CableDRenderPinCategory="{0714E52A-05FD-44A7-AA99-7055BFC40C6C}"
+Name.CableDRenderPinCategory="AudioRouter Cable D Input"
+GUID.CableDCapturePinCategory="{51279B57-57D7-4340-98E4-520DA803E50C}"
+Name.CableDCapturePinCategory="AudioRouter Cable D Output"
 KSNAME_WaveCableDRender="WaveCableDRender"
 AUDIOROUTERVIRTUAL.WaveCableDRender.szPname="AudioRouter Cable D Input"
 KSNAME_TopologyCableDRender="TopologyCableDRender"
@@ -448,6 +482,10 @@ KSNAME_WaveCableDCapture="WaveCableDCapture"
 AUDIOROUTERVIRTUAL.WaveCableDCapture.szPname="AudioRouter Cable D Output"
 KSNAME_TopologyCableDCapture="TopologyCableDCapture"
 AUDIOROUTERVIRTUAL.TopologyCableDCapture.szPname="AudioRouter Cable D Output"
+GUID.CableERenderPinCategory="{7AAD623E-878F-46F5-BCBD-790D1ED6D374}"
+Name.CableERenderPinCategory="AudioRouter Cable E Input"
+GUID.CableECapturePinCategory="{89CD2009-D9EF-4DD3-A6C9-CA859DA7EE7A}"
+Name.CableECapturePinCategory="AudioRouter Cable E Output"
 KSNAME_WaveCableERender="WaveCableERender"
 AUDIOROUTERVIRTUAL.WaveCableERender.szPname="AudioRouter Cable E Input"
 KSNAME_TopologyCableERender="TopologyCableERender"
@@ -456,6 +494,10 @@ KSNAME_WaveCableECapture="WaveCableECapture"
 AUDIOROUTERVIRTUAL.WaveCableECapture.szPname="AudioRouter Cable E Output"
 KSNAME_TopologyCableECapture="TopologyCableECapture"
 AUDIOROUTERVIRTUAL.TopologyCableECapture.szPname="AudioRouter Cable E Output"
+GUID.CableFRenderPinCategory="{81CFE35B-23B8-4715-89B2-09308E237471}"
+Name.CableFRenderPinCategory="AudioRouter Cable F Input"
+GUID.CableFCapturePinCategory="{8F29DC80-794D-4BFA-A315-A2C4524BDA72}"
+Name.CableFCapturePinCategory="AudioRouter Cable F Output"
 KSNAME_WaveCableFRender="WaveCableFRender"
 AUDIOROUTERVIRTUAL.WaveCableFRender.szPname="AudioRouter Cable F Input"
 KSNAME_TopologyCableFRender="TopologyCableFRender"
@@ -464,6 +506,10 @@ KSNAME_WaveCableFCapture="WaveCableFCapture"
 AUDIOROUTERVIRTUAL.WaveCableFCapture.szPname="AudioRouter Cable F Output"
 KSNAME_TopologyCableFCapture="TopologyCableFCapture"
 AUDIOROUTERVIRTUAL.TopologyCableFCapture.szPname="AudioRouter Cable F Output"
+GUID.CableGRenderPinCategory="{B5A1784E-1324-4B3F-AC86-2A3A4CFD18F9}"
+Name.CableGRenderPinCategory="AudioRouter Cable G Input"
+GUID.CableGCapturePinCategory="{C45B9A3F-F715-47C1-9AF9-28F83563C78A}"
+Name.CableGCapturePinCategory="AudioRouter Cable G Output"
 KSNAME_WaveCableGRender="WaveCableGRender"
 AUDIOROUTERVIRTUAL.WaveCableGRender.szPname="AudioRouter Cable G Input"
 KSNAME_TopologyCableGRender="TopologyCableGRender"
@@ -472,6 +518,10 @@ KSNAME_WaveCableGCapture="WaveCableGCapture"
 AUDIOROUTERVIRTUAL.WaveCableGCapture.szPname="AudioRouter Cable G Output"
 KSNAME_TopologyCableGCapture="TopologyCableGCapture"
 AUDIOROUTERVIRTUAL.TopologyCableGCapture.szPname="AudioRouter Cable G Output"
+GUID.CableHRenderPinCategory="{88583CEB-D6B6-4E78-8672-53E4ED95BA32}"
+Name.CableHRenderPinCategory="AudioRouter Cable H Input"
+GUID.CableHCapturePinCategory="{637B0783-F72A-48AF-8E52-6BD8F47277B9}"
+Name.CableHCapturePinCategory="AudioRouter Cable H Output"
 KSNAME_WaveCableHRender="WaveCableHRender"
 AUDIOROUTERVIRTUAL.WaveCableHRender.szPname="AudioRouter Cable H Input"
 KSNAME_TopologyCableHRender="TopologyCableHRender"
@@ -500,5 +550,5 @@ ProviderName = "AudioRouter Project"
 MfgName      = "AudioRouter Project"
 MsCopyRight  = "Copyright (c) 2026 AudioRouter contributors"
 
-AUDIOROUTERVIRTUAL_SA.DeviceDesc="AudioRouter Virtual Audio Device"
+AUDIOROUTERVIRTUAL_SA.DeviceDesc="AudioRouter Virtual Cable"
 AudioRouterVirtual.SvcDesc="AudioRouter Virtual Audio Driver"

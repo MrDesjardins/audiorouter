@@ -5,8 +5,8 @@
 //! ever changed; no other driver or device is touched (17 §9.2).
 
 use crate::{
-    classify_endpoint_name, is_oem_inf_name, CableEndpoint, DriverVersion, Failure, PackageInfo,
-    Platform, Signer, HARDWARE_ID, MICROSOFT_DRIVER_SIGNER,
+    classify_endpoint_properties, is_oem_inf_name, CableEndpoint, DriverVersion, Failure,
+    PackageInfo, Platform, Signer, HARDWARE_ID, MICROSOFT_DRIVER_SIGNER,
 };
 use std::path::Path;
 use windows::core::{PCWSTR, PWSTR};
@@ -18,6 +18,39 @@ use windows::Win32::System::Registry::{
 };
 
 pub struct WindowsPlatform;
+
+fn select_active_cable_endpoints(
+    display: Vec<audiorouter_windows_audio::EndpointDisplayInfo>,
+    states: &[audiorouter_windows_audio::EndpointStateInfo],
+) -> Vec<CableEndpoint> {
+    use audiorouter_windows_audio::{EndpointDirection, EndpointState};
+    display
+        .into_iter()
+        .filter_map(|info| {
+            let (cable, direction) =
+                classify_endpoint_properties(&info.name, &info.device_description)?;
+            let expected_flow = match direction {
+                crate::Direction::Input => EndpointDirection::Render,
+                crate::Direction::Output => EndpointDirection::Capture,
+            };
+            if info.direction != expected_flow
+                || !states.iter().any(|state| {
+                    state.id == info.id
+                        && state.direction == expected_flow
+                        && state.state == EndpointState::Active
+                })
+            {
+                return None;
+            }
+            Some(CableEndpoint {
+                cable,
+                direction,
+                endpoint_id: info.id,
+                friendly_name: info.name,
+            })
+        })
+        .collect()
+}
 
 impl WindowsPlatform {
     pub fn new() -> Self {
@@ -660,19 +693,12 @@ impl Platform for WindowsPlatform {
     }
 
     fn cable_endpoints(&mut self) -> Vec<CableEndpoint> {
-        audiorouter_windows_audio::enumerate_active_endpoint_display_info()
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|info| {
-                let (cable, direction) = classify_endpoint_name(&info.name)?;
-                Some(CableEndpoint {
-                    cable,
-                    direction,
-                    endpoint_id: info.id,
-                    friendly_name: info.name,
-                })
-            })
-            .collect()
+        // Display inventory contains disabled and historical MMDevice records.
+        // Only active endpoints of the matching data flow count as installed.
+        let display =
+            audiorouter_windows_audio::enumerate_active_endpoint_display_info().unwrap_or_default();
+        let states = audiorouter_windows_audio::enumerate_endpoint_states().unwrap_or_default();
+        select_active_cable_endpoints(display, &states)
     }
 
     fn set_endpoint_description(
@@ -690,14 +716,14 @@ impl Platform for WindowsPlatform {
             STGM_READWRITE,
         };
         use windows::Win32::System::Variant::VT_LPWSTR;
-        // PKEY_Device_DeviceDesc: the endpoint description Sound settings
-        // renames; the endpoint ID does not change (17 §5.5 decision).
-        const DEVICE_DESC: PROPERTYKEY = PROPERTYKEY {
+        // PKEY_Device_FriendlyName is the display label. DeviceDesc retains
+        // the driver category name and is used to recover cable identity.
+        const DEVICE_FRIENDLY_NAME: PROPERTYKEY = PROPERTYKEY {
             fmtid: windows::core::GUID::from_u128(0xa45c254e_df1c_4efd_8020_67d146a850e0),
-            pid: 2,
+            pid: 14,
         };
         let id = wide(endpoint_id);
-        let mut text = wide(description);
+        let mut text = wide(&format!("{description} (AudioRouter Virtual Cable)"));
         // SAFETY: COM is initialized for this call and uninitialized after;
         // the PROPVARIANT borrows `text`, which outlives SetValue (the store
         // copies it), and is never passed to PropVariantClear.
@@ -723,7 +749,7 @@ impl Platform for WindowsPlatform {
                         }),
                     },
                 };
-                store.SetValue(&DEVICE_DESC, &value)?;
+                store.SetValue(&DEVICE_FRIENDLY_NAME, &value)?;
                 store.Commit()
             })();
             CoUninitialize();
@@ -781,6 +807,50 @@ pub fn format_utc(seconds: u64) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn cable_inventory_ignores_stale_records_and_wrong_data_flow() {
+        use audiorouter_windows_audio::{
+            EndpointDirection, EndpointDisplayInfo, EndpointState, EndpointStateInfo,
+        };
+        let display = |id: &str, flow| EndpointDisplayInfo {
+            id: id.into(),
+            direction: flow,
+            name: "My renamed endpoint".into(),
+            device_description: "AudioRouter Cable A Input".into(),
+            driver_inf_section: String::new(),
+        };
+        let states = vec![
+            EndpointStateInfo {
+                id: "active".into(),
+                direction: EndpointDirection::Render,
+                state: EndpointState::Active,
+            },
+            EndpointStateInfo {
+                id: "stale".into(),
+                direction: EndpointDirection::Render,
+                state: EndpointState::NotPresent,
+            },
+            EndpointStateInfo {
+                id: "wrong-flow".into(),
+                direction: EndpointDirection::Capture,
+                state: EndpointState::Active,
+            },
+        ];
+        let result = super::select_active_cable_endpoints(
+            vec![
+                display("active", EndpointDirection::Render),
+                display("stale", EndpointDirection::Render),
+                display("wrong-flow", EndpointDirection::Capture),
+                display("missing-state", EndpointDirection::Render),
+            ],
+            &states,
+        );
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].endpoint_id, "active");
+        assert_eq!(result[0].cable, 0);
+        assert_eq!(result[0].direction, crate::Direction::Input);
+    }
+
     #[test]
     fn utc_formatting_matches_known_instants() {
         assert_eq!(super::format_utc(0), "1970-01-01T00:00:00Z");

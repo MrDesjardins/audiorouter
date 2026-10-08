@@ -59,6 +59,7 @@ $inventoryTool = Join-Path $root 'tools\m03_cable_inventory.exe'
 $fuzzer = Join-Path $root 'tools\m03-bridge-fuzz.exe'
 $evidenceRoot = 'C:\ar\evidence'
 $evidence = Join-Path $evidenceRoot ((Get-Date -Format 'yyyyMMdd-HHmmss') + "-$Step")
+$collectZip = $null
 New-Item -ItemType Directory -Path $evidence -Force | Out-Null
 Start-Transcript -LiteralPath (Join-Path $evidence 'transcript.txt') | Out-Null
 $results = [Collections.Generic.List[object]]::new()
@@ -222,18 +223,13 @@ try {
             Check 'No AudioRouter device left' ($left.Count -eq 0) "$($left.Count) left"
         }
         'collect' {
-            $zip = Join-Path $root ('evidence-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.zip')
+            $collectZip = Join-Path $root ('evidence-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.zip')
             # Windows' driver-install log explains Code 10/52 and install failures.
             Copy-Item -LiteralPath 'C:\Windows\INF\setupapi.dev.log' -Destination (Join-Path $evidence 'setupapi.dev.log') -ErrorAction SilentlyContinue
             Get-PnpDevice -Class MEDIA, AudioEndpoint -ErrorAction SilentlyContinue |
                 Select-Object FriendlyName, Status, Problem, InstanceId |
                 ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidence 'devices.json') -Encoding UTF8
-            Compress-Archive -Path (Join-Path $evidenceRoot '*') -DestinationPath $zip
-            # Minidumps help if the VM crashed (blue screen) during a test.
-            foreach ($dump in @(Get-ChildItem C:\Windows\Minidump -Filter *.dmp -ErrorAction SilentlyContinue)) {
-                Compress-Archive -Path $dump.FullName -DestinationPath $zip -Update
-            }
-            Check 'Evidence zipped' (Test-Path $zip) $zip
+            Check 'Evidence ready to archive' $true $evidence
         }
     }
 } catch {
@@ -241,6 +237,29 @@ try {
 } finally {
     $results | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $evidence 'summary.json') -Encoding UTF8
     Stop-Transcript | Out-Null
+}
+if ($Step -eq 'collect') {
+    try {
+        # The transcript must be closed before Compress-Archive reads this tree.
+        Compress-Archive -Path (Join-Path $evidenceRoot '*') -DestinationPath $collectZip
+        # Minidumps help diagnose a blue screen during a test.
+        foreach ($dump in @(Get-ChildItem C:\Windows\Minidump -Filter *.dmp -ErrorAction SilentlyContinue)) {
+            Compress-Archive -Path $dump.FullName -DestinationPath $collectZip -Update
+        }
+        Check 'Evidence zipped' (Test-Path $collectZip) $collectZip
+    } catch {
+        Check 'Evidence zipped' $false $_.Exception.Message
+    }
+    $results | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $evidence 'summary.json') -Encoding UTF8
+    if (Test-Path $collectZip) {
+        try {
+            # Refresh the archive's copy with the final collection result.
+            Compress-Archive -Path $evidence -DestinationPath $collectZip -Update
+        } catch {
+            Check 'Final collection summary added to zip' $false $_.Exception.Message
+            $results | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $evidence 'summary.json') -Encoding UTF8
+        }
+    }
 }
 $failed = @($results | Where-Object { -not $_.passed }).Count
 if ($failed -eq 0) {

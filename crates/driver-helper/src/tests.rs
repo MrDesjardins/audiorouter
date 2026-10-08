@@ -503,6 +503,58 @@ fn signer_rules_follow_9_1() {
 }
 
 #[test]
+fn endpoint_names_match_vm_guard_fixtures() {
+    #[derive(serde::Deserialize)]
+    struct Fixture {
+        friendly: String,
+        expected: Option<(u8, String)>,
+    }
+    let fixtures: Vec<Fixture> = serde_json::from_str(include_str!(
+        "../../../tests/acceptance/m03-endpoint-names.json"
+    ))
+    .unwrap();
+    for fixture in fixtures {
+        let expected = fixture.expected.map(|(cable, direction)| {
+            let direction = match direction.as_str() {
+                "input" => Direction::Input,
+                "output" => Direction::Output,
+                _ => panic!("invalid fixture direction"),
+            };
+            (cable, direction)
+        });
+        assert_eq!(
+            classify_endpoint_name(&fixture.friendly),
+            expected,
+            "{}",
+            fixture.friendly
+        );
+    }
+}
+
+#[test]
+fn renamed_endpoint_retains_driver_category_identity() {
+    assert_eq!(
+        classify_endpoint_properties(
+            "AudioRouter Discord Input (AudioRouter Virtual Cable)",
+            "AudioRouter Cable B Input",
+        ),
+        Some((1, Direction::Input))
+    );
+    assert_eq!(
+        classify_endpoint_properties("My microphone", "AudioRouter Cable H Output"),
+        Some((7, Direction::Output))
+    );
+    assert_eq!(
+        classify_endpoint_properties("Speakers (AudioRouter Cable A Input)", "Speakers"),
+        Some((0, Direction::Input))
+    );
+    assert_eq!(
+        classify_endpoint_properties("Line (AudioRouter Virtual Cable)", "Line"),
+        None
+    );
+}
+
+#[test]
 fn endpoint_names_are_recognised_through_renames() {
     assert_eq!(
         classify_endpoint_name("AudioRouter Cable A Input"),

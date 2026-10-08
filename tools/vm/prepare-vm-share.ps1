@@ -81,13 +81,14 @@ Step '5/6 VM scripts'
 $acceptance = Join-Path $repo 'tests\acceptance'
 $driverScripts = Join-Path $repo 'drivers\audiorouter-virtual'
 New-Item -ItemType Directory -Path $acceptance, $driverScripts | Out-Null
-foreach ($name in 'm03-driver-vm.ps1', 'm03-driver-vm-support.ps1', 'm03-default-endpoints.cs', 'm03-driver-vm-guards.ps1') {
+foreach ($name in 'm03-driver-vm.ps1', 'm03-driver-vm-support.ps1', 'm03-default-endpoints.cs', 'm03-driver-vm-guards.ps1', 'm03-endpoint-names.json') {
     Copy-Item -LiteralPath (Join-Path $workspace "tests\acceptance\$name") -Destination $acceptance
 }
 foreach ($name in 'manage.ps1', 'package-tools.ps1') {
     Copy-Item -LiteralPath (Join-Path $driverRoot $name) -Destination $driverScripts
 }
 Copy-Item -LiteralPath (Join-Path $workspace 'tools\vm\vm-checks.ps1') -Destination $Share
+Copy-Item -LiteralPath (Join-Path $workspace 'tools\vm\retry-smoke.ps1') -Destination $Share
 
 Step '6/6 Manifest'
 $commit = (& git -C $workspace rev-parse HEAD).Trim()

@@ -30,7 +30,14 @@ function Test-CableEndpointName {
     if ([string]::IsNullOrEmpty($FriendlyName) -or [string]::IsNullOrEmpty($Expected)) { return $false }
     if ($FriendlyName -ceq $Expected) { return $true }
     $escaped = [regex]::Escape($Expected)
-    return ($FriendlyName -cmatch "^[^()]+ \($escaped\)$") -or ($FriendlyName -cmatch "^$escaped \([^()]+\)$")
+    return ($FriendlyName -cmatch "^[^()]+ \($escaped\)$") -or ($FriendlyName -ceq "$Expected (AudioRouter Virtual Cable)")
+}
+
+function Save-DriverEndpointSnapshot {
+    param([object[]] $Endpoints, [string] $Path)
+    # InputObject preserves an empty JSON array instead of writing an empty file.
+    ConvertTo-Json -InputObject @($Endpoints) -Depth 4 -Compress |
+        Set-Content -LiteralPath $Path -Encoding UTF8
 }
 function Select-CableEndpoints {
     param($Endpoints, [string[]] $Expected)

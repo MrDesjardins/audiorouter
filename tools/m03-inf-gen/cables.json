@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "cables": [
-    { "index": 0, "letter": "A" },
-    { "index": 1, "letter": "B" },
-    { "index": 2, "letter": "C" },
-    { "index": 3, "letter": "D" },
-    { "index": 4, "letter": "E" },
-    { "index": 5, "letter": "F" },
-    { "index": 6, "letter": "G" },
-    { "index": 7, "letter": "H" }
+    { "index": 0, "letter": "A", "renderPinCategoryGuid": "{45FACA63-8302-4BB2-B12A-2E02B2F0F691}", "capturePinCategoryGuid": "{A978B404-531F-4B33-BF37-4ADD6595D93F}" },
+    { "index": 1, "letter": "B", "renderPinCategoryGuid": "{7FD23486-D370-4EBD-B9E0-C20F2F751C89}", "capturePinCategoryGuid": "{8FD441B5-651E-45A2-956A-B878C20DA386}" },
+    { "index": 2, "letter": "C", "renderPinCategoryGuid": "{66F3B079-5A39-4F4D-8A32-5A4B23D18D4D}", "capturePinCategoryGuid": "{DD4080A7-1F79-4381-A27C-EAFFF83024CA}" },
+    { "index": 3, "letter": "D", "renderPinCategoryGuid": "{0714E52A-05FD-44A7-AA99-7055BFC40C6C}", "capturePinCategoryGuid": "{51279B57-57D7-4340-98E4-520DA803E50C}" },
+    { "index": 4, "letter": "E", "renderPinCategoryGuid": "{7AAD623E-878F-46F5-BCBD-790D1ED6D374}", "capturePinCategoryGuid": "{89CD2009-D9EF-4DD3-A6C9-CA859DA7EE7A}" },
+    { "index": 5, "letter": "F", "renderPinCategoryGuid": "{81CFE35B-23B8-4715-89B2-09308E237471}", "capturePinCategoryGuid": "{8F29DC80-794D-4BFA-A315-A2C4524BDA72}" },
+    { "index": 6, "letter": "G", "renderPinCategoryGuid": "{B5A1784E-1324-4B3F-AC86-2A3A4CFD18F9}", "capturePinCategoryGuid": "{C45B9A3F-F715-47C1-9AF9-28F83563C78A}" },
+    { "index": 7, "letter": "H", "renderPinCategoryGuid": "{88583CEB-D6B6-4E78-8672-53E4ED95BA32}", "capturePinCategoryGuid": "{637B0783-F72A-48AF-8E52-6BD8F47277B9}" }
   ]
 }

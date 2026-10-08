@@ -88,14 +88,26 @@ static KSDATARANGE_AUDIO CableFloatDataRanges[] = {
 };
 #undef AR_PCM_RANGE
 #undef AR_FLOAT_RANGE
+#define AR_RANGE_WITH_ATTRIBUTES(range) \
+    PKSDATARANGE(range), PKSDATARANGE(&PinDataRangeAttributeList)
+// KS expects the attribute-list pointer immediately after every range whose
+// KSDATARANGE_ATTRIBUTES flag is set. Keep these pairs adjacent in the pointer
+// table; placing one attribute list at the end makes KS walk a format range as
+// an attribute list and can bugcheck during endpoint enumeration.
 static PKSDATARANGE CableStreamDataRanges[] = {
-    PKSDATARANGE(&CablePcmDataRanges[0]), PKSDATARANGE(&CablePcmDataRanges[1]),
-    PKSDATARANGE(&CablePcmDataRanges[2]), PKSDATARANGE(&CablePcmDataRanges[3]),
-    PKSDATARANGE(&CablePcmDataRanges[4]), PKSDATARANGE(&CableFloatDataRanges[0]),
-    PKSDATARANGE(&CableFloatDataRanges[1]), PKSDATARANGE(&CableFloatDataRanges[2]),
-    PKSDATARANGE(&CableFloatDataRanges[3]), PKSDATARANGE(&CableFloatDataRanges[4]),
-    PKSDATARANGE(&PinDataRangeAttributeList)
+    AR_RANGE_WITH_ATTRIBUTES(&CablePcmDataRanges[0]),
+    AR_RANGE_WITH_ATTRIBUTES(&CablePcmDataRanges[1]),
+    AR_RANGE_WITH_ATTRIBUTES(&CablePcmDataRanges[2]),
+    AR_RANGE_WITH_ATTRIBUTES(&CablePcmDataRanges[3]),
+    AR_RANGE_WITH_ATTRIBUTES(&CablePcmDataRanges[4]),
+    AR_RANGE_WITH_ATTRIBUTES(&CableFloatDataRanges[0]),
+    AR_RANGE_WITH_ATTRIBUTES(&CableFloatDataRanges[1]),
+    AR_RANGE_WITH_ATTRIBUTES(&CableFloatDataRanges[2]),
+    AR_RANGE_WITH_ATTRIBUTES(&CableFloatDataRanges[3]),
+    AR_RANGE_WITH_ATTRIBUTES(&CableFloatDataRanges[4]),
 };
+#undef AR_RANGE_WITH_ATTRIBUTES
+C_ASSERT(SIZEOF_ARRAY(CableStreamDataRanges) == 20);
 static KSDATARANGE CableBridgeDataRange = {
     sizeof(KSDATARANGE), 0, 0, 0,
     STATICGUIDOF(KSDATAFORMAT_TYPE_AUDIO), STATICGUIDOF(KSDATAFORMAT_SUBTYPE_ANALOG),

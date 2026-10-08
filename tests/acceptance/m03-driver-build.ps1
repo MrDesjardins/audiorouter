@@ -28,6 +28,7 @@ foreach ($required in @(
         'AUDIOROUTERVIRTUAL.WaveCableARender.szPname="AudioRouter Cable A Input"',
         'AUDIOROUTERVIRTUAL.WaveCableACapture.szPname="AudioRouter Cable A Output"',
         'AUDIOROUTERVIRTUAL.WaveCableHCapture.szPname="AudioRouter Cable H Output"',
+        'AUDIOROUTERVIRTUAL_SA.DeviceDesc="AudioRouter Virtual Cable"',
         'HKR,,CableCount,0x00010001,2',
         'ROOT\AudioRouterVirtual')) {
     if (-not $infSource.Contains($required)) {
@@ -41,8 +42,7 @@ if ($infSource.Contains('SWD\AudioRouterVirtual') -or
 foreach ($required in @(
         'CableRenderWaveFilterDescriptor',
         'CableCaptureWaveFilterDescriptor',
-        'CableRenderTopologyFilterDescriptor',
-        'CableCaptureTopologyFilterDescriptor',
+        'DEFINE_CABLE_TOPOLOGY_PAIR(letter)',
         'eCableHRender, eCableHCapture',
         '&CableHRenderMiniports',
         '&CableHCaptureMiniports')) {
@@ -54,6 +54,19 @@ if ($miniPairs.Contains('SpeakerWaveMiniportFilterDescriptor') -or
     $miniPairs.Contains('MicArrayWaveMiniportFilterDescriptor') -or
     $miniPairs.Contains('MicArray1TopoMiniportFilterDescriptor')) {
     throw 'cable pairs must not retain the sample wave/microphone-array descriptors'
+}
+if (-not $miniPairs.Contains('&DEVPKEY_KsAudio_PacketSize_Constraints2') -or
+    $miniPairs.Contains('DEVPKEY_DeviceInterface_FriendlyName')) {
+    throw 'wave interfaces must retain packet constraints without relying on ignored adapter friendly-name properties'
+}
+$pinCategoryGuids = Join-Path $workspace 'drivers/audiorouter-virtual/Source/Filters/cabletopotable.h'
+$pinCategoryGuids = Get-Content -LiteralPath $pinCategoryGuids -Raw
+if (([regex]::Matches($pinCategoryGuids, 'static const GUID Cable[A-H](Render|Capture)PinCategory')).Count -ne 16 -or
+    ([regex]::Matches($infSource, '(?m)^HKR,MediaCategories\\%GUID\.Cable[A-H](Render|Capture)PinCategory%,Name,,%Name\.Cable[A-H](Render|Capture)PinCategory%\r?$')).Count -ne 16) {
+    throw 'each cable bridge pin must have one unique registered Windows pin category and name'
+}
+foreach ($required in @('&Cable##letter##RenderPinCategory', '&Cable##letter##CapturePinCategory')) {
+    if (-not $topologyTable.Contains($required)) { throw "per-cable topology category is not assigned: $required" }
 }
 if (-not $bridgeHeader.Contains('#define AR_BRIDGE_LEASE_SLOTS (AR_BRIDGE_MAX_CABLES * 2)')) {
     throw 'bridge lease table must reserve one slot per cable and direction'
@@ -75,6 +88,20 @@ foreach ($required in @(
     if (-not $waveTable.Contains($required)) {
         throw "required cable format inventory is missing: $required"
     }
+}
+foreach ($required in @(
+        '#define AR_RANGE_WITH_ATTRIBUTES(range)',
+        'AR_RANGE_WITH_ATTRIBUTES(&CablePcmDataRanges[0])',
+        'AR_RANGE_WITH_ATTRIBUTES(&CablePcmDataRanges[4])',
+        'AR_RANGE_WITH_ATTRIBUTES(&CableFloatDataRanges[0])',
+        'AR_RANGE_WITH_ATTRIBUTES(&CableFloatDataRanges[4])',
+        'C_ASSERT(SIZEOF_ARRAY(CableStreamDataRanges) == 20)')) {
+    if (-not $waveTable.Contains($required)) {
+        throw "KS data-range attribute list pairing is missing: $required"
+    }
+}
+if ($waveTable -match '(?s)CableStreamDataRanges\[\]\s*=\s*\{[^}]*PKSDATARANGE\(&PinDataRangeAttributeList\)\s*\}') {
+    throw 'KS data-range attribute pointers must follow each flagged range, not appear only once at the end'
 }
 if ($topologyTable.Contains('KSNODETYPE_MICROPHONE_ARRAY') -or
     $topologyTable.Contains('KSNODETYPE_VOLUME') -or
@@ -534,7 +561,8 @@ foreach ($required in @(
 $minipairs = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Filters/minipairs.h') -Raw
 foreach ($required in @(
         'DEVPKEY_KsAudio_PacketSize_Constraints2',
-        'SIZEOF_ARRAY(g_CableWaveInterfaceProperties), g_CableWaveInterfaceProperties')) {
+        'g_CableWaveInterfaceProperties[]',
+        'SIZEOF_ARRAY(g_CableWaveInterfaceProperties)')) {
     if (-not $minipairs.Contains($required)) {
         throw "cable wave interfaces must advertise low-latency packet constraints: $required"
     }

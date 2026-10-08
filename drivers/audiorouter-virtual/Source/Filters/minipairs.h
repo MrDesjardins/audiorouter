@@ -16,6 +16,7 @@ Abstract:
 
 #include "cablewavtable.h"
 #include "cabletopotable.h"
+#include <devpkey.h>
 
 NTSTATUS CreateMiniportWaveRTAudioRouterVirtual(
     _Out_ PUNKNOWN *, _In_ REFCLSID, _In_opt_ PUNKNOWN, _In_ POOL_FLAGS,
@@ -52,13 +53,14 @@ static const AUDIOROUTERVIRTUAL_DEVPROPERTY g_CableWaveInterfaceProperties[] = {
     { &DEVPKEY_KsAudio_PacketSize_Constraints2, DEVPROP_TYPE_BINARY,
       sizeof(g_CablePacketSizeConstraints), &g_CablePacketSizeConstraints },
 };
-
 // The bus index is implicit in the stable endpoint ordinal: render/capture
 // pairs occupy adjacent enum values, so endpoint / 2 is the cable bus.
 #define DEFINE_CABLE_PAIR(letter, displayLetter, renderType, captureType) \
+DEFINE_CABLE_TOPOLOGY_PAIR(letter) \
 static ENDPOINT_MINIPAIR Cable##letter##RenderMiniports = { \
     renderType, L"TopologyCable" displayLetter L"Render", NULL, CreateMiniportTopologyAudioRouterVirtual, \
-    &CableRenderTopologyFilterDescriptor, 0, NULL, L"WaveCable" displayLetter L"Render", NULL, \
+    &Cable##letter##RenderTopologyFilterDescriptor, 0, NULL, \
+    L"WaveCable" displayLetter L"Render", NULL, \
     CreateMiniportWaveRTAudioRouterVirtual, &CableRenderWaveFilterDescriptor, \
     SIZEOF_ARRAY(g_CableWaveInterfaceProperties), g_CableWaveInterfaceProperties, \
     CABLE_DEVICE_MAX_CHANNELS, CableRenderPinFormats, \
@@ -66,7 +68,8 @@ static ENDPOINT_MINIPAIR Cable##letter##RenderMiniports = { \
     SIZEOF_ARRAY(CableRenderPhysicalConnections), ENDPOINT_NO_FLAGS }; \
 static ENDPOINT_MINIPAIR Cable##letter##CaptureMiniports = { \
     captureType, L"TopologyCable" displayLetter L"Capture", NULL, CreateMiniportTopologyAudioRouterVirtual, \
-    &CableCaptureTopologyFilterDescriptor, 0, NULL, L"WaveCable" displayLetter L"Capture", NULL, \
+    &Cable##letter##CaptureTopologyFilterDescriptor, 0, NULL, \
+    L"WaveCable" displayLetter L"Capture", NULL, \
     CreateMiniportWaveRTAudioRouterVirtual, &CableCaptureWaveFilterDescriptor, \
     SIZEOF_ARRAY(g_CableWaveInterfaceProperties), g_CableWaveInterfaceProperties, \
     CABLE_DEVICE_MAX_CHANNELS, CableCapturePinFormats, \

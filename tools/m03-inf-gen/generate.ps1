@@ -3,12 +3,14 @@ param(
     [string] $InputInf,
     [string] $CableList,
     [string] $OutputInf,
-    [switch] $Check
+    [switch] $Check,
+    [switch] $Update
 )
 $ErrorActionPreference = 'Stop'
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $InputInf) { $InputInf = Join-Path $scriptRoot '../../drivers/audiorouter-virtual/Source/Main/AudioRouterVirtual.inx' }
 if (-not $CableList) { $CableList = Join-Path $scriptRoot 'cables.json' }
+$topologyHeader = Join-Path $scriptRoot '../../drivers/audiorouter-virtual/Source/Filters/cabletopotable.h'
 
 $cableData = Get-Content -LiteralPath $CableList -Raw | ConvertFrom-Json
 if ($cableData.schemaVersion -ne 1 -or $cableData.cables.Count -ne 8) {
@@ -20,13 +22,41 @@ for ($index = 0; $index -lt 8; $index++) {
         throw "Cable list must be contiguous A-H at index $index."
     }
 }
+$uniquePinCategories = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+foreach ($cable in $cableData.cables) {
+    foreach ($property in @('renderPinCategoryGuid', 'capturePinCategoryGuid')) {
+        $guid = [guid]::Empty
+        if (-not [guid]::TryParse([string] $cable.$property, [ref] $guid) -or
+            -not $uniquePinCategories.Add($guid.ToString('D'))) {
+            throw "Cable $($cable.letter) has an invalid or duplicate $property."
+        }
+    }
+}
 
 $inf = Get-Content -LiteralPath $InputInf -Raw
+$header = Get-Content -LiteralPath $topologyHeader -Raw
 $interfaceLines = [System.Collections.Generic.List[string]]::new()
 $registrySections = [System.Collections.Generic.List[string]]::new()
+$pinCategoryRegistry = [System.Collections.Generic.List[string]]::new()
+$pinCategoryHeader = [System.Collections.Generic.List[string]]::new()
 $stringLines = [System.Collections.Generic.List[string]]::new()
 foreach ($cable in $cableData.cables) {
     $letter = $cable.letter
+    foreach ($role in @('Render', 'Capture')) {
+        $categoryProperty = "${role}PinCategoryGuid"
+        $categoryName = "Cable${letter}${role}PinCategory"
+        $guidText = [string] $cable.$categoryProperty
+        $guid = [guid]::Empty
+        if (-not [guid]::TryParse($guidText, [ref] $guid)) {
+            throw "Cable $letter has an invalid ${categoryProperty}: $guidText"
+        }
+        $guidText = $guid.ToString('B').ToUpperInvariant()
+        $pinCategoryRegistry.Add("HKR,MediaCategories\%GUID.$categoryName%,Name,,%Name.$categoryName%")
+        $pinCategoryHeader.Add("static const GUID ${categoryName} = $($guid.ToString('X'));")
+        $stringLines.Add("GUID.$categoryName=`"$guidText`"")
+        $suffix = if ($role -eq 'Render') { 'Input' } else { 'Output' }
+        $stringLines.Add("Name.$categoryName=`"AudioRouter Cable $letter $suffix`"")
+    }
     foreach ($role in @('Render', 'Capture')) {
         $suffix = if ($role -eq 'Render') { 'Input' } else { 'Output' }
         $wave = "WaveCable${letter}${role}"
@@ -69,13 +99,21 @@ function Replace-MarkedRegion([string] $Source, [string] $Start, [string] $End, 
 }
 
 $inf = Replace-MarkedRegion $inf '; BEGIN GENERATED CABLE REGISTRY SECTIONS' '; END GENERATED CABLE REGISTRY SECTIONS' $registrySections.ToArray()
+$inf = Replace-MarkedRegion $inf '; BEGIN GENERATED PIN CATEGORY REGISTRATION' '; END GENERATED PIN CATEGORY REGISTRATION' $pinCategoryRegistry.ToArray()
 $inf = Replace-MarkedRegion $inf '; BEGIN GENERATED CABLE INTERFACES' '; END GENERATED CABLE INTERFACES' $interfaceLines.ToArray()
 $inf = Replace-MarkedRegion $inf '; BEGIN GENERATED CABLE STRINGS' '; END GENERATED CABLE STRINGS' $stringLines.ToArray()
+$header = Replace-MarkedRegion $header '// BEGIN GENERATED CABLE PIN CATEGORY GUIDS' '// END GENERATED CABLE PIN CATEGORY GUIDS' $pinCategoryHeader.ToArray()
 
 if ($Check) {
     $actual = [IO.File]::ReadAllText((Resolve-Path $InputInf).Path)
     if ($actual -cne $inf) { throw 'INF is stale. Regenerate a preview, inspect it, then update the source.' }
-    Write-Output 'Cable INF sections are current and deterministic.'
+    $actualHeader = [IO.File]::ReadAllText((Resolve-Path $topologyHeader).Path)
+    if ($actualHeader -cne $header) { throw 'Topology pin category GUIDs are stale. Regenerate and update the source.' }
+    Write-Output 'Cable INF sections and topology pin category GUIDs are current and deterministic.'
+} elseif ($Update) {
+    [IO.File]::WriteAllText((Resolve-Path $InputInf).Path, $inf, [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Resolve-Path $topologyHeader).Path, $header, [Text.UTF8Encoding]::new($false))
+    Write-Output 'Updated cable INF sections and topology pin category GUIDs.'
 } elseif ($OutputInf) {
     $directory = Split-Path -Parent $OutputInf
     if ($directory) { New-Item -ItemType Directory -Path $directory -Force | Out-Null }

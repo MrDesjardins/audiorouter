@@ -102,7 +102,24 @@ try {
     if ($Helper) {
         Copy-Item -LiteralPath (Join-Path $Package 'package.json') -Destination $staged
         $installed = $true
-        $null = Invoke-DriverTool $Helper @('install', '--package', $staged, '--result', (Join-Path $Evidence 'helper-install.json')) (Join-Path $Evidence 'helper-install.txt')
+        try {
+            $null = Invoke-DriverTool $Helper @('install', '--package', $staged, '--result', (Join-Path $Evidence 'helper-install.json')) (Join-Path $Evidence 'helper-install.txt')
+        } catch {
+            $installFailure = $_
+            # Preserve the raw Windows names before the finally block removes
+            # the failed install. This distinguishes endpoint naming failures
+            # from missing PnP endpoint children when the helper rejects names.
+            try {
+                $endpointFailureSnapshot = @(
+                    Get-PnpDevice -Class AudioEndpoint -PresentOnly -ErrorAction SilentlyContinue |
+                        Select-Object FriendlyName, InstanceId, Status, Class, Problem
+                )
+                Save-DriverEndpointSnapshot $endpointFailureSnapshot (Join-Path $Evidence 'endpoint-names-on-install-failure.json')
+            } catch {
+                Write-Warning "Could not save endpoint failure evidence: $($_.Exception.Message)"
+            }
+            throw $installFailure
+        }
     } else {
         $preview = Invoke-DriverTool $powershellExe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $manage, '-Install', '-Preview', '-Inf', $inf, '-State', $state) (Join-Path $Evidence 'install-preview.json')
         if (-not ($preview.Output | ConvertFrom-Json).ready) { throw 'Install preview is not ready.' }

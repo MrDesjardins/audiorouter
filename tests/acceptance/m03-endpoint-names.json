@@ -1,0 +1,17 @@
+[
+  {"friendly": "AudioRouter Cable A Input", "expected": [0, "input"]},
+  {"friendly": "AudioRouter Cable H Output", "expected": [7, "output"]},
+  {"friendly": "Speakers (AudioRouter Cable A Input)", "expected": [0, "input"]},
+  {"friendly": "AudioRouter Discord Output (AudioRouter Cable B Output)", "expected": [1, "output"]},
+  {"friendly": "AudioRouter Cable A Input (AudioRouter Virtual Cable)", "expected": [0, "input"]},
+  {"friendly": "AudioRouter Cable B Output (AudioRouter Virtual Cable)", "expected": [1, "output"]},
+  {"friendly": "Speakers (AudioRouter Virtual Cable)", "expected": null},
+  {"friendly": "Line (AudioRouter Virtual Cable)", "expected": null},
+  {"friendly": "AudioRouter Cable A Input (Realtek)", "expected": null},
+  {"friendly": "AudioRouter Cable I Input", "expected": null},
+  {"friendly": "AudioRouter Cable A Input 2", "expected": null},
+  {"friendly": "audiorouter cable a input", "expected": null},
+  {"friendly": "Speakers (AudioRouter Cable A Input) ", "expected": null},
+  {"friendly": "X (Y) (AudioRouter Cable A Input)", "expected": null},
+  {"friendly": "", "expected": null}
+]
