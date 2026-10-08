@@ -102,7 +102,7 @@ unactivated Windows only shows a watermark and limits personalization.
 Create two folders on the D: drive (it has the most free space):
 
 - `E:\VMs` — VirtualBox will store the VM's virtual disk here (up to 80 GB).
-- `E:\ar-share` — the exchange folder between the PC and the VM. **Leave it
+- `C:\VMs\ar-share` — the exchange folder between the PC and the VM. **Leave it
   empty**; Part 4 fills it.
 
 ## Part 2: Create the VM (once)
@@ -208,13 +208,13 @@ and run:
 
 ```powershell
 cd C:\code\audiorouter
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\prepare-vm-share.ps1 -Share E:\ar-share
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\prepare-vm-share.ps1 -Share C:\VMs\ar-share
 ```
 
-It takes 5–10 minutes and ends with `Ready: E:\ar-share`. It builds and
+It takes 5–10 minutes and ends with `Ready: C:\VMs\ar-share`. It builds and
 places:
 
-| In `E:\ar-share` | What it is |
+| In `C:\VMs\ar-share` | What it is |
 | --- | --- |
 | `driver\` | The test-signed driver package (`.inf`, `.sys`, `.cat`), `package.json`, logs, and `AudioRouterTest.cer` (public certificate only) |
 | `tools\audiorouter-driver-helper.exe` | The installer helper (debug build: the only build that accepts a test-signed driver, and only when a test explicitly allows it) |
@@ -232,7 +232,7 @@ the test certificate stays in your Windows certificate store on the PC.
 
 1. With the VM **shut down**, open its **Settings → Shared Folders**.
 2. Click the folder icon with **+**:
-   - Folder Path: `E:\ar-share`
+   - Folder Path: `C:\VMs\ar-share`
    - Folder Name: `ar-share`
    - **Read-only: unticked** (the VM copies its results back here)
    - **Auto-mount: ticked**, Mount point: `Z:`
@@ -282,7 +282,16 @@ bcdedit /set testsigning on
 # 4. Trust only the PUBLIC test certificate, only in this VM.
 Import-Certificate -FilePath C:\ar\driver\AudioRouterTest.cer -CertStoreLocation Cert:\LocalMachine\Root
 Import-Certificate -FilePath C:\ar\driver\AudioRouterTest.cer -CertStoreLocation Cert:\LocalMachine\TrustedPublisher
+```
 
+If the `TrustedPublisher` import returns **Access is denied** even in an
+Administrator PowerShell window, use this command instead for that store:
+
+```powershell
+certutil -addstore -f TrustedPublisher C:\ar\driver\AudioRouterTest.cer
+```
+
+```powershell
 # 5. Restart so Test Mode takes effect.
 Restart-Computer
 ```
@@ -322,13 +331,132 @@ PowerShell):
 
 ## Part 5: Test sessions
 
-Each session: **restore snapshot 2 → start the VM → open PowerShell as
-administrator → `cd C:\ar` → run the steps → `collect` → copy the zip to
-`Z:\` → shut down → restore snapshot 2**. Steps are run with:
+Each session starts from the snapshot named in that session: restore it,
+start the VM, sign in, and open **PowerShell as administrator**. In every
+PowerShell window used for a session, first change to the shared folder:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step <name>
+Set-Location C:\ar
 ```
+
+The step names in this guide (such as `preflight`, `install`, and `smoke`) are
+not commands by themselves. Each session below gives the complete command for
+each script step. Copy the command for the step you are on exactly as shown.
+
+For example, run preflight with:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step preflight
+```
+
+Run steps one at a time and read the result before continuing. If a step
+reports `FAIL`, stop that session and follow its recovery instructions; do not
+continue to an install, smoke test, or the next session.
+
+### Copy-and-run commands for each session
+
+For every session below, run `Set-Location C:\ar` first in an Administrator
+PowerShell window. Then copy the commands for that session exactly as written,
+running one line at a time and waiting for it to finish before running the
+next. Do not type only the step name. Do not continue after a failed check.
+
+#### Session 1 — installation smoke test
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step preflight
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step smoke
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step collect
+```
+
+#### Session 2 — audio and cable checks
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step preflight
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step install
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step status
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step tone
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step tone-stall
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step tone-8ch
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step collect
+```
+
+#### Session 3 — cable lifecycle
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step preflight
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step install
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step cables
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step rename
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step remove
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step collect
+```
+
+#### Session 4 — Driver Verifier and fuzzing
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step preflight
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step install
+```
+
+After those commands, enable Driver Verifier using the instructions below and
+restart when instructed. After signing in and opening Administrator
+PowerShell again, run:
+
+```powershell
+Set-Location C:\ar
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step fuzz
+```
+
+Then disable Driver Verifier using the instructions below and restart when
+instructed. After signing in and opening Administrator PowerShell again, run:
+
+```powershell
+Set-Location C:\ar
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step collect
+```
+
+#### Session 5 — access control
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step preflight
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step install
+```
+
+Continue with the separate account and user-switching instructions below. Run
+the named tone check with its full command at the indicated user account, then
+collect evidence with:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step collect
+```
+
+### If preflight fails on test mode or Secure Boot
+
+Do not run `install` while `preflight` has any failures. If it reports
+`Test mode on` or `Secure Boot off`, shut down Windows completely. In the
+VirtualBox VM settings, open **System > Motherboard** and disable **Secure
+Boot** while preserving the VM's existing EFI setting. Start the VM, open an
+Administrator PowerShell window, then run:
+
+```powershell
+Set-Location C:\ar
+bcdedit /set testsigning on
+Restart-Computer
+```
+
+After Windows restarts, open a new Administrator PowerShell window and check:
+
+```powershell
+Confirm-SecureBootUEFI
+bcdedit /enum '{current}'
+```
+
+`Confirm-SecureBootUEFI` must report `False`, and the current boot entry must
+show `testsigning Yes`. If either condition is not met, stop and correct the
+VM boot configuration before continuing. Rerun the complete `preflight`
+command above and proceed only when it passes. Refresh snapshot
+`02-test-signing-ready` while the VM is powered off so later sessions restore
+these settings.
 
 Each step prints `[PASS]`/`[FAIL]` lines and a final verdict, and saves
 everything under `C:\ar\evidence\<time>-<step>\`. A `FAIL` is not your
@@ -349,6 +477,31 @@ the VM is for.
 
 Copy the zip: `Copy-Item C:\ar\evidence-*.zip Z:\`. Restore snapshot 2 and
 run the session a second time (the procedure requires two clean runs).
+
+#### Retry after the 2026-10-07 endpoint-enumeration crash
+
+The first smoke build could bugcheck Windows while enumerating the cable
+formats. The custom bridge-pin category package and endpoint-name evidence
+collector are staged in the shared folder at
+`repair-20261008-reviewed`. For each retry, restore snapshot
+`02-test-signing-ready` with the VM powered off, start the VM, and open
+**Administrator PowerShell**. Copy and run this command; it overlays the
+reviewed files into the local `C:\ar` folder, verifies every manifest hash
+(including the helper and scripts), then performs
+preflight, smoke, and evidence collection:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File Z:\repair-20261008-reviewed\retry-smoke.ps1
+```
+
+The package retains the repaired interleaved audio format table and assigns
+each bridge pin a per-cable Windows category. If smoke fails, its runner
+evidence includes `endpoint-names-on-install-failure.json`, captured before
+cleanup. Send the resulting zip so the actual Windows names remain available
+for diagnosis.
+Do not continue to the tone or verifier sessions unless smoke ends `PASS` and
+the VM stays running. If Windows restarts, start the VM again, run `collect`,
+then copy the resulting zip to `Z:`.
 
 Look at `endpoint-names.json` in the evidence: it shows exactly how Windows
 named the endpoints (for example `Speakers (AudioRouter Cable A Input)`).
@@ -436,8 +589,8 @@ This proves one Windows user cannot take over a cable another user is using.
 ## Part 6: Sending the results
 
 After `collect` and `Copy-Item C:\ar\evidence-*.zip Z:\`, the zip is in
-`E:\ar-share` on your PC. Tell the developer agent which session it was and
-the zip's name (for example "Session 2, `E:\ar-share\evidence-20261007-201500.zip`").
+`C:\VMs\ar-share` on your PC. Tell the developer agent which session it was and
+the zip's name (for example "Session 2, `C:\VMs\ar-share\evidence-20261007-201500.zip`").
 The agent unpacks it, checks every number, records it in
 `docs/plans/active/evidence/`, and fixes what failed. The evidence contains
 device names, endpoint IDs and test tones only, never a microphone
@@ -473,8 +626,8 @@ the VM can harm the PC.
 When the developer agent changes the driver, refresh the files without
 redoing Parts 2–4:
 
-1. On the PC, empty `E:\ar-share` (keep your evidence zips somewhere else
-   first) and run `tools\vm\prepare-vm-share.ps1 -Share E:\ar-share` again.
+1. On the PC, empty `C:\VMs\ar-share` (keep your evidence zips somewhere else
+   first) and run `tools\vm\prepare-vm-share.ps1 -Share C:\VMs\ar-share` again.
 2. Restore snapshot 2, start the VM, and in administrator PowerShell:
    `robocopy Z:\ C:\ar /MIR /XF evidence-*.zip` then
    `Get-ChildItem C:\ar -Recurse | Unblock-File`.

@@ -200,6 +200,116 @@ are recorded in [WP-02 evidence](evidence/2026-10-05-virtual-cable-wp02.md).
 
 ## WP-03 — VM smoke script (A1, A2, A3, A14)
 
+### VCAB-02 endpoint naming repair (2026-10-08, user authorized)
+
+- **Objective:** make Windows expose the four enabled endpoints with cable-
+  and direction-specific names so the helper can recognize Cable A/B and
+  users can select the devices as specified.
+- **Requirements:** VCAB-01/02, VDEV-01/03; Stage A A2/A3/A14.
+- **Prerequisites/evidence:** clean VM after successful helper removal;
+  repaired x64 package starts without a bugcheck. Direct VM inventory showed
+  two render endpoints named `Speakers (AudioRouter Virtual Audio Device)`
+  and two capture endpoints named `Line (AudioRouter Virtual Audio Device)`.
+  The INF's per-interface names were not reflected. See the [VM failure and
+  naming evidence](evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md).
+- **Decision:** preserve the VCAB-02 endpoint names and strict helper
+  classification. The interface friendly-name attempt still produced
+  `Speakers (AudioRouter Virtual Cable)` and `Line (AudioRouter Virtual
+  Cable)`, two each. Per the Windows audio naming documentation, endpoint
+  names come from bridge-pin categories/names; speaker form-factor names are
+  fixed. Use unique custom pin categories, registered in the device software
+  key, for each cable and direction. This changes endpoint form-factor labels
+  from generic Speakers/Line to the specified virtual cable names while
+  preserving render/capture data flow and strict helper classification.
+- **Ordered work:** (1) add 16 deterministic pin-category GUIDs to the cable
+  manifest and generate matching INF registrations and C declarations; (2)
+  assign a per-cable topology descriptor/category to each bridge pin; (3) add
+  build guards for generated GUID/string parity and descriptor wiring; (4)
+  build, sign and stage an x64 test package; (5) have the user run a focused
+  inventory, then two clean-checkpoint smoke runs only after the four names
+  match.
+- **Validation matrix:** host driver build and table checks; acceptance INF/
+  property guards; VM `Get-PnpDevice` names and helper install/remove; then
+  A1/A2/A3/A14 twice. No host driver load. VM tone/Verifier remain blocked
+  until endpoint naming and both smoke runs pass.
+- **Risk:** custom pin categories may use a generic Windows icon/form factor.
+  Confirm endpoint creation and direction in the VM, and preserve unique
+  exact cable/direction names and endpoint IDs across package updates.
+- **Rollback:** restore the previous test package in the VM checkpoint and
+  revert only the naming property and its focused acceptance checks.
+- **Status:** implementation and host validation in progress; VM validation
+  pending.
+
+#### Review before VM retry (2026-10-08)
+
+Review scope: the pending category package, native helper classification,
+failure evidence, and copy/paste retry. Requirements VCAB-02, VDEV-03,
+Stage A A2/A3/A14. Found a reproducible mismatch: the Rust helper rejects
+`AudioRouter Cable A Input (AudioRouter Virtual Cable)` while the VM guard
+accepts it. Also, failure evidence can mask the original install exception,
+and interactive retry commands do not form one terminating script block.
+Ordered repair: align strict Rust/PowerShell name classification with shared
+fixtures; preserve the original exception when collecting failure evidence;
+wrap the retry and check package hashes before smoke; rebuild a fresh share.
+Validate the reproduced rejection before repair, focused helper regressions,
+VM guards, driver/INF checks, package manifest hashes, docs and Jev.
+Rollback: restore the clean VM snapshot and keep the earlier share untouched.
+Runtime naming, rename persistence and custom-category app compatibility
+remain VM gates; host checks do not establish them.
+Additional finding: native rename writes `PKEY_Device_DeviceDesc`, the very
+category description supplying the new cable identity. Preserve that property
+and update only the display friendly name; classify from the unchanged device
+description, check actual render/capture direction, and regress renamed
+metadata separately from display parsing. This stays within VCAB-02/VDEV-03.
+The Windows display inventory also includes historical/disabled endpoints
+despite its function name. Filter helper results by active MMDevice state and
+actual data flow; regress stale, missing-state and wrong-flow records.
+Review repairs and host checks completed: helper 28 tests, native Clippy,
+formatting, VM guards 274, driver checks 215, WDK/INF/catalog build, generator,
+docs, package integrity 33 and all 29 staged manifest hashes. The required
+Jev source review is incomplete: network access failed, and automatic review
+rejected exporting the source diff; user approval was requested. Fresh share:
+`C:\VMs\ar-share\repair-20261008-reviewed`. See the linked failure evidence
+for exact package hashes, limitations and failed attempts. Next VM task is
+Session 1 via `retry-smoke.ps1`; two clean runs remain required.
+
+### Crash follow-up (2026-10-07, user authorized repair and continuation)
+
+The user's Stage A `smoke` run installed the test-signed driver, found zero
+AudioRouter endpoints, then Windows bugchecked with `SYSTEM_SERVICE_EXCEPTION`
+0x3B / access violation. The copied mini dump
+`C:\VMs\ar-share\100726-6484-01.dmp` places the fault in `ks.sys` while it
+walks the driver's `CableStreamDataRanges` pointer list. AudioRouter's ten
+`KSDATARANGE_AUDIO` values all set `KSDATARANGE_ATTRIBUTES`, but the list only
+contained one `PinDataRangeAttributeList` pointer after all ten ranges. The
+Microsoft Sysvad format table interleaves that attribute-list pointer after
+each flagged range. This was a real descriptor-table defect and was corrected,
+but the second replay bugchecked with the corrected 20-entry table present;
+the defect alone does not explain the crash.
+
+- Requirements/scenarios: VCAB-02 (endpoint enumeration), VCAB-10/11 (format
+  enumeration), VDEV-09 (test package); Stage A A2/A3 and crash-free install.
+- Prerequisites: the dump and test-signed driver from the smoke run; current
+  Windows WDK; VM snapshot `02-test-signing-ready`. No host driver load.
+- Ordered work: (1) match dump symbols to the local build and compare the
+  KS range-list convention with Microsoft's Sysvad sample; (2) interleave
+  one attribute-list pointer after each attributed range and assert the
+  expected pointer-list shape in host acceptance; (3) build and package a new
+  test-signed x64 driver; (4) prepare a fresh VM share and rerun preflight,
+  then smoke from the clean test-signing snapshot; (5) only after A2/A3 pass,
+  continue the next authorized VM session.
+- Validation: `drivers/audiorouter-virtual/tests/build-tests.ps1`,
+  `tests/acceptance/m03-driver-build.ps1 -Platform x64`,
+  `tools/vm/prepare-vm-share.ps1`, and in-VM `vm-checks.ps1 -Step smoke`.
+  The final VM install must enumerate all four endpoints and produce no new
+  bugcheck. Existing failed-run evidence is retained.
+- Rollback: restore `02-test-signing-ready` and use the previous package only
+  for reproducing the recorded failure; revert the pointer-table/test changes
+  if the corrected table fails static checks. Never load the test driver on
+  the host.
+- Status: blocked on host diagnosis after the 2026-10-07 VM replay; see
+  the outcome below and linked evidence.
+
 - **Who:** agent writes; user runs in the VM.
 - **Files:** new `tests/acceptance/m03-driver-vm.ps1`.
 - **Behavior:**
@@ -233,8 +343,18 @@ are recorded in [WP-02 evidence](evidence/2026-10-05-virtual-cable-wp02.md).
   `devcon install <inf> ROOT\AudioRouterVirtual`; `devcon.exe` is in the
   WDK tools folder). The product helper (WP-07) replaces this.
 - **Rollback:** restore the VM checkpoint.
-- **Status:** host implementation/checks done 2026-10-05; VM A1/A2/A3/A14
-  acceptance pending (two checkpoint runs still required).
+- **Status:** host implementation/checks done 2026-10-05; VM run 1 on
+  2026-10-07 installed the package, found no endpoints and bugchecked during
+  KS format enumeration. The first table repair added the expected
+  per-format attribute pointers and passed host build/guard checks, but the
+  2026-10-07 replay from the test-signing checkpoint bugchecked again as
+  Windows started `ROOT\MEDIA\0000`. The host shared package contains the
+  20-entry table, but the second dump's stack passes a count of 11 at that
+  table and an earlier runner summary reports the pre-repair build time. The
+  second runner crashed before writing its package summary, so the VM-loaded
+  package is unconfirmed and may be stale. First verify the VM package's
+  manifest and SYS hash; do not rerun smoke until the exact repaired image is
+  confirmed. Two clean checkpoint runs are still required.
 
 Implementation steps: separate pure guard and baseline comparison helpers;
 reject host execution before package/files/inventory mutations; capture PnP,
@@ -250,7 +370,9 @@ Evidence: Windows PowerShell `m03-driver-vm-guards.ps1` passed 16 checks
 (identity/signing matrix, baseline deltas, parser, read-only MMDevice defaults).
 Real `m03-driver-vm.ps1 -Package C:/does-not-exist` refused at VM identity before
 boot query, inventory, output or package access; log
-`target/driver-vm-host-refusal.log`. No install or VM result is claimed.
+`target/driver-vm-host-refusal.log`. The first attended smoke result and the
+2026-10-07 crash repair are recorded in
+[crash follow-up evidence](evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md).
 
 ### Higher-precision decision (2026-10-05, user)
 
@@ -753,6 +875,43 @@ published app keeps the VB-Cable workflow. Reverting DEC-18 restores DEC-16.
 user), WP-05 (names, 60 formats, ≤128-frame period, 2→8→2 IDs), WP-06 (tone
 both ways, counters, 8 ch/96 kHz) and WP-07 (helper install/status/
 set-cables/configure/remove). Send each session's evidence zip.
+
+The 2026-10-07 failure and repaired-package replay are recorded in
+[the crash follow-up evidence](evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md).
+The repaired package identity matched in the VM and Windows completed the
+device start without a bugcheck, but the helper still found zero of four
+endpoints. A direct diagnostic inventory showed the four healthy devices were
+named `Speakers (AudioRouter Virtual Audio Device)` (render) and `Line
+(AudioRouter Virtual Audio Device)` (capture), twice each. Those names do not
+match the required `AudioRouter Cable A/B Input/Output` names, so the helper
+correctly failed its strict name classification. The helper's remove command
+returned 0 and removed `oem5.inf`; the VM is clean. The INF's per-cable
+interface names are not reflected in the MMDevice friendly names. Microsoft
+documents endpoint naming through KS bridge-pin names/categories and the
+audio adapter's interface friendly name; speaker endpoints use the fixed
+`Speakers` label ([friendly names](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/friendly-names-for-audio-endpoint-devices),
+[endpoint builder](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/audio-endpoint-builder-algorithm)).
+Two interface-name retries failed. The diagnostic retry captured four healthy
+endpoint children, named `Speakers (AudioRouter Virtual Cable)` twice and
+`Line (AudioRouter Virtual Cable)` twice. This confirms the missing cable
+identity is in the bridge-pin naming path. Full evidence is in the
+[crash and endpoint-naming record](evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md).
+Do not proceed to tone or Verifier until the required endpoint names appear.
+Two clean smoke runs are still required before tone or Verifier sessions.
+
+The revised source now uses unique custom bridge-pin category GUIDs per cable
+and direction, generated and registered from one manifest. The ineffective
+per-interface name override is removed; the helper stays strict. WDK build,
+INF generation, 215 driver checks, 31 VM guards, documentation, Jev, and the
+33-check package integrity validation pass. The x64 test-signed package is
+staged at `C:\VMs\ar-share\repair-20261008-reviewed`; VM validation is
+pending. The subsequent review fixed helper parsing, rename identity, stale
+MMDevice counting and failure evidence. Jev awaits approval for its source
+export. Next: have the user restore `02-test-signing-ready`, then run the
+single `retry-smoke.ps1` command in the VM guide; it copies and verifies the
+package before preflight, smoke and collection. Confirm four distinct Cable A/B
+Input/Output names and two consecutive clean smoke runs before tone or
+Verifier.
 
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
