@@ -895,11 +895,13 @@ published app keeps the VB-Cable workflow. Reverting DEC-18 restores DEC-16.
 
 ## Next action
 
-**Host build environment (blocking):** repair the installed Visual Studio
-linker/PDB toolchain. The current x64 build compiles the driver objects but
-fails at link with `LNK1101: incorrect MSPDB140.DLL version`. After the build
-passes, create and verify a fresh test-signed package and stage it in the
-share. The user should keep the VM off the old package until then.
+**Host safety (blocking):** review the 2026-10-08 host bugcheck dump
+`C:\Windows\Minidump\100826-29328-01.dmp` before another driver build or VM
+retry. The x64 WDK build now passes when invoked with
+`PreferredToolArchitecture=x64` and the matching Hostx64 tool directory first
+in the process-local `PATH`; the remaining package blocker is access to the
+existing test-signing certificate/private key. Do not copy the unsigned
+partial output to the VM or use the old package.
 
 **User (after a fresh package is ready):** restore `02-test-signing-ready`
 and run the copy/paste smoke command in the
@@ -938,15 +940,29 @@ both captures, while render endpoints remained `Speakers (AudioRouter Virtual
 Cable)`. Cleanup and collection passed; see the 2026-10-08 evidence above.
 The code now uses `KSNODETYPE_ANALOG_CONNECTOR` plus per-cable bridge-pin
 `Name` GUIDs on render and keeps custom categories on capture. INF generation
-and the 274-check VM guard suite pass. The C++ sources compile, but the local
-WDK build cannot link: `LINK : fatal error LNK1101: incorrect MSPDB140.DLL
-version` for `Source/Main/Main.vcxproj`. Log:
-`target/driver-render-naming-build/build.log`. No new signed package is
-available, and the VM must not retry the previous package. Once the MSVC/WDK
-linker installation is repaired, build and sign a fresh x64 package, verify
-its manifest, stage it in the share, and rerun A1/A2/A3/A14. Confirm four
-distinct Cable A/B Input/Output names and two clean smoke runs before tone or
-Verifier. Jev still awaits approval for its source export.
+and the 274-check VM guard suite pass.
+
+On 2026-10-08, Visual Studio repair completed with exit code 0, but an
+ordinary build still failed with `LNK1101: incorrect MSPDB140.DLL version`.
+Repeating the documented process-local tool selection (`PreferredToolArchitecture=x64`
+and the matching 14.51.36256 Hostx64 linker directory first in `PATH`) made
+the x64 WDK build acceptance pass. The subsequent test-signed share build
+compiled, linked, and generated a signable catalog, then stopped when the
+restricted process was denied permission to create/find the test certificate
+in `Cert:\CurrentUser\My`. Its partial output is under the ignored
+`target/vm-share-render-pin-name-20261008`; it is unsigned and must not be
+copied to the VM.
+
+After that build, Windows recorded a host bugcheck `0x3B`
+(`0xC0000005`, access violation) and saved
+`C:\Windows\Minidump\100826-29328-01.dmp` (13,670,524 bytes, last written
+2026-10-08 17:50). The current sandbox could not open the dump for debugger
+analysis. The build scripts are build-only and did not install or load this
+driver on the host; the timing does not establish whether the build caused
+the bugcheck. Pause further driver builds, signing, and VM retries until the
+host crash is reviewed and the certificate-signing context is understood.
+The VM must not retry the previous package. Jev still awaits approval for its
+source export.
 
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
