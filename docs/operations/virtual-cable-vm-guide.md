@@ -520,7 +520,10 @@ is `Z:\repair-20261008-surround-layout` (source `a8138984`). The prior
 `151a3b69` bridge-open repair passed in the guest; inventory then found an
 8-channel mask mismatch (48/60 accepted). This replacement corrects that
 layout and preserves native inventory summaries in Windows PowerShell 5.1.
-Its host build/package checks passed; its 60-format runtime check is pending.
+Its host build/package checks passed; the guest archive
+`evidence-20261008-194356.zip` confirms 60/60 formats on all four endpoints
+and a minimum shared period of 128 frames at 48 kHz. Continue in the installed
+VM to listening/tone; actual streaming and latency are still pending.
 
 1. Open **Administrator PowerShell inside the VM** and paste the whole block.
    It checks preflight, installs the driver, verifies that another install is

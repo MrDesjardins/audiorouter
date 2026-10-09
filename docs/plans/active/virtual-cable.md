@@ -1130,6 +1130,19 @@ and staged VM guards (275) passed. Guide pins the replacement SYS hash.
 Next: user restores `02-test-signing-ready`, copies this candidate, runs
 preflight/install and status/collection. Guest 60-format gate is still open.
 
+2026-10-08 19:43 guest evidence verified: archive
+`C:\VMs\ar-share\evidence-20261008-194356.zip`, SHA-256
+`89740A881754EDAE031CEEF369C252BF330CEFEEC30C5195581F40F239C645A3`.
+Preflight 15/15 and install 3/3 passed; bridge status returned installed,
+protocol 1.1 and all four names. All four endpoints now accept **60/60**
+formats, no rejected entries, mix 48 kHz float32 stereo. Minimum shared
+period 128 frames, default/max 480, fundamental 1. VCAB-11 advertised format
+gate and the original bridge-open crash reproduction passed. These checks
+do not prove actual streaming, latency, fidelity or Verifier safety. Next:
+continue in this installed VM, set Cable B Output Listen to the VM's physical
+speakers, run Session 2 tone for 600 seconds and collect/copy evidence. Review
+the WAV and counters before stall/8-channel tests; do not restore yet.
+
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
 use the capture-sink acknowledgement (`consumer_sequence`) for producer

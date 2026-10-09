@@ -497,3 +497,22 @@ guards passed 275 checks. SYS SHA-256:
 The existing VM certificate is retained. Next: clean snapshot, copy and hash
 verification, preflight/install, then status/collection. Do not start tone
 until the agent verifies all four endpoints at 60/60 formats.
+
+## 2026-10-08 19:43: all 60 formats accepted
+
+Archive `C:\VMs\ar-share\evidence-20261008-194356.zip`, SHA-256
+`89740A881754EDAE031CEEF369C252BF330CEFEEC30C5195581F40F239C645A3`.
+After the replacement copy/hash instructions, user reported preflight 15/15
+and install 3/3. Archived helper status confirms installed, protocol 1.1,
+capabilities 63, two cables and all four correctly named endpoints. Inventory
+confirms **60/60** accepted formats on every endpoint, no unsupported entries,
+48 kHz float32 stereo mix, min period 128 frames, default/max 480 and
+fundamental 1. Status and collection summaries passed.
+
+This verifies the 8-channel mask repair and the original bridge-open crash
+reproduction on the guest. VCAB-11 advertised-format checks passed; the
+minimum-period capability is measured, not actual end-to-end latency (VCAB-25).
+Streaming, conversion quality, continuity and Verifier remain unqualified.
+Next: current installed VM, configure Cable B Output listening to the VM's
+own speakers and run the 600-second tone; inspect WAV/counters before more
+Session 2 steps. Keep this VM state for that run.
