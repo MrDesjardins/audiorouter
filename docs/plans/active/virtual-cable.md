@@ -895,7 +895,7 @@ published app keeps the VB-Cable workflow. Reverting DEC-18 restores DEC-16.
 
 ## Next action
 
-**VM retry (user action):** `repair-20261008-render-enabled` is staged from a
+**VM retry (user action, 1 of 2 clean runs verified):** `repair-20261008-render-enabled` is staged from a
 clean commit; package integrity and all 29 manifest hashes pass. With the VM
 powered off, restore
 `02-test-signing-ready`, start it, and run the copy/paste command in the
@@ -1056,6 +1056,17 @@ Documentation passed 133 files/721 local links; diff whitespace check passed.
 Runtime names, active state, stream safety and two-run gate remain unverified.
 Next: restore `02-test-signing-ready`, run the guide's one-shot retry command,
 and inspect its evidence before continuing Session 1 or later sessions.
+
+First clean runtime pass verified (2026-10-08 18:57): archive
+`C:\VMs\ar-share\evidence-20261008-185852.zip`, SHA-256
+`857FAC1C7EDA67744CC8D4F764D8043E00B396B553A7FFA0AC40CFF0D0AA29ED`.
+The clean `5f61df3c` package passed preflight, A1/A2/A3/A14 and collection.
+All four names are `AudioRouter Cable A/B Input/Output (AudioRouter Virtual
+Cable)`, status OK, with render flow on Input and capture flow on Output.
+Windows default roles did not change; uninstall restored the full baseline.
+The combined naming/default-enable fix is confirmed for this single install.
+Next: restore `02-test-signing-ready` and run the same candidate again. Two-run
+gate is 1/2; tone, formats, Verifier and later sessions remain pending.
 
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must

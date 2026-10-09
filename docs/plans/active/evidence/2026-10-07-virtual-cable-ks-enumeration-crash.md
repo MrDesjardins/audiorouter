@@ -370,3 +370,20 @@ VM guards passed 275 checks; package integrity passed 33; all 29 manifest
 file hashes matched; docs passed 133 Markdown files/721 links; diff check
 passed. Build/staging performed no host driver load/install or trust/boot
 changes. Jev remains blocked on its previous source-export approval rejection.
+
+## 2026-10-08 18:57: first clean smoke pass
+
+Archive `C:\VMs\ar-share\evidence-20261008-185852.zip`, SHA-256
+`857FAC1C7EDA67744CC8D4F764D8043E00B396B553A7FFA0AC40CFF0D0AA29ED`.
+The package matches clean source commit `5f61df3c`, built
+`2026-10-09T01:51:01.3638446Z`. Preflight passed all 15 checks; runner A1,
+A2, A3 and A14 passed. Collection produced the archive successfully.
+
+The pre-cleanup endpoint inventory contains exactly Cable A/B Input/Output
+with suffix `(AudioRouter Virtual Cable)`, all status OK. Input InstanceIds
+use the render flow prefix `{0.0.0.00000000}`; Output uses capture prefix
+`{0.0.1.00000000}`. Default roles stayed unchanged. Uninstall restored driver
+store, present devices and default roles to the baseline. This confirms the
+combined naming/default-enable change for one clean install/remove cycle.
+Required two-run gate is **1/2**. Restore the clean snapshot and repeat the
+same candidate; audio quality, formats and Verifier remain unqualified.
