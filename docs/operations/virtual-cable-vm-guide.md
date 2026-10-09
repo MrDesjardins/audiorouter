@@ -515,26 +515,36 @@ Installation and status must be run separately; send the collected status
 evidence for review before continuing to listening or tone. See the
 [crash record](../plans/active/evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md#2026-10-08-1925-bridge-open-crashed-session-2).
 
-After the two successful Session 1 runs, continue in the current VM. Smoke
-removed the driver; the first block below installs and keeps it. The retry
-script's "before the second run" message applies after the first success.
+After a crash, restore `02-test-signing-ready` before starting. The replacement
+is `Z:\repair-20261008-bridge-dispatch` (source `151a3b69`). Its host build and
+package checks passed; its bridge-open runtime check remains pending.
 
 1. Open **Administrator PowerShell inside the VM** and paste the whole block.
    It checks preflight, installs the driver, verifies that another install is
-   a no-op, and reads the format/period inventory. An earlier failure stops
-   the block:
+   a no-op. An earlier failure stops the block:
 
    ```powershell
    & {
+       robocopy.exe Z:\repair-20261008-bridge-dispatch C:\ar /E /R:1 /W:1
+       if ($LASTEXITCODE -ge 8) { throw 'Copy failed. Stop here.' }
+       $hash = (Get-FileHash C:\ar\driver\audioroutervirtual.sys -Algorithm SHA256).Hash
+       if ($hash -ne '5A641E0CA21171BDF4318DBF1972BE92D1BC7D18F3BC8600F952D9B39135E8B6') { throw 'Wrong driver build. Stop here.' }
+       Get-ChildItem C:\ar -Recurse -File | Unblock-File
        powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step preflight
        if ($LASTEXITCODE -ne 0) { throw 'Preflight failed. Send the output before continuing.' }
        powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step install
        if ($LASTEXITCODE -ne 0) { throw 'Install failed. Send the output before continuing.' }
-       powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step status
    }
    ```
 
-2. Send this output before continuing. Every endpoint must accept all 60
+2. Send the install output before continuing. Once reviewed, run status as
+   a separate command:
+
+   ```powershell
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step status
+   ```
+
+   Send this output before continuing. Every endpoint must accept all 60
    formats (44.1/48/96 kHz × 1/2/4/6/8 channels × float,
    16-, 24- and 32-bit) and offer a minimum shared period of 128 frames
    (2.7 ms) or less. For comparison, VB-Cable on the PC reports 480 frames.

@@ -1101,6 +1101,14 @@ restore the clean snapshot, install and run status separately, then inspect
 evidence before tone. Rollback: restore the clean guest snapshot; never load
 this package on the host. A build alone cannot close this crash gate.
 
+Replacement is ready in `C:\VMs\ar-share\repair-20261008-bridge-dispatch`,
+clean source `151a3b69`, built `2026-10-09T02:32:39.0185028Z`. Windows x64
+WDK acceptance and dispatch regression guards passed; package integrity 33
+checks passed, 29 manifest hashes matched. The guide now separates install
+from status and pins the replacement SYS hash. Next: user restores the clean
+guest snapshot and runs the copy/preflight/install block, then sends output.
+Status/format inventory follows only after installation is reviewed.
+
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
 use the capture-sink acknowledgement (`consumer_sequence`) for producer

@@ -440,3 +440,12 @@ passed with the dispatch regression guards (`target/bridge-dispatch-build-check.
 `git diff --check` passed. Jev was not run because automatic approval review
 previously rejected uploading the source diff to that external service.
 Guest runtime verification of the repair is pending.
+
+Replacement staged at `C:\VMs\ar-share\repair-20261008-bridge-dispatch`,
+built `2026-10-09T02:32:39.0185028Z` from clean commit
+`151a3b6959dadbad784153ab8017969ffc367b03`. Test-signed Release x64;
+package integrity passed 33 checks and all 29 manifest hashes matched.
+SYS SHA-256: `5A641E0CA21171BDF4318DBF1972BE92D1BC7D18F3BC8600F952D9B39135E8B6`.
+The staged package retains the existing VM certificate. Next: clean snapshot,
+copy/hash verification and install; review output before the separate status
+command. No tone or Verifier until the bridge-open crash gate passes.
