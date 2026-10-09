@@ -1436,6 +1436,13 @@ result are recorded in the
 The updated tool-only bundle is staged at
 `C:\VMs\ar-share\diagnostics-20261008-tone-ready`; in the VM, run
 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Z:\diagnostics-20261008-tone-ready\retry-isolated-tone.ps1`.
+The 30-second retry passed with all error counters and harness sequence gaps
+at zero. It recorded 506 render blocks (about 5.06 seconds of audio), so for
+the 10-minute gate, route a known file into Cable A Input and keep playback
+continuous for the full run. Use
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step tone -ToneSeconds 600`,
+then run the collect step. Archive and detailed metrics are in the
+[render-overrun evidence](evidence/2026-10-08-m03-render-overrun.md).
 
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must

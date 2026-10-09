@@ -108,3 +108,23 @@ command finishes. The updated tool-only bundle is staged at
 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Z:\diagnostics-20261008-tone-ready\retry-isolated-tone.ps1`.
 Press Enter when ready, then click Cable A Input Test as soon as the tone run
 starts. Review the short result before the 10-minute gate.
+
+## 2026-10-08 clean 30-second retry
+
+- Guest archive: `C:\VMs\ar-share\evidence-20261008-214459.zip`
+- SHA-256: `8B8A609736851222A7CFA11729EC6D1B990A1C8092B937B034171A5EB9165A2A`
+- The tone step passed all four checks. Capture and render driver error
+  counters were zero; the harness reported zero sequence gaps.
+- Capture wrote 3,003 blocks. Render recorded 506 blocks (242,880 frames,
+  about 5.06 seconds) during the 30-second run. Maximum capture/render pump
+  gaps were 5,928/5,948 μs; maximum heartbeat, progress output and lease
+  close were 1,112/267/37 μs.
+
+This clears the short-run gate, but the Cable A Input test stimulus was brief.
+For the 10-minute run, route a known audio file to Cable A Input and keep it
+playing continuously for the full 600 seconds. Do not use a single short Test
+sample as the long-run stimulus. In the VM run
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step tone -ToneSeconds 600`,
+then collect the evidence with `powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step collect`.
+Keep Cable B Output Listen enabled as before. Review the collected trace before
+the stall or 8-channel checks.
