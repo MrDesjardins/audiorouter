@@ -328,6 +328,8 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
     let mut last_write_at = start;
     let mut last_ack = 0_u64;
     let mut last_ack_at = start;
+    let mut last_progress = start;
+    println!("lease-open capture={:?}", capture.counters());
     while start.elapsed() < run_for + stall_offset {
         let now = std::time::Instant::now();
         if !stalled && now >= stall_at {
@@ -366,6 +368,9 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
             last_write_at = now;
             next_block += 1;
             written_blocks += 1;
+            if written_blocks == 1 {
+                println!("first-write capture={:?}", capture.counters());
+            }
         }
         // The render-source lease holds one block (the newest). Poll faster
         // than one period so every block is read once; one replaced before we
@@ -381,6 +386,19 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
             capture.heartbeat().map_err(explain)?;
             render.heartbeat().map_err(explain)?;
             last_heartbeat = std::time::Instant::now();
+        }
+        // Diagnostic work belongs to this user-mode tool, never the audio
+        // callback. Retain raw cumulative counts; do not subtract startup
+        // errors or hide them from the final zero-counter acceptance check.
+        if last_progress.elapsed() >= std::time::Duration::from_secs(1) {
+            println!(
+                "progress {} ms: written={written_blocks} read={read_blocks} ack={} capture={:?} render={:?}",
+                start.elapsed().as_millis(),
+                capture.consumer_sequence(),
+                capture.counters(),
+                render.counters()
+            );
+            last_progress = std::time::Instant::now();
         }
         // Stop as soon as the driver has taken the final tone block: from
         // then on it would correctly count silence until the lease closes,

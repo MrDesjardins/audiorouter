@@ -1154,6 +1154,26 @@ recording. This does not establish a hang or an audio-quality pass. Next:
 same installed guest and listening setup, run `tone -ToneSeconds 30`, collect
 and inspect completion/counters before repeating the full 600-second check.
 
+2026-10-08 19:56 short tone completed but failed VCAB-24: 3000 capture blocks
+written, capture-sink underrun_frames 1104 (23 ms), all other counters zero;
+render-source 1530 blocks/734400 frames, all error counters zero. Final totals
+do not locate the underruns in time. Do not waive them or assume VM scheduling.
+Diagnostic plan: add user-mode counter snapshots at lease open, first write
+and one-second intervals; print progress live through the VM wrapper while
+retaining the log. Keep kernel behavior and zero-counter gate unchanged.
+Run focused host tool tests/format checks, stage the diagnostic build, then
+run only a 30-second guest trace before selecting a repair. Rollback: previous
+test tool/package or clean guest snapshot. No host driver loading.
+
+Additional review requested by user: completed OPEN/setup, single-slot ack,
+WaveRT scratch/catch-up, close/counter timing and script gate review. Fixed
+missing/duplicate report handling and `tone-8ch` zero-counter enforcement;
+added live progress and raw counter snapshots. No kernel pacing change or
+counter waiver. Host tool tests 4/4, focused Clippy, Rust fmt checks and
+PowerShell output/counter regressions passed. Startup exposure and delayed
+callback starvation remain hypotheses requiring the diagnostic guest trace;
+see the [review record](evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md#2026-10-08-1956-short-run-underrun-and-additional-review).
+
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
 use the capture-sink acknowledgement (`consumer_sequence`) for producer

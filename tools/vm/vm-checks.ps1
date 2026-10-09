@@ -97,6 +97,20 @@ function Invoke-Inventory([int] $Cables, [string] $Name) {
     $json = if (Test-Path -LiteralPath $out) { Get-Content -LiteralPath $out -Raw | ConvertFrom-Json } else { $null }
     return [pscustomobject]@{ Code = $code; Json = $json; Text = $text }
 }
+function Invoke-ToneTool([string[]] $Arguments, [string] $Wav) {
+    $previousPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $text = & $tone @Arguments --out $Wav 2>&1 | ForEach-Object {
+            Write-Host $_
+            $_
+        } | Out-String
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
+    return [pscustomobject]@{ Text = $text; Code = $code }
+}
 function Get-CableIds($Inventory, [string[]] $Letters) {
     $map = @{}
     foreach ($endpoint in @($Inventory.Json.endpoints)) {
@@ -109,9 +123,24 @@ function Get-CableIds($Inventory, [string[]] $Letters) {
     return $map
 }
 function Show-ToneSummary($Text) {
-    $counters = @($Text -split "`n" | Where-Object { $_ -match 'counters' })
+    $counters = @($Text -split "`n" | Where-Object { $_ -match '^(capture-sink|render-source) counters \(' })
     $counters | ForEach-Object { Write-Host "  $_" }
     return $counters
+}
+
+function Get-ToneCounterResult($Lines) {
+    $complete = @($Lines).Count -eq 2
+    foreach ($direction in @('capture-sink', 'render-source')) {
+        if (@($Lines | Where-Object { $_ -match "^$direction counters \(" }).Count -ne 1) { $complete = $false }
+    }
+    $sum = 0L
+    foreach ($line in @($Lines)) {
+        foreach ($field in @('underrun_frames', 'overrun_frames', 'sequence_gaps', 'non_finite_samples', 'format_mismatches')) {
+            $matches = [regex]::Matches($line, "\b${field}: (\d+)")
+            if ($matches.Count -ne 1) { $complete = $false } else { $sum += [long]$matches[0].Groups[1].Value }
+        }
+    }
+    return [pscustomobject]@{ Complete = $complete; Sum = $sum }
 }
 
 try {
@@ -168,17 +197,18 @@ try {
             Write-Host 'While this runs: record "AudioRouter Cable B Output" (e.g. Audacity) to hear 997 Hz left / 47 Hz right,'
             Write-Host 'and play any sound into "AudioRouter Cable A Input" so it lands in the WAV.' -ForegroundColor Yellow
             $wav = Join-Path $evidence 'render-source.wav'
-            $text = & $tone @arguments --out $wav 2>&1 | Out-String
-            $code = $LASTEXITCODE
+            $run = Invoke-ToneTool $arguments $wav
+            $text = $run.Text
+            $code = $run.Code
             $text | Set-Content -LiteralPath (Join-Path $evidence 'tone.txt') -Encoding UTF8
             Check 'Tone tool finished (driver compatible, leases opened and closed)' ($code -eq 0) "exit $code"
             $lines = Show-ToneSummary $text
-            $values = @($lines | ForEach-Object { [regex]::Matches($_, '(underrun_frames|overrun_frames|sequence_gaps|non_finite_samples|format_mismatches): (\d+)') } |
-                ForEach-Object { [long]$_.Groups[2].Value })
+            $counterResult = Get-ToneCounterResult $lines
+            Check 'Both final counter reports complete' $counterResult.Complete 'five counters per direction required'
             if ($Step -eq 'tone-stall') {
-                Check 'Counters rose during the deliberate stall' (($values | Measure-Object -Sum).Sum -gt 0)
-            } elseif ($Step -eq 'tone') {
-                Check 'All error counters zero in the clean run' (($values | Measure-Object -Sum).Sum -eq 0) 'see tone.txt'
+                Check 'Counters rose during the deliberate stall' ($counterResult.Complete -and $counterResult.Sum -gt 0)
+            } elseif ($Step -in @('tone', 'tone-8ch')) {
+                Check 'All error counters zero in the clean run' ($counterResult.Complete -and $counterResult.Sum -eq 0) 'see tone.txt'
             }
             Check 'WAV written' (Test-Path -LiteralPath $wav) $wav
         }

@@ -569,8 +569,8 @@ VM to listening/tone; actual streaming and latency are still pending.
    powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step tone -ToneSeconds 30
    ```
 
-   The window stays quiet while the tool runs: output is captured and printed
-   after it exits. Collect/copy the evidence using step 9 and send the output
+   Diagnostic builds print progress/counter snapshots every second; earlier
+   builds stayed quiet until exit. Collect/copy the evidence using step 9 and send the output
    before the full run. This short check does not replace the 10-minute gate.
 
    Once the short run is reviewed, run the 10-minute tone step:

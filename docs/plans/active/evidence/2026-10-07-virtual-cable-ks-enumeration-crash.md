@@ -533,3 +533,51 @@ after exit; the quiet console was expected during the run. Next: keep the
 installed guest and listening setup, run `-Step tone -ToneSeconds 30`, collect
 the evidence, and verify finalization/counters before the full 600-second run.
 The short run is diagnostic and does not replace the longer acceptance gate.
+
+## 2026-10-08 19:56: short-run underrun and additional review
+
+Archive `C:\VMs\ar-share\evidence-20261008-195708.zip`, SHA-256
+`EFF32A9E54C3DCE13A2FE8C182A937E6590D7ACD3678577C17C0D58CC3CBBB4B`.
+Tool exit 0 means leases opened/closed, not audio qualification. Capture-sink
+wrote 3000 blocks but reported 1104 underrun frames (23 ms at 48 kHz); all
+other capture and render error counters were zero. Render-source recorded
+1530 blocks/734400 frames. The transcript spans 19:56:12–19:56:38, shorter
+than the requested 30 seconds: the producer stops on final-block acknowledgement.
+The aggregate counters cannot establish when silence was inserted. VCAB-24
+failed; no scheduling/startup excuse is accepted as evidence of a pass.
+
+At the user's request, reviewed tool OPEN/setup order, single-slot producer
+acknowledgement, WaveRT scratch retention and missing-block silence, close and
+counter snapshot timing, script parsing and the 8-channel gate. Findings:
+
+- Confirmed startup exposure: capture OPEN precedes render mapping, WAV file
+  creation and first tone publication; an already-running Listen stream sees
+  an active empty lease during that interval. Its contribution to 1104 frames
+  is unmeasured. Log lease-open/first-write counts before choosing a repair.
+- Potential steady-state starvation: a delayed callback may need more than
+  the remaining scratch plus one published block. The next producer block
+  depends on user-mode scheduling after acknowledgement. No queue redesign is
+  made without evidence and the specification decision required by the plan.
+- Confirmed test defect: missing/duplicate final reports were not validated;
+  `tone-8ch` did not enforce zero counters. Require one final report per
+  direction and all five fields exactly once; apply zero checks to both clean
+  runs. Never reset or subtract underruns to obtain a pass.
+- Output handling: native stderr must be retained even on failure; tone
+  progress now displays live and remains captured in tone.txt. Keep summaries
+  separate from diagnostic snapshots so counters are not counted repeatedly.
+- The WAV records Cable A render input; it does not measure Cable B's audible
+  capture tone. That path still needs its separate signal-quality evidence.
+
+Diagnostic tool adds snapshots at lease-open, first write and one-second
+intervals, including elapsed time, producer blocks, acknowledgement and raw
+capture/render counters. This is user-mode logging; no kernel behavior change.
+Windows checks: `cargo test --locked -p audiorouter-windows-audio --example
+m03_bridge_tone` 4/4; matching example Clippy with `-D warnings` passed;
+workspace and shell fmt and both checks passed without unrelated edits.
+`m03-vm-inventory-output.ps1` passed output/exit 0/1 fixtures, missing/duplicate
+reports, zero reports and the 1104-frame regression. Evidence:
+`target/inventory-output-f0af28ed51eb4be9ab0eb4d437695f8b`,
+`target/tone-progress-tests.txt`, `target/tone-progress-clippy.txt`.
+Jev remains unrun due to the earlier external source-upload approval rejection.
+Next: a diagnostic 30-second guest trace with the existing installed driver;
+no full-duration or 8-channel retry until the trace is reviewed.
