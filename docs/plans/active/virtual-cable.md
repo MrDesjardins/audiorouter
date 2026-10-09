@@ -1444,6 +1444,19 @@ continuous for the full run. Use
 then run the collect step. Archive and detailed metrics are in the
 [render-overrun evidence](evidence/2026-10-08-m03-render-overrun.md).
 
+The first 600-second run completed but failed the clean-run gate: capture
+underrun was 2,208 frames (46 ms), first observed at 67.193 seconds; maximum
+capture/render worker poll gaps were 64.984/65.410 ms. Both workers had MMCSS
+Pro Audio and a 1 ms timer, and no fallback. The progress trace shows Cable A
+Input data for only 76.52 seconds total, not continuous for the whole test.
+The max-gap timestamps are unavailable, so a scheduling pause is plausible but
+unconfirmed. Do not run stall or 8-channel checks. Repeat the clean 600-second
+run only with a known file looped continuously into Cable A Input, the VM in
+the foreground and no heavy host work. If the underrun recurs, investigate VM
+scheduling and capture buffering before changing the driver or its thresholds.
+Archive and details are in the
+[render-overrun evidence](evidence/2026-10-08-m03-render-overrun.md).
+
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
 use the capture-sink acknowledgement (`consumer_sequence`) for producer

@@ -128,3 +128,29 @@ sample as the long-run stimulus. In the VM run
 then collect the evidence with `powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step collect`.
 Keep Cable B Output Listen enabled as before. Review the collected trace before
 the stall or 8-channel checks.
+
+## 2026-10-08 10-minute run — capture underrun
+
+- Guest archive: `C:\VMs\ar-share\evidence-20261008-215641.zip`
+- SHA-256: `95EABDA6F2491954742A1AD3A511B711878411EB48D5ECCCB6EA906A68A561AD`
+- The harness completed all 600 seconds and exited 0, but the clean-run gate
+  failed. Capture-sink underrun reached 2,208 frames (46 ms at 48 kHz), first
+  visible at elapsed 67.193 seconds, and remained at that value. Other driver
+  error counters and harness render sequence gaps stayed zero.
+- Both workers had MMCSS Pro Audio, 1 ms timer resolution, and no priority
+  fallback. Maximum capture/render poll gaps were 64,984/65,410 μs. The
+  control heartbeat, progress output and WAV append maxima were 648, 652 and
+  11,519 μs. The maximum poll-gap timestamps are not recorded, so their exact
+  overlap with the underrun cannot be proven. The similarly sized gap in both
+  workers is consistent with a transient guest scheduling pause; this remains
+  an inference, not a confirmed root cause.
+- Render source produced 7,652 blocks (3,672,960 frames, 76.52 seconds) over
+  the 600-second run, with progress showing long intervals without new render
+  blocks. The Cable A Input stimulus was intermittent rather than continuous.
+
+Do not count this as the clean 10-minute gate and do not proceed to stall or
+8-channel tests. Next: repeat the 600-second run only with a known file looped
+continuously to Cable A Input, keep the VM running in the foreground, and avoid
+other heavy host work. If capture underruns recur with both workers scheduled
+normally, investigate the VM's scheduling and the capture queue before making
+any driver or acceptance-threshold change.
