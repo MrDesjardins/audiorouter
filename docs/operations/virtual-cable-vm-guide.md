@@ -511,14 +511,17 @@ more; two clean runs are required before moving on.
 but opening its bridge crashed the guest during Session 2. Do not use that
 package for status or tone. Preserve the evidence, restore
 `02-test-signing-ready`, and use the replacement package supplied by the agent.
-Installation and status must be run separately; send the collected status
-evidence for review before continuing to listening or tone. See the
+Run installation and status checks before continuing to listening or tone;
+send their output for review. See the
 [crash record](../plans/active/evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md#2026-10-08-1925-bridge-open-crashed-session-2).
 
 Restore `02-test-signing-ready` before replacing the driver. The current
-candidate is `Z:\repair-20261008-capture-prefetch` (source `abb303ee`).
-It adds bounded capture prefetch after the prior package showed underruns
-during playback. Host queue regressions, WDK build and package checks passed;
+candidate is `Z:\repair-20261008-capture-tick-primed` (source `dbf19e17`).
+The prefetch-only candidate still failed: its capture timer skipped audio
+service between notifications, and the tone tool exposed an empty lease
+during setup. This candidate services capture on each 1 ms tick, preserves
+whole-frame arithmetic at all rates, and primes the tone before OPEN.
+Host queue/timing regressions, WDK build and package checks passed;
 runtime continuity and latency remain unverified. The prior `a8138984`
 package already passed bridge opening and 60/60 formats on all four endpoints
 (`evidence-20261008-194356.zip`); repeat install/status on this new candidate
@@ -530,11 +533,11 @@ before configuring Listen and running only the 30-second diagnostic below.
 
    ```powershell
    & {
-       robocopy.exe Z:\repair-20261008-capture-prefetch C:\ar /E /R:1 /W:1
+       robocopy.exe Z:\repair-20261008-capture-tick-primed C:\ar /E /R:1 /W:1
        if ($LASTEXITCODE -ge 8) { throw 'Copy failed. Stop here.' }
        $hash = (Get-FileHash C:\ar\driver\audioroutervirtual.sys -Algorithm SHA256).Hash
-       if ($hash -ne 'B45C9EF5B4B466D729BBD6579962F1540BB853377A14C14A647AA641BD4605BA') { throw 'Wrong driver build. Stop here.' }
-       $entries = @(Get-Content Z:\repair-20261008-capture-prefetch\MANIFEST.txt | Where-Object { $_ -match '^[a-fA-F0-9]{64}  ' })
+       if ($hash -ne '692C013CF9727985FE804F4020388108D1A568ECF8FC0D99B9B525771E39D646') { throw 'Wrong driver build. Stop here.' }
+       $entries = @(Get-Content Z:\repair-20261008-capture-tick-primed\MANIFEST.txt | Where-Object { $_ -match '^[a-fA-F0-9]{64}  ' })
        if ($entries.Count -ne 29) { throw 'Unexpected package manifest. Stop here.' }
        foreach ($entry in $entries) {
            if ((Get-FileHash (Join-Path C:\ar $entry.Substring(66))).Hash -ine $entry.Substring(0, 64)) { throw 'Copied package hash mismatch. Stop here.' }
@@ -545,17 +548,12 @@ before configuring Listen and running only the 30-second diagnostic below.
        if ($LASTEXITCODE -ne 0) { throw 'Preflight failed. Send the output before continuing.' }
        powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step install
        if ($LASTEXITCODE -ne 0) { throw 'Install failed. Send the output before continuing.' }
+       powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step status
+       if ($LASTEXITCODE -ne 0) { throw 'Status failed. Send the output before continuing.' }
    }
    ```
 
-2. Send the install output before continuing. Once reviewed, run status as
-   a separate command:
-
-   ```powershell
-   powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step status
-   ```
-
-   Send this output before continuing. Every endpoint must accept all 60
+2. Send the install/status output before continuing. Every endpoint must accept all 60
    formats (44.1/48/96 kHz × 1/2/4/6/8 channels × float,
    16-, 24- and 32-bit) and offer a minimum shared period of 128 frames
    (2.7 ms) or less. For comparison, VB-Cable on the PC reports 480 frames.
@@ -597,11 +595,9 @@ before configuring Listen and running only the 30-second diagnostic below.
 5. Run the deliberate stall step:
 
    If the short clean tone fails with underruns, stop before stall/8-channel
-   runs. The `diagnostics-20261008-tone-timing` bundle updates only the tone
-   tool and vm-checks.ps1; copy its two manifest-listed files into the existing
-   `C:\ar`, verify their hashes, and rerun 30 seconds with the same Listen
-   setup. No snapshot restore or driver reinstall is needed for this trace.
-   Send the collected ZIP for review; diagnostic output does not waive the
+   runs. The current candidate already includes live counter diagnostics and
+   primed startup; do not copy an older diagnostic tool over it. Keep the
+   installed VM, collect/copy the ZIP and send it for review. Diagnostics do not waive the
    zero-counter requirement.
 
    ```powershell

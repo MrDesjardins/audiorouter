@@ -1313,6 +1313,19 @@ while servicing capture between notifications. WDK acceptance, 275 VM guards,
 PowerShell output/counter regression, docs and diff checks passed; ASan/Jev
 limitations remain as recorded above. No host driver loading occurred.
 
+Corrected candidate staged: `C:\VMs\ar-share\repair-20261008-capture-tick-primed`,
+clean source `dbf19e178c737e9aa4cc93bc1048bd66ec591c3d`, built
+`2026-10-09T03:46:14.0611758Z`. SYS SHA-256:
+`692C013CF9727985FE804F4020388108D1A568ECF8FC0D99B9B525771E39D646`.
+Package checks 33 passed; all 29 manifest hashes independently reread and
+matched. Log: `target/capture-tick-share.txt`. Guide now runs install/status
+checks together before any listening/tone; an earlier failure stops the block.
+Next: restore `02-test-signing-ready`, copy/hash/preflight/install/status,
+review output, then configure Listen and run 30 seconds with Cable A Input
+Test stimulus. The previous trace's empty render WAV cannot qualify A4.
+No long test until this candidate's trace is reviewed. The zero-error gate
+and measured latency requirement remain unchanged.
+
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
 use the capture-sink acknowledgement (`consumer_sequence`) for producer
