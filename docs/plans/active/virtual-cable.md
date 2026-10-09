@@ -1326,6 +1326,54 @@ Test stimulus. The previous trace's empty render WAV cannot qualify A4.
 No long test until this candidate's trace is reviewed. The zero-error gate
 and measured latency requirement remain unchanged.
 
+### 2026-10-08 20:54: per-tick candidate still fails; review before another retry
+
+Archive `C:\VMs\ar-share\evidence-20261008-205521.zip`, SHA-256
+`54FD1A4D3A2DDC4C4BEF1EB28A80D2EAC680ECCE4A7C6F953CAA99EA73A5EA6E`.
+Preflight/install/status passed. Capture counters are zero at primed OPEN and
+through 19.030 seconds, then 4272 underrun frames at 20.030 seconds, unchanged
+through exit. That is 89 ms of missing capture audio in one interval. Render
+has 480 overrun frames by 29.044 seconds (one 10 ms block). 2993 capture
+blocks written, 508 render blocks read, 243840 WAV frames. This is a failed
+VCAB-24 run; neither direction's continuity gate passes. Primed startup and
+per-tick prefetch behaved cleanly during the initial interval, which does not
+qualify sustained playback or establish the later failure's cause.
+
+Review of the actual test loop found an unisolated audio path: the same thread
+publishes capture, polls render, allocates/serializes/writes WAV data, performs
+two synchronous heartbeat IOCTLs, prints synchronous console progress, and
+sleeps. The log does not time those operations, so it cannot distinguish a
+blocking tool operation from scheduler delay or driver timing. The ~20 ms
+private capture reserve cannot cover an arbitrarily blocked producer. The
+earlier host timing model tested a one-tick producer delay; it did not cover
+this failure class. Do not increase buffers or relax counters on this evidence.
+
+Proposed harness design for approval under plan rule 9:
+
+1. Keep driver/ABI and zero-error acceptance unchanged. Prepare resources and
+   prime capture before activation; move mapped capture production and render
+   consumption to dedicated audio workers with explicit readiness and shutdown.
+2. Keep heartbeat IOCTLs, progress output and WAV I/O outside those workers.
+   Transfer float64 render blocks through fixed, preallocated bounded storage;
+   report an exhausted recording queue as a harness failure, never block or
+   silently discard. Preserve exactly one producer/consumer per direction.
+3. Record each worker's maximum pump gap and control/recording operation
+   durations through bounded diagnostics. Treat thread scheduling support
+   failures explicitly. Do not claim MMCSS or scheduling guarantees unmeasured.
+4. Before any guest retry, exercise the actual worker/mapped-slot path on the
+   host with deliberately blocked heartbeat, console and recording operations,
+   plus recording backpressure, producer stalls, sample order, sequence counts,
+   startup failures and shutdown. Verify that peripheral stalls do not halt
+   audio service and that a real producer stall is still reported.
+5. Inspect the complete implementation and focused Windows checks, then stage
+   only the harness update for the existing guest driver. Review a 30-second
+   trace before any long run. New transport buffering, if still needed, is a
+   separate decision supported by that evidence. Latency/fidelity gates remain
+   open. Rollback is the previous tool bundle or clean guest snapshot.
+
+Next action: approve the isolated harness design. The current VM and archives
+are retained; no additional kernel patch or request for another blind retry.
+
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
 use the capture-sink acknowledgement (`consumer_sequence`) for producer
