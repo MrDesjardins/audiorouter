@@ -211,3 +211,24 @@ capture underrun and remains unqualified.
 Next: rerun the updated 30-second bundle with the audio file looping into
 Cable A Input for the entire check. Do not start the 600-second test until the
 short run passes; keep the original zero-counter criterion.
+
+## 2026-10-08 sustained 30-second retry — pass
+
+- Guest archive: `C:\VMs\ar-share\evidence-20261008-221819.zip`
+- SHA-256: `35D39E181CED721350470CA4E4B5B9EE98948541DB4569072B1ED17CA78403F4`
+- The updated retry passed all four checks. Capture and render counters and
+  harness sequence gaps were zero. Both workers reported MMCSS Pro Audio,
+  1 ms timer resolution, and no priority fallback.
+- Capture wrote 3,003 blocks and render recorded 3,000 blocks (1,440,000
+  frames, 30 seconds). Maximum capture/render poll gaps were 6,099/6,079 μs;
+  heartbeat, progress output, lease close, and WAV append maxima were
+  151/210/21/9,061 μs.
+- This clears the short-run gate only. It does not qualify the 600-second run;
+  the earlier 10-minute capture underrun remains unresolved.
+
+Next: with Cable B Output Listen enabled, loop a known audio file to Cable A
+Input continuously for the entire 600-second run. In the VM, run
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step tone -ToneSeconds 600`,
+then collect with
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step collect`.
+Review the new archive before any stall or 8-channel check.

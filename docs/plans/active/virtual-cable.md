@@ -1481,9 +1481,11 @@ overrun. The run used only the brief Windows Test sound, and the current trace
 cannot distinguish a callback burst from delayed reader scheduling. The
 render worker now repolls immediately after a successful read rather than
 sleeping 1 ms before the next poll. The retry script now requires a sound file
-looped to Cable A Input for the full 30 seconds. The updated guest retry is
-pending; keep the zero-error gate and do not run the 600-second test yet.
-Archive and details are in the
+looped to Cable A Input for the full 30 seconds. The updated short run passed:
+3,000 render blocks / 1,440,000 frames, with all driver counters and harness
+sequence gaps at zero. This clears the short-run gate only; the 600-second
+run remains unqualified. Next, run the 600-second test with the known file
+looped continuously into Cable A Input. Archive and measurements are in the
 [render-overrun evidence](evidence/2026-10-08-m03-render-overrun.md).
 
 **Agent (host, can start now):** WP-08 status detection and the
