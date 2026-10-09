@@ -215,41 +215,54 @@ fn main() {
 }
 
 #[cfg(windows)]
+#[path = "m03_bridge_tone/workers.rs"]
+mod workers;
+
+#[cfg(windows)]
+struct TimerResolution;
+
+#[cfg(windows)]
+impl TimerResolution {
+    fn acquire() -> Result<Self, (i32, String)> {
+        // SAFETY: process timer request, paired with timeEndPeriod in Drop.
+        let result = unsafe { windows::Win32::Media::timeBeginPeriod(1) };
+        if result != 0 {
+            return Err((1, format!("1 ms timer resolution failed: {result}")));
+        }
+        Ok(Self)
+    }
+}
+
+#[cfg(windows)]
+impl Drop for TimerResolution {
+    fn drop(&mut self) {
+        // SAFETY: matches this guard's successful timeBeginPeriod request.
+        unsafe {
+            windows::Win32::Media::timeEndPeriod(1);
+        }
+    }
+}
+
+#[cfg(windows)]
 fn run(options: &Options) -> Result<(), (i32, String)> {
     use audiorouter_windows_audio::{
-        classify_native_bridge_error, NativeBridgeControlClient, NativeBridgeController,
-        NativeBridgeControllerError,
+        NativeBridgeControlClient, NativeBridgeController, NativeBridgeRegion, NativeBridgeSession,
     };
-    let explain = |error: NativeBridgeControllerError| -> (i32, String) {
-        match error {
-            NativeBridgeControllerError::Windows(windows) => {
-                let kind = classify_native_bridge_error(&windows);
-                (1, format!("{kind:?}: {} ({windows})", kind.user_message()))
-            }
-            other => (1, format!("{other:?}")),
-        }
-    };
-
-    // QUERY first: refuse an incompatible driver before creating any lease.
-    let client = NativeBridgeControlClient::open(&options.device).map_err(|error| {
-        let kind = classify_native_bridge_error(&error);
-        (1, format!("{kind:?}: {} ({error})", kind.user_message()))
-    })?;
-    let info = client
-        .query()
-        .map_err(|error| (1, format!("QUERY failed: {error}")))?;
+    use std::sync::atomic::Ordering;
+    use std::time::{Duration, Instant};
+    fn fail(error: impl std::fmt::Debug) -> (i32, String) {
+        (1, format!("{error:?}"))
+    }
+    let client = NativeBridgeControlClient::open(&options.device).map_err(fail)?;
+    let info = client.query().map_err(fail)?;
     println!("driver: {info:?}");
     info.check_compatible()
-        .map_err(|error| (2, format!("{error:?}: {}", error.user_message())))?;
+        .map_err(|error| (2, format!("{error:?}")))?;
     drop(client);
-
-    // Generations must increase across runs while the driver stays loaded;
-    // wall-clock milliseconds satisfy that without persisted state.
     let generation = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_millis() as u64)
-        .unwrap_or(1)
-        .max(1);
+        .map_err(|error| (1, error.to_string()))?
+        .as_millis() as u64;
     let hello = |bus: &str, direction| audiorouter_protocol::AudioBridgeHello {
         protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
         protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
@@ -261,6 +274,15 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
         frames_per_quantum: options.frames,
         lease_ms: 2_000,
     };
+    // Prepared sessions own the files even if a later preparation fails.
+    struct Prepared(Option<NativeBridgeSession>);
+    impl Drop for Prepared {
+        fn drop(&mut self) {
+            if let Some(session) = self.0.take() {
+                let _ = session.remove_owned_mapping();
+            }
+        }
+    }
     let temp = std::env::temp_dir();
     let capture_path = temp.join(format!(
         "audiorouter-bridge-tone-{}-capture.slot",
@@ -270,15 +292,34 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
         "audiorouter-bridge-tone-{}-render.slot",
         std::process::id()
     ));
-    let mut render = NativeBridgeController::create_with_section(
-        &options.device,
-        &render_path,
-        hello(
-            &options.render_bus,
-            audiorouter_protocol::AudioBridgeDirection::RenderSource,
-        ),
-    )
-    .map_err(explain)?;
+    let samples = usize::from(options.frames) * usize::from(options.channels);
+    let mut tone = vec![0.0; samples];
+    fill_tone_block(&mut tone, options.channels, 0, options.rate);
+    let mut prepared_capture = Prepared(Some(
+        NativeBridgeSession::create_primed(
+            &capture_path,
+            hello(
+                &options.capture_bus,
+                audiorouter_protocol::AudioBridgeDirection::CaptureSink,
+            ),
+            &tone,
+        )
+        .map_err(fail)?,
+    ));
+    let mut prepared_render = Prepared(Some(
+        NativeBridgeSession::create(
+            &render_path,
+            hello(
+                &options.render_bus,
+                audiorouter_protocol::AudioBridgeDirection::RenderSource,
+            ),
+        )
+        .map_err(fail)?,
+    ));
+    let capture_view =
+        NativeBridgeRegion::open(&capture_path, options.channels, options.frames).map_err(fail)?;
+    let render_view =
+        NativeBridgeRegion::open(&render_path, options.channels, options.frames).map_err(fail)?;
     let mut wav = WavWriter::create(&options.out, options.channels, options.rate, options.wav64)
         .map_err(|error| {
             (
@@ -286,162 +327,223 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
                 format!("cannot create {}: {error}", options.out.display()),
             )
         })?;
+    let state = workers::Shared::new(samples, 64);
+    let _timer = TimerResolution::acquire()?;
+    println!("isolated capture/render workers; 64 preallocated recording blocks; {} seconds; intentional stall {} ms", options.seconds, options.stall_ms);
 
-    let samples_per_block = usize::from(options.frames) * usize::from(options.channels);
-    let mut tone = vec![0.0_f64; samples_per_block];
-    let mut received = vec![0.0_f64; samples_per_block];
-    let block_period =
-        std::time::Duration::from_secs_f64(f64::from(options.frames) / f64::from(options.rate));
-    let total_blocks =
-        u64::from(options.seconds) * u64::from(options.rate) / u64::from(options.frames);
-    // Complete file/buffer/render setup before exposing the capture lease.
-    // Its first block is valid before OPEN; no startup counter is reset or
-    // subtracted to compensate for an active empty mapping.
-    fill_tone_block(&mut tone, options.channels, 0, options.rate);
-    let mut capture = NativeBridgeController::create_with_section_primed(
-        &options.device,
-        &capture_path,
-        hello(
-            &options.capture_bus,
-            audiorouter_protocol::AudioBridgeDirection::CaptureSink,
-        ),
-        &tone,
-    )
-    .map_err(explain)?;
-    let start = std::time::Instant::now();
-    let mut last_heartbeat = start;
-    let mut last_render_sequence = 0_u64;
-    let mut written_blocks = 1_u64;
-    let mut read_blocks = 0_u64;
-    let mut stall_offset = std::time::Duration::ZERO;
-    println!(
-        "writing {} Hz/{} Hz into {} capture sink, recording {} render source for {} s ({} ch, {} Hz, {}-frame blocks)",
-        997, 47, options.capture_bus, options.render_bus, options.seconds,
-        options.channels, options.rate, options.frames
-    );
-    // 1 ms scheduler resolution for this process only, so the 1 ms poll below
-    // is not stretched to Windows' default 15.6 ms tick.
-    // SAFETY: plain winmm call; matched by timeEndPeriod after the loop.
-    unsafe {
-        windows::Win32::Media::timeBeginPeriod(1);
-    }
-    let run_for = std::time::Duration::from_secs(u64::from(options.seconds));
-    let stall_at = start + run_for / 2;
-    let mut stalled = options.stall_ms == 0;
-    let mut next_block = 1_u64;
-    let mut last_written = 1_u64;
-    let mut last_write_at = start;
-    let mut last_ack = 0_u64;
-    let mut last_ack_at = start;
-    let mut last_progress = start;
-    println!("lease-open capture={:?}", capture.counters());
-    println!(
-        "first-write (primed before OPEN) capture={:?}",
-        capture.counters()
-    );
-    while start.elapsed() < run_for + stall_offset {
-        let now = std::time::Instant::now();
-        if !stalled && now >= stall_at {
-            // Deliberate stall: neither produce nor consume, so the driver's
-            // underrun/overrun counters must rise (WP-06 acceptance).
-            println!("stalling for {} ms", options.stall_ms);
-            let stall = std::time::Duration::from_millis(u64::from(options.stall_ms));
-            std::thread::sleep(stall);
-            stall_offset += stall;
-            stalled = true;
+    std::thread::scope(|scope| -> Result<(), (i32, String)> {
+        // Declared before spawning: every early return wakes waiting workers.
+        struct Stop<'a>(&'a workers::Shared);
+        impl Drop for Stop<'_> {
+            fn drop(&mut self) {
+                self.0.stop.store(true, Ordering::Release);
+            }
         }
-        // Flow control: while the driver is consuming (a recorder or
-        // "Listen" is open on the capture endpoint) it acknowledges each block
-        // it takes; publish the next one right after the acknowledgement, so
-        // the tone runs on the driver's clock. With no consumer, pace by wall
-        // clock (unread blocks are simply replaced and not counted).
-        let ack = capture.consumer_sequence();
-        if ack != last_ack {
-            last_ack = ack;
-            last_ack_at = now;
+        let _stop = Stop(&state);
+        let (ready_tx, ready_rx) = std::sync::mpsc::sync_channel(2);
+        let capture_tx = ready_tx.clone();
+        let capture_state = &state;
+        let capture_region = &capture_view;
+        let capture_worker = std::thread::Builder::new()
+            .name("tone-capture".to_owned())
+            .spawn_scoped(scope, move || {
+                let _panic = workers::PanicSignal(capture_state);
+                let ready = workers::prepare_thread();
+                let _ = capture_tx.send(ready.clone());
+                let result = ready.and_then(|()| {
+                    workers::capture(
+                        capture_region,
+                        capture_state,
+                        options,
+                        generation,
+                        &mut tone,
+                    )
+                });
+                if result.is_err() {
+                    capture_state.failed.store(true, Ordering::Release);
+                }
+                result
+            })
+            .map_err(|error| (1, format!("capture worker startup: {error}")))?;
+        let render_state = &state;
+        let render_region = &render_view;
+        let render_worker = std::thread::Builder::new()
+            .name("tone-render".to_owned())
+            .spawn_scoped(scope, move || {
+                let _panic = workers::PanicSignal(render_state);
+                struct Finished<'a>(&'a workers::Shared);
+                impl Drop for Finished<'_> {
+                    fn drop(&mut self) {
+                        self.0.renderer_done.store(true, Ordering::Release);
+                    }
+                }
+                let _finished = Finished(render_state);
+                let ready = workers::prepare_thread();
+                let _ = ready_tx.send(ready.clone());
+                let result = ready.and_then(|()| {
+                    workers::render(render_region, render_state, options, generation)
+                });
+                if result.is_err() {
+                    render_state.failed.store(true, Ordering::Release);
+                }
+                result
+            })
+            .map_err(|error| (1, format!("render worker startup: {error}")))?;
+        for _ in 0..2 {
+            ready_rx
+                .recv_timeout(Duration::from_secs(10))
+                .map_err(|error| (1, format!("worker readiness: {error}")))?
+                .map_err(|error| (1, error))?;
         }
-        let consumer_active = last_ack != 0 && last_ack_at.elapsed() < block_period * 3;
-        let due = if consumer_active {
-            last_written == 0 || ack >= last_written
-        } else {
-            last_written == 0 || now.duration_since(last_write_at) >= block_period
-        };
-        if due && next_block < total_blocks {
-            fill_tone_block(
-                &mut tone,
-                options.channels,
-                next_block * u64::from(options.frames),
-                options.rate,
-            );
-            last_written = capture.write_f64(&tone).map_err(explain)?;
-            last_write_at = now;
-            next_block += 1;
-            written_blocks += 1;
-        }
-        // The render-source lease holds one block (the newest). Poll faster
-        // than one period so every block is read once; one replaced before we
-        // read it is counted by the driver as an overrun, not lost silently.
-        if let Ok(header) = render.read_into_f64_after(last_render_sequence, &mut received) {
-            let count = usize::from(header.frames) * usize::from(header.channels);
-            wav.append(&received[..count])
-                .map_err(|error| (1, format!("WAV write failed: {error}")))?;
-            last_render_sequence = header.sequence;
-            read_blocks += 1;
-        }
-        if last_heartbeat.elapsed() >= std::time::Duration::from_millis(250) {
-            capture.heartbeat().map_err(explain)?;
-            render.heartbeat().map_err(explain)?;
-            last_heartbeat = std::time::Instant::now();
-        }
-        // Diagnostic work belongs to this user-mode tool, never the audio
-        // callback. Retain raw cumulative counts; do not subtract startup
-        // errors or hide them from the final zero-counter acceptance check.
-        if last_progress.elapsed() >= std::time::Duration::from_secs(1) {
+        let disk_state = &state;
+        let disk_worker = std::thread::Builder::new()
+            .name("tone-recording".to_owned())
+            .spawn_scoped(scope, move || {
+                let _panic = workers::PanicSignal(disk_state);
+                let recorded = workers::record(disk_state, |samples| {
+                    wav.append(samples)
+                        .map_err(|error| format!("WAV write: {error}"))
+                });
+                let before = Instant::now();
+                let frames = wav
+                    .finish(options.rate)
+                    .map_err(|error| format!("WAV finish: {error}"))?;
+                workers::observe_max(&disk_state.disk_finish_us, before.elapsed());
+                recorded.map(|()| frames)
+            })
+            .map_err(|error| (1, format!("recording worker startup: {error}")))?;
+
+        // Activation errors still stop/join audio and finalize the WAV.
+        let operation = (|| -> Result<(), (i32, String)> {
+            let mut render = NativeBridgeController::activate_prepared_section(
+                &options.device,
+                prepared_render.0.take().unwrap(),
+            )
+            .map_err(fail)?;
+            let mut capture = NativeBridgeController::activate_prepared_section(
+                &options.device,
+                prepared_capture.0.take().unwrap(),
+            )
+            .map_err(fail)?;
+            let start = Instant::now();
+            state
+                .start
+                .set(start)
+                .map_err(|_| (1, "worker start already set".to_owned()))?;
+            capture_worker.thread().unpark();
+            render_worker.thread().unpark();
+            let mut heartbeat = start;
+            let mut progress = start;
+            let mut control_us = 0;
+            let mut report_us = 0;
+            let service = (|| -> Result<(), (i32, String)> {
+                while !state.done.load(Ordering::Acquire) && !state.failed.load(Ordering::Acquire) {
+                    if heartbeat.elapsed() >= Duration::from_millis(250) {
+                        let before = Instant::now();
+                        capture.heartbeat().map_err(fail)?;
+                        render.heartbeat().map_err(fail)?;
+                        control_us = control_us.max(before.elapsed().as_micros());
+                        heartbeat = Instant::now();
+                    }
+                    if progress.elapsed() >= Duration::from_secs(1) {
+                        let before = Instant::now();
+                        println!(
+                            "progress {} ms: written={} read={} ack={} capture={:?} render={:?}",
+                            start.elapsed().as_millis(),
+                            state.capture_blocks.load(Ordering::Acquire),
+                            state.render_blocks.load(Ordering::Acquire),
+                            capture.consumer_sequence(),
+                            capture.counters(),
+                            render.counters()
+                        );
+                        report_us = report_us.max(before.elapsed().as_micros());
+                        progress = Instant::now();
+                    }
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                Ok(())
+            })();
+            // Deactivate both native leases before disk flush, output or joins.
+            let close_start = Instant::now();
+            let capture_close = capture.deactivate().map_err(fail);
+            let render_close = render.deactivate().map_err(fail);
+            let close_us = close_start.elapsed().as_micros();
+            let capture_counters = capture_view.counters();
+            let render_counters = render_view.counters();
+            state.stop.store(true, Ordering::Release);
             println!(
-                "progress {} ms: written={written_blocks} read={read_blocks} ack={} capture={:?} render={:?}",
-                start.elapsed().as_millis(),
-                capture.consumer_sequence(),
-                capture.counters(),
-                render.counters()
+                "capture-sink counters ({}): {capture_counters:?}",
+                options.capture_bus
             );
-            last_progress = std::time::Instant::now();
+            println!(
+                "render-source counters ({}): {render_counters:?}",
+                options.render_bus
+            );
+            println!("maximum control heartbeat: {control_us} us; progress output: {report_us} us; lease close: {close_us} us");
+            // Both cleanup calls run even if one reports a failure.
+            let capture_cleanup = capture.close().map_err(fail);
+            let render_cleanup = render.close().map_err(fail);
+            service
+                .and(capture_close)
+                .and(render_close)
+                .and(capture_cleanup)
+                .and(render_cleanup)
+        })();
+        state.stop.store(true, Ordering::Release);
+        capture_worker.thread().unpark();
+        render_worker.thread().unpark();
+        let capture_result = capture_worker
+            .join()
+            .map_err(|_| (1, "capture worker panicked".to_owned()))
+            .and_then(|result| result.map_err(|error| (1, error)));
+        let render_result = render_worker
+            .join()
+            .map_err(|_| (1, "render worker panicked".to_owned()))
+            .and_then(|result| result.map_err(|error| (1, error)));
+        let disk_result = disk_worker
+            .join()
+            .map_err(|_| (1, "recording worker panicked".to_owned()))
+            .and_then(|result| result.map_err(|error| (1, error)));
+        println!(
+            "capture-sink blocks written: {}",
+            state.capture_blocks.load(Ordering::Acquire)
+        );
+        println!(
+            "render-source blocks read: {}; WAV frames: {:?} -> {}",
+            state.render_blocks.load(Ordering::Acquire),
+            disk_result.as_ref().map_or(0, |frames| *frames),
+            options.out.display()
+        );
+        println!(
+            "maximum pump gaps: capture={} us render={} us; WAV append={} us finish={} us",
+            state.capture_gap_us.load(Ordering::Relaxed),
+            state.render_gap_us.load(Ordering::Relaxed),
+            state.disk_us.load(Ordering::Relaxed),
+            state.disk_finish_us.load(Ordering::Relaxed)
+        );
+        println!(
+            "harness render sequence gaps: {}",
+            state.render_gaps.load(Ordering::Relaxed)
+        );
+        operation
+            .and(capture_result)
+            .and(render_result)
+            .and(disk_result.map(|_| ()))?;
+        if state.capture_blocks.load(Ordering::Acquire) == 1 {
+            return Err((
+                1,
+                "no capture consumer acknowledged the primed block; enable Listen before running"
+                    .to_owned(),
+            ));
         }
-        // Stop as soon as the driver has taken the final tone block: from
-        // then on it would correctly count silence until the lease closes,
-        // which is the end of the test, not a glitch.
-        if next_block == total_blocks
-            && consumer_active
-            && capture.consumer_sequence() >= last_written
-        {
-            break;
+        if state.render_blocks.load(Ordering::Acquire) == 0 {
+            return Err((
+                1,
+                "no render audio recorded; play the Cable A Input test during the run".to_owned(),
+            ));
         }
-        std::thread::sleep(std::time::Duration::from_millis(1));
-    }
-    let capture_counters = capture.counters();
-    let render_counters = render.counters();
-    // SAFETY: matches timeBeginPeriod(1) above.
-    unsafe {
-        windows::Win32::Media::timeEndPeriod(1);
-    }
-    let recorded_frames = wav
-        .finish(options.rate)
-        .map_err(|error| (1, format!("WAV finish failed: {error}")))?;
-    println!("capture-sink blocks written: {written_blocks}");
-    println!(
-        "render-source blocks read: {read_blocks}; WAV frames: {recorded_frames} -> {}",
-        options.out.display()
-    );
-    println!(
-        "capture-sink counters ({}): {capture_counters:?}",
-        options.capture_bus
-    );
-    println!(
-        "render-source counters ({}): {render_counters:?}",
-        options.render_bus
-    );
-    capture.close().map_err(explain)?;
-    render.close().map_err(explain)?;
-    Ok(())
+        Ok(())
+    })
 }
 
 #[cfg(not(windows))]

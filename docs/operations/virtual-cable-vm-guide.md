@@ -515,6 +515,34 @@ Run installation and status checks before continuing to listening or tone;
 send their output for review. See the
 [crash record](../plans/active/evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md#2026-10-08-1925-bridge-open-crashed-session-2).
 
+### Isolated harness diagnostic on the already installed VM
+
+The 20:54 trace still failed with 4272 capture underrun frames and 480 render
+overrun frames. The tone tool has now been separated into capture, render,
+control and recording workers. The driver and acceptance thresholds stay the
+same. Fixed recording storage holds 64 blocks; exhaustion is an explicit
+failure. Progress includes maximum audio pump gaps, heartbeat/output and WAV
+append durations. Host mapped-slot tests are harness evidence; they do not
+qualify the kernel driver or prove the cause of the earlier VM failure.
+
+For the VM that already passed install/status for `dbf19e17`, keep it running.
+In the classic Sound panel, keep **Cable B Output → Properties → Listen →
+Listen to this device** enabled through the VM's own speakers. Open the
+**Playback** tab and be ready to use **Cable A Input → Test** several times
+during the 30-second check. In Administrator PowerShell inside the VM, paste:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File Z:\diagnostics-20261008-isolated-tone\retry-isolated-tone.ps1
+```
+
+The script checks the required local driver hash, copies and verifies only the
+tone tool and check script, checks installed endpoint status, runs 30 seconds,
+collects evidence and copies the ZIP to the host shared folder. Send the output
+before proceeding. Do not restore or reinstall for this tool-only diagnostic.
+Rollback: restore the prior tone tool from `repair-20261008-capture-tick-primed`.
+
+### Installing the existing driver candidate after a clean restore
+
 Restore `02-test-signing-ready` before replacing the driver. The current
 candidate is `Z:\repair-20261008-capture-tick-primed` (source `dbf19e17`).
 The prefetch-only candidate still failed: its capture timer skipped audio

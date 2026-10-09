@@ -1309,15 +1309,41 @@ impl NativeBridgeController {
             None => NativeBridgeSession::create(&mapping_path, hello.clone()),
         }
         .map_err(NativeBridgeControllerError::Session)?;
-        let section =
-            match NativeBridgeSectionHandle::for_file(mapping_path, session.mapping_bytes() as u32)
-            {
-                Ok(section) => section,
-                Err(error) => {
-                    let _ = session.remove_owned_mapping();
-                    return Err(NativeBridgeControllerError::Windows(error));
-                }
-            };
+        Self::claim_prepared_section(client, session)
+    }
+
+    /// Claim a fully prepared mapping after its audio workers are ready.
+    /// The caller owns the session exclusively; this consumes it and preserves
+    /// the primed sequence. Failure removes the session's owned mapping.
+    pub fn activate_prepared_section(
+        device_path: &str,
+        session: NativeBridgeSession,
+    ) -> Result<Self, NativeBridgeControllerError> {
+        let client = match NativeBridgeControlClient::open(device_path) {
+            Ok(client) => client,
+            Err(error) => {
+                let _ = session.remove_owned_mapping();
+                return Err(NativeBridgeControllerError::Windows(error));
+            }
+        };
+        Self::claim_prepared_section(client, session)
+    }
+
+    fn claim_prepared_section(
+        client: NativeBridgeControlClient,
+        session: NativeBridgeSession,
+    ) -> Result<Self, NativeBridgeControllerError> {
+        let hello = session.hello().clone();
+        let section = match NativeBridgeSectionHandle::for_file(
+            &session.mapping_path,
+            session.mapping_bytes() as u32,
+        ) {
+            Ok(section) => section,
+            Err(error) => {
+                let _ = session.remove_owned_mapping();
+                return Err(NativeBridgeControllerError::Windows(error));
+            }
+        };
         if let Err(error) =
             client.open_bridge_with_mapping(&hello, section.raw_handle(), section.mapping_bytes())
         {
@@ -1475,9 +1501,15 @@ impl NativeBridgeController {
             .map_err(NativeBridgeControllerError::Session)
     }
 
-    pub fn close(mut self) -> Result<(), NativeBridgeControllerError> {
-        let section = self.section.take();
-        let close_result = if let Some(section) = section.as_ref() {
+    /// Release the broker lease without flushing or deleting its mapping.
+    /// Audio workers may retain independent views until final counters have
+    /// been read. Call `close` afterwards to finish owned-file cleanup.
+    pub fn deactivate(&mut self) -> Result<(), NativeBridgeControllerError> {
+        if self.closed {
+            return Ok(());
+        }
+        let section = self.section.as_ref();
+        let close_result = if let Some(section) = section {
             self.client
                 .close_with_mapping(
                     self.session
@@ -1499,11 +1531,16 @@ impl NativeBridgeController {
                 .map_err(NativeBridgeControllerError::Windows)
         };
         close_result?;
-        drop(section);
         // Mark the broker lease closed before any later cleanup can run. If
         // the request above fails, this assignment is not reached and Drop
         // retains its best-effort retry path.
         self.closed = true;
+        Ok(())
+    }
+
+    pub fn close(mut self) -> Result<(), NativeBridgeControllerError> {
+        self.deactivate()?;
+        self.section.take();
         let mut session = self
             .session
             .take()
@@ -1524,6 +1561,10 @@ impl Drop for NativeBridgeController {
         // Best-effort release for panic/error paths. The kernel lease timeout
         // remains the final recovery boundary when close cannot be delivered.
         if self.closed {
+            self.section.take();
+            if let Some(session) = self.session.take() {
+                let _ = session.remove_owned_mapping();
+            }
             return;
         }
         if let Some(section) = &self.section {
@@ -12697,6 +12738,36 @@ mod tests {
             assert!(NativeBridgeSession::create_primed(&path, hello.clone(), &invalid).is_err());
             assert!(!path.exists(), "failed prime must remove its owned mapping");
         }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_bridge_prepared_activation_failure_removes_owned_file() {
+        let path = std::env::temp_dir().join(format!(
+            "bridge-activation-failure-{}.slot",
+            std::process::id()
+        ));
+        let hello = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: "cable-b".into(),
+            direction: audiorouter_protocol::AudioBridgeDirection::CaptureSink,
+            generation: 7,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            frames_per_quantum: 128,
+            lease_ms: 1_000,
+        };
+        let prepared = NativeBridgeSession::create_primed(&path, hello, &[0.125; 256]).unwrap();
+        let view = NativeBridgeRegion::open(&path, 2, 128).unwrap();
+        // Deliberately absent device: this regression never opens a real driver.
+        assert!(NativeBridgeController::activate_prepared_section(
+            r"\\.\AudioRouterAbsentActivationTest-8352D503-2D64-44EC-BC81-31A5B18C9191",
+            prepared
+        )
+        .is_err());
+        assert!(!path.exists());
+        drop(view);
     }
 
     #[test]

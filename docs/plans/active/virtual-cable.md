@@ -1348,7 +1348,7 @@ private capture reserve cannot cover an arbitrarily blocked producer. The
 earlier host timing model tested a one-tick producer delay; it did not cover
 this failure class. Do not increase buffers or relax counters on this evidence.
 
-Proposed harness design for approval under plan rule 9:
+Harness design approved by the user (2026-10-08) under plan rule 9:
 
 1. Keep driver/ABI and zero-error acceptance unchanged. Prepare resources and
    prime capture before activation; move mapped capture production and render
@@ -1371,8 +1371,19 @@ Proposed harness design for approval under plan rule 9:
    separate decision supported by that evidence. Latency/fidelity gates remain
    open. Rollback is the previous tool bundle or clean guest snapshot.
 
-Next action: approve the isolated harness design. The current VM and archives
-are retained; no additional kernel patch or request for another blind retry.
+The isolated harness is implemented: prepared activation, two mapped audio
+workers, control-only main thread and bounded recording worker. Both leases
+deactivate before cleanup; final render data is drained. Host regressions:
+11 tone/worker tests and 30 bridge tests passed, including a 160 ms blocked
+recording/control interval, explicit backpressure and a visible 120 ms producer
+stall. Details and limits are in the
+[harness record](evidence/2026-10-08-isolated-tone-harness.md).
+
+Next action: build and stage the tool-only diagnostic, then review one
+30-second run on the already installed VM. Archives are retained; no kernel
+patch or threshold change. The VM continuity, fidelity and latency gates
+remain open; host regressions do not establish the prior runtime failure's
+precise cause.
 
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
