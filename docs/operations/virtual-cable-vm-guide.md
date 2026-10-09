@@ -478,30 +478,28 @@ the VM is for.
 Copy the zip: `Copy-Item C:\ar\evidence-*.zip Z:\`. Restore snapshot 2 and
 run the session a second time (the procedure requires two clean runs).
 
-#### Retry after the 2026-10-07 endpoint-enumeration crash
+#### Retry the endpoint-naming check (2026-10-08)
 
-The first smoke build could bugcheck Windows while enumerating the cable
-formats. The custom bridge-pin category package and endpoint-name evidence
-collector are staged in the shared folder at
-`repair-20261008-reviewed`. For each retry, restore snapshot
+The candidate package with per-cable bridge-pin render names and the endpoint
+failure collector is staged in the shared folder at
+`repair-20261008-render-pin-name`. For this retry, restore snapshot
 `02-test-signing-ready` with the VM powered off, start the VM, and open
 **Administrator PowerShell**. Copy and run this command; it overlays the
-reviewed files into the local `C:\ar` folder, verifies every manifest hash
-(including the helper and scripts), then performs
+package into `C:\ar`, verifies all 29 manifest file hashes, then performs
 preflight, smoke, and evidence collection:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File Z:\repair-20261008-reviewed\retry-smoke.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File Z:\repair-20261008-render-pin-name\retry-smoke.ps1
 ```
 
-The package retains the repaired interleaved audio format table and assigns
-each bridge pin a per-cable Windows category. If smoke fails, its runner
-evidence includes `endpoint-names-on-install-failure.json`, captured before
-cleanup. Send the resulting zip so the actual Windows names remain available
-for diagnosis.
-Do not continue to the tone or verifier sessions unless smoke ends `PASS` and
-the VM stays running. If Windows restarts, start the VM again, run `collect`,
-then copy the resulting zip to `Z:`.
+The package uses the already-trusted test certificate. If smoke fails, its
+runner evidence includes `endpoint-names-on-install-failure.json`, captured
+before cleanup. Send the resulting zip so the actual Windows endpoint names
+remain available for diagnosis. Do not continue to tone or Verifier sessions
+unless smoke ends `PASS` and the VM stays running. If Windows restarts, start
+the VM again, run `collect`, then copy the resulting zip to `Z:`. After one
+clean smoke run, restore `02-test-signing-ready` and run the same command once
+more; two clean runs are required before moving on.
 
 Look at `endpoint-names.json` in the evidence: it shows exactly how Windows
 named the endpoints (for example `Speakers (AudioRouter Cable A Input)`).

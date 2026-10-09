@@ -895,20 +895,16 @@ published app keeps the VB-Cable workflow. Reverting DEC-18 restores DEC-16.
 
 ## Next action
 
-**Host safety (blocking):** review the 2026-10-08 host bugcheck dump
-`C:\Windows\Minidump\100826-29328-01.dmp` before another driver build or VM
-retry. The x64 WDK build now passes when invoked with
-`PreferredToolArchitecture=x64` and the matching Hostx64 tool directory first
-in the process-local `PATH`; the remaining package blocker is access to the
-existing test-signing certificate/private key. Do not copy the unsigned
-partial output to the VM or use the old package.
+**VM retry (user action):** keep the host driver unloaded. With the VM powered
+off, restore `02-test-signing-ready`, start it, and run the copy/paste command
+in the [VM guide](../../operations/virtual-cable-vm-guide.md) for
+`repair-20261008-render-pin-name`. The new package passed signing and all 33
+package checks; all 29 staged file hashes match its manifest. Two clean smoke
+runs are required before tone or Verifier.
 
-**User (after a fresh package is ready):** restore `02-test-signing-ready`
-and run the copy/paste smoke command in the
-[VM guide](../../operations/virtual-cable-vm-guide.md). Continue sessions
-1–5 only after two clean A1–A3/A14 runs show the four Cable A/B Input/Output
-names. The sessions then cover WP-04 (Verifier + fuzz, second user), WP-05
-(60 formats, ≤128-frame period, 2→8→2 IDs), WP-06 (tone both ways, counters,
+After two clean A1–A3/A14 runs show the four Cable A/B Input/Output names,
+continue sessions 2–5: WP-04 (Verifier + fuzz, second user), WP-05 (60
+formats, ≤128-frame period, 2→8→2 IDs), WP-06 (tone both ways, counters,
 8 ch/96 kHz) and WP-07 (helper install/status/set-cables/configure/remove).
 
 The 2026-10-07 failure and repaired-package replay are recorded in
@@ -946,23 +942,29 @@ On 2026-10-08, Visual Studio repair completed with exit code 0, but an
 ordinary build still failed with `LNK1101: incorrect MSPDB140.DLL version`.
 Repeating the documented process-local tool selection (`PreferredToolArchitecture=x64`
 and the matching 14.51.36256 Hostx64 linker directory first in `PATH`) made
-the x64 WDK build acceptance pass. The subsequent test-signed share build
-compiled, linked, and generated a signable catalog, then stopped when the
-restricted process was denied permission to create/find the test certificate
-in `Cert:\CurrentUser\My`. Its partial output is under the ignored
-`target/vm-share-render-pin-name-20261008`; it is unsigned and must not be
-copied to the VM.
+the x64 WDK build acceptance pass. The first share-preparation attempt then
+stopped at test-certificate creation with access denied. An elevated
+sign-only step reused certificate thumbprint
+`FF6876FBE50A74DC0B69077C11DC28A1A9FAAD40`; no host trust change was made.
+The resulting driver package passed 33 integrity checks. Static-CRT helper,
+tone/inventory tools and fuzzer were staged; the complete share passed all 29
+manifest hash checks and is at
+`C:\VMs\ar-share\repair-20261008-render-pin-name`. The SYS SHA-256 is
+`C6931B62DDFB6317A75D17D7DC7213838024EAC24A12CC801A8B8A7154DBE6BD`.
 
-After that build, Windows recorded a host bugcheck `0x3B`
-(`0xC0000005`, access violation) and saved
-`C:\Windows\Minidump\100826-29328-01.dmp` (13,670,524 bytes, last written
-2026-10-08 17:50). The current sandbox could not open the dump for debugger
-analysis. The build scripts are build-only and did not install or load this
-driver on the host; the timing does not establish whether the build caused
-the bugcheck. Pause further driver builds, signing, and VM retries until the
-host crash is reviewed and the certificate-signing context is understood.
-The VM must not retry the previous package. Jev still awaits approval for its
-source export.
+The host bugcheck dump `C:\Windows\Minidump\100826-29328-01.dmp` was copied
+to the shared folder (SHA-256
+`ADE420AF6A2D0E275E5E4A98CDE28C11E8C4D89FC6302DBA18F28D10AE799A65`) and
+analyzed with matching Microsoft symbols. It records bugcheck `0x3B`
+(`0xC0000005`) at 2026-10-08 17:48:10, in `explorer.exe` waiting through
+`nt!KeWaitForSingleObject+0x369` on Windows 11 kernel 10.0.26100.9549. The
+dump contains no AudioRouter module, so this candidate driver was not loaded
+on the host. The fault occurred about ten seconds after the candidate SYS
+was built; the dump and call stack do not establish a cause. Blackbox PnP's
+last record is `STORAGE\VolumeSnapshot\HarddiskVolumeSnapshot2`, problem
+code 24, with no PnP event in progress; this is not evidence of causation.
+The host crash remains unexplained. No host driver was installed or loaded.
+Jev still awaits approval for its source export.
 
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must

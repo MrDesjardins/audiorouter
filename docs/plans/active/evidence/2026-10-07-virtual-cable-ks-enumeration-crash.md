@@ -196,7 +196,7 @@ Package staged at `C:\VMs\ar-share\repair-20261008-endpoint-names`.
 `0706772A3A26A2827534E2C0C6455061EA27FB022D7D89B5844A995E07596954`.
 The VM run is pending; do not report endpoint naming or smoke as runtime
 passed until the user provides VM evidence. Run the copy/preflight/smoke/
-collect block in the updated [VM guide](../../../operations/virtual-cable-vm-guide.md#retry-after-the-2026-10-07-endpoint-enumeration-crash).
+collect block in the updated [VM guide](../../../operations/virtual-cable-vm-guide.md#retry-the-endpoint-naming-check-2026-10-08).
 
 ### Endpoint-name replay and diagnostic capture (2026-10-08)
 
@@ -258,7 +258,7 @@ The x64 test-signed package is staged at
 test-signed, dirty working tree. SYS SHA-256:
 `ABFF3407D940308136B9598AEFFFCE46067B1AD0D38287F0EC5B02D1196B495E`.
 The next action is a clean-checkpoint VM smoke run using the updated
-[VM guide](../../../operations/virtual-cable-vm-guide.md#retry-after-the-2026-10-07-endpoint-enumeration-crash).
+[VM guide](../../../operations/virtual-cable-vm-guide.md#retry-the-endpoint-naming-check-2026-10-08).
 Endpoint naming, endpoint direction/app visibility, and smoke remain unverified
 until the VM result arrives.
 
@@ -329,6 +329,6 @@ test-signed, dirty source tree, driver version `0.1.0.0`, built
 - Helper SHA-256: `11886DF1C15D58D4CE59B3B4D981BE6893E3B9D67D4344910FB00B86F70FD735`.
 
 Next: restore the clean test-signing snapshot and run the single command in
-the [retry guide](../../../operations/virtual-cable-vm-guide.md#retry-after-the-2026-10-07-endpoint-enumeration-crash).
+the [retry guide](../../../operations/virtual-cable-vm-guide.md#retry-the-endpoint-naming-check-2026-10-08).
 Remain at Session 1 until two clean smoke runs pass. Rename/persistence and
 app compatibility must subsequently pass their own VM gates.
