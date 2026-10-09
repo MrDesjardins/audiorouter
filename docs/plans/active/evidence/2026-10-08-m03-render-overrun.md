@@ -232,3 +232,24 @@ Input continuously for the entire 600-second run. In the VM, run
 then collect with
 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step collect`.
 Review the new archive before any stall or 8-channel check.
+
+## 2026-10-08 600-second retry — immediate render startup overrun
+
+- Guest archive: `C:\VMs\ar-share\evidence-20261008-221952.zip`
+- SHA-256: `BA8A096043E41D8CEB56472886403FD788BC711065C81BB18DCA2726DF5DD074`
+- The archive's `tone.txt` shows this run did **not** reach 564 seconds. It
+  failed 18 ms after the timer started, before the first progress report, with
+  `previous=0`, `expected=1`, `observed=2`, one 480-frame render overrun, and
+  zero recorded render blocks. Capture counters remained zero. The maximum
+  render poll gap was 2,564 μs. The startup-poller message was present.
+- This differs from the passing short retry, whose script waited for the user
+  to start playback after its five-second countdown. If playback was already
+  active when the 600-second command opened its render lease, the first two
+  publications could have arrived before the reader acknowledged sequence 1;
+  the archive does not record playback state, so this is a hypothesis, not a
+  confirmed cause.
+
+Next: make sure Media Player is ready and routed to Cable A Input but paused
+before running the 600-second command. Start the command, wait for its first
+`progress ... ms` line (showing both leases are active), then start playback
+and leave it looping through completion. Keep the zero-counter gate unchanged.

@@ -1485,7 +1485,18 @@ looped to Cable A Input for the full 30 seconds. The updated short run passed:
 3,000 render blocks / 1,440,000 frames, with all driver counters and harness
 sequence gaps at zero. This clears the short-run gate only; the 600-second
 run remains unqualified. Next, run the 600-second test with the known file
-looped continuously into Cable A Input. Archive and measurements are in the
+looped continuously into Cable A Input.
+
+The first 600-second retry after the short pass failed at 18 ms, before its
+first progress report: render sequence 2 was observed before sequence 1 was
+acknowledged. The startup-poller message was present, and the poll gap was
+2,564 μs. This is not a 564-second failure; the guest archive's tone trace
+shows immediate startup failure. If Media Player was already playing before
+the render lease opened, that could explain the initial burst, but playback
+state is not recorded. For the next retry, prepare Media Player routed to
+Cable A Input but paused, start the 600-second command, then start playback
+when the first progress line appears. The clean 10-minute gate remains open.
+Archive and measurements are in the
 [render-overrun evidence](evidence/2026-10-08-m03-render-overrun.md).
 
 **Agent (host, can start now):** WP-08 status detection and the
