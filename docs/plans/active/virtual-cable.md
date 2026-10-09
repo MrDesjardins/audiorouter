@@ -1387,9 +1387,10 @@ then clean up their mappings. Details are in the evidence record. Twelve tone
 tests, 30 bridge tests, focused Clippy and formatting pass after this fix. No
 driver files or thresholds changed.
 
-Next action: rebuild and replace the tool-only diagnostic in the existing
-shared-folder bundle; then rerun one 30-second check on the already installed
-VM. Archives are retained; no kernel
+The rebuilt, hash-verified tool-only bundle is ready at
+`C:\VMs\ar-share\diagnostics-20261008-isolated-tone` (source `966a83b6`).
+The driver file was not included. Next action: rerun one 30-second check on
+the already installed VM and review the archive. Archives are retained; no kernel
 patch or threshold change. The VM continuity, fidelity and latency gates
 remain open; host regressions do not establish the prior runtime failure's
 precise cause.

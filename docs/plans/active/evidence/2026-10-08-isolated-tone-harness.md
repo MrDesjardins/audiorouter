@@ -100,13 +100,19 @@ The initial tool-only bundle at
 `C:\VMs\ar-share\diagnostics-20261008-isolated-tone` used clean source
 `bac0cc0de611636b61946c9c35c743bfb7e41639`, staged at
 `2026-10-09T04:17:12.3464104Z`. Its execution caught the teardown defect above;
-replace that executable with a clean rebuild of the fix before retrying. The
-bundle metadata records tool/script hashes and the unchanged driver SHA-256.
-No driver files were copied.
+The original executable has now been replaced by the teardown fix. Bundle
+metadata: clean commit `966a83b6dd26bf6cd47c5beca5d059a3a9d1a59c`, staged
+`2026-10-09T04:22:46.2570174Z`; tool SHA-256
+`E54533B9E011488DC19F6BA8D948AE035AC2B6706ED775D5500039365D621043`.
+The check script hash matches its committed copy. The unchanged installed
+driver hash is `692C013CF9727985FE804F4020388108D1A568ECF8FC0D99B9B525771E39D646`.
+No driver files were copied. Release build and expected `--help` launch
+passed; logs: `target/isolated-tone-release-build-fix1.txt` and
+`target/isolated-tone-release-launch-fix1.txt`.
 
-Next: rebuild and replace the tool-only diagnostic, then repeat one
-30-second run on the already installed `dbf19e17` guest. Keep Cable B Output
-Listen active, stimulate Cable A Input and review the collected evidence.
+Next: run the replaced tool-only diagnostic once for 30 seconds on the already
+installed `dbf19e17` guest. Keep Cable B Output Listen active, stimulate
+Cable A Input and review the collected evidence.
 VCAB-24 sustained zero-error, fidelity and latency gates remain open. Rollback
 is the old tone executable in `repair-20261008-capture-tick-primed` or the
 clean guest snapshot.
