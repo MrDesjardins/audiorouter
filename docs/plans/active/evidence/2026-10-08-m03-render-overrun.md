@@ -40,7 +40,19 @@ Host validation on 2026-10-08: `cargo fmt --all` and the `src-tauri` format
 check passed; the focused tone example had 13/13 tests pass; the existing
 Windows service-thread setup/release test passed; workspace and `src-tauri`
 Clippy passed with `-D warnings`. These checks do not establish guest timing.
-The MMCSS-enabled tool-only bundle is the next VM step. Preserve the installed
-guest driver, run its 30-second validation first, and review that archive
-before retrying the 10-minute test. A clean 10-minute VM run remains required;
-MMCSS support is not itself proof of continuity.
+
+The clean-source build was committed and pushed as `1c94edfd` on `main`. The
+release executable launched its `--help` path as expected (exit 64) without
+opening the bridge device. The tool-only bundle is
+`C:\VMs\ar-share\diagnostics-20261008-mmcss-render`; executable SHA-256 is
+`7E422B60B7C6DA52840716BCEA218867B00EA0ACE194C967B5C3ED560BD5CE89`. It
+contains the tone executable and VM retry/check scripts, not a driver. The
+bundle verifies the installed driver against SHA-256
+`692C013CF9727985FE804F4020388108D1A568ECF8FC0D99B9B525771E39D646`.
+
+Next: in the VM run
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File Z:\diagnostics-20261008-mmcss-render\retry-isolated-tone.ps1`.
+Keep Cable B Output Listen enabled and stimulate Cable A Input as directed by
+the script. Review its collected 30-second archive before retrying the
+10-minute test. A clean 10-minute VM run remains required; MMCSS support is
+not itself proof of continuity.

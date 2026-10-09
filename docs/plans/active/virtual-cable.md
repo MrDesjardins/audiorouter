@@ -1407,7 +1407,10 @@ limits, and the scheduling follow-up are in the
 retrying, the isolated workers were updated to request MMCSS `Pro Audio`,
 report fallback capability, and include sequence and timing details in any
 gap error. Focused host checks and workspace Clippy pass; this is not VM timing
-evidence. Next: stage only the updated harness and VM script, then run the
+evidence. The updated tool-only bundle is staged at
+`C:\VMs\ar-share\diagnostics-20261008-mmcss-render`; its executable and driver
+hashes and the exact VM command are in the
+[render-overrun record](evidence/2026-10-08-m03-render-overrun.md). Run the
 30-second guest validation before another 10-minute attempt. Preserve the
 zero-counter acceptance criterion and installed VM driver.
 
