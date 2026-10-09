@@ -507,7 +507,7 @@ more; two clean runs are required before moving on.
 
 ### Session 2 — Audio through the cables · 30 min · checks A4 (tool), A5, A6, VCAB-11, VCAB-25
 
-**Current crash gate (2026-10-08):** package `5f61df3c` passed naming smoke,
+**Crash repair (2026-10-08):** package `5f61df3c` passed naming smoke,
 but opening its bridge crashed the guest during Session 2. Do not use that
 package for status or tone. Preserve the evidence, restore
 `02-test-signing-ready`, and use the replacement package supplied by the agent.
@@ -516,8 +516,11 @@ evidence for review before continuing to listening or tone. See the
 [crash record](../plans/active/evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md#2026-10-08-1925-bridge-open-crashed-session-2).
 
 After a crash, restore `02-test-signing-ready` before starting. The replacement
-is `Z:\repair-20261008-bridge-dispatch` (source `151a3b69`). Its host build and
-package checks passed; its bridge-open runtime check remains pending.
+is `Z:\repair-20261008-surround-layout` (source `a8138984`). The prior
+`151a3b69` bridge-open repair passed in the guest; inventory then found an
+8-channel mask mismatch (48/60 accepted). This replacement corrects that
+layout and preserves native inventory summaries in Windows PowerShell 5.1.
+Its host build/package checks passed; its 60-format runtime check is pending.
 
 1. Open **Administrator PowerShell inside the VM** and paste the whole block.
    It checks preflight, installs the driver, verifies that another install is
@@ -525,10 +528,10 @@ package checks passed; its bridge-open runtime check remains pending.
 
    ```powershell
    & {
-       robocopy.exe Z:\repair-20261008-bridge-dispatch C:\ar /E /R:1 /W:1
+       robocopy.exe Z:\repair-20261008-surround-layout C:\ar /E /R:1 /W:1
        if ($LASTEXITCODE -ge 8) { throw 'Copy failed. Stop here.' }
        $hash = (Get-FileHash C:\ar\driver\audioroutervirtual.sys -Algorithm SHA256).Hash
-       if ($hash -ne '5A641E0CA21171BDF4318DBF1972BE92D1BC7D18F3BC8600F952D9B39135E8B6') { throw 'Wrong driver build. Stop here.' }
+       if ($hash -ne '332C6BA37659E16EB5BF84DFA2CC3CED7040F3D14E92A29CCE844EB7FD8C6C9B') { throw 'Wrong driver build. Stop here.' }
        Get-ChildItem C:\ar -Recurse -File | Unblock-File
        powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step preflight
        if ($LASTEXITCODE -ne 0) { throw 'Preflight failed. Send the output before continuing.' }

@@ -1123,6 +1123,13 @@ collection; tone stays pending. Rollback: clean guest snapshot. Existing
 stereo package configurations are unchanged; this corrects the advertised
 eight-channel speaker positions for the test candidate.
 
+Candidate ready: `C:\VMs\ar-share\repair-20261008-surround-layout`, clean
+source `a8138984`, built `2026-10-09T02:40:41.6587231Z`. Host WDK acceptance,
+native stdout/stderr regression, package integrity (33), manifest hashes (29),
+and staged VM guards (275) passed. Guide pins the replacement SYS hash.
+Next: user restores `02-test-signing-ready`, copies this candidate, runs
+preflight/install and status/collection. Guest 60-format gate is still open.
+
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
 use the capture-sink acknowledgement (`consumer_sequence`) for producer

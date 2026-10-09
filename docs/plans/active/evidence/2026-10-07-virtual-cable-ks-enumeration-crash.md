@@ -487,3 +487,13 @@ WDK x64 acceptance, including layout and dispatch guards, passed
 diff whitespace passed. Jev remains unrun due to the earlier automatic
 approval rejection of external source-diff upload. New VM format validation
 and tone qualification remain pending.
+
+Candidate staged: `C:\VMs\ar-share\repair-20261008-surround-layout`, built
+`2026-10-09T02:40:41.6587231Z` from clean source
+`a8138984004a68de97d84a5d0cb017503363ea7c`, test-signed x64 Release.
+Package integrity passed 33 checks; all 29 manifest hashes matched; staged VM
+guards passed 275 checks. SYS SHA-256:
+`332C6BA37659E16EB5BF84DFA2CC3CED7040F3D14E92A29CCE844EB7FD8C6C9B`.
+The existing VM certificate is retained. Next: clean snapshot, copy and hash
+verification, preflight/install, then status/collection. Do not start tone
+until the agent verifies all four endpoints at 60/60 formats.
