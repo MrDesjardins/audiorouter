@@ -449,3 +449,41 @@ SYS SHA-256: `5A641E0CA21171BDF4318DBF1972BE92D1BC7D18F3BC8600F952D9B39135E8B6`.
 The staged package retains the existing VM certificate. Next: clean snapshot,
 copy/hash verification and install; review output before the separate status
 command. No tone or Verifier until the bridge-open crash gate passes.
+
+## 2026-10-08 19:36: bridge open passed; 8-channel layout mismatch
+
+Archive `C:\VMs\ar-share\evidence-20261008-193649.zip`, SHA-256
+`D871004B16A04AAF6B19AAE25C8A1269EF6F24E63C4784132FCA8137BD82E341`.
+Preflight passed 15 checks; install passed three including its idempotent
+repeat. Helper status opened the bridge and returned installed, protocol 1.1,
+capabilities 63 and all four correctly named endpoints without a crash.
+The original bridge-open failure is repaired for this guest run.
+
+Inventory JSON contains all four endpoints: each accepts 48/60 formats, and
+all 12 rejected combinations are 8 channels at every rate/encoding
+(AUDCLNT_E_UNSUPPORTED_FORMAT, 0x88890008). Every minimum shared period is
+128 frames at 48 kHz, default/max 480, fundamental 1. VCAB-11 remains failed.
+The WaveRT table used `KSAUDIO_SPEAKER_7POINT1` (0xFF), while inventory asks
+for `KSAUDIO_SPEAKER_7POINT1_SURROUND` (0x63F). The format validator compares
+channel masks exactly. Microsoft documents the former as obsolete in
+[header changes](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/header-file-changes).
+
+Repair: change the driver's 8-channel table to the surround mask, assert the
+SDK value 0x63F and guard agreement with the user-mode probe. Clarify VCAB-11
+speaker positions without changing the 60 required combinations. Stereo and
+the other channel counts retain their formats. Existing test installs should
+be replaced from the clean snapshot; old wide 7.1 requests no longer match.
+
+Also repair inventory invocation under Windows PowerShell 5.1: the native
+tool writes both PASS and FAIL summaries to stderr; redirected stderr under
+`Stop` aborted the wrapper before saving inventory.txt or checking exit code.
+Temporarily use Continue only around that native call, restore the preference
+in finally, and use its exit code. `m03-vm-inventory-output.ps1` passes native
+exit 0/1 fixtures with stdout/stderr retained and preference restored; it
+executes only the wrapper and never a driver or audio stream. Evidence:
+`target/inventory-output-d84f83a883c34fe49a1fe84d5e2bad01`.
+WDK x64 acceptance, including layout and dispatch guards, passed
+(`target/surround-layout-build-check.txt`); docs passed 133 files/723 links;
+diff whitespace passed. Jev remains unrun due to the earlier automatic
+approval rejection of external source-diff upload. New VM format validation
+and tone qualification remain pending.

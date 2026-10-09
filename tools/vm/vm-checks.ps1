@@ -83,8 +83,16 @@ function Invoke-Helper([string[]] $Arguments, [string] $Name) {
 }
 function Invoke-Inventory([int] $Cables, [string] $Name) {
     $out = Join-Path $evidence "$Name.json"
-    $text = & $inventoryTool --cables $Cables --out $out 2>&1 | Out-String
-    $code = $LASTEXITCODE
+    # Windows PowerShell 5.1 turns redirected native stderr (including the
+    # tool's PASS summary) into errors. Preserve it and decide on exit code.
+    $previousPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $text = & $inventoryTool --cables $Cables --out $out 2>&1 | Out-String
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
     $text | Set-Content -LiteralPath (Join-Path $evidence "$Name.txt") -Encoding UTF8
     $json = if (Test-Path -LiteralPath $out) { Get-Content -LiteralPath $out -Raw | ConvertFrom-Json } else { $null }
     return [pscustomobject]@{ Code = $code; Json = $json; Text = $text }

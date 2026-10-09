@@ -105,7 +105,9 @@ passes audio when AudioRouter is not running.
 - **VCAB-11 — Windows side.** Each endpoint offers:
   - sample rates **44 100, 48 000 and 96 000 Hz**;
   - channels **1, 2, 4, 6 (5.1) and 8 (7.1)** with the standard
-    `KSAUDIO_SPEAKER_*` channel masks;
+    `KSAUDIO_SPEAKER_*` channel masks (eight channels use
+    `KSAUDIO_SPEAKER_7POINT1_SURROUND`, 0x63F: front L/R, center, LFE,
+    back L/R, side L/R; not the obsolete wide 7.1 mask 0xFF);
   - formats **IEEE float 32-bit**, PCM 16-bit, PCM 24-bit in a 32-bit
     container, PCM 32-bit.
 

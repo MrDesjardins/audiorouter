@@ -22,6 +22,12 @@ $adapter = Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/adapter
 $bridgeHeader = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Inc/bridgeio.h') -Raw
 $miniPairs = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Filters/minipairs.h') -Raw
 $waveTable = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Filters/cablewavtable.h') -Raw
+$inventorySource = Get-Content -LiteralPath (Join-Path $workspace 'crates/windows-audio/examples/m03_cable_inventory.rs') -Raw
+if (-not $waveTable.Contains('C_ASSERT(KSAUDIO_SPEAKER_7POINT1_SURROUND == 0x63F);') -or
+    -not $inventorySource.Contains('8 => 0x63F,') -or
+    $waveTable.Contains('AR_CHANNEL_FORMATS(8, KSAUDIO_SPEAKER_7POINT1),')) {
+    throw 'driver and user-mode inventory must agree on surround 7.1 mask 0x63F, not obsolete wide 0xFF'
+}
 $topologyTable = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Filters/cabletopotable.h') -Raw
 $infSource = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/AudioRouterVirtual.inx') -Raw
 foreach ($required in @(
@@ -83,7 +89,7 @@ foreach ($required in @(
         'AR_CHANNEL_FORMATS(2, KSAUDIO_SPEAKER_STEREO)',
         'AR_CHANNEL_FORMATS(4, KSAUDIO_SPEAKER_QUAD)',
         'AR_CHANNEL_FORMATS(6, KSAUDIO_SPEAKER_5POINT1)',
-        'AR_CHANNEL_FORMATS(8, KSAUDIO_SPEAKER_7POINT1)',
+        'AR_CHANNEL_FORMATS(8, KSAUDIO_SPEAKER_7POINT1_SURROUND)',
         'AR_RATE_FORMATS(ch, mask, 44100)',
         'AR_RATE_FORMATS(ch, mask, 48000)',
         'AR_RATE_FORMATS(ch, mask, 96000)',

@@ -1109,6 +1109,20 @@ from status and pins the replacement SYS hash. Next: user restores the clean
 guest snapshot and runs the copy/preflight/install block, then sends output.
 Status/format inventory follows only after installation is reviewed.
 
+2026-10-08 19:36 guest evidence: clean preflight 15/15, install 3/3 and bridge
+QUERY/status succeeded with protocol 1.1; the bridge-open crash reproduction
+now passes on `151a3b69`. Archive `evidence-20261008-193649.zip` shows all four
+endpoints at 48/60 accepted formats and a minimum period of 128 frames. All
+12 rejected combinations per endpoint are 8-channel formats. The driver uses
+obsolete wide 7.1 mask 0xFF, while inventory correctly requests surround
+0x63F. VCAB-11 repair: use `KSAUDIO_SPEAKER_7POINT1_SURROUND`, assert its SDK
+value, pin inventory/table agreement in the build regression, then build/sign
+and stage a fresh clean package. No acceptance target is reduced. Guest
+verification: clean snapshot, copy/hash verification, install, status and
+collection; tone stays pending. Rollback: clean guest snapshot. Existing
+stereo package configurations are unchanged; this corrects the advertised
+eight-channel speaker positions for the test candidate.
+
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
 use the capture-sink acknowledgement (`consumer_sequence`) for producer

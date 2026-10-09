@@ -41,12 +41,15 @@ Abstract: Shared, format-bounded WaveRT tables for AudioRouter cable pairs.
     AR_RATE_FORMATS(ch, mask, 48000), \
     AR_RATE_FORMATS(ch, mask, 96000)
 
+// Windows 11 uses side speakers for 7.1. The older 7POINT1 (0xFF) means
+// front-of-center speakers and does not match the user-mode surround probe.
+C_ASSERT(KSAUDIO_SPEAKER_7POINT1_SURROUND == 0x63F);
 static KSDATAFORMAT_WAVEFORMATEXTENSIBLE CableSupportedFormats[] = {
     AR_CHANNEL_FORMATS(1, KSAUDIO_SPEAKER_MONO),
     AR_CHANNEL_FORMATS(2, KSAUDIO_SPEAKER_STEREO),
     AR_CHANNEL_FORMATS(4, KSAUDIO_SPEAKER_QUAD),
     AR_CHANNEL_FORMATS(6, KSAUDIO_SPEAKER_5POINT1),
-    AR_CHANNEL_FORMATS(8, KSAUDIO_SPEAKER_7POINT1),
+    AR_CHANNEL_FORMATS(8, KSAUDIO_SPEAKER_7POINT1_SURROUND),
 };
 
 #undef AR_CHANNEL_FORMATS
