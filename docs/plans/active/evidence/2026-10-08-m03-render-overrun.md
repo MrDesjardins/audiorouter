@@ -154,3 +154,37 @@ continuously to Cable A Input, keep the VM running in the foreground, and avoid
 other heavy host work. If capture underruns recur with both workers scheduled
 normally, investigate the VM's scheduling and the capture queue before making
 any driver or acceptance-threshold change.
+
+## 2026-10-08 600-second retry — render startup race
+
+- Guest archive: `C:\VMs\ar-share\evidence-20261008-220557.zip`
+- SHA-256: `5D525C838C2ED2F9E513C644EBB2F6182C90764D3196FF7039492C30BA71319F`
+- The harness failed at startup, about 17 ms after the timer began. The render
+  reader observed sequence 2 when it expected 1, reported one 480-frame
+  overrun, read zero render blocks, and wrote a zero-frame WAV. The capture
+  counters were zero. The render poll gap at detection was 1,466 μs and its
+  maximum was 2,165 μs. This run does not qualify the 600-second gate.
+- The harness activated the render and capture leases before waking its render
+  worker. Windows could publish and overwrite the first slot before the reader
+  began polling, even though its measured poll cadence was timely.
+- Fix: set the run start and wake the render reader before activating either
+  lease; wait until it has polled the empty mapping, then activate render and
+  capture. A focused worker regression publishes the first block immediately
+  after the empty poll and verifies it is consumed without a sequence gap.
+- Host checks on 2026-10-08: focused example tests 14/14 passed; workspace
+  Clippy and `src-tauri` Clippy passed with `-D warnings`; both formatting
+  checks and `git diff --check` passed. The static-CRT tool's `--help` path
+  exited with the expected code 64. These checks do not establish guest timing.
+- A new tool-only bundle is staged at
+  `C:\VMs\ar-share\diagnostics-20261008-render-startup`. It replaces only
+  `m03_bridge_tone.exe` and carries the current VM check/retry scripts. The
+  metadata requires the existing driver SHA-256
+  `692C013CF9727985FE804F4020388108D1A568ECF8FC0D99B9B525771E39D646`;
+  no driver files are included.
+
+Next: run the short 30-second retry in the VM with Cable B Output Listen
+enabled and actively play a looping sound into Cable A Input as prompted by
+the script. Collect and review its archive. Retry the 600-second run only
+after the short run passes; keep the VM in the foreground and loop the audio
+stimulus continuously. The previous 10-minute run still has its independent
+capture underrun and remains unqualified.

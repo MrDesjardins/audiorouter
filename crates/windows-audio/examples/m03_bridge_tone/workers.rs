@@ -30,6 +30,7 @@ pub(super) struct Shared {
     pub start: OnceLock<Instant>,
     pub retiring: AtomicBool,
     pub stop: AtomicBool,
+    pub render_armed: AtomicBool,
     pub done: AtomicBool,
     pub capture_blocks: AtomicU64,
     pub render_blocks: AtomicU64,
@@ -50,6 +51,7 @@ impl Shared {
             start: OnceLock::new(),
             retiring: AtomicBool::new(false),
             stop: AtomicBool::new(false),
+            render_armed: AtomicBool::new(false),
             done: AtomicBool::new(false),
             capture_blocks: AtomicU64::new(1),
             render_blocks: AtomicU64::new(0),
@@ -281,6 +283,10 @@ pub(super) fn render(
                 | NativeBridgeRegionError::TornRead
                 | NativeBridgeRegionError::SequenceRegression,
             ) => {
+                // The control thread waits for this first empty poll before
+                // activating the render lease. That way the worker is already
+                // watching the slot when Windows starts publishing blocks.
+                state.render_armed.store(true, Ordering::Release);
                 if stopping {
                     break;
                 }
@@ -591,6 +597,33 @@ mod tests {
         assert_eq!(state.recorded.len(), 2);
         assert_eq!(state.recorded.pop().unwrap().samples[0], 0.25);
         assert_eq!(state.recorded.pop().unwrap().samples[0], 0.5);
+        assert_eq!(state.render_gaps.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn render_worker_polls_empty_slot_before_first_published_block() {
+        let mapping = Mapping::new();
+        let view = mapping.view();
+        let state = Shared::new(960, 4);
+        let options = Options::default();
+        std::thread::scope(|scope| {
+            let _stop = Stop(&state);
+            let worker = scope.spawn(|| render(&view, &state, &options, 1));
+            state.start.set(Instant::now()).unwrap();
+            until(|| state.render_armed.load(Ordering::Acquire));
+            assert_eq!(state.render_blocks.load(Ordering::Acquire), 0);
+
+            mapping
+                .region
+                .as_ref()
+                .unwrap()
+                .write_f64(1, 1, &[0.25; 960])
+                .unwrap();
+            until(|| state.render_blocks.load(Ordering::Acquire) == 1);
+            state.stop.store(true, Ordering::Release);
+            worker.join().unwrap().unwrap();
+        });
+        assert_eq!(state.render_blocks.load(Ordering::Acquire), 1);
         assert_eq!(state.render_gaps.load(Ordering::Relaxed), 0);
     }
 

@@ -436,6 +436,25 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
         let mut render_controller: Option<NativeBridgeController> = None;
         let mut capture_controller: Option<NativeBridgeController> = None;
         let operation = (|| -> Result<(), (i32, String)> {
+            let start = Instant::now();
+            state
+                .start
+                .set(start)
+                .map_err(|_| (1, "worker start already set".to_owned()))?;
+            capture_worker.thread().unpark();
+            render_worker.thread().unpark();
+
+            let arm_deadline = Instant::now() + Duration::from_secs(10);
+            while !state.render_armed.load(Ordering::Acquire) {
+                if state.failed.load(Ordering::Acquire) {
+                    return Err((1, "render worker failed before polling".to_owned()));
+                }
+                if Instant::now() >= arm_deadline {
+                    return Err((1, "render worker did not begin polling".to_owned()));
+                }
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            println!("render worker polling before lease activation");
             render_controller = Some(
                 NativeBridgeController::activate_prepared_section(
                     &options.device,
@@ -450,13 +469,6 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
                 )
                 .map_err(fail)?,
             );
-            let start = Instant::now();
-            state
-                .start
-                .set(start)
-                .map_err(|_| (1, "worker start already set".to_owned()))?;
-            capture_worker.thread().unpark();
-            render_worker.thread().unpark();
             let mut heartbeat = start;
             let mut progress = start;
             let mut control_us = 0;

@@ -1457,6 +1457,24 @@ scheduling and capture buffering before changing the driver or its thresholds.
 Archive and details are in the
 [render-overrun evidence](evidence/2026-10-08-m03-render-overrun.md).
 
+The next 600-second attempt failed during startup: at 17 ms the render reader
+first observed sequence 2 instead of 1, recorded one 480-frame overrun, and
+exited before recording WAV frames. Its own poll gap was only 1.466 ms
+(maximum 2.165 ms). Code review found that the harness activated the render
+and capture leases before waking the render reader, so the first block could
+be overwritten before polling began. The harness now starts the render poller
+first, waits for its first empty poll, then activates both leases. A focused
+regression verifies that an immediately published first block is consumed
+without a gap. Host checks: 14/14 focused tests passed; workspace and
+`src-tauri` Clippy passed with `-D warnings`; formatting and `git diff --check`
+passed. A static-CRT tone executable was built and its non-device `--help`
+path exited as expected. The tool-only VM bundle is staged at
+`C:\VMs\ar-share\diagnostics-20261008-render-startup`; no driver package was
+rebuilt or included. The guest short test remains pending. Keep the zero-error
+criterion and do not retry the 600-second gate until the short guest test
+passes. Full archive and run details are in the
+[render-overrun evidence](evidence/2026-10-08-m03-render-overrun.md).
+
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
 use the capture-sink acknowledgement (`consumer_sequence`) for producer
