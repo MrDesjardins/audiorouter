@@ -986,13 +986,18 @@ Fix implemented: render bridge pins now retain the speaker pin category and
 use unique per-cable `Name` GUIDs. `m03-inf-gen.ps1` passed; VM guards passed
 274 checks; `m03-driver-build.ps1 -Platform x64` passed and explicitly did
 not install/load the driver or change host trust/boot/audio settings. Package
-integrity passed 33 checks. An initial staged copy at
-`C:\VMs\ar-share\repair-20261008-speaker-endpoints` was built before the
-change was committed and is marked dirty; rebuild to a fresh share after
-commit so the VM's metadata points at a clean commit.
+integrity passed 33 checks. Commit `06e59457` contains the source fix,
+regression check, and diagnostic notes. A clean test-signed x64 package was
+staged at `C:\VMs\ar-share\repair-20261008-speaker-endpoints-clean`: version
+0.1.0, built 2026-10-09 01:41 UTC from commit
+`06e594575aee63a399d68b36212677450c710901`, `dirty: false`, 29 manifest file
+hashes verified. Driver SYS SHA-256:
+`05F74CC94ECCA7158BBD303BCA8C79B6EBA7860578E2E8D1EE9999B20A6900DD`.
+The earlier `repair-20261008-speaker-endpoints` folder was built while the
+worktree was dirty; use the `-clean` folder only.
 
-Next action: commit the fix/docs and build a clean test-signed package with a
-one-shot retry command. The VM must pass A1-A3/A14 twice, with all four Cable
+Next action: in the VM, restore `02-test-signing-ready` and run the one-shot
+command in the VM guide. The VM must pass A1-A3/A14 twice, with all four Cable
 A/B Input/Output endpoints, before tone or Verifier. Host driver installation
 remains paused while the unrelated host bugcheck is unexplained.
 

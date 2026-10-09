@@ -480,8 +480,8 @@ run the session a second time (the procedure requires two clean runs).
 
 #### Retry the endpoint-naming check (2026-10-08)
 
-The latest package is staged at
-`repair-20261008-speaker-endpoints`. The previous package made the capture
+The latest clean package is staged at
+`repair-20261008-speaker-endpoints-clean`. The previous package made the capture
 names correct but used the `KSNODETYPE_ANALOG_CONNECTOR` render-pin category;
 Windows hid those render endpoints by default. This build uses the speaker
 category with the unique per-cable bridge-pin names. Restore snapshot
@@ -491,7 +491,7 @@ package into `C:\ar`, verifies every manifest hash, then performs preflight,
 smoke and evidence collection:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File Z:\repair-20261008-speaker-endpoints\retry-smoke.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File Z:\repair-20261008-speaker-endpoints-clean\retry-smoke.ps1
 ```
 
 The package uses the already-trusted test certificate. If smoke fails, its
