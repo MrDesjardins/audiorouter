@@ -262,8 +262,10 @@ device in `Source/Main/adapter.cpp` and bridge helpers in
   Shared header offsets: state 0, block header 8, counters 32–87,
   `SampleBytes` 88 (driver-written at OPEN, 8), `ReaderSequence` 96 (the
   consumer's acknowledgement of the last block it took: user mode writes it
-  for a `RENDER_SOURCE` lease, and the driver counts `OverrunFrames` when it
-  replaces a block that was not acknowledged; **the driver writes it for a
+  for a `RENDER_SOURCE` lease, and the driver replaces that shared slot only
+  after an exact acknowledgement; completed blocks wait in bounded private
+  storage and actual discarded frames increment `OverrunFrames` (§5.4).
+  **The driver writes it for a
   `CAPTURE_SINK` lease** when its capture callback takes a block, so the
   user-mode producer publishes the next block right after the
   acknowledgement and runs on the endpoint's QPC clock instead of its own
@@ -356,9 +358,29 @@ device in `Source/Main/adapter.cpp` and bridge helpers in
   the smallest period the engine quantum allows. Lesson 2026-09-21: a
   physical device may have a fixed 10 ms floor; our own driver must not.
 - Underrun (no newer sequence): write silence for the missing frames and
-  increment `UnderrunFrames`. Overrun on render (user mode not reading):
-  overwrite the oldest unread block, increment `OverrunFrames`, never queue
-  without bound.
+  increment `UnderrunFrames`. Render publication preserves the unread shared
+  block; a busy slot is not itself a loss. If the bounded private queue fills,
+  replace its oldest block and increment `OverrunFrames` by the dropped frames.
+  Sequence numbers count successful publications; private-queue loss does not
+  create a sequence gap. Audio continuity requires zero overrun counters too.
+- **Render retention (2026-10-08 repair).** A callback can complete multiple
+  quanta before user mode can run. Retain up to four completed blocks in the
+  render stream's existing 256 KiB prefetch array, limited further to the
+  number of negotiated blocks that fit (one at 4096 frames × 8 channels).
+  No new sample storage or wire format is required; metadata adds 24 bytes
+  per stream. Drain on each 1 ms tick, including zero-DMA ticks. At the default
+  shape at most 40 ms waits privately, in addition to the shared quantum;
+  this capacity is a limit, not an intentional delay or a latency result.
+  STOP, missing/changed lease and unusable format invalidate pending samples.
+  A generation checked inside rundown prevents old buffered samples entering
+  a replacement lease. Pause drains completed blocks without advancing DMA;
+  EoS zero-pads only the final partial quantum and drains completed blocks
+  before signaling final completion once and stopping the timer. A pending tail remains bounded even if a reader
+  stalls; STOP/close retire it. The timer is joined before callback resources
+  are freed. Catch-up beyond a DMA-ring lap counts lost frames and reads only
+  the surviving lap, never replaying overwritten ring contents. Playback may
+  already be running when a reader opens its lease. VCAB-24/25/28 and VM
+  qualification remain required; the zero-error gate is unchanged.
 - **Capture prefetch (approved 2026-10-08).** Two private fixed stream
   buffers retain validated blocks in sequence order. A callback may copy and
   acknowledge the next block while the current block still has unread frames;

@@ -466,7 +466,7 @@ foreach ($required in @(
         throw "WaveRT bridge scratch-shape guard is missing: $required"
     }
 }
-if ($streamSource.Contains('RtlZeroMemory(m_BridgeScratch')) {
+if ($streamSource.Contains('RtlZeroMemory(m_BridgeScratch,')) {
     throw 'WaveRT audio callbacks must invalidate scratch by bounds without clearing the maximum 256 KiB buffer'
 }
 
@@ -552,14 +552,12 @@ $timerSource = $stream.Substring($timerStart)
 if (-not $timerSource.Contains('_this->UpdatePosition(qpc);')) {
     throw 'WaveRT timer callback does not reach the position-update bridge path'
 }
-$captureTick = $timerSource.IndexOf('if (_this->m_bCapture && _this->m_KsState == KSSTATE_RUN)')
-$captureUpdate = $timerSource.IndexOf('_this->UpdatePosition(qpc);', $captureTick)
+$captureUpdate = $timerSource.IndexOf('_this->UpdatePosition(qpc);')
 $notificationGate = $timerSource.IndexOf('if (!bufferCompleted && !_this->m_bEoSReceived)')
-if ($captureTick -lt 0 -or $captureUpdate -lt $captureTick -or
+if ($captureUpdate -lt 0 -or
     $notificationGate -le $captureUpdate -or
-    ([regex]::Matches($timerSource, '_this->UpdatePosition\(qpc\);')).Count -ne 2 -or
-    -not $timerSource.Contains('if (!_this->m_bCapture)')) {
-    throw 'capture timer must service DMA before the notification gate, without double updates'
+    ([regex]::Matches($timerSource, '_this->UpdatePosition\(qpc\);')).Count -ne 1) {
+    throw 'both directions must service DMA before the notification gate, without double updates'
 }
 $readBytesStart = $stream.IndexOf('VOID CMiniportWaveRTStream::ReadBytes')
 $readBytesEnd = $stream.IndexOf('BOOLEAN CMiniportWaveRTStream::RefreshBridgePublishShape', $readBytesStart)
@@ -633,7 +631,7 @@ foreach ($required in @(
         'AudioRouterValidateBridgeRequestLength(',
         'AudioRouterValidateBridgeOpenExtension(',
         'InitializeBridgeViewHeader(mappedView);',
-        'AudioRouterRenderBlockWasOverrun(',
+        'AudioRouterRenderSlotAvailable(',
         'static_cast<UCHAR*>(view) + AR_BRIDGE_READER_SEQUENCE_OFFSET),')) {
     if (-not $source.Contains($required)) {
         throw "bridge protocol 1.1 negotiation/counter invariant is missing: $required"
@@ -684,8 +682,9 @@ if (-not $stream.Contains('m_pDmaBuffer == NULL || m_ulDmaBufferSize == 0 || m_u
 if (-not $stream.Contains('m_ullPerformanceCounterFrequency.QuadPart == 0')) {
     throw 'WaveRT position callback must reject an uninitialized performance-counter frequency'
 }
-if (-not $stream.Contains('static_cast<ULONGLONG>(ilQPC.QuadPart) < m_ullDmaTimeStamp')) {
-    throw 'WaveRT position callback must reject a backwards performance-counter sample'
+if (-not $stream.Contains('static_cast<ULONGLONG>(hnsCurrentTime) < m_ullDmaTimeStamp') -or
+    $stream.Contains('static_cast<ULONGLONG>(ilQPC.QuadPart) < m_ullDmaTimeStamp')) {
+    throw 'WaveRT position must compare converted 100ns time, never raw QPC ticks, to its timestamp'
 }
 if (-not $stream.Contains('ULONGLONG byteNumerator = static_cast<ULONGLONG>(m_ulDmaMovementRate)')) {
     throw 'WaveRT DMA displacement arithmetic must widen before multiplication'
@@ -697,8 +696,37 @@ if (-not $stream.Contains('AudioRouterFrameAlignedByteCount(') -or
     -not $stream.Contains('byteNumerator % frameDenominator')) {
     throw 'DMA updates must preserve fractional carry and never advance by partial sample frames'
 }
-if (-not $stream.Contains('static_cast<ULONGLONG>(qpc.QuadPart) < _this->m_ullLastDPCTimeStamp')) {
-    throw 'WaveRT timer callback must reject a backwards QPC sample before conversion'
+if (-not $stream.Contains('static_cast<ULONGLONG>(hnsCurrentTime) < _this->m_ullLastDPCTimeStamp') -or
+    $stream.Contains('static_cast<ULONGLONG>(qpc.QuadPart) < _this->m_ullLastDPCTimeStamp')) {
+    throw 'WaveRT timer must compare timestamps in the same converted units'
+}
+foreach ($required in @('generation != ExpectedGeneration', 'AudioRouterRenderSlotAvailable(nextSequence, readerSequence)',
+        'Activity->OverrunFrames')) {
+    if (-not $source.Contains($required)) { throw "render publication invariant missing: $required" }
+}
+foreach ($required in @('m_RenderQueue.Push(m_BridgePrefetch, m_BridgeScratch)',
+        'm_RenderQueue.Reset(m_BridgePublishFrames, m_BridgePublishChannels, generation)',
+        'm_bLastBufferRendered && _this->m_RenderQueue.Count == 0',
+        'ByteDisplacement = m_ulDmaBufferSize;', 'activity.OverrunFrames +=',
+        'm_RenderQueue.Clear();')) {
+    if (-not $stream.Contains($required)) { throw "render retention invariant missing: $required" }
+}
+$initialOpen = $source.Substring($source.IndexOf('// Ownership checks passed'),
+    $source.IndexOf('sectionObject = NULL;', $source.IndexOf('// Ownership checks passed')) - $source.IndexOf('// Ownership checks passed'))
+if ($initialOpen.IndexOf('InterlockedExchangePointer(&lease->MappedView, mappedView)') -le
+    $initialOpen.IndexOf('InterlockedExchange64(&lease->NextSequence, 0)')) {
+    throw 'initial OPEN must expose the view only after resetting the publication sequence'
+}
+$destructorStart = $stream.IndexOf('CMiniportWaveRTStream::~CMiniportWaveRTStream')
+$destructor = $stream.Substring($destructorStart, $stream.IndexOf('} // ~CMiniportWaveRTStream', $destructorStart) - $destructorStart)
+if ($destructor.IndexOf('ExDeleteTimer(') -gt $destructor.IndexOf('m_pMiniport->Release()')) {
+    throw 'stream timer must be joined before callback dependencies are released'
+}
+$eosGate = $timerSource.IndexOf('if (_this->m_bLastBufferRendered && _this->m_RenderQueue.Count != 0)')
+if ($eosGate -lt 0 -or $eosGate -gt $timerSource.IndexOf('KeSetEvent(') -or
+    -not $timerSource.Contains('if (_this->m_bEosCompletionNotified)') -or
+    -not $timerSource.Contains('_this->m_bEosCompletionNotified = TRUE;')) {
+    throw 'EoS completion must wait for the render tail and be sent only once'
 }
 if (-not $stream.Contains('ByteDisplacement > MAXULONGLONG - m_ullPresentationPosition')) {
     throw 'WaveRT position callback must reject presentation-position overflow'

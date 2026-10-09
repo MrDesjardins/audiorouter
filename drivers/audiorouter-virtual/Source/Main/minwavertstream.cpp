@@ -121,6 +121,14 @@ Return Value:
 --*/
 {
     PAGED_CODE();
+    // Timer callbacks own references to the format, DMA and miniport below.
+    // Join them before releasing any of those dependencies, including a tail
+    // drain still pending after playback has paused or reached EoS.
+    if (m_pNotificationTimer)
+    {
+        ExDeleteTimer(m_pNotificationTimer, TRUE, TRUE, NULL);
+        m_pNotificationTimer = NULL;
+    }
     if (NULL != m_pMiniport)
     {
 
@@ -168,16 +176,6 @@ Return Value:
     {
         ExFreePoolWithTag( m_pWfExt, MINWAVERTSTREAM_POOLTAG );
         m_pWfExt = NULL;
-    }
-    if (m_pNotificationTimer)
-    {
-        ExDeleteTimer
-        (
-            m_pNotificationTimer,
-            TRUE, // Cancel the timer if it is currently set.
-            TRUE, // Wait for the timer to finish expiring and for any callback to a ExTimerCallback routine to finish.
-            NULL
-         );
     }
 
     // Since we just cancelled the notification timer, wait for all queued
@@ -272,6 +270,8 @@ Return Value:
     m_BridgeReadGeneration = 0;
     m_BridgePublishFrames = 0;
     m_BridgePublishChannels = 0;
+    m_RenderQueue.Reset(0, 0, 0);
+    m_bEosCompletionNotified = FALSE;
 
     m_pPortStream = PortStream_;
     InitializeListHead(&m_NotificationList);
@@ -519,6 +519,14 @@ VOID CMiniportWaveRTStream::FreeBufferWithNotification
 
     PAGED_CODE();
 
+    // PortCls calls buffer release after stopping the pin. Join any tail
+    // callback before unmapping DMA, just as destruction joins before freeing
+    // the stream's format/miniport dependencies.
+    if (m_pNotificationTimer != NULL) {
+        ExCancelTimer(m_pNotificationTimer, NULL);
+        KeFlushQueuedDpcs();
+    }
+
     if (Mdl_ != NULL)
     {
         if (m_pDmaBuffer != NULL && m_pPortStream != NULL)
@@ -678,6 +686,11 @@ _In_        ULONG       Size_
     UNREFERENCED_PARAMETER(Size_);
 
     PAGED_CODE();
+
+    if (m_pNotificationTimer != NULL) {
+        ExCancelTimer(m_pNotificationTimer, NULL);
+        KeFlushQueuedDpcs();
+    }
 
     if (Mdl_ != NULL)
     {
@@ -1263,10 +1276,12 @@ NTSTATUS CMiniportWaveRTStream::SetState
                 // Acquire stream resources
             }
             KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
+            m_KsState = KSSTATE_STOP;
             // Reset DMA
             // Discard queued audio but retain the last acknowledgement so
             // the same shared block cannot replay after STOP/RUN.
             m_CaptureQueue.Clear();
+            m_RenderQueue.Clear();
             m_BridgeScratchFrames = 0;
             m_BridgeScratchFrameOffset = 0;
             m_llPacketCounter = 0;
@@ -1281,6 +1296,7 @@ NTSTATUS CMiniportWaveRTStream::SetState
             m_ulLastOsWritePacket = ULONG_MAX;
             m_bEoSReceived = FALSE;
             m_bLastBufferRendered = FALSE;
+            m_bEosCompletionNotified = FALSE;
 
             KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
 
@@ -1338,22 +1354,6 @@ NTSTATUS CMiniportWaveRTStream::SetState
             ullPerfCounterTemp = KeQueryPerformanceCounter(&m_ullPerformanceCounterFrequency);
             m_ullLastDPCTimeStamp = m_ullDmaTimeStamp = KSCONVERT_PERFORMANCE_TIME(m_ullPerformanceCounterFrequency.QuadPart, ullPerfCounterTemp);
 
-            if (m_hnsNotificationInterval > 0)
-            {
-                // Set timer for 1 ms. This will cause DPC to run every 1 ms but driver will send out
-                // notification events only after notification interval. This timer is used by AudioRouter Virtual to
-                // emulate hardware and send out notification event. Real hardware should not use this
-                // timer to fire notification event as it will drain power if the timer is running at 1 msec.
-                ExSetTimer
-                (
-                    m_pNotificationTimer,
-                    (-1) * HNSTIME_PER_MILLISECOND,
-                    HNSTIME_PER_MILLISECOND, // 1 ms
-                    NULL
-                 );
-
-            }
-
             break;
     }
 
@@ -1362,7 +1362,20 @@ NTSTATUS CMiniportWaveRTStream::SetState
         return ntStatus;
     }
 
+    KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
     m_KsState = State_;
+    if (m_pNotificationTimer != NULL && m_hnsNotificationInterval > 0) {
+        if (State_ == KSSTATE_RUN ||
+            (State_ == KSSTATE_PAUSE && !m_bCapture && m_RenderQueue.Count != 0)) {
+            // Service transport every millisecond. A paused stream only drains
+            // completed blocks; it does not advance DMA or send notifications.
+            ExSetTimer(m_pNotificationTimer, -HNSTIME_PER_MILLISECOND,
+                       HNSTIME_PER_MILLISECOND, NULL);
+        } else {
+            ExCancelTimer(m_pNotificationTimer, NULL);
+        }
+    }
+    KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
 
     return ntStatus;
 }
@@ -1409,8 +1422,7 @@ VOID CMiniportWaveRTStream::UpdatePosition
     if (m_pDmaBuffer == NULL || m_ulDmaBufferSize == 0 || m_ulDmaMovementRate == 0 ||
         m_pWfExt == NULL || m_pWfExt->Format.nBlockAlign == 0 ||
         m_ullPerformanceCounterFrequency.QuadPart == 0 ||
-        ilQPC.QuadPart < 0 ||
-        static_cast<ULONGLONG>(ilQPC.QuadPart) < m_ullDmaTimeStamp)
+        ilQPC.QuadPart < 0)
     {
         return;
     }
@@ -1423,12 +1435,11 @@ VOID CMiniportWaveRTStream::UpdatePosition
     // may cause us to lose some of the time, so we will carry the remainder forward
     // to the next GetPosition() call.
     //
-    LONGLONG elapsedHnsSigned = hnsCurrentTime - m_ullDmaTimeStamp;
-    if (elapsedHnsSigned < 0)
+    if (hnsCurrentTime < 0 || static_cast<ULONGLONG>(hnsCurrentTime) < m_ullDmaTimeStamp)
     {
         return;
     }
-    ULONGLONG elapsedHns = static_cast<ULONGLONG>(elapsedHnsSigned);
+    ULONGLONG elapsedHns = static_cast<ULONGLONG>(hnsCurrentTime) - m_ullDmaTimeStamp;
     if (elapsedHns > MAXULONGLONG - m_hnsElapsedTimeCarryForward)
     {
         m_ullDmaTimeStamp = static_cast<ULONGLONG>(hnsCurrentTime);
@@ -1734,7 +1745,7 @@ VOID CMiniportWaveRTStream::ReadBytes
 
 Routine Description:
 
-This function reads the audio buffer and saves the data in a file.
+Convert render DMA into complete bridge quanta, retaining bursts until read.
 
 Arguments:
 
@@ -1748,9 +1759,25 @@ ByteDisplacement - # of bytes to process.
     const BOOLEAN renderFormatMismatch = RefreshBridgePublishShape();
     ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
     const BOOLEAN bridgeFormat = IsBridgePcmFormat(m_pWfExt);
+    AR_BRIDGE_STREAM_ACTIVITY activity = {};
+    activity.FormatMismatches = renderFormatMismatch ? 1 : 0;
+    DrainRenderQueue();
 
-    // Normally this will loop no more than once for a single wrap, but if
-    // many bytes have been displaced then this may loops many times.
+    // After more than one lap, older DMA bytes no longer exist. Read only the
+    // surviving lap, count the lost frames, and never replay the same ring in
+    // an unbounded catch-up loop. UpdatePosition still advances the full clock.
+    if (ByteDisplacement > m_ulDmaBufferSize) {
+        const ULONG skipped = ByteDisplacement - m_ulDmaBufferSize;
+        bufferOffset = AdvanceDmaOffset(bufferOffset, skipped, m_ulDmaBufferSize);
+        ByteDisplacement = m_ulDmaBufferSize;
+        if (m_BridgePublishFrames != 0 && bridgeFormat) {
+            activity.OverrunFrames += skipped / m_pWfExt->Format.nBlockAlign +
+                m_BridgeScratchFrames;
+        }
+        m_BridgeScratchFrames = 0;
+    }
+
+    // At most one surviving DMA lap (two segments across the wrap).
     while (ByteDisplacement > 0)
     {
         ULONG runWrite = min(ByteDisplacement, m_ulDmaBufferSize - bufferOffset);
@@ -1785,13 +1812,11 @@ ByteDisplacement - # of bytes to process.
                 m_BridgeScratchFrames += copyFrames;
                 consumedFrames += copyFrames;
                 if (m_BridgeScratchFrames == m_BridgePublishFrames) {
-                    (void)AudioRouterPublishLeaseBlockForDirection(
-                        static_cast<USHORT>(m_pMiniport->GetCableBusIndex()),
-                        AR_BRIDGE_DIRECTION_RENDER_SOURCE,
-                        static_cast<USHORT>(m_BridgePublishFrames),
-                        static_cast<USHORT>(m_BridgePublishChannels),
-                        m_BridgeScratch,
-                        ARRAYSIZE(m_BridgeScratch));
+                    DrainRenderQueue();
+                    if (m_RenderQueue.Push(m_BridgePrefetch, m_BridgeScratch)) {
+                        activity.OverrunFrames += m_BridgePublishFrames;
+                    }
+                    DrainRenderQueue();
                     m_BridgeScratchFrames = 0;
                 }
             }
@@ -1799,13 +1824,32 @@ ByteDisplacement - # of bytes to process.
         bufferOffset = (bufferOffset + runWrite) % m_ulDmaBufferSize;
         ByteDisplacement -= runWrite;
     }
+    if (m_bLastBufferRendered && m_BridgeScratchFrames != 0 && m_BridgePublishFrames != 0) {
+        // The wire shape is fixed. Preserve the final partial quantum and pad
+        // only its unused tail with silence rather than discarding valid audio.
+        AudioRouterPadRenderTail(m_BridgeScratch, m_BridgeScratchFrames,
+                                 m_BridgePublishFrames, m_BridgePublishChannels);
+        if (m_RenderQueue.Push(m_BridgePrefetch, m_BridgeScratch)) {
+            activity.OverrunFrames += m_BridgePublishFrames;
+        }
+        m_BridgeScratchFrames = 0;
+        DrainRenderQueue();
+    }
     if (m_BridgePublishFrames != 0 || renderFormatMismatch) {
-        // Overruns are counted by the publisher; this records format
-        // mismatches plus the device position/QPC pair for the lease.
-        AR_BRIDGE_STREAM_ACTIVITY activity = {};
-        activity.FormatMismatches = renderFormatMismatch ? 1 : 0;
         RecordBridgeActivity(AR_BRIDGE_DIRECTION_RENDER_SOURCE, &activity);
     }
+}
+
+#pragma code_seg()
+VOID CMiniportWaveRTStream::DrainRenderQueue()
+{
+    m_RenderQueue.Drain(m_BridgePrefetch, [&](const DOUBLE* samples, ULONG count, ULONGLONG generation) {
+        return AudioRouterPublishLeaseBlockForDirection(
+            static_cast<USHORT>(m_pMiniport->GetCableBusIndex()),
+            AR_BRIDGE_DIRECTION_RENDER_SOURCE, generation,
+            static_cast<USHORT>(m_BridgePublishFrames),
+            static_cast<USHORT>(m_BridgePublishChannels), samples, count) == STATUS_SUCCESS;
+    });
 }
 
 //=============================================================================
@@ -1820,7 +1864,9 @@ VOID CMiniportWaveRTStream::RecordBridgeActivity(
     Activity->DevicePositionFrames = blockAlign != 0 ? m_ullLinearPosition / blockAlign : 0;
     Activity->QpcTime = static_cast<ULONGLONG>(KeQueryPerformanceCounter(NULL).QuadPart);
     (void)AudioRouterRecordLeaseActivityForDirection(
-        static_cast<USHORT>(m_pMiniport->GetCableBusIndex()), Direction, Activity);
+        static_cast<USHORT>(m_pMiniport->GetCableBusIndex()), Direction,
+        Direction == AR_BRIDGE_DIRECTION_RENDER_SOURCE ? m_BridgeGeneration : m_BridgeReadGeneration,
+        Activity);
 }
 
 //=============================================================================
@@ -1852,12 +1898,14 @@ BOOLEAN CMiniportWaveRTStream::RefreshBridgePublishShape()
         m_BridgePublishChannels = 0;
     }
     if (m_BridgePublishFrames != previousFrames ||
-        m_BridgePublishChannels != previousChannels) {
+        m_BridgePublishChannels != previousChannels ||
+        AudioRouterStreamGenerationChanged(m_BridgeGeneration, generation)) {
         // A lease may be replaced with a different quantum while this
         // stream still owns a partial scratch block. Never subtract the new
         // shape from stale frame state in the callback.
         m_BridgeScratchFrames = 0;
         m_BridgeScratchFrameOffset = 0;
+        m_RenderQueue.Reset(m_BridgePublishFrames, m_BridgePublishChannels, generation);
     }
     if (AudioRouterStreamGenerationChanged(m_BridgeGeneration, generation)) {
         // Partial samples are unreachable after the index reset and are fully
@@ -1986,11 +2034,25 @@ TimerNotifyRT
     KIRQL oldIrql;
     KeAcquireSpinLock(&_this->m_PositionSpinLock, &oldIrql);
 
+    if (_this->m_KsState != KSSTATE_RUN) {
+        if (_this->m_KsState == KSSTATE_PAUSE && !_this->m_bCapture) {
+            _this->RefreshBridgePublishShape();
+            _this->DrainRenderQueue();
+        }
+        if (_this->m_KsState != KSSTATE_PAUSE || _this->m_RenderQueue.Count == 0) {
+            ExCancelTimer(_this->m_pNotificationTimer, NULL);
+        }
+        goto End;
+    }
+    if (_this->m_bEosCompletionNotified) {
+        ExCancelTimer(_this->m_pNotificationTimer, NULL);
+        goto End;
+    }
+
     qpc = KeQueryPerformanceCounter(&qpcFrequency);
 
     if (_this->m_ullPerformanceCounterFrequency.QuadPart == 0 ||
         qpc.QuadPart < 0 ||
-        static_cast<ULONGLONG>(qpc.QuadPart) < _this->m_ullLastDPCTimeStamp ||
         _this->m_hnsNotificationInterval == 0)
     {
         goto End;
@@ -2027,12 +2089,14 @@ TimerNotifyRT
         bufferCompleted = TRUE;
     }
 
-    // Capture must fetch/ack blocks between notifications, while its current
-    // scratch still has samples. Waiting for a full packet here makes even
-    // two private buffers unable to establish producer headroom.
-    if (_this->m_bCapture && _this->m_KsState == KSSTATE_RUN)
-    {
-        _this->UpdatePosition(qpc);
+    // Service both bridge directions each tick, including pending render
+    // blocks when DMA displacement is zero. Notifications retain their cadence.
+    _this->UpdatePosition(qpc);
+
+    // Do not tell PortCls the final packet is complete while valid tail audio
+    // is still private: STOP in response would legitimately discard that tail.
+    if (_this->m_bLastBufferRendered && _this->m_RenderQueue.Count != 0) {
+        goto End;
     }
 
     if (!bufferCompleted && !_this->m_bEoSReceived)
@@ -2050,10 +2114,6 @@ TimerNotifyRT
         goto End;
     }
 
-    if (!_this->m_bCapture)
-    {
-        _this->UpdatePosition(qpc);
-    }
 
     if (!_this->m_bEoSReceived)
     {
@@ -2107,8 +2167,9 @@ TimerNotifyRT
         }
     }
 
-    if (_this->m_bLastBufferRendered)
+    if (_this->m_bLastBufferRendered && _this->m_RenderQueue.Count == 0)
     {
+        _this->m_bEosCompletionNotified = TRUE;
         if (_this->m_pNotificationTimer != NULL)
         {
             ExCancelTimer(_this->m_pNotificationTimer, NULL);

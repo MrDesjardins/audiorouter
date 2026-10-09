@@ -613,9 +613,11 @@ before configuring Listen and running only the 30-second diagnostic below.
    While it runs:
    - You should hear a steady high tone (997 Hz) on the left and a low hum
      (47 Hz) on the right. Clicks, gaps or a changing pitch are findings.
-   - In the Sound panel **Playback** tab, right-click **AudioRouter Cable A
-     Input** → **Test**, a few times: the chimes go into Cable A and are
-     recorded into `render-source.wav` in the evidence.
+   - Keep a known audio file looping in Media Player, routed to **AudioRouter
+     Cable A Input**, throughout the run. The Sound panel's moving meter
+     confirms playback reaches that endpoint. It is valid to start playback
+     before the tone command. A few brief Windows test chimes do not qualify
+     sustained render traffic. The tool records it into `render-source.wav`.
    - At the end the step prints the stream counters. Pass: all of
      underrun, overrun, gaps, non-finite and format mismatches are 0. (The
      tool paces itself on the driver's acknowledgements, so a clean run

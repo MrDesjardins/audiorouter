@@ -260,6 +260,7 @@ NTSTATUS AudioRouterCopyLeaseBlock(
 // allocation, waits, logging, endpoint access, or control I/O.
 NTSTATUS AudioRouterPublishLeaseBlock(
     _In_ AR_BRIDGE_LEASE_STATE* Lease,
+    _In_ ULONGLONG ExpectedGeneration,
     _In_ USHORT Frames,
     _In_ USHORT Channels,
     _In_reads_(SampleCapacity) const DOUBLE* Samples,
@@ -294,7 +295,7 @@ NTSTATUS AudioRouterPublishLeaseBlock(
         framesPerQuantum != Frames ||
         channels != Channels ||
         mappedBytes < AR_BRIDGE_PAYLOAD_OFFSET + sampleCount * sizeof(DOUBLE) ||
-        generation == 0) {
+        generation == 0 || generation != ExpectedGeneration) {
         ExReleaseRundownProtection(&Lease->Rundown);
         return status;
     }
@@ -306,6 +307,17 @@ NTSTATUS AudioRouterPublishLeaseBlock(
     if (nextSequence == MAXULONGLONG) {
         ExReleaseRundownProtection(&Lease->Rundown);
         return STATUS_INTEGER_OVERFLOW;
+    }
+    // Rundown pins this view. Snapshot the untrusted acknowledgement once;
+    // it gates publication only and never controls memory extent or addresses.
+    // Keeping an unread slot is backpressure, not a lost block. Loss is counted
+    // only if the stream's bounded private queue actually has to drop samples.
+    ULONGLONG readerSequence = static_cast<ULONGLONG>(InterlockedCompareExchange64(
+        reinterpret_cast<volatile LONG64*>(static_cast<UCHAR*>(view) +
+            AR_BRIDGE_READER_SEQUENCE_OFFSET), 0, 0));
+    if (!AudioRouterRenderSlotAvailable(nextSequence, readerSequence)) {
+        ExReleaseRundownProtection(&Lease->Rundown);
+        return STATUS_DEVICE_BUSY;
     }
     for (SIZE_T index = 0; index < sampleCount; ++index) {
         if (Samples[index] != Samples[index] ||
@@ -328,14 +340,6 @@ NTSTATUS AudioRouterPublishLeaseBlock(
             static_cast<LONG64>(current)) != static_cast<LONG64>(current)) {
         ExReleaseRundownProtection(&Lease->Rundown);
         return STATUS_DEVICE_BUSY;
-    }
-    // The consumer acknowledges each block it read in ReaderSequence. Read
-    // that user-writable value exactly once; it only feeds a diagnostic
-    // counter and never sizes or addresses memory.
-    ULONGLONG readerSequence = static_cast<ULONGLONG>(*reinterpret_cast<volatile LONG64*>(
-        static_cast<UCHAR*>(view) + AR_BRIDGE_READER_SEQUENCE_OFFSET));
-    if (AudioRouterRenderBlockWasOverrun(nextSequence, readerSequence)) {
-        AddBridgeCounter(view, FIELD_OFFSET(AR_BRIDGE_STREAM_COUNTERS, OverrunFrames), Frames);
     }
     ULONGLONG sequence = static_cast<ULONGLONG>(
         InterlockedIncrement64(&Lease->NextSequence));
@@ -486,6 +490,7 @@ NTSTATUS AudioRouterCopyLeaseBlockForDirection(
 NTSTATUS AudioRouterRecordLeaseActivityForDirection(
     _In_ USHORT BusIndex,
     _In_ USHORT Direction,
+    _In_ ULONGLONG ExpectedGeneration,
     _In_ const AR_BRIDGE_STREAM_ACTIVITY* Activity)
 {
     AR_BRIDGE_LEASE_STATE* lease = BridgeLeaseForBusDirection(BusIndex, Direction);
@@ -498,12 +503,16 @@ NTSTATUS AudioRouterRecordLeaseActivityForDirection(
         InterlockedCompareExchange(
             reinterpret_cast<volatile LONG*>(&lease->MappedBytes), 0, 0));
     if (view == NULL || mappedBytes < AR_BRIDGE_HEADER_BYTES ||
-        LoadBridgeUshort(&lease->Request.Direction) != Direction) {
+        LoadBridgeUshort(&lease->Request.Direction) != Direction ||
+        ExpectedGeneration == 0 || static_cast<ULONGLONG>(InterlockedCompareExchange64(
+            reinterpret_cast<volatile LONG64*>(&lease->Request.Generation), 0, 0)) != ExpectedGeneration) {
         ExReleaseRundownProtection(&lease->Rundown);
         return STATUS_DEVICE_NOT_READY;
     }
     AddBridgeCounter(view, FIELD_OFFSET(AR_BRIDGE_STREAM_COUNTERS, UnderrunFrames),
                      Activity->UnderrunFrames);
+    AddBridgeCounter(view, FIELD_OFFSET(AR_BRIDGE_STREAM_COUNTERS, OverrunFrames),
+                     Activity->OverrunFrames);
     AddBridgeCounter(view, FIELD_OFFSET(AR_BRIDGE_STREAM_COUNTERS, SequenceGaps),
                      Activity->SequenceGaps);
     AddBridgeCounter(view, FIELD_OFFSET(AR_BRIDGE_STREAM_COUNTERS, NonFiniteSamples),
@@ -523,6 +532,7 @@ NTSTATUS AudioRouterRecordLeaseActivityForDirection(
 NTSTATUS AudioRouterPublishLeaseBlockForDirection(
     _In_ USHORT BusIndex,
     _In_ USHORT Direction,
+    _In_ ULONGLONG ExpectedGeneration,
     _In_ USHORT Frames,
     _In_ USHORT Channels,
     _In_reads_(SampleCapacity) const DOUBLE* Samples,
@@ -532,7 +542,7 @@ NTSTATUS AudioRouterPublishLeaseBlockForDirection(
     return lease == NULL
         ? STATUS_INVALID_PARAMETER
         : AudioRouterPublishLeaseBlock(
-            lease, Frames, Channels, Samples, SampleCapacity);
+            lease, ExpectedGeneration, Frames, Channels, Samples, SampleCapacity);
 }
 
 NTSTATUS AudioRouterGetLeaseShapeForDirection(
@@ -857,10 +867,13 @@ static NTSTATUS HandleBridgeControlRequest(
                         lease->Active = TRUE;
                         lease->SectionObject = sectionObject;
                         lease->LockedMdl = lockedMdl;
-                        lease->MappedView = mappedView;
                         SetBridgeMappedBytes(
                             lease, static_cast<ULONG>(request->MappingBytes));
                         InterlockedExchange64(&lease->NextSequence, 0);
+                        // This pointer is the callback publication boundary.
+                        // Sequence, extent and request must be ready first.
+                        KeMemoryBarrier();
+                        InterlockedExchangePointer(&lease->MappedView, mappedView);
                         sectionObject = NULL;
                         mappedView = NULL;
                         lockedMdl = NULL;

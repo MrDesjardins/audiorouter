@@ -249,7 +249,8 @@ Review the new archive before any stall or 8-channel check.
   the archive does not record playback state, so this is a hypothesis, not a
   confirmed cause.
 
-Next: make sure Media Player is ready and routed to Cable A Input but paused
-before running the 600-second command. Start the command, wait for its first
-`progress ... ms` line (showing both leases are active), then start playback
-and leave it looping through completion. Keep the zero-counter gate unchanged.
+Superseded 2026-10-09: the user confirmed playback was already running. This
+is valid, and pausing it is not the repair. The [source review and driver
+repair](2026-10-09-m03-render-publication-review.md) address batched publication,
+OPEN ordering and lease lifetime. No further VM retry until host review and
+candidate preparation are complete; the zero-counter gate is unchanged.

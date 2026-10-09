@@ -16,6 +16,7 @@ Abstract:
 
 #include "bridgeio.h"
 #include "capturequeue.h"
+#include "renderqueue.h"
 
 //
 // Structure to store notifications events in a protected list
@@ -114,10 +115,12 @@ protected:
     GUID                        m_SignalProcessingMode;
     BOOLEAN                     m_bEoSReceived;
     BOOLEAN                     m_bLastBufferRendered;
+    BOOLEAN                     m_bEosCompletionNotified;
     KSPIN_LOCK                  m_PositionSpinLock;
     DOUBLE                      m_BridgeScratch[AR_BRIDGE_MAX_CHANNELS * AR_BRIDGE_MAX_FRAMES];
     DOUBLE                      m_BridgePrefetch[AR_BRIDGE_MAX_CHANNELS * AR_BRIDGE_MAX_FRAMES];
     AudioRouterCaptureQueue     m_CaptureQueue;
+    AudioRouterRenderQueue      m_RenderQueue;
     ULONG                       m_BridgeScratchFrames;
     ULONG                       m_BridgeScratchFrameOffset;
     ULONGLONG                  m_BridgeGeneration;
@@ -172,6 +175,7 @@ private:
     // callback path. This is deliberately bounded and nonblocking; a changed
     // lease shape discards only the stream's partial scratch quantum.
     BOOLEAN RefreshBridgePublishShape();
+    VOID DrainRenderQueue();
     VOID RecordBridgeActivity(_In_ USHORT Direction, _Inout_ AR_BRIDGE_STREAM_ACTIVITY* Activity);
 
     VOID UpdatePosition

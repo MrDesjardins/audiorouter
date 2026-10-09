@@ -47,6 +47,13 @@ advises against it for software. Chosen: `GPL-3.0-only` for versions after
 
 ## Decision (2026-10-05, user): ship AudioRouter's own virtual cable (DEC-18)
 
+Current driver task (2026-10-09): repair render publication loss before another
+VM retry. The [review record](evidence/2026-10-09-m03-render-publication-review.md)
+supersedes the historical host-only status below: the guest has passed two
+smoke cycles and four-endpoint format inventory, but tone continuity still
+fails. The source repair has host checks and a fresh kernel review; VM/runtime
+gates remain open. No test driver has been installed on the host.
+
 AudioRouter will ship its own signed virtual cable so users do not need
 VB-Cable; VB-Cable/Voicemeeter stay supported. Lowest-cost signing
 (attestation, EV certificate bought only for driver-release windows).

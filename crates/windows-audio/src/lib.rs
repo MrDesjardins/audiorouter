@@ -9073,8 +9073,8 @@ impl NativeBridgeRegion {
             samples[..sample_count].fill(T::default());
             return Err(NativeBridgeRegionError::TornRead);
         }
-        // Acknowledge the consumed block so the driver can count a render
-        // overrun when it replaces a block nobody read.
+        // Acknowledge only after the complete copy is validated. The driver
+        // can then publish its next queued render block into this shared slot.
         self.reader_sequence()
             .store(header.sequence, std::sync::atomic::Ordering::Release);
         Ok(header)

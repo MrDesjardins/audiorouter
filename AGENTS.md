@@ -91,6 +91,14 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-09 — Exercise producer bursts without waiting for the consumer.**
+  Evidence: [render publication review](docs/plans/active/evidence/2026-10-09-m03-render-publication-review.md),
+  `renderBurstChecks` in the driver unit suite. Scope: audio bridge publication
+  and bounded queues. Consequence: a callback can finish multiple quanta before
+  the reader runs; an acknowledgement-paced test concealed shared-slot
+  overwrites. Test back-to-back completion, delayed acknowledgement, bounded
+  loss, lease replacement and tail delivery with the production queue logic.
+
 - **2026-10-08 — Render endpoint names and default visibility must be configured together.**
   Evidence: [two clean Windows VM smoke cycles](docs/plans/active/evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md#2026-10-08-1920-two-clean-smoke-cycles-passed).
   Scope: virtual cable KS bridge pins and generated endpoint INF properties.

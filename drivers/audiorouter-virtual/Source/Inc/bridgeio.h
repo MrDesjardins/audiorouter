@@ -114,6 +114,7 @@ NTSTATUS AudioRouterCopyLeaseBlockForDirection(
 // lock-free and touches only the pinned mapped view of an active lease.
 typedef struct _AR_BRIDGE_STREAM_ACTIVITY {
     ULONGLONG UnderrunFrames;
+    ULONGLONG OverrunFrames;
     ULONGLONG SequenceGaps;
     ULONGLONG NonFiniteSamples;
     ULONGLONG FormatMismatches;
@@ -124,11 +125,13 @@ typedef struct _AR_BRIDGE_STREAM_ACTIVITY {
 NTSTATUS AudioRouterRecordLeaseActivityForDirection(
     _In_ USHORT BusIndex,
     _In_ USHORT Direction,
+    _In_ ULONGLONG ExpectedGeneration,
     _In_ const AR_BRIDGE_STREAM_ACTIVITY* Activity);
 
 NTSTATUS AudioRouterPublishLeaseBlockForDirection(
     _In_ USHORT BusIndex,
     _In_ USHORT Direction,
+    _In_ ULONGLONG ExpectedGeneration,
     _In_ USHORT Frames,
     _In_ USHORT Channels,
     _In_reads_(SampleCapacity) const DOUBLE* Samples,
@@ -449,13 +452,13 @@ __forceinline void AudioRouterFillDriverInfo(
     Info->DefaultPeriodFrames = Config->DefaultPeriodFrames;
 }
 
-// Overrun rule for a render-source lease: the previously published block was
-// lost when the consumer has not acknowledged it before the next publish.
-__forceinline bool AudioRouterRenderBlockWasOverrun(
+// Exact equality prevents a fabricated future acknowledgement from granting
+// permission to replace successive blocks. No ack ever sizes/addresses memory.
+__forceinline bool AudioRouterRenderSlotAvailable(
     _In_ ULONGLONG LastPublishedSequence,
     _In_ ULONGLONG ReaderSequence)
 {
-    return LastPublishedSequence != 0 && ReaderSequence < LastPublishedSequence;
+    return ReaderSequence == LastPublishedSequence;
 }
 
 // Number of blocks skipped between two consecutively consumed sequences.

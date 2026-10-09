@@ -11,6 +11,47 @@ the user's Windows 11 development PC and in its Hyper-V test VM.
 - Signing (human steps, costs): [virtual cable signing](../../operations/virtual-cable-signing.md).
 - Background, costs and gap analysis: [driver track](../future/M03-driver-signing.md).
 
+## Active repair — 2026-10-09 render publication review
+
+User confirmed playback was already running and requested source analysis and
+an owning-layer repair before any further VM retry. This supersedes the final
+"pause Media Player" workaround below. Already-running playback is supported.
+Scope: VCAB-20/24/25/27/28, VDEV-12, SEC-08; Stage A tone continuity.
+
+Source finding: `ReadBytes` can finish several bridge quanta in one locked
+callback; the publisher replaces the sole shared slot each time. An armed
+reader cannot acknowledge between those writes. The 18 ms first-read gap
+is consistent with this defect; existing archives do not identify the exact
+callback schedule. A test that waits for each reader acknowledgement cannot
+exercise it. Also review time-unit guards and timer/resource lifetime.
+
+Ordered repair: retain completed render quanta in bounded private storage,
+publish only after an exact acknowledgement, fence publication by expected
+lease generation, and service transport independently of notification cadence.
+Reuse existing stream storage, preserve protocol 1.1 and honest loss counters;
+no acceptance threshold change. Handle queue capacity, lease replacement,
+pause/EOS/STOP and DMA catch-up explicitly. Document the internal buffering
+decision in spec 17. Fresh-context kernel review is required by WP-04.
+
+Verification after the code repair: deterministic production-helper cases for
+back-to-back completion without intervening reader execution, exact samples,
+bounded overflow, hostile acknowledgements and generation turnover; host-only
+WDK build and source guards. No driver load or new VM run in this task.
+Earlier capture loss during a 65 ms guest scheduling gap remains a separate
+open issue; this repair cannot claim arbitrary scheduler stalls are lossless.
+Rollback: revert this repair and retain the existing VM snapshot and evidence;
+never replace the installed package automatically.
+
+Implemented and reviewed: private FIFO in existing storage, exact ack flow
+control, expected-generation publication/counters, initial OPEN pointer-last,
+per-tick render service, bounded DMA catch-up, consistent clock units and safe
+timer teardown. The second review's EoS ordering finding is also repaired.
+Host FIFO suite passes 447 checks; x64/ARM64 WDK/source acceptance and formatting/
+Clippy pass. ASan is unavailable (missing runtime library); Jev returned a
+network error. See the [full review and validation record](evidence/2026-10-09-m03-render-publication-review.md).
+Next action: commit the reviewed source and prepare a single candidate.
+Runtime/latency/long-run gates remain pending; no further user test requested.
+
 ## Objective
 
 Ship AudioRouter-owned virtual cables (up to 8, Cable A–H; 2 enabled by

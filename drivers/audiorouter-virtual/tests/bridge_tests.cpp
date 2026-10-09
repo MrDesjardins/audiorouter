@@ -2,6 +2,7 @@
 #include "../Source/Inc/bridgeio.h"
 #include "../Source/Inc/sampleconv.h"
 #include "../Source/Inc/capturequeue.h"
+#include "../Source/Inc/renderqueue.h"
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -76,7 +77,95 @@ static ULONG captureTimerUnderruns(bool serviceEveryTick) {
     }
     return underruns;
 }
+// Same FIFO and ack decision used by WaveRT/adapter. The producer completes
+// two quanta in one callback: the reader cannot run until that callback ends.
+// This is deliberately unlike the old harness test that waited for each ack.
+static void renderBurstChecks() {
+    for (ULONG frames : {128UL, 480UL, 4096UL}) {
+        for (ULONG channels : {1UL, 2UL, 8UL}) {
+            AudioRouterRenderQueue queue = {};
+            queue.Reset(frames, channels, 7);
+            std::vector<DOUBLE> storage(AR_BRIDGE_MAX_CHANNELS * AR_BRIDGE_MAX_FRAMES);
+            std::vector<DOUBLE> input(frames * channels);
+            std::vector<DOUBLE> shared(frames * channels);
+            ULONGLONG published = 0, ack = 0, activeGeneration = 7;
+            auto publish = [&](const DOUBLE* samples, ULONG count, ULONGLONG generation) {
+                if (generation != activeGeneration || !AudioRouterRenderSlotAvailable(published, ack)) {
+                    return false;
+                }
+                std::memcpy(shared.data(), samples, count * sizeof(DOUBLE));
+                ++published;
+                return true;
+            };
+            for (ULONG block = 1; block <= 2; ++block) {
+                for (ULONG index = 0; index < input.size(); ++index) {
+                    input[index] = block + index / 65536.0;
+                }
+                require(!queue.Push(storage.data(), input.data()), "two-quantum callback retains both blocks");
+                queue.Drain(storage.data(), publish);
+            }
+            require(published == 1 && queue.Count == 1, "second completion cannot replace unread shared block");
+            for (ULONG block = 1; block <= 2; ++block) {
+                bool exact = published == block;
+                for (ULONG index = 0; index < shared.size(); ++index) {
+                    exact = exact && shared[index] == block + index / 65536.0;
+                }
+                require(exact, "batched render samples delivered exactly in order");
+                ack = published;
+                queue.Drain(storage.data(), publish);
+            }
+            require(queue.Count == 0, "ack plus empty DMA tick drains tail");
+            // An arbitrary future user acknowledgement must not permit a write.
+            ack = ~ULONGLONG(0);
+            require(!queue.Push(storage.data(), input.data()), "queue accepts while ack is hostile");
+            queue.Drain(storage.data(), publish);
+            require(queue.Count == 1 && published == 2, "future acknowledgement does not bypass flow control");
+            ack = published;
+            activeGeneration = 8;
+            queue.Drain(storage.data(), publish);
+            require(queue.Count == 1, "old queued generation cannot publish into replacement lease");
+            queue.Reset(frames, channels, activeGeneration);
+            require(queue.Count == 0, "generation reset makes old samples unreachable");
+
+            // Overflow drops exactly the oldest private quantum; it never
+            // overwrites the current shared block or silently clears counters.
+            ULONG drops = 0;
+            for (ULONG block = 1; block <= queue.Capacity + 2; ++block) {
+                for (auto& sample : input) { sample = block; }
+                if (queue.Push(storage.data(), input.data())) { ++drops; }
+            }
+            require(drops == 2 && queue.Count == queue.Capacity, "bounded FIFO reports each dropped block once");
+            ULONG expected = 3;
+            queue.Drain(storage.data(), [&](const DOUBLE* samples, ULONG count, ULONGLONG generation) {
+                bool exact = generation == 8;
+                for (ULONG i = 0; i < count; ++i) { exact = exact && samples[i] == expected; }
+                require(exact, "overflow retains FIFO order of surviving samples");
+                ++expected;
+                return true;
+            });
+            require(queue.Count == 0, "drain iterations are bounded by capacity");
+            require(queue.Capacity >= 1 && queue.Capacity <= 4 &&
+                queue.Capacity * queue.SamplesPerBlock <= storage.size(), "all negotiated shapes fit existing storage");
+            queue.Clear();
+            require(queue.Count == 0, "STOP drops valid lengths without replay");
+            for (auto& sample : input) { sample = 0.25; }
+            AudioRouterPadRenderTail(input.data(), frames - 1, frames, channels);
+            bool tailExact = true;
+            for (ULONG i = 0; i < input.size(); ++i) {
+                tailExact = tailExact && input[i] == (i < (frames - 1) * channels ? 0.25 : 0.0);
+            }
+            require(tailExact, "EoS preserves valid samples and zeroes only the partial block tail");
+        }
+    }
+    AudioRouterRenderQueue invalid = {};
+    invalid.Reset(0xffffffff, 8, 1);
+    require(invalid.Capacity == 0, "invalid queue dimensions are bounded before multiplication");
+    invalid.Reset(480, 2, 0);
+    require(invalid.Capacity == 0, "missing lease invalidates queue");
+}
+
 int main() {
+    renderBurstChecks();
     const ULONG clockRates[] = { 44100, 48000, 96000 };
     const USHORT frameSizes[] = { 2, 4, 8, 12, 16, 24, 32 };
     for (ULONG rate : clockRates) {
@@ -365,9 +454,10 @@ int main() {
     require(reservedClear, "QUERY never leaks stale reserved bytes");
     require(IOCTL_AUDIOROUTER_BRIDGE_OPEN == 0x0022E000 && IOCTL_AUDIOROUTER_BRIDGE_QUERY == 0x0022600C,
         "IOCTL codes are METHOD_BUFFERED and match the Rust client");
-    require(!AudioRouterRenderBlockWasOverrun(0, 0), "first render block is never an overrun");
-    require(!AudioRouterRenderBlockWasOverrun(5, 5), "acknowledged block is not an overrun");
-    require(AudioRouterRenderBlockWasOverrun(5, 4), "unread block replaced is an overrun");
+    require(AudioRouterRenderSlotAvailable(0, 0), "first render block can publish");
+    require(AudioRouterRenderSlotAvailable(5, 5), "acknowledged block can be replaced");
+    require(!AudioRouterRenderSlotAvailable(5, 4), "unread block cannot be replaced");
+    require(!AudioRouterRenderSlotAvailable(5, 6), "future acknowledgement cannot authorize replacement");
     require(AudioRouterSequenceGap(0, 9) == 0, "first consumed block has no gap");
     require(AudioRouterSequenceGap(4, 5) == 0, "consecutive blocks have no gap");
     require(AudioRouterSequenceGap(4, 8) == 3, "skipped blocks counted");
