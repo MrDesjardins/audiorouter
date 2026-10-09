@@ -92,6 +92,32 @@ now number 12; all passed after this fix. The guest attempt does not qualify
 continuity, but confirms both leases opened and real render audio was recorded.
 A fresh 30-second result is still required.
 
+### Corrected 30-second guest run passes
+
+Archive `evidence-20261008-212408.zip`, SHA-256
+`A17719B5480B1DCE86CB7AD2028D505FD8A1F465BDC5BABA25C6DF3A0AAEE923`
+(5,559,146 bytes). Tone summary has all four checks passing and collect has
+both checks passing. The final five error counters are zero in each direction;
+capture ended at device position 86,769,696, render at 69,648. Capture
+published 3003 blocks and the driver acknowledged through sequence 2910 before
+close. Render produced 1019 blocks (489,120 frames). There were no harness
+render sequence gaps. Capture and render maximum pump gaps were 5853 us and
+5744 us; maximum heartbeat, progress output and lease close were 244 us,
+611 us and 27 us. WAV is stereo 48 kHz IEEE float32, 489120 frames (10.19 s),
+with nonzero signal in both channels: RMS 0.1811/0.1691, peak 0.9851/0.9794.
+Render publications stopped advancing near 20 seconds while capture continued;
+the run log has audio activity but does not establish continuous Cable A test
+playback for all 30 seconds.
+
+This verifies the harness teardown fix and a clean short VM run. Proceed to the
+10-minute tone run; keep Cable B Listen active, check that the test tone is
+audible, and use Cable A Input Test several times during the run so the WAV
+continues to capture render-side samples. Continue to stop before deliberate
+stall/8-channel runs until the 10-minute trace has been reviewed. The longer
+run still needs zero driver error counters, and no VM latency measurement has
+yet been made. Evidence is from guest `AR-DriverTest` running the already
+installed test-signed driver; no driver build changed in this harness pass.
+
 Jev was not rerun: automatic approval review previously rejected uploading
 source to its external service. ASan remains unavailable with the installed
 MSVC runtime, as recorded in the active plan. Neither is a passing check.

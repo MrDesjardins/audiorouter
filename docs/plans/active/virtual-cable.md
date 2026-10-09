@@ -1389,11 +1389,14 @@ driver files or thresholds changed.
 
 The rebuilt, hash-verified tool-only bundle is ready at
 `C:\VMs\ar-share\diagnostics-20261008-isolated-tone` (source `966a83b6`).
-The driver file was not included. Next action: rerun one 30-second check on
-the already installed VM and review the archive. Archives are retained; no kernel
-patch or threshold change. The VM continuity, fidelity and latency gates
-remain open; host regressions do not establish the prior runtime failure's
-precise cause.
+The driver file was not included. Corrected guest run passed all four tone
+checks; archive and metrics are in the harness evidence record. Next action:
+run the 10-minute tone check on the already installed VM using
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step tone`.
+Keep Cable B Output Listen enabled and stimulate Cable A Input during the run.
+Review the 10-minute trace before stall/8-channel checks. Archives are retained;
+no kernel patch or threshold change. VM sustained continuity, fidelity and
+latency gates remain open; the 30-second success does not qualify them.
 
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
