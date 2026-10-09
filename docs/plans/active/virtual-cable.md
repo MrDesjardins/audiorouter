@@ -1420,8 +1420,11 @@ deactivation clears the mapping header just before the worker stop flag is
 set. The worker can report the expected clear as `SampleSizeMismatch`. Fixed
 with a separate retirement signal set before deactivation; only that exact
 error is tolerated after retirement begins. Keep runtime mapping errors and
-the zero-error gate unchanged. Host formatting, tests and Clippy pass. See the
-[render-overrun record](evidence/2026-10-08-m03-render-overrun.md).
+the zero-error gate unchanged. Host formatting, tests and Clippy pass. The new
+tool-only short retry is staged at
+`C:\VMs\ar-share\diagnostics-20261008-retirement-fix`; its exact command and
+hashes are in the [render-overrun record](evidence/2026-10-08-m03-render-overrun.md).
+Do not run the 10-minute test until this retry passes.
 
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must

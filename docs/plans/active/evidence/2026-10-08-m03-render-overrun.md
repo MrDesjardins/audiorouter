@@ -75,3 +75,17 @@ retirement signal is set before lease deactivation. All other mapping errors
 remain fatal. The focused tone suite passes 13/13; workspace and `src-tauri`
 Clippy pass with `-D warnings`; both formatting checks pass. Guest retry is
 still pending. Do not begin the 10-minute gate until the short check passes.
+
+The retirement-race fix was committed and pushed as `8007f466` on `main`. A
+fresh static-CRT tone executable passed its non-device `--help` launch. The
+tool-only retry bundle is staged at
+`C:\VMs\ar-share\diagnostics-20261008-retirement-fix`; executable SHA-256 is
+`0E73F90326633723665209D6971D051E36FD1FF9E516EE8EC4C9A477EAAD6EF8`. It
+verifies the existing guest driver hash
+`692C013CF9727985FE804F4020388108D1A568ECF8FC0D99B9B525771E39D646` and
+contains no driver files.
+
+Next, in Administrator PowerShell in the VM, run
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File Z:\diagnostics-20261008-retirement-fix\retry-isolated-tone.ps1`.
+That script performs the 30-second check, collects evidence, and copies the
+archive to the shared folder. Review it before the 10-minute run.
