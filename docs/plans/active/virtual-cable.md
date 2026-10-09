@@ -895,8 +895,9 @@ published app keeps the VB-Cable workflow. Reverting DEC-18 restores DEC-16.
 
 ## Next action
 
-**Next candidate:** finish staging and verifying `repair-20261008-render-enabled`
-from a clean commit. Then, with the VM powered off, restore
+**VM retry (user action):** `repair-20261008-render-enabled` is staged from a
+clean commit; package integrity and all 29 manifest hashes pass. With the VM
+powered off, restore
 `02-test-signing-ready`, start it, and run the copy/paste command in the
 [VM guide](../../operations/virtual-cable-vm-guide.md). Two clean smoke runs
 are required before tone or Verifier. See the latest follow-up below for why
@@ -1043,6 +1044,18 @@ friendly names. This closes the evidence gap in the earlier analog-connector
 retry: its hidden/disabled state was inferred from documentation, not captured.
 Jev remains unrun because the previous automatic approval review rejected
 transmitting the source diff to its external service.
+
+Candidate staged and verified: `C:\VMs\ar-share\repair-20261008-render-enabled`,
+version 0.1.0, built `2026-10-09T01:51:01.3638446Z` from clean commit
+`5f61df3c367a6774fb829393b5458444889cad45`. Package integrity passed 33 checks;
+29 staged manifest hashes were independently reread and verified; the staged
+guard suite also passed 275 checks. Existing certificate thumbprint remains
+`FF6876FBE50A74DC0B69077C11DC28A1A9FAAD40`. SYS SHA-256:
+`54B7ABB3730550A8F2698C00F9850ACC5A3612F09D9B25318D82D3C6A1297362`.
+Documentation passed 133 files/721 local links; diff whitespace check passed.
+Runtime names, active state, stream safety and two-run gate remain unverified.
+Next: restore `02-test-signing-ready`, run the guide's one-shot retry command,
+and inspect its evidence before continuing Session 1 or later sessions.
 
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must

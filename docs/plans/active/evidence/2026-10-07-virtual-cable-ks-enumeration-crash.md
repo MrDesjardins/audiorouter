@@ -360,3 +360,13 @@ before cleanup, so visibility failures can be diagnosed directly. Build and
 static checks do not prove names, active state or runtime safety; two clean
 A1-A3/A14 runs are still required. Use the updated
 [retry guide](../../../operations/virtual-cable-vm-guide.md#retry-the-endpoint-naming-check-2026-10-08).
+
+Candidate `repair-20261008-render-enabled` was built from clean commit
+`5f61df3c367a6774fb829393b5458444889cad45` at
+`2026-10-09T01:51:01.3638446Z`, using the already-trusted VM test certificate.
+SYS SHA-256: `54B7ABB3730550A8F2698C00F9850ACC5A3612F09D9B25318D82D3C6A1297362`.
+Verification: INF generator and x64 WDK acceptance passed; source and staged
+VM guards passed 275 checks; package integrity passed 33; all 29 manifest
+file hashes matched; docs passed 133 Markdown files/721 links; diff check
+passed. Build/staging performed no host driver load/install or trust/boot
+changes. Jev remains blocked on its previous source-export approval rejection.
