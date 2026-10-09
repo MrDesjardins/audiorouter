@@ -480,30 +480,28 @@ run the session a second time (the procedure requires two clean runs).
 
 #### Retry the endpoint-naming check (2026-10-08)
 
-The candidate package with per-cable bridge-pin render names and the endpoint
-failure collector is staged in the shared folder at
-`repair-20261008-render-pin-name`. For this retry, restore snapshot
+The latest package is staged at
+`repair-20261008-speaker-endpoints`. The previous package made the capture
+names correct but used the `KSNODETYPE_ANALOG_CONNECTOR` render-pin category;
+Windows hid those render endpoints by default. This build uses the speaker
+category with the unique per-cable bridge-pin names. Restore snapshot
 `02-test-signing-ready` with the VM powered off, start the VM, and open
 **Administrator PowerShell**. Copy and run this command; it overlays the
-package into `C:\ar`, verifies all 29 manifest file hashes, then performs
-preflight, smoke, and evidence collection:
+package into `C:\ar`, verifies every manifest hash, then performs preflight,
+smoke and evidence collection:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File Z:\repair-20261008-render-pin-name\retry-smoke.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File Z:\repair-20261008-speaker-endpoints\retry-smoke.ps1
 ```
 
 The package uses the already-trusted test certificate. If smoke fails, its
 runner evidence includes `endpoint-names-on-install-failure.json`, captured
 before cleanup. Send the resulting zip so the actual Windows endpoint names
-remain available for diagnosis. Do not continue to tone or Verifier sessions
-unless smoke ends `PASS` and the VM stays running. If Windows restarts, start
-the VM again, run `collect`, then copy the resulting zip to `Z:`. After one
-clean smoke run, restore `02-test-signing-ready` and run the same command once
+remain available for diagnosis. Do not continue to tone or Verifier unless
+smoke ends `PASS` and the VM stays running. If Windows restarts, start the VM
+again, run `collect`, then copy the resulting zip to `Z:`. After one clean
+smoke run, restore `02-test-signing-ready` and run the same command once
 more; two clean runs are required before moving on.
-
-Look at `endpoint-names.json` in the evidence: it shows exactly how Windows
-named the endpoints (for example `Speakers (AudioRouter Cable A Input)`).
-That settles one open design question (spec 17 §5.5).
 
 ### Session 2 — Audio through the cables · 30 min · checks A4 (tool), A5, A6, VCAB-11, VCAB-25
 

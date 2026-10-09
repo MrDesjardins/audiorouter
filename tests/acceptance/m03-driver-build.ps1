@@ -67,11 +67,12 @@ if (([regex]::Matches($pinCategoryGuids, 'static const GUID Cable[A-H]RenderPinN
     ([regex]::Matches($infSource, '(?m)^HKR,MediaCategories\\%GUID\.Cable[A-H]CapturePinCategory%,Name,,%Name\.Cable[A-H]CapturePinCategory%\r?$')).Count -ne 8) {
     throw 'each render bridge pin name and capture bridge pin category must be uniquely registered'
 }
-foreach ($required in @('&Cable##letter##RenderPinName', '&KSNODETYPE_ANALOG_CONNECTOR', '&Cable##letter##CapturePinCategory')) {
+foreach ($required in @('&Cable##letter##RenderPinName', '&KSNODETYPE_SPEAKER', '&Cable##letter##CapturePinCategory')) {
     if (-not $topologyTable.Contains($required)) { throw "per-cable bridge pin naming/type is not assigned: $required" }
 }
-if (-not $topologyTable.Contains('KSPIN_DATAFLOW_OUT, KSPIN_COMMUNICATION_NONE, &KSNODETYPE_ANALOG_CONNECTOR, &Cable##letter##RenderPinName')) {
-    throw 'render bridge must pair the analog-connector category with its cable-specific pin Name GUID'
+if (-not $topologyTable.Contains('KSPIN_DATAFLOW_OUT, KSPIN_COMMUNICATION_NONE, &KSNODETYPE_SPEAKER, &Cable##letter##RenderPinName') -or
+    $topologyTable.Contains('KSNODETYPE_ANALOG_CONNECTOR')) {
+    throw 'render bridge must use the speaker category for enabled endpoints and its cable-specific pin Name GUID'
 }
 if (-not $bridgeHeader.Contains('#define AR_BRIDGE_LEASE_SLOTS (AR_BRIDGE_MAX_CABLES * 2)')) {
     throw 'bridge lease table must reserve one slot per cable and direction'

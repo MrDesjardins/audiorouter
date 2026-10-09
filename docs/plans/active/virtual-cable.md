@@ -966,6 +966,36 @@ code 24, with no PnP event in progress; this is not evidence of causation.
 The host crash remains unexplained. No host driver was installed or loaded.
 Jev still awaits approval for its source export.
 
+The 2026-10-08 `repair-20261008-render-pin-name` retry passed all 15 preflight
+checks, installed and started the driver, then exposed two endpoints (Cable A/B
+Output) and no render endpoints. The captured endpoint inventory confirms that
+the unique pin `Name` registrations work for capture; the driver start record
+has no PnP problem. The missing render endpoints were caused by categorizing
+their bridge pins as `KSNODETYPE_ANALOG_CONNECTOR`: Windows classifies those
+endpoints as `UnknownFormFactor` and hides/disables them by default. The render
+bridge now uses `KSNODETYPE_SPEAKER` so endpoints are enabled by default while
+keeping the unique per-cable pin `Name` GUID, which Windows checks before the
+category's default friendly name. This is supported by Microsoft's endpoint
+naming and default-visibility documentation. The static regression now rejects
+the analog-connector category on render bridge pins. VM evidence is at
+`C:\VMs\ar-share\evidence-20261008-183636.zip`; extracted locally under ignored
+`target/vm-evidence-20261008-183636/`. The VM helper removed `oem5.inf`
+successfully, and the final collected device inventory is clean.
+
+Fix implemented: render bridge pins now retain the speaker pin category and
+use unique per-cable `Name` GUIDs. `m03-inf-gen.ps1` passed; VM guards passed
+274 checks; `m03-driver-build.ps1 -Platform x64` passed and explicitly did
+not install/load the driver or change host trust/boot/audio settings. Package
+integrity passed 33 checks. An initial staged copy at
+`C:\VMs\ar-share\repair-20261008-speaker-endpoints` was built before the
+change was committed and is marked dirty; rebuild to a fresh share after
+commit so the VM's metadata points at a clean commit.
+
+Next action: commit the fix/docs and build a clean test-signed package with a
+one-shot retry command. The VM must pass A1-A3/A14 twice, with all four Cable
+A/B Input/Output endpoints, before tone or Verifier. Host driver installation
+remains paused while the unrelated host bugcheck is unexplained.
+
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
 use the capture-sink acknowledgement (`consumer_sequence`) for producer

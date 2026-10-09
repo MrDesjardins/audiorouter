@@ -43,10 +43,11 @@ static PCCONNECTION_DESCRIPTOR CableCaptureTopologyConnections[] = {
     { PCFILTER_NODE, KSPIN_TOPO_MIC_ELEMENTS, PCFILTER_NODE, KSPIN_TOPO_BRIDGE }
 };
 
-// Render bridge pins are analog connectors rather than speakers: Windows
-// hardcodes the speaker endpoint label. Their per-cable Name GUID supplies
-// the endpoint label; capture bridge pins use per-cable categories. The INF
-// registers those Name/category GUIDs in the root device's software key.
+// Render bridge pins use the speaker category so Windows creates enabled
+// render endpoints by default. Their per-cable Name GUID supplies the
+// endpoint label before the category's default "Speakers" name is used.
+// Capture bridge pins use per-cable categories. The INF registers those
+// Name/category GUIDs in the root device's software key.
 #define DEFINE_CABLE_TOPOLOGY_PAIR(letter) \
 static PCPIN_DESCRIPTOR Cable##letter##RenderTopologyPins[] = { \
     { 0, 0, 0, NULL, \
@@ -54,7 +55,7 @@ static PCPIN_DESCRIPTOR Cable##letter##RenderTopologyPins[] = { \
         KSPIN_DATAFLOW_IN, KSPIN_COMMUNICATION_NONE, &KSCATEGORY_AUDIO, NULL, 0 } }, \
     { 0, 0, 0, NULL, \
       { 0, NULL, 0, NULL, SIZEOF_ARRAY(CableTopologyDataRanges), CableTopologyDataRanges, \
-        KSPIN_DATAFLOW_OUT, KSPIN_COMMUNICATION_NONE, &KSNODETYPE_ANALOG_CONNECTOR, &Cable##letter##RenderPinName, 0 } } \
+        KSPIN_DATAFLOW_OUT, KSPIN_COMMUNICATION_NONE, &KSNODETYPE_SPEAKER, &Cable##letter##RenderPinName, 0 } } \
 }; \
 static PCFILTER_DESCRIPTOR Cable##letter##RenderTopologyFilterDescriptor = { \
     0, NULL, sizeof(PCPIN_DESCRIPTOR), SIZEOF_ARRAY(Cable##letter##RenderTopologyPins), \
