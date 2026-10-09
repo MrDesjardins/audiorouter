@@ -106,6 +106,12 @@ try {
             $null = Invoke-DriverTool $Helper @('install', '--package', $staged, '--result', (Join-Path $Evidence 'helper-install.json')) (Join-Path $Evidence 'helper-install.txt')
         } catch {
             $installFailure = $_
+            try {
+                ConvertTo-Json -InputObject @([AudioRouterVmEvidence.EndpointStates]::Read()) -Depth 3 |
+                    Set-Content -Encoding utf8 (Join-Path $Evidence 'endpoint-states-on-install-failure.json')
+            } catch {
+                Write-Warning "Could not save endpoint states: $($_.Exception.Message)"
+            }
             # Preserve the raw Windows names before the finally block removes
             # the failed install. This distinguishes endpoint naming failures
             # from missing PnP endpoint children when the helper rejects names.

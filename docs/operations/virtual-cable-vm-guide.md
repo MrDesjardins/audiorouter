@@ -480,23 +480,25 @@ run the session a second time (the procedure requires two clean runs).
 
 #### Retry the endpoint-naming check (2026-10-08)
 
-The latest clean package is staged at
-`repair-20261008-speaker-endpoints-clean`. The previous package made the capture
-names correct but used the `KSNODETYPE_ANALOG_CONNECTOR` render-pin category;
-Windows hid those render endpoints by default. This build uses the speaker
-category with the unique per-cable bridge-pin names. Restore snapshot
+Use the candidate package `repair-20261008-render-enabled` for this retry.
+The speaker-category package created all four endpoints, but Windows replaced
+the render names with "Speakers". This candidate combines unique render pin
+names on analog connectors with the explicit default-enable setting for that
+category. Its Windows runtime behavior still needs this smoke check. Restore snapshot
 `02-test-signing-ready` with the VM powered off, start the VM, and open
 **Administrator PowerShell**. Copy and run this command; it overlays the
 package into `C:\ar`, verifies every manifest hash, then performs preflight,
 smoke and evidence collection:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File Z:\repair-20261008-speaker-endpoints-clean\retry-smoke.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File Z:\repair-20261008-render-enabled\retry-smoke.ps1
 ```
 
 The package uses the already-trusted test certificate. If smoke fails, its
-runner evidence includes `endpoint-names-on-install-failure.json`, captured
-before cleanup. Send the resulting zip so the actual Windows endpoint names
+runner evidence includes `endpoint-names-on-install-failure.json` and
+`endpoint-states-on-install-failure.json`, captured before cleanup. The state
+snapshot reads active, disabled, not-present and unplugged MMDevices without
+opening an audio stream. Send the resulting zip so the Windows names and states
 remain available for diagnosis. Do not continue to tone or Verifier unless
 smoke ends `PASS` and the VM stays running. If Windows restarts, start the VM
 again, run `collect`, then copy the resulting zip to `Z:`. After one clean

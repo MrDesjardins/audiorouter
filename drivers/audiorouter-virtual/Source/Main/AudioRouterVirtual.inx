@@ -82,14 +82,16 @@ AddReg=AUDIOROUTERVIRTUAL.I.WaveCableARender.AddReg
 [AUDIOROUTERVIRTUAL.I.WaveCableARender.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableARender.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 [AUDIOROUTERVIRTUAL.I.TopologyCableARender]
 AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableARender.AddReg
 [AUDIOROUTERVIRTUAL.I.TopologyCableARender.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableARender.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 [AUDIOROUTERVIRTUAL.I.WaveCableACapture]
 AddReg=AUDIOROUTERVIRTUAL.I.WaveCableACapture.AddReg
@@ -110,14 +112,16 @@ AddReg=AUDIOROUTERVIRTUAL.I.WaveCableBRender.AddReg
 [AUDIOROUTERVIRTUAL.I.WaveCableBRender.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableBRender.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 [AUDIOROUTERVIRTUAL.I.TopologyCableBRender]
 AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableBRender.AddReg
 [AUDIOROUTERVIRTUAL.I.TopologyCableBRender.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableBRender.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 [AUDIOROUTERVIRTUAL.I.WaveCableBCapture]
 AddReg=AUDIOROUTERVIRTUAL.I.WaveCableBCapture.AddReg
@@ -138,14 +142,16 @@ AddReg=AUDIOROUTERVIRTUAL.I.WaveCableCRender.AddReg
 [AUDIOROUTERVIRTUAL.I.WaveCableCRender.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableCRender.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 [AUDIOROUTERVIRTUAL.I.TopologyCableCRender]
 AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableCRender.AddReg
 [AUDIOROUTERVIRTUAL.I.TopologyCableCRender.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableCRender.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 [AUDIOROUTERVIRTUAL.I.WaveCableCCapture]
 AddReg=AUDIOROUTERVIRTUAL.I.WaveCableCCapture.AddReg
@@ -166,14 +172,16 @@ AddReg=AUDIOROUTERVIRTUAL.I.WaveCableDRender.AddReg
 [AUDIOROUTERVIRTUAL.I.WaveCableDRender.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableDRender.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 [AUDIOROUTERVIRTUAL.I.TopologyCableDRender]
 AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableDRender.AddReg
 [AUDIOROUTERVIRTUAL.I.TopologyCableDRender.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableDRender.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 [AUDIOROUTERVIRTUAL.I.WaveCableDCapture]
 AddReg=AUDIOROUTERVIRTUAL.I.WaveCableDCapture.AddReg
@@ -194,14 +202,16 @@ AddReg=AUDIOROUTERVIRTUAL.I.WaveCableERender.AddReg
 [AUDIOROUTERVIRTUAL.I.WaveCableERender.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableERender.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 [AUDIOROUTERVIRTUAL.I.TopologyCableERender]
 AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableERender.AddReg
 [AUDIOROUTERVIRTUAL.I.TopologyCableERender.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableERender.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 [AUDIOROUTERVIRTUAL.I.WaveCableECapture]
 AddReg=AUDIOROUTERVIRTUAL.I.WaveCableECapture.AddReg
@@ -222,14 +232,16 @@ AddReg=AUDIOROUTERVIRTUAL.I.WaveCableFRender.AddReg
 [AUDIOROUTERVIRTUAL.I.WaveCableFRender.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableFRender.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 [AUDIOROUTERVIRTUAL.I.TopologyCableFRender]
 AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableFRender.AddReg
 [AUDIOROUTERVIRTUAL.I.TopologyCableFRender.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableFRender.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 [AUDIOROUTERVIRTUAL.I.WaveCableFCapture]
 AddReg=AUDIOROUTERVIRTUAL.I.WaveCableFCapture.AddReg
@@ -250,14 +262,16 @@ AddReg=AUDIOROUTERVIRTUAL.I.WaveCableGRender.AddReg
 [AUDIOROUTERVIRTUAL.I.WaveCableGRender.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableGRender.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 [AUDIOROUTERVIRTUAL.I.TopologyCableGRender]
 AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableGRender.AddReg
 [AUDIOROUTERVIRTUAL.I.TopologyCableGRender.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableGRender.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 [AUDIOROUTERVIRTUAL.I.WaveCableGCapture]
 AddReg=AUDIOROUTERVIRTUAL.I.WaveCableGCapture.AddReg
@@ -278,14 +292,16 @@ AddReg=AUDIOROUTERVIRTUAL.I.WaveCableHRender.AddReg
 [AUDIOROUTERVIRTUAL.I.WaveCableHRender.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableHRender.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 [AUDIOROUTERVIRTUAL.I.TopologyCableHRender]
 AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableHRender.AddReg
 [AUDIOROUTERVIRTUAL.I.TopologyCableHRender.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableHRender.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 [AUDIOROUTERVIRTUAL.I.WaveCableHCapture]
 AddReg=AUDIOROUTERVIRTUAL.I.WaveCableHCapture.AddReg
@@ -540,9 +556,11 @@ KSCATEGORY_REALTIME ="{EB115FFC-10C8-4964-831D-6DCB02E6F23F}"
 KSCATEGORY_TOPOLOGY = "{DDA54A40-1E4C-11D1-A050-405705C10000}"
 
 KSNODETYPE_ANY   = "{00000000-0000-0000-0000-000000000000}"
+KSNODETYPE_ANALOG_CONNECTOR = "{DFF21FE1-F70F-11D0-B917-00A0C9223196}"
 
 PKEY_AudioEndpoint_Association               = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},2"
 PKEY_AudioEndpoint_Supports_EventDriven_Mode = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},7"
+PKEY_AudioDevice_EnableEndpointByDefault    = "{F3E80BEF-1723-4FF2-BCC4-7F83DC5E46D4},4"
 
 ;Localizable
 

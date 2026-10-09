@@ -895,12 +895,12 @@ published app keeps the VB-Cable workflow. Reverting DEC-18 restores DEC-16.
 
 ## Next action
 
-**VM retry (user action):** keep the host driver unloaded. With the VM powered
-off, restore `02-test-signing-ready`, start it, and run the copy/paste command
-in the [VM guide](../../operations/virtual-cable-vm-guide.md) for
-`repair-20261008-render-pin-name`. The new package passed signing and all 33
-package checks; all 29 staged file hashes match its manifest. Two clean smoke
-runs are required before tone or Verifier.
+**Next candidate:** finish staging and verifying `repair-20261008-render-enabled`
+from a clean commit. Then, with the VM powered off, restore
+`02-test-signing-ready`, start it, and run the copy/paste command in the
+[VM guide](../../operations/virtual-cable-vm-guide.md). Two clean smoke runs
+are required before tone or Verifier. See the latest follow-up below for why
+both the naming category and default-enable policy must be changed together.
 
 After two clean A1–A3/A14 runs show the four Cable A/B Input/Output names,
 continue sessions 2–5: WP-04 (Verifier + fuzz, second user), WP-05 (60
@@ -1000,6 +1000,49 @@ Next action: in the VM, restore `02-test-signing-ready` and run the one-shot
 command in the VM guide. The VM must pass A1-A3/A14 twice, with all four Cable
 A/B Input/Output endpoints, before tone or Verifier. Host driver installation
 remains paused while the unrelated host bugcheck is unexplained.
+
+### VM follow-up: speaker naming still fails (2026-10-08 18:44)
+
+The clean `06e59457` package passed preflight but failed A3 again. Evidence:
+`C:\VMs\ar-share\evidence-20261008-184523.zip`, inventory
+`20261008-184403-smoke/runner/endpoint-names-on-install-failure.json`.
+All four project endpoints are healthy: two renders named
+`Speakers (AudioRouter Virtual Cable)` and captures named Cable A/B Output.
+The helper counts only two because the render identities lack cable letters;
+A14 cleanup restores the complete baseline. This supersedes the claim that
+the speaker category plus a custom pin Name would fix the names. The earlier
+capture success uses custom category GUIDs, not render pin Name GUIDs.
+
+Microsoft's [endpoint builder algorithm](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/audio-endpoint-builder-algorithm)
+explicitly fixes speaker names to Speakers. Its
+[default visibility setting](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/pkey-audiodevice-enableendpointbydefault)
+provides the missing counterpart to a non-speaker category: enable render
+endpoints with `FLAG_ENABLE | FLOW_MASK_RENDER = 0x00000101` under the
+associated interface's `EP\\0` key.
+
+Plan for VCAB-02 and WP-03 A2/A3/A14: use the analog-connector render category
+and unique pin Names, associate generated render EP properties with that
+category, and set EnableEndpointByDefault to `0x00000101`. Keep capture
+unchanged. Add generator checks for each render Wave/Topology interface and
+capture isolation; run INF generation, VM guards, WDK build, package integrity,
+docs and diff checks; build a fresh clean signed share and update the guide.
+The combined naming/visibility change remains a candidate until Windows VM
+evidence passes twice. Rollback is reverting this change and restoring the
+clean VM snapshot. No host driver installation or loading is authorized.
+
+Implemented the category/visibility combination and generated the INF.
+Render Wave and Topology interfaces associate EP properties with the analog
+bridge category and enable only render flow; all capture policy stays as
+before. Generator regression checks each of the 32 Wave/Topology sections for
+the correct role policy and pins the SDK property/category GUIDs. Driver build
+acceptance passed; INF generation passed. The VM guard suite passed 275 checks
+including a new COM all-state enumeration, verified against the SDK's
+IMMDeviceCollection ABI. A helper-install failure now saves MMDevice IDs,
+flow and state before cleanup without activating streams, as well as PnP
+friendly names. This closes the evidence gap in the earlier analog-connector
+retry: its hidden/disabled state was inferred from documentation, not captured.
+Jev remains unrun because the previous automatic approval review rejected
+transmitting the source diff to its external service.
 
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must

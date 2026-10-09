@@ -112,4 +112,11 @@ Add-Type -Path (Join-Path $PSScriptRoot 'm03-default-endpoints.cs')
 # A host-safe read-only COM check. Store only count, never private endpoint IDs.
 if ([AudioRouterVmEvidence.DefaultEndpoints]::Read().Length -ne 6) { throw 'Default endpoint role snapshot is incomplete.' }
 $script:count++
+foreach ($endpoint in [AudioRouterVmEvidence.EndpointStates]::Read()) {
+    if ([string]::IsNullOrEmpty($endpoint.Id) -or $endpoint.Flow -notin 0,1 -or
+        $endpoint.State -eq 0 -or ($endpoint.State -band 0xFFFFFFF0) -ne 0) {
+        throw 'All-state endpoint snapshot returned invalid SDK metadata.'
+    }
+}
+$script:count++
 Write-Output "VM guards and read-only default endpoint snapshot passed: $script:count checks."

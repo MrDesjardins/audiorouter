@@ -82,7 +82,15 @@ foreach ($cable in $cableData.cables) {
             $registrySections.Add("[$section.AddReg]")
             $registrySections.Add('HKR,,CLSID,,%Proxy.CLSID%')
             $registrySections.Add("HKR,,FriendlyName,,%$nameString%")
-            $registrySections.Add('HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%')
+            if ($role -eq 'Render') {
+                # Analog connectors preserve pin Names but are hidden by default.
+                # Associate this override with the bridge category, enable only
+                # the render flow (0x100), and keep capture policy unchanged.
+                $registrySections.Add('HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%')
+                $registrySections.Add('HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101')
+            } else {
+                $registrySections.Add('HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%')
+            }
             $registrySections.Add('HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1')
             $stringLines.Add("KSNAME_$name=`"$name`"")
             $stringLines.Add("$nameString=`"$friendly`"")

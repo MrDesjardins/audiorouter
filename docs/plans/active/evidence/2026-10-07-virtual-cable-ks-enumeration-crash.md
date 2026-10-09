@@ -332,3 +332,31 @@ Next: restore the clean test-signing snapshot and run the single command in
 the [retry guide](../../../operations/virtual-cable-vm-guide.md#retry-the-endpoint-naming-check-2026-10-08).
 Remain at Session 1 until two clean smoke runs pass. Rename/persistence and
 app compatibility must subsequently pass their own VM gates.
+
+## 2026-10-08 18:44: speaker pin Names remain overridden
+
+Evidence archive: `C:\VMs\ar-share\evidence-20261008-184523.zip`, SHA-256
+`2F92448CDA2555FDE495647D0CADD04FB1CB4F9D081ECB34078207253723A515`.
+Package: clean commit `06e594575aee63a399d68b36212677450c710901`, built
+`2026-10-09T01:41:09.3969489Z`. Preflight passed 15/15. Smoke's A1 passed,
+install timed out at two recognized endpoints, and A14 restored the baseline.
+Collection passed and copied the ZIP automatically.
+
+The inventory captured before cleanup contains all four healthy project
+endpoints: two render devices named `Speakers (AudioRouter Virtual Cable)`
+and two captures named `AudioRouter Cable A/B Output (AudioRouter Virtual
+Cable)`. The helper correctly rejects the anonymous render names. Thus this
+is an endpoint identity failure, not proof that the driver created only two
+devices. It disproves the previous candidate's assumption that a custom pin
+Name overrides the speaker endpoint name. Microsoft explicitly documents
+the [speaker naming exception](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/audio-endpoint-builder-algorithm).
+
+Next candidate uses an analog connector plus the unique render pin Name and
+the [documented default-enable property](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/pkey-audiodevice-enableendpointbydefault)
+with render mask `0x00000101`. Its EP association matches the analog category.
+Capture policy is unchanged. The earlier analog candidate lacked this enable
+property. A new read-only COM snapshot records every MMDevice's flow/state
+before cleanup, so visibility failures can be diagnosed directly. Build and
+static checks do not prove names, active state or runtime safety; two clean
+A1-A3/A14 runs are still required. Use the updated
+[retry guide](../../../operations/virtual-cable-vm-guide.md#retry-the-endpoint-naming-check-2026-10-08).

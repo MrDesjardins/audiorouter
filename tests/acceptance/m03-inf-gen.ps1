@@ -32,6 +32,30 @@ foreach ($expected in @(
     if (-not $generated.Contains($expected)) { throw "Generated INF omitted $expected." }
 }
 $invalid = Join-Path $output 'invalid-cables.json'
+if (-not $generated.Contains('KSNODETYPE_ANALOG_CONNECTOR = "{DFF21FE1-F70F-11D0-B917-00A0C9223196}"') -or
+    -not $generated.Contains('PKEY_AudioDevice_EnableEndpointByDefault    = "{F3E80BEF-1723-4FF2-BCC4-7F83DC5E46D4},4"')) {
+    throw 'Render category and endpoint enable property must match the Windows SDK identities.'
+}
+foreach ($letter in 'A','B','C','D','E','F','G','H') {
+    foreach ($role in 'Render','Capture') {
+        foreach ($filter in 'Wave','Topology') {
+            $section = "AUDIOROUTERVIRTUAL.I.${filter}Cable${letter}${role}.AddReg"
+            $pattern = '(?ms)^\[' + [regex]::Escape($section) + '\]\r?\n(?<body>.*?)(?=^\[|\z)'
+            $match = [regex]::Match($generated, $pattern)
+            if (-not $match.Success) { throw "Missing endpoint registry section: $section" }
+            $body = $match.Groups['body'].Value
+            if ($role -eq 'Render') {
+                if (-not $body.Contains('HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%') -or
+                    -not $body.Contains('HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101')) {
+                    throw "Render endpoint must associate the analog bridge and enable render flow: $section"
+                }
+            } elseif ($body.Contains('PKEY_AudioDevice_EnableEndpointByDefault') -or
+                      -not $body.Contains('HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%')) {
+                throw "Render visibility policy must not alter capture: $section"
+            }
+        }
+    }
+}
 $bad = Get-Content -LiteralPath $cableList -Raw | ConvertFrom-Json
 $bad.cables[2].letter = 'Z'
 $bad | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $invalid -Encoding UTF8
