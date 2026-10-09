@@ -404,3 +404,39 @@ successful package remains the candidate for Session 2: install and retain
 it, inspect the 60-format/engine-period inventory, then run tone qualification.
 Rename, IDs across configuration/restart, Verifier, security, audio quality
 and release signing remain separate gates.
+
+## 2026-10-08 19:25: bridge open crashed Session 2
+
+Evidence archive `C:\VMs\ar-share\evidence-20261008-192858.zip`, SHA-256
+`A910CA7F93ED584A949EACFDFC8BD86B05CACF870B84529F251B7D85066D0C34`;
+guest minidump `100826-7703-01.dmp`, SHA-256
+`DB6735B6720AE13BC96DB2CBB2225C0E8202F694E08245FC8B4FF3C42808A0C2`.
+These are distinct from the earlier host crash. The install transcript reports
+four named endpoints and a successful idempotent second install. No status
+transcript survived. Guest System event 1001 confirms bugcheck 0x3B/c0000005.
+
+Local CDB analysis with matching Microsoft symbols (`target/vm-1925-crash-symbols.txt`)
+places the fault at `portcls!AcquireRemoveLock+4`, dereferencing null + 0x178,
+through `portcls!DispatchCreate`, `nt!NtCreateFile`; process `audiorouter-dr`.
+The minidump lacks device-object/IRP memory, so those cannot be inspected.
+Source confirms bridge handlers were assigned before `PcInitializeAdapterDriver`,
+which replaces dispatch entries as documented by
+[Microsoft](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/portcls/nf-portcls-pcinitializeadapterdriver).
+The standalone bridge object has no PortCls device extension. This explains
+the observed null-extension device-open failure; formats were not qualified.
+
+Repair: register CREATE/CLEANUP/CLOSE/DEVICE_CONTROL wrappers after PortCls
+initialization and publish the bridge device afterward. Each wrapper handles
+only `g_BridgeControlDevice`; other device objects are forwarded to
+`PcDispatchIrp`. Regression checks pin initialization/publication ordering
+and both audio forwarding paths. SEC-08 and VCAB-11 remain blocked on a new
+guest install/status run. The old package's two smoke passes qualify naming
+and uninstall only; smoke never opened the bridge. Rollback is the clean
+guest snapshot, after preserving the evidence above.
+
+Host validation: Windows x64 WDK `tests/acceptance/m03-driver-build.ps1`
+passed with the dispatch regression guards (`target/bridge-dispatch-build-check.txt`);
+`tests/acceptance/docs.ps1` passed 133 Markdown files/723 local links;
+`git diff --check` passed. Jev was not run because automatic approval review
+previously rejected uploading the source diff to that external service.
+Guest runtime verification of the repair is pending.

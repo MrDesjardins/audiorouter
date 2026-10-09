@@ -1079,6 +1079,28 @@ ID persistence or audio quality. Next action: Session 2 install/status with
 the existing package, inspect 60-format and minimum-period inventory, then
 set up listening and run the tone tests only after that inventory passes.
 
+Unexpected VM restart reported after the Session 2 install/status instructions
+(2026-10-08). The exact command and restart cause are not yet established.
+Session 2 is paused pending the guest System events, minidump and collected
+evidence. Preserve these before restoring a snapshot or retrying installation.
+The two completed smoke passes remain valid; stream safety is still unqualified.
+Next action: collect read-only diagnostics in the restarted guest and copy the
+archive and latest minidump through `Z:\` to the host shared folder for analysis.
+
+Crash evidence received: `evidence-20261008-192858.zip` and
+`100826-7703-01.dmp`. Matching Microsoft symbols identify bugcheck 0x3B,
+access violation in `portcls!AcquireRemoveLock+4` during helper device open.
+Installation and its idempotent repeat had succeeded; Session 2 remains blocked.
+The bridge handlers were registered before `PcInitializeAdapterDriver`, which
+overwrites those dispatch entries. Repair plan (SEC-08, VCAB-11): initialize
+PortCls first, register bridge handlers afterward, publish the control device
+last, and forward audio-device requests to PortCls by device identity. Add
+regression guards for ordering and both dispatch paths; build/sign a fresh
+candidate and verify the package. Runtime verification requires the user VM:
+restore the clean snapshot, install and run status separately, then inspect
+evidence before tone. Rollback: restore the clean guest snapshot; never load
+this package on the host. A build alone cannot close this crash gate.
+
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
 use the capture-sink acknowledgement (`consumer_sequence`) for producer

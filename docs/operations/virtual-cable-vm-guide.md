@@ -507,6 +507,14 @@ more; two clean runs are required before moving on.
 
 ### Session 2 — Audio through the cables · 30 min · checks A4 (tool), A5, A6, VCAB-11, VCAB-25
 
+**Current crash gate (2026-10-08):** package `5f61df3c` passed naming smoke,
+but opening its bridge crashed the guest during Session 2. Do not use that
+package for status or tone. Preserve the evidence, restore
+`02-test-signing-ready`, and use the replacement package supplied by the agent.
+Installation and status must be run separately; send the collected status
+evidence for review before continuing to listening or tone. See the
+[crash record](../plans/active/evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md#2026-10-08-1925-bridge-open-crashed-session-2).
+
 After the two successful Session 1 runs, continue in the current VM. Smoke
 removed the driver; the first block below installs and keeps it. The retry
 script's "before the second run" message applies after the first success.

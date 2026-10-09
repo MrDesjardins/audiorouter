@@ -328,6 +328,25 @@ foreach ($required in @(
         throw "driver bridge direction export is missing: $required"
     }
 }
+# Regression: PortCls initialization used to overwrite the bridge dispatch
+# entries, so helper status opened the zero-extension control device in PortCls
+# and crashed the VM. Moving handlers alone must not intercept audio FDO IRPs.
+$portInit = $source.IndexOf('ntStatus =  PcInitializeAdapterDriver(')
+$controlPublish = $source.IndexOf('ntStatus = CreateBridgeControlDevice(DriverObject);')
+foreach ($major in @('CREATE', 'CLEANUP', 'CLOSE', 'DEVICE_CONTROL')) {
+    $registration = $source.IndexOf("DriverObject->MajorFunction[IRP_MJ_$major] = BridgeControl")
+    if ($portInit -lt 0 -or $registration -le $portInit -or $controlPublish -le $registration) {
+        throw "bridge $major dispatch must be registered after PortCls initialization and before control publication"
+    }
+}
+foreach ($handler in @('BridgeControlCreateClose', 'BridgeControlDeviceControl')) {
+    $body = [regex]::Match($source, "(?s)NTSTATUS $handler\(_In_ PDEVICE_OBJECT DeviceObject, _In_ PIRP Irp\).*?\n\}").Value
+    if (-not $body.Contains('if (DeviceObject != g_BridgeControlDevice)') -or
+        -not $body.Contains('return PcDispatchIrp(DeviceObject, Irp);') -or
+        $body.IndexOf('return PcDispatchIrp(DeviceObject, Irp);') -gt $body.IndexOf('CompleteBridgeIrp(')) {
+        throw "$handler must forward audio device requests before bridge processing/completion"
+    }
+}
 $publishRequestStart = $source.IndexOf('static void PublishBridgeRequest(')
 $publishRequestEnd = $source.IndexOf('// This helper is intentionally independent', $publishRequestStart)
 if ($publishRequestStart -lt 0 -or $publishRequestEnd -le $publishRequestStart) {

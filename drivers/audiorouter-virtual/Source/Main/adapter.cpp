@@ -610,10 +610,16 @@ static NTSTATUS CompleteBridgeIrp(
 
 static void ReleaseLeasesOwnedByFileObject(_In_opt_ PFILE_OBJECT FileObject);
 
-NTSTATUS BridgeControlCreateClose(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
+NTSTATUS BridgeControlCreateClose(_In_ PDEVICE_OBJECT DeviceObject, _In_ PIRP Irp)
 {
     if (Irp == NULL) {
         return STATUS_INVALID_PARAMETER;
+    }
+    // Dispatch entries belong to the whole driver. Only the standalone
+    // control device lacks PortCls state; audio FDO requests remain owned
+    // (and completed) by PortCls. The control object lives until unload.
+    if (DeviceObject != g_BridgeControlDevice) {
+        return PcDispatchIrp(DeviceObject, Irp);
     }
     PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(Irp);
     if (stack == NULL) {
@@ -977,9 +983,14 @@ static NTSTATUS HandleBridgeControlRequest(
     return status;
 }
 
-NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
+NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT DeviceObject, _In_ PIRP Irp)
 {
     if (Irp == NULL) { return STATUS_INVALID_PARAMETER; }
+    // Never interpret an audio FDO's KS IOCTL as a bridge request. PortCls
+    // owns that device's extension and the forwarded IRP completion.
+    if (DeviceObject != g_BridgeControlDevice) {
+        return PcDispatchIrp(DeviceObject, Irp);
+    }
     NTSTATUS status;
     ULONG_PTR information = 0;
     {
@@ -1324,16 +1335,6 @@ Return Value:
         DPF(D_ERROR, ("WdfDriverCreate failed, 0x%x", ntStatus)),
         Done);
 
-    ntStatus = CreateBridgeControlDevice(DriverObject);
-    IF_FAILED_ACTION_JUMP(
-        ntStatus,
-        DPF(D_ERROR, ("CreateBridgeControlDevice failed, 0x%x", ntStatus)),
-        Done);
-    DriverObject->MajorFunction[IRP_MJ_CREATE] = BridgeControlCreateClose;
-    DriverObject->MajorFunction[IRP_MJ_CLEANUP] = BridgeControlCreateClose;
-    DriverObject->MajorFunction[IRP_MJ_CLOSE] = BridgeControlCreateClose;
-    DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = BridgeControlDeviceControl;
-
     //
     // Get registry configuration.
     //
@@ -1352,6 +1353,20 @@ Return Value:
     IF_FAILED_ACTION_JUMP(
         ntStatus,
         DPF(D_ERROR, ("PcInitializeAdapterDriver failed, 0x%x", ntStatus)),
+        Done);
+
+    // PortCls initialization replaces dispatch entries. Install the device
+    // routing wrappers afterward, before publishing the bridge symbolic link,
+    // so a control open never reaches PortCls with a missing audio extension.
+    DriverObject->MajorFunction[IRP_MJ_CREATE] = BridgeControlCreateClose;
+    DriverObject->MajorFunction[IRP_MJ_CLEANUP] = BridgeControlCreateClose;
+    DriverObject->MajorFunction[IRP_MJ_CLOSE] = BridgeControlCreateClose;
+    DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = BridgeControlDeviceControl;
+
+    ntStatus = CreateBridgeControlDevice(DriverObject);
+    IF_FAILED_ACTION_JUMP(
+        ntStatus,
+        DPF(D_ERROR, ("CreateBridgeControlDevice failed, 0x%x", ntStatus)),
         Done);
 
     //
