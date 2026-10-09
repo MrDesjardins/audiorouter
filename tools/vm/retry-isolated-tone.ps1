@@ -24,7 +24,15 @@ foreach ($entry in $metadata.files) {
 Write-Host "Verified isolated harness from $($metadata.gitCommit)."
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step status
 if ($LASTEXITCODE -ne 0) { throw 'Installed-driver status failed. Send the output before continuing.' }
-Write-Host '30-second check: keep Cable B Output Listen enabled; click Cable A Input Test several times now.'
+Write-Host ''
+Write-Host 'Before the check starts:' -ForegroundColor Cyan
+Write-Host '  1. Enable Cable B Output Listen.'
+Write-Host '  2. Open Cable A Input and have its Test button ready.'
+Write-Host '  3. Press Enter below, then click Test during the 30-second tone run.'
+Write-Host 'Do not wait for the tone run to finish before clicking Test.'
+Read-Host 'Press Enter when ready to start the 30-second check' | Out-Null
+Write-Host 'Starting in 5 seconds. Click Cable A Input Test as soon as the tone run starts.' -ForegroundColor Yellow
+Start-Sleep -Seconds 5
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step tone -ToneSeconds 30
 $toneExit = $LASTEXITCODE
 $collectStart = Get-Date

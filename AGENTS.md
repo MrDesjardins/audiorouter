@@ -70,27 +70,14 @@ Archive a completed execution plan under `docs/plans/archived/` with a date and 
 
 For defects: record reproduction and affected versions; add a focused regression when useful; fix the owning layer; verify the original failure; document compatibility or migration consequences. For releases: use M08 gates, record artifacts and checksums, confirm rollback, publish known issues and migration instructions. For incidents: mitigate within authority, preserve redacted evidence, identify cause, repair, and add a prevention measure. Revisit the specification when experience disproves an assumption.
 
-## Rule check (Jev)
+## Jev review
 
-`jev/` holds Markdown coding rules (Rust, TypeScript/React, CSS, user-mode C++ under `tools/`, and the AudioRouter realtime and UI rules above). Pull requests are checked against them automatically (`.github/workflows/jev-review.yml`). Before reporting a code change as done, run the same check on your uncommitted changes:
-
-1. Run `git add -N <path>` for each new file you created, so it is part of the diff. Name only your own files.
-2. Run, from the repository root:
-   ```bash
-   node ../jevrealtimecodecheck/node_modules/tsx/dist/cli.mjs ../jevrealtimecodecheck/scripts/review-pr.ts --cwd . --working-tree --fail-on-violation
-   ```
-   The API key is read from `TYPESAFE_API_KEY` or a `.env` file. Never print, log, or commit it.
-3. A non-zero exit lists each violation as JSON (`ruleName`, `ruleInstructions`, `severity`, `path`, `line`). Fix the code and run it again. If a finding is wrong, keep the code and say why in the handoff.
-4. Do not edit `jev/` to make a check pass. Changing a rule is a separate, explicitly requested task.
-5. If `../jevrealtimecodecheck` is missing, set it up once, at the commit CI pins in `.github/workflows/jev-review.yml` (see the tool's [Setup](https://github.com/MrDesjardins/jevrealtimecodecheck#setup)):
-   ```bash
-   git clone https://github.com/MrDesjardins/jevrealtimecodecheck.git ../jevrealtimecodecheck
-   git -C ../jevrealtimecodecheck checkout <sha pinned in jev-review.yml>
-   npm ci --prefix ../jevrealtimecodecheck
-   ```
-   The key comes from this repository's `.env` (`TYPESAFE_API_KEY=...`, gitignored). Claude Code's auto mode may refuse the first run because it executes code from outside this repository; ask the user to allow it with `/permissions` instead of working around it.
-6. If the tool still cannot run (no key, permission refused), report the check as not run. Do not report it as passing.
-7. The check reviews diffs, so keep it to normal-sized changes. A range dominated by mechanical reformatting yields unlocated, low-confidence findings (2026-10-06: `--base 5841be2a`, ~14,600 lines, two findings at 6% and 13% confidence, both false).
+Jev is disabled as a local development check. GitHub runs Jev only for
+same-repository pull requests with at most 5,000 changed lines (additions plus
+deletions); larger pull requests skip the review. The limit avoids unreliable
+results on large diffs: on 2026-10-06, a roughly 14,600-line diff produced two
+unlocated findings at 6% and 13% confidence, both false. The separate
+formatting, tests, Clippy and other checks in this file remain required.
 
 ## Self-learning, with evidence
 

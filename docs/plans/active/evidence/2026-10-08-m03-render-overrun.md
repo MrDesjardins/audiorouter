@@ -89,3 +89,22 @@ Next, in Administrator PowerShell in the VM, run
 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Z:\diagnostics-20261008-retirement-fix\retry-isolated-tone.ps1`.
 That script performs the 30-second check, collects evidence, and copies the
 archive to the shared folder. Review it before the 10-minute run.
+
+## 2026-10-08 retry with no Cable A Input playback
+
+- Guest archive: `C:\VMs\ar-share\evidence-20261008-213942.zip`
+- SHA-256: `6ACA1F67B51DE1399EDA38B22A7D6F3426138F06F950359B6E8911963D392D8B`
+- Both workers reported `MMCSS_Pro_Audio=true`; driver counters and harness
+  sequence gaps were zero. Render poll gap max was 6,750 μs.
+- No Cable A Input audio was played, so `render-source blocks read: 0`; the
+  tool correctly failed with `no render audio recorded`.
+
+This is not driver continuity evidence because the test stimulus was absent.
+The retry script now pauses for readiness, gives a five-second countdown, and
+states explicitly that Cable A Input's Test button must be clicked during the
+30-second run. The runbook also clarifies that playback starts before the
+command finishes. The updated tool-only bundle is staged at
+`C:\VMs\ar-share\diagnostics-20261008-tone-ready`; the exact guest command is
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File Z:\diagnostics-20261008-tone-ready\retry-isolated-tone.ps1`.
+Press Enter when ready, then click Cable A Input Test as soon as the tone run
+starts. Review the short result before the 10-minute gate.

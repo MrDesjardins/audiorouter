@@ -1426,6 +1426,17 @@ tool-only short retry is staged at
 hashes are in the [render-overrun record](evidence/2026-10-08-m03-render-overrun.md).
 Do not run the 10-minute test until this retry passes.
 
+The next short retry had zero render blocks because Cable A Input was not
+stimulated; counters and sequence gaps stayed at zero, and MMCSS was active.
+The tool correctly reported missing playback. The retry script now waits for
+readiness and gives a five-second countdown before its 30-second tone run;
+click Cable A Input Test while the run is active. The exact guest archive and
+result are recorded in the
+[render-overrun evidence](evidence/2026-10-08-m03-render-overrun.md).
+The updated tool-only bundle is staged at
+`C:\VMs\ar-share\diagnostics-20261008-tone-ready`; in the VM, run
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File Z:\diagnostics-20261008-tone-ready\retry-isolated-tone.ps1`.
+
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
 use the capture-sink acknowledgement (`consumer_sequence`) for producer

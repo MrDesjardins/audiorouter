@@ -10,14 +10,41 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
-
 jobs:
-  review:
+  diff-size:
     runs-on: ubuntu-latest
+    outputs:
+      run_jev: ${{ steps.size.outputs.run_jev }}
+      changed_lines: ${{ steps.size.outputs.changed_lines }}
+    steps:
+      - name: Calculate pull request diff size
+        id: size
+        env:
+          ADDITIONS: ${{ github.event.pull_request.additions }}
+          DELETIONS: ${{ github.event.pull_request.deletions }}
+        run: |
+          changed_lines=$((10#$ADDITIONS + 10#$DELETIONS))
+          echo "changed_lines=$changed_lines" >> "$GITHUB_OUTPUT"
+          if (( changed_lines <= 5000 )); then
+            echo "run_jev=true" >> "$GITHUB_OUTPUT"
+            echo "Jev will review $changed_lines changed lines (limit: 5000)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "run_jev=false" >> "$GITHUB_OUTPUT"
+            echo "Jev skipped: this pull request changes $changed_lines lines; the limit is 5000." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  review:
+    needs: diff-size
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     # Fork PRs get no secrets and a read-only token. pull_request_target is
     # deliberately not used: it would run PR code with base-repo secrets.
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # Large PRs skip Jev because the model's findings are unreliable on them.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      needs.diff-size.outputs.run_jev == 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

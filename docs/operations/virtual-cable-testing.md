@@ -158,7 +158,10 @@ channels) at −12 dBFS into the `cable-b` capture sink and records the
 `cable-a` render source to an IEEE-float WAV (`--wav64` for float64). While
 it runs, record **AudioRouter Cable B Output** with a recorder (for example
 Audacity or `ffmpeg -f dshow`) and play a known file into **AudioRouter Cable
-A Input**. At the end it prints both leases' stream counters: a clean run
+A Input**. Start playback while the tone command is running; do not wait for
+the 30-second or 10-minute command to finish. Zero recorded render blocks
+means no playback reached Cable A Input during that run. At the end it prints
+both leases' stream counters: a clean run
 must end with zero underrun, overrun, gap, non-finite and format-mismatch
 counts; the `--stall-ms` run must show them rising. Setting a cable's
 Windows format (Sound settings → Advanced) to another rate than `--rate`
