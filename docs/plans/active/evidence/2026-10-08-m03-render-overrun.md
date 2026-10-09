@@ -56,3 +56,22 @@ Keep Cable B Output Listen enabled and stimulate Cable A Input as directed by
 the script. Review its collected 30-second archive before retrying the
 10-minute test. A clean 10-minute VM run remains required; MMCSS support is
 not itself proof of continuity.
+
+## MMCSS 30-second retry — teardown race found
+
+- Guest archive: `C:\VMs\ar-share\evidence-20261008-213523.zip`
+- SHA-256: `DE46106097E7E101F42DD723DEE070453836A4488A9A6B59B44A154C779ADB04`
+- Both workers reported `MMCSS_Pro_Audio=true`, with no fallback.
+- Render and capture driver error counters and harness sequence gaps were all
+  zero. Maximum render/capture poll gaps were 6,220/5,880 μs.
+- The tool still exited with `render mapping: SampleSizeMismatch` at shutdown.
+
+Code review found a race in the exit condition. Lease deactivation clears the
+driver mapping header before the main thread sets the worker stop flag. The
+render worker therefore could observe the intentional header clear while
+`stop=false` and report it as a runtime error. The capture writer had the same
+window. Both workers now accept `SampleSizeMismatch` only after a separate
+retirement signal is set before lease deactivation. All other mapping errors
+remain fatal. The focused tone suite passes 13/13; workspace and `src-tauri`
+Clippy pass with `-D warnings`; both formatting checks pass. Guest retry is
+still pending. Do not begin the 10-minute gate until the short check passes.

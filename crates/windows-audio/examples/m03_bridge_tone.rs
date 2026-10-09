@@ -502,6 +502,10 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
             let capture_counters = capture_view.counters();
             let render_counters = render_view.counters();
             let close_start = Instant::now();
+            // Deactivation clears the driver's mapping header. Tell both
+            // workers that a SampleSizeMismatch from this point is the
+            // expected retirement signal, avoiding a close/stop race.
+            state.retiring.store(true, Ordering::Release);
             let capture_close = capture_controller
                 .as_mut()
                 .map_or(Ok(()), |controller| controller.deactivate().map_err(fail));

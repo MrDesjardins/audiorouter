@@ -1414,6 +1414,15 @@ hashes and the exact VM command are in the
 30-second guest validation before another 10-minute attempt. Preserve the
 zero-counter acceptance criterion and installed VM driver.
 
+The MMCSS 30-second retry confirmed both workers acquired `Pro Audio`, with
+zero counters and no sequence gap, but exposed a second shutdown race:
+deactivation clears the mapping header just before the worker stop flag is
+set. The worker can report the expected clear as `SampleSizeMismatch`. Fixed
+with a separate retirement signal set before deactivation; only that exact
+error is tolerated after retirement begins. Keep runtime mapping errors and
+the zero-error gate unchanged. Host formatting, tests and Clippy pass. See the
+[render-overrun record](evidence/2026-10-08-m03-render-overrun.md).
+
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
 use the capture-sink acknowledgement (`consumer_sequence`) for producer

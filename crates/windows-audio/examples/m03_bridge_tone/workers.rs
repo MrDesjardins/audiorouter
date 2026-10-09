@@ -28,6 +28,7 @@ impl Drop for PanicSignal<'_> {
 
 pub(super) struct Shared {
     pub start: OnceLock<Instant>,
+    pub retiring: AtomicBool,
     pub stop: AtomicBool,
     pub done: AtomicBool,
     pub capture_blocks: AtomicU64,
@@ -47,6 +48,7 @@ impl Shared {
     pub fn new(samples: usize, capacity: usize) -> Arc<Self> {
         let state = Arc::new(Self {
             start: OnceLock::new(),
+            retiring: AtomicBool::new(false),
             stop: AtomicBool::new(false),
             done: AtomicBool::new(false),
             capture_blocks: AtomicU64::new(1),
@@ -93,8 +95,8 @@ pub(super) fn observe_max(value: &AtomicU64, elapsed: Duration) {
     );
 }
 
-fn ended_by_mapping_retirement(stopping: bool, error: &NativeBridgeRegionError) -> bool {
-    stopping && *error == NativeBridgeRegionError::SampleSizeMismatch
+fn is_expected_mapping_retirement(retiring: bool, error: &NativeBridgeRegionError) -> bool {
+    retiring && *error == NativeBridgeRegionError::SampleSizeMismatch
 }
 
 /// Disk thread loop, shared by the production writer and stalled-I/O tests.
@@ -200,9 +202,18 @@ pub(super) fn capture(
             sequence = sequence
                 .checked_add(1)
                 .ok_or("capture sequence exhausted")?;
-            region
-                .write_f64(generation, sequence, tone)
-                .map_err(|error| format!("capture mapping: {error:?}"))?;
+            match region.write_f64(generation, sequence, tone) {
+                Ok(()) => {}
+                Err(error)
+                    if is_expected_mapping_retirement(
+                        state.retiring.load(Ordering::Acquire),
+                        &error,
+                    ) =>
+                {
+                    break;
+                }
+                Err(error) => return Err(format!("capture mapping: {error:?}")),
+            }
             state.capture_blocks.store(sequence, Ordering::Release);
         }
         std::thread::sleep(Duration::from_millis(1));
@@ -277,7 +288,14 @@ pub(super) fn render(
             // CLOSE retires the driver's view while this read-only mapping
             // remains alive long enough to drain a final published block.
             // A cleared format header is therefore a normal stop condition.
-            Err(error) if ended_by_mapping_retirement(stopping, &error) => break,
+            Err(error)
+                if is_expected_mapping_retirement(
+                    state.retiring.load(Ordering::Acquire),
+                    &error,
+                ) =>
+            {
+                break;
+            }
             Err(error) => return Err(format!("render mapping: {error:?}")),
         }
         std::thread::sleep(Duration::from_millis(1));
@@ -621,12 +639,16 @@ mod tests {
     }
 
     #[test]
-    fn cleared_format_header_is_accepted_only_after_shutdown() {
+    fn cleared_format_header_is_accepted_only_after_retirement_begins() {
         let error = NativeBridgeRegionError::SampleSizeMismatch;
-        assert!(ended_by_mapping_retirement(true, &error));
-        assert!(!ended_by_mapping_retirement(false, &error));
-        assert!(!ended_by_mapping_retirement(
+        assert!(is_expected_mapping_retirement(true, &error));
+        assert!(!is_expected_mapping_retirement(false, &error));
+        assert!(!is_expected_mapping_retirement(
             true,
+            &NativeBridgeRegionError::StaleGeneration
+        ));
+        assert!(!is_expected_mapping_retirement(
+            false,
             &NativeBridgeRegionError::StaleGeneration
         ));
     }
