@@ -1143,6 +1143,17 @@ continue in this installed VM, set Cable B Output Listen to the VM's physical
 speakers, run Session 2 tone for 600 seconds and collect/copy evidence. Review
 the WAV and counters before stall/8-channel tests; do not restore yet.
 
+2026-10-08 19:54 tone interrupted: archive `evidence-20261008-195458.zip`,
+SHA-256 `7CCFA6934BF5CA7D07D9CA123CE01E1EBCD36A3BC1C9AAE59FE66A97C33E1071`.
+Transcript started 19:46:23 and was stopped at 19:54:34 (491 seconds), before
+the configured 600-second duration. The wrapper buffers native output through
+Out-String until process exit, so silence in the console is expected. No
+counter report or completed summary exists; the 14,607,404-byte WAV retains
+placeholder RIFF/data sizes (36/0) after interruption and is not a qualified
+recording. This does not establish a hang or an audio-quality pass. Next:
+same installed guest and listening setup, run `tone -ToneSeconds 30`, collect
+and inspect completion/counters before repeating the full 600-second check.
+
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
 use the capture-sink acknowledgement (`consumer_sequence`) for producer

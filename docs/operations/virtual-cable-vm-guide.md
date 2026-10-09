@@ -563,7 +563,17 @@ VM to listening/tone; actual streaming and latency are still pending.
      hear whatever arrives on Cable B through your PC's speakers. Listening
      also keeps Cable B's recording side running, which the tone test needs
      for its glitch counters.
-4. Run the 10-minute tone step:
+4. First run a short completion check (30 seconds):
+
+   ```powershell
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step tone -ToneSeconds 30
+   ```
+
+   The window stays quiet while the tool runs: output is captured and printed
+   after it exits. Collect/copy the evidence using step 9 and send the output
+   before the full run. This short check does not replace the 10-minute gate.
+
+   Once the short run is reviewed, run the 10-minute tone step:
 
    ```powershell
    powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step tone

@@ -516,3 +516,20 @@ Streaming, conversion quality, continuity and Verifier remain unqualified.
 Next: current installed VM, configure Cable B Output listening to the VM's
 own speakers and run the 600-second tone; inspect WAV/counters before more
 Session 2 steps. Keep this VM state for that run.
+
+## 2026-10-08 19:54: tone interrupted before its duration
+
+Archive `C:\VMs\ar-share\evidence-20261008-195458.zip`, SHA-256
+`7CCFA6934BF5CA7D07D9CA123CE01E1EBCD36A3BC1C9AAE59FE66A97C33E1071`.
+Tone transcript `20261008-194623-tone/transcript.txt` runs from 19:46:23 to
+19:54:34: 491 seconds of the requested 600. It ends with pipeline stopped.
+No tone.txt, completed counters or summary survived. The render-source WAV
+has 14,607,404 bytes but header RIFF/data sizes are still 36/0, so interruption
+prevented finalization. Audio data presence alone does not qualify signal or
+continuity. There is no evidence here that the tool exceeded its timeout.
+
+The wrapper captures native output into Out-String and prints summaries only
+after exit; the quiet console was expected during the run. Next: keep the
+installed guest and listening setup, run `-Step tone -ToneSeconds 30`, collect
+the evidence, and verify finalization/counters before the full 600-second run.
+The short run is diagnostic and does not replace the longer acceptance gate.
