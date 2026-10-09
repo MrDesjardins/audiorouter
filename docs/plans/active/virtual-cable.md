@@ -1398,6 +1398,19 @@ Review the 10-minute trace before stall/8-channel checks. Archives are retained;
 no kernel patch or threshold change. VM sustained continuity, fidelity and
 latency gates remain open; the 30-second success does not qualify them.
 
+The next guest attempt stopped after about 29 seconds with one 480-frame
+render overrun and one harness sequence gap. Its maximum render poll gap was
+11.186 ms; heartbeat and WAV operations were each below 1 ms. It requested a
+600-second run but did not complete the 10-minute gate. Full archived evidence,
+limits, and the scheduling follow-up are in the
+[render-overrun record](evidence/2026-10-08-m03-render-overrun.md). Before
+retrying, the isolated workers were updated to request MMCSS `Pro Audio`,
+report fallback capability, and include sequence and timing details in any
+gap error. Focused host checks and workspace Clippy pass; this is not VM timing
+evidence. Next: stage only the updated harness and VM script, then run the
+30-second guest validation before another 10-minute attempt. Preserve the
+zero-counter acceptance criterion and installed VM driver.
+
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
 use the capture-sink acknowledgement (`consumer_sequence`) for producer

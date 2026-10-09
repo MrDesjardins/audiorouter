@@ -1,6 +1,9 @@
 //! Mapped audio workers. Control and disk work never run in these loops.
 use super::{fill_tone_block, Options};
-use audiorouter_windows_audio::{NativeBridgeRegion, NativeBridgeRegionError};
+use audiorouter_windows_audio::{
+    AudioServiceThreadCapabilities, AudioServiceThreadGuard, NativeBridgeRegion,
+    NativeBridgeRegionError,
+};
 use crossbeam_queue::ArrayQueue;
 use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
@@ -128,14 +131,32 @@ pub(super) fn record(
 }
 
 #[cfg(windows)]
-pub(super) fn prepare_thread() -> Result<(), String> {
+#[derive(Clone, Copy, Debug)]
+pub(super) struct WorkerScheduling {
+    pub capabilities: AudioServiceThreadCapabilities,
+    pub highest_priority_fallback: bool,
+}
+
+#[cfg(windows)]
+pub(super) fn prepare_thread() -> Result<(AudioServiceThreadGuard, WorkerScheduling), String> {
     use windows::Win32::System::Threading::{
         GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_HIGHEST,
     };
-    // SAFETY: the pseudo handle refers only to this thread; no ownership is
-    // transferred. HIGHEST does not select the realtime process class.
-    unsafe { SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST) }
-        .map_err(|error| format!("audio thread priority failed: {error}"))
+    let (guard, capabilities) = AudioServiceThreadGuard::enter();
+    let highest_priority_fallback = !capabilities.mmcss_pro_audio;
+    if highest_priority_fallback {
+        // SAFETY: the pseudo handle refers only to this thread; no ownership
+        // is transferred. HIGHEST does not select the realtime process class.
+        unsafe { SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST) }
+            .map_err(|error| format!("audio thread fallback priority failed: {error}"))?;
+    }
+    Ok((
+        guard,
+        WorkerScheduling {
+            capabilities,
+            highest_priority_fallback,
+        },
+    ))
 }
 
 pub(super) fn capture(
@@ -208,7 +229,8 @@ pub(super) fn render(
     loop {
         let stopping = state.stop.load(Ordering::Acquire);
         let now = Instant::now();
-        observe_max(&state.render_gap_us, now.duration_since(last));
+        let poll_gap = now.duration_since(last);
+        observe_max(&state.render_gap_us, poll_gap);
         last = now;
         if !stalled && start.elapsed() >= Duration::from_secs(u64::from(options.seconds)) / 2 {
             std::thread::sleep(Duration::from_millis(u64::from(options.stall_ms)));
@@ -216,12 +238,19 @@ pub(super) fn render(
         }
         match region.read_into_f64_after(generation, sequence, &mut packet.samples) {
             Ok(header) => {
-                state.render_gaps.fetch_add(
-                    header.sequence.saturating_sub(sequence + 1),
-                    Ordering::Relaxed,
-                );
-                if header.sequence != sequence + 1 && options.stall_ms == 0 {
-                    return Err("render sequence gap in harness".to_owned());
+                let expected_sequence = sequence.saturating_add(1);
+                let skipped_sequences = header.sequence.saturating_sub(expected_sequence);
+                state
+                    .render_gaps
+                    .fetch_add(skipped_sequences, Ordering::Relaxed);
+                if skipped_sequences > 0 && options.stall_ms == 0 {
+                    return Err(format!(
+                        "render sequence gap: previous={sequence}, expected={expected_sequence}, observed={}, skipped={skipped_sequences}, elapsed_ms={}, poll_gap_us={}, max_poll_gap_us={}",
+                        header.sequence,
+                        start.elapsed().as_millis(),
+                        poll_gap.as_micros(),
+                        state.render_gap_us.load(Ordering::Relaxed),
+                    ));
                 }
                 sequence = header.sequence;
                 packet.count = usize::from(header.frames) * usize::from(header.channels);
@@ -563,6 +592,32 @@ mod tests {
             .unwrap_err()
             .contains("StaleGeneration"));
         assert_eq!(state.render_blocks.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn render_sequence_gap_reports_sequence_and_poll_timing() {
+        let mapping = Mapping::new();
+        let view = mapping.view();
+        let state = Shared::new(960, 2);
+        let options = Options::default();
+        mapping
+            .region
+            .as_ref()
+            .unwrap()
+            .write_f64(1, 2, &[0.25; 960])
+            .unwrap();
+        state.start.set(Instant::now()).unwrap();
+
+        let error = render(&view, &state, &options, 1).unwrap_err();
+
+        assert!(error.contains("previous=0"));
+        assert!(error.contains("expected=1"));
+        assert!(error.contains("observed=2"));
+        assert!(error.contains("skipped=1"));
+        assert!(error.contains("elapsed_ms="));
+        assert!(error.contains("poll_gap_us="));
+        assert!(error.contains("max_poll_gap_us="));
+        assert_eq!(state.render_gaps.load(Ordering::Relaxed), 1);
     }
 
     #[test]

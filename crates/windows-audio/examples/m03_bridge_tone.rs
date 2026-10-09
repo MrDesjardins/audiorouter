@@ -348,17 +348,22 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
             .name("tone-capture".to_owned())
             .spawn_scoped(scope, move || {
                 let _panic = workers::PanicSignal(capture_state);
-                let ready = workers::prepare_thread();
-                let _ = capture_tx.send(ready.clone());
-                let result = ready.and_then(|()| {
-                    workers::capture(
+                let setup = workers::prepare_thread();
+                let readiness = match &setup {
+                    Ok((_, scheduling)) => Ok(*scheduling),
+                    Err(error) => Err(error.clone()),
+                };
+                let _ = capture_tx.send(("capture", readiness));
+                let result = match setup {
+                    Ok((_scheduling_guard, _scheduling)) => workers::capture(
                         capture_region,
                         capture_state,
                         options,
                         generation,
                         &mut tone,
-                    )
-                });
+                    ),
+                    Err(error) => Err(error),
+                };
                 if result.is_err() {
                     capture_state.failed.store(true, Ordering::Release);
                 }
@@ -378,11 +383,18 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
                     }
                 }
                 let _finished = Finished(render_state);
-                let ready = workers::prepare_thread();
-                let _ = ready_tx.send(ready.clone());
-                let result = ready.and_then(|()| {
-                    workers::render(render_region, render_state, options, generation)
-                });
+                let setup = workers::prepare_thread();
+                let readiness = match &setup {
+                    Ok((_, scheduling)) => Ok(*scheduling),
+                    Err(error) => Err(error.clone()),
+                };
+                let _ = ready_tx.send(("render", readiness));
+                let result = match setup {
+                    Ok((_scheduling_guard, _scheduling)) => {
+                        workers::render(render_region, render_state, options, generation)
+                    }
+                    Err(error) => Err(error),
+                };
                 if result.is_err() {
                     render_state.failed.store(true, Ordering::Release);
                 }
@@ -390,10 +402,17 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
             })
             .map_err(|error| (1, format!("render worker startup: {error}")))?;
         for _ in 0..2 {
-            ready_rx
+            let (worker_name, readiness) = ready_rx
                 .recv_timeout(Duration::from_secs(10))
-                .map_err(|error| (1, format!("worker readiness: {error}")))?
-                .map_err(|error| (1, error))?;
+                .map_err(|error| (1, format!("worker readiness: {error}")))?;
+            let scheduling = readiness.map_err(|error| (1, error))?;
+            println!(
+                "{worker_name} worker scheduling: COM_MTA={} MMCSS_Pro_Audio={} timer_1ms={} highest_priority_fallback={}",
+                scheduling.capabilities.com_multithreaded,
+                scheduling.capabilities.mmcss_pro_audio,
+                scheduling.capabilities.one_millisecond_timer,
+                scheduling.highest_priority_fallback,
+            );
         }
         let disk_state = &state;
         let disk_worker = std::thread::Builder::new()
