@@ -515,15 +515,14 @@ Installation and status must be run separately; send the collected status
 evidence for review before continuing to listening or tone. See the
 [crash record](../plans/active/evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md#2026-10-08-1925-bridge-open-crashed-session-2).
 
-After a crash, restore `02-test-signing-ready` before starting. The replacement
-is `Z:\repair-20261008-surround-layout` (source `a8138984`). The prior
-`151a3b69` bridge-open repair passed in the guest; inventory then found an
-8-channel mask mismatch (48/60 accepted). This replacement corrects that
-layout and preserves native inventory summaries in Windows PowerShell 5.1.
-Its host build/package checks passed; the guest archive
-`evidence-20261008-194356.zip` confirms 60/60 formats on all four endpoints
-and a minimum shared period of 128 frames at 48 kHz. Continue in the installed
-VM to listening/tone; actual streaming and latency are still pending.
+Restore `02-test-signing-ready` before replacing the driver. The current
+candidate is `Z:\repair-20261008-capture-prefetch` (source `abb303ee`).
+It adds bounded capture prefetch after the prior package showed underruns
+during playback. Host queue regressions, WDK build and package checks passed;
+runtime continuity and latency remain unverified. The prior `a8138984`
+package already passed bridge opening and 60/60 formats on all four endpoints
+(`evidence-20261008-194356.zip`); repeat install/status on this new candidate
+before configuring Listen and running only the 30-second diagnostic below.
 
 1. Open **Administrator PowerShell inside the VM** and paste the whole block.
    It checks preflight, installs the driver, verifies that another install is
@@ -531,10 +530,16 @@ VM to listening/tone; actual streaming and latency are still pending.
 
    ```powershell
    & {
-       robocopy.exe Z:\repair-20261008-surround-layout C:\ar /E /R:1 /W:1
+       robocopy.exe Z:\repair-20261008-capture-prefetch C:\ar /E /R:1 /W:1
        if ($LASTEXITCODE -ge 8) { throw 'Copy failed. Stop here.' }
        $hash = (Get-FileHash C:\ar\driver\audioroutervirtual.sys -Algorithm SHA256).Hash
-       if ($hash -ne '332C6BA37659E16EB5BF84DFA2CC3CED7040F3D14E92A29CCE844EB7FD8C6C9B') { throw 'Wrong driver build. Stop here.' }
+       if ($hash -ne 'B45C9EF5B4B466D729BBD6579962F1540BB853377A14C14A647AA641BD4605BA') { throw 'Wrong driver build. Stop here.' }
+       $entries = @(Get-Content Z:\repair-20261008-capture-prefetch\MANIFEST.txt | Where-Object { $_ -match '^[a-fA-F0-9]{64}  ' })
+       if ($entries.Count -ne 29) { throw 'Unexpected package manifest. Stop here.' }
+       foreach ($entry in $entries) {
+           if ((Get-FileHash (Join-Path C:\ar $entry.Substring(66))).Hash -ine $entry.Substring(0, 64)) { throw 'Copied package hash mismatch. Stop here.' }
+       }
+       Write-Host 'Verified 29 copied package files.'
        Get-ChildItem C:\ar -Recurse -File | Unblock-File
        powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step preflight
        if ($LASTEXITCODE -ne 0) { throw 'Preflight failed. Send the output before continuing.' }

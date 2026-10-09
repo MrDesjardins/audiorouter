@@ -1245,6 +1245,23 @@ external source upload. Next: finish host checks and stage a signed clean
 candidate, then restore the clean guest snapshot and run install/status and
 only a 30-second trace before the long continuity and latency gates.
 
+Candidate staged: `C:\VMs\ar-share\repair-20261008-capture-prefetch`, clean
+source `abb303ee8834c64af6ea273a7bdd960b128926e0`, built
+`2026-10-09T03:30:54.0452936Z`. SYS SHA-256:
+`B45C9EF5B4B466D729BBD6579962F1540BB853377A14C14A647AA641BD4605BA`.
+Package checks 33/33 and independently reread manifest hashes 29/29 passed;
+VM guard checks 275 passed. Final x64 WDK acceptance used
+`PreferredToolArchitecture=x64` and the installed MSVC Hostx64/x64 compiler
+directory on the process PATH. Logs: `target/capture-prefetch-build.txt`,
+`target/capture-prefetch-share.txt`, `target/capture-prefetch-vm-guards.txt`.
+Documentation validation passed 133 files/724 links; whitespace check passed.
+No driver was installed or loaded on the host. Next: restore
+`02-test-signing-ready`, use Session 2's copy/hash/preflight/install block,
+review installation, then status and a configured 30-second trace. Successful
+copy acknowledgement means private buffering, not completed playback; the
+short diagnostic and its counters do not substitute for external capture,
+fidelity or impulse latency qualification. VCAB-24/25/28 remain open.
+
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
 use the capture-sink acknowledgement (`consumer_sequence`) for producer
