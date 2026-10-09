@@ -359,6 +359,17 @@ device in `Source/Main/adapter.cpp` and bridge helpers in
   increment `UnderrunFrames`. Overrun on render (user mode not reading):
   overwrite the oldest unread block, increment `OverrunFrames`, never queue
   without bound.
+- **Capture prefetch (approved 2026-10-08).** Two private fixed stream
+  buffers retain validated blocks in sequence order. A callback may copy and
+  acknowledge the next block while the current block still has unread frames;
+  busy publication preserves queued audio. Each prefetch makes at most two
+  copy attempts and never waits. Generation turnover discards both buffers;
+  unusable format and STOP discard valid lengths while retaining the last
+  acknowledged sequence to prevent replay. The shared ABI is unchanged.
+  One extra 8-channel × 4096-frame float64 array costs 256 KiB per stream;
+  buffering adds at most one quantum (10 ms at 480 frames/48 kHz). This
+  does not waive VCAB-24/25/28: continuity, measured latency, and pool gates
+  still require guest evidence.
 - The copy per callback is one bounded loop over the frames due; no
   per-sample function calls through pointers; conversion functions are
   `__forceinline` per format.

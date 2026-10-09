@@ -15,6 +15,7 @@ Abstract:
 #define _AUDIOROUTERVIRTUAL_MINWAVERTSTREAM_H_
 
 #include "bridgeio.h"
+#include "capturequeue.h"
 
 //
 // Structure to store notifications events in a protected list
@@ -115,9 +116,10 @@ protected:
     BOOLEAN                     m_bLastBufferRendered;
     KSPIN_LOCK                  m_PositionSpinLock;
     DOUBLE                      m_BridgeScratch[AR_BRIDGE_MAX_CHANNELS * AR_BRIDGE_MAX_FRAMES];
+    DOUBLE                      m_BridgePrefetch[AR_BRIDGE_MAX_CHANNELS * AR_BRIDGE_MAX_FRAMES];
+    AudioRouterCaptureQueue     m_CaptureQueue;
     ULONG                       m_BridgeScratchFrames;
     ULONG                       m_BridgeScratchFrameOffset;
-    ULONGLONG                  m_BridgeReadSequence;
     ULONGLONG                  m_BridgeGeneration;
     ULONGLONG                  m_BridgeReadGeneration;
     ULONG                       m_BridgePublishFrames;

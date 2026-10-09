@@ -1,6 +1,7 @@
 #define AR_BRIDGE_UNIT_TEST
 #include "../Source/Inc/bridgeio.h"
 #include "../Source/Inc/sampleconv.h"
+#include "../Source/Inc/capturequeue.h"
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -39,6 +40,59 @@ static AR_BRIDGE_OPEN_REQUEST validRequest() {
     return request;
 }
 int main() {
+    AudioRouterCaptureQueue queue = {};
+    queue.Reset();
+    require(queue.Count == 0 && queue.Available() == 0, "capture starts empty");
+    require(queue.Commit(480, 1), "capture commits current block");
+    require(queue.Consume(128) && queue.Available() == 352, "partial read retains samples");
+    require(queue.Commit(480, 2), "prefetch while current block has unread samples");
+    require(queue.Count == 2 && queue.Head == 0 && queue.Offset == 128,
+        "publication does not replace unread current block");
+    require(!queue.Commit(480, 3), "capture memory bounded to two blocks");
+    require(queue.Consume(352) && queue.Head == 1 && queue.Available() == 480,
+        "FIFO promotion preserves whole prefetched block");
+    require(!queue.Commit(480, 2) && !queue.Commit(480, 1), "duplicates and old blocks refused");
+    require(queue.Commit(128, 3) && queue.Tail() == 1, "freed slot reused without shifting samples");
+    require(!queue.Consume(481) && queue.Available() == 480, "oversized drain leaves queue intact");
+    require(queue.Consume(480) && queue.Consume(128) && queue.Count == 0,
+        "batched callback drains both blocks exactly once");
+    require(!queue.Consume(1) && queue.Available() == 0, "missing block requires counted silence");
+    require(!queue.Commit(0, 4) && !queue.Commit(AR_BRIDGE_MAX_FRAMES + 1, 4),
+        "invalid frame lengths cannot become valid audio");
+    require(queue.Commit(480, 4) && queue.Consume(48), "partial block before boundary");
+    queue.Clear();
+    require(queue.Available() == 0 && queue.Count == 0 && !queue.Commit(480, 4),
+        "stop or unusable format discards audio without replaying acknowledged block");
+    queue.Reset();
+    require(queue.Commit(128, 1) && queue.Offset == 0,
+        "generation turnover permits new sequence without old samples");
+    // A busy publisher performs no Commit: good queued samples remain valid.
+    require(queue.Consume(64) && queue.Available() == 64 && queue.Sequence == 1,
+        "busy publication preserves partial queued audio");
+    queue.Reset();
+    require(queue.Count == 0 && queue.Frames[0] == 0 && queue.Frames[1] == 0,
+        "teardown invalidates both buffers with bounded metadata writes");
+    DOUBLE queueSamples[2][4] = {};
+    ULONG fetches = 0;
+    queue.Prefetch([&](ULONG slot, ULONGLONG sequence) {
+        ++fetches;
+        for (ULONG frame = 0; frame < 4; ++frame) {
+            queueSamples[slot][frame] = static_cast<DOUBLE>(sequence * 4 + frame);
+        }
+        return queue.Commit(4, sequence + 1);
+    });
+    require(fetches == 2 && queue.Count == 2, "prefetch copies at most two blocks");
+    queue.Prefetch([&](ULONG, ULONGLONG) { ++fetches; return false; });
+    require(fetches == 2, "full queue does not read or overwrite shared slot");
+    for (ULONG frame = 0; frame < 8; ++frame) {
+        require(queueSamples[queue.Head][queue.Offset] == static_cast<DOUBLE>(frame),
+            "prefetched samples drain in order without duplication");
+        require(queue.Consume(1), "sample frame consumed once");
+        // Simulate publication in progress after the first block is freed.
+        queue.Prefetch([&](ULONG, ULONGLONG) { ++fetches; return false; });
+    }
+    require(queue.Available() == 0 && fetches == 7,
+        "busy publication makes one attempt per call and leaves no stale samples");
     bool occupiedLeaseSlots[AR_BRIDGE_LEASE_SLOTS] = {};
     for (USHORT bus = 0; bus < AR_BRIDGE_MAX_CABLES; ++bus) {
         WCHAR busId[] = L"cable-a";

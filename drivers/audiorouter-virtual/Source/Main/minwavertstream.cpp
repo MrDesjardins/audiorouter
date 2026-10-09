@@ -267,7 +267,7 @@ Return Value:
     m_bLastBufferRendered = FALSE;
     m_BridgeScratchFrames = 0;
     m_BridgeScratchFrameOffset = 0;
-    m_BridgeReadSequence = 0;
+    m_CaptureQueue.Reset();
     m_BridgeGeneration = 0;
     m_BridgeReadGeneration = 0;
     m_BridgePublishFrames = 0;
@@ -1264,6 +1264,11 @@ NTSTATUS CMiniportWaveRTStream::SetState
             }
             KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
             // Reset DMA
+            // Discard queued audio but retain the last acknowledgement so
+            // the same shared block cannot replay after STOP/RUN.
+            m_CaptureQueue.Clear();
+            m_BridgeScratchFrames = 0;
+            m_BridgeScratchFrameOffset = 0;
             m_llPacketCounter = 0;
             m_ullPlayPosition = 0;
             m_ullWritePosition = 0;
@@ -1557,7 +1562,7 @@ VOID CMiniportWaveRTStream::WriteBytes
 
 Routine Description:
 
-This function writes the audio buffer using a sine wave generator
+This function writes capture DMA from the bounded bridge queue.
 
 Arguments:
 
@@ -1579,20 +1584,18 @@ ByteDisplacement - # of bytes to process.
         &readSampleRate,
         &readGeneration);
     if (NT_SUCCESS(readShapeStatus) && readFrames != 0 && readChannels != 0 &&
-        readSampleRate == m_pWfExt->Format.nSamplesPerSec &&
         AudioRouterStreamGenerationChanged(m_BridgeReadGeneration, readGeneration)) {
         // Reset valid length/sequence only. The block copy overwrites every
         // sample consumed before output; never clear the full DPC scratch array.
         m_BridgeScratchFrames = 0;
         m_BridgeScratchFrameOffset = 0;
-        m_BridgeReadSequence = 0;
+        m_CaptureQueue.Reset();
         m_BridgeReadGeneration = readGeneration;
-    } else if (!NT_SUCCESS(readShapeStatus) || readFrames == 0 || readChannels == 0 ||
-        readSampleRate != m_pWfExt->Format.nSamplesPerSec) {
+    } else if (!NT_SUCCESS(readShapeStatus) || readFrames == 0 || readChannels == 0) {
         if (m_BridgeReadGeneration != 0) {
             m_BridgeScratchFrames = 0;
             m_BridgeScratchFrameOffset = 0;
-            m_BridgeReadSequence = 0;
+            m_CaptureQueue.Reset();
             m_BridgeReadGeneration = 0;
         }
     }
@@ -1614,10 +1617,51 @@ ByteDisplacement - # of bytes to process.
     const BOOLEAN captureLeaseUsable = captureLeaseActive && bridgeFormat &&
         readSampleRate == m_pWfExt->Format.nSamplesPerSec &&
         readChannels == bridgeChannels;
+    if (!captureLeaseUsable) {
+        m_CaptureQueue.Clear();
+    }
     AR_BRIDGE_STREAM_ACTIVITY activity = {};
     if (captureLeaseActive && !captureLeaseUsable) {
         activity.FormatMismatches = 1;
     }
+
+    DOUBLE* captureBlocks[2] = { m_BridgeScratch, m_BridgePrefetch };
+    bool captureSnapshotValid = true;
+    // Copy into free private storage before consuming the current block.
+    // A failed/noncoherent publication never invalidates queued good audio.
+    // At most two copies per call; no wait for the user-mode publisher.
+    auto prefetch = [&]() {
+        if (!captureSnapshotValid) { return; }
+        m_CaptureQueue.Prefetch([&](ULONG slot, ULONGLONG sequence) {
+            AR_BRIDGE_BLOCK_HEADER header = {};
+            ULONG nonFinite = 0;
+            NTSTATUS status = AudioRouterCopyLeaseBlockForDirection(
+                static_cast<USHORT>(m_pMiniport->GetCableBusIndex()),
+                AR_BRIDGE_DIRECTION_CAPTURE_SINK,
+                sequence,
+                captureBlocks[slot],
+                ARRAYSIZE(m_BridgeScratch), &header, &nonFinite);
+            activity.NonFiniteSamples += nonFinite;
+            if (!NT_SUCCESS(status)) { return false; }
+            if (header.Generation != readGeneration) {
+                // Lease turnover raced the shape snapshot. Discard both
+                // generations and renegotiate on the next callback.
+                m_CaptureQueue.Reset();
+                captureSnapshotValid = false;
+                return false;
+            }
+            if (header.Channels != bridgeChannels) {
+                activity.FormatMismatches += 1;
+                m_CaptureQueue.Clear();
+                captureSnapshotValid = false;
+                return false;
+            }
+            activity.SequenceGaps += AudioRouterSequenceGap(
+                m_CaptureQueue.Sequence, header.Sequence);
+            return m_CaptureQueue.Commit(header.Frames, header.Sequence);
+        });
+    };
+    if (captureLeaseUsable && ByteDisplacement != 0) { prefetch(); }
 
     // Normally this will loop no more than once for a single wrap, but if
     // many bytes have been displaced then this may loops many times.
@@ -1633,33 +1677,9 @@ ByteDisplacement - # of bytes to process.
             ULONG bytes = frames * deviceFrameBytes;
             ULONG writtenFrames = 0;
             while (writtenFrames < frames) {
-                if (m_BridgeScratchFrameOffset >= m_BridgeScratchFrames) {
-                    AR_BRIDGE_BLOCK_HEADER header = {};
-                    ULONG nonFinite = 0;
-                    NTSTATUS status = AudioRouterCopyLeaseBlockForDirection(
-                        static_cast<USHORT>(m_pMiniport->GetCableBusIndex()),
-                        AR_BRIDGE_DIRECTION_CAPTURE_SINK,
-                        m_BridgeReadSequence,
-                        m_BridgeScratch,
-                        ARRAYSIZE(m_BridgeScratch),
-                        &header,
-                        &nonFinite);
-                    activity.NonFiniteSamples += nonFinite;
-                    if (NT_SUCCESS(status) && header.Channels != bridgeChannels) {
-                        activity.FormatMismatches += 1;
-                    }
-                    if (!NT_SUCCESS(status) || header.Channels != bridgeChannels) {
-                        m_BridgeScratchFrames = 0;
-                        m_BridgeScratchFrameOffset = 0;
-                        break;
-                    }
-                    activity.SequenceGaps += AudioRouterSequenceGap(
-                        m_BridgeReadSequence, header.Sequence);
-                    m_BridgeScratchFrames = header.Frames;
-                    m_BridgeScratchFrameOffset = 0;
-                    m_BridgeReadSequence = header.Sequence;
-                }
-                ULONG available = m_BridgeScratchFrames - m_BridgeScratchFrameOffset;
+                if (m_CaptureQueue.Count == 0) { prefetch(); }
+                ULONG available = m_CaptureQueue.Available();
+                if (available == 0) { break; }
                 ULONG copyFrames = min(frames - writtenFrames, available);
                 for (ULONG frame = 0; frame < copyFrames; ++frame) {
                     for (ULONG channel = 0; channel < bridgeChannels; ++channel) {
@@ -1668,13 +1688,14 @@ ByteDisplacement - # of bytes to process.
                                 (writtenFrames + frame) * deviceFrameBytes +
                                 channel * deviceBytesPerSample,
                             m_pWfExt,
-                            m_BridgeScratch[
-                                (m_BridgeScratchFrameOffset + frame) * bridgeChannels +
+                            captureBlocks[m_CaptureQueue.Head][
+                                (m_CaptureQueue.Offset + frame) * bridgeChannels +
                                 channel]);
                     }
                 }
-                m_BridgeScratchFrameOffset += copyFrames;
+                m_CaptureQueue.Consume(copyFrames);
                 writtenFrames += copyFrames;
+                prefetch();
                 if (copyFrames == 0) {
                     break;
                 }
@@ -1840,7 +1861,6 @@ BOOLEAN CMiniportWaveRTStream::RefreshBridgePublishShape()
         // overwritten before publication; keep generation changes bounded.
         m_BridgeScratchFrames = 0;
         m_BridgeScratchFrameOffset = 0;
-        m_BridgeReadSequence = 0;
         m_BridgeGeneration = generation;
     }
     return formatMismatch;

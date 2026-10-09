@@ -1191,7 +1191,7 @@ increment disproves a startup-only diagnosis. Other error counters remain
 zero. 3000 capture blocks written, 765 render blocks/367200 frames recorded.
 Do not retry the long test or change acceptance thresholds.
 
-### Proposed buffering decision — pending user approval
+### Capture buffering decision — approved 2026-10-08
 
 The review found a structural limitation: the capture callback requests a
 new bridge block only after its scratch is exhausted; a producer busy publishing
@@ -1218,11 +1218,32 @@ race caused each increment. Proposal for VCAB-24/25/28 and SEC-08:
 5. Rollback: restore the clean guest snapshot and retain prior package/tool
    plus archived evidence; no host driver loading.
 
-Implementation is pending the design decision required by this plan's rule 9
-("If a WP finds the design wrong ... ask the user before continuing"). Existing
-diagnostic and acceptance code is preserved; no counter reset or speculative
-kernel patch was made. Next action: approve/reject the bounded capture-prefetch
-proposal, then implement and verify it before requesting another VM run.
+The user approved this proposal on 2026-10-08, satisfying rule 9. Implement
+the bounded queue, verify FIFO/partial reads/busy publication and reset paths,
+then build a fresh signed candidate. The zero-counter acceptance gate remains
+unchanged. Runtime repair and latency remain unverified until guest evidence.
+
+Implemented: the capture path uses a two-slot private FIFO and bounded
+prefetch; the existing render scratch stays independent. Generation races
+discard the queue and disable further reads for that callback. STOP and
+unusable format invalidate buffered audio; acknowledged sequence is retained
+across STOP. Memory increase is 256 KiB per stream plus 32-byte queue state,
+less the removed 8-byte sequence field. Added buffering is bounded to one
+quantum beyond the old scratch (10 ms at the diagnostic setup); VCAB-25 is
+still open. Shared bridge layout and zero-error counters are unchanged.
+
+Host regression: `drivers/audiorouter-virtual/tests/build-tests.ps1` passed
+252 checks, including actual queue sample ordering, busy-publication attempts,
+partial/batched consumption, duplicate/invalid-length refusal, and reset
+boundaries. Log: `target/driver-unit-release/tests.log`. x64 WDK acceptance
+passed (`target/capture-prefetch-build.txt`). Neither is kernel runtime
+evidence. AddressSanitizer was attempted but could not link because the installed
+MSVC toolchain lacks `clang_rt.asan_static_runtime_thunk-x86_64.lib`
+(`target/driver-unit-asan/compile.log`); no ASan pass is claimed.
+Jev remains unrun due the prior automatic-review rejection of
+external source upload. Next: finish host checks and stage a signed clean
+candidate, then restore the clean guest snapshot and run install/status and
+only a 30-second trace before the long continuity and latency gates.
 
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must

@@ -520,7 +520,7 @@ foreach ($required in @(
         'AudioRouterGetLeaseShapeForDirection',
         'RefreshBridgePublishShape();',
         'm_BridgeScratch',
-        'm_BridgeReadSequence',
+        'm_CaptureQueue.Sequence',
         'header.Sequence',
         'header.Frames',
         'AR_BRIDGE_DIRECTION_RENDER_SOURCE',
@@ -571,8 +571,15 @@ if (-not $writeBytesSource.Contains('AR_BRIDGE_DIRECTION_CAPTURE_SINK')) {
 if (-not $writeBytesSource.Contains('AR_BRIDGE_DIRECTION_CAPTURE_SINK, &readFrames, &readChannels')) {
     throw 'WaveRT capture callback must track the capture-sink lease generation'
 }
-if (-not $writeBytesSource.Contains('m_BridgeReadSequence = 0;')) {
+if (-not $writeBytesSource.Contains('m_CaptureQueue.Reset();')) {
     throw 'WaveRT capture callback must reset its minimum sequence at sink lease turnover'
+}
+foreach ($required in @('m_CaptureQueue.Clear();', 'header.Generation != readGeneration',
+        'captureBlocks[slot]', 'm_CaptureQueue.Consume(copyFrames)',
+        'captureSnapshotValid = false', 'prefetch();')) {
+    if (-not $writeBytesSource.Contains($required)) {
+        throw "capture prefetch integration is missing: $required"
+    }
 }
 if (-not $writeBytesSource.Contains('header.Channels != bridgeChannels')) {
     throw 'WaveRT render callback must reject a bridge channel-shape mismatch'
