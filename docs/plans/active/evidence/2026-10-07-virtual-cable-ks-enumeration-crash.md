@@ -387,3 +387,20 @@ store, present devices and default roles to the baseline. This confirms the
 combined naming/default-enable change for one clean install/remove cycle.
 Required two-run gate is **1/2**. Restore the clean snapshot and repeat the
 same candidate; audio quality, formats and Verifier remain unqualified.
+
+## 2026-10-08 19:20: two clean smoke cycles passed
+
+Second archive `C:\VMs\ar-share\evidence-20261008-192120.zip`, SHA-256
+`B04D885E35FC2A4C4EE0AA0696DEBC1D2637DAA6321316B338B98F2941FF766E`.
+Package identity and build time match the first successful run. Preflight
+passed 15/15; A1/A2/A3/A14 passed. Before removal, all four project endpoints
+again had the required Cable A/B Input/Output names with adapter suffix and
+status OK. InstanceId flow prefixes confirm Input is render and Output is
+capture. Default roles stayed unchanged; removal restored the full baseline.
+
+The required clean-snapshot install/name/remove gate is **2/2 passed**.
+The naming repair is now supported by two actual Windows VM cycles. The
+successful package remains the candidate for Session 2: install and retain
+it, inspect the 60-format/engine-period inventory, then run tone qualification.
+Rename, IDs across configuration/restart, Verifier, security, audio quality
+and release signing remain separate gates.

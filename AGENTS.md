@@ -104,6 +104,16 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-08 — Render endpoint names and default visibility must be configured together.**
+  Evidence: [two clean Windows VM smoke cycles](docs/plans/active/evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md#2026-10-08-1920-two-clean-smoke-cycles-passed).
+  Scope: virtual cable KS bridge pins and generated endpoint INF properties.
+  Consequence: the speaker category keeps the fixed Speakers label despite
+  custom pin Names; analog connectors support names but are hidden by default.
+  Pair unique render pin Names with the analog category and an associated
+  `PKEY_AudioDevice_EnableEndpointByDefault` render mask `0x00000101`.
+  Check actual Windows names and active render/capture flows; builds and
+  source-string checks do not establish endpoint enumeration or audio quality.
+
 - **2026-10-06 — CI is Windows-only; cross-check Windows code from Linux with the GNU target.**
   Evidence: [execution record, CI back to green](docs/plans/archived/2026-10-07-maintenance-0.0.12-to-code-review.md#ci-back-to-green-on-windows-2026-10-06-user-request),
   CI run 37417530916. Scope: CI and any agent working in a Linux container.

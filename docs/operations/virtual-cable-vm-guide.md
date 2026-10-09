@@ -507,10 +507,27 @@ more; two clean runs are required before moving on.
 
 ### Session 2 — Audio through the cables · 30 min · checks A4 (tool), A5, A6, VCAB-11, VCAB-25
 
-1. `preflight`, then `install` (installs and keeps the driver; also checks
-   that a second install is a no-op).
-2. `status` — helper status plus the endpoint inventory: every endpoint
-   must accept all 60 formats (44.1/48/96 kHz × 1/2/4/6/8 channels × float,
+After the two successful Session 1 runs, continue in the current VM. Smoke
+removed the driver; the first block below installs and keeps it. The retry
+script's "before the second run" message applies after the first success.
+
+1. Open **Administrator PowerShell inside the VM** and paste the whole block.
+   It checks preflight, installs the driver, verifies that another install is
+   a no-op, and reads the format/period inventory. An earlier failure stops
+   the block:
+
+   ```powershell
+   & {
+       powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step preflight
+       if ($LASTEXITCODE -ne 0) { throw 'Preflight failed. Send the output before continuing.' }
+       powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step install
+       if ($LASTEXITCODE -ne 0) { throw 'Install failed. Send the output before continuing.' }
+       powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step status
+   }
+   ```
+
+2. Send this output before continuing. Every endpoint must accept all 60
+   formats (44.1/48/96 kHz × 1/2/4/6/8 channels × float,
    16-, 24- and 32-bit) and offer a minimum shared period of 128 frames
    (2.7 ms) or less. For comparison, VB-Cable on the PC reports 480 frames.
 3. **Set up listening** (once per session, in the VM):
@@ -522,7 +539,13 @@ more; two clean runs are required before moving on.
      hear whatever arrives on Cable B through your PC's speakers. Listening
      also keeps Cable B's recording side running, which the tone test needs
      for its glitch counters.
-4. `tone` — runs for 10 minutes. While it runs:
+4. Run the 10-minute tone step:
+
+   ```powershell
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step tone
+   ```
+
+   While it runs:
    - You should hear a steady high tone (997 Hz) on the left and a low hum
      (47 Hz) on the right. Clicks, gaps or a changing pitch are findings.
    - In the Sound panel **Playback** tab, right-click **AudioRouter Cable A
@@ -532,16 +555,36 @@ more; two clean runs are required before moving on.
      underrun, overrun, gaps, non-finite and format mismatches are 0. (The
      tool paces itself on the driver's acknowledgements, so a clean run
      really should be 0; anything else is a finding.)
-5. `tone-stall` — the tool pauses for half a second on purpose. Pass: the
+5. Run the deliberate stall step:
+
+   ```powershell
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step tone-stall
+   ```
+
+   The tool pauses for half a second on purpose. Pass: the
    counters are **above** 0 (the driver noticed the gap).
-6. `tone-8ch` — the same at 96 kHz with 8 channels.
+6. Run the 96 kHz, 8-channel step:
+
+   ```powershell
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step tone-8ch
+   ```
 7. **Silence check (A6):** after the tone steps, with nothing running, the
    Listen output must be completely silent.
 8. Optional: open **Sound Recorder** (Start → Sound Recorder), choose
    **AudioRouter Cable B Output** as the microphone, start `tone` again and
    record 30 seconds; save it into `C:\ar\evidence`. If Sound Recorder sees
    no microphone, allow it in Settings → Privacy & security → Microphone.
-9. `collect`, copy the zip to `Z:\`.
+9. Collect and copy the evidence:
+
+   ```powershell
+   & {
+       powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step collect
+       if ($LASTEXITCODE -ne 0) { throw 'Collection failed. Send the output.' }
+       Get-ChildItem -LiteralPath C:\ar -Filter 'evidence-*.zip' -File |
+           Sort-Object LastWriteTime -Descending | Select-Object -First 1 |
+           Copy-Item -Destination Z:\
+   }
+   ```
 
 ### Session 3 — Cable count and names · 15 min · checks A15 (count), VCAB-02/05
 

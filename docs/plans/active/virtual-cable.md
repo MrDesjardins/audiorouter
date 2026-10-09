@@ -237,8 +237,9 @@ are recorded in [WP-02 evidence](evidence/2026-10-05-virtual-cable-wp02.md).
   exact cable/direction names and endpoint IDs across package updates.
 - **Rollback:** restore the previous test package in the VM checkpoint and
   revert only the naming property and its focused acceptance checks.
-- **Status:** implementation and host validation in progress; VM validation
-  pending.
+- **Status:** initial naming and install/remove gate passed twice on
+  2026-10-08 with clean package `5f61df3c`. See the latest two-run evidence
+  below. Rename, persistence, formats, audio and Verifier remain pending.
 
 ### Render-name follow-up (2026-10-08, VM evidence)
 
@@ -895,13 +896,12 @@ published app keeps the VB-Cable workflow. Reverting DEC-18 restores DEC-16.
 
 ## Next action
 
-**VM retry (user action, 1 of 2 clean runs verified):** `repair-20261008-render-enabled` is staged from a
-clean commit; package integrity and all 29 manifest hashes pass. With the VM
-powered off, restore
-`02-test-signing-ready`, start it, and run the copy/paste command in the
-[VM guide](../../operations/virtual-cable-vm-guide.md). Two clean smoke runs
-are required before tone or Verifier. See the latest follow-up below for why
-both the naming category and default-enable policy must be changed together.
+**VM Session 2 (user action, two smoke runs verified):** continue in the
+current clean VM using package `repair-20261008-render-enabled`. Run the
+Session 2 preflight/install/status block in the
+[VM guide](../../operations/virtual-cable-vm-guide.md), then inspect the
+format/period inventory before tone or Verifier. The second smoke removed
+the driver and restored the baseline; Session 2 installs and keeps it.
 
 After two clean A1–A3/A14 runs show the four Cable A/B Input/Output names,
 continue sessions 2–5: WP-04 (Verifier + fuzz, second user), WP-05 (60
@@ -1067,6 +1067,17 @@ Windows default roles did not change; uninstall restored the full baseline.
 The combined naming/default-enable fix is confirmed for this single install.
 Next: restore `02-test-signing-ready` and run the same candidate again. Two-run
 gate is 1/2; tone, formats, Verifier and later sessions remain pending.
+
+Second clean runtime pass verified (2026-10-08 19:20): archive
+`C:\VMs\ar-share\evidence-20261008-192120.zip`, SHA-256
+`B04D885E35FC2A4C4EE0AA0696DEBC1D2637DAA6321316B338B98F2941FF766E`.
+Same clean package; preflight and A1/A2/A3/A14 passed again. All four names
+and render/capture flows are correct, default roles remained unchanged, and
+uninstall restored the baseline. Session 1 naming/install/remove gate is
+**2/2 passed**. This qualifies the initial VCAB-02 names, not rename,
+ID persistence or audio quality. Next action: Session 2 install/status with
+the existing package, inspect 60-format and minimum-period inventory, then
+set up listening and run the tone tests only after that inventory passes.
 
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
