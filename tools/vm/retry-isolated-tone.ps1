@@ -27,11 +27,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Installed-driver status failed. Send the outpu
 Write-Host ''
 Write-Host 'Before the check starts:' -ForegroundColor Cyan
 Write-Host '  1. Enable Cable B Output Listen.'
-Write-Host '  2. Open Cable A Input and have its Test button ready.'
-Write-Host '  3. Press Enter below, then click Test during the 30-second tone run.'
-Write-Host 'Do not wait for the tone run to finish before clicking Test.'
-Read-Host 'Press Enter when ready to start the 30-second check' | Out-Null
-Write-Host 'Starting in 5 seconds. Click Cable A Input Test as soon as the tone run starts.' -ForegroundColor Yellow
+Write-Host '  2. In Media Player, select a sound file, enable Repeat, and set its output to Cable A Input.'
+Write-Host '  3. Have the file ready to play. It must keep playing for the full 30-second check.'
+Read-Host 'Press Enter when Media Player is ready' | Out-Null
+Write-Host 'Starting in 5 seconds. Start playback as soon as the tone run begins, and leave it playing until the run ends.' -ForegroundColor Yellow
 Start-Sleep -Seconds 5
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step tone -ToneSeconds 30
 $toneExit = $LASTEXITCODE

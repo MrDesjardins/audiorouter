@@ -276,6 +276,10 @@ pub(super) fn render(
                     .free
                     .pop()
                     .ok_or("recording buffer pool exhausted; disk worker stalled")?;
+                // Drain a just-published successor immediately. Sleeping
+                // here adds an avoidable blind interval when Windows
+                // publishes adjacent render quanta in a burst.
+                continue;
             }
             Err(
                 NativeBridgeRegionError::Empty
@@ -620,10 +624,17 @@ mod tests {
                 .write_f64(1, 1, &[0.25; 960])
                 .unwrap();
             until(|| state.render_blocks.load(Ordering::Acquire) == 1);
+            mapping
+                .region
+                .as_ref()
+                .unwrap()
+                .write_f64(1, 2, &[0.5; 960])
+                .unwrap();
+            until(|| state.render_blocks.load(Ordering::Acquire) == 2);
             state.stop.store(true, Ordering::Release);
             worker.join().unwrap().unwrap();
         });
-        assert_eq!(state.render_blocks.load(Ordering::Acquire), 1);
+        assert_eq!(state.render_blocks.load(Ordering::Acquire), 2);
         assert_eq!(state.render_gaps.load(Ordering::Relaxed), 0);
     }
 

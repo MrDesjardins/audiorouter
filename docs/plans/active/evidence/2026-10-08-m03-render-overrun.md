@@ -188,3 +188,26 @@ the script. Collect and review its archive. Retry the 600-second run only
 after the short run passes; keep the VM in the foreground and loop the audio
 stimulus continuously. The previous 10-minute run still has its independent
 capture underrun and remains unqualified.
+
+## 2026-10-08 short retry — post-start render gap
+
+- Guest archive: `C:\VMs\ar-share\evidence-20261008-221304.zip`
+- SHA-256: `D231DE404A80BA2BDA9A9E1BE2C234449765C412C1DAFC1C18C2706F8E1255A3`
+- The new startup ordering was active (`render worker polling before lease
+  activation`). At 996 ms the reader had consumed through sequence 2, then saw
+  sequence 4 instead of 3. The driver reported one 480-frame overrun; the WAV
+  contained two blocks. Capture counters stayed zero. The poll gap at the
+  detection was 2,022 μs and the maximum was 6,249 μs. The run fails the
+  unchanged zero-error gate.
+- This run used the brief Windows Test sound. It does not establish whether
+  the skipped block came from an audio callback publishing quanta in a burst
+  or a delayed reader poll; the current trace cannot distinguish those causes.
+- The render worker now immediately polls again after successfully consuming a
+  block, instead of sleeping 1 ms first. Empty polls still sleep to avoid a
+  busy loop. The retry script now requests a looping Media Player source on
+  Cable A Input for the full 30 seconds, so the guest check exercises sustained
+  render traffic rather than a brief startup sample.
+
+Next: rerun the updated 30-second bundle with the audio file looping into
+Cable A Input for the entire check. Do not start the 600-second test until the
+short run passes; keep the original zero-counter criterion.

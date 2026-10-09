@@ -1475,6 +1475,17 @@ criterion and do not retry the 600-second gate until the short guest test
 passes. Full archive and run details are in the
 [render-overrun evidence](evidence/2026-10-08-m03-render-overrun.md).
 
+That short retry confirmed startup polling was fixed but still observed
+sequence 2 followed by sequence 4 at 996 ms, with one 480-frame render
+overrun. The run used only the brief Windows Test sound, and the current trace
+cannot distinguish a callback burst from delayed reader scheduling. The
+render worker now repolls immediately after a successful read rather than
+sleeping 1 ms before the next poll. The retry script now requires a sound file
+looped to Cable A Input for the full 30 seconds. The updated guest retry is
+pending; keep the zero-error gate and do not run the 600-second test yet.
+Archive and details are in the
+[render-overrun evidence](evidence/2026-10-08-m03-render-overrun.md).
+
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
 use the capture-sink acknowledgement (`consumer_sequence`) for producer
