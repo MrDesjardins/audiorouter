@@ -1182,6 +1182,48 @@ and verify those two files, run 30 seconds with existing Listen setup, then
 collect/copy and locate when underrun counts first rise. The producer bug
 is not marked repaired. Jev remains unrun (prior external-upload rejection).
 
+2026-10-08 20:16 diagnostic trace verified: archive
+`evidence-20261008-201644.zip`, SHA-256
+`CA1C2447E49362C1EFC5391C407D2B9FBF2B01C31C333F181B942A8F1200370A`.
+Counters are zero at lease-open/first-write, 96 underrun frames at 1 second,
+144 at 2 seconds, and 192 at 22 seconds through exit. The late 48-frame
+increment disproves a startup-only diagnosis. Other error counters remain
+zero. 3000 capture blocks written, 765 render blocks/367200 frames recorded.
+Do not retry the long test or change acceptance thresholds.
+
+### Proposed buffering decision — pending user approval
+
+The review found a structural limitation: the capture callback requests a
+new bridge block only after its scratch is exhausted; a producer busy publishing
+or a callback catching up cannot wait for user mode and currently outputs
+counted silence. The trace proves runtime starvation, but not which timing
+race caused each increment. Proposal for VCAB-24/25/28 and SEC-08:
+
+1. Add one fixed preallocated capture prefetch block per stream. Opportunistically
+   copy/acknowledge the next valid block while the current block still has
+   samples; retain both blocks and consume strictly by sequence. No shared
+   protocol/layout, helper command, endpoint identity or format change.
+2. Preserve generation/format boundaries: reset both valid lengths on
+   generation change, unusable format, stop and teardown; never replay stale
+   audio. An empty queue still yields silence and increments the true underrun
+   counter. No allocation, wait, lock or logging in the audio callback.
+3. Add offline regressions for publication-in-progress, partial block reads,
+   callback batches across two blocks, missing-block silence, no duplicates,
+   generation/format changes and bounded memory. Test the owning buffering
+   logic rather than merely checking source strings.
+4. Record fixed memory increase and added buffered duration; measure the
+   existing latency gate rather than assuming prefetch is free. Build/sign
+   only after regressions, diff review and host checks pass; user VM checks
+   30 seconds, then 600 seconds, deliberate stall and 8-channel operation.
+5. Rollback: restore the clean guest snapshot and retain prior package/tool
+   plus archived evidence; no host driver loading.
+
+Implementation is pending the design decision required by this plan's rule 9
+("If a WP finds the design wrong ... ask the user before continuing"). Existing
+diagnostic and acceptance code is preserved; no counter reset or speculative
+kernel patch was made. Next action: approve/reject the bounded capture-prefetch
+proposal, then implement and verify it before requesting another VM run.
+
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
 use the capture-sink acknowledgement (`consumer_sequence`) for producer

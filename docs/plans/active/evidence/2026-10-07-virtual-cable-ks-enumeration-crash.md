@@ -592,3 +592,25 @@ script SHA-256:
 Only those files are updated in the guest; installed driver, endpoint
 configuration and certificate stay as previously verified. The underrun
 root cause remains open until this diagnostic evidence arrives.
+
+## 2026-10-08 20:16: underrun increased during playback
+
+Archive `C:\VMs\ar-share\evidence-20261008-201644.zip`, SHA-256
+`CA1C2447E49362C1EFC5391C407D2B9FBF2B01C31C333F181B942A8F1200370A`.
+User's pasted output reports zero at lease-open/first-write, 96 missing frames
+at 1001 ms, 144 at 2003 ms, unchanged through 21026 ms, and 192 at 22028 ms
+through final counters. Thus 48 frames (1 ms at 48 kHz) were lost during
+steady playback, not only setup/shutdown. The final total is 192 frames
+(4 ms); every other capture/render error counter is zero. Producer completed
+3000 blocks, render recorded 765 blocks/367200 frames, final report completeness
+passed, zero-counter gate failed. Intermittent render input reflects the Sound
+panel Test actions and does not qualify sustained render continuity.
+
+Source review: WaveRT fetches only when scratch is exhausted, and a busy or
+unavailable shared block produces silence immediately. The exact per-callback
+race is unmeasured; the trace does not justify blaming VM scheduling or
+discounting startup counts. The active plan now contains a concrete proposal
+for one fixed capture prefetch block, with ordering, retirement, regression,
+memory/latency and rollback checks. It preserves the shared ABI and all
+acceptance thresholds. Approval is pending under the active plan's rule 9;
+no kernel buffering behavior has been changed yet. Keep VM retries paused.
