@@ -402,14 +402,15 @@ takes effect when the helper restarts the device (about 1 s pause).
   counts `UnderrunFrames`). After the producer stops, at most the one
   unread quantum (≤ 4096 frames, ≤ 93 ms at 44.1 kHz) can still play, well
   inside VDEV-12's 500 ms.
-- **Names (decision):** the driver does not read `Cables\<n>\Name`. The
-  standard Windows speaker endpoint name is fixed to `Speakers`, and standard
-  line pins produce generic `Line` names. Each cable bridge pin therefore
-  uses its own custom category GUID, registered with its
-  `AudioRouter Cable <letter> Input` or `Output` name in the device software
-  key. The helper identifies a cable from that stable category description,
-  with a composed-name fallback for older test packages, and counts only
-  active endpoints whose actual data flow matches the cable direction.
+- **Names (decision):** the driver does not read `Cables\<n>\Name`. Windows
+  hardcodes `Speakers` for speaker endpoints, so render bridge pins use the
+  standard analog-connector category and a cable-specific pin `Name` GUID.
+  Capture bridge pins use cable-specific category GUIDs. The INF registers
+  these GUID/name pairs in the device software key as
+  `AudioRouter Cable <letter> Input` or `Output`. The helper identifies a
+  cable from that stable description, with a composed-name fallback for older
+  test packages, and counts only active endpoints whose actual data flow
+  matches the cable direction.
   Custom user names are written by the
   elevated helper as the endpoint's `PKEY_Device_FriendlyName`, preserving
   the driver-provided `PKEY_Device_DeviceDesc` category identity and endpoint
@@ -417,14 +418,13 @@ takes effect when the helper restarts the device (about 1 s pause).
   `AudioRouter Discord Output (AudioRouter Virtual Cable)`. The driver
   interface names remain stable across user renames and driver updates. The
   root PnP device description is `AudioRouter Virtual Cable`.
-- **Observed VM defect (2026-10-07/08):** the INF interface names and an
-  explicit `DEVPKEY_DeviceInterface_FriendlyName` property still produced
-  two `Speakers (AudioRouter Virtual Cable)` and two
-  `Line (AudioRouter Virtual Cable)` endpoints. Windows created four healthy
-  endpoint children, but the duplicate names did not identify cable or
-  direction. The implementation now uses a distinct registered bridge-pin
-  category for each cable direction. WP-03 VM evidence must verify the names
-  and endpoint flow before this behavior is qualified.
+- **Observed VM defect (2026-10-08):** the first category-based package
+  created four healthy endpoints and correctly named both capture endpoints,
+  but Windows still returned `Speakers (AudioRouter Virtual Cable)` for both
+  render endpoints. The speaker label is fixed, and the helper could not
+  identify the two render cables. The follow-up uses analog-connector render
+  pins with cable-specific pin `Name` GUIDs. The revised names remain
+  unqualified until a new VM install confirms all four cable/direction names.
 
 ### 5.6 INF and package
 

@@ -18,15 +18,16 @@ $generated = Get-Content -LiteralPath $first -Raw
 if (([regex]::Matches($generated, '(?m)^AddInterface=')).Count -ne 80) {
     throw 'Generated INF must contain 80 cable interfaces.'
 }
-if (([regex]::Matches($generated, '(?m)^HKR,MediaCategories\\%GUID\.Cable[A-H](Render|Capture)PinCategory%,Name,,%Name\.Cable[A-H](Render|Capture)PinCategory%\r?$')).Count -ne 16) {
-    throw 'Generated INF must register 16 unique per-cable bridge-pin categories.'
+if (([regex]::Matches($generated, '(?m)^HKR,MediaCategories\\%GUID\.Cable[A-H]RenderPinName%,Name,,%Name\.Cable[A-H]RenderPinName%\r?$')).Count -ne 8 -or
+    ([regex]::Matches($generated, '(?m)^HKR,MediaCategories\\%GUID\.Cable[A-H]CapturePinCategory%,Name,,%Name\.Cable[A-H]CapturePinCategory%\r?$')).Count -ne 8) {
+    throw 'Generated INF must register eight render pin names and eight capture pin categories.'
 }
 foreach ($expected in @(
         'WaveCableARender', 'TopologyCableACapture',
         'WaveCableHRender', 'TopologyCableHCapture',
         'AudioRouter Cable A Input', 'AudioRouter Cable A Output',
         'AudioRouter Cable H Input', 'AudioRouter Cable H Output',
-        'Name.CableARenderPinCategory="AudioRouter Cable A Input"',
+        'Name.CableARenderPinName="AudioRouter Cable A Input"',
         'Name.CableHCapturePinCategory="AudioRouter Cable H Output"')) {
     if (-not $generated.Contains($expected)) { throw "Generated INF omitted $expected." }
 }
@@ -39,12 +40,12 @@ try { & $generator -CableList $invalid -OutputInf (Join-Path $output 'bad.inx') 
 catch { $rejected = $true }
 if (-not $rejected) { throw 'Non-contiguous cable identities must be rejected.' }
 $duplicate = Get-Content -LiteralPath $cableList -Raw | ConvertFrom-Json
-$duplicate.cables[2].renderPinCategoryGuid = $duplicate.cables[0].renderPinCategoryGuid
+$duplicate.cables[2].renderPinNameGuid = $duplicate.cables[0].renderPinNameGuid
 $duplicatePath = Join-Path $output 'duplicate-pin-categories.json'
 $duplicate | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $duplicatePath -Encoding UTF8
 $rejected = $false
 try { & $generator -CableList $duplicatePath -OutputInf (Join-Path $output 'duplicate.inx') | Out-Null }
 catch { $rejected = $true }
-if (-not $rejected) { throw 'Duplicate pin categories must be rejected.' }
+if (-not $rejected) { throw 'Duplicate pin names must be rejected.' }
 & $generator -Check | Out-Null
 Write-Output 'M03 cable INF generator acceptance passed (80 interfaces, deterministic output, invalid list rejected).'

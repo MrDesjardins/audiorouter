@@ -61,12 +61,17 @@ if (-not $miniPairs.Contains('&DEVPKEY_KsAudio_PacketSize_Constraints2') -or
 }
 $pinCategoryGuids = Join-Path $workspace 'drivers/audiorouter-virtual/Source/Filters/cabletopotable.h'
 $pinCategoryGuids = Get-Content -LiteralPath $pinCategoryGuids -Raw
-if (([regex]::Matches($pinCategoryGuids, 'static const GUID Cable[A-H](Render|Capture)PinCategory')).Count -ne 16 -or
-    ([regex]::Matches($infSource, '(?m)^HKR,MediaCategories\\%GUID\.Cable[A-H](Render|Capture)PinCategory%,Name,,%Name\.Cable[A-H](Render|Capture)PinCategory%\r?$')).Count -ne 16) {
-    throw 'each cable bridge pin must have one unique registered Windows pin category and name'
+if (([regex]::Matches($pinCategoryGuids, 'static const GUID Cable[A-H]RenderPinName')).Count -ne 8 -or
+    ([regex]::Matches($pinCategoryGuids, 'static const GUID Cable[A-H]CapturePinCategory')).Count -ne 8 -or
+    ([regex]::Matches($infSource, '(?m)^HKR,MediaCategories\\%GUID\.Cable[A-H]RenderPinName%,Name,,%Name\.Cable[A-H]RenderPinName%\r?$')).Count -ne 8 -or
+    ([regex]::Matches($infSource, '(?m)^HKR,MediaCategories\\%GUID\.Cable[A-H]CapturePinCategory%,Name,,%Name\.Cable[A-H]CapturePinCategory%\r?$')).Count -ne 8) {
+    throw 'each render bridge pin name and capture bridge pin category must be uniquely registered'
 }
-foreach ($required in @('&Cable##letter##RenderPinCategory', '&Cable##letter##CapturePinCategory')) {
-    if (-not $topologyTable.Contains($required)) { throw "per-cable topology category is not assigned: $required" }
+foreach ($required in @('&Cable##letter##RenderPinName', '&KSNODETYPE_ANALOG_CONNECTOR', '&Cable##letter##CapturePinCategory')) {
+    if (-not $topologyTable.Contains($required)) { throw "per-cable bridge pin naming/type is not assigned: $required" }
+}
+if (-not $topologyTable.Contains('KSPIN_DATAFLOW_OUT, KSPIN_COMMUNICATION_NONE, &KSNODETYPE_ANALOG_CONNECTOR, &Cable##letter##RenderPinName')) {
+    throw 'render bridge must pair the analog-connector category with its cable-specific pin Name GUID'
 }
 if (-not $bridgeHeader.Contains('#define AR_BRIDGE_LEASE_SLOTS (AR_BRIDGE_MAX_CABLES * 2)')) {
     throw 'bridge lease table must reserve one slot per cable and direction'

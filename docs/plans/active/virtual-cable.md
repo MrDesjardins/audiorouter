@@ -240,6 +240,32 @@ are recorded in [WP-02 evidence](evidence/2026-10-05-virtual-cable-wp02.md).
 - **Status:** implementation and host validation in progress; VM validation
   pending.
 
+### Render-name follow-up (2026-10-08, VM evidence)
+
+- **Finding:** the retried package created four healthy endpoint children.
+  Both capture endpoints expose their cable-specific names, while both render
+  endpoints are `Speakers (AudioRouter Virtual Cable)`. The helper therefore
+  sees only two identifiable endpoints. Its remove command succeeded and the
+  before/after snapshots match. Evidence:
+  `C:\VMs\ar-share\evidence-20261008-172141.zip`, especially
+  `20261008-172014-smoke\runner\endpoint-names-on-install-failure.json`,
+  `helper-remove.json`, and the baseline snapshots.
+- **Correction:** the prior assumption that a custom category would replace
+  the render speaker label was disproved. Microsoft documents the speaker
+  endpoint label as fixed. The render bridge currently uses a custom category
+  yet Windows still exposes the fixed `Speakers` name.
+- **Ordered work:** use `KSNODETYPE_ANALOG_CONNECTOR` for the render bridge
+  and a per-cable bridge-pin `Name` GUID registered in the device software
+  key. Keep capture's observed per-cable category naming and the helper's
+  strict flow/name checks. Add source/INF generation guards, rebuild and
+  stage a fresh package, then use the VM to verify all four names and clean
+  removal before repeating A1/A2/A3/A14.
+- **Validation:** driver build, INF generation, package signature and hash
+  checks, plus focused driver and VM-guard checks. The render-name behavior
+  remains unqualified until observed in a new VM installation.
+- **Rollback:** restore `02-test-signing-ready` and retry the prior reviewed
+  package if this test package fails. Do not load it on the host.
+
 #### Review before VM retry (2026-10-08)
 
 Review scope: the pending category package, native helper classification,
@@ -869,12 +895,19 @@ published app keeps the VB-Cable workflow. Reverting DEC-18 restores DEC-16.
 
 ## Next action
 
-**User (blocking):** set up the VM and run sessions 1–5 of the
-[VM guide](../../operations/virtual-cable-vm-guide.md). They cover WP-01
-(VM, snapshots), WP-03 (A1–A3, A14, twice), WP-04 (Verifier + fuzz, second
-user), WP-05 (names, 60 formats, ≤128-frame period, 2→8→2 IDs), WP-06 (tone
-both ways, counters, 8 ch/96 kHz) and WP-07 (helper install/status/
-set-cables/configure/remove). Send each session's evidence zip.
+**Host build environment (blocking):** repair the installed Visual Studio
+linker/PDB toolchain. The current x64 build compiles the driver objects but
+fails at link with `LNK1101: incorrect MSPDB140.DLL version`. After the build
+passes, create and verify a fresh test-signed package and stage it in the
+share. The user should keep the VM off the old package until then.
+
+**User (after a fresh package is ready):** restore `02-test-signing-ready`
+and run the copy/paste smoke command in the
+[VM guide](../../operations/virtual-cable-vm-guide.md). Continue sessions
+1–5 only after two clean A1–A3/A14 runs show the four Cable A/B Input/Output
+names. The sessions then cover WP-04 (Verifier + fuzz, second user), WP-05
+(60 formats, ≤128-frame period, 2→8→2 IDs), WP-06 (tone both ways, counters,
+8 ch/96 kHz) and WP-07 (helper install/status/set-cables/configure/remove).
 
 The 2026-10-07 failure and repaired-package replay are recorded in
 [the crash follow-up evidence](evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md).
@@ -899,19 +932,21 @@ identity is in the bridge-pin naming path. Full evidence is in the
 Do not proceed to tone or Verifier until the required endpoint names appear.
 Two clean smoke runs are still required before tone or Verifier sessions.
 
-The revised source now uses unique custom bridge-pin category GUIDs per cable
-and direction, generated and registered from one manifest. The ineffective
-per-interface name override is removed; the helper stays strict. WDK build,
-INF generation, 215 driver checks, 31 VM guards, documentation, Jev, and the
-33-check package integrity validation pass. The x64 test-signed package is
-staged at `C:\VMs\ar-share\repair-20261008-reviewed`; VM validation is
-pending. The subsequent review fixed helper parsing, rename identity, stale
-MMDevice counting and failure evidence. Jev awaits approval for its source
-export. Next: have the user restore `02-test-signing-ready`, then run the
-single `retry-smoke.ps1` command in the VM guide; it copies and verifies the
-package before preflight, smoke and collection. Confirm four distinct Cable A/B
-Input/Output names and two consecutive clean smoke runs before tone or
-Verifier.
+The first revised package (`repair-20261008-reviewed`) was copied and verified
+in the VM. Preflight passed 15/15 checks; smoke found two named endpoints,
+both captures, while render endpoints remained `Speakers (AudioRouter Virtual
+Cable)`. Cleanup and collection passed; see the 2026-10-08 evidence above.
+The code now uses `KSNODETYPE_ANALOG_CONNECTOR` plus per-cable bridge-pin
+`Name` GUIDs on render and keeps custom categories on capture. INF generation
+and the 274-check VM guard suite pass. The C++ sources compile, but the local
+WDK build cannot link: `LINK : fatal error LNK1101: incorrect MSPDB140.DLL
+version` for `Source/Main/Main.vcxproj`. Log:
+`target/driver-render-naming-build/build.log`. No new signed package is
+available, and the VM must not retry the previous package. Once the MSVC/WDK
+linker installation is repaired, build and sign a fresh x64 package, verify
+its manifest, stage it in the share, and rerun A1/A2/A3/A14. Confirm four
+distinct Cable A/B Input/Output names and two clean smoke runs before tone or
+Verifier. Jev still awaits approval for its source export.
 
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
