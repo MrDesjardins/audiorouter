@@ -1262,6 +1262,57 @@ copy acknowledgement means private buffering, not completed playback; the
 short diagnostic and its counters do not substitute for external capture,
 fidelity or impulse latency qualification. VCAB-24/25/28 remain open.
 
+2026-10-08 20:36 candidate failed VCAB-24: archive
+`evidence-20261008-203731.zip`, SHA-256
+`8EDD4624AA55FE2619F7C866516BB2B5085118E7B05BE5B11C8460088FE54833`.
+Install and all four 60-format inventories passed. Capture underruns were
+already 480 at lease-open/first-write, 576 at 1 second, 624 at 4 seconds,
+and 672 at exit. Render was never stimulated: zero blocks and a header-only
+WAV; its zero counters are not render streaming evidence. Prefetch alone did
+not resolve the defect and is not qualified.
+
+Source review found the missing integration: TimerNotifyRT runs every 1 ms
+but skips UpdatePosition until a notification is due (10 ms here). Capture
+prefetch therefore cannot build headroom between notifications. The tone tool
+also opens the capture lease before opening render, creating its WAV and
+allocating/filling samples, exposing an active empty lease during setup.
+Within the approved bounded-prefetch repair, next tasks are: service capture
+DMA on each RUN timer tick while keeping notification/packet cadence unchanged;
+prime the first validated capture block before broker OPEN, with all other
+setup completed first; test timer integration plus actual primed mapped-session
+contents/sequence/error cleanup; rerun WDK, focused Rust tests/Clippy/format,
+VM guards/package checks and stage a clean candidate. No counter subtraction
+or startup exemption. Rollback remains the clean snapshot/prior package.
+
+Implemented the missing timer integration and primed capture startup.
+Offline queue/timing suite passed 254 checks, including a model that fails
+with notification-only service and passes with per-tick service under a
+one-tick producer delay and notification overshoot. This is simulation, not
+kernel timing evidence. The actual mapped-session priming test passed:
+sequence 1 and all samples are readable before broker OPEN, the next write
+is sequence 2, and wrong direction/invalid samples remove the owned file.
+Seven existing session tests and four tone-tool tests passed; crate/all-target
+Clippy and both Rust formatting checks passed (compiler reported a cache
+hard-link fallback, not a code lint). Logs: `target/primed-session-tests.txt`,
+`target/capture-tick-session-tests.txt`, `target/capture-tick-tone-tests.txt`,
+`target/capture-tick-clippy.txt`, `target/driver-unit-release/tests.log`.
+The failed prefetch-only candidate remains preserved; there is no accepted
+runtime continuity result yet. Next: complete WDK/package/VM guard checks,
+stage a clean candidate and request only install/status followed by a
+30-second trace with both capture listening and render Test stimulus.
+
+Review also caught a compatibility risk from faster DMA updates: the old
+byte-rate arithmetic can advance by partial frames at 44.1 kHz. UpdatePosition
+now rounds displacement down to complete frames and carries the fractional
+byte numerator modulo `1000 * nBlockAlign`. The shared helper is tested for
+all three supported rates and all seven possible frame byte sizes across
+1000 one-millisecond updates: exact one-second sample totals, zero remaining
+carry, and no partial frame. Invalid zero alignment fails closed. Final native
+suite: 276 checks. This preserves the existing rate/format contract (VCAB-11/12)
+while servicing capture between notifications. WDK acceptance, 275 VM guards,
+PowerShell output/counter regression, docs and diff checks passed; ASan/Jev
+limitations remain as recorded above. No host driver loading occurred.
+
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
 use the capture-sink acknowledgement (`consumer_sequence`) for producer

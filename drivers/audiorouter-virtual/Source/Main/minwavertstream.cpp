@@ -1407,6 +1407,7 @@ VOID CMiniportWaveRTStream::UpdatePosition
     // the DMA buffer and byte rate are valid; in particular, this prevents a
     // zero-sized modulo on an early or late callback.
     if (m_pDmaBuffer == NULL || m_ulDmaBufferSize == 0 || m_ulDmaMovementRate == 0 ||
+        m_pWfExt == NULL || m_pWfExt->Format.nBlockAlign == 0 ||
         m_ullPerformanceCounterFrequency.QuadPart == 0 ||
         ilQPC.QuadPart < 0 ||
         static_cast<ULONGLONG>(ilQPC.QuadPart) < m_ullDmaTimeStamp)
@@ -1452,7 +1453,7 @@ VOID CMiniportWaveRTStream::UpdatePosition
 
     // Calculate how many bytes in the DMA buffer would have been processed in the elapsed
     // time.  Note that the division by 1000 to convert to milliseconds may cause us to
-    // lose some bytes, so we will carry the remainder forward to the next GetPosition() call.
+    // lose part of a sample frame, so carry that fraction to the next call.
     //
     // need to divide by 1000 because m_ulDmaMovementRate is average bytes per sec.
 
@@ -1465,15 +1466,17 @@ VOID CMiniportWaveRTStream::UpdatePosition
         return;
     }
     byteNumerator += m_byteDisplacementCarryForward;
-    ULONGLONG byteDisplacementWide = byteNumerator / 1000;
+    const ULONG frameDenominator = 1000UL * m_pWfExt->Format.nBlockAlign;
+    ULONGLONG byteDisplacementWide = AudioRouterFrameAlignedByteCount(
+        byteNumerator, m_pWfExt->Format.nBlockAlign);
     if (byteDisplacementWide > MAXULONG)
     {
         m_ullDmaTimeStamp = static_cast<ULONGLONG>(hnsCurrentTime);
-        m_byteDisplacementCarryForward = static_cast<ULONG>(byteNumerator % 1000);
+        m_byteDisplacementCarryForward = static_cast<ULONG>(byteNumerator % frameDenominator);
         return;
     }
     ULONG ByteDisplacement = static_cast<ULONG>(byteDisplacementWide);
-    m_byteDisplacementCarryForward = static_cast<ULONG>(byteNumerator % 1000);
+    m_byteDisplacementCarryForward = static_cast<ULONG>(byteNumerator % frameDenominator);
 
     // These counters are monotonic and are consumed by PortCls position
     // queries.  Do not let a long-lived stream wrap either counter and expose
@@ -2024,6 +2027,14 @@ TimerNotifyRT
         bufferCompleted = TRUE;
     }
 
+    // Capture must fetch/ack blocks between notifications, while its current
+    // scratch still has samples. Waiting for a full packet here makes even
+    // two private buffers unable to establish producer headroom.
+    if (_this->m_bCapture && _this->m_KsState == KSSTATE_RUN)
+    {
+        _this->UpdatePosition(qpc);
+    }
+
     if (!bufferCompleted && !_this->m_bEoSReceived)
     {
         goto End;
@@ -2039,7 +2050,10 @@ TimerNotifyRT
         goto End;
     }
 
-    _this->UpdatePosition(qpc);
+    if (!_this->m_bCapture)
+    {
+        _this->UpdatePosition(qpc);
+    }
 
     if (!_this->m_bEoSReceived)
     {

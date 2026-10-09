@@ -39,7 +39,68 @@ static AR_BRIDGE_OPEN_REQUEST validRequest() {
     request.MappingBytes = AR_BRIDGE_HEADER_BYTES + 128 * 2 * sizeof(DOUBLE);
     return request;
 }
+// Offline model: the producer refills one tick after an acknowledgement.
+// A notification arriving 1 ms late must not exhaust a prefetched queue.
+// It uses the same queue methods as WaveRT; it is not kernel timing evidence.
+static ULONG captureTimerUnderruns(bool serviceEveryTick) {
+    AudioRouterCaptureQueue queue = {};
+    queue.Reset();
+    ULONG lastTick = 0;
+    ULONG publishAt = 0;
+    ULONGLONG published = 1;
+    bool ready = true;
+    ULONG underruns = 0;
+    for (ULONG tick = 1; tick <= 100; ++tick) {
+        if (!ready && tick >= publishAt) { ++published; ready = true; }
+        const bool notification = tick == 10 || tick == 21 ||
+            (tick >= 30 && tick % 10 == 0);
+        if (!serviceEveryTick && !notification) { continue; }
+        auto prefetch = [&]() {
+            queue.Prefetch([&](ULONG, ULONGLONG) {
+                if (!ready) { return false; }
+                ready = false;
+                publishAt = tick + 1;
+                return queue.Commit(480, published);
+            });
+        };
+        prefetch();
+        ULONG due = (tick - lastTick) * 48;
+        lastTick = tick;
+        while (due != 0 && queue.Available() != 0) {
+            const ULONG take = due < queue.Available() ? due : queue.Available();
+            queue.Consume(take);
+            due -= take;
+            prefetch();
+        }
+        underruns += due;
+    }
+    return underruns;
+}
 int main() {
+    const ULONG clockRates[] = { 44100, 48000, 96000 };
+    const USHORT frameSizes[] = { 2, 4, 8, 12, 16, 24, 32 };
+    for (ULONG rate : clockRates) {
+        for (USHORT frameBytes : frameSizes) {
+            if (frameBytes == 0) { std::exit(1); }
+            ULONGLONG carry = 0;
+            ULONGLONG total = 0;
+            bool aligned = true;
+            for (ULONG tick = 0; tick < 1000; ++tick) {
+                const ULONGLONG numerator = static_cast<ULONGLONG>(rate) * frameBytes + carry;
+                const ULONGLONG bytes = AudioRouterFrameAlignedByteCount(numerator, frameBytes);
+                aligned = aligned && bytes % frameBytes == 0;
+                total += bytes;
+                carry = numerator % (1000ULL * frameBytes);
+            }
+            require(aligned && total == static_cast<ULONGLONG>(rate) * frameBytes && carry == 0,
+                "one-millisecond DMA updates preserve full frames and exact one-second sample count");
+        }
+    }
+    require(AudioRouterFrameAlignedByteCount(1234, 0) == 0, "zero frame size fails closed");
+    require(captureTimerUnderruns(false) != 0,
+        "notification-only capture service reproduces jitter starvation");
+    require(captureTimerUnderruns(true) == 0,
+        "per-tick capture service builds a reserve without counted silence");
     AudioRouterCaptureQueue queue = {};
     queue.Reset();
     require(queue.Count == 0 && queue.Available() == 0, "capture starts empty");

@@ -270,15 +270,6 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
         "audiorouter-bridge-tone-{}-render.slot",
         std::process::id()
     ));
-    let mut capture = NativeBridgeController::create_with_section(
-        &options.device,
-        &capture_path,
-        hello(
-            &options.capture_bus,
-            audiorouter_protocol::AudioBridgeDirection::CaptureSink,
-        ),
-    )
-    .map_err(explain)?;
     let mut render = NativeBridgeController::create_with_section(
         &options.device,
         &render_path,
@@ -303,10 +294,24 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
         std::time::Duration::from_secs_f64(f64::from(options.frames) / f64::from(options.rate));
     let total_blocks =
         u64::from(options.seconds) * u64::from(options.rate) / u64::from(options.frames);
+    // Complete file/buffer/render setup before exposing the capture lease.
+    // Its first block is valid before OPEN; no startup counter is reset or
+    // subtracted to compensate for an active empty mapping.
+    fill_tone_block(&mut tone, options.channels, 0, options.rate);
+    let mut capture = NativeBridgeController::create_with_section_primed(
+        &options.device,
+        &capture_path,
+        hello(
+            &options.capture_bus,
+            audiorouter_protocol::AudioBridgeDirection::CaptureSink,
+        ),
+        &tone,
+    )
+    .map_err(explain)?;
     let start = std::time::Instant::now();
     let mut last_heartbeat = start;
     let mut last_render_sequence = 0_u64;
-    let mut written_blocks = 0_u64;
+    let mut written_blocks = 1_u64;
     let mut read_blocks = 0_u64;
     let mut stall_offset = std::time::Duration::ZERO;
     println!(
@@ -323,13 +328,17 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
     let run_for = std::time::Duration::from_secs(u64::from(options.seconds));
     let stall_at = start + run_for / 2;
     let mut stalled = options.stall_ms == 0;
-    let mut next_block = 0_u64;
-    let mut last_written = 0_u64;
+    let mut next_block = 1_u64;
+    let mut last_written = 1_u64;
     let mut last_write_at = start;
     let mut last_ack = 0_u64;
     let mut last_ack_at = start;
     let mut last_progress = start;
     println!("lease-open capture={:?}", capture.counters());
+    println!(
+        "first-write (primed before OPEN) capture={:?}",
+        capture.counters()
+    );
     while start.elapsed() < run_for + stall_offset {
         let now = std::time::Instant::now();
         if !stalled && now >= stall_at {
@@ -368,9 +377,6 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
             last_write_at = now;
             next_block += 1;
             written_blocks += 1;
-            if written_blocks == 1 {
-                println!("first-write capture={:?}", capture.counters());
-            }
         }
         // The render-source lease holds one block (the newest). Poll faster
         // than one period so every block is read once; one replaced before we

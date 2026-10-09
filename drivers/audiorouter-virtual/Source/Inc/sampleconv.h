@@ -10,6 +10,16 @@
 #define AR_CABLE_FORMAT_PCM 1
 #define AR_CABLE_FORMAT_FLOAT32 2
 
+// ByteNumerator is bytes/second * elapsed milliseconds plus the prior
+// fractional carry. Advance only complete sample frames, including at 44.1
+// kHz on 1 ms callbacks. Division before multiplication cannot overflow.
+__forceinline unsigned long long AudioRouterFrameAlignedByteCount(
+    unsigned long long ByteNumerator, unsigned short FrameBytes)
+{
+    return FrameBytes == 0 ? 0 :
+        (ByteNumerator / (1000ULL * FrameBytes)) * FrameBytes;
+}
+
 // Keep the portable acceptance inventory alongside conversion logic. The
 // WDK tables use the same finite set (5 channel layouts x 3 rates x 4 forms).
 __forceinline bool AudioRouterCableFormatSupported(

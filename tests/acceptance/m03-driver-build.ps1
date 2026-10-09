@@ -552,6 +552,15 @@ $timerSource = $stream.Substring($timerStart)
 if (-not $timerSource.Contains('_this->UpdatePosition(qpc);')) {
     throw 'WaveRT timer callback does not reach the position-update bridge path'
 }
+$captureTick = $timerSource.IndexOf('if (_this->m_bCapture && _this->m_KsState == KSSTATE_RUN)')
+$captureUpdate = $timerSource.IndexOf('_this->UpdatePosition(qpc);', $captureTick)
+$notificationGate = $timerSource.IndexOf('if (!bufferCompleted && !_this->m_bEoSReceived)')
+if ($captureTick -lt 0 -or $captureUpdate -lt $captureTick -or
+    $notificationGate -le $captureUpdate -or
+    ([regex]::Matches($timerSource, '_this->UpdatePosition\(qpc\);')).Count -ne 2 -or
+    -not $timerSource.Contains('if (!_this->m_bCapture)')) {
+    throw 'capture timer must service DMA before the notification gate, without double updates'
+}
 $readBytesStart = $stream.IndexOf('VOID CMiniportWaveRTStream::ReadBytes')
 $readBytesEnd = $stream.IndexOf('BOOLEAN CMiniportWaveRTStream::RefreshBridgePublishShape', $readBytesStart)
 if ($readBytesStart -lt 0 -or $readBytesEnd -le $readBytesStart) {
@@ -683,6 +692,10 @@ if (-not $stream.Contains('ULONGLONG byteNumerator = static_cast<ULONGLONG>(m_ul
 }
 if (-not $stream.Contains('byteDisplacementWide > MAXULONG')) {
     throw 'WaveRT DMA displacement must fail closed when it exceeds ULONG capacity'
+}
+if (-not $stream.Contains('AudioRouterFrameAlignedByteCount(') -or
+    -not $stream.Contains('byteNumerator % frameDenominator')) {
+    throw 'DMA updates must preserve fractional carry and never advance by partial sample frames'
 }
 if (-not $stream.Contains('static_cast<ULONGLONG>(qpc.QuadPart) < _this->m_ullLastDPCTimeStamp')) {
     throw 'WaveRT timer callback must reject a backwards QPC sample before conversion'

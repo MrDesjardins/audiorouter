@@ -370,6 +370,13 @@ device in `Source/Main/adapter.cpp` and bridge helpers in
   buffering adds at most one quantum (10 ms at 480 frames/48 kHz). This
   does not waive VCAB-24/25/28: continuity, measured latency, and pool gates
   still require guest evidence.
+- Capture DMA and its private prefetch are serviced on each running 1 ms
+  timer tick, independently of the requested Windows notification period.
+  Packet numbers and notification events advance only at that requested
+  period. A primed capture constructor validates/publishes the first block
+  before broker OPEN makes the lease visible; prepare files/buffers first.
+  The driver retains that block while initializing only its counter/header
+  metadata. Startup errors remain part of the raw zero-counter gate.
 - The copy per callback is one bounded loop over the frames due; no
   per-sample function calls through pointers; conversion functions are
   `__forceinline` per format.

@@ -1033,9 +1033,8 @@ impl Drop for NativeBridgeDuplexWorker {
 #[cfg(windows)]
 /// Explicit owner of the driver lease and its broker-side mapped session.
 ///
-/// Construction claims the kernel lease before callers can publish blocks.
-/// The mapping is still broker-owned until the driver receives a future section
-/// handle; this type deliberately does not claim kernel access to the file view.
+/// Construction pins the mapped section through the broker OPEN. The primed
+/// capture constructor publishes its first block before making the lease active.
 pub struct NativeBridgeController {
     client: NativeBridgeControlClient,
     session: Option<NativeBridgeSession>,
@@ -1281,10 +1280,35 @@ impl NativeBridgeController {
         mapping_path: impl AsRef<std::path::Path>,
         hello: audiorouter_protocol::AudioBridgeHello,
     ) -> Result<Self, NativeBridgeControllerError> {
+        Self::create_with_section_initial(device_path, mapping_path, hello, None)
+    }
+
+    /// Publish a validated first capture block before broker OPEN makes the
+    /// lease visible to an already-running recording endpoint.
+    pub fn create_with_section_primed(
+        device_path: &str,
+        mapping_path: impl AsRef<std::path::Path>,
+        hello: audiorouter_protocol::AudioBridgeHello,
+        initial_samples: &[f64],
+    ) -> Result<Self, NativeBridgeControllerError> {
+        Self::create_with_section_initial(device_path, mapping_path, hello, Some(initial_samples))
+    }
+
+    fn create_with_section_initial(
+        device_path: &str,
+        mapping_path: impl AsRef<std::path::Path>,
+        hello: audiorouter_protocol::AudioBridgeHello,
+        initial_samples: Option<&[f64]>,
+    ) -> Result<Self, NativeBridgeControllerError> {
         let client = NativeBridgeControlClient::open(device_path)
             .map_err(NativeBridgeControllerError::Windows)?;
-        let session = NativeBridgeSession::create(&mapping_path, hello.clone())
-            .map_err(NativeBridgeControllerError::Session)?;
+        let session = match initial_samples {
+            Some(samples) => {
+                NativeBridgeSession::create_primed(&mapping_path, hello.clone(), samples)
+            }
+            None => NativeBridgeSession::create(&mapping_path, hello.clone()),
+        }
+        .map_err(NativeBridgeControllerError::Session)?;
         let section =
             match NativeBridgeSectionHandle::for_file(mapping_path, session.mapping_bytes() as u32)
             {
@@ -9300,6 +9324,21 @@ pub struct NativeBridgeSession {
 }
 
 impl NativeBridgeSession {
+    /// Prepare the capture mapping before kernel activation. Invalid samples
+    /// or direction remove the newly created file; no broker OPEN has run.
+    pub fn create_primed(
+        path: impl AsRef<std::path::Path>,
+        hello: audiorouter_protocol::AudioBridgeHello,
+        initial_samples: &[f64],
+    ) -> Result<Self, NativeBridgeSessionError> {
+        let mut session = Self::create(path, hello)?;
+        if let Err(error) = session.write_f64(initial_samples) {
+            let _ = session.remove_owned_mapping();
+            return Err(error);
+        }
+        Ok(session)
+    }
+
     pub fn create(
         path: impl AsRef<std::path::Path>,
         hello: audiorouter_protocol::AudioBridgeHello,
@@ -12609,6 +12648,55 @@ mod tests {
         );
         drop(reader);
         writer.remove_owned_mapping().unwrap();
+    }
+
+    #[test]
+    fn native_bridge_primed_session_is_readable_before_open_and_advances_sequence() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-primed-{}-{}.slot",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let hello = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: "cable-b".into(),
+            direction: audiorouter_protocol::AudioBridgeDirection::CaptureSink,
+            generation: 7,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            frames_per_quantum: 128,
+            lease_ms: 1_000,
+        };
+        let samples = vec![0.125; 256];
+        let mut writer =
+            NativeBridgeSession::create_primed(&path, hello.clone(), &samples).unwrap();
+        let mut reader_hello = hello.clone();
+        reader_hello.direction = audiorouter_protocol::AudioBridgeDirection::RenderSource;
+        let reader = NativeBridgeSession::open(&path, reader_hello.clone()).unwrap();
+        let mut output = vec![0.0; 256];
+        let header = reader.read_into_f64(&mut output).unwrap();
+        assert_eq!(
+            (header.generation, header.sequence, header.frames),
+            (7, 1, 128)
+        );
+        assert_eq!(output, samples);
+        assert_eq!(writer.write_f64(&samples).unwrap(), 2);
+        drop(reader);
+        writer.remove_owned_mapping().unwrap();
+
+        assert!(matches!(
+            NativeBridgeSession::create_primed(&path, reader_hello, &samples),
+            Err(NativeBridgeSessionError::WrongDirection)
+        ));
+        assert!(!path.exists());
+        for invalid in [vec![], vec![f64::NAN; 256], vec![0.0; 257]] {
+            assert!(NativeBridgeSession::create_primed(&path, hello.clone(), &invalid).is_err());
+            assert!(!path.exists(), "failed prime must remove its owned mapping");
+        }
     }
 
     #[test]
