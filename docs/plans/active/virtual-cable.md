@@ -1379,8 +1379,16 @@ recording/control interval, explicit backpressure and a visible 120 ms producer
 stall. Details and limits are in the
 [harness record](evidence/2026-10-08-isolated-tone-harness.md).
 
-Next action: build and stage the tool-only diagnostic, then review one
-30-second run on the already installed VM. Archives are retained; no kernel
+Tool-only diagnostic built from clean `bac0cc0d`, staged and hash-verified at
+`C:\VMs\ar-share\diagnostics-20261008-isolated-tone`; static CRT executable
+launch passed. No driver files copied. Formatting, focused Clippy, 275 guards,
+output/counter and docs checks passed; the full 11-test tone suite also passed
+ten consecutive runs. Jev/ASan limits are recorded in the harness evidence.
+
+Next action: inside the already installed VM, run
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File Z:\diagnostics-20261008-isolated-tone\retry-isolated-tone.ps1`
+with Cable B Listen enabled and Cable A Input Test stimulus, then review the
+30-second output/archive. Archives are retained; no kernel
 patch or threshold change. The VM continuity, fidelity and latency gates
 remain open; host regressions do not establish the prior runtime failure's
 precise cause.

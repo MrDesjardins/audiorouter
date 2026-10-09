@@ -74,7 +74,21 @@ Jev was not rerun: automatic approval review previously rejected uploading
 source to its external service. ASan remains unavailable with the installed
 MSVC runtime, as recorded in the active plan. Neither is a passing check.
 
-Next: stage a tool-only diagnostic for the already installed `dbf19e17` guest
+Tool-only diagnostic staged and all three copied file hashes matched:
+`C:\VMs\ar-share\diagnostics-20261008-isolated-tone`. Clean source
+`bac0cc0de611636b61946c9c35c743bfb7e41639`; staged at
+`2026-10-09T04:17:12.3464104Z`. Static CRT Release build passed with two build
+jobs (`RUSTFLAGS=-C target-feature=+crt-static`, `cargo build --locked --release
+--target-dir target\vm-tools -p audiorouter-windows-audio --example
+m03_bridge_tone`). The staged executable launched with `--help` and the
+expected exit 64; no host device was opened. Build/launch logs:
+`target/isolated-tone-release-build.txt`, `target/isolated-tone-release-launch.txt`.
+Tone executable SHA-256:
+`1B8D2E20225F21E1ED859DCD69D05F7137F2936BC00D020EC6676EA2BC8613EF`.
+The bundle's `diagnostics.json` records tool/script hashes and the required
+unchanged driver SHA-256. No driver files were copied.
+
+Next: use the staged diagnostic with the already installed `dbf19e17` guest
 driver, keep Cable B Output Listen active, stimulate Cable A Input, run only
 30 seconds and review collected evidence. VCAB-24 sustained zero-error,
 fidelity and latency gates remain open. Rollback is the old tone executable
