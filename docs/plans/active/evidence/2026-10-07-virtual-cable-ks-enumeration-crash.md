@@ -581,3 +581,14 @@ reports, zero reports and the 1104-frame regression. Evidence:
 Jev remains unrun due to the earlier external source-upload approval rejection.
 Next: a diagnostic 30-second guest trace with the existing installed driver;
 no full-duration or 8-channel retry until the trace is reviewed.
+
+Static-CRT Release diagnostic executable built successfully and staged with
+vm-checks.ps1 at `C:\VMs\ar-share\diagnostics-20261008-tone-timing` from
+clean `5cb14067fd245466b05d7ccbe2a09e9785b9bce8`.
+Tone executable SHA-256:
+`DD11EE10EFBD4B72AD7C0B9478341DF10E4DE9C7A5C21A6C45EC5020FE9774D1`;
+script SHA-256:
+`4D63F38DF2A26CA047C384570A89213766382B33E8D91B0BE340E25ACF5B59D0`.
+Only those files are updated in the guest; installed driver, endpoint
+configuration and certificate stay as previously verified. The underrun
+root cause remains open until this diagnostic evidence arrives.

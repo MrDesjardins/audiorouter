@@ -1174,6 +1174,14 @@ PowerShell output/counter regressions passed. Startup exposure and delayed
 callback starvation remain hypotheses requiring the diagnostic guest trace;
 see the [review record](evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md#2026-10-08-1956-short-run-underrun-and-additional-review).
 
+Diagnostic bundle staged in `C:\VMs\ar-share\diagnostics-20261008-tone-timing`
+from clean `5cb14067`: only the static-CRT tone tool and vm-checks.ps1, with
+SHA-256 manifest `diagnostics.json`. Existing `a8138984` guest driver stays
+installed; no snapshot restore or driver update for this trace. Next: copy
+and verify those two files, run 30 seconds with existing Listen setup, then
+collect/copy and locate when underrun counts first rise. The producer bug
+is not marked repaired. Jev remains unrun (prior external-upload rejection).
+
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
 use the capture-sink acknowledgement (`consumer_sequence`) for producer

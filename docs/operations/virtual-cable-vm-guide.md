@@ -591,6 +591,14 @@ VM to listening/tone; actual streaming and latency are still pending.
      really should be 0; anything else is a finding.)
 5. Run the deliberate stall step:
 
+   If the short clean tone fails with underruns, stop before stall/8-channel
+   runs. The `diagnostics-20261008-tone-timing` bundle updates only the tone
+   tool and vm-checks.ps1; copy its two manifest-listed files into the existing
+   `C:\ar`, verify their hashes, and rerun 30 seconds with the same Listen
+   setup. No snapshot restore or driver reinstall is needed for this trace.
+   Send the collected ZIP for review; diagnostic output does not waive the
+   zero-counter requirement.
+
    ```powershell
    powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step tone-stall
    ```
