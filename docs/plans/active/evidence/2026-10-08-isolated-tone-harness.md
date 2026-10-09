@@ -39,7 +39,8 @@ checks, **not kernel/runtime continuity or latency evidence**.
 
 | Check | Result | Evidence/command |
 | --- | --- | --- |
-| Actual worker/mapped-slot regressions and existing waveform/WAV/options tests | 11 passed | `cargo test -p audiorouter-windows-audio --example m03_bridge_tone`; `target/isolated-tone-worker-tests.txt` |
+| Actual worker/mapped-slot regressions and existing waveform/WAV/options tests (initial harness) | 11 passed | `cargo test -p audiorouter-windows-audio --example m03_bridge_tone`; `target/isolated-tone-worker-tests.txt` |
+| Post-guest teardown fixes and worker regressions | 12 passed | `cargo test -p audiorouter-windows-audio --example m03_bridge_tone`; `target/isolated-tone-worker-tests-fix1.txt` |
 | Repeated full tone suite | 10 consecutive runs passed (110 test executions) | `target/isolated-tone-repeat-tests.txt` |
 | Bridge/session/ABI/mapping tests, including absent-device prepared activation cleanup | 30 passed | `cargo test -p audiorouter-windows-audio --lib native_bridge`; `target/isolated-tone-bridge-tests.txt` |
 | Native stdout/stderr, exit codes, strict complete final counters | Passed | `tests/acceptance/m03-vm-inventory-output.ps1`; `target/isolated-tone-output-check.txt` |
@@ -70,26 +71,42 @@ not guarantee Windows scheduling. A control stall beyond the two-second
 broker lease can still expire ownership. The bounded recording pool cannot
 absorb an indefinitely blocked disk. Its exhaustion must remain a failure.
 
+### First isolated guest attempt exposed a teardown-order defect
+
+Archive `evidence-20261008-211936.zip`; tone run `20261008-211905-tone`.
+Installed-driver status passed (protocol 1.1, driver 0.1.0.0, four endpoints,
+all 60 formats). During the 30-second run the capture acknowledgement advanced
+to 2910 and the device position advanced; the tone worker published 3003
+blocks. Render recorded 1271 blocks / 610080 WAV frames, so Cable A Input was
+stimulated. Progress snapshots showed zero runtime error counters.
+
+The tool then exited 1 with `render mapping: SampleSizeMismatch`. Its final
+counter snapshots incorrectly showed zero device positions because the driver
+resets its mapping header on CLOSE. Code review also found `close()` removed
+the owned mapping files before the scoped audio workers joined. Fixed shutdown
+now snapshots counters before CLOSE, deactivates both leases, stops and joins
+audio workers and drains the recording queue while mapping files are still
+owned, then removes the files. A retired format header is accepted only during
+shutdown; the same error remains fatal during an active lease. Host tone tests
+now number 12; all passed after this fix. The guest attempt does not qualify
+continuity, but confirms both leases opened and real render audio was recorded.
+A fresh 30-second result is still required.
+
 Jev was not rerun: automatic approval review previously rejected uploading
 source to its external service. ASan remains unavailable with the installed
 MSVC runtime, as recorded in the active plan. Neither is a passing check.
 
-Tool-only diagnostic staged and all three copied file hashes matched:
-`C:\VMs\ar-share\diagnostics-20261008-isolated-tone`. Clean source
-`bac0cc0de611636b61946c9c35c743bfb7e41639`; staged at
-`2026-10-09T04:17:12.3464104Z`. Static CRT Release build passed with two build
-jobs (`RUSTFLAGS=-C target-feature=+crt-static`, `cargo build --locked --release
---target-dir target\vm-tools -p audiorouter-windows-audio --example
-m03_bridge_tone`). The staged executable launched with `--help` and the
-expected exit 64; no host device was opened. Build/launch logs:
-`target/isolated-tone-release-build.txt`, `target/isolated-tone-release-launch.txt`.
-Tone executable SHA-256:
-`1B8D2E20225F21E1ED859DCD69D05F7137F2936BC00D020EC6676EA2BC8613EF`.
-The bundle's `diagnostics.json` records tool/script hashes and the required
-unchanged driver SHA-256. No driver files were copied.
+The initial tool-only bundle at
+`C:\VMs\ar-share\diagnostics-20261008-isolated-tone` used clean source
+`bac0cc0de611636b61946c9c35c743bfb7e41639`, staged at
+`2026-10-09T04:17:12.3464104Z`. Its execution caught the teardown defect above;
+replace that executable with a clean rebuild of the fix before retrying. The
+bundle metadata records tool/script hashes and the unchanged driver SHA-256.
+No driver files were copied.
 
-Next: use the staged diagnostic with the already installed `dbf19e17` guest
-driver, keep Cable B Output Listen active, stimulate Cable A Input, run only
-30 seconds and review collected evidence. VCAB-24 sustained zero-error,
-fidelity and latency gates remain open. Rollback is the old tone executable
-in `repair-20261008-capture-tick-primed` or the clean guest snapshot.
+Next: rebuild and replace the tool-only diagnostic, then repeat one
+30-second run on the already installed `dbf19e17` guest. Keep Cable B Output
+Listen active, stimulate Cable A Input and review the collected evidence.
+VCAB-24 sustained zero-error, fidelity and latency gates remain open. Rollback
+is the old tone executable in `repair-20261008-capture-tick-primed` or the
+clean guest snapshot.

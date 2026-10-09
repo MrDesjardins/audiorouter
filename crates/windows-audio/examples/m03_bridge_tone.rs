@@ -414,17 +414,23 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
             .map_err(|error| (1, format!("recording worker startup: {error}")))?;
 
         // Activation errors still stop/join audio and finalize the WAV.
+        let mut render_controller: Option<NativeBridgeController> = None;
+        let mut capture_controller: Option<NativeBridgeController> = None;
         let operation = (|| -> Result<(), (i32, String)> {
-            let mut render = NativeBridgeController::activate_prepared_section(
-                &options.device,
-                prepared_render.0.take().unwrap(),
-            )
-            .map_err(fail)?;
-            let mut capture = NativeBridgeController::activate_prepared_section(
-                &options.device,
-                prepared_capture.0.take().unwrap(),
-            )
-            .map_err(fail)?;
+            render_controller = Some(
+                NativeBridgeController::activate_prepared_section(
+                    &options.device,
+                    prepared_render.0.take().unwrap(),
+                )
+                .map_err(fail)?,
+            );
+            capture_controller = Some(
+                NativeBridgeController::activate_prepared_section(
+                    &options.device,
+                    prepared_capture.0.take().unwrap(),
+                )
+                .map_err(fail)?,
+            );
             let start = Instant::now();
             state
                 .start
@@ -440,8 +446,16 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
                 while !state.done.load(Ordering::Acquire) && !state.failed.load(Ordering::Acquire) {
                     if heartbeat.elapsed() >= Duration::from_millis(250) {
                         let before = Instant::now();
-                        capture.heartbeat().map_err(fail)?;
-                        render.heartbeat().map_err(fail)?;
+                        capture_controller
+                            .as_mut()
+                            .unwrap()
+                            .heartbeat()
+                            .map_err(fail)?;
+                        render_controller
+                            .as_mut()
+                            .unwrap()
+                            .heartbeat()
+                            .map_err(fail)?;
                         control_us = control_us.max(before.elapsed().as_micros());
                         heartbeat = Instant::now();
                     }
@@ -452,9 +466,9 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
                             start.elapsed().as_millis(),
                             state.capture_blocks.load(Ordering::Acquire),
                             state.render_blocks.load(Ordering::Acquire),
-                            capture.consumer_sequence(),
-                            capture.counters(),
-                            render.counters()
+                            capture_controller.as_ref().unwrap().consumer_sequence(),
+                            capture_controller.as_ref().unwrap().counters(),
+                            render_controller.as_ref().unwrap().counters()
                         );
                         report_us = report_us.max(before.elapsed().as_micros());
                         progress = Instant::now();
@@ -464,12 +478,18 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
                 Ok(())
             })();
             // Deactivate both native leases before disk flush, output or joins.
-            let close_start = Instant::now();
-            let capture_close = capture.deactivate().map_err(fail);
-            let render_close = render.deactivate().map_err(fail);
-            let close_us = close_start.elapsed().as_micros();
+            // CLOSE retires/reset the driver's mapping header, so preserve its
+            // final raw counters immediately before deactivation.
             let capture_counters = capture_view.counters();
             let render_counters = render_view.counters();
+            let close_start = Instant::now();
+            let capture_close = capture_controller
+                .as_mut()
+                .map_or(Ok(()), |controller| controller.deactivate().map_err(fail));
+            let render_close = render_controller
+                .as_mut()
+                .map_or(Ok(()), |controller| controller.deactivate().map_err(fail));
+            let close_us = close_start.elapsed().as_micros();
             state.stop.store(true, Ordering::Release);
             println!(
                 "capture-sink counters ({}): {capture_counters:?}",
@@ -480,14 +500,7 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
                 options.render_bus
             );
             println!("maximum control heartbeat: {control_us} us; progress output: {report_us} us; lease close: {close_us} us");
-            // Both cleanup calls run even if one reports a failure.
-            let capture_cleanup = capture.close().map_err(fail);
-            let render_cleanup = render.close().map_err(fail);
-            service
-                .and(capture_close)
-                .and(render_close)
-                .and(capture_cleanup)
-                .and(render_cleanup)
+            service.and(capture_close).and(render_close)
         })();
         state.stop.store(true, Ordering::Release);
         capture_worker.thread().unpark();
@@ -504,6 +517,14 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
             .join()
             .map_err(|_| (1, "recording worker panicked".to_owned()))
             .and_then(|result| result.map_err(|error| (1, error)));
+        // Keep the owner sessions and backing files alive until all workers
+        // have stopped using their independent mapped views.
+        let capture_cleanup = capture_controller
+            .take()
+            .map_or(Ok(()), |controller| controller.close().map_err(fail));
+        let render_cleanup = render_controller
+            .take()
+            .map_or(Ok(()), |controller| controller.close().map_err(fail));
         println!(
             "capture-sink blocks written: {}",
             state.capture_blocks.load(Ordering::Acquire)
@@ -526,6 +547,8 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
             state.render_gaps.load(Ordering::Relaxed)
         );
         operation
+            .and(capture_cleanup)
+            .and(render_cleanup)
             .and(capture_result)
             .and(render_result)
             .and(disk_result.map(|_| ()))?;

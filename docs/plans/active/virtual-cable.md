@@ -1379,16 +1379,17 @@ recording/control interval, explicit backpressure and a visible 120 ms producer
 stall. Details and limits are in the
 [harness record](evidence/2026-10-08-isolated-tone-harness.md).
 
-Tool-only diagnostic built from clean `bac0cc0d`, staged and hash-verified at
-`C:\VMs\ar-share\diagnostics-20261008-isolated-tone`; static CRT executable
-launch passed. No driver files copied. Formatting, focused Clippy, 275 guards,
-output/counter and docs checks passed; the full 11-test tone suite also passed
-ten consecutive runs. Jev/ASan limits are recorded in the harness evidence.
+The first 30-second isolated VM run exercised capture and render, but exited
+with `SampleSizeMismatch` during teardown. Its final counters were zero because
+the driver resets the mapping on CLOSE. Fixed the order: snapshot raw counters
+before CLOSE; deactivate leases, stop/join workers and drain WAV buffers,
+then clean up their mappings. Details are in the evidence record. Twelve tone
+tests, 30 bridge tests, focused Clippy and formatting pass after this fix. No
+driver files or thresholds changed.
 
-Next action: inside the already installed VM, run
-`powershell.exe -NoProfile -ExecutionPolicy Bypass -File Z:\diagnostics-20261008-isolated-tone\retry-isolated-tone.ps1`
-with Cable B Listen enabled and Cable A Input Test stimulus, then review the
-30-second output/archive. Archives are retained; no kernel
+Next action: rebuild and replace the tool-only diagnostic in the existing
+shared-folder bundle; then rerun one 30-second check on the already installed
+VM. Archives are retained; no kernel
 patch or threshold change. The VM continuity, fidelity and latency gates
 remain open; host regressions do not establish the prior runtime failure's
 precise cause.

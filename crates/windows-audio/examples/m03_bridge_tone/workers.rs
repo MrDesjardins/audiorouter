@@ -90,6 +90,10 @@ pub(super) fn observe_max(value: &AtomicU64, elapsed: Duration) {
     );
 }
 
+fn ended_by_mapping_retirement(stopping: bool, error: &NativeBridgeRegionError) -> bool {
+    stopping && *error == NativeBridgeRegionError::SampleSizeMismatch
+}
+
 /// Disk thread loop, shared by the production writer and stalled-I/O tests.
 pub(super) fn record(
     state: &Shared,
@@ -241,6 +245,10 @@ pub(super) fn render(
                     break;
                 }
             }
+            // CLOSE retires the driver's view while this read-only mapping
+            // remains alive long enough to drain a final published block.
+            // A cleared format header is therefore a normal stop condition.
+            Err(error) if ended_by_mapping_retirement(stopping, &error) => break,
             Err(error) => return Err(format!("render mapping: {error:?}")),
         }
         std::thread::sleep(Duration::from_millis(1));
@@ -555,5 +563,16 @@ mod tests {
             .unwrap_err()
             .contains("StaleGeneration"));
         assert_eq!(state.render_blocks.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn cleared_format_header_is_accepted_only_after_shutdown() {
+        let error = NativeBridgeRegionError::SampleSizeMismatch;
+        assert!(ended_by_mapping_retirement(true, &error));
+        assert!(!ended_by_mapping_retirement(false, &error));
+        assert!(!ended_by_mapping_retirement(
+            true,
+            &NativeBridgeRegionError::StaleGeneration
+        ));
     }
 }
