@@ -1555,15 +1555,25 @@ runtime or quality pass.
 install and both smoke cycles passed. The status inventory JSON contains four
 valid endpoints (all 60 formats, minimum period 128 frames), but the inventory
 tool reports 12 name matches and eight `IAudioClient3` activation failures.
-Root-cause review found `enumerate_active_endpoint_display_info()` is documented
-to return active endpoints but calls `EnumAudioEndpoints(..., DEVICE_STATE_ALL)`;
-the tool therefore counts inactive/stale Windows endpoint records as duplicates
-and tries to activate clients for them. Requirements: VCAB-11, VCAB-25. Scope:
-make this inventory snapshot enumerate active endpoints only; do not remove VM
-devices, alter acceptance thresholds, or change driver behavior. Add a source
-acceptance guard that pins the active-state flag, then run the focused acceptance
-and build/package integrity checks, stage a replacement package, and ask for a
-single status rerun before tone. Validation does not claim guest behavior until
-that rerun passes. Rollback: retain the current guest/package and replace only
-the staged inventory/tool bundle. Next action: fix the enumeration flag and
-source regression guard.
+Root cause: `enumerate_active_endpoint_display_info()` was documented to return
+active endpoints but called `EnumAudioEndpoints(..., DEVICE_STATE_ALL)`. The
+inventory therefore counted records from every Windows endpoint state and
+attempted to activate clients for them. The guest output did not include each
+record's state, so the eight extra records are not individually classified.
+Requirements: VCAB-11, VCAB-25. Fix committed and pushed to `main` as
+`d9e72560`: enumerate active endpoints only and pin the state flag in the M03
+build acceptance guard. Driver behavior and acceptance thresholds are unchanged;
+no VM devices were removed. Focused evidence: inventory example tests 2/2,
+release executable build with static CRT, focused Clippy, Rust formatting,
+docs validation (136 Markdown files/738 links), and manifest verification for
+all 29 staged files. The driver's SYS hash is unchanged. Jev review could not
+reach its API and remains unrun. New bundle:
+`C:\VMs\ar-share\repair-20261009-active-inventory`; inventory tool SHA-256
+`D08495D741E99C1AC4FA4F0BE234C5C5CC2D920E30C1AACF28684DC6B94CDEB2`.
+Next: copy this bundle into a new folder under `C:\ar` in the VM and run only
+`vm-checks.ps1 -Step status`, then collect and send the evidence. The existing
+driver is already installed, so do not run preflight or install from this new
+bundle. Tone remains gated on status passing. This is not guest validation;
+the active-state fix must pass in the VM. Rollback: keep the old bundle and
+installed driver; the new package changes only the inventory executable,
+manifest and build metadata.
