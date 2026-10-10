@@ -150,3 +150,22 @@ Guest clock run `20261010-102108` (preflight) to `20261010-102200` (collect).
 Scope: installation, enumeration and cleanup only. No audio was streamed, so
 packet-mode activation, waveform continuity and counters remain unqualified.
 Next: the second independent clean smoke from the same checkpoint and command.
+
+## Second clean guest smoke — 2026-10-10 (passed)
+
+Same checkpoint restore, command and package. Guest clock `20261010-102723`
+(preflight) to `20261010-102855` (collect). Preflight 15/15; A1/A2/A3/A14
+passed; collect 2/2. Install `oem5.inf` on `ROOT\MEDIA\0000`, no restart,
+no default change, four endpoints `OK`; removal ok without restart.
+
+Independence: the archive contains no folder from the first run, and its
+`before-baseline.json` is byte-identical to the first run's, so the checkpoint
+was really restored. Its before/after baselines are also byte-identical.
+
+Archive: `C:\VMs\ar-share\evidence-20261010-102855.zip`, SHA-256
+`CC96B2122B2F8D3E3006AF009F9FB48B44322C8ECE9F515BD73408A419C36CB4`;
+extracted to `target/smoke2-20261010-102855`.
+
+Both required clean smokes pass for this candidate. Scope unchanged:
+installation/cleanup only. Next: install plus status/format inventory in the
+same guest session (it was left at the restored baseline), then collect.
