@@ -210,3 +210,14 @@ base. Rebuild only the static-runtime tone example; verify each original hash
 before copying and generate a new manifest. Preserve identical driver bytes
 and the installed guest driver. Next guest task: only the updated 30-second
 Tone phase, then review its reports before considering a longer run.
+
+Prepared candidate: `C:\VMs\ar-share\repair-20261009-bounded-tone`, static
+runtime Release tool built from clean source
+`658be117d8446703e15b9bba865c3a086eb8e892` at `2026-10-10 02:25:54Z`.
+Tone executable SHA256:
+`A0393BCEA4DBA6277DEED02977C393CBFA1DE5AAE909658E054C0D7550157CBD`.
+All 30 manifest hashes independently pass; all 16 driver package files are
+byte-identical to verified r2 (SYS SHA256 remains `23F741CD5D4D455840898D0A614E39BFA588B96BE8CB2C1CF5E7AD5CAF0D34B3`).
+Invoking the copied VM script on the host gives its expected identity refusal
+before any step runs. No driver rebuild, host trust/security change or VM
+execution occurred. The next command is in the updated retest procedure.

@@ -1781,3 +1781,10 @@ code unless its handle is retained. No VM/driver/hypervisor operation was run.
 Next: build and independently hash-verify the separate bounded-tone update,
 then hand off its 30-second command. Earlier real audio loss is not repaired
 or waived by these host results; preserve the failed sustained gate.
+
+Candidate prepared from clean source `658be117`: 30 manifest hashes pass,
+all 16 driver files byte-identical to r2, copied runner refuses host execution.
+Only the Release static-runtime tone executable and two supporting scripts
+changed. Artifact hashes and exact next guest task are in the packet-clock
+review/retest procedure. Next: updated 30-second tone in the existing guest
+session; no reinstall/restore required. Review before any sustained run.
