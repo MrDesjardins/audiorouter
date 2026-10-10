@@ -96,8 +96,12 @@ EOS rejection is unchanged. Rollback: revert this isolated repair and
 retain the installed driver, clean snapshot and prior bundles unchanged.
 620 offline helper checks and x64/ARM64 WDK/catalog/source acceptance pass.
 See the [repair record](evidence/2026-10-10-m03-render-commit-validity.md).
-Next action: commit the isolated repair and prepare one checksummed candidate
-from clean source. No new VM run is authorized by a build pass.
+Repair committed/pushed as `28b989f5`; the clean-source candidate at
+`C:\VMs\ar-share\repair-20261010-render-commits` passes 33 package integrity
+checks and independent verification of all 32 manifest files. Checksums and
+exact guest command are in the repair record. Next action: user restores
+`03-test-signing-ready-20261007` and runs one guest `retry-smoke.ps1`; review
+its evidence before the second clean smoke or any audio test.
 
 Ship AudioRouter-owned virtual cables (up to 8, Cable A–H; 2 enabled by
 default, the user picks 1–8) with the app, with studio-grade sound

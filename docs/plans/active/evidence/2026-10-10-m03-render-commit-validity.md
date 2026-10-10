@@ -75,15 +75,15 @@ It requested explicit one-slot remainder coverage, now added.
   Hostx64 tool selection resolved it: `PreferredToolArchitecture=x64` and the
   matching MSVC Hostx64/x64 folder first on PATH, for those build processes
   only. No Visual Studio repair or persistent environment change performed.
-- `node tools/docs/validate.mjs`: **passed**, 142 Markdown files and 783 local
-  links before the final evidence links were added. `git diff --check`: passed.
+- `node tools/docs/validate.mjs`: **passed**, 142 Markdown files and 785 local
+  links. `git diff --check`: passed.
 - Jev is disabled by the earlier explicit user decision recorded in AGENTS.md.
   No Rust/UI files changed; their format/lint/Clippy checks were not rerun.
 
 ## Remaining gates and next action
 
-Host-only validation and diff inspection are complete. Commit the isolated
-repair and prepare one checksummed candidate from its clean source commit.
+Host-only validation and diff inspection are complete. Repair committed and
+pushed to main as `28b989f5d8d16f20e0d1996a335c01bd7203c342`.
 No guest driver was changed or loaded during this work. Full
 kernel counter/waveform integration, native packet-mode activation, sustained
 continuity, latency, count-1 operation and EOS remain unqualified. The saved
@@ -92,3 +92,36 @@ long scheduling losses and downstream HDA scratching remain open.
 Rollback: revert the isolated source commit; preserve the existing installed
 driver, clean VM snapshot, private evidence and prior bundles. A future guest
 candidate must be recoverable through that clean snapshot.
+
+## Prepared candidate and exact next guest step
+
+Host bundle: `C:\VMs\ar-share\repair-20261010-render-commits`.
+Built from the clean repair commit above, `builtAt=2026-10-10T17:08:27.6787581Z`,
+test-signed x64. `tools/vm/prepare-vm-share.ps1 -Share` with that absolute path
+completed using the process-local Hostx64 tool selection. Package integrity
+suite passed **33 checks**, including tamper rejection, and an independent
+manifest traversal verified **all 32 bundled files**. Logs:
+`target/render-commit-candidate-build.log`; tamper evidence:
+`target/driver-package-test-755ef67f063b440dbf73c40ef3b3c78c`.
+
+- Signed SYS SHA-256:
+  `91BBC17ADCC55482D230B932A8198A566E5C3AFC5398588C810B8CC9135D7BB6`.
+- Manifest SHA-256:
+  `69FD263F8005A555587BB477FE913F78D3A595EDCA77D9B58A0B88F83DFD8F67`.
+
+No host trust, security, audio, WSL, installed driver or VM configuration was
+changed. Fuzzer and native tools were built, not run. No VM process was present
+at the final read-only check. The package is a candidate, not a stable release.
+
+Next: restore the existing `03-test-signing-ready-20261007` checkpoint, boot
+AR-DriverTest and open Administrator PowerShell **inside the guest**. Run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'Z:\repair-20261010-render-commits\retry-smoke.ps1'
+```
+
+This existing runner copies/verifies the candidate into `C:\ar`, runs preflight
+and one smoke, cleans up the driver and collects/copies evidence to the host
+share. Send the output. Do not start Media Player, Listen, tone, stall, fuzzer
+or a longer run during this installation check. A second clean smoke and the
+focused direct waveform check remain subsequent steps after evidence review.
