@@ -3,7 +3,7 @@
 **Resuming with Claude or another agent:** start with the
 [detailed handoff](virtual-cable-agent-handoff.md). The 2026-10-10 candidate is
 prepared; two clean smokes and install/status passed; the r3 direct audio
-run is next. Older dated
+run failed (packet-validity silence regression, see Objective). Older dated
 next-action notes below are historical when superseded by that handoff.
 
 Updated 2026-10-09. The driver is installed only in AR-DriverTest. Smoke,
@@ -109,9 +109,13 @@ exact guest command are in the repair record. Both clean guest smokes passed
 2026-10-10 (`evidence-20261010-102200.zip`, `evidence-20261010-102855.zip`;
 install, four endpoints, removal, baseline restored; no audio streamed).
 Install/status also passed (60/60 formats, 128/480/480 periods; driver left
-installed). Direct audio r3 bundle prepared from this candidate. Next action:
-user runs the r3 `run-direct-audio.ps1` with Listen off (exact command in the
-repair record); review its recordings before any longer test.
+installed). Direct audio r3 run **failed**: the new silence substitution
+removed ~15 % of Cable A audio (all render underrun comes from the
+`!committed` branch), including in stall-free seconds, while r2's previous
+driver delivered clean Cable A; shared 90–460 ms stalls also recurred. See
+the repair record's r3 section. Next action: user decision on a reviewed
+kernel change (record `SetWritePacket` outcomes; use a late write of the
+transferring packet for its unconsumed frames). Do not rerun r3 unchanged.
 
 Ship AudioRouter-owned virtual cables (up to 8, Cable A–H; 2 enabled by
 default, the user picks 1–8) with the app, with studio-grade sound

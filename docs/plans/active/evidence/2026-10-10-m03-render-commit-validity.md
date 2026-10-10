@@ -213,8 +213,71 @@ in Administrator PowerShell **inside the VM**:
 }
 ```
 
-Limit: no driver counter shows whether Windows actually calls
-`SetWritePacket` on these streams, so this run cannot prove the repaired path
-was active. A clean result shows the candidate's direct samples and counters;
+Limit (superseded by the run below): no driver counter shows whether Windows
+actually calls `SetWritePacket` on these streams. A clean result shows the candidate's direct samples and counters;
 a new render underrun count is a failed continuity gate to analyze, not to
 suppress. Packet-mode observability would need a separate reviewed kernel change.
+
+## Direct audio r3 result — 2026-10-10 (failed; regression analysis)
+
+Run `direct-fb4b29850e184849af6247edb3948ffa`, guest tone folder
+`20261010-103654-tone`. Archive
+`C:\VMs\ar-share\diagnostics-20261010-direct-audio-r3\direct-fb4b29850e184849af6247edb3948ffa.zip`,
+SHA-256 `27149CE0B72C8B8CD96A3C94C7626D51BCDD85D727D0DFC30E3409E7FD114406`,
+extracted to `target/direct-r3-fb4b2985`. Startup and recorder exit 0; tone
+exit 1 (error counters), both signal analyses exit 1, 166 in-signal Cable B
+discontinuity/timestamp packets.
+
+Final counters: Cable B capture underrun 126,528; Cable A render underrun
+193,968 and overrun 136,368; sequence gaps, non-finite and format 0. Maximum
+pump gap ~460 ms; Cable A WAV 1,303,200 frames (27.15 s of 30 s).
+
+Per-second progress shows two separate patterns:
+
+1. **Shared user-mode stalls** (90–460 ms, both workers at once) coincide with
+   capture underrun and render overrun (bridge queue drops of whole quanta).
+   This is investigation B and is much worse than in r2 (one 288 ms pause).
+2. **Render underrun without stalls.** At 20–23 s worker gaps were ~20–30 ms,
+   capture underrun ~0 and render overrun ~0, yet render underrun grew
+   11,500–15,000 frames/s (~25–30 %). In `ReadBytes` the only render
+   `UnderrunFrames` increment is the new `!committed` branch, so all 193,968
+   frames are the new packet-validity rule substituting silence. This also
+   proves packet mode latched (at least one `SetWritePacket` succeeded).
+
+Waveform comparison with the same, current offline analyzer
+(`m03_direct_audio analyze`, file-only):
+
+| Run | Driver | Cable A 1-s windows clean | 10-ms blocks clean |
+| --- | --- | --- | --- |
+| r2 | before `28b989f5` | 28 of 30 (residual 0.00) | 2,965 of 2,973 |
+| r3 | `28b989f5` | 0 of 28 (residual ~0.14) | 1,583 of 2,715 |
+
+r3 Cable A has 446 exact-zero runs (201,968 frames ≈ the counter): 197 of
+480 frames (a whole packet), others mostly 144/192 frames; the tone phase is
+continuous across 347 of them, i.e. silence replaced audio in place on the
+source timeline. 190 additional one-packet (480-frame) phase jumps without
+zeros match bridge overrun drops from the stalls. Scratch analysis code:
+session scratchpad `wav.cs` (block least-squares fit, zero runs, phase breaks).
+
+Interpretation (proven vs. not):
+
+- Proven: the repair's silence substitution is active and, in this run,
+  removed ~15 % of Cable A audio, including in seconds without user-mode
+  stalls. The previous driver delivered clean Cable A in r2.
+- Not proven: whether those frames held valid data. The driver does not
+  record `SetWritePacket` outcomes (accepted/late/overrun) or lateness, and
+  r3's guest was far more stalled than r2's, so OS-side lateness may be real.
+- Policy finding: Microsoft documents `STATUS_DATA_LATE_ERROR` as "the driver
+  may optionally use some of the data from the packet". The repair instead
+  discards a late packet entirely (and `InvalidateSlot` runs before
+  admission, so a late or overrun submission also retires the tag of the
+  packet currently transferring when its slot matches). A late write of the
+  transferring packet thus becomes a full counted packet of silence where the
+  previous driver played the freshly written remainder.
+
+Not repeated: the user's run is not retried unchanged. Proposed next step
+(needs a reviewed kernel change and one new candidate): record `SetWritePacket`
+outcomes and lateness in reserved shared-header space, and accept a late write
+of the currently transferring packet for its not-yet-consumed frames while
+still returning `STATUS_DATA_LATE_ERROR` and counting the already-consumed
+frames. Decision pending with the user.

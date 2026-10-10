@@ -6,7 +6,8 @@ clean smokes and install/status. Bundle
 direct runner and static recorder to that candidate. The exact command, with
 Cable B Listen **off**, is in the
 [repair record](../plans/active/evidence/2026-10-10-m03-render-commit-validity.md#direct-audio-r3-bundle-2026-10-10).
-The r2 notes below are history.
+The r3 run has finished and failed (see the repair record's r3 section); do
+not repeat it unchanged. The r2 notes below are history.
 
 **Current state:** the r2 run has finished and its recordings have been
 reviewed. Do not repeat the procedure below or extend it. Direct Cable B
