@@ -83,7 +83,11 @@ passes counters/deadline, both trace loss checks and compatible QPC brackets
 Cable B, ending with the script. The saved Cable A WAV does not verify that
 path. Hold longer runs; the [automatic direct audio diagnostic](../../operations/virtual-cable-direct-audio.md)
 generates Cable A audio and records Cable B without default/microphone fallback
-or Audacity installation. Preparation is complete; the first guest run is pending.
+or Audacity installation. The first guest attempt passed status but the new
+recorder exited before readiness with empty output. PE inspection confirms a
+dynamic Visual C++ runtime dependency missed by the original packaging.
+Repair uses static linking, a PE import gate and saved numeric/hex startup
+exits; no redistributable or driver installation. Direct recordings are pending.
 Sustained continuity, audible quality and cause remain unresolved.
 Commands are in
 [Administrator PowerShell](../../operations/virtual-cable-paired-trace.md).

@@ -99,3 +99,48 @@ recording with audible hiss points to further listener/playback investigation;
 a noisy recording requires tracing the digital path. Neither alone proves a
 particular function is responsible. Rollback stops this owned diagnostic and
 returns to the prior bundle without changing the installed driver.
+
+## First guest attempt and startup repair (2026-10-09)
+
+User ran the published diagnostic. Archive
+`direct-4a281d278cde43ada173fb07d2506aea.zip` was opened read-only from the
+host share; its SHA-256 matches
+`CA129D76FCA71BD8A42125FA3B73DA5E7ED9A27E162641990CFF61673052E0AD`.
+Installed status and all endpoint formats pass. The recorder exits before
+readiness; stdout/stderr are zero bytes, capture directory empty, and the
+wrapper never starts the bridge tone. There is no new signal measurement.
+
+Confirmed preparation defect: the original helper was built with ordinary
+`cargo build --release` and imports `VCRUNTIME140.dll` plus dynamic CRT API
+sets. The established VM tool build uses `-C target-feature=+crt-static`.
+The working bridge tone imports no Visual C++ runtime DLL. Local startup on
+the development PC did not demonstrate portability to the clean guest.
+The old wrapper omitted the recorder's pre-readiness exit code, so this
+archive cannot prove the exact guest loader status or missing DLL.
+
+Repair:
+
+- [Build helper](../../../../tools/vm/build-direct-audio.ps1) restores the
+  caller's build flags after building with `+crt-static` under a separate
+  `target\vm-direct-audio` tree. Nothing is installed or repaired.
+- [PE import gate](../../../../tools/vm/portable-tool-support.ps1) reads bounded
+  PE32+ sections/imports without loading the executable; packaging rejects
+  Visual C++ redistributable imports and malformed files. The preparer uses
+  this static artifact rather than the ordinary release output.
+- New `startup-check` opens no audio endpoint. The wrapper verifies it before
+  status/audio and preserves its process report. Early recorder exits now
+  retain numeric and unsigned hex codes in `recorder-process.json`.
+- Expanded script checks simulate loader failure `0xC0000135` with empty
+  stderr, early worker exit, and validate malformed PE rejection. They reject
+  the actual previous dynamic helper and accept/launch the actual static one
+  in offline mode. No host audio/driver operation occurs.
+
+Verification on Windows: static release build succeeds; its PE parser and
+independent `dumpbin /dependents` agree on system-only imports, with no
+VCRUNTIME/MSVCP/CONCRT DLL. Nine Rust regressions and 103 script checks pass;
+root/shell formatting and workspace Clippy pass. Script evidence:
+`target\direct-audio-tests-0e2040ffb17848b684b6462838942d48`.
+Jev remains disabled. The fixed executable's first guest run is pending;
+hiss and sustained continuity are still unresolved. The old bundle/archive
+are preserved; a new r2 bundle uses the original paired-tone base and copies
+all driver files unchanged. Use the updated direct-audio procedure above.

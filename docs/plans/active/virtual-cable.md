@@ -2084,3 +2084,21 @@ crackles (user observation, not a digital-path measurement).
 - Next action: run the
   [automatic 30-second guest diagnostic](../../operations/virtual-cable-direct-audio.md).
   First real direct recording and waveform review remain pending.
+
+### Direct recorder startup repair — 2026-10-09
+
+Guest archive `direct-4a281d278cde43ada173fb07d2506aea.zip` matches SHA-256
+`CA129D76FCA71BD8A42125FA3B73DA5E7ED9A27E162641990CFF61673052E0AD`.
+Status passes; recorder exits before readiness with empty stdout/stderr and
+no recording. No tone process starts. The new helper imports VCRUNTIME140.dll
+and dynamic CRT API sets, unlike the working statically linked VM tools.
+This is a confirmed packaging defect; the archive omitted the native exit
+code, so the precise guest loader failure cannot yet be confirmed.
+
+Repair before retry: build the helper with `+crt-static` in a separate target
+folder; gate packaging on actual PE imports; add an offline startup command
+and preserve numeric/hex startup and recorder exits even before readiness.
+Regress a missing-runtime exit with empty stderr and verify the shipped
+helper's dependency table, host refusal and offline command. Do not install a
+redistributable or rebuild/install the driver. Publish a new immutable bundle;
+keep this failure and prior artifacts. Requirements/sustained gates unchanged.

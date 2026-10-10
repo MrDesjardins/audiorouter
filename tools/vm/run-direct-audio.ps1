@@ -22,7 +22,15 @@ $process = $null
 $toneEvidence = $null
 $failure = $null
 $codes = @{}
+function ConvertTo-DirectExitHex([int] $Code) {
+    return '0x' + [BitConverter]::ToUInt32([BitConverter]::GetBytes($Code),0).ToString('X8')
+}
 try {
+    $startup = Invoke-DriverVmProcess -Executable $probe -Arguments @('startup-check') -Stdout (Join-Path $evidence 'startup.txt') `
+        -Stderr (Join-Path $evidence 'startup-stderr.txt') -TimeoutSeconds 5
+    $codes.Startup = $startup.Code
+    $startup | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidence 'startup-process.json') -Encoding UTF8
+    if ($startup.Code -ne 0) { throw "Recorder executable startup failed ($(ConvertTo-DirectExitHex $startup.Code)); no audio test started." }
     $status = Invoke-DriverVmProcess -Executable $powershell -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $bundle 'vm-checks.ps1'),'-Step','status') `
         -Stdout (Join-Path $evidence 'status.txt') -Stderr (Join-Path $evidence 'status-stderr.txt') -TimeoutSeconds 60
     if ($status.Code -ne 0) { throw 'Installed-driver status failed. No audio test started.' }
@@ -33,7 +41,7 @@ try {
     $null = $process.Handle
     $watch = [Diagnostics.Stopwatch]::StartNew()
     while (-not (Test-Path -LiteralPath (Join-Path $capture 'ready.json'))) {
-        if ($process.HasExited) { throw 'Direct recorder failed to start; see probe-stderr.txt.' }
+        if ($process.HasExited) { throw "Direct recorder exited before readiness ($(ConvertTo-DirectExitHex $process.ExitCode)); see recorder-process.json and probe-stderr.txt." }
         if ($watch.Elapsed.TotalSeconds -ge 12) { throw 'Direct recorder readiness timed out.' }
         Start-Sleep -Milliseconds 50
     }
@@ -80,6 +88,10 @@ try {
             if (-not $process.HasExited) {
                 if (-not (Test-Path -LiteralPath (Join-Path $capture 'stop'))) { New-Item -ItemType File -Path (Join-Path $capture 'stop') | Out-Null }
                 if (-not $process.WaitForExit(10000)) { $process.Kill(); [void]$process.WaitForExit(5000) }
+            }
+            if ($process.HasExited) {
+                $codes.Recorder = $process.ExitCode
+                Write-PairedTraceJson (Join-Path $evidence 'recorder-process.json') @{ ExitCode=$process.ExitCode; ExitCodeHex=(ConvertTo-DirectExitHex $process.ExitCode) }
             }
         } finally { $process.Dispose() }
     }

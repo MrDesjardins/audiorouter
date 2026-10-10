@@ -91,6 +91,14 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-09 — Check VM tool imports; a host startup is not guest portability evidence.**
+  Evidence: [direct recorder startup failure and repair](docs/plans/active/evidence/2026-10-09-m03-direct-audio-preparation.md#first-guest-attempt-and-startup-repair-2026-10-09).
+  Scope: user-mode executables copied into the clean driver-test VM.
+  Consequence: ordinary release output imported VCRUNTIME140.dll, while the
+  established VM tools linked the CRT statically. Use the VM build script
+  (`+crt-static`), inspect PE imports before packaging, and preserve numeric
+  and hex process exits even when stdout/stderr are empty or readiness fails.
+
 - **2026-10-09 — Exercise producer bursts without waiting for the consumer.**
   Evidence: [render publication review](docs/plans/active/evidence/2026-10-09-m03-render-publication-review.md),
   `renderBurstChecks` in the driver unit suite. Scope: audio bridge publication

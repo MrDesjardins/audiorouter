@@ -8,6 +8,10 @@ use std::path::{Path, PathBuf};
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.as_slice() {
+        [mode] if mode == "startup-check" => {
+            println!("direct audio helper startup OK; no audio endpoint opened");
+            Ok(())
+        }
         [mode, directory] if mode == "record" => record(PathBuf::from(directory)),
         [mode, wav, kind, report] if mode == "analyze" => {
             m03_direct_audio::analyze(Path::new(wav), kind, Path::new(report))

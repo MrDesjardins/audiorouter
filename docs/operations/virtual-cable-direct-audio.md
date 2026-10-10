@@ -1,5 +1,10 @@
 # Automatic direct audio diagnosis
 
+Use the **r2 bundle** below. The first helper was accidentally built with a
+dynamic Visual C++ runtime dependency and exited before readiness in the
+guest. The repaired helper includes that runtime; packaging checks its PE
+imports and the wrapper checks executable startup before any audio test.
+
 Current task: explain Cable B's reported continuous hiss before another long
 run. Media Player routed directly to VM speakers sounded clean to the user.
 That observation narrows the reproduction but does not identify the cause.
@@ -25,10 +30,10 @@ Paste this entire block into that VM PowerShell window:
 
 ```powershell
 & {
-    robocopy.exe 'Z:\diagnostics-20261010-direct-audio' 'C:\ar\diagnostics-20261010-direct-audio' /E /R:1 /W:1 /XF direct-*.zip
+    robocopy.exe 'Z:\diagnostics-20261010-direct-audio-r2' 'C:\ar\diagnostics-20261010-direct-audio-r2' /E /R:1 /W:1 /XF direct-*.zip
     if ($LASTEXITCODE -ge 8) { throw 'Copy failed. Stop here.' }
 
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-direct-audio\run-direct-audio.ps1'
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-direct-audio-r2\run-direct-audio.ps1'
     if ($LASTEXITCODE -ne 0) { throw 'Diagnostic failed. Evidence was preserved; send the output.' }
 }
 ```
@@ -45,13 +50,13 @@ Send the final PowerShell output and say whether the listening path still had
 hiss. Both WAVs and reports are copied automatically into:
 
 ```text
-Z:\diagnostics-20261010-direct-audio\direct-<run>.zip
+Z:\diagnostics-20261010-direct-audio-r2\direct-<run>.zip
 ```
 
 On the main PC, the same file is under:
 
 ```text
-C:\VMs\ar-share\diagnostics-20261010-direct-audio\
+C:\VMs\ar-share\diagnostics-20261010-direct-audio-r2\
 ```
 
 Do not repeat a failing run or start a longer/stall run. Review the saved
