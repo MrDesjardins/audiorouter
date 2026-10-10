@@ -52,8 +52,10 @@ render-publication repair. Latest packet-clock r2: preparation and 30 seconds
 pass, but the five-minute attempt failed and exposed a 38.5-minute synchronous
 reporting block that extended active recording past its deadline. The harness
 now uses bounded deferred reporting and a process watchdog; host regressions
-and the checksummed bounded-tone update are complete. Next: its 30-second
-guest check. Earlier 53 ms worker gaps/audio loss remain unresolved; see the
+and the checksummed bounded-tone update are complete. Its 30-second guest
+check passes: leases stop at 30,001 ms, child exit 0 without timeout, zero
+error counters. Next: updated bounded 300-second run. Earlier 53 ms worker
+gaps/audio loss remain unresolved; see the
 [packet-clock review](evidence/2026-10-09-m03-packet-clock-review.md) and active
 virtual cable plan. The [earlier review record](evidence/2026-10-09-m03-render-publication-review.md)
 and [virtual cable execution plan](virtual-cable.md) record the guest's passing

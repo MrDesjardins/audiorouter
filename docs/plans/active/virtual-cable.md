@@ -1788,3 +1788,12 @@ Only the Release static-runtime tone executable and two supporting scripts
 changed. Artifact hashes and exact next guest task are in the packet-clock
 review/retest procedure. Next: updated 30-second tone in the existing guest
 session; no reinstall/restore required. Review before any sustained run.
+
+Guest bounded-tone follow-up: archive `evidence-20261009-192823.zip` hash
+independently verified. Status/tone/collect pass; zero error counters and
+harness sequence gaps. Leases stop at 30,001 ms; process completes in 30.604 s
+without timeout. All 29 deferred snapshots and the valid 29.99-second WAV
+are present. Full measurements and limitations are in the review record.
+Next: bounded 300-second Tone with the same installed driver and audio setup;
+inspect control/worker timing alongside any loss. Sustained acceptance stays
+open until that and the remaining required gates have evidence.

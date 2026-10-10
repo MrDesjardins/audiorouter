@@ -221,3 +221,26 @@ byte-identical to verified r2 (SYS SHA256 remains `23F741CD5D4D455840898D0A614E3
 Invoking the copied VM script on the host gives its expected identity refusal
 before any step runs. No driver rebuild, host trust/security change or VM
 execution occurred. The next command is in the updated retest procedure.
+
+## Guest bounded-tone 30-second verification — 2026-10-09 19:28 local
+
+Archive `C:\VMs\ar-share\evidence-20261009-192823.zip`, independently verified
+SHA256 `CBE551D5EB47E86A314AB479658DB925D9B562C0A14AE4268FB9DE4598D5650F`.
+User ran the verified bounded-tone bundle against the unchanged r2 driver.
+Status 2/2, tone 4/4 and collect 2/2 pass. Both final driver reports have all
+five error counters zero; harness sequence gaps zero.
+
+Leases deactivated at **30,001 ms**, whole child process **30.6044054 seconds**,
+exit 0, no watchdog timeout. All 29 deferred interval snapshots are present.
+Maximum capture/render worker gaps **5,615 / 5,536 us**; control-loop gap
+**8,915 us**; heartbeat **77 us**, snapshot **162 us**, close **31 us**.
+The recording contains 2,999 blocks / 1,439,520 frames (**29.99 seconds**);
+RIFF/WAVE, 48-kHz stereo float32, data bytes 11,516,160 and file length
+11,516,204 were independently checked. This is not waveform continuity,
+kernel DPC or hardware latency evidence.
+
+The reporting/deadline repair worked in this short guest run. The earlier
+53-ms worker/audio-loss burst remains unresolved. Next: the updated bounded
+300-second Tone command in the same guest session, with loop/listener kept
+active. Review its interval/control timing and counters; no longer or stall
+qualification yet. Sustained VCAB-24 and VCAB-25/27/28 remain open.
