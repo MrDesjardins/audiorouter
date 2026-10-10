@@ -36,7 +36,8 @@ param(
         'verifier-on', 'fuzz', 'verifier-off', 'remove', 'collect')]
     [string] $Step,
     [int] $FuzzSeconds = 1800,
-    [ValidateRange(1, 3600)][int] $ToneSeconds = 600
+    [ValidateRange(1, 3600)][int] $ToneSeconds = 600,
+    [switch] $TraceScheduling
 )
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
@@ -50,6 +51,9 @@ Assert-DriverTestVmIdentity $env:COMPUTERNAME (Test-Path -LiteralPath 'C:\ar\IS_
 $principal = [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     throw 'Open PowerShell with "Run as administrator" inside the VM.'
+}
+if ($TraceScheduling -and ($Step -ne 'tone' -or $ToneSeconds -notin @(30,300))) {
+    throw 'Scheduling trace requires the tone step for 30 or 300 seconds.'
 }
 
 $package = Join-Path $root 'driver'
@@ -109,11 +113,36 @@ function Invoke-ToneTool([string[]] $Arguments, [string] $Wav) {
     # Native output goes straight to files. Console selection/output cannot
     # backpressure the tool, its heartbeats, or its deadline.
     Write-Host "Tone runs for ${duration}s; output is saved to files. Watchdog limit: ${timeout}s. Final results follow."
-    $run = Invoke-DriverVmProcess -Executable $tone -Arguments (@($Arguments) + @('--out', $Wav)) `
-        -Stdout $stdout -Stderr $stderr -TimeoutSeconds $timeout
+    $traceFailure = $null
+    if ($TraceScheduling) {
+        if ((Get-PSDrive -Name C).Free -lt 2GB) { throw 'Scheduling diagnostics require at least 2 GB free on guest C:; no traced tone was started.' }
+        Write-Host 'A VM scheduling trace will be saved. This diagnostic adds overhead; it is not release qualification.'
+        . (Join-Path $root 'vm-scheduling-trace.ps1')
+        $holder = [pscustomobject]@{ Result = $null }
+        try {
+            Invoke-DriverVmSchedulingRun -Recorder (Join-Path $env:SystemRoot 'System32\wpr.exe') -Directory (Join-Path $evidence 'scheduling') -Run {
+                # No console operations while WPR and audio leases are active.
+                $holder.Result = Invoke-DriverVmProcess -Executable $tone -Arguments (@($Arguments) + @('--out', $Wav)) `
+                    -Stdout $stdout -Stderr $stderr -TimeoutSeconds $timeout
+                if ($holder.Result.Code -ne 0) { throw "Native tone exited $($holder.Result.Code); preserve its reports." }
+            }
+        } catch {
+            if (-not $holder.Result) { throw }
+            $traceFailure = $_
+        }
+        $run = $holder.Result
+    } else {
+        $run = Invoke-DriverVmProcess -Executable $tone -Arguments (@($Arguments) + @('--out', $Wav)) `
+            -Stdout $stdout -Stderr $stderr -TimeoutSeconds $timeout
+    }
+    if ($traceFailure) {
+        $run | Add-Member -NotePropertyName NativeCode -NotePropertyValue $run.Code
+        if ($run.Code -eq 0) { $run.Code = 125 }
+    }
     $run | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidence 'tone-process.json') -Encoding UTF8
     $text = (Get-Content -LiteralPath $stdout -Raw) + "`r`n" + (Get-Content -LiteralPath $stderr -Raw)
     if ($run.TimedOut) { $text += "`r`nerror: tone process exceeded ${timeout}s watchdog; terminated. This run is invalid." }
+    if ($traceFailure) { $text += "`r`nerror: scheduling diagnostic failed: $traceFailure" }
     return [pscustomobject]@{ Text = $text; Code = $run.Code }
 }
 function Get-CableIds($Inventory, [string[]] $Letters) {

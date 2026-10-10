@@ -54,8 +54,10 @@ reporting block that extended active recording past its deadline. The harness
 now uses bounded deferred reporting and a process watchdog; host regressions
 and the checksummed bounded-tone update are complete. Its 30-second guest
 check passes: leases stop at 30,001 ms, child exit 0 without timeout, zero
-error counters. Next: updated bounded 300-second run. Earlier 53 ms worker
-gaps/audio loss remain unresolved; see the
+error counters. Its five-minute run ends on time but loses audio: both audio
+loops stall about 310 ms and the control loop about 317 ms in the same
+observation interval. Root cause remains unidentified; next is an opt-in guest
+scheduler trace, preserving WSL and the failed continuity gate. See the
 [packet-clock review](evidence/2026-10-09-m03-packet-clock-review.md) and active
 virtual cable plan. The [earlier review record](evidence/2026-10-09-m03-render-publication-review.md)
 and [virtual cable execution plan](virtual-cable.md) record the guest's passing

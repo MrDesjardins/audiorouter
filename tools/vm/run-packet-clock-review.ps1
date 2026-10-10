@@ -4,7 +4,8 @@ param(
     [ValidateSet('Prepare', 'Tone')]
     [string] $Phase = 'Prepare',
     [ValidateSet(30, 300)]
-    [int] $ToneSeconds = 30
+    [int] $ToneSeconds = 30,
+    [switch] $TraceScheduling
 )
 $ErrorActionPreference = 'Stop'
 $bundle = [IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\')
@@ -18,6 +19,7 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 if (-not (Test-Path -LiteralPath 'Z:\' -PathType Container)) {
     throw 'The Z: shared folder must be connected before starting.'
 }
+if ($TraceScheduling -and $Phase -ne 'Tone') { throw 'Scheduling trace is available only for the Tone phase.' }
 $entries = @(Get-Content -LiteralPath (Join-Path $bundle 'MANIFEST.txt') |
     Where-Object { $_ -match '^[a-fA-F0-9]{64}  ' })
 if ($entries.Count -eq 0) { throw 'Bundle manifest has no hashes.' }
@@ -36,7 +38,9 @@ Write-Host "Verified $($entries.Count) bundle files."
 Get-Content -LiteralPath (Join-Path $bundle 'driver\package.json') -Raw | Write-Host
 $script = Join-Path $bundle 'vm-checks.ps1'
 function Invoke-Check([string] $Step) {
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -Step $Step -ToneSeconds $ToneSeconds
+    $checkArguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $script, '-Step', $Step, '-ToneSeconds', $ToneSeconds)
+    if ($TraceScheduling -and $Step -eq 'tone') { $checkArguments += '-TraceScheduling' }
+    & powershell.exe @checkArguments
     if ($LASTEXITCODE -ne 0) { throw "$Step failed. Stop here; collecting evidence." }
 }
 $failure = $null
@@ -54,6 +58,7 @@ try {
 } catch {
     $failure = $_
 } finally {
+    Write-Host 'Checks finished. Collecting and copying evidence; large earlier recordings can make this take longer.'
     $collectionStart = Get-Date
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -Step collect
     if ($LASTEXITCODE -ne 0) { throw 'Collection failed; preserve C:\ar\evidence.' }

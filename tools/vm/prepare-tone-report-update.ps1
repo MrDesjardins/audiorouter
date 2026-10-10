@@ -44,6 +44,8 @@ foreach ($entry in $entries) {
 Copy-Item -LiteralPath (Join-Path $workspace 'target\vm-tools\release\examples\m03_bridge_tone.exe') `
     -Destination (Join-Path $destination 'tools\m03_bridge_tone.exe')
 Copy-Item -LiteralPath (Join-Path $workspace 'tools\vm\vm-checks.ps1') -Destination $destination
+Copy-Item -LiteralPath (Join-Path $workspace 'tools\vm\run-packet-clock-review.ps1') -Destination $destination
+Copy-Item -LiteralPath (Join-Path $workspace 'tools\vm\vm-scheduling-trace.ps1') -Destination $destination
 Copy-Item -LiteralPath (Join-Path $workspace 'tests\acceptance\m03-driver-vm-support.ps1') `
     -Destination (Join-Path $destination 'repo\tests\acceptance\m03-driver-vm-support.ps1')
 $commit = (& git -C $workspace rev-parse HEAD).Trim()

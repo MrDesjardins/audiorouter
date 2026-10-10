@@ -1797,3 +1797,44 @@ are present. Full measurements and limitations are in the review record.
 Next: bounded 300-second Tone with the same installed driver and audio setup;
 inspect control/worker timing alongside any loss. Sustained acceptance stays
 open until that and the remaining required gates have evidence.
+
+### 2026-10-09 19:35: bounded five-minute run still loses audio
+
+Archive `evidence-20261009-193519.zip`, SHA256
+`F77E1359EC22E368420A58BDC04ABD8A26ABEB2A1E35E141A49554DCBB4E6D2B`,
+independently verified. Tool exits 0/no timeout; leases stop at 300,003 ms,
+process 300.145662 s. Capture underrun 16,704 / render overrun 17,520 frames;
+all other error counters/harness sequence gaps zero. First loss snapshot at
+122.349 s correlates capture/render/control gaps 310.442/310.289/317.342 ms;
+second at 184.541 s correlates 23.117/23.222/28.291 ms. The output hang is
+repaired, but the sustained gate remains failed.
+
+All three independent loops were delayed in the same observation intervals.
+Mapped audio loops have no file/console/IOCTL call or shared control lock;
+maximum heartbeat operation was only 372 us. These facts support a broader
+execution delay, without identifying a guest DPC, guest scheduler, host or
+hypervisor cause. Host System log has no events in 19:31:50–19:33:25 local;
+VBox.log supplies no scheduler trace that distinguishes these possibilities.
+Do not blame sleep, relax counters, or change WSL/Hyper-V.
+
+Next objective (VCAB-24/27 diagnostics, VDEV-12 lifecycle): prepare an opt-in,
+guest-only scheduler trace around one bounded run, using built-in WPR
+GeneralProfile.Light (context switches/ready threads/DPC/ISR). Verify no
+existing recorder session, start only after status passes, stop/save the owned
+trace before collection even after tone failure, retain partial output and
+report startup/stop failure. Host-only fake-recorder tests must cover ownership,
+startup refusal and failed-tone cleanup; no host trace or VM run is authorized
+by those tests. Trace overhead makes this diagnostic, not release evidence.
+Rollback: omit the tracing option/use the retained bounded-tone bundle. Next:
+implement and verify the collector before handing off a trace command.
+
+Collector implemented inside the tone step: its traced callback runs only the
+redirected child under the existing watchdog; no console output occurs while
+trace/audio is active. Save/stop before counter reporting and archive creation.
+Use a unique named WPR instance and require guest free space. Host checks:
+77 fake-recorder/lifecycle/tone-integration assertions and 11 existing process
+regressions pass; scripts parse and host identity guard refuses tracing.
+The exported GeneralProfile.Light definition contains the intended scheduling
+keywords. No real host recording, VM operation or driver change was performed.
+Next: verify the separate diagnostics bundle (same driver/audio executable),
+then collect one five-minute guest trace. Root cause/sustained gate stay open.

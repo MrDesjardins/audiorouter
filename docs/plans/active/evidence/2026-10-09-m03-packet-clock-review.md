@@ -244,3 +244,88 @@ The reporting/deadline repair worked in this short guest run. The earlier
 300-second Tone command in the same guest session, with loop/listener kept
 active. Review its interval/control timing and counters; no longer or stall
 qualification yet. Sustained VCAB-24 and VCAB-25/27/28 remain open.
+
+## Guest bounded-tone five-minute failure — 2026-10-09 19:35 local
+
+Archive `C:\VMs\ar-share\evidence-20261009-193519.zip`, independently verified
+SHA256 `F77E1359EC22E368420A58BDC04ABD8A26ABEB2A1E35E141A49554DCBB4E6D2B`.
+Native tool exit 0, no watchdog timeout; leases stop at **300,003 ms** and
+the child finishes in **300.1456619 seconds**. The reporting/deadline repair
+holds for five minutes. All 299 deferred snapshots are present.
+
+The zero-error gate fails: capture underrun **16,704** frames (348 ms), render
+overrun **17,520** frames (365 ms). Other driver error counters and harness
+sequence gaps remain zero. Recording: 29,963 blocks / 14,382,240 frames,
+**299.63 seconds**, 370 ms short of the requested duration, close to the render
+loss plus startup boundary. This relationship is evidence of actual missing
+audio; no waveform or exact per-burst frame attribution is claimed.
+
+| Progress snapshot | Capture worker gap | Render worker gap | Control loop gap | New capture underrun / render overrun |
+| --- | --- | --- | --- | --- |
+| 122.349 s | 310.442 ms | 310.289 ms | 317.342 ms | 16,560 / 17,232 frames |
+| 184.541 s | 23.117 ms | 23.222 ms | 28.291 ms | 144 / 288 frames |
+
+Maximum heartbeat call 372 us, snapshot 141 us, close 482 us, WAV append
+30,998 us. Audio loops do mapped memory/tone arithmetic and short sleeps;
+they do no file, console or native control call and share no control lock.
+All three independently serviced loops are delayed in the same observation
+windows. This supports a broader execution delay, but does not distinguish
+guest scheduling, guest DPC/ISR, VirtualBox or host scheduling. It does not
+prove a whole-VM suspension or a specific defective driver. Host System event
+query at 19:31:50–19:33:25 local returned zero events. VBox.log has no trace
+that resolves the thread scheduling question. No host setting was changed.
+
+### Next diagnostic: scheduler trace
+
+An opt-in `-TraceScheduling` mode surrounds only the bounded, redirected
+native tone process with WPR `GeneralProfile.Light` in file mode. Its
+context-switch/ready-thread/DPC/interrupt events are documented by Microsoft:
+[General profile](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/recording-for-basic-system-diagnosis),
+[command options and named instances](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/wpr-command-line-options).
+Trace overhead makes the result diagnostic, not release qualification.
+
+The VM identity guard precedes tracing. Require an available GeneralProfile,
+known idle default recorder, and 2 GB guest free space. Use a fresh unique WPR
+instance name for start/status/stop/cancel, always as the last argument.
+Never cancel another recording. Save the owned trace before result reporting
+or ZIP collection, including after native tone failure. A failed/timed-out
+start prevents tone and cancels only that unique potentially partial instance.
+Stop/save failure is a diagnostic failure; retain command logs and report a
+failed cancellation explicitly. The callback performs only the owned child's
+bounded, redirected run: no console output while recording/audio is active.
+The duration + 60-second tone watchdog stays in place; WPR stop has a
+120-second limit. A VM crash/pause can still prevent guest-side cleanup;
+preserve the guest evidence if that occurs.
+
+No driver, buffer, ABI, WSL/Hyper-V or host recording change. Host WPR was only
+queried for status/profiles; no host recording was started. The collector's
+fake-recorder ownership/lifecycle checks do not establish real ETW validity.
+Next: prepare and verify a separate scheduling-trace bundle, then run one
+bounded 300-second diagnostic with unchanged loop/listener settings.
+
+Host verification of collector (no real recording or audio process launched):
+
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/acceptance/m03-vm-scheduling-trace.ps1`:
+  **77 checks pass**, evidence
+  `target/vm-trace-tests-825a5a090f164ec6a224aa7dd5061b61`. Fake recorder cases
+  cover successful save, failed native callback, existing/unknown recorder,
+  missing profile, failed/timed-out startup, failed stop/cancel, failed status
+  query and missing ETL. Integration invokes the actual `Invoke-ToneTool`
+  against a fake native-process boundary, verifying argument forwarding,
+  native exit preservation and exit 125 for failed trace save after native
+  exit 0. No test recording or driver was started on the host.
+- Existing owned-child process regressions: **11 checks pass**, evidence
+  `target/vm-process-tests-960b5fc03f7041c8b663132ec7aa38e2`.
+- Changed scripts parse; tracing wrapper refuses host invocation before any
+  recording; `git diff --check` passes. Documentation acceptance: 138 Markdown
+  files / 747 local links. Local Jev remains disabled by user request.
+- Host `wpr -status` / `-profiles` only queried existing status/capabilities;
+  `-exportprofile GeneralProfile.Light ... -filemode` saved a profile definition
+  under `target/wpr-profile-review`, without starting a trace. Its actual XML
+  contains CSwitch, ReadyThread, DPC, Interrupt and ThreadPriority keywords.
+  This does not establish that guest recording/start/save works.
+
+Prepare `diagnostics-20261009-scheduling-trace` separately from the retained
+bounded-tone bundle. Preserve identical driver and audio executable bytes;
+only the opt-in tracing scripts change. Follow the first section of the
+updated retest procedure; one 300-second diagnostic, then inspect the trace.
