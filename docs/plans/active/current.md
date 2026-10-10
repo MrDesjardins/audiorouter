@@ -53,8 +53,10 @@ and [virtual cable execution plan](virtual-cable.md) record the guest's passing
 smoke cycles, four-endpoint format inventory, and 30-second tone run. The
 first 10-minute attempt failed with earlier audio counter errors and a
 14m55s VirtualBox guest-execution stall. VirtualBox reports NEM “Snail” mode
-under the active Hyper-V hypervisor; review the host/VM configuration before
-another run. No test driver has been installed on the host.
+under the active Hyper-V hypervisor. The user requires WSL to remain
+available; do not disable Hyper-V-backed features. The guide's 4-vCPU/8-GB
+settings are already in use. Resolve a WSL-preserving test environment before
+another continuity run. No test driver has been installed on the host.
 
 AudioRouter will ship its own signed virtual cable so users do not need
 VB-Cable; VB-Cable/Voicemeeter stay supported. Lowest-cost signing

@@ -1629,3 +1629,15 @@ where VirtualBox can use native hardware virtualization. Do not reinstall the
 unchanged driver. Acceptance remains zero driver error counters and zero
 harness sequence gaps; rollback is the existing clean VM snapshot and
 previously installed driver.
+
+User decision (2026-10-09): preserve WSL; do not disable the Windows
+hypervisor or its dependent features. Host inspection found the documented
+VM settings already in use (4 vCPUs, 8192 MB, 100% execution cap, nested
+paging on), with VirtualBox NEM active. The host Balanced power plan has
+sleep-after set to Never on AC; no matching host power/boot/shutdown events
+were present for the stall window. The VM guide was corrected: this NEM mode
+is not assumed suitable for sustained audio qualification. Next: arrange a
+WSL-preserving validation path, such as a separate machine where VirtualBox
+has native hardware virtualization, or gather further evidence explaining
+the NEM scheduling stall before retrying. Do not repeat the 600-second run
+unchanged.

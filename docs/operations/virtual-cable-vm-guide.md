@@ -71,8 +71,14 @@ and VirtualBox must go through Windows to use it. Enable that bridge:
 This adds a Windows component. It does not change Secure Boot, Memory
 Integrity, test signing, drivers or audio. VirtualBox will show a small
 green turtle icon in the VM window's status bar, meaning it runs through
-Windows' hypervisor. That is expected; the VM is a bit slower, which does
-not matter for these tests.
+Windows' hypervisor. Some slowdown is expected. Do not assume that this mode
+is suitable for sustained audio qualification: on 2026-10-09 the guest
+stopped responding for 896 seconds during a 600-second tone attempt. Keep the
+Windows hypervisor enabled if WSL 2 or Memory Integrity depends on it. If a
+long audio run fails, stop and collect the guest and VirtualBox logs; do not
+repeat it unchanged or disable host virtualization features without choosing
+that tradeoff. Use a host where VirtualBox can use native hardware
+virtualization for sustained continuity evidence if this stall recurs.
 
 To check virtualization is on in the firmware: Task Manager → Performance →
 CPU → "Virtualization: Enabled". It is on by default on this PC's Intel
@@ -730,7 +736,7 @@ recording.
 | Popup "It looks like you started an upgrade and booted from installation media" | The install disk is still in the VM's DVD drive | **Never click No** (it starts a clean install that erases Windows). Eject the disk (Part 3 step 2), check the drive is empty, then click **Yes** |
 | Firmware menu after "Boot failure"; **Windows Boot Manager** returns straight to the menu | An upgrade was started from the install disk and the disk is now gone | Do not repair. Restore the last snapshot, eject the disk before starting, untick Secure Boot again if that snapshot predates 4.3, then cancel the update if it resumes |
 | **"Installing Windows 11 — xx%"** does not move | A feature update installing; slow in a VM | Wait while the disk icon flickers (up to 15 minutes per percentage). Only if it stays put for 30+ minutes with a dark disk icon: **Machine → Reset**, or restore the last snapshot |
-| VM very slow, turtle icon | Running through Windows' hypervisor | Expected; give the VM 4 CPUs and 8 GB, close other heavy apps |
+| VM very slow, turtle icon, or tone workers report a long poll gap | Running through Windows' hypervisor (NEM); a guest heartbeat/catch-up stall was observed on 2026-10-09 | Stop the run and collect the guest and VirtualBox logs. Keep 4 CPUs and 8 GB; close heavy apps. Do not disable Hyper-V-backed features if WSL 2 must remain available. Use a host with native VirtualBox hardware virtualization for sustained continuity qualification if the stall recurs |
 
 When in doubt: restore snapshot 2 and start the session again. Nothing in
 the VM can harm the PC.
