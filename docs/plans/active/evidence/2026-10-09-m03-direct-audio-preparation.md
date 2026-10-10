@@ -542,3 +542,57 @@ restore. This verifies backend selection for the bounded comparison; it does
 not establish playback quality. Next: user runs the unchanged speaker-only
 recorder/reference, with Media Player routed to guest Speakers, Repeat/Listen
 off and prior formats/volume retained; send current archive and audible report.
+
+## DirectSound capture result (2026-10-09)
+
+Archive `C:\VMs\ar-share\diagnostics-20261009-speaker-loopback\speaker-loopback-98d3cd98893d4095b97504508cf77ee6.zip`
+SHA-256 matches user output:
+`18C4850E40647A111E3C11B6AC505ECE230FE0FC31E1D8B9BCDEF66EABE15EDA`.
+WAV SHA-256:
+`3A12823775918AAAE48268021B403132A3C86A055A562B1FB10FADEB86D10E7C`.
+DirectSound startup is confirmed in the current VBox.log, including
+`Audio: Initializing DirectSound audio driver` and its device enumeration.
+
+Startup exit 0, 0.0748672 s, no timeout. Recorder exits 1 with
+`speaker capture storage exhausted or packet shape changed`; result has
+CaptureCompleted=false and Qualification=false. Saved metadata:
+
+- Elapsed 25.1114944 s; 1,543,360 stereo float32 frames at declared 44,100 Hz
+  = 34.996825397 nominal sample seconds. Next 448-frame packet exceeds
+  preallocated 35-second storage. Do not increase storage to hide this.
+- 3,445 saved packets, all 448 frames; packet metadata cap is 60,000.
+  Device-position increments match preceding packet frame counts throughout.
+  Flags: one startup discontinuity, 342 silent packets, 3,102 zero flags.
+- Maximum pump gap 8,482 us. First packet elapsed 410,577 us; last packet
+  elapsed 25,097,960 us. Packet QPC timestamps span 25.2071347 s for
+  1,542,912 position frames. Sample progress, packet QPC and worker elapsed
+  disagree; this does not identify which virtual clock/path is responsible.
+- Samples finite, peak 0.25 in each channel. Same 64-frame reference offset
+  and same 749,260-frame exact prefix (16.990022676 s) as earlier recording.
+  Final reference transition differs; no whole-recording pass is claimed.
+
+Offline command: `python target/speaker-review-98d3cd98/wave_review.py`, using
+bundled Python/NumPy, exits 0. It reads the checksummed archive in memory,
+validates the WAV header, compares PCM16-expanded reference bytes exactly
+and saves `offline-inspection.json` under that ignored workspace directory.
+No recorded audio is committed or played on the host. SharedCapture source
+review confirms each successful packet is copied once and released, with
+frame count/stride tied to the initialized format; no packet-copy duplication
+defect was established by this inspection.
+
+User: silent gaps are perfectly quiet; scratching during capture, then clean
+sound afterward (approximately 30 s). The recording stopped at the measured
+25.1114944 s above. Treat the capture-on versus capture-off observation as a
+useful hypothesis, not proof that MMCSS, 1-ms polling/timer resolution or a
+specific driver caused the audible effect. The original WAS recording and
+pre-capture listening observations also remain in the history.
+
+Next: one full 17-second playback on DirectSound with the recorder stopped,
+same reference/route/volume/formats and Listen/Repeat off. This checks all
+sections in the capture-off condition; no new recording/collect or bridge
+test. Keep prior driver loss/phase-break/continuity failures unresolved.
+Rollback is the documented powered-off default-backend restoration.
+
+Documentation verification: all 10 PowerShell blocks parse without execution;
+141 Markdown files / 778 local links and `git diff --check` pass. No code
+build/test or native audio operation was run by the agent for this review.

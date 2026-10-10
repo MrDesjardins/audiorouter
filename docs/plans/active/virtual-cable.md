@@ -2348,3 +2348,28 @@ Exact preparation/run/report steps are now Step 4 in the runbook. Preserve
 formats/volume, collect only this current run automatically, then review the
 recording and audible report before any further cable test. No new binary,
 driver rebuild, host audio operation or qualification claim.
+
+### DirectSound capture failed at its storage bound (2026-10-09)
+
+Returned speaker archive `98d3cd98` is checksum-verified. Recorder exits 1
+after 25.1114944 s, saving 1,543,360 frames / 34.996825 nominal sample seconds
+at 44.1 kHz. All 3,445 saved packets have 448 frames; metadata storage is far
+below its cap and device positions advance contiguously. The next full packet
+cannot fit the 35-second sample storage bound. Preserve this as a failed
+capture/timing observation; enlarging storage would conceal the disagreement.
+No new driver, recorder binary or machine setting is changed.
+
+Samples match the first 749,260 reference frames exactly at offset 64, as in
+the previous WAS recording. User reports perfectly quiet separators and
+scratching only during capture, with clean playback afterward (approximately
+30 s by ear; metadata gives the actual stop above). This suggests interaction
+with capture; it does not identify the polling loop, MMCSS/timer request,
+guest audio engine, HDA or VirtualBox backend as the cause.
+
+Next ordered comparison (same requirement IDs and failed gates): stop all
+recorders/bridge scripts, keep DirectSound/Listen-off/formats/volume unchanged,
+turn Repeat off and play only the same verified 17-second reference. This
+covers the full capture-off condition once; send audible section results.
+No recording/collect, longer run or driver test. Review timing/source paths
+before any further recorder variant. Exact block is Step 5 in the runbook.
+Rollback remains the powered-off default-backend restoration above.

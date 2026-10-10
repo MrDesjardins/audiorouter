@@ -186,6 +186,46 @@ without restoring a snapshot. The next bounded comparison is authorized.
 The helper/binary/reference are unchanged; the compared variable is the
 verified VirtualBox backend. Capture completion is not an audio-quality pass.
 
+**Received comparison result:** the silent gaps were perfectly quiet; user
+heard scratching during capture and clean playback after it ended. The
+recorder actually stopped at 25.111494 s with its storage bound reached:
+1,543,360 frames represent 34.996825 s at the declared 44.1-kHz rate.
+Its first 16.990023 s of samples still match the reference exactly. This
+is a sample/timing disagreement and a possible capture/playback interaction,
+not an established driver cause. Do not enlarge storage or repeat this
+recording unchanged. Full evidence is in the
+[DirectSound capture review](../plans/active/evidence/2026-10-09-m03-direct-audio-preparation.md#directsound-capture-result-2026-10-09).
+
+**Step 5 — one playback with the recorder stopped, inside the VM:**
+
+1. Stop current playback. Keep Cable B Listen off, Media Player routed to
+   Speakers, prior formats/volume and DirectSound selection unchanged.
+2. Turn Media Player's **Repeat off**. The reference should end after
+   **17 seconds**; if it continues, stop it and report that fact.
+3. Paste this block in the VM's PowerShell. It opens only the verified
+   reference in the existing player; it starts no recorder or bridge tool.
+
+   ```powershell
+   & {
+       $ErrorActionPreference = 'Stop'
+       if ($env:COMPUTERNAME -ine 'AR-DriverTest') { throw 'Run this inside AR-DriverTest.' }
+       if (Get-Process -Name 'm03_direct_audio','m03_bridge_tone' -ErrorAction SilentlyContinue) {
+           throw 'An audio diagnostic is still running. Stop here and send the output.'
+       }
+       $reference = 'C:\ar\diagnostics-20261009-speaker-loopback\reference-44100.wav'
+       if ((Get-FileHash -LiteralPath $reference -Algorithm SHA256).Hash -ne 'C9652D3C629C45FE7BAC8AB0C332A6668F7BD584E3A55323BA0CE9F54842D6A7') {
+           throw 'Reference checksum differs. Stop here.'
+       }
+       Invoke-Item -LiteralPath $reference
+   }
+   ```
+
+4. Report whether scratching is present in the first, middle and final tone
+   sections. This confirms the capture-off condition for a complete reference
+   on DirectSound; the earlier clean tail alone does not cover every section.
+   No collect command or new recording is needed. No driver-quality gate is
+   granted by this listening comparison.
+
 **Rollback — main PC, only with the VM Powered Off:**
 
 ```powershell

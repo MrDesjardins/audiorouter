@@ -124,9 +124,14 @@ comparison requires both backend selection and an override to avoid silent
 WAS substitution. The powered-off guard, saved baseline, startup-log check
 and exact rollback are prepared in the runbook. User applied the reviewed
 host block and booted normally. Fresh startup log confirms DSoundAudio.
-Next: one unchanged 30-second guest speaker recording/reference, with
-Media Player routed to Speakers and Listen/Repeat off; review before a new
-cable test. No change has been applied by the agent.
+The guest recorder now stops at 25.111494 s after receiving 34.996825 nominal
+seconds of samples and reaching its storage limit. Its first 16.990023 s of
+samples remain exactly equal to the reference. User reports quiet separators,
+scratching during capture and clean sound after capture ends. Next: one
+17-second DirectSound reference playback with the recorder stopped, to
+confirm every section in that condition. Hold further recorder/bridge runs;
+sample/timing discrepancy and capture interaction need review. No change has
+been applied by the agent.
 Preserve WSL and the separate measured scheduling/loss failures.
 Commands are in
 [Administrator PowerShell](../../operations/virtual-cable-paired-trace.md).
