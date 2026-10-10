@@ -2078,6 +2078,9 @@ crackles (user observation, not a digital-path measurement).
   9 Rust regressions, 75 PowerShell checks, release build, workspace/shell
   Clippy and both format checks. No host audio stream or driver was opened.
   See [preparation evidence](evidence/2026-10-09-m03-direct-audio-preparation.md).
-- Next action: publish the checked bundle and run the
+- Published: clean source `c0bc9595`, 37 verified bundle files, all 35 base
+  files unchanged, including every driver file. Share folder:
+  `C:\VMs\ar-share\diagnostics-20261010-direct-audio`.
+- Next action: run the
   [automatic 30-second guest diagnostic](../../operations/virtual-cable-direct-audio.md).
   First real direct recording and waveform review remain pending.

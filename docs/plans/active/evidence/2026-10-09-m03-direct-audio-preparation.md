@@ -78,6 +78,19 @@ by this preparation and remain open.
 
 ## Handoff and rollback
 
+Published copy-only bundle: `C:\VMs\ar-share\diagnostics-20261010-direct-audio`,
+prepared at `2026-10-10 05:06:11Z` from clean pushed source
+`c0bc9595d6f90259bb013f62bd39a82b4c1a18ef`. Independent read-only hashing
+verified all 37 entries and confirmed all 35 base files byte-identical.
+Only the new helper and wrapper are added. No base driver or tone binary is
+rebuilt/replaced, and no host endpoint is opened by preparing the share.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| MANIFEST.txt | `08CAF415683CD83C0B073D92052A8919168EC23D791E752EB26C63971F278549` |
+| m03_direct_audio.exe | `C93F329ED5A4ECB2085CBA50FEEC3524893DF6D844A61546C564C6DA8C970FFD` |
+| Unchanged audioroutervirtual.sys | `23F741CD5D4D455840898D0A614E39BFA588B96BE8CB2C1CF5E7AD5CAF0D34B3` |
+
 Use the [copy/paste guest procedure](../../../operations/virtual-cable-direct-audio.md).
 Stop Media Player so its signal cannot mix with the generated reference;
 keep the existing listener for simultaneous listening-path reproduction.
