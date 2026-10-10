@@ -71,7 +71,8 @@ lists the work packages. The current driver investigation uses the
 for bounded direct cable runs; sustained runs need the user-run
 [native VT-x session](operations/virtual-cable-native-vtx-session.md)
 (hypervisor off for one boot, with the exact restore steps for WSL and
-Memory Integrity) or a bare-metal test PC.
+Memory Integrity) or a bare-metal test PC. The [cable latency diagnostic](operations/virtual-cable-latency.md)
+prepares VCAB-25 measurement through a bridge pass-through.
 For agent continuation, start with the [detailed driver handoff](plans/active/virtual-cable-agent-handoff.md)
 and then the [virtual cable plan](plans/active/virtual-cable.md), whose
 Objective section has the latest candidate, evidence and open gates.
