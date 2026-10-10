@@ -69,6 +69,8 @@ Microsoft steps, and the [virtual cable plan](plans/active/virtual-cable.md)
 lists the work packages. The current driver investigation uses the
 [automatic direct audio diagnostic](operations/virtual-cable-direct-audio.md)
 to record the reported Cable B hiss before further sustained testing.
+For agent continuation, start with the [detailed driver handoff](plans/active/virtual-cable-agent-handoff.md),
+which records the latest verified candidate, next guest commands and open gates.
 
 The [release qualification checklist](operations/release-qualification.md)
 records the reproducible unsigned artifact flow, recovery expectations, and

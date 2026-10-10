@@ -1,5 +1,10 @@
 # Active plan — AudioRouter virtual cable (DEC-18)
 
+**Resuming with Claude or another agent:** start with the
+[detailed handoff](virtual-cable-agent-handoff.md). The 2026-10-10 candidate is
+prepared; its first clean guest smoke has not yet been reported. Older dated
+next-action notes below are historical when superseded by that handoff.
+
 Updated 2026-10-09. The driver is installed only in AR-DriverTest. Smoke,
 active format inventory and short tone checks pass; reported Cable B hiss and
 sustained audio loss still block qualification. Direct recordings have been

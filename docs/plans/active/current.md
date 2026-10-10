@@ -1,5 +1,9 @@
 # Active plan — post-0.0.8 maintenance
 
+Driver-agent resumption: read the [Claude / next-agent handoff](virtual-cable-agent-handoff.md)
+first. It records the prepared candidate, exact next guest step, completed
+checks, open defects and host/VM safety boundaries as of 2026-10-10.
+
 Updated 2026-10-07. Completed work through the code review P0/P1 fixes is in the
 [2026-10-04 to 2026-10-07 execution record](../archived/2026-10-07-maintenance-0.0.12-to-code-review.md);
 the current work is the code review P2/P3 follow-ups below.
