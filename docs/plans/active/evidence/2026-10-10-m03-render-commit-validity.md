@@ -480,3 +480,38 @@ audio otherwise. Command (inside the VM, Media Player and Listen off):
 ```
 
 Still not VCAB-24 (one hour, eight cables) or VCAB-25 latency evidence.
+
+## 300-second direct run — 2026-10-10 (failed; environmental stalls)
+
+Run `direct-502c64da3bb64391945da3fa9b0ba320` on the installed `492d8ca8`
+driver, bundle `ed47836c`. Archive
+`C:\VMs\ar-share\diagnostics-20261010-direct-audio-300s\direct-502c64da3bb64391945da3fa9b0ba320.zip`,
+SHA-256 `DB2D3117122E59498CF30E0BF4A56BD9B87782CCDACCB92FDD929F68C785E531`,
+extracted to `target/direct-300-502c64da`.
+
+- Counters: Cable B capture underrun 94,080; Cable A render underrun 64,944,
+  overrun 109,968; other error counters 0. Packet writes: accepted 29,674,
+  late 124, overrun 72. Analyzer failed both cables; 124 Cable B in-signal
+  discontinuity packets. Max worker gaps ~502 ms; full 300 s completed.
+- Timeline (1-s progress): every second with loss also shows user-mode worker
+  gaps — stalls of ~496 ms (5.0 s), ~502 ms (8.5 s), 232 ms (40.7 s),
+  212 ms (120.9 s) and persistent 20–50 ms gaps between ~9 s and ~63 s.
+  Windows' own late/overrun packet submissions rise in the same seconds.
+  From ~121 s to 300 s there is no counter change, no late packet and no gap.
+- Waveforms (10-s buckets, scratch `wav.cs`): all phase breaks fall in
+  0–70 s plus one near 121 s; both cables are clean afterwards. Cable B's
+  zeros at 290–310 s are post-tone silence. Breaks match counted packets.
+- Host-side VirtualBox log for this session: execution engine NEM
+  ("HM: VT-x is not available", Windows Hypervisor Platform), "TSC mode
+  RealTSCOffset ... not suitable"; no catch-up record in this session. Live
+  TM statistics show only averages (guests ~91 % halted).
+
+Interpretation: losses coincide with simultaneous starvation of independent
+guest processes (tone tool workers and Windows' audio engine), consistent
+with the previously recorded NEM scheduling limitation (VM guide and plan
+entries of 2026-10-09). The driver reported every loss honestly; no
+undetected corruption was found. This does not prove the stall mechanism:
+a guest scheduling trace during a stall would show whether every guest CPU
+is idle/absent (VM-level pause) or a guest thread runs. Sustained continuity
+(VCAB-24) cannot be qualified in this NEM-backed VM while WSL keeps the host
+hypervisor on; decision pending with the user.

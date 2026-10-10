@@ -125,8 +125,10 @@ documented (repair record). Candidate `492d8ca8` and r4 direct bundle are
 built and verified. VM 2026-10-10: two clean smokes, install/status and the
 30-second direct run passed (all error counters 0, 3,000 packets accepted on
 time, waveforms exact). The 300-second direct bundle (`ed47836c`) is built
-and host-verified. Next action: user runs it on the installed driver (command
-in the repair record); VCAB-24/25 remain open.
+and host-verified. Its run failed from VM-wide stalls (first ~63 s plus one
+at 121 s; clean from 121 s to 300 s; driver counted every loss). Next action:
+user decision between a traced 300-second run (stall attribution) and
+sustained qualification on a host without NEM; VCAB-24/25 remain open.
 Do not rerun r3 unchanged.
 
 Ship AudioRouter-owned virtual cables (up to 8, Cable A–H; 2 enabled by
