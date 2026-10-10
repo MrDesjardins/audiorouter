@@ -353,7 +353,9 @@ device in `Source/Main/adapter.cpp` and bridge helpers in
   from absolute DMA progress, including position queries and delayed callbacks,
   rather than timer invocation count. Notifications retain a separate last
   signaled count. Capture timestamps identify the first sample of the latest
-  completed packet. STOP resets position, counts and fractional carries;
+  completed packet; conversion back to QPC splits seconds/remainder before
+  multiplication so representable long-uptime timestamps remain valid.
+  STOP resets position, counts and fractional carries;
   PAUSE retains progress while RUN excludes elapsed pause time. Capture and
   render catch-up process at most the surviving DMA lap and count lost frames,
   never loop over historical laps at DISPATCH_LEVEL. Runtime continuity and

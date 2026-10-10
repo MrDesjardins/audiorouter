@@ -1709,7 +1709,8 @@ then document measured host results and the precise next guest command.
 
 Implementation/checks completed: packet clock and separate notification state,
 first-sample timestamp, STOP fractional reset, bounded capture traversal and
-interval worker diagnostics. C++ host units: 569 checks; Rust tone example:
+interval worker diagnostics. C++ host units: 569 checks (578 after the QPC
+conversion follow-up below); Rust tone example:
 15 tests; WDK x64 and ARM64 acceptance: pass; workspace/shell Clippy and fmt:
 pass. Documentation validation: 138 Markdown files / 746 local links; retest
 script parses in Windows PowerShell and refuses host execution. Details and limitations:
@@ -1718,3 +1719,12 @@ Next: build the identified candidate, then follow the
 [bounded VM procedure](../../operations/virtual-cable-packet-clock-retest.md).
 Original runtime failure remains unverified until the guest run; do not mark
 continuity or measured kernel latency as passed from host-safe checks.
+
+Final arithmetic review found another independent defect: converting an
+absolute capture timestamp back to QPC multiplied before dividing, overflowing
+after about 51 hours of uptime at 10 MHz. Split seconds/remainder before
+scaling; regress 100-day timestamps and representable/overflow boundaries.
+Use the `repair-20261009-packet-clock-r2` bundle including this follow-up,
+not the earlier packet-clock candidate. Both WDK targets and all 578 C++
+checks pass again after this follow-up. Next: verify the rebuilt test-signed
+bundle and hand off the bounded procedure.

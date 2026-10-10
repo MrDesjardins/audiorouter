@@ -39,7 +39,12 @@ lost frame. WSL/Hyper-V and host drivers/settings are unchanged.
 4. **STOP retained fractional clock state.** Reset both time/byte remainders
    and notification progress with DMA position. PAUSE retains progress and
    RUN establishes a fresh QPC anchor, excluding time spent paused.
-5. **Loss snapshots lacked matching worker timing.** The tone tool now prints
+5. **Long-uptime timestamp conversion overflowed.** Multiplication of absolute
+   100 ns time by QPC frequency before division rejects otherwise valid
+   timestamps after about 51 hours at 10 MHz. Split seconds/remainder before
+   scaling and check both intermediate ranges and the final sum. This is an
+   independent long-uptime defect, not a demonstrated cause of the recent run.
+6. **Loss snapshots lacked matching worker timing.** The tone tool now prints
    maximum capture/render pump gaps for each progress interval as well as
    lifetime peaks. Workers only update fixed atomic counters; reporting stays
    on the control thread. These are diagnostic observation windows, not proof
@@ -57,7 +62,7 @@ no Visual Studio repair or persistent environment change.
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Production arithmetic/bridge regressions | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File drivers/audiorouter-virtual/tests/build-tests.ps1` | 569 checks pass; `target/driver-unit-release/tests.log` |
+| Production arithmetic/bridge regressions | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File drivers/audiorouter-virtual/tests/build-tests.ps1` | 578 checks pass; `target/driver-unit-release/tests.log` |
 | WDK x64 compile/catalog/source guards | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/acceptance/m03-driver-build.ps1 -Platform x64` | pass; build-only |
 | WDK ARM64 compile/catalog/source guards | same command with `-Platform ARM64` | pass; build-only |
 | Tone worker/recording regressions | `cargo test --locked -p audiorouter-windows-audio --example m03_bridge_tone` | 15 pass |
@@ -71,6 +76,8 @@ no Visual Studio repair or persistent environment change.
 New C++ checks exercise 163 ms and 895 s delays, partial/first packets,
 ULONG packet-number wrap, first-sample location, zero buffer/configuration,
 and bounded traversal through maximum ULONG displacement/position wrap.
+The follow-up additionally covers 100-day 10/50 MHz timestamps, sub-tick
+fractions, representable maximum output and intermediate/final overflow.
 They test production helpers, not a running kernel or DPC latency. Source
 guards additionally require correct callback wiring and STOP reset.
 The new Rust check confirms interval resets preserve the lifetime peak.

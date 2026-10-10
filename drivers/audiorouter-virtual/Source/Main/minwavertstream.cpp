@@ -943,13 +943,13 @@ NTSTATUS CMiniportWaveRTStream::GetReadPacket
         return STATUS_INVALID_DEVICE_STATE;
     }
     ULONGLONG timeOfAvailablePacketInHns = ullDmaTimeStamp - deltaTimeInHns;
-    if (timeOfAvailablePacketInHns >
-        MAXULONGLONG / m_ullPerformanceCounterFrequency.QuadPart)
+    ULONGLONG timeOfAvailablePacketInQpc = 0;
+    if (!AudioRouterHnsToQpc(timeOfAvailablePacketInHns,
+        static_cast<ULONGLONG>(m_ullPerformanceCounterFrequency.QuadPart),
+        &timeOfAvailablePacketInQpc))
     {
         return STATUS_INTEGER_OVERFLOW;
     }
-    ULONGLONG timeOfAvailablePacketInQpc = timeOfAvailablePacketInHns * m_ullPerformanceCounterFrequency.QuadPart / 10000000;
-
     *PerformanceCounterValue = timeOfAvailablePacketInQpc;
 
     // No flags are defined yet

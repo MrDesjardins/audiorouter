@@ -192,6 +192,17 @@ static void packetClockChecks() {
         }
     }
     require(AudioRouterSurvivingDmaWindow(1, ULONG_MAX, 0).Bytes == 0, "zero DMA size yields empty window");
+    ULONGLONG ticks = 0;
+    const ULONGLONG hundredDaysHns = 100ULL * 86400 * 10000000 + 1234567;
+    require(AudioRouterHnsToQpc(hundredDaysHns, 10000000, &ticks) && ticks == hundredDaysHns, "capture timestamp remains valid after 100 days at 10 MHz");
+    require(AudioRouterHnsToQpc(hundredDaysHns, 50000000, &ticks) && ticks == hundredDaysHns * 5, "capture timestamp retains fractional seconds at 50 MHz");
+    require(AudioRouterHnsToQpc(1, 1000000, &ticks) && ticks == 0, "QPC conversion truncates sub-tick fraction");
+    require(AudioRouterHnsToQpc(~0ULL, 10000000, &ticks) && ticks == ~0ULL, "representable QPC boundary does not overflow intermediate multiplication");
+    require(!AudioRouterHnsToQpc(~0ULL, 20000000, &ticks), "truly overflowing QPC output is rejected");
+    require(!AudioRouterHnsToQpc(1, 0, &ticks), "zero QPC frequency is rejected");
+    require(!AudioRouterHnsToQpc(9999999, ~0ULL, &ticks), "unrepresentable fractional multiplication fails closed");
+    require(!AudioRouterHnsToQpc(19999999, ~0ULL, &ticks), "large whole and fractional clock overflow fails closed");
+    require(!AudioRouterHnsToQpc(10000001, ~0ULL - 42, &ticks), "overflow when adding valid whole and fractional ticks is rejected");
 }
 
 int main() {

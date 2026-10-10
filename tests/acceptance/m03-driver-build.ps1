@@ -769,7 +769,7 @@ foreach ($required in @(
         'advancedLinearPosition < linearPositionOfAvailablePacket',
         'deltaLinearPosition > MAXULONGLONG / 10000000',
         'deltaTimeInHns > ullDmaTimeStamp',
-        'timeOfAvailablePacketInHns >')) {
+        'AudioRouterHnsToQpc(timeOfAvailablePacketInHns,')) {
     if (-not $stream.Contains($required)) {
         throw "WaveRT packet timestamp arithmetic guard is missing: $required"
     }

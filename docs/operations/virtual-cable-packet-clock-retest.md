@@ -18,9 +18,9 @@ Paste this whole block into that PowerShell window:
 
 ```powershell
 & {
-    robocopy.exe 'Z:\repair-20261009-packet-clock' 'C:\ar\repair-20261009-packet-clock' /E /R:1 /W:1
+    robocopy.exe 'Z:\repair-20261009-packet-clock-r2' 'C:\ar\repair-20261009-packet-clock-r2' /E /R:1 /W:1
     if ($LASTEXITCODE -ge 8) { throw 'Copy failed. Stop here.' }
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\repair-20261009-packet-clock\run-packet-clock-review.ps1' -Phase Prepare
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\repair-20261009-packet-clock-r2\run-packet-clock-review.ps1' -Phase Prepare
     if ($LASTEXITCODE -ne 0) { throw 'Preparation failed. Send the output; stop here.' }
     Copy-Item -LiteralPath 'Z:\loop-test-60s.wav' -Destination 'C:\ar\loop-test-60s.wav'
 }
@@ -48,7 +48,7 @@ settings during measurement.
 ## 4. Run 30 seconds
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\repair-20261009-packet-clock\run-packet-clock-review.ps1' -Phase Tone -ToneSeconds 30
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\repair-20261009-packet-clock-r2\run-packet-clock-review.ps1' -Phase Tone -ToneSeconds 30
 ```
 
 Wait until it ends. Continue only if **Tone passed** appears and every error
@@ -60,7 +60,7 @@ already been collected and copied to the host shared folder.
 Keep the audio loop and listener running. Paste:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\repair-20261009-packet-clock\run-packet-clock-review.ps1' -Phase Tone -ToneSeconds 300
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\repair-20261009-packet-clock-r2\run-packet-clock-review.ps1' -Phase Tone -ToneSeconds 300
 ```
 
 Wait approximately five minutes plus collection time. Send the final output
