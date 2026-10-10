@@ -55,9 +55,14 @@ first 10-minute attempt failed with earlier audio counter errors and a
 14m55s VirtualBox guest-execution stall. VirtualBox reports NEM “Snail” mode
 under the active Hyper-V hypervisor. The user requires WSL to remain
 available; do not disable Hyper-V-backed features. The guide's 4-vCPU/8-GB
-settings are already in use. User was away during the run; next is a supervised
-300-second diagnostic with the VM foreground before deciding on another
-600-second run. No test driver has been installed on the host.
+settings are already in use. A supervised 300-second run with the VM kept
+awake and foreground completed without a long pause, but recorded four bursts
+of audio errors (16,704 capture underrun frames / 348 ms; 19,152 render
+overrun frames / 399 ms; maximum pump gaps about 163 ms). The user confirms
+the VM did not sleep and no screen saver ran. This rules out those proposed
+causes, but does not identify why the VM was intermittently descheduled. Keep
+the continuity gate failed; review the run evidence and scheduling diagnostics
+before any further long run. No test driver has been installed on the host.
 
 AudioRouter will ship its own signed virtual cable so users do not need
 VB-Cable; VB-Cable/Voicemeeter stay supported. Lowest-cost signing

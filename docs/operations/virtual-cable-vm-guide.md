@@ -73,12 +73,16 @@ Integrity, test signing, drivers or audio. VirtualBox will show a small
 green turtle icon in the VM window's status bar, meaning it runs through
 Windows' hypervisor. Some slowdown is expected. Do not assume that this mode
 is suitable for sustained audio qualification: on 2026-10-09 the guest
-stopped responding for 896 seconds during a 600-second tone attempt. Keep the
-Windows hypervisor enabled if WSL 2 or Memory Integrity depends on it. If a
-long audio run fails, stop and collect the guest and VirtualBox logs; do not
-repeat it unchanged or disable host virtualization features without choosing
-that tradeoff. Use a host where VirtualBox can use native hardware
-virtualization for sustained continuity evidence if this stall recurs.
+stopped responding for 896 seconds during a 600-second tone attempt. A later,
+supervised 300-second attempt completed with the VM awake and foreground, but
+still recorded 348 ms of capture underruns and 399 ms of render overruns.
+Keeping the VM foreground did not clear the continuity failure, and the logs
+do not prove its root cause. Keep the Windows hypervisor enabled if WSL 2 or
+Memory Integrity depends on it. If an audio run fails, stop and collect the
+guest and VirtualBox logs; do not repeat it unchanged or disable host
+virtualization features without choosing that tradeoff. Use a host where
+VirtualBox can use native hardware virtualization for sustained continuity
+evidence if these failures recur.
 
 To check virtualization is on in the firmware: Task Manager → Performance →
 CPU → "Virtualization: Enabled". It is on by default on this PC's Intel

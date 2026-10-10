@@ -1635,13 +1635,26 @@ hypervisor or its dependent features. Host inspection found the documented
 VM settings already in use (4 vCPUs, 8192 MB, 100% execution cap, nested
 paging on), with VirtualBox NEM active. The host Balanced power plan has
 sleep-after set to Never on AC; no matching host power/boot/shutdown events
-were present for the stall window. The user notes they were away from the
-machine during the failed run; this could be relevant if the host/VM became
-idle, but the available logs do not prove that explanation. The VM guide was
-corrected: NEM mode is not assumed suitable for sustained audio qualification.
-Next diagnostic: keep the VM window foreground and the host awake, with the
-looped file routed to Cable A Input, and run a supervised 300-second tone
-attempt. This spans the earlier 178- and 269-second counter increases. Collect
-and review its evidence before deciding whether another 600-second run is
-justified. Preserve WSL; do not change Hyper-V settings or reinstall the
-unchanged driver.
+were present for the 14m55s stall. The earlier suggestion that the guest may
+have idled while the user was away is not supported: the user confirms the VM
+remained on and neither sleep nor a screen saver occurred.
+
+Supervised 300-second diagnostic (2026-10-09): completed the full duration,
+with no long pause or harness sequence gap. Four progress snapshots showed
+new counter bursts at 58.160 s (816 capture underrun / 1,824 render overrun
+frames), 83.234 s (7,008 / 8,496 cumulative), 210.589 s (13,728 / 15,696),
+and 273.788 s (16,704 / 19,152). Final totals correspond to 348 ms of
+capture underrun and 399 ms of render overrun at 48 kHz; maximum measured
+capture/render pump gaps were 163,040 / 163,082 us. Thus keeping the VM
+awake/foreground avoided the previous multi-minute execution pause but did not
+produce clean continuity. The user's confirmation rules out sleep and screen
+saver as causes. NEM scheduling remains a plausible contributor, not a proven
+root cause. Evidence archive: `C:\VMs\ar-share\evidence-20261009-175425.zip`,
+SHA256 `477BD491D3C8BD84B364A4337F581EEA5A5D23739B61E5557E09867317033CAB`;
+guest tone evidence is `20261009-174917-tone/tone.txt` in the archive.
+
+Next: do not repeat the unchanged long test. Review VM/host scheduling and
+diagnostic instrumentation, preserving WSL and leaving Hyper-V settings
+untouched. The continuity gate remains failed; do not claim sustained runtime
+qualification or install the test driver on the host. Preserve the clean VM
+snapshot and unchanged driver package.
