@@ -34,6 +34,23 @@ so treat the numbers as an upper bound until measured under native VT-x
    low-latency periods (target p95 ≤ 20 ms). Jitter target: p99 − p1 ≤ 2 ms.
    Any lost or corrupted impulse fails the targets.
 
+## Optional: quiet the guest first
+
+Traces show VM audio losses only during guest background bursts (Windows
+Update, Defender, background tasks). The bundle includes a reversible,
+guest-only script. After copying the bundle (first line of the block below),
+in Administrator PowerShell inside the VM:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-cable-latency\quiet-guest.ps1' -Apply
+```
+
+It records the current values, pauses Windows Update for 7 days, disables
+Automatic Maintenance, adds Defender exclusions for `C:\ar` and the test
+tools, updates Defender signatures now, then waits (up to 15 minutes) for 60
+quiet seconds. `-Status` shows the settings; `-Revert` restores exactly what
+it recorded. It refuses to run outside AR-DriverTest.
+
 ## Run it (inside the VM)
 
 Close Media Player and turn Cable B Listen off. In **Administrator PowerShell
