@@ -395,3 +395,12 @@ Host verification (Windows PowerShell 5.1; no real host recording/audio run):
 Next: prepare/verify the separate `diagnostics-20261009-scheduling-trace-r2`
 script bundle, then a two-second guest TraceProbe only. Review its saved event
 content before a five-minute diagnostic. No audio fix or trace success claimed.
+
+Prepared artifact: `C:\VMs\ar-share\diagnostics-20261009-scheduling-trace-r2`,
+clean source `ee2048a6f73f223a7bd9e366a48ba6aac3a69a6d`, built
+`2026-10-10 03:00:52Z`. All **32** manifest hashes independently pass. All
+16 driver files match the previous bundle; tone executable still SHA256
+`A0393BCEA4DBA6277DEED02977C393CBFA1DE5AAE909658E054C0D7550157CBD`.
+Copied wrapper refuses host TraceProbe and copied WPRP parses with read-only
+WPR query. Next: the guest TraceProbe command in the retest procedure; send
+output and review the small copied archive before any audio test.

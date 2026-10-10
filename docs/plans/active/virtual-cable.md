@@ -1877,3 +1877,8 @@ reports any error other than the observed no-profiles code. Probe collection
 archives only its own folder, avoiding earlier large audio files. Full checks
 and evidence paths are in the packet-clock review. Next: prepare and verify
 the separate r2 script update, then review the two-second guest probe.
+
+Separate r2 diagnostic bundle prepared from clean `ee2048a6`: 32 hashes pass,
+all 16 driver files and tone executable unchanged; copied host guard and
+read-only profile query pass. Artifact identity is in the review record.
+Next action: guest TraceProbe only, then inspect its trace and exact errors.
