@@ -399,3 +399,83 @@ Docs: 141 Markdown files / 773 local links pass; diff checks pass.
 
 The reference hash is unchanged. Actual guest speaker capture is still
 pending; this package publication runs no audio and changes no host settings.
+
+## Guest speaker recording review (2026-10-09)
+
+User operated the bounded capture inside AR-DriverTest and heard crackles
+at reference seconds **0–5 and 12–16**. The agent opened no host audio endpoint
+and made no machine/audio/driver setting change.
+
+Received archive:
+`C:\VMs\ar-share\diagnostics-20261009-speaker-loopback\speaker-loopback-0e7000c055ba41d392abb3a902097fca.zip`.
+SHA-256 matches the user's output:
+`3D1CE8550A60E9D511627DC8765C0F31D5BA13973650DB0546FB1C5E358CF8A3`.
+Raw `capture\speakers.wav` SHA-256:
+`45E62F47FD86B13FEF3D30D064A1519EEEA81CE3E16CD4857CB9D822CA4DD1E6`.
+Reference SHA-256 remains
+`C9652D3C629C45FE7BAC8AB0C332A6668F7BD584E3A55323BA0CE9F54842D6A7`.
+
+Observed endpoint: Speakers (High Definition Audio Device), opaque ID
+`{0.0.0.00000000}.{15bef167-ae9c-4c78-814b-843520a938d8}`. Recorder startup
+and final exit are zero, no timeout/error. WAV is native stereo IEEE float32,
+44,100 Hz, 1,320,256 frames (29.937778 s); recorder elapsed 30.0053374 s.
+All samples finite; peak 0.25 in both channels. Maximum pump gap 15,324 us.
+
+Offline exact comparison: read the reference as little-endian signed PCM16,
+expand each sample to float32 by dividing by 32,768; read the recording as
+little-endian float32. Offset is 64 recorded frames. Compare both channels
+without resampling, amplitude adjustment, sine fitting or tolerance:
+
+```python
+reference = pcm16.astype(numpy.float32) / 32768
+delta = recorded[64:64 + len(reference)] - reference
+first_different_frame = numpy.flatnonzero(numpy.any(delta != 0, axis=1))[0]
+# 749260; every preceding stereo frame is identical.
+```
+
+| Reference interval | Mismatching channel samples | Maximum absolute difference |
+| --- | --- | --- |
+| 0–5 s (997/47 Hz; reported noisy) | 0 | 0 |
+| 5–6 s (silence) | 0 | 0 |
+| 6–11 s (997/997 Hz) | 0 | 0 |
+| 11–12 s (silence) | 0 | 0 |
+| 12–16 s (47/47 Hz; reported noisy) | 0 | 0 |
+
+Exact prefix: 749,260 frames, 16.990022676 s. The final 440 frames of the
+first reference differ around the playback transition; tone sections
+continue afterward. Do not treat the whole 30-second capture as one clean
+17-second playback. An exploratory RMS-span sine fit was discarded because
+adjacent repeated tone sections merge into spans with different frequencies;
+the evidence above is a direct sample comparison, not that invalid fit.
+
+Packet metadata retains 2,947 packets of 448 frames, 35 discontinuity flags
+(including the first packet), and 34 position gaps totaling 15,232 frames.
+Do not infer actual missing samples from these flags/position jumps alone:
+they coexist with the bit-exact prefix. They remain unresolved timing
+observations; no physical-clock or whole-recording continuity claim is made.
+
+Offline review command (bundled Python with NumPy, Windows host, no audio):
+`python target/speaker-review-0e7000c0/exact_review.py`, exit 0.
+The safely extracted source archive, reproducible scratch script and
+`offline-inspection.json` remain under that ignored target directory; raw
+audio is not committed. No new test or build was run for this review.
+
+Inference: the reported crackles in the compared intervals are introduced
+after the guest loopback capture point, not present in those captured mix
+samples. Loopback is not host/acoustic capture
+([Microsoft loopback recording](https://learn.microsoft.com/en-us/windows/win32/coreaudio/loopback-recording)).
+Guest HDA/device rendering, VirtualBox transport/backend and host playback
+remain candidates; this recording does not identify which is responsible.
+The separate direct-r2 bridge loss (12,912 frames in each direction), Cable A
+phase breaks and sustained-continuity gate remain failed.
+
+Read-only VBoxManage machine query failed at COM initialization with
+E_ACCESSDENIED; existing XML/log evidence remains the configuration source.
+Next: review installed-version playback/backend behavior before preparing a
+single reversible comparison. No new run, settings change, driver rebuild,
+host audio operation or WSL/Hyper-V change is requested by this finding.
+Rollback: documentation only; all bundles and installed driver are unchanged.
+
+Review verification: `node tools/docs/validate.mjs` passes 141 Markdown files
+and 775 local links; `git diff --check` passes. Code tests/builds are not
+rerun for this documentation-only change.

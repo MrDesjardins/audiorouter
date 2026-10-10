@@ -109,12 +109,18 @@ configuration/log review shows HDA, HostAudioWas and default Focusrite speaker
 output; it does not identify a defective component. With Cable B Listen off,
 the user now hears much less static but several distinct crackles remain in
 the early/final portions, and the middle is not perfectly clean either. Keep
-Listen off. Next is a bounded guest speaker-loopback recording of the same
-reference to locate digital breaks before the sound leaves the guest,
-as documented in the
+Listen off. The bounded guest speaker-loopback recording is now reviewed:
+after a 64-frame alignment, the first 749,260 stereo frames (16.990023 s)
+match the reference exactly, including both reported noisy sections and
+silent separators. Audible crackles in those sections arise after this
+capture boundary; the exact downstream component is unproved. The final
+440 reference frames differ and further tone sections continue; packet
+position gaps/flags are retained, not silently waived. No whole-recording
+or driver pass is claimed. Next is read-only VirtualBox playback/backend
+review before preparing a reversible comparison, as documented in the
 [direct audio runbook](../../operations/virtual-cable-direct-audio.md#current-next-step-supported-format-speaker-reference).
-Review that recording before another driver run. It does not test host audio
-or grant an audio-quality pass on capture completion.
+No new driver/audio run or settings change is requested. Preserve WSL and
+the separate measured scheduling/loss failures.
 Commands are in
 [Administrator PowerShell](../../operations/virtual-cable-paired-trace.md).
 See the

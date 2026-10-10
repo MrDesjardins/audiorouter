@@ -3,8 +3,9 @@
 Updated 2026-10-09. The driver is installed only in AR-DriverTest. Smoke,
 active format inventory and short tone checks pass; reported Cable B hiss and
 sustained audio loss still block qualification. Direct recordings have been
-reviewed. The current next action is the guest speaker-loopback recording
-at the end of this plan; do not repeat the direct diagnostic unchanged.
+reviewed, including the guest speaker-loopback capture. The current next
+action is read-only playback/backend review at the end of this plan;
+do not repeat the completed diagnostics unchanged.
 All implementation and testing happens on
 the user's Windows 11 development PC and its VirtualBox test VM, with the
 host's Hyper-V/WSL capability preserved.
@@ -2266,3 +2267,34 @@ Manifest SHA-256:
 `7F899E6AC49C211E32F7EB61E0F2E01738A692ED3D1BFAEA1481860D18B769FC`.
 Next: the exact speaker-loopback guest command in the runbook. Real guest
 capture and signal attribution remain pending; no driver qualification pass.
+
+### Speaker recording reviewed: noisy sections match exactly (2026-10-09)
+
+The user heard crackles at reference seconds 0–5 and 12–16. Returned archive
+`speaker-loopback-0e7000c055ba41d392abb3a902097fca.zip` matches the reported
+SHA-256. Native stereo float32/44.1-kHz recording: 1,320,256 frames,
+29.937778 seconds, elapsed 30.005337 s, maximum pump gap 15.324 ms.
+After aligning by 64 frames, 749,260 consecutive reference frames match
+both channels exactly (16.990023 s), including both reported noisy sections
+and both silent separators. Last 440 frames of the first reference differ;
+subsequent tone sections continue. No full-recording pass is claimed.
+
+Retain 35 discontinuity flags (including startup) and 34 device-position
+gaps totaling 15,232 frames. These metadata anomalies occur despite exact
+sample agreement in the compared prefix; do not convert them into asserted
+sample loss or treat the virtual device position as an independently verified
+physical clock. Full checksums, reproduction and limits are in the
+[speaker evidence](evidence/2026-10-09-m03-direct-audio-preparation.md#guest-speaker-recording-review-2026-10-09).
+
+Decision (VCAB-12/20/24/29, VDEV-12): investigate the audible reproduction
+after this capture boundary separately from the measured bridge loss. Do
+not make speculative driver/buffer/rate changes based on the hiss alone.
+No acceptance criterion is waived. Installed driver remains `97b393d5`.
+
+Next ordered work: review the installed VirtualBox version's playback/backend
+configuration and logs read-only; prepare at most one reversible comparison
+with original settings and rollback recorded before a user run. The initial
+`VBoxManage showvminfo` query failed with COM E_ACCESSDENIED; only existing XML
+and logs have been read successfully. No configuration change was attempted.
+Leave Listen off; do not request another driver/long/stall run now. Preserve
+WSL/Hyper-V and host settings. Rollback for this review is documentation only.

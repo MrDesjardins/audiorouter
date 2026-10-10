@@ -21,7 +21,31 @@ crackles in the early/final portions. The middle is not perfectly clean either.
 Times are approximate; silence quality is unconfirmed. This does not identify
 a 47-Hz or sample-rate defect. Keep Listen off.
 
-### Next step: record the guest speaker mix once
+### Completed guest speaker recording: review before another test
+
+The returned `speaker-loopback-0e7000c055ba41d392abb3a902097fca.zip`
+matches the user's checksum. After a 64-frame alignment, **749,260 stereo
+frames (16.990023 seconds) match the PCM16 reference exactly** when expanded
+to float32. Both reported noisy sections, 0–5 and 12–16 seconds, have zero
+sample differences. The two silent separators also match exactly.
+
+This places the reported audible crackles downstream of the guest loopback
+capture point for those sections. It does not identify whether guest HDA,
+VirtualBox's audio backend or the host playback path introduces them. The
+last 440 frames of the first reference differ, and further tone sections
+continue afterward; the full 30-second recording is not declared clean.
+Packet position gaps/discontinuity flags remain in the evidence and do not
+by themselves establish missing audio: the matching sections include them.
+See the [speaker recording evidence](../plans/active/evidence/2026-10-09-m03-direct-audio-preparation.md#guest-speaker-recording-review-2026-10-09).
+
+**Next:** leave Listen off and stop playback after this completed comparison.
+Review the current VirtualBox playback configuration/backend before preparing
+one reversible comparison. No new audio run or configuration change is
+requested here. Preserve WSL/Hyper-V, installed driver and speaker formats.
+The independent bridge loss and sustained-continuity gates remain failed.
+
+The following command is retained to reproduce the completed recording;
+do not repeat it unchanged.
 
 A new user-mode bundle records the VM's exact Speakers endpoint for 30 seconds
 and opens the same 17-second reference after the recorder is ready. It starts
@@ -127,8 +151,8 @@ Playback lasts **17 seconds**. There is one second of silence between parts:
 
 User reports continuous static in all three parts. Do not repeat this completed
 comparison unchanged. The separately prepared 48-kHz reference remains held;
-use the listener comparison above next. No continuity gate has passed through
-this playback observation.
+the completed listener and speaker-recording reviews are above. No continuity
+gate has passed through this playback observation.
 
 ## Previous direct-recording procedure
 
@@ -227,5 +251,6 @@ path. Neither result alone identifies the exact defective function.
   The driver package and native bridge-tone binary are copied unchanged.
   Rollback is to stop this test and use the previous bundle.
 
-Next task: review both direct waveforms; repair the measured owning layer,
+Next task: investigate playback after the guest loopback boundary and the
+separate shared scheduling pause; repair only the established owning layer,
 then qualify that same build with bounded short/sustained and specified gates.
