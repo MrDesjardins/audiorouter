@@ -2331,3 +2331,11 @@ override. Original default/WAS state is checked before and after. No global
 override, host endpoint, WSL/Hyper-V, security, power or controller change.
 Exact commands and source links are in the
 [backend comparison runbook](../../operations/virtual-cable-direct-audio.md#prepared-next-step-virtualbox-playback-backend-comparison).
+
+User applied the guarded host block successfully. Original configuration:
+`C:\VMs\ar-share\vbox-audio-before-336a68538bfa437aa8167432a0de8729.xml`.
+Read-only verification confirms current HDA/DirectSound and machine override
+`VBoxInternal2/Audio/WindowsDrv=dsound`. No VirtualBoxVM process is running;
+the existing log ends with powered-off shutdown and belongs to the earlier
+HostAudioWas session. Next: user starts VM normally, then verify the fresh
+startup log selects DSoundAudio before requesting reference playback.

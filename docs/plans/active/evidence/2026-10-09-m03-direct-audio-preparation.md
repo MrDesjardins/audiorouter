@@ -527,3 +527,11 @@ This is a playback-path hypothesis comparison, not a proven fix or driver
 qualification. DirectSound still uses Windows audio services. All measured
 bridge-loss/phase-break/sustained-continuity failures remain open. Next:
 user shuts down guest Windows normally before the guarded host block.
+
+User completed the powered-off host block: original XML saved to
+`C:\VMs\ar-share\vbox-audio-before-336a68538bfa437aa8167432a0de8729.xml`;
+both setting commands succeeded. Agent read-only XML inspection confirms HDA,
+DirectSound selection and machine override `dsound`. No VirtualBoxVM process
+is running; existing log ends with powered-off shutdown of the earlier WAS
+session. This confirms configuration only, not actual DirectSound startup.
+Next: user boots normally; read the new log before any playback/capture.
