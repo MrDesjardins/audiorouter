@@ -33,7 +33,14 @@ foreach ($entry in $entries) {
 }
 Copy-Item -LiteralPath $binary -Destination (Join-Path $output 'tools\m03_direct_audio.exe')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-direct-audio.ps1') -Destination $output
-$manifest = @('AudioRouter automatic direct audio diagnostic; guest-only record, offline analyze',"source: $commit", "base: $base", "prepared: $([DateTime]::UtcNow.ToString('u'))",'')
+# A standard candidate base has no paired-tone files; the runner needs these
+# definitions. A paired-tone base keeps its own reviewed copy unchanged.
+$supportTarget = Join-Path $output 'paired-trace-support.ps1'
+if (-not (Test-Path -LiteralPath $supportTarget)) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'paired-trace-support.ps1') -Destination $supportTarget }
+$driver = Get-Content -LiteralPath (Join-Path $output 'driver\package.json') -Raw | ConvertFrom-Json
+if (-not $driver.gitCommit -or $driver.dirty) { throw 'Base driver package lacks a clean source identity.' }
+$manifest = @('AudioRouter automatic direct audio diagnostic; guest-only record, offline analyze',"source: $commit", "base: $base",
+    "driver: $($driver.gitCommit) built $($driver.builtAt)", "prepared: $([DateTime]::UtcNow.ToString('u'))",'')
 foreach ($file in Get-ChildItem -LiteralPath $output -File -Recurse | Sort-Object FullName) {
     $manifest += '{0}  {1}' -f (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLower(),$file.FullName.Substring($output.Length+1)
 }
