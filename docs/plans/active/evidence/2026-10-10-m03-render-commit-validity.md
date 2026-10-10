@@ -515,3 +515,42 @@ a guest scheduling trace during a stall would show whether every guest CPU
 is idle/absent (VM-level pause) or a guest thread runs. Sustained continuity
 (VCAB-24) cannot be qualified in this NEM-backed VM while WSL keeps the host
 hypervisor on; decision pending with the user.
+
+## All-CPU guest silence in the saved 2026-10-09 trace, and the traced run
+
+Commit `5b386608` adds `m03-scheduler-trace --silences` (offline, ETL only)
+and `run-direct-audio.ps1 -TraceScheduling`. Host checks: reader built with
+`/W4 /WX /MT` (8 self-test checks), direct-audio orchestration 171 passed
+(including a traced 300-second case), trace regressions 128 passed.
+
+Applied to the saved 2026-10-09 five-minute guest trace
+(`target/trace-tone-review-20261009-200614/scheduling.etl`): 3,420,580
+events over 300.618 s, none lost, QPC 10 MHz. Three intervals of at least
+20 ms had **no event of any kind on any of the four guest CPUs**: 35.173 ms
+from QPC 65,370,043,251, 27.954 ms from 63,007,889,594 and 24.161 ms from
+66,000,927,518. The two largest coincide with that run's recorded losses
+(longest worker wait ≈ 237.311 s after lease origin 62,997,286,114, i.e.
+QPC ≈ 65,370,396,000; first loss ≈ 1.089 s, QPC ≈ 63,008,176,000). The audio
+workers were requesting 1 ms waits, so an executing guest records events
+every few milliseconds; total silence means the guest was not executing
+(paused or starved below the guest OS). This attributes those losses to the
+virtualization layer, not to the driver or a guest thread. It does not yet
+cover today's 200–500 ms stalls; the traced run below tests that.
+
+Bundle `C:\VMs\ar-share\diagnostics-20261010-direct-audio-300s-trace`:
+source `5b386608`, driver `492d8ca8` (SYS SHA-256 unchanged), 35 entries,
+manifest SHA-256
+`EF114592FC0583410A0BB42570A8DD46289C19089FB6C56BBDB1D4A497143F89`. Command
+inside the VM (driver already installed; Media Player and Listen off):
+
+```powershell
+& {
+    robocopy.exe 'Z:\diagnostics-20261010-direct-audio-300s-trace' 'C:\ar\diagnostics-20261010-direct-audio-300s-trace' /E /R:1 /W:1 /XF direct-*.zip | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw 'Copy failed. Stop here.' }
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-direct-audio-300s-trace\run-direct-audio.ps1' -Seconds 300 -TraceScheduling
+    if ($LASTEXITCODE -ne 0) { throw 'Direct audio test finished with a failure. Evidence was preserved; send the output.' }
+}
+```
+
+Host review: `m03-scheduler-trace --silences` on the new ETL, aligned with
+the tone progress counters and the driver's `last_qpc_time`.

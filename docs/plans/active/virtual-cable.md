@@ -127,8 +127,9 @@ built and verified. VM 2026-10-10: two clean smokes, install/status and the
 time, waveforms exact). The 300-second direct bundle (`ed47836c`) is built
 and host-verified. Its run failed from VM-wide stalls (first ~63 s plus one
 at 121 s; clean from 121 s to 300 s; driver counted every loss). Next action:
-user decision between a traced 300-second run (stall attribution) and
-sustained qualification on a host without NEM; VCAB-24/25 remain open.
+a traced 300-second run (bundle `5b386608`; the saved 2026-10-09 trace
+already shows all-CPU guest silences at its losses), then sustained
+qualification on a host without NEM; VCAB-24/25 remain open.
 Do not rerun r3 unchanged.
 
 Ship AudioRouter-owned virtual cables (up to 8, Cable A–H; 2 enabled by
