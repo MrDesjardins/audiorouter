@@ -1604,10 +1604,14 @@ VM, or its host paused it. The earlier 37/47 ms continuity errors occurred
 before that pause, so the result also fails even when the long gap is set
 aside.
 
-Next: do not rerun tone yet. Collect Windows System and Power-Troubleshooter
-events for 2026-10-09 17:10–17:35 from the guest, and inspect the VirtualBox
-host log for the same interval to determine whether the VM was suspended,
-paused, or starved. Then review VM/host power and scheduling settings before
-another continuity attempt. Do not reinstall the unchanged driver. Acceptance
-remains zero driver error counters and zero harness sequence gaps; rollback
-is the existing clean VM snapshot and previously installed driver.
+The host's available `VBox.log.1` is an older session (opened
+2026-10-09T03:51:36Z); the current `VBox.log` is empty. Neither covers the
+tone run, so the host log does not yet establish why the workers stopped.
+Next: do not rerun tone yet. Collect Windows System and
+Power-Troubleshooter events for 2026-10-09 17:10–17:35 from the guest. If
+those do not explain the 14m55s gap, retrieve the VirtualBox log for the exact
+VM session used by this run and check whether the host slept or the VM was
+paused/starved. Review VM/host power and scheduling settings before another
+continuity attempt. Do not reinstall the unchanged driver. Acceptance remains
+zero driver error counters and zero harness sequence gaps; rollback is the
+existing clean VM snapshot and previously installed driver.
