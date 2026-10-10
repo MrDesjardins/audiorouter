@@ -157,7 +157,8 @@ one-slot continuity remain unqualified. This finding does not prove the saved
 phase-break cause or explain the independent HDA scratches. Keep the VM off
 and further recorder/bridge runs held. The clean-source `28b989f5` candidate
 is ready at `C:\VMs\ar-share\repair-20261010-render-commits`: 33 package checks
-and all 32 manifest hashes pass. Next is one clean guest smoke from checkpoint
+and all 32 manifest hashes pass. Its first clean guest smoke passed
+2026-10-10; next is the second clean smoke from checkpoint
 `03-test-signing-ready-20261007`, as recorded below; no audio run yet.
 No installed driver or host setting is changed by the agent. See the
 [repair and validation record](evidence/2026-10-10-m03-render-commit-validity.md) and the

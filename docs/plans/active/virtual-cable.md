@@ -2,7 +2,7 @@
 
 **Resuming with Claude or another agent:** start with the
 [detailed handoff](virtual-cable-agent-handoff.md). The 2026-10-10 candidate is
-prepared; its first clean guest smoke has not yet been reported. Older dated
+prepared; its first clean guest smoke passed, the second is next. Older dated
 next-action notes below are historical when superseded by that handoff.
 
 Updated 2026-10-09. The driver is installed only in AR-DriverTest. Smoke,
@@ -104,9 +104,11 @@ See the [repair record](evidence/2026-10-10-m03-render-commit-validity.md).
 Repair committed/pushed as `28b989f5`; the clean-source candidate at
 `C:\VMs\ar-share\repair-20261010-render-commits` passes 33 package integrity
 checks and independent verification of all 32 manifest files. Checksums and
-exact guest command are in the repair record. Next action: user restores
-`03-test-signing-ready-20261007` and runs one guest `retry-smoke.ps1`; review
-its evidence before the second clean smoke or any audio test.
+exact guest command are in the repair record. First clean guest smoke passed
+2026-10-10 (`evidence-20261010-102200.zip`; install, four endpoints, removal,
+baseline restored; no audio streamed). Next action: user restores
+`03-test-signing-ready-20261007` again and runs the same `retry-smoke.ps1`
+for the second independent clean smoke, before any audio test.
 
 Ship AudioRouter-owned virtual cables (up to 8, Cable A–H; 2 enabled by
 default, the user picks 1–8) with the app, with studio-grade sound

@@ -125,3 +125,28 @@ and one smoke, cleans up the driver and collects/copies evidence to the host
 share. Send the output. Do not start Media Player, Listen, tone, stall, fuzzer
 or a longer run during this installation check. A second clean smoke and the
 focused direct waveform check remain subsequent steps after evidence review.
+
+## First clean guest smoke — 2026-10-10 (passed)
+
+Environment: AR-DriverTest restored from `03-test-signing-ready-20261007`,
+Administrator PowerShell in the guest, no audio tools running. Command as above.
+Guest clock run `20261010-102108` (preflight) to `20261010-102200` (collect).
+
+- Runner verified 32 copied files; package identity `28b989f5…`, `dirty=false`,
+  `builtAt=2026-10-10T17:08:27.6787581Z`, test-signed x64 Release.
+- Preflight: 15/15 passed. Smoke: A1 baseline, A2 install, A3 endpoints and
+  A14 uninstall + baseline passed. Collect: 2/2 passed.
+- Install: `oem5.inf`, `ROOT\MEDIA\0000` started, no restart required, no
+  default role changed. Four endpoints, all `OK`: Cable A/B Input (render,
+  `{0.0.0…}`) and Cable A/B Output (capture, `{0.0.1…}`).
+- Removal: `oem5.inf` removed, no restart required; before/after baseline
+  JSON files are byte-identical.
+- Archive on host: `C:\VMs\ar-share\evidence-20261010-102200.zip`, SHA-256
+  `3CCD1A1A97151DFF39B6FE6FB9CFA0DCEAA2AA436077F5B5739670CC991EC82F`;
+  extracted to ignored `target/smoke1-20261010-102200`. It also contains
+  three 2026-10-07 preflight folders carried in the checkpoint's `C:\ar\evidence`;
+  they are not part of this run.
+
+Scope: installation, enumeration and cleanup only. No audio was streamed, so
+packet-mode activation, waveform continuity and counters remain unqualified.
+Next: the second independent clean smoke from the same checkpoint and command.
