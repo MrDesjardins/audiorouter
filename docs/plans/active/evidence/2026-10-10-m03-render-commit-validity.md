@@ -593,3 +593,25 @@ This VM cannot qualify VCAB-24 sustained continuity. Options for the user:
 quiet the guest (pause Windows Update, Defender exclusions or a test-only
 policy) for diagnostic runs, and qualify sustained continuity on bare metal
 or on a host where VirtualBox uses native VT-x.
+
+## Cross-trace activity analysis — 2026-10-10
+
+`m03-scheduler-trace --activity` (commit `d83cbeb3`; one pass for names and
+periodic-thread detection, one for 1-second buckets) on both saved guest
+traces, watching `audiodg.exe` and the test tools (7 periodic real-time
+threads found in each):
+
+| Trace | Late-wake buckets (audio-thread wait ≫ baseline) | Guest activity in those buckets | Recorded losses |
+| --- | --- | --- | --- |
+| 2026-10-09 five-minute | 1 s (33.7 ms); 237–246 s (30–44 ms) | `MoUsoCoreWorker` (Windows Update) 20–53 %, `svchost` netsvcs 14–44 % of a CPU; CPUs 25–37 % busy | ≈1.089 s; 237.7–246.7 s |
+| 2026-10-10 traced (`5d7337e8`) | 0–1 s; 209 s; 227 s; 258–270 s; 290 s (17–49 ms) | `MoUsoCoreWorker`, `MsMpEng` (Defender) up to 80 %, `SecurityHealthService`, `backgroundTaskHost`, `svchost`; CPUs 20–67 % busy | ≈2 s; 209.7 s; 227.7 s; 257–269 s; 291 s |
+
+Baseline audio-thread wait outside those buckets: ≈15 ms (2026-10-09) and
+≤14.75 ms (2026-10-10, 100–200 s); ready-to-running stayed ≤2.6 ms
+throughout. Both runs therefore lost audio exactly when guest background
+maintenance ran: the VM (NEM) delivers the audio threads' timers late while
+the guest is busy. The 2026-10-09 run also shows short all-CPU silences.
+Practical consequence: quieting the guest (pausing Windows Update, Defender
+exclusions/settled signatures, letting post-boot maintenance finish) should
+remove most VM losses even before a native VT-x session; it is not a
+substitute for VCAB-24 qualification on native VT-x or bare metal.
