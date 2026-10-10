@@ -1,6 +1,35 @@
 # Automatic direct audio diagnosis
 
-**2026-10-10 r3 (current):** the render-commit candidate `28b989f5` passed two
+**2026-10-10 r4 (current):** slot-provenance candidate `492d8ca8`
+([repair record](../plans/active/evidence/2026-10-10-m03-render-commit-validity.md#slot-provenance-candidate-and-guest-steps--2026-10-10)).
+After a first clean smoke from `03-test-signing-ready-20261007` (command in
+the record), power off, restore the same checkpoint, boot, and paste this in
+Administrator PowerShell **inside the VM** with Media Player and Cable B Listen off:
+
+```powershell
+& {
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'Z:\repair-20261010-slot-provenance\retry-smoke.ps1'
+    if ($LASTEXITCODE -ne 0) { throw 'Second smoke failed. Stop here and send the output.' }
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\vm-checks.ps1' -Step install
+    if ($LASTEXITCODE -ne 0) { throw 'Install failed. Stop here and send the output.' }
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\vm-checks.ps1' -Step status
+    if ($LASTEXITCODE -ne 0) { throw 'Status failed. Stop here and send the output.' }
+    $collectionStart = Get-Date
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\vm-checks.ps1' -Step collect
+    if ($LASTEXITCODE -ne 0) { throw 'Collection failed; preserve C:\ar\evidence.' }
+    $zip = Get-ChildItem -LiteralPath 'C:\ar' -Filter 'evidence-*.zip' -File |
+        Where-Object { $_.LastWriteTime -ge $collectionStart } |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if (-not $zip) { throw 'No new evidence ZIP found.' }
+    Copy-Item -LiteralPath $zip.FullName -Destination 'Z:\'
+    robocopy.exe 'Z:\diagnostics-20261010-direct-audio-r4' 'C:\ar\diagnostics-20261010-direct-audio-r4' /E /R:1 /W:1 /XF direct-*.zip | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw 'Copy failed. Stop here.' }
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-direct-audio-r4\run-direct-audio.ps1'
+    if ($LASTEXITCODE -ne 0) { throw 'Direct audio test failed. Evidence was preserved; send the output.' }
+}
+```
+
+**2026-10-10 r3 (history):** the render-commit candidate `28b989f5` passed two
 clean smokes and install/status. Bundle
 `C:\VMs\ar-share\diagnostics-20261010-direct-audio-r3` adds the unchanged
 direct runner and static recorder to that candidate. The exact command, with

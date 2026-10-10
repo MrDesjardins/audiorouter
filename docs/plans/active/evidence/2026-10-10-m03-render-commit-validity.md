@@ -377,3 +377,36 @@ precede the lock release in `SetWritePacket`.
 
 After these fixes: 738 offline checks, x64 and ARM64 WDK acceptance passed
 again (`target/provenance-*-acceptance.log`).
+
+## Slot-provenance candidate and guest steps — 2026-10-10
+
+Built from clean commit `492d8ca82cac177d792fe0561003a8e157c4fab5`
+(`builtAt=2026-10-10T18:07:59.3587015Z`, test-signed x64 Release) with the
+process-local Hostx64 tools; log `target/slot-provenance-candidate-build.log`.
+Package checks 33 passed; all 32 manifest entries re-verified independently.
+
+- Base: `C:\VMs\ar-share\repair-20261010-slot-provenance`; SYS SHA-256
+  `10CF8E879DE85E3A924CDCC0DBA2987D00CB8328DAB9CBA870B997F3EF952381`;
+  manifest SHA-256
+  `97D9CD1DA8354C145E9623D68F938AE0D2EA53784FFBBA469F38835E86B128D6`.
+  The packaged tone tool contains the packet-writes report.
+- Direct bundle: `C:\VMs\ar-share\diagnostics-20261010-direct-audio-r4`, source
+  and driver `492d8ca8`, 35 entries, manifest SHA-256
+  `F0BBF409914901FAF149AC23B05C552F5D954A8D1EF5861960CB1277BA1F9236`.
+
+Guest sequence (VirtualBox controls on the host; commands in Administrator
+PowerShell inside AR-DriverTest; Media Player and Cable B Listen off):
+
+1. Restore `03-test-signing-ready-20261007`, boot, run the first clean smoke:
+   `powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'Z:\repair-20261010-slot-provenance\retry-smoke.ps1'`.
+   Continue only if it ends with `Smoke passed`.
+2. Power off without saving state, restore the same checkpoint, boot, and run
+   one combined block: second clean smoke, install, status, collect, copy the
+   r4 bundle and the 30-second direct audio test. Each step stops the block on
+   failure. The exact block is in the user message of 2026-10-10 and in the
+   direct audio runbook.
+
+Expected new output: `render-source packet writes (cable-a): NativeBridgePacketCounters { accepted, late, overrun }`
+next to the counters. Interpretation: late or overrun counts show Windows'
+submission timing; render underrun should now be only frames consumed before
+a late write. Gates are unchanged: zero error counters and clean waveforms.
