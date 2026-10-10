@@ -1,6 +1,6 @@
 <# One bounded, automatic guest diagnostic on the already installed driver. #>
 [CmdletBinding()]
-param()
+param([ValidateSet(30, 300)][int] $Seconds = 30)
 $ErrorActionPreference = 'Stop'
 $bundle = [IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\')
 if ($env:COMPUTERNAME -ine 'AR-DriverTest' -or $bundle -notlike 'C:\ar\*') { throw 'Run inside AR-DriverTest from the copied bundle under C:\ar.' }
@@ -34,8 +34,8 @@ try {
     $status = Invoke-DriverVmProcess -Executable $powershell -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $bundle 'vm-checks.ps1'),'-Step','status') `
         -Stdout (Join-Path $evidence 'status.txt') -Stderr (Join-Path $evidence 'status-stderr.txt') -TimeoutSeconds 60
     if ($status.Code -ne 0) { throw 'Installed-driver status failed. No audio test started.' }
-    Write-Host 'Automatic 30-second test: Cable A generated source and Cable B direct recording. No manual playback needed.'
-    $arguments = @('record',$capture) | ForEach-Object { ConvertTo-DriverProcessArgument $_ }
+    Write-Host "Automatic $Seconds-second test: Cable A generated source and Cable B direct recording. No manual playback needed."
+    $arguments = @('record',$capture,[string]$Seconds) | ForEach-Object { ConvertTo-DriverProcessArgument $_ }
     $process = Start-Process -FilePath $probe -ArgumentList ($arguments -join ' ') -WindowStyle Hidden -PassThru `
         -RedirectStandardOutput (Join-Path $evidence 'probe.txt') -RedirectStandardError (Join-Path $evidence 'probe-stderr.txt')
     $null = $process.Handle
@@ -51,8 +51,8 @@ try {
     if ($process.HasExited) { throw 'Direct recorder ended before native tone started.' }
     $before = @(Get-ChildItem -LiteralPath 'C:\ar\evidence' -Directory -Filter '*-tone' | Select-Object -ExpandProperty FullName)
     try {
-        $tone = Invoke-DriverVmProcess -Executable $powershell -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $bundle 'vm-checks.ps1'),'-Step','tone','-ToneSeconds','30') `
-            -Stdout (Join-Path $evidence 'tone.txt') -Stderr (Join-Path $evidence 'tone-stderr.txt') -TimeoutSeconds 90
+        $tone = Invoke-DriverVmProcess -Executable $powershell -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $bundle 'vm-checks.ps1'),'-Step','tone','-ToneSeconds',[string]$Seconds) `
+            -Stdout (Join-Path $evidence 'tone.txt') -Stderr (Join-Path $evidence 'tone-stderr.txt') -TimeoutSeconds ($Seconds + 60)
         $codes.Tone = $tone.Code
         $tone | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidence 'tone-process.json') -Encoding UTF8
     } finally {
@@ -76,8 +76,8 @@ try {
         @{ Kind = 'b'; Wav = (Join-Path $capture 'cable-b-output.wav') }
     )) {
         $kind = $item.Kind
-        $analysis = Invoke-DriverVmProcess -Executable $probe -Arguments @('analyze',$item.Wav,$kind,(Join-Path $evidence "metrics-$kind.json")) `
-            -Stdout (Join-Path $evidence "analysis-$kind.txt") -Stderr (Join-Path $evidence "analysis-$kind-stderr.txt") -TimeoutSeconds 20
+        $analysis = Invoke-DriverVmProcess -Executable $probe -Arguments @('analyze',$item.Wav,$kind,(Join-Path $evidence "metrics-$kind.json"),[string]$Seconds) `
+            -Stdout (Join-Path $evidence "analysis-$kind.txt") -Stderr (Join-Path $evidence "analysis-$kind-stderr.txt") -TimeoutSeconds $(if ($Seconds -eq 300) { 180 } else { 20 })
         $codes["Signal$kind"] = $analysis.Code
         Write-Host "Cable $($kind.ToUpper()) signal analysis: exit $($analysis.Code) (0 = diagnostic passed)."
     }

@@ -18,7 +18,24 @@ pub use speaker::record_speaker;
 
 const RATE: usize = 48_000;
 const STRIDE: usize = 8;
-const MAX_SECONDS: usize = 100;
+/// Storage and worker-deadline margin beyond the requested diagnostic length.
+const MARGIN_SECONDS: u64 = 70;
+/// Shortest capture packet the endpoints advertise (128 frames at 48 kHz).
+const MAX_PACKETS_PER_SECOND: usize = RATE / 128;
+
+/// The diagnostic supports exactly 30 seconds (default) or 300 seconds.
+pub fn parse_seconds(value: Option<&str>) -> Result<u64, String> {
+    match value {
+        None | Some("30") => Ok(30),
+        Some("300") => Ok(300),
+        Some(other) => Err(format!("duration must be 30 or 300 seconds, not {other}")),
+    }
+}
+
+/// Storage bound in seconds for a requested diagnostic length.
+fn storage_seconds(seconds: u64) -> u64 {
+    seconds + MARGIN_SECONDS
+}
 
 pub fn write_json(path: &Path, value: &Value) -> Result<(), String> {
     let mut file = OpenOptions::new()
@@ -63,13 +80,13 @@ fn select_endpoint(
     Ok(format.clone())
 }
 
-pub fn record(directory: &Path) -> Result<(), String> {
+pub fn record(directory: &Path, seconds: u64) -> Result<(), String> {
     let stop = Arc::new(AtomicBool::new(false));
     let worker_stop = Arc::clone(&stop);
     let (ready_tx, ready_rx) = mpsc::sync_channel(1);
-    let worker = std::thread::spawn(move || pump(worker_stop, ready_tx));
+    let worker = std::thread::spawn(move || pump(worker_stop, ready_tx, seconds));
     // Control/file I/O stays off the service thread. Even if this controller
-    // stalls, the service thread has its own 100-second monotonic deadline.
+    // stalls, the service thread has its own storage-bounded monotonic deadline.
     let control: Result<(), String> = (|| {
         let metadata = ready_rx
             .recv_timeout(Duration::from_secs(10))
@@ -80,7 +97,7 @@ pub fn record(directory: &Path) -> Result<(), String> {
             directory.join("ready.json"),
         )
         .map_err(|e| e.to_string())?;
-        let deadline = Instant::now() + Duration::from_secs(90);
+        let deadline = Instant::now() + Duration::from_secs(seconds + 60);
         while !directory.join("stop").exists() && !worker.is_finished() && Instant::now() < deadline
         {
             std::thread::sleep(Duration::from_millis(50));
@@ -109,7 +126,11 @@ struct Recording {
     error: Option<String>,
 }
 
-fn pump(stop: Arc<AtomicBool>, ready: mpsc::SyncSender<Value>) -> Result<Recording, String> {
+fn pump(
+    stop: Arc<AtomicBool>,
+    ready: mpsc::SyncSender<Value>,
+    seconds: u64,
+) -> Result<Recording, String> {
     let (_guard, capabilities) = AudioServiceThreadGuard::enter();
     if !capabilities.com_multithreaded
         || !capabilities.mmcss_pro_audio
@@ -143,8 +164,9 @@ fn pump(stop: Arc<AtomicBool>, ready: mpsc::SyncSender<Value>) -> Result<Recordi
     }
     // Allocate every storage area before Start. Packet metadata is bounded
     // even for 128-frame capture packets over the complete watchdog interval.
-    let mut bytes = Vec::with_capacity(RATE * MAX_SECONDS * STRIDE);
-    let mut packets = Vec::with_capacity(60_000);
+    let limit = storage_seconds(seconds);
+    let mut bytes = Vec::with_capacity(RATE * limit as usize * STRIDE);
+    let mut packets = Vec::with_capacity(MAX_PACKETS_PER_SECOND * limit as usize);
     let mut packet = vec![0u8; RATE * STRIDE];
     let mut generated = vec![0u8; capacity * STRIDE];
     let mut submitted = 0u64;
@@ -159,16 +181,14 @@ fn pump(stop: Arc<AtomicBool>, ready: mpsc::SyncSender<Value>) -> Result<Recordi
     ready
         .try_send(json!({"sourceId":source.id,"captureId":sink.id,"rate":RATE,
         "channels":2,"bits":32,"format":"IEEE_FLOAT","sourceFrequencies":[440,660],
-        "captureFrequencies":[997,47],"renderBufferFrames":capacity}))
+        "captureFrequencies":[997,47],"renderBufferFrames":capacity,"seconds":seconds}))
         .map_err(|e| e.to_string())?;
     let start = Instant::now();
     let mut previous = start;
     let mut max_gap_us = 0u128;
     let mut error = None;
     let outcome = (|| {
-        while !stop.load(Ordering::Acquire)
-            && start.elapsed() < Duration::from_secs(MAX_SECONDS as u64)
-        {
+        while !stop.load(Ordering::Acquire) && start.elapsed() < Duration::from_secs(limit) {
             let now = Instant::now();
             max_gap_us = max_gap_us.max(now.duration_since(previous).as_micros());
             previous = now;
@@ -240,6 +260,21 @@ fn fill_source(bytes: &mut [u8], first_frame: u64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn only_thirty_or_three_hundred_seconds_are_accepted() {
+        assert_eq!(parse_seconds(None), Ok(30));
+        assert_eq!(parse_seconds(Some("30")), Ok(30));
+        assert_eq!(parse_seconds(Some("300")), Ok(300));
+        for wrong in ["0", "31", "3600", "-30", "30s", ""] {
+            assert!(parse_seconds(Some(wrong)).is_err(), "{wrong}");
+        }
+        // Storage covers the run plus margin; 300 s of stereo float32 plus
+        // 128-frame packet metadata stays bounded for the 8 GB test VM.
+        assert_eq!(storage_seconds(30), 100);
+        assert_eq!(storage_seconds(300), 370);
+        assert!(RATE * storage_seconds(300) as usize * STRIDE < 150_000_000);
+        assert!(MAX_PACKETS_PER_SECOND * storage_seconds(30) as usize >= 37_500);
+    }
     #[test]
     fn partial_submissions_preserve_source_phase() {
         let mut full = vec![0; 480 * STRIDE];

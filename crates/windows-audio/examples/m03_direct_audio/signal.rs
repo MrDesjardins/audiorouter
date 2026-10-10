@@ -82,22 +82,27 @@ fn decode_wav(bytes: &[u8]) -> Result<Vec<[f64; 2]>, String> {
     Ok(frames)
 }
 
-pub fn analyze(wav: &Path, kind: &str, report: &Path) -> Result<(), String> {
+pub fn analyze(wav: &Path, kind: &str, report: &Path, seconds: u64) -> Result<(), String> {
     let frequencies = match kind {
         "a" => [440.0, 660.0],
         "b" => [997.0, 47.0],
         _ => return Err("kind must be a or b".into()),
     };
+    // Same bound as the recorder's preallocated storage, plus header slack.
+    let limit =
+        (RATE as u64 * super::storage_seconds(seconds) * STRIDE as u64).max(40_000_000) + 1_024;
     let mut bytes = Vec::new();
     File::open(wav)
         .map_err(|e| e.to_string())?
-        .take(40_000_001)
+        .take(limit + 1)
         .read_to_end(&mut bytes)
         .map_err(|e| e.to_string())?;
-    if bytes.len() > 40_000_000 {
-        return Err("WAV exceeds diagnostic's 100-second bound".into());
+    if bytes.len() as u64 > limit {
+        return Err(format!(
+            "WAV exceeds the {seconds}-second diagnostic's storage bound"
+        ));
     }
-    let result = decode_wav(&bytes).and_then(|frames| measure(&frames, frequencies));
+    let result = decode_wav(&bytes).and_then(|frames| measure(&frames, frequencies, seconds));
     match result {
         Ok(metrics) => {
             write_json(report, &metrics)?;
@@ -118,7 +123,32 @@ pub fn analyze(wav: &Path, kind: &str, report: &Path) -> Result<(), String> {
     }
 }
 
-fn measure(frames: &[[f64; 2]], frequencies: [f64; 2]) -> Result<Value, String> {
+/// Active-signal length must be the requested duration within ±0.2 s.
+fn duration_gate(active_frames: usize, seconds: u64) -> (bool, Option<String>) {
+    let expected = RATE * seconds as usize;
+    let tolerance = RATE / 5;
+    if active_frames + tolerance < expected {
+        (
+            false,
+            Some(format!(
+                "fewer than {:.1} seconds of active signal; incomplete {seconds}-second diagnostic",
+                (expected - tolerance) as f64 / RATE as f64
+            )),
+        )
+    } else if active_frames > expected + tolerance {
+        (
+            false,
+            Some(format!(
+                "more than {:.1} seconds of active signal; unexpected replay or timing",
+                (expected + tolerance) as f64 / RATE as f64
+            )),
+        )
+    } else {
+        (true, None)
+    }
+}
+
+fn measure(frames: &[[f64; 2]], frequencies: [f64; 2], seconds: u64) -> Result<Value, String> {
     if frames.iter().flatten().any(|sample| !sample.is_finite()) {
         return Err("non-finite samples".into());
     }
@@ -143,14 +173,7 @@ fn measure(frames: &[[f64; 2]], frequencies: [f64; 2]) -> Result<Value, String> 
     // A duration failure must not hide the waveform evidence needed to explain
     // it. Keep the same acceptance bounds, but fit every available window and
     // retain both failures in the report instead of returning before fitting.
-    let duration_passed = (RATE * 298 / 10..=RATE * 302 / 10).contains(&(end - begin));
-    let duration_error = if end - begin < RATE * 298 / 10 {
-        Some("fewer than 29.8 seconds of active signal; incomplete 30-second diagnostic")
-    } else if end - begin > RATE * 302 / 10 {
-        Some("more than 30.2 seconds of active signal; unexpected replay or timing")
-    } else {
-        None
-    };
+    let (duration_passed, duration_error) = duration_gate(end - begin, seconds);
     let mut channels = Vec::new();
     let mut passed = duration_passed;
     for (channel, frequency) in frequencies.into_iter().enumerate() {
@@ -203,7 +226,7 @@ fn measure(frames: &[[f64; 2]], frequencies: [f64; 2]) -> Result<Value, String> 
     Ok(
         json!({"passed":passed,"qualification":false,"rate":RATE,"totalFrames":frames.len(),
         "fitStartFrame":begin,"fitEndFrame":end,"boundaryQuantaExcluded":2,
-        "analyzedSeconds":(end-begin) as f64 / RATE as f64,
+        "analyzedSeconds":(end-begin) as f64 / RATE as f64,"expectedSeconds":seconds,
         "durationPassed":duration_passed,"durationError":duration_error,"channels":channels}),
     )
 }
@@ -288,7 +311,7 @@ mod tests {
             .collect()
     }
     fn passes(frames: &[[f64; 2]]) -> bool {
-        measure(frames, [997.0, 47.0]).unwrap()["passed"] == true
+        measure(frames, [997.0, 47.0], 30).unwrap()["passed"] == true
     }
     #[test]
     fn clean_unknown_phase_float32_passes() {
@@ -321,10 +344,10 @@ mod tests {
     }
     #[test]
     fn silence_short_signal_and_nan_fail() {
-        assert!(measure(&vec![[0.0; 2]; RATE], [997.0, 47.0]).is_err());
+        assert!(measure(&vec![[0.0; 2]; RATE], [997.0, 47.0], 30).is_err());
         let mut frames = tone();
         frames[500][0] = f64::NAN;
-        assert!(measure(&frames, [997.0, 47.0]).is_err());
+        assert!(measure(&frames, [997.0, 47.0], 30).is_err());
         assert!(!passes(&tone()[..RATE]));
     }
 
@@ -343,7 +366,7 @@ mod tests {
     fn duration_failure_preserves_signal_metrics_and_phase_breaks() {
         let mut frames = tone();
         frames.drain(RATE * 26..RATE * 26 + 12_912);
-        let report = measure(&frames, [997.0, 47.0]).unwrap();
+        let report = measure(&frames, [997.0, 47.0], 30).unwrap();
         assert_eq!(report["passed"], false);
         assert_eq!(report["durationPassed"], false);
         assert!(report["durationError"].as_str().unwrap().contains("29.8"));
@@ -353,11 +376,36 @@ mod tests {
 
         let mut clean_short = tone();
         clean_short.truncate(RATE * 29);
-        let report = measure(&clean_short, [997.0, 47.0]).unwrap();
+        let report = measure(&clean_short, [997.0, 47.0], 30).unwrap();
         assert_eq!(report["durationPassed"], false);
         assert_eq!(report["passed"], false);
         assert_eq!(report["channels"][0]["passed"], true);
         assert_eq!(report["channels"][1]["passed"], true);
+    }
+
+    #[test]
+    fn duration_gate_scales_with_the_requested_length() {
+        assert_eq!(duration_gate(RATE * 30, 30), (true, None));
+        assert!(duration_gate(RATE * 30 - RATE / 5, 30).0);
+        assert!(!duration_gate(RATE * 30 - RATE / 5 - 1, 30).0);
+        assert!(duration_gate(RATE * 30, 30).1.is_none());
+        assert!(duration_gate(RATE * 29, 30).1.unwrap().contains("29.8"));
+        assert!(duration_gate(RATE * 300, 300).0);
+        assert!(
+            !duration_gate(RATE * 30, 300).0,
+            "a 30-second signal cannot pass 300"
+        );
+        assert!(
+            !duration_gate(RATE * 300, 30).0,
+            "a 300-second signal cannot pass 30"
+        );
+        assert!(duration_gate(RATE * 299, 300).1.unwrap().contains("299.8"));
+        assert!(duration_gate(RATE * 301, 300).1.unwrap().contains("300.2"));
+        // A clean 30-second tone measured as a 300-second run fails on duration only.
+        let report = measure(&tone(), [997.0, 47.0], 300).unwrap();
+        assert_eq!(report["durationPassed"], false);
+        assert_eq!(report["channels"][0]["passed"], true);
+        assert_eq!(report["expectedSeconds"], 300);
     }
 
     #[test]

@@ -1,5 +1,6 @@
 //! VM-only automatic source/recorder; analyze mode opens no Windows stream.
-//! Streaming is bounded to 100 seconds with preallocated sample/packet storage.
+//! Streaming is bounded to the requested 30- or 300-second diagnostic plus a
+//! fixed margin, with preallocated sample/packet storage.
 #[path = "m03_direct_audio/mod.rs"]
 mod m03_direct_audio;
 
@@ -12,15 +13,20 @@ fn main() {
             println!("direct audio helper startup OK; no audio endpoint opened");
             Ok(())
         }
-        [mode, directory] if mode == "record" || mode == "speaker-record" => {
-            record(PathBuf::from(directory), mode == "speaker-record")
+        [mode, directory] if mode == "speaker-record" => record(PathBuf::from(directory), None),
+        [mode, directory, seconds @ ..] if mode == "record" && seconds.len() <= 1 => {
+            m03_direct_audio::parse_seconds(seconds.first().map(String::as_str))
+                .and_then(|seconds| record(PathBuf::from(directory), Some(seconds)))
         }
-        [mode, wav, kind, report] if mode == "analyze" => {
-            m03_direct_audio::analyze(Path::new(wav), kind, Path::new(report))
+        [mode, wav, kind, report, seconds @ ..] if mode == "analyze" && seconds.len() <= 1 => {
+            m03_direct_audio::parse_seconds(seconds.first().map(String::as_str)).and_then(
+                |seconds| m03_direct_audio::analyze(Path::new(wav), kind, Path::new(report), seconds),
+            )
         }
-        _ => {
-            Err("usage: m03_direct_audio record|speaker-record NEW_DIRECTORY | analyze WAV a|b REPORT.json".into())
-        }
+        _ => Err(
+            "usage: m03_direct_audio record NEW_DIRECTORY [30|300] | speaker-record NEW_DIRECTORY | analyze WAV a|b REPORT.json [30|300]"
+                .into(),
+        ),
     };
     if let Err(error) = result {
         eprintln!("{error}");
@@ -28,7 +34,8 @@ fn main() {
     }
 }
 
-fn record(directory: PathBuf, speaker: bool) -> Result<(), String> {
+/// `seconds` is `None` for the speaker loopback recorder (fixed 30 seconds).
+fn record(directory: PathBuf, seconds: Option<u64>) -> Result<(), String> {
     if !std::env::var("COMPUTERNAME")
         .unwrap_or_default()
         .eq_ignore_ascii_case("AR-DriverTest")
@@ -46,9 +53,8 @@ fn record(directory: PathBuf, speaker: bool) -> Result<(), String> {
     {
         return Err("record output directory must be empty".into());
     }
-    if speaker {
-        m03_direct_audio::record_speaker(&canonical)
-    } else {
-        m03_direct_audio::record(&canonical)
+    match seconds {
+        None => m03_direct_audio::record_speaker(&canonical),
+        Some(seconds) => m03_direct_audio::record(&canonical, seconds),
     }
 }
