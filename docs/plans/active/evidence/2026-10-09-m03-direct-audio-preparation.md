@@ -383,3 +383,19 @@ or guarded before endpoint access:
 Real guest capture is pending. Next: one reference recording from the new
 speaker-only bundle, then offline waveform/packet review. Long/stall/driver
 qualification gates remain open; all prior bundles stay immutable.
+
+Published after a clean source commit `72766a66dab28830644aca6f330270b6b802a375`:
+`C:\VMs\ar-share\diagnostics-20261009-speaker-loopback`. Prepared
+2026-10-10 05:47:54Z. Independent reread verifies all five manifest entries;
+no driver binaries or certificates are included. Final wrapper rerun remains
+82/82; evidence `target\speaker-tests-70cabb42e15349639510dafc7815eb09`.
+Docs: 141 Markdown files / 773 local links pass; diff checks pass.
+
+| Published artifact | SHA-256 |
+| --- | --- |
+| MANIFEST.txt | `7F899E6AC49C211E32F7EB61E0F2E01738A692ED3D1BFAEA1481860D18B769FC` |
+| m03_direct_audio.exe | `4A3A9D20B6DA94BA5790130755C7BE071FC5D06FBACE215E78A02A96E2BC05C2` |
+| run-speaker-loopback.ps1 | `78A12CEE4CE5CD0F971F242381DDEA63B17A21965D4D0147163C3C743205A83E` |
+
+The reference hash is unchanged. Actual guest speaker capture is still
+pending; this package publication runs no audio and changes no host settings.

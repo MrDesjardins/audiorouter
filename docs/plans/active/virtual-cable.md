@@ -2254,3 +2254,15 @@ Risks: another guest app's audio mixes into the recording; stop unrelated
 playback. Rollback: stop this owned helper/file playback and return to the
 previous bundle. No driver install/rebuild, host audio, VM configuration,
 WSL/Hyper-V, security or qualification threshold change.
+
+Preparation complete: 12 Rust tests, 82 speaker-wrapper checks, existing
+117 direct-audio checks, static import gate, formatting, workspace/shell Clippy
+and documentation checks pass. Latest speaker fixture evidence:
+`target\speaker-tests-70cabb42e15349639510dafc7815eb09`.
+Published and independently reverified five-entry manifest in
+`C:\VMs\ar-share\diagnostics-20261009-speaker-loopback`, from clean source
+`72766a66dab28830644aca6f330270b6b802a375`.
+Manifest SHA-256:
+`7F899E6AC49C211E32F7EB61E0F2E01738A692ED3D1BFAEA1481860D18B769FC`.
+Next: the exact speaker-loopback guest command in the runbook. Real guest
+capture and signal attribution remain pending; no driver qualification pass.
