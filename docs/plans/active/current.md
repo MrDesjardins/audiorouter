@@ -81,8 +81,9 @@ verified (35 files, all 32 base files unchanged). The paired 30-second run now
 passes counters/deadline, both trace loss checks and compatible QPC brackets
 (23.0877 ms). The user reports continuous hiss mixed with the beep through
 Cable B, ending with the script. The saved Cable A WAV does not verify that
-path. Hold longer runs; next is preparation of a bounded direct Cable B
-recording without default/microphone fallback or Audacity installation.
+path. Hold longer runs; the [automatic direct audio diagnostic](../../operations/virtual-cable-direct-audio.md)
+generates Cable A audio and records Cable B without default/microphone fallback
+or Audacity installation. Preparation is complete; the first guest run is pending.
 Sustained continuity, audible quality and cause remain unresolved.
 Commands are in
 [Administrator PowerShell](../../operations/virtual-cable-paired-trace.md).

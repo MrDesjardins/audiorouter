@@ -66,7 +66,9 @@ the AudioRouter-owned cable (DEC-18) from a test-signed VM to a
 Microsoft-signed package on the main PC and beta testers; the
 [signing runbook](operations/virtual-cable-signing.md) covers the paid
 Microsoft steps, and the [virtual cable plan](plans/active/virtual-cable.md)
-lists the work packages.
+lists the work packages. The current driver investigation uses the
+[automatic direct audio diagnostic](operations/virtual-cable-direct-audio.md)
+to record the reported Cable B hiss before further sustained testing.
 
 The [release qualification checklist](operations/release-qualification.md)
 records the reproducible unsigned artifact flow, recovery expectations, and

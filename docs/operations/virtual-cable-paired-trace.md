@@ -20,10 +20,10 @@ test yet.** The saved WAV records Cable A's render-source path, not Cable B
 Output or the speaker playback path. Zero counters cannot clear this report.
 Audacity is not installed in the guest; no installation is requested.
 
-Next task: prepare a bounded direct recording of the exact Cable B capture
-endpoint using existing Windows capture code, with no default/microphone
-fallback. Review waveform/packet evidence before changing the owning layer
-or requesting sustained tests. No direct Cable B recording is available yet.
+Next action: use the [automatic direct audio diagnostic](virtual-cable-direct-audio.md).
+It generates Cable A audio and records exact Cable B Output without a player
+or Audacity. Review waveform/packet evidence before changing the owning layer
+or requesting sustained tests. The first direct Cable B recording is pending.
 The following 30-second commands are the completed experiment's reproduction.
 
 ## Completed paired 30-second audio diagnostic

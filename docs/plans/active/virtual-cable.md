@@ -1,9 +1,12 @@
 # Active plan — AudioRouter virtual cable (DEC-18)
 
-Updated 2026-10-05. WP-02 package tooling complete; WP-01 host baseline
-passed, VM evidence pending. No driver has been loaded.
+Updated 2026-10-09. The driver is installed only in AR-DriverTest. Smoke,
+active format inventory and short tone checks pass; reported Cable B hiss and
+sustained audio loss still block qualification. The current next action is
+the automatic direct audio diagnostic at the end of this plan.
 All implementation and testing happens on
-the user's Windows 11 development PC and in its Hyper-V test VM.
+the user's Windows 11 development PC and its VirtualBox test VM, with the
+host's Hyper-V/WSL capability preserved.
 
 - Decision: DEC-18 in [15-delivery](../../spec/15-delivery.md).
 - Design (what to build): [17 Virtual cable](../../spec/17-virtual-cable.md).
@@ -2041,3 +2044,40 @@ and prepare a bounded exact-endpoint Cable B recorder using existing Windows
 capture code; refuse default/microphone substitution, preserve packet/format
 metadata and compare captured signal to generated 997/47-Hz reference. No
 new test or implementation is claimed. Preserve current artifacts and WSL.
+## Convergence task — automatic direct audio diagnosis (2026-10-09)
+
+User requests faster convergence after repeated attended failures. The paired
+30-second run passes counters, but the user hears continuous hiss through
+Cable B. Media Player routed directly to VM speakers plays without hiss or
+crackles (user observation, not a digital-path measurement).
+
+- Requirements: VCAB-12/20/24/29, VDEV-12; sustained, latency and signing
+  gates remain open. Preserve WSL, host settings and the installed driver.
+- Prerequisites: installed `97b393d5` driver, passing active inventory,
+  AR-DriverTest guest, local checked bundle and shared Z: evidence destination.
+- Decision: measure before another driver change. Add a VM-only user-mode
+  source on the exact Cable A Input and recorder on exact Cable B Output.
+  Generate 440/660 Hz and retain 997/47 Hz bridge tones. No default endpoint,
+  microphone, external player or Audacity dependency. Record packet flags,
+  positions and pump gaps. Analyze both WAVs after streaming ends.
+- Ordered tasks: implement bounded preallocated probe and offline signal
+  analysis; regress clean/noise/drop/repeat/channel failures and VM guards;
+  compile and lint on Windows without opening host streams; publish a
+  checksummed copy-only update; run one automatic 30-second guest diagnostic.
+- Validation: synthetic checks prove diagnostic behavior only. Guest WAVs,
+  native counters and timing establish the actual short-run outcome. Hold
+  long/stall tests until those samples explain the audible defect. Then use
+  the same build for 30 s, 5 min, 10 min and remaining specified gates, with
+  a fixed duration/watchdog and current-run-only evidence each time.
+- Rollback: stop only owned user-mode processes and use the previous bundle;
+  no driver install, settings migration or change to acceptance thresholds.
+- Risk: additional WASAPI clients add scheduling work. A diagnostic failure
+  is evidence, not automatically a driver defect. First run remains pending.
+- Preparation: implemented the safe WASAPI helper, phase/noise analyzer,
+  owned-process wrapper and copy-only preparer. Windows host-safe checks pass:
+  9 Rust regressions, 75 PowerShell checks, release build, workspace/shell
+  Clippy and both format checks. No host audio stream or driver was opened.
+  See [preparation evidence](evidence/2026-10-09-m03-direct-audio-preparation.md).
+- Next action: publish the checked bundle and run the
+  [automatic 30-second guest diagnostic](../../operations/virtual-cable-direct-audio.md).
+  First real direct recording and waveform review remain pending.
