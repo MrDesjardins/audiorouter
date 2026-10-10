@@ -2207,3 +2207,11 @@ sections and silent gaps. This removes the concurrent listener from the
 comparison; it does not prove the driver or VirtualBox at fault. Preserve
 44.1-kHz speakers and 48-kHz cable settings. Rollback is rechecking Listen
 if previously enabled. No live bridge, long/stall run or 48-kHz comparison.
+
+Listener-off result: user reports "a lot less" static, still audible especially
+in the first and final parts. The setting affects the audible reproduction,
+but does not establish that all remaining noise originates in the same layer.
+First/final sections contain 47 Hz, middle only 997 Hz. Next is clarification
+of continuous sections versus brief start/stop sounds, plus silent-gap and
+middle-section quality. Leave Listen off; do not change formats or request
+another driver run based on this subjective reduction.

@@ -323,3 +323,15 @@ Cable B Listen path is not yet excluded. Next is the guest-only listener-off
 reference comparison in the runbook, including the silent gaps. No host
 settings, WSL, driver build or qualification criteria change. The real loss
 and source phase breaks remain failed gates regardless of this comparison.
+
+### Listener disabled: static reduced but remains
+
+After the guest listener-off comparison, user reports "a lot less" static,
+still audible especially in the first and final parts. This supports an effect
+of the concurrent Listen setting on perceived noise; it does not identify
+the remaining cause. The first/final reference sections contain 47 Hz, while
+the middle contains only 997 Hz. No new recording or objective noise measure
+exists for this playback result. Asked whether the residual is continuous
+through those sections or brief at boundaries, and whether the silent gaps
+and middle section are clean. Keep Listen off and all bridge/long tests held
+pending that clarification. No host, VM configuration, format or driver change.

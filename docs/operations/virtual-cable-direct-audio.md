@@ -16,7 +16,14 @@ synthesized file matches the supported speaker format and contains the intended
 tones. That reproduces hiss without AudioRouter-generated samples; it does not
 identify the faulty playback component or resolve the driver's measured loss.
 
-### Next comparison inside the VM: disable the concurrent listener
+**Listener-off result:** user reports much less static, with some remaining,
+especially in the first and final parts. Keep Listen off and hold further
+tests while clarifying whether this means entire tone sections or just their
+start/stop boundaries, and whether the silent gaps and middle section are clean.
+The first/final sections both contain 47 Hz; the middle section contains only
+997 Hz. This content difference is a clue, not an identified cause.
+
+### Completed comparison inside the VM: disable the concurrent listener
 
 1. Stop Media Player playback and leave all tone scripts stopped.
 2. Open the Sound control panel:

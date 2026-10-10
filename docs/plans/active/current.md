@@ -106,8 +106,10 @@ The user now reports static in all three sections of the independently
 generated 17-second **44.1-kHz** speaker reference. Offline reinspection
 confirms its header, clean sine samples and silent separators. Read-only VM
 configuration/log review shows HDA, HostAudioWas and default Focusrite speaker
-output; it does not identify a defective component. Next: turn off Cable B's
-concurrent Listen client inside the VM and replay this same reference once,
+output; it does not identify a defective component. With Cable B Listen off,
+the user now hears much less static but some remains, especially in the first
+and final parts. Keep Listen off. Clarify full sections versus start/stop
+boundaries and silent-gap/middle-section quality before another comparison,
 as documented in the
 [direct audio runbook](../../operations/virtual-cable-direct-audio.md#current-next-step-supported-format-speaker-reference).
 Review static during tones and silent gaps before another driver run.
