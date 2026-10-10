@@ -2016,3 +2016,10 @@ and 128 fake recorder checks pass; evidence in packet-clock review. No real
 paired audio, build or setting change occurred. Next: commit/push, verify
 separate copy-only paired-tone bundle and hand off 30 seconds. Review before
 any longer run; remaining gates stay open.
+
+Copy-only paired-tone bundle published from clean `565c9e6d`, prepared
+`2026-10-10 04:34:19Z`, under `C:\VMs\ar-share\diagnostics-20261010-paired-tone`.
+All 35 hashes independently verify; all 32 base files unchanged. Source pushed
+to main. Artifact identity in packet-clock review. Next user action: copy
+inside VM, start loop/listener, host Tone 30 then guest Tone 30 when ready.
+No paired audio has run yet; review before any longer test.

@@ -76,8 +76,9 @@ zero-lost counts pass review, and WPR is idle afterward. The paired two-second
 probe also passes trace coverage/loss review. Guest UTC drifts relative to QPC;
 normalized QPC brackets remain compatible within 22.45631 ms during this short
 probe. Attribution must use raw QPC with that uncertainty, not UTC alignment.
-The next step is a paired 30-second audio diagnostic, after publishing the
-separate copy-only update. Sustained continuity and cause remain unresolved.
+The separate copy-only paired-tone update is published and independently
+verified (35 files, all 32 base files unchanged). The next step is a paired
+30-second audio diagnostic. Sustained continuity and cause remain unresolved.
 Commands are in
 [Administrator PowerShell](../../operations/virtual-cable-paired-trace.md).
 See the

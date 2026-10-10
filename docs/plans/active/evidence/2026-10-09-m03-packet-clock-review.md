@@ -768,3 +768,14 @@ before any longer run. [Current steps](../../../operations/virtual-cable-paired-
 separate host and guest. No paired Tone has run yet. Continuity, latency,
 hardware, signing and other unqualified gates stay open. Rollback: keep the
 probe-only bundle and omit optional paired Tone scripts.
+
+Published artifact: `C:\VMs\ar-share\diagnostics-20261010-paired-tone`, clean
+source `565c9e6df3058e536a1be22f641e04580e8bc0a4`, prepared
+`2026-10-10 04:34:19Z`. Independent verification matches all **35** hashes,
+all **32** base files and the three scripts against committed source. Manifest
+SHA256 `1A1B766640C38CC8244B4F4B5C33E68C436BE32C116EF00097B45980547BAA3D`.
+All 16 driver files and tone executable remain byte-identical to the retained
+base. Host C: has 711.9 GB free at verification; scripts recheck at invocation.
+Preparation was copy-only, no dependency repair/build or real recorder/audio
+run. Source commit pushed to main. Next user step: current runbook's 30-second
+paired Tone with loop/listener running; send both outputs before a longer run.
