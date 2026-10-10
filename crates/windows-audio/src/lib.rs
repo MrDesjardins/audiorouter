@@ -8541,7 +8541,7 @@ unsafe fn enumerate_display_info_after_com_init() -> Result<Vec<EndpointDisplayI
         PKEY_Device_DeviceDesc, PKEY_Device_DriverInfSection, PKEY_Device_FriendlyName,
     };
     use windows::Win32::Media::Audio::{
-        eCapture, eRender, IMMDeviceEnumerator, MMDeviceEnumerator, DEVICE_STATEMASK_ALL,
+        eCapture, eRender, IMMDeviceEnumerator, MMDeviceEnumerator, DEVICE_STATE_ACTIVE,
     };
     use windows::Win32::System::Com::StructuredStorage::{PropVariantClear, PropVariantToString};
     use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL, STGM_READ};
@@ -8555,11 +8555,8 @@ unsafe fn enumerate_display_info_after_com_init() -> Result<Vec<EndpointDisplayI
         (EndpointDirection::Render, eRender),
     ] {
         let devices = enumerator
-            .EnumAudioEndpoints(
-                flow,
-                windows::Win32::Media::Audio::DEVICE_STATE(DEVICE_STATEMASK_ALL),
-            )
-            .map_err(inventory_operation("inventory.enumerateAllEndpoints"))?;
+            .EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE)
+            .map_err(inventory_operation("inventory.enumerateActiveEndpoints"))?;
         for index in 0..devices
             .GetCount()
             .map_err(inventory_operation("inventory.getEndpointCount"))?

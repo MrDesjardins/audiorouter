@@ -23,10 +23,24 @@ $bridgeHeader = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorou
 $miniPairs = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Filters/minipairs.h') -Raw
 $waveTable = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Filters/cablewavtable.h') -Raw
 $inventorySource = Get-Content -LiteralPath (Join-Path $workspace 'crates/windows-audio/examples/m03_cable_inventory.rs') -Raw
+$windowsAudioSource = Get-Content -LiteralPath (Join-Path $workspace 'crates/windows-audio/src/lib.rs') -Raw
 if (-not $waveTable.Contains('C_ASSERT(KSAUDIO_SPEAKER_7POINT1_SURROUND == 0x63F);') -or
     -not $inventorySource.Contains('8 => 0x63F,') -or
     $waveTable.Contains('AR_CHANNEL_FORMATS(8, KSAUDIO_SPEAKER_7POINT1),')) {
     throw 'driver and user-mode inventory must agree on surround 7.1 mask 0x63F, not obsolete wide 0xFF'
+}
+$displayInventoryStart = $windowsAudioSource.IndexOf('unsafe fn enumerate_display_info_after_com_init()')
+$stateInventoryStart = $windowsAudioSource.IndexOf('unsafe fn enumerate_states_after_com_init()', $displayInventoryStart)
+if ($displayInventoryStart -lt 0 -or $stateInventoryStart -le $displayInventoryStart) {
+    throw 'active endpoint display inventory function boundary is missing'
+}
+$displayInventorySource = $windowsAudioSource.Substring(
+    $displayInventoryStart,
+    $stateInventoryStart - $displayInventoryStart
+)
+if (-not $displayInventorySource.Contains('EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE)') -or
+    $displayInventorySource.Contains('DEVICE_STATE_ALL')) {
+    throw 'endpoint format inventory must inspect active endpoints only, not disabled/stale endpoint records'
 }
 $topologyTable = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Filters/cabletopotable.h') -Raw
 $infSource = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/AudioRouterVirtual.inx') -Raw

@@ -1550,3 +1550,20 @@ host work: fix what they find first.
 
 Do not load the intermediate package on the host or call a host build a
 runtime or quality pass.
+
+2026-10-09 VM status failure (candidate `repair-20261009-render-retention`):
+install and both smoke cycles passed. The status inventory JSON contains four
+valid endpoints (all 60 formats, minimum period 128 frames), but the inventory
+tool reports 12 name matches and eight `IAudioClient3` activation failures.
+Root-cause review found `enumerate_active_endpoint_display_info()` is documented
+to return active endpoints but calls `EnumAudioEndpoints(..., DEVICE_STATE_ALL)`;
+the tool therefore counts inactive/stale Windows endpoint records as duplicates
+and tries to activate clients for them. Requirements: VCAB-11, VCAB-25. Scope:
+make this inventory snapshot enumerate active endpoints only; do not remove VM
+devices, alter acceptance thresholds, or change driver behavior. Add a source
+acceptance guard that pins the active-state flag, then run the focused acceptance
+and build/package integrity checks, stage a replacement package, and ask for a
+single status rerun before tone. Validation does not claim guest behavior until
+that rerun passes. Rollback: retain the current guest/package and replace only
+the staged inventory/tool bundle. Next action: fix the enumeration flag and
+source regression guard.
