@@ -1,4 +1,4 @@
-<# Bounded guest cable latency (VCAB-25) and bit-exactness (VCAB-20) diagnostic
+<# Bounded guest cable latency (VCAB-25), bit-exactness (VCAB-20) and isolation (VCAB-26) diagnostic
    on the already installed driver. Cable A Input -> driver bridge -> pass-through
    relay (an AudioRouter route proxy) -> Cable B Output, measured by the native
    probe. Not product-engine latency or qualification. #>
@@ -23,6 +23,8 @@ $probe = Join-Path $bundle 'tools\m00-probe.exe'
 $tone = Join-Path $bundle 'tools\m03_bridge_tone.exe'
 $renderName = 'AudioRouter Cable A Input (AudioRouter Virtual Cable)'
 $captureName = 'AudioRouter Cable B Output (AudioRouter Virtual Cable)'
+$otherRenderName = 'AudioRouter Cable B Input (AudioRouter Virtual Cable)'
+$quietCaptureName = 'AudioRouter Cable A Output (AudioRouter Virtual Cable)'
 # Each configuration: bridge quantum and WASAPI engine period request, with
 # the VCAB-25 p95 target that applies to it.
 $configurations = @(
@@ -31,6 +33,7 @@ $configurations = @(
 )
 $results = @()
 $bitExact = $null
+$isolation = @()
 $failure = $null
 $active = $null
 function Get-ProbeValue([string] $Text, [string] $Name) {
@@ -52,6 +55,11 @@ try {
     if ($renderMatches.Count -ne 1 -or $captureMatches.Count -ne 1) { throw 'Expected exactly one active Cable A Input and one Cable B Output; no audio test started.' }
     $renderIndex = $renderMatches[0].Groups[1].Value
     $captureIndex = $captureMatches[0].Groups[1].Value
+    $otherRenderMatches = [regex]::Matches($inventoryText, '(?m)^render\[(\d+)\] name=' + [regex]::Escape($otherRenderName) + ' id=')
+    $quietCaptureMatches = [regex]::Matches($inventoryText, '(?m)^capture\[(\d+)\] name=' + [regex]::Escape($quietCaptureName) + ' id=')
+    if ($otherRenderMatches.Count -ne 1 -or $quietCaptureMatches.Count -ne 1) { throw 'Expected exactly one active Cable B Input and one Cable A Output; no audio test started.' }
+    $otherRenderIndex = $otherRenderMatches[0].Groups[1].Value
+    $quietCaptureIndex = $quietCaptureMatches[0].Groups[1].Value
     $probeSeconds = [int][Math]::Ceiling($Impulses / 100.0) + 2
     foreach ($configuration in $configurations) {
         $name = $configuration.Name
@@ -138,7 +146,42 @@ try {
     Write-Host ("{0}: {1}; compared {2} frames, mismatched samples {3}, max diff {4}, non-zero silence samples {5}; probe exit {6}, pass-through exit {7}" -f `
         $name, $(if ($bitExact.Passed) { 'bit-exact' } else { 'NOT bit-exact' }), $bitExact.ComparedFrames, $bitExact.MismatchedSamples,
         $bitExact.MaxAbsDiff, $bitExact.SilenceNonzero, $measured.Code, $toneCode)
-    if (@($results | Where-Object { $_.ProbeCode -ne 0 -or $_.ToneCode -ne 0 }).Count -gt 0 -or $bitExact.ProbeCode -ne 0 -or $bitExact.ToneCode -ne 0) {
+    # Isolation: the tone tool in its normal mode (tone on Cable B Output,
+    # Cable A Input consumed). Nothing routes into Cable A Output, so it must
+    # stay exact silence while noise plays into Cable A Input and Cable B Input.
+    $name = 'isolation'
+    $toneOut = Join-Path $evidence "$name-tone.txt"
+    $toneArguments = @('--frames','480','--seconds','25','--out',(Join-Path $evidence "$name-cable-a.wav")) | ForEach-Object { ConvertTo-DriverProcessArgument $_ }
+    $active = Start-Process -FilePath $tone -ArgumentList ($toneArguments -join ' ') -WindowStyle Hidden -PassThru `
+        -RedirectStandardOutput $toneOut -RedirectStandardError (Join-Path $evidence "$name-tone-stderr.txt")
+    $null = $active.Handle
+    $watch = [Diagnostics.Stopwatch]::StartNew()
+    while (-not ((Test-Path -LiteralPath $toneOut) -and ((Get-Content -LiteralPath $toneOut -Raw) -match 'render worker polling before lease activation'))) {
+        if ($active.HasExited) { throw "$name tone tool exited before its leases were active (exit $($active.ExitCode)); see $name-tone-stderr.txt." }
+        if ($watch.Elapsed.TotalSeconds -ge 15) { throw "$name tone tool readiness timed out." }
+        Start-Sleep -Milliseconds 50
+    }
+    Start-Sleep -Milliseconds 1500
+    foreach ($pair in @(@{ Label = 'A-Input-to-A-Output'; Render = $renderIndex }, @{ Label = 'B-Input-to-A-Output'; Render = $otherRenderIndex })) {
+        if ($active.HasExited) { throw "$name tone tool ended before the $($pair.Label) probe (exit $($active.ExitCode))." }
+        $measured = Invoke-DriverVmProcess -Executable $probe -Arguments @('cable-isolation','5',$pair.Render,$quietCaptureIndex) `
+            -Stdout (Join-Path $evidence "$name-$($pair.Label).txt") -Stderr (Join-Path $evidence "$name-$($pair.Label)-stderr.txt") -TimeoutSeconds 30
+        $probeText = Get-Content -LiteralPath (Join-Path $evidence "$name-$($pair.Label).txt") -Raw
+        $isolation += [pscustomobject][ordered]@{
+            Path = $pair.Label; ProbeCode = $measured.Code
+            Passed = ($measured.Code -eq 0 -and (Get-ProbeValue $probeText 'isolation_pass') -eq 1)
+            Frames = Get-ProbeValue $probeText 'isolation_frames'; NonzeroSamples = Get-ProbeValue $probeText 'isolation_nonzero_samples'
+            PeakDbfs = Get-ProbeValue $probeText 'isolation_peak_dbfs'
+        }
+        Write-Host ("isolation {0}: {1}; frames {2}, non-zero samples {3}; probe exit {4}" -f $pair.Label,
+            $(if ($isolation[-1].Passed) { 'exact silence' } else { 'LEAK' }), $isolation[-1].Frames, $isolation[-1].NonzeroSamples, $measured.Code)
+    }
+    if (-not $active.WaitForExit(60000)) { throw "$name tone tool did not finish within its watchdog." }
+    $isolationToneCode = $active.ExitCode
+    $active.Dispose()
+    $active = $null
+    if (@($results | Where-Object { $_.ProbeCode -ne 0 -or $_.ToneCode -ne 0 }).Count -gt 0 -or $bitExact.ProbeCode -ne 0 -or $bitExact.ToneCode -ne 0 -or
+        @($isolation | Where-Object { $_.ProbeCode -ne 0 }).Count -gt 0 -or $isolationToneCode -ne 0) {
         throw 'A probe or pass-through process failed; see the reports.'
     }
 } catch { $failure = $_ } finally {
@@ -150,7 +193,7 @@ try {
         } finally { $active.Dispose() }
     }
     Write-PairedTraceJson (Join-Path $evidence 'result.json') @{ Run = $run; Passed = (-not [bool]$failure); Error = [string]$failure
-        Results = $results; BitExact = $bitExact; Qualification = $false
+        Results = $results; BitExact = $bitExact; Isolation = $isolation; Qualification = $false
         Scope = 'Cable A -> driver bridge -> diagnostic pass-through relay -> Cable B; AudioRouter route proxy, not product-engine latency or VB-Cable comparison' }
     $zip = Join-Path $bundle "$run.zip"
     Compress-Archive -LiteralPath $evidence -DestinationPath $zip
@@ -166,4 +209,6 @@ if (@($results | Where-Object { -not $_.MeetsTargets }).Count -gt 0) {
 }
 if ($bitExact.Passed) { Write-Host 'Bit-exact through the proxy route (VCAB-20 check at the endpoint format).' }
 else { Write-Host 'NOT bit-exact through the proxy route (see above).' }
+if (@($isolation | Where-Object { -not $_.Passed }).Count -eq 0 -and $isolation.Count -eq 2) { Write-Host 'Cable A Output stayed exact silence (VCAB-26 isolation check).' }
+else { Write-Host 'Isolation check failed (see above).' }
 Write-Host 'Send the output.'

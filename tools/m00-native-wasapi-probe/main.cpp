@@ -1622,6 +1622,141 @@ static int cable_bitexact_probe(UINT render_index, UINT capture_index, DWORD noi
     return 0;
 }
 
+// ---------------------------------------------------------------------------
+// Cable isolation (VCAB-26 preparation): noise into one cable's Input while
+// recording an Output that no route feeds. Every captured sample must be
+// exact +0.0; the peak is reported in dBFS for the -140 dBFS target.
+struct IsolationReport { UINT64 frames = 0, nonzero = 0; double peak = 0.0; };
+
+static IsolationReport analyze_isolation(const std::vector<float>& captured, UINT32 channels) {
+    IsolationReport report;
+    if (channels == 0) return report;
+    report.frames = captured.size() / channels;
+    for (float value : captured) {
+        UINT32 bits;
+        std::memcpy(&bits, &value, sizeof(bits));
+        if (bits != 0) {
+            ++report.nonzero;
+            report.peak = std::max(report.peak, std::fabs(static_cast<double>(value)));
+        }
+    }
+    return report;
+}
+
+static void print_isolation_report(const IsolationReport& report) {
+    std::cout << "isolation_frames=" << report.frames << " isolation_nonzero_samples=" << report.nonzero
+              << " isolation_peak=" << report.peak << " isolation_peak_dbfs="
+              << (report.peak > 0 ? 20.0 * std::log10(report.peak) : -1000.0) << '\n';
+    std::cout << "isolation_pass=" << ((report.frames > 0 && report.nonzero == 0) ? 1 : 0) << '\n';
+}
+
+static int cable_isolation_self_test() {
+    unsigned checks = 0;
+#define ISOLATION_CHECK(condition) do { if (!(condition)) { std::cerr << "isolation self-test failed line " << __LINE__ << '\n'; return 1; } ++checks; } while (0)
+    std::vector<float> silent(9600, 0.0f);
+    auto report = analyze_isolation(silent, 2);
+    ISOLATION_CHECK(report.frames == 4800 && report.nonzero == 0 && report.peak == 0.0);
+    silent[1234] = 1e-7f;  // about -140 dBFS: still a leak, never rounded away
+    report = analyze_isolation(silent, 2);
+    ISOLATION_CHECK(report.nonzero == 1 && report.peak > 0.9e-7 && report.peak < 1.1e-7);
+    silent[1234] = -0.0f;  // sign-bit noise counts too
+    ISOLATION_CHECK(analyze_isolation(silent, 2).nonzero == 1);
+    ISOLATION_CHECK(analyze_isolation({}, 2).frames == 0);
+#undef ISOLATION_CHECK
+    std::cout << checks << " cable isolation checks pass\n";
+    return 0;
+}
+
+static int cable_isolation_probe(UINT render_index, UINT capture_index, DWORD seconds) {
+    IMMDeviceEnumerator* enumerator = nullptr;
+    HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+                                  __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
+    if (FAILED(hr)) { print_hr("isolation_enumerator", hr); return 1; }
+    LoopbackStreamState render_state;
+    LoopbackStreamState capture_state;
+    bool ok = activate_shared_stream(enumerator, eRender, render_index, render_state, "isolation_render", true, 0, false);
+    if (ok) ok = activate_shared_stream(enumerator, eCapture, capture_index, capture_state, "isolation_capture", true, 0, false);
+    enumerator->Release();
+    if (!ok) { render_state.release(); capture_state.release(); return 1; }
+    if (render_state.format->wBitsPerSample != 32 || capture_state.format->wBitsPerSample != 32) {
+        std::cout << "isolation_requires_float32_formats=1\n";
+        render_state.release(); capture_state.release();
+        return 1;
+    }
+    IAudioRenderClient* render_service = nullptr;
+    IAudioCaptureClient* capture_service = nullptr;
+    hr = render_state.client->GetService(__uuidof(IAudioRenderClient), reinterpret_cast<void**>(&render_service));
+    if (SUCCEEDED(hr)) hr = capture_state.client->GetService(__uuidof(IAudioCaptureClient), reinterpret_cast<void**>(&capture_service));
+    print_hr("isolation_services", hr);
+    if (FAILED(hr)) {
+        if (render_service) render_service->Release();
+        render_state.release(); capture_state.release();
+        return 1;
+    }
+    const UINT32 render_channels = render_state.format->nChannels;
+    const UINT32 capture_channels = capture_state.format->nChannels;
+    const UINT64 rate = capture_state.format->nSamplesPerSec;
+    std::vector<NoiseSource> sources;
+    for (UINT32 channel = 0; channel < render_channels; ++channel) sources.emplace_back(4242u + 0x9e3779b9u * (channel + 1));
+    std::vector<float> captured;
+    captured.reserve(static_cast<size_t>((static_cast<UINT64>(seconds) + 3) * rate * capture_channels));
+    UINT32 render_buffer = 0;
+    render_state.client->GetBufferSize(&render_buffer);
+    std::atomic<bool> stop{false};
+    UINT64 rendered = 0, overflow = 0;
+    std::thread render_thread([&] {
+        while (!stop.load()) {
+            if (WaitForSingleObject(render_state.ready_event, 100) != WAIT_OBJECT_0) continue;
+            UINT32 padding = 0;
+            if (FAILED(render_state.client->GetCurrentPadding(&padding))) continue;
+            const UINT32 available = render_buffer - padding;
+            if (available == 0) continue;
+            BYTE* data = nullptr;
+            if (FAILED(render_service->GetBuffer(available, &data))) continue;
+            auto* out = reinterpret_cast<float*>(data);
+            for (UINT32 frame = 0; frame < available; ++frame, ++rendered)
+                for (UINT32 channel = 0; channel < render_channels; ++channel)
+                    out[static_cast<size_t>(frame) * render_channels + channel] = sources[channel].Next();
+            render_service->ReleaseBuffer(available, 0);
+        }
+    });
+    std::thread capture_thread([&] {
+        while (!stop.load()) {
+            if (WaitForSingleObject(capture_state.ready_event, 100) != WAIT_OBJECT_0) continue;
+            for (;;) {
+                UINT32 frames = 0;
+                if (FAILED(capture_service->GetNextPacketSize(&frames)) || frames == 0) break;
+                BYTE* data = nullptr; DWORD flags = 0; UINT64 position = 0, qpc = 0;
+                if (FAILED(capture_service->GetBuffer(&data, &frames, &flags, &position, &qpc))) break;
+                const size_t samples = static_cast<size_t>(frames) * capture_channels;
+                if (captured.size() + samples > captured.capacity()) ++overflow;
+                else if ((flags & AUDCLNT_BUFFERFLAGS_SILENT) || !data) captured.insert(captured.end(), samples, 0.0f);
+                else { const auto* in = reinterpret_cast<const float*>(data); captured.insert(captured.end(), in, in + samples); }
+                capture_service->ReleaseBuffer(frames);
+            }
+        }
+    });
+    hr = capture_state.client->Start();
+    print_hr("isolation_capture_start", hr);
+    if (SUCCEEDED(hr)) hr = render_state.client->Start();
+    print_hr("isolation_render_start", hr);
+    if (SUCCEEDED(hr)) std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<DWORD>(seconds) * 1000));
+    stop.store(true);
+    SetEvent(render_state.ready_event);
+    SetEvent(capture_state.ready_event);
+    render_thread.join();
+    capture_thread.join();
+    print_hr("isolation_render_stop", render_state.client->Stop());
+    print_hr("isolation_capture_stop", capture_state.client->Stop());
+    render_service->Release();
+    capture_service->Release();
+    std::cout << "isolation_rendered_frames=" << rendered << " isolation_capture_overflow_packets=" << overflow << '\n';
+    print_isolation_report(analyze_isolation(captured, capture_channels));
+    render_state.release();
+    capture_state.release();
+    return rendered == 0 ? 1 : 0;
+}
+
 // Captures a stream's own impulse-arrival timestamps: a persistent worker
 // thread that drains packets from `service`, peak-detects impulses using
 // each packet's own device position and QPC timestamp (immune to render
@@ -2193,6 +2328,20 @@ int main(int argc, char** argv) {
         UINT render_index = argc > 2 ? static_cast<UINT>(std::strtoul(argv[2], nullptr, 10)) : 0;
         bool low_latency = argc > 3 && std::strcmp(argv[3], "low-latency") == 0;
         int result = render_clock_ramp_probe(render_index, low_latency);
+        CoUninitialize();
+        return result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "cable-isolation-selftest") == 0) {
+        int result = cable_isolation_self_test();
+        CoUninitialize();
+        return result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "cable-isolation") == 0) {
+        DWORD seconds = argc > 2 ? static_cast<DWORD>(std::strtoul(argv[2], nullptr, 10)) : 5;
+        UINT render_index = argc > 3 ? static_cast<UINT>(std::strtoul(argv[3], nullptr, 10)) : 0;
+        UINT capture_index = argc > 4 ? static_cast<UINT>(std::strtoul(argv[4], nullptr, 10)) : 0;
+        if (seconds < 1 || seconds > 120) { std::cout << "isolation_seconds_out_of_range=1\n"; CoUninitialize(); return 2; }
+        int result = cable_isolation_probe(render_index, capture_index, seconds);
         CoUninitialize();
         return result;
     }

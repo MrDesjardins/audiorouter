@@ -26,6 +26,8 @@ $execution = [scriptblock]::Create($body.Extent.Text)
 
 $renderName = 'AudioRouter Cable A Input (AudioRouter Virtual Cable)'
 $captureName = 'AudioRouter Cable B Output (AudioRouter Virtual Cable)'
+$otherRenderName = 'AudioRouter Cable B Input (AudioRouter Virtual Cable)'
+$quietCaptureName = 'AudioRouter Cable A Output (AudioRouter Virtual Cable)'
 function Get-ProbeOutput([string] $Case, [string] $Mode) {
     $p95 = if ($Case -eq 'slow' -and $Mode -eq 'low-latency') { 26.5 } elseif ($Mode -eq 'low-latency') { 9.25 } else { 23.5 }
     $lost = if ($Case -eq 'lost') { 3 } else { 0 }
@@ -45,7 +47,7 @@ function Test-Latency([string] $Case) {
     $Impulses = 1000
     $powershell = 'fake-powershell'; $probe = 'fake-probe'; $tone = 'fake-tone'
     . ([scriptblock]::Create($configurationAst.Extent.Text))
-    $results = @(); $failure = $null; $active = $null
+    $results = @(); $bitExact = $null; $isolation = @(); $failure = $null; $active = $null
     $script:started = @(); $script:probeCalls = @(); $script:killed = 0; $script:disposed = 0
     function Start-Sleep { param($Milliseconds) }
     function Start-Process {
@@ -70,9 +72,19 @@ function Test-Latency([string] $Case) {
         }
         if ($Arguments[0] -eq 'inventory') {
             $lines = @('render_endpoint_count=3', "render[0] name=Speakers (High Definition Audio Device) id=x", "render[2] name=$renderName id={0.0.0}.{a}",
-                'capture_endpoint_count=2', "capture[1] name=$captureName id={0.0.1}.{b}")
+                'capture_endpoint_count=2', "capture[1] name=$captureName id={0.0.1}.{b}",
+                "render[4] name=$otherRenderName id={0.0.0}.{d}", "capture[0] name=$quietCaptureName id={0.0.1}.{e}")
             if ($Case -eq 'duplicate') { $lines += "render[3] name=$renderName id={0.0.0}.{c}" }
             Set-Content -LiteralPath $Stdout -Value ($lines -join "`n")
+            return @{ Code = 0 }
+        }
+        if ($Arguments[0] -eq 'cable-isolation') {
+            Assert ($Arguments[1] -eq '5' -and $Arguments[2] -in @('2','4') -and $Arguments[3] -eq '0' -and $TimeoutSeconds -ge 20) 'isolation records Cable A Output while noise plays into Cable A or B Input'
+            $script:probeCalls += "isolation-$($Arguments[2])"
+            $leak = $Case -eq 'leak' -and $Arguments[2] -eq '4'
+            Set-Content -LiteralPath $Stdout -Value ("isolation_rendered_frames=240000 isolation_capture_overflow_packets=0
+isolation_frames=240000 isolation_nonzero_samples=$(if ($leak) { 7 } else { 0 }) isolation_peak=$(if ($leak) { 0.001 } else { 0 }) isolation_peak_dbfs=$(if ($leak) { -60 } else { -1000 })
+isolation_pass=$(if ($leak) { 0 } else { 1 })")
             return @{ Code = 0 }
         }
         if ($Arguments[0] -eq 'cable-bitexact') {
@@ -101,19 +113,21 @@ bitexact_pass=$(if ($exact) { 1 } else { 0 })")
     $saved = Read-PairedTraceJson (Join-Path $evidence 'result.json')
     Assert ($saved.Qualification -eq $false) "$Case never claims qualification"
     switch ($Case) {
-        { $_ -in 'pass','slow','lost','not-exact' } {
+        { $_ -in 'pass','slow','lost','not-exact','leak' } {
             Assert (-not $failure) "$Case completes"
-            Assert ($script:started.Count -eq 3 -and $script:started[0] -match '"--frames" "480"' -and $script:started[1] -match '"--frames" "128"' -and $script:started[2] -match '"--frames" "480"') 'latency at 480 and 128 frames, then bit-exactness at 480'
-            Assert (@($script:started | Where-Object { $_ -notmatch '"--passthrough"' }).Count -eq 0) 'pass-through mode always selected'
+            Assert ($script:started.Count -eq 4 -and $script:started[3] -notmatch '"--passthrough"' -and $script:started[0] -match '"--frames" "480"' -and $script:started[1] -match '"--frames" "128"' -and $script:started[2] -match '"--frames" "480"') 'latency at 480 and 128 frames, then bit-exactness at 480'
+            Assert (@($script:started[0..2] | Where-Object { $_ -notmatch '"--passthrough"' }).Count -eq 0) 'pass-through for latency and bit-exactness; tone mode for isolation'
             $seconds = [int]([regex]::Match($script:started[0], '"--seconds" "(\d+)"').Groups[1].Value)
             Assert ($seconds -ge 18) 'pass-through outlives the probe'
-            Assert (($script:probeCalls -join ',') -eq 'default,low-latency,bitexact') 'default, low-latency, then bit-exact probe'
+            Assert (($script:probeCalls -join ',') -eq 'default,low-latency,bitexact,isolation-2,isolation-4') 'latency, bit-exact, then both isolation paths'
+            Assert (@($saved.Isolation).Count -eq 2) 'isolation results recorded'
             Assert ($saved.BitExact.Passed -eq ($Case -ne 'not-exact')) 'bit-exact verdict recorded from the probe'
             Assert ($bitExact.Relay -match 'forwarded=') 'bit-exact relay statistics recorded'
             Assert ($results.Count -eq 2 -and $results[0].Relay -match 'forwarded=1500' -and @($results[0].Counters).Count -eq 3) 'relay statistics and driver counters recorded'
             Assert ($results[0].P95Ms -eq 23.5 -and $results[0].JitterMs -eq 1.4) 'probe values parsed'
         }
-        'pass' { Assert ($results[0].MeetsTargets -and $results[1].MeetsTargets) 'targets met' }
+        'pass' { Assert ($results[0].MeetsTargets -and $results[1].MeetsTargets -and @($isolation | Where-Object { $_.Passed }).Count -eq 2) 'targets met and both isolation paths silent' }
+        'leak' { Assert ($isolation[0].Passed -and -not $isolation[1].Passed -and $isolation[1].NonzeroSamples -eq 7) 'a leak into Cable A Output is reported, not hidden' }
         'not-exact' { Assert (-not $bitExact.Passed -and $bitExact.MismatchedSamples -eq 12) 'a mismatch is reported, not hidden' }
         'slow' { Assert ($results[0].MeetsTargets -and -not $results[1].MeetsTargets) 'a missed low-latency target is reported, not hidden' }
         'lost' { Assert (-not $results[0].MeetsTargets -and -not $results[1].MeetsTargets) 'lost impulses fail the targets' }
@@ -125,7 +139,7 @@ bitexact_pass=$(if ($exact) { 1 } else { 0 })")
         'tone-hang' { Assert ([bool]$failure -and $script:killed -eq 1 -and $script:disposed -ge 1) 'hung pass-through is killed and disposed' }
     }
 }
-foreach ($case in @('pass','slow','lost','not-exact','status-failure','duplicate','early-exit','probe-failure','tone-hang')) { Test-Latency $case }
+foreach ($case in @('pass','slow','lost','not-exact','leak','status-failure','duplicate','early-exit','probe-failure','tone-hang')) { Test-Latency $case }
 
 $probeBinary = Join-Path $workspace 'target\m00-probe-cable\m00-probe.exe'
 $imports = @(Assert-PortableVmTool $probeBinary)
@@ -134,6 +148,8 @@ $selfTest = Invoke-DriverVmProcess -Executable $probeBinary -Arguments @('cable-
 Assert ($selfTest.Code -eq 0 -and (Get-Content -LiteralPath (Join-Path $root 'selftest.txt') -Raw) -match '\d+ cable impulse pairing checks pass') 'real probe pairing self-test (offline, no endpoint)'
 $selfTest = Invoke-DriverVmProcess -Executable $probeBinary -Arguments @('cable-bitexact-selftest') -Stdout (Join-Path $root 'bitexact-selftest.txt') -Stderr (Join-Path $root 'bitexact-selftest-stderr.txt') -TimeoutSeconds 20
 Assert ($selfTest.Code -eq 0 -and (Get-Content -LiteralPath (Join-Path $root 'bitexact-selftest.txt') -Raw) -match '\d+ cable bit-exact checks pass') 'real probe bit-exact self-test (offline, no endpoint)'
+$selfTest = Invoke-DriverVmProcess -Executable $probeBinary -Arguments @('cable-isolation-selftest') -Stdout (Join-Path $root 'isolation-selftest.txt') -Stderr (Join-Path $root 'isolation-selftest-stderr.txt') -TimeoutSeconds 20
+Assert ($selfTest.Code -eq 0 -and (Get-Content -LiteralPath (Join-Path $root 'isolation-selftest.txt') -Raw) -match '\d+ cable isolation checks pass') 'real probe isolation self-test (offline, no endpoint)'
 if ($env:COMPUTERNAME -ine 'AR-DriverTest') {
     $guard = Invoke-DriverVmProcess -Executable (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') `
         -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File',$runner) `
