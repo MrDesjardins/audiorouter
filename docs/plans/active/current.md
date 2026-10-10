@@ -77,8 +77,13 @@ probe also passes trace coverage/loss review. Guest UTC drifts relative to QPC;
 normalized QPC brackets remain compatible within 22.45631 ms during this short
 probe. Attribution must use raw QPC with that uncertainty, not UTC alignment.
 The separate copy-only paired-tone update is published and independently
-verified (35 files, all 32 base files unchanged). The next step is a paired
-30-second audio diagnostic. Sustained continuity and cause remain unresolved.
+verified (35 files, all 32 base files unchanged). The paired 30-second run now
+passes counters/deadline, both trace loss checks and compatible QPC brackets
+(23.0877 ms). The user reports continuous hiss mixed with the beep through
+Cable B, ending with the script. The saved Cable A WAV does not verify that
+path. Hold longer runs; next is preparation of a bounded direct Cable B
+recording without default/microphone fallback or Audacity installation.
+Sustained continuity, audible quality and cause remain unresolved.
 Commands are in
 [Administrator PowerShell](../../operations/virtual-cable-paired-trace.md).
 See the

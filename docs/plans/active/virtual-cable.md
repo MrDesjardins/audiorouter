@@ -2023,3 +2023,21 @@ All 35 hashes independently verify; all 32 base files unchanged. Source pushed
 to main. Artifact identity in packet-clock review. Next user action: copy
 inside VM, start loop/listener, host Tone 30 then guest Tone 30 when ready.
 No paired audio has run yet; review before any longer test.
+
+Paired 30-second run `2efe2c4cb0ae466a8536fbe49ed2ac74` reviewed: both ZIP
+hashes match, native exit 0/no timeout, leases stop at 30,004 ms, all counters
+and harness sequence gaps zero. WAV parses as 30 s/1,440,000 frames. Host
+and guest traces independently decode with zero loss/rejections; QPC bounds
+intersect across all sixteen samples within 23.0877 ms. Host recorder idle
+afterward. This short diagnostic does not close sustained/audio-quality gates.
+
+New user observation: continuous hiss plus audible beep through Cable B
+listener, stopping with the script. Guest has no Audacity. Hold longer/stall
+tests. Existing WAV captures Cable A only; there is no direct Cable B sample
+to attribute hiss to driver, shared audio engine, listener or VirtualBox/host
+playback. Source review of generator, capture queue and sample conversion
+does not demonstrate an owning defect from this evidence. Next task: design
+and prepare a bounded exact-endpoint Cable B recorder using existing Windows
+capture code; refuse default/microphone substitution, preserve packet/format
+metadata and compare captured signal to generated 997/47-Hz reference. No
+new test or implementation is claimed. Preserve current artifacts and WSL.

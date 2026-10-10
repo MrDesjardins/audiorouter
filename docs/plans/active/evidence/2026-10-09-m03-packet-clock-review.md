@@ -779,3 +779,69 @@ base. Host C: has 711.9 GB free at verification; scripts recheck at invocation.
 Preparation was copy-only, no dependency repair/build or real recorder/audio
 run. Source commit pushed to main. Next user step: current runbook's 30-second
 paired Tone with loop/listener running; send both outputs before a longer run.
+
+## Paired 30 seconds reviewed; audible hiss blocks longer tests — 2026-10-09
+
+Run `2efe2c4cb0ae466a8536fbe49ed2ac74`, guest tone
+`20261009-213832-tone`. Local share ZIP hashes independently verified:
+
+- Guest `7A321BDADBB03E695FE31733B43EED4992CB1A2D18C21306688C372B8F5FB2F4`
+  matches user output.
+- Host metadata `877D5BDF91460B6B48A91AC335F61B2148D17A977553142896C0B68DB6AFF2EC`.
+- Separate host ETL `7043B0A37E69E46EB1728800E1DCAB851D6F01F374FA4A022A0D0F7DCFB8E3FA`.
+- Guest ETL `DA332E4BC6B7B84CBC873A9880B6FDE47E2DC8575DC53445E6D96F75CB02EB43`.
+
+Both coordination results pass, guest tone exit 0. Native process elapsed
+30.1754341 s, no timeout; leases deactivated at 30,004 ms. All ten final
+driver counters and harness render sequence gaps zero. Capture/render maximum
+pump gaps 8.168/7.911 ms, control gap 9.396 ms. Recorded 3,000 blocks and
+1,440,000 frames. Guest status reports four endpoints, 60/60 formats each.
+WAV SHA256 `62B05A78185585033966A43FDC36C25AF40C52B3FED41909F5C6623FCC19C321`:
+RIFF sizes/chunks consistent, stereo IEEE float32/48 kHz, exactly 30 s,
+no non-finite samples, peaks 0.25. These checks do not prove audible quality.
+
+Both minimal profiles match prior hash. Host start/save exit 0 in
+0.3515851/9.6653798 s; guest in 0.1678924/1.9215072 s. ETL sizes
+202,375,168/26,214,400 bytes. Offline extraction/reports stay ignored under
+`target/pair-tone-review-2efe2c4c`. Approved read-only
+`tracerpt.exe <saved.etl> -o NUL -of CSV -summary <summary.txt> -report
+<report.xml> -y` exits 0 for both, without retaining full process metadata CSV.
+The existing offline reader with `--raw` also exits 0 and matches independent
+scheduling counts:
+
+| Trace | Total events | Context switches | ReadyThread | Lost/rejected |
+| --- | ---: | ---: | ---: | ---: |
+| Host | 4,154,879 | 2,219,737 | 1,312,290 | 0 |
+| Guest | 418,391 | 176,757 | 112,951 | 0 |
+
+Raw scheduling spans: host 35.0228132 s, guest 30.5091121 s. Sixteen normalized
+QPC brackets intersect at `[-88295932.4433, -88295909.3556] ms`, width
+**23.0877 ms**. Guest span maps wholly within host span under these bounds.
+Tightest before/after RTT 30.1616/31.4937 ms. UTC offset bounds change from
+`[247.1254, 277.287] ms` to `[-520.6932, -489.1995] ms`; UTC-only alignment
+remains invalid. QPC compatibility applies to this short run, not a future
+300-second measurement. Read-only `wpr.exe -status`: not recording afterward.
+
+User reports **continuous static/hiss** mixed with audible high-pitched beep,
+stopping when the script finished. Guest Audacity is not installed. Treat
+audio quality as unresolved despite counter PASS. Current WAV records
+Media Player → Cable A Input → render bridge; the complained-of path is
+tone bridge → Cable B Output → Listen → emulated speakers → host playback.
+There is no direct Cable B recording here. Source read covers absolute-phase
+997/47-Hz generator, acknowledged publication, bounded capture queue and
+integer/float endpoint conversion; no specific owning defect is demonstrated
+by these counters or the Cable A recording. Do not label hiss an expected
+tone or blame VirtualBox/host without waveform evidence.
+
+Exploratory Cable A sine fit sees a startup phase difference; a global fit
+does not prove steady noise. It is not evidence about Cable B and is not
+used to close any quality gate. Raw audio/analysis remain private and ignored.
+No new recording/test, dependency installation, driver/audio code or settings
+changed during this offline review.
+
+Next task (VCAB-24/27 diagnostics): prepare a bounded exact-endpoint Cable B
+capture using existing Windows capture code, preserving negotiated format,
+packet flags/positions and a directly recorded WAV for reference comparison.
+No default/microphone fallback. Hold longer/stall runs until that signal is
+reviewed and the owning failure is identified. Existing bundles stay retained;
+WSL/Hyper-V, latency/counter/hardware/signing gates remain unchanged.

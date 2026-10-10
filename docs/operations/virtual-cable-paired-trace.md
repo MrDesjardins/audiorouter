@@ -6,7 +6,27 @@ qualification. It changes no driver/audio binaries, VM configuration, power,
 security or WSL/Hyper-V settings. The explicit Tone phase runs audio only in
 the VM; the host only records scheduling metadata.
 
-## Current next step: paired 30-second audio diagnostic
+## Current result: short run passed counters; hiss remains unresolved
+
+Paired run `2efe2c4cb0ae466a8536fbe49ed2ac74` completed on time with zero
+driver counters and harness sequence gaps. Both saved traces decode with zero
+lost/rejected events; sixteen QPC brackets have a compatible 23.0877-ms
+interval. This establishes short diagnostic compatibility, not sustained
+continuity or sound quality.
+
+The user reports continuous hiss mixed with the beep through Cable B's
+listener; it stopped when the tone ended. **Do not start a longer or stall
+test yet.** The saved WAV records Cable A's render-source path, not Cable B
+Output or the speaker playback path. Zero counters cannot clear this report.
+Audacity is not installed in the guest; no installation is requested.
+
+Next task: prepare a bounded direct recording of the exact Cable B capture
+endpoint using existing Windows capture code, with no default/microphone
+fallback. Review waveform/packet evidence before changing the owning layer
+or requesting sustained tests. No direct Cable B recording is available yet.
+The following 30-second commands are the completed experiment's reproduction.
+
+## Completed paired 30-second audio diagnostic
 
 The host probe is reviewed: its archive hash matches, independent decoding
 finds 717,343 events with zero lost, and the offline switch reader matches
