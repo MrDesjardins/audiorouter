@@ -12,12 +12,14 @@ fn main() {
             println!("direct audio helper startup OK; no audio endpoint opened");
             Ok(())
         }
-        [mode, directory] if mode == "record" => record(PathBuf::from(directory)),
+        [mode, directory] if mode == "record" || mode == "speaker-record" => {
+            record(PathBuf::from(directory), mode == "speaker-record")
+        }
         [mode, wav, kind, report] if mode == "analyze" => {
             m03_direct_audio::analyze(Path::new(wav), kind, Path::new(report))
         }
         _ => {
-            Err("usage: m03_direct_audio record NEW_DIRECTORY | analyze WAV a|b REPORT.json".into())
+            Err("usage: m03_direct_audio record|speaker-record NEW_DIRECTORY | analyze WAV a|b REPORT.json".into())
         }
     };
     if let Err(error) = result {
@@ -26,7 +28,7 @@ fn main() {
     }
 }
 
-fn record(directory: PathBuf) -> Result<(), String> {
+fn record(directory: PathBuf, speaker: bool) -> Result<(), String> {
     if !std::env::var("COMPUTERNAME")
         .unwrap_or_default()
         .eq_ignore_ascii_case("AR-DriverTest")
@@ -44,5 +46,9 @@ fn record(directory: PathBuf) -> Result<(), String> {
     {
         return Err("record output directory must be empty".into());
     }
-    m03_direct_audio::record(&canonical)
+    if speaker {
+        m03_direct_audio::record_speaker(&canonical)
+    } else {
+        m03_direct_audio::record(&canonical)
+    }
 }

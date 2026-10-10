@@ -12,7 +12,9 @@ use audiorouter_windows_audio::{
 use serde_json::{json, Value};
 
 mod signal;
+mod speaker;
 pub use signal::analyze;
+pub use speaker::record_speaker;
 
 const RATE: usize = 48_000;
 const STRIDE: usize = 8;

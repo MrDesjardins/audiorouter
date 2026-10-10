@@ -3,7 +3,7 @@
 Updated 2026-10-09. The driver is installed only in AR-DriverTest. Smoke,
 active format inventory and short tone checks pass; reported Cable B hiss and
 sustained audio loss still block qualification. Direct recordings have been
-reviewed. The current next action is the guest listener/playback comparison
+reviewed. The current next action is the guest speaker-loopback recording
 at the end of this plan; do not repeat the direct diagnostic unchanged.
 All implementation and testing happens on
 the user's Windows 11 development PC and its VirtualBox test VM, with the
@@ -2215,3 +2215,42 @@ First/final sections contain 47 Hz, middle only 997 Hz. Next is clarification
 of continuous sections versus brief start/stop sounds, plus silent-gap and
 middle-section quality. Leave Listen off; do not change formats or request
 another driver run based on this subjective reduction.
+
+### Next diagnostic: guest speaker loopback (2026-10-09)
+
+User clarifies several distinct crackles in the early/final portions; the
+middle is not perfectly clean either. Timing is approximate, not a measured
+number of clicks. Silence quality remains unconfirmed. Do not infer a 47-Hz
+or sample-rate defect from this subjective description.
+
+Objective (VCAB-12/20/24/29, VDEV-12): obtain a digital recording of this
+independent reference at the guest speaker boundary before changing drivers.
+Prerequisites: current reference checksum, Media Player already routed to
+Speakers, Cable B Listen off, all bridge tools/playback stopped. Only the
+user runs native audio inside AR-DriverTest; host validation is offline.
+
+Ordered tasks:
+1. Add a separate 30-second, VM-only speaker loopback mode to the static
+   user-mode diagnostic. Select exactly one active Speakers (High Definition
+   Audio Device), stereo native 44.1-kHz PCM16 or float32; no default/mic/cable
+   fallback, no resampling or endpoint/volume setting change.
+2. Preallocate samples/packet metadata before Start; keep file/log work off
+   the service thread. Preserve raw native WAV format, packet flags/positions,
+   monotonic gaps and endpoint identity. Independent process watchdog applies.
+3. Add a wrapper that waits for verified recorder readiness before opening
+   the checksummed reference in the existing Media Player, retains startup/
+   exit/error evidence, archives only this run and stops only its own child.
+4. Verify endpoint/format rejection, WAV serialization, startup/timeout/failure
+   paths, static imports, formatting, Clippy and documentation offline. Package
+   from a clean identified commit into a new immutable share folder.
+5. Give one exact guest command; review the recorded samples before a new
+   bridge/long test. Capture completion is not a signal or driver pass.
+
+Boundary: WASAPI loopback observes the guest rendering endpoint mix; it is
+not a recording of host/hardware/acoustic output. Clean loopback would narrow
+further playback investigation but cannot prove which downstream component
+is defective. Source: [Microsoft loopback recording](https://learn.microsoft.com/en-us/windows/win32/coreaudio/loopback-recording).
+Risks: another guest app's audio mixes into the recording; stop unrelated
+playback. Rollback: stop this owned helper/file playback and return to the
+previous bundle. No driver install/rebuild, host audio, VM configuration,
+WSL/Hyper-V, security or qualification threshold change.

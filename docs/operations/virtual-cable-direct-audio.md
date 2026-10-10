@@ -16,12 +16,48 @@ synthesized file matches the supported speaker format and contains the intended
 tones. That reproduces hiss without AudioRouter-generated samples; it does not
 identify the faulty playback component or resolve the driver's measured loss.
 
-**Listener-off result:** user reports much less static, with some remaining,
-especially in the first and final parts. Keep Listen off and hold further
-tests while clarifying whether this means entire tone sections or just their
-start/stop boundaries, and whether the silent gaps and middle section are clean.
-The first/final sections both contain 47 Hz; the middle section contains only
-997 Hz. This content difference is a clue, not an identified cause.
+**Listener-off result:** user reports much less static, with several distinct
+crackles in the early/final portions. The middle is not perfectly clean either.
+Times are approximate; silence quality is unconfirmed. This does not identify
+a 47-Hz or sample-rate defect. Keep Listen off.
+
+### Next step: record the guest speaker mix once
+
+A new user-mode bundle records the VM's exact Speakers endpoint for 30 seconds
+and opens the same 17-second reference after the recorder is ready. It starts
+no AudioRouter cable/bridge stream and changes no audio/VM settings. Native
+44.1-kHz stereo PCM16 or float32 mix is retained without resampling.
+WASAPI loopback observes the rendering endpoint mix; it does not record the
+host/hardware/acoustic output ([Microsoft loopback recording](https://learn.microsoft.com/en-us/windows/win32/coreaudio/loopback-recording)).
+
+Inside **AR-DriverTest**:
+
+1. Keep Cable B Output **Listen to this device unchecked**. Stop test scripts
+   and other playback. Turn Media Player's Repeat off for this one reference.
+2. Keep Media Player's output **Speakers (High Definition Audio Device)**,
+   speaker setting 16-bit/44.1 kHz, and cable settings unchanged.
+3. Paste this block in the VM's PowerShell window:
+
+   ```powershell
+   & {
+       robocopy.exe 'Z:\diagnostics-20261009-speaker-loopback' 'C:\ar\diagnostics-20261009-speaker-loopback' /E /R:1 /W:1 /XF speaker-loopback-*.zip
+       if ($LASTEXITCODE -ge 8) { throw 'Bundle copy failed. Stop here.' }
+       powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261009-speaker-loopback\run-speaker-loopback.ps1'
+       if ($LASTEXITCODE -ne 0) { throw 'Speaker capture failed; evidence was preserved. Send the output.' }
+   }
+   ```
+
+4. The reference opens automatically. Listen once and wait for the final result
+   (normally under one minute). Send the output and whether crackles occurred.
+   Only this run's WAV, packet/timing metadata and process logs are zipped to
+   `Z:\diagnostics-20261009-speaker-loopback\speaker-loopback-<run>.zip`.
+
+Capture completion is **not** an audio-quality pass. Review the raw recording
+before another cable or long test. Another guest app's audio would contaminate
+this mix, so stop unrelated playback. No microphone or host endpoint is opened.
+The helper refuses the host before enumeration and has fixed native/control/
+parent deadlines. Rollback: stop reference playback; the wrapper stops only
+its owned recorder. All previous bundles and driver binaries remain unchanged.
 
 ### Completed comparison inside the VM: disable the concurrent listener
 

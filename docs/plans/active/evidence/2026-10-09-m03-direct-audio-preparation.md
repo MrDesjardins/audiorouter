@@ -335,3 +335,51 @@ exists for this playback result. Asked whether the residual is continuous
 through those sections or brief at boundaries, and whether the silent gaps
 and middle section are clean. Keep Listen off and all bridge/long tests held
 pending that clarification. No host, VM configuration, format or driver change.
+
+### Clarification and speaker-loopback preparation
+
+User describes about three distinct noises in the early/final portions;
+the middle was not perfect but quieter. Approximate times are not a measured
+click count. This supports intermittent crackles in addition to the earlier
+hiss report; neither their exact timing nor silent-gap quality is known.
+Keep Listen off. Do not infer a low-frequency, conversion or driver cause.
+
+New diagnostic mode `speaker-record` selects only the exact active guest
+Speakers render endpoint and opens its shared loopback capture. It opens no
+render, microphone or cable stream. Preserves native stereo 44.1-kHz PCM16
+or float32, rejects all other rates/layouts/encodings, and rechecks metadata
+after open. Preallocated samples/packet storage, 30-second monotonic duration,
+separate readiness/controller and process deadlines, file writes after Stop.
+The wrapper verifies the reference checksum and recorder readiness before
+opening the reference in the existing file player. It retains numeric/hex
+child exits, raw WAV and packet/position/gap metadata and archives only this
+run. `CaptureCompleted` and `qualification: false` do not assert clean audio.
+
+Boundary: loopback is the guest rendering endpoint mix, not the host or
+acoustic speaker output ([Microsoft loopback recording](https://learn.microsoft.com/en-us/windows/win32/coreaudio/loopback-recording)).
+Other guest audio could contaminate the mix; stop unrelated playback. No
+default/mic fallback, driver install/rebuild, format change, WSL/Hyper-V or
+host setting change. A separate checksummed bundle contains no driver files.
+
+Windows host verification, Rust 1.96.0, all audio/process GUI boundaries mocked
+or guarded before endpoint access:
+
+- `cargo test -p audiorouter-windows-audio --example m03_direct_audio`: 12 pass,
+  including strict speaker identity/rate/encoding rejection and PCM16/float32
+  WAV header/stride/storage checks.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/acceptance/m03-speaker-loopback.ps1`:
+  82 checks pass. Covers valid PCM/float readiness, every missing readiness
+  field, early loader exit, bad readiness, native failure, playback failure,
+  missing WAV, readiness timeout, process timeout, owned cleanup and actual
+  host guard. Initial fixture expected unquoted mode; corrected to match
+  production Windows argv quoting. Evidence:
+  `target\speaker-tests-ab7fb171feb94a00b4e876771b021415`.
+- Existing `tests/acceptance/m03-direct-audio.ps1`: 117 checks pass; evidence
+  `target\direct-audio-tests-3c2080f9220444dca7085d1ca2f65cc8`.
+- Static release build/import gate pass; no Visual C++ redistributable import.
+  Workspace and shell formatting/Clippy pass, with incremental hard-link
+  fallback warnings only. No driver or live host audio was opened.
+
+Real guest capture is pending. Next: one reference recording from the new
+speaker-only bundle, then offline waveform/packet review. Long/stall/driver
+qualification gates remain open; all prior bundles stay immutable.

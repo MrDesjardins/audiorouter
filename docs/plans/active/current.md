@@ -107,12 +107,14 @@ generated 17-second **44.1-kHz** speaker reference. Offline reinspection
 confirms its header, clean sine samples and silent separators. Read-only VM
 configuration/log review shows HDA, HostAudioWas and default Focusrite speaker
 output; it does not identify a defective component. With Cable B Listen off,
-the user now hears much less static but some remains, especially in the first
-and final parts. Keep Listen off. Clarify full sections versus start/stop
-boundaries and silent-gap/middle-section quality before another comparison,
+the user now hears much less static but several distinct crackles remain in
+the early/final portions, and the middle is not perfectly clean either. Keep
+Listen off. Next is a bounded guest speaker-loopback recording of the same
+reference to locate digital breaks before the sound leaves the guest,
 as documented in the
 [direct audio runbook](../../operations/virtual-cable-direct-audio.md#current-next-step-supported-format-speaker-reference).
-Review static during tones and silent gaps before another driver run.
+Review that recording before another driver run. It does not test host audio
+or grant an audio-quality pass on capture completion.
 Commands are in
 [Administrator PowerShell](../../operations/virtual-cable-paired-trace.md).
 See the
