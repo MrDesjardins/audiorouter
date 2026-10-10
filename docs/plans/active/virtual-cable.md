@@ -1882,3 +1882,18 @@ Separate r2 diagnostic bundle prepared from clean `ee2048a6`: 32 hashes pass,
 all 16 driver files and tone executable unchanged; copied host guard and
 read-only profile query pass. Artifact identity is in the review record.
 Next action: guest TraceProbe only, then inspect its trace and exact errors.
+
+### 2026-10-09 20:03: guest minimal recorder probe passes
+
+Copied archive SHA256
+`A3E50C9558066CE4F928341768E8338DA0C0A8A248328F8430949AA588E7019B`
+independently verified. Start/save exit 0, no timeout/cleanup failure. Saved
+13.6 MB trace decodes: 96,771 events, zero reported lost; ready-thread,
+context-switch event type, DPC/ISR, priority and process/image records present.
+Newer context-switch payload version is not fully interpreted by host tracerpt;
+timing attribution remains pending. This was two seconds without audio leases.
+Minimal profile compatibility is now guest evidence; original unsupported
+GeneralProfile feature and audio-loss cause remain unidentified. Full command,
+counts and limitations are in the review record. Next: one 300-second traced
+Tone in the same session/bundle with loop/listener active. Preserve WSL/Hyper-V,
+the zero-error gate and all failed-run evidence; no longer or stall test yet.

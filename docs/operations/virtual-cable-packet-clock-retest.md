@@ -6,14 +6,33 @@ Use only the **AR-DriverTest VM**. The host shared folder is
 The zero-error gate is unchanged. This bounded test does not replace the
 one-hour/eight-cable or hardware qualification gates.
 
-## Next step: check recorder compatibility for two seconds
+## Next step: five-minute scheduling diagnostic
+
+The two-second probe passed in the guest; its copied trace was reviewed with
+zero reported lost events and scheduling/DPC/ISR records present. Use the
+already copied bundle. Keep Media Player looping into **Cable A Input** and
+**Cable B Output → Listen → Speakers** enabled throughout. Paste into
+**Administrator PowerShell inside AR-DriverTest**:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261009-scheduling-trace-r2\run-packet-clock-review.ps1' -Phase Tone -ToneSeconds 300 -TraceScheduling
+```
+
+Measurement takes five minutes, with a six-minute tone watchdog. Trace save
+(up to two minutes) and evidence ZIP/copy follow; earlier large recordings
+can make collection take longer. The script is quiet during measurement.
+Send the final output whether tone passes or fails. No reinstall, snapshot
+restore, sound setting change or longer test is needed. This trace is
+diagnostic; the sustained zero-error requirement remains open.
+
+## Completed compatibility check: two-second probe
 
 The five-minute test now finishes on time, but all three servicing threads
 show a delay around 310–317 ms when audio is lost. The next useful evidence
 is a scheduling trace from **inside the VM**. The first tracing attempt failed
 before audio started: WPR rejected GeneralProfile.Light.File with 0x80070032.
-The revised collector uses a smaller scheduling profile. Its syntax is checked;
-actual guest recording must pass this short probe first. Driver/audio bytes stay
+The revised collector uses a smaller scheduling profile. Its actual guest
+start/save and event content now pass the short probe recorded below. Driver/audio bytes stay
 unchanged; no reinstall, snapshot restore or WSL/Hyper-V change is needed.
 
 This probe launches no tone test. Leave your sound settings as they are. Paste
@@ -29,8 +48,8 @@ into **Administrator PowerShell inside AR-DriverTest**:
 
 Recording takes two seconds, followed by start/save processing (stop watchdog
 up to two minutes) and a small ZIP copy. Earlier audio files are excluded.
-Send the final output, including any exact startup error. Do not start another
-audio test until the probe archive has been reviewed. This compatibility
+When repeating the probe, send its output, including any exact startup error,
+before another audio test. This compatibility
 candidate does not establish why the original broad profile was unsupported.
 Do not cancel an existing WPR recording.
 
@@ -43,15 +62,7 @@ The collector stops/saves its own uniquely named recording before collection.
 If stop/cancel fails or the guest crashes, preserve the VM files and send the
 output. Do not run a longer or intentional-stall test.
 
-After the probe is reviewed, keep the Media Player loop routed to **Cable A
-Input** and **Cable B Output → Listen → Speakers** enabled. The subsequent
-five-minute diagnostic command (do not run yet) is:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261009-scheduling-trace-r2\run-packet-clock-review.ps1' -Phase Tone -ToneSeconds 300 -TraceScheduling
-```
-
-The tone watchdog is six minutes; trace save and ZIP collection follow.
+The probe is now reviewed; use the next-step command at the top of this page.
 The tone ZIP includes `scheduling\scheduling.etl` and native timing reports.
 
 ## Current harness update after the five-minute failure

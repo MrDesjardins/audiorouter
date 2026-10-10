@@ -404,3 +404,39 @@ clean source `ee2048a6f73f223a7bd9e366a48ba6aac3a69a6d`, built
 Copied wrapper refuses host TraceProbe and copied WPRP parses with read-only
 WPR query. Next: the guest TraceProbe command in the retest procedure; send
 output and review the small copied archive before any audio test.
+
+## Guest minimal-profile probe passes — 2026-10-09 20:03 local
+
+Archive `C:\VMs\ar-share\evidence-20261009-200256-trace-probe-196bd5e0.zip`
+independently matches SHA256
+`A3E50C9558066CE4F928341768E8338DA0C0A8A248328F8430949AA588E7019B`.
+All 32 bundle files verify in the guest. WPR start exit 0 in 0.1570748 s;
+stop/save exit 0 in 2.0198765 s; no timeout/cleanup failure. The exact profile
+hash is `CB4DE1288C25F900705D28D6E13A589221661B4BA916783936B0624F0548433C`,
+matching the checked-in/copied candidate. Saved ETL length **13,631,488 bytes**.
+Final collector status shows all seven requested keywords enabled, zero dropped
+events and zero collector events lost. No tone executable/lease was launched.
+
+Host inspection: extracted only ETL/profile into ignored
+`target/trace-probe-review-20261009-200256`; `tracerpt.exe scheduling.etl -o
+events.csv -of CSV -summary summary.txt -report report.xml -y` completes with
+exit 0. Initial sandbox attempt could not access the WMI metadata service;
+an approved read-only execution decoded the saved file without changing
+services/settings or starting a host recording. The report identifies
+AR-DRIVERTEST, build 26300, 4 processors and 8,173 MB memory. It processes
+**96,771 events**, zero lost, two-second collection. Observed event groups:
+
+- 4,548 ReadyThread; 726 DPC; 50 TimerDPC; 522 ISR records.
+- 7,835 Thread / opcode 36 / version 5 records. Opcode 36 is the documented
+  [context-switch event](https://learn.microsoft.com/en-us/windows/win32/etw/cswitch).
+  The host decoder leaves the newer version-5 payload unnamed; its full
+  payload interpretation and timing attribution have not yet been qualified.
+- Process/thread lifetime, image load/rundown and thread priority records.
+
+This proves the narrowed profile can start/save in this guest and carries the
+required event families; it does not isolate the original GeneralProfile
+unsupported feature or explain sustained audio loss. Named instance and file
+mode work with this profile. Next: one bounded 300-second traced Tone using
+the same r2 diagnostic bundle, installed driver and loop/listener. Inspect
+audio timings/loss alongside the scheduler trace; no longer/stall run yet.
+VCAB-24 sustained continuity and other hardware/signing gates remain open.

@@ -58,9 +58,12 @@ error counters. Its five-minute run ends on time but loses audio: both audio
 loops stall about 310 ms and the control loop about 317 ms in the same
 observation interval. Root cause remains unidentified; next is an opt-in guest
 scheduler trace, preserving WSL and the failed continuity gate. Its initial
-GeneralProfile startup failed with 0x80070032 before tone began. Next: review
-a two-second guest recorder probe using a minimal scheduling profile before
-any new long audio diagnostic. See the
+GeneralProfile startup failed with 0x80070032 before tone began. The minimal
+profile's two-second guest probe now starts/saves successfully; the copied
+trace decodes with scheduling/DPC/ISR event families and zero reported lost
+events. Next: one bounded 300-second traced audio diagnostic; the newer
+context-switch payload interpretation and audio-loss attribution remain open.
+See the
 [packet-clock review](evidence/2026-10-09-m03-packet-clock-review.md) and active
 virtual cable plan. The [earlier review record](evidence/2026-10-09-m03-render-publication-review.md)
 and [virtual cable execution plan](virtual-cable.md) record the guest's passing
