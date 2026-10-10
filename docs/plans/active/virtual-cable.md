@@ -1573,10 +1573,23 @@ all 29 staged files. The driver's SYS hash is unchanged. Jev review could not
 reach its API and remains unrun. New bundle:
 `C:\VMs\ar-share\repair-20261009-active-inventory`; inventory tool SHA-256
 `D08495D741E99C1AC4FA4F0BE234C5C5CC2D920E30C1AACF28684DC6B94CDEB2`.
-Next: copy this bundle into a new folder under `C:\ar` in the VM and run only
-`vm-checks.ps1 -Step status`, then collect and send the evidence. The existing
-driver is already installed, so do not run preflight or install from this new
-bundle. Tone remains gated on status passing. This is not guest validation;
-the active-state fix must pass in the VM. Rollback: keep the old bundle and
-installed driver; the new package changes only the inventory executable,
-manifest and build metadata.
+The active-state inventory repair passed in the VM. The status step found
+exactly four active AudioRouter endpoints, each with 60 supported formats and
+a 128-frame minimum period. The 30-second tone run passed all four checks
+using bundle `repair-20261009-active-inventory`; archive
+`C:\ar\repair-20261009-active-inventory\evidence-20261009-171045.zip`,
+SHA-256 `F6D16DDFA8AC1B0A02AFBC349F074D249B74BEDD5324F6F59E8E24AF69F94BA3`.
+The trace records 3,003 capture blocks written, 3,000 render blocks read
+(1,440,000 stereo frames / 30 seconds), zero driver error counters, zero
+harness sequence gaps, and maximum capture/render worker poll gaps of 6.200 /
+6.192 ms. WAV format/header was verified as stereo 48 kHz float32 for exactly
+30 seconds. This qualifies the status repair and short-tone gate only; it does
+not qualify sustained continuity or latency.
+
+Next: run the clean 600-second tone step from the same bundle while looping
+`Z:\loop-test-60s.wav` from Media Player into AudioRouter Cable A Input for the
+entire run. Keep Cable B Output monitoring enabled if desired. Collect the
+archive even if tone fails, then review the trace before any stall or
+8-channel test. Do not reinstall the unchanged driver. Acceptance remains
+zero error counters and zero harness sequence gaps; rollback is the existing
+clean VM snapshot and previously installed driver.
