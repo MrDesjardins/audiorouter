@@ -1,4 +1,4 @@
-# Cable latency and bit-exactness diagnostic (VCAB-25/VCAB-20 preparation)
+# Cable latency, bit-exactness and isolation diagnostic (VCAB-25/20/26 preparation)
 
 Measures how long an impulse takes from **AudioRouter Cable A Input** to
 **AudioRouter Cable B Output** inside the AR-DriverTest VM, through the
@@ -40,6 +40,11 @@ so treat the numbers as an upper bound until measured under native VT-x
    32-frame match and every sample is compared, and the silence must be
    exact +0.0. This is VCAB-20 at the endpoints' float32 mix format through
    the proxy route, not across the product engine or other rates/channels.
+5. Isolation: the tone tool runs in its normal mode (a tone on Cable B
+   Output, Cable A Input consumed). Nothing routes into Cable A Output, so
+   `m00-probe.exe cable-isolation` records it for 5 s while noise plays into
+   Cable A Input, then into Cable B Input; every sample must be exact +0.0
+   (VCAB-26 asks for ≤ −140 dBFS; the peak is reported in dBFS).
 
 ## Optional: quiet the guest first
 
@@ -49,7 +54,7 @@ guest-only script. After copying the bundle (first line of the block below),
 in Administrator PowerShell inside the VM:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-cable-latency-r3\quiet-guest.ps1' -Apply
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-cable-latency-r4\quiet-guest.ps1' -Apply
 ```
 
 It records the current values, pauses Windows Update for 7 days, disables
@@ -65,18 +70,19 @@ inside AR-DriverTest**, with the driver installed:
 
 ```powershell
 & {
-    robocopy.exe 'Z:\diagnostics-20261010-cable-latency-r3' 'C:\ar\diagnostics-20261010-cable-latency-r3' /E /R:1 /W:1 /XF latency-*.zip | Out-Null
+    robocopy.exe 'Z:\diagnostics-20261010-cable-latency-r4' 'C:\ar\diagnostics-20261010-cable-latency-r4' /E /R:1 /W:1 /XF latency-*.zip | Out-Null
     if ($LASTEXITCODE -ge 8) { throw 'Copy failed. Stop here.' }
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-cable-latency-r3\run-cable-latency.ps1'
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-cable-latency-r4\run-cable-latency.ps1'
     if ($LASTEXITCODE -ne 0) { throw 'Latency diagnostic failed. Evidence was preserved; send the output.' }
 }
 ```
 
-It takes about a minute. It prints one line per latency configuration (p50,
+It takes about a minute and a half. It prints one line per latency configuration (p50,
 p95, jitter, lost, corrupted), the relay statistics and the driver counters,
-one bit-exact line (compared frames, mismatched samples, non-zero silence), then
+one bit-exact line (compared frames, mismatched samples, non-zero silence),
+two isolation lines (frames, non-zero samples), then
 copies `latency-<run>.zip` to the same folder on `Z:` (host:
-`C:\VMs\ar-share\diagnostics-20261010-cable-latency-r3`). Send the output. A
+`C:\VMs\ar-share\diagnostics-20261010-cable-latency-r4`). Send the output. A
 missed target is a measurement, not a crash; do not rerun it unchanged.
 
 ## Host-side checks

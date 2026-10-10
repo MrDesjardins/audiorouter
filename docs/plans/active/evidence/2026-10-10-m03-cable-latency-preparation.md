@@ -88,3 +88,16 @@ probe verdict is caught). Bundle
 driver `492d8ca8` (SYS SHA-256 unchanged), 36 entries, manifest SHA-256
 `53BBE034142F3EBF6206EE3509BD5E981C74FC5720E04CB34FF87BFAEB40D6B6`. Use r3;
 r1/r2 stay as built.
+
+## Bundle r4 with the isolation check (VCAB-26 preparation)
+
+Commit `9717d2b1`: probe mode `cable-isolation SECONDS RENDER CAPTURE`
+(noise into one Input, every captured sample must be +0.0; peak in dBFS)
+with `cable-isolation-selftest` (4 checks, including a −140 dBFS sample and
+−0.0 counted as leaks). The runner adds a tone-mode session (tone on Cable B)
+and records Cable A Output while noise plays into Cable A Input and into
+Cable B Input. Host: `/W4` clean; cable acceptance 167 checks (new `leak`
+case; mutation ignoring the probe's isolation verdict is caught). Bundle
+`C:\VMs\ar-share\diagnostics-20261010-cable-latency-r4`: source `9717d2b1`,
+driver `492d8ca8` (SYS SHA-256 unchanged), 36 entries, manifest SHA-256
+`6B81F23A9E735B50EC13F4ED04B94D2FE2766665B8873FF69D2DEF15C7F925CC`. Use r4.
