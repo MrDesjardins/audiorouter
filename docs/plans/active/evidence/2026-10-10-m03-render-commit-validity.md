@@ -169,3 +169,52 @@ extracted to `target/smoke2-20261010-102855`.
 Both required clean smokes pass for this candidate. Scope unchanged:
 installation/cleanup only. Next: install plus status/format inventory in the
 same guest session (it was left at the restored baseline), then collect.
+
+## Install and status — 2026-10-10 (passed)
+
+Same guest session, `C:\ar\vm-checks.ps1 -Step install`, `-Step status`,
+`-Step collect`. Install 3/3 (exit 0, four endpoints, second install is an
+idempotent no-op); status 2/2: helper `installed`, protocol 1.1, driver
+0.1.0.0. All four active endpoints (Cable A/B Input render, Cable A/B Output
+capture) support 60/60 formats, engine periods min/default/max 128/480/480
+frames, mix format float32 stereo 48 kHz. Archive
+`C:\VMs\ar-share\evidence-20261010-103119.zip`, SHA-256
+`DDAFA3169E392AF7B75FC3CB926C30D635014C333B26C76E9BF4FA84D3CA851D`, extracted
+to `target/install-20261010-103119`. The driver remains installed in the guest.
+Not audio evidence.
+
+## Direct audio r3 bundle — 2026-10-10
+
+The existing preparer required a paired-tone base; the standard candidate
+lacks the definitions-only `paired-trace-support.ps1` the runner loads.
+Commit `792c5a69` adds that file when absent and records the base driver
+identity in the manifest; a paired-tone base keeps its own copy.
+
+- Recorder: `build-direct-audio.ps1` (static CRT); cargo found it current with
+  the HEAD sources (last direct-audio source change `72766a66`). Import check
+  shows no Visual C++ runtime DLL.
+- `tests/acceptance/m03-direct-audio.ps1`: 117 orchestration checks passed;
+  no audio stream or driver tool opened. Log `target/direct-audio-r3-acceptance.log`.
+- Bundle `C:\VMs\ar-share\diagnostics-20261010-direct-audio-r3`: source
+  `792c5a69`, driver `28b989f5` (SYS SHA-256 unchanged, `91BBC17A…7BB6`),
+  35 manifest entries = the 32 base files plus `paired-trace-support.ps1`,
+  `run-direct-audio.ps1`, `tools\m03_direct_audio.exe`. Manifest SHA-256
+  `66D216264573EFE05D3368FE5F42A7DAB694754BED3A67151A08379B1BC67251`.
+
+Guest step (driver already installed; Media Player and Cable B Listen off),
+in Administrator PowerShell **inside the VM**:
+
+```powershell
+& {
+    robocopy.exe 'Z:\diagnostics-20261010-direct-audio-r3' 'C:\ar\diagnostics-20261010-direct-audio-r3' /E /R:1 /W:1 /XF direct-*.zip
+    if ($LASTEXITCODE -ge 8) { throw 'Copy failed. Stop here.' }
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-direct-audio-r3\run-direct-audio.ps1'
+    if ($LASTEXITCODE -ne 0) { throw 'Diagnostic failed. Evidence was preserved; send the output.' }
+}
+```
+
+Limit: no driver counter shows whether Windows actually calls
+`SetWritePacket` on these streams, so this run cannot prove the repaired path
+was active. A clean result shows the candidate's direct samples and counters;
+a new render underrun count is a failed continuity gate to analyze, not to
+suppress. Packet-mode observability would need a separate reviewed kernel change.

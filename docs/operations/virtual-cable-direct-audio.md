@@ -1,5 +1,13 @@
 # Automatic direct audio diagnosis
 
+**2026-10-10 r3 (current):** the render-commit candidate `28b989f5` passed two
+clean smokes and install/status. Bundle
+`C:\VMs\ar-share\diagnostics-20261010-direct-audio-r3` adds the unchanged
+direct runner and static recorder to that candidate. The exact command, with
+Cable B Listen **off**, is in the
+[repair record](../plans/active/evidence/2026-10-10-m03-render-commit-validity.md#direct-audio-r3-bundle-2026-10-10).
+The r2 notes below are history.
+
 **Current state:** the r2 run has finished and its recordings have been
 reviewed. Do not repeat the procedure below or extend it. Direct Cable B
 samples fit the expected tones between one real loss event; they do not
