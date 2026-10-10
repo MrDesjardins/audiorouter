@@ -1731,3 +1731,11 @@ bundle and hand off the bounded procedure. Completed: r2 built from clean
 source `97b393d5`, package integrity 33/33 and all 30 manifest hashes pass.
 Driver SHA256 is recorded in the review evidence. Next action is the guest
 procedure; no VM run was performed during this review.
+
+Guest follow-up: the user ran r2 Prepare successfully. Archive
+`evidence-20261009-182328.zip` is independently hash-verified on the host;
+preflight, smoke A1/A2/A3/A14, install/idempotency, four-endpoint format status
+and collection all pass. Details are in the packet-clock review evidence.
+Next: 30-second tone in the same installed guest session, with Cable A Input
+loop playback and Cable B Output listening already active; 300 seconds only
+after the short run passes. No new continuity result yet.

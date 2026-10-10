@@ -109,3 +109,18 @@ No new VM run, Verifier, stall injection, one-hour continuity, DPC measurement,
 or hardware latency result is claimed here. VCAB-24/25/27/28 stay open.
 Rollback: power off and restore the same clean snapshot; keep earlier bundles
 and evidence. Reverting the source commit restores previous code if needed.
+
+## Guest preparation evidence — 2026-10-09 18:23 local
+
+User ran Prepare in AR-DriverTest and copied
+`C:\VMs\ar-share\evidence-20261009-182328.zip`. Host inspection verified
+SHA256 `3EE56FD05D809207FBD8A2BBCF17BAC0D5C37B67572E19CF50BF157CE40AB210`
+and the archived JSON summaries. Exact r2 source `97b393d5`, clean build:
+preflight 15/15, smoke A1/A2/A3/A14, retained install 3/3 (four endpoints,
+idempotency), status 2/2, collect 2/2 all pass. Smoke left unrelated devices
+and default roles unchanged and restored its baseline. The subsequent install
+keeps the driver for tone testing. All four active endpoints accept 60 formats
+and report 128-frame minimum period. This is not hardware latency evidence.
+Next: keep this guest session running, loop Media Player into Cable A Input,
+listen to Cable B Output through the VM speakers, and run the 30-second tone
+phase. Sustained continuity remains pending.
