@@ -61,3 +61,13 @@ Guest command: [latency runbook](../../../operations/virtual-cable-latency.md).
 - Proxy route, not the product engine; no VB-Cable comparison (not present in
   the VM); the VM's NEM timer delays make the numbers an upper bound.
 - Not run in the VM yet; no latency number is claimed.
+
+## Bundle r2 with guest quieting
+
+Commit `bf1cc2ba` adds the reversible `quiet-guest.ps1` (47 host checks:
+apply/refuse-second-apply/exact revert, pre-existing values and exclusions
+preserved, settle wait, host refusal) and copies it into the bundle. The
+first bundle stays as built; use
+`C:\VMs\ar-share\diagnostics-20261010-cable-latency-r2`: source `bf1cc2ba`,
+driver `492d8ca8` (SYS SHA-256 unchanged), 36 entries, manifest SHA-256
+`6685987B95DBE2F7752CE151DF31EA96F27D8452B633F05471D7F14878B0CE11`.
