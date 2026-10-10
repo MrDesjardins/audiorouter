@@ -22,8 +22,12 @@ confirm HDA, `useDefault=true`, stored driver WAS and zero backend overrides.
 No VirtualBoxVM/VBoxHeadless process is running. Keep the VM off; no new
 playback, recorder or driver test is requested. Do not repeat the rollback
 block or restore a snapshot. WSL and host settings remain unchanged.
-Next engineering task: review virtual audio clock recovery against the saved
-timing evidence before preparing another candidate. See the
+Next engineering task: finish the committed-render-packet repair and its
+host-only validation. Source review found stale DMA could be published with
+zero counters after a missing OS commit. The repair does not prove the cause
+of the saved phase breaks or fix the independent HDA playback scratching.
+No further VM test is requested until one reviewed candidate is prepared.
+See the
 [capture-off and clock review](../plans/active/evidence/2026-10-09-m03-direct-audio-preparation.md#directsound-playback-with-capture-off-and-clock-review-2026-10-10).
 The closed-session log additionally records 11 HDA output transfers skipped
 because a completion interrupt remained pending. This is a concrete playback

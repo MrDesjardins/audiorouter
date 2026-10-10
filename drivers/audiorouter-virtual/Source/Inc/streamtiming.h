@@ -2,6 +2,58 @@
 #ifndef _AUDIOROUTERVIRTUAL_STREAMTIMING_H_
 #define _AUDIOROUTERVIRTUAL_STREAMTIMING_H_
 
+// Stream-owned metadata, accessed only under the position lock. SetWritePacket
+// admits only the current packet before RUN, or current + 1 during RUN; hence
+// two identities suffice regardless of the number of physical DMA slots.
+// Never retain a borrowed DMA pointer or infer validity from a reused offset.
+struct AudioRouterRenderCommits {
+    ULONGLONG Packets[2];
+    bool Valid[2];
+    bool PacketMode;
+
+    void Reset() {
+        Packets[0] = Packets[1] = 0;
+        Valid[0] = Valid[1] = false;
+        PacketMode = false;
+    }
+
+    void Commit(ULONGLONG Packet) {
+        const ULONG slot = static_cast<ULONG>(Packet & 1);
+        Packets[slot] = Packet;
+        Valid[slot] = true;
+        PacketMode = true;
+    }
+
+    void InvalidateSlot(ULONG PacketNumber, ULONG Notifications) {
+        if (Notifications == 0) { return; }
+        for (ULONG slot = 0; slot < 2; ++slot) {
+            if (Valid[slot] && static_cast<ULONG>(Packets[slot]) % Notifications ==
+                    PacketNumber % Notifications) {
+                Valid[slot] = false;
+            }
+        }
+    }
+
+    bool Contains(ULONGLONG LinearByte, ULONG PacketBytes) const {
+        // Legacy write-position / polling clients do not commit packet IDs.
+        if (!PacketMode) { return true; }
+        if (PacketBytes == 0) { return false; }
+        const ULONGLONG packet = LinearByte / PacketBytes;
+        const ULONG slot = static_cast<ULONG>(packet & 1);
+        return Valid[slot] && Packets[slot] == packet;
+    }
+};
+
+// Compare the low 32 bits at the wire boundary, retaining the full identity
+// for consumption across PacketNumber rollover. Caller bounds CurrentPacket
+// to MAXLONGLONG and commits only when this signed modulo delta is zero.
+__forceinline LONG AudioRouterRenderCommitDelta(
+    ULONG PacketNumber, ULONGLONG CurrentPacket, bool Running)
+{
+    const ULONG expected = static_cast<ULONG>(CurrentPacket + (Running ? 1 : 0));
+    return static_cast<LONG>(PacketNumber - expected);
+}
+
 __forceinline ULONGLONG AudioRouterCompletedPackets(
     ULONGLONG LinearBytes, ULONG BufferBytes, ULONG Notifications)
 {

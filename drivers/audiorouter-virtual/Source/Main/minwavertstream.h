@@ -99,6 +99,7 @@ protected:
     ULONGLONG                   m_ullPresentationPosition;
     ULONG                       m_ulLastOsReadPacket;
     ULONG                       m_ulLastOsWritePacket;
+    AudioRouterRenderCommits     m_RenderCommits;
     LONGLONG                    m_llPacketCounter;
     ULONGLONG                   m_ullDmaTimeStamp;
     LARGE_INTEGER               m_ullPerformanceCounterFrequency;

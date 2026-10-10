@@ -205,7 +205,85 @@ static void packetClockChecks() {
     require(!AudioRouterHnsToQpc(10000001, ~0ULL - 42, &ticks), "overflow when adding valid whole and fractional ticks is rejected");
 }
 
+static void renderCommitChecks() {
+    constexpr ULONG packetBytes = 16;
+    AudioRouterRenderCommits commits = {};
+    commits.Reset();
+    require(commits.Contains(0, 0), "polling remains outside packet validity mode");
+    require(commits.Contains(32, packetBytes), "legacy event mode preserved before first commit");
+    require(AudioRouterRenderCommitDelta(0, 0, false) == 0, "prefill admits packet zero");
+    commits.Commit(0);
+    commits.Commit(1);
+    const DOUBLE dma[2] = {0.25, -0.5};
+    ULONGLONG missingFrames = 0;
+    for (ULONGLONG packet = 0; packet < 4; ++packet) {
+        if (packet == 3) {
+            require(AudioRouterRenderCommitDelta(3, 2, true) == 0, "next packet admitted after missed packet");
+            commits.InvalidateSlot(3, 2);
+            commits.Commit(3);
+        }
+        for (ULONG frame = 0; frame < 4; ++frame) {
+            const bool valid = commits.Contains(packet * packetBytes + frame * 4, packetBytes);
+            const DOUBLE sample = valid ? dma[packet % 2] : 0.0;
+            missingFrames += valid ? 0 : 1;
+            require(sample == (packet == 2 ? 0.0 : dma[packet % 2]),
+                    "missed OS commit cannot replay the previous DMA lap");
+        }
+    }
+    require(missingFrames == 4, "only missing producer frames count as underruns");
+    require(AudioRouterCompletedPackets(64, 32, 2) == 4,
+            "missing producer data does not stop packet clock");
+    require(AudioRouterRenderCommitDelta(2, 2, true) < 0, "late packet rejected");
+    require(AudioRouterRenderCommitDelta(4, 2, true) > 0, "ahead packet rejected");
+    require(AudioRouterRenderCommitDelta(3, 2, true) == 0, "duplicate admission matches existing contract");
+
+    // Incoming payload is already in its physical slot when the DDI is called.
+    // Invalidation must precede the progress update, including rejected calls.
+    for (ULONG notifications : {1UL, 2UL}) {
+        commits.Reset();
+        commits.Commit(1);
+        commits.InvalidateSlot(1 + notifications, notifications);
+        require(!commits.Contains(packetBytes, packetBytes),
+                "overwritten physical slot invalidated before delayed progress");
+        require(!commits.Contains((1 + notifications) * packetBytes, packetBytes),
+                "invalidation does not admit a rejected incoming packet");
+        commits.Commit(1 + notifications);
+        require(commits.Contains((1 + notifications) * packetBytes, packetBytes),
+                "new packet becomes readable only after successful commit");
+    }
+    commits.Reset();
+    commits.Commit(0);
+    commits.InvalidateSlot(1, 1);
+    commits.Commit(1);
+    require(!commits.Contains(8, packetBytes),
+            "one-slot next commit silences overwritten current remainder");
+    require(commits.Contains(packetBytes + 8, packetBytes),
+            "one-slot next payload belongs only to next logical packet");
+    require(sizeof(commits) <= 24, "packet metadata is fixed and bounded");
+    commits.Reset();
+    commits.Commit(0xffffffffULL);
+    require(commits.Contains(0xffffffffULL * packetBytes, packetBytes),
+            "ULONG_MAX is a valid packet identity rather than a sentinel");
+    require(AudioRouterRenderCommitDelta(0, 0xffffffffULL, true) == 0,
+            "wire packet number wraps while logical packet identity continues");
+    commits.InvalidateSlot(0, 2);
+    commits.Commit(0x100000000ULL);
+    require(commits.Contains(0x100000000ULL * packetBytes, packetBytes), "wrapped packet committed");
+    require(!commits.Contains(0, packetBytes), "wrapped slot cannot revive startup packet");
+    require(commits.Contains(0xffffffffULL * packetBytes + 8, packetBytes),
+            "pause preserves partially consumed current packet");
+    const auto window = AudioRouterSurvivingDmaWindow(16, 16000, 32);
+    require(!commits.Contains(16 + window.SkippedBytes, packetBytes),
+            "long stall cannot revive historical commit tags");
+    commits.Reset();
+    require(!commits.PacketMode && !commits.Valid[0] && !commits.Valid[1],
+            "STOP and buffer replacement discard all packet identities");
+    commits.Commit(0);
+    require(!commits.Contains(0, 0), "packet mode fails closed with invalid packet size");
+}
+
 int main() {
+    renderCommitChecks();
     packetClockChecks();
     renderBurstChecks();
     const ULONG clockRates[] = { 44100, 48000, 96000 };

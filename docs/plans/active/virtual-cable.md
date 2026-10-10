@@ -4,7 +4,7 @@ Updated 2026-10-09. The driver is installed only in AR-DriverTest. Smoke,
 active format inventory and short tone checks pass; reported Cable B hiss and
 sustained audio loss still block qualification. Direct recordings have been
 reviewed, including the guest speaker-loopback capture. The current next
-action is read-only playback/backend review at the end of this plan;
+action is the committed-render-packet repair under Objective below;
 do not repeat the completed diagnostics unchanged.
 All implementation and testing happens on
 the user's Windows 11 development PC and its VirtualBox test VM, with the
@@ -58,6 +58,46 @@ Next action: commit the reviewed source and prepare a single candidate.
 Runtime/latency/long-run gates remain pending; no further user test requested.
 
 ## Objective
+
+### Active repair: committed render packet validity (2026-10-10)
+
+User requests the next engineering step before another VM test. Scope:
+VCAB-12/20/24/27/28, VDEV-12; event-driven render DMA underflow handling.
+Review finds `ReadBytes` converts elapsed DMA without checking which logical
+packets Windows committed through `SetWritePacket`. A missed write can expose
+the previous circular-buffer lap. The timer's later ETW underrun does not
+increment bridge counters. Microsoft documents this replay behavior and its
+optional silence mitigation; AudioRouter must not silently qualify stale data.
+This source defect is not proven to cause the saved 12-second phase breaks
+and is separate from the virtual HDA speaker scratches.
+
+Ordered tasks: (1) model packet validity with a production helper and reproduce
+uncommitted/stale packet reuse; (2) silence only unavailable event-mode frames
+and count each as render underrun, preserving packet clock and valid samples;
+(3) make accepted OS packet commits and validity state atomic with DMA position;
+(4) regress startup, duplicate/late commits, rollover, PAUSE/STOP, long stalls,
+format/buffer boundaries and existing polling behavior; (5) fresh kernel review,
+host-only x64/ARM64 WDK build/source guards and focused native-free tests;
+(6) document counter semantics, commit and prepare one checksummed candidate
+only after review. No buffer growth, ABI change or acceptance relaxation.
+
+Prerequisites: existing source/build tools and saved private evidence are
+available; VM is off with original default/WAS and HDA restored. Real audio,
+driver loading, waveform continuity and latency validation require the user
+inside AR-DriverTest; no host audio endpoint or driver is opened by the agent.
+Fresh-context review found and confirmed the packet-validity and atomicity
+defects. The guarded reader and shared-helper regressions are implemented;
+review found no remaining source blocker within this scope. Compatibility
+decision: strict validity latches after the first accepted `SetWritePacket`,
+preserving legacy event/polling clients. Earlier consumption remains outside
+that protection. One-slot commits invalidate the current physical slot and
+can introduce honest, counted silence; one-slot continuity is unqualified.
+EOS rejection is unchanged. Rollback: revert this isolated repair and
+retain the installed driver, clean snapshot and prior bundles unchanged.
+620 offline helper checks and x64/ARM64 WDK/catalog/source acceptance pass.
+See the [repair record](evidence/2026-10-10-m03-render-commit-validity.md).
+Next action: commit the isolated repair and prepare one checksummed candidate
+from clean source. No new VM run is authorized by a build pass.
 
 Ship AudioRouter-owned virtual cables (up to 8, Cable A–H; 2 enabled by
 default, the user picks 1–8) with the app, with studio-grade sound

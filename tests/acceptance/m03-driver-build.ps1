@@ -851,5 +851,28 @@ if ($waitOffset -lt 0 -or $unmapOffset -lt 0 -or $waitOffset -ge $unmapOffset) {
     throw 'mapped-view retirement must wait for rundown before unmapping'
 }
 
+$commitStart = $stream.IndexOf('NTSTATUS CMiniportWaveRTStream::SetWritePacket')
+$commitEnd = $stream.IndexOf('NTSTATUS CMiniportWaveRTStream::GetOutputStreamPresentationPosition', $commitStart)
+if ($commitStart -lt 0 -or $commitEnd -le $commitStart) {
+    throw 'render packet commit boundary is missing'
+}
+$commitBody = $stream.Substring($commitStart, $commitEnd - $commitStart)
+$invalidateOffset = $commitBody.IndexOf('m_RenderCommits.InvalidateSlot(')
+$progressOffset = $commitBody.IndexOf('UpdatePosition(')
+$tagOffset = $commitBody.IndexOf('m_RenderCommits.Commit(')
+$releaseOffset = $commitBody.IndexOf('KeReleaseSpinLock(')
+if ($invalidateOffset -lt 0 -or $invalidateOffset -ge $progressOffset -or
+    $progressOffset -ge $tagOffset -or $tagOffset -ge $releaseOffset -or
+    ([regex]::Matches($commitBody, 'KeAcquireSpinLock\(').Count -ne 1) -or
+    ([regex]::Matches($commitBody, 'KeReleaseSpinLock\(').Count -ne 1)) {
+    throw 'render slot invalidation/progress/admission/commit must share one position lock'
+}
+if (-not $stream.Contains('m_RenderCommits.Contains(') -or
+    -not $stream.Contains('if (!committed) { ++activity.UnderrunFrames; }') -or
+    -not $stream.Contains('committed ? ReadBridgeSample(') -or
+    -not $stream.Contains('m_pWfExt) : 0.0;')) {
+    throw 'render DMA must gate sample reads and count silence for missing packet commits'
+}
+
 Write-Output 'M03 AudioRouter virtual-driver build acceptance passed'
 Write-Output "Scope: project-owned $Platform WDK compile/signability/catalog qualification only; no installation, loading, signing-mode, boot-policy, service, or audio configuration action."

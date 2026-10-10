@@ -274,7 +274,8 @@ device in `Source/Main/adapter.cpp` and bridge helpers in
   value back for a capture sink), reserved
   to 128. OPEN zeroes bytes 32–127 before the lease becomes visible. Counter
   units: `UnderrunFrames` frames of silence while a usable capture-sink lease
-  had no newer block; `SequenceGaps` skipped block sequences;
+  had no newer block, or while a usable render-source lease consumed frames
+  without a valid OS packet commit in packet mode; `SequenceGaps` skipped block sequences;
   `NonFiniteSamples` every NaN/Inf sample in a rejected block (the whole block
   is refused and replaced by silence); `FormatMismatches` callbacks in which an
   active lease's rate or channel count differed from the endpoint stream (that
@@ -360,6 +361,25 @@ device in `Source/Main/adapter.cpp` and bridge helpers in
   render catch-up process at most the surviving DMA lap and count lost frames,
   never loop over historical laps at DISPATCH_LEVEL. Runtime continuity and
   DPC-duration gates remain required.
+- **Committed render packets (2026-10-10 repair).** After the first successful
+  `SetWritePacket`, retain explicit absolute identities for the current/next
+  packet. Progress, admission and commit share the stream position lock.
+  Invalidate the incoming packet's physical slot before updating progress:
+  Windows has written that slot before reporting it. Read only samples with
+  a matching logical commit; substitute silence for unavailable frames and
+  increment render `UnderrunFrames` once per frame, while preserving the packet
+  clock and notifications. Never clear user-owned DMA to implement mitigation.
+  Metadata is fixed at 24 bytes per stream; no sample storage or ABI change.
+  STOP and buffer replacement reset it; PAUSE retains it. Before the first
+  accepted commit, legacy write-position and polling behavior remain unchanged;
+  their zero counters do not establish producer validity. Notification allocation
+  accepts Microsoft's defined counts 1/2 and rounds to whole frames per packet.
+  In one-slot mode, committing the next packet invalidates the current slot's
+  remaining samples conservatively; glitch-free one-slot operation is not yet
+  qualified. Existing EOS packet rejection is unchanged and remains a separate
+  lifecycle limitation. Host regressions are not runtime continuity evidence.
+  See Microsoft's [packet commit contract](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/portcls/nf-portcls-iminiportwavertoutputstream-setwritepacket)
+  and [notification allocation contract](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/portcls/nf-portcls-iminiportwavertstreamnotification-allocatebufferwithnotification).
 - **Low latency.** Advertise packet-size constraints
   (`KSAUDIO_PACKETSIZE_CONSTRAINTS2`; take the exact property and pin
   wiring from Microsoft's low-latency audio documentation and the WDK SysVAD

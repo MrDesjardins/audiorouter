@@ -143,9 +143,17 @@ completion interrupt remained pending; source confirms this pauses DMA while
 the host consumer continues. Whole-session totals do not identify individual
 scratches. Later overnight HostSuspend/HostResume and host endpoint changes
 are also logged and must not be attributed to the earlier listening run.
-Next: review virtual HDA interrupt/clock recovery against saved timing data,
-keeping the VM off and further recorder/bridge runs held. No driver or host
-setting is changed by the agent. See the
+Next engineering step: source review confirmed that event render DMA can replay
+uncommitted circular-buffer bytes without incrementing bridge counters. The
+owning reader now tracks accepted absolute packet identities, silences/counts
+missing frames and commits atomically with position progress. Fresh kernel
+review found no remaining source blocker in this scoped repair; 620 offline
+helper checks and x64/ARM64 WDK/catalog/source acceptance pass. Legacy clients before/without packet commits and
+one-slot continuity remain unqualified. This finding does not prove the saved
+phase-break cause or explain the independent HDA scratches. Keep the VM off
+and further recorder/bridge runs held until one reviewed candidate is ready.
+No installed driver or host setting is changed by the agent. See the
+[repair and validation record](evidence/2026-10-10-m03-render-commit-validity.md) and the
 [clock review](evidence/2026-10-09-m03-direct-audio-preparation.md#directsound-playback-with-capture-off-and-clock-review-2026-10-10).
 Preserve WSL and the separate measured scheduling/loss failures.
 Commands are in

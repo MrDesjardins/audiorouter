@@ -258,6 +258,7 @@ Return Value:
     m_ulCurrentWritePosition = 0;
     m_ulLastOsReadPacket = ULONG_MAX;
     m_ulLastOsWritePacket = ULONG_MAX;
+    m_RenderCommits.Reset();
     m_IsCurrentWritePositionUpdated = 0;
     m_SignalProcessingMode = SignalProcessingMode;
     m_bEoSReceived = FALSE;
@@ -445,12 +446,17 @@ NTSTATUS CMiniportWaveRTStream::AllocateBufferWithNotification
         return STATUS_UNSUCCESSFUL;
     }
 
-    if ((NotificationCount_ == 0) || (RequestedSize_ % NotificationCount_ != 0))
+    if (NotificationCount_ != 1 && NotificationCount_ != 2)
     {
         return STATUS_INVALID_PARAMETER;
     }
 
-    RequestedSize_ -= RequestedSize_ % (m_pWfExt->Format.nBlockAlign);
+    // Every notification packet must contain whole frames, including when
+    // the requested cyclic buffer size needs rounding down.
+    const ULONG packetAlignment = m_pWfExt->Format.nBlockAlign * NotificationCount_;
+    RequestedSize_ -= RequestedSize_ % packetAlignment;
+    if (RequestedSize_ == 0) { return STATUS_INVALID_PARAMETER; }
+    m_RenderCommits.Reset();
 
     PHYSICAL_ADDRESS highAddress;
     highAddress.HighPart = 0;
@@ -542,6 +548,7 @@ VOID CMiniportWaveRTStream::FreeBufferWithNotification
 
     m_ulDmaBufferSize = 0;
     m_ulNotificationsPerBuffer = 0;
+    m_RenderCommits.Reset();
 
     return;
 }
@@ -707,6 +714,7 @@ _In_        ULONG       Size_
 
     m_ulDmaBufferSize = 0;
     m_ulNotificationsPerBuffer = 0;
+    m_RenderCommits.Reset();
 }
 
 //=============================================================================
@@ -768,6 +776,7 @@ _Out_   MEMORY_CACHING_TYPE    *CacheType_
 
     m_ulDmaBufferSize = RequestedSize_;
     m_ulNotificationsPerBuffer = 0;
+    m_RenderCommits.Reset();
 
     *AudioBufferMdl_ = pBufferMdl;
     *ActualSize_ = RequestedSize_;
@@ -988,71 +997,37 @@ NTSTATUS CMiniportWaveRTStream::SetWritePacket
         return STATUS_NOT_SUPPORTED;
     }
 
-    ULONG oldLastOsWritePacket = m_ulLastOsWritePacket;
-
-    // This function should not be called once EoS has been set.
-    if (m_bEoSReceived)
-    {
-        return STATUS_INVALID_DEVICE_STATE;
-    }
-
     KIRQL oldIrql;
     KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
+    // The OS has written this physical slot before reporting its packet.
+    // Retire its old identity before progress can read an overwritten lap,
+    // including when the new submission proves late or too far ahead.
+    m_RenderCommits.InvalidateSlot(PacketNumber, m_ulNotificationsPerBuffer);
     if (m_KsState == KSSTATE_RUN) {
         UpdatePosition(KeQueryPerformanceCounter(NULL));
     }
-    // 1-based count of completed packets, 0-based packet number of current packet
-    LONGLONG currentPacket = m_llPacketCounter;
+    const bool running = m_KsState == KSSTATE_RUN;
+    const ULONGLONG currentPacket = static_cast<ULONGLONG>(m_llPacketCounter);
+    const LONG delta = AudioRouterRenderCommitDelta(PacketNumber, currentPacket, running);
+    if (m_bEoSReceived) {
+        ntStatus = STATUS_INVALID_DEVICE_STATE;
+    } else if (delta < 0) {
+        ntStatus = STATUS_DATA_LATE_ERROR;
+    } else if (delta > 0) {
+        ntStatus = STATUS_DATA_OVERRUN;
+    } else if (Flags & KSSTREAM_HEADER_OPTIONSF_ENDOFSTREAM) {
+        // EOS support remains a separate lifecycle task.
+        ntStatus = STATUS_INVALID_PARAMETER;
+    } else {
+        const ULONG packetSize = m_ulDmaBufferSize / m_ulNotificationsPerBuffer;
+        const ULONG packetIndex = PacketNumber % m_ulNotificationsPerBuffer;
+        ntStatus = SetCurrentWritePositionInternal(packetIndex * packetSize);
+        if (NT_SUCCESS(ntStatus)) {
+            m_ulLastOsWritePacket = PacketNumber;
+            m_RenderCommits.Commit(currentPacket + (running ? 1 : 0));
+        }
+    }
     KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
-
-    // If not running, the current packet hasn't actually started transfering so OS should be writing
-    // to the current packet. If running, then the current packing is already transfering to hardware
-    // so the OS should write the packet after the current packet.
-    ULONG expectedPacket = LODWORD(currentPacket);
-    if (m_KsState == KSSTATE_RUN)
-    {
-        expectedPacket++;
-    }
-
-    // Check if OS PacketNumber is behind or too far ahead of current packet
-    LONG deltaFromExpectedPacket = PacketNumber - expectedPacket;   // Modulo arithemetic
-    if (deltaFromExpectedPacket < 0)
-    {
-        return STATUS_DATA_LATE_ERROR;
-    }
-    else if (deltaFromExpectedPacket > 0)
-    {
-        return STATUS_DATA_OVERRUN;
-    }
-
-    ULONG packetSize = m_ulDmaBufferSize / m_ulNotificationsPerBuffer;
-    ULONG packetIndex = PacketNumber % m_ulNotificationsPerBuffer;
-    ULONG ulCurrentWritePosition = packetIndex * packetSize;
-
-    // Check if EOS flag was passed
-    if (Flags & KSSTREAM_HEADER_OPTIONSF_ENDOFSTREAM)
-    {
-        return STATUS_INVALID_PARAMETER;
-    }
-    else
-    {
-        m_ulLastOsWritePacket = PacketNumber;
-
-        // This function sets the current write position to the specified byte in the DMA buffer.
-        // Will check if the write position is smaller than the DMA buffer size.
-        // Will not return an error when the passed in parameter is 0.
-        // Will also check if this function was called with the same write position(in event mode only)
-        // Underruning will also be checked via timer mechanism
-        KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
-        ntStatus = SetCurrentWritePositionInternal(ulCurrentWritePosition);
-        KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
-    }
-
-    if (!NT_SUCCESS(ntStatus))
-    {
-        m_ulLastOsWritePacket = oldLastOsWritePacket;
-    }
-
     return ntStatus;
 }
 
@@ -1302,6 +1277,7 @@ NTSTATUS CMiniportWaveRTStream::SetState
             m_ulLastOsReadPacket = ULONG_MAX;
             m_ulCurrentWritePosition = 0;
             m_ulLastOsWritePacket = ULONG_MAX;
+            m_RenderCommits.Reset();
             m_bEoSReceived = FALSE;
             m_bLastBufferRendered = FALSE;
             m_bEosCompletionNotified = FALSE;
@@ -1768,6 +1744,9 @@ ByteDisplacement - # of bytes to process.
     }
     const BOOLEAN renderFormatMismatch = RefreshBridgePublishShape();
     ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
+    ULONGLONG linearByte = m_ullLinearPosition;
+    const ULONG packetBytes = m_ulNotificationsPerBuffer == 0 ? 0 :
+        m_ulDmaBufferSize / m_ulNotificationsPerBuffer;
     const BOOLEAN bridgeFormat = IsBridgePcmFormat(m_pWfExt);
     AR_BRIDGE_STREAM_ACTIVITY activity = {};
     activity.FormatMismatches = renderFormatMismatch ? 1 : 0;
@@ -1779,6 +1758,7 @@ ByteDisplacement - # of bytes to process.
     if (ByteDisplacement > m_ulDmaBufferSize) {
         const ULONG skipped = ByteDisplacement - m_ulDmaBufferSize;
         bufferOffset = AdvanceDmaOffset(bufferOffset, skipped, m_ulDmaBufferSize);
+        linearByte += skipped;
         ByteDisplacement = m_ulDmaBufferSize;
         if (m_BridgePublishFrames != 0 && bridgeFormat) {
             activity.OverrunFrames += skipped / m_pWfExt->Format.nBlockAlign +
@@ -1807,16 +1787,19 @@ ByteDisplacement - # of bytes to process.
                 ULONG needed = m_BridgePublishFrames - m_BridgeScratchFrames;
                 ULONG copyFrames = min(needed, frames - consumedFrames);
                 for (ULONG frame = 0; frame < copyFrames; ++frame) {
+                    const bool committed = m_RenderCommits.Contains(
+                        linearByte + (consumedFrames + frame) * frameBytes, packetBytes);
+                    if (!committed) { ++activity.UnderrunFrames; }
                     for (ULONG channel = 0;
                          channel < m_BridgePublishChannels; ++channel) {
                         m_BridgeScratch[
                             (m_BridgeScratchFrames + frame) *
                                 m_BridgePublishChannels + channel] =
-                            ReadBridgeSample(
+                            committed ? ReadBridgeSample(
                                 m_pDmaBuffer + bufferOffset +
                                     (consumedFrames + frame) * frameBytes +
                                     channel * bytesPerSample,
-                                m_pWfExt);
+                                m_pWfExt) : 0.0;
                     }
                 }
                 m_BridgeScratchFrames += copyFrames;
@@ -1832,6 +1815,7 @@ ByteDisplacement - # of bytes to process.
             }
         }
         bufferOffset = (bufferOffset + runWrite) % m_ulDmaBufferSize;
+        linearByte += runWrite;
         ByteDisplacement -= runWrite;
     }
     if (m_bLastBufferRendered && m_BridgeScratchFrames != 0 && m_BridgePublishFrames != 0) {
