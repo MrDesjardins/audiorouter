@@ -1,5 +1,14 @@
 # Automatic direct audio diagnosis
 
+**Current state:** the r2 run has finished and its recordings have been
+reviewed. Do not repeat the procedure below or extend it. Direct Cable B
+samples fit the expected tones between one real loss event; they do not
+contain the reported continuous hiss. All audio workers also paused about
+288 ms, and both recordings are short. The listening/playback path and the
+shared pause need separate investigation. See the
+[waveform review](../plans/active/evidence/2026-10-09-m03-direct-audio-preparation.md#direct-r2-recordings-and-reporting-repair-2026-10-09).
+The procedure below is retained for reproducibility, not a new retry request.
+
 Use the **r2 bundle** below. The first helper was accidentally built with a
 dynamic Visual C++ runtime dependency and exited before readiness in the
 guest. The repaired helper includes that runtime; packaging checks its PE
@@ -82,6 +91,10 @@ path. Neither result alone identifies the exact defective function.
   seconds of active audio. Pre/post-lease silence is not fitted. One 10-ms
   boundary quantum on each side is excluded from the fit; the full WAV and
   those packets remain available for startup/teardown review.
+  The source analyzer now retains duration failure and per-window waveform
+  metrics together, so a short recording cannot hide distortion or phase
+  breaks. A duration failure still fails the command. Existing r2 artifacts
+  retain the previous analyzer; review can use the repaired analyzer offline.
 - Triage limits: residual RMS ≤ 0.00001, residual peak ≤ 0.0001, DC ≤ 0.00001,
   amplitude 0.24–0.26, inter-window phase jump ≤ 0.001 radians. These are
   diagnostic limits, **not** replacements for VCAB-20 bit-exact conversion,

@@ -137,16 +137,22 @@ fn measure(frames: &[[f64; 2]], frequencies: [f64; 2]) -> Result<Value, String> 
     let last = *active.last().ok_or("no stereo signal")?;
     let begin = (first + 1) * 480;
     let end = last * 480;
-    if end <= begin || end - begin < RATE * 298 / 10 {
-        return Err(
-            "fewer than 29.8 seconds of active signal; incomplete 30-second diagnostic".into(),
-        );
+    if end <= begin {
+        return Err("too little interior signal to fit after boundary exclusion".into());
     }
-    if end - begin > RATE * 302 / 10 {
-        return Err("more than 30.2 seconds of active signal; unexpected replay or timing".into());
-    }
+    // A duration failure must not hide the waveform evidence needed to explain
+    // it. Keep the same acceptance bounds, but fit every available window and
+    // retain both failures in the report instead of returning before fitting.
+    let duration_passed = (RATE * 298 / 10..=RATE * 302 / 10).contains(&(end - begin));
+    let duration_error = if end - begin < RATE * 298 / 10 {
+        Some("fewer than 29.8 seconds of active signal; incomplete 30-second diagnostic")
+    } else if end - begin > RATE * 302 / 10 {
+        Some("more than 30.2 seconds of active signal; unexpected replay or timing")
+    } else {
+        None
+    };
     let mut channels = Vec::new();
-    let mut passed = true;
+    let mut passed = duration_passed;
     for (channel, frequency) in frequencies.into_iter().enumerate() {
         let mut worst_rms: f64 = 0.0;
         let mut worst_peak: f64 = 0.0;
@@ -155,20 +161,29 @@ fn measure(frames: &[[f64; 2]], frequencies: [f64; 2]) -> Result<Value, String> 
         let mut max_amplitude: f64 = 0.0;
         let mut previous_phase: Option<f64> = None;
         let mut max_phase_jump: f64 = 0.0;
+        let mut windows = Vec::new();
         for (index, block) in frames[begin..end].chunks(RATE).enumerate() {
-            let fit = fit_sine(block, channel, frequency, begin + index * RATE)?;
+            let first_frame = begin + index * RATE;
+            let fit = fit_sine(block, channel, frequency, first_frame)?;
             worst_rms = worst_rms.max(fit.rms);
             worst_peak = worst_peak.max(fit.peak);
             worst_dc = worst_dc.max(fit.dc.abs());
             min_amplitude = min_amplitude.min(fit.amplitude);
             max_amplitude = max_amplitude.max(fit.amplitude);
-            if let Some(previous) = previous_phase {
+            let phase_jump = if let Some(previous) = previous_phase {
                 let jump = (fit.phase - previous + std::f64::consts::PI)
                     .rem_euclid(std::f64::consts::TAU)
                     - std::f64::consts::PI;
                 max_phase_jump = max_phase_jump.max(jump.abs());
-            }
+                Some(jump)
+            } else {
+                None
+            };
             previous_phase = Some(fit.phase);
+            windows.push(json!({"firstFrame":first_frame,"frames":block.len(),
+                "amplitude":fit.amplitude,"phaseRadians":fit.phase,"dc":fit.dc,
+                "residualRms":fit.rms,"residualPeak":fit.peak,
+                "phaseJumpRadians":phase_jump}));
         }
         // Conservative triage limits, explicitly not VCAB-20 bit-exact or
         // full THD+N/latency qualification. Hiss, drop/replay and clipping fail.
@@ -182,13 +197,14 @@ fn measure(frames: &[[f64; 2]], frequencies: [f64; 2]) -> Result<Value, String> 
         channels.push(
             json!({"frequencyHz":frequency,"residualRms":worst_rms,"residualPeak":worst_peak,
             "dc":worst_dc,"minAmplitude":min_amplitude,"maxAmplitude":max_amplitude,
-            "phaseJumpRadians":max_phase_jump,"passed":clean}),
+            "phaseJumpRadians":max_phase_jump,"passed":clean,"windows":windows}),
         );
     }
     Ok(
         json!({"passed":passed,"qualification":false,"rate":RATE,"totalFrames":frames.len(),
         "fitStartFrame":begin,"fitEndFrame":end,"boundaryQuantaExcluded":2,
-        "analyzedSeconds":(end-begin) as f64 / RATE as f64,"channels":channels}),
+        "analyzedSeconds":(end-begin) as f64 / RATE as f64,
+        "durationPassed":duration_passed,"durationError":duration_error,"channels":channels}),
     )
 }
 
@@ -309,18 +325,39 @@ mod tests {
         let mut frames = tone();
         frames[500][0] = f64::NAN;
         assert!(measure(&frames, [997.0, 47.0]).is_err());
-        assert!(measure(&tone()[..RATE], [997.0, 47.0]).is_err());
+        assert!(!passes(&tone()[..RATE]));
     }
 
     #[test]
     fn whole_second_loss_cannot_hide_in_integer_tone_periods() {
         let mut frames = tone();
         frames.drain(RATE * 10..RATE * 11);
-        assert!(measure(&frames, [997.0, 47.0]).is_err());
+        assert!(!passes(&frames));
         let mut frames = tone();
         let repeated = frames[RATE * 10..RATE * 11].to_vec();
         frames.splice(RATE * 10..RATE * 10, repeated);
-        assert!(measure(&frames, [997.0, 47.0]).is_err());
+        assert!(!passes(&frames));
+    }
+
+    #[test]
+    fn duration_failure_preserves_signal_metrics_and_phase_breaks() {
+        let mut frames = tone();
+        frames.drain(RATE * 26..RATE * 26 + 12_912);
+        let report = measure(&frames, [997.0, 47.0]).unwrap();
+        assert_eq!(report["passed"], false);
+        assert_eq!(report["durationPassed"], false);
+        assert!(report["durationError"].as_str().unwrap().contains("29.8"));
+        assert!(report["fitEndFrame"].as_u64().unwrap() > 0);
+        assert!(report["channels"][1]["residualRms"].as_f64().unwrap() > 0.001);
+        assert!(report["channels"][1]["windows"].as_array().unwrap().len() > 25);
+
+        let mut clean_short = tone();
+        clean_short.truncate(RATE * 29);
+        let report = measure(&clean_short, [997.0, 47.0]).unwrap();
+        assert_eq!(report["durationPassed"], false);
+        assert_eq!(report["passed"], false);
+        assert_eq!(report["channels"][0]["passed"], true);
+        assert_eq!(report["channels"][1]["passed"], true);
     }
 
     #[test]

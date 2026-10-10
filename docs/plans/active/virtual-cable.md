@@ -2110,3 +2110,43 @@ workspace/shell Clippy and documentation checks pass. R2 is published under
 `C:\VMs\ar-share\diagnostics-20261010-direct-audio-r2`; all 37 file hashes
 verify, all 35 paired-tone base files unchanged. Next: the automatic guest
 procedure with r2; actual direct recording and hiss cause remain pending.
+
+### Direct r2 waveform review — 2026-10-09
+
+Received `direct-4586cab5c56d429c8835b3c0eaa3008c.zip`; its SHA-256 matches
+`7F47E3C08F46DF6A3945C60F5731E79CC9FDEE94E530A3F2240BF30A2B554AA4`.
+Recorder startup/exit and installed status pass. The native zero-error gate
+fails: 12,912 capture underrun and 12,912 render overrun frames, with a
+288-ms gap shared by both native workers and the independent direct recorder.
+Both active recordings span 29.73 seconds. Offline inspection of 100-ms
+windows finds Cable B clean between the pause (residual near float32 rounding,
+amplitude 0.25), with one in-signal discontinuity flag and a phase break at
+the pause. Continuous hiss is not present in those direct Cable B samples.
+Cable A also has separate phase breaks at recorded seconds 12.037–12.050. Cause of
+the shared scheduling gap and the downstream audible hiss remains open.
+
+Requirements: VCAB-12/20/24/29, VDEV-12. Before another guest run:
+1. Fix the offline analyzer to retain signal metrics when duration fails;
+   keep the 29.8–30.2-second gate and all noise/phase thresholds unchanged.
+2. Regress shortened/noisy recordings and rerun analysis on both saved WAVs
+   on the host without opening audio endpoints. Retain the raw originals.
+3. Record duration, packet/phase failures and the distinction between captured
+   Cable B samples and Windows Listen/speaker playback. Do not attribute the
+   hiss to sample-rate conversion or a specific driver function without data.
+4. Review the listening path separately before requesting another audio run;
+   do not repeat the unchanged test, rebuild the driver or start a long run.
+
+Validation: focused synthetic regressions, offline reproduction using this
+archive, formatting/Clippy/docs/diff checks. No host audio or system settings
+changes. Rollback: revert only diagnostic reporting; the current installed
+driver and all retained bundles remain unchanged. Next action: reporting
+repair and saved-waveform review, not an attended retry.
+
+Reporting repair complete: unchanged duration/noise/phase bounds now retain
+per-channel window metrics on short or long active intervals. Ten Rust tests
+and 117 orchestration checks pass, including short duration plus packet loss.
+The repaired analyzer reproduces failures on both original WAVs offline and
+retains their 29.71-second fitted intervals, phase breaks and packet bounds.
+See [direct r2 waveform evidence](evidence/2026-10-09-m03-direct-audio-preparation.md#direct-r2-recordings-and-reporting-repair-2026-10-09).
+Next: locate the downstream Listen/speaker hiss separately from the measured
+shared pause. No new VM audio run is requested by this reporting repair.

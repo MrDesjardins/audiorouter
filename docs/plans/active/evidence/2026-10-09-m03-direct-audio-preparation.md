@@ -161,3 +161,90 @@ links pass; diff checks pass. Next action is the bounded automatic guest
 diagnostic using r2, with Media Player stopped and the existing listener
 retained. Neither the packaging repair nor its host checks clears the hiss
 or sustained continuity gate.
+
+## Direct r2 recordings and reporting repair (2026-10-09)
+
+User reports beep plus substantial continuous static during the automatic
+test. Archive `direct-4586cab5c56d429c8835b3c0eaa3008c.zip` was read from
+`C:\VMs\ar-share\diagnostics-20261010-direct-audio-r2`; SHA-256 matches the
+user's `7F47E3C08F46DF6A3945C60F5731E79CC9FDEE94E530A3F2240BF30A2B554AA4`.
+Unique local review directory: `target\direct-review-4586cab5`. Nothing in
+the guest or original bundle was changed during review.
+
+### Measured outcome
+
+- Startup, installed status and recorder exit pass. Metadata confirms stereo
+  IEEE float32 at 48,000 Hz, exact Cable A Input and Cable B Output IDs.
+- Native process exits 0; the check wrapper correctly fails the counter
+  gate: 12,912 capture underrun and 12,912 render overrun frames (269 ms
+  each). Leases stop at 30,003 ms; there is no watchdog timeout.
+- Native capture/render maximum pump gaps: 288,446 / 288,263 us. Independent
+  WASAPI source/recorder gap: 288,257 us. Control gap: 291,265 us. Progress
+  first shows the counter burst between native seconds 26 and 27. Correlated
+  stalls do not identify host descheduling, a guest wait or a driver lock.
+- Cable A WAV: 1,427,040 frames / 29.73 seconds. Direct Cable B: 1,497,600
+  frames / 31.2 seconds including pre/post-lease silence; active interval
+  spans 29.73 seconds. Both fitted intervals are 29.71 seconds after the
+  same two boundary quanta are excluded. Duration failure is genuine.
+- Cable B has one in-signal discontinuity flag at file frame 1,324,800
+  (27.6 seconds), with a 13,440-frame device-position gap. One earlier
+  480-frame position gap and the initial discontinuity flag occur before
+  the generated tone begins. Raw packet flags/positions remain preserved.
+
+### Waveform evidence versus audible hiss
+
+Independent Python/NumPy least-squares fits of 100-ms windows find median
+residual RMS about 3.6–3.7e-9 in Cable B's 997/47-Hz channels, with amplitude
+0.25. A sine recurrence check across every adjacent sample triple finds
+only the start/stop boundaries and the single in-signal break at frame
+1,324,800. This is float32 rounding-level residual between the loss event,
+not continuous broadband noise in the directly captured samples.
+
+Cable A has breaks at frames 577,776 / 577,920 / 578,400 (12.037 / 12.040 /
+12.050 seconds), plus several breaks during recovery near 26.44–26.48
+seconds. Before the later pause, bridge counters remain zero despite that
+earlier source-path discontinuity. A zero bridge counter is therefore not
+sufficient waveform continuity evidence.
+
+The data narrows continuous hiss to further investigation of Windows Listen,
+speaker rendering and VirtualBox/host playback. It does not prove which one
+is defective or exclude another concurrent capture stream. The known 48-kHz
+float recording does not justify a speculative 44.1/48-kHz setting change.
+Do not label the whole run clean: it has measured loss and phase breaks.
+
+| Original artifact | SHA-256 |
+| --- | --- |
+| Cable A render-source.wav | `DEDFD3E45F430253B56B3FCAC68CC174262E91D49F3382CDFB8F3D8DB2AF72B5` |
+| Direct cable-b-output.wav | `6A6127DE457D25CEA2AF877BA0FA861D6E1DF9E02630173F9700C11BC568749B` |
+
+### Owning diagnostic defect fixed
+
+The old offline analyzer returned at the duration gate before fitting samples,
+so both reports contained only "fewer than 29.8 seconds". This also omitted
+the fit bounds used by the wrapper's in-signal packet check. The source
+repair retains duration result/error, fit bounds, per-channel metrics and
+per-window phase/residual details even when duration fails. The 29.8–30.2 s,
+noise, amplitude and phase bounds are unchanged; malformed, nonfinite or
+unfittable files still fail explicitly.
+
+Verification on Windows host, Rust 1.96.0, no endpoint or driver opened:
+
+- `cargo test -p audiorouter-windows-audio --example m03_direct_audio`:
+  10 pass, including shortened recordings with noise/phase breaks, clean
+  shortened failure, and whole-second loss/replay failure.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/acceptance/m03-direct-audio.ps1`:
+  117 checks pass; short-duration plus packet failure still evaluates packet
+  flags. Evidence: `target\direct-audio-tests-8674085fe5504699aeb1cadc5cb6d702`.
+- `tools/vm/build-direct-audio.ps1`: static release build and PE import gate
+  pass. Both original WAVs analyzed offline with the repaired executable:
+  exit 1 on each, duration false, waveform/phase metrics retained. Reports:
+  `target\direct-review-4586cab5\repaired-metrics-a.json` and `repaired-metrics-b.json`.
+- Root/shell formatting checks and both workspace/shell Clippy pass. No
+  unrelated Rust reformatting. Documentation: 141 Markdown files / 771 local
+  links pass; diff checks pass. Incremental hard-link fallback warnings only.
+
+Rollback: revert the analyzer/reporting regression only. Driver, native tone,
+host settings, WSL and all guest bundles are unchanged. No new share bundle
+or guest retry is needed to review these existing recordings. Next task:
+isolate the downstream listening path and attribute the shared stall; hold
+long/stall runs and all unresolved VCAB-12/20/24/29 and VDEV-12 gates.

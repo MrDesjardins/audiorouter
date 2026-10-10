@@ -87,8 +87,17 @@ or Audacity installation. The first guest attempt passed status but the new
 recorder exited before readiness with empty output. PE inspection confirms a
 dynamic Visual C++ runtime dependency missed by the original packaging.
 Repair uses static linking, a PE import gate and saved numeric/hex startup
-exits; no redistributable or driver installation. Direct recordings are pending.
-Sustained continuity, audible quality and cause remain unresolved.
+exits; no redistributable or driver installation. The r2 recorder now succeeds,
+but the run fails with a 288-ms gap shared by all three audio workers and
+12,912 lost frames in each bridge direction. Both active WAVs span 29.73 s.
+Direct Cable B samples are clean between the single loss event; the user's
+continuous hiss points to further Listen/speaker playback investigation.
+Cable A also has separate phase breaks at 12.037–12.050 s. The offline
+analyzer now retains waveform metrics when duration fails, with unchanged
+pass criteria; both saved WAVs still fail. Hold further guest runs while
+reviewing these separate failures. See the
+[direct waveform evidence](evidence/2026-10-09-m03-direct-audio-preparation.md#direct-r2-recordings-and-reporting-repair-2026-10-09).
+Sustained continuity, audible quality and exact cause remain unresolved.
 Commands are in
 [Administrator PowerShell](../../operations/virtual-cable-paired-trace.md).
 See the
