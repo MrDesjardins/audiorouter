@@ -51,8 +51,9 @@ Current driver task (2026-10-09): qualify sustained tone continuity after the
 render-publication repair. The [review record](evidence/2026-10-09-m03-render-publication-review.md)
 and [virtual cable execution plan](virtual-cable.md) record the guest's passing
 smoke cycles, four-endpoint format inventory, and 30-second tone run. The
-10-minute continuity gate remains open. No test driver has been installed on
-the host.
+first 10-minute attempt failed with earlier audio counter errors and a
+14m55s worker gap; its cause is under investigation before another run. No test
+driver has been installed on the host.
 
 AudioRouter will ship its own signed virtual cable so users do not need
 VB-Cable; VB-Cable/Voicemeeter stay supported. Lowest-cost signing

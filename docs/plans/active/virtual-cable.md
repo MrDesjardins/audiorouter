@@ -1586,10 +1586,28 @@ harness sequence gaps, and maximum capture/render worker poll gaps of 6.200 /
 30 seconds. This qualifies the status repair and short-tone gate only; it does
 not qualify sustained continuity or latency.
 
-Next: run the clean 600-second tone step from the same bundle while looping
-`Z:\loop-test-60s.wav` from Media Player into AudioRouter Cable A Input for the
-entire run. Keep Cable B Output monitoring enabled if desired. Collect the
-archive even if tone fails, then review the trace before any stall or
-8-channel test. Do not reinstall the unchanged driver. Acceptance remains
-zero error counters and zero harness sequence gaps; rollback is the existing
-clean VM snapshot and previously installed driver.
+The 600-second attempt failed; it is not continuity evidence. Archive:
+`C:\ar\repair-20261009-active-inventory\evidence-20261009-173249.zip`,
+SHA-256 `A6BA1BE7E0AD2DABE1C4523D61386C3D6898E41E0437E51AE34160E38CA61E1B`.
+The trace began with zero counters, then at 178.536 seconds showed 1,776
+capture underrun frames (37 ms) and 2,256 render overrun frames (47 ms). At
+269.828 seconds those totals rose to 3,744 (78 ms) and 5,184 (108 ms), then
+remained there through 316.956 seconds. After that, both audio worker pollers
+had a 895,145 ms gap (about 14 minutes 55 seconds). Final counter totals were
+42,969,360 capture underrun frames and 42,970,944 render overrun frames, which
+correspond to roughly 895 seconds. The tool recorded 31,722 capture blocks
+and 31,716 render blocks (15,223,680 WAV frames, about 317 seconds), zero
+harness sequence gaps, and then failed with HRESULT `0x80070016` (“The device
+does not recognize the command”). This strongly indicates execution stopped
+for a long interval, but the trace alone cannot identify whether Windows, the
+VM, or its host paused it. The earlier 37/47 ms continuity errors occurred
+before that pause, so the result also fails even when the long gap is set
+aside.
+
+Next: do not rerun tone yet. Collect Windows System and Power-Troubleshooter
+events for 2026-10-09 17:10–17:35 from the guest, and inspect the VirtualBox
+host log for the same interval to determine whether the VM was suspended,
+paused, or starved. Then review VM/host power and scheduling settings before
+another continuity attempt. Do not reinstall the unchanged driver. Acceptance
+remains zero driver error counters and zero harness sequence gaps; rollback
+is the existing clean VM snapshot and previously installed driver.
