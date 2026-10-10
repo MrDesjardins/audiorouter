@@ -280,4 +280,100 @@ Not repeated: the user's run is not retried unchanged. Proposed next step
 outcomes and lateness in reserved shared-header space, and accept a late write
 of the currently transferring packet for its not-yet-consumed frames while
 still returning `STATUS_DATA_LATE_ERROR` and counting the already-consumed
-frames. Decision pending with the user.
+frames. The user approved this (2026-10-10) and asked for maximal host-side
+testing before the next VM run; see the next section.
+
+## Slot-provenance repair and host evidence — 2026-10-10
+
+Microsoft contract re-read for this change:
+[SetWritePacket](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/portcls/nf-portcls-iminiportwavertoutputstream-setwritepacket)
+(the OS has written the packet before the call; late packets may be partly
+used; overrun data may be ignored; packet counter and notifications continue
+at real-time rate),
+[GetPacketCount](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/portcls/nf-portcls-iminiportwavertoutputstream-getpacketcount)
+(count 5 means packet 5 transfers and the OS writes 6; the OS resynchronizes
+from it after a dataflow error; reset at STOP) and
+[GetReadPacket](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/portcls/nf-portcls-iminiportwavertinputstream-getreadpacket)
+(capture: drop oldest data on overflow; the existing implementation returns
+the last completed packet, which matches). Admission/return codes match the
+sysvad-derived arithmetic and are unchanged.
+
+Change (owning layer: `streamtiming.h`, `minwavertstream.cpp`, `bridgeio.h`,
+`adapter.cpp`; Rust `crates/windows-audio`; tone tool and VM scripts):
+
+- `AudioRouterRenderCommits` now records per **physical slot** the absolute
+  identity of the last packet the OS wrote there (`RecordWrite`), called in
+  `SetWritePacket` before `UpdatePosition`, under the position lock, for every
+  call (return code independent). `Contains` requires the slot's identity to
+  equal the logical packet being read. Late writes of the transferring packet
+  play their unconsumed bytes; never-rewritten slots never replay; overwritten
+  current slots (overrun, one-slot mode) silence their remainder. EOS payloads
+  never play.
+- Packet outcome counters (accepted/late/overrun) in shared-header bytes
+  104–127, capability `PACKET_COUNTERS` 0x40; Rust `packet_counters()`; the
+  tone tool prints `render-source packet writes (...)` and adds
+  `render_packets=` to each progress line; `vm-checks.ps1` and
+  `run-direct-audio.ps1` echo it. Error-counter parsing is unchanged.
+- Spec 17 §5.2/§5.4 updated.
+
+Host checks (Windows host, no driver load, no audio endpoint):
+
+| Check | Result / evidence |
+| --- | --- |
+| MSVC offline bridge/helper suite with timing model | 738 passed; `target/driver-unit-provenance-tests.log` |
+| x64 WDK/catalog/source acceptance (Hostx64 tools) | Passed; `target/provenance-x64-acceptance.log` |
+| ARM64 WDK/catalog/source acceptance | Passed (compile-only); `target/provenance-arm64-acceptance.log` |
+| `cargo fmt --check` (workspace, src-tauri) | Clean |
+| Clippy workspace and src-tauri, `-D warnings` | Clean; `target/provenance-clippy*.log` |
+| `cargo test -p audiorouter-windows-audio` | 122 passed (header offsets 104/112/120, capability 0x40 pinned) |
+| Direct-audio orchestration acceptance | 117 passed; `target/direct-audio-provenance-acceptance.log` |
+| VM script guards | 275 passed; `target/vm-guards-provenance.log` |
+
+Offline render timing model (`renderTimingModelChecks`, production helpers,
+1 ms timer, 2 × 480-frame packets, 30 s; three OS reactions: blind write with
+immediate or next-wake resync, and count-first). Frames silenced although the
+OS had already written them / stale frames played:
+
+| Scenario (blind write, resync on next wake) | before repair | `28b989f5` | provenance |
+| --- | --- | --- | --- |
+| on time | 0 / 0 | 0 / 0 | 0 / 0 |
+| late mid-packet (13.5 ms, every 5th) | 0 / 0 | **288,000** / 0 | 0 / 0 |
+| jitter 0–25 ms | 0 / 455,975 | **451,876** / 0 | 0 / 0 |
+| OS skips every 9th packet | 0 / 159,840 | 0 / 0 | 0 / 0 |
+
+Across all 18 scenario × OS-model combinations the provenance rule plays no
+stale frame and silences no written frame (asserted); the reference rules
+reproduce both defects (asserted). This is a model of documented behavior,
+not kernel timing or VM evidence; the actual OS reaction is what the new
+packet counters will show.
+
+Fresh-context kernel review (WP-04, separate read-only agent, 2026-10-10): no
+blocking defect; identity resolution, `Contains` for one/two slots, ordering,
+IRQL/lock path (`RecordBridgeActivity` under the position lock: QPC read and
+rundown-protected interlocked adds only) and ABI were confirmed. Findings and
+disposition:
+
+1. Medium, residual: the driver cannot see the OS write before its call; a
+   timer tick in between judges the slot by its previous record. Documented in
+   17 §5.4. The model now separates write and call (`writeLeadUs`) and asserts
+   that misjudged frames never exceed the frames consumed inside the gap. With
+   an exaggerated 2 ms gap (blind write, resync on next wake): late mid-packet
+   57,600 frames silenced (96 per late packet), late at boundary 20,544,
+   jitter 90,426 silenced and 22,862 stale (overwrites of the transferring
+   slot); on time and skipped packets remain exact. A real OS writes and calls
+   on one thread, so its gap is far shorter.
+2. Low: zero-gap provenance assertions are partly self-consistent; the test
+   comment now says so, and the regression references plus gap bound carry
+   the evidence.
+3. Low: two `§` characters in the test were mis-encoded by a PowerShell 5
+   round trip; restored (no other occurrence in the repository).
+4. Low: packet counters cover calls while the stream publishes to the lease;
+   documented in 17 §5.4 (never counted against another lease).
+5. Low: one-slot caveat restored in 17 §5.4.
+6. Nit: `RecordWrite` now rejects identities beyond the `MAXLONGLONG`-bounded
+   count instead of overflowing; regression added.
+Optional guard adopted: `RecordBridgeActivity` must follow admission and
+precede the lock release in `SetWritePacket`.
+
+After these fixes: 738 offline checks, x64 and ARM64 WDK acceptance passed
+again (`target/provenance-*-acceptance.log`).

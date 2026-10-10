@@ -61,6 +61,12 @@ try {
         $newTone = @(Get-ChildItem -LiteralPath 'C:\ar\evidence' -Directory -Filter '*-tone' | Where-Object { $_.FullName -notin $before })
         if ($newTone.Count -eq 1) { $toneEvidence = $newTone[0].FullName }
     }
+    $toneReport = Join-Path $evidence 'tone.txt'
+    if (Test-Path -LiteralPath $toneReport) {
+        # Driver counters and Windows' SetWritePacket outcomes, for the console.
+        Get-Content -LiteralPath $toneReport | Where-Object { $_ -match '^\s*(capture-sink|render-source) (counters|packet writes) \(' } |
+            ForEach-Object { Write-Host $_.Trim() }
+    }
     if (-not $process.WaitForExit(10000)) { throw 'Direct recorder did not close within its watchdog.' }
     $codes.Recorder = $process.ExitCode
     if ($codes.Recorder -ne 0) { throw 'Direct recorder failed; preserve probe-stderr.txt and recording.json.' }

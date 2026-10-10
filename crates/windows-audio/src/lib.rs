@@ -192,6 +192,10 @@ pub const NATIVE_DRIVER_CAP_LOW_LATENCY_PERIODS: u32 = 0x04;
 pub const NATIVE_DRIVER_CAP_STREAM_COUNTERS: u32 = 0x08;
 pub const NATIVE_DRIVER_CAP_CONFIG_FROM_REGISTRY: u32 = 0x10;
 pub const NATIVE_DRIVER_CAP_SAMPLE_FLOAT64: u32 = 0x20;
+/// `AR_BRIDGE_CAP_PACKET_COUNTERS`: the render-source header carries
+/// `SetWritePacket` outcome counters (offsets 104..128). Older drivers leave
+/// those bytes zero, so read them only when QUERY reports this bit.
+pub const NATIVE_DRIVER_CAP_PACKET_COUNTERS: u32 = 0x40;
 
 /// Decoded `AR_BRIDGE_DRIVER_INFO` from the QUERY IOCTL.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1470,6 +1474,14 @@ impl NativeBridgeController {
             .as_ref()
             .expect("native bridge session remains owned until close")
             .counters()
+    }
+
+    /// Driver-written `SetWritePacket` outcomes for this lease (17 §5.2).
+    pub fn packet_counters(&self) -> NativeBridgePacketCounters {
+        self.session
+            .as_ref()
+            .expect("native bridge session remains owned until close")
+            .packet_counters()
     }
 
     /// Last block sequence the driver consumed (capture-sink flow control).
@@ -8676,7 +8688,9 @@ const BRIDGE_HEADER_OFFSET: usize = 8;
 const BRIDGE_COUNTERS_OFFSET: usize = 32;
 const BRIDGE_SAMPLE_BYTES_OFFSET: usize = 88;
 const BRIDGE_READER_SEQUENCE_OFFSET: usize = 96;
+const BRIDGE_PACKET_COUNTERS_OFFSET: usize = 104;
 const BRIDGE_PAYLOAD_OFFSET: usize = 128;
+
 const BRIDGE_SAMPLE_BYTES_FLOAT64: u32 = 8;
 /// `AR_BRIDGE_MAX_CHANNELS`: the kernel cable bridge carries up to 7.1. This
 /// is separate from the internal 2-channel AudioBridge protocol bound.
@@ -8697,6 +8711,16 @@ pub struct NativeBridgeStreamCounters {
     pub format_mismatches: u64,
     pub last_device_position: u64,
     pub last_qpc_time: u64,
+}
+
+/// Driver-written `SetWritePacket` outcomes for a render-source lease (17
+/// §5.2): how often Windows submitted a packet on time, late (already
+/// transferring) or too far ahead. Zero on capture leases and older drivers.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct NativeBridgePacketCounters {
+    pub accepted: u64,
+    pub late: u64,
+    pub overrun: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -9101,6 +9125,29 @@ impl NativeBridgeRegion {
         }
     }
 
+    /// Snapshot of the driver-written packet outcome counters. Each field is
+    /// read atomically; the set is not a single consistent snapshot.
+    pub fn packet_counters(&self) -> NativeBridgePacketCounters {
+        let field = |index: usize| {
+            // SAFETY: the mapping is at least `BRIDGE_PAYLOAD_OFFSET` bytes, so
+            // offsets 104..128 lie inside it; they are multiples of 8 from a
+            // page-aligned base, as AtomicU64 requires.
+            unsafe {
+                &*(self
+                    .map
+                    .as_ptr()
+                    .add(BRIDGE_PACKET_COUNTERS_OFFSET + index * 8)
+                    as *const std::sync::atomic::AtomicU64)
+            }
+            .load(std::sync::atomic::Ordering::Acquire)
+        };
+        NativeBridgePacketCounters {
+            accepted: field(0),
+            late: field(1),
+            overrun: field(2),
+        }
+    }
+
     /// The consumer's last acknowledged sequence: the driver writes it for a
     /// capture-sink lease when it takes a block, so a producer can publish
     /// the next block right away (flow control on the stream's clock).
@@ -9422,6 +9469,11 @@ impl NativeBridgeSession {
     /// Driver-written stream counters from this session's mapped header.
     pub fn counters(&self) -> NativeBridgeStreamCounters {
         self.region.counters()
+    }
+
+    /// See [`NativeBridgeRegion::packet_counters`].
+    pub fn packet_counters(&self) -> NativeBridgePacketCounters {
+        self.region.packet_counters()
     }
 
     /// See [`NativeBridgeRegion::consumer_sequence`].
@@ -12405,6 +12457,25 @@ mod tests {
                 last_qpc_time: 7,
             }
         );
+        // Packet outcome counters follow ReaderSequence (bridgeio.h offsets
+        // 104/112/120) and do not alias the stream counters.
+        assert_eq!(
+            region.packet_counters(),
+            NativeBridgePacketCounters::default()
+        );
+        for (index, value) in (11_u64..=13).enumerate() {
+            raw[104 + index * 8..112 + index * 8].copy_from_slice(&value.to_le_bytes());
+        }
+        assert_eq!(
+            region.packet_counters(),
+            NativeBridgePacketCounters {
+                accepted: 11,
+                late: 12,
+                overrun: 13,
+            }
+        );
+        assert_eq!(region.counters().last_qpc_time, 7);
+        assert_eq!(region.consumer_sequence(), 3);
         // A header without the negotiated sample size must not be decoded.
         raw[88..92].copy_from_slice(&4_u32.to_le_bytes());
         assert_eq!(
@@ -12423,6 +12494,9 @@ mod tests {
         assert_eq!(IOCTL_AUDIOROUTER_BRIDGE_CLOSE, 0x0022_E004);
         assert_eq!(IOCTL_AUDIOROUTER_BRIDGE_HEARTBEAT, 0x0022_E008);
         assert_eq!(IOCTL_AUDIOROUTER_BRIDGE_QUERY, 0x0022_600C);
+        // AR_BRIDGE_CAP_PACKET_COUNTERS and AR_BRIDGE_PACKET_COUNTERS_OFFSET.
+        assert_eq!(NATIVE_DRIVER_CAP_PACKET_COUNTERS, 0x40);
+        assert_eq!(BRIDGE_PACKET_COUNTERS_OFFSET, 104);
         assert_eq!(std::mem::size_of::<NativeBridgeOpenExtension>(), 64);
         assert_eq!(std::mem::offset_of!(NativeBridgeOpenExtension, flags), 4);
         assert_eq!(std::mem::size_of::<NativeBridgeOpenRequestEx>(), 240);

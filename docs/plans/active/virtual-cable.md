@@ -113,9 +113,15 @@ installed). Direct audio r3 run **failed**: the new silence substitution
 removed ~15 % of Cable A audio (all render underrun comes from the
 `!committed` branch), including in stall-free seconds, while r2's previous
 driver delivered clean Cable A; shared 90–460 ms stalls also recurred. See
-the repair record's r3 section. Next action: user decision on a reviewed
-kernel change (record `SetWritePacket` outcomes; use a late write of the
-transferring packet for its unconsumed frames). Do not rerun r3 unchanged.
+the repair record's r3 section. User approved the follow-up the same day:
+per-physical-slot provenance recorded before progress (late-written audio
+plays, stale laps never replay) plus `SetWritePacket` outcome counters
+(capability 0x40). Host evidence (694 offline checks with a render timing
+model, x64/ARM64 WDK acceptance, Rust tests/Clippy) is in the repair
+record. Fresh-context kernel review: no blocker; its findings are fixed or
+documented (repair record). Next action: one new candidate, then two clean
+smokes and one combined install/status/direct-audio run.
+Do not rerun r3 unchanged.
 
 Ship AudioRouter-owned virtual cables (up to 8, Cable A–H; 2 enabled by
 default, the user picks 1–8) with the app, with studio-grade sound

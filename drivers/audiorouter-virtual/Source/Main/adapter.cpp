@@ -519,6 +519,14 @@ NTSTATUS AudioRouterRecordLeaseActivityForDirection(
                      Activity->NonFiniteSamples);
     AddBridgeCounter(view, FIELD_OFFSET(AR_BRIDGE_STREAM_COUNTERS, FormatMismatches),
                      Activity->FormatMismatches);
+    // Packet outcome counters follow ReaderSequence; offsets stay relative
+    // to the counter block like the fields above.
+    AddBridgeCounter(view, FIELD_OFFSET(AR_BRIDGE_SHARED_HEADER, PacketsAccepted) -
+                     AR_BRIDGE_COUNTERS_OFFSET, Activity->PacketsAccepted);
+    AddBridgeCounter(view, FIELD_OFFSET(AR_BRIDGE_SHARED_HEADER, PacketsLate) -
+                     AR_BRIDGE_COUNTERS_OFFSET, Activity->PacketsLate);
+    AddBridgeCounter(view, FIELD_OFFSET(AR_BRIDGE_SHARED_HEADER, PacketsOverrun) -
+                     AR_BRIDGE_COUNTERS_OFFSET, Activity->PacketsOverrun);
     InterlockedExchange64(
         BridgeCounter(view, FIELD_OFFSET(AR_BRIDGE_STREAM_COUNTERS, LastDevicePosition)),
         static_cast<LONG64>(Activity->DevicePositionFrames));

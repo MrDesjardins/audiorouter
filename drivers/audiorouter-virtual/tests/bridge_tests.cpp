@@ -209,81 +209,327 @@ static void renderCommitChecks() {
     constexpr ULONG packetBytes = 16;
     AudioRouterRenderCommits commits = {};
     commits.Reset();
-    require(commits.Contains(0, 0), "polling remains outside packet validity mode");
-    require(commits.Contains(32, packetBytes), "legacy event mode preserved before first commit");
+    require(commits.Contains(0, 0, 2), "polling remains outside packet validity mode");
+    require(commits.Contains(32, packetBytes, 2), "legacy event mode preserved before first write");
     require(AudioRouterRenderCommitDelta(0, 0, false) == 0, "prefill admits packet zero");
-    commits.Commit(0);
-    commits.Commit(1);
+    commits.RecordWrite(0, 0, 2, true);
+    commits.RecordWrite(1, 0, 2, true);
     const DOUBLE dma[2] = {0.25, -0.5};
     ULONGLONG missingFrames = 0;
     for (ULONGLONG packet = 0; packet < 4; ++packet) {
         if (packet == 3) {
             require(AudioRouterRenderCommitDelta(3, 2, true) == 0, "next packet admitted after missed packet");
-            commits.InvalidateSlot(3, 2);
-            commits.Commit(3);
+            commits.RecordWrite(3, 2, 2, true);
         }
         for (ULONG frame = 0; frame < 4; ++frame) {
-            const bool valid = commits.Contains(packet * packetBytes + frame * 4, packetBytes);
+            const bool valid = commits.Contains(packet * packetBytes + frame * 4, packetBytes, 2);
             const DOUBLE sample = valid ? dma[packet % 2] : 0.0;
             missingFrames += valid ? 0 : 1;
             require(sample == (packet == 2 ? 0.0 : dma[packet % 2]),
-                    "missed OS commit cannot replay the previous DMA lap");
+                    "missed OS write cannot replay the previous DMA lap");
         }
     }
     require(missingFrames == 4, "only missing producer frames count as underruns");
     require(AudioRouterCompletedPackets(64, 32, 2) == 4,
             "missing producer data does not stop packet clock");
-    require(AudioRouterRenderCommitDelta(2, 2, true) < 0, "late packet rejected");
-    require(AudioRouterRenderCommitDelta(4, 2, true) > 0, "ahead packet rejected");
+    require(AudioRouterRenderCommitDelta(2, 2, true) < 0, "late packet reported late");
+    require(AudioRouterRenderCommitDelta(4, 2, true) > 0, "ahead packet reported overrun");
     require(AudioRouterRenderCommitDelta(3, 2, true) == 0, "duplicate admission matches existing contract");
 
-    // Incoming payload is already in its physical slot when the DDI is called.
-    // Invalidation must precede the progress update, including rejected calls.
+    // A late write of the packet now transferring holds that packet's data:
+    // its unconsumed bytes play although the DDI reports STATUS_DATA_LATE_ERROR.
+    commits.Reset();
+    commits.RecordWrite(5, 5, 2, true);
+    require(AudioRouterRenderCommitDelta(5, 5, true) < 0, "late current packet still reported late");
+    require(commits.Contains(5 * packetBytes + 8, packetBytes, 2), "late current packet remainder is usable");
+    require(!commits.Contains(3 * packetBytes + 8, packetBytes, 2), "late write never revives the previous lap");
+    // Overwriting the transferring slot (too far ahead) retires its remainder.
+    commits.Reset();
+    commits.RecordWrite(5, 4, 2, true);
+    require(commits.Contains(5 * packetBytes, packetBytes, 2), "current packet valid before overwrite");
+    commits.RecordWrite(7, 5, 2, true);
+    require(!commits.Contains(5 * packetBytes + 8, packetBytes, 2), "overrun write silences overwritten current remainder");
+    require(commits.Contains(7 * packetBytes, packetBytes, 2), "overrun payload belongs only to its named packet");
+
     for (ULONG notifications : {1UL, 2UL}) {
         commits.Reset();
-        commits.Commit(1);
-        commits.InvalidateSlot(1 + notifications, notifications);
-        require(!commits.Contains(packetBytes, packetBytes),
-                "overwritten physical slot invalidated before delayed progress");
-        require(!commits.Contains((1 + notifications) * packetBytes, packetBytes),
-                "invalidation does not admit a rejected incoming packet");
-        commits.Commit(1 + notifications);
-        require(commits.Contains((1 + notifications) * packetBytes, packetBytes),
-                "new packet becomes readable only after successful commit");
+        commits.RecordWrite(1, 1, notifications, true);
+        commits.RecordWrite(1 + notifications, 1, notifications, false);
+        require(!commits.Contains(packetBytes, packetBytes, notifications),
+                "unusable (EOS) write still retires the overwritten slot");
+        require(!commits.Contains((1 + notifications) * packetBytes, packetBytes, notifications),
+                "unusable (EOS) payload never plays");
     }
     commits.Reset();
-    commits.Commit(0);
-    commits.InvalidateSlot(1, 1);
-    commits.Commit(1);
-    require(!commits.Contains(8, packetBytes),
-            "one-slot next commit silences overwritten current remainder");
-    require(commits.Contains(packetBytes + 8, packetBytes),
+    commits.RecordWrite(0, 0, 1, true);
+    commits.RecordWrite(1, 0, 1, true);
+    require(!commits.Contains(8, packetBytes, 1),
+            "one-slot next write silences overwritten current remainder");
+    require(commits.Contains(packetBytes + 8, packetBytes, 1),
             "one-slot next payload belongs only to next logical packet");
     require(sizeof(commits) <= 24, "packet metadata is fixed and bounded");
     commits.Reset();
-    commits.Commit(0xffffffffULL);
-    require(commits.Contains(0xffffffffULL * packetBytes, packetBytes),
+    commits.RecordWrite(0xffffffffUL, 0xfffffffeULL, 2, true);
+    require(commits.Contains(0xffffffffULL * packetBytes, packetBytes, 2),
             "ULONG_MAX is a valid packet identity rather than a sentinel");
     require(AudioRouterRenderCommitDelta(0, 0xffffffffULL, true) == 0,
             "wire packet number wraps while logical packet identity continues");
-    commits.InvalidateSlot(0, 2);
-    commits.Commit(0x100000000ULL);
-    require(commits.Contains(0x100000000ULL * packetBytes, packetBytes), "wrapped packet committed");
-    require(!commits.Contains(0, packetBytes), "wrapped slot cannot revive startup packet");
-    require(commits.Contains(0xffffffffULL * packetBytes + 8, packetBytes),
+    commits.RecordWrite(0, 0xffffffffULL, 2, true);
+    require(commits.Contains(0x100000000ULL * packetBytes, packetBytes, 2), "wrapped wire number resolves to next identity");
+    require(!commits.Contains(0, packetBytes, 2), "wrapped slot cannot revive startup packet");
+    require(commits.Contains(0xffffffffULL * packetBytes + 8, packetBytes, 2),
             "pause preserves partially consumed current packet");
     const auto window = AudioRouterSurvivingDmaWindow(16, 16000, 32);
-    require(!commits.Contains(16 + window.SkippedBytes, packetBytes),
-            "long stall cannot revive historical commit tags");
+    require(!commits.Contains(16 + window.SkippedBytes, packetBytes, 2),
+            "long stall cannot revive historical packet identities");
+    commits.Reset();
+    commits.RecordWrite(0xffffffffUL, 0, 2, true);
+    require(!commits.Valid[1] && commits.PacketMode, "identity before stream start is unrepresentable and unusable");
+    commits.Reset();
+    const ULONGLONG saturated = ~0ULL >> 1;
+    commits.RecordWrite(static_cast<ULONG>(saturated) + 1, saturated, 2, true);
+    require(!commits.Valid[0] && !commits.Valid[1], "identity beyond the saturated packet count is unusable");
+    commits.RecordWrite(static_cast<ULONG>(saturated), saturated, 2, true);
+    require(commits.Contains(saturated, 1, 2), "saturated packet count itself remains representable");
+    commits.Reset();
+    commits.RecordWrite(0, 0, 3, true);
+    require(!commits.PacketMode, "unsupported notification count records nothing");
     commits.Reset();
     require(!commits.PacketMode && !commits.Valid[0] && !commits.Valid[1],
             "STOP and buffer replacement discard all packet identities");
-    commits.Commit(0);
-    require(!commits.Contains(0, 0), "packet mode fails closed with invalid packet size");
+    commits.RecordWrite(0, 0, 2, true);
+    require(!commits.Contains(0, 0, 2), "packet mode fails closed with invalid packet size");
+    require(!commits.Contains(0, packetBytes, 0), "packet mode fails closed without notifications");
+}
+
+// Offline WaveRT render timing model. The OS writes a packet into its slot,
+// then (after a configurable write-to-call gap) calls SetWritePacket; the
+// 1 ms timer consumes DMA and notifies once per completed packet. Each
+// consumed frame is classified against what the slot physically holds.
+// Production helpers decide validity, packet clock and admission; the OS
+// reaction (resync via packet count on an error) follows the GetPacketCount
+// documentation. This is a model, not kernel timing evidence.
+// With a zero gap the provenance assertions largely restate that RecordWrite
+// resolves identities and slots like the model's own ground truth; the
+// meaningful checks are the reference regressions (the 28b989f5 rule silences
+// written audio, no validity replays stale laps), the on-time lossless check
+// and the gap bound: the driver cannot see a write before its call, so only
+// frames consumed inside that gap may be stale or wrongly silenced.
+enum class RenderPolicy { Legacy, CommitAfterProgress, SlotProvenance };
+// How the modeled OS reacts to its notification and to a dataflow error.
+// The documentation fixes only that it resynchronizes from the packet count.
+enum class OsModel { BlindRetryNow, BlindRetryNextWake, CountFirst };
+struct RenderSimResult {
+    ULONGLONG Correct = 0, Stale = 0, SilencedValid = 0, SilencedMissing = 0;
+    ULONG Accepted = 0, Late = 0, Overrun = 0, DeferredCalls = 0;
+};
+// The 28b989f5 rule, retained only as the regression reference.
+struct CommitAfterProgressReference {
+    ULONGLONG Packets[2] = {}; bool Valid[2] = {}; bool PacketMode = false;
+    void Invalidate(ULONG packetNumber, ULONG notifications) {
+        for (ULONG slot = 0; slot < 2; ++slot) {
+            if (Valid[slot] && static_cast<ULONG>(Packets[slot]) % notifications == packetNumber % notifications) { Valid[slot] = false; }
+        }
+    }
+    void Commit(ULONGLONG packet) { Packets[packet & 1] = packet; Valid[packet & 1] = true; PacketMode = true; }
+    bool Contains(ULONGLONG byte, ULONG packetBytes) const {
+        if (!PacketMode) { return true; }
+        const ULONGLONG packet = byte / packetBytes;
+        return Valid[packet & 1] && Packets[packet & 1] == packet;
+    }
+};
+template <typename Delay, typename Skip>
+static RenderSimResult simulateRender(RenderPolicy policy, OsModel osModel, ULONG notifications,
+                                      ULONG totalMs, Delay osDelayUs, Skip osSkips, ULONG writeLeadUs) {
+    constexpr ULONG frameBytes = 8, framesPerMs = 48, packetFrames = 480;
+    const ULONG packetBytes = packetFrames * frameBytes;
+    const ULONG bufferBytes = packetBytes * notifications;
+    RenderSimResult result;
+    LONG64 slotHolds[2] = {-1, -1};
+    ULONGLONG linear = 0, lastNotified = 0;
+    AudioRouterRenderCommits commits = {}; commits.Reset();
+    CommitAfterProgressReference reference;
+    auto counter = [&]() { return AudioRouterCompletedPackets(linear, bufferBytes, notifications); };
+    auto consume = [&](ULONGLONG toByte) {
+        for (; linear < toByte; linear += frameBytes) {
+            const ULONGLONG packet = linear / packetBytes;
+            const bool truth = slotHolds[packet % notifications] == static_cast<LONG64>(packet);
+            const bool valid = policy == RenderPolicy::Legacy ? true :
+                policy == RenderPolicy::SlotProvenance ? commits.Contains(linear, packetBytes, notifications)
+                                                       : reference.Contains(linear, packetBytes);
+            if (valid) { if (truth) { ++result.Correct; } else { ++result.Stale; } }
+            else { if (truth) { ++result.SilencedValid; } else { ++result.SilencedMissing; } }
+        }
+    };
+    bool running = false;
+    ULONGLONG nowByte = 0;
+    auto osWrite = [&](ULONGLONG packet) {
+        slotHolds[static_cast<ULONG>(packet) % notifications] = static_cast<LONG64>(packet);
+    };
+    // The driver side of SetWritePacket, in the production order. Returns the
+    // DDI admission delta (0 accepted, <0 late, >0 overrun).
+    auto ddiSetWritePacket = [&](ULONGLONG packet) {
+        const ULONG wire = static_cast<ULONG>(packet);
+        if (policy == RenderPolicy::SlotProvenance) { commits.RecordWrite(wire, counter(), notifications, true); }
+        if (policy == RenderPolicy::CommitAfterProgress) { reference.Invalidate(wire, notifications); }
+        if (running) { consume(nowByte); }
+        const ULONGLONG current = counter();
+        const LONG delta = AudioRouterRenderCommitDelta(wire, current, running);
+        if (delta == 0) {
+            ++result.Accepted;
+            if (policy == RenderPolicy::CommitAfterProgress) { reference.Commit(current + (running ? 1 : 0)); }
+        } else if (delta < 0) { ++result.Late; } else { ++result.Overrun; }
+        return delta;
+    };
+    struct Event { ULONGLONG TimeUs; bool Call; ULONGLONG Packet; };
+    std::vector<Event> events;
+    ULONGLONG osNext = 0;
+    ULONGLONG nowUs = 0;
+    auto afterCall = [&](ULONGLONG packet, LONG delta) {
+        if (delta == 0) { osNext = packet + 1; return; }
+        if (running) { consume(nowByte); }
+        osNext = counter() + 1;
+    };
+    auto osWake = [&]() {
+        if (osModel == OsModel::CountFirst) {
+            // Query the count, never write behind or beyond count + 1.
+            if (running) { consume(nowByte); }
+            const ULONGLONG target = counter() + (running ? 1 : 0);
+            if (osNext > target) { return; }
+            osNext = target;
+        }
+        const ULONGLONG packet = osNext;
+        if (osSkips(packet)) { osNext = packet + 1; return; }
+        osWrite(packet);
+        if (running && writeLeadUs != 0) {
+            // The call arrives later; timer ticks may consume in between.
+            ++result.DeferredCalls;
+            osNext = packet + 1;   // provisional until the call's result
+            events.push_back({nowUs + writeLeadUs, true, packet});
+            return;
+        }
+        const LONG delta = ddiSetWritePacket(packet);
+        afterCall(packet, delta);
+        if (delta != 0 && osModel == OsModel::BlindRetryNow && !osSkips(osNext)) {
+            const ULONGLONG retry = osNext;
+            osWrite(retry);
+            afterCall(retry, ddiSetWritePacket(retry));
+        }
+    };
+    // Prefill before RUN: the current packet (0).
+    osWake();
+    running = true;
+    // Packet 0 is transferring after RUN, so the OS writes packet 1 at once.
+    osWake();
+    ULONG notificationIndex = 0;
+    for (ULONG ms = 1; ms <= totalMs; ++ms) {
+        // OS events due within this millisecond happen at their exact time,
+        // earliest first.
+        for (;;) {
+            size_t earliest = events.size();
+            for (size_t i = 0; i < events.size(); ++i) {
+                if (events[i].TimeUs <= ms * 1000ULL &&
+                    (earliest == events.size() || events[i].TimeUs < events[earliest].TimeUs)) { earliest = i; }
+            }
+            if (earliest == events.size()) { break; }
+            const Event event = events[earliest];
+            events.erase(events.begin() + static_cast<std::ptrdiff_t>(earliest));
+            nowUs = event.TimeUs;
+            nowByte = event.TimeUs * framesPerMs / 1000 * frameBytes;
+            if (event.Call) {
+                const LONG delta = ddiSetWritePacket(event.Packet);
+                // A newer write already superseded this call's resync point;
+                // a real OS writes and calls on one thread, never interleaved.
+                if (delta != 0 && osNext == event.Packet + 1) { afterCall(event.Packet, delta); }
+            } else {
+                osWake();
+            }
+        }
+        nowUs = ms * 1000ULL;
+        nowByte = static_cast<ULONGLONG>(ms) * framesPerMs * frameBytes;
+        consume(nowByte);   // 1 ms timer DPC
+        if (counter() > lastNotified) {
+            lastNotified = counter();
+            events.push_back({ms * 1000ULL + osDelayUs(notificationIndex), false, 0});
+            ++notificationIndex;
+        }
+    }
+    return result;
+}
+static void renderTimingModelChecks() {
+    struct Scenario { const char* name; ULONG notifications; ULONG (*delayUs)(ULONG); bool (*skip)(ULONGLONG); bool producerMisses; };
+    static ULONG seed;
+    const Scenario scenarios[] = {
+        {"on-time 1 ms", 2, [](ULONG) -> ULONG { return 1000; }, [](ULONGLONG) { return false; }, false},
+        {"late at boundary 10 ms", 2, [](ULONG i) -> ULONG { return i % 7 == 3 ? 10000 : 1000; }, [](ULONGLONG) { return false; }, true},
+        {"late mid-packet 13.5 ms", 2, [](ULONG i) -> ULONG { return i % 5 == 2 ? 13500 : 1000; }, [](ULONGLONG) { return false; }, true},
+        {"jitter 0-25 ms", 2, [](ULONG) -> ULONG { seed = seed * 1103515245u + 12345u; return (seed >> 8) % 25000; }, [](ULONGLONG) { return false; }, true},
+        {"OS skips packets", 2, [](ULONG) -> ULONG { return 1000; }, [](ULONGLONG p) { return p % 9 == 4; }, true},
+        {"one-slot on-time", 1, [](ULONG) -> ULONG { return 1000; }, [](ULONGLONG) { return false; }, true},
+    };
+    const OsModel osModels[3] = {OsModel::BlindRetryNow, OsModel::BlindRetryNextWake, OsModel::CountFirst};
+    const char* osNames[3] = {"blind, retry now", "blind, retry on wake", "count first"};
+    const ULONG leads[2] = {0, 2000};
+    std::printf("render timing model (30 s, 480-frame packets; frames; lead = OS write-to-call gap):\n");
+    std::printf("  %-24s %-21s %5s %-18s %9s %7s %9s %9s %5s %5s %5s\n", "scenario", "OS model", "lead",
+                "policy", "correct", "stale", "silValid", "silMiss", "acc", "late", "over");
+    for (ULONG lead : leads)
+    for (int os = 0; os < 3; ++os)
+    for (const auto& scenario : scenarios) {
+        RenderSimResult results[3];
+        const RenderPolicy policies[3] = {RenderPolicy::Legacy, RenderPolicy::CommitAfterProgress, RenderPolicy::SlotProvenance};
+        const char* names[3] = {"no validity (pre)", "28b989f5 commit", "slot provenance"};
+        for (int p = 0; p < 3; ++p) {
+            seed = 12345;
+            results[p] = simulateRender(policies[p], osModels[os], scenario.notifications, 30000,
+                                        scenario.delayUs, scenario.skip, lead);
+            const auto& r = results[p];
+            std::printf("  %-24s %-21s %5lu %-18s %9llu %7llu %9llu %9llu %5lu %5lu %5lu\n", scenario.name, osNames[os],
+                        lead, names[p], r.Correct, r.Stale, r.SilencedValid, r.SilencedMissing, r.Accepted, r.Late, r.Overrun);
+        }
+        const auto& fixed = results[2];
+        require(fixed.Correct + fixed.SilencedMissing + fixed.Stale + fixed.SilencedValid == 30000ULL * 48,
+                "every consumed frame classified once");
+        if (lead == 0) {
+            require(fixed.Stale == 0, "slot provenance never plays a stale lap");
+            require(fixed.SilencedValid == 0, "slot provenance never silences data the OS already reported");
+        } else {
+            // Only frames consumed between an OS write and its call can be
+            // misjudged: at most one DPC per started millisecond of the gap.
+            const ULONGLONG window = static_cast<ULONGLONG>(fixed.DeferredCalls) * (lead / 1000 + 1) * 48;
+            require(fixed.Stale + fixed.SilencedValid <= window, "write-to-call gap bounds provenance error");
+        }
+        if (!scenario.producerMisses && lead == 0) {
+            for (const auto& r : results) {
+                require(r.Correct == 30000ULL * 48 && r.Late == 0 && r.Overrun == 0, "on-time producer is lossless under every policy");
+            }
+        }
+        if (!scenario.producerMisses) {
+            require(fixed.Correct == 30000ULL * 48, "on-time producer is lossless with slot provenance, gap or not");
+        }
+    }
+    // Regression evidence: the late-packet rule of 28b989f5 silenced written
+    // audio, and the original no-validity reader replayed stale laps.
+    // An OS that queries the count first never writes behind it, so only the
+    // blind-write models can expose the reference's late-write loss.
+    for (OsModel os : {OsModel::BlindRetryNow, OsModel::BlindRetryNextWake}) {
+        seed = 12345;
+        const auto jitterReference = simulateRender(RenderPolicy::CommitAfterProgress, os, 2, 30000,
+            scenarios[3].delayUs, scenarios[3].skip, 0);
+        require(jitterReference.SilencedValid > 0, "reference reproduces silenced late-written audio");
+    }
+    seed = 12345;
+    const auto boundaryReference = simulateRender(RenderPolicy::CommitAfterProgress, OsModel::BlindRetryNextWake, 2,
+        30000, scenarios[1].delayUs, scenarios[1].skip, 0);
+    require(boundaryReference.SilencedValid > 0, "reference silences a packet written at its boundary");
+    const auto skipLegacy = simulateRender(RenderPolicy::Legacy, OsModel::BlindRetryNextWake, 2, 30000,
+        scenarios[4].delayUs, scenarios[4].skip, 0);
+    require(skipLegacy.Stale > 0, "reference reproduces stale replay without validity");
 }
 
 int main() {
     renderCommitChecks();
+    renderTimingModelChecks();
     packetClockChecks();
     renderBurstChecks();
     const ULONG clockRates[] = { 44100, 48000, 96000 };

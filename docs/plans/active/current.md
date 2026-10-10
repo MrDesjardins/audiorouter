@@ -159,8 +159,9 @@ and further recorder/bridge runs held. The clean-source `28b989f5` candidate
 is ready at `C:\VMs\ar-share\repair-20261010-render-commits`: 33 package checks
 and all 32 manifest hashes pass. Both clean guest smokes and install/status
 passed 2026-10-10; the r3 direct audio run failed: the repair's silence
-substitution removed ~15 % of Cable A audio. A follow-up kernel change awaits
-the user's decision, as recorded below.
+substitution removed ~15 % of Cable A audio. The approved follow-up (slot
+provenance plus packet outcome counters) is implemented with host evidence;
+a new candidate and VM run follow, as recorded below.
 No installed driver or host setting is changed by the agent. See the
 [repair and validation record](evidence/2026-10-10-m03-render-commit-validity.md) and the
 [clock review](evidence/2026-10-09-m03-direct-audio-preparation.md#directsound-playback-with-capture-off-and-clock-review-2026-10-10).

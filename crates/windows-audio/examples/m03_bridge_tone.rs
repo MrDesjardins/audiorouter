@@ -291,6 +291,7 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
     println!("driver: {info:?}");
     info.check_compatible()
         .map_err(|error| (2, format!("{error:?}")))?;
+    let packet_counters = info.has(audiorouter_windows_audio::NATIVE_DRIVER_CAP_PACKET_COUNTERS);
     drop(client);
     let generation = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -541,7 +542,7 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
                     if progress.elapsed() >= Duration::from_secs(1) {
                         let before = Instant::now();
                         progress_log.record(format!(
-                            "progress {} ms: written={} read={} ack={} interval_capture_gap_us={} interval_render_gap_us={} interval_control_gap_us={} capture={:?} render={:?}",
+                            "progress {} ms: written={} read={} ack={} interval_capture_gap_us={} interval_render_gap_us={} interval_control_gap_us={} capture={:?} render={:?} render_packets={:?}",
                             start.elapsed().as_millis(),
                             state.capture_blocks.load(Ordering::Acquire),
                             state.render_blocks.load(Ordering::Acquire),
@@ -550,7 +551,8 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
                             state.render_interval_gap_us.swap(0, Ordering::Relaxed),
                             interval_control_gap_us,
                             capture_controller.as_ref().unwrap().counters(),
-                            render_controller.as_ref().unwrap().counters()
+                            render_controller.as_ref().unwrap().counters(),
+                            packet_counters.then(|| render_controller.as_ref().unwrap().packet_counters())
                         )).map_err(|error| (1, error.to_owned()))?;
                         report_us = report_us.max(before.elapsed().as_micros());
                         interval_control_gap_us = 0;
@@ -565,6 +567,7 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
             // final raw counters immediately before deactivation.
             let capture_counters = capture_view.counters();
             let render_counters = render_view.counters();
+            let render_packets = packet_counters.then(|| render_view.packet_counters());
             let close_start = Instant::now();
             // Deactivation clears the driver's mapping header. Tell both
             // workers that a SampleSizeMismatch from this point is the
@@ -581,6 +584,7 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
             final_report = Some((
                 capture_counters,
                 render_counters,
+                render_packets,
                 control_us,
                 report_us,
                 close_us,
@@ -621,6 +625,7 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
         if let Some((
             capture_counters,
             render_counters,
+            render_packets,
             control_us,
             report_us,
             close_us,
@@ -636,6 +641,18 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
                 "render-source counters ({}): {render_counters:?}",
                 options.render_bus
             );
+            // SetWritePacket outcomes: Windows' packet submissions on time,
+            // late (already transferring) or too far ahead (17 §5.2).
+            match render_packets {
+                Some(packets) => println!(
+                    "render-source packet writes ({}): {packets:?}",
+                    options.render_bus
+                ),
+                None => println!(
+                    "render-source packet writes ({}): not reported by this driver",
+                    options.render_bus
+                ),
+            }
             println!("maximum control heartbeat: {control_us} us; progress snapshot: {report_us} us; lease close: {close_us} us");
             println!("leases deactivated at {elapsed_ms} ms; maximum control loop gap: {control_gap_us} us");
         }

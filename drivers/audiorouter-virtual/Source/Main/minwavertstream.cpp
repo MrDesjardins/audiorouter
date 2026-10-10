@@ -999,23 +999,32 @@ NTSTATUS CMiniportWaveRTStream::SetWritePacket
 
     KIRQL oldIrql;
     KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
-    // The OS has written this physical slot before reporting its packet.
-    // Retire its old identity before progress can read an overwritten lap,
-    // including when the new submission proves late or too far ahead.
-    m_RenderCommits.InvalidateSlot(PacketNumber, m_ulNotificationsPerBuffer);
+    // The OS wrote this packet into its physical slot before this call. Record
+    // that provenance before progress consumes any byte, so bytes the OS has
+    // already written (including a late write of the packet now transferring)
+    // play, and the slot's previous lap can never replay. The return code
+    // below is the documented admission result and does not change provenance.
+    const bool endOfStream = (Flags & KSSTREAM_HEADER_OPTIONSF_ENDOFSTREAM) != 0;
+    m_RenderCommits.RecordWrite(PacketNumber, static_cast<ULONGLONG>(m_llPacketCounter),
+                                m_ulNotificationsPerBuffer,
+                                !endOfStream && !m_bEoSReceived);
     if (m_KsState == KSSTATE_RUN) {
         UpdatePosition(KeQueryPerformanceCounter(NULL));
     }
     const bool running = m_KsState == KSSTATE_RUN;
     const ULONGLONG currentPacket = static_cast<ULONGLONG>(m_llPacketCounter);
     const LONG delta = AudioRouterRenderCommitDelta(PacketNumber, currentPacket, running);
+    AR_BRIDGE_STREAM_ACTIVITY activity = {};
     if (m_bEoSReceived) {
         ntStatus = STATUS_INVALID_DEVICE_STATE;
     } else if (delta < 0) {
+        // Already transferred or transferring; its unconsumed bytes may play.
         ntStatus = STATUS_DATA_LATE_ERROR;
+        activity.PacketsLate = 1;
     } else if (delta > 0) {
         ntStatus = STATUS_DATA_OVERRUN;
-    } else if (Flags & KSSTREAM_HEADER_OPTIONSF_ENDOFSTREAM) {
+        activity.PacketsOverrun = 1;
+    } else if (endOfStream) {
         // EOS support remains a separate lifecycle task.
         ntStatus = STATUS_INVALID_PARAMETER;
     } else {
@@ -1024,8 +1033,11 @@ NTSTATUS CMiniportWaveRTStream::SetWritePacket
         ntStatus = SetCurrentWritePositionInternal(packetIndex * packetSize);
         if (NT_SUCCESS(ntStatus)) {
             m_ulLastOsWritePacket = PacketNumber;
-            m_RenderCommits.Commit(currentPacket + (running ? 1 : 0));
+            activity.PacketsAccepted = 1;
         }
+    }
+    if (!m_bCapture && m_BridgePublishFrames != 0) {
+        RecordBridgeActivity(AR_BRIDGE_DIRECTION_RENDER_SOURCE, &activity);
     }
     KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
     return ntStatus;
@@ -1788,7 +1800,8 @@ ByteDisplacement - # of bytes to process.
                 ULONG copyFrames = min(needed, frames - consumedFrames);
                 for (ULONG frame = 0; frame < copyFrames; ++frame) {
                     const bool committed = m_RenderCommits.Contains(
-                        linearByte + (consumedFrames + frame) * frameBytes, packetBytes);
+                        linearByte + (consumedFrames + frame) * frameBytes, packetBytes,
+                        m_ulNotificationsPerBuffer);
                     if (!committed) { ++activity.UnderrunFrames; }
                     for (ULONG channel = 0;
                          channel < m_BridgePublishChannels; ++channel) {

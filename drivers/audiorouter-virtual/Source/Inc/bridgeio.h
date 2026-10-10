@@ -54,6 +54,9 @@ extern "C" NTKERNELAPI NTSTATUS IoGetRequestorSessionId(_In_ PIRP Irp, _Out_ PUL
 #define AR_BRIDGE_COUNTERS_OFFSET 32
 #define AR_BRIDGE_SAMPLE_BYTES_OFFSET 88
 #define AR_BRIDGE_READER_SEQUENCE_OFFSET 96
+// Driver-written render packet outcomes, in formerly reserved driver-owned
+// bytes; valid only when QUERY reports AR_BRIDGE_CAP_PACKET_COUNTERS.
+#define AR_BRIDGE_PACKET_COUNTERS_OFFSET 104
 #define AR_BRIDGE_PAYLOAD_OFFSET 128
 #define AR_BRIDGE_SAMPLE_BYTES_FLOAT64 8
 #define AR_BRIDGE_MAX_PAYLOAD_BYTES \
@@ -73,6 +76,8 @@ extern "C" NTKERNELAPI NTSTATUS IoGetRequestorSessionId(_In_ PIRP Irp, _Out_ PUL
 #define AR_BRIDGE_CAP_STREAM_COUNTERS 0x00000008UL
 #define AR_BRIDGE_CAP_CONFIG_FROM_REGISTRY 0x00000010UL
 #define AR_BRIDGE_CAP_SAMPLE_FLOAT64 0x00000020UL
+// The render-source lease header carries SetWritePacket outcome counters.
+#define AR_BRIDGE_CAP_PACKET_COUNTERS 0x00000040UL
 // LOW_LATENCY_PERIODS means the driver advertises packet-size constraints
 // for the configured minimum period; whether Windows grants that period is
 // measured in the VM (IAudioClient3::GetSharedModeEnginePeriod).
@@ -81,7 +86,8 @@ extern "C" NTKERNELAPI NTSTATUS IoGetRequestorSessionId(_In_ PIRP Irp, _Out_ PUL
 #define AR_BRIDGE_IMPLEMENTED_CAPS \
     (AR_BRIDGE_CAP_MULTICHANNEL | AR_BRIDGE_CAP_RATES_44_48_96 | \
      AR_BRIDGE_CAP_LOW_LATENCY_PERIODS | AR_BRIDGE_CAP_STREAM_COUNTERS | \
-     AR_BRIDGE_CAP_CONFIG_FROM_REGISTRY | AR_BRIDGE_CAP_SAMPLE_FLOAT64)
+     AR_BRIDGE_CAP_CONFIG_FROM_REGISTRY | AR_BRIDGE_CAP_SAMPLE_FLOAT64 | \
+     AR_BRIDGE_CAP_PACKET_COUNTERS)
 #define AR_BRIDGE_RATE_44100 0x00000001UL
 #define AR_BRIDGE_RATE_48000 0x00000002UL
 #define AR_BRIDGE_RATE_96000 0x00000004UL
@@ -120,6 +126,10 @@ typedef struct _AR_BRIDGE_STREAM_ACTIVITY {
     ULONGLONG FormatMismatches;
     ULONGLONG DevicePositionFrames;
     ULONGLONG QpcTime;
+    // SetWritePacket outcomes (render source only).
+    ULONGLONG PacketsAccepted;
+    ULONGLONG PacketsLate;
+    ULONGLONG PacketsOverrun;
 } AR_BRIDGE_STREAM_ACTIVITY, *PAR_BRIDGE_STREAM_ACTIVITY;
 
 NTSTATUS AudioRouterRecordLeaseActivityForDirection(
@@ -226,7 +236,10 @@ typedef struct _AR_BRIDGE_SHARED_HEADER {
     ULONG Reserved0;
     ULONGLONG ReaderSequence;   // consumer acknowledgement: user mode for RENDER_SOURCE,
                                 // the driver for CAPTURE_SINK (producer flow control)
-    UCHAR Reserved[24];
+    // Driver-written, monotonic within one lease; zero on capture leases.
+    ULONGLONG PacketsAccepted;  // SetWritePacket STATUS_SUCCESS
+    ULONGLONG PacketsLate;      // STATUS_DATA_LATE_ERROR
+    ULONGLONG PacketsOverrun;   // STATUS_DATA_OVERRUN
 } AR_BRIDGE_SHARED_HEADER, *PAR_BRIDGE_SHARED_HEADER;
 
 typedef struct _AR_BRIDGE_DRIVER_INFO {
@@ -313,6 +326,10 @@ C_ASSERT(FIELD_OFFSET(AR_BRIDGE_SHARED_HEADER, Counters.FormatMismatches) == 64)
 C_ASSERT(FIELD_OFFSET(AR_BRIDGE_SHARED_HEADER, Counters.LastQpcTime) == 80);
 C_ASSERT(FIELD_OFFSET(AR_BRIDGE_SHARED_HEADER, SampleBytes) == AR_BRIDGE_SAMPLE_BYTES_OFFSET);
 C_ASSERT(FIELD_OFFSET(AR_BRIDGE_SHARED_HEADER, ReaderSequence) == AR_BRIDGE_READER_SEQUENCE_OFFSET);
+C_ASSERT(AR_BRIDGE_CAP_PACKET_COUNTERS == 0x40 && AR_BRIDGE_PACKET_COUNTERS_OFFSET == 104);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_SHARED_HEADER, PacketsAccepted) == AR_BRIDGE_PACKET_COUNTERS_OFFSET);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_SHARED_HEADER, PacketsLate) == 112);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_SHARED_HEADER, PacketsOverrun) == 120);
 C_ASSERT(sizeof(AR_BRIDGE_SHARED_HEADER) == AR_BRIDGE_PAYLOAD_OFFSET);
 C_ASSERT(FIELD_OFFSET(AR_BRIDGE_DRIVER_INFO, DriverVersion) == 4);
 C_ASSERT(FIELD_OFFSET(AR_BRIDGE_DRIVER_INFO, CableCount) == 12);

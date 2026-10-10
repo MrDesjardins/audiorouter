@@ -227,8 +227,8 @@ device in `Source/Main/adapter.cpp` and bridge helpers in
   new flag bits and reserved words; the size never shrinks.
 - **Capabilities.** QUERY (below) returns a `Capabilities` bit mask:
   `MULTICHANNEL` (8 ch), `RATES_44_48_96`, `LOW_LATENCY_PERIODS`,
-  `STREAM_COUNTERS`, `CONFIG_FROM_REGISTRY`. AudioRouter uses only what the
-  installed driver reports.
+  `STREAM_COUNTERS`, `CONFIG_FROM_REGISTRY`, `SAMPLE_FLOAT64`,
+  `PACKET_COUNTERS`. AudioRouter uses only what the installed driver reports.
 - **Shared section header 128 bytes** (was 32): state/seqlock (8), block
   header (24), stream counters (written only by the driver, read by user
   mode, no IOCTL): `UnderrunFrames`, `OverrunFrames`, `SequenceGaps`,
@@ -271,11 +271,13 @@ device in `Source/Main/adapter.cpp` and bridge helpers in
   acknowledgement and runs on the endpoint's QPC clock instead of its own
   timer: flow control for the single-block slot, added 2026-10-06 after
   analysing wall-clock pacing against VCAB-24; the driver never reads the
-  value back for a capture sink), reserved
-  to 128. OPEN zeroes bytes 32–127 before the lease becomes visible. Counter
+  value back for a capture sink), packet outcome counters 104–127 (§5.4,
+  render source only, capability `PACKET_COUNTERS`). OPEN zeroes bytes 32–127
+  before the lease becomes visible. Counter
   units: `UnderrunFrames` frames of silence while a usable capture-sink lease
   had no newer block, or while a usable render-source lease consumed frames
-  without a valid OS packet commit in packet mode; `SequenceGaps` skipped block sequences;
+  whose physical slot does not hold the packet being read (packet mode, §5.4);
+  `SequenceGaps` skipped block sequences;
   `NonFiniteSamples` every NaN/Inf sample in a rejected block (the whole block
   is refused and replaced by silence); `FormatMismatches` callbacks in which an
   active lease's rate or channel count differed from the endpoint stream (that
@@ -361,23 +363,55 @@ device in `Source/Main/adapter.cpp` and bridge helpers in
   render catch-up process at most the surviving DMA lap and count lost frames,
   never loop over historical laps at DISPATCH_LEVEL. Runtime continuity and
   DPC-duration gates remain required.
-- **Committed render packets (2026-10-10 repair).** After the first successful
-  `SetWritePacket`, retain explicit absolute identities for the current/next
-  packet. Progress, admission and commit share the stream position lock.
-  Invalidate the incoming packet's physical slot before updating progress:
-  Windows has written that slot before reporting it. Read only samples with
-  a matching logical commit; substitute silence for unavailable frames and
-  increment render `UnderrunFrames` once per frame, while preserving the packet
-  clock and notifications. Never clear user-owned DMA to implement mitigation.
-  Metadata is fixed at 24 bytes per stream; no sample storage or ABI change.
-  STOP and buffer replacement reset it; PAUSE retains it. Before the first
-  accepted commit, legacy write-position and polling behavior remain unchanged;
-  their zero counters do not establish producer validity. Notification allocation
-  accepts Microsoft's defined counts 1/2 and rounds to whole frames per packet.
-  In one-slot mode, committing the next packet invalidates the current slot's
-  remaining samples conservatively; glitch-free one-slot operation is not yet
-  qualified. Existing EOS packet rejection is unchanged and remains a separate
-  lifecycle limitation. Host regressions are not runtime continuity evidence.
+- **Render packet provenance (2026-10-10, revised the same day).** Windows
+  writes a packet into its physical slot (`PacketNumber % NotificationCount`)
+  before it calls `SetWritePacket`. The driver therefore records, per physical
+  slot, the absolute packet identity the OS last named for it (32-bit wire
+  number resolved against the current 64-bit packet count), **before** the
+  call's progress update consumes any byte, under the stream position lock.
+  A render sample plays only when its slot's recorded identity equals the
+  logical packet being read; otherwise it is silence counted once per frame in
+  render `UnderrunFrames`, while the packet clock and notifications continue.
+  Consequences: a slot the OS did not rewrite never replays its previous lap
+  (the original defect); bytes the OS has already written always play,
+  including a late write of the packet now transferring, which Microsoft
+  allows ("the driver may optionally use some of the data from the packet");
+  a write into the slot now transferring (too far ahead, or one-slot mode)
+  silences that packet's remainder, which the OS has overwritten. The return
+  code is the documented admission result and is independent of provenance:
+  `STATUS_DATA_LATE_ERROR` for a packet already transferred or transferring,
+  `STATUS_DATA_OVERRUN` beyond current + 1, success otherwise, so the OS
+  resynchronizes from `GetPacketCount` as documented. The first version of this
+  repair (`28b989f5`) tagged a packet only after an on-time admission and only
+  after progress; in the VM (r3) it silenced about 15 % of written Cable A
+  audio, and an offline timing model reproduces that loss. Never clear
+  user-owned DMA to implement mitigation. Metadata is fixed at 24 bytes per
+  stream. STOP and buffer replacement reset it; PAUSE retains it. Before the
+  first `SetWritePacket`, legacy write-position and polling behavior remain
+  unchanged; their zero counters do not establish producer validity.
+  Notification allocation accepts Microsoft's defined counts 1/2 and rounds to
+  whole frames per packet. EOS packets are rejected with
+  `STATUS_INVALID_PARAMETER` and their payload never plays (the slot's
+  previous contents are still treated as overwritten); the driver exposes no
+  offload pin, where EOS is used. Residual window: the driver cannot observe
+  the OS write before the call, so a timer tick between the two still judges
+  the slot by its previous record (a late write is silent, an overwrite of
+  the transferring slot can play the new bytes) for at most the frames
+  consumed in that gap; the offline model bounds this and the window is the
+  OS's own write-to-call latency. In one-slot mode every next-packet write
+  silences the transferring packet's remainder; glitch-free one-slot
+  operation is not qualified. Host regressions and the timing model are not
+  runtime continuity evidence.
+- **Packet outcome counters (2026-10-10).** QUERY capability
+  `PACKET_COUNTERS` (`0x40`) announces three driver-written, monotonic
+  `ULONGLONG` counters in the render-source lease header at offsets 104/112/120
+  (formerly reserved, zeroed at OPEN): `SetWritePacket` calls that returned
+  success, `STATUS_DATA_LATE_ERROR` and `STATUS_DATA_OVERRUN`. They are zero on
+  capture leases and on drivers without the bit; the protocol stays 1.1
+  because the bytes were driver-owned and already zeroed. They cover calls
+  made while the stream publishes to that lease (a usable render shape and
+  generation); a prefill before the first progress update or a call during a
+  lease replacement may go uncounted, never to another lease.
   See Microsoft's [packet commit contract](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/portcls/nf-portcls-iminiportwavertoutputstream-setwritepacket)
   and [notification allocation contract](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/portcls/nf-portcls-iminiportwavertstreamnotification-allocatebufferwithnotification).
 - **Low latency.** Advertise packet-size constraints

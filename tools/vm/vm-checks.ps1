@@ -159,6 +159,8 @@ function Get-CableIds($Inventory, [string[]] $Letters) {
 function Show-ToneSummary($Text) {
     $counters = @($Text -split "`n" | Where-Object { $_ -match '^(capture-sink|render-source) counters \(' })
     $counters | ForEach-Object { Write-Host "  $_" }
+    # Windows' SetWritePacket outcomes (display only; not an error counter).
+    $Text -split "`n" | Where-Object { $_ -match '^render-source packet writes \(' } | ForEach-Object { Write-Host "  $_" }
     return $counters
 }
 

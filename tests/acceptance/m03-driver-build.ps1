@@ -857,15 +857,26 @@ if ($commitStart -lt 0 -or $commitEnd -le $commitStart) {
     throw 'render packet commit boundary is missing'
 }
 $commitBody = $stream.Substring($commitStart, $commitEnd - $commitStart)
-$invalidateOffset = $commitBody.IndexOf('m_RenderCommits.InvalidateSlot(')
+# The OS writes a packet before SetWritePacket: its slot provenance must be
+# recorded before progress consumes bytes, and admission (the documented
+# return code) must follow progress, all under one position lock.
+$acquireOffset = $commitBody.IndexOf('KeAcquireSpinLock(')
+$recordOffset = $commitBody.IndexOf('m_RenderCommits.RecordWrite(')
 $progressOffset = $commitBody.IndexOf('UpdatePosition(')
-$tagOffset = $commitBody.IndexOf('m_RenderCommits.Commit(')
+$admissionOffset = $commitBody.IndexOf('AudioRouterRenderCommitDelta(')
 $releaseOffset = $commitBody.IndexOf('KeReleaseSpinLock(')
-if ($invalidateOffset -lt 0 -or $invalidateOffset -ge $progressOffset -or
-    $progressOffset -ge $tagOffset -or $tagOffset -ge $releaseOffset -or
+if ($acquireOffset -lt 0 -or $recordOffset -le $acquireOffset -or $progressOffset -le $recordOffset -or
+    $admissionOffset -le $progressOffset -or $releaseOffset -le $admissionOffset -or
+    $commitBody.Contains('m_RenderCommits.Commit(') -or $commitBody.Contains('InvalidateSlot(') -or
     ([regex]::Matches($commitBody, 'KeAcquireSpinLock\(').Count -ne 1) -or
     ([regex]::Matches($commitBody, 'KeReleaseSpinLock\(').Count -ne 1)) {
-    throw 'render slot invalidation/progress/admission/commit must share one position lock'
+    throw 'render slot provenance must be recorded before progress and admission under one position lock'
+}
+if (-not $commitBody.Contains('activity.PacketsLate = 1;') -or -not $commitBody.Contains('activity.PacketsOverrun = 1;') -or
+    -not $commitBody.Contains('activity.PacketsAccepted = 1;') -or
+    $commitBody.IndexOf('RecordBridgeActivity(') -le $admissionOffset -or
+    $commitBody.IndexOf('RecordBridgeActivity(') -ge $releaseOffset) {
+    throw 'SetWritePacket outcomes must be reported through the packet counters'
 }
 if (-not $stream.Contains('m_RenderCommits.Contains(') -or
     -not $stream.Contains('if (!committed) { ++activity.UnderrunFrames; }') -or
