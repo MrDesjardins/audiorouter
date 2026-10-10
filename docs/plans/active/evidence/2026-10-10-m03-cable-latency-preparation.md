@@ -71,3 +71,20 @@ first bundle stays as built; use
 `C:\VMs\ar-share\diagnostics-20261010-cable-latency-r2`: source `bf1cc2ba`,
 driver `492d8ca8` (SYS SHA-256 unchanged), 36 entries, manifest SHA-256
 `6685987B95DBE2F7752CE151DF31EA96F27D8452B633F05471D7F14878B0CE11`.
+
+## Bundle r3 with the bit-exactness check (VCAB-20 preparation)
+
+Commit `6c620ff1`: probe mode `cable-bitexact SECONDS RENDER CAPTURE`
+(seeded noise on the 2^-24 grid, |x| ≤ 0.5, per-channel seeds; exact 32-frame
+alignment; every sample compared; trailing silence must be +0.0) with
+`cable-bitexact-selftest` (10 checks: grid/bounds/channel distinctness, exact
+pass with lead-in, one-LSB change located, dropped 480-frame block, swapped
+channels, half gain, −0.0 in silence, early capture stop). The runner adds a
+third pass-through run at 480 frames and records `BitExact` in
+`result.json`. Host: `/W4` compile of the probe without warnings; cable
+latency acceptance 122 checks (new `not-exact` case; mutation ignoring the
+probe verdict is caught). Bundle
+`C:\VMs\ar-share\diagnostics-20261010-cable-latency-r3`: source `6c620ff1`,
+driver `492d8ca8` (SYS SHA-256 unchanged), 36 entries, manifest SHA-256
+`53BBE034142F3EBF6206EE3509BD5E981C74FC5720E04CB34FF87BFAEB40D6B6`. Use r3;
+r1/r2 stay as built.
