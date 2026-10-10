@@ -2339,3 +2339,12 @@ Read-only verification confirms current HDA/DirectSound and machine override
 the existing log ends with powered-off shutdown and belongs to the earlier
 HostAudioWas session. Next: user starts VM normally, then verify the fresh
 startup log selects DSoundAudio before requesting reference playback.
+
+Fresh startup verified after normal boot (no snapshot restore): VBox.log
+opened `2026-10-10T06:04:57.145334800Z`; Driver and DriverName are DSoundAudio.
+Next authorized comparison: the same existing 30-second guest speaker
+recorder/reference with Listen/Repeat off and Media Player routed to Speakers.
+Exact preparation/run/report steps are now Step 4 in the runbook. Preserve
+formats/volume, collect only this current run automatically, then review the
+recording and audible report before any further cable test. No new binary,
+driver rebuild, host audio operation or qualification claim.

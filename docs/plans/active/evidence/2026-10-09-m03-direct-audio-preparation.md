@@ -535,3 +535,10 @@ DirectSound selection and machine override `dsound`. No VirtualBoxVM process
 is running; existing log ends with powered-off shutdown of the earlier WAS
 session. This confirms configuration only, not actual DirectSound startup.
 Next: user boots normally; read the new log before any playback/capture.
+
+Fresh startup read successfully: log opened `2026-10-10T06:04:57.145334800Z`,
+Driver and DriverName both DSoundAudio. User started normally without snapshot
+restore. This verifies backend selection for the bounded comparison; it does
+not establish playback quality. Next: user runs the unchanged speaker-only
+recorder/reference, with Media Player routed to guest Speakers, Repeat/Listen
+off and prior formats/volume retained; send current archive and audible report.

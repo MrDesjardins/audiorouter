@@ -145,6 +145,47 @@ checks the current startup log for `DSoundAudio` before giving the playback
 command. Do not rerun the speaker capture or a cable tone yet. An unreadable
 log or wrong backend blocks the comparison, not independent offline work.
 
+Startup now verified: new log opened `2026-10-10T06:04:57.145334800Z`, with
+both Driver and DriverName set to DSoundAudio. The user booted normally,
+without restoring a snapshot. The next bounded comparison is authorized.
+
+**Step 4 — inside AR-DriverTest, once the Windows desktop appears:**
+
+1. Stop unrelated playback/test scripts. Open Sound with the following command
+   in the VM's PowerShell window:
+
+   ```powershell
+   Start-Process control.exe -ArgumentList 'mmsys.cpl'
+   ```
+
+2. Recording → AudioRouter Cable B Output → Properties → Listen: keep
+   **Listen to this device unchecked**, then Apply/OK.
+3. Playback → Speakers (High Definition Audio Device) → Properties → Advanced:
+   confirm stereo **16 bit, 44,100 Hz**, retaining the previous setting and
+   volume. Keep cable formats unchanged.
+4. Settings → System → Sound → Volume mixer → Media Player: output device
+   **Speakers (High Definition Audio Device)**. If its app row is absent,
+   open Media Player, briefly play the existing reference and pause it so the
+   row appears. Keep it paused, with **Repeat off**, before the command.
+5. In the VM's PowerShell, run the existing verified helper by its absolute
+   path. No initial manual playback is needed:
+
+   ```powershell
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261009-speaker-loopback\run-speaker-loopback.ps1'
+   ```
+
+6. The same 17-second reference opens after capture readiness. Listen once,
+   then wait for the 30-second recording and archive to finish, normally
+   under one minute. The wrapper copies this run's ZIP to the existing shared
+   folder automatically; no separate collect command is needed.
+7. Send final output and whether hiss/crackles occurred during 0–5, 6–11 and
+   12–17 seconds, and whether the two one-second silent gaps were quiet.
+   Leave Listen off and stop reference playback afterward. Review this new
+   waveform/metadata and subjective result before another cable/long test.
+
+The helper/binary/reference are unchanged; the compared variable is the
+verified VirtualBox backend. Capture completion is not an audio-quality pass.
+
 **Rollback — main PC, only with the VM Powered Off:**
 
 ```powershell
