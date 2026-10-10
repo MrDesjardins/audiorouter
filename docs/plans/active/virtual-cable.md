@@ -1635,9 +1635,13 @@ hypervisor or its dependent features. Host inspection found the documented
 VM settings already in use (4 vCPUs, 8192 MB, 100% execution cap, nested
 paging on), with VirtualBox NEM active. The host Balanced power plan has
 sleep-after set to Never on AC; no matching host power/boot/shutdown events
-were present for the stall window. The VM guide was corrected: this NEM mode
-is not assumed suitable for sustained audio qualification. Next: arrange a
-WSL-preserving validation path, such as a separate machine where VirtualBox
-has native hardware virtualization, or gather further evidence explaining
-the NEM scheduling stall before retrying. Do not repeat the 600-second run
-unchanged.
+were present for the stall window. The user notes they were away from the
+machine during the failed run; this could be relevant if the host/VM became
+idle, but the available logs do not prove that explanation. The VM guide was
+corrected: NEM mode is not assumed suitable for sustained audio qualification.
+Next diagnostic: keep the VM window foreground and the host awake, with the
+looped file routed to Cable A Input, and run a supervised 300-second tone
+attempt. This spans the earlier 178- and 269-second counter increases. Collect
+and review its evidence before deciding whether another 600-second run is
+justified. Preserve WSL; do not change Hyper-V settings or reinstall the
+unchanged driver.
