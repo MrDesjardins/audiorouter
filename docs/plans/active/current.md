@@ -57,7 +57,10 @@ check passes: leases stop at 30,001 ms, child exit 0 without timeout, zero
 error counters. Its five-minute run ends on time but loses audio: both audio
 loops stall about 310 ms and the control loop about 317 ms in the same
 observation interval. Root cause remains unidentified; next is an opt-in guest
-scheduler trace, preserving WSL and the failed continuity gate. See the
+scheduler trace, preserving WSL and the failed continuity gate. Its initial
+GeneralProfile startup failed with 0x80070032 before tone began. Next: review
+a two-second guest recorder probe using a minimal scheduling profile before
+any new long audio diagnostic. See the
 [packet-clock review](evidence/2026-10-09-m03-packet-clock-review.md) and active
 virtual cable plan. The [earlier review record](evidence/2026-10-09-m03-render-publication-review.md)
 and [virtual cable execution plan](virtual-cable.md) record the guest's passing

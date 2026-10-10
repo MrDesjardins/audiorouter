@@ -46,6 +46,7 @@ Copy-Item -LiteralPath (Join-Path $workspace 'target\vm-tools\release\examples\m
 Copy-Item -LiteralPath (Join-Path $workspace 'tools\vm\vm-checks.ps1') -Destination $destination
 Copy-Item -LiteralPath (Join-Path $workspace 'tools\vm\run-packet-clock-review.ps1') -Destination $destination
 Copy-Item -LiteralPath (Join-Path $workspace 'tools\vm\vm-scheduling-trace.ps1') -Destination $destination
+Copy-Item -LiteralPath (Join-Path $workspace 'tools\vm\AudioRouterScheduling.wprp') -Destination $destination
 Copy-Item -LiteralPath (Join-Path $workspace 'tests\acceptance\m03-driver-vm-support.ps1') `
     -Destination (Join-Path $destination 'repo\tests\acceptance\m03-driver-vm-support.ps1')
 $commit = (& git -C $workspace rev-parse HEAD).Trim()

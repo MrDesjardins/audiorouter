@@ -17,14 +17,14 @@ function Invoke-DriverVmTraceCommand {
     $script:calls.Add([pscustomobject]@{ Arguments = $Arguments; Name = $Name; Timeout = $TimeoutSeconds })
     $text = ''; $code = 0
     switch ($Name) {
-        'profiles' { $text = if ($script:scenario -eq 'missing-profile') { 'CPU cpu' } else { 'GeneralProfile First level triage' } }
+        'profiles' { $text = if ($script:scenario -eq 'missing-profile') { 'CPU cpu' } else { 'AudioRouterScheduling Guest scheduling' } }
         'initial-status' {
             $text = if ($script:scenario -eq 'busy') { 'WPR recording is in progress...' }
             elseif ($script:scenario -eq 'unknown-status') { 'unknown/localized status' }
             else { 'WPR is not recording' }
         }
         'start' {
-            if ($script:scenario -eq 'start-failure') { $code = 1 }
+            if ($script:scenario -in @('start-failure','start-cancel-failure','start-no-profiles')) { $code = -2147024846; $text = 'The request is not supported. Error code: 0x80070032' }
             elseif ($script:scenario -eq 'start-timeout') { $code = 124 }
         }
         'final-status' { if ($script:scenario -eq 'status-failure') { throw 'fake status query failure' } }
@@ -32,11 +32,14 @@ function Invoke-DriverVmTraceCommand {
             if ($script:scenario -in @('stop-failure','cancel-failure')) { $code = 1 }
             elseif ($script:scenario -ne 'missing-etl') { Set-Content -LiteralPath $Arguments[1] -Value 'fake ETL' -Encoding ASCII }
         }
-        'cancel' { if ($script:scenario -eq 'cancel-failure') { $code = 1 } }
+        'cancel' {
+            if ($script:scenario -in @('cancel-failure','start-cancel-failure')) { $code = 1 }
+            elseif ($script:scenario -eq 'start-no-profiles') { $code = -984076288 }
+        }
     }
     return [pscustomobject]@{ Code = $code; TimedOut = $false; Text = $text }
 }
-foreach ($scenarioName in @('success', 'tone-failure', 'busy', 'unknown-status', 'missing-profile', 'start-failure', 'start-timeout', 'stop-failure', 'cancel-failure', 'status-failure', 'missing-etl')) {
+foreach ($scenarioName in @('success', 'tone-failure', 'busy', 'unknown-status', 'missing-profile', 'start-failure', 'start-timeout', 'start-cancel-failure', 'start-no-profiles', 'stop-failure', 'cancel-failure', 'status-failure', 'missing-etl')) {
     $script:scenario = $scenarioName
     $script:calls = [Collections.Generic.List[object]]::new()
     $script:runCount = 0
@@ -47,16 +50,26 @@ foreach ($scenarioName in @('success', 'tone-failure', 'busy', 'unknown-status',
             $script:runCount++
             if ($script:scenario -eq 'tone-failure') { throw 'fake tone failure' }
         }
-    } catch { $failed = $true }
+    } catch {
+        $failed = $true
+        if ($scenarioName -eq 'start-failure') { Assert ($_.ToString().Contains('0x80070032')) 'original recorder error reaches user output' }
+    }
     Assert ($failed -eq ($scenarioName -notin @('success', 'status-failure'))) "$scenarioName preserves outcome"
     foreach ($call in @($script:calls | Where-Object Name -in @('start','stop','cancel','final-status'))) {
         Assert ($call.Arguments[-2] -eq '-instancename' -and $call.Arguments[-1] -match '^AudioRouterTone-[a-f0-9]{32}$') "$scenarioName never manipulates a global recorder"
     }
+    foreach ($call in @($script:calls | Where-Object Name -eq 'start')) {
+        Assert ($call.Arguments[1] -like '*AudioRouterScheduling.wprp!AudioRouterScheduling.Light') 'starts the custom profile, not GeneralProfile'
+    }
+    $profileQuery = @($script:calls | Where-Object Name -eq 'profiles')[0]
+    Assert ($profileQuery.Arguments[1] -like '*AudioRouterScheduling.wprp') 'validates the actual custom profile'
     if ($scenarioName -in @('busy','unknown-status','missing-profile')) {
         Assert ($script:runCount -eq 0 -and @($script:calls | Where-Object Name -in @('start','stop','cancel')).Count -eq 0) "$scenarioName leaves existing recording untouched"
-    } elseif ($scenarioName -in @('start-failure','start-timeout')) {
+    } elseif ($scenarioName -in @('start-failure','start-timeout','start-cancel-failure','start-no-profiles')) {
         Assert ($script:runCount -eq 0) 'startup failure prevents tone'
         Assert (@($script:calls | Where-Object Name -eq 'cancel').Count -eq 1) 'partially started named instance is cleaned up'
+        $summary = Get-Content -LiteralPath (Join-Path $directory 'trace-summary.json') -Raw | ConvertFrom-Json
+        Assert ($summary.CleanupFailed -eq ($scenarioName -eq 'start-cancel-failure')) 'failed startup still reports failed cancellation; explicit no-profiles is clean'
     } else {
         Assert ($script:runCount -eq 1 -and @($script:calls | Where-Object Name -eq 'stop').Count -eq 1) "$scenarioName stops after callback even when it fails"
         if ($scenarioName -in @('stop-failure','cancel-failure','missing-etl')) {
@@ -67,8 +80,17 @@ foreach ($scenarioName in @('success', 'tone-failure', 'busy', 'unknown-status',
         $summary = Get-Content -LiteralPath (Join-Path $directory 'trace-summary.json') -Raw | ConvertFrom-Json
         Assert ($summary.RunFailed -eq ($scenarioName -eq 'tone-failure')) "$scenarioName keeps primary run failure"
         Assert ($summary.Saved -eq ($scenarioName -notin @('stop-failure','cancel-failure','missing-etl'))) "$scenarioName reports trace validity"
+        Assert ($summary.ProfileSha256 -eq (Get-FileHash -LiteralPath (Join-Path $workspace 'tools\vm\AudioRouterScheduling.wprp')).Hash) 'records exact profile identity'
     }
 }
+# Exercise the real probe with the fake recorder, including actual bounded
+# wait, start/save and zero calls into a tone process boundary.
+$script:scenario = 'success'
+$script:calls = [Collections.Generic.List[object]]::new()
+$probeWatch = [Diagnostics.Stopwatch]::StartNew()
+Invoke-DriverVmSchedulingProbe -Recorder $fakeRecorder -Directory (Join-Path $evidence 'probe')
+Assert ($probeWatch.Elapsed.TotalSeconds -ge 2 -and $probeWatch.Elapsed.TotalSeconds -lt 15) 'probe callback is bounded to a short wait'
+Assert (@($script:calls | Where-Object Name -eq 'start').Count -eq 1 -and @($script:calls | Where-Object Name -eq 'stop').Count -eq 1) 'probe exercises the same owned recorder lifecycle'
 # Exercise the actual tone function with a fake native-process boundary.
 # This catches PowerShell dynamic-scope/argument forwarding mistakes without
 # running a recorder, tone executable or driver on this PC.
@@ -87,7 +109,7 @@ function Invoke-DriverVmProcess {
     param($Executable, [string[]] $Arguments, $Stdout, $Stderr, $TimeoutSeconds)
     $code = 0; $text = ''
     switch ($Arguments[0]) {
-        '-profiles' { $text = 'GeneralProfile First level triage' }
+        '-profiles' { $text = 'AudioRouterScheduling Guest scheduling' }
         '-status' { $text = 'WPR is not recording' }
         '-stop' {
             if ($script:scenario -eq 'integrated-stop-failure') { $code = 1 }
@@ -124,4 +146,13 @@ foreach ($scenarioName in @('integrated-success','integrated-native-failure','in
         if ($scenarioName -eq 'integrated-stop-failure') { Assert ($result.Text -match 'scheduling diagnostic failed') 'failed save cannot look like a clean native pass' }
     } finally { $evidence = $testEvidenceRoot }
 }
+# Guard the narrowed profile and probe wiring without executing a recorder.
+[xml]$profileXml = Get-Content -LiteralPath (Join-Path $workspace 'tools\vm\AudioRouterScheduling.wprp') -Raw
+$keywords = @($profileXml.WindowsPerformanceRecorder.Profiles.SystemProvider.Keywords.Keyword | ForEach-Object Value)
+Assert (($keywords | Sort-Object) -join ',' -eq 'CSwitch,DPC,Interrupt,Loader,ProcessThread,ReadyThread,ThreadPriority') 'profile contains exactly the scheduling keywords'
+Assert ($profileXml.WindowsPerformanceRecorder.Profiles.Profile.LoggingMode -eq 'File') 'profile saves the whole bounded observation'
+$wrapper = Get-Content -LiteralPath (Join-Path $workspace 'tools\vm\run-packet-clock-review.ps1') -Raw
+Assert ($wrapper.Contains("elseif (`$Phase -eq 'TraceProbe')") -and $wrapper.Contains('Invoke-DriverVmSchedulingProbe')) 'short recorder probe is wired'
+Assert ($wrapper.IndexOf('AR-DriverTest') -lt $wrapper.IndexOf('Invoke-DriverVmSchedulingProbe')) 'VM identity guard precedes probe'
+Assert ($wrapper.Contains('Compress-Archive -LiteralPath $probeDirectory')) 'probe archive excludes old audio recordings'
 Write-Host "$checks host-only trace regressions pass. Evidence: $evidence"

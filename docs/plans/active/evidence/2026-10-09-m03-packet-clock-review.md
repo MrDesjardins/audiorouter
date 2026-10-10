@@ -339,3 +339,59 @@ executable remains SHA256
 `A0393BCEA4DBA6277DEED02977C393CBFA1DE5AAE909658E054C0D7550157CBD`.
 Only script/reporting support differs. Copied wrapper refuses host tracing
 before any recording or VM step. No guest diagnostic run is claimed yet.
+
+## Guest recorder startup failure — 2026-10-09 19:53 local
+
+Archive `C:\VMs\ar-share\evidence-20261009-195302.zip` independently verified:
+SHA256 `7B481B854285D656364C44D7E8F03CD669042B4A52936E9FD3DBB1A5B3A0EABE`.
+Status 2/2 passes; WPR 10.0.26100 CoreSystem lists GeneralProfile and reports
+idle. Start rejects **GeneralProfile.Light.File**, error **0x80070032**, exit
+-2147024846, elapsed **0.1689724 seconds**. Exact text: “The request is not
+supported.” No native tone process ran. The owned cancellation returns
+0xc5583000, “There are no trace profiles running,” in 0.0877787 seconds.
+Trace summary Started/Saved false, RunFailed true, CleanupFailed false.
+
+The failure is recorder compatibility, not new audio continuity evidence.
+It does not isolate the unsupported keyword/provider/option. Host export and
+fake lifecycle tests proved syntax/ownership, not guest recorder startup.
+
+### Compatibility repair and short probe
+
+Use checked-in `AudioRouterScheduling.wprp` with only ProcessThread, Loader,
+CSwitch, ReadyThread, ThreadPriority, DPC and Interrupt. Exclude broad
+GeneralProfile user providers, sampling, capture-state callbacks and other
+system keywords. This narrows the requested features; it is a candidate
+compatibility repair, not a proven cause of the original error. Microsoft's
+[profile authoring](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/authoring-recording-profiles)
+and [system provider](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/systemprovider)
+describe this custom profile mechanism.
+
+Preserve unique named ownership and existing-recorder refusal. Validate the
+actual WPRP, copy it into evidence, record its hash, and surface recorder exit
+and exact text to the user. No silent retry with global recorder ownership.
+New TraceProbe phase exercises that same start/save path for two seconds,
+launches no audio executable, and archives only its own small evidence folder.
+Only after real guest start/save and event content review should the next
+five-minute audio diagnostic run. Driver/audio bytes and host settings stay
+unchanged; sustained VCAB-24 remains failed/open.
+
+Host verification (Windows PowerShell 5.1; no real host recording/audio run):
+
+- `tests/acceptance/m03-vm-scheduling-trace.ps1`: **128** fake-recorder,
+  ownership, cleanup, custom-profile, probe and tone integration assertions
+  pass. Evidence `target/vm-trace-tests-efb1bc39bf9346a5ae76492822f5233c`.
+  Failed startup plus failed cancellation is now surfaced as cleanup failure;
+  the observed explicit no-profiles code is distinguished from other errors.
+- `tests/acceptance/m03-vm-process.ps1`: **11** process checks pass;
+  `target/vm-process-tests-1c7dd45010cb49df98813b3ee2d9f77e`.
+- Real host WPR **read-only** `-profiles <custom.wprp>` and
+  `-profiledetails <custom.wprp>!AudioRouterScheduling.Light -filemode` both
+  exit 0 and enumerate exactly the seven requested system keywords.
+  This validates parsing/configuration, not actual guest start/save/events.
+- Five changed scripts parse; wrapper TraceProbe refuses host invocation
+  before any operation. Documentation acceptance: 138 Markdown / 747 links.
+  `git diff --check` clean; no Rust/UI change; local Jev disabled by user.
+
+Next: prepare/verify the separate `diagnostics-20261009-scheduling-trace-r2`
+script bundle, then a two-second guest TraceProbe only. Review its saved event
+content before a five-minute diagnostic. No audio fix or trace success claimed.

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<WindowsPerformanceRecorder Version="1.0">
+  <Profiles>
+    <!-- Only scheduling/DPC/ISR events; no broad GeneralProfile providers,
+         CPU sampling, hardware counters, stacks, or capture-state callbacks. -->
+    <SystemCollector Id="AudioRouterSystem" Name="AudioRouter Scheduling">
+      <BufferSize Value="1024" />
+      <Buffers Value="64" />
+    </SystemCollector>
+    <SystemProvider Id="AudioRouterKernel">
+      <Keywords>
+        <Keyword Value="ProcessThread" />
+        <Keyword Value="Loader" />
+        <Keyword Value="CSwitch" />
+        <Keyword Value="ReadyThread" />
+        <Keyword Value="ThreadPriority" />
+        <Keyword Value="DPC" />
+        <Keyword Value="Interrupt" />
+      </Keywords>
+    </SystemProvider>
+    <Profile Id="AudioRouterScheduling.Light.File" Name="AudioRouterScheduling"
+             Description="AudioRouter guest scheduling diagnosis"
+             LoggingMode="File" DetailLevel="Light">
+      <Collectors>
+        <SystemCollectorId Value="AudioRouterSystem">
+          <SystemProviderId Value="AudioRouterKernel" />
+        </SystemCollectorId>
+      </Collectors>
+    </Profile>
+  </Profiles>
+</WindowsPerformanceRecorder>

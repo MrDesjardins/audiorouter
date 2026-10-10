@@ -1844,3 +1844,36 @@ hashes pass; driver files and audio executable are unchanged; copied wrapper
 refuses host tracing. Exact identity/hashes are in the review record. Next
 action: one 300-second guest trace using the updated retest procedure, with
 existing audio settings. No guest trace/continuity result is claimed yet.
+
+### 2026-10-09 19:53: recorder startup unsupported
+
+The copied archive `evidence-20261009-195302.zip` independently matches SHA256
+`7B481B854285D656364C44D7E8F03CD669042B4A52936E9FD3DBB1A5B3A0EABE`.
+Status passes, but WPR rejects GeneralProfile.Light.File with 0x80070032 in
+0.169 seconds. No tone started. Cancellation reports no trace profiles running.
+The error does not identify which profile feature or recorder option is
+unsupported; listing/exporting a profile and fake lifecycle checks did not
+prove runtime compatibility. Sustained audio loss remains unresolved.
+
+Objective: repair diagnostic compatibility without changing driver/audio bytes
+or host settings (VCAB-24/27 diagnostics, VDEV-12 ownership). Ordered work:
+1. Use a versioned minimal kernel scheduling WPRP (process/thread, loader,
+   context switch, ready thread, priority, DPC/ISR), preserving named ownership.
+2. Validate its syntax with read-only WPR queries and regress actual profile
+   forwarding/startup errors; keep real recorder startup explicitly unverified.
+3. Add a guest-only two-second TraceProbe phase that saves the trace and copies
+   evidence, without launching audio. Require its reviewed result before a
+   new five-minute diagnostic. No global cancel or automatic broad fallback.
+4. Prepare a separate checksummed script update; preserve old bundles.
+Rollback: use the retained bounded-tone bundle or omit tracing. Risk: narrowed
+profile/named instance may still be unsupported; probe fails visibly and
+collects exact command output. Next action: implement and check the collector.
+
+Collector/probe implemented. Read-only WPR profile/profiledetails queries parse
+and enumerate the minimal events; 128 fake-recorder/probe/integration checks,
+11 process checks, script parsing, docs and host guard pass. Actual guest
+start/save/event content is still unverified. Failed startup cancellation now
+reports any error other than the observed no-profiles code. Probe collection
+archives only its own folder, avoiding earlier large audio files. Full checks
+and evidence paths are in the packet-clock review. Next: prepare and verify
+the separate r2 script update, then review the two-second guest probe.

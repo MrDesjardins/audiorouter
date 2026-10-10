@@ -11,12 +11,17 @@ function Invoke-DriverVmTraceCommand {
 function Invoke-DriverVmSchedulingRun {
     param([Parameter(Mandatory = $true)][string] $Recorder,
         [Parameter(Mandatory = $true)][string] $Directory,
+        [string] $ProfilePath = (Join-Path $PSScriptRoot 'AudioRouterScheduling.wprp'),
         [Parameter(Mandatory = $true)][scriptblock] $Run)
     if (-not (Test-Path -LiteralPath $Recorder -PathType Leaf)) { throw 'WPR is unavailable; no traced tone was started.' }
+    if (-not (Test-Path -LiteralPath $ProfilePath -PathType Leaf)) { throw 'Scheduling profile is missing; no recording was started.' }
+    $ProfilePath = [IO.Path]::GetFullPath($ProfilePath)
     New-Item -ItemType Directory -Path $Directory -Force | Out-Null
-    $profiles = Invoke-DriverVmTraceCommand $Recorder @('-profiles') $Directory 'profiles'
-    if ($profiles.Code -ne 0 -or $profiles.Text -notmatch '(?m)^\s*GeneralProfile\s') {
-        throw 'WPR GeneralProfile is unavailable; no traced tone was started.'
+    Copy-Item -LiteralPath $ProfilePath -Destination (Join-Path $Directory 'used-profile.wprp')
+    $profileHash = (Get-FileHash -LiteralPath $ProfilePath -Algorithm SHA256).Hash
+    $profiles = Invoke-DriverVmTraceCommand $Recorder @('-profiles', $ProfilePath) $Directory 'profiles'
+    if ($profiles.Code -ne 0 -or $profiles.Text -notmatch '(?m)^\s*AudioRouterScheduling\s') {
+        throw "WPR scheduling profile validation failed; no recording was started. $($profiles.Text.Trim())"
     }
     $status = Invoke-DriverVmTraceCommand $Recorder @('-status') $Directory 'initial-status'
     # The test guest is en-US. Unknown/localized status is refused too.
@@ -33,8 +38,8 @@ function Invoke-DriverVmSchedulingRun {
     $cleanupFailure = $null
     $startUtc = [DateTime]::UtcNow.ToString('o')
     try {
-        $start = Invoke-DriverVmTraceCommand $Recorder @('-start', 'GeneralProfile.Light', '-filemode', '-recordtempto', $temporary, '-instancename', $instance) $Directory 'start'
-        if ($start.Code -ne 0) { throw 'WPR startup failed; tone was not started. Preserve trace command logs.' }
+        $start = Invoke-DriverVmTraceCommand $Recorder @('-start', ($ProfilePath + '!AudioRouterScheduling.Light'), '-filemode', '-recordtempto', $temporary, '-instancename', $instance) $Directory 'start'
+        if ($start.Code -ne 0) { throw "WPR startup failed (exit $($start.Code)); run callback was not started. $($start.Text.Trim())" }
         $started = $true
         # The callback must not print: console backpressure must never extend
         # this recording. Production runs only a bounded redirected child.
@@ -60,11 +65,18 @@ function Invoke-DriverVmSchedulingRun {
                 # Never issue a global cancel or touch another recorder.
                 try {
                     $cancel = Invoke-DriverVmTraceCommand $Recorder @('-cancel', '-instancename', $instance) $Directory 'cancel'
-                    if ($started -and $cancel.Code -ne 0) { throw "Could not stop owned recording $instance; inspect WPR status for that instance." }
+                    # A failed start can still have partially created a trace.
+                    # Only success or WPR's explicit no-profiles result proves
+                    # cleanup here; other errors must be reported even then.
+                    $noProfiles = -984076288 # 0xc5583000
+                    if ($cancel.Code -ne 0 -and ($started -or $cancel.Code -ne $noProfiles)) {
+                        throw "Could not stop owned recording $instance (exit $($cancel.Code)); inspect WPR status for that instance. $($cancel.Text.Trim())"
+                    }
                 } catch { $cleanupFailure = $_ }
             }
             [pscustomobject]@{
                 Instance = $instance; Started = $started; Saved = $saved
+                Profile = $ProfilePath; ProfileSha256 = $profileHash
                 StartUtc = $startUtc; EndUtc = [DateTime]::UtcNow.ToString('o')
                 RunFailed = [bool]$failure; CleanupFailed = [bool]$cleanupFailure
             } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Directory 'trace-summary.json') -Encoding UTF8
@@ -74,4 +86,14 @@ function Invoke-DriverVmSchedulingRun {
     if ($failure) { throw $failure }
     if ($cleanupFailure) { throw $cleanupFailure }
     Write-Host "Scheduling trace saved: $trace"
+}
+
+function Invoke-DriverVmSchedulingProbe {
+    param([Parameter(Mandatory = $true)][string] $Recorder,
+        [Parameter(Mandatory = $true)][string] $Directory)
+    # Exercise the exact start/save path used by tone, with no native audio
+    # executable or lease. Only the owned recorder is active during this wait.
+    Invoke-DriverVmSchedulingRun -Recorder $Recorder -Directory $Directory -Run {
+        Start-Sleep -Seconds 2
+    }
 }

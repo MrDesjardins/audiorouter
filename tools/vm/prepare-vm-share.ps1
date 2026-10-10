@@ -91,6 +91,7 @@ Copy-Item -LiteralPath (Join-Path $workspace 'tools\vm\vm-checks.ps1') -Destinat
 Copy-Item -LiteralPath (Join-Path $workspace 'tools\vm\retry-smoke.ps1') -Destination $Share
 Copy-Item -LiteralPath (Join-Path $workspace 'tools\vm\run-packet-clock-review.ps1') -Destination $Share
 Copy-Item -LiteralPath (Join-Path $workspace 'tools\vm\vm-scheduling-trace.ps1') -Destination $Share
+Copy-Item -LiteralPath (Join-Path $workspace 'tools\vm\AudioRouterScheduling.wprp') -Destination $Share
 
 Step '6/6 Manifest'
 $commit = (& git -C $workspace rev-parse HEAD).Trim()
