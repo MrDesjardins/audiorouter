@@ -1838,3 +1838,9 @@ The exported GeneralProfile.Light definition contains the intended scheduling
 keywords. No real host recording, VM operation or driver change was performed.
 Next: verify the separate diagnostics bundle (same driver/audio executable),
 then collect one five-minute guest trace. Root cause/sustained gate stay open.
+
+Scheduling diagnostic artifact prepared from clean `bf03cf26`: 31 manifest
+hashes pass; driver files and audio executable are unchanged; copied wrapper
+refuses host tracing. Exact identity/hashes are in the review record. Next
+action: one 300-second guest trace using the updated retest procedure, with
+existing audio settings. No guest trace/continuity result is claimed yet.

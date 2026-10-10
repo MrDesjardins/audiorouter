@@ -329,3 +329,13 @@ Prepare `diagnostics-20261009-scheduling-trace` separately from the retained
 bounded-tone bundle. Preserve identical driver and audio executable bytes;
 only the opt-in tracing scripts change. Follow the first section of the
 updated retest procedure; one 300-second diagnostic, then inspect the trace.
+
+Prepared/verified artifact:
+`C:\VMs\ar-share\diagnostics-20261009-scheduling-trace`, clean source
+`bf03cf26b4391f89f0395b52bf705ba7b79403e7`, built at
+`2026-10-10 02:50:22Z`. All **31** manifest hashes independently verified.
+All 16 driver files are identical to the bounded-tone/r2 candidate; audio
+executable remains SHA256
+`A0393BCEA4DBA6277DEED02977C393CBFA1DE5AAE909658E054C0D7550157CBD`.
+Only script/reporting support differs. Copied wrapper refuses host tracing
+before any recording or VM step. No guest diagnostic run is claimed yet.
