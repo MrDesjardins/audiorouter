@@ -244,8 +244,7 @@ Return Value:
     m_ullWritePosition = 0;
     m_ullDmaTimeStamp = 0;
     m_hnsElapsedTimeCarryForward = 0;
-    m_ullLastDPCTimeStamp = 0;
-    m_hnsDPCTimeCarryForward = 0;
+    m_llLastNotifiedPacketCounter = 0;
     m_ulDmaMovementRate = 0;
     m_byteDisplacementCarryForward = 0;
     m_bLfxEnabled = FALSE;
@@ -867,6 +866,9 @@ NTSTATUS CMiniportWaveRTStream::GetReadPacket
     KIRQL oldIrql;
     KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
 
+    if (m_KsState == KSSTATE_RUN) {
+        UpdatePosition(KeQueryPerformanceCounter(NULL));
+    }
     LONGLONG packetCounter = m_llPacketCounter;
     ULONGLONG ullLinearPosition = m_ullLinearPosition;
     ULONGLONG hnsElapsedTimeCarryForward = m_hnsElapsedTimeCarryForward;
@@ -874,12 +876,12 @@ NTSTATUS CMiniportWaveRTStream::GetReadPacket
 
     KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
 
+    if (packetCounter == 0) { return STATUS_DEVICE_NOT_READY; }
+
     // The 0-based number of the last completed packet
     // FUTURE-2014/10/27 Update to allow different numbers of packets per WaveRT buffer
-    // Keep the first-packet ULONG_MAX behavior without performing a signed
-    // subtraction on the 64-bit counter.  The counter is expected to be
-    // non-negative, but the low-word operation also remains well-defined at
-    // the packet-number wrap boundary.
+    // Startup is handled above. The low-word subtraction remains well-defined
+    // at the packet-number wrap boundary without signed counter arithmetic.
     availablePacketNumber = LODWORD(packetCounter) - 1;
 
     // If no new packets are available...
@@ -899,20 +901,20 @@ NTSTATUS CMiniportWaveRTStream::GetReadPacket
     // Return next packet number to be read
     *PacketNumber = availablePacketNumber;
 
-    // Compute and return timestamp corresponding to the end of the available packet. In a real hardware
+    // Compute and return timestamp corresponding to the first sample of the available packet. In a real hardware
     // driver, the timestamp would be computed in a driver and hardware specific manner. In this sample
     // driver, it is extrapolated from the sample driver's internal simulated position correlation
     // [m_ullLinearPosition @ m_ullDmaTimeStamp] and the sample's internal 64-bit packet counter, subtracting
     // 1 from the packet counter to compute the time at the start of that last completed packet.
     ULONG packetSize = m_ulDmaBufferSize / m_ulNotificationsPerBuffer;
-    if (packetSize == 0 || packetCounter < 0 ||
+    if (packetSize == 0 || packetCounter <= 0 ||
         static_cast<ULONGLONG>(packetCounter) >
             MAXULONGLONG / packetSize)
     {
         return STATUS_INTEGER_OVERFLOW;
     }
     ULONGLONG linearPositionOfAvailablePacket =
-        static_cast<ULONGLONG>(packetCounter) * packetSize;
+        AudioRouterCompletedPacketStart(static_cast<ULONGLONG>(packetCounter), packetSize);
     // Need to divide by (1000 * 10000 because m_ulDmaMovementRate is average bytes per sec
     if (hnsElapsedTimeCarryForward >
         MAXULONGLONG / m_ulDmaMovementRate)
@@ -996,6 +998,9 @@ NTSTATUS CMiniportWaveRTStream::SetWritePacket
 
     KIRQL oldIrql;
     KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
+    if (m_KsState == KSSTATE_RUN) {
+        UpdatePosition(KeQueryPerformanceCounter(NULL));
+    }
     // 1-based count of completed packets, 0-based packet number of current packet
     LONGLONG currentPacket = m_llPacketCounter;
     KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
@@ -1285,6 +1290,9 @@ NTSTATUS CMiniportWaveRTStream::SetState
             m_BridgeScratchFrames = 0;
             m_BridgeScratchFrameOffset = 0;
             m_llPacketCounter = 0;
+            m_llLastNotifiedPacketCounter = 0;
+            m_hnsElapsedTimeCarryForward = 0;
+            m_byteDisplacementCarryForward = 0;
             m_ullPlayPosition = 0;
             m_ullWritePosition = 0;
             m_ullLinearPosition = 0;
@@ -1323,20 +1331,8 @@ NTSTATUS CMiniportWaveRTStream::SetState
                     ExCancelTimer(m_pNotificationTimer, NULL);
                     KeFlushQueuedDpcs();
 
-                    // If pin is transitioning from RUN, save the time since last buffer completion event was sent
-                    // so if the pin goes to RUN state again we can send the buffer completion event at correct time.
-                    if (m_ullLastDPCTimeStamp > 0)
-                    {
-                        LARGE_INTEGER qpc;
-                        LARGE_INTEGER qpcFrequency;
-                        LONGLONG  hnsCurrentTime;
-
-                        qpc = KeQueryPerformanceCounter(&qpcFrequency);
-
-                        // Convert ticks to 100ns units.
-                        hnsCurrentTime = KSCONVERT_PERFORMANCE_TIME(m_ullPerformanceCounterFrequency.QuadPart, qpc);
-                        m_hnsDPCTimeCarryForward = hnsCurrentTime - m_ullLastDPCTimeStamp + m_hnsDPCTimeCarryForward;
-                    }
+                    // GetPositions below finalizes DMA. Packet cadence follows
+                    // its retained position through PAUSE, not a second clock.
                 }
             }
             // This call updates the linear buffer and presentation positions.
@@ -1352,7 +1348,7 @@ NTSTATUS CMiniportWaveRTStream::SetState
             // Start DMA
             LARGE_INTEGER ullPerfCounterTemp;
             ullPerfCounterTemp = KeQueryPerformanceCounter(&m_ullPerformanceCounterFrequency);
-            m_ullLastDPCTimeStamp = m_ullDmaTimeStamp = KSCONVERT_PERFORMANCE_TIME(m_ullPerformanceCounterFrequency.QuadPart, ullPerfCounterTemp);
+            m_ullDmaTimeStamp = KSCONVERT_PERFORMANCE_TIME(m_ullPerformanceCounterFrequency.QuadPart, ullPerfCounterTemp);
 
             break;
     }
@@ -1560,6 +1556,12 @@ VOID CMiniportWaveRTStream::UpdatePosition
     // so m_ullLinearPosition needs to be updated accordingly here
     //
     m_ullLinearPosition += ByteDisplacement;
+    const ULONGLONG completedPackets = AudioRouterCompletedPackets(
+        m_ullLinearPosition, m_ulDmaBufferSize, m_ulNotificationsPerBuffer);
+    // Saturate before the counter can wrap into a negative value. Queries
+    // and notifications use the same actual completed DMA packet count.
+    m_llPacketCounter = static_cast<LONGLONG>(min(
+        completedPackets, static_cast<ULONGLONG>(MAXLONGLONG)));
 
     // Update the DMA time stamp for the next call to GetPosition()
     //
@@ -1638,6 +1640,15 @@ ByteDisplacement - # of bytes to process.
     if (captureLeaseActive && !captureLeaseUsable) {
         activity.FormatMismatches = 1;
     }
+    const AudioRouterDmaWindow window = AudioRouterSurvivingDmaWindow(
+        m_ullLinearPosition, ByteDisplacement, m_ulDmaBufferSize);
+    bufferOffset = window.Offset;
+    ByteDisplacement = window.Bytes;
+    if (captureLeaseUsable && deviceFrameBytes != 0) {
+        // Older laps no longer exist. Count their missed audio without
+        // repeatedly overwriting DMA or consuming queued good blocks.
+        activity.UnderrunFrames += window.SkippedBytes / deviceFrameBytes;
+    }
 
     DOUBLE* captureBlocks[2] = { m_BridgeScratch, m_BridgePrefetch };
     bool captureSnapshotValid = true;
@@ -1677,8 +1688,7 @@ ByteDisplacement - # of bytes to process.
     };
     if (captureLeaseUsable && ByteDisplacement != 0) { prefetch(); }
 
-    // Normally this will loop no more than once for a single wrap, but if
-    // many bytes have been displaced then this may loops many times.
+    // The surviving window is at most one lap (two segments across wrap).
     while (ByteDisplacement > 0)
     {
         ULONG runWrite = min(ByteDisplacement, m_ulDmaBufferSize - bufferOffset);
@@ -2058,40 +2068,10 @@ TimerNotifyRT
         goto End;
     }
 
-    // Convert ticks to 100ns units.
-    LONGLONG  hnsCurrentTime = KSCONVERT_PERFORMANCE_TIME(_this->m_ullPerformanceCounterFrequency.QuadPart, qpc);
-
-    if (hnsCurrentTime < 0 ||
-        static_cast<ULONGLONG>(hnsCurrentTime) < _this->m_ullLastDPCTimeStamp)
-    {
-        goto End;
-    }
-
-    // Compare in 100 ns units so short packets do not collapse to zero
-    // milliseconds. Carry any timer overshoot into the next notification.
-
-    ULONGLONG elapsedHns = static_cast<ULONGLONG>(hnsCurrentTime) -
-        _this->m_ullLastDPCTimeStamp;
-    if (elapsedHns > MAXULONGLONG - _this->m_hnsDPCTimeCarryForward)
-    {
-        _this->m_ullLastDPCTimeStamp = static_cast<ULONGLONG>(hnsCurrentTime);
-        _this->m_hnsDPCTimeCarryForward = 0;
-        goto End;
-    }
-    elapsedHns += _this->m_hnsDPCTimeCarryForward;
-    if (elapsedHns >= _this->m_hnsNotificationInterval)
-    {
-        // Preserve timer overshoot so the periodic 1 ms DPC does not add
-        // cumulative drift to the requested packet cadence.
-        _this->m_hnsDPCTimeCarryForward = elapsedHns - _this->m_hnsNotificationInterval;
-        // Save the last time DPC ran at notification interval
-        _this->m_ullLastDPCTimeStamp = hnsCurrentTime;
-        bufferCompleted = TRUE;
-    }
-
     // Service both bridge directions each tick, including pending render
     // blocks when DMA displacement is zero. Notifications retain their cadence.
     _this->UpdatePosition(qpc);
+    bufferCompleted = _this->m_llPacketCounter > _this->m_llLastNotifiedPacketCounter;
 
     // Do not tell PortCls the final packet is complete while valid tail audio
     // is still private: STOP in response would legitimately discard that tail.
@@ -2102,22 +2082,6 @@ TimerNotifyRT
     if (!bufferCompleted && !_this->m_bEoSReceived)
     {
         goto End;
-    }
-
-    // Packet numbers are reported from a signed internal counter.  Stop this
-    // timer tick before the counter can wrap into a negative value; the packet
-    // query will otherwise reject the stream only after undefined arithmetic
-    // has already occurred here.
-    if (!_this->m_bEoSReceived &&
-        _this->m_llPacketCounter == MAXLONGLONG)
-    {
-        goto End;
-    }
-
-
-    if (!_this->m_bEoSReceived)
-    {
-        _this->m_llPacketCounter++;
     }
 
     if (_this->m_KsState != KSSTATE_RUN)
@@ -2157,6 +2121,9 @@ TimerNotifyRT
     if (!IsListEmpty(&_this->m_NotificationList) &&
         (bufferCompleted || _this->m_bLastBufferRendered))
     {
+        // One coalesced event is enough: PortCls resynchronizes from the
+        // completed-packet count. Position queries must not consume this event.
+        _this->m_llLastNotifiedPacketCounter = _this->m_llPacketCounter;
         PLIST_ENTRY leCurrent = _this->m_NotificationList.Flink;
         while (leCurrent != &_this->m_NotificationList)
         {

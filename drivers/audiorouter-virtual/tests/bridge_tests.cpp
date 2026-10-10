@@ -3,6 +3,7 @@
 #include "../Source/Inc/sampleconv.h"
 #include "../Source/Inc/capturequeue.h"
 #include "../Source/Inc/renderqueue.h"
+#include "../Source/Inc/streamtiming.h"
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -164,7 +165,37 @@ static void renderBurstChecks() {
     require(invalid.Capacity == 0, "missing lease invalidates queue");
 }
 
+static void packetClockChecks() {
+    const ULONG frameBytes = 8;
+    const ULONG packetBytes = 480 * frameBytes;
+    const ULONG bufferBytes = 2 * packetBytes;
+    require(AudioRouterCompletedPackets(0, bufferBytes, 2) == 0, "no completed packet at startup");
+    require(AudioRouterCompletedPackets(packetBytes - frameBytes, bufferBytes, 2) == 0, "partial packet not reported complete");
+    require(AudioRouterCompletedPackets(packetBytes, bufferBytes, 2) == 1, "first full packet completes once");
+    require(AudioRouterCompletedPacketStart(1, packetBytes) == 0, "first capture packet timestamp starts at byte zero");
+    require(AudioRouterCompletedPackets(163 * 48ULL * frameBytes, bufferBytes, 2) == 16, "163 ms delayed callback completes sixteen packets, not one");
+    require(AudioRouterCompletedPackets(895 * 48000ULL * frameBytes, bufferBytes, 2) == 89500, "895 s pause resynchronizes packet count in constant work");
+    const ULONGLONG wrappedPackets = 0x100000001ULL;
+    require(AudioRouterCompletedPackets(wrappedPackets * packetBytes, bufferBytes, 2) == wrappedPackets, "packet clock retains high word after ULONG wrap");
+    require(AudioRouterCompletedPacketStart(wrappedPackets, packetBytes) == 0x100000000ULL * packetBytes, "capture packet start remains correct after ULONG wrap");
+    require(AudioRouterCompletedPackets(123, 0, 2) == 0 && AudioRouterCompletedPackets(123, 12, 0) == 0, "unconfigured packet clock rejects division by zero");
+    const ULONG displacements[] = { 0, 8, packetBytes, bufferBytes, 163 * 48 * frameBytes, 895 * 48000 * frameBytes, ULONG_MAX };
+    const ULONGLONG positions[] = { 0, 8, bufferBytes - 8, ~0ULL };
+    for (ULONG displacement : displacements) {
+        for (ULONGLONG position : positions) {
+            const auto window = AudioRouterSurvivingDmaWindow(position, displacement, bufferBytes);
+            require(window.Bytes <= bufferBytes, "capture callback processes at most one physical DMA lap");
+            require(static_cast<ULONGLONG>(window.Bytes) + window.SkippedBytes == displacement, "skipped DMA bytes remain accounted as loss");
+            require((static_cast<ULONGLONG>(window.Offset) + window.Bytes) % bufferBytes ==
+                (position % bufferBytes + static_cast<ULONGLONG>(displacement)) % bufferBytes, "bounded DMA traversal preserves the full logical end position");
+            require(window.Offset < bufferBytes, "surviving DMA window stays within buffer at wrap");
+        }
+    }
+    require(AudioRouterSurvivingDmaWindow(1, ULONG_MAX, 0).Bytes == 0, "zero DMA size yields empty window");
+}
+
 int main() {
+    packetClockChecks();
     renderBurstChecks();
     const ULONG clockRates[] = { 44100, 48000, 96000 };
     const USHORT frameSizes[] = { 2, 4, 8, 12, 16, 24, 32 };

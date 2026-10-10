@@ -1655,7 +1655,8 @@ guest tone evidence is `20261009-174917-tone/tone.txt` in the archive.
 
 Next: do not repeat the unchanged long test. Review VM/host scheduling and
 diagnostic instrumentation, preserving WSL and leaving Hyper-V settings
-untouched. Source review of this trace found no proven driver defect:
+untouched. The initial review of this trace did not identify a driver defect
+(superseded by the packet-clock findings below):
 `WriteBytes`' capture-side queue holds at most two 480-frame blocks (20 ms at
 48 kHz), while `ReadBytes`' render-side queue is capped at four blocks (40 ms
 at 48 kHz); the shared bridge slot adds at most one block. A worker scheduling
@@ -1669,9 +1670,51 @@ time was 56.2 ms; the writer did not run out of packets. It read 29,960 blocks
 (14,380,800 frames) versus 30,000 expected for 300 seconds, a 40-block / 400-ms
 shortfall. That closely matches the 19,152-frame / 399-ms render overrun
 counter, confirming actual audio loss rather than a counter-only failure.
-No code change is justified from this evidence alone. Next: obtain ETW CPU,
+The initial conclusion that no code change was justified is superseded by
+the deeper packet-clock review below. Scheduling remains unproven. Obtain ETW CPU,
 context-switch, DPC/ISR and VirtualBox scheduling traces during a bounded run,
 or qualify on a host where VirtualBox uses native hardware virtualization.
 Keep the continuity gate failed; do not claim sustained runtime qualification
 or install the test driver on the host. Preserve the clean VM snapshot and
 unchanged driver package.
+
+### Packet-clock repair (2026-10-09, requested code review)
+
+Objective: repair demonstrated WaveRT accounting defects before another VM
+run; preserve WSL and host settings. Requirements VCAB-24/25/27/28 and VDEV-12.
+Prerequisites: clean working tree; previous guest evidence preserved in the
+archives above; WDK/MSVC build tools available. Host builds do not load a driver.
+
+Confirmed findings: DMA advances by full elapsed time while the notification
+callback increments the completed-packet count only once; position queries
+can consequently return an inconsistent count. Capture catch-up traverses
+unbounded DMA laps under a spinlock. GetReadPacket extrapolates the end rather
+than the first sample of the latest completed packet. STOP retains fractional
+time/byte carry from the previous stream.
+
+Ordered tasks: (1) derive packet count from DMA position, separately retain
+the last notified count, correct capture timestamp and STOP reset; (2) bound
+capture catch-up to one surviving DMA lap and count skipped frames;
+(3) regress production arithmetic for delayed callbacks, wrap and restart;
+(4) add per-progress-interval worker gap diagnostics; (5) run host-safe C++
+units, WDK x64/ARM64 acceptance, Rust example tests/Clippy/format and docs;
+(6) prepare a checksummed VM bundle and one bounded test procedure.
+
+Validation: arithmetic and source wiring are checked on the host; only the
+guest can establish install, endpoints and continuity. Do not increase queues,
+ignore losses, relax zero-counter acceptance, or claim a delayed callback can
+recover overwritten audio. Rollback: restore the known clean test-signing VM
+snapshot and retain the previous bundle. Next action: implement these repairs,
+then document measured host results and the precise next guest command.
+
+Implementation/checks completed: packet clock and separate notification state,
+first-sample timestamp, STOP fractional reset, bounded capture traversal and
+interval worker diagnostics. C++ host units: 569 checks; Rust tone example:
+15 tests; WDK x64 and ARM64 acceptance: pass; workspace/shell Clippy and fmt:
+pass. Documentation validation: 138 Markdown files / 746 local links; retest
+script parses in Windows PowerShell and refuses host execution. Details and limitations:
+[review evidence](evidence/2026-10-09-m03-packet-clock-review.md).
+Next: build the identified candidate, then follow the
+[bounded VM procedure](../../operations/virtual-cable-packet-clock-retest.md).
+Original runtime failure remains unverified until the guest run; do not mark
+continuity or measured kernel latency as passed from host-safe checks.

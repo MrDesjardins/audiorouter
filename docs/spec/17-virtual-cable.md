@@ -346,8 +346,18 @@ device in `Source/Main/adapter.cpp` and bridge helpers in
   cables therefore share one clock (QPC), which lets the engine skip drift
   correction between two cables (7.3).
 - **Timer.** Notification events use a high-resolution timer
-  (`ExAllocateTimer` with `EX_TIMER_HIGH_RESOLUTION`) at the stream's period;
+  (`ExAllocateTimer` with `EX_TIMER_HIGH_RESOLUTION`). The implementation
+  services transport every 1 ms and signals on completed packet boundaries;
   no timer runs for a stopped or closed stream, so idle cables cost nothing.
+- **Packet clock (2026-10-09 repair).** Completed packet count is derived
+  from absolute DMA progress, including position queries and delayed callbacks,
+  rather than timer invocation count. Notifications retain a separate last
+  signaled count. Capture timestamps identify the first sample of the latest
+  completed packet. STOP resets position, counts and fractional carries;
+  PAUSE retains progress while RUN excludes elapsed pause time. Capture and
+  render catch-up process at most the surviving DMA lap and count lost frames,
+  never loop over historical laps at DISPATCH_LEVEL. Runtime continuity and
+  DPC-duration gates remain required.
 - **Low latency.** Advertise packet-size constraints
   (`KSAUDIO_PACKETSIZE_CONSTRAINTS2`; take the exact property and pin
   wiring from Microsoft's low-latency audio documentation and the WDK SysVAD

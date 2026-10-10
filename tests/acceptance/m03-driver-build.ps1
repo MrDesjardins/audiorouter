@@ -710,9 +710,21 @@ if (-not $stream.Contains('AudioRouterFrameAlignedByteCount(') -or
     -not $stream.Contains('byteNumerator % frameDenominator')) {
     throw 'DMA updates must preserve fractional carry and never advance by partial sample frames'
 }
-if (-not $stream.Contains('static_cast<ULONGLONG>(hnsCurrentTime) < _this->m_ullLastDPCTimeStamp') -or
-    $stream.Contains('static_cast<ULONGLONG>(qpc.QuadPart) < _this->m_ullLastDPCTimeStamp')) {
-    throw 'WaveRT timer must compare timestamps in the same converted units'
+if ($stream.Contains('m_ullLastDPCTimeStamp') -or $stream.Contains('m_hnsDPCTimeCarryForward') -or
+    $timerSource.Contains('m_llPacketCounter++') -or
+    -not $stream.Contains('AudioRouterCompletedPackets(') -or
+    -not $timerSource.Contains('m_llPacketCounter > _this->m_llLastNotifiedPacketCounter')) {
+    throw 'WaveRT packets and notifications must follow actual DMA progress, never a second timer clock'
+}
+if (-not $stream.Contains('AudioRouterSurvivingDmaWindow(') -or
+    -not $stream.Contains('activity.UnderrunFrames += window.SkippedBytes / deviceFrameBytes') -or
+    -not $stream.Contains('AudioRouterCompletedPacketStart(')) {
+    throw 'capture catch-up must be bounded and counted; capture timestamps must identify the first sample'
+}
+$stopStart = $stream.IndexOf('case KSSTATE_STOP:')
+$stopSource = $stream.Substring($stopStart, $stream.IndexOf('case KSSTATE_ACQUIRE:', $stopStart) - $stopStart)
+foreach ($required in @('m_llLastNotifiedPacketCounter = 0', 'm_hnsElapsedTimeCarryForward = 0', 'm_byteDisplacementCarryForward = 0')) {
+    if (-not $stopSource.Contains($required)) { throw "STOP must reset the packet clock: $required" }
 }
 foreach ($required in @('generation != ExpectedGeneration', 'AudioRouterRenderSlotAvailable(nextSequence, readerSequence)',
         'Activity->OverrunFrames')) {
@@ -763,15 +775,14 @@ foreach ($required in @(
     }
 }
 foreach ($required in @(
-        'm_llPacketCounter == MAXLONGLONG',
+        'completedPackets, static_cast<ULONGLONG>(MAXLONGLONG)',
         'before the counter can wrap')) {
     if (-not $stream.Contains($required)) {
         throw "WaveRT packet counter overflow guard is missing: $required"
     }
 }
-if (-not $stream.Contains('static_cast<ULONGLONG>(RequestedSize_) * 10000000') -or
-    -not $stream.Contains('elapsedHns >= _this->m_hnsNotificationInterval')) {
-    throw 'WaveRT notification cadence must use 100 ns precision without millisecond truncation'
+if (-not $stream.Contains('static_cast<ULONGLONG>(RequestedSize_) * 10000000')) {
+    throw 'WaveRT notification setup must preserve sub-millisecond period precision'
 }
 if (-not $stream.Contains('if (_this->m_pMiniport == NULL)')) {
     throw 'WaveRT timer callback must guard its miniport owner'

@@ -22,6 +22,10 @@ and updating), then 15–60 minutes per test session.
 
 ## Contents
 
+For the current 2026-10-09 candidate, follow the
+[packet-clock repair retest](virtual-cable-packet-clock-retest.md).
+It has complete copy-paste commands and collects evidence automatically.
+
 - [Part 0: Words used in this guide](#part-0-words-used-in-this-guide)
 - [Part 1: Prepare your PC (once)](#part-1-prepare-your-pc-once)
 - [Part 2: Create the VM (once)](#part-2-create-the-vm-once)

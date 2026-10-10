@@ -67,9 +67,13 @@ loss: the recorded WAV is short by 40 ten-millisecond blocks, closely matching
 the render-overrun total. The driver's bounded queues provide only tens of
 milliseconds of headroom; absorbing a 163 ms pause would require comparable
 buffer headroom and transient latency, conflicting with the virtual-cable
-latency target. No safe code fix is established by this run. Next: capture
-scheduling evidence (ETW) or qualify on a host where VirtualBox uses native
-hardware virtualization. No test driver has been installed on the host.
+latency target. The deeper review subsequently found packet-count drift,
+unbounded capture catch-up, a one-packet timestamp error and fractional carry
+retained across STOP. These are repaired in the
+[packet-clock review](evidence/2026-10-09-m03-packet-clock-review.md).
+Host regressions/builds pass; fresh VM continuity is still pending. Next:
+use the [bounded retest procedure](../../operations/virtual-cable-packet-clock-retest.md).
+No test driver has been installed on the host; WSL and Hyper-V remain enabled.
 
 AudioRouter will ship its own signed virtual cable so users do not need
 VB-Cable; VB-Cable/Voicemeeter stay supported. Lowest-cost signing

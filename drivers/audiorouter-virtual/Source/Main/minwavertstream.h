@@ -17,6 +17,7 @@ Abstract:
 #include "bridgeio.h"
 #include "capturequeue.h"
 #include "renderqueue.h"
+#include "streamtiming.h"
 
 //
 // Structure to store notifications events in a protected list
@@ -102,8 +103,7 @@ protected:
     ULONGLONG                   m_ullDmaTimeStamp;
     LARGE_INTEGER               m_ullPerformanceCounterFrequency;
     ULONGLONG                   m_hnsElapsedTimeCarryForward;
-    ULONGLONG                   m_ullLastDPCTimeStamp;
-    ULONGLONG                   m_hnsDPCTimeCarryForward;
+    LONGLONG                    m_llLastNotifiedPacketCounter;
     ULONG                       m_byteDisplacementCarryForward;
     ULONG                       m_ulDmaMovementRate;
     BOOL                        m_bLfxEnabled;

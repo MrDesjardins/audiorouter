@@ -89,6 +89,7 @@ foreach ($name in 'manage.ps1', 'package-tools.ps1') {
 }
 Copy-Item -LiteralPath (Join-Path $workspace 'tools\vm\vm-checks.ps1') -Destination $Share
 Copy-Item -LiteralPath (Join-Path $workspace 'tools\vm\retry-smoke.ps1') -Destination $Share
+Copy-Item -LiteralPath (Join-Path $workspace 'tools\vm\run-packet-clock-review.ps1') -Destination $Share
 
 Step '6/6 Manifest'
 $commit = (& git -C $workspace rev-parse HEAD).Trim()

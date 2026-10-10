@@ -37,6 +37,8 @@ pub(super) struct Shared {
     pub render_gaps: AtomicU64,
     pub capture_gap_us: AtomicU64,
     pub render_gap_us: AtomicU64,
+    pub capture_interval_gap_us: AtomicU64,
+    pub render_interval_gap_us: AtomicU64,
     pub disk_us: AtomicU64,
     pub disk_finish_us: AtomicU64,
     pub failed: AtomicBool,
@@ -58,6 +60,8 @@ impl Shared {
             render_gaps: AtomicU64::new(0),
             capture_gap_us: AtomicU64::new(0),
             render_gap_us: AtomicU64::new(0),
+            capture_interval_gap_us: AtomicU64::new(0),
+            render_interval_gap_us: AtomicU64::new(0),
             disk_us: AtomicU64::new(0),
             disk_finish_us: AtomicU64::new(0),
             failed: AtomicBool::new(false),
@@ -181,6 +185,7 @@ pub(super) fn capture(
         let stopping = state.stop.load(Ordering::Acquire);
         let now = Instant::now();
         observe_max(&state.capture_gap_us, now.duration_since(last));
+        observe_max(&state.capture_interval_gap_us, now.duration_since(last));
         last = now;
         if !stalled && start.elapsed() >= run_for / 2 {
             std::thread::sleep(Duration::from_millis(u64::from(options.stall_ms)));
@@ -244,6 +249,7 @@ pub(super) fn render(
         let now = Instant::now();
         let poll_gap = now.duration_since(last);
         observe_max(&state.render_gap_us, poll_gap);
+        observe_max(&state.render_interval_gap_us, poll_gap);
         last = now;
         if !stalled && start.elapsed() >= Duration::from_secs(u64::from(options.seconds)) / 2 {
             std::thread::sleep(Duration::from_millis(u64::from(options.stall_ms)));
@@ -553,6 +559,24 @@ mod tests {
             assert!(sequence > 20);
         });
         assert!(state.capture_gap_us.load(Ordering::Relaxed) >= 120_000);
+    }
+
+    #[test]
+    fn interval_gap_report_resets_without_erasing_lifetime_peak() {
+        let state = Shared::new(960, 2);
+        observe_max(&state.capture_gap_us, Duration::from_millis(163));
+        observe_max(&state.capture_interval_gap_us, Duration::from_millis(163));
+        assert_eq!(
+            state.capture_interval_gap_us.swap(0, Ordering::Relaxed),
+            163_000
+        );
+        observe_max(&state.capture_gap_us, Duration::from_millis(2));
+        observe_max(&state.capture_interval_gap_us, Duration::from_millis(2));
+        assert_eq!(
+            state.capture_interval_gap_us.swap(0, Ordering::Relaxed),
+            2_000
+        );
+        assert_eq!(state.capture_gap_us.load(Ordering::Relaxed), 163_000);
     }
 
     #[test]

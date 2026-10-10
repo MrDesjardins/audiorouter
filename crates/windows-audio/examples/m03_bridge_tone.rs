@@ -493,11 +493,13 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
                     if progress.elapsed() >= Duration::from_secs(1) {
                         let before = Instant::now();
                         println!(
-                            "progress {} ms: written={} read={} ack={} capture={:?} render={:?}",
+                            "progress {} ms: written={} read={} ack={} interval_capture_gap_us={} interval_render_gap_us={} capture={:?} render={:?}",
                             start.elapsed().as_millis(),
                             state.capture_blocks.load(Ordering::Acquire),
                             state.render_blocks.load(Ordering::Acquire),
                             capture_controller.as_ref().unwrap().consumer_sequence(),
+                            state.capture_interval_gap_us.swap(0, Ordering::Relaxed),
+                            state.render_interval_gap_us.swap(0, Ordering::Relaxed),
                             capture_controller.as_ref().unwrap().counters(),
                             render_controller.as_ref().unwrap().counters()
                         );
