@@ -127,9 +127,11 @@ built and verified. VM 2026-10-10: two clean smokes, install/status and the
 time, waveforms exact). The 300-second direct bundle (`ed47836c`) is built
 and host-verified. Its run failed from VM-wide stalls (first ~63 s plus one
 at 121 s; clean from 121 s to 300 s; driver counted every loss). Next action:
-a traced 300-second run (bundle `5b386608`; the saved 2026-10-09 trace
-already shows all-CPU guest silences at its losses), then sustained
-qualification on a host without NEM; VCAB-24/25 remain open.
+the traced 300-second run attributed its losses to late timer delivery
+during guest Defender/Windows Update bursts under NEM (repair record). This
+VM cannot qualify VCAB-24. Next: user decision on quieting the guest and on a
+bare-metal or native-VT-x host for sustained runs; VCAB-25 latency work can
+proceed meanwhile.
 Do not rerun r3 unchanged.
 
 Ship AudioRouter-owned virtual cables (up to 8, Cable A–H; 2 enabled by

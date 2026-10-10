@@ -554,3 +554,42 @@ inside the VM (driver already installed; Media Player and Listen off):
 
 Host review: `m03-scheduler-trace --silences` on the new ETL, aligned with
 the tone progress counters and the driver's `last_qpc_time`.
+
+## Traced 300-second run — 2026-10-10 (failed; cause attributed)
+
+Run `direct-5d7337e83440472a854f0b909598a444`, archive
+`C:\VMs\ar-share\diagnostics-20261010-direct-audio-300s-trace\direct-5d7337e83440472a854f0b909598a444.zip`,
+SHA-256 `4F0A2110C17A287410AF8B8CC65699A4D86F785C4192A4C1D303B4AB52FE0D64`,
+extracted to `target/direct-300-trace-5d7337e8`. Trace saved by the owned WPR
+instance (144,703,488 bytes; 3,578,226 events over 300.996 s; none lost).
+
+- Counters: capture underrun 4,512; render underrun 18,720, overrun 9,648;
+  other error counters 0. Packet writes accepted 29,940, late 50, overrun 32.
+  56 Cable B in-signal discontinuity packets; both analyses failed.
+- Timeline: clean from ~2 s to 209 s (one 240-frame blip at 2 s). Losses
+  cluster at 257–269 s plus small events at 210, 228 and 291 s; worker gaps
+  there 16–48 ms.
+- All-CPU silences (`--silences`, 10 ms): five, longest inside the run
+  19.1 ms (37.8 ms falls after lease close during trace stop). This run's
+  losses are therefore not mainly whole-guest freezes.
+- CPU use (`busy.cs`, context switches): 100–200 s window 0.6–5.9 % per CPU,
+  only the audio processes; 257–269 s window 38–47 % per CPU. Threads mapped
+  through `tracerpt` process/thread records: MsMpEng.exe (Microsoft Defender)
+  ≈41 % of one CPU, MoUsoCoreWorker.exe (Windows Update orchestrator) ≈17 %,
+  svchost netsvcs/UserManager/RPCSS.
+- Thread delays (`delays.cs`): in that window every 1 ms audio thread — tone
+  workers, the recorder and audiodg's audio threads — waited ≈47 ms **before
+  becoming ready**, simultaneously, then ran within 1–5 ms. In the clean
+  window the same split was ≈6–14 ms / ≤2.3 ms. The audio threads were not
+  starved by Defender for CPU (they are higher priority); their timer
+  expirations were delivered late while the guest was busy.
+
+Conclusion: both loss mechanisms observed in this VM sit below the guest
+scheduler — whole-guest execution gaps (2026-10-09 trace) and late timer
+delivery to every thread during guest background bursts (this trace) —
+consistent with VirtualBox running through the Windows Hypervisor Platform
+(NEM). The driver counted all losses; nothing implicates its data path.
+This VM cannot qualify VCAB-24 sustained continuity. Options for the user:
+quiet the guest (pause Windows Update, Defender exclusions or a test-only
+policy) for diagnostic runs, and qualify sustained continuity on bare metal
+or on a host where VirtualBox uses native VT-x.
