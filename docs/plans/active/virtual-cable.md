@@ -124,8 +124,9 @@ record. Fresh-context kernel review: no blocker; its findings are fixed or
 documented (repair record). Candidate `492d8ca8` and r4 direct bundle are
 built and verified. VM 2026-10-10: two clean smokes, install/status and the
 30-second direct run passed (all error counters 0, 3,000 packets accepted on
-time, waveforms exact). Next action: a bounded longer direct run (5 minutes)
-to revisit the earlier long-run losses; VCAB-24/25 remain open.
+time, waveforms exact). The 300-second direct bundle (`ed47836c`) is built
+and host-verified. Next action: user runs it on the installed driver (command
+in the repair record); VCAB-24/25 remain open.
 Do not rerun r3 unchanged.
 
 Ship AudioRouter-owned virtual cables (up to 8, Cable A–H; 2 enabled by

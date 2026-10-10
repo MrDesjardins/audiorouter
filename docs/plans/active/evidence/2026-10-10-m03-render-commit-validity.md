@@ -445,3 +445,38 @@ late-packet frequency remains unknown because that driver had no counters.
 Not established: sustained continuity (VCAB-24: one hour, eight cables),
 latency (VCAB-25), the shared-stall investigation, downstream HDA speaker
 scratching. A 30-second pass is not a stability claim.
+
+## Bounded 300-second direct run preparation — 2026-10-10
+
+Commit `ed47836c`: the recorder, analyzer and `run-direct-audio.ps1` accept
+exactly 30 (default) or 300 seconds. Preallocated sample storage and worker
+deadline are the length plus 70 s (370 s ≈ 142 MB for 300 s on the 8 GB VM),
+packet metadata covers 128-frame packets over that bound, the controller
+watchdog is the length plus 60 s, the analyzer's WAV bound matches the
+recorder storage and its duration gate is the requested length ±0.2 s. The
+30-second behavior is unchanged.
+
+Host checks: example unit tests 14 passed (duration parsing, storage bounds,
+gate scaling); direct-audio orchestration 139 passed including a 300-second
+pass case (`target/direct-audio-300-acceptance.log`); speaker loopback 82
+passed; fmt and workspace Clippy clean. The real static analyzer on synthetic
+float32 WAVs (`target/analyze-300-host-62f16652`): clean 300 s passes in about
+1 s; one dropped 480-frame quantum at 200 s fails (phase jump 2.508 rad); a
+300-second file under the 30-second gate is refused by the storage bound.
+
+Bundle `C:\VMs\ar-share\diagnostics-20261010-direct-audio-300s`: source
+`ed47836c`, driver `492d8ca8` (SYS SHA-256 unchanged), 35 entries, manifest
+SHA-256 `3F8AC51ABAAA28F4CF39D6FA1C37FD5B28743D33FA575E438C9D8BCA1EDE711A`.
+It runs on the already installed driver; its status check refuses to start
+audio otherwise. Command (inside the VM, Media Player and Listen off):
+
+```powershell
+& {
+    robocopy.exe 'Z:\diagnostics-20261010-direct-audio-300s' 'C:\ar\diagnostics-20261010-direct-audio-300s' /E /R:1 /W:1 /XF direct-*.zip | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw 'Copy failed. Stop here.' }
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-direct-audio-300s\run-direct-audio.ps1' -Seconds 300
+    if ($LASTEXITCODE -ne 0) { throw 'Direct audio test failed. Evidence was preserved; send the output.' }
+}
+```
+
+Still not VCAB-24 (one hour, eight cables) or VCAB-25 latency evidence.
