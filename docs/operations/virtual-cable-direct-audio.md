@@ -1,6 +1,6 @@
 # Automatic direct audio diagnosis
 
-**2026-10-10 r4 (current):** slot-provenance candidate `492d8ca8`
+**2026-10-10 r4 (passed; do not repeat unchanged):** slot-provenance candidate `492d8ca8`
 ([repair record](../plans/active/evidence/2026-10-10-m03-render-commit-validity.md#slot-provenance-candidate-and-guest-steps-2026-10-10)).
 After a first clean smoke from `03-test-signing-ready-20261007` (command in
 the record), power off, restore the same checkpoint, boot, and paste this in

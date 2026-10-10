@@ -410,3 +410,38 @@ Expected new output: `render-source packet writes (cable-a): NativeBridgePacketC
 next to the counters. Interpretation: late or overrun counts show Windows'
 submission timing; render underrun should now be only frames consumed before
 a late write. Gates are unchanged: zero error counters and clean waveforms.
+
+## Slot-provenance VM results — 2026-10-10 (passed)
+
+Candidate `492d8ca8` (`builtAt=2026-10-10T18:07:59.3587015Z`), AR-DriverTest
+restored from `03-test-signing-ready-20261007` before each smoke.
+
+| Run | Result | Archive (host `C:\VMs\ar-share`), SHA-256 |
+| --- | --- | --- |
+| Smoke 1 (guest `20261010-111159`) | Preflight 15/15; A1/A2/A3/A14 pass; four endpoints; no restart or default change; baselines byte-identical | `evidence-20261010-111302.zip`, `765038344BF3AB500B2E634063C48271961E2CAA2C99D63D563C11F5E77AAE70` |
+| Smoke 2 (after a second restore) | Preflight 15/15; smoke pass; collect 2/2 | `evidence-20261010-111704.zip`, `2BEBA62660C9C21A9FC10A6BE21252662CBB3967360F1DC3EB32CD49495CA042` |
+| Install + status | Install 3/3 (idempotent); status: installed, protocol 1.1, 0.1.0.0; four endpoints 60/60 formats, 128/480/480 periods | `evidence-20261010-111722.zip`, `5F59E0C5A3B9FC0E0F95A5E02EE1C3E7E7F89ECCCCE4C7A505D9E9FED4D61B64` |
+| Direct audio r4, 30 s, Listen off | All codes 0; diagnostic passed | `diagnostics-20261010-direct-audio-r4\direct-c5b3caa3b6314319a4882732a5b6dfb0.zip`, `4270F91DC1CEFF54CC1EA83378CDC096DBB95361F404BAAD1941FFE42451BEA9` |
+
+Direct r4 details (extracted to `target/direct-r4-c5b3caa3`):
+
+- Counters: every error counter 0 on both leases (capture-sink Cable B and
+  render-source Cable A).
+- Packet writes (Cable A): accepted 3,000, late 0, overrun 0. Packet mode is
+  confirmed active; Windows submitted every packet on time in this run.
+- Analyzer: Cable A 440/660 Hz and Cable B 997/47 Hz over 29.97/29.99 s, minimum
+  amplitude 0.2500, residual 0.000000, no phase jump; duration gates passed.
+- Independent frame scan (session scratch `wav.cs`): Cable A 1,439,520 frames
+  with no zero run and no phase break; Cable B has no phase break and one zero
+  run, the 166,417-frame silence before the tone starts at file frame 0 (the
+  analyzer excludes it from the fit).
+- Scheduling: maximum pump gaps 6.1 ms, maximum control loop gap 9.2 ms
+  (r3: ~460 ms). 2,999 render and 3,002 capture blocks.
+
+Interpretation: the candidate removes the r3 regression and keeps the
+stale-replay protection; this run had no late packets and no stalls, so it does
+not exercise late-write handling in the VM (the offline model does). r3's
+late-packet frequency remains unknown because that driver had no counters.
+Not established: sustained continuity (VCAB-24: one hour, eight cables),
+latency (VCAB-25), the shared-stall investigation, downstream HDA speaker
+scratching. A 30-second pass is not a stability claim.

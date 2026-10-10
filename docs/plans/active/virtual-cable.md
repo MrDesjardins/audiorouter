@@ -4,7 +4,8 @@
 [detailed handoff](virtual-cable-agent-handoff.md). The 2026-10-10 candidate is
 prepared; two clean smokes and install/status passed; the r3 direct audio
 run failed (packet-validity silence regression); the slot-provenance
-candidate `492d8ca8` is ready for its VM run (see Objective). Older dated
+candidate `492d8ca8` passed its smokes and 30-second direct run (see
+Objective). Older dated
 next-action notes below are historical when superseded by that handoff.
 
 Updated 2026-10-09. The driver is installed only in AR-DriverTest. Smoke,
@@ -121,9 +122,10 @@ plays, stale laps never replay) plus `SetWritePacket` outcome counters
 model, x64/ARM64 WDK acceptance, Rust tests/Clippy) is in the repair
 record. Fresh-context kernel review: no blocker; its findings are fixed or
 documented (repair record). Candidate `492d8ca8` and r4 direct bundle are
-built and verified. Next action: user runs the first clean smoke, then the
-combined second smoke/install/status/direct-audio block from the direct
-audio runbook; review its packet-write counters and recordings.
+built and verified. VM 2026-10-10: two clean smokes, install/status and the
+30-second direct run passed (all error counters 0, 3,000 packets accepted on
+time, waveforms exact). Next action: a bounded longer direct run (5 minutes)
+to revisit the earlier long-run losses; VCAB-24/25 remain open.
 Do not rerun r3 unchanged.
 
 Ship AudioRouter-owned virtual cables (up to 8, Cable A–H; 2 enabled by
