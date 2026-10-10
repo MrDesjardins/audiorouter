@@ -641,3 +641,15 @@ add a 300-second audio phase before reviewing real pair clocks/recordings.
 The [step-by-step runbook](../../../operations/virtual-cable-paired-trace.md)
 keeps host/guest commands distinct. VCAB-24/27 and other gates remain open.
 Rollback omits the optional probe scripts; there are no setting changes.
+
+Published copy-only artifact:
+`C:\VMs\ar-share\diagnostics-20261010-paired-probe`, clean source
+`88f6e808d5f802cd73a1b794f418dc15002eab1a`, prepared
+`2026-10-10 03:44:25Z`. All **35** published manifest hashes independently
+verify; all **32** base files, including all 16 driver files and tone executable,
+are byte-identical to the verified scheduling-trace-r2 bundle. Three new probe
+scripts are the only bundle additions. MANIFEST SHA256
+`2852AEA2A4DA59F43F74869FF45BC4B692A432B62E6C696862838D7F8C140386`.
+No dependency build/repair or Windows/VM setting changed. Next user step remains
+HostProbe in Administrator PowerShell on the main PC; no paired/audio success
+is claimed. Real host recording was not bypassed after the administrator refusal.

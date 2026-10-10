@@ -1972,3 +1972,9 @@ Next: commit/push, prepare the source-identified copy-only share update and
 independently verify it, then user runs HostProbe in Administrator PowerShell.
 Inspect its saved event coverage/loss before any paired probe. No audio test
 is requested yet. Exact procedure: virtual-cable-paired-trace runbook.
+
+Copy-only share bundle published from clean `88f6e808`, prepared 03:44:25Z:
+`C:\VMs\ar-share\diagnostics-20261010-paired-probe`. Independent verification
+passes all 35 hashes; all 32 base files unchanged. Manifest identity is in the
+review record. Next user action: HostProbe only in Administrator PowerShell
+on the main PC; review the local archive's coverage/loss before PairProbe.
