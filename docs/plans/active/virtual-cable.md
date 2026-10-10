@@ -1739,3 +1739,11 @@ and collection all pass. Details are in the packet-clock review evidence.
 Next: 30-second tone in the same installed guest session, with Cable A Input
 loop playback and Cable B Output listening already active; 300 seconds only
 after the short run passes. No new continuity result yet.
+
+The r2 30-second tone now passes, independently reviewed in archive
+`evidence-20261009-183059.zip`: all driver error counters and harness sequence
+gaps zero; exactly 30 seconds recorded with a valid WAV header/length.
+Maximum worker gaps were 7.523 ms capture / 7.467 ms render. Next action:
+300-second Tone phase in the same guest session with loop playback/listening
+kept active. This short result does not close the sustained, eight-cable,
+waveform, DPC-duration or hardware latency gates.

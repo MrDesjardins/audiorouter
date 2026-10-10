@@ -124,3 +124,20 @@ and report 128-frame minimum period. This is not hardware latency evidence.
 Next: keep this guest session running, loop Media Player into Cable A Input,
 listen to Cable B Output through the VM speakers, and run the 30-second tone
 phase. Sustained continuity remains pending.
+
+## Guest 30-second tone evidence — 2026-10-09 18:30 local
+
+User ran the r2 Tone phase for 30 seconds. Archive
+`C:\VMs\ar-share\evidence-20261009-183059.zip`, SHA256
+`27BB85E54EA9F211E3E6DD41B444BF15D07E444068BDB92CC43FA72BBF92629C`,
+was independently verified on the host. Archived tone summary passes all
+four checks: tool exit 0, complete final reports, all five error counters
+zero in both directions, recording written. Harness sequence gaps: zero.
+Render recording: exactly 3,000 blocks / 1,440,000 frames / 30 seconds,
+48 kHz stereo float32; RIFF/WAVE header and data/file lengths verified.
+Maximum worker gaps: capture 7,523 us / render 7,467 us; WAV append 2,425 us,
+control heartbeat 183 us, report 356 us, lease close 57 us. These are harness
+timings, not kernel DPC or hardware latency measurements. No waveform
+discontinuity analysis or long-run qualification is claimed from this check.
+Next: keep the same loop/listener active and run the bounded 300-second Tone
+phase. Preserve zero-counter and zero-sequence-gap acceptance.
