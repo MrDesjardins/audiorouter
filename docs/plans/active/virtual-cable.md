@@ -1897,3 +1897,45 @@ GeneralProfile feature and audio-loss cause remain unidentified. Full command,
 counts and limitations are in the review record. Next: one 300-second traced
 Tone in the same session/bundle with loop/listener active. Preserve WSL/Hyper-V,
 the zero-error gate and all failed-run evidence; no longer or stall test yet.
+
+### 2026-10-09 20:11: five-minute scheduling trace collected
+
+Archive `evidence-20261009-201122.zip` independently matches SHA256
+`16A48B2590608BEBC512213FCE092784BF9DCB231E280F28A487C162E01763C2`.
+Native process finishes in 300.1581863 s; capture underrun 7,056 frames,
+render overrun 14,832. Trace save succeeds and decodes 3,420,594 events with
+zero lost. The gate still fails. Review of version-5 context-switch common
+fields using Microsoft's parser layout shows long before-ready waits, not
+long runnable-queue delays at the maximum worker gap. Largest capture/render
+off-CPU intervals 35.6225/35.7156 ms; ready-to-run 30.2/161 us, priority 24.
+Two event-silent intervals across recorded live scheduler/DPC/ISR events
+(28.443 and 35.2318 ms) coincide with the first and largest loss windows.
+Full guest-versus-host attribution is not proven. Do not modify buffers,
+counters, driver timer behavior or WSL based on this alone.
+
+Next ordered tasks (VCAB-24/27 diagnostics): retain an offline-only version-5
+context-switch reader in source so analysis is reproducible, check its length
+guards and compare both raw/converted event counts to tracerpt; record exact
+thread/timer and WAV findings; decide what paired host/guest timing evidence
+is needed without repeating the unchanged guest-only test. No audio/driver
+implementation change is justified yet. Rollback: remove the diagnostic reader;
+it never creates/controls tracing sessions or accesses a driver.
+
+Offline reader and review complete: MSVC x64 `/W4 /WX` build, eight prefix/
+length checks, actual ETL decoding in converted and raw modes, and existing
+output refusal pass. Both decodes match tracerpt's 1,717,691 context switches
+and 1,232,133 ready events, with zero rejected/lost. WAV parses as 48-kHz stereo
+float, 14,384,640 frames (299.68 s). Largest individual decoded DPC is 2.754 ms;
+ISR 2.317 ms. These do not establish the cause of the much longer waits.
+Pinned Rust sleep uses a high-resolution waitable timer when available;
+fallback use and timer occlusion are not proven. No driver/audio bytes changed.
+
+Next task: design paired host/guest timing collection to distinguish delayed
+guest timer delivery from host/VirtualBox execution delay. Prerequisites:
+read-only recorder availability/ownership checks, explicit clock alignment,
+bounded duration and cleanup, host trace privacy/size limits, short start/save
+probe before attended audio. Preserve WSL/Hyper-V and existing evidence.
+Do not start another unchanged guest-only run, install host drivers/tools,
+change host features, waive counters, or claim VCAB-24/27 closed. User can stop
+loop/listener between measurements. Full timings and verification commands are
+in the packet-clock review; diagnostic reader rollback removes only its source.

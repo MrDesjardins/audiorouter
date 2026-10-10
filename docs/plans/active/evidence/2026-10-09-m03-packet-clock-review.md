@@ -440,3 +440,148 @@ mode work with this profile. Next: one bounded 300-second traced Tone using
 the same r2 diagnostic bundle, installed driver and loop/listener. Inspect
 audio timings/loss alongside the scheduler trace; no longer/stall run yet.
 VCAB-24 sustained continuity and other hardware/signing gates remain open.
+
+## Five-minute guest scheduling analysis — 2026-10-09 20:11 local
+
+Archive `C:\VMs\ar-share\evidence-20261009-201122.zip` independently matches
+SHA256 `16A48B2590608BEBC512213FCE092784BF9DCB231E280F28A487C162E01763C2`.
+Affected driver source remains clean `97b393d5e25cd0e114bf0a8078627b14ab97b13b`;
+native tone SHA256 remains
+`A0393BCEA4DBA6277DEED02977C393CBFA1DE5AAE909658E054C0D7550157CBD`.
+No new driver/audio repair or guest test was performed during this review.
+
+### Process, recording and counters
+
+- Native PID 3712 exits 0 after **300.1581863 s**, no watchdog timeout.
+  Leases stop at 300,001 ms. Acceptance still fails: capture underrun
+  **7,056 frames / 147 ms**, render overrun **14,832 frames / 309 ms**.
+  Other driver counters and harness render sequence gaps are zero.
+- Maximum worker gaps: capture **35,662 us**, render **35,857 us**;
+  control gap **40,879 us**. Maximum control heartbeat 383 us, snapshot
+  174 us, lease close 30 us. WAV append 13,852 us; finish 590 us. The writer
+  runs on a separate thread; these values do not explain the coincident
+  before-ready worker waits by themselves.
+- Header inspection confirms playable-format RIFF/WAVE, float tag 3,
+  stereo, 48,000 Hz, 32-bit, data 115,077,120 bytes, file 115,077,164 bytes.
+  Recorded **14,384,640 frames / 299.68 s**, about 320 ms short. That is close
+  to the 309-ms render loss plus boundary/startup time, but is not waveform
+  continuity qualification. Private audio is excluded from Git.
+- Counter increases occur near the 2,007-ms snapshot and again at snapshots
+  237,705–246,721 ms. Snapshots are approximately one second apart and do
+  not identify the exact instant each counter changed.
+
+### Trace completeness and decoder verification
+
+Minimal profile hash remains
+`CB4DE1288C25F900705D28D6E13A589221661B4BA916783936B0624F0548433C`.
+Owned instance `AudioRouterTone-bb4eb94657314166aed304976bf05ba4` starts in
+0.1617771 s and saves in 2.7998765 s, both exit 0. No recorder timeout or
+cleanup failure. ETL is **138,412,032 bytes**. Collector and independent
+`tracerpt` report **zero lost events**. Decoding processes **3,420,594 events**:
+1,717,691 context switches, 1,232,133 ReadyThread, 172,553 DPC, 67,904 ISR,
+1,463 TimerDPC, plus process/thread/image/priority records.
+
+Analysis extracts only this run into ignored
+`target/trace-tone-review-20261009-200614`. Host Windows SDK `tracerpt` command:
+
+```powershell
+tracerpt.exe target\trace-tone-review-20261009-200614\scheduling.etl -o target\trace-tone-review-20261009-200614\events.csv -of CSV -summary target\trace-tone-review-20261009-200614\summary.txt -report target\trace-tone-review-20261009-200614\report.xml -y
+```
+
+Exit 0. Approved read-only metadata access is needed in this sandbox; no
+host recording/service/setting change occurs. Decoded CSV is about 1.25 GB
+and remains ignored. Host tracerpt leaves version-5 switch payload fields
+unnamed. `-lr` with CSV was rejected and is not a verified workaround.
+
+New [offline reader](../../../../tools/m03-scheduler-trace/README.md) uses the
+checked common prefix from Microsoft's
+[PerfView CSwitchTraceData parser](https://github.com/microsoft/perfview/blob/main/src/TraceEvent/Parsers/KernelTraceEventParser.cs).
+Version-2 24-byte and version-5 40-byte records share these fields. Appended
+fields are ignored, short/null/old switch payloads rejected. It never creates
+or controls tracing sessions or accesses the driver. Verification on the host:
+
+- Existing MSVC 14.51.36231 x64, SDK 10.0.26100.0, `/W4 /WX /O2 /MT` build
+  passes with no warnings; no tool installation or repair.
+- `target\m03-scheduler-trace.exe --self-test`: eight decoder checks pass.
+- Saved ETL → converted-time CSV and `--raw` QPC CSV: each reports
+  `ProcessTrace=0 CloseTrace=0 CSwitch=1717691 ReadyThread=1232133 Rejected=0 EventsLost=0`.
+  Both counts independently match tracerpt. Existing output path is refused
+  with exit 3. These qualify this parser on this trace, not the audio gate.
+
+### Worker readiness and kernel activity
+
+Thread names/lifetime identify main TID 1356, capture 8184, render 10848,
+recording writer 1696, all belonging to native PID 3712. Match each switch-out
+to its subsequent first readiness and switch-in; discard stale readiness at
+switch-out and clear it at switch-in. Compare pre-readiness wait with runnable
+delay. Raw QPC is 10 MHz. Approximate lease origin 62,997,286,114 ticks derives
+from the final timestamp minus 300,001 ms, with sub-millisecond rounding.
+
+Longest coincident worker wait, approximately 237.311 s after lease origin:
+
+| Thread | Off CPU | Before ready | Ready to running | Running priority |
+| --- | --- | --- | --- | --- |
+| Capture | 35.6225 ms | 35.5923 ms | 30.2 us | 24 |
+| Render | 35.7156 ms | 35.5546 ms | 161 us | 24 |
+| Control | 40.8726 ms | 39.9214 ms | 951.2 us | 8 |
+| WAV writer | 35.9641 ms | 35.5539 ms | 410.2 us | 8 |
+
+The old state is Waiting (5), wait reason UserRequest (6). At the first loss
+around 1.089 s, capture/render spend 28.7233/28.7429 ms before readiness,
+then run within 142/213 us, also at priority 24. Across the complete run the
+maximum ready-to-run delays are 2.6803/2.6736 ms; do not confuse these with
+the much smaller runnable delays at the longest worker waits.
+
+Source requests a 1-ms sleep in idle audio-worker loops, 5 ms in control,
+1 ms in writer. The pinned
+[Rust 1.96.0 Windows thread implementation](https://github.com/rust-lang/rust/blob/1.96.0/library/std/src/sys/thread/windows.rs)
+uses a high-resolution waitable timer when available, creating/setting/waiting
+and closing it per sleep; it can fall back to Sleep. This trace does not prove
+fallback use. A timer-resolution/occluded-console explanation, or a reusable
+timer as the repair, remains unverified.
+
+There are two live-event gaps spanning all four guest processors in the loss
+windows: **28.443 ms** near 1.060–1.089 s and **35.2318 ms** near
+237.276–237.311 s. No context switch, ready, DPC, ISR or TimerDPC event is
+recorded in those intervals. These events do not sample all execution, so
+absence alone does not prove a suspended VM. Later 23–27-ms worker waits
+occur while other guest events continue; one whole-VM pause does not explain
+all observations. A third 10.778-ms gap occurs after leases end.
+
+The longest individual decoded DPC is **2.7535 ms** and ISR **2.3169 ms**,
+mapped by loaded-image address to dxgkrnl.sys; longest TimerDPC 96.5 us.
+No individual decoded callback accounts for a 35-ms wait. There are no full
+stacks/symbol attribution, and cumulative effects remain possible. In
+particular, the driver's ExAllocateTimer callback can appear under a kernel
+timer wrapper; absence of an address in its own image does not prove its
+timer path uninvolved.
+
+Read-only host System events for 20:06:00–20:11:35 contain no entries. Current
+VirtualBox log confirms the previously observed NEM execution mode. A later
+four-second GuestHeartbeat flatline is outside this run, and the NAT MTU
+warning is after the loss burst; neither establishes this run's cause.
+No evidence requires disabling WSL/Hyper-V or changing host power/security.
+
+### Decision and next task
+
+The strongest finding is **late readiness / timer wake delivery**, rather
+than long runnable-queue delay at the largest loss, or the repaired synchronous
+console block. It does not distinguish guest timer behavior from host/VirtualBox
+execution delay and does not prove the driver fault-free. VCAB-24 sustained
+continuity remains failed; VCAB-25/27/28 and hardware/signing gates remain open.
+
+Stop repeating unchanged guest-only tone tests. Prepare paired host/guest
+timing diagnostics with explicit clock alignment, owned recorder lifecycle,
+bounded size/duration, privacy limits, and a short recorder probe before a new
+attended audio run. Do not enlarge buffers, suppress/reset loss counters,
+change driver timer semantics or host features on this correlation alone.
+No new driver or VM bundle is produced. Rollback removes the offline reader
+only. Preserve this archive and all earlier failed experiments.
+
+Final host checks: rebuilt the offline reader with `/W4 /WX`, eight checks
+pass, and the final executable again decodes the full saved ETL in raw mode
+with matching counts and zero rejected/lost. Documentation acceptance passes
+138 Markdown files / 749 local links; `git diff --check` clean. No Rust/UI
+changes, so their formatting/Clippy suites were not rerun. Local Jev remains
+disabled by the user's repository instruction. Diagnostic source and reviewed
+findings are committed; raw traces/CSVs/audio and scratch analysis stay ignored.

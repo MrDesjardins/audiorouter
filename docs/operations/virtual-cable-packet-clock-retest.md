@@ -6,7 +6,26 @@ Use only the **AR-DriverTest VM**. The host shared folder is
 The zero-error gate is unchanged. This bounded test does not replace the
 one-hour/eight-cable or hardware qualification gates.
 
-## Next step: five-minute scheduling diagnostic
+## Current result: stop further tone testing
+
+The five-minute traced run finished on time but failed continuity. Its archive
+has been verified and analyzed: capture lost 7,056 frames and render lost
+14,832. Worker waits reached about 35 ms before the threads became ready;
+they ran promptly afterward. This identifies late wakeups, but does not yet
+distinguish guest timer behavior from host/VirtualBox scheduling.
+
+**Do not rerun the commands below yet.** Preserve the installed bundle and
+`evidence-20261009-201122.zip`. You can stop Media Player and disable the
+Cable B listener now; no measurement is running. Keep WSL/Hyper-V enabled.
+
+The next development task is paired host/guest timing collection with a short
+recorder probe and a reviewed, bounded procedure. No replacement driver or new
+VM test is ready from this analysis. The
+[review record](../plans/active/evidence/2026-10-09-m03-packet-clock-review.md)
+contains the evidence and remaining limits. All commands below are retained
+as the completed experiment's reproduction, not the current next step.
+
+## Completed five-minute scheduling diagnostic
 
 The two-second probe passed in the guest; its copied trace was reviewed with
 zero reported lost events and scheduling/DPC/ISR records present. Use the
@@ -62,7 +81,7 @@ The collector stops/saves its own uniquely named recording before collection.
 If stop/cancel fails or the guest crashes, preserve the VM files and send the
 output. Do not run a longer or intentional-stall test.
 
-The probe is now reviewed; use the next-step command at the top of this page.
+The probe was reviewed before the completed five-minute run above.
 The tone ZIP includes `scheduling\scheduling.etl` and native timing reports.
 
 ## Current harness update after the five-minute failure

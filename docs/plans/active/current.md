@@ -61,8 +61,14 @@ scheduler trace, preserving WSL and the failed continuity gate. Its initial
 GeneralProfile startup failed with 0x80070032 before tone began. The minimal
 profile's two-second guest probe now starts/saves successfully; the copied
 trace decodes with scheduling/DPC/ISR event families and zero reported lost
-events. Next: one bounded 300-second traced audio diagnostic; the newer
-context-switch payload interpretation and audio-loss attribution remain open.
+events. The 300-second traced run now fails with 7,056 capture underrun and
+14,832 render overrun frames. Saved trace analysis finds worker waits up to
+35.7 ms, predominantly before readiness; the longest wake runs at priority 24
+within 30.2/161 us for capture/render. An offline reader interprets the common
+version-5 context-switch fields and matches independent event counts. Guest
+timer versus host/VirtualBox attribution remains open. Next: prepare paired
+host/guest timing diagnostics before another audio run; do not repeat the
+unchanged guest-only test or alter buffers/counters/WSL based on correlation.
 See the
 [packet-clock review](evidence/2026-10-09-m03-packet-clock-review.md) and active
 virtual cable plan. The [earlier review record](evidence/2026-10-09-m03-render-publication-review.md)
