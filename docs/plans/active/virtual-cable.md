@@ -1558,8 +1558,11 @@ tool reports 12 name matches and eight `IAudioClient3` activation failures.
 Root cause: `enumerate_active_endpoint_display_info()` was documented to return
 active endpoints but called `EnumAudioEndpoints(..., DEVICE_STATE_ALL)`. The
 inventory therefore counted records from every Windows endpoint state and
-attempted to activate clients for them. The guest output did not include each
-record's state, so the eight extra records are not individually classified.
+attempted to activate clients for them. The JSON lists only four because the
+tool skips a record before serializing it when client activation fails; the
+three-match/12-total diagnostics are computed before that filter. The guest
+output did not include each record's state, so the eight extra records are not
+individually classified.
 Requirements: VCAB-11, VCAB-25. Fix committed and pushed to `main` as
 `d9e72560`: enumerate active endpoints only and pin the state flag in the M03
 build acceptance guard. Driver behavior and acceptance thresholds are unchanged;
