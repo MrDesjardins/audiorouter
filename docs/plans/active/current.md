@@ -101,10 +101,16 @@ Sustained continuity, audible quality and exact cause remain unresolved.
 User also hears hiss on saved-file replay through Speakers; that device only
 offers PCM16 at 16/22.05/44.1 kHz. Keep its supported 44.1-kHz setting and
 Cable B at 48 kHz. The clean recorded section quantizes identically to a
-generated reference. New offline PCM16 reference files are published;
-next user action is the 17-second **44.1-kHz** speaker reference in the
+generated reference. New offline PCM16 reference files are published.
+The user now reports static in all three sections of the independently
+generated 17-second **44.1-kHz** speaker reference. Offline reinspection
+confirms its header, clean sine samples and silent separators. Read-only VM
+configuration/log review shows HDA, HostAudioWas and default Focusrite speaker
+output; it does not identify a defective component. Next: turn off Cable B's
+concurrent Listen client inside the VM and replay this same reference once,
+as documented in the
 [direct audio runbook](../../operations/virtual-cable-direct-audio.md#current-next-step-supported-format-speaker-reference).
-Review that result before the 48-kHz comparison or another driver run.
+Review static during tones and silent gaps before another driver run.
 Commands are in
 [Administrator PowerShell](../../operations/virtual-cable-paired-trace.md).
 See the

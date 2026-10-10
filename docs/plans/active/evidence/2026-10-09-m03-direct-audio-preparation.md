@@ -298,3 +298,28 @@ and reports which section has hiss. It is a supported-format playback
 comparison, not an AudioRouter driver run. Review before the 48-kHz file or
 any live/long/stall test. Rollback is to stop playback; WSL, host configuration,
 driver binaries and all prior bundles remain unchanged.
+
+### Received reference result and read-only VM review
+
+User reports static in **all three** sections of the independent 44.1-kHz
+PCM16 reference. Rechecked the published share file, not just the generator:
+SHA-256 matches `C9652D3C629C45FE7BAC8AB0C332A6668F7BD584E3A55323BA0CE9F54842D6A7`;
+header is stereo PCM16/44.1 kHz, uncompressed, 749,700 frames. Peak is 8,192.
+793,800 interior samples match independent sine equations with maximum error
+0.499984803 PCM16 step; both silent separators contain only zero samples.
+No file regeneration, driver operation or host audio playback occurred.
+
+Read-only sources: `C:\VMs\AR-DriverTest\AR-DriverTest.vbox` and current
+`Logs\VBox.log` (opened 2026-10-10T01:21:10.416351800Z). Configuration:
+HDA, Windows Audio (`HostAudioWas`), output enabled; default output identified
+as Speakers (Focusrite USB Audio). VirtualBox reports version 7.2.20 r175154.
+Scheduling-hint warnings print implausible durations; retain them as log
+observations, not evidence of an actual pause of that duration. No log entry
+reviewed identifies the cause of continuous hiss.
+
+Inference: the hiss reproduces with supported-format audio that was not
+generated or captured through AudioRouter. The still-enabled concurrent
+Cable B Listen path is not yet excluded. Next is the guest-only listener-off
+reference comparison in the runbook, including the silent gaps. No host
+settings, WSL, driver build or qualification criteria change. The real loss
+and source phase breaks remain failed gates regardless of this comparison.

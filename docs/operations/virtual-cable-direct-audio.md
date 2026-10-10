@@ -11,6 +11,40 @@ The procedure below is retained for reproducibility, not a new retry request.
 
 ## Current next step: supported-format speaker reference
 
+**Result received:** all three sections have continuous static. The independently
+synthesized file matches the supported speaker format and contains the intended
+tones. That reproduces hiss without AudioRouter-generated samples; it does not
+identify the faulty playback component or resolve the driver's measured loss.
+
+### Next comparison inside the VM: disable the concurrent listener
+
+1. Stop Media Player playback and leave all tone scripts stopped.
+2. Open the Sound control panel:
+
+   ```powershell
+   Start-Process control.exe -ArgumentList 'mmsys.cpl'
+   ```
+
+3. **Recording → AudioRouter Cable B Output → Properties → Listen**.
+   Clear **Listen to this device**, then click **Apply → OK**. If it is already
+   clear, leave it clear. Keep the current speaker and cable formats.
+4. Confirm Media Player's output is **Speakers (High Definition Audio Device)**.
+   Play the existing reference:
+
+   ```powershell
+   Invoke-Item -LiteralPath 'C:\ar\speaker-reference-44100.wav'
+   ```
+
+5. Report whether static remains in the three tone sections and in the one-second
+   silent gaps. Leave Listen off until this result is reviewed. This is one
+   17-second playback comparison; no bridge or long test runs.
+
+Rollback: recheck **Listen to this device** after the comparison if it was
+previously enabled. This guest-only setting removes a concurrent capture-to-speaker
+client; it does not alter host audio, VirtualBox, Hyper-V/WSL or the driver.
+
+### Completed reference preparation and playback
+
 User also hears hiss while replaying the saved WAV through Media Player →
 Speakers. Speakers only offers 16-bit 16/22.05/44.1 kHz. Keep Speakers at
 **16 bit, 44,100 Hz** and Cable B at **32 bit, 48,000 Hz**. Do not force an
@@ -48,11 +82,10 @@ Playback lasts **17 seconds**. There is one second of silence between parts:
 2. **6–11 s:** high tone on both channels (997 Hz).
 3. **12–17 s:** low tone on both channels (47 Hz).
 
-Report which parts have continuous hiss. This isolates supported-format
-playback and tone content; it does not clear the driver's failed continuity
-gate. A separately prepared 48-kHz reference is retained for a later
-comparison only after this result is reviewed. No driver or host setting
-change is involved. Stop file playback to roll back.
+User reports continuous static in all three parts. Do not repeat this completed
+comparison unchanged. The separately prepared 48-kHz reference remains held;
+use the listener comparison above next. No continuity gate has passed through
+this playback observation.
 
 ## Previous direct-recording procedure
 

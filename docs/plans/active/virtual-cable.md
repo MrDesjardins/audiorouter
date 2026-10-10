@@ -2,8 +2,9 @@
 
 Updated 2026-10-09. The driver is installed only in AR-DriverTest. Smoke,
 active format inventory and short tone checks pass; reported Cable B hiss and
-sustained audio loss still block qualification. The current next action is
-the automatic direct audio diagnostic at the end of this plan.
+sustained audio loss still block qualification. Direct recordings have been
+reviewed. The current next action is the guest listener/playback comparison
+at the end of this plan; do not repeat the direct diagnostic unchanged.
 All implementation and testing happens on
 the user's Windows 11 development PC and its VirtualBox test VM, with the
 host's Hyper-V/WSL capability preserved.
@@ -2180,3 +2181,29 @@ path failure corrected to workspace-owned test storage. New share folder
 checksums. Next: play only reference-44100.wav in the VM and identify which
 of the three sections has hiss; no driver test or new setting is requested.
 Exact copy/paste procedure is in the direct audio runbook above.
+
+### Independent reference also has audible static — 2026-10-09
+
+User reports continuous static in all three 44.1-kHz PCM16 reference sections.
+The file was synthesized independently of AudioRouter. Reinspection of the
+published bytes confirms the original SHA-256, correct stereo PCM16/44.1-kHz
+header, 749,700 frames, peak 8,192, and zero nonzero separator samples.
+793,800 interior samples match the sine equations within 0.5 PCM16 step.
+The tone content and supported reference format do not explain continuous
+digital noise in the file. Playback-chain cause remains open; do not clear
+the separate 288-ms stall/lost-frame/phase-break defects.
+
+Read-only review: current AR-DriverTest configuration is HDA/Windows Audio,
+four CPUs, 8 GB. VBox.log opened 2026-10-10T01:21:10Z identifies VirtualBox
+7.2.20 r175154, HostAudioWas and default output Speakers (Focusrite USB Audio).
+It contains scheduling-hint warnings with implausible printed durations;
+those numbers are not measured pauses and do not establish the hiss cause.
+No machine, audio endpoint or host setting was changed.
+
+Next ordered comparison (VCAB-12/20/24/29, VDEV-12): stop scripts/playback,
+clear Cable B Output's guest Listen setting, confirm Media Player routes to
+Speakers and replay the same 17-second reference. Ask for static during tone
+sections and silent gaps. This removes the concurrent listener from the
+comparison; it does not prove the driver or VirtualBox at fault. Preserve
+44.1-kHz speakers and 48-kHz cable settings. Rollback is rechecking Listen
+if previously enabled. No live bridge, long/stall run or 48-kHz comparison.
