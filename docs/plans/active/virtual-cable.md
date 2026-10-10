@@ -2398,3 +2398,23 @@ No additional playback/recorder/bridge/long test is requested. No owning
 AudioRouter defect was proved by this inspection, so no speculative driver
 patch, buffer increase, timer/security/WSL change or waived gate. Requirements
 VCAB-12/20/24/29 and VDEV-12 retain their failed/unverified evidence.
+
+### Rollback complete; closed-session HDA evidence (2026-10-10)
+
+User reports successful powered-off rollback. Read-only XML confirms retained
+HDA, `useDefault=true`, WAS and no `VBoxInternal2/Audio/WindowsDrv` override;
+no VM process runs. The earlier pending rollback action is complete.
+
+Shutdown counters show 11 Stream4 output transfers skipped due to a pending
+BCIS completion interrupt. Source `hdaR3StreamDoDmaPrologue` returns before
+DMA when this bit remains set, while the host backend keeps consuming. This
+is observed virtual HDA scheduling trouble, but there is no per-event timing
+to map it to the subjective scratches. Stream0's 3,101 underruns belong to
+the input stream and must not be reported as 3,101 speaker glitches. Later
+HostSuspend/HostResume and host endpoint changes extend the session; totals
+are not isolated to the short comparison. Evidence and limits are in the
+[shutdown review](evidence/2026-10-09-m03-direct-audio-preparation.md#rollback-verified-and-shutdown-statistics-reviewed-2026-10-10).
+
+Next: keep the VM off and review virtual HDA interrupt/clock recovery against
+retained timing data before preparing a candidate. No new test or driver patch
+is requested by this rollback result; all prior qualification gates remain.

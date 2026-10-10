@@ -9,7 +9,7 @@ shared pause need separate investigation. See the
 [waveform review](../plans/active/evidence/2026-10-09-m03-direct-audio-preparation.md#direct-r2-recordings-and-reporting-repair-2026-10-09).
 The procedure below is retained for reproducibility, not a new retry request.
 
-## Current action: stop playback and restore the baseline
+## Current action: keep the VM off while timing is reviewed
 
 The DirectSound comparison is complete. With the recorder stopped, the user
 still hears variable scratching: some plays have about six to eight scratches,
@@ -17,12 +17,18 @@ with more scratching as playback continues. This supersedes the provisional
 capture-only explanation. DirectSound has not provided reliably clean playback.
 Stop reference playback and hold all recorder, bridge and longer tests.
 
-Shut down guest Windows normally, then use the guarded **Rollback** block below
-on the main PC. Do not restore a snapshot or change speaker formats. WSL and
-host settings remain unchanged. The rollback is prepared, not yet performed.
+**Rollback completed (2026-10-10):** user reports success; read-only XML checks
+confirm HDA, `useDefault=true`, stored driver WAS and zero backend overrides.
+No VirtualBoxVM/VBoxHeadless process is running. Keep the VM off; no new
+playback, recorder or driver test is requested. Do not repeat the rollback
+block or restore a snapshot. WSL and host settings remain unchanged.
 Next engineering task: review virtual audio clock recovery against the saved
 timing evidence before preparing another candidate. See the
 [capture-off and clock review](../plans/active/evidence/2026-10-09-m03-direct-audio-preparation.md#directsound-playback-with-capture-off-and-clock-review-2026-10-10).
+The closed-session log additionally records 11 HDA output transfers skipped
+because a completion interrupt remained pending. This is a concrete playback
+timing fault observation, without timestamps tying individual skips to audible
+scratches. See the [shutdown review](../plans/active/evidence/2026-10-09-m03-direct-audio-preparation.md#rollback-verified-and-shutdown-statistics-reviewed-2026-10-10).
 
 ## Completed supported-format speaker reference
 

@@ -136,10 +136,16 @@ failure and a 249-second guest heartbeat gap. Installed-version source shows
 HDA uses the synchronous virtual clock, whose recovery can accelerate DMA.
 This is a concrete timing hypothesis, not aligned proof of the audible cause.
 Host power-event inspection was denied; no sleep or host cause is established.
-Next: stop playback, restore the original default backend with the guarded
-powered-off rollback, and review clock recovery against saved timing data.
-Hold further recorder/bridge runs. No driver or host setting is changed by
-the agent, and rollback has not yet been performed. See the
+User has now shut the VM down and completed the guarded rollback. XML confirms
+default/WAS, retained HDA and no backend override; VM processes are absent.
+The closed-session log records 11 HDA output transfers skipped while a
+completion interrupt remained pending; source confirms this pauses DMA while
+the host consumer continues. Whole-session totals do not identify individual
+scratches. Later overnight HostSuspend/HostResume and host endpoint changes
+are also logged and must not be attributed to the earlier listening run.
+Next: review virtual HDA interrupt/clock recovery against saved timing data,
+keeping the VM off and further recorder/bridge runs held. No driver or host
+setting is changed by the agent. See the
 [clock review](evidence/2026-10-09-m03-direct-audio-preparation.md#directsound-playback-with-capture-off-and-clock-review-2026-10-10).
 Preserve WSL and the separate measured scheduling/loss failures.
 Commands are in

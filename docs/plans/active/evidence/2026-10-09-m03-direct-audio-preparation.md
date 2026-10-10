@@ -662,3 +662,45 @@ Verification for this documentation-only update: `node tools/docs/validate.mjs`
 passes (141 Markdown files / 781 local links); all 10 runbook PowerShell blocks
 parse without execution; `git diff --check` passes. No code build, new audio
 test, driver installation or VM setting change was performed by the agent.
+
+## Rollback verified and shutdown statistics reviewed (2026-10-10)
+
+User shut down guest Windows normally and reports the guarded rollback
+succeeded. Agent read-only XML inspection confirms HDA, `useDefault=true`,
+stored driver WAS and zero machine backend overrides. No VirtualBoxVM or
+VBoxHeadless process is running; VBox.log ends in PoweredOff. No snapshot,
+guest format, driver, host security, power or WSL change was made.
+
+Closed-session log preserved at ignored workspace path
+`target/vbox-playback-review-20261009/VBox-DirectSound-shutdown.log`, SHA-256
+`695DFED2A994083F7BC844CCB44C9F1A3806D84B42315618B83323855CBC74B1`.
+Its shutdown statistics provide additional evidence:
+
+- Stream4: 44,100 Hz, 4-byte frames, 1,792-byte current DMA period;
+  `DMASkippedPendingBCIS=11`. This is the first output stream, following
+  the four input streams (`DevHda.cpp:478–483`, `DevHdaStream.cpp:905–928`).
+- `DevHdaStream.cpp:1366–1391` skips DMA when the prior buffer-completion
+  interrupt remains pending. Its comment identifies the pacing mismatch:
+  the host backend continues consuming while DMA pauses. These counters
+  confirm skipped virtual-HDA work, not merely a hypothetical playback path.
+- Stream0 has 3,101 input DMA underruns and 1,864,280 bytes of inserted silence.
+  The source registers that underrun counter only for input
+  (`DevHda.cpp:5313–5325`). Do not mislabel this as speaker corruption.
+- Synchronous virtual-clock current offset is 253,171,005,741 ns and given-up
+  offset is 248,755,386,920 ns. These are final aggregate values, not the
+  catch-up percentage during the short recording or the duration of a scratch.
+- The session later logs `HostSuspend` at elapsed `00:23:56.065542` and
+  `HostResume` at `10:39:22.767589`, with host default-output changes around
+  resume. This later overnight suspension does not prove that earlier audio
+  comparisons slept or identify their cause. No host power setting was changed.
+
+Limit: skipped-transfer counters cover the whole boot session and have no
+individual timestamps. They cannot quantify the comparison's audible events
+or replace digital continuity evidence. Earlier AudioRouter bridge loss and
+phase breaks remain distinct unresolved defects. The owning virtual HDA
+interrupt/clock recovery path is now a more specific investigation target;
+no AudioRouter code defect or qualified driver fix is claimed.
+
+Next engineering task: inspect that path against retained timing data before
+preparing a candidate. Keep the VM off; no new playback or audio test is
+requested. The original backend selection is restored, not declared clean.
